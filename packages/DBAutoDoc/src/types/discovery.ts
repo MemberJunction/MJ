@@ -7,58 +7,98 @@
  * Evidence for why a column might be a primary key
  */
 export interface PKEvidence {
-  uniqueness: number;        // 0-1: Percentage of unique values
-  nullCount: number;         // Number of null values found
-  totalRows: number;         // Total rows sampled
-  dataPattern: 'sequential' | 'guid' | 'composite' | 'natural' | 'unknown';
-  namingScore: number;       // 0-1: How well the name matches PK patterns
-  dataTypeScore: number;     // 0-1: How appropriate the data type is for PK
-  warnings: string[];        // Any issues found (e.g., "has nulls", "not unique")
+  uniqueness: number;        // 0-1: Percentage of unique values — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  nullCount: number;         // Number of null values found — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  totalRows: number;         // Total rows sampled — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  dataPattern: 'sequential' | 'guid' | 'composite' | 'natural' | 'unknown';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  namingScore: number;       // 0-1: How well the name matches PK patterns — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  dataTypeScore: number;     // 0-1: How appropriate the data type is for PK — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  warnings: string[];        // Any issues found (e.g., "has nulls", "not unique") — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
  * Primary key candidate discovered during analysis
  */
 export interface PKCandidate {
-  schemaName: string;
-  tableName: string;
-  columnNames: string[];     // Array to support composite keys
-  confidence: number;        // 0-100: Overall confidence score
-  evidence: PKEvidence;
-  discoveredInIteration: number;
-  validatedByLLM: boolean;
-  status: 'candidate' | 'confirmed' | 'rejected';
+  schemaName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  tableName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  columnNames: string[];     // Array to support composite keys — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  confidence: number;        // 0-100: Overall confidence score — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  evidence: PKEvidence;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  discoveredInIteration: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  validatedByLLM: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  status: 'candidate' | 'confirmed' | 'rejected';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
  * Evidence for why a column might be a foreign key
  */
 export interface FKEvidence {
-  namingMatch: number;       // 0-1: Similarity between column names
-  valueOverlap: number;      // 0-1: Percentage of values that exist in target
-  cardinalityRatio: number;  // Ratio of distinct values (many:one expected)
-  dataTypeMatch: boolean;    // Do the data types match?
-  nullPercentage: number;    // 0-1: Percentage of nulls (optional FK has nulls)
-  sampleSize: number;        // How many rows were checked
-  orphanCount: number;       // Values with no match in target
-  warnings: string[];
+  namingMatch: number;       // 0-1: Similarity between column names — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  valueOverlap: number;      // 0-1: Percentage of values that exist in target — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  cardinalityRatio: number;  // Ratio of distinct values (many:one expected) — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  dataTypeMatch: boolean;    // Do the data types match? — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  nullPercentage: number;    // 0-1: Percentage of nulls (optional FK has nulls) — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  sampleSize: number;        // How many rows were checked — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  orphanCount: number;       // Values with no match in target — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  warnings: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
  * Foreign key candidate discovered during analysis
  */
+/**
+ * Where a key came from. Recorded per key so a wrong inference can be traced back to
+ * whichever stage authored it, instead of a hand-written key and a hallucinated one
+ * sitting side by side looking equally authoritative.
+ */
+export type KeyProvenance = 'Declared' | 'Inferred' | 'LLM' | 'Organic';
+
+/**
+ * Whether the key was checked against the data, and what the check concluded.
+ *
+ * `Unprobed` is NOT a synonym for `Refuted`. `Refuted` means a probe ran and measured
+ * containment below the floor; `Unprobed` means no measurement exists. Collapsing the
+ * two is what lets a permissions failure masquerade as a disproved key.
+ */
+export type KeyVerificationStatus = 'Verified' | 'Refuted' | 'Unprobed';
+
+/**
+ * The provenance + verification record carried alongside an emitted key.
+ *
+ * `MatchedRows` / `SampledRows` are counts. There is deliberately no field here that
+ * can carry a data value.
+ */
+export interface KeyVerificationStamp {
+  Provenance: KeyProvenance;
+  Verification: KeyVerificationStatus;
+  VerifiedAt: string;
+  /** Null when Verification is 'Unprobed' — no measurement was taken. */
+  MatchedRows: number | null;
+  /** Null when Verification is 'Unprobed'. */
+  SampledRows: number | null;
+  /** Why it verified, why it was refuted, or why the probe could not run. */
+  VerificationNote: string;
+}
+
 export interface FKCandidate {
-  schemaName: string;
-  sourceTable: string;
-  sourceColumn: string;
-  targetSchema: string;
-  targetTable: string;
-  targetColumn: string;
-  confidence: number;        // 0-100: Overall confidence score
-  evidence: FKEvidence;
-  discoveredInIteration: number;
-  validatedByLLM: boolean;
-  status: 'candidate' | 'confirmed' | 'rejected';
+  schemaName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  sourceTable: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  sourceColumn: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  targetSchema: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  targetTable: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  targetColumn: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  confidence: number;        // 0-100: Overall confidence score — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  evidence: FKEvidence;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  discoveredInIteration: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  validatedByLLM: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  status: 'candidate' | 'confirmed' | 'rejected';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /**
+   * Provenance + probe result for this candidate. Optional so existing producers keep
+   * compiling; absent means nothing recorded which stage authored the key or whether
+   * anyone ever checked it against the data.
+   */
+  verification?: KeyVerificationStamp;  // case-violation-ok-legacy-back-compat: FKCandidate is persisted in state.json and read back on resume, like its camelCase siblings above; a rename would silently drop stamps from existing state files
 }
 
 /**
@@ -83,24 +123,24 @@ export interface ColumnStatistics {
  * Maps to what the driver provides
  */
 export interface SimpleColumnStats {
-  totalRows: number;
-  nullCount: number;
-  distinctCount: number;
-  sampleValues: Array<string | number | null>;
+  TotalRows: number;
+  NullCount: number;
+  DistinctCount: number;
+  SampleValues: Array<string | number | null>;
 }
 
 /**
  * Single iteration of the discovery process
  */
 export interface RelationshipDiscoveryIteration {
-  iteration: number;
-  phase: 'sampling' | 'pk_detection' | 'fk_detection' | 'sanity_check' | 'llm_validation' | 'backprop';
-  startedAt: string;
-  completedAt: string;
-  tokensUsed: number;
-  inputTokens: number;
-  outputTokens: number;
-  discoveries: {
+  iteration: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  phase: 'sampling' | 'pk_detection' | 'fk_detection' | 'sanity_check' | 'llm_validation' | 'backprop';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  startedAt: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  completedAt: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  tokensUsed: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  inputTokens: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  outputTokens: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  discoveries: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     newPKs: PKCandidate[];
     newFKs: FKCandidate[];
     validated: string[];     // IDs of candidates that were validated
@@ -112,22 +152,22 @@ export interface RelationshipDiscoveryIteration {
       reason: string;
     }>;
   };
-  backpropTriggered: boolean;
-  backpropReason?: string;
+  backpropTriggered: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  backpropReason?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
  * Feedback from analysis phase back to discovery
  */
 export interface AnalysisToDiscoveryFeedback {
-  type: 'pk_invalidated' | 'fk_invalidated' | 'new_relationship' | 'confidence_change';
-  evidence: string;          // What the LLM learned during analysis
-  tableName: string;
-  columnName: string;
-  affectedCandidates: string[]; // IDs of affected PK/FK candidates
-  recommendation: 'remove' | 'downgrade_confidence' | 'upgrade_confidence' | 'add_new';
-  newConfidence?: number;    // If recommendation is to change confidence
-  newRelationship?: {        // If recommendation is to add new relationship
+  type: 'pk_invalidated' | 'fk_invalidated' | 'new_relationship' | 'confidence_change';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  evidence: string;          // What the LLM learned during analysis — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  tableName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  columnName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  affectedCandidates: string[]; // IDs of affected PK/FK candidates — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  recommendation: 'remove' | 'downgrade_confidence' | 'upgrade_confidence' | 'add_new';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  newConfidence?: number;    // If recommendation is to change confidence — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  newRelationship?: {        // If recommendation is to add new relationship — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     targetTable: string;
     targetColumn: string;
   };
@@ -137,48 +177,48 @@ export interface AnalysisToDiscoveryFeedback {
  * Complete state of relationship discovery phase
  */
 export interface RelationshipDiscoveryPhase {
-  triggered: boolean;
-  triggerReason: 'missing_pks' | 'insufficient_fks' | 'both' | 'manual';
-  triggerDetails: {
+  triggered: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  triggerReason: 'missing_pks' | 'insufficient_fks' | 'both' | 'manual';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  triggerDetails: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     tablesWithoutPK: number;
     expectedFKs: number;
     actualFKs: number;
     fkDeficitPercentage: number;
   };
 
-  startedAt: string;
-  completedAt?: string;
+  startedAt: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  completedAt?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
-  tokenBudget: {
+  tokenBudget: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     allocated: number;
     used: number;
     remaining: number;
   };
 
-  iterations: RelationshipDiscoveryIteration[];
+  iterations: RelationshipDiscoveryIteration[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
-  discovered: {
+  discovered: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     primaryKeys: PKCandidate[];
     foreignKeys: FKCandidate[];
   };
 
   /** Resume tracking — which tables have been processed in each sub-phase */
-  progress?: {
+  progress?: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     pkTablesAnalyzed?: string[];   // "schema.table" keys that completed PK detection
     fkTablesAnalyzed?: string[];   // "schema.table" keys that completed FK detection
     llmValidated?: boolean;        // Whether LLM validation pass completed
     sanityChecked?: boolean;       // Whether LLM sanity check completed
   };
 
-  schemaEnhancements: {
+  schemaEnhancements: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     pkeysAdded: number;
     fkeysAdded: number;
     overallConfidence: number;  // 0-100: Confidence in all discoveries
   };
 
-  feedbackFromAnalysis: AnalysisToDiscoveryFeedback[];
+  feedbackFromAnalysis: AnalysisToDiscoveryFeedback[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
-  summary: {
+  summary: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     totalTablesAnalyzed: number;
     tablesWithDiscoveredPKs: number;
     relationshipsDiscovered: number;
@@ -194,9 +234,9 @@ export interface RelationshipDiscoveryPhase {
  * Discovery trigger analysis
  */
 export interface DiscoveryTriggerAnalysis {
-  shouldRun: boolean;
-  reason: string;
-  details: {
+  ShouldRun: boolean;
+  reason: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  Details: {
     totalTables: number;
     tablesWithPK: number;
     tablesWithoutPK: number;
@@ -212,49 +252,49 @@ export interface DiscoveryTriggerAnalysis {
  * Pre-computed once and stored to avoid redundant queries
  */
 export interface CachedColumnStats {
-  schemaName: string;
-  tableName: string;
-  columnName: string;
-  dataType: string;
+  schemaName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  tableName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  columnName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  dataType: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   // Core statistics
-  totalRows: number;
-  nullCount: number;
-  nullPercentage: number;
-  distinctCount: number;
-  uniqueness: number;        // distinctCount / totalRows
+  totalRows: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  nullCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  nullPercentage: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  distinctCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  uniqueness: number;        // distinctCount / totalRows — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   // Data ranges
-  minValue?: string | number;
-  maxValue?: string | number;
-  avgLength?: number;        // For string columns
+  minValue?: string | number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  maxValue?: string | number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  avgLength?: number;        // For string columns — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   // Patterns and samples
-  dataPattern: 'sequential' | 'guid' | 'composite' | 'natural' | 'unknown';
-  sampleValues: Array<string | number | null>;
-  valueDistribution?: Array<{ value: string | number; frequency: number }>;
+  dataPattern: 'sequential' | 'guid' | 'composite' | 'natural' | 'unknown';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  sampleValues: Array<string | number | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  valueDistribution?: Array<{ value: string | number; frequency: number }>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   // Deterministic eligibility flags — set once during stats gathering,
   // used to constrain what the LLM can recommend as PKs/FKs.
   /** True if column qualifies as a potential PK: zero nulls, zero blanks, 100% unique values */
-  pkEligible: boolean;
+  pkEligible: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** True if column qualifies as a potential FK source: non-date/bool/float type, values look like keys */
-  fkEligible: boolean;
+  fkEligible: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   // Timing
-  computedAt: string;
-  queryTimeMs: number;
+  computedAt: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  queryTimeMs: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
  * Collection of cached stats for a table
  */
 export interface TableStatsCache {
-  schemaName: string;
-  tableName: string;
-  totalRows: number;
-  columns: Map<string, CachedColumnStats>;
-  computedAt: string;
+  schemaName: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  tableName: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  TotalRows: number;
+  columns: Map<string, CachedColumnStats>;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  ComputedAt: string;
 }
 
 /**
@@ -262,7 +302,7 @@ export interface TableStatsCache {
  * Provides selective stats to LLM for intelligent reasoning
  */
 export interface LLMDiscoveryContext {
-  targetTable: {
+  TargetTable: {
     schema: string;
     table: string;
     rowCount: number;
@@ -277,7 +317,7 @@ export interface LLMDiscoveryContext {
     }>;
   };
 
-  relatedTables?: Array<{
+  RelatedTables?: Array<{
     schema: string;
     table: string;
     rowCount: number;
@@ -288,29 +328,32 @@ export interface LLMDiscoveryContext {
     }>;
   }>;
 
-  pkCandidates: Array<{
+  pkCandidates: Array<{  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     columnNames: string[];
     confidence: number;
     reasoning: string;
   }>;
 
-  fkCandidates: Array<{
+  fkCandidates: Array<{  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     sourceColumn: string;
     targetTable: string;
     targetColumn: string;
     confidence: number;
     reasoning: string;
   }>;
+
+  /** Existing indexes on the target table, one formatted line each (see FormatIndexHint) */
+  ExistingIndexes?: string[];
 }
 
 /**
  * LLM validation result
  */
 export interface LLMValidationResult {
-  validated: boolean;
-  reasoning: string;
-  confidenceAdjustment: number;  // -100 to +100
-  recommendations: Array<{
+  validated: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  reasoning: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  ConfidenceAdjustment: number;  // -100 to +100
+  Recommendations: Array<{
     type: 'confirm' | 'reject' | 'modify' | 'add_new';
     target: 'pk' | 'fk';
     schemaName?: string;
@@ -318,7 +361,7 @@ export interface LLMValidationResult {
     columnName?: string;
     details: string;
   }>;
-  tokensUsed: number;
-  inputTokens: number;
-  outputTokens: number;
+  tokensUsed: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  InputTokens: number;
+  OutputTokens: number;
 }

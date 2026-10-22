@@ -1,8 +1,17 @@
+import '@angular/compiler';
+import { getTestBed } from '@angular/core/testing';
+import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { describe, it, expect } from 'vitest';
 import type { EntityInfo } from '@memberjunction/core';
 import type { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { renderComponentFixture, query, queryAll, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
 import { RecordProcessEditorComponent } from './record-process-editor.component';
+
+try {
+  getTestBed().initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
+} catch {
+  // already initialized
+}
 
 /**
  * DOM coverage for <mj-record-process-editor> — the Bulk Operations process editor (~4×). It reads
@@ -43,7 +52,6 @@ function fakeProvider() {
 
 const render = (record: MJRecordProcessEntity) =>
   renderComponentFixture(RecordProcessEditorComponent, {
-    imports: [RecordProcessEditorComponent],
     inputs: { Record: record, Provider: fakeProvider() },
   });
 type Fx = ReturnType<typeof render>;
@@ -111,5 +119,18 @@ describe('RecordProcessEditorComponent (DOM)', () => {
     input.value = 'Typed name';
     input.dispatchEvent(new Event('input'));
     expect(rec.Name).toBe('Typed name');
+  });
+
+  const entitySelect = (f: Fx) => queryAll(f, 'select').find((s) => (s as HTMLSelectElement).options[0]?.textContent?.includes('choose an entity')) as HTMLSelectElement;
+
+  it('selects the stored entity (UUIDs compared case-insensitively), not the first option', () => {
+    const f = render(makeRecord({ Name: 'Job titles', EntityID: 'E2' }));
+    const select = entitySelect(f);
+    expect(select.selectedOptions[0]?.textContent?.trim()).toBe('Contacts');
+  });
+
+  it('selects the placeholder when the stored entity is not listed', () => {
+    const f = render(makeRecord({ Name: 'Job titles', EntityID: 'zzz-unlisted' }));
+    expect(entitySelect(f).selectedIndex).toBe(0);
   });
 });

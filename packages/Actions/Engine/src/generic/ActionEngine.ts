@@ -1,5 +1,5 @@
-import { BaseEntitySaveQueue, LogError, LogErrorEx, Metadata, UserInfo, IMetadataProvider } from "@memberjunction/core";
-import { MJActionExecutionLogEntity, MJActionEntity_IRuntimeActionConfiguration, MJActionCategoryEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
+import { BaseEntitySaveQueue, LogError, LogErrorEx, LogStatus, Metadata, UserInfo, IMetadataProvider, DatabaseProviderBase } from "@memberjunction/core";
+import { MJActionEntity, MJActionExecutionLogEntity, MJActionEntity_IRuntimeActionConfiguration, MJActionCategoryEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
 import { BaseSingleton, MJGlobal, MJLruCache, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { BaseAction } from "./BaseAction";
 import { BaseActionFilter } from "./BaseActionFilter";
@@ -15,7 +15,9 @@ import {
     RedactParamsToJSON,
     EntityChangeContext,
     DidFieldChange,
-    DidFieldChangeToValue
+    DidFieldChangeToValue,
+    ActionAudienceReaders,
+    AUDIENCE_UNSUPPORTED_RESULT_CODE
 } from "@memberjunction/actions-base";
 import { RuntimeActionExecutor } from "@memberjunction/action-runtime";
 import type { BridgeHandlerMap } from "@memberjunction/code-execution";
@@ -31,6 +33,9 @@ import type { BridgeHandlerMap } from "@memberjunction/code-execution";
  */
 export const ACTION_PREVENTED_BY_FILTER_MESSAGE =
    'Filters were run and the result indicated this action should not be executed. This is a Success condition as filters returning false is not considered an error.';
+
+/** Why `CheckAudience` refuses every action under a malformed audience (the refusal message's closing clause). */
+const MALFORMED_AUDIENCE_REASON = 'the audience naming them is malformed, so who they are cannot be checked';
 
 /**
  * Execution context handed to an Action Filter's `Code` when the engine evaluates it inline
@@ -80,6 +85,37 @@ export interface ActionFilterContext {
 }
 
 /**
+ * Opens a provider on the host's read-only database login. Resolves null when the host has no
+ * read-only login configured.
+ */
+export type ReadOnlyProviderFactory = () => Promise<DatabaseProviderBase | null>;
+
+/**
+ * The host's checks for SQL a caller wrote, so that an action which runs such SQL applies the same
+ * rules as the host's own ad-hoc SQL API. MJServer registers one at startup.
+ */
+export interface AdhocSQLAuthorizer {
+   /**
+    * Why `contextUser` may not run `sql` on `provider`, or null when they may. The host checks the
+    * SQL as it will run: one read statement, and every table it reads an entity view the user may
+    * read in full.
+    */
+   Authorize(sql: string, provider: DatabaseProviderBase, contextUser: UserInfo): string | null;
+
+   /** The timeout, in seconds, to run with when the caller asks for `requestedSeconds`. */
+   ClampTimeoutSeconds(requestedSeconds: number | undefined): number;
+}
+
+/**
+ * True when `actionClass` declares `AuthorizesCaller = true` as its own static field. A subclass does
+ * not inherit the marker from its parent. The field is read by name, so a class built on another
+ * loaded copy of {@link BaseAction} qualifies too.
+ */
+function declaresAuthorizesCaller(actionClass: unknown): boolean {
+   return typeof actionClass === 'function' && Object.getOwnPropertyDescriptor(actionClass, 'AuthorizesCaller')?.value === true;
+}
+
+/**
  * Base class for executing actions. This class can be sub-classed if desired if you would like to modify the logic across ALL actions. To do so, sub-class this class and use the
  * @RegisterClass decorator from the @memberjunction/global package to register your sub-class with the ClassFactory. This will cause your sub-class to be used instead of this base class when the Metadata object insantiates the ActionEngine.
  */
@@ -100,7 +136,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * one cache, loaded once, shared by every consumer (and reused by AIEngine.RefreshActions via the
     * BaseEngineRegistry).
     */
-   private get Base(): ActionEngineBase {
+   private get base(): ActionEngineBase {
       return ActionEngineBase.Instance;
    }
 
@@ -119,31 +155,93 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       if (contextUser) {
          this._contextUser = contextUser;
       }
-      await this.Base.Config(forceRefresh, contextUser, provider);
+      await this.base.Config(forceRefresh, contextUser, provider);
    }
 
    /** True once the underlying ActionEngineBase cache has loaded. */
-   public get Loaded(): boolean { return this.Base.Loaded; }
+   public get Loaded(): boolean { return this.base.Loaded; }
 
-   public get ContextUser(): UserInfo { return (this._contextUser ?? this.Base.ContextUser) as UserInfo; }
+   public get ContextUser(): UserInfo { return (this._contextUser ?? this.base.ContextUser) as UserInfo; }
    public set ContextUser(value: UserInfo) { this._contextUser = value; }
 
+   // No initializer, so running the constructor again on the live singleton keeps the registration.
+   private _readOnlyProviderFactory?: ReadOnlyProviderFactory;
+
+   /**
+    * Registers how the host opens a provider on its read-only database login. MJServer registers one
+    * at startup. A second registration through this setter throws; code running inside the server
+    * process can still replace it.
+    * @throws Error when a factory is already registered
+    */
+   public SetReadOnlyProviderFactory(factory: ReadOnlyProviderFactory): void {
+      if (this._readOnlyProviderFactory) {
+         throw new Error('A read-only provider factory is already registered with the action engine; a second registration is not allowed.');
+      }
+      this._readOnlyProviderFactory = factory;
+   }
+
+   /**
+    * A provider on the host's read-only database login, for actions that run caller-supplied SQL.
+    * Such actions run only here and never fall back to the read-write provider, so they refuse when
+    * this resolves null: no factory registered, or no read-only login configured.
+    */
+   public async GetReadOnlyProvider(): Promise<DatabaseProviderBase | null> {
+      return this._readOnlyProviderFactory ? await this._readOnlyProviderFactory() : null;
+   }
+
+   // No initializer, so running the constructor again on the live singleton keeps the registration.
+   private _adhocSQLAuthorizer?: AdhocSQLAuthorizer;
+
+   /**
+    * Registers the host's checks for SQL a caller wrote. MJServer registers one at startup. A second
+    * registration through this setter throws; code running inside the server process can still
+    * replace it.
+    * @throws Error when an authorizer is already registered
+    */
+   public SetAdhocSQLAuthorizer(authorizer: AdhocSQLAuthorizer): void {
+      if (this._adhocSQLAuthorizer) {
+         throw new Error('An ad-hoc SQL authorizer is already registered with the action engine; a second registration is not allowed.');
+      }
+      this._adhocSQLAuthorizer = authorizer;
+   }
+
+   /**
+    * The host's checks for SQL a caller wrote. Actions that run such SQL refuse when this is null.
+    */
+   public get AdhocSQLAuthorizer(): AdhocSQLAuthorizer | null {
+      return this._adhocSQLAuthorizer ?? null;
+   }
+
+   /**
+    * True when the class that runs `action` declares {@link BaseAction.AuthorizesCaller} itself. The
+    * class is resolved the way {@link RunClassBasedAction} resolves it. A subclass that overrides a
+    * marked action does not inherit the marker. A Runtime action, or one with no registered class,
+    * does not authorize its caller.
+    */
+   public ActionAuthorizesCaller(action: MJActionEntity): boolean {
+      if (action.Type === 'Runtime') {
+         return false;
+      }
+      const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseAction, action.DriverClass || action.Name);
+      return declaresAuthorizesCaller(registration?.SubClass);
+   }
+
    // ── Proxied cached collections (single source of truth: ActionEngineBase.Instance) ──
-   public get Actions(): MJActionEntityExtended[] { return this.Base.Actions; }
-   public get ActionCategories(): MJActionCategoryEntity[] { return this.Base.ActionCategories; }
-   public get ActionParams(): MJActionParamEntity[] { return this.Base.ActionParams; }
-   public get ActionFilters(): MJActionFilterEntity[] { return this.Base.ActionFilters; }
-   public get ActionResultCodes(): MJActionResultCodeEntity[] { return this.Base.ActionResultCodes; }
-   public get ActionLibraries(): MJActionLibraryEntity[] { return this.Base.ActionLibraries; }
-   public get CoreActions(): MJActionEntityExtended[] { return this.Base.CoreActions; }
-   public get NonCoreActions(): MJActionEntityExtended[] { return this.Base.NonCoreActions; }
-   public get CoreActionsRootCategoryID(): string { return this.Base.CoreActionsRootCategoryID; }
+   public get Actions(): MJActionEntityExtended[] { return this.base.Actions; }
+   public get ActionCategories(): MJActionCategoryEntity[] { return this.base.ActionCategories; }
+   public get ActionParams(): MJActionParamEntity[] { return this.base.ActionParams; }
+   public get ActionFilters(): MJActionFilterEntity[] { return this.base.ActionFilters; }
+   public get ActionResultCodes(): MJActionResultCodeEntity[] { return this.base.ActionResultCodes; }
+   public get ActionLibraries(): MJActionLibraryEntity[] { return this.base.ActionLibraries; }
+   public get CoreActions(): MJActionEntityExtended[] { return this.base.CoreActions; }
+   public get NonCoreActions(): MJActionEntityExtended[] { return this.base.NonCoreActions; }
+   public get CoreActionsRootCategoryID(): string { return this.base.CoreActionsRootCategoryID; }
 
    // ── Proxied lookups ──
-   public IsChildCategoryOf(categoryId: string, parentCategoryId: string): boolean { return this.Base.IsChildCategoryOf(categoryId, parentCategoryId); }
-   public IsCoreAction(action: MJActionEntityExtended): boolean { return this.Base.IsCoreAction(action); }
-   public IsCoreActionCategory(categoryId: string): boolean { return this.Base.IsCoreActionCategory(categoryId); }
-   public GetActionByName(actionName: string): MJActionEntityExtended | undefined { return this.Base.GetActionByName(actionName); }
+   public IsChildCategoryOf(categoryId: string, parentCategoryId: string): boolean { return this.base.IsChildCategoryOf(categoryId, parentCategoryId); }
+   public IsCoreAction(action: MJActionEntityExtended): boolean { return this.base.IsCoreAction(action); }
+   public IsCoreActionCategory(categoryId: string): boolean { return this.base.IsCoreActionCategory(categoryId); }
+   public GetActionByName(actionName: string): MJActionEntityExtended | undefined { return this.base.GetActionByName(actionName); }
 
    /**
     * Fire-and-forget queue for action-execution-log writes. Action-execution logging is observability —
@@ -157,7 +255,9 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * impossible). The queue is self-bounding (in-flight tasks only), so it needs no flush on this
     * long-lived singleton.
     */
-   private readonly _logQueue = new BaseEntitySaveQueue();
+   private readonly _logQueue = new BaseEntitySaveQueue({ saveReturnMode: 'datestamps_only' });
+   /** Per-run cache of resolved BaseAction instances so CheckAudience, ValidateInputs, and RunClassBasedAction share one instance. */
+   private readonly _actionInstanceCache = new WeakMap<RunActionParams, BaseAction | null>();
 
    /**
     * Engine-default wall-clock timeout applied to any action whose
@@ -171,51 +271,61 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
    }
 
    public async RunAction(params: RunActionParams): Promise<ActionResult> {
-      // Snapshot the inputs BEFORE anything can run — see SnapshotInputParams. Threaded down every
-      // path (validation failure, filter refusal, timeout, normal run) so all four write the same
-      // as-called values into ActionExecutionLog.Params.
-      const inputSnapshot = this.SnapshotInputParams(params);
-      const validInputs: boolean = await this.ValidateInputs(params);
-      if(!validInputs){
-         const result: ActionResult = {
-            Success: false,
-            Message: "Input validation failed. This is a failure condition.",
-            LogEntry: null,
-            Params: params.Params,
-            RunParams: params
-         };
+      try {
+         // An audience the run cannot honour refuses it before anything else — no validation, no filters, no log
+         // row: the action never runs. Otherwise the audience is normalized for the action (see CheckAudience).
+         const audienceRefusal = this.CheckAudience(params);
+         if (audienceRefusal) {
+            return audienceRefusal;
+         }
+         // Snapshot the inputs BEFORE anything can run — see SnapshotInputParams. Threaded down every
+         // path (validation failure, filter refusal, timeout, normal run) so all four write the same
+         // as-called values into ActionExecutionLog.Params.
+         const inputSnapshot = this.SnapshotInputParams(params);
+         const validInputs: boolean = await this.ValidateInputs(params);
+         if(!validInputs){
+            const result: ActionResult = {
+               Success: false,
+               Message: "Input validation failed. This is a failure condition.",
+               LogEntry: null,
+               Params: params.Params,
+               RunParams: params
+            };
 
-         if(this.ShouldLogOutcome(params, result)){
-            result.LogEntry = await this.StartAndEndActionLog(params, result, inputSnapshot);
+            if(this.ShouldLogOutcome(params, result)){
+               result.LogEntry = await this.StartAndEndActionLog(params, result, inputSnapshot);
+            }
+
+            return result;
          }
 
-         return result;
-      }
+         const filtersPassed: boolean = await this.RunFilters(params);
+         if(!filtersPassed){
+            // filters indicated we should NOT run this action
+            const result: ActionResult = {
+               Success: true,
+               Message: ACTION_PREVENTED_BY_FILTER_MESSAGE,
+               LogEntry: null, // initially null
+               Params: params.Params,
+               RunParams: params
+            };
 
-      const filtersPassed: boolean = await this.RunFilters(params);
-      if(!filtersPassed){
-         // filters indicated we should NOT run this action
-         const result: ActionResult = {
-            Success: true,
-            Message: ACTION_PREVENTED_BY_FILTER_MESSAGE,
-            LogEntry: null, // initially null
-            Params: params.Params,
-            RunParams: params
-         };
+            if(this.ShouldLogOutcome(params, result)){
+               result.LogEntry = await this.StartAndEndActionLog(params, result, inputSnapshot);
+            }
 
-         if(this.ShouldLogOutcome(params, result)){
-            result.LogEntry = await this.StartAndEndActionLog(params, result, inputSnapshot);
+            // RETURNING here is the entire point of a filter. Without it this block logged a refusal
+            // and then fell through to run the action anyway — so every filter recorded that it had
+            // prevented something while preventing nothing. The refusal row made it look like the
+            // mechanism worked, which is why it survived: the observable said "prevented" and the side
+            // effect happened regardless.
+            return result;
          }
 
-         // RETURNING here is the entire point of a filter. Without it this block logged a refusal
-         // and then fell through to run the action anyway — so every filter recorded that it had
-         // prevented something while preventing nothing. The refusal row made it look like the
-         // mechanism worked, which is why it survived: the observable said "prevented" and the side
-         // effect happened regardless.
-         return result;
+         return await this.RunActionWithTimeout(params, inputSnapshot);
+      } finally {
+         this._actionInstanceCache.delete(params);
       }
-
-      return await this.RunActionWithTimeout(params, inputSnapshot);
    }
 
    /**
@@ -339,9 +449,9 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
 
          return {
             Name: param.Name,
-            Value: value,
-            Type: param.Type
-         }
+            Type: param.Type,
+            Value: value
+         };
       });
 
       return params;
@@ -471,11 +581,15 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
                : await this.RunClassBasedAction(params)
          );
 
-         const resultCodeEntity: MJActionResultCodeEntity | undefined = this.ActionResultCodes.find(r => UUIDsEqual(r.ActionID, params.Action.ID) &&
-                                                               r.ResultCode.trim().toLowerCase() === simpleResult.ResultCode.trim().toLowerCase());
+         const resultCodeEntity: MJActionResultCodeEntity | undefined =
+            typeof this.base?.GetResultCode === 'function' && this.ActionResultCodes === this.base.ActionResultCodes
+               ? this.base.GetResultCode(params.Action.ID, simpleResult.ResultCode)
+               : this.ActionResultCodes.find(r => UUIDsEqual(r.ActionID, params.Action.ID) &&
+                                                  r.ResultCode.trim().toLowerCase() === simpleResult.ResultCode.trim().toLowerCase());
          const result: ActionResult = {
             RunParams: params,
             Success: simpleResult.Success,
+            ResultCode: simpleResult.ResultCode,
             Message: simpleResult.Message,
             AIDirectives: simpleResult.AIDirectives,
             LogEntry: logEntry,
@@ -525,15 +639,88 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * the Type dispatch is readable.
     */
    protected async RunClassBasedAction(params: RunActionParams): Promise<ActionResultSimple> {
+      const action = this.GetOrCreateActionInstance(params);
+      if (!action) {
+         throw new Error(`Could not find a class for action ${params.Action.Name}.`);
+      }
+      return await action.Run(params);
+   }
+
+   /**
+    * Returns the memoized `BaseAction` instance for `params` (or creates it once via `CreateActionInstance`),
+    * avoiding duplicate `ClassFactory.CreateInstance` calls across `CheckAudience`, `ValidateInputs`, and `RunClassBasedAction`.
+    */
+   protected GetOrCreateActionInstance(params: RunActionParams): BaseAction | null {
+      if (this._actionInstanceCache.has(params)) {
+         return this._actionInstanceCache.get(params) ?? null;
+      }
+      const instance = this.CreateActionInstance(params);
+      this._actionInstanceCache.set(params, instance);
+      return instance;
+   }
+
+   /**
+    * The registered class for a Custom / Generated action — keyed by its `DriverClass`, else its `Name` — or
+    * null when nothing more specific than `BaseAction` is registered.
+    */
+   protected CreateActionInstance(params: RunActionParams): BaseAction | null {
       const action = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAction>(
          BaseAction,
          params.Action.DriverClass || params.Action.Name,
          params.ContextUser
       );
-      if (!action || action.constructor === BaseAction) {
-         throw new Error(`Could not find a class for action ${params.Action.Name}.`);
+      return action && action.constructor !== BaseAction ? action : null;
+   }
+
+   /**
+    * The audience gate ({@link RunActionParams.Audience}): the refusal when the audience adds a reader beyond
+    * the caller and this run cannot honour it, else null — after normalizing the audience to the distinct
+    * readers beyond the caller, or clearing it when it adds nobody, so the action sees exactly the people to check.
+    *
+    * Refused, for EVERY action, under a malformed audience (`Readers` not an array, a reader that is not an object
+    * or has no `ID` — see {@link ActionAudienceReaders}): who the readers are cannot be checked, so no action may run
+    * as if there were none, nor pass it on to one that would take it as no audience. Refused under a well-formed
+    * audience that adds a reader: an action whose class does not declare `BaseAction.SupportsAudience`, or has no
+    * registered class; a runtime-defined action, whose code cannot declare support; and any deferred run, which
+    * hands the work to a path that executes it later, outside this gate. The refusal carries
+    * {@link AUDIENCE_UNSUPPORTED_RESULT_CODE} and writes no execution log row, since nothing ran. Protected so a
+    * host can change the rule.
+    */
+   protected CheckAudience(params: RunActionParams): ActionResult | null {
+      const readers = ActionAudienceReaders(params.Audience, params.ContextUser);
+      if (readers !== null && readers.length === 0) {
+         params.Audience = undefined;
+         return null;
       }
-      return await action.Run(params);
+      const reason = readers === null ? MALFORMED_AUDIENCE_REASON : this.audienceUnsupportedReason(params);
+      if (!reason && readers) {
+         params.Audience = { Readers: readers };
+         return null;
+      }
+      LogStatus(`ActionEngine: action '${params.Action.Name}' refused under an audience — ${reason}.`);
+      return {
+         RunParams: params,
+         Success: false,
+         ResultCode: AUDIENCE_UNSUPPORTED_RESULT_CODE,
+         Message: `Action '${params.Action.Name}' is not available here: its output would be shown to people besides the caller, and ${reason}.`,
+         LogEntry: undefined,
+         Params: params.Params,
+         Result: undefined
+      };
+   }
+
+   /** Why this run cannot honour an audience, or null when it can. */
+   private audienceUnsupportedReason(params: RunActionParams): string | null {
+      if (params.DeferExecution) {
+         return 'a deferred run executes later, outside this dispatch, where nothing holds it to the audience';
+      }
+      if (params.Action.Type === 'Runtime') {
+         return 'a runtime-defined action cannot declare that it honours an audience';
+      }
+      if (this.GetOrCreateActionInstance(params)?.SupportsAudience === true) {
+         return null;
+      }
+      return 'it has not declared that it can limit what it returns to what every one of them may see';
    }
 
    /**
@@ -599,7 +786,9 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
                config,
                contextUser: params.ContextUser,
                abortSignal: params.AbortSignal,
-               provider: params.Provider
+               provider: params.Provider,
+               runScope: params.RunScope,
+               audience: params.Audience
             });
             preamble = builder.GetPreamble();
          }
@@ -658,6 +847,9 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * the `Params` column, so redaction here is what makes the column safe by construction.
     */
    protected SnapshotInputParams(params: RunActionParams): string {
+      if (params.SkipActionLog || this.ResolveLoggingMode(params) === 'None' || !params.Params || params.Params.length === 0) {
+         return '[]';
+      }
       return RedactParamsToJSON(params.Params, this.ParamDefinitionsFor(params), params.Provenance?.EntityActionParams);
    }
 
@@ -667,7 +859,11 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * which is typed as the plain entity and carries no params collection.
     */
    protected ParamDefinitionsFor(params: RunActionParams): MJActionParamEntity[] {
-      return params.Action ? this.ActionParams.filter(p => UUIDsEqual(p.ActionID, params.Action.ID)) : [];
+      if (!params.Action) return [];
+      if (typeof this.base?.GetParamsByActionID === 'function' && this.ActionParams === this.base.ActionParams) {
+         return this.base.GetParamsByActionID(params.Action.ID);
+      }
+      return this.ActionParams.filter(p => UUIDsEqual(p.ActionID, params.Action.ID));
    }
 
    /**

@@ -6,9 +6,9 @@ import { AgentRunner } from "@memberjunction/ai-agents";
 import { ChatMessage } from "@memberjunction/ai";
 
 export interface OperationResult {
-    success: boolean;
-    result?: any;
-    errorMessage?: string;
+    success: boolean;  // case-violation-ok-legacy-back-compat: the A2A protocol wire shape — these field names ARE the protocol, serialized to every A2A client
+    result?: any;  // case-violation-ok-legacy-back-compat: the A2A protocol wire shape — these field names ARE the protocol, serialized to every A2A client
+    errorMessage?: string;  // case-violation-ok-legacy-back-compat: the A2A protocol wire shape — these field names ARE the protocol, serialized to every A2A client
 }
 
 export interface OperationParameters {
@@ -37,7 +37,7 @@ export class AgentOperations {
      * @param parameters Parameters containing the pattern
      * @returns The operation result with list of agents
      */
-    public async discoverAgents(parameters: OperationParameters): Promise<OperationResult> {
+    public async DiscoverAgents(parameters: OperationParameters): Promise<OperationResult> {
         try {
             const pattern = parameters.pattern || '*';
             
@@ -84,12 +84,17 @@ export class AgentOperations {
         }
     }
 
+    /** @deprecated Use {@link DiscoverAgents}. */
+    public async discoverAgents(parameters: OperationParameters): Promise<OperationResult> {
+        return this.DiscoverAgents(parameters);
+    }
+
     /**
      * Executes an agent
      * @param parameters Parameters containing agent ID/name and execution params
      * @returns The operation result with run info
      */
-    public async executeAgent(parameters: OperationParameters): Promise<OperationResult> {
+    public async ExecuteAgent(parameters: OperationParameters, cancellationToken?: AbortSignal): Promise<OperationResult> {
         try {
             // Find the agent
             const aiEngine = AIEngine.Instance;
@@ -120,7 +125,8 @@ export class AgentOperations {
                 agent,
                 conversationMessages: messages,
                 contextUser: this.contextUser,
-                data: parameters.data || {}
+                data: parameters.data || {},
+                ...(cancellationToken ? { cancellationToken } : {})
             });
             
             return { 
@@ -144,12 +150,17 @@ export class AgentOperations {
         }
     }
 
+    /** @deprecated Use {@link ExecuteAgent}. */
+    public async executeAgent(parameters: OperationParameters, cancellationToken?: AbortSignal): Promise<OperationResult> {
+        return this.ExecuteAgent(parameters, cancellationToken);
+    }
+
     /**
      * Gets the status of an agent run
      * @param parameters Parameters containing the run ID
      * @returns The operation result with run status
      */
-    public async getAgentRunStatus(parameters: OperationParameters): Promise<OperationResult> {
+    public async GetAgentRunStatus(parameters: OperationParameters): Promise<OperationResult> {
         try {
             const runId = parameters.runId;
             
@@ -191,12 +202,17 @@ export class AgentOperations {
         }
     }
 
+    /** @deprecated Use {@link GetAgentRunStatus}. */
+    public async getAgentRunStatus(parameters: OperationParameters): Promise<OperationResult> {
+        return this.GetAgentRunStatus(parameters);
+    }
+
     /**
      * Cancels an agent run
      * @param parameters Parameters containing the run ID
      * @returns The operation result
      */
-    public async cancelAgentRun(parameters: OperationParameters): Promise<OperationResult> {
+    public async CancelAgentRun(parameters: OperationParameters): Promise<OperationResult> {
         try {
             const runId = parameters.runId;
             
@@ -243,25 +259,30 @@ export class AgentOperations {
         }
     }
 
+    /** @deprecated Use {@link CancelAgentRun}. */
+    public async cancelAgentRun(parameters: OperationParameters): Promise<OperationResult> {
+        return this.CancelAgentRun(parameters);
+    }
+
     /**
      * Processes an agent operation
      * @param operation The operation to perform
      * @param parameters The operation parameters
      * @returns The operation result
      */
-    public async processOperation(operation: string, parameters: OperationParameters): Promise<OperationResult> {
+    public async ProcessOperation(operation: string, parameters: OperationParameters, cancellationToken?: AbortSignal): Promise<OperationResult> {
         switch(operation) {
             case 'discoverAgents':
-                return await this.discoverAgents(parameters);
+                return await this.DiscoverAgents(parameters);
                 
             case 'executeAgent':
-                return await this.executeAgent(parameters);
+                return await this.ExecuteAgent(parameters, cancellationToken);
                 
             case 'getAgentRunStatus':
-                return await this.getAgentRunStatus(parameters);
+                return await this.GetAgentRunStatus(parameters);
                 
             case 'cancelAgentRun':
-                return await this.cancelAgentRun(parameters);
+                return await this.CancelAgentRun(parameters);
                 
             default:
                 return { 
@@ -269,5 +290,10 @@ export class AgentOperations {
                     errorMessage: `Unsupported agent operation: ${operation}` 
                 };
         }
+    }
+
+    /** @deprecated Use {@link ProcessOperation}. */
+    public async processOperation(operation: string, parameters: OperationParameters, cancellationToken?: AbortSignal): Promise<OperationResult> {
+        return this.ProcessOperation(operation, parameters, cancellationToken);
     }
 }

@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { IMetadataProvider } from '@memberjunction/core';
 import { JSONObject } from '@memberjunction/ai';
-import { RealtimeSessionService, RealtimeCaption, RealtimeConnectionState } from '../lib/services/realtime-session.service';
+import { RealtimeCaption, RealtimeConnectionState } from '@memberjunction/realtime-runtime';
+import { RealtimeSessionService } from '../lib/services/realtime-session.service';
 
 /**
  * Provider-agnostic POLICY surfaces of the voice session service that no other suite
@@ -414,6 +415,49 @@ describe('RealtimeSessionService — transcript correction (ReplacesPrevious)', 
       expect.objectContaining({ replacesPrevious: false })
     );
   });
+
+  it('renders interim user transcripts as an in-place caption, appending deltas and replacing on final without relaying interims', async () => {
+    const t = transcriptInternals(service);
+
+    // Three deltas
+    await t.onClientTranscript({ Role: 'User', Text: 'Hello', IsFinal: false, Kind: 'normal' });
+    expect(captionsOf(service)).toEqual([{ Role: 'User', Text: 'Hello' }]);
+    expect(executeGQL).not.toHaveBeenCalled();
+
+    await t.onClientTranscript({ Role: 'User', Text: ' world', IsFinal: false, Kind: 'normal' });
+    expect(captionsOf(service)).toEqual([{ Role: 'User', Text: 'Hello world' }]);
+    expect(executeGQL).not.toHaveBeenCalled();
+
+    await t.onClientTranscript({ Role: 'User', Text: '!', IsFinal: false, Kind: 'normal' });
+    expect(captionsOf(service)).toEqual([{ Role: 'User', Text: 'Hello world!' }]);
+    expect(executeGQL).not.toHaveBeenCalled();
+
+    // Final
+    await t.onClientTranscript({ Role: 'User', Text: 'Hello world!', IsFinal: true, Kind: 'normal' });
+    expect(captionsOf(service)).toEqual([{ Role: 'User', Text: 'Hello world!' }]);
+    expect(executeGQL).toHaveBeenCalledTimes(1);
+    expect(executeGQL).toHaveBeenLastCalledWith(
+      expect.stringContaining('RelayRealtimeTranscript'),
+      expect.objectContaining({ role: 'user', text: 'Hello world!', agentSessionId: 'sess-1' })
+    );
+  });
+
+  it('ignores whitespace-only interim deltas and whitespace-only final transcripts', async () => {
+    const t = transcriptInternals(service);
+
+    // Whitespace-only interim delta does not start an interim bubble
+    await t.onClientTranscript({ Role: 'User', Text: '   ', IsFinal: false, Kind: 'normal' });
+    expect(captionsOf(service)).toEqual([]);
+    expect(executeGQL).not.toHaveBeenCalled();
+
+    // Real interim delta creates the bubble
+    await t.onClientTranscript({ Role: 'User', Text: 'Hello', IsFinal: false, Kind: 'normal' });
+    expect(captionsOf(service)).toEqual([{ Role: 'User', Text: 'Hello' }]);
+
+    // Whitespace-only final does not relay or overwrite
+    await t.onClientTranscript({ Role: 'User', Text: '   ', IsFinal: true, Kind: 'normal' });
+    expect(executeGQL).not.toHaveBeenCalled();
+  });
 });
 
 describe('RealtimeSessionService — per-turn recording timing across a tool-call gap', () => {
@@ -456,7 +500,7 @@ describe('RealtimeSessionService — per-turn recording timing across a tool-cal
     internals(service).agentSessionId = 'sess-1';
     now = 0;
     // Inject a fake recorder whose offset is whatever the test set `now` to, mirroring how the
-    // real RealtimeAudioRecorder reports wall-clock-relative offsets during a live recording.
+    // real RealtimeAudioRecorder reports offsets from its 48 kHz sample clock during a live recording.
     timing(service).recorder = { NowOffsetMs: () => now };
     // Seed as the live recorder path does: first turn starts at ~0, guard not yet captured.
     timing(service).currentTurnStartMs = 0;
@@ -508,6 +552,16 @@ describe('RealtimeSessionService — per-turn recording timing across a tool-cal
     now = 9000; await t.onClientTranscript({ Role: 'Assistant', Text: 'hi there', IsFinal: true, Kind: 'normal', ReplacesPrevious: true });
     // The correction relays start=null (it doesn't reopen a turn) while end tracks finalization.
     expect(lastTiming()).toEqual({ utteranceStartMs: null, utteranceEndMs: 9000 });
+  });
+
+  it('relays whole milliseconds when the recorder clock lands between them (GraphQL Int)', async () => {
+    // The recorder counts 48 kHz samples, so an offset is rarely a whole millisecond: 229,376 samples
+    // is 4778.67 ms. RelayRealtimeTranscript types both offsets as Int, and GraphQL refuses a
+    // fraction, so the whole transcript line was lost (#5294 live smoke: 16 of 16 lines on an iPhone).
+    const t = timing(service);
+    now = (229_376 * 1000) / 48_000; await t.onClientTranscript({ Role: 'Assistant', Text: 'hello', IsFinal: false, Kind: 'normal' });
+    now = (487_936 * 1000) / 48_000; await t.onClientTranscript({ Role: 'Assistant', Text: 'hello there', IsFinal: true, Kind: 'normal' });
+    expect(lastTiming()).toEqual({ utteranceStartMs: 4779, utteranceEndMs: 10165 });
   });
 
   // ── #3832: the session clock — timings without a recording ────────────────────────────────────

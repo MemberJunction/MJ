@@ -51,13 +51,13 @@ import { type UserInfo, type IMetadataProvider, Metadata } from '@memberjunction
 import type { MJRecordProcessEntity, MJMLModelScoringBindingEntity } from '@memberjunction/core-entities';
 import {
   ML_MODEL_WORK_TYPE,
-  applyScope,
-  modelConfiguration,
-  writeBackOutputMapping,
-  createScoringBinding,
-  countScopeSelectors,
-  resolveTargetEntityID,
-  isNonEmpty,
+  ApplyScope,
+  ModelConfiguration,
+  WriteBackOutputMapping,
+  CreateScoringBinding,
+  CountScopeSelectors,
+  ResolveTargetEntityID,
+  IsNonEmpty,
   type ScoringValueKind,
   type ScoringScope,
 } from '../scoring/scoring-process-shared';
@@ -185,14 +185,14 @@ export interface ScheduledModelScoringResult {
  *   the cause). The binding save is intentionally fail-loud (not swallowed): a saved RP
  *   without a binding would run invisibly to the lineage UX, so we surface the inconsistency.
  */
-export async function createScheduledModelScoring(
+export async function CreateScheduledModelScoring(
   opts: ScheduleModelScoringOptions,
 ): Promise<ScheduledModelScoringResult> {
   validateOptions(opts);
 
   const provider = opts.provider ?? Metadata.Provider;
-  const entityID = resolveTargetEntityID(opts.targetEntityName, provider, HELPER_NAME);
-  const cron = cadenceToCron(opts.cadence);
+  const entityID = ResolveTargetEntityID(opts.targetEntityName, provider, HELPER_NAME);
+  const cron = CadenceToCron(opts.cadence);
 
   const rp = await provider.GetEntityObject<MJRecordProcessEntity>('MJ: Record Processes', opts.contextUser);
   rp.NewRecord();
@@ -206,8 +206,8 @@ export async function createScheduledModelScoring(
   }
 
   // Lineage binding only in write-back mode — generic output has no column to bind.
-  const binding = isNonEmpty(opts.outputField)
-    ? await createScoringBinding(
+  const binding = IsNonEmpty(opts.outputField)
+    ? await CreateScoringBinding(
         opts.modelId,
         opts.outputField,
         rp.ID,
@@ -219,6 +219,13 @@ export async function createScheduledModelScoring(
       )
     : null;
   return { recordProcess: rp, binding };
+}
+
+/** @deprecated Use {@link CreateScheduledModelScoring}. */
+export async function createScheduledModelScoring(
+  opts: ScheduleModelScoringOptions,
+): Promise<ScheduledModelScoringResult> {
+  return CreateScheduledModelScoring(opts);
 }
 
 // ----- field population --------------------------------------------------------
@@ -247,13 +254,13 @@ function applyRecordProcessFields(
   // it, so Set() is the legitimate, documented exception (same as PS2-1's path).
   rp.Set('WorkType', ML_MODEL_WORK_TYPE);
 
-  applyScope(rp, opts.scope);
+  ApplyScope(rp, opts.scope);
 
-  rp.Configuration = modelConfiguration(opts.modelId, opts.primaryKeyField);
+  rp.Configuration = ModelConfiguration(opts.modelId, opts.primaryKeyField);
   // Write-back mode only: map the prediction into the target column. Generic mode
   // (no outputField) leaves OutputMapping unset — predictions land in run history only.
-  if (isNonEmpty(opts.outputField)) {
-    rp.OutputMapping = writeBackOutputMapping(opts.outputField, opts.valueKind);
+  if (IsNonEmpty(opts.outputField)) {
+    rp.OutputMapping = WriteBackOutputMapping(opts.outputField, opts.valueKind);
   }
 
   rp.ScheduleEnabled = true;
@@ -269,7 +276,7 @@ function applyRecordProcessFields(
  * {@link CADENCE_CRON}; an explicit `{ cron }` is passed through (trimmed). Defaults
  * to `'Monthly'` when no cadence is supplied.
  */
-export function cadenceToCron(cadence: ScoringCadence | undefined): string {
+export function CadenceToCron(cadence: ScoringCadence | undefined): string {
   if (cadence == null) {
     return CADENCE_CRON.Monthly;
   }
@@ -283,6 +290,11 @@ export function cadenceToCron(cadence: ScoringCadence | undefined): string {
   return CADENCE_CRON[cadence];
 }
 
+/** @deprecated Use {@link CadenceToCron}. */
+export function cadenceToCron(cadence: ScoringCadence | undefined): string {
+  return CadenceToCron(cadence);
+}
+
 /**
  * A descriptive default Record Process name. The base shape never implies a column —
  * `Score <entity> with model <id> (<cadence>)` — which is exactly right for generic
@@ -294,7 +306,7 @@ function defaultName(opts: ScheduleModelScoringOptions, cron: string): string {
   const label = typeof opts.cadence === 'object' || opts.cadence == null
     ? (opts.cadence == null ? 'Monthly' : `cron ${cron}`)
     : opts.cadence;
-  const writeBack = isNonEmpty(opts.outputField) ? ` → ${opts.outputField}` : '';
+  const writeBack = IsNonEmpty(opts.outputField) ? ` → ${opts.outputField}` : '';
   return `Score ${opts.targetEntityName} with model ${opts.modelId}${writeBack} (${label})`;
 }
 
@@ -306,13 +318,13 @@ function defaultName(opts: ScheduleModelScoringOptions, cron: string): string {
  * (predictions recorded in run history only; see {@link createScheduledModelScoring}).
  */
 function validateOptions(opts: ScheduleModelScoringOptions): void {
-  if (!isNonEmpty(opts.modelId)) {
+  if (!IsNonEmpty(opts.modelId)) {
     throw new Error(`${HELPER_NAME}: \`modelId\` is required.`);
   }
-  if (!isNonEmpty(opts.targetEntityName)) {
+  if (!IsNonEmpty(opts.targetEntityName)) {
     throw new Error(`${HELPER_NAME}: \`targetEntityName\` is required.`);
   }
-  if (countScopeSelectors(opts.scope) !== 1) {
+  if (CountScopeSelectors(opts.scope) !== 1) {
     throw new Error(
       `${HELPER_NAME}: \`scope\` must populate exactly one of: filter, viewId, listId, all.`,
     );

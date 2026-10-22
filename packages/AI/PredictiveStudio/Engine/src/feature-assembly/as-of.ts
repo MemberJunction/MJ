@@ -39,7 +39,7 @@ export interface DatedRow {
  * @param labelEventDate the record's label-event date (required for `offset`)
  * @returns the resolved as-of cutoff, or `null` when no filtering applies
  */
-export function resolveAsOfDate(strategy: AsOfStrategy, record: SourceRow, labelEventDate?: Date | null): Date | null {
+export function ResolveAsOfDate(strategy: AsOfStrategy, record: SourceRow, labelEventDate?: Date | null): Date | null {
   switch (strategy.Mode) {
     case 'none':
       return null;
@@ -73,6 +73,11 @@ export function resolveAsOfDate(strategy: AsOfStrategy, record: SourceRow, label
   }
 }
 
+/** @deprecated Use {@link ResolveAsOfDate}. */
+export function resolveAsOfDate(strategy: AsOfStrategy, record: SourceRow, labelEventDate?: Date | null): Date | null {
+  return ResolveAsOfDate(strategy, record, labelEventDate);
+}
+
 /**
  * Filters dated rows to those occurring at-or-before the as-of cutoff. A `null`
  * cutoff (i.e. `Mode='none'`) is the identity filter — all rows survive.
@@ -84,12 +89,17 @@ export function resolveAsOfDate(strategy: AsOfStrategy, record: SourceRow, label
  * @param asOfDate the resolved cutoff, or `null` for no filtering
  * @returns the rows at-or-before the cutoff
  */
-export function filterAsOf(rows: DatedRow[], asOfDate: Date | null): DatedRow[] {
+export function FilterAsOf(rows: DatedRow[], asOfDate: Date | null): DatedRow[] {
   if (asOfDate === null) {
     return rows;
   }
   const cutoff = asOfDate.getTime();
   return rows.filter((r) => r.Date.getTime() <= cutoff);
+}
+
+/** @deprecated Use {@link FilterAsOf}. */
+export function filterAsOf(rows: DatedRow[], asOfDate: Date | null): DatedRow[] {
+  return FilterAsOf(rows, asOfDate);
 }
 
 /**
@@ -104,9 +114,9 @@ export function filterAsOf(rows: DatedRow[], asOfDate: Date | null): DatedRow[] 
  * @param rows candidate dated rows (will be filtered to the cutoff internally)
  * @param asOfDate the resolved cutoff; when `null`, recency is measured from "now"
  */
-export function daysSinceLastActivityAsOf(rows: DatedRow[], asOfDate: Date | null): number | null {
+export function DaysSinceLastActivityAsOf(rows: DatedRow[], asOfDate: Date | null): number | null {
   const reference = asOfDate ?? new Date();
-  const surviving = filterAsOf(rows, asOfDate);
+  const surviving = FilterAsOf(rows, asOfDate);
   if (surviving.length === 0) {
     return null;
   }
@@ -121,6 +131,11 @@ export function daysSinceLastActivityAsOf(rows: DatedRow[], asOfDate: Date | nul
   return Math.floor(diffMs / MS_PER_DAY);
 }
 
+/** @deprecated Use {@link DaysSinceLastActivityAsOf}. */
+export function daysSinceLastActivityAsOf(rows: DatedRow[], asOfDate: Date | null): number | null {
+  return DaysSinceLastActivityAsOf(rows, asOfDate);
+}
+
 /**
  * Counts surviving activity rows as of the cutoff — a generic point-in-time
  * aggregate (e.g. `activity_count_asof`). Only rows at-or-before the cutoff are
@@ -129,8 +144,13 @@ export function daysSinceLastActivityAsOf(rows: DatedRow[], asOfDate: Date | nul
  * @param rows candidate dated rows
  * @param asOfDate the resolved cutoff, or `null` for no filtering
  */
+export function ActivityCountAsOf(rows: DatedRow[], asOfDate: Date | null): number {
+  return FilterAsOf(rows, asOfDate).length;
+}
+
+/** @deprecated Use {@link ActivityCountAsOf}. */
 export function activityCountAsOf(rows: DatedRow[], asOfDate: Date | null): number {
-  return filterAsOf(rows, asOfDate).length;
+  return ActivityCountAsOf(rows, asOfDate);
 }
 
 /** Milliseconds in one day. */

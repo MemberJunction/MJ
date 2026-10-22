@@ -271,7 +271,7 @@ CodeGen guarantees **100% idempotency relative to database state** and **minimal
 
 1. **Idempotency (No-Change Runs)**:
    - Running CodeGen twice against an unchanged database state produces **0 diffs** across all generated code, schemas, and forms.
-   - Run 2 reports counters: `fieldsNew = 0`, `fieldsChanged = 0`, and `decisionRecordsWritten = 0`.
+   - Run 2 reports counters: `fieldsNew = 0`, `fieldsChanged = 0`.
    - Empty SQL capture files (`CodeGen_Run_*.sql`) are automatically removed upon run completion; no empty migration artifacts survive.
 
 2. **Minimal Blast Radius (Single-Column Changes)**:
@@ -279,8 +279,8 @@ CodeGen guarantees **100% idempotency relative to database state** and **minimal
    - Sibling fields on the entity are untouched: existing `DisplayName`, `Category`, `ExtendedType`, `CodeType`, `GeneratedFormSection`, `DefaultInView`, `IncludeInUserSearchAPI`, and `IsNameField` do not churn.
    - `generated-forms.module.ts` is not modified by adding a column (only by adding or deleting entire entities).
 
-3. **Field Decision Persistence**:
-   - Field categorization and metadata decisions are persisted to `metadata/entities/decisions/` so clean-room builds match warm builds identically.
+3. **Field Metadata Lock & Migration Single Source of Truth**:
+   - Field categorization and metadata decisions are locked in the database via the field-metadata lock (`field-metadata-lock.ts`) and committed via the migration's CodeGen capture SQL, making migration SQL the authoritative single source of truth.
    - Re-runs against an existing schema lock established categories and metadata unless the underlying schema definition materially changes.
 
 4. **Stable Partitioning & Deterministic Ordering**:

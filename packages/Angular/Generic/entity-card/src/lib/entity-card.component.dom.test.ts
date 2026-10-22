@@ -232,3 +232,56 @@ describe('MJEntityCardComponent (DOM)', () => {
     });
   });
 });
+
+describe('a date-only field renders its stored calendar day (MJ#4210)', () => {
+  /**
+   * A `date` column arrives as UTC midnight. Formatting it in the reader's local zone lands on
+   * the previous day for everyone west of Greenwich. The card knows the column's SQL type through
+   * the entity it was given, so a `date` is pinned to its stored day and a timestamp keeps local
+   * rendering. Pinned to a New York zone: at Greenwich this bug is invisible.
+   */
+  const AT = (tz: string, fn: () => void) => {
+    const original = process.env.TZ;
+    process.env.TZ = tz;
+    try {
+      fn();
+    } finally {
+      process.env.TZ = original;
+    }
+  };
+  const entity = {
+    Name: 'Animals',
+    Fields: [
+      { Name: 'IntakeDate', Type: 'date' },
+      { Name: 'LaunchAt', Type: 'datetimeoffset' },
+    ],
+  } as unknown as import('@memberjunction/core').EntityInfo;
+
+  it('shows the 20th for a stored 2026-11-20, not the 19th', () => {
+    AT('America/New_York', () => {
+      const f = renderComponentFixture(MJEntityCardComponent, {
+        inputs: {
+          Template: tpl({ DisplayFields: [field('IntakeDate', 'date')] }),
+          Record: { Name: 'Biscuit', IntakeDate: new Date('2026-11-20T00:00:00.000Z') },
+          Entity: entity,
+        },
+      });
+      const shown = text(f, '.mj-ec-field-value');
+      expect(shown, `got ${shown}`).toContain('20');
+      expect(shown).not.toContain('19');
+    });
+  });
+
+  it('keeps a timestamp field in local time', () => {
+    AT('America/New_York', () => {
+      const f = renderComponentFixture(MJEntityCardComponent, {
+        inputs: {
+          Template: tpl({ DisplayFields: [field('LaunchAt', 'date')] }),
+          Record: { Name: 'Biscuit', LaunchAt: new Date('2026-11-20T02:00:00.000Z') },
+          Entity: entity,
+        },
+      });
+      expect(text(f, '.mj-ec-field-value')).toContain('19');
+    });
+  });
+});

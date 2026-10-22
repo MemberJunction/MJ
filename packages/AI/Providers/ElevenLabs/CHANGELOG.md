@@ -1,5 +1,256 @@
 # @memberjunction/ai-elevenlabs
 
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- 4e4c82d: A cancelled model call now stops where it is: it is never failed over or retried, a call cancelled in flight is reported as `Cancelled` (a non-chat call cancelled before it starts is refused before a run row exists), and the cancellation reaches the vendor's SDK so the request is torn down rather than abandoned (#5548, #3132).
+
+  **Prompts and agents (#5548)**
+  - **No failover walk after a cancel.** `ExecuteWithFailover` stops before each candidate once the caller's token is aborted, and after any attempt that fails while it is aborted or that reports a cancellation. Before, one abort walked every model candidate (113 real driver calls in a live test) and logged an `[ERROR] [ModelExecution]` with a stack trace for each. Real failures before the cancel are still recorded as failover attempts. A timeout is not a cancellation and still fails over.
+  - **Logged once, recorded as cancelled.** One info line instead of an error per candidate. The prompt run is saved `Cancelled` / `user_requested`, and the `AIPromptRunResult` carries `status: 'Cancelled'` and `cancelled: true`.
+  - **Agent runs end Cancelled.** `BaseAgent` checks the token before treating a failed prompt as a failure, and before counting a failed step toward the consecutive-failure limit, so a run cancelled mid-prompt no longer ends `Failed`. A final answer that had already finished when Stop landed still completes the run.
+  - **Failover fields persist.** A prompt run's `FailoverAttempts`, `FailoverErrors`, `FailoverDurations`, `TotalFailoverDuration` and failed-over `ModelID` / `VendorID` were written while its `Running` INSERT could still be in flight, and the INSERT's reload reset them, so a run that failed over could be saved with `FailoverAttempts = 0`. They are now set again in the queued finalize update, after the reload. This affected every runner, not only cancellation.
+
+  **Cancellation in `@memberjunction/ai` (#3132)**
+  - **`AIErrorType` has `'Cancelled'`**: Fatal and never failed over. `ErrorAnalyzer` on its own classifies an error named `AbortError`, `APIUserAbortError` or `RequestAbortedError` as `Cancelled`. The signal-aware helpers that `BaseLLM`, `BaseDecision` and every runner use (`BuildCancellationErrorInfo`) decide by why the signal was aborted, so an abort caused by a timeout stays a retriable `NetworkError`. A timeout is recognized by the abort reason's type — a `TimeoutError`, or a reason flagged `IsTimeout` (new `TimeoutAbortReason`; `AIPromptTimeoutError` sets it) — never by the words of a caller's reason.
+  - **Shared helpers** (exported): `IsAbortError`, `IsTimeoutAbort`, `IsRequestAborted`, `BuildCancellationErrorInfo`, `IsCancellationErrorInfo`, `DescribeCancellation`, `CreateCancellationError`, `ThrowIfAborted`, `AbortableDelay`, and the `REQUEST_CANCELLED_CODE` / `REQUEST_TIMEOUT_CODE` codes.
+  - **`BaseLLM` owns chat cancellation, per request.** It answers an already-aborted request without calling the driver, turns an abort (thrown, or a failed result while the signal is aborted) into one cancelled result, and decides a streaming cancellation from the request's own signal, so drivers no longer keep cancellation state on a shared instance. New protected `BuildCancelledChatResult`, `IsCancellationError` and the `IsProviderAbortError` hook. A pre-aborted streaming request now resolves cancelled on every driver instead of rejecting with a generic error.
+  - **Every chat driver uses it.** The duplicated cancelled-result builders, predicates and stream-cancel flags are gone from Anthropic, Azure, Bedrock, Betty, BettyBot, Cerebras, Fireworks, Gemini (and Vertex), Groq, Inception, LMStudio, Mistral, Ollama and OpenAI (and its subclasses). Anthropic, Bedrock, Gemini, Mistral and Ollama used to report a cancel as a retriable `Unknown` error. Cancel messages now read "Request was cancelled[: reason]".
+  - **Bedrock streaming** iterated the response envelope instead of its body, so every streaming call failed with "stream is not async iterable". Fixed.
+  - `BaseDecision` and the decision runner classify an aborted decision by its signal, so a timeout fails over and a cancel does not.
+
+  **Non-chat models**
+  - **Media** (text-to-speech, speech-to-text, video): the driver params carry `CancellationToken`, the runner passes the call's bound signal, and the OpenAI, Groq, ElevenLabs and HeyGen drivers forward it. `MediaOperation.Invoke` takes the signal as a third argument.
+  - **Embeddings, rerank and image generation** gain timeout and cancellation: `TimeoutMS` / `CancellationToken` on their run options, a pre-aborted run refused before a run row exists, a cancelled run recorded `Cancelled` and not failed over, and a timeout failed over. The param types gain `CancellationToken`, and the OpenAI, Azure, Bedrock, Cohere, Gemini, Mistral, Ollama and local embedding drivers, the Cohere, LLM and decision rerankers, and the OpenAI, Gemini and FLUX image drivers forward it. A cancelled `BaseEmbeddings.EmbedTexts` now throws a cancellation error instead of returning an empty result. The local embedding model can only stop between texts or batches.
+
+  **Testing**
+  - `TestLLM` gains a `hangUntilAborted` outcome. The LLM conformance suite drops `PreAbortedStreamingBehavior`: every driver must resolve a pre-aborted request as `Cancelled`.
+  - New integration bundle **IT122 - Agent Prompt Cancellation**: a real agent run cancelled mid-call stops at that call and is recorded cancelled throughout.
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [3080e83]
+- Updated dependencies [81aea34]
+- Updated dependencies [2274f42]
+- Updated dependencies [230cdad]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [72dd65c]
+- Updated dependencies [17a4137]
+  - @memberjunction/ai@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- 5a3de97: The server AssemblyAI, ElevenLabs, Inworld and OpenAI Realtime drivers, and the xAI and Hugging Face drivers built on OpenAI's session, drop a video frame passed to `SendInput` instead of sending its bytes to the model as audio. Each session logs a dropped kind and type once (`console.warn`), not once per frame. `RealtimeDroppedInputReporter` (Core) is the shared reporter.
+- 35ed7b5: `IRealtimeSession.SendInput` takes one `RealtimeInputFrame` (`Data`, `Kind`, and optional `MimeType` and `TimestampMs`) instead of `(chunk, kind?)`. A realtime driver outside this repo must change its `SendInput` signature, and a caller passes `{ Data: chunk, Kind: 'audio' }`. The bridge engine passes each inbound frame's type and capture time, and `BridgeMediaFrame` gains an optional `MimeType`. The server Gemini Live driver sends a JPEG or PNG video frame as video instead of as audio, sends audio in the PCM format the frame names, and drops a frame it cannot send, reporting each type once. The other drivers behave as before.
+- Updated dependencies [d17de94]
+- Updated dependencies [7ada797]
+- Updated dependencies [432cb73]
+- Updated dependencies [293c316]
+- Updated dependencies [155aa45]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [1da00cb]
+- Updated dependencies [b699a37]
+- Updated dependencies [a4b23b7]
+- Updated dependencies [961d529]
+- Updated dependencies [10c2311]
+- Updated dependencies [4889fb2]
+- Updated dependencies [b2441c3]
+- Updated dependencies [69e19c5]
+- Updated dependencies [7316ac3]
+- Updated dependencies [8ef5e86]
+- Updated dependencies [596855c]
+- Updated dependencies [fdf6669]
+- Updated dependencies [4c682c1]
+- Updated dependencies [f325baa]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [b09fe34]
+- Updated dependencies [8bac4d6]
+- Updated dependencies [5a3de97]
+- Updated dependencies [0d0ba18]
+- Updated dependencies [b6fcb30]
+- Updated dependencies [f73e192]
+- Updated dependencies [8704df6]
+- Updated dependencies [5345e3d]
+- Updated dependencies [22c9074]
+- Updated dependencies [aee2d53]
+- Updated dependencies [5dc3752]
+- Updated dependencies [6c8798b]
+- Updated dependencies [25f7b82]
+- Updated dependencies [35ed7b5]
+- Updated dependencies [d853bf8]
+- Updated dependencies [e293b68]
+- Updated dependencies [afe9eb4]
+- Updated dependencies [d2cb42e]
+- Updated dependencies [cbddadb]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [6b487b8]
+  - @memberjunction/ai@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [279b93e]
+- Updated dependencies [bea2386]
+  - @memberjunction/ai@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 79279f2: Text-to-speech, speech-to-text and video now have runners, like chat, embeddings and images.
+  - **`AITextToSpeechRunner`** (`TTS` models), **`AISpeechToTextRunner`** (`Speech to Text` models) and **`AIVideoRunner`** (`Video` models) select a model from a carrier prompt's bindings, or a pinned `ModelID`, resolve its credential, fail over, and record every call as an AI Prompt Run. The run row never holds audio or video. Text-to-speech records the characters sent in the `Characters` measure unless the driver reports its own quantity; speech-to-text records the audio's seconds when the provider reports them; video records seconds only when a driver reports them, which HeyGen's does not. They share their lifecycle through a new `BaseMediaRunner`.
+  - New metadata: the `Default Text To Speech`, `Default Speech To Text` and `Default Video Generation` prompts, which the runners use when no prompt is named.
+  - **`BaseAudioGenerator` is split** into `BaseTextToSpeech` and `BaseSpeechToText`. `BaseAudioGenerator` is deprecated but keeps working: it implements both, and every driver still extends it and stays registered against it under the same key. `OpenAIAudioGenerator` also registers against both new classes, `ElevenLabsAudioGenerator` against `BaseTextToSpeech`, and `GroqAudioGenerator` against `BaseSpeechToText`. The split-and-join transcription loop is also exported as `TranscribeAudioWithSplitting`.
+  - `VideoResult` gains an optional `usage`, for a driver that reports the video's length.
+  - `SpeechResult` and `VideoResult` gain an optional `errorInfo`. The OpenAI, ElevenLabs, Groq and HeyGen audio and video drivers now fill it from the error their SDK threw, keeping its HTTP status, so a caller can tell a rejected request from an outage. The runners fail over on it: a 400 or 422 no longer fails over to every other candidate.
+  - The media runners take `TimeoutMS` and `CancellationToken`, which bound each driver call as `timeoutMS` and `cancellationToken` bound a chat call.
+  - `BaseModelRunner` gains `ResolveUsageToRecord` and `ApplyUsageToRunRecord`, which the image runner now uses too, so every non-chat runner records units the same way.
+
+  Nothing called the audio or video drivers before, so no existing caller changes behavior.
+
+### Patch Changes
+
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [2552b1e]
+- Updated dependencies [f3c6161]
+- Updated dependencies [5148534]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [4d647e6]
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Minor Changes
+
+- ddcd666: Adds ElevenLabs **Eleven v4** and **Eleven v4 Turbo** to the AI model catalog. Metadata only, no code change.
+  - New TTS models **Eleven v4** (`eleven_v4`) and **Eleven v4 Turbo** (`eleven_v4_turbo`), each with Eleven Labs as model developer and as inference provider through the existing `ElevenLabsAudioGenerator` driver. The driver hands `model_id` to the ElevenLabs API unchanged and the SDK types it as a plain string, so text-to-speech needs nothing else.
+  - No cost rows yet. ElevenLabs bills speech per character, and the catalog's price units (per token, minute, hour, image) have no per-character unit; the launch pricing also could not be confirmed against ElevenLabs' own pricing page.
+  - Not covered: the `ElevenLabsRealtime` (ElevenAgents) driver never sets a TTS model on its managed agent, so this change does not put v4 into realtime conversations. That needs a driver change.
+
+### Patch Changes
+
+- Updated dependencies [a50948e]
+- Updated dependencies [15a4333]
+- Updated dependencies [5da3ad2]
+- Updated dependencies [e1dd673]
+- Updated dependencies [c261eb8]
+- Updated dependencies [1d43161]
+- Updated dependencies [80905a1]
+  - @memberjunction/ai@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [b518dfa]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [575bfae]
+- Updated dependencies [e962151]
+- Updated dependencies [fc3da91]
+  - @memberjunction/ai@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
+## 6.1.0
+
+### Minor Changes
+
+- 5ecfdb4: Realtime voice agents can now **speak first**.
+
+  Conversation-start behavior is not instruction-following: an ElevenLabs realtime agent with no `first_message` produces no audio at all until it receives user audio, whatever the persona prompt says. Every ElevenLabs realtime session therefore opened in silence, waiting for the human to guess they should talk (issue #3557).
+  - **`ElevenLabsRealtime`** now sends an `agent.first_message` conversation-config override, built alongside the existing prompt and voice overrides, so both topologies (server-bridged and client-direct) carry it. The managed agent enables the override, and — because `OverridesSatisfied` requires it too — an agent provisioned by an earlier MJ version is re-PATCHed on next use instead of silently dropping it forever (the failure mode behind #3374). Omitting it preserves today's wait-for-the-user behavior exactly.
+  - **New persona slot `realtime.voice.default.firstMessage`** authors the opening utterance without naming a vendor, filed onto whichever driver resolves under the neutral `firstMessage` key — the same shape as the agnostic `voice`. It reaches both realtime host paths (`BaseAgent` server-bridged and `RealtimeClientSessionService` client-direct). The text is spoken VERBATIM; it is the literal opening line, not guidance about how to open.
+  - **`AssemblyAIRealtime`** honors the same neutral `firstMessage` key for its `greeting` wire slot. The legacy `greeting` config key still works; `firstMessage` wins when it carries something. Both go through the same trim-and-drop-blank rule as the ElevenLabs driver, so one authored value means the same thing whichever vendor runs — in particular a blank `firstMessage` reads as "none authored" and does not suppress a valid legacy `greeting`.
+  - **`firstMessage` is registered in `REALTIME_SHARED_CONFIG_KEYS`**, and the drivers that do not consume it now scrub it. Because an agnostic persona slot is filed onto _whichever_ driver resolves, an unregistered neutral key survives each driver's residual-bag spread and reaches the provider as an unknown session field — it was reaching the OpenAI (and xAI) `session.update` payload on both topologies, and Inworld's raw-override loop was copying it onto the session verbatim. On the OpenAI-protocol endpoints a malformed session object is rejected wholesale, taking the prompt and tools with it. Inworld now scrubs the whole shared vocabulary, closing the same class of leak for the other shared keys too.
+
+  Drivers without a provider-native opening utterance ignore the key and open silently, as before.
+
+### Patch Changes
+
+- 24b22c9: Carry a per-session **voice** on ElevenLabs realtime sessions: `RealtimeSessionParams.Config.voice` is now sent as the `tts.voice_id` conversation-config override, on both the client-direct mint and the server-bridged initiation frame.
+
+  The driver could already carry a per-session system prompt but not a voice, so a consumer modelling a persona could express who the agent _is_ but not what they _sound like_ — every session on an agent shared one voice, and changing it meant one dashboard-managed agent per persona. `voice` is the driver-neutral key AssemblyAI and Inworld already read, so it reaches the driver unchanged from the effective config as `realtime.voice.providers.elevenlabs.voice`.
+
+  Enabling the override on the managed agent is not sufficient on its own: ElevenLabs drops any override the agent has not allowed, and the ensure flow's drift check only tested the _prompt_ override — so an agent provisioned by an earlier version matched on tools and was never re-PATCHed, leaving `tts.voiceId` disabled and the voice silently dropped on every existing deployment. The drift check now requires the whole override set, so those agents are repaired on next use. A test drives every override the driver writes and asserts each one, alone, triggers that repair — so adding a future override without teaching the drift check about it fails the build rather than shipping the same silent gap again.
+
+  Sessions with no configured voice are byte-for-byte unchanged. Blank and non-string values are ignored rather than sent, since an empty `voice_id` would fail the whole session. Fixes #3374.
+
+  Smoke-testing the above against a live ElevenLabs account surfaced two further defects in the managed-agent ensure flow, both pre-existing and both fixed here:
+
+  **The tool-set fingerprint never matched the remote, so every session re-PATCHed the agent.** `ToolSetFingerprint` compared a raw `JSON.stringify`, but the platform returns schema keys in its own order _and_ materializes its own defaults into the stored form (`dynamic_variable: ""`, `is_omitted: false`, `required: []`, `isSystemProvided: false`, `constantValue: ""`), making the stored schema a superset of what was sent. The fingerprint now sorts object keys and drops empty/default entries on both sides. Arrays keep their order, since an `enum` or `required` list is data rather than a set. Deliberate, documented loss of sensitivity: a field flipping between `false`/`""`/`[]` and absent no longer counts as drift; any meaningful value change still does.
+
+  **Find-by-name could fork a duplicate managed agent.** ElevenLabs' agent search is eventually consistent, so an agent created moments earlier — by this process or a concurrent one — is briefly invisible. A single miss made the ensure flow conclude the agent did not exist and create a second one competing for the same name forever (observed live, twice). Lookups are now retried up to a bounded `MAX_AGENT_LOOKUP_ATTEMPTS`, and when duplicates _do_ already exist the oldest is adopted deterministically so every process and session converges on the same agent instead of PATCHing them alternately.
+
+  **Two sessions opening at once could fork a duplicate agent within a single process.** The ensure cache stored the _resolved_ agent id, so it was only populated once the whole find-create round-trip finished — two concurrent sessions for the same not-yet-provisioned name both missed the cache, both found nothing, and both created. It now caches the _in-flight_ ensure, so the second caller joins the first instead of racing it, and a rejected ensure is evicted rather than replaying one transient REST failure to every later session for the life of the process. This closes the intra-process half of the fork above; genuinely simultaneous _cross-process_ cold starts can still create duplicates, which the oldest-wins adoption above then converges.
+
+  Two API notes, both on seams the driver owns end to end: `ElevenLabsRealtimeSession.SendInitiation` now takes the wire-shaped overrides object rather than the system-prompt string, so the client-direct and server-bridged paths build it in one place and cannot drift (the class is documented as driver-constructed and never instantiated by consumers). `ElevenLabsRealtime.PromptOverrideEnabled` is deprecated in favour of `OverridesSatisfied` — it reports on one override and so cannot answer whether an agent is current.
+
+- eac9819: ElevenLabs realtime: per-session `llm`, agent-body `temperature`, and drift that actually re-PATCHes.
+
+  Both settings were authored, accepted and normalized, then dropped at the driver. The fix is deliberately **asymmetric**, because the platform decided the shapes:
+  - **`llm` is genuinely per-session.** `PromptAgentApiModelOverrideConfig.llm` exists, so it is enabled, required and sent. `BuildSessionOverrides` includes `agent.prompt.llm` when the config bag carries one and omits it entirely otherwise, so an unconfigured session's initiation frame is byte-for-byte unchanged.
+  - **`temperature` is agent-body state.** The override config has no enablement flag for it, so sending it per-session would be transmitted and silently discarded — the exact defect this closes. It is written into the agent body at ensure instead.
+
+  Agent-body state then needs drift handling, which is the substance of the change. `ModelSettingsSatisfied` re-PATCHes when the remote body's `llm`/`temperature` differ from the desired settings, and **an unconfigured desire matches anything** — half the point of a managed agent is that a deployment may hand-tune it, so a bag that says nothing must not stampede a PATCH war against a tuned value. The ensure cache also keys on the desired settings, without which a config change inside one process lifetime is served from cache and never reaches the drift check at all — the same never-re-PATCHed defect one layer earlier.
+
+  The five fixture agents in the ensure-flow round-trip tests gained `llm: true` because an agent this driver provisions now carries it; that is the round-trip contract holding, not fixture drift.
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [e533ce5]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [2c826f7]
+- Updated dependencies [61b5612]
+- Updated dependencies [4586215]
+- Updated dependencies [197fdf8]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [ada8784]
+- Updated dependencies [11de1a3]
+- Updated dependencies [cefc302]
+- Updated dependencies [080f4cd]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [48ff99f]
+- Updated dependencies [076fa5d]
+- Updated dependencies [23c2521]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [de343b5]
+- Updated dependencies [1bd9674]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/global@6.1.0
+  - @memberjunction/ai@6.1.0
+
+## 6.1.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [61b5612]
+- Updated dependencies [076fa5d]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/ai@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Patch Changes

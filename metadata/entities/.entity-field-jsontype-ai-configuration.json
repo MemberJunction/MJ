@@ -1,0 +1,205 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on ModelConfiguration (MJ: AI Model Types entity) so CodeGen emits",
+      "a typed ModelConfigurationObject accessor returning MJAIModelTypeEntity_IAIModelConfiguration.",
+      "The EntityField row must exist (created by a CodeGen pass over the new column) before",
+      "this @lookup resolves on push — see plans/model-configuration.md for the 4-step ordering."
+    ],
+    "fields": {
+      "Name": "MJ: AI Model Types"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IAIModelConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IAIConfiguration.ts"
+          },
+          "_comments": [
+            "ModelPromptConfiguration field — type-wide default layer of the model-configuration cascade"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Model Types&Name=ModelConfiguration"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:08.840Z",
+            "checksum": "a557dc4c561c5ddba6a527c68f568215ee97b5d50cdee167d4018e037f301418"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Model Types"
+    }
+  },
+  {
+    "_comments": [
+      "Sets JSONType metadata on ModelConfiguration (MJ: AI Models entity) — the per-model layer.",
+      "Same IAIModelConfiguration definition as the type and model-vendor levels: one shape,",
+      "three cascade layers."
+    ],
+    "fields": {
+      "Name": "MJ: AI Models"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IAIModelConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IAIConfiguration.ts"
+          },
+          "_comments": [
+            "ModelPromptConfiguration field — per-model layer of the model-configuration cascade"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Models&Name=ModelConfiguration"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:08.860Z",
+            "checksum": "a557dc4c561c5ddba6a527c68f568215ee97b5d50cdee167d4018e037f301418"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Models"
+    }
+  },
+  {
+    "_comments": [
+      "Sets JSONType metadata on ModelConfiguration (MJ: AI Model Vendors entity) — the",
+      "most-specific layer (this model on this provider) of the model-configuration cascade."
+    ],
+    "fields": {
+      "Name": "MJ: AI Model Vendors"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IAIModelConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IAIConfiguration.ts"
+          },
+          "_comments": [
+            "ModelPromptConfiguration field — model-vendor (most specific) layer of the model-configuration cascade"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Model Vendors&Name=ModelConfiguration"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:08.882Z",
+            "checksum": "a557dc4c561c5ddba6a527c68f568215ee97b5d50cdee167d4018e037f301418"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Model Vendors"
+    }
+  },
+  {
+    "_comments": [
+      "Sets JSONType metadata on PromptConfiguration (MJ: AI Prompts entity) — the per-prompt layer,",
+      "layered on top of the resolved model-catalog configuration by the prompt runner."
+    ],
+    "fields": {
+      "Name": "MJ: AI Prompts"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IAIPromptConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IAIConfiguration.ts"
+          },
+          "_comments": [
+            "PromptConfiguration field — per-prompt call-time knobs"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Prompts&Name=PromptConfiguration"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:08.903Z",
+            "checksum": "9a423a6034b88ed3de0d6da9b308305ff870f322be0dd450c080f49cc4744c21"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Prompts"
+    }
+  },
+  {
+    "_comments": [
+      "Sets JSONType metadata on PromptConfiguration (MJ: AI Prompt Models entity) — the most-specific",
+      "layer, overriding both the prompt's own bag and the model catalog for this pairing."
+    ],
+    "fields": {
+      "Name": "MJ: AI Prompt Models"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IAIPromptModelConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IAIConfiguration.ts"
+          },
+          "_comments": [
+            "PromptConfiguration field — per prompt-on-this-model overrides"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Prompt Models&Name=PromptConfiguration"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:08.926Z",
+            "checksum": "b308b365d5f9144d6789035152d8e2d4c2be181fbb0892bbf1c0ae11f41991d7"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Prompt Models"
+    }
+  },
+  {
+    "_comments": [
+      "Sets JSONType metadata on Configuration (MJ: AI Vendors entity) — the vendor's own",
+      "configuration bag (IAIVendorConfiguration). Its ModelDefaults key is the vendor layer of the",
+      "model-configuration cascade (above AI Models, below AI Model Vendors). Column added by",
+      "V202609281000__v6.2.x__AIVendor_Configuration."
+    ],
+    "fields": {
+      "Name": "MJ: AI Vendors"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IAIVendorConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IAIConfiguration.ts"
+          },
+          "_comments": [
+            "Configuration field — vendor bag whose ModelDefaults key forms the vendor layer of the cascade"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Vendors&Name=Configuration"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:08.949Z",
+            "checksum": "7e4538655800bd876b8efb63b7a697ab92f716009f7b43fd2701f735e4c2bde9"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Vendors"
+    }
+  }
+]

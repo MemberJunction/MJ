@@ -22,6 +22,39 @@ mj-record-form-container {
 }
 
 /* ============================================
+   POSSIBLE-DUPLICATE NOTICE (entry-time check on a new record)
+   Sits between the toolbar and the scroll area, so it stays in view.
+   ============================================ */
+.mj-forms-duplicate-notice {
+  flex: 0 0 auto;
+  margin: var(--mj-space-2) var(--mj-space-4);
+}
+
+.mj-forms-duplicate-notice-lead {
+  margin-right: var(--mj-space-1);
+}
+
+.mj-forms-duplicate-notice-candidate {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--mj-text-link);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.mj-forms-duplicate-notice-candidate:hover {
+  color: var(--mj-text-link-hover);
+}
+
+.mj-forms-duplicate-notice-candidate:focus-visible {
+  outline: var(--mj-ring-width) solid var(--mj-focus-ring-color);
+  outline-offset: 2px;
+  border-radius: var(--mj-radius-sm);
+}
+
+/* ============================================
    SCROLL AREA (full-width so mouse wheel works anywhere)
    ============================================ */
 .mj-forms-scroll-area {
@@ -188,8 +221,15 @@ mj-record-form-container {
   resize: none;
 }
 
+/* Slot-mounted contributions (heroes, overview strips) are always visible, so
+   they sit in the same column as the active rail panel and need rhythm between
+   them. Collapsed siblings are `display: none`, so this gap only ever applies
+   between items that are actually on screen. Tighter than the accordion's 16px
+   because left-nav strips panel chrome and reads as one continuous column.
+   `mj-form-panel-slot` and the panel hosts are `display: contents`, so the gap
+   lands between the panels' own content boxes rather than around the slot. */
 .mj-forms-layout--left-nav .mj-forms-all-panels {
-  gap: 0;
+  gap: 12px;
   min-height: 0;
   overflow-y: auto;
 }
@@ -641,6 +681,36 @@ mj-collapsible-panel.mj-form-role-more {
   font-size: var(--mj-space-2-5);
 }
 
+/* Failures no rail item owns: same row shape as an item, not interactive, error-tinted. */
+.mj-forms-chrome-rail-unrouted {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--mj-radius-sm);
+  color: var(--mj-status-error);
+  font-size: var(--mj-text-sm);
+  text-align: left;
+  cursor: default;
+}
+
+.mj-forms-chrome-rail-unrouted > i {
+  width: 1.15em;
+  flex-shrink: 0;
+  text-align: center;
+  color: inherit;
+}
+
+.mj-forms-chrome-rail-unrouted > .mj-forms-chrome-rail-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* The section's icon takes the error colour too, so the item reads as failing
    even before the badge is noticed — but never the active item's brand tint. */
 .mj-forms-chrome-rail-item.has-errors:not(.is-active) > i {
@@ -902,4 +972,82 @@ mj-collapsible-panel.mj-form-role-more {
   font-weight: 400;
   font-size: 11px;
   margin-left: 4px;
+}
+
+/* ====================================================================
+   NON-INTRUSIVE LIVE REMOTE UPDATE SLIDE-IN PILL
+   ==================================================================== */
+@keyframes mj-remote-pill-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.mj-forms-remote-update-pill {
+  position: absolute;
+  top: 56px;
+  right: 24px;
+  z-index: 45;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--mj-bg-surface-elevated, var(--mj-bg-surface-card));
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 35%, var(--mj-border-default));
+  box-shadow: var(--mj-shadow-md, 0 4px 14px rgba(15, 23, 42, 0.12));
+  color: var(--mj-text-primary);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  animation: mj-remote-pill-slide-in 180ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.mj-forms-remote-update-pill--warning {
+  border-color: color-mix(in srgb, var(--mj-status-warning, #f59e0b) 45%, var(--mj-border-default));
+}
+
+.mj-forms-remote-update-pill-icon {
+  color: var(--mj-brand-primary);
+  font-size: 12px;
+}
+
+.mj-forms-remote-update-pill--warning .mj-forms-remote-update-pill-icon {
+  color: var(--mj-status-warning, #f59e0b);
+}
+
+.mj-forms-remote-update-pill-action {
+  border: none;
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+  color: var(--mj-brand-primary);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.mj-forms-remote-update-pill-action:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
+}
+
+.mj-forms-remote-update-pill-close {
+  border: none;
+  background: transparent;
+  color: var(--mj-text-muted);
+  padding: 2px 4px;
+  border-radius: 999px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.mj-forms-remote-update-pill-close:hover {
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface-hover);
 }

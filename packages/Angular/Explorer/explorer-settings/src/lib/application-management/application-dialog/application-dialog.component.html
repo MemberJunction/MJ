@@ -143,7 +143,7 @@
                           </div>
                           <div class="entity-details">
                             <div class="entity-name">
-                              {{ config.entity.Name }}
+                              {{ getEntityDisplayName(config.entity) }}
                               @if (config.entity.Description) {
                                 <i
                                   class="fa-solid fa-info-circle entity-info-icon"
@@ -177,7 +177,7 @@
                             class="btn-icon btn-danger"
                             (click)="removeEntity(config)"
                             title="Remove entity"
-                            [attr.aria-label]="'Remove ' + config.entity.Name"
+                            [attr.aria-label]="'Remove ' + getEntityDisplayName(config.entity)"
                           >
                             <i class="fa-solid fa-times" aria-hidden="true"></i>
                           </button>
@@ -229,11 +229,11 @@
                           class="entity-chip"
                           (click)="addEntity(entity)"
                           role="listitem"
-                          [attr.aria-label]="'Add ' + entity.Name"
+                          [attr.aria-label]="'Add ' + getEntityDisplayName(entity)"
                         >
                           <div class="chip-content">
                             <i class="fa-solid fa-plus" aria-hidden="true"></i>
-                            <span class="chip-name">{{ entity.Name }}</span>
+                            <span class="chip-name">{{ getEntityDisplayName(entity) }}</span>
                           </div>
                         </button>
                       }

@@ -8,6 +8,7 @@ import type {
     ExternalRecord,
     DefaultFieldMapping,
     SourceSchemaInfo,
+    SourceObjectInfo,
     IntrospectSchemaOptions,
     CreateRecordContext,
     UpdateRecordContext,
@@ -23,15 +24,15 @@ import type {
 import { ClassifyError } from './types.js';
 import { ExtractRetryAfterFromError } from './RetryAfter.js';
 import {
-    discoverFromStream,
-    pickKeyFromStats,
-    pickPrimaryKeyFromStats,
+    DiscoverFromStream,
+    PickKeyFromStats,
+    PickPrimaryKeyFromStats,
     PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE,
     type StreamDiscoveryOptions,
     type PkPickOptions,
 } from './StreamingDiscovery.js';
 import { AdaptiveConcurrencyController, RunAdaptive, type AdaptiveItemOutcome } from './AdaptiveConcurrency.js';
-import { flattenRecord, hasNestedObject } from './RecordFlatten.js';
+import { FlattenRecord, HasNestedObject } from './RecordFlatten.js';
 import { DiscoveryWatchdog } from './DiscoveryWatchdog.js';
 
 /** Result of testing a connection to an external system */
@@ -665,14 +666,14 @@ export abstract class BaseIntegrationConnector {
         // as the key. Mirrors the sync-intake flatten (FieldMappingEngine) EXACTLY, so the field
         // names discovered here match what sync produces. A flat record passes through unchanged.
         async function* flattenRecords(): AsyncIterable<Record<string, unknown>> {
-            for await (const r of records) yield hasNestedObject(r) ? flattenRecord(r) : r;
+            for await (const r of records) yield HasNestedObject(r) ? FlattenRecord(r) : r;
         }
-        const scan = await discoverFromStream(flattenRecords(), opts.Discovery);
+        const scan = await DiscoverFromStream(flattenRecords(), opts.Discovery);
         // Provable-only identity in ONE pass: best contender per subset size (1,2,3…) → the SMALLEST
         // size whose best contender is a provable key (single OR composite), decided by the Chao1
         // domain-saturation test on the streamed sample. No fabricated keys; a genuinely-keyless object
         // simply gets no PK and is honestly not added downstream.
-        const key = pickKeyFromStats(scan.Columns, scan.RowSamples, opts.Pk);
+        const key = PickKeyFromStats(scan.Columns, scan.RowSamples, opts.Pk);
         let pkFieldNames: string[] = key.Fields ?? [];
         let pkReason = key.Reason;
         if (pkFieldNames.length === 0) {
@@ -685,7 +686,7 @@ export abstract class BaseIntegrationConnector {
             // objects still get no PK (content-hash identity handles dedup).
             // #A4 — tell the PK picker whether the scan saw the WHOLE stream; a time-budget-truncated scan
             // must not yield a confident soft key from a partial prefix.
-            const soft = pickPrimaryKeyFromStats(scan.Columns, { ...opts.Pk, ScanComplete: scan.StoppedReason !== 'time-budget' });
+            const soft = PickPrimaryKeyFromStats(scan.Columns, { ...opts.Pk, ScanComplete: scan.StoppedReason !== 'time-budget' });
             if (soft.Field) { pkFieldNames = [soft.Field]; pkReason = `[soft-fallback] ${soft.Reason}`; }
         }
         const pkFields = new Set<string>(pkFieldNames);
@@ -877,7 +878,10 @@ export abstract class BaseIntegrationConnector {
             CompanyIntegration: companyIntegration,
             ObjectName: objectName,
             WatermarkValue: null,   // FULL fetch — discovery wants breadth, not the incremental delta
-            BatchSize: batchSize,
+            // A sample that stops at `maxRecords` never needs a page bigger than that. With the
+            // default page of 500 and a target of 50, every connector that honours BatchSize
+            // fetched ten times the rows it kept, per object, on every discovery.
+            BatchSize: maxRecords > 0 ? Math.min(batchSize, maxRecords) : batchSize,
             ContextUser: contextUser,
             // TELL THE CONNECTOR WHAT THIS CALL IS FOR. Stopping after `maxRecords` here only works
             // when one FetchChanges is one page; a connector that fans out internally (one request
@@ -1090,7 +1094,15 @@ export abstract class BaseIntegrationConnector {
         const objects = wanted ? allObjects.filter(o => wanted.has(o.Name)) : allObjects;
         // §7 — a SCOPED introspection (ObjectNames filter) is never authoritative over the whole surface,
         // so it can never drive deactivation even if the connector affirms authoritative discovery.
-        const result: SourceSchemaInfo = { Objects: [], IsAuthoritative: this.DiscoveryIsAuthoritative && !wanted };
+        // OnObject (see IntrospectSchemaOptions) lets the caller take each object as it is built; the
+        // object is then released instead of accumulated, so peak memory is the describes in flight
+        // rather than the whole catalog. No handler → accumulate and return, exactly as before.
+        const onObject = options?.OnObject;
+        const result: SourceSchemaInfo = {
+            Objects: [],
+            IsAuthoritative: this.DiscoveryIsAuthoritative && !wanted,
+            Streamed: !!onObject,
+        };
 
         // Parallel describe via the SAME control law the sync engine uses for its layers —
         // `RunAdaptive` + `AdaptiveConcurrencyController` (AIMD). Discovery IS the sync read path with
@@ -1171,7 +1183,7 @@ export abstract class BaseIntegrationConnector {
             }));
             // Single-threaded async → these mutations are atomic across concurrent introspectOne calls
             // (same safety the sync engine's per-map aggregate mutations rely on).
-            result.Objects.push({
+            const built: SourceObjectInfo = {
                 ExternalName: obj.Name,
                 ExternalLabel: obj.Label,
                 Description: obj.Description,
@@ -1202,7 +1214,13 @@ export abstract class BaseIntegrationConnector {
                 Relationships: fields
                     .filter(f => (f.IsForeignKey ?? false) && f.ForeignKeyTarget)
                     .map(f => ({ FieldName: f.Name, TargetObject: f.ForeignKeyTarget!, TargetField: 'ID' })),
-            });
+            };
+            if (onObject) {
+                // The caller persists it; it is deliberately NOT retained here — that is the point.
+                await onObject(built);
+            } else {
+                result.Objects.push(built);
+            }
             succeeded++;
             const done = succeeded + skipped;
             if (done % 100 === 0 || done === total) {

@@ -41,7 +41,7 @@ export interface ParsedPathWithOperations {
  * @param pathSpec The path specification string
  * @returns Parsed path with operations
  */
-export function parsePathWithOperations(pathSpec: string): ParsedPathWithOperations {
+export function ParsePathWithOperations(pathSpec: string): ParsedPathWithOperations {
     if (!pathSpec || typeof pathSpec !== 'string') {
         return { path: '', operations: [], allOperations: false };
     }
@@ -88,18 +88,28 @@ export function parsePathWithOperations(pathSpec: string): ParsedPathWithOperati
     };
 }
 
+/** @deprecated Use {@link ParsePathWithOperations}. */
+export function parsePathWithOperations(pathSpec: string): ParsedPathWithOperations {
+    return ParsePathWithOperations(pathSpec);
+}
+
 /**
  * Parses multiple path specifications
  * 
  * @param pathSpecs Array of path specification strings
  * @returns Array of parsed paths with operations
  */
-export function parsePathsWithOperations(pathSpecs: string[]): ParsedPathWithOperations[] {
+export function ParsePathsWithOperations(pathSpecs: string[]): ParsedPathWithOperations[] {
     if (!Array.isArray(pathSpecs)) {
         return [];
     }
     
-    return pathSpecs.map(spec => parsePathWithOperations(spec));
+    return pathSpecs.map(spec => ParsePathWithOperations(spec));
+}
+
+/** @deprecated Use {@link ParsePathsWithOperations}. */
+export function parsePathsWithOperations(pathSpecs: string[]): ParsedPathWithOperations[] {
+    return ParsePathsWithOperations(pathSpecs);
 }
 
 /**
@@ -109,11 +119,19 @@ export function parsePathsWithOperations(pathSpecs: string[]): ParsedPathWithOpe
  * @param operation The operation to check
  * @returns True if the operation is allowed
  */
-export function isOperationAllowed(
+export function IsOperationAllowed(
     parsedPath: ParsedPathWithOperations,
     operation: PayloadOperation
 ): boolean {
     return parsedPath.allOperations || parsedPath.operations.includes(operation);
+}
+
+/** @deprecated Use {@link IsOperationAllowed}. */
+export function isOperationAllowed(
+    parsedPath: ParsedPathWithOperations,
+    operation: PayloadOperation
+): boolean {
+    return IsOperationAllowed(parsedPath, operation);
 }
 
 /**
@@ -122,7 +140,7 @@ export function isOperationAllowed(
  * @param parsedPath The parsed path with operations
  * @returns String representation
  */
-export function formatPathWithOperations(parsedPath: ParsedPathWithOperations): string {
+export function FormatPathWithOperations(parsedPath: ParsedPathWithOperations): string {
     if (parsedPath.allOperations) {
         return parsedPath.path;
     }
@@ -132,4 +150,9 @@ export function formatPathWithOperations(parsedPath: ParsedPathWithOperations): 
     }
     
     return `${parsedPath.path}:${parsedPath.operations.join(',')}`;
+}
+
+/** @deprecated Use {@link FormatPathWithOperations}. */
+export function formatPathWithOperations(parsedPath: ParsedPathWithOperations): string {
+    return FormatPathWithOperations(parsedPath);
 }

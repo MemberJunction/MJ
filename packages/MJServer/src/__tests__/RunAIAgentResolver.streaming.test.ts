@@ -29,31 +29,27 @@ vi.mock('type-graphql', () => {
 });
 import type { AgentExecutionStreamingCallback } from '@memberjunction/ai-core-plus';
 
-import { RunAIAgentResolver } from '../resolvers/RunAIAgentResolver.js';
+import { AgentRunStatusPublisher } from '../resolvers/AgentRunStatusPublisher.js';
 import type { UserPayload } from '../types.js';
 
-/** Access the private factory without widening the class's public API. */
-interface StreamingCallbackFactory {
-    createStreamingCallback(
-        pubSub: PubSubEngine,
-        sessionId: string,
-        userPayload: UserPayload,
-        agentRunRef: { current: unknown }
-    ): AgentExecutionStreamingCallback;
-}
+const agentRun = {
+    ID: 'run-1',
+    GetAll: () => ({ ID: 'run-1', ConversationDetailID: 'detail-1', Agent: 'Betty' }),
+};
 
 function buildHarness() {
     const publish = vi.fn().mockResolvedValue(undefined);
     const pubSub = { publish } as unknown as PubSubEngine;
-    const userPayload = { sessionId: 'session-1' } as UserPayload;
-    const agentRunRef = {
-        current: {
-            ID: 'run-1',
-            GetAll: () => ({ ID: 'run-1', ConversationDetailID: 'detail-1', Agent: 'Betty' }),
-        },
-    };
-    const resolver = new RunAIAgentResolver() as unknown as StreamingCallbackFactory;
-    const callback = resolver.createStreamingCallback(pubSub, 'session-1', userPayload, agentRunRef);
+    const userPayload = { sessionId: 'session-1', userRecord: { ID: 'user-1' } } as UserPayload;
+    const publisher = new AgentRunStatusPublisher(pubSub, userPayload, 'session-1');
+    // A progress event, even a noise step, is how the publisher learns the run.
+    publisher.OnProgress({
+        step: 'initialization',
+        message: 'starting',
+        metadata: { agentRun },
+    });
+    publish.mockClear();
+    const callback: AgentExecutionStreamingCallback = publisher.OnStreaming;
     return { publish, callback };
 }
 
@@ -67,7 +63,7 @@ function publishedData(publish: ReturnType<typeof vi.fn>): Record<string, unknow
     return parsed.data as Record<string, unknown>;
 }
 
-describe('RunAIAgentResolver.createStreamingCallback', () => {
+describe('AgentRunStatusPublisher streaming wire shape', () => {
     it('publishes the streaming wire shape the conversation client parses', () => {
         const { publish, callback } = buildHarness();
 
@@ -110,13 +106,8 @@ describe('RunAIAgentResolver.createStreamingCallback', () => {
     it('does not publish when no agent run is available yet', () => {
         const publish = vi.fn();
         const pubSub = { publish } as unknown as PubSubEngine;
-        const resolver = new RunAIAgentResolver() as unknown as StreamingCallbackFactory;
-        const callback = resolver.createStreamingCallback(
-            pubSub,
-            'session-1',
-            { sessionId: 'session-1' } as UserPayload,
-            { current: null }
-        );
+        const publisher = new AgentRunStatusPublisher(pubSub, { sessionId: 'session-1', userRecord: { ID: 'user-1' } } as UserPayload, 'session-1');
+        const callback = publisher.OnStreaming;
         const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         try {
             callback({ content: 'early', isComplete: false });

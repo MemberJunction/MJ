@@ -13,6 +13,30 @@ export { ConversationsRuntime } from './ConversationsRuntime';
 
 // Sub-components and their public types
 export { MentionParser, type Mention, type MentionParseResult } from './mentions/MentionParser';
+export { MentionAutocomplete } from './mentions/MentionAutocomplete';
+export { IntersectAcceptedSkills } from './mentions/SkillNarrowing';
+export type { MentionPerson, MentionSuggestion, MentionSuggestionPreset, MentionSuggestionScope } from './mentions/MentionSuggestion';
+export {
+    BuildConversationTimeline,
+    CollectRealtimeSessionIDs,
+    FindRealtimeSessionMeta,
+    IsVisibleRealtimeTurn,
+    MapRealtimeSessionMeta,
+    REALTIME_SESSION_META_FIELDS,
+    SessionCardDurationLabel,
+    SessionCardIsSameDayRange,
+    SessionCardMessageCountLabel,
+    SessionCardSpeakerLabel,
+    SessionCardStartedAt,
+    SessionCardStatusChip,
+    SessionCardTitle,
+    type ConversationTimelineItem,
+    type RealtimeSessionMetaRow,
+    type RealtimeSessionStatusChip,
+    type RealtimeSessionTimelineGroup,
+    type RealtimeSessionTimelineMeta,
+    type RealtimeTimelineSourceDetail,
+} from './timeline/RealtimeSessionTimeline';
 export {
     ConversationBridge,
     type ConversationSwitchEvent,
@@ -31,11 +55,21 @@ export {
 export {
     ConversationStreaming,
     type CompletionEvent,
+    type TaskGraphStreamEvent,
     type MessageProgressUpdate,
     type MessageProgressMetadata,
     type MessageProgressCallback,
     type StreamingConnectionStatus,
 } from './streaming/ConversationStreaming';
+export {
+    ConversationLiveness,
+    RECONCILE_THROTTLE_MS,
+    type ReconciliationReason,
+} from './streaming/ConversationLiveness';
+export {
+    ConversationTail,
+    type ConversationTailResult,
+} from './streaming/ConversationTail';
 export {
     ConversationAgentRunner,
     type ProcessMessageInput,

@@ -92,21 +92,28 @@ export class ComponentMetadataEngine extends BaseEngine<ComponentMetadataEngine>
 
     /**
      * Finds a component by name (case-insensitive), optionally filtered by namespace and registry.
-     * Performs a targeted RunView query instead of searching a bulk-loaded cache.
+     * Performs a targeted RunView query instead of searching a bulk-loaded cache. On SQL Server the
+     * name is a Unicode literal (`N'...'`), so a name with characters outside the database's code
+     * page matches as stored.
      */
     public async FindComponent(name: string, namespace?: string, registry?: string, contextUser?: UserInfo): Promise<MJComponentEntityExtended | undefined> {
         const rv = new RunView();
-        const filterParts = [`Name='${name.trim().replace(/'/g, "''")}'`];
+        const nameLiteral = name.trim().replace(/'/g, "''");
+        const otherParts: string[] = [];
         if (namespace) {
-            filterParts.push(`Namespace='${namespace.trim().replace(/'/g, "''")}'`);
+            otherParts.push(`Namespace='${namespace.trim().replace(/'/g, "''")}'`);
         }
         if (registry) {
-            filterParts.push(`SourceRegistry='${registry.trim().replace(/'/g, "''")}'`);
+            otherParts.push(`SourceRegistry='${registry.trim().replace(/'/g, "''")}'`);
         }
+        const otherFilter = otherParts.map((part) => ` AND ${part}`).join('');
 
         const result = await rv.RunView<MJComponentEntityExtended>({
             EntityName: 'MJ: Components',
-            ExtraFilter: filterParts.join(' AND '),
+            ExtraFilter: {
+                default: `Name='${nameLiteral}'${otherFilter}`,
+                sqlserver: `Name=N'${nameLiteral}'${otherFilter}`,
+            },
             MaxRows: 1,
             ResultType: 'entity_object'
         }, contextUser);

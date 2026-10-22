@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
@@ -110,7 +110,7 @@ export class UseeffectUnstableDependenciesRule extends BaseLintRule {
       return paramsWithObjectDefaults;
     };
 
-    traverse(ast, {
+    Traverse(ast, {
       CallExpression(path: NodePath<t.CallExpression>) {
         // Check for useEffect calls
         if (t.isIdentifier(path.node.callee) && path.node.callee.name === 'useEffect') {

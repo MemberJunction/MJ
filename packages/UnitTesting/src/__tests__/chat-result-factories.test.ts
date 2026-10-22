@@ -1,17 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { ChatParams, ChatResult, ModelUsage } from '@memberjunction/ai';
 import {
-  makeChatParams,
-  makeDriverFailureChatResult,
-  makeErrorInfo,
-  makeFailedChatResult,
-  makeModelUsage,
-  makeSuccessChatResult,
+  MakeChatParams,
+  MakeDriverFailureChatResult,
+  MakeErrorInfo,
+  MakeFailedChatResult,
+  MakeModelUsage,
+  MakeSuccessChatResult,
 } from '../ai/chat-result-factories';
 
 describe('makeModelUsage', () => {
   it('returns a REAL ModelUsage instance with the standard defaults (10/5, cost 0.001)', () => {
-    const usage = makeModelUsage();
+    const usage = MakeModelUsage();
     expect(usage).toBeInstanceOf(ModelUsage);
     expect(usage.promptTokens).toBe(10);
     expect(usage.completionTokens).toBe(5);
@@ -20,20 +20,20 @@ describe('makeModelUsage', () => {
   });
 
   it('honors overrides including the cache-token buckets', () => {
-    const usage = makeModelUsage({ promptTokens: 100, completionTokens: 50, cacheReadTokens: 30, cacheWriteTokens: 7 });
+    const usage = MakeModelUsage({ promptTokens: 100, completionTokens: 50, cacheReadTokens: 30, cacheWriteTokens: 7 });
     expect(usage.totalTokens).toBe(150);
     expect(usage.totalInputTokens).toBe(137); // promptTokens + cacheRead + cacheWrite
   });
 
   it('allows explicitly opting out of the default cost', () => {
-    const usage = makeModelUsage({ cost: undefined });
+    const usage = MakeModelUsage({ cost: undefined });
     expect(usage.cost).toBeUndefined();
   });
 });
 
 describe('makeSuccessChatResult', () => {
   it('builds a REAL successful ChatResult with one assistant choice', () => {
-    const result = makeSuccessChatResult('hello world');
+    const result = MakeSuccessChatResult('hello world');
     expect(result).toBeInstanceOf(ChatResult);
     expect(result.success).toBe(true);
     expect(result.statusText).toBe('success');
@@ -45,8 +45,8 @@ describe('makeSuccessChatResult', () => {
   });
 
   it('threads usage, model, thinking, and finishReason overrides through', () => {
-    const usage = makeModelUsage({ promptTokens: 3, completionTokens: 4 });
-    const result = makeSuccessChatResult('x', { usage, model: 'claude-opus-4-5', thinking: 'chain of thought', finishReason: 'length' });
+    const usage = MakeModelUsage({ promptTokens: 3, completionTokens: 4 });
+    const result = MakeSuccessChatResult('x', { usage, model: 'claude-opus-4-5', thinking: 'chain of thought', finishReason: 'length' });
     expect(result.data.usage).toBe(usage);
     expect(result.data.model).toBe('claude-opus-4-5');
     expect(result.data.choices[0].message.thinking).toBe('chain of thought');
@@ -56,14 +56,14 @@ describe('makeSuccessChatResult', () => {
   it('uses the supplied start/end times (timeElapsed comes from the real getter)', () => {
     const startTime = new Date(1000);
     const endTime = new Date(1500);
-    const result = makeSuccessChatResult('x', { startTime, endTime });
+    const result = MakeSuccessChatResult('x', { startTime, endTime });
     expect(result.timeElapsed).toBe(500);
   });
 });
 
 describe('makeFailedChatResult', () => {
   it('mirrors the BaseLLM error shape by default: empty choices, zero usage, statusText error', () => {
-    const result = makeFailedChatResult();
+    const result = MakeFailedChatResult();
     expect(result).toBeInstanceOf(ChatResult);
     expect(result.success).toBe(false);
     expect(result.statusText).toBe('error');
@@ -74,14 +74,14 @@ describe('makeFailedChatResult', () => {
   });
 
   it('omitData leaves data unassigned for drivers that return no data on failure', () => {
-    const result = makeFailedChatResult({ errorMessage: 'provider exploded', omitData: true });
+    const result = MakeFailedChatResult({ errorMessage: 'provider exploded', omitData: true });
     expect(result.data).toBeUndefined();
     expect(result.errorMessage).toBe('provider exploded');
   });
 
   it('attaches errorInfo and exception only when supplied', () => {
     const boom = new Error('boom');
-    const result = makeFailedChatResult({ errorMessage: 'boom', exception: boom, errorInfo: makeErrorInfo({ errorType: 'RateLimit' }) });
+    const result = MakeFailedChatResult({ errorMessage: 'boom', exception: boom, errorInfo: MakeErrorInfo({ errorType: 'RateLimit' }) });
     expect(result.exception).toBe(boom);
     expect(result.errorInfo?.errorType).toBe('RateLimit');
   });
@@ -89,19 +89,19 @@ describe('makeFailedChatResult', () => {
 
 describe('makeDriverFailureChatResult', () => {
   it('classifies through the REAL ErrorAnalyzer: network error → NetworkError, failover-eligible', () => {
-    const result = makeDriverFailureChatResult(new Error('connect ECONNREFUSED 10.0.0.5:443'));
+    const result = MakeDriverFailureChatResult(new Error('connect ECONNREFUSED 10.0.0.5:443'));
     expect(result.success).toBe(false);
     expect(result.errorInfo?.errorType).toBe('NetworkError');
     expect(result.errorInfo?.canFailover).toBe(true);
   });
 
   it('classifies a rate-limit message as RateLimit', () => {
-    const result = makeDriverFailureChatResult(new Error('Rate limit exceeded, too many requests'));
+    const result = MakeDriverFailureChatResult(new Error('Rate limit exceeded, too many requests'));
     expect(result.errorInfo?.errorType).toBe('RateLimit');
   });
 
   it('classifies a structural request error as Fatal/non-failover (InvalidRequest)', () => {
-    const result = makeDriverFailureChatResult(new Error('Malformed JSON in request payload'));
+    const result = MakeDriverFailureChatResult(new Error('Malformed JSON in request payload'));
     expect(result.errorInfo?.errorType).toBe('InvalidRequest');
     expect(result.errorInfo?.severity).toBe('Fatal');
     expect(result.errorInfo?.canFailover).toBe(false);
@@ -109,7 +109,7 @@ describe('makeDriverFailureChatResult', () => {
 
   it('carries the original error as message and exception', () => {
     const boom = new Error('Service temporarily unavailable');
-    const result = makeDriverFailureChatResult(boom);
+    const result = MakeDriverFailureChatResult(boom);
     expect(result.errorMessage).toBe('Service temporarily unavailable');
     expect(result.exception).toBe(boom);
   });
@@ -117,14 +117,14 @@ describe('makeDriverFailureChatResult', () => {
 
 describe('makeErrorInfo', () => {
   it('defaults to an Unknown/Retriable/failover-eligible error', () => {
-    const info = makeErrorInfo();
+    const info = MakeErrorInfo();
     expect(info.errorType).toBe('Unknown');
     expect(info.severity).toBe('Retriable');
     expect(info.canFailover).toBe(true);
   });
 
   it('honors overrides', () => {
-    const info = makeErrorInfo({ errorType: 'Authentication', severity: 'Fatal', canFailover: false, httpStatusCode: 401 });
+    const info = MakeErrorInfo({ errorType: 'Authentication', severity: 'Fatal', canFailover: false, httpStatusCode: 401 });
     expect(info.errorType).toBe('Authentication');
     expect(info.severity).toBe('Fatal');
     expect(info.canFailover).toBe(false);
@@ -134,7 +134,7 @@ describe('makeErrorInfo', () => {
 
 describe('makeChatParams', () => {
   it('returns a REAL ChatParams instance (class defaults intact) with a default model + user message', () => {
-    const params = makeChatParams();
+    const params = MakeChatParams();
     expect(params).toBeInstanceOf(ChatParams);
     expect(params.model).toBe('test-model');
     expect(params.messages).toHaveLength(1);
@@ -143,7 +143,7 @@ describe('makeChatParams', () => {
   });
 
   it('applies overrides on top of the defaults', () => {
-    const params = makeChatParams({ model: 'gpt-5', temperature: 0.2, effortLevel: '3' });
+    const params = MakeChatParams({ model: 'gpt-5', temperature: 0.2, effortLevel: '3' });
     expect(params.model).toBe('gpt-5');
     expect(params.temperature).toBe(0.2);
     expect(params.effortLevel).toBe('3');

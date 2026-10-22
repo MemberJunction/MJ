@@ -131,7 +131,7 @@ describe('AgentPromptAdvancedSettingsDialogComponent (DOM)', () => {
 
     expect(closed.length).toBe(1);
     expect(emitted.length).toBe(1);
-    expect(emitted[0]).toMatchObject({ executionOrder: 3, purpose: 'Go', status: 'Active', contextBehavior: 'Complete' });
+    expect(emitted[0]).toMatchObject({ ExecutionOrder: 3, Purpose: 'Go', Status: 'Active', ContextBehavior: 'Complete' });
   });
 
   it('emits null on Cancel and fires DialogClose', async () => {

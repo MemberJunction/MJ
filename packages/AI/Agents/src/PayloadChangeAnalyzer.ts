@@ -140,7 +140,7 @@ export class PayloadChangeAnalyzer {
     /**
      * Analyzes a payload change request for suspicious patterns
      */
-    public analyzeChangeRequest<P = any>(
+    public AnalyzeChangeRequest<P = any>(
         originalPayload: P,
         changeRequest: AgentPayloadChangeRequest<P>,
         resultPayload: P
@@ -185,6 +185,15 @@ export class PayloadChangeAnalyzer {
         };
     }
 
+    /** @deprecated Use {@link AnalyzeChangeRequest}. */
+    public analyzeChangeRequest<P = any>(
+        originalPayload: P,
+        changeRequest: AgentPayloadChangeRequest<P>,
+        resultPayload: P
+    ): PayloadAnalysisResult {
+        return this.AnalyzeChangeRequest(originalPayload, changeRequest, resultPayload);
+    }
+
     /**
      * Recursively analyze changes between original and result payloads
      */
@@ -195,8 +204,8 @@ export class PayloadChangeAnalyzer {
         path: string[],
         warnings: PayloadWarning[]
     ): void {
-        // Skip if we've exceeded max depth
-        if (path.length > this.config.maxAnalysisDepth) return;
+        // Skip if we've exceeded max depth or values are identical
+        if (path.length > this.config.maxAnalysisDepth || original === result) return;
 
         // Handle different types
         if (typeof original === 'string' && typeof result === 'string') {
@@ -221,7 +230,7 @@ export class PayloadChangeAnalyzer {
         path: string[],
         warnings: PayloadWarning[]
     ): void {
-        if (!original || !result) return;
+        if (!original || !result || original === result) return;
 
         const originalLength = original.length;
         const resultLength = result.length;
@@ -308,13 +317,17 @@ export class PayloadChangeAnalyzer {
         if (this.config.analyzeNestedChanges) {
             const minLength = Math.min(originalLength, resultLength);
             for (let i = 0; i < minLength; i++) {
-                this.analyzeChanges(
-                    original[i],
-                    result[i],
-                    {} as AgentPayloadChangeRequest<any>,
-                    [...path, `[${i}]`],
-                    warnings
-                );
+                if (original[i] !== result[i]) {
+                    path.push(`[${i}]`);
+                    this.analyzeChanges(
+                        original[i],
+                        result[i],
+                        {} as AgentPayloadChangeRequest<any>,
+                        path,
+                        warnings
+                    );
+                    path.pop();
+                }
             }
         }
     }
@@ -331,7 +344,13 @@ export class PayloadChangeAnalyzer {
     ): void {
         const originalKeys = Object.keys(original);
         const resultKeys = Object.keys(result);
-        const removedKeys = originalKeys.filter(k => !resultKeys.includes(k));
+        const removedKeys: string[] = [];
+        for (let i = 0; i < originalKeys.length; i++) {
+            const k = originalKeys[i];
+            if (!Object.prototype.hasOwnProperty.call(result, k)) {
+                removedKeys.push(k);
+            }
+        }
         
         // Check for significant key removal
         if (removedKeys.length > 0) {
@@ -366,15 +385,18 @@ export class PayloadChangeAnalyzer {
 
         // Analyze nested changes
         if (this.config.analyzeNestedChanges) {
-            for (const key of resultKeys) {
-                if (key in original) {
+            for (let i = 0; i < resultKeys.length; i++) {
+                const key = resultKeys[i];
+                if (Object.prototype.hasOwnProperty.call(original, key) && original[key] !== result[key]) {
+                    path.push(key);
                     this.analyzeChanges(
                         original[key],
                         result[key],
                         changeRequest,
-                        [...path, key],
+                        path,
                         warnings
                     );
+                    path.pop();
                 }
             }
         }
@@ -469,7 +491,7 @@ export class PayloadChangeAnalyzer {
                         pattern: 'partial_state_return',
                         originalKeyCount: originalKeys.length,
                         resultKeyCount: resultKeys.length,
-                        missingKeys: originalKeys.filter(k => !resultKeys.includes(k)).slice(0, 10)
+                        missingKeys: originalKeys.filter(k => !Object.prototype.hasOwnProperty.call(result, k)).slice(0, 10)
                     }
                 });
             }
@@ -484,21 +506,27 @@ export class PayloadChangeAnalyzer {
         ];
 
         this.walkPayload(result, [], (value, path) => {
-            if (typeof value === 'string' && placeholderPatterns.some(p => p.test(value))) {
-                const originalValue = _.get(original, path);
-                if (originalValue && typeof originalValue === 'string' && originalValue.length > 50) {
-                    warnings.push({
-                        type: PayloadWarningType.PatternAnomaly,
-                        severity: 'medium',
-                        path: path.join('.'),
-                        message: 'Complex content replaced with placeholder',
-                        requiresFeedback: true,
-                        details: {
-                            pattern: 'placeholder_replacement',
-                            placeholder: value,
-                            originalLength: originalValue.length
+            if (typeof value === 'string' && value.length > 0) {
+                const c0 = value.charCodeAt(0);
+                // Fast-reject strings that cannot match /^TODO:/i, /^TBD$/i, /^\[.*\]$/, or /^<.*>$/
+                if (c0 === 84 || c0 === 116 || c0 === 91 || c0 === 60) {
+                    if (placeholderPatterns.some(p => p.test(value))) {
+                        const originalValue = _.get(original, path);
+                        if (originalValue && typeof originalValue === 'string' && originalValue.length > 50) {
+                            warnings.push({
+                                type: PayloadWarningType.PatternAnomaly,
+                                severity: 'medium',
+                                path: path.join('.'),
+                                message: 'Complex content replaced with placeholder',
+                                requiresFeedback: true,
+                                details: {
+                                    pattern: 'placeholder_replacement',
+                                    placeholder: value,
+                                    originalLength: originalValue.length
+                                }
+                            });
                         }
-                    });
+                    }
                 }
             }
         });
@@ -518,14 +546,18 @@ export class PayloadChangeAnalyzer {
         }
 
         if (Array.isArray(obj)) {
-            obj.forEach((item, index) => {
-                this.walkPayload(item, [...path, `[${index}]`], callback);
-            });
+            for (let index = 0; index < obj.length; index++) {
+                path.push(`[${index}]`);
+                this.walkPayload(obj[index], path, callback);
+                path.pop();
+            }
         } else {
-            for (const key in obj) {
-                if (obj.hasOwnProperty(key)) {
-                    this.walkPayload(obj[key], [...path, key], callback);
-                }
+            const keys = Object.keys(obj);
+            for (let i = 0; i < keys.length; i++) {
+                const key = keys[i];
+                path.push(key);
+                this.walkPayload(obj[key], path, callback);
+                path.pop();
             }
         }
     }
@@ -533,7 +565,7 @@ export class PayloadChangeAnalyzer {
     /**
      * Generate feedback questions for suspicious changes
      */
-    public generateFeedbackQuestions(warnings: PayloadWarning[]): string[] {
+    public GenerateFeedbackQuestions(warnings: PayloadWarning[]): string[] {
         const questions: string[] = [];
         const feedbackWarnings = warnings.filter(w => w.requiresFeedback);
         
@@ -571,5 +603,10 @@ export class PayloadChangeAnalyzer {
         }
         
         return questions;
+    }
+
+    /** @deprecated Use {@link GenerateFeedbackQuestions}. */
+    public generateFeedbackQuestions(warnings: PayloadWarning[]): string[] {
+        return this.GenerateFeedbackQuestions(warnings);
     }
 }

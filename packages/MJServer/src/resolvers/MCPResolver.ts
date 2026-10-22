@@ -19,7 +19,7 @@ import {
 } from '@memberjunction/ai-mcp-client';
 import { AppContext } from '../types.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
-import { publishStatusUpdate } from '../generic/PushStatusResolver.js';
+import { PublishStatusUpdate } from '../generic/PushStatusResolver.js';
 import { GraphQLJSONObject } from 'graphql-type-json';
 import { configInfo } from '../config.js';
 
@@ -493,13 +493,13 @@ export class MCPToolSummary {
 @ObjectType()
 export class MCPToolPageResult {
     @Field(() => [MCPToolSummary])
-    items: MCPToolSummary[];
+    items: MCPToolSummary[];  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Int)
-    totalCount: number;
+    totalCount: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field()
-    hasMore: boolean;
+    hasMore: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 /**
@@ -508,13 +508,13 @@ export class MCPToolPageResult {
 @ObjectType()
 export class MCPToolServerCount {
     @Field()
-    serverID: string;
+    serverID: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field()
-    serverName: string;
+    serverName: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Int)
-    count: number;
+    count: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 /**
@@ -524,10 +524,10 @@ export class MCPToolServerCount {
 @ObjectType()
 export class MCPToolCategoryCount {
     @Field()
-    category: string;
+    category: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => Int)
-    count: number;
+    count: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 /**
@@ -536,13 +536,13 @@ export class MCPToolCategoryCount {
 @ObjectType()
 export class MCPToolCountsResult {
     @Field(() => Int)
-    totalCount: number;
+    totalCount: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => [MCPToolServerCount])
-    countByServer: MCPToolServerCount[];
+    countByServer: MCPToolServerCount[];  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => [MCPToolCategoryCount])
-    countByCategory: MCPToolCategoryCount[];
+    countByCategory: MCPToolCategoryCount[];  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 /**
@@ -639,11 +639,14 @@ export class MCPResolver extends ResolverBase {
             // Publish syncing progress
             this.publishProgress(pubSub, sessionId, user.ID, ConnectionID, 'syncing', 'Synchronizing tools to database...');
 
-            // Perform the sync
-            const syncResult: MCPSyncToolsResult = await manager.syncTools(ConnectionID, { contextUser: user });
-
-            // Remove event listener
-            manager.removeEventListener('toolsSynced', eventHandler);
+            // Perform the sync; always detach the listener, even if syncTools throws, so failed
+            // syncs don't stack handlers on the shared manager.
+            let syncResult: MCPSyncToolsResult;
+            try {
+                syncResult = await manager.syncTools(ConnectionID, { contextUser: user });
+            } finally {
+                manager.removeEventListener('toolsSynced', eventHandler);
+            }
 
             if (!syncResult.success) {
                 this.publishProgress(pubSub, sessionId, user.ID, ConnectionID, 'error', `Sync failed: ${syncResult.error}`);
@@ -1247,7 +1250,7 @@ export class MCPResolver extends ResolverBase {
      * @returns OAuth event notification
      */
     @Subscription(() => MCPOAuthEventNotification, { topics: MCP_OAUTH_EVENTS_TOPIC })
-    onMCPOAuthEvent(
+    onMCPOAuthEvent(  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
         @Root() payload: MCPOAuthEventPayload
     ): MCPOAuthEventNotification {
         return {
@@ -1361,7 +1364,7 @@ export class MCPResolver extends ResolverBase {
             result
         };
 
-        publishStatusUpdate(pubSub, { sessionId, ownerUserId, message: JSON.stringify(progressMessage) });
+        PublishStatusUpdate(pubSub, { sessionId, ownerUserId, message: JSON.stringify(progressMessage) });
     }
 
     /**
@@ -1653,7 +1656,7 @@ export class MCPResolver extends ResolverBase {
  * @param pubSub - PubSub engine
  * @param event - OAuth event details
  */
-export async function publishMCPOAuthEvent(
+export async function PublishMCPOAuthEvent(
     pubSub: PubSubEngine,
     event: {
         eventType: MCPOAuthEventType;
@@ -1675,4 +1678,19 @@ export async function publishMCPOAuthEvent(
     };
 
     await pubSub.publish(MCP_OAUTH_EVENTS_TOPIC, payload);
+}
+
+/** @deprecated Use {@link PublishMCPOAuthEvent}. */
+export async function publishMCPOAuthEvent(
+    pubSub: PubSubEngine,
+    event: {
+        eventType: MCPOAuthEventType;
+        connectionId: string;
+        authorizationUrl?: string;
+        stateParameter?: string;
+        errorMessage?: string;
+        requiresReauthorization?: boolean;
+    }
+): Promise<void> {
+    return PublishMCPOAuthEvent(pubSub, event);
 }

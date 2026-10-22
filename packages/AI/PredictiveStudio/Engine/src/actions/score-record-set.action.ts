@@ -104,7 +104,7 @@ export interface ScoreRecordSetResult {
  */
 export interface IScoreRecordSetRunner {
   /** Score the requested scope and return the run summary. */
-  run(request: ScoreRecordSetRequest): Promise<ScoreRecordSetResult>;
+  run(request: ScoreRecordSetRequest): Promise<ScoreRecordSetResult>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

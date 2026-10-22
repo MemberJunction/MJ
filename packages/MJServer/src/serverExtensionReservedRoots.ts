@@ -2,15 +2,17 @@
  * Core HTTP prefixes MJServer mounts — many of them PRE-AUTH — that an Open App
  * server extension must not claim.
  *
+ * Every value is relative to MJAPI's base path (`ApiRoute()` composes the real mount path).
+ *
  * Kept as literals (not imported `*_MOUNT_PATH` constants) so this module cannot
  * pull `config.ts` / telephony routers into every importer. Values MUST stay in
  * lockstep with the `export const *_MOUNT_PATH` declarations and the `app.use` /
- * `app.get` calls in `src/index.ts`. The companion unit test reads those source
- * files and fails if a constant drifts.
+ * `app.get` calls in `src/coreRoutes.ts`. The companion unit tests read the constants'
+ * source and boot those mounts (`apiRootBoot.test.ts`), failing if either drifts.
  *
  * `serve()` passes the result into `prepareServerExtensionConfigs({ extraReservedRoots })`.
  *
- * If you add a pre-auth `app.use(...)` in `serve()`, add its prefix here.
+ * If you add a pre-auth core mount, add its prefix here.
  */
 
 /** Core mounts that have no exported `*_MOUNT_PATH` constant. */
@@ -20,6 +22,8 @@ export const CORE_STATIC_RESERVED_SERVER_EXTENSION_ROOTS: readonly string[] = [
     '/media',
     '/oauth',
     '/health',
+    '/realtime',
+    '/realtime-proxy',
 ];
 
 /**
@@ -30,22 +34,19 @@ export const CORE_CONSTANT_RESERVED_SERVER_EXTENSION_ROOTS: readonly string[] = 
     '/auth',              // AUTH_CATALOG_MOUNT_PATH
     '/magic-link',        // MAGIC_LINK_MOUNT_PATH
     '/widget',            // WIDGET_MOUNT_PATH
-    '/telephony/twilio',  // TWILIO_TELEPHONY_MOUNT_PATH
-    '/telephony/vonage',  // VONAGE_TELEPHONY_MOUNT_PATH
-    '/meetings/teams',    // TEAMS_MEETINGS_MOUNT_PATH
 ];
 
 /**
- * Reserved roots for the running process. `graphqlRootPath` is included so a
- * deployment that sets `GRAPHQL_ROOT_PATH=/api` (or anything other than the
- * static `/graphql` baseline) is still protected. `/` as graphqlRootPath is
- * already reserved as the server root and does not prefix-match every path.
+ * Reserved roots for the running process, relative to MJAPI's base path like every extension RootPath.
+ * `graphqlRootPath` is no longer reserved: it is only Apollo's path, and Apollo mounts last, so an extension
+ * route registered before it always wins (`prepareServerExtensionConfigs({ apiRootPath })` composes the
+ * mount path).
  */
-export function coreReservedServerExtensionRoots(graphqlRootPath: string): string[] {
-    const graphql = typeof graphqlRootPath === 'string' ? graphqlRootPath.trim() : '';
-    return [
-        ...(graphql ? [graphql] : []),
-        ...CORE_CONSTANT_RESERVED_SERVER_EXTENSION_ROOTS,
-        ...CORE_STATIC_RESERVED_SERVER_EXTENSION_ROOTS,
-    ];
+export function CoreReservedServerExtensionRoots(): string[] {
+    return [...CORE_CONSTANT_RESERVED_SERVER_EXTENSION_ROOTS, ...CORE_STATIC_RESERVED_SERVER_EXTENSION_ROOTS];
+}
+
+/** @deprecated Use {@link CoreReservedServerExtensionRoots}. The argument is ignored. */
+export function coreReservedServerExtensionRoots(_graphqlRootPath?: string): string[] {
+    return CoreReservedServerExtensionRoots();
 }

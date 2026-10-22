@@ -7,13 +7,14 @@ import {
     FullTextSearchResult,
     MaterializedColumnSpec,
     DataSourceResult,
+    ExcludedBaseViewFieldNames,
 } from '../../codeGenDatabaseProvider';
 import { SQLServerDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
-import { ordinalCompare, RegisterClass } from '@memberjunction/global';
-import { sortBySequenceAndCreatedAt } from '../../../Misc/util';
-import { configInfo, dbDatabase, mj_core_schema } from '../../../Config/config';
-import { MSSQLConnection, getSqlConfig } from '../../../Config/db-connection';
-import { logError, logStatus, logWarning, startSpinner, succeedSpinner } from '../../../Misc/status_logging';
+import { EscapeSQLString, ordinalCompare, RegisterClass } from '@memberjunction/global';
+import { SortBySequenceAndCreatedAt } from '../../../Misc/util';
+import { configInfo, dbDatabase, MjCoreSchema } from '../../../Config/config';
+import { MSSQLConnection, GetSqlConfig } from '../../../Config/db-connection';
+import { logError, logStatus, LogWarning, StartSpinner, SucceedSpinner } from '../../../Misc/status_logging';
 import { SQLServerDataProvider, SQLServerProviderConfigData, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { SQLServerCodeGenConnection } from './SQLServerCodeGenConnection';
@@ -57,9 +58,9 @@ export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
      * mean touching the orchestrator.
      */
     async SetupDataSource(): Promise<DataSourceResult> {
-        startSpinner('Initializing database connection...');
+        StartSpinner('Initializing database connection...');
         const pool = await MSSQLConnection();
-        const config = new SQLServerProviderConfigData(pool, mj_core_schema());
+        const config = new SQLServerProviderConfigData(pool, MjCoreSchema());
         // CodeGen is a short-lived process ⇒ 'task' entry-point default: skip engine
         // pre-warm; MJ_STARTUP_MODE or mj.config.cjs startup.mode can override
         const startupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'task' });
@@ -70,7 +71,7 @@ export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
         // MSSQLConnection() above. The non-null assertion is safe because the
         // call to MSSQLConnection on the line above is what guarantees the
         // accessor has a value to return.
-        const cfg = getSqlConfig()!;
+        const cfg = GetSqlConfig()!;
         let connectionInfo = cfg.server;
         if (cfg.port) connectionInfo += ':' + cfg.port;
         if (cfg.options?.instanceName) connectionInfo += '\\' + cfg.options.instanceName;
@@ -80,7 +81,7 @@ export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
         const userMatch = UserCache.Users.find((u) => u?.Type?.trim().toLowerCase() === 'owner');
         const currentUser = userMatch ?? UserCache.Users[0];
 
-        succeedSpinner('SQL Server connection initialized: ' + connectionInfo);
+        SucceedSpinner('SQL Server connection initialized: ' + connectionInfo);
         return { provider, connection: conn, currentUser, connectionInfo };
     }
 
@@ -123,6 +124,13 @@ export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
         const whereClause = entity.DeleteType === 'Soft'
             ? `WHERE\n    ${alias}.[${EntityInfo.DeletedAtFieldName}] IS NULL\n`
             : '';
+        // `alias.*` unless this entity has a configured base-view column exclusion, in which case the
+        // base-table columns are enumerated instead. See baseTableSelectList / ExcludedBaseViewFieldNames.
+        const baseTableSelect = this.baseTableSelectList(
+            entity,
+            alias,
+            ExcludedBaseViewFieldNames(entity.Name, configInfo?.baseViewExcludedFields ?? [])
+        );
 
         return `
 ------------------------------------------------------------
@@ -138,7 +146,7 @@ GO
 CREATE VIEW [${entity.SchemaName}].[${viewName}]
 AS
 SELECT
-    ${alias}.*${context.parentFieldsSelect}${context.relatedFieldsSelect.length > 0 ? ',' : ''}${context.relatedFieldsSelect}${context.rootFieldsSelect}
+    ${baseTableSelect}${context.parentFieldsSelect}${context.relatedFieldsSelect.length > 0 ? ',' : ''}${context.relatedFieldsSelect}${context.rootFieldsSelect}
 FROM
     [${entity.SchemaName}].[${entity.BaseTable}] AS ${alias}${context.parentJoins ? '\n' + context.parentJoins : ''}${context.relatedFieldsJoins ? '\n' + context.relatedFieldsJoins : ''}${context.rootJoins}
 ${whereClause}GO`;
@@ -187,6 +195,21 @@ END`;
         return `CREATE OR ALTER VIEW [${esc(schema)}].[${esc(viewName)}]
 AS
 SELECT * FROM [${esc(schema)}].[${esc(tableName)}];`;
+    }
+
+    /**
+     * SQL Server create-or-replace for a config-declared view. `CREATE OR ALTER VIEW`
+     * (SQL Server 2016 SP1+) replaces the definition in place whatever its column shape, so
+     * a changed body needs no drop and existing grants survive.
+     *
+     * Returns a single GO-free batch (executed via `ds.query`); the caller adds the file
+     * batch separator. `CREATE OR ALTER VIEW` must be the sole statement in its batch.
+     */
+    override generateCreateOrReplaceViewSQL(schema: string, viewName: string, selectSQL: string): string {
+        const esc = (n: string) => n.replace(/\]/g, ']]');
+        return `CREATE OR ALTER VIEW [${esc(schema)}].[${esc(viewName)}]
+AS
+${this.trimStatementTerminator(selectSQL)}`;
     }
 
     /** SQL Server synthetic surrogate key: an auto-incrementing IDENTITY column. */
@@ -241,7 +264,7 @@ SELECT * FROM [${esc(schema)}].[${esc(tableName)}];`;
             additionalFieldList = callerSuppliedKeys.map(k => `[${k.Name}]`).join(',\n                ');
             additionalValueList = callerSuppliedKeys.map(k => `@${k.CodeName}`).join(',\n                ');
             const callerSuppliedKeyPredicates = callerSuppliedKeys.map(k => ` AND [${k.Name}] = @${k.CodeName}`).join('');
-            selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${identityKey.Name}] = SCOPE_IDENTITY()${callerSuppliedKeyPredicates}`;
+            selectInsertedRecord = this.buildCRUDReturnSelect(entity, `[${identityKey.Name}] = SCOPE_IDENTITY()${callerSuppliedKeyPredicates}`);
         } else if (firstKey.Type.toLowerCase().trim() === 'uniqueidentifier' && entity.PrimaryKeys.length === 1) {
             const hasDefaultValue = firstKey.DefaultValue && firstKey.DefaultValue.trim().length > 0;
 
@@ -287,7 +310,7 @@ SELECT * FROM [${esc(schema)}].[${esc(tableName)}];`;
                 additionalFieldList = '';
                 additionalValueList = '';
                 outputCode = '';
-                selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${firstKey.Name}] = (SELECT [${firstKey.Name}] FROM @InsertedRow)`;
+                selectInsertedRecord = this.buildCRUDReturnSelect(entity, `[${firstKey.Name}] = (SELECT [${firstKey.Name}] FROM @InsertedRow)`);
             } else {
                 // UUID without DB default: generate via ISNULL(@PK, NEWID()).
                 // PK is added via additionalFieldList; no leading comma — the
@@ -296,7 +319,7 @@ SELECT * FROM [${esc(schema)}].[${esc(tableName)}];`;
                 additionalFieldList = '[' + firstKey.Name + ']';
                 additionalValueList = '@ActualID';
                 outputCode = '';
-                selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${firstKey.Name}] = @ActualID`;
+                selectInsertedRecord = this.buildCRUDReturnSelect(entity, `[${firstKey.Name}] = @ActualID`);
             }
         } else {
             // Composite PKs or single non-UUID PKs (e.g. string `Code` keys): the caller MUST
@@ -314,13 +337,8 @@ SELECT * FROM [${esc(schema)}].[${esc(tableName)}];`;
             }
             additionalFieldList = pkColumns.join(',\n                ');
             additionalValueList = pkValues.join(',\n                ');
-            selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE `;
-            let isFirst = true;
-            for (const k of entity.PrimaryKeys) {
-                if (!isFirst) selectInsertedRecord += ' AND ';
-                selectInsertedRecord += `[${k.Name}] = @${k.CodeName}`;
-                isFirst = false;
-            }
+            const pkWhereClause = entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ');
+            selectInsertedRecord = this.buildCRUDReturnSelect(entity, pkWhereClause);
         }
 
         // Build the INSERT column and value lists. For the non-hasDefaultValue branches,
@@ -381,11 +399,31 @@ GO${permissions}
     }
 
     /**
+     * Builds the post-insert / post-update `SELECT` statement returned by a CRUD stored procedure.
+     *
+     * - When `entity.SaveReturnMode` is `'full'` (default), queries `SELECT *` (or `SELECT TOP 0 *`)
+     *   from `[schema].[BaseView]` so calculated and joined columns are returned.
+     * - When `entity.SaveReturnMode` is `'datestamps_only'`, queries only the primary key column(s)
+     *   plus `__mj_CreatedAt` and `__mj_UpdatedAt` (via {@link EntityInfo.DatestampReturnFields})
+     *   directly from `[schema].[BaseTable]`, avoiding the post-write `BaseView` joins and large
+     *   payload columns while still returning DB-generated key and timestamp values.
+     */
+    protected buildCRUDReturnSelect(entity: EntityInfo, whereClause: string, topZero: boolean = false): string {
+        const topPrefix = topZero ? 'TOP 0 ' : '';
+        if (entity.SaveReturnMode === 'datestamps_only') {
+            const cols = entity.DatestampReturnFields.map(f => `[${f.Name}]`).join(', ');
+            return `SELECT ${topPrefix}${cols} FROM [${entity.SchemaName}].[${entity.BaseTable}] WHERE ${whereClause}`;
+        }
+        return `SELECT ${topPrefix}* FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE ${whereClause}`;
+    }
+
+    /**
      * Generates the `spUpdate` stored procedure for a SQL Server entity. Performs a standard
      * `UPDATE ... SET ... WHERE PK = @PK` and uses `@@ROWCOUNT` to detect whether the row
      * was found: if no rows were updated (e.g., stale PK or concurrent delete), returns an
      * empty result set with the base view's column structure (`SELECT TOP 0 ... WHERE 1=0`);
-     * otherwise returns the updated record from the base view. Also generates the
+     * otherwise returns the updated record from the base view (or PK + datestamp columns from
+     * the base table when `entity.SaveReturnMode === 'datestamps_only'`). Also generates the
      * `__mj_UpdatedAt` timestamp trigger if the entity has that column.
      */
     generateCRUDUpdate(entity: EntityInfo): string {
@@ -395,13 +433,18 @@ GO${permissions}
         const hasUpdatedAtField = entity.Fields.find(f => f.Name.toLowerCase().trim() === EntityInfo.UpdatedAtFieldName.trim().toLowerCase()) !== undefined;
         const updatedAtTrigger = hasUpdatedAtField ? this.generateTimestampTrigger(entity) : '';
         const updateFields = this.generateUpdateFieldString(entity.Fields);
-        const selectUpdatedRecord = `SELECT
+        const pkWhereClause = entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ');
+        const isDatestampsOnly = entity.SaveReturnMode === 'datestamps_only';
+        const selectUpdatedRecord = isDatestampsOnly
+            ? this.buildCRUDReturnSelect(entity, pkWhereClause)
+            : `SELECT
                                         *
                                     FROM
                                         [${entity.SchemaName}].[${entity.BaseView}]
                                     WHERE
-                                        ${entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ')}
+                                        ${pkWhereClause}
                                     `;
+        const selectEmptyRecord = this.buildCRUDReturnSelect(entity, '1=0', true);
 
         // PK-only entities (e.g. junction tables with only PK + __mj timestamp columns)
         // have no updatable fields. Generate a no-op SP that just returns the existing row
@@ -414,12 +457,12 @@ GO${permissions}
     SET
         ${updateFields}
     WHERE
-        ${entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ')}
+        ${pkWhereClause}
 
     -- Check if the update was successful
     IF @@ROWCOUNT = 0
         -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
-        SELECT TOP 0 * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE 1=0
+        ${selectEmptyRecord}
     ELSE
         -- Return the updated record so the caller can see the updated values and any calculated fields
         ${selectUpdatedRecord}`
@@ -630,6 +673,25 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] (${col
      *
      * @returns The generated SQL and the resolved function name for permission grants.
      */
+    /**
+     * SQL Server charges full-text search through the fulltext population service rather than a
+     * trigger: `CREATE FULLTEXT INDEX` puts the table under continuous change tracking, so every
+     * INSERT/UPDATE/DELETE that touches an indexed column queues crawl work, and the index itself
+     * occupies catalog storage. The generated script also DROPs and RECREATEs the index, which means
+     * a full re-crawl of the table each time this entity's SQL is applied.
+     */
+    FullTextSearchCostDisclosure(entity: EntityInfo, searchFields: EntityFieldInfo[]): string | null {
+        if (!entity.FullTextIndexGenerated) {
+            return null;
+        }
+        const fields = searchFields.map((f: EntityFieldInfo) => f.Name).join(', ');
+        return `Full-text search on ${entity.SchemaName}.${entity.BaseTable} adds a PERMANENT cost: the `
+            + `fulltext index over (${fields}) puts the table under change tracking, so every write to an `
+            + `indexed column queues population work, and this script DROPs and RECREATEs the index — a full `
+            + `re-crawl of the table on every apply. Clearing the entity's full-text flags later does not drop `
+            + `the index or the catalog.`;
+    }
+
     generateFullTextSearch(entity: EntityInfo, searchFields: EntityFieldInfo[], primaryKeyIndexName: string): FullTextSearchResult {
         let sql = '';
         const catalogName = entity.FullTextCatalog && entity.FullTextCatalog.length > 0
@@ -1117,7 +1179,7 @@ GO
                 if (context.ServiceProtectedRoleSQLNames.has(sqlName.trim().toLowerCase())) {
                     if (!this._serviceProtectedDenySkipsWarned.has(sqlName)) {
                         this._serviceProtectedDenySkipsWarned.add(sqlName);
-                        logWarning(
+                        LogWarning(
                             `   ⚠️  SKIPPED field-security DENY to role '${sqlName}': a protected service login is a member of this role. ` +
                             `A column DENY here would strip the column from the service login itself (DENY beats every sibling GRANT) and break the API for all users. ` +
                             `Remove the service login from the role to enable DB-tier enforcement; app-tier enforcement is unaffected.`
@@ -1219,7 +1281,7 @@ GO
         const parentKey = this.resolveCascadeParentKeyField(parentEntity, fkField);
         if (!parentKey) {
             const warning = this.unresolvedCascadeKeyComment(parentEntity, relatedEntity, fkField);
-            logWarning(`WARNING in ${this.getCRUDRoutineName(parentEntity, 'Delete')} generation: ${warning.trim()}`);
+            LogWarning(`WARNING in ${this.getCRUDRoutineName(parentEntity, 'Delete')} generation: ${warning.trim()}`);
             return '\n' + warning;
         }
         const whereClause = `${qi(fkField.CodeName)} = @${parentKey.CodeName}`;
@@ -1261,7 +1323,7 @@ GO
         const parentKey = this.resolveCascadeParentKeyField(parentEntity, fkField);
         if (!parentKey) {
             const warning = this.unresolvedCascadeKeyComment(parentEntity, relatedEntity, fkField);
-            logWarning(`WARNING in ${this.getCRUDRoutineName(parentEntity, 'Delete')} generation: ${warning.trim()}`);
+            LogWarning(`WARNING in ${this.getCRUDRoutineName(parentEntity, 'Delete')} generation: ${warning.trim()}`);
             return '\n' + warning;
         }
         const whereClause = `${qi(fkField.CodeName)} = @${parentKey.CodeName}`;
@@ -1327,7 +1389,7 @@ GO
         allParams = pkComponents.routineParams;
 
         // Then, add all updateable fields with the same prefix
-        const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+        const sortedFields = SortBySequenceAndCreatedAt(entity.Fields);
         for (const ef of sortedFields) {
             if (!ef.IsPrimaryKey && !ef.IsVirtual && ef.AllowUpdateAPI && !ef.AutoIncrement && !ef.IsSpecialDateField) {
                 if (declarations !== '')
@@ -1579,6 +1641,26 @@ WHERE s.name IN (${inList})`;
                    FROM sys.index_columns ic2
                    WHERE ic2.object_id = i.object_id
                      AND ic2.index_id = i.index_id) > 1`;
+    }
+
+    /** @inheritdoc */
+    public override GetUniqueIndexMembershipSQL(schema: string, tableName: string, columnName: string): string | null {
+        return `SELECT ic.is_included_column AS IsIncludedColumn,
+                (SELECT COUNT(*)
+                   FROM sys.index_columns k
+                  WHERE k.object_id = i.object_id
+                    AND k.index_id = i.index_id
+                    AND k.is_included_column = 0) AS KeyColumnCount
+            FROM sys.indexes i
+            INNER JOIN sys.tables t ON t.object_id = i.object_id
+            INNER JOIN sys.schemas s ON s.schema_id = t.schema_id
+            INNER JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+            INNER JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+            WHERE i.is_unique = 1
+              AND i.is_primary_key = 0
+              AND s.name = '${EscapeSQLString(schema)}'
+              AND t.name = '${EscapeSQLString(tableName)}'
+              AND c.name = '${EscapeSQLString(columnName)}'`;
     }
 
     /** @inheritdoc */
@@ -2042,7 +2124,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
                     await pool.request().query(batch);
                 } catch (err) {
                     const msg = err instanceof Error ? err.message : String(err);
-                    logWarning(`[CodeGen] SQL batch warning in ${path.basename(filePath)}: ${msg.substring(0, 200)}`);
+                    LogWarning(`[CodeGen] SQL batch warning in ${path.basename(filePath)}: ${msg.substring(0, 200)}`);
                 }
             }
 

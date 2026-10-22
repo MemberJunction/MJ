@@ -2,8 +2,8 @@ import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject, Observable, interval, Subscription } from 'rxjs';
 import { map, shareReplay, switchMap } from 'rxjs/operators';
 import { LogStatusEx, RunView, UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
-import { MJAIAgentRunEntity } from '@memberjunction/core-entities';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { ConversationEngine, MJAIAgentRunEntity, type ConversationScope } from '@memberjunction/core-entities';
 
 export type AgentStatus = 'acknowledging' | 'working' | 'completing' | 'completed' | 'error';
 
@@ -24,6 +24,9 @@ export class AgentStateService implements OnDestroy {
   private _activeAgents$ = new BehaviorSubject<AgentWithStatus[]>([]);
   private pollSubscription?: Subscription;
   private currentUser?: UserInfo;
+  /** The conversation and scope polling was started with, so a restart (SetPollInterval) keeps them. */
+  private pollConversationId?: string;
+  private pollScope: ConversationScope | null = null;
   private pollInterval: number = 30000; // Poll every 30 seconds (reduced from 3s to minimize DB load)
   private pollCycleCount = 0;
   /** Minimum poll cycles before allowing auto-stop. Prevents premature shutdown
@@ -31,7 +34,12 @@ export class AgentStateService implements OnDestroy {
   private readonly minimumPollCycles = 3;
 
   // Public observable streams
-  public readonly activeAgents$ = this._activeAgents$.asObservable();
+  public readonly ActiveAgents$ = this._activeAgents$.asObservable();
+
+  /** @deprecated Use {@link ActiveAgents$}. */
+  public get activeAgents$() {
+    return this.ActiveAgents$;
+  }
 
   private _provider: IMetadataProvider | null = null;
 
@@ -49,72 +57,103 @@ export class AgentStateService implements OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.stopPolling();
+    this.StopPolling();
   }
 
   /**
    * Starts polling for active agents
    * @param currentUser The current user context
    * @param conversationId Optional conversation ID to filter by
+   * @param scope The conversation scope whose runs are read; the trunk of `conversationId` when null
    */
-  startPolling(currentUser: UserInfo, conversationId?: string): void {
+  StartPolling(currentUser: UserInfo, conversationId?: string, scope: ConversationScope | null = null): void {
     this.currentUser = currentUser;
-    this.stopPolling();
+    this.StopPolling();
+    this.pollConversationId = conversationId;
+    this.pollScope = scope;
     this.pollCycleCount = 0;
 
     // Initial load
-    this.loadActiveAgents(conversationId);
+    this.loadActiveAgents(conversationId, scope);
 
     // Start polling
     this.pollSubscription = interval(this.pollInterval)
-      .pipe(switchMap(() => this.loadActiveAgents(conversationId)))
+      .pipe(switchMap(() => this.loadActiveAgents(conversationId, scope)))
       .subscribe();
+  }
+
+  /** @deprecated Use {@link StartPolling}. */
+  startPolling(currentUser: UserInfo, conversationId?: string, scope: ConversationScope | null = null): void {
+    return this.StartPolling(currentUser, conversationId, scope);
   }
 
   /**
    * Stops polling for active agents
    */
-  stopPolling(): void {
+  StopPolling(): void {
     if (this.pollSubscription) {
       this.pollSubscription.unsubscribe();
       this.pollSubscription = undefined;
     }
   }
 
+  /** @deprecated Use {@link StopPolling}. */
+  stopPolling(): void {
+    return this.StopPolling();
+  }
+
   /**
    * Gets active agents as an observable
    * @param conversationId Optional conversation ID to filter by
    */
-  getActiveAgents(conversationId?: string): Observable<AgentWithStatus[]> {
+  GetActiveAgents(conversationId?: string): Observable<AgentWithStatus[]> {
     if (conversationId) {
-      return this.activeAgents$.pipe(
+      return this.ActiveAgents$.pipe(
         map(agents => agents.filter(a => UUIDsEqual(a.run.ConversationID, conversationId))),
         shareReplay(1)
       );
     }
-    return this.activeAgents$;
+    return this.ActiveAgents$;
+  }
+
+  /** @deprecated Use {@link GetActiveAgents}. */
+  getActiveAgents(conversationId?: string): Observable<AgentWithStatus[]> {
+    return this.GetActiveAgents(conversationId);
   }
 
   /**
    * Gets a specific agent by ID
    * @param agentRunId The agent run ID
    */
-  getAgent(agentRunId: string): AgentWithStatus | undefined {
+  GetAgent(agentRunId: string): AgentWithStatus | undefined {
     return this._activeAgents$.value.find(a => UUIDsEqual(a.run.ID, agentRunId));
+  }
+
+  /** @deprecated Use {@link GetAgent}. */
+  getAgent(agentRunId: string): AgentWithStatus | undefined {
+    return this.GetAgent(agentRunId);
   }
 
   /**
    * Manually refreshes active agents
    * @param conversationId Optional conversation ID to filter by
+   * @param scope The conversation scope whose runs are read; the trunk of `conversationId` when null
    */
-  async refresh(conversationId?: string): Promise<void> {
-    await this.loadActiveAgents(conversationId);
+  async Refresh(conversationId?: string, scope: ConversationScope | null = null): Promise<void> {
+    await this.loadActiveAgents(conversationId, scope);
+  }
+
+  /** @deprecated Use {@link Refresh}. */
+  async refresh(conversationId?: string, scope: ConversationScope | null = null): Promise<void> {
+    return this.Refresh(conversationId, scope);
   }
 
   /**
-   * Loads active agents from the database
+   * Loads the running and paused agent runs from the database. With a conversation, only runs
+   * whose conversation detail is in `scope` (the trunk of `conversationId` when null), plus the
+   * conversation's runs that have no conversation detail, which belong to every path.
    */
-  private async loadActiveAgents(conversationId?: string): Promise<void> {
+  private async loadActiveAgents(conversationId?: string, scope: ConversationScope | null = null): Promise<void> {
     if (!this.currentUser) {
       return;
     }
@@ -129,7 +168,8 @@ export class AgentStateService implements OnDestroy {
       let filter = `Status IN ('Running', 'Paused')`;
 
       if (conversationId) {
-        filter += ` AND ConversationID='${conversationId}'`;
+        const inScope = ConversationEngine.ScopeSubquery(scope ?? ConversationEngine.TrunkScope(conversationId));
+        filter += ` AND (${inScope} OR ([ConversationID]='${EscapeSQLString(conversationId)}' AND [ConversationDetailID] IS NULL))`;
       }
 
       LogStatusEx({message: `[${timestamp}] 🤖 AgentStateService - Executing RunView for AI Agent Runs`, verboseOnly: true});
@@ -155,7 +195,7 @@ export class AgentStateService implements OnDestroy {
         // before the server has created the agent run record.
         if (runs.length === 0 && this.pollSubscription && this.pollCycleCount >= this.minimumPollCycles) {
           LogStatusEx({message: `[${timestamp}] 🤖 AgentStateService - No active agents after ${this.pollCycleCount} cycles, stopping polling`, verboseOnly: true});
-          this.stopPolling();
+          this.StopPolling();
         }
       }
     } catch (error) {
@@ -203,9 +243,8 @@ export class AgentStateService implements OnDestroy {
         return 'acknowledging';
       }
 
-      // Check if nearing completion (has results or output)
-      if (run.Result || run.Status === 'Completed') {
-        // If there's output, likely completing
+      // A run that is no longer Running has reached its final block
+      if (run.Status !== 'Running') {
         return 'completing';
       }
 
@@ -221,13 +260,14 @@ export class AgentStateService implements OnDestroy {
    * Extracts confidence score from agent run if available
    */
   private extractConfidence(run: MJAIAgentRunEntity): number | null {
-    // Try to parse confidence from Result or other fields
+    // Try to parse confidence from the run payload (FinalPayload, or Result on older rows)
     // This is a placeholder - adjust based on actual data structure
     try {
-      if (run.Result) {
-        const result = typeof run.Result === 'string' ? JSON.parse(run.Result) : run.Result;
-        if (result.confidence != null) {
-          return parseFloat(result.confidence);
+      const payload = run.FinalPayload ?? run.Result;
+      if (payload) {
+        const result: { confidence?: number | string } | null = JSON.parse(payload);
+        if (result?.confidence != null) {
+          return parseFloat(String(result.confidence));
         }
       }
     } catch {
@@ -238,45 +278,98 @@ export class AgentStateService implements OnDestroy {
   }
 
   /**
-   * Cancels an agent run
-   * @param agentRunId The agent run ID to cancel
+   * Stops an agent run that is still in flight.
+   *
+   * The run's row is the control channel: this marks it `Cancelled` with reason `User Request`,
+   * and the server process that owns the run notices within a few seconds (the agent-run
+   * watchdog's cancellation poll), aborts the in-flight step through the run's cancellation
+   * token, and finalizes the run — keeping the payload as it stood — and its reply as stopped.
+   * No request reaches the running process directly, so this works whichever replica owns it.
+   *
+   * The row is loaded fresh rather than taken from the polled active-agent list, which refreshes
+   * every 30 seconds and may not hold a run that started a moment ago.
+   *
+   * @returns true when the row was marked; false when the run was not found, had already
+   *   finished (nothing to stop), or the save was refused.
    */
-  async cancelAgent(agentRunId: string): Promise<boolean> {
-    if (!this.currentUser) {
-      return false;
-    }
-
+  async CancelAgent(agentRunId: string): Promise<boolean> {
     try {
-      const agent = this.getAgent(agentRunId);
-      if (!agent) {
+      const run = await this.Provider.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.currentUser);
+      if (!await run.Load(agentRunId)) {
+        return false;
+      }
+      if (run.Status !== 'Running' && run.Status !== 'Paused') {
         return false;
       }
 
-      agent.run.Status = 'Cancelled';
-      const saved = await agent.run.Save();
-
-      if (saved) {
-        // Refresh the active agents list
-        await this.refresh();
-        return true;
+      run.Status = 'Cancelled';
+      run.CancellationReason = 'User Request';
+      const saved = await run.Save();
+      if (!saved) {
+        console.error(`Failed to stop agent run ${agentRunId}: ${run.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        return false;
       }
+
+      await this.Refresh();
+      return true;
     } catch (error) {
       console.error('Failed to cancel agent:', error);
+      return false;
     }
+  }
 
-    return false;
+  /**
+   * Stops the in-flight run behind an agent's reply message, for callers that know the
+   * conversation detail but not yet the run (the run row is created a moment after the reply
+   * placeholder). Finds the newest Running or Paused run for that detail and stops it.
+   *
+   * @returns true when a run was found and marked; false otherwise.
+   */
+  async CancelAgentForDetail(conversationDetailId: string): Promise<boolean> {
+    try {
+      const rv = RunView.FromMetadataProvider(this.Provider);
+      const result = await rv.RunView<{ ID: string }>(
+        {
+          EntityName: 'MJ: AI Agent Runs',
+          ExtraFilter: `ConversationDetailID='${conversationDetailId}' AND Status IN ('Running', 'Paused')`,
+          OrderBy: 'StartedAt DESC',
+          MaxRows: 1,
+          Fields: ['ID'],
+          ResultType: 'simple'
+        },
+        this.currentUser
+      );
+      const runId = result.Success ? result.Results?.[0]?.ID : undefined;
+      if (!runId) {
+        return false;
+      }
+      return await this.CancelAgent(runId);
+    } catch (error) {
+      console.error('Failed to find the agent run to cancel:', error);
+      return false;
+    }
+  }
+
+  /** @deprecated Use {@link CancelAgent}. */
+  async cancelAgent(agentRunId: string): Promise<boolean> {
+    return this.CancelAgent(agentRunId);
   }
 
   /**
    * Updates the poll interval
    * @param milliseconds The new poll interval in milliseconds
    */
-  setPollInterval(milliseconds: number): void {
+  SetPollInterval(milliseconds: number): void {
     this.pollInterval = milliseconds;
 
-    // Restart polling if currently active
+    // Restart polling if currently active, on the same conversation and scope
     if (this.pollSubscription && this.currentUser) {
-      this.startPolling(this.currentUser);
+      this.StartPolling(this.currentUser, this.pollConversationId, this.pollScope);
     }
+  }
+
+  /** @deprecated Use {@link SetPollInterval}. */
+  setPollInterval(milliseconds: number): void {
+    return this.SetPollInterval(milliseconds);
   }
 }

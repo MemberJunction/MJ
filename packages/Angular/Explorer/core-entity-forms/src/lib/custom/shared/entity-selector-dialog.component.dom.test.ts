@@ -21,12 +21,12 @@ import { EntitySelectorDialogComponent, EntitySelectorConfig } from './entity-se
  */
 
 const CONFIG: EntitySelectorConfig = {
-  entityName: 'AI Prompts',
-  title: 'Pick a Prompt',
-  displayField: 'Name',
-  descriptionField: 'Description',
-  statusField: 'Status',
-  icon: 'fa-solid fa-comment',
+  EntityName: 'AI Prompts',
+  Title: 'Pick a Prompt',
+  DisplayField: 'Name',
+  DescriptionField: 'Description',
+  StatusField: 'Status',
+  Icon: 'fa-solid fa-comment',
 };
 
 const ROWS = [

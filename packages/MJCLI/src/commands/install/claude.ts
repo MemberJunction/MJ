@@ -1,6 +1,6 @@
 import { Command, Flags } from '@oclif/core';
-import { installPack, type InstallPackOptions } from '../../lib/claude-pack/PackInstaller.js';
-import { formatJson, formatPretty } from '../../lib/claude-pack/PackOutputFormatter.js';
+import { InstallPack, type InstallPackOptions } from '../../lib/claude-pack/PackInstaller.js';
+import { FormatJson, FormatPretty } from '../../lib/claude-pack/PackOutputFormatter.js';
 
 /**
  * `mj install:claude` — install or refresh the Claude Code pack in the
@@ -66,15 +66,15 @@ export default class InstallClaude extends Command {
 
     async run(): Promise<void> {
         const { flags } = await this.parse(InstallClaude);
-        const opts = mapFlagsToInstallOptions(flags, (msg) => {
+        const opts = MapFlagsToInstallOptions(flags, (msg) => {
             if (flags.verbose && !flags.json) this.log(msg);
         });
-        const result = await installPack(opts);
+        const result = await InstallPack(opts);
 
         if (flags.json) {
-            this.log(formatJson(result));
+            this.log(FormatJson(result));
         } else {
-            this.log(formatPretty(result));
+            this.log(FormatPretty(result));
         }
 
         if (!result.ok) this.exit(1);
@@ -85,7 +85,7 @@ export default class InstallClaude extends Command {
  * Translate oclif flag bag → `installPack` options. Extracted so update:claude
  * can reuse the shared install-style options (it adds its own on top).
  */
-export function mapFlagsToInstallOptions(
+export function MapFlagsToInstallOptions(
     flags: Record<string, unknown>,
     onProgress?: (msg: string) => void
 ): InstallPackOptions {
@@ -102,6 +102,14 @@ export function mapFlagsToInstallOptions(
         SkipSettings: asBool(flags['skip-settings']),
         OnProgress: onProgress,
     };
+}
+
+/** @deprecated Use {@link MapFlagsToInstallOptions}. */
+export function mapFlagsToInstallOptions(
+    flags: Record<string, unknown>,
+    onProgress?: (msg: string) => void
+): InstallPackOptions {
+    return MapFlagsToInstallOptions(flags, onProgress);
 }
 
 function asString(v: unknown, fallback: string): string {

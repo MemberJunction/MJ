@@ -34,13 +34,13 @@ describe('ParseTemplateParameters', () => {
         it('should deduplicate parameters used multiple times', () => {
             const result = ParseTemplateParameters('{{ name }} is {{ name }}');
             expect(result.parameters).toHaveLength(1);
-            expect(findParam(result, 'name')?.usages).toHaveLength(2);
+            expect(findParam(result, 'name')?.Usages).toHaveLength(2);
         });
 
         it('should handle empty template', () => {
             const result = ParseTemplateParameters('');
             expect(result.parameters).toHaveLength(0);
-            expect(result.warnings).toHaveLength(0);
+            expect(result.Warnings).toHaveLength(0);
         });
 
         it('should handle null/undefined template', () => {
@@ -77,7 +77,7 @@ describe('ParseTemplateParameters', () => {
             expect(user?.type).toBe('Object');
             const addressProp = user?.properties.find(p => p.name === 'address');
             expect(addressProp).toBeDefined();
-            expect(addressProp?.children.find(p => p.name === 'city')).toBeDefined();
+            expect(addressProp?.Children.find(p => p.name === 'city')).toBeDefined();
         });
 
         it('should merge multiple property accesses on the same root', () => {
@@ -211,31 +211,31 @@ describe('ParseTemplateParameters', () => {
 
         it('should record applied filters', () => {
             const result = ParseTemplateParameters('{{ description | safe }}');
-            expect(findParam(result, 'description')?.appliedFilters).toContain('safe');
+            expect(findParam(result, 'description')?.AppliedFilters).toContain('safe');
         });
 
         it('should handle multiple filters', () => {
             const result = ParseTemplateParameters('{{ data | json }}');
             expect(paramNames(result)).toEqual(['data']);
-            expect(findParam(result, 'data')?.appliedFilters).toContain('json');
+            expect(findParam(result, 'data')?.AppliedFilters).toContain('json');
         });
 
         it('should handle filter with arguments (join)', () => {
             const template = '{{ items | join(", ") }}';
             const result = ParseTemplateParameters(template);
             expect(paramNames(result)).toEqual(['items']);
-            expect(findParam(result, 'items')?.appliedFilters).toContain('join');
+            expect(findParam(result, 'items')?.AppliedFilters).toContain('join');
         });
 
         it('should handle filter on object property', () => {
             const result = ParseTemplateParameters('{{ entity.description | safe }}');
             expect(paramNames(result)).toEqual(['entity']);
-            expect(findParam(result, 'entity')?.appliedFilters).toContain('safe');
+            expect(findParam(result, 'entity')?.AppliedFilters).toContain('safe');
         });
 
         it('should detect default value from default filter', () => {
             const result = ParseTemplateParameters("{{ title | default('Untitled') }}");
-            expect(findParam(result, 'title')?.defaultValue).toBe('Untitled');
+            expect(findParam(result, 'title')?.DefaultValue).toBe('Untitled');
         });
     });
 
@@ -246,14 +246,14 @@ describe('ParseTemplateParameters', () => {
     describe('Or fallback and default values', () => {
         it('should detect default value from or pattern', () => {
             const result = ParseTemplateParameters("{{ description or 'No description' }}");
-            expect(findParam(result, 'description')?.defaultValue).toBe('No description');
+            expect(findParam(result, 'description')?.DefaultValue).toBe('No description');
         });
 
         it('should not override default value from earlier detection', () => {
             const template = "{{ x | default('first') }}{{ x or 'second' }}";
             const result = ParseTemplateParameters(template);
             // First detection should win
-            expect(findParam(result, 'x')?.defaultValue).toBe('first');
+            expect(findParam(result, 'x')?.DefaultValue).toBe('first');
         });
     });
 
@@ -295,9 +295,9 @@ describe('ParseTemplateParameters', () => {
         it('should detect underscore-prefixed vars as system variables', () => {
             const template = '{{ _CURRENT_DATE_AND_TIME }} {{ _USER_NAME }} {{ regularParam }}';
             const result = ParseTemplateParameters(template);
-            expect(findParam(result, '_CURRENT_DATE_AND_TIME')?.isSystemVariable).toBe(true);
-            expect(findParam(result, '_USER_NAME')?.isSystemVariable).toBe(true);
-            expect(findParam(result, 'regularParam')?.isSystemVariable).toBe(false);
+            expect(findParam(result, '_CURRENT_DATE_AND_TIME')?.IsSystemVariable).toBe(true);
+            expect(findParam(result, '_USER_NAME')?.IsSystemVariable).toBe(true);
+            expect(findParam(result, 'regularParam')?.IsSystemVariable).toBe(false);
         });
     });
 
@@ -323,7 +323,7 @@ describe('ParseTemplateParameters', () => {
 {@include ./_includes/entity-metadata.md}
 {{ description }}`;
             const result = ParseTemplateParameters(template);
-            expect(result.warnings).toHaveLength(0);
+            expect(result.Warnings).toHaveLength(0);
             expect(paramNames(result)).toEqual(['description', 'userQuestion']);
         });
     });
@@ -371,7 +371,7 @@ describe('ParseTemplateParameters', () => {
     describe('Parse errors', () => {
         it('should return warnings on invalid Nunjucks syntax', () => {
             const result = ParseTemplateParameters('{{ unclosed');
-            expect(result.warnings.length).toBeGreaterThan(0);
+            expect(result.Warnings.length).toBeGreaterThan(0);
             expect(result.parameters).toHaveLength(0);
         });
     });
@@ -587,7 +587,7 @@ No parameters
 
         it('should record safe filter on filtered params', () => {
             const result = ParseTemplateParameters(template);
-            expect(findParam(result, 'userQuestion')?.appliedFilters).toContain('safe');
+            expect(findParam(result, 'userQuestion')?.AppliedFilters).toContain('safe');
         });
     });
 
@@ -605,15 +605,15 @@ User: {{ _USER_NAME }}
 
         it('should detect system variables', () => {
             const result = ParseTemplateParameters(template);
-            expect(findParam(result, '_CURRENT_DATE_AND_TIME')?.isSystemVariable).toBe(true);
-            expect(findParam(result, '_USER_NAME')?.isSystemVariable).toBe(true);
-            expect(findParam(result, '_AGENT_TYPE_SYSTEM_PROMPT')?.isSystemVariable).toBe(true);
+            expect(findParam(result, '_CURRENT_DATE_AND_TIME')?.IsSystemVariable).toBe(true);
+            expect(findParam(result, '_USER_NAME')?.IsSystemVariable).toBe(true);
+            expect(findParam(result, '_AGENT_TYPE_SYSTEM_PROMPT')?.IsSystemVariable).toBe(true);
         });
 
         it('should detect regular params as non-system', () => {
             const result = ParseTemplateParameters(template);
-            expect(findParam(result, 'agentDescription')?.isSystemVariable).toBe(false);
-            expect(findParam(result, 'agentSpecificPrompt')?.isSystemVariable).toBe(false);
+            expect(findParam(result, 'agentDescription')?.IsSystemVariable).toBe(false);
+            expect(findParam(result, 'agentSpecificPrompt')?.IsSystemVariable).toBe(false);
         });
     });
 

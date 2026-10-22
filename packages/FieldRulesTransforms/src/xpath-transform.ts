@@ -20,7 +20,7 @@ function nodeValue(n: unknown): unknown {
  * returned. By default the FIRST match is returned; set `First: false` to get the full array. Lives here,
  * not in `@memberjunction/global`, because it needs `xpath` + `@xmldom/xmldom`.
  */
-export const xPathTransform: FieldTransformPlugin = (value, _fields, config) => {
+export const XPathTransform: FieldTransformPlugin = (value, _fields, config) => {
     const c = config as XPathConfig;
     const doc = new DOMParser().parseFromString(String(value ?? ''), 'text/xml');
     const result = xpath.select(c.Path, doc as unknown as Node);
@@ -30,3 +30,6 @@ export const xPathTransform: FieldTransformPlugin = (value, _fields, config) => 
     }
     return result ?? null; // string / number / boolean (e.g. count(), normalize-space())
 };
+
+/** @deprecated Use {@link XPathTransform}. */
+export const xPathTransform: FieldTransformPlugin = XPathTransform;

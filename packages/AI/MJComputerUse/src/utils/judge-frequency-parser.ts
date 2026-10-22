@@ -23,29 +23,39 @@ import type { JudgeFrequency } from '@memberjunction/computer-use';
  * - "EveryNSteps:5" → EveryNStepsFrequency(5)
  * - "OnStagnation:3" → OnStagnationFrequency(3)
  */
-export function parseJudgeFrequency(str: string): JudgeFrequency {
+export function ParseJudgeFrequency(str: string): JudgeFrequency {
     const lower = str.toLowerCase();
 
     if (lower.startsWith('everynsteps')) {
-        const n = parseColonNumber(str, 3);
+        const n = ParseColonNumber(str, 3);
         return new EveryNStepsFrequency(n);
     }
 
     if (lower.startsWith('onstagnation')) {
-        const threshold = parseColonNumber(str, 5);
+        const threshold = ParseColonNumber(str, 5);
         return new OnStagnationFrequency(threshold);
     }
 
     return new EveryStepFrequency();
 }
 
+/** @deprecated Use {@link ParseJudgeFrequency}. */
+export function parseJudgeFrequency(str: string): JudgeFrequency {
+    return ParseJudgeFrequency(str);
+}
+
 /**
  * Extract the number after a colon in "Label:N" format.
  * Returns defaultValue if no colon or not a valid number.
  */
-export function parseColonNumber(str: string, defaultValue: number): number {
+export function ParseColonNumber(str: string, defaultValue: number): number {
     const colonIdx = str.indexOf(':');
     if (colonIdx < 0) return defaultValue;
     const num = Number(str.substring(colonIdx + 1).trim());
     return isNaN(num) || num <= 0 ? defaultValue : num;
+}
+
+/** @deprecated Use {@link ParseColonNumber}. */
+export function parseColonNumber(str: string, defaultValue: number): number {
+    return ParseColonNumber(str, defaultValue);
 }

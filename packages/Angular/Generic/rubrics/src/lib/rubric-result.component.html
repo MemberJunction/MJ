@@ -1,0 +1,55 @@
+<section class="author" aria-label="Rubric result">
+  @if (Result) {
+    <div class="card cockpit">
+      <div class="hero">
+        <span class="hero-mark" aria-hidden="true"><i class="fa-solid fa-circle-check"></i></span>
+        <div>
+          <span class="eyebrow">Overall result</span>
+          <h2>{{ Result.outcome }}</h2>
+          <p class="score-line"><strong>{{ Shown }}</strong></p>
+        </div>
+      </div>
+      <div class="fact-row">
+        <span class="fact fact-scale">Band {{ BandLabel ?? '—' }}</span>
+        <span class="fact">Completeness {{ Result.completeness ?? '—' }}</span>
+        <span class="fact" [class.fact-gate]="Result.gateFailed">Gate {{ Result.gateFailed ? 'not met' : 'met' }}</span>
+      </div>
+    </div>
+    <div class="card">
+      <h3><i class="fa-solid fa-list-check"></i> Criterion scores</h3>
+      <ul class="rubric-list">
+        @for (node of Result.nodes; track node.id) {
+          <li class="criterion">
+            <header class="criterion-header">
+              <div class="criterion-title">
+                <strong>{{ NodeName(node.id) }}</strong>
+                <code>{{ node.key }}</code>
+              </div>
+              <div class="fact-row">
+                <span class="fact">Weight {{ Weight(node.id) }}</span>
+                <span class="fact fact-scale">{{ ScaleName(node.id) }}</span>
+                <span class="fact">{{ Gate(node.id) }}</span>
+              </div>
+            </header>
+            <div class="criterion-body">
+              <div class="score-line"><strong>{{ Bar(node.normalizedScore) }}%</strong></div>
+              <span class="rubric-track"><span class="rubric-bar" [style.width.%]="Bar(node.normalizedScore)"></span></span>
+              @if (Note(node.id, 'rationale')) {
+                <div class="anchor-box">
+                  <div class="box-title">Rationale</div>
+                  <p>{{ Note(node.id, 'rationale') }}</p>
+                </div>
+              }
+              @if (Note(node.id, 'evidence')) {
+                <div class="anchor-box">
+                  <div class="box-title">Evidence</div>
+                  <p>{{ Note(node.id, 'evidence') }}</p>
+                </div>
+              }
+            </div>
+          </li>
+        }
+      </ul>
+    </div>
+  }
+</section>

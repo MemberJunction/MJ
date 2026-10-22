@@ -1,7 +1,7 @@
 import { Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, registerEnumType } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { CompositeKey, IMetadataProvider, KeyValuePair, LogError, Metadata, TransactionVariable, BaseEntity, EntityDeleteOptions, EntitySaveOptions } from '@memberjunction/core';
-import { SafeJSONParse } from '@memberjunction/global';
+import { CompositeKey, EntityInfo, IMetadataProvider, KeyValuePair, LogError, Metadata, TransactionVariable, TransactionGroupBase, BaseEntity, EntityDeleteOptions, EntitySaveOptions } from '@memberjunction/core';
+import { SafeJSONParse, ValuesEqual } from '@memberjunction/global';
 import { GetReadWriteProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 
@@ -78,6 +78,19 @@ export class TransactionOutputType {
 
 
 
+/**
+ * Renders one refused transaction-group item for the server log, naming the position, entity and
+ * operation so an operator can tie the refusal back to the row the client sent.
+ *
+ * `CompleteMessage` rather than `Message` because a refusal can report itself through any of
+ * `Message`, `Error` or the `Errors` array — a validation failure populates only the last of the
+ * three, so reading `Message` alone logs an empty reason for exactly the case that matters most.
+ */
+function describeRefusedItem(index: number, item: TransactionItemInputType, entity: BaseEntity): string {
+    const reason = entity.LatestResult?.CompleteMessage?.trim();
+    return `  [${index}] ${item.OperationType} '${item.EntityName}': ${reason || 'refused without a reported reason'}`;
+}
+
 export class TransactionResolver extends ResolverBase {
     /**
      * Maps a TransactionGroup item's operation type onto the SAME API-key scope path the singular
@@ -123,11 +136,25 @@ export class TransactionResolver extends ResolverBase {
             const tg = await md.CreateTransactionGroup();
             const entityObjects: BaseEntity[] = [];
             const objectValues: any[] = [];
+            // #4309: Save()/Delete() report a LOGICAL refusal by returning false — they do not throw —
+            // and a refused row is never enrolled, because TransactionGroup.AddTransaction() is reached
+            // only from inside ProviderToUse.Save()/Delete(). Discarding that boolean let a group whose
+            // rows were all refused arrive at Submit() empty, take its legitimate "nothing to do"
+            // branch, and report success for writes that never happened.
+            const refusals: string[] = [];
+            const preUpdateValues = new Map<number, Record<string, unknown>>();
 
+            // instantiate an entity object for every item first, so the group's variables are known
+            // BEFORE any Save()/Delete() runs below: a 'Use' variable sets its field at Submit(), after
+            // every server-side write check has passed, so an entity whose check depends on a field's
+            // final value must be able to see that a variable will set it.
             for (const item of group.Items) {
-                // instantiate a new entity object for the item
-                const entity = await md.GetEntityObject(item.EntityName, context.userPayload.userRecord);
-                entityObjects.push(entity); // save for later for mapping variables if needed
+                entityObjects.push(await md.GetEntityObject(item.EntityName, context.userPayload.userRecord));
+            }
+            this.AddNetworkVariables(group, entityObjects, tg);
+
+            for (const [index, item] of group.Items.entries()) {
+                const entity = entityObjects[index];
 
                 // get the values from the payload
                 const itemValues = SafeJSONParse(item.EntityObjectJSON);
@@ -143,44 +170,68 @@ export class TransactionResolver extends ResolverBase {
                     case "Create":
                         if (item.OperationType === "Update") {
                             await entity.InnerLoad(pkey);
+                            if (typeof entity.GetDataObject === 'function') {
+                                preUpdateValues.set(index, await entity.GetDataObject());
+                            } else if (typeof entity.GetAll === 'function') {
+                                preUpdateValues.set(index, { ...(entity.GetAll() as Record<string, unknown>) });
+                            }
                         }
                         objectValues.push(itemValues);
                         entity.SetMany(itemValues, true);
                         entity.TransactionGroup = tg;
-                        await entity.Save();
+                        if (!await entity.Save()) {
+                            refusals.push(describeRefusedItem(index, item, entity));
+                        }
                         break;
                     case "Delete":
                         await entity.InnerLoad(pkey);
-                        objectValues.push(entity.GetDataObject());
+                        // AWAITED: GetDataObject() is async, and pushing the un-awaited Promise put
+                        // one into `objectValues` — which is `any[]`, so neither tsc nor a
+                        // floating-promise lint could see it. PrepareReturnValue's Delete branch
+                        // then stringified that Promise, and JSON.stringify(Promise) is "{}", so
+                        // EVERY Delete in a transaction group reported an empty payload, successful
+                        // ones included. Worse than losing the payload: GraphQLDataProvider's Delete
+                        // transaction callback validates the commit with
+                        // `pk.Value !== results[pk.FieldName]`, so "{}" made every key mismatch and
+                        // reported 'Transaction failed to commit' for a delete that DID commit.
+                        // Awaiting costs nothing here — DataObjectParams defaults
+                        // includeRelatedEntityData to false, which guards the method's only awaited
+                        // work, so with no params this is GetAll() plus a filter loop.
+                        objectValues.push(await entity.GetDataObject());
                         entity.TransactionGroup = tg;
-                        await entity.Delete();
+                        if (!await entity.Delete()) {
+                            refusals.push(describeRefusedItem(index, item, entity));
+                        }
                         break;
                 }
             }
 
-            // now, we need to set the variables
-            if (group.Variables && group.Variables.length > 0) {
-                for (const networkVar of group.Variables) {
-                    // for each variable, add it to the transaction group and map the index from the network payload to the specific entity object loaded up above
-                    if (networkVar.ItemIndex >= 0 && networkVar.ItemIndex < entityObjects.length) {
-                        const entityObject = entityObjects[networkVar.ItemIndex];
-                        const newVar = new TransactionVariable(networkVar.Name, entityObject, networkVar.FieldName, networkVar.Type);
-                        tg.AddVariable(newVar);
-                    }
-                    else {
-                        throw new Error(`TransactionResolver::ExecuteTransactionGroup --- Error\n\n' + 'Invalid ItemIndex ${networkVar.ItemIndex} in TransactionVariable "${JSON.stringify(networkVar)}"`);
-                    }
-                }
+            // A refused row never enrolled, so submitting now would commit only the SURVIVORS and
+            // still report unqualified success. Nothing has been written at this point — enrolment
+            // is deferral, and the provider does not touch the database until Submit() — so
+            // returning here leaves the database exactly as we found it.
+            //
+            // The predicate is the RETURN VALUE, not whether the group ended up empty: a row that
+            // is not dirty also fails to enrol and correctly returns true, and an empty group
+            // legitimately means "nothing to do" for a caller that enrolled nothing. That is also
+            // why this belongs here rather than in TransactionGroupBase.Submit() — this is the only
+            // layer that still knows which row was refused and why.
+            if (refusals.length > 0) {
+                LogError(
+                    `TransactionResolver::ExecuteTransactionGroup --- ${refusals.length} of ${group.Items.length} ` +
+                    `item(s) were refused, so the group was not submitted:\n${refusals.join('\n')}`
+                );
+                return await this.PrepareReturnValue(false, entityObjects, objectValues, group, preUpdateValues);
             }
 
             // after all that, we are ready to roll, so let's run the TG
             if (await tg.Submit()) {
                 // success!
-                return await this.PrepareReturnValue(true, entityObjects, objectValues, group);
+                return await this.PrepareReturnValue(true, entityObjects, objectValues, group, preUpdateValues);
             }
             else {
                 // failure, send back the results
-                return await this.PrepareReturnValue(false, entityObjects, objectValues, group);
+                return await this.PrepareReturnValue(false, entityObjects, objectValues, group, preUpdateValues);
             }
         } 
         catch (err) {
@@ -189,15 +240,48 @@ export class TransactionResolver extends ResolverBase {
         }
     }
 
-    protected async PrepareReturnValue(success: boolean, entityObjects: BaseEntity[], objectValues: any[], group: TransactionInputType): Promise<TransactionOutputType> {
+    /**
+     * Adds the network payload's variables to the group, mapping each one's item index to the entity
+     * object built for that item.
+     */
+    protected AddNetworkVariables(group: TransactionInputType, entityObjects: BaseEntity[], tg: TransactionGroupBase): void {
+        for (const networkVar of group.Variables ?? []) {
+            if (networkVar.ItemIndex >= 0 && networkVar.ItemIndex < entityObjects.length) {
+                const entityObject = entityObjects[networkVar.ItemIndex];
+                tg.AddVariable(new TransactionVariable(networkVar.Name, entityObject, networkVar.FieldName, networkVar.Type));
+            }
+            else {
+                throw new Error(`TransactionResolver::ExecuteTransactionGroup --- Error\n\n' + 'Invalid ItemIndex ${networkVar.ItemIndex} in TransactionVariable "${JSON.stringify(networkVar)}"`);
+            }
+        }
+    }
+
+    protected async PrepareReturnValue(
+        success: boolean,
+        entityObjects: BaseEntity[],
+        objectValues: unknown[],
+        group: TransactionInputType,
+        preUpdateValues?: Map<number, Record<string, unknown>>
+    ): Promise<TransactionOutputType> {
         const jsonResults = [];
         for (let i = 0; i < group.Items.length; i++) {
             const item = group.Items[i];
-            if (item.OperationType==='Delete') {
+            if (item.OperationType === 'Delete') {
                 jsonResults.push(JSON.stringify(objectValues[i]));
             }
+            else if (item.OperationType === 'Update') {
+                jsonResults.push(
+                    await this.serializeUpdateReturnValue(
+                        entityObjects[i],
+                        objectValues[i],
+                        preUpdateValues?.get(i),
+                        group,
+                        i
+                    )
+                );
+            }
             else {
-                // create or update, return what is in the database
+                // create, return what is in the database
                 jsonResults.push(await entityObjects[i].GetDataObjectJSON());
             }
         }
@@ -208,6 +292,79 @@ export class TransactionResolver extends ResolverBase {
             ResultsJSON: jsonResults
         }
     }
- 
+
+    /**
+     * Serializes a delta return payload for an `Update` transaction group item containing:
+     * - Primary key fields
+     * - All keys sent by the client in `sentValues` (`objectValues[i]`)
+     * - Any `TransactionVariable` fields targeting this item
+     * - `__mj_CreatedAt` and `__mj_UpdatedAt`
+     * - Virtual fields when any foreign key field was in `sentValues`
+     * - Any field whose post-save value differs from its pre-update DB snapshot (`preSaveValues`),
+     *   capturing virtual fields, triggers, or server-side `BeforeSave()` mutations automatically
+     *   while omitting unchanged columns.
+     */
+    private async serializeUpdateReturnValue(
+        entity: BaseEntity,
+        sentValues: unknown,
+        preSaveValues: Record<string, unknown> | undefined,
+        group: TransactionInputType,
+        itemIndex: number
+    ): Promise<string> {
+        const fullDataObj: Record<string, unknown> | null = typeof entity.GetDataObject === 'function'
+            ? (await entity.GetDataObject() as Record<string, unknown>)
+            : SafeJSONParse<Record<string, unknown>>(await entity.GetDataObjectJSON());
+        if (!fullDataObj || typeof fullDataObj !== 'object' || !sentValues || typeof sentValues !== 'object') {
+            return await entity.GetDataObjectJSON();
+        }
+
+        const sentRecord = sentValues as Record<string, unknown>;
+        const includeKeys = new Set<string>([
+            EntityInfo.CreatedAtFieldName,
+            EntityInfo.UpdatedAtFieldName,
+        ]);
+
+        for (const pk of entity.PrimaryKeys ?? []) {
+            if (pk?.Name) {
+                includeKeys.add(pk.Name);
+            }
+        }
+        for (const key of Object.keys(sentRecord)) {
+            includeKeys.add(key);
+        }
+        for (const v of group.Variables ?? []) {
+            if (v.ItemIndex === itemIndex && v.FieldName) {
+                includeKeys.add(v.FieldName);
+            }
+        }
+        if (Array.isArray(entity.Fields)) {
+            for (const f of entity.Fields) {
+                if (
+                    f.EntityFieldInfo?.IsSpecialDateField ||
+                    Boolean(f.EntityFieldInfo?.IsVirtual) ||
+                    Boolean(f.EntityFieldInfo?.IsComputed) ||
+                    f.ReadOnly
+                ) {
+                    includeKeys.add(f.Name);
+                }
+            }
+        }
+        if (preSaveValues) {
+            for (const key of Object.keys(fullDataObj)) {
+                if (!ValuesEqual(fullDataObj[key], preSaveValues[key])) {
+                    includeKeys.add(key);
+                }
+            }
+        }
+
+        const deltaObj: Record<string, unknown> = {};
+        for (const key of Object.keys(fullDataObj)) {
+            if (includeKeys.has(key)) {
+                deltaObj[key] = fullDataObj[key];
+            }
+        }
+        return JSON.stringify(deltaObj);
+    }
+
 }
  

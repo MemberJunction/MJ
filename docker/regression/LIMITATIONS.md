@@ -48,9 +48,9 @@ A 500-token context across a 30-step × 25-test suite adds ~375K tokens per run.
 ### 2.2 No per-test override audit
 **Severity:** P3
 
-Tests can override or append context via `InputDefinition.applicationContext`, concatenated under a `## Test-specific Notes` heading. None of the 25 existing MJ tests use this yet.
+Tests can override or append context via `InputDefinition.applicationContext`, concatenated under a `## Test-specific Notes` heading. None of the 155 existing MJ tests use this yet.
 
-**Suggested fix:** if a few MJ tests start needing per-test notes, document the pattern in `metadata/tests/regression/README.md`.
+**Suggested fix:** if a few MJ tests start needing per-test notes, document the pattern in `metadata-optional/regression-test/README.md`.
 
 ---
 

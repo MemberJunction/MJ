@@ -49,7 +49,8 @@ export class WorkflowAgentWriter extends WorkflowAgentWriterBase {
         context: { ContextUser: UserInfo; Provider: IMetadataProvider },
     ): Promise<string> {
         const flowTypeID = await this.resolveFlowAgentTypeID(context);
-        const agentIDsByName = await this.buildAgentNameIndex(context);
+        const { Agents, Actions, Prompts } = await this.buildNameIndexes(context);
+        const byName = (index: Map<string, string>, name: string): string | null => index.get(name.trim().toLowerCase()) ?? null;
 
         let counter = 0;
         const result = ConvertTaskGraphToAgentSpec(spec.graph, {
@@ -57,7 +58,11 @@ export class WorkflowAgentWriter extends WorkflowAgentWriterBase {
             // insert — these only have to correlate steps to paths inside this payload.
             AgentID: `workflow-${Date.now()}-${counter}`,
             NextID: () => `wf-node-${++counter}`,
-            ResolveAgentID: (name) => agentIDsByName.get(name.trim().toLowerCase()) ?? null,
+            ResolveAgentID: (name) => byName(Agents, name),
+            // Without these, a saved Action step carries no action and a Decision step loses its
+            // named prompt: the spec addresses both by name, and a step stores the ID.
+            ResolveActionID: (name) => byName(Actions, name),
+            ResolvePromptID: (name) => byName(Prompts, name),
             FlowAgentTypeID: flowTypeID,
             Name: spec.name,
         });
@@ -83,7 +88,11 @@ export class WorkflowAgentWriter extends WorkflowAgentWriterBase {
         // consumed by MCP tools, so it is left alone rather than renamed under this change.
         const saved = await sync.SaveToDatabase();
         if (!saved?.success) {
-            throw new Error(`Could not save the workflow's agent "${spec.name}".`);
+            throw new Error(
+                saved?.errorMessage
+                    ? `Could not save the workflow's agent "${spec.name}": ${saved.errorMessage}`
+                    : `Could not save the workflow's agent "${spec.name}".`,
+            );
         }
         return saved.agentId;
     }
@@ -99,15 +108,41 @@ export class WorkflowAgentWriter extends WorkflowAgentWriterBase {
         return id;
     }
 
-    /** Name → ID for every agent, lowercased so a spec's human-entered name still resolves. */
-    private async buildAgentNameIndex(
+    /**
+     * Name (and ID) → ID for every agent, action and prompt, in one batch, lowercased so a spec's
+     * human-entered name or projected ID fallback still resolves.
+     *
+     * A failed load throws rather than leaving an index empty: an empty index resolves nothing, and
+     * every agent, action and prompt in the workflow would then be reported lost — or, for an action,
+     * saved pointing at nothing.
+     */
+    private async buildNameIndexes(
         context: { ContextUser: UserInfo; Provider: IMetadataProvider },
-    ): Promise<Map<string, string>> {
-        const result = await RunView.FromMetadataProvider(context.Provider).RunView<{ ID: string; Name: string }>(
-            { EntityName: 'MJ: AI Agents', Fields: ['ID', 'Name'], ResultType: 'simple' },
+    ): Promise<{ Agents: Map<string, string>; Actions: Map<string, string>; Prompts: Map<string, string> }> {
+        const entityNames = ['MJ: AI Agents', 'MJ: Actions', 'MJ: AI Prompts'];
+        const results = await RunView.FromMetadataProvider(context.Provider).RunViews<{ ID: string; Name: string }>(
+            entityNames.map((EntityName) => ({
+                EntityName,
+                Fields: ['ID', 'Name'],
+                ResultType: 'simple' as const,
+            })),
             context.ContextUser,
         );
-        return new Map((result.Results ?? []).map((a) => [a.Name.trim().toLowerCase(), a.ID]));
+        const failed = entityNames.filter((_, i) => !results[i]?.Success);
+        if (failed.length > 0) {
+            const reasons = failed.map((name) => `${name}: ${results[entityNames.indexOf(name)]?.ErrorMessage || 'no result'}`);
+            throw new Error(`Could not load the names a workflow's steps refer to (${reasons.join('; ')}).`);
+        }
+        const [agents, actions, prompts] = results;
+        const index = (rows: Array<{ ID: string; Name: string }>): Map<string, string> => {
+            const map = new Map<string, string>();
+            for (const r of rows) {
+                if (r.Name?.trim()) map.set(r.Name.trim().toLowerCase(), r.ID);
+                if (r.ID?.trim()) map.set(r.ID.trim().toLowerCase(), r.ID);
+            }
+            return map;
+        };
+        return { Agents: index(agents.Results), Actions: index(actions.Results), Prompts: index(prompts.Results) };
     }
 }
 

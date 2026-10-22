@@ -1,21 +1,21 @@
 import { UserInfo } from "@memberjunction/core";
 
 export type RasaResponse<T = Record<string, any>> = {
-    code: number,
-    status_code: number,
-    metadata: {
-        errors: string,
-        next_link: string,
-        record_count: number,
-        request: string,
-        response_time: number,
-        timestamp: number,
-        token_expiration: number,
-        total_community_count: number | null,
-        total_query_count: number | null,
+    code: number,  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+    status_code: number,  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+    metadata: {  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+        errors: string,  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+        next_link: string,  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+        record_count: number,  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+        request: string,  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+        response_time: number,  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+        timestamp: number,  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+        token_expiration: number,  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+        total_community_count: number | null,  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+        total_query_count: number | null,  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
     },
-    request?: Record<string, any>,
-    results: T[],
+    request?: Record<string, any>,  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+    results: T[],  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
 };
 
 export type RasaTokenResponse = {
@@ -46,25 +46,25 @@ export type GetEmbeddingParams = {
 };
 
 export type GetEmbeddingResponse = {
-    created: string,
-    engine: string,
-    id: string,
-    model: string,
-    source: string,
-    type: string,
-    vector_id: string,
-    version: string
+    created: string,  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+    engine: string,  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+    id: string,  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+    model: string,  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+    source: string,  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+    type: string,  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+    vector_id: string,  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
+    version: string  // case-violation-ok-legacy-back-compat: this type mirrors an external vendor API payload — the remote spelling is the contract, not MJ convention
 };
 
 export type RecommendationResponse = {
-    engine: string, 
-    version: string, 
-    id: string,
-    model: string,
-    score: number,
-    source: string,
-    type: string, 
-    vector_id: string
+    engine: string,  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    version: string,  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    id: string,  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    model: string,  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    score: number,  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    source: string,  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    type: string,  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    vector_id: string  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 };
 
 export type GetRecommendationParams = {
@@ -83,6 +83,6 @@ export type GetRecommendationResults = {
 export type RecommendContextData = {
     EntityDocumentID: string,
     TypeMap: Record<string, string>
-    type: string,
-    filters: { type: string, max_results: number } []
+    type: string,  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    filters: { type: string, max_results: number } []  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 };

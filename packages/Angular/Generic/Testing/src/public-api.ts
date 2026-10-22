@@ -8,6 +8,7 @@ export * from './lib/testing.module';
 // Models
 export * from './lib/models/testing.models';
 export * from './lib/models/evaluation.types';
+export * from './lib/models/testing-rubrics';
 
 // Components
 export * from './lib/components/test-feedback-dialog.component';
@@ -20,6 +21,7 @@ export * from './lib/components/widgets/evaluation-badge.component';
 export * from './lib/components/widgets/evaluation-mode-toggle.component';
 export * from './lib/components/widgets/review-status-indicator.component';
 export * from './lib/components/widgets/execution-context.component';
+export * from './lib/components/testing-rubric-result.component';
 
 // Services
 export * from './lib/services/testing-dialog.service';

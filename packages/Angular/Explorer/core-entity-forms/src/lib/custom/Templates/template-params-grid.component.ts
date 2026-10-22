@@ -48,16 +48,52 @@ interface ParamRowData {
     styleUrls: ['./template-params-grid.component.css']
 })
 export class TemplateParamsGridComponent extends BaseAngularComponent implements OnInit, OnChanges {
-    @Input() template: MJTemplateEntity | null = null;
-    @Input() editMode: boolean = false;
+    @Input() Template: MJTemplateEntity | null = null;
+
+    /** @deprecated Use {@link Template}. */
+    @Input() set template(value: MJTemplateEntity | null) {
+        this.Template = value;
+    }
+    /** @deprecated Use {@link Template}. */
+    get template(): MJTemplateEntity | null {
+        return this.Template;
+    }
+    @Input() EditMode: boolean = false;
+
+    /** @deprecated Use {@link EditMode}. */
+    @Input() set editMode(value: boolean) {
+        this.EditMode = value;
+    }
+    /** @deprecated Use {@link EditMode}. */
+    get editMode(): boolean {
+        return this.EditMode;
+    }
 
     private confirmService = inject(MJConfirmService);
 
-    public templateParams: ParamRowData[] = [];
+    public TemplateParams: ParamRowData[] = [];
+
+    /** @deprecated Use {@link TemplateParams}. */
+    public get templateParams(): ParamRowData[] {
+        return this.TemplateParams;
+    }
+    /** @deprecated Use {@link TemplateParams}. */
+    public set templateParams(value: ParamRowData[]) {
+        this.TemplateParams = value;
+    }
     public isLoading = false;
 
     // Type options for dropdown
-    public typeOptions = ['Scalar', 'Array', 'Object', 'Record', 'Entity'];
+    public TypeOptions = ['Scalar', 'Array', 'Object', 'Record', 'Entity'];
+
+    /** @deprecated Use {@link TypeOptions}. */
+    public get typeOptions() {
+        return this.TypeOptions;
+    }
+    /** @deprecated Use {@link TypeOptions}. */
+    public set typeOptions(value) {
+        this.TypeOptions = value;
+    }
 
     // AG Grid configuration
     public ColumnDefs: ColDef[] = [];
@@ -76,54 +112,77 @@ export class TemplateParamsGridComponent extends BaseAngularComponent implements
     private editingRowBackup: ParamRowData | null = null;
     private editingRowId: string | null = null;
 
-    public noRowsTemplate = `
+    public NoRowsTemplate = `
         <div style="text-align: center; padding: 40px 20px; color: var(--mj-text-muted);">
             <i class="fa-solid fa-info-circle" style="font-size: 2em; margin-bottom: 10px;"></i>
             <p>No parameters defined for this template.</p>
         </div>
     `;
 
-    public getRowId = (params: GetRowIdParams<ParamRowData>): string => {
+    /** @deprecated Use {@link NoRowsTemplate}. */
+    public get noRowsTemplate() {
+        return this.NoRowsTemplate;
+    }
+    /** @deprecated Use {@link NoRowsTemplate}. */
+    public set noRowsTemplate(value) {
+        this.NoRowsTemplate = value;
+    }
+
+    public GetRowId = (params: GetRowIdParams<ParamRowData>): string => {
         // Use entity ID if saved, otherwise use a temporary key
         return params.data.ID || `new_${params.data.Name}_${Date.now()}`;
     };
 
+    /** @deprecated Use {@link GetRowId}. */
+    public get getRowId() {
+        return this.GetRowId;
+    }
+    /** @deprecated Use {@link GetRowId}. */
+    public set getRowId(value) {
+        this.GetRowId = value;
+    }
+
     ngOnInit() {
         this.buildColumnDefs();
-        if (this.template?.ID) {
-            this.loadTemplateParams();
+        if (this.Template?.ID) {
+            this.LoadTemplateParams();
         }
     }
 
     ngOnChanges(changes: SimpleChanges) {
-        if (changes['template'] && this.template?.ID) {
-            this.loadTemplateParams();
+        if (changes['template'] && this.Template?.ID) {
+            this.LoadTemplateParams();
         }
         if (changes['editMode']) {
             this.buildColumnDefs();
         }
     }
 
-    public onGridReady(event: GridReadyEvent): void {
+    public OnGridReady(event: GridReadyEvent): void {
         this.gridApi = event.api;
     }
 
-    async loadTemplateParams() {
-        if (!this.template?.ID) return;
+    /** @deprecated Use {@link OnGridReady}. */
+    public onGridReady(event: GridReadyEvent): void {
+        return this.OnGridReady(event);
+    }
+
+    async LoadTemplateParams() {
+        if (!this.Template?.ID) return;
 
         this.isLoading = true;
         try {
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const results = await rv.RunView<MJTemplateParamEntity>({
                 EntityName: 'MJ: Template Params',
-                ExtraFilter: `TemplateID='${this.template.ID}'`,
+                ExtraFilter: `TemplateID='${this.Template.ID}'`,
                 OrderBy: 'Name ASC',
                 ResultType: 'entity_object'
             });
 
             if (results.Success) {
                 const entities = results.Results || [];
-                this.templateParams = entities.map(e => this.entityToRowData(e));
+                this.TemplateParams = entities.map(e => this.entityToRowData(e));
             } else {
                 console.error('Failed to load template params:', results.ErrorMessage);
                 MJNotificationService.Instance.CreateSimpleNotification(
@@ -142,10 +201,15 @@ export class TemplateParamsGridComponent extends BaseAngularComponent implements
         }
     }
 
+    /** @deprecated Use {@link LoadTemplateParams}. */
+    async loadTemplateParams() {
+        return this.LoadTemplateParams();
+    }
+
     // -- Grid editing lifecycle --
 
-    public async addNewParam(): Promise<void> {
-        if (!this.editMode || !this.template?.ID) return;
+    public async AddNewParam(): Promise<void> {
+        if (!this.EditMode || !this.Template?.ID) return;
 
         // Cancel any in-progress edit first
         this.cancelCurrentEdit();
@@ -156,7 +220,7 @@ export class TemplateParamsGridComponent extends BaseAngularComponent implements
         const newRow = this.entityToRowData(newEntity);
         newRow.IsNew = true;
         // Prepend the new row
-        this.templateParams = [newRow, ...this.templateParams];
+        this.TemplateParams = [newRow, ...this.TemplateParams];
 
         // Wait for grid to process the new row, then start editing it
         setTimeout(() => {
@@ -174,8 +238,13 @@ export class TemplateParamsGridComponent extends BaseAngularComponent implements
         });
     }
 
-    public startEditRow(params: ICellRendererParams): void {
-        if (!this.gridApi || !this.editMode) return;
+    /** @deprecated Use {@link AddNewParam}. */
+    public async addNewParam(): Promise<void> {
+        return this.AddNewParam();
+    }
+
+    public StartEditRow(params: ICellRendererParams): void {
+        if (!this.gridApi || !this.EditMode) return;
 
         // Cancel any in-progress edit first
         this.cancelCurrentEdit();
@@ -192,18 +261,33 @@ export class TemplateParamsGridComponent extends BaseAngularComponent implements
         this.gridApi.refreshCells({ columns: ['actions'], force: true });
     }
 
-    public cancelEditRow(): void {
+    /** @deprecated Use {@link StartEditRow}. */
+    public startEditRow(params: ICellRendererParams): void {
+        return this.StartEditRow(params);
+    }
+
+    public CancelEditRow(): void {
         this.cancelCurrentEdit();
     }
 
-    public saveEditRow(): void {
+    /** @deprecated Use {@link CancelEditRow}. */
+    public cancelEditRow(): void {
+        return this.CancelEditRow();
+    }
+
+    public SaveEditRow(): void {
         if (!this.gridApi) return;
         // stopEditing triggers onRowEditingStopped, which handles the save
         this.gridApi.stopEditing(false);
         this.gridApi.refreshCells({ columns: ['actions'], force: true });
     }
 
-    public async onRowEditingStopped(event: RowEditingStoppedEvent): Promise<void> {
+    /** @deprecated Use {@link SaveEditRow}. */
+    public saveEditRow(): void {
+        return this.SaveEditRow();
+    }
+
+    public async OnRowEditingStopped(event: RowEditingStoppedEvent): Promise<void> {
         const rowData = event.data as ParamRowData;
         if (!rowData) return;
 
@@ -218,7 +302,7 @@ export class TemplateParamsGridComponent extends BaseAngularComponent implements
             );
             // If it was a new unsaved row, remove it
             if (rowData.IsNew) {
-                this.templateParams = this.templateParams.filter(p => p !== rowData);
+                this.TemplateParams = this.TemplateParams.filter(p => p !== rowData);
             } else if (this.editingRowBackup) {
                 // Revert to backup
                 this.revertRow(event.node, this.editingRowBackup);
@@ -231,8 +315,13 @@ export class TemplateParamsGridComponent extends BaseAngularComponent implements
         this.clearEditState();
     }
 
-    public async deleteRow(params: ICellRendererParams): Promise<void> {
-        if (!this.editMode) return;
+    /** @deprecated Use {@link OnRowEditingStopped}. */
+    public async onRowEditingStopped(event: RowEditingStoppedEvent): Promise<void> {
+        return this.OnRowEditingStopped(event);
+    }
+
+    public async DeleteRow(params: ICellRendererParams): Promise<void> {
+        if (!this.EditMode) return;
 
         const rowData = params.data as ParamRowData;
         const entity = rowData.Entity;
@@ -249,7 +338,7 @@ export class TemplateParamsGridComponent extends BaseAngularComponent implements
                         `Parameter "${rowData.Name}" deleted successfully`,
                         'success'
                     );
-                    this.templateParams = this.templateParams.filter(p => p !== rowData);
+                    this.TemplateParams = this.TemplateParams.filter(p => p !== rowData);
                 } else {
                     MJNotificationService.Instance.CreateSimpleNotification(
                         `Failed to delete parameter: ${entity.LatestResult?.Message || 'Unknown error'}`,
@@ -258,7 +347,7 @@ export class TemplateParamsGridComponent extends BaseAngularComponent implements
                 }
             } else {
                 // Not yet saved -- just remove from the array
-                this.templateParams = this.templateParams.filter(p => p !== rowData);
+                this.TemplateParams = this.TemplateParams.filter(p => p !== rowData);
             }
         } catch (error) {
             console.error('Error deleting parameter:', error);
@@ -269,9 +358,14 @@ export class TemplateParamsGridComponent extends BaseAngularComponent implements
         }
     }
 
+    /** @deprecated Use {@link DeleteRow}. */
+    public async deleteRow(params: ICellRendererParams): Promise<void> {
+        return this.DeleteRow(params);
+    }
+
     // -- Helpers --
 
-    public getTypeIcon(type: string): string {
+    public GetTypeIcon(type: string): string {
         switch (type) {
             case 'Scalar': return 'fa-font';
             case 'Array': return 'fa-list';
@@ -280,6 +374,11 @@ export class TemplateParamsGridComponent extends BaseAngularComponent implements
             case 'Entity': return 'fa-table';
             default: return 'fa-question';
         }
+    }
+
+    /** @deprecated Use {@link GetTypeIcon}. */
+    public getTypeIcon(type: string): string {
+        return this.GetTypeIcon(type);
     }
 
     private entityToRowData(entity: MJTemplateParamEntity): ParamRowData {
@@ -326,13 +425,13 @@ export class TemplateParamsGridComponent extends BaseAngularComponent implements
                 rowData.ID = entity.ID;
                 rowData.IsNew = false;
                 // Refresh the grid to pick up the new ID
-                this.templateParams = [...this.templateParams];
+                this.TemplateParams = [...this.TemplateParams];
             } else {
                 MJNotificationService.Instance.CreateSimpleNotification(
                     `Failed to save parameter: ${entity.LatestResult?.Message || 'Unknown error'}`,
                     'error'
                 );
-                await this.loadTemplateParams();
+                await this.LoadTemplateParams();
             }
         } catch (error) {
             console.error('Error saving parameter:', error);
@@ -340,17 +439,17 @@ export class TemplateParamsGridComponent extends BaseAngularComponent implements
                 'Error saving parameter',
                 'error'
             );
-            await this.loadTemplateParams();
+            await this.LoadTemplateParams();
         }
     }
 
     private async createNewParamEntity(): Promise<MJTemplateParamEntity | null> {
-        if (!this.template?.ID) return null;
+        if (!this.Template?.ID) return null;
 
         try {
             const md = this.ProviderToUse;
             const newParam = await md.GetEntityObject<MJTemplateParamEntity>('MJ: Template Params');
-            newParam.TemplateID = this.template.ID;
+            newParam.TemplateID = this.Template.ID;
             newParam.Type = 'Scalar';
             newParam.IsRequired = false;
 
@@ -372,7 +471,7 @@ export class TemplateParamsGridComponent extends BaseAngularComponent implements
                     const backup = this.editingRowBackup;
                     this.clearEditState();
                     this.gridApi.stopEditing(true);
-                    this.templateParams = this.templateParams.filter(p => p.Entity !== backup.Entity);
+                    this.TemplateParams = this.TemplateParams.filter(p => p.Entity !== backup.Entity);
                     return;
                 }
                 // Revert to backup
@@ -402,7 +501,7 @@ export class TemplateParamsGridComponent extends BaseAngularComponent implements
                 field: 'Name',
                 headerName: 'Parameter Name',
                 width: 200,
-                editable: this.editMode,
+                editable: this.EditMode,
                 cellRenderer: (params: ICellRendererParams) => {
                     if (!params.value) return '';
                     const row = params.data as ParamRowData;
@@ -417,10 +516,10 @@ export class TemplateParamsGridComponent extends BaseAngularComponent implements
                 field: 'Type',
                 headerName: 'Type',
                 width: 140,
-                editable: this.editMode,
+                editable: this.EditMode,
                 cellEditor: 'agSelectCellEditor',
                 cellEditorParams: {
-                    values: this.typeOptions
+                    values: this.TypeOptions
                 },
                 cellRenderer: (params: ICellRendererParams) => {
                     if (!params.value) return '';
@@ -432,7 +531,7 @@ export class TemplateParamsGridComponent extends BaseAngularComponent implements
                 field: 'IsRequired',
                 headerName: 'Required',
                 width: 100,
-                editable: this.editMode,
+                editable: this.EditMode,
                 cellDataType: 'boolean',
                 cellRenderer: (params: ICellRendererParams) => {
                     if (params.value) {
@@ -445,7 +544,7 @@ export class TemplateParamsGridComponent extends BaseAngularComponent implements
                 field: 'Description',
                 headerName: 'Description',
                 width: 300,
-                editable: this.editMode,
+                editable: this.EditMode,
                 cellRenderer: (params: ICellRendererParams) => {
                     return params.value || '<span style="color: var(--mj-text-muted); font-style: italic; font-size: 0.9em;">(No description)</span>';
                 }
@@ -454,7 +553,7 @@ export class TemplateParamsGridComponent extends BaseAngularComponent implements
                 field: 'DefaultValue',
                 headerName: 'Default Value',
                 width: 200,
-                editable: this.editMode,
+                editable: this.EditMode,
                 cellRenderer: (params: ICellRendererParams) => {
                     if (params.value) {
                         return `<code style="background-color: var(--mj-bg-surface-card); padding: 2px 6px; border-radius: 3px; font-size: 0.85em; color: var(--mj-text-secondary);">${params.value}</code>`;
@@ -464,7 +563,7 @@ export class TemplateParamsGridComponent extends BaseAngularComponent implements
             }
         ];
 
-        if (this.editMode) {
+        if (this.EditMode) {
             cols.push({
                 headerName: 'Actions',
                 width: 120,

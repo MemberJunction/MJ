@@ -34,7 +34,7 @@ const DEFAULT_METRICS_BY_PROBLEM: Record<'classification' | 'regression', string
  * @param incumbent the current model
  * @param challenger the freshly-retrained model
  */
-export function resolveComparisonMetric(
+export function ResolveComparisonMetric(
   configured: string,
   incumbent: MJMLModelEntity,
   challenger: MJMLModelEntity,
@@ -66,6 +66,15 @@ export function resolveComparisonMetric(
   return (DEFAULT_METRICS_BY_PROBLEM[problem] ?? ['roc_auc'])[0];
 }
 
+/** @deprecated Use {@link ResolveComparisonMetric}. */
+export function resolveComparisonMetric(
+  configured: string,
+  incumbent: MJMLModelEntity,
+  challenger: MJMLModelEntity,
+): string {
+  return ResolveComparisonMetric(configured, incumbent, challenger);
+}
+
 /**
  * Read a single metric value off a model's `HoldoutMetrics` JSON. Returns `null`
  * when the blob is absent/unparseable or the metric is missing/non-numeric.
@@ -73,10 +82,15 @@ export function resolveComparisonMetric(
  * @param holdoutMetricsJson the model's `HoldoutMetrics` column
  * @param metric the metric name to read
  */
-export function readMetric(holdoutMetricsJson: string | null | undefined, metric: string): number | null {
+export function ReadMetric(holdoutMetricsJson: string | null | undefined, metric: string): number | null {
   const metrics = parseMetrics(holdoutMetricsJson);
   const value = metrics[metric];
   return isFiniteNumber(value) ? value : null;
+}
+
+/** @deprecated Use {@link ReadMetric}. */
+export function readMetric(holdoutMetricsJson: string | null | undefined, metric: string): number | null {
+  return ReadMetric(holdoutMetricsJson, metric);
 }
 
 /** Parse a `HoldoutMetrics` JSON blob into a name → value map (empty on null/parse error). */

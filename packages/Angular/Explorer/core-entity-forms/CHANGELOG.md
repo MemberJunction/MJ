@@ -1,5 +1,1730 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 6.2.0-edge.5
+
+### Minor Changes
+
+- 0d81c53: Action params can declare a JSON Schema for their value, and native tool calling now follows each agent's own prompt configuration and every LLM's stated capability (#5050, #5508, #5610).
+  - **`ActionParam.ValueSchema`** (#5050). A new nullable column holds a JSON Schema fragment for one param's value, limited to the subset every tool-calling provider accepts: `type`, `description`, `enum`, `items`, `properties`, `required`. CodeGen emits a typed `ValueSchemaObject` accessor (`MJActionParamEntity_IActionParamValueSchema`). When it is set, the native tool builder declares it in place of the coarse `ValueType` mapping. For an `IsArray` param it describes one element. Keywords outside the subset are dropped before the declaration goes out, and text that is not valid JSON falls back to `ValueType` with a warning. Params without a schema are declared exactly as before.
+  - **Argument coercion follows the schema, on every path.** `CoerceActionArguments` coerces each argument against the same schema its declaration used, at any depth, and `BaseAgent.ExecuteSingleAction` now applies it before every dispatch, so envelope-mode and Flow calls get the same types as native ones. JSON text becomes an object or array, `"10"` becomes a number and `"true"` becomes a boolean, but only where the schema does not allow strings. This replaces the `Simple Object`-only JSON decoding. New exports from `@memberjunction/ai-agents`: `SanitizeValueSchema`, `ResolveParamElementSchema`, `GetStoredValueSchema`, `CoerceValueToSchema`, `DescribeValueSchemaInline`, `ParamValueSchema`.
+  - **Stock actions backfilled.** `ValueSchema` is set on 33 params of actions stock agents use, where the action code accepts the native type: Create SVG Chart, Create SVG Diagram, Web Search, Web Page Content, Text Analyzer, Find Candidate Agents, Find Candidate Actions and Get Weather (enums, integers, numbers, booleans, string arrays, and Create SVG Chart's `Data` objects).
+  - **The prose action catalog shows the schema too**, as a compact type such as `{TopCount: integer, Sort?: string}` or `"asc"|"desc"`, so the envelope path tells the model what the native declaration does.
+  - **The agent's own prompt counts for native tool calling** (#5508). On a hierarchical run (an agent type's system prompt with the agent's prompt as its child), the gate used to read only the parent's `PromptConfiguration`, so `LLM.UseNativeToolCalling` set on an agent's prompt was ignored. The cascade is now parent prompt, then child prompt, then the selected AI Prompt Model row, merged per key.
+  - **Every LLM states `LLM.SupportsNativeToolCalling`** (#5610). Gemini 3.8 Flash, which Google now serves for `gemini-3.7-flash`, gets the same native block as 3.7 Flash. The other 20 records that left it unset now say `true` or `false`. Vendor rows on drivers that cannot send tools (Azure, Bedrock, Fireworks, Mistral, LM Studio, Cohere) say `false`, which also corrects Mistral Large 4. A test in `@memberjunction/ai` fails when an LLM leaves the flag unset, or when an active vendor row resolves to `true` on a driver that ignores tools.
+  - **Live integration test IT129** (`native-tool-calling-live`). Real Loop agents call an Action in native and envelope mode across one model per tool-capable driver, and the test reads the recorded `ToolCallingMode` and the arguments each Action received from its execution log. It covers native mode set on the agent's own prompt, envelope mode, the stock Create SVG Chart backfill, and a vendor row without tool support running envelope. Models without a credential, retired models and accounts without balance are skipped and logged. `@memberjunction/testing-integration` adds the `NativeToolCallingLiveFixture` slot to `IntegrationCheckContext`.
+
+- 29129bd: Archive configurations have a new `StorageMode` setting. `Store` (the default) works as before: each record's archive document is written to storage, then the mode changes the source row. `Purge` applies the mode (StripFields or HardDelete) without writing a copy, so no storage account is needed and cleared data cannot be restored. A Purge run writes an Archive Run Detail row only for records that fail. Before it starts, it refuses the whole run if any entity cannot be purged safely: entities in ArchiveOnly mode, entities missing from metadata, entities that track Record Changes, entities whose driver is not registered or does not support purge, and HardDelete entities that use soft delete or whose delete cascade reaches an entity that tracks Record Changes or uses soft delete. Each Archive Run records the `StorageMode` it ran with. Custom drivers opt in to purge by overriding `BaseArchiveDriver.SupportsPurge`; subclasses of `DefaultArchiveDriver` inherit purge support unless they override `SupportsPurge`. `ArchiveRecordContext.StorageDriver` is now `null` on a Purge run, and `ArchiveRecordContext` has a new required `StorageMode` field.
+
+  `ResolveArchiveDriver` returns `null` for an unregistered driver name, and a Store run with an unregistered `DriverClass` now fails at the start of that entity with a clear error.
+
+  Fix: when an archive entity's `RetentionDays` is NULL, the run now uses the configuration's `DefaultRetentionDays`. Before, it applied no age filter and selected every row. An entity with no `DateField` is now refused instead of selecting every row.
+
+  Two CHECK constraints refuse a negative retention period: `ArchiveConfiguration.DefaultRetentionDays >= 0` and `ArchiveConfigurationEntity.RetentionDays >= 0`. The engine also refuses to select records for an entity whose resolved retention period is negative.
+
+  When a run throws after its Archive Run row exists (for example a bad FieldConfiguration or a storage initialization failure), the run is saved as `Failed` with a `CompletedAt` time, the error message in `ErrorLog`, and the counts of the entities that finished before the error, and the result carries the run's ID.
+
+  `ArchiveRunResult` has a new optional `StorageMode` field, set once the configuration loads. The Archive Data and Run All Active Archives actions say "Purged" instead of "Archived" for Purge runs, and the run viewer shows "purged" on Purge run cards and a "Purged" label in the run drawer.
+
+  `ArchiveProcessor.ProcessEntity` now takes the generated `MJArchiveConfigurationEntityEntity`, `MJArchiveConfigurationEntity` and `MJArchiveRunEntity` classes and a nullable `ArchiveStorageManager`, and the engine reads those records through their typed properties instead of `.Get()`.
+
+  With Archive Runs now named by their configuration, `MJ: Archive Run Details.ArchiveRun` holds the configuration name instead of the run's start time. Its display name changes from "Archive Run Timestamp" to "Archive Run" (through metadata, with `AutoUpdateDisplayName` turned off so CodeGen keeps it).
+
+  The PostgreSQL counterpart of the migration is generated at release time.
+
+- b14c72f: Add the personal Chief of Staff (`Chief of Staff`) AI agent, per-user narrowed governance (`MJ: AI Agent User Policies` + `AgentUserPolicyEngine`), 3-Tier Wake Gate on `MJ: User Routines` (`RoutineType = 'AgentWake'`), user-scoped calendar/email/availability actions (`EnterpriseMailboxSecurityGate`), and Communication Dashboard enterprise governance cards.
+- 223669e: Fresh installs migrate again. The `V202610171900` migration (AI Agent User Policies and User Routine wake) refreshed entity field metadata for the whole core schema, which collided on `UQ_EntityField_EntityID_Sequence` on any new database; the refresh is now limited to the entities that migration changes. Generated code is regenerated to match a clean database: deprecated fields (AI Agent Run `AgentState`; Conversation Detail `SuggestedResponses`, `ArtifactID`, `ArtifactVersionID`) no longer appear on their generated forms, and AI Agent User Policy's `CalendarChannelMode` moves to its column position. The Angular class-registration manifests now include `MJAIAgentUserPolicyEntity`.
+- 5fed75a: Agent runs no longer write `AIAgentRun.Result`; use `FinalPayload`, which holds the same value. The `Result` column remains, deprecated, for existing rows.
+
+  New column `AIAgentRunStep.PayloadAtStartSourceStepID`. When a step starts from the same payload an earlier step in the run ended with, `PayloadAtStart` is stored as NULL and this column points at that step. Readers resolve the value with `ResolvePayloadAtStart` / `ApplyResolvedPayloadAtStart` from `@memberjunction/ai-core-plus`. External API clients that read `PayloadAtStart` directly must follow the pointer.
+
+- 1cb1d52: Login Studio: design the Explorer sign-in page on the default theme.
+  - **Schema:** `MJ: Themes` gains `LoginScreen` (published) and `LoginScreenDraft`. `MJThemeEntityExtended`
+    refuses a design the login screen cannot draw safely (`StoredLoginDesignProblems` in
+    `@memberjunction/theme-engine`, the same contract the editor checks).
+  - **App:** Login Studio (`LoginStudioResource`) edits blocks, layout, background and colors, saves a draft
+    and publishes it.
+  - **Public route:** `GET /auth/login-screen` serves the default Active theme's published design, logos and
+    seeds, sanitized (`SanitizePublicLoginScreen`) on the server and again in the browser. Drafts are never
+    served to anonymous visitors; signed-in users who can read themes can read them.
+  - **Login screen:** `<mj-explorer-app>` draws a published design through `<mj-login-region>` and wears the
+    default theme's brand colors before sign-in. A host's `mjLoginSlot` templates still win;
+    `UsePublishedLoginScreen = false` keeps the screen as the host's own inputs and CSS draw it.
+
+- 5fed75a: Prompt runs store less template data in `AIPromptRun.Messages` (#5526). `Messages` always holds the messages the model received. The template inputs (`data`, `templateData`) are stored per a capture mode: `None` (default: top-level keys and byte sizes only), `Referenced` (only keys the prompt's templates read) or `Full`. Set it per prompt with the new `AIPrompt.TemplateDataCapture` column, per call with `AIPromptParams.TemplateDataCapture`, or per server with `aiPromptRuns.templateDataCapture` in mj.config.cjs. `_CURRENT_PAYLOAD` is never stored; agent-run steps hold the payload. New `TemplateEngineServer.GetReferencedVariables()` lists the variables a template reads.
+
+  **API note:** clients that read `data` or `templateData` out of `AIPromptRun.Messages` get less than before.
+  - The capture mode comes from the call, then the prompt, then the server default. The most specific prompt wins: the run's child prompts come before its main prompt. So for a Loop or Harness agent, a value on the agent's own prompt beats a value on the agent-type system prompt.
+  - In `None` mode (the default), `Messages` holds no `data` or `templateData`, only the `dataShape` sizes. `ParseMessagesData().inputData` and `GetDataContext()` return null.
+  - In `Referenced` mode, clients find only the keys that the templates read.
+  - `data` never holds `_CURRENT_PAYLOAD`, in any mode, `Full` included.
+  - `ParseMessagesData()` now also returns `dataCapture`, `dataShape` and `dataCaptureNote`.
+  - If the capture step fails, the run still saves, with `dataCapture: 'None'`, a fixed `dataCaptureNote` and no template data.
+  - The `GetReferencedVariables()` result has `ParseFailed: true` when a template does not parse.
+
+- ce758af: Feature Pipelines: keyed, versioned Feature Values and honest runs (migration `V202610201100__v6.2.x__Feature_Value_Key_And_Versions.sql`).
+  - Feature Values upsert on a key (record, feature, pipeline version, prompt version, primary model, parameters, input); a value a person entered (`Source='Human'`) is never overwritten unless the run sets `overwriteHumanValues`. Child write-back can `reconcile` rows on a key.
+  - `MJ: Feature Pipeline Versions` registers each pipeline pin; a gated pipeline runs only under a version whose golden-set result meets its threshold. The `Steward Feature Pipeline Version` Action (`StewardFeaturePipelineVersionAction`) and `Feature Pipeline Version Steward` Record Process (`WorkType='Action'`, scheduled via `RecordProcessScheduledJobDriver`) evaluate and backfill changed versions; golden sets carry a label-quality record, `Required` and `ExpectAbstain` cases.
+  - New `@memberjunction/feature-pipelines-engine` package houses server-side Feature Pipeline execution (`InferProcessor`, `BaseFeaturePipelineDriver`, `LLMFeaturePipelineDriver`, `DecisionFeaturePipelineDriver`, `FeaturePipelineEscalation`, `FeaturePipelineHumanValueGuard`, `FeaturePipelineErrors`), golden-set testing (`FeaturePipelineGoldenSetDriver`, `golden-set-scoring`, `golden-label-quality`), and version stewardship (`FeaturePipelineVersionSteward`, `StewardFeaturePipelineVersionAction`, `RegisterInferRecordProcessor`), keeping `@memberjunction/record-set-processor-base`, `@memberjunction/record-set-processor`, `@memberjunction/scheduling-engine`, and `@memberjunction/testing-engine` free of Feature Pipeline dependencies.
+  - Outputs are checked against `lookup` constraints (per item with `ItemRef`); an output below its `MinConfidence` is withheld (`OnLowConfidence: 'null'`); `Context.RecordAsUserMessage` sends the record as a JSON user turn.
+  - Dry runs write nothing, preview only what the real write would change, cap at 25 records and report `WouldRefuse`; a Feature Pipeline run with a failed record ends `Failed` with a `FeaturePipelineRunResult` summary; the breaker counts attempted records.
+  - An output may omit its write target (builder target mode `Feature value only (no write-back)`): the answer is stored in `MJ: Feature Values` only, typed by its constraint (`numeric`/`money`, `boolean`, `date`), and no entity field is written. The Bulk Operations dry-run dialog shows each as a `<Feature> (feature value)` row with the previous and proposed value, and loads only the non-skipped details so a large scope counts every changed record.
+  - A Feature Values panel on every record form shows the latest answer per pipeline and feature (Source, Confidence, version, Computed, Reasoning) and expands to its history; a latest answer that withheld its value reads "no value". `@memberjunction/ng-base-forms` re-resolves the form chrome when a panel mounts after first render, so a late panel gets its left-nav entry.
+  - The Version Steward beats on a timer while its backfill runs, defers a backfill while a run is Running, marks only a clean run as backfilled, and ignores a Running Process Run not checkpointed for 30 minutes. A Feature Value insert that loses the race on its key to an equal value is `Unchanged`.
+  - Bedrock sends a configured temperature of 0 as 0 (F-FP-13).
+  - `AIPromptParams.templateAutoescape` (set by the Feature Pipeline drivers) renders a prompt template without HTML escaping; a Feature Pipeline run reads its prompt's template from the database at run start, so a template edit takes effect on the next run.
+  - API moves & PascalCase standardization: `WriteBackResult`, `TagWriteBackPreview`, `FieldRulesResultPayload`, and `MetadataProviderCapabilities` live in `@memberjunction/record-set-processor-base`; `FeaturePipelineRunResults` lives in `@memberjunction/feature-pipelines`; `RunRecordProcessOptions`, `RecordProcessorContext`, `RecordSetProcessOptions`, `ProcessRunSummary`, and `WriteBackValuePreview` use `PascalCase` properties across `@memberjunction/record-set-processor-base` and `@memberjunction/record-set-processor`.
+
+- 8420f36: Client-direct realtime recordings no longer depend on the browser surviving the end of the call (#5294).
+  - **Opus shards during the call.** The browser captures at 48 kHz into one continuous Opus encoder (WebCodecs, or libopus WebAssembly in a Worker where WebCodecs cannot encode Opus) and uploads a 5 s `MJOPUS1` shard as raw bytes to `POST /realtime/recording/:agentSessionId/shard/:index`. Each shard is kept in IndexedDB until the server acknowledges it, so shards survive network drops and reloads and are uploaded on the next page load.
+  - **Keepalive terminal.** End, `pagehide` and `visibilitychange`→hidden send `POST /realtime/recording/:agentSessionId/end` with the last partial window as a `keepalive` request, then re-send every unacknowledged shard with `keepalive`. A hidden tab's terminal carries `final=false`: the server stamps the counts but assembles only after the grace period, so switching tabs does not rewrite the recording. `EndRealtimeSession()` waits for the terminal's acknowledgement for at most 3 s. The whole-call `UploadRealtimeRecording` upload and the `beforeunload` prompt are gone from new clients. The mutations remain for older clients.
+  - **Server ledger and assembly.** Migration `V202610151535` adds `RecordingStatus`, `RecordingExpectedShards`, `RecordingCapturedSamples`, `RecordingGaps` and `RecordingAssemblyVersion` to `AIAgentSession`, and the new `MJ: AI Agent Session Recording Shards` entity, written through guarded stored procedures. MJAPI assembles `recording.wav` and `peaks.json` within seconds of the terminal. A recording with missing shards is assembled as `Partial` after `realtime.recordingAssemblyGraceSeconds` (default 90): each gap is silence and is listed in `RecordingGaps`. The session janitor assembles sessions that never sent a terminal. Recovery of legacy `seg-*.pcm` storage shards is unchanged.
+  - **Breaking for custom hosts:** `IRealtimeSessionRecorder` now returns Opus packets (`TakeEncodedPackets()`, `Stop(): Promise<number>`) instead of base64 audio. `BrowserRecordingUnloadGuard` is removed. A host that wires its own page-lifecycle events calls `SendRecordingTerminal({ Final: false })` when the page is hidden and `SendRecordingTerminal()` on `pagehide`.
+
+### Patch Changes
+
+- 7e72c86: Phase 2 fresh efficiency and quality audit across Core Data Primitives, Task Graph Engine, AI Agent Runtime & PayloadManager, High-Volume Telemetry SaveReturnMode, and Angular Chat / Step Inspector UI:
+  - **Core Data Primitives (`@memberjunction/core`, `@memberjunction/generic-database-provider`, `@memberjunction/sqlserver-dataprovider`, `@memberjunction/server`, `@memberjunction/templates-base-types`)**:
+    - Restore lazy `_raw` `BaseEntity` hydration on `GetEntityObject()` + `LoadFromData()` (`20.87x` faster, `-100%` `EntityField` allocations on read-only `entity_object` views) while guarding subsequent `LoadFromData()` calls on already-loaded instances.
+    - Support runtime `options.SaveReturnMode === 'datestamps_only'` projection in `SQLServerDataProvider.WrapSaveCallForResult`.
+    - Eliminate duplicate `DiffObjects()` and `CreateUserDescriptionOfChanges()` calls in `GenericDatabaseProvider.Save()`.
+    - Add precomputed `FieldMappingPlan` in `ResolverBase.ArrayMapFieldNamesToCodeNames` and `O(1)` `EntityInfo.FieldByCodeName()` lookup.
+    - Deduplicate `entity.GetAll()` across `DatabaseProviderBase.Save()` and `BaseEntity.finalizeSave()` via `__mj_preMerged`, mark unpopulated virtual fields `NotLoaded = true` on new `datestamps_only` inserts, compute `ProviderBase.prepareSmartCacheCheckParams` fingerprint before widening `param.Fields`, and avoid double property reads in `NunjucksSandbox.guardMemberLookup`.
+  - **Task Graph Engine (`@memberjunction/task-graph`)**:
+    - Collapse `TaskGraphDispatcher.pollOnce` from `6 + 13G` to `3 + 2G` DB queries via a single `loadGraphState` per active graph per poll, gate `checkHumanTaskCompletion` with an in-memory `pendingHumanTasks` set, pass pre-hydrated `ClaimedTaskCandidate` into `executeClaimed` (`0` re-queries), parallelize `TaskGraphService.Submit` and `persistComputedLayout`, and complete `AgentSpecSync.LoadFromDatabase` round-trip hydration.
+  - **AI Agent Runtime, Prompts & PayloadManager (`@memberjunction/ai-agents`, `@memberjunction/ai-prompts`)**:
+    - Gate `BaseAgent.runPostRunCompaction` on `!IsVolatileResultMessage(msg)` and `!msg.toolCalls?.length`, reuse `_promptRunner`, queue compaction steps via `_stepSaveQueue`, and account for compaction steps in `_treeBudget`.
+    - Remove synchronous `stepEntity.Save()` queue bypasses in `checkExecutionGuardrails` and `validateSuccessNextStep`, and route `AIPromptRunner.executePromptInParallel` parent completion save through `queuePromptRunCompletionUpdate`.
+    - Fix `PayloadManager.mergeAllowedPaths` `arguments[2]` warning bug and cache compiled glob/wildcard `RegExp` and parsed path specs statically (`49,150x` fewer regex compilations).
+    - Add `O(1)` reference + metadata snapshot fast path to `BaseAgent.capturePromptStepMessages` (`16.2x` faster) and memoize child template placeholder analysis.
+  - **High-Volume Telemetry `SaveReturnMode: 'datestamps_only'` (`@memberjunction/ai-core-plus`, `@memberjunction/ai-agents`, `@memberjunction/ai-prompts`, `@memberjunction/actions`)**:
+    - Pass `{ SaveReturnMode: 'datestamps_only' }` in `AgentRunStepSaveQueue`, `BaseAgent._agentRun.Save`, `BaseModelRunner._promptRunQueue`, and `ActionEngineServer._logQueue`.
+  - **Angular Chat, Task Graph & Step Inspector (`@memberjunction/ng-conversations`, `@memberjunction/ng-ai-test-harness`, `@memberjunction/ng-core-entity-forms`)**:
+    - Memoize `DisplayArtifacts`, `SupportingArtifacts`, and single-pass `buildWorkflowStepSummaries` in `MessageItemComponent`, memoize JSON parsing and graph layout positions in `AIAgentRunStepDetailComponent` and `MJAIAgentRunFormComponentExtended`, add `ShouldReplaceDetailAgentRun` guard and `RefreshRenderedMessage` in `ConversationMessageListComponent`, migrate `artifactPaneWidth` from `localStorage` to `UserInfoEngine`, and remove redundant `MJ: AI Agent Runs` query in `AIAgentRunDataHelper`.
+
+- 0cc6b08: Pre-execution RAG now applies the same scope-permission gate as the Scoped Search action and the GraphQL resolver. Before searching one of an agent's assigned scopes it resolves the effective `SearchScopePermission` for the acting user, with the agent as principal and the run's tenant, and requires a level above `Read`. Requested and persisted conversation skills are already active when pre-execution RAG runs, so the run's skills are passed in as well: when exactly one skill is active it is a second principal, as in the action, so its `SearchScopeAccess` can refuse a scope (`SkillNone`, `SkillAssignedNotListed`) and it is stamped as `AISkillID` on the search and on any `Forbidden` row; when several are active, none is passed. A sub-agent receives the root run's active skills, as it does for the action, so a sub-agent that cannot activate the root's lone active skill has its pre-execution scopes refused (`PrincipalNotActivatable`). Previously every assigned scope was searched for every user before the first tool call — the one scoped search path that never consulted scope permissions.
+
+  A refused scope is skipped (the others still run) and written as one `Forbidden` row in `MJ: Search Execution Logs`, its reason truncated to the column's 500 characters; the console line is verbose-only. A resolver failure skips that scope with a logged error and writes no `Forbidden` row, as the action and the GraphQL resolvers do. A turn with no query text (an empty or multimodal last message on a scope without a query template) skips the scope before the gate, so it neither resolves a permission nor logs a `Forbidden` row with an empty query.
+
+  **Behaviour change for existing configurations.** An agent whose `SearchScopeAccess` is `None` (the column default) no longer gets pre-execution retrieval, and an `Assigned` agent's scopes now need a `MJ: Search Scope Permissions` grant at `Search` or `Manage` for the acting user or one of their roles (or the agent set to `All`), exactly as the Scoped Search action already required. Deployments that attached pre-execution scopes without setting the agent's access or granting the scope will see retrieval stop, with a `Forbidden` row per scope explaining why.
+
+  **Known resolver behaviour, inherited.** For an agent set to `All`, a user or role grant at `Read` on a scope is found before the agent's `All` fallback, so the resolver returns `Read` and the scope is refused: adding a `Read` grant removes pre-execution retrieval of that scope for the users it covers. The Scoped Search action and the GraphQL resolvers behave the same way.
+
+  The agent form and the Knowledge Hub scope-permission grid now say that `Assigned` needs a Search grant for the user or one of their roles, and that pre-execution scopes are searched only for users who may search them. The integration fixture `IT: Integration Test Scope` gains `Search` grants for the `UI`, `Developer` and `Integration` roles, so the scope is searchable by any `UI`-role user wherever the integration fixture is pushed. A new deterministic integration test, `IT117 - Agent Pre-Execution RAG Permission Gate`, runs pre-execution RAG directly (no model) for a permitted run and a refused one.
+
+- 1d29837: System placeholders now resolve in scoped prompt parts. After `BaseAgent.InjectScopedPromptParts` adds the parts (including from a subclass override), the agent passes the added messages to the new `SystemPlaceholderManager.ReplaceAvailablePlaceholders`, which replaces each bare token such as `{{ _CURRENT_DATE }}` with its value. Part text is not rendered as a template: every other character, including other `{{ ... }}` text, filters and tags, is sent as written, and so is a token that cannot be resolved before the prompt runs (prompt and Execution Context placeholders, or a user one without a context user). System placeholders declare what they need with the new optional `requires` field; one without it resolves only through `ResolveAllPlaceholders`, as before. Code that assembles parts itself with `PromptComponentResolver.AssembleMessages` can pass the result to `ReplaceAvailablePlaceholders` to get the same behavior.
+- 0cc6b08: Three search trust fixes. Each changes behaviour.
+
+  **External-index hits are always verified against the entity they name.** The permission pass used to skip its ownership check for any result labelled `SourceType: 'entity'` or `'fulltext'` when no row filter applied. Every shipped external-index provider (Azure AI Search, Typesense, Elasticsearch, OpenSearch) labels its hits `'fulltext'`, with the index name as `EntityName` and the document's own id as `RecordID`. So a document in an index named after an entity the user can read was admitted as that entity's row without being checked. A third-party provider could also label its hits `'entity'`. Trust now follows the provider the engine stamped on the result (`ProviderId`), never the label. The new `BaseSearchProvider.ResultsAreRowsOfLabelledEntity` flag (default `false`) is set only by `EntitySearchProvider` and `FullTextSearchProvider`, which read the entity through `RunView`. Every other result is verified, including one with no `ProviderId` and one whose `ProviderId` names no configured provider. Fusion and dedup keep each result's `ProviderId` paired with its own `EntityName`, `RecordID` and `SourceType`, so a merge never upgrades an external hit to trusted. A merge can still lend a result another item's scores: dedup merges items sharing `EntityName` + `RecordID`, but per-scope RRF merges `ScoreBreakdown` across items that share only a `RecordID`, of any entity. A `MJ: Content Items` hit promoted to its origin record is always verified: its provider never read that row. Cost: one `PK IN (...)` read per labelled entity for each search that returns external-index hits. Hits whose document id is not the MJ primary key of the labelled entity are dropped. The entity and full-text lanes cost nothing extra.
+
+  **Naming a scope that cannot be resolved no longer widens the search to a global one.** An inactive, expired or missing scope in `SearchParams.ScopeIDs` used to be skipped. A search whose scopes were all skipped then ran with no scope at all. The GraphQL paths let a caller with a grant on a dead scope do this, because the scope permission check does not look at scope status. Now, if any named scope cannot be resolved, the search is refused: `Success: false`, an error naming the scope, a `LogError`, a `Failure` row in `MJ: Search Execution Logs`, and no provider runs. One dead scope among several also refuses the search, because dropping it silently would change what the caller asked for. The check runs before the result cache. `ExplainScope` agrees with the search. It now reports an inactive or expired scope as unreachable, by name; before, it explained one as searchable. When one requested scope cannot be resolved, it reports every scope in that dry run as unreachable, with the reason.
+
+  **Streamed `provider` events carry counts only.** `streamSearch` used to put each provider's hits on its `provider` event, before the permission pass. That included rows the caller's row filters would drop, unverified external-index hits, and content whose origin record the caller may not read. `SearchKnowledgeStreamResolver` published those hits to the client. A `provider` event now carries `providerName`, `durationMs` and a new `resultCount` (the provider's hit count, capped at `MaxResults`). `results` is always `[]` and is deprecated. Results arrive only in `fused` and `final`. The GraphQL `SearchStreamNotification` gains `ResultCount` and always sends `Results: []` on a provider event, whatever the engine hands it. `GraphQLSearchClient.StreamSearch` requests `ResultCount` (new exported type `SearchStreamClientEvent`). `SearchService.StreamSearch` forwards it. The search overlay, the search results page and the scope form preview now show each provider's count from it, and render rows from `final` only. Pre-execution RAG's streaming trace and the Scoped Search action's `ProgressEvents` report `resultCount`. Like `SourceCounts`, `resultCount` is counted before the permission and audience passes, so don't show it to a room. This replaces the audience-only withholding of partials. Because a newer client requests `ResultCount`, its stream subscription fails against an older server. The reverse also shows: an older client counts each provider's `Results`, which a newer server always sends empty, so its per-provider chips show 0 until the client is upgraded. Search results themselves are unaffected.
+
+  New deterministic integration bundle `IT118 - Search Provider Trust and Unresolvable Scopes` (`search-provider-trust`, SPT1–SPT2).
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [5465489]
+- Updated dependencies [83486cf]
+- Updated dependencies [c6b4b85]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [8b62f8c]
+- Updated dependencies [c7418dc]
+- Updated dependencies [0ab85d7]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [60bb4b5]
+- Updated dependencies [2274f42]
+- Updated dependencies [35ed364]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [c271ddf]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [230cdad]
+- Updated dependencies [7e72c86]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [2a7a098]
+- Updated dependencies [8420f36]
+- Updated dependencies [72dd65c]
+- Updated dependencies [1d29837]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [c7d1170]
+- Updated dependencies [5f707d1]
+- Updated dependencies [e1f2583]
+- Updated dependencies [dc38250]
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/ai@6.2.0-edge.5
+  - @memberjunction/ai-core-plus@6.2.0-edge.5
+  - @memberjunction/actions-base@6.2.0-edge.5
+  - @memberjunction/ai-engine-base@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/ng-shared-generic@6.2.0-edge.5
+  - @memberjunction/ng-ui-components@6.2.0-edge.5
+  - @memberjunction/ng-shared@6.2.0-edge.5
+  - @memberjunction/ng-base-application@6.2.0-edge.5
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.5
+  - @memberjunction/ng-base-forms@6.2.0-edge.5
+  - @memberjunction/ng-markdown@6.2.0-edge.5
+  - @memberjunction/ng-notifications@6.2.0-edge.5
+  - @memberjunction/templates-base-types@6.2.0-edge.5
+  - @memberjunction/ng-ai-test-harness@6.2.0-edge.5
+  - @memberjunction/feature-pipelines@6.2.0-edge.5
+  - @memberjunction/ng-record-process-studio@6.2.0-edge.5
+  - @memberjunction/ng-search@6.2.0-edge.5
+  - @memberjunction/ng-rubrics@6.2.0-edge.5
+  - @memberjunction/ng-testing@6.2.0-edge.5
+  - @memberjunction/ng-action-gallery@6.2.0-edge.5
+  - @memberjunction/ng-actions@6.2.0-edge.5
+  - @memberjunction/ng-agents@6.2.0-edge.5
+  - @memberjunction/ng-artifacts@6.2.0-edge.5
+  - @memberjunction/ng-base-types@6.2.0-edge.5
+  - @memberjunction/ng-code-editor@6.2.0-edge.5
+  - @memberjunction/ng-flow-editor@6.2.0-edge.5
+  - @memberjunction/ng-hierarchy-tree@6.2.0-edge.5
+  - @memberjunction/ng-join-grid@6.2.0-edge.5
+  - @memberjunction/ng-list-management@6.2.0-edge.5
+  - @memberjunction/ng-record-clone@6.2.0-edge.5
+  - @memberjunction/ng-resource-permissions@6.2.0-edge.5
+  - @memberjunction/ng-task-graph-editor@6.2.0-edge.5
+  - @memberjunction/ng-trees@6.2.0-edge.5
+  - @memberjunction/ng-versions@6.2.0-edge.5
+  - @memberjunction/ng-link-directives@6.2.0-edge.5
+  - @memberjunction/ng-deep-diff@6.2.0-edge.5
+  - @memberjunction/ng-entity-relationship-diagram@6.2.0-edge.5
+  - @memberjunction/ng-timeline@6.2.0-edge.5
+  - @memberjunction/record-cloning-base@6.2.0-edge.5
+  - @memberjunction/rubrics-base@6.2.0-edge.5
+  - @memberjunction/ng-tabstrip@6.2.0-edge.5
+  - @memberjunction/predictive-studio-core@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Minor Changes
+
+- 7384dd6: Conversation forks: a conversation is Main (the messages with no branch) plus forks (`MJ: Conversation Branches`). A fork starts at a message and shows as a chip under it (kind icon, up to three avatars, message count, name, last activity); it opens as a full view where the inherited history sits faded behind a dashed rail, up to a fork marker, and the fork's own messages behind a solid rail. "Fork from here" on one of your own messages opens a new fork that replaces that message at once (it starts from the message before it, the composer starts with the message's text, the fork is created on the first send and named from that message, and leaving without sending creates nothing), Edit ("Save as fork"; the original message stays) and Regenerate (the first answer stays) each start a fork. A Forks button lists every fork, nested under its parent, with All and Mine filters. Everyone who can see a conversation sees its forks and who started each one. What a person is looking at is per person and in memory; nothing about the view is stored on the conversation, and changing the view ends an active voice session.
+  - New entity `MJ: Conversation Branches` with `Kind` (Fork, Edit, Regenerate; default Fork), `SourceDetailID` and `UserID`; new columns `ConversationDetail.BranchID` and `ConversationDetail.ReplacedAt` (migration, so `minor`).
+  - New authorization `Conversations: Fork`, granted to the UI role. The server refuses to create a fork for a person without it; deny it to a role to turn forking off for that role's members. Each person can also switch forking off in My Profile ("Fork when I edit or regenerate"; user setting `mj.conversations.forking.v1`).
+  - When forking is off for a person, Edit and Regenerate change the latest turn in place: Regenerate (latest answer) and "Save and resend" (latest user message) hide the current answer and run the agent again; earlier user messages can still be edited ("Save", shown as edited). A replaced answer keeps its row (`ReplacedAt` and `HiddenToUser` set) and is left out of the chat, export, pins, the mobile transcript, rubric subjects, the returning-visitor recap and every agent context read (`ConversationEngine.LiveRowsFilter` and `IsReplacedRow`). A turn a fork depends on is not changed in place.
+  - Every writer sets `BranchID` itself (null is Main): the composer and its agent turns, `AgentRunner`, the task-graph deliverer, an agent request resumed from the Agent Requests dashboard or API (the fork of the message that started the run) and realtime transcripts (a voice session's fork is fixed when it starts). The server no longer stamps it and refuses a `BranchID` that names a fork of another conversation.
+  - A fork that still has its own messages or child forks cannot be deleted on its own (its messages would move into Main); deleting the conversation deletes its forks and messages.
+  - `ConversationEngine` gains `CreateFork`, `ForkPointFrom`, `EditForkPoint`, `RegenerateForkPoint`, `SourceRowsFilter`, `BuildForkSummaries`, `LoadForkSummaries`, `ForkDisplayName`, `LiveRowsFilter` and `IsReplacedRow`.
+  - **Removed public Angular API** (the ParentID-based thread panel; a host app that binds any of these must drop the binding): `ConversationChatAreaComponent`'s `ThreadId` input and `ThreadOpened`/`ThreadClosed` outputs; the `ThreadPanelComponent` export; `ConversationWorkspaceComponent`'s `OpenThread`, `CloseThread` and `SelectedThreadId`; `ChatConversationsResource`'s `SelectedThreadId`, `OnThreadOpened` and `OnThreadClosed`; `MessageListComponent`'s `ReplyInThread` and `ViewThread` outputs. Their deprecated camelCase aliases (`threadId`, `threadOpened`, `threadClosed`, `openThread`, `closeThread`, `selectedThreadId`, `onThreadOpened`, `onThreadClosed`, `replyInThread`, `viewThread`) are removed with them.
+
+  Message-anchored scope: every reader of one conversation reads one path through `ConversationScope` (`LoadScope`, `TrunkScope`, `ScopeFilter`, `ScopeSubquery`, `IsInScope`, `FilterToScope`, `ArtifactVersionScopeFilter`): the open view in the chat (window, pins, artifacts, agent polling, export, voice start), and Main for the mobile app, the realtime widget, meeting transcripts, the conversation overview, rubric subjects and the returning-visitor recap. Artifact history is path-aware: the viewer takes a `Scope` input and lists only the versions a message on the path links (any direction) or that no message links, labels a gap as `v4 · from v2`, and falls back to the newest visible version with a notice. Search results carry the fork of each hit; opening one opens that fork, or Main. Skip requests carry `conversationBranchID` from the reply's fork, so Skip Brain keeps one mirror record per path.
+
+- 6dc3aa9: feat(explorer): Dashboards is its own application
+
+  Dashboards move out of Data Explorer into a first-class Dashboards app, and Home, the command palette and recents reach them directly. There is no schema change: the new application is metadata, shipped in the release's metadata sync.
+  - **Dashboards app** (`metadata/applications/.dashboards-application.json`: App Switcher navigation, default for new users) with two pages. **Library**, the default page, lists every dashboard the user can see in one flat list: favorites first, then the dashboards the user opened last, then the rest by last update. Its rail has the Library filters (All dashboards, My dashboards, Shared with me, Favorites, Recently opened) and the category tree with an Uncategorized list; a category shows as a folder. A card shows the dashboard's screenshot (else a miniature of its layout, and "Not set up yet" for a dashboard with no parts), its owner ("You", else the owner's name), a Shared marker, its category and its last update, and a star that adds or removes a favorite. **Categories** shows the category tree with counts, creates categories, and deletes empty ones that the user owns after a confirm. New dashboard asks for a name first, and Cancel creates nothing. Existing users get the app once, automatically, the next time Home loads; a user who later removes it keeps it removed. `@memberjunction/ng-bootstrap` registers the new Categories page class.
+  - **Data Explorer** keeps Data and Queries. A dismissible banner on the Data tab points to the Dashboards app (`DataExplorerDashboardComponent` adds `ShowDashboardsMovedBanner`, `DismissDashboardsMovedBanner()` and `OpenDashboardsApp()`). For a user who has the Dashboards app, a link to Data Explorer's old Dashboards page (`/app/data-explorer/Dashboards`, query params kept) and an old Home pin to that page open the Library, and a saved workspace tab of that page becomes a Library tab (or gives way to an open Library tab) when the workspace loads or the user's apps change.
+  - **A dashboard opens in a workspace tab**, titled with the dashboard's name. Like any link, it replaces the current preview tab, so Back returns to the page it replaced (for example Home, a Dashboards app page or another dashboard) and Forward shows the dashboard again; Shift-click opens it in a separate tab, and so does a Ctrl or Cmd click on the Library list. A dashboard opened from a Dashboards app page is a tab of that app, so the app's header and pages stay in view; one opened from anywhere else (the command palette, recents, Home's Quick Access, a pinned Code dashboard) is a tab of Home. A new dashboard, and a card's Edit action, open the dashboard in edit mode.
+  - **Viewing and editing a dashboard.** The dashboard tab and Home show a Config dashboard in one editor. Its header shows the name and description, a Shared marker and the Favorite star; in the tab it also has the AI assistant toggle, a Share button and an Add to menu (Pin card, Share). Edit enters edit mode: name and description fields, an Editing badge, and Add part, Save and Cancel. Parts are MJ-styled tabs in tab groups, with a menu for the tabs that do not fit. In edit mode each tab group's header has Edit part and Remove for its active part, and a tab can be dragged to an edge to put parts side by side; in view mode tabs do not move. Add part and Edit part open one part dialog: the part type tiles, the type's source settings, a title that defaults to the source's name, and for a query its parameter controls and a refresh interval of 30, 60, 300 or 600 seconds; Edit part cannot change a part's type. Remove asks first and says that the view, query, artifact or page itself is kept. An empty dashboard offers Add part, also in view mode, to a user who can edit it. Save stores the changes and Cancel discards them. A dashboard that is not being edited reloads when it is saved elsewhere, Edit starts from the latest saved layout, and Save asks first when the dashboard was saved elsewhere after the edit began. Each Save also stores a small screenshot of the dashboard in `MJ: Dashboards.Thumbnail`, for the dashboard cards.
+  - **Home** stays a launcher: a greeting, Pinned and My applications. The Pinned header has Add Pin, a **Dashboards** switcher (`mj-home-dashboard-switcher`, internal to `CoreDashboardsModule`) and Edit. The switcher filters the pinned Config dashboards and offers Home, New dashboard and Manage pins; its `HeadingLevel` input (`1`, `2` or `null`) puts the trigger of its title look, not its menu, in an `h1` or `h2`, and Home's dashboard view uses `1`. A pinned Config dashboard opens full size inside Home (`?dashboard=<id>`, so links, Back and Forward work) in the same editor, with a breadcrumb and the switcher as its title: the user edits it in place, Open in Dashboards opens it in the Dashboards app, and leaving it with unsaved changes asks first. Quick Access is hidden while a dashboard shows. New dashboard asks for a name, pins the new dashboard and opens it in Home in edit mode. A dashboard pin shows its dashboard's name, and renaming the pin renames the dashboard for a user who can edit it; other pins keep their own names. Pin cards show an icon tile for every pin except Action pins, app cards drop their nav chips, and the pin options menu works from the keyboard. The Pinned section collapses, and Home remembers the choice for each user (`HomeApp.PinnedCollapsed`).
+  - **`mj-accordion-panel`** (`@memberjunction/ng-ui-components`): `Bare` now also drops the body fill and the row hover fill; on a device that can hover, pointing at the title or chevron gives both the brand color. A new `HeadingLevel` input wraps the toggle in a heading. Fix: the toggle's keyboard focus ring is drawn inside the header, so the panel no longer clips it; on a brand-colored header (the `primary` Variant, and the open sections of the Queries and Templates forms in `@memberjunction/ng-core-entity-forms`) the ring uses the inverse text color.
+  - **The command palette** lists matching dashboards (by name, description or category) in a Dashboards group; Enter opens the dashboard in place of the preview tab (Shift-click on a row opens a separate tab). `OmnibarNavPayload` (`@memberjunction/ng-explorer-core`) gains a `dashboard` kind.
+  - **Recents include dashboards.** Opening one logs `MJ: Dashboards` access, and `RecentAccessService` maps prefixed entity names with the new `ResourceTypeForEntity` and its `RecentResourceType` type (`@memberjunction/ng-shared-generic`).
+  - **`mj-dashboard-browser`** (`@memberjunction/ng-dashboard-viewer`) gains `[FlatMode]`: one flat list of every dashboard it is given, with no folder scoping. Outside selection mode, a Shift, Ctrl or Cmd click on a dashboard now opens it with `OpenInNewTab: true` instead of selecting it; in selection mode those clicks still select, and a Shift range starts from the last dashboard clicked in selection mode. Its cards are the new `mj-dashboard-card`, filled by the new inputs `FavoriteIds`, `ShowFavorites` and `OwnerLabels`; `FlatEmptyIcon`, `FlatEmptyTitle`, `FlatEmptyMessage` and `FlatEmptyWelcome` set the empty state of a flat list, and the new `DashboardFavoriteToggle` output (`DashboardFavoriteToggleEvent`) reports a star click. Its template uses the new public members `IsFavorite()`, `OnToggleFavorite()`, `OwnerLabel()`, `CardCategoryPath()` and `ShowWelcome`. Delete, from a card, a list row or the selection toolbar, asks first through the shared `MJConfirmService` and then emits `DashboardDelete`, so the host does not ask again. `OnDeleteDashboard()` and `OnDeleteSelected()` return a `Promise`, `OnEditDashboard()` and `OnDeleteDashboard()` take the click event as an optional argument, and `ShowDeleteConfirm`, `DashboardsPendingDelete`, `ConfirmDelete()` and `CloseDeleteConfirm()` are removed. The constructor takes `MJConfirmService` (root-provided), so a subclass or a direct `new` must pass it.
+  - **`mj-dashboard-card`** (`DashboardCardComponent`, `@memberjunction/ng-dashboard-viewer`) is one dashboard as a presentational card, with `DashboardCardClickEvent` and the helpers `IsDashboardNotSetUp()`, `FormatDashboardDate()` and `DashboardCategoryPath()`. The package also adds `mj-dashboard-layout-preview`, a miniature of a dashboard's saved panel layout: `DashboardLayoutPreviewComponent`, `DashboardLayoutPreviewNodeComponent`, and `BuildDashboardLayoutPreview()` with its types `DashboardLayoutPreviewNode`, `DashboardLayoutPreviewGroup` and `DashboardLayoutPreviewPanel`.
+  - **`mj-dashboard-viewer`** (`@memberjunction/ng-dashboard-viewer`) gains `HasNewerSavedLayout()`, `ReloadFromSaved()` and `UseSavedCopy()`: they compare with and show the dashboard's saved layout, and take a new copy of the dashboard without rebuilding. A new `CanEdit` input offers Add part on an empty dashboard in view mode. In edit mode, the Edit part and Remove buttons of each tab group ask the host through `PanelInteraction` (`configure-part-requested`, `remove-part-requested`), and the remove request carries `partTypeName`; edit mode draws no title bar above each part. `RemovePartConfirmOptions()` builds the Remove part confirm for `MJConfirmService.ConfirmDelete`. `GoldenLayoutWrapperService.OnStackAction` emits a `StackActionEvent` (a `StackAction`, `'edit'` or `'remove'`, and the active part's `PanelId`) in edit mode. The wrapper writes `DASHBOARD_STACK_HEADER_HEIGHT` (44) and `DASHBOARD_TAB_CONTROL_OFFSET` (78) into every layout it loads, so the layouts it saves carry them. Tabs can be dragged only in edit mode, and the keyboard reaches each tab (a tab list with `aria-selected`).
+  - **Part and name dialogs** (`@memberjunction/ng-dashboard-viewer`): `DashboardPartDialogComponent` (`mj-dashboard-part-dialog`, with `DashboardPartDialogMode`, `DashboardPartDialogResult` and `QUERY_REFRESH_SECONDS`) adds or edits a part in one `mj-dialog`, and the new `BaseConfigPanel.ShowCommonFields` input (default `true`) lets it hide a settings panel's own title and query fields. The standalone `DashboardNameDialogComponent` (`mj-dashboard-name-dialog`, with `DASHBOARD_NAME_MAX_LENGTH`) asks for a new dashboard's name and stays open while the host creates it.
+  - **Deprecated in `@memberjunction/ng-dashboard-viewer`** (still exported and working): `AddPanelDialogComponent` and `EditPartDialogComponent` (use `DashboardPartDialogComponent`); `AddPanelResult`, now a type alias of `DashboardPartDialogResult`, and `EditPartDialogResult`, now `DashboardPartDialogResult` without `PartType`; and `ConfirmDialogComponent` and `ConfirmDialogType` (use `MJConfirmService`, `MJConfirmDialogComponent` and `MJConfirmDialogType` from `@memberjunction/ng-ui-components`). The dashboard tab's two Dashboard Studio confirms still render `ConfirmDialogComponent`.
+  - **`mj-dashboard-editor`** (`DashboardEditorComponent`, `@memberjunction/ng-dashboards`, declared and exported by `CoreDashboardsModule`) is that editor. A host sets `DashboardId` (and optionally `TitleTemplate`, `ShowOpenInDashboards`, `ShowFavorite`, `BodyStyle` and `StartInEditMode`, two-way with `StartInEditModeChange`), puts its own buttons in the `[headerTools]` and `[viewActions]` slots, and handles `Loaded`, `LoadFailed`, `EditingChange`, `Saved`, `NameChanged`, `ConfigChanged`, `ReloadedFromSaved`, `FavoriteChange`, `NavigationRequested` and `OpenInDashboardsRequested`. A host can read the state `Dashboard`, `Viewer`, `BodyElement`, `IsEditing`, `IsSaving`, `EditingName`, `EditingDescription`, `Permissions`, `CanEdit`, `PartTypes`, `IsSharedWithUser`, `IsFavorite`, `HasUnsavedChanges`, `PartDialogMode`, `EditPartPanel` and `IsFill`, and call `EnterEditMode()`, `ToggleEditMode()`, `CancelEdit()`, `SaveDashboard()`, `Save()`, `ToggleFavorite()`, `RefreshPermissions()`, `OpenAddPartDialog()`, `OnPartDialogSaved()`, `ClosePartDialog()` and `OnNameBlur()`. The package also exports `DashboardViewerFactory` (`Create()`), `DashboardEditorBodyStyle`, `DashboardEditorLoadError`, `DashboardSaveOverrides`, `DashboardEditorTitleContext` and `DASHBOARD_SAVE_IN_PROGRESS`.
+  - **More in `@memberjunction/ng-dashboards`:** `DashboardsCategoriesResourceComponent` (the Categories page, with `LoadDashboardsCategoriesResource()`) and the Dashboards app helpers `DASHBOARDS_APP_NAME`, `DASHBOARDS_LIBRARY_NAV_ITEM`, `FindDashboardsApp()`, `DashboardsAppOpenOptions()`, `DashboardNameMaxLength()`, `CreateBlankDashboard(md, name, categoryId?)`, `AutoInstallDashboardsApp()` and `EnsureDashboardsApp()`.
+  - **`DashboardBrowserResourceComponent`** (`@memberjunction/ng-dashboards`) is the Library page; its tab is titled Library. It adds `LibraryFilter`, `LibraryCounts`, `VisibleDashboards`, `IsFlatView`, `EmptyState`, `FavoriteIds`, `OwnerLabels` and `OnDashboardFavoriteToggle()`; the rail's `RailSections`, `RailActiveId`, `RailCollapsed`, `RailExpandedIds`, `OnRailItemClicked()`, `OnRailItemToggled()` and `OnRailCollapsedChange()`; and the name dialog's `ShowNewDashboardDialog`, `IsCreatingDashboard`, `NewDashboardNameMaxLength`, `OpenNewDashboardDialog()`, `OnNewDashboardNamed()` and `OnNewDashboardCancelled()`. `CreateDashboard()` and `createDashboard()` are deprecated: they open the name dialog and no longer create a dashboard themselves. The Library no longer shows or edits a dashboard itself (a click opens the dashboard's tab), so these members and their camelCase aliases are removed: the in-page viewer (`Mode`, `SelectedDashboard`, `DashboardViewer`, `SelectedDashboardPermissions`, `OpenDashboard()`, `EditDashboard()`, `BackToList()`, `OnNavigationRequested()`, `OnPanelInteraction()`, `OnBreadcrumbNavigate()`), edit mode (`ToggleEditMode()`, `SaveDashboard()`, `CancelEdit()`, `EditingName`, `EditingDescription`, `OnNameBlur()`), the add part dialog (`OpenAddPartDialog()`, `ShowAddPanelDialog`, `OnPanelAdded()`, `OnAddPanelCancelled()`), the part settings dialog (`ShowConfigDialog`, `ConfigDialogPanel`, `ConfigDialogPartType`, `ConfigDialogClass`, `OpenConfigDialog()`, `OnConfigDialogSaved()`, `OnConfigDialogCancelled()`), the remove confirm (`ShowConfirmDialog`, `ConfirmPanelId`, `ConfirmPanelTitle`, `OpenRemoveConfirmDialog()`, `OnRemoveConfirmed()`, `OnRemoveCancelled()`) and the share dialog (`ShowShareDialog`, `OpenShareDialog()`, `CloseShareDialog()`, `OnShareDialogResult()`). `openInNewTab()` is removed too.
+  - **`HomeDashboardComponent`** (`@memberjunction/ng-dashboards`) adds the methods `OpenDashboardInHome()`, `GoHome()`, `OnSwitcherPick()`, `ManagePins()`, `OpenNewDashboardDialog()`, `OnNewDashboardNamed()`, `OnNewDashboardCancelled()`, `OpenDashboardInDashboardsApp()`, `PinName()`, `OnPinNameEnter()`, `OnPinMenuKeydown()`, `OnPinnedExpandedChange()`, `OnDashboardNavigationRequested()`, `OnDashboardEditingChange()`, `OnDashboardSaved()`, `OnDashboardViewLoaded()` and `OnDashboardViewLoadFailed()`, and the state `CurrentDashboard`, `CurrentDashboardId`, `CurrentDashboardName`, `DashboardStartsInEditMode`, `IsDashboardEditing`, `PinnedDashboards`, `PinnedExpanded`, `ShowOverview` (false while a dashboard shows), `ShowDashboardView`, `ShowQuickAccess`, `ShowNewDashboardDialog`, `IsCreatingDashboard`, `NewDashboardNameMaxLength`, `PinSections`, `GreetingName`, `PinMenuGroupLabelId` and `PinMenuMaxHeight`. Its `IsEditing()` is true while that dashboard is being edited, and `CurrentUser` has an optional `FirstName`.
+  - **`DashboardResource`** (`@memberjunction/ng-explorer-core`, the dashboard tab) shows a Config dashboard in `mj-dashboard-editor`. It adds `ConfigDashboardId`, `CanShare`, `IsPinnedToHome` and `PinToHome()`, and the editor event handlers `OnEditorLoaded()`, `OnEditorLoadFailed()`, `OnEditorEditingChange()`, `OnEditorNameChanged()`, `OnEditorConfigChanged()`, `OnEditorReloaded()`, `OnEditorFavoriteChange()` and `OnEditorNavigationRequested()`. `ToggleEditMode()`, `CancelEdit()`, `SaveDashboard()`, `OpenAddPartDialog()`, `EditingName`, `EditingDescription` and `DashboardPermissions`, and their camelCase aliases, are deprecated and call the editor. `ConfigDashboard`, `IsEditMode` and `DashboardPermissions` are read-only, and the `configDashboard`, `isEditMode` and `dashboardPermissions` setters are removed, so a subclass that writes them no longer compiles. Before a dashboard loads, `DashboardPermissions` allows nothing.
+  - **New in `@memberjunction/ng-shared`:** `DashboardFavoritesService` (dashboard favorites in `MJ: User Favorites`, with `IsDashboardEntity()` and `DashboardFavoriteIds()`); `BuildDashboardPinInput()` and `DASHBOARD_PIN_RESOURCE_TYPE`, the Home pin that the dashboard tab and Home store for a dashboard; and `MOVED_NAV_ITEMS` with `MovedNavItem`, `FindMovedNavItem()`, `FindMovedNavItemApp()`, `ResolveMovedNavItem()`, `MovedNavItemApp` and `ResolvedMovedNavItem`. `NavigationService.SwitchToApp` opens a moved nav item in its new app, and the new `NavigationService.RetargetMovedNavItemTabs()` and `WatchMovedNavItemTabs()` move the saved tabs of a moved nav item. `HomeAppPinService` matches a dashboard pin by its `dashboardId` or `recordId`, in any letter case, and `CaptureThumbnail()` takes an optional timeout.
+  - **`NavigationService.OpenDashboard` options** (`DashboardNavigationOptions`, `@memberjunction/ng-shared`): `applicationId` names the application the dashboard's tab belongs to (default: Home), and `openInEditMode` opens the dashboard in edit mode on the usual tab path (no forced new tab): the tab it opens in (the replaced preview tab, or a new tab) starts in edit mode, and a tab already open for the dashboard is focused and enters edit mode. The tab's component is also told through `DashboardEditModeRequested$`. The tab takes the request once with `TakeDashboardEditModeRequest(tabId, dashboardId, applicationId)`; the application check keeps a cached component of the same dashboard from another application's tab from taking it.
+  - **Agent context:** the Library, the Categories page, the dashboard tab and Home report their state to the agent. The Library reports its filter with per-filter counts (`LibraryCounts`) and the dashboards opened last (`RecentlyOpenedNames`), and Categories opens a category in the Library (`OpenCategoryInLibrary`). Home reports its view (`HomeView`: Overview or Dashboard), the dashboard it shows (`CurrentDashboardName`, `CurrentDashboardID`, `IsEditingDashboard`) and the pinned dashboards the switcher lists (`PinnedDashboardNames`, plus `PinnedDashboardNameCount` when the list is capped). Home's new `SwitchHomeDashboard` tool shows a pinned dashboard by name or id, or the overview for "Home", and asks the user first when the open dashboard has unsaved changes; `OpenPin` opens a pinned Config dashboard inside Home and leaves pin edit mode. The tools of the Library, Categories and Home read, search, filter or navigate; none creates, renames, edits, shares or deletes a dashboard or a category. The dashboard tab reports the open dashboard; its read tools read it, and its Dashboard Studio tools ask the user before a save or a pin.
+  - **Fix: saving a dashboard no longer reloads its tab in a loop.** The save froze the page, because each tab reload started the next one. The dashboard tab now reports a save as the dashboard's new name (the tab keeps its dashboard id and takes the saved name as its title), not as a record save, which rewrote the component's record id to `ID|<uuid>`. The tab container's reload check also accepts that form: the new `TabContainerComponent.IsSameRecordId` treats a single-field URL segment and its bare value as the same record. The loop was already on `next`.
+  - **Fix: `mj-dashboard-viewer` (`@memberjunction/ng-dashboard-viewer`) fills its box in a scaled host.** The viewer sizes Golden Layout to the layout container's layout size (`offsetWidth` / `offsetHeight`, which Golden Layout also reads when it resizes with the container), not its on-screen size, so a dashboard shown scaled (with CSS `zoom` or a transform) no longer lays out at the scaled size and leaves an empty band.
+  - **Fix: the panels of a dashboard in a tab no longer grow from zero height after Edit or Save.** The shell's stack animation now applies only to the shell's own layouts.
+  - **Fix: a dashboard loaded into DashboardEngine's cache (or any `MJ: Dashboards` object built with `GetEntityObject()` then `LoadFromData()`) now has the loaded values as its old values.** Before, its `UIConfigDetails` and `UserID` kept the defaults of a new dashboard. That made a clean dashboard look changed and made `Revert()` put back the defaults.
+
+- aac148b: Notifications gain a scoped level between a type's defaults and a recipient's preference (MJ#4946).
+
+  `MJ: Scoped Notification Configs` holds one config per notification type per scope, on the same polymorphic scope the AI layer uses for `MJ: Scoped Prompt Configs`: a primary record of any entity (an Application, a Role, a User) plus JSON secondary dimensions, the first of which is `origin` (`Person`, `System`, `Automation`). Each channel is `Allow`, `Deny` or null. `NotificationEngine` loads the configs and resolves them through `ScopedNotificationConfigResolver` (pluggable through `ClassFactory`): most specific in-scope row wins per channel, one `Deny` beats any `Allow` at equal specificity, and a `Deny` on a row with `IsLocked` caps every level below it, the recipient's preference included. `SendNotificationParams` gains `scope`.
+
+  The share-notification handler sets `origin: System` when the grantor is MJ's Owner-type user, and the one row MJ ships denies Resource Shared notices of that origin on every channel, locked: a grant an application writes as plumbing no longer tells every grantee that "System shared" something with them. A grant a person writes is unchanged.
+
+- 0e5a4cd: Template users: an account set up to be copied, with its pinned apps, views, settings, dashboards and Skip conversations, so a new user starts with all of it.
+  - **`User.IsTemplate`** (migration). The User form shows it under Account Settings. A copy is never a template itself.
+  - **The `template` preset on `MJ: Users`** copies a template user whole: views, settings, dashboards with their categories and links, conversations with their messages, and the artifacts and versions in them. Dashboard layouts, pinned items and artifact references point at the copies. The planner refuses the preset for any user not flagged `IsTemplate` (`TEMPLATE_SOURCE_REQUIRED`), so one person's private work is never copied to another. Only a template-mode preset may open a Locked edge or copy an entity marked `CloneableFromTemplate` (conversations and their messages); request overrides still cannot.
+  - **First sign-in.** `userHandling.newUserTemplate: { email, preset }` in `mj.config.cjs` makes MJAPI create each new user as a copy of that template. Any problem falls back to a plain user, so sign-in never breaks.
+  - **`mj user clone`** creates a user as a copy of another: `--from`, `--email`, `--first`, `--last`, `--preset` (default `template`), `--inactive`, `--dry-run`.
+  - **Open Apps can ship a template user.** `templateUser: { email, description?, preset?, newUsers?: offer | always | never }` in `mj-app.json`. After install, the installer gets their own copy, from `MJ_INSTALL_USER_EMAIL` / `_FIRST_NAME` / `_LAST_NAME` or prompts. The template can also be set for later sign-ins (`MJ_INSTALL_TEMPLATE_FOR_NEW_USERS`). The step only warns on failure; it never fails the install.
+  - **Explorer** shows a red banner while a template user is signed in, because everything changed there reaches every later copy.
+
+  Fixes found on the way:
+  - **CurrentUser** now returns `IsTemplate`, `FirstLast` and the `Employee*` fields. It returned null for every `UserInfo` field missing from its hand-written list. The list is now `SessionUserFields`, with a test that it covers every field the client requests.
+  - **Artifact version saves inside a transaction.** `MJArtifactVersionEntityServer` read attributes through the global provider. On a server's per-request provider, inside a clone's transaction, each read waited about 30 s on the transaction's own locks. A 23-version copy took 11 minutes instead of seconds. It now reads through the entity's provider.
+  - **Copies keep their rows' order.** The dependency walker reads children oldest first (`__mj_CreatedAt`). A row whose remapped column points only at its own ancestors, such as a copied user's messages naming the new user, now saves within the graph save instead of after it. Copied conversations kept their messages, but showed each answer above its question.
+  - **User copies keep dashboard and view names.** The entities' `(copy)` rename applies only where a name could collide. A user copy owns its rows, so the rename only mislabelled them.
+  - Record cloning: `Child.JoinField` preset keys, case-insensitive key lookup in JSON remap, Golden Layout and top-level-array JSON remap paths, and a descendant's `JsonRemap` merged with the entity's own.
+  - A conversation message can be created during a clone save (`CloneContext`) by a user who doesn't own the conversation yet. Updates and deletes are still checked.
+
+### Patch Changes
+
+- de2dc2f: Avatar video in realtime usage and cost. The Gemini browser client counts the seconds of avatar video a model turn generated from the fragments' durations (Core's fragmented MP4 reader gains track timescales and `Fmp4VideoSeconds`), until `generationComplete` (an interrupted turn counts what arrived before `interrupted`), and emits them once, as amounts, in `OutputTokenDetails.VideoSeconds`; it also reads Google's response-side token split, VIDEO included (`RealtimeUsageModalityDetail.VideoTokens`). The runtime relays the full input and output detail blocks, and an update that carries only video seconds; `RelayRealtimeUsage` takes them as an optional `usageDetailsJson` argument, and `AccumulatePromptRunUsage` adds them into the co-agent prompt run's `ModelSpecificResponseDetails.RealtimeUsage` record, with the stored video seconds capped at the run's elapsed time plus 30 seconds. At finalize, a run whose model vendor configuration has `Realtime.Pricing.AvatarVideoOutput` (per minute) is priced at its cost row plus a video line, the video's output tokens leave the cost row's output bucket, and the lines are written under `CostLines`; without that price the run prices as before. The agent-run analytics cost card shows the avatar video on its own line and no longer prices the video's tokens as output. Integration check RD16 stores a minute of avatar usage on a co-agent-shaped prompt run for Gemini 3.8 Live on Vertex AI, finalizes it, and checks its cost lines.
+- 9d73096: The Files form no longer stays on "Loading…" for a file it can't preview, and stops reading two fields the entity doesn't have.
+
+  The viewer learns that an image, PDF, video or audio file has loaded from its element's `load` event, and reads text by fetch. Any other type (a `.zip`, say) has no element: its view is the fallback card with _Open in Browser_, but nothing ever set `IsMediaLoaded`, so the loading overlay covered that card for good. The form now marks such a file loaded as soon as its URL is known (`MediaLoadsByElement`).
+
+  `MJ: Files` records no size and its created stamp is `__mj_CreatedAt`, so the form showed "0 B" and a blank _Created_ for every file. The size badge and row appear only when a size is known (`DescribeFileSize`), and _Created_ reads the real column.
+
+- 1403d04: Word and Excel files preview inline in the Files form, through the renderers the Artifacts viewer already had (MJ#4957).
+
+  `@memberjunction/ng-artifacts` now exports `mj-docx-preview` (mammoth to sanitized HTML) and `mj-xlsx-preview` (SheetJS into an AG Grid with sheet tabs), each taking a URL or bytes and reporting `loaded` and `failed`. The Word and Excel artifact viewer plugins wrap them, so Explorer has one renderer of each kind.
+
+  The `MJ: Files` form recognises `.docx`, `.xlsx`, `.xlsm` and `.xls` by name as well as by MIME type, since the server stores Office files as `application/octet-stream`, and shows them in its preview pane with _Open in New Tab_ kept for the download. Legacy `.doc` stays a download: mammoth reads OOXML only.
+
+- b8a9e5e: Remove nested `UUIDsEqual` scans where both lists grow with the data or the code runs on every render. Fix one cross-database lookup bug.
+  - **Rubric publish validation could miss advisory parents.** `ValidateRubricTree` looked a raw `parentId` up in a map with normalized keys. On SQL Server (upper-case IDs) the advisory-ancestor walk silently stopped, so a non-advisory criterion under an advisory group was not reported. The map is now a `UUIDMap`.
+  - **Per-render getters no longer rescan the entity list.** The Entity form's `FormChromeCandidates`, the Data Explorer's `RecentEntities` / `FavoriteEntities` and the storage admin's `FilteredAccountRows` now read cached or once-built indexes.
+  - **Entity lookups by ID** in the ERD, the get-entity-details and list-entities actions, recent-access and the form builder now use the provider's indexed `EntityByID`. The application dialog uses a once-built index.
+  - **Other once-built indexes:** tag lookups, permission grantee names, orphaned-conversation owners and flow-editor node moves.
+  - `createFakeProvider` (`ng-test-utils`) now implements `EntityByID`, like a real provider.
+  - **New helper:** `GroupByUUID(items, getId?)` in `@memberjunction/global` groups items by a UUID in one pass, each group in input order.
+  - **Server sites that matched two growing lists:** the user cache (users × user roles), resource-permission deduplication, user/role sync, default-app user applications, scheduled-job statistics, MCP action discovery, REST connector schema introspection and rubric calibration.
+  - **Offline tools:** CodeGen relationship sync and CHECK-constraint value lists, CodeGen's related-entity form lookups, and `mj artifacts reclassify`.
+  - **Angular screens that scale with the data:** the AI Agent form's linked prompts and actions, the prompt priority matrix, the Testing explorer, the conversations message cache, the Query Browser tree, the Actions overview and categories, the dashboard browser, list-form bulk remove and credentials bulk actions.
+
+  Behaviour is unchanged otherwise, and each site has a test that also passes against the old code.
+
+- Updated dependencies [96d6ec2]
+- Updated dependencies [a709bb6]
+- Updated dependencies [d17de94]
+- Updated dependencies [7ada797]
+- Updated dependencies [51c469d]
+- Updated dependencies [432cb73]
+- Updated dependencies [293c316]
+- Updated dependencies [155aa45]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [822ed69]
+- Updated dependencies [1da00cb]
+- Updated dependencies [b699a37]
+- Updated dependencies [0dbd455]
+- Updated dependencies [dde482c]
+- Updated dependencies [a4b23b7]
+- Updated dependencies [49f26d9]
+- Updated dependencies [961d529]
+- Updated dependencies [10c2311]
+- Updated dependencies [1dc0681]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [bb3028a]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [24fce37]
+- Updated dependencies [c87f87a]
+- Updated dependencies [490cd8d]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [4889fb2]
+- Updated dependencies [b2441c3]
+- Updated dependencies [69e19c5]
+- Updated dependencies [7316ac3]
+- Updated dependencies [8ef5e86]
+- Updated dependencies [596855c]
+- Updated dependencies [fdf6669]
+- Updated dependencies [4c682c1]
+- Updated dependencies [f325baa]
+- Updated dependencies [fc24fc4]
+- Updated dependencies [ae0a662]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [b09fe34]
+- Updated dependencies [1403d04]
+- Updated dependencies [8bac4d6]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [dbc3462]
+- Updated dependencies [5a3de97]
+- Updated dependencies [0d0ba18]
+- Updated dependencies [b6fcb30]
+- Updated dependencies [f73e192]
+- Updated dependencies [8704df6]
+- Updated dependencies [5345e3d]
+- Updated dependencies [1ea4085]
+- Updated dependencies [975948b]
+- Updated dependencies [22c9074]
+- Updated dependencies [88b85fc]
+- Updated dependencies [aee2d53]
+- Updated dependencies [5dc3752]
+- Updated dependencies [5e1e343]
+- Updated dependencies [6c8798b]
+- Updated dependencies [f0c78c3]
+- Updated dependencies [25f7b82]
+- Updated dependencies [35ed7b5]
+- Updated dependencies [d853bf8]
+- Updated dependencies [e293b68]
+- Updated dependencies [02bb563]
+- Updated dependencies [afe9eb4]
+- Updated dependencies [90829e3]
+- Updated dependencies [aac148b]
+- Updated dependencies [a7fd6e9]
+- Updated dependencies [f2f6f4b]
+- Updated dependencies [d2cb42e]
+- Updated dependencies [cbddadb]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [e7b2ebc]
+- Updated dependencies [e0cf9ed]
+- Updated dependencies [57fea6a]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [6b487b8]
+  - @memberjunction/ai-core-plus@6.2.0-edge.4
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/ai-engine-base@6.2.0-edge.4
+  - @memberjunction/ai@6.2.0-edge.4
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/ng-base-forms@6.2.0-edge.4
+  - @memberjunction/ng-artifacts@6.2.0-edge.4
+  - @memberjunction/ng-shared@6.2.0-edge.4
+  - @memberjunction/ng-shared-generic@6.2.0-edge.4
+  - @memberjunction/ng-ui-components@6.2.0-edge.4
+  - @memberjunction/templates-base-types@6.2.0-edge.4
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.4
+  - @memberjunction/ng-markdown@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/ng-search@6.2.0-edge.4
+  - @memberjunction/record-cloning-base@6.2.0-edge.4
+  - @memberjunction/ng-entity-relationship-diagram@6.2.0-edge.4
+  - @memberjunction/ng-agents@6.2.0-edge.4
+  - @memberjunction/ng-flow-editor@6.2.0-edge.4
+  - @memberjunction/ng-ai-test-harness@6.2.0-edge.4
+  - @memberjunction/ng-task-graph-editor@6.2.0-edge.4
+  - @memberjunction/feature-pipelines@6.2.0-edge.4
+  - @memberjunction/actions-base@6.2.0-edge.4
+  - @memberjunction/ng-base-application@6.2.0-edge.4
+  - @memberjunction/ng-testing@6.2.0-edge.4
+  - @memberjunction/ng-action-gallery@6.2.0-edge.4
+  - @memberjunction/ng-actions@6.2.0-edge.4
+  - @memberjunction/ng-base-types@6.2.0-edge.4
+  - @memberjunction/ng-code-editor@6.2.0-edge.4
+  - @memberjunction/ng-hierarchy-tree@6.2.0-edge.4
+  - @memberjunction/ng-join-grid@6.2.0-edge.4
+  - @memberjunction/ng-list-management@6.2.0-edge.4
+  - @memberjunction/ng-notifications@6.2.0-edge.4
+  - @memberjunction/ng-record-clone@6.2.0-edge.4
+  - @memberjunction/ng-record-process-studio@6.2.0-edge.4
+  - @memberjunction/ng-resource-permissions@6.2.0-edge.4
+  - @memberjunction/ng-rubrics@6.2.0-edge.4
+  - @memberjunction/ng-trees@6.2.0-edge.4
+  - @memberjunction/ng-versions@6.2.0-edge.4
+  - @memberjunction/ng-link-directives@6.2.0-edge.4
+  - @memberjunction/ng-deep-diff@6.2.0-edge.4
+  - @memberjunction/ng-timeline@6.2.0-edge.4
+  - @memberjunction/rubrics-base@6.2.0-edge.4
+  - @memberjunction/ng-tabstrip@6.2.0-edge.4
+  - @memberjunction/predictive-studio-core@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Minor Changes
+
+- dfe40a4: Binary fields work end to end, and persisted embeddings gain a binary float32 copy that loads about 14× faster than the JSON one.
+
+  **Binary fields (varbinary / binary / image on SQL Server, bytea on PostgreSQL).** Previously a binary column reached `BaseEntity` as whatever the driver returned. A Node `Buffer` then serialized over GraphQL as `{"type":"Buffer","data":[…]}`, and saves wrote the base64 text into the column. Now a binary field's value is a **base64 string** everywhere above the database: in `BaseEntity`, every cache, RunView results and the GraphQL wire. Providers convert at the boundary. SQL Server binds a `0x…` hex literal, PostgreSQL binds a `Buffer`, and rows read back become base64, including rows returned from a transaction group save. CodeGen now declares a length-less `varbinary` parameter as `varbinary(MAX)`; it used to emit `varbinary`, which T-SQL truncates to one byte. Generated getters document the encoding, and generated forms skip binary fields.
+  - **`RunView` omits binary fields by default.** Set `IncludeBinaryFields: true`, or name a binary field in `Fields`, which sets it for you. The flag is part of the cache fingerprint, so the two shapes never share an entry. A single-record `Load()` always includes binary fields. Engine configs take `IncludeBinaryFields: true | 'DatabaseProviderOnly'`; the second loads binary fields only in server processes.
+  - **Validation.** Saving a value that is not canonical base64 into a binary field fails `Validate()` with a message naming base64. A value whose decoded length exceeds a fixed-length column also fails.
+  - **`@memberjunction/global` codecs.** `BytesToBase64` / `Base64ToBytes` / `TryBase64ToBytes` pick the fastest host implementation: native `Uint8Array.fromBase64`, then Node `Buffer`, then `atob`. On Node, validation is fused into the decode and is fuzz-tested to accept exactly what `IsValidBase64` accepts. `Float32VectorToBase64` / `Base64ToFloat32Vector` handle little-endian float32 vectors. `ReplaceByteArraysWithBase64` makes any raw query row JSON-safe.
+
+  **Binary vector columns (migration `V202610021716`).** These nullable `varbinary(MAX)` companions of the JSON vector columns are added:
+  - `EntityRecordDocument.VectorBinary`
+  - `EmbeddingVectorBinary` on `AIAgentNote`, `AIAgentExample`, `Query` and `Tag`
+  - `Component.FunctionalRequirementsVectorBinary` and `Component.TechnicalDesignVectorBinary`
+
+  Every writer now fills both columns: `BaseEntity.GenerateEmbedding*` (new optional binary field parameter), the note, example, component, query and tag entity servers, `TagEngine`, and the entity vectorizer (`EntityVectorSyncer`). Readers prefer the binary column through the new `ReadStoredVector` and `DecodeVectorBinary` in `@memberjunction/ai-vectors-memory`, and fall back to JSON for rows written before the column existed or for invalid binary values. The readers are `SimpleVectorServiceProvider`, `SimpleVectorDatabase` (new `binaryVectorField` ProviderConfig key), `AIEngine`, `TagEngine`, `TagHealthJob`, `QueryEngineServer` and clustering. For 20,000 × 1,536 vectors, decoding takes 0.28 s, against 3.9 s to parse the JSON.
+
+  Fixes found along the way:
+  - Clustering no longer counts a binary-only row as having no vector.
+  - A note, example or tag whose stored JSON vector is malformed is now dropped from the in-memory index instead of throwing.
+  - A PostgreSQL transaction group post-processes each row with its entity's own provider rather than the process-global one.
+
+- 60bd774: Form contributions can be metadata rows, not only compiled panels, and users can place, share, hide and remove them from the form itself.
+
+  **Contributions from metadata.** A `MJ: Entity Form Contributions` row (migration `V202610051244__v6.2.x__Entity_Form_Contributions`) mounts a `MJ: Components` row (`Type='Widget'`, spec `componentRole: 'form-panel'`) on an entity's form. It carries the same registration bag as `@RegisterClassEx` plus `Presentation`, `Title`, `Icon`, `Configuration`, `Precedence` and User/Role/Global scope. `CollectFormContributionRegistrations` merges rows with class registrations, and the form collapses the list once per resolve (`ResolveFormContributionWinners`): one winner per `ContributionKey`, the higher rank wins, a compiled panel wins a tie against any row, and between rows `User` beats `Role` beats `Global` (`FormContributionOutranks`). `CollectFormPanelRegistrations` stays as a deprecated wrapper that returns compiled registrations only. Wildcard (`'*'`) registrations take part on every form, but their place claims are ignored: one that claims a grid, a section or a tab replaces nothing, and one that names a section to draw in draws at its slot. `InteractiveFormsEngine` caches the rows and the full custom forms (in the browser, the shared ones and the signed-in user's own) and fetches each panel component by ID once (`GetComponentByID`); `InteractiveFormPanelComponent` renders them, and a panel can change only the fields it claims, in edit mode. On the 11 identity, permission and form-metadata entities in `RESTRICTED_FORM_ENTITIES`, only `User` rows and full custom forms render.
+
+  **One rule set, shared by the browser and the server.** The contribution key is derived once (`ResolveContributionWriteKey` in `@memberjunction/interactive-component-types/forms`). `@memberjunction/core-entities` `custom/FormScope/` holds the spec-to-row mapper (`ApplyContributionSpecToRow`), the claim validator (`ContributionClaimRefusal`), the scope rules (`FormScopeWriteRefusal`, which normalizes Scope and fails closed, `ComponentWriteRefusal`, `FormRowComponentRefusal`, `ComponentNameCollisionRefusal`, `IsCallersOwnComponent`, `IsCanonicalFormScope`, `ContributionScopeRank`, `FormContributionOutranks`, `IsSelectableFormOverride`, `FormScopeAllowedOnEntity`, `UserCanManageFormDefaults`), the hide-setting key helpers, and the retire rule (`ActiveContributionSiblings`, which compares keys ignoring case as the SQL Server unique index does).
+
+  **What a panel can stand in for.** One claim per row, enforced by the database: a related grid, one or several field sections (`ReplacesSectionKey`, `ReplacesSectionKeys`), a group of fields (`ReplacesFieldNames`, rendered once inside that section), or a place inside a section (`InSectionKey` + `SectionPosition`). A compiled panel renders at the slot it registered for, and a panel standing in for something takes its place. The `top-area` slot is accepted by the CHECK constraint but no form emits it, so the placement dialog does not offer it.
+
+  **Authoring.** New actions `Create Form Contribution`, `Modify Form Contribution`, `Activate Form Contribution Version`, `Get Form Contributions For Entity` and `Get Form Composition For Entity`. The write actions, and the existing Modify / Activate / Revert Interactive Form actions, change only the caller's own `User` rows; a `Role` or `Global` row returns `FORBIDDEN` for every caller. A spec with more than one claim returns `INVALID_CLAIM` before any write. The contribution actions write the Component and the row in one transaction, and so do the Modify and Activate Interactive Form paths for a full form's Component and override; Create and Revert Interactive Form do not. Modify and Activate Interactive Form set the prior version aside after that transaction, and Activate returns `PERSIST_FAILED`, with the new form already Active, when it cannot. Activating a target that is already Active also sets aside the caller's other Active personal forms for that entity. `Modify Form Contribution` accepts an optional `Precedence`. `Get Form Composition For Entity` answers for the form the user sees as far as metadata can tell (hidden panels, restricted entities, the same collapse; no compiled panels, and no rows while the kill switch is off) and returns `QUERY_FAILED` when a query fails. The artifact viewer previews a form-panel spec and offers **Add to my form**, which opens a placement dialog: the entity's real form, read-only and scaled, with the panel drawn where it will go, the positions the form actually has, order within a position, what it replaces, and draft or active. The dialog starts from the claims the panel proposes that it offers on the open form, and on a full custom form the panel starts as a draft. New `mj-icon-picker` (`@memberjunction/ng-ui-components`) chooses a Font Awesome solid or regular icon by looking at it.
+
+  **Managing a form.** A "Manage this form" drawer lists the form choice and every panel; Escape closes it and focus stays inside it. Any user can hide a panel shared with them and remove their own. Hide and Show change the open form at once: its slot-mounted panels remount, and a stock grid comes back when the panel that took it over is hidden. Publishing a panel or a full custom form to a role or everyone needs the new `Manage Form Defaults` authorization (Developer and Integration; owners count). `MJEntityFormContributionEntityServer` and `MJEntityFormOverrideEntityServer` enforce it on every save, replayed save and delete. Turning a panel on, or publishing it, retires the Active sibling for the same audience and key in the same transaction and sets the panel component's status. The stock UI role can create and update `MJ: Components` (not delete), so any user can create or change their own panel through the actions and turn it on, off or to a draft in the drawer. Without `Manage Form Defaults` the server requires the component to be the caller's own (`IsCallersOwnComponent`): used only by their own personal rows, or used by no row and created by them, as its Internal `Create` record in `MJ: Record Changes` shows. That applies to any update or delete of the component, whatever columns it changes (`MJComponentEntityServer`, `ComponentWriteRefusal`), to a contribution or override row created or re-pointed at it (`FormRowComponentRefusal`), and to reusing its name (`ComponentNameCollisionRefusal`, names compared trimmed and lower-cased, in any namespace, and sent as a Unicode literal on SQL Server); a form can also load a component by name, so a component no row uses still matters. With the grant, a delete or a change to a component's specification, status, name, namespace or type, and pointing a row at it, are refused only when another user's personal row uses the component. The reads run as the caller in one batch, the changed columns come from the stored row, and a failed read refuses the write. Publishing a draft, an off panel or a set-aside form turns it on, and the chooser says so. A set-aside (`Inactive`) shared form is retracted; a set-aside personal form stays in its owner's picker. The placement preview never saves form state.
+
+  **Form context.** The record container publishes its full composition snapshot to `FormCompositionRegistry` (`@memberjunction/ng-base-forms`), where the apply path reads it. Agents get a compact `FormAgentContext` in `AdditionalContext.Form` (entity, record key, form choice, and each section's key, title, variant, hidden flag and holding contribution), published by the record tab while it is the tab on screen. `RecordPrimaryKey` is a `CompositeKey.ToURLSegment()` string, or null for an unsaved record. The `SkipFormContext` mirror in `@askskip/types` must follow this shape.
+
+  **Kill switch.** On a Node host, `MJ_FORMS_METADATA_CONTRIBUTIONS=false` makes the engine on that process load no row. In Explorer, the `MJ: Instance Configurations` key `Forms.MetadataContributions.Enabled` set to `false` turns rows off on every form; the shell applies it after `InstanceConfigEngine.Config()` and before any form opens, it can only turn the source off, and the source stays on when Instance Config fails to load. `Get Form Contributions For Entity` and `Get Form Composition For Entity` list no row when either setting is off and report `MetadataContributionsEnabled`. The write actions still write rows. The seed row reaches a database through `mj sync push`.
+
+  **Section counts and empty sections.** A saved record fetches every related-section count and the tag, attachment and version badges in one `RunViews` call; an all-`count_only` batch runs as one `UNION ALL` statement in `GenericDatabaseProvider`, with each view's security path intact. New `whenEmpty` (`'show'` default | `'hide'` | `'more'`) and `showCount` on `EntityRelationship.Configuration.UI` and on contributions, with entity defaults `UI.Form.RelatedWhenEmpty` and `UI.Form.ShowRelatedCounts`.
+
+  **Fixes.** Eleven compiled panel registrations named their entity without the `MJ: ` prefix: the five overview cards and the realtime panel mounted only through the slot host's loose name match, which the rail did not apply, and the five header panels also used `slot: 'header'`, which is not a `FormPanelSlot`, so they never rendered. All eleven now use `MJ: ` names and the slot host matches names exactly, so the hero headers render above the overview cards on `MJ: Users`, `MJ: Companies`, `MJ: Employees`, `MJ: Conversations` and `MJ: AI Agent Categories`. The overview cards query `MJ: ` entity names (four of them queried unprefixed names and showed empty states), the overview cards and the realtime panel show a load error instead of an empty state when a query fails, and conversation turn pills and counts use the stored `User`/`AI` roles. CodeGen no longer corrupts generated validators that contain escapes, and a table-level validator's metadata guard includes the validator's `Name`.
+
+  **Behaviour changes to know about.** `BaseFormPanel.Validate()` now runs on Save (through `BaseFormComponent.ValidateAsync()`) and may return a Promise. A React panel whose `Validate` throws does not block the save and shows the failure in the panel, as it does an error from `<mj-react-component>`; a field edit from a panel that the record refuses is logged and dropped. After upgrade, editing or deleting an existing `Role` or `Global` full custom form needs `Manage Form Defaults`, and an `mj sync push` of `Global` rows needs a sync user who holds it or is an Owner. The UI role gains Create and Update on `MJ: Components`. Without `Manage Form Defaults`, whatever role grants component rights, a caller can change or delete a component, on any column, only when it is their own (used only by their own personal rows, or used by none and created by them), and two such users cannot give components the same name. With the grant, a delete or a change to one of the five guarded columns (specification, status, name, namespace or type) is refused only when another user's personal row uses the component, and a change to any other column passes. `MJRecordChangeEntityServer` refuses a caller creating a record change whose `Source` is `Internal` and `Type` is `Create` through the API; other record changes, such as version-label snapshots, are unchanged. `mj sync push` runs as the `System` user, which must hold the Developer role and so holds the grant by default; a sync user that is neither an Owner nor a holder of the grant can push changes only to components of its own. Every `mj-form-field` carries `data-field-name` and `data-field-label`. Collapsible-panel move up/down follows the visual order. New user setting `mj.formPanels.hidden.<entity>`; the existing `mj.formVariant.<entity>` is also read by `Get Form Composition For Entity`. `ng-conversations` gains a type-only dependency on `ng-base-forms`. `Get Active Form For Entity` applies the restricted-entity rule, so a Role or Global form on one of those entities is neither active nor listed. A `form-panel` spec must set `entityName`; the artifact viewer no longer falls back to `dataRequirements` for a panel.
+
+  **PostgreSQL.** `UQ_EntityFormContribution_Key` and `UQ_EntityFormContribution_RelatedClaim` include nullable columns (`UserID`, `RoleID`, `RelatedJoinField`). SQL Server treats NULLs as equal in a unique index; PostgreSQL does not, so the converted indexes need `NULLS NOT DISTINCT` (PostgreSQL 15+) or a `COALESCE` expression index to refuse the same duplicates. PostgreSQL also compares the key case-sensitively, so there the case-insensitive retire rule is stricter than the index.
+
+  **Deploy order:** deploy the server code before pushing the metadata. The UI role's grants ship as metadata only: write access to `MJ: Entity Form Contributions` and `MJ: Entity Form Overrides`, and Create and Update on `MJ: Components`. Only the new server subclasses keep that access to the user's own rows and components, so the component guard must be live before the UI role gains Update: apply the release build's consolidated metadata-sync migration together with the server deploy, never before it. A development database that already ran an earlier copy of the migration needs a Flyway repair or a rebuild.
+
+- 49e0bd8: Add the MemberJunction Durable Work Queue and Messaging Framework:
+  - **Core & Data Layer**: Transport-neutral queue contracts, database schema and entities for transports, topics, subscriptions, messages, deliveries, and deduplication ledger, backed by guarded-write stored procedures (`spWorkQueue*`) with SQL Server and PostgreSQL support.
+  - **Transports**: Native Database transport driver, consumer, and operator; AWS transport (`@memberjunction/work-queue-aws` with SNS topic publishing, SQS FIFO consumer, visibility-timeout leases, dead-letter redrive, binding validation, and LocalStack conformance); and in-memory reference transport.
+  - **Runtime & Host**: Competing-consumer `WorkQueueHost` (supporting continuous daemon and one-shot `RunOnce` container modes), `WorkQueueSweeper` (handling lease expiry and retention purging under a distributed sweep lock), REST publish endpoint (`POST /work-queue/topics/{topic}/messages` with API-key and scope authorization), and seven Remote Operations for operator control (`WorkQueue.GetSubscriptionStats`, `ReplayDeadLetter`, `DiscardDelivery`, `ValidateBindings`, etc.).
+  - **Operator Surface**: Explorer `WorkQueueDashboard` with Overview, Dead Letters (envelope/payload inspection and replay/discard), Partitions (blocked, in-flight, and idle keys), and Bindings validation tabs, plus a new "Work Queue" application record.
+  - **Tooling & Samples**: `mj queue` CLI commands (stats, dead-letters, partitions, replay, discard, backlog, work, export-topology, import-bindings, validate-bindings) and `@memberjunction/work-queue-samples` (`HelloWorldHandler` with sample topologies).
+
+### Patch Changes
+
+- fe39606: Memory-leak audit round 17 fixes.
+  - **Core entity forms:** twelve custom form components (Lists, Tests, Entities, Templates, AI Agent Runs, Search Scopes, AI Agents, AI Prompt Runs, Queries) overrode `ngOnDestroy` without calling `super.ngOnDestroy()`, so every opened form stayed subscribed to the root-singleton form-state stream. They now call `super`.
+  - **Testing engine:** the per-suite rubric version pins and labels grew on every run on a process-lifetime driver. They are now bounded LRU caches with a TTL.
+  - **CodeGen:** `RunCommand` now clears its timeout timer when the command finishes first, so it no longer kills a recycled PID later or holds the event loop open.
+  - **Code execution:** a sandbox worker that fails to start is now killed instead of orphaned, and `Shutdown()` decides whether a worker has exited from `exitCode`/`signalCode` rather than `killed`.
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [131f3c4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [279b93e]
+- Updated dependencies [66fd011]
+- Updated dependencies [f41442f]
+- Updated dependencies [196160a]
+- Updated dependencies [bea2386]
+- Updated dependencies [d046715]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+- Updated dependencies [d0a8dbf]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [b1b6d3d]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/ai@6.2.0-edge.3
+  - @memberjunction/core-entities@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.3
+  - @memberjunction/ai-engine-base@6.2.0-edge.3
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.3
+  - @memberjunction/ng-base-forms@6.2.0-edge.3
+  - @memberjunction/ng-shared@6.2.0-edge.3
+  - @memberjunction/ng-base-application@6.2.0-edge.3
+  - @memberjunction/ai-core-plus@6.2.0-edge.3
+  - @memberjunction/actions-base@6.2.0-edge.3
+  - @memberjunction/ng-ui-components@6.2.0-edge.3
+  - @memberjunction/ng-ai-test-harness@6.2.0-edge.3
+  - @memberjunction/feature-pipelines@6.2.0-edge.3
+  - @memberjunction/ng-testing@6.2.0-edge.3
+  - @memberjunction/ng-action-gallery@6.2.0-edge.3
+  - @memberjunction/ng-actions@6.2.0-edge.3
+  - @memberjunction/ng-agents@6.2.0-edge.3
+  - @memberjunction/ng-base-types@6.2.0-edge.3
+  - @memberjunction/ng-code-editor@6.2.0-edge.3
+  - @memberjunction/ng-flow-editor@6.2.0-edge.3
+  - @memberjunction/ng-hierarchy-tree@6.2.0-edge.3
+  - @memberjunction/ng-join-grid@6.2.0-edge.3
+  - @memberjunction/ng-list-management@6.2.0-edge.3
+  - @memberjunction/ng-notifications@6.2.0-edge.3
+  - @memberjunction/ng-record-clone@6.2.0-edge.3
+  - @memberjunction/ng-record-process-studio@6.2.0-edge.3
+  - @memberjunction/ng-resource-permissions@6.2.0-edge.3
+  - @memberjunction/ng-rubrics@6.2.0-edge.3
+  - @memberjunction/ng-search@6.2.0-edge.3
+  - @memberjunction/ng-shared-generic@6.2.0-edge.3
+  - @memberjunction/ng-task-graph-editor@6.2.0-edge.3
+  - @memberjunction/ng-trees@6.2.0-edge.3
+  - @memberjunction/ng-versions@6.2.0-edge.3
+  - @memberjunction/templates-base-types@6.2.0-edge.3
+  - @memberjunction/ng-deep-diff@6.2.0-edge.3
+  - @memberjunction/ng-entity-relationship-diagram@6.2.0-edge.3
+  - @memberjunction/record-cloning-base@6.2.0-edge.3
+  - @memberjunction/rubrics-base@6.2.0-edge.3
+  - @memberjunction/ng-link-directives@6.2.0-edge.3
+  - @memberjunction/ng-timeline@6.2.0-edge.3
+  - @memberjunction/ng-tabstrip@6.2.0-edge.3
+  - @memberjunction/ng-markdown@6.2.0-edge.3
+  - @memberjunction/predictive-studio-core@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- a9e96dd: The Entities form's Settings section gains a Record cloning panel that edits `Configuration.Clone` without raw JSON: enable/never-clone switches, scope defaults, naming, field rules (prompt, exclude, ownership, server-assigned), per-relationship policies, and an Advanced JSON box for the rest. It can validate the configuration, preview a clone plan for a record, and copy the `.clone-configurations.json` metadata entry.
+- ef43cf3: Add `MJ: Feature Pipeline Types`, the catalog of Knowledge Hub Feature Pipeline types. Each type names the driver class that turns a record's context into its output values, so a new type is a row plus a registered class. Seeds the `LLM` type, which is what every existing pipeline is.
+- 4d647e6: Add Rubrics, a core way to score any record against a published set of weighted criteria.
+
+  What ships:
+  - Schema for rubrics, versions, criteria, scales, anchors, bands, evaluations, and score rows, plus layered consensus views. Published versions are frozen. Raw writes to a frozen row throw 51101–51110. A draft version delete is an `INSTEAD OF DELETE` trigger. `MJ: Test Rubrics` is deprecated in metadata.
+  - `RubricScoring` and `RubricVersionDiff` in `@memberjunction/rubrics-base`. The outcome ladder is Incomplete, NotApplicableFailure, GateFailed, Passed or BelowThreshold, then Scored. The publish base is the highest Published or Retired version.
+  - `@memberjunction/rubrics`: LLM, agent, deterministic, and human evaluators. Actions are Evaluate Record Against Rubric, Get Rubric, Get Rubric Subject, Get Rubric Consensus, Create Rubric Draft, and Submit Human Rubric. Create Rubric Draft and the architect import do not publish. The evaluation agent does not call Get Rubric Consensus.
+  - Presentational widgets in `@memberjunction/ng-rubrics`, Explorer forms, and a Rubrics application. The agent form has a Rubrics tab.
+  - Six guide-example rubrics stay Draft. Seven agent rubrics publish at 1.0.0 and bind to their agents. Marketing Agent is not bound. Shipped self-check links and the sampling job stay Disabled. A test that already has an `llm-judge` oracle keeps it.
+  - Testing: rubric resolution, a `rubric` oracle, judge calibration, per-criterion spread on `--flaky-check`, `mj rubric`, and `mj test promote-criteria`. `Test.RubricID` and `TestSuite.RubricID` select a rubric. `TestSuiteRun.Score` is stored.
+  - The deterministic integration bundle is IT98 at sequence 49.
+
+  `GeneratePluralName` keeps the head of a name verbatim and pluralizes only the tail, preserving that tail's case. A linear scan finds the tail, so `user_profile` and `userProfile` no longer produce the same view name, a leading character such as Ä stays on the head, and `Contact Person` pluralizes to `Contact People`. The base view for a criterion is `vwRubricCriteria`.
+
+- c35f7e5: Ship the Rubric Categories/Criteria hierarchy CodeGen output and regenerate stale generated types (fixes Integration Tier on next).
+
+  The hierarchy SQL is appended to `V202609302342__v6.2.x__Rubrics.sql` (unreleased) as a second CodeGen section, not shipped as a new migration.
+
+  What changed in generated output:
+  - MJ: Rubric Categories & MJ: Rubric Criteria: hierarchy functions (fnRubricCategoryParentID_GetHierarchyMeta / \_GetDescendants / \_GetAncestors / \_GetRootID, fnRubricCriterionParentID_GetHierarchyMeta / \_GetDescendants / \_GetAncestors / \_GetRootID), rebuilt views (vwRubricCategories, vwRubricCriteria) with hier_ParentID joins, and 10 EntityField records (RootParentID, ParentIDDepth, ParentIDPath, ParentIDIsLeaf, ParentIDChildCount)
+  - MJ: Rubric Evaluation Scores & MJ: Rubric Criterion Levels: 22 missing CD3 fields in \_\_mj.ts (ScaleLevel, CriterionKey, CriterionNodeType, CriterionParentID, EvaluationStatus, EvaluatorType, EvaluatorUserID, SubjectEntityID, SubjectRecordID, ContextEntityID, ContextRecordID, RubricID, RubricMajorVersion, CriterionCohortCount, CriterionCohortMeanScore, CriterionCohortMinScore, CriterionCohortMaxScore, CriterionCohortScoreStdDev, CriterionCohortHumanMeanScore, etc.)
+  - MJRecordChange.ChangeContext: field moved, now a typed ChangeContextObject accessor, and new IRecordChangeContext / IRecordChangeCloneContext interfaces (#4585, record cloning)
+  - MJRecordCloneLog.PlanJSON: now a typed IClonePlan field (#4585)
+  - MJEntityFieldEntity_IEntityFieldCloneConfiguration and IJsonRemapSpec interfaces (#4585)
+  - MJAIAgentStep.StepType and Configuration descriptions (Decision step, #4874)
+  - MJTestSuiteRun.Score: decimal(5,4) changed to decimal(9,6)
+  - MJRubricEvaluation.Band, the cascade-delete transaction Delete() override on MJRubricEvaluation, and the vwRubricCriterions → vwRubricCriteria base-view fix
+  - The MJ: Test Rubrics "DEPRECATED" description in the GraphQL schema
+
+### Patch Changes
+
+- 513e608: Add pipeline type picker, capability-aware output filtering and validation, Decision-specific constraint editors, and type badges for Feature Pipelines. What each pipeline type can produce is now one rule set, shared by the server, the builder and the save check. A Decision pipeline reads enum values and descriptions from its own entity's fields only; before, it read them from any entity with a field of the same name. An enum reads field metadata only when it sets FromFieldMetadata or lists no values, and only a type that needs listed values (Decision) requires them.
+
+  A Record Process now refuses at save an Infer pipeline its type cannot run, on both tiers and every save path, through the shared MJRecordProcessEntityExtended; the Record Process form also refuses while the builder reports errors. The builder loads and edits CaptureReasoning, and keeps Watermark. Its pickers now show the saved pipeline type, prompt, entity document, target and constraint, not the first option, and a placeholder when the saved value is not offered.
+
+- 8655198: Annotate the rubric form's single-key row load so the primary-key compliance gate passes.
+- fb267da: Two template-content fixes: `EntityRecordDocument.DocumentText` now holds each record's rendered text, and the Templates admin form now saves the content typed into its editor.
+
+  **`DocumentText` stored the raw template.** `EntityVectorSyncer.renderAndEmbedBatch()` rendered every record correctly and embedded the rendered text, but the per-record result carried `templateContent.TemplateText` (the Nunjucks source) instead of the rendered output, so every `EntityRecordDocument.DocumentText` row for an entity was the same `Name: {{ (org_name or '') | lower | trim }}` boilerplate (7,095 identical rows on one tenant). Search and duplicate detection were unaffected (the embedding used the right text); the audit trail for "what text was embedded for record X" was unusable. The result now carries the rendered text for that record, i.e. exactly what was embedded. The unused worker-thread copy gets the same fix, and `EmbeddingData.TemplateContent` documents what it holds.
+
+  **The Templates form discarded content.** Creating or editing a Template in Data Explorer saved the top-level fields and silently dropped the content from the nested `mj-template-editor`: the form saved each content row on its own after the template save had already reported success, a row whose save returned false only reached `console.error`, no mutation carrying the content was issued, and the editor kept showing "Unsaved changes". The editor now exposes `getPendingChanges()` (its new/dirty contents as `PendingRecordItem`s) and `markContentsSaved()`, and the Templates form folds those into `PopulatePendingRecords()`, so the template and its contents are validated together and committed in one transaction group by the base form's `InternalSaveRecord()`; a content that fails validation now blocks the save with the field painted instead of vanishing. The AI Prompt form already probed the editor for `getPendingChanges` and skipped when it was missing, so its embedded template contents ride along in its save transaction too; its `PopulatePendingRecords()` now keeps one pending record per entity object, since it preserves the previous list and re-collects on every call and a retry after a failed save would otherwise save the same content twice in one group. When the host form discards its edit, the editor now reloads its rows from the saved state (it listens for the form's `REVERT_PENDING_CHANGES` broadcast), so the screen no longer keeps showing text the user just threw away.
+
+- 74c5280: The Users form's Assigned Security Roles panel queried the legacy entity name 'User Roles', which no longer resolves, so it always showed "0 Roles" and logged errors. It now queries 'MJ: User Roles'.
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [2552b1e]
+- Updated dependencies [660ef45]
+- Updated dependencies [21f9e15]
+- Updated dependencies [a3d6182]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [664baea]
+- Updated dependencies [f3c6161]
+- Updated dependencies [5148534]
+- Updated dependencies [0adaf76]
+- Updated dependencies [5ee02db]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [513e608]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [ea4080e]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [7e57b48]
+- Updated dependencies [705ab4e]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [e9ab27b]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [93f1254]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [7bcba8c]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [bb33c77]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+- Updated dependencies [8766e99]
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.2
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.2
+  - @memberjunction/ng-timeline@6.2.0-edge.2
+  - @memberjunction/feature-pipelines@6.2.0-edge.2
+  - @memberjunction/ng-base-forms@6.2.0-edge.2
+  - @memberjunction/ng-record-process-studio@6.2.0-edge.2
+  - @memberjunction/ng-flow-editor@6.2.0-edge.2
+  - @memberjunction/record-cloning-base@6.2.0-edge.2
+  - @memberjunction/ng-record-clone@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/ng-agents@6.2.0-edge.2
+  - @memberjunction/ng-rubrics@6.2.0-edge.2
+  - @memberjunction/ng-testing@6.2.0-edge.2
+  - @memberjunction/rubrics-base@6.2.0-edge.2
+  - @memberjunction/ai-engine-base@6.2.0-edge.2
+  - @memberjunction/ng-ui-components@6.2.0-edge.2
+  - @memberjunction/ng-shared@6.2.0-edge.2
+  - @memberjunction/ng-ai-test-harness@6.2.0-edge.2
+  - @memberjunction/ng-task-graph-editor@6.2.0-edge.2
+  - @memberjunction/actions-base@6.2.0-edge.2
+  - @memberjunction/ng-base-application@6.2.0-edge.2
+  - @memberjunction/ng-link-directives@6.2.0-edge.2
+  - @memberjunction/ng-action-gallery@6.2.0-edge.2
+  - @memberjunction/ng-actions@6.2.0-edge.2
+  - @memberjunction/ng-base-types@6.2.0-edge.2
+  - @memberjunction/ng-code-editor@6.2.0-edge.2
+  - @memberjunction/ng-deep-diff@6.2.0-edge.2
+  - @memberjunction/ng-entity-relationship-diagram@6.2.0-edge.2
+  - @memberjunction/ng-hierarchy-tree@6.2.0-edge.2
+  - @memberjunction/ng-join-grid@6.2.0-edge.2
+  - @memberjunction/ng-list-management@6.2.0-edge.2
+  - @memberjunction/ng-notifications@6.2.0-edge.2
+  - @memberjunction/ng-resource-permissions@6.2.0-edge.2
+  - @memberjunction/ng-search@6.2.0-edge.2
+  - @memberjunction/ng-shared-generic@6.2.0-edge.2
+  - @memberjunction/ng-trees@6.2.0-edge.2
+  - @memberjunction/ng-versions@6.2.0-edge.2
+  - @memberjunction/templates-base-types@6.2.0-edge.2
+  - @memberjunction/ng-tabstrip@6.2.0-edge.2
+  - @memberjunction/ng-markdown@6.2.0-edge.2
+  - @memberjunction/predictive-studio-core@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Minor Changes
+
+- 0eeb89d: **AI usage analytics: a trustworthy cost basis, and the dimensions to slice it by (#4396)**
+
+  Cost reporting was wrong in both directions and could not be sliced by the dimensions anyone
+  actually asks about. This settles the basis, gives runs the keys they were missing, and rebuilds
+  the reporting layer on top.
+  - **Cost doctrine.** `guides/AI_USAGE_AND_COST_ANALYTICS_GUIDE.md` states the rules every consumer
+    now follows: the additive basis is own cost at the prompt-run grain, `Cost IS NULL` means
+    unpriced and is never coalesced to zero, rollups are derived from the hierarchy at query time and
+    never summed from stored inclusive columns, and coverage ships beside every cost figure.
+  - **Attribution.** `AIPromptRun` gains `UserID`, written when the run is created. The agent run a
+    prompt run belongs to is not stored on it: the agent layer owns that link as
+    `AIAgentRunStep.TargetLogID`, now indexed, and the fact view resolves it at query time. Cost
+    precision is aligned on `decimal(19,8)` across both run tables, and six analytics indexes are
+    added. Sub-agent runs now inherit `CompanyID`.
+  - **Parallel execution accounting.** The consolidated parent is created before its arms run, so the
+    arms persist as `ParallelChild` rows with their own cost and the parent carries none — previously
+    the losing arms were never recorded at all.
+  - **Semantic layer.** `vwAIUsageFacts` gives one row per prompt run over the base tables, with
+    time buckets, every dimension, and the flags that carry semantics no column expresses
+    (`IsPriced`, `IsParallelParent`, `IsUnmeasured`, `SourceKind`).
+  - **Aggregates.** Eight saved queries in the `AI` category, every cost figure grouped by currency
+    and carried with its priced/unpriced counts. They run live; materializing the hourly and daily
+    grains is a follow-up.
+  - **Honest dashboards.** The seven analytics surfaces read the aggregates instead of pulling
+    unbounded raw rows, unpriced cost renders as an em dash rather than `$0.00`, and coverage is
+    shown beside every total.
+  - **`mj-query-pivot`.** A generic pivot over any saved Query in `@memberjunction/ng-query-viewer`;
+    the AI Usage Explorer is a thin configuration of it. `ColumnLabels` titles columns, and
+    `HiddenColumns` lets a host group by an ID it does not display (so two records that share a name
+    stay apart while only the name shows).
+
+- 6b08ebf: `Project.OwnerUserID`: conversation folders can be personal. One additive, nullable column — NULL keeps a folder shared with the environment exactly as today; set, the folder belongs to that user.
+
+  The sidebar and the Assign Project picker list only shared folders plus the user's own, for every user. Server-side, the migration attaches a row-level-security filter (`OwnerUserID IS NULL OR OwnerUserID = '{{UserID}}'`) to the UI role's read permission on `MJ: Projects`, so for a user whose every read grant on the entity is filtered, a personal folder's NAME is unreadable through any reader — `RunView`, the entity browser, the Projects grid on the User form — and not merely absent from the sidebar. Developer and Integration stay unfiltered, and RLS exemption is per user: holding either role lifts the filter. With the seeded permissions those are the only roles that can create a folder, so by default the server-side guarantee covers read-only UI users. Hosts that want personal folders private between the people who create them should give those users a role that grants Create/Update on `MJ: Projects` without unfiltered Read, rather than Developer.
+
+  What it does NOT change: a SHARED folder is readable by everyone in the environment, which is what shared means and is the state every folder that already exists is in. This makes personal folders possible; it is not a tenancy model, and tenant separation stays the host's Environment or its own row-level security.
+
+  Visibility is a create-time choice, and one-way afterwards. A personal folder can be shared; a shared folder cannot be taken private, because NULL-means-shared conflates "shared" with "unowned" — sharing erases the owner, so the system cannot tell reclaiming from appropriating, and every folder that exists today would otherwise be one click from belonging to whoever opened its settings first.
+
+  Also: `ConversationEngine` keys its folder cache by user as well as environment, its remote-save handler drops a folder that just became someone else's, and `DeleteProject` reads a folder's children by `ParentID` instead of trusting the now-narrowed cache — an unseen subfolder still holds the RESTRICT foreign key.
+
+### Patch Changes
+
+- 41274aa: Cache-invalidation events no longer carry row data unless the deployment opts in, and the consumers that needed that row now re-read it through an access-controlled path.
+
+  The `cacheInvalidation` subscription is delivered to every connected client with no per-user filter, and both publish sites attached the full row (`JSON.stringify(entity.GetAll())`) to every save. Row-level security and any consumer-side scoping apply on the read path, which a push bypasses — so every signed-in session received the contents of rows it had no right to read.
+
+  **Server.** `recordData` is populated only for entities named in the new `cacheSettings.recordDataBroadcastEntities`, default `[]`. `['*']` restores the previous behaviour wholesale. `EntityName` and `PrimaryKeyValues` still broadcast unconditionally — they disclose nothing a client cannot already derive, and they are what tells a consumer _which_ record changed.
+
+  **Core.** New `ResolveEntityEventRow(event, provider?, contextUser?)` and `ResolveEntityEventKey(event)`. The first returns the row from the live entity (local events), from `recordData` (allowlisted entities), or by re-reading that one record by primary key through the provider — as the signed-in user, so the server decides what comes back. A session that may not read the record gets `null` rather than an exception or someone else's data. The second reads identity from the primary key, which is always present.
+
+  **Consumers.** `ConversationEngine` hydrates once in its already-async event dispatcher and passes the row to its five handlers, which stay synchronous; identity now comes from the primary key, so a conversation delete and a project delete need no row at all. The dispatcher asks `EntityEventRowIsFree(event)` first — a row that is already in hand, from the live entity or from allowlisted `recordData`, is never worth skipping, and the per-entity skips below it are about avoiding THE READ. The AI Agent Run form resolves `Status` the same way, behind its id match; `AgentRunID` on a step cannot be gated that way (it is the foreign key being matched), so while that form is open on a Running agent every step save in the deployment costs it one keyed read, bounded by the run's lifetime. The Form Builder cockpit resolves `Name` only after its id match has already missed. A conversation whose re-read comes back null — refused, gone, or failed — is left as it was rather than handed to `SetMany`, and a remote delete on the detail path no longer re-reads a row that is guaranteed gone.
+
+  **Cost, stated plainly for whoever sets the allowlist.** `BaseEngine` is unchanged in code and is the broadest behavioural change here: it applies a remote save in place only when `recordData` is present, so with the default `[]` every remote save of an `AutoRefresh` entity falls through to a full `RunView` reload of each matching config (`LoadSingleConfig(..., bypassCache=true)`), not a keyed read. Remote deletes still apply in place from the primary key. Engine-cached reference entities that every signed-in user may read are the ones worth listing.
+
+  Without the consumer half, defaulting `recordDataBroadcastEntities` to `[]` would have made `ConversationEngine`'s remote handling a silent no-op — including the eviction whose own comment warns that a warm cache "would keep serving without this row forever".
+
+- 2cb5498: Import `LogError` from `@memberjunction/core` rather than `@memberjunction/global` in
+  `record-process-form.component.ts`. `LogError` is exported from MJCore's `generic/logging.ts`;
+  importing it from `global` failed `ngc` with `TS2305: Module '"@memberjunction/global"' has no
+exported member 'LogError'`, breaking the build of this package. The other names on that import
+  line are genuinely in `global` and are unchanged.
+- 87aa6e0: The Record Process form template binds the PascalCase members `RawJsonExpanded`, `RawJsonCopied`, `ToggleRawJson` and `CopyRawJson` directly rather than through their deprecated camelCase stubs. Behavior is unchanged.
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [15a4333]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [5da3ad2]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [beacbb2]
+- Updated dependencies [c261eb8]
+- Updated dependencies [520bd09]
+- Updated dependencies [2d4bf8d]
+- Updated dependencies [307da67]
+- Updated dependencies [d67c8c0]
+- Updated dependencies [62e9e2d]
+- Updated dependencies [62f0ebc]
+- Updated dependencies [a7da50b]
+- Updated dependencies [1d43161]
+- Updated dependencies [7110019]
+- Updated dependencies [20b5e23]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [db975fa]
+- Updated dependencies [920bef8]
+- Updated dependencies [e2fa695]
+  - @memberjunction/ai@6.2.0-edge.1
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/ai-core-plus@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.1
+  - @memberjunction/ng-resource-permissions@6.2.0-edge.1
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.1
+  - @memberjunction/actions-base@6.2.0-edge.1
+  - @memberjunction/ng-base-forms@6.2.0-edge.1
+  - @memberjunction/ng-hierarchy-tree@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/ng-action-gallery@6.2.0-edge.1
+  - @memberjunction/ng-agents@6.2.0-edge.1
+  - @memberjunction/ng-ai-test-harness@6.2.0-edge.1
+  - @memberjunction/ng-base-application@6.2.0-edge.1
+  - @memberjunction/ng-code-editor@6.2.0-edge.1
+  - @memberjunction/ng-deep-diff@6.2.0-edge.1
+  - @memberjunction/ng-entity-relationship-diagram@6.2.0-edge.1
+  - @memberjunction/ng-flow-editor@6.2.0-edge.1
+  - @memberjunction/ng-join-grid@6.2.0-edge.1
+  - @memberjunction/ng-list-management@6.2.0-edge.1
+  - @memberjunction/ng-markdown@6.2.0-edge.1
+  - @memberjunction/ng-notifications@6.2.0-edge.1
+  - @memberjunction/ng-record-process-studio@6.2.0-edge.1
+  - @memberjunction/ng-search@6.2.0-edge.1
+  - @memberjunction/ng-shared@6.2.0-edge.1
+  - @memberjunction/ng-shared-generic@6.2.0-edge.1
+  - @memberjunction/ng-tabstrip@6.2.0-edge.1
+  - @memberjunction/ng-testing@6.2.0-edge.1
+  - @memberjunction/ng-timeline@6.2.0-edge.1
+  - @memberjunction/ng-trees@6.2.0-edge.1
+  - @memberjunction/ng-ui-components@6.2.0-edge.1
+  - @memberjunction/ng-versions@6.2.0-edge.1
+  - @memberjunction/predictive-studio-core@6.2.0-edge.1
+  - @memberjunction/ai-engine-base@6.2.0-edge.1
+  - @memberjunction/feature-pipelines@6.2.0-edge.1
+  - @memberjunction/ng-actions@6.2.0-edge.1
+  - @memberjunction/ng-base-types@6.2.0-edge.1
+  - @memberjunction/ng-task-graph-editor@6.2.0-edge.1
+  - @memberjunction/templates-base-types@6.2.0-edge.1
+  - @memberjunction/ng-link-directives@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Minor Changes
+
+- 6e6e3f1: Feature Pipelines: schema migration (V202609212241), data feature spec, runtime constraint validation, and write-back extensions.
+
+### Patch Changes
+
+- 6fd16d2: fix(record-processes): sanitize InferProcessor provider guards and tokenize form styles
+- dc04823: Pin the RecordProcessFormPolicy group ordering: the reorder lifts `processOverview` to the lead
+  position and leaves every other group in its original order. The existing tests only asserted that
+  `processOverview` ends up first, which a sort-based implementation would also satisfy while
+  quietly shuffling the groups behind it.
+- Updated dependencies [abf8778]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [b518dfa]
+- Updated dependencies [37891d3]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [50241c8]
+- Updated dependencies [6207578]
+- Updated dependencies [5df9486]
+- Updated dependencies [5df9486]
+- Updated dependencies [e225ece]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [575bfae]
+- Updated dependencies [a17a228]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8d1a373]
+- Updated dependencies [1ed606c]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [e962151]
+- Updated dependencies [af57e8d]
+- Updated dependencies [2c590b0]
+- Updated dependencies [fc3da91]
+  - @memberjunction/actions-base@6.2.0-edge.0
+  - @memberjunction/ai@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/ai-core-plus@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.0
+  - @memberjunction/ng-base-forms@6.2.0-edge.0
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.0
+  - @memberjunction/ng-shared-generic@6.2.0-edge.0
+  - @memberjunction/predictive-studio-core@6.2.0-edge.0
+  - @memberjunction/ng-shared@6.2.0-edge.0
+  - @memberjunction/ai-engine-base@6.2.0-edge.0
+  - @memberjunction/ng-search@6.2.0-edge.0
+  - @memberjunction/ng-actions@6.2.0-edge.0
+  - @memberjunction/ng-ai-test-harness@6.2.0-edge.0
+  - @memberjunction/ng-base-application@6.2.0-edge.0
+  - @memberjunction/ng-testing@6.2.0-edge.0
+  - @memberjunction/ng-action-gallery@6.2.0-edge.0
+  - @memberjunction/ng-agents@6.2.0-edge.0
+  - @memberjunction/ng-base-types@6.2.0-edge.0
+  - @memberjunction/ng-code-editor@6.2.0-edge.0
+  - @memberjunction/ng-flow-editor@6.2.0-edge.0
+  - @memberjunction/ng-hierarchy-tree@6.2.0-edge.0
+  - @memberjunction/ng-join-grid@6.2.0-edge.0
+  - @memberjunction/ng-list-management@6.2.0-edge.0
+  - @memberjunction/ng-notifications@6.2.0-edge.0
+  - @memberjunction/ng-record-process-studio@6.2.0-edge.0
+  - @memberjunction/ng-resource-permissions@6.2.0-edge.0
+  - @memberjunction/ng-task-graph-editor@6.2.0-edge.0
+  - @memberjunction/ng-trees@6.2.0-edge.0
+  - @memberjunction/ng-versions@6.2.0-edge.0
+  - @memberjunction/templates-base-types@6.2.0-edge.0
+  - @memberjunction/ng-link-directives@6.2.0-edge.0
+  - @memberjunction/ng-deep-diff@6.2.0-edge.0
+  - @memberjunction/ng-entity-relationship-diagram@6.2.0-edge.0
+  - @memberjunction/ng-timeline@6.2.0-edge.0
+  - @memberjunction/ng-tabstrip@6.2.0-edge.0
+  - @memberjunction/ng-markdown@6.2.0-edge.0
+  - @memberjunction/ng-ui-components@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
+## 6.1.0
+
+### Minor Changes
+
+- ee15cf7: Add AI Persona foundation schema (`AIPersona`, `AIPersonaVendor`, `AIModelPersona`, `AIAgentPersona`) and strongly typed JSONType interfaces (`IAIPersonaStyleDescriptors`, `IAIPersonaVendorSettings`, `IAIAgentPersonaStyleOverride`).
+  - Introduce `AIPersona` catalog table with deterministic global name uniqueness for cross-modality catalog curation.
+  - Introduce `AIPersonaVendor` for concrete vendor and modality bindings with typed `VendorSettingsObject` (`IAIPersonaVendorSettings` with native ElevenLabs settings).
+  - Introduce `AIModelPersona` for model availability and priority sequences.
+  - Introduce `AIAgentPersona` for agent persona assignments with filtered unique index `UQ_AIAgentPersona_OneDefaultPerAgent` and typed `StyleOverrideObject` (`IAIAgentPersonaStyleOverride`).
+  - Add strongly-typed `<Field>Object` accessors in `MJAIPersonaEntity`, `MJAIPersonaVendorEntity`, and `MJAIAgentPersonaEntity`.
+  - Scope CodeGen remote operations emission to `includeSchemas` and partition core vs non-core operations.
+
+- 0d3094c: **A skill can stay active for a conversation, not just a run.**
+
+  A skill activates for one run: `requestedSkillIDs` is a per-call input and the activated set dies
+  with the run. That is right for a one-shot capability and wrong for a skill that behaves as a
+  mode — a persona, or an assistant whose reply carries a menu that is pressed on the NEXT turn, when
+  nothing would re-activate it. Every conversational agent with a mode was re-implementing a
+  (conversation, skill) table and merging it into the request by hand.
+
+  Two additive, opt-in pieces (migration `V202609031400__v6.1.x__Conversation_Scoped_Skill_Activation`):
+  - `AISkill.ActivationScope` — `Run` (default, today's behaviour) or `Conversation`.
+  - `MJ: Conversation Skills` — one row per (conversation, skill), `Active` or `Ended`, with the run
+    that activated it as provenance.
+
+  `BaseAgent` does the rest. At the start of every root run that has a `conversationId`, the
+  conversation's Active skills join `requestedSkillIDs` (every availability gate still applies on
+  every run). When a `Conversation`-scoped skill activates — by request or by the agent's own choice —
+  its row is written or re-activated. A persisted skill that a gate refuses this turn is simply not
+  activated and gets no note (the user never mentioned it); its row stays Active, because a gate miss
+  can be transient and ending the row would be silent, permanent loss of a mode. Retiring a mode is an
+  explicit act. An explicitly requested skill that is refused still gets the system note.
+  `BaseAgent.EndConversationSkill(conversationId, skillId, user)` is the app's "leave the mode"
+  gesture. All three steps are protected/public and fail soft: losing a persisted skill means the user
+  re-invokes it, never that the turn fails.
+
+  Precedent: `UserRoutine.RequestedSkillIDs` (v5.45) persists a pre-selection on the owning record and
+  threads it per run; this is the same idea keyed on the conversation. First-adopter feedback (Betty).
+  A composer chip that shows the conversation's active skills and ends one on removal is the natural
+  UI follow-up; the server side works for every client and bridge without it.
+
+  Also: `mj sync pull` now round-trips a skill's `MJ: AI Skill Search Scopes` rows (under
+  `metadata/ai-skills`) and an agent's `MJ: AI Agent Skills` grants (under `metadata/agents`, for the
+  agents that directory pulls) — pull-config additions only; push already accepted both.
+
+- e7f1f88: Two defects a dispatched workflow hit end to end — one that killed the run, one that misreported it.
+
+  **The invocation envelope could not be written down.** R3-3 carried `ExecuteAgentParams.context` into the parent task's `InputPayload` verbatim. That parameter is documented as possibly a class instance holding "external service credentials or connection information", so the first real agent run whose context held a socket died at submit time with `Converting circular structure to JSON --> starting at object with constructor 'Socket'` — before any step executed. Had it serialized instead, those credentials would have been written to a row that outlives the run. `SanitizeInvocationEnvelope` now reduces the envelope to what is safe to persist at the durable boundary, so every submission path is covered: JSON data survives (primitives, arrays, plain objects, `Date`, anything with `toJSON`), while class instances, functions, sockets and cycles are refused **and reported by path** — a value that silently vanished is a condition reading absent-data and taking a branch nobody can explain later.
+
+  **Three agents referenced Font Awesome Pro glyphs** (`fa-chart-diagram`, `fa-shield-check`, `fa-chart-mixed`), which render as nothing in the free 6.5.2 build Explorer loads — an empty icon square rather than a missing-icon indicator, since an absent glyph is silently invisible. Swapped for free equivalents in `metadata/agents`. Betty and Skip keep their `mj-icon-*` classes, which are intentional custom styling.
+
+  **A dispatched workflow reported itself finished while it was still running.** The run-tree query joins the submit step to the graph it produced, so one workflow arrives as two rows whose statuses disagree: the step's describes the _submission_ (`Completed` in ~300ms, correctly), while its title names the _graph_, which is still going. The result was "Task Graph: X — Completed" sitting above steps that had not run, contradicting the page header's own "PAUSED / Workflow still running". The timeline now renders the pair as one row that keeps the step's identity — so selection and deep links still resolve — and takes its status and timing from the graph, with submit latency preserved in the subtitle. A failed or in-flight submission keeps its own row, since there is then no graph to inherit from and the submission is the whole story; an unrecognized shape declines to collapse rather than guessing.
+
+  **Action and agent icons, resolved without a hop.** `get-agent-run-tree.sql` now returns `ActionID` and `AgentID` for the nodes that have them — read by joining back to the task (and, for a loop's passes, to the execution log they expanded from), the same way `LoopMode` already is, so none of the CTE's six members change. That removes the join a consumer would otherwise make and fixes the real defect: the same action rendered as two different generic glyphs depending on which arm of the query produced its row, because a graph step and a loop pass arrive by different paths. A task carries its `ActionID` whether or not it ran, so a **skipped** branch can now show which action it would have run — something the execution log can never say, since no log exists for work that did not happen. A `ForEach` keeps its loop icon rather than the icon of the action it repeats.
+
+- 06ccfb2: Add Entity.Configuration and EntityRelationship.Configuration JSONType bags (IEntityConfiguration / IEntityRelationshipConfiguration) as the tenant-editable default for generated-form chrome. NULL keeps today's accordion. CodeGen emits typed ConfigurationObject accessors.
+- 43f9133: Add `Entity.SubtypeSelector` column, JSONType metadata, and CodeGen artifacts for prospective IsA subtype resolution.
+  - **Schema & Migration**: Migration `V202609081111__v6.1.x__Entity_SubtypeSelector.sql` adds nullable `SubtypeSelector NVARCHAR(MAX)` on `__mj.Entity` with extended property documentation, regenerated CRUD stored procedures, and view refresh.
+  - **Metadata**: Created `IEntitySubtypeSelectorConfig` interface (`metadata/entities/JSONType-interfaces/IEntitySubtypeSelectorConfig.ts`) and configured JSONType metadata on `Entity.SubtypeSelector` via `metadata/entities/.entity-field-jsontype-entity-subtype-selector.json`.
+  - **Generated Code**: Generated `SubtypeSelector` and typed `SubtypeSelectorObject: MJEntityEntity_IEntitySubtypeSelectorConfig | null` accessor on `MJEntityEntity` in `@memberjunction/core-entities`, GraphQL schema definitions in `@memberjunction/server`, and updated Angular entity forms in `@memberjunction/ng-core-entity-forms`.
+
+- 95fc3e6: Ship generated-form chrome: a budgeted related-role ranker (not all-in-More), accordion More as a quiet overflow footer (not a fake panel), left-nav More folder, user move in/out of More via Manage Sections, Layout auto / left-nav, optional BaseFormPolicy, and Entity / Entity Relationship visualization. Metadata JSONType bags on Entity / EntityRelationship.Configuration back the ranker.
+- 47930ef: Add reusable generic `@memberjunction/ng-graph-view` Angular component with physics force relaxation, circular layouts, zoom/pan controls, search filtering, and cancelable Before/After event suite. Add modern hero headers and 4-card overview mini-dashboards for AIAgentCategories, Conversations, Employees, Companies, and Users in `@memberjunction/ng-core-entity-forms`.
+- 00a2483: Introduces Identity Claims infrastructure in MemberJunction core for guest record claiming, account linking, and invite verification workflows (#4012).
+  - Schema & Entities: Adds `IdentityClaimType` and `IdentityClaim` entities with lifecycle state transitions (`Pending`, `Claimed`, `Expired`, `Revoked`).
+  - Pluggable Driver Substrate: Supports custom claim handler implementations via `BaseIdentityClaimDriver` and `@RegisterClass`.
+  - Server Engine: `IdentityClaimEngineServer` handles cryptographic claim creation, SHA-256 token hashing at rest, timing-safe token verification, email notifications via MJ Communications framework with HTML escaping, configurable email providers, polymorphic entity resolution, and atomic claim redemption.
+
+- 7300953: Query & Entity Materialization — snapshot a stored Query's result (or an entity's base view) into a physical table that IS its own read-only entity, refreshed on a schedule with an atomic wrapper-view swap. Base-view (entity) materialization is cross-engine (SQL Server + PostgreSQL); query materialization runs on SQL Server today and becomes cross-engine once the pre-existing `spCreateVirtualEntity` support proc is ported to PostgreSQL (tracked with the broader PG parity effort). The refresh SQL and read path are cross-engine on both.
+  - **New `@memberjunction/materialization`** package: the refresh engine (`MaterializationRefresher`) — full-rebuild (shadow table + atomic view swap), `DirtyGroupRecompute` and MERGE-upsert `Incremental` strategies for keyed aggregations, combined-key `SHA2_256` surrogate hashing, and the advisory `MaterializationFreshness` mixed-freshness inspector.
+  - **CodeGen** (`codegen-lib`): materializes flagged stored Queries + entity base views (cross-engine DDL, wrapper view, read-only Virtual Entity minting, migration-reuse detection); parameterization (row-filter → materialize-broad + read-time predicate); aggregation-key auto-detection; RLS-downgrade gate; and `DriftHold` flag-and-hold drift detection.
+  - **Read path**: `RunViewParams.DataSource: 'Live' | 'Materialized'` (`core`) routed by `GenericDatabaseProvider.GetEffectiveBaseView`, plumbed through the GraphQL layer (`server`, `graphql-dataprovider`).
+  - **Scheduling** (`scheduling-engine`): `MaterializationRefreshScheduledJobDriver` sweeps due materializations (skips `Disabled`/`DriftHold`).
+  - **`core-entities` / `ng-core-entity-forms`**: generated `MJ: Materialized Results` + `MJ: Materialized Result Queries` (join) entities + `Query.IsMaterialized` + forms. The MR↔Query link lives in the `MaterializedResultQuery` join table — there is no `MaterializedResult.SourceQueryID` / `Query.MaterializedResultID` FK — avoiding the circular dependency of the direct-FK design.
+
+  See `plans/query-entity-materialization.md` for the full design.
+
+- 9a29da4: Retire the Workflows app; make the Flow agent form first-class.
+
+  The Workflows app owned no storage — a workflow's WHAT is a Flow agent and there is no `Workflow` table — so it was a second list of rows the AI app already listed, fronted by a canvas that duplicated the Flow agent editor and had no Save path at all. Removed, and replaced by making the agent record answer what the app was implicitly about.
+
+  **`@memberjunction/ng-core-entity-forms`** — the AI Agents form is now tabbed: the agent type's designer (any type declaring a `UIFormSectionKey`), Details (the existing accordion set, unchanged), and Invocations. The designer pane is hidden with CSS rather than removed from the DOM, so unsaved canvas edits and canvas viewport state survive a tab switch. The default tab is the first that exists, so a Flow agent opens on its diagram.
+
+  **`@memberjunction/ng-agents`** — new `<mj-agent-invocations>`: a read-only index of every automated pathway that invokes an agent (Scheduled Jobs, User Routines, Entity Action bindings, Record Processes, sub-agent steps and relationships, `ExposeAsAction`). Answers "what runs this when I'm not looking?", which no surface could previously answer from the agent's side.
+
+  **`@memberjunction/ai-core-plus`** — `AgentSpec.Status` and `AgentStep.StepType` now derive from their entity fields instead of restating them. Both had drifted: `Status` declared `'Inactive'`, which `AIAgent.Status` has never accepted, so any caller setting it wrote a value the CHECK constraint rejects; `StepType` omitted `ForEach` and `While`, making loops executable but unauthorable. `AgentStep` gains `LoopBodyType` and `Configuration`, and the action mapping fields now admit the object form that callers already pass.
+
+  **`@memberjunction/ai-agent-manager`** — `AgentSpecSync` round-trips loop fields; new pure `ValidateLoopStep` catches a loop that saves cleanly and then iterates zero times; the Architect's status validator accepts `Disabled` rather than the invalid `Inactive`, and `WorkflowAgentWriter` maps Draft/Paused workflows to `Disabled`.
+
+  **`@memberjunction/ai-mcp-server`** — the `List_Agents` status filter no longer offers `Inactive`, which could never match a row.
+
+  **`@memberjunction/ng-dashboards`** — the Workflows dashboard, its module, its resource component and its `ng-task-graph-editor` dependency are removed. `mj-task-graph-editor` itself is unchanged and keeps its read-only consumers.
+
+  The `Workflow.Draft` / `Workflow.Save` / `Workflow.Validate` Remote Operations are deliberately kept — they are the agent- and MCP-facing contract and matter more now that creation is conversational.
+
+  A migration removes the Workflows Application row from existing databases (idempotent; a no-op on a clean install). The Architect prompt template change requires `mj sync push` to take effect.
+
+- 4cdfdcf: **A skill can bundle an action without putting it into the agent's run.**
+
+  Bundling an action into a skill (an `MJ: AI Skill Actions` row) put the action into the activating
+  agent's run — described to the model and executable — for the rest of the run. A skill whose reply
+  carries a menu (buttons the application wires to an action, pressed by the person on the next turn)
+  wants the association without the model ever calling the action on its own mid-conversation (#4226).
+  - `AISkillAction.ExposeToModel` (BIT, NOT NULL, default 1). `1` is today's behaviour. `0` keeps the
+    action bundled — SKILL.md export, tooling — but out of the run: not described to the model and not
+    executable by the agent; application code invokes it through the Actions API.
+  - `AIEngineBase.GetSkillExposedActionIDs(skillID)` returns the `ExposeToModel` subset;
+    `BaseAgent.enableSkillCapabilities` pushes that subset onto the run. `GetSkillActionIDs` (every
+    bundled action) is unchanged.
+  - SKILL.md round-trips the flag: the frontmatter gains an optional `codeOnlyActions` list (names, a
+    subset of `actions`), written on export for rows with the flag off and applied on import; a file
+    without the key leaves surviving rows' flags as they were.
+
+  Migration `V202609111449__v6.1.x__Skill_Action_Expose_To_Model.sql` (additive, defaulted; existing
+  rows keep today's behaviour).
+
+- 394d276: Phase 0 of the unified workflow DAG engine program (plan: PR #3456) — retires three dead or superseded subsystems so the **Workflow** name is freed for the program's user-facing vocabulary, and so the task-graph engine isn't built alongside a parallel, non-functioning orchestration model.
+
+  **Eleven tables dropped** — the Skip v1-era workflow schema (`Workflow`, `WorkflowRun`, `WorkflowEngine`), the Skip v1-era report artifact (`Report`, `ReportCategory`, `ReportSnapshot`, `ReportUserState`, `ReportVersion`), the legacy `ScheduledAction` / `ScheduledActionParam` pair, and the report-era `OutputTriggerType`. All were verified dead or superseded: nothing outside generated code read the workflow tables, the `Reports` resource type named a `DriverClass` (`ReportResource`) that exists nowhere in the repo, and the legacy scheduled-action cron due-check is mathematically always-false so authored schedules could never fire.
+
+  **Breaking — the report execution surface is gone.** `RunReport` was already marked `@deprecated` ("Reports are no longer supported... Interactive Components and Artifacts are replacements") and read `vwReports`, which this migration drops. Removed: `IRunReportProvider`, the `RunReport` class, `RunReportParams` / `RunReportResult`, `BaseEntity.RunReportProviderToUse`, `BaseAngularComponent.RunReportToUse`, `GraphQLDataProvider.GetReportData`, the `GetReportData` GraphQL query and `CreateReportFromConversationDetailID` mutation, and the `GET /reports/:reportId` REST endpoint. Accepted deliberately in the open v6 breaking-change window. Consumers should use Interactive Components and Artifacts.
+
+  **Scheduled Actions are superseded by Scheduled Jobs, and the UI moved with them.** Contrary to the original plan's read, the entities were live authoring surface: four Knowledge Hub / AI dashboards created and read them. Those surfaces now author a `MJ: Scheduled Jobs` row of type **Action** — the same work, executed by `ActionScheduledJobDriver`, with the action and its parameters carried in the job's `Configuration` JSON rather than in child parameter rows. `ContentSource.ScheduledActionID` becomes `ContentSource.ScheduledJobID`. A shared `action-scheduled-job` helper in `ng-dashboards` owns the mapping so it isn't triplicated across surfaces.
+
+  **Also removed:** the `@memberjunction/scheduled-actions` and `@memberjunction/scheduled-actions-server` packages (nothing depended on either), the `MJScheduledActionEntityExtended` subclass, the "coming soon" Scheduled Actions placeholder dashboard, and the Explorer report wiring (route, `TabService.OpenReport`, `NavigationService.OpenReport`, resource-type map entry, home-pin matcher, and the dashboard add-item Reports branch).
+
+- 63ea273: A workflow run now draws what happened, and the Runs surface remembers how you arranged it.
+
+  **Edges could never bind.** Every task-graph node declared canvas ports literally named `in` and
+  `out`, and the canvas resolves a connection by looking its port ids up in one flat, graph-wide
+  namespace — so no connection could say which node's port it meant, and a workflow drew its boxes
+  with no edges at all. Nothing errored: an unresolvable port is just a connection with nowhere to
+  attach. Port ids are now scoped to their node (`InputPortID` / `OutputPortID`), matching the
+  convention the Flow Agent editor has always used.
+
+  **A declined branch was reported as `Pending`.** `NormalizeRuntimeState` falls back to `Pending` for
+  any status it does not recognise, and it did not recognise `Skipped` — so a branch the workflow
+  chose not to take reached the canvas as "still waiting to run". The node drew as an ordinary pending
+  step, its edges drew as live routes, and `IsRuntimeSettled` could never report a graph containing one
+  as finished, so a host polling on it polled a completed run forever. `Skipped` is now carried
+  through and counts as terminal.
+
+  With those two fixed, run mode draws **only the path taken**: edges touching a declined step are
+  omitted (both ends — an edge leaving a skipped step is as untravelled as one entering it) and the
+  step is hatched and struck through, in the same visual language the run timeline already uses.
+  Design mode still draws every edge, because there is no route yet — the graph is all the routes that
+  _could_ be taken, which is exactly what an author is arranging.
+
+  **The agent run's Workflow tab now shows the run, not the plan.** It rendered the recorded
+  `TaskGraphSpec` on a bare canvas with no runtime, so every branch appeared to have run. It uses the
+  same `mj-task-graph-run-view` the Workflows app does, falling back to the spec view only for a
+  constant-folded graph that never reached the dispatcher — where a plan is the honest thing to draw.
+
+  **Layout.** `FlowNodeStatus` gains `skipped` (deliberately not folded into `disabled`: disabled means
+  "cannot run", skipped means "the graph went the other way"). `ShowLegend` and `ShowToolbar` are
+  separately controllable, defaulting legend-off / toolbar-on in run views — the legend explains
+  authoring vocabulary a run does not need, while the toolbar is how a person navigates the picture.
+  `LegendToggled` is forwarded so a host can persist the choice rather than adding a second control.
+  The run view's height chain was also broken: `Height` sat on the canvas and resolved against an
+  auto-height ancestor, so `100%` meant nothing; it now governs the widget and the canvas flexes.
+
+  **Workflows → Runs** gains resizable, per-user-persisted panes (list | detail, and canvas | step
+  record inside it), with the step record moved beside the canvas rather than in a strip below it.
+  Sizes are stored separately from openness, so closing and reopening returns a pane to the width you
+  dragged it to. Preferences go through `UserInfoEngine`, never `localStorage`.
+
+- 394d276: Phase 5 continued — the two **Save as Workflow** surfaces deferred out of Phase 4 (D17). Phase 4 shipped the converter; these are where a person actually reaches it.
+
+  **Agent Run admin — a Workflow tab on the `TaskGraph` run step.** Phase 3 writes that step for _every_ emitted graph, dispatched or constant-folded, which is what makes a folded single-node graph just as promotable as a dispatched one — the point of recording the fold rather than letting it vanish. The tab opens by default on a `TaskGraph` step, because that step's whole content _is_ the graph and opening on the JSON would bury the one thing it exists to show. A folded graph says so, so the reader sees _why_ it never reached the dispatcher instead of inferring it.
+
+  **ng-conversations — a plan card.** The moment this serves: an agent breaks a request into steps, the work runs, it was good, and today that is where it ends — the decomposition was ephemeral, so the next person who wants the same thing asks an agent to invent it again. Save is offered only once the work has **settled**; offering it mid-run invites saving a shape that may yet change under a retry or a failure routing down a recovery branch. The card starts collapsed, because it sits inline in a thread and must not dominate it.
+
+  **Both render through the same `TaskGraphSpec` component the editor uses**, in `ReadOnly` mode. A second, simpler renderer for chat would be a second thing that can disagree with the canvas about what a graph means — which is the exact class of divergence this whole program has been removing.
+
+  **Save is intent only** on both surfaces. Neither persists agents; the host converts and writes through `AgentSpecSync`, keeping the one place that writes an agent the one place that writes an agent.
+
+### Patch Changes
+
+- b915983: Align the Angular toolchain on the current 21.x patch line: framework packages 21.1.3 → 21.2.22,
+  CLI/builders 21.1.3 → 21.2.23, CDK 21.1.3 → 21.2.14, ng-packagr → 21.2.7, PrimeNG 21.1.1 → 21.1.9.
+
+  This is a patch-level move inside the supported Angular 21 LTS line, not a framework migration.
+  It closes every open Angular security advisory on the repository — fifteen distinct GHSAs
+  (i18n and template-sanitizer XSS bypasses, service-worker header leakage and credential
+  stripping, HttpTransferCache cross-request leakage, and formatDate/number-format DoS), all fixed
+  in 21.2.19 or earlier — which together accounted for 438 of the 749 open Dependabot alerts.
+
+  Every published `@memberjunction/ng-*` package's `@angular/*` peer range moves from `^21.1.3`
+  (or `^21.0.0`) to `^21.2.22`, so consumers must be on at least that patch. The era-6 platform
+  manifest in `release-lines.json` records the new pin; era 5 (the certified 5.51 line) is
+  unchanged.
+
+  Also moves the exact `@angular/*` runtime pins that 23 libraries carried in `dependencies`
+  into caret `peerDependencies` (adding the missing peers on `ng-react`), so a consumer on any
+  in-range Angular 21.2.x build gets a single Angular copy instead of a nested second runtime, and
+  drops the unused `primeng` peer from `ng-base-forms` (nothing in the repo imports PrimeNG).
+
+- b895f92: Angular DOM unit-testing — Phase 4 (gates, guardrails & spec hygiene). Dev-only; no runtime change.
+  - **`test:types` spec type-check gate**: each DOM-testing package gains a
+    `"test:types": "tsc --noEmit -p tsconfig.spec.json"` script, run as a cached turbo task in CI
+    before the vitest suite (both the affected and full-suite paths). Closes the Phase-3 hole where
+    vitest/esbuild's transpile-only path let real spec type errors (broken `import type` paths,
+    `Subject`-vs-`EventEmitter`) ride green until the `ngc` build failed.
+  - **DOM-spec placement guard** (`scripts/check-dom-spec-placement.mjs`, fast pre-build CI step):
+    fails when a `*.dom.test.ts` sits inside `__tests__/`, where a dual-preset package silently runs
+    it in neither vitest project. Its one real finding — `ng-markdown`'s service DOM spec — was
+    relocated next to its source (test-file move only).
+  - Fixes the pre-existing latent 2-args-of-3 `MCPDashboardComponent` constructor call in the
+    dashboards node test (the gate's prerequisite).
+  - **Anti-pattern lint** (`scripts/check-spec-antipatterns.mjs`, CI): bans vacuous assertions,
+    skipped specs, blanket schemas, and `any`/`as never` casts in `*.dom.test.ts`. Enabling it drove
+    the spec-hygiene cleanup across `ng-agent-requests` / `ng-query-viewer` / `ng-scheduling` /
+    `ng-agents` / `ng-record-changes` (blanket schemas → explicit child stubs; `as never` → typed
+    doubles) and the Explorer specs (real DOM clicks instead of handler calls, SVG prototype-patch
+    teardown, typed context doubles).
+  - **Explorer DOM coverage gate**: `classify-explorer-components.mjs --min 85` in CI — a testable
+    Explorer component shipped without a DOM spec now fails the PR.
+
+- 1a2ce13: Pricing for models that aren't billed by the token, and OpenAI as a second Whisper provider.
+
+  **The problem.** MJ's pricing _schema_ was always general — a cost row names a price unit type, and the unit type names a `DriverClass` the ClassFactory resolves. The _execution layer_ was not: `BasePriceUnitType` took two token counts, only the three token drivers were ever registered, and `MJAIPromptRunEntityServer` refused to cost any run reporting zero tokens. So the three continuous-media unit types that already shipped — `Per Image`, `Per Minute`, `Per Hour` — resolved to nothing, and every run priced by one was silently uncosted. Six ACTIVE image cost rows were in that state. (Bug register B60.)
+
+  Speech-to-text made it concrete: Groq bills Whisper by the audio-hour, the just-landed `GroqAudioGenerator` requested `response_format: 'json'` which discards the duration entirely, and the two Whisper models shipped with no cost rows because there was no honest way to write one.
+
+  **Usage grows a second axis.** `ModelUsage` gains `unitKind` (`'Tokens' | 'Seconds' | 'Characters' | 'Images'`), `inputUnits` and `outputUnits`, plus a `ModelUsage.ForMedia(kind, input, output?)` constructor. Continuous quantities are deliberately _not_ folded into the token fields: a run reporting 90 "tokens" that means 90 minutes corrupts `TokensUsed`, every rollup above it, and every dashboard downstream. `SpeechResult` gains `usage?`, matching `ImageGenerationResult`.
+
+  Quantities are always recorded in the **base** measure, never the billing measure — audio billed per hour is still recorded in seconds, and the driver converts. That is what lets one measured duration be priced against a per-minute row from one vendor and a per-hour row from another.
+
+  **Pricing takes quantities.** `BasePriceUnitType` gains a `UnitKind` getter (defaulting to `'Tokens'`, so external subclasses need no change) and `CalculateCost(activeCost, usage)`, the preferred entry point — its default delegates to the existing cache-aware path, so every current driver behaves identically. `TimePerMinutePriceUnitType`, `TimePerHourPriceUnitType` and `PerImagePriceUnitType` register against the unit types that were already seeded, closing the driver half of B60.
+
+  Each driver also exposes `UnitsPerBillingUnit` — 1,000,000 for a per-million-token rate, 3,600 for per-hour, 1 for per-image — so a divisor exists in exactly one place per driver. `TOKEN_PRICE_UNIT_TYPE_DIVISORS` is _derived_ from the driver instances rather than restated, which makes drift between the exported table and the arithmetic that prices every run impossible instead of merely detectable. The map deliberately covers only the token drivers: a missing key is the signal for a consumer doing token-rate math to SKIP a row priced by audio duration, not to fall back to a per-token divisor.
+
+  `BasePriceUnitType` is marked `@RequiresSubclass()`. `ClassFactory.CreateInstance` has never returned `null` for an unregistered key — it falls back to `new BaseClass(...)` — so `if (!calculator)` was a dead branch that installed a hollow object whose only pricing method is `undefined`, surfacing as a `TypeError` inside cost math rather than "this driver is not registered". The new `UnitKind` default made that hollow instance _more_ convincing, since it answers `'Tokens'` and so passes the measure check before throwing. `GetPriceCalculator` now resolves via `TryCreateInstance` and reports the failure, so its documented `null` return is real.
+
+  `AIEngineBase.CalculateModelCost(modelID, vendorID, usage)` is a new costing surface for callers holding a result but no prompt run — transcription and image actions, downstream apps. It returns `null`, having logged why, when there is no active cost row in the measure the run recorded, no registered driver, or a mismatch between what the run measured and what the row prices. A null means "we don't know what this cost" and must never be read as zero.
+
+  **Cost-row selection is measure-aware.** `GetActiveModelCost` takes an optional `usageKind` and excludes rows priced in any other measure before the most-recently-started tiebreak. Without it the effective key is `(Model, Vendor, ProcessingType)`, which cannot represent a model billing in two measures — per-image output alongside per-token prompt — so which measure you got was a sort-order coin flip that was then refused downstream and reported as a pricing gap. The measure is now established _before_ a row is chosen. Omitting the argument keeps the previous behaviour, and no shipped model+vendor carries two measures today, so nothing changes for existing data.
+
+  **The measure is a first-class row, not a string.** A new `MJ: AI Usage Types` entity (`Tokens`, `Seconds`, `Characters`, `Images`) is what a run and a price unit type point at, so "what does this price buy" is answerable by a join instead of by convention. An earlier revision carried it as `AIPromptRun.UnitsKind NVARCHAR(20)` behind a CHECK constraint, which made the set of measures a property of a constraint on one column: nothing else in the schema could reference a measure, and adding one meant editing a CHECK on a table with nothing to do with pricing.
+
+  Note the usage type and the price unit type answer **different** questions and stay separate: `AIUsageType` is the BASE measure of a quantity, while `AIModelPriceUnitType` is the BILLING unit and its scale. Audio is recorded in `Seconds` and billed `Per Hour`. Collapsing them would force a new usage type per billing granularity.
+
+  **The measure lives on `AIModelPriceUnitType`, and nowhere else.** It gains `UsageTypeID` — so a cost row has exactly one place to look for its measure, reached through its `UnitTypeID`, and the FK there means whatever it finds is a real catalog row rather than a string. `AIModelCost` deliberately carries **no** usage-type column: it would be a second copy of a derivable fact, and nothing would arbitrate a cost row claiming `Seconds` while its unit type says `Tokens` — which is precisely the comparison the safety checks depend on. Single-sourcing makes that contradiction unrepresentable rather than merely unlikely.
+
+  **The divisor becomes data, which closes B60's class rather than its instance.** `AIModelPriceUnitType.UnitsPerBillingUnit` (`CHECK > 0`) holds the number that converts base measure to billed unit — 1,000,000 for per-1M-tokens, 3,600 for per-hour, 1 for per-image. That number previously existed _only_ inside a TypeScript class, and that is the root cause of B60: `Per Image` / `Per Minute` / `Per Hour` were seeded as data by one person while the driver classes were never written by another, and the seam was silent for months. A new `LinearPriceUnitType` (`DriverClass = 'Linear'`) reads both columns off its own row, so a linear billing unit — "Per 1,000 Characters" — now ships as one seeded row with no class, no registration and no build. `DriverClass` remains the escape hatch for genuinely non-linear pricing (tiered rates, per-image-by-resolution, minimum-billing increments like the Groq 10-second floor). An _unregistered_ driver still refuses to price, deliberately: `DriverClass` is NOT NULL, so an unrecognised name is ambiguous between "a new linear unit" and "a non-linear driver whose code is missing", and pricing the second linearly would produce a confident wrong number.
+
+  **`AIModelPriceType` is demoted alongside.** It was a NOT NULL FK that nothing prices, filters or branches on, while `AIModelPriceUnitType` carried the real contract — three vocabularies for one concept, with the _mandatory_ one the one nothing read. Adding a usage type without demoting it would have locked that ambiguity in permanently. Not dropped (NOT NULL, 235 metadata rows, and dropping is on the Forbidden list in `PUBLISH_NO_BREAK_POLICY.md`): the field is flagged `Status = 'Deprecated'`, removed from the generated form (`IncludeInGeneratedForm = 0`, which is the step that actually ends the ambiguity rather than documenting it), and has `AutoUpdateDescription` cleared so CodeGen cannot overwrite the demotion text — all declared in `metadata/entities`, where field-level editorial decisions belong, rather than as EntityField UPDATEs in a migration. The migration keeps only the schema half: a database default of `Tokens`, so new cost rows need not name a value from the vocabulary they are being told to ignore.
+
+  **Prompt runs can record it.** `AIPromptRun` gains `InputUnitsUsed`, `OutputUnitsUsed` (both `CHECK >= 0`) and `UsageTypeID`, where NULL means token-billed — which is what every row written before the column existed IS, since the schema had no way to say anything else. That reading happens at exactly one seam (`MJAIPromptRunEntityServer.RecordedUsage`) rather than in four places, so the rest of the runtime still sees a definite measure. The save-time cost gate passes on units as well as tokens, and refuses — loudly — to price a run whose measure disagrees with its cost row's, rather than dividing seconds by a million and reporting the ~$0 that produces. No units rollup was added: units of different kinds cannot be summed, so cost remains the universal aggregate.
+
+  **The catalog rows are declarative metadata, and that is what makes the new columns nullable.** The four measures live in `metadata/ai-usage-types`, and the measure + divisor for all six shipped billing units in `metadata/ai-model-price-unit-types` — seeded and backfilled by `mj sync push`, not by INSERT and UPDATE statements in the migration, so they are reviewable data in the same form as the rest of the catalog. Metadata is pushed by the release-time consolidated `*__Metadata_Sync.sql`, which by construction carries a later timestamp than any migration a PR can author, so a NOT NULL column defaulted to the Tokens row would fail the from-scratch build on the ADD itself: SQL Server materialises the default into every existing row and the foreign key has nothing to resolve. Nullable + FK is the strongest guarantee available before the seed exists — any non-null value is a real measure — and the runtime is written to that contract rather than around it: a price unit type with no measure refuses to price rather than guessing Tokens. Tightening both `UsageTypeID` columns to NOT NULL is a one-statement follow-up in the release _after_ the one that ships the seed.
+
+  A clean-room bootstrap also found that `sp_updateextendedproperty` throws when the property does not already exist, so the demotion uses drop-then-add — the same fresh-install-only class as the `EntityField.Sequence` trap in `migrations/CLAUDE.md`.
+
+  **`ModelUsageUnitKind` must stay a superset of the `AIUsageType` catalog, and the catalog rows are the source.** `MJAIPromptRunEntityServer` resolves a run's `UsageTypeID` to the catalog row's `Name` and hands that string straight to `ModelUsageUnitKind`. Nothing about that is checked by the compiler — the name arrives as a plain `string` from a database row — so seeding a usage type whose name the union does not carry produces no build error, just a runtime hole on exactly the rows using the new measure. `MODEL_USAGE_UNIT_KINDS` exists so a test can assert the two agree by reading the seed file rather than restating it. `Characters` is present for that reason and has no pricing driver yet, which is not a defect: the costing path refuses to price a measure no driver claims and logs why, which is strictly better than a plausible wrong number. A compile-time assignability pin backs this up (Vitest does not typecheck by default, which is how a narrowing slipped through once).
+
+  **Providers.** Groq now requests `verbose_json` and reports the duration it was already being billed for, summed across split pieces. If any piece fails to report one, usage is left undefined rather than under-reported — a partial sum understates the bill while looking complete. `OpenAIAudioGenerator.SpeechToText` is implemented (it previously threw), with the same 25MB ceiling, the same injected `AudioSplitter`, and the same duration capture. The split-and-join loop moved onto `BaseAudioGenerator.TranscribeWithSplitting` so both providers share one implementation.
+
+  **Cost rows now ship** for Groq Whisper Large v3 ($0.111/audio-hour) and Turbo ($0.04/audio-hour), verified against Groq's published pricing. `Whisper 1` is a **new** model rather than a vendor row on Whisper Large v3: OpenAI's endpoint serves the large-v2 checkpoint, and attaching it to the v3 record would misreport which weights transcribed a given run. It carries a $0.006/minute cost row.
+
+  **Also:** the AC1 integration check flips from warning to hard assert now that every shipped unit type resolves — a future unit type added without a driver reddens the deterministic tier instead of scrolling past. The assert is scoped to unit types an **Active cost row actually references**, since those are the ones whose missing driver silently uncosts real runs; a custom unit type awaiting its driver, referenced by nothing, is reported rather than failed.
+
+  A new **AC7** check is the monitoring counterpart to the whole refusal doctrine. Everything here turns a wrong number into a `NULL`, which is right — but a null plus a `LogError` in a server log is invisible, and that is precisely how B60 survived months with six dormant ACTIVE image cost rows. AC7 asks the question nothing asked: completed runs that did measurable work and carry no cost. It grades the two populations differently — no active cost row in the run's measure is a pricing-coverage gap and is reported; an active cost row in that measure _existing_ while the run is still uncosted means the pipeline had everything it needed and produced nothing, which is asserted.
+
+  The two Explorer cost dashboards no longer carry their own copy of the divisor table. They now resolve a cost row's scale through its unit type's `DriverClass` against the exported `TOKEN_PRICE_UNIT_TYPE_DIVISORS`, and skip rows priced by a non-token unit type rather than defaulting them to the per-1M divisor — which had been dividing an hourly audio rate by a million. Both local tables were keyed by unit-type _display name_ using names (`Per Million Tokens`) that never matched the seeded ones (`Per 1M Tokens`), so every lookup missed and only the per-1M fallback made the numbers come out right; keying off the driver class removes both the miss and the fallback that hid it.
+
+  Pricing also refuses, rather than reporting $0, when a run records continuous units without a resolvable usage type to name their measure — the same "we don't know what this cost" rule the rest of the path follows.
+
+  Both transcription providers request `verbose_json` only for models that accept it. OpenAI's GPT-4o transcription models reject it outright, so they fall back to `json` and report no duration instead of failing the transcription; Groq's STT surface is Whisper-only today, so the guard there is prospective — matched on `includes('whisper')`, because `distil-whisper-large-v3-en` does support `verbose_json` and a `startsWith` test would strip its duration and leave every run through it uncosted. A reported duration of exactly `0` now leaves usage undefined rather than producing a measure with no quantity, which the pricing layer would refuse and log as a fault for genuinely silent audio.
+
+  The PostgreSQL counterpart to the migration is deferred to the release build, per `migrations/CLAUDE.md`.
+
+- deea1a3: Unstick the DOM unit specs that fail under the M5 joined pnpm workspace. Two physical copies of @angular/core / @codemirror/state (parent store vs MJ store) made CodeMirror throw on EditorState.create, AgGrid crash with firstCreatePass of null, angular-split inject() hit NG0203, and bootstrap constructor inject() fail the same way. The specs now skip those host libraries (toolbar-only CodeMirror init, AgGrid/as-split stubs) and bootstrap inlines Angular through Vite so Analog and TestBed share one copy.
+- 815b9bc: feat(storage,core,forms): ephemeral staged binary upload pipeline, polymorphic related collections, and file record viewer
+  - **Storage & Server**:
+    - Implement Tier 2 ephemeral staged raw binary upload pipeline (UploadTokenManager, POST /media/upload-stage, CreateUploadStageToken mutation, UploadStorageFile token consumption).
+    - Add single-use cryptographic token security, user identity ownership binding, automated TTL eviction, and memory bounds.
+    - Sanitize paths/filenames and add X-Content-Type-Options: nosniff to /media endpoints.
+  - **Core & ORM**:
+    - Add support for polymorphic IS-A subtypes in RelatedRecordCollection and dirty state preservation across relationship chains.
+    - Support IEntityConfiguration and entity hierarchy traversal.
+  - **Angular & UI**:
+    - Add 3-tier upload pipeline in RecordAttachmentsComponent with real-time wire progress.
+    - Add dedicated MJ: Files custom record viewer form component in ng-core-entity-forms.
+    - Add attachment count badges to base form container and toolbar.
+    - Add ResizeObserver lifecycle handling to Gantt chart and OpenNewEntityRecord in SharedService.
+
+- 05865ea: feat(angular): introduce `@memberjunction/ng-hierarchy-tree` visual hierarchy component and wire 15 core entity form hierarchy panels
+  - **`@memberjunction/ng-hierarchy-tree`**: Reusable D3-based interactive visual hierarchy and taxonomy tree component with smooth pan/zoom, dynamic primary key metadata extraction, real-time path search and ancestor branch auto-expansion, subtree focus, cancelable lifecycle events, and `--mj-*` design token theming.
+  - **`@memberjunction/ng-core-entity-forms`**: Adds 15 visual hierarchy form panels in the `after-related` slot for self-referencing and category entities in MJ Core (`AI Agent Categories`, `AI Prompt Categories`, `Action Categories`, `Dashboard Categories`, `Query Categories`, `Tags`, `Projects`, `Content Items`, `File Categories`, `List Categories`, `Record Process Categories`, `Skills`, `Template Categories`, `Test Suites`, `User View Categories`).
+  - **`@memberjunction/ng-gantt`**: Polish host height layout on `MJGanttChartComponent`.
+
+- 8de5f7e: Let a host form own the flow editor's save, and fix the canvas context menu.
+
+  **The flow was never part of the agent form's save.** `InternalSaveRecord` persisted templates, prompts and the agent row; steps and paths were written only by the flow editor's own Save button. That gave one record two save buttons with two failure modes — the form could succeed while the flow failed, leaving an agent that looked saved and step edits that were gone.
+
+  `BaseFormSectionComponent` gains an opt-in contract so a section that owns an editor can join the host's transaction: `HasPendingChanges`, `ContributeToSave(transactionGroup)` and `OnHostSaveCompleted()`. All three are no-ops by default, so existing sections are unaffected. `BaseFormComponent.HasAdditionalUnsavedChanges` (default `false`) feeds the container's `EffectiveIsDirty`, so a form holding unsaved editor state no longer reports itself clean — previously the navigate-away guard would discard those edits without asking.
+
+  `FlowAgentEditorComponent` splits `Save()` into `QueueSaveInto(transactionGroup)` (queue only, caller submits) plus `MarkSaved()`, and exposes `HasUnsavedChanges`. Two new inputs: **`ShowSaveControls`** (default `false`) hides the editor's own Save / Edit / Cancel and its unsaved indicator, for hosts that own persistence — a host that turns it on is declaring it owns its own save; and `CanvasTitle` (`null` hides the toolbar title) for hosts whose chrome already names the record.
+
+  **Context menu fix:** `onContextMenuAction` closed the menu before reading its target, and closing nulls the stored node/connection. Every branch then tested those now-null fields and fell through, so right-click **Remove and Edit both did nothing** — for nodes and connections alike, with the menu closing on click making it look like the action had been taken. The target is now captured before the menu closes, and the undo entry is pushed only once a target is confirmed, so a no-op action no longer leaves a phantom step in the undo stack. Covered by 7 regression tests, 6 of which fail against the old ordering.
+
+- be0bdb2: Follow-up hardening for Query & Entity Materialization (#3735). Each item below fails toward doing the
+  wrong thing rather than doing nothing, so none of them surface as an error in normal operation.
+
+  **Row-restriction gates read both fence layers.** MJ enforces row restrictions in two AND-composed
+  layers — role RLS and API-key row filters — and the mint, drift and runtime Leak-1 gates each re-derived
+  a role-only predicate inline. An entity fenced _only_ by an API-key row filter therefore read as
+  unrestricted; because the mint gives the materialized entity a NEW EntityID, the key's EntityID-keyed
+  binding stops matching it, and the principal is served a full unscoped snapshot of rows it cannot read
+  live. All gates now compose both layers, and an unproven layer counts as restricted.
+
+  **Lost provenance is now drift.** Deleting a source query cascade-deletes the `MaterializedResultQuery`
+  join row while the snapshot, the minted entity and its read grants all survive — which silently disarmed
+  both the RLS re-check and the read-grant re-narrow, leaving the unscoped snapshot serving indefinitely.
+  It now revokes read and holds.
+
+  **A zero-row external query no longer destroys the snapshot.** Columns are derived from the returned
+  rows, so an empty result built a surrogate-only shadow, dropped the canonical table and renamed that
+  shell into its place — every subsequent read failing on a missing column while the refresh reported
+  success. An empty result now refuses the rebuild and leaves the existing snapshot serving.
+
+  **The refresher snapshots the statement the read path executes.** Reads resolve SQL through
+  `GetPlatformSQL(PlatformKey)`; the refresher snapshotted the base `SQL`, so a query carrying a
+  per-platform variant was materialized from a different statement than live serves.
+
+  **`XACT_ABORT` no longer escapes onto the pooled connection.** The swap, recompute and dirty-group
+  batches each set it ON and never restored it. SET options persist for the session, so unrelated requests
+  handed the same physical connection inherited it — turning their recoverable statement-level errors into
+  full transaction aborts, far from anything to do with materialization.
+
+  **The DDL identifier guard no longer opens on its own failure.** `assertSafeObjectNames` throws on a
+  tampered `SchemaName`, but the failure path then passed that same rejected name to the best-effort shadow
+  cleanup, which interpolated it raw into `DROP TABLE`/`OBJECT_ID`. The cleanup now re-checks and declines.
+
+  **Two analyzers that produced silently wrong rows.** A `UNION`/`EXCEPT`/`INTERSECT` parses to a single
+  `select` root whose `groupby` and `columns` describe only the first branch, so a set operation yielded an
+  aggregation key covering one branch and the incremental MERGE collided both branches on the same hash.
+  And a row-filter predicate was bound to an output column by bare name, which cannot tell `o.Status` from
+  `c.Status` across a join, nor an alias from the column it rebinds.
+
+  **Missing manifest registrations.** Neither new `@RegisterClass` class was in the pre-built manifests, so
+  a bundled MJAPI tree-shook both away: the refresh driver never resolved, nothing was ever refreshed, and
+  `Status` stayed `Active` while the read paths served mint-time data forever.
+
+  **Read-routing distinguishes a failed lookup from "not materialized".** Only three roles hold `CanRead`
+  on `MJ: Materialized Results`, so a restricted user silently got live data for every materialized request
+  while an admin got the snapshot. The live fallback is correct and unchanged; the silence was the defect.
+
+  **Note on coverage.** The predicate-binding proof and the join-qualifier requirement are deliberately
+  conservative and will refuse shapes that previously qualified: a row-filter query whose predicate or
+  projection is unqualified across a join now stays live-only, and an aggregation over a join with an
+  unqualified `GROUP BY` loses its incremental key and falls back to `FullRebuild`. Both refusals are
+  logged with the specific reason. Falling back to live is always correct — but a query that silently gets
+  slower is easier to diagnose knowing this changed.
+
+- 92f2ac9: Repo-wide sweep of code that assumed an entity's primary key is a single column named `ID`, plus a `PrimaryKeyCompliance` gate in `@memberjunction/core` so the pattern cannot come back.
+
+  MJ supports primary keys with any column name(s) and type(s). Every MJ core entity happens to use `ID`, so hardcoding it works across the whole core product and silently breaks on customer entities mapped from external schemas — `Load()` rejects the invented field name, or a composite key is truncated to its first column. #4179 (search result click-through) was one instance; this sweep found the same shape in ~90 files and fixes all of it on top of the `CompositeKey.FromURLSegment` / `FromEntityRecord` / `ToCompactURLSegment` primitives introduced with that fix.
+
+  **What changed, by kind**
+  - **Literal `ID` key construction** (`{ FieldName: 'ID', Value: x }`, `LoadFromSingleKeyValuePair('ID', …)`, `FromKeyValuePair('ID', …)`) — ~135 sites. Where the entity is a literal MJ core entity the key is now `CompositeKey.FromID(x)`, the one sanctioned way to say "this entity's key is `ID`". Where the entity is a variable (an event's `EntityName`, an `entityInfo`, a configured entity) the key is `CompositeKey.FromURLSegment(entityInfo, recordId)`, which reads a bare value or a `F1|v1||F2|v2` segment against the entity's real primary key(s).
+  - **`PrimaryKeys[0]` → `FirstPrimaryKey`** — 39 sites. Same semantics, a named accessor the gate can track. IS-A shared-key and keyset uses are annotated `// first-pk-ok`.
+  - **Real defects fixed** (arbitrary entity keyed as `ID`): Mobile app record load/edit/offline sync; the generic form overlay; the ERD "open record" path; version-history label/diff/micro-view links (which stripped `ID|` off a stored key and re-wrapped the value as `ID`); `RestoreEngine` and `buildPrimaryKeyForLoad`; the Apollo enrichment connector (six `GetEntityObject(configuredEntity, FromID(record.ID))` calls); geocoding record reload; List Detail record-open (composite keys now open instead of showing a notice); `EmbeddedRecord`; `DatabaseReferenceScanner`; hardcoded `ID` filters on a variable entity in Data Explorer's record load, Predictive Studio's label lookup, the realtime-widget visitor identity lookup, `DuplicateRecordDetector.LoadRecordsByListID`, and MetadataSync's `@lookup` GUID conversion.
+  - **REST API**: `EntityCRUDHandler` / `RESTEndpointHandler` built the key from the `:id` segment for single-column keys only and threw "Composite primary keys are not supported". Both now accept a bare value or a URL-encoded `Field1|Value1||Field2|Value2` segment. Single-column behavior is unchanged.
+  - **One serializer instead of eight**: `ListOperations.serializeRecordId`, `list-set-operations.serializeRecordId`, RecordSetProcessor's `serializeRecordId`, `GetListRecordsAction`'s inline copy, `MJListDetailEntityExtended.BuildRecordID` / `GetCompositeKey`, `record.util.buildCompositeKey`, `VersionHistory.buildCompositeKeyFromRecord` and `ChangeDetector.buildDeleteItem` all delegate to `CompositeKey.FromEntityRecord(...).ToCompactURLSegment()` / `FromURLSegment(...)`. Output is byte-identical for single-column keys.
+
+  **`FirstPrimaryKey` triage** — every one of the ~390 `FirstPrimaryKey` / `FromID` uses in the repo was read in context and either rewritten or annotated with a reason (154 annotations). Real defects found and fixed along the way, all of the shape "first key column used as the whole key" on an entity that can be composite-keyed:
+  - **Data providers**: the deterministic `ORDER BY` fallback for row-limited queries ordered by the first key column only, leaving composite-key pages in undefined order; it now orders by every key column. Saved-view run logging / exclusion and the `{%UserView%}` template subquery, whose persisted `RecordID` cannot hold a composite key, now refuse loudly instead of excluding wrong rows. The dependency-link subquery now predicates on the full key. Single-column SQL is byte-identical.
+  - **CodeGen**: generated cascade delete/update procs bound the child FK to `@<firstPK>` regardless of which parent key column the FK references; a composite key containing an identity column dropped the other key columns from the generated INSERT (both providers); the PostgreSQL JSON-arg `spCreate` inserted only the first key column; the generated join-grid/timeline filters and the GraphQL audit-log `RecordID` truncated composite keys. Single-key generator output verified byte-identical against `HEAD` (168 shapes).
+  - **Smart cache** (`ProviderBase` differential merge): keyed rows on the first PK, so composite-key deletes never applied and rows sharing the first column collapsed.
+  - **Integration push sync**: composed record identity from the first key column while the record map stores all columns joined, so every already-synced composite-key row was re-created externally as a duplicate on each full push; the changed-record path silently dropped rows.
+  - **Scheduled geocoding orphan cleanup** (destructive): compared a cast of the first key column to a `RecordID` holding all columns, so every geocode row for a composite-key entity was deleted on each run.
+  - **Lists**: list membership, export and add-record paths filtered on the first key column and wrote only its value into `ListDetail.RecordID`; Explorer "open record" paths on user-selected entities, duplicate detection, omnibar record search, Data Explorer deep links, the sharing center revoke, recent-access, tree dropdowns, the mobile app's record ids and offline queue.
+  - **AI**: duplicate detection, vector sync record ids, Predictive Studio list scope and write-back; the Recommendations engine also wrote a record id into `SourceEntityID` (an FK to Entities) and never set `SourceEntityRecordID`.
+  - **Apollo enrichment**: `Accounts` (a customer entity) loaded by literal `ID`; the contacts path read its key off an entity that had never been loaded.
+  - Every `entityInfo.FirstPrimaryKey?.Name ?? 'ID'` fallback is gone; where the entity can be missing the code now fails loudly instead of inventing `ID`.
+
+  **The gate** — `packages/MJCore/src/__tests__/PrimaryKeyCompliance.test.ts`, modelled on `MultiProviderCompliance` / `UUIDCompliance`:
+  1. _Strict_: a key built with a literal `ID` field name. Marker `// pk-literal-ok: <reason>`.
+  2. _Strict_: `PrimaryKeys[0]` / `PrimaryKeys.at(0)`.
+  3. _Strict_: `FirstPrimaryKey` and `CompositeKey.FromID(`. These are legitimate only where MJ is single-column by design (foreign-key targets, keyset `ORDER BY` / `AfterKey`, IS-A shared keys, core entities), so every use must be self-evidently on a core entity or say why: `FromID` is exempt when a `'MJ: …'` entity literal is on the same line or within 8 lines above (the `GetEntityObject` / `OpenEntityRecord` naming the core entity); everything else carries `// first-pk-ok: <reason>` on the same line, reason mandatory.
+  4. _Strict_: an `ID = …` / `ID IN (…)` `ExtraFilter` or `Fields: ['ID']` within eight lines of an `EntityName:` that is a variable rather than a string literal or ALL_CAPS constant. Marker `// pk-filter-ok: <reason>`.
+
+  Generated code, tests, `dist/`, and the `TestingFramework` / `UnitTesting` packages are not scanned. The rule is written up in `.claude/rules/data-access.md` § "Primary keys: never assume a column named ID". There is no baseline file: all four gates are strict.
+
+  No public signatures change; every edit is additive or a same-shape substitution, so this is `patch` throughout.
+
+- 394d276: Declare @angular/\* peer dependencies as ranges (^21.1.3) instead of exact pins across all Angular library packages. Peer declarations are compatibility claims, not install instructions: the exact pins falsely claimed incompatibility with every other Angular 21.x build, produced 502 peer-resolution errors under strict pnpm workspaces, and structurally blocked Angular security patches behind a full republish. Installed versions remain pinned by consuming apps and the era platform manifest; dependencies/devDependencies keep their exact pins.
+- b46330e: feat(codegen,core): full-stack recursive foreign key support with automated TVF suites, base view projections, and hierarchy traversal APIs
+  - **Database / TVF Suite**: CodeGen automatically emits 4 table-valued functions per recursive self-referencing foreign key on both SQL Server (T-SQL) and PostgreSQL (PL/pgSQL):
+    - `fn<Table><Field>_GetHierarchyMeta` (computes `RootID`, `Depth`, materialized `Path`, `IsLeaf`, and `ChildCount`)
+    - `fn<Table><Field>_GetDescendants` (full subtree retrieval with cycle detection)
+    - `fn<Table><Field>_GetAncestors` (materialized path-based ancestor retrieval)
+    - `fn<Table><Field>_GetRootID` (top-level root resolver)
+  - **Base View Projections**: Every base view (`vw<Entities>`) automatically joins the hierarchy metadata via lateral joins (`OUTER APPLY` in SQL Server, `LEFT JOIN LATERAL` in PostgreSQL), projecting `[Root<Field>]`, `[<Field>Depth]`, `[<Field>Path]`, `[<Field>IsLeaf]`, and `[<Field>ChildCount]`.
+  - **`BaseEntity` & Generated Subclasses**:
+    - `BaseEntity` in `@memberjunction/core` provides generic hierarchy traversal methods `GetDescendants<T>()`, `GetAncestors<T>()`, and `GetChildren<T>()` with automated `ParentID` and recursive FK resolution.
+    - CodeGen generates strongly-typed convenience methods (`entity.GetDescendants()`, `entity.GetAncestors()`, `entity.GetChildren()`) on all generated entity subclasses with self-referencing foreign keys.
+  - **Documentation**: Added comprehensive architectural documentation in [`guides/RECURSIVE_FOREIGN_KEYS_AND_HIERARCHIES_GUIDE.md`](guides/RECURSIVE_FOREIGN_KEYS_AND_HIERARCHIES_GUIDE.md) and cross-referenced in package READMEs.
+
+- 394d276: One look and one keyboard contract for MJ's tab strips.
+  - **`ng-ui-components`** ships the shared `.mj-tabs*` tab chrome as a global stylesheet (`dist/lib/tabs/tabs.scss`) and `mjTabList`, the ARIA tabs keyboard directive: roving tabindex (one Tab stop per strip), Arrow/Home/End navigation with focus-follows-selection, Enter/Space activation, Delete/Backspace close, hidden-tab skipping, and editable-content passthrough. `mj-workspace-tab-strip` now renders the shared chrome, puts `role="tab"` on the focusable element, and folds unsaved/rejected state into each tab's accessible name. An active tab's border and top accent line follow its STATUS color (brand primary for an ordinary tab, warning when rejected, success when complete) via the `--mj-tab-accent` custom property, overridable per host. Touch devices get hold-to-drag reordering (400ms, the platform idiom) so a horizontal swipe scrolls an overflowing tab list instead of grabbing a tab; a new `AllowReorder` input (strip + card) disables reordering entirely for hosts where every touch gesture should scroll. **Standalone hosts (anything not running inside MJ Explorer's `explorer-app` shell — e.g. the BizApps apps) must add `@import '@memberjunction/ng-ui-components/dist/lib/tabs/tabs';` to their global stylesheet or tab strips render unstyled.**
+  - **`ng-tabstrip`** adopts the same chrome and directive (new dependency on `ng-ui-components`): tokens replace the legacy `--gray-*` styling that never adapted to dark mode, tabs gain full keyboard support plus `aria-controls`/`tabpanel` linkage, and the close button is Font Awesome. **Behavioral change:** the strip and its tab bodies now size to content instead of hardcoding viewport height (`calc(100vh - …)`) — hosts that relied on the old fixed-height, internally-scrolling body should set a height on their own container. Overflow scrolling is native (`scrollLeft`) rather than the old offset animation. `FillWidth`/`FillHeight` inputs are deprecated no-ops. The package's stale "DEPRECATED — use Kendo" notice is gone.
+  - **`ng-core-entity-forms`**: the Entity Actions form's Filters grid gets an explicit `[Height]` now that its tab body no longer imposes viewport height.
+
+- 2644a76: The AI Agent Run timeline lists steps by `StartedAt` (execution time), not persist time.
+
+  A 1ms Artifact Tool whose fire-and-forget INSERT lost a race with the next Execute Agent Prompt was painted _after_ that prompt even though its clock was 2ms earlier. `__mj_CreatedAt` is when the INSERT committed; `StartedAt` is when the step actually began. The query and a client-side sort both use `StartedAt` then `StepNumber`, so siblings (and loop children) read in the order the clocks already show.
+
+- ca4feb4: Workflow cost becomes a projection of the run tree, and a graph now runs in the order it was drawn.
+
+  **Cost is the tree, not arithmetic beside it.** `AIAgentRun`'s four `…Rollup` columns are now written from `SumAgentRunTreeCost(LoadAgentRunTree(runID))` at settlement — one basis (per-node own spend), prompt-aware through `Configuration.runtime.promptRunID`, and structurally incapable of disagreeing with what the run viewer shows. The previous per-child loop filtered on `AgentRunID`, so every Prompt step's spend was absent, and mixed a descendant-inclusive number with an own-spend one. The tree now also carries the prompt/completion token split so all four columns share a basis. Writing the sum back makes the column an _output_ of the tree, which is non-circular only because the query reads own cost and never a rollup — stated in the query header and pinned by a test that plants an absurd rollup on a real run. When the tree cannot be summed (load failure, depth cap, graph not reachable), the columns are **cleared** rather than left holding a stale total from an earlier settlement.
+
+  **A loop's passes exist.** The run tree reaches nested work through six relationships and a loop iteration was none of them, so a `While` that spent real money across three passes reported one childless node with no cost. The dispatcher now records one entry per pass (`ITaskStepRuntime.iterations`) and the tree expands them into nodes. On a real workflow this moved `TotalCostRollup` from `0.00049725` to `0.00555375` — the loop had been spent and not counted.
+
+  **A graph is dispatched only once its edges exist.** Children and dependencies are now written in one transaction. Previously a poll could land between the two writes, see tasks with no prerequisites, and claim the whole graph at once — observed running a closing branch before the draft it was meant to judge existed, then reporting Complete.
+
+  **Steps see their payload.** A step with no input mapping fell back to the raw input instead of the merged payload, so a Prompt step — which declares no mapping by design — rendered `{{ _CURRENT_PAYLOAD }}` as `{}` and wrote from an empty brief. Separately, a step with no output mapping _replaced_ the payload with its own output rather than merging; for a loop, whose output is a summary, that discarded everything the iterations had established and made a downstream `payload.x === true` edge unreachable.
+
+  **An output mapping that names a parameter the step never returns now says so** (`unmapped`), naming what the step did return, instead of skipping in silence.
+
+  **Human steps**: a cancelled request re-raises instead of stalling forever; cancelling a graph withdraws its open requests instead of leaving them in someone's inbox; cross-user `assignToUserID` is refused at submission rather than silently reassigned to the submitter; and a step can declare `expiresInHours`, which finally makes the existing expiry machinery reachable.
+
+  **Web Search** captured each result with a non-greedy match that stopped at the first nested `</div>`, cutting the snippet out of every result — ten well-formed hits carrying no content. Results are now sliced between block starts, and an all-snippets-empty parse is reported rather than returned silently.
+
+  **Testing**: a bundle whose every check is gated out now records an explicit skip naming the flag that would run it, instead of reporting PASS with zero checks executed.
+
+- Updated dependencies [4273317]
+- Updated dependencies [394d276]
+- Updated dependencies [634aa8c]
+- Updated dependencies [834f8d7]
+- Updated dependencies [a987913]
+- Updated dependencies [e533ce5]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [2c826f7]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [b915983]
+- Updated dependencies [b895f92]
+- Updated dependencies [b895f92]
+- Updated dependencies [b7819d2]
+- Updated dependencies [394d276]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [c1fea88]
+- Updated dependencies [4586215]
+- Updated dependencies [22ec804]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [a2e4e09]
+- Updated dependencies [4c1de04]
+- Updated dependencies [0d3094c]
+- Updated dependencies [255d506]
+- Updated dependencies [0ec1980]
+- Updated dependencies [a8ba8b7]
+- Updated dependencies [199eb2b]
+- Updated dependencies [7a71c96]
+- Updated dependencies [f80bdb7]
+- Updated dependencies [1940a4d]
+- Updated dependencies [e7f1f88]
+- Updated dependencies [07cb22e]
+- Updated dependencies [deea1a3]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [c09c818]
+- Updated dependencies [711c208]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [e9c5b90]
+- Updated dependencies [59def38]
+- Updated dependencies [2412415]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [9699d0e]
+- Updated dependencies [394d276]
+- Updated dependencies [78ea840]
+- Updated dependencies [43f9133]
+- Updated dependencies [469461a]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [69f2bf2]
+- Updated dependencies [2d14c62]
+- Updated dependencies [394d276]
+- Updated dependencies [05865ea]
+- Updated dependencies [c996a56]
+- Updated dependencies [de6eb14]
+- Updated dependencies [b9de989]
+- Updated dependencies [38d4482]
+- Updated dependencies [ea003fc]
+- Updated dependencies [052b4c7]
+- Updated dependencies [51017a5]
+- Updated dependencies [ada8784]
+- Updated dependencies [8ec1515]
+- Updated dependencies [9a905e8]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [8de5f7e]
+- Updated dependencies [c996a56]
+- Updated dependencies [d907a1b]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [2e4786e]
+- Updated dependencies [ac6755c]
+- Updated dependencies [73c853b]
+- Updated dependencies [051e0ff]
+- Updated dependencies [142cf2a]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [e635378]
+- Updated dependencies [de66f54]
+- Updated dependencies [48ae81e]
+- Updated dependencies [26046d8]
+- Updated dependencies [8d880cc]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [11de1a3]
+- Updated dependencies [cefc302]
+- Updated dependencies [841e6ea]
+- Updated dependencies [394d276]
+- Updated dependencies [44ac084]
+- Updated dependencies [1f4af2b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [080f4cd]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [d66a26a]
+- Updated dependencies [c643ba3]
+- Updated dependencies [e9e9873]
+- Updated dependencies [1d88e00]
+- Updated dependencies [647bd71]
+- Updated dependencies [e93f221]
+- Updated dependencies [aff9886]
+- Updated dependencies [6e98173]
+- Updated dependencies [0869c24]
+- Updated dependencies [aa9006b]
+- Updated dependencies [a76cf28]
+- Updated dependencies [8288711]
+- Updated dependencies [10cbc60]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [d26e202]
+- Updated dependencies [48ff99f]
+- Updated dependencies [076fa5d]
+- Updated dependencies [9f73528]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [27e4d09]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [23c2521]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [98841bb]
+- Updated dependencies [53c341c]
+- Updated dependencies [2e2879e]
+- Updated dependencies [9b6fb5b]
+- Updated dependencies [14bc0b2]
+- Updated dependencies [394d276]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [ceb8e46]
+- Updated dependencies [b46330e]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [2a0262d]
+- Updated dependencies [7a98676]
+- Updated dependencies [6ef741e]
+- Updated dependencies [75ca6f8]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [53d256f]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [9a29da4]
+- Updated dependencies [cf2484c]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [0967ba7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [7a630ba]
+- Updated dependencies [de343b5]
+- Updated dependencies [5fc861f]
+- Updated dependencies [1748491]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [0db6105]
+- Updated dependencies [d7feeae]
+- Updated dependencies [7fefca2]
+- Updated dependencies [a1a8989]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [905820a]
+- Updated dependencies [394d276]
+- Updated dependencies [34d19a9]
+- Updated dependencies [ca3657d]
+- Updated dependencies [394d276]
+- Updated dependencies [1bd9674]
+- Updated dependencies [9f6a53b]
+- Updated dependencies [6d7d3da]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [d078c54]
+- Updated dependencies [7fcdc2d]
+- Updated dependencies [15319b4]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [b46330e]
+- Updated dependencies [4b1257f]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [63ea273]
+- Updated dependencies [1be0f14]
+- Updated dependencies [6cd337d]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [1c0d586]
+  - @memberjunction/ng-shared-generic@6.1.0
+  - @memberjunction/ng-ui-components@6.1.0
+  - @memberjunction/ng-entity-viewer@6.1.0
+  - @memberjunction/ai-core-plus@6.1.0
+  - @memberjunction/global@6.1.0
+  - @memberjunction/core@6.1.0
+  - @memberjunction/core-entities@6.1.0
+  - @memberjunction/ai-engine-base@6.1.0
+  - @memberjunction/ai@6.1.0
+  - @memberjunction/ng-action-gallery@6.1.0
+  - @memberjunction/ng-actions@6.1.0
+  - @memberjunction/ng-agents@6.1.0
+  - @memberjunction/ng-ai-test-harness@6.1.0
+  - @memberjunction/ng-base-application@6.1.0
+  - @memberjunction/ng-base-forms@6.1.0
+  - @memberjunction/ng-base-types@6.1.0
+  - @memberjunction/ng-code-editor@6.1.0
+  - @memberjunction/ng-deep-diff@6.1.0
+  - @memberjunction/ng-entity-relationship-diagram@6.1.0
+  - @memberjunction/ng-flow-editor@6.1.0
+  - @memberjunction/ng-hierarchy-tree@6.1.0
+  - @memberjunction/ng-join-grid@6.1.0
+  - @memberjunction/ng-link-directives@6.1.0
+  - @memberjunction/ng-list-management@6.1.0
+  - @memberjunction/ng-markdown@6.1.0
+  - @memberjunction/ng-notifications@6.1.0
+  - @memberjunction/ng-record-process-studio@6.1.0
+  - @memberjunction/ng-resource-permissions@6.1.0
+  - @memberjunction/ng-search@6.1.0
+  - @memberjunction/ng-shared@6.1.0
+  - @memberjunction/ng-tabstrip@6.1.0
+  - @memberjunction/ng-task-graph-editor@6.1.0
+  - @memberjunction/ng-testing@6.1.0
+  - @memberjunction/ng-timeline@6.1.0
+  - @memberjunction/ng-trees@6.1.0
+  - @memberjunction/ng-versions@6.1.0
+  - @memberjunction/graphql-dataprovider@6.1.0
+  - @memberjunction/actions-base@6.1.0
+  - @memberjunction/templates-base-types@6.1.0
+
+## 6.1.0-edge.7
+
+### Minor Changes
+
+- ee15cf7: Add AI Persona foundation schema (`AIPersona`, `AIPersonaVendor`, `AIModelPersona`, `AIAgentPersona`) and strongly typed JSONType interfaces (`IAIPersonaStyleDescriptors`, `IAIPersonaVendorSettings`, `IAIAgentPersonaStyleOverride`).
+  - Introduce `AIPersona` catalog table with deterministic global name uniqueness for cross-modality catalog curation.
+  - Introduce `AIPersonaVendor` for concrete vendor and modality bindings with typed `VendorSettingsObject` (`IAIPersonaVendorSettings` with native ElevenLabs settings).
+  - Introduce `AIModelPersona` for model availability and priority sequences.
+  - Introduce `AIAgentPersona` for agent persona assignments with filtered unique index `UQ_AIAgentPersona_OneDefaultPerAgent` and typed `StyleOverrideObject` (`IAIAgentPersonaStyleOverride`).
+  - Add strongly-typed `<Field>Object` accessors in `MJAIPersonaEntity`, `MJAIPersonaVendorEntity`, and `MJAIAgentPersonaEntity`.
+  - Scope CodeGen remote operations emission to `includeSchemas` and partition core vs non-core operations.
+
+- 4cdfdcf: **A skill can bundle an action without putting it into the agent's run.**
+
+  Bundling an action into a skill (an `MJ: AI Skill Actions` row) put the action into the activating
+  agent's run — described to the model and executable — for the rest of the run. A skill whose reply
+  carries a menu (buttons the application wires to an action, pressed by the person on the next turn)
+  wants the association without the model ever calling the action on its own mid-conversation (#4226).
+  - `AISkillAction.ExposeToModel` (BIT, NOT NULL, default 1). `1` is today's behaviour. `0` keeps the
+    action bundled — SKILL.md export, tooling — but out of the run: not described to the model and not
+    executable by the agent; application code invokes it through the Actions API.
+  - `AIEngineBase.GetSkillExposedActionIDs(skillID)` returns the `ExposeToModel` subset;
+    `BaseAgent.enableSkillCapabilities` pushes that subset onto the run. `GetSkillActionIDs` (every
+    bundled action) is unchanged.
+  - SKILL.md round-trips the flag: the frontmatter gains an optional `codeOnlyActions` list (names, a
+    subset of `actions`), written on export for rows with the flag off and applied on import; a file
+    without the key leaves surviving rows' flags as they were.
+
+  Migration `V202609111449__v6.1.x__Skill_Action_Expose_To_Model.sql` (additive, defaulted; existing
+  rows keep today's behaviour).
+
+### Patch Changes
+
+- Updated dependencies [a987913]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [076fa5d]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core-entities@6.1.0-edge.7
+  - @memberjunction/ai-engine-base@6.1.0-edge.7
+  - @memberjunction/ai@6.1.0-edge.7
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.7
+  - @memberjunction/ng-base-forms@6.1.0-edge.7
+  - @memberjunction/ng-versions@6.1.0-edge.7
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.7
+  - @memberjunction/ai-core-plus@6.1.0-edge.7
+  - @memberjunction/ng-ui-components@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+  - @memberjunction/actions-base@6.1.0-edge.7
+  - @memberjunction/ng-base-application@6.1.0-edge.7
+  - @memberjunction/ng-shared@6.1.0-edge.7
+  - @memberjunction/ng-testing@6.1.0-edge.7
+  - @memberjunction/ng-action-gallery@6.1.0-edge.7
+  - @memberjunction/ng-actions@6.1.0-edge.7
+  - @memberjunction/ng-agents@6.1.0-edge.7
+  - @memberjunction/ng-ai-test-harness@6.1.0-edge.7
+  - @memberjunction/ng-base-types@6.1.0-edge.7
+  - @memberjunction/ng-code-editor@6.1.0-edge.7
+  - @memberjunction/ng-flow-editor@6.1.0-edge.7
+  - @memberjunction/ng-hierarchy-tree@6.1.0-edge.7
+  - @memberjunction/ng-join-grid@6.1.0-edge.7
+  - @memberjunction/ng-list-management@6.1.0-edge.7
+  - @memberjunction/ng-notifications@6.1.0-edge.7
+  - @memberjunction/ng-record-process-studio@6.1.0-edge.7
+  - @memberjunction/ng-resource-permissions@6.1.0-edge.7
+  - @memberjunction/ng-search@6.1.0-edge.7
+  - @memberjunction/ng-shared-generic@6.1.0-edge.7
+  - @memberjunction/ng-task-graph-editor@6.1.0-edge.7
+  - @memberjunction/ng-trees@6.1.0-edge.7
+  - @memberjunction/templates-base-types@6.1.0-edge.7
+  - @memberjunction/ng-link-directives@6.1.0-edge.7
+  - @memberjunction/ng-deep-diff@6.1.0-edge.7
+  - @memberjunction/ng-entity-relationship-diagram@6.1.0-edge.7
+  - @memberjunction/ng-timeline@6.1.0-edge.7
+  - @memberjunction/ng-tabstrip@6.1.0-edge.7
+  - @memberjunction/ng-markdown@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Minor Changes

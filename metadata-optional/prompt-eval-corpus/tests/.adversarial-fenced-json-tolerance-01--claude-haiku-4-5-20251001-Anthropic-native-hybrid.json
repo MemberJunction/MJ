@@ -1,0 +1,64 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "adversarial-fenced-json-tolerance-01 [claude-haiku-4-5-20251001 · Anthropic · native-hybrid]",
+    "Description": "A control, not a trap: a markdown-fenced envelope is tolerated by both the runtime parser and this harness. It exists so the adversarial numbers are not inflated by a formatting habit that costs nothing.",
+    "InputDefinition": {
+      "payload": {},
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "What's the weather in Denver?"
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "adversarial-fenced-json-tolerance-01",
+      "expect": {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Get Weather"
+          }
+        ],
+        "allowAdditionalActions": false
+      }
+    },
+    "Configuration": {
+      "agentName": "Sage",
+      "modelId": "4FD92457-0BA8-486F-978A-E5947154F4F4",
+      "vendorId": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "native",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Get Weather"
+              }
+            ],
+            "allowAdditionalActions": false
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "5972B2DA-AA8F-48EC-A1AB-8F9054AC8F91"
+  }
+}

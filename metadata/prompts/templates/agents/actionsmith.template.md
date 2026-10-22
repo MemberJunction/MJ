@@ -380,6 +380,9 @@ Your response is ALWAYS a JSON object with `taskComplete` at the top level and (
 
 ### Turn type 1 — Discovering schema (invoke an Action)
 
+{% if _NATIVE_TOOL_CALLING %}
+Call the `get_entity_list` tool with no arguments.
+{% else %}
 ```json
 {
   "taskComplete": false,
@@ -392,9 +395,13 @@ Your response is ALWAYS a JSON object with `taskComplete` at the top level and (
   }
 }
 ```
+{% endif %}
 
 ### Turn type 2 — Drilling into a specific entity
 
+{% if _NATIVE_TOOL_CALLING %}
+Call the `get_entity_details` tool with `entityName`.
+{% else %}
 ```json
 {
   "taskComplete": false,
@@ -407,6 +414,7 @@ Your response is ALWAYS a JSON object with `taskComplete` at the top level and (
   }
 }
 ```
+{% endif %}
 
 ### Turn type 3 — Building up the contract via payloadChangeRequest
 
@@ -452,6 +460,9 @@ Your response is ALWAYS a JSON object with `taskComplete` at the top level and (
 
 **CRITICAL — inline the literal values from your payload.** The Loop agent runtime does NOT resolve references like `"payload.permissions"`, `"payload.code"`, or `"@payload.testCases"`. Those are Flow-agent features; Loop agents (that's you) pass action `params` through verbatim. If you write `"Configuration": { "permissions": "payload.permissions" }`, the downstream action receives the literal string `"payload.permissions"` and Zod validation rejects it. **Copy the actual object, array, and string values from your payload into `params` by value.**
 
+{% if _NATIVE_TOOL_CALLING %}
+Call the `test_runtime_action` tool with `Code` (the literal code string from your payload — never a `payload.*` reference) and `Configuration` (the permissions and limits object).
+{% else %}
 ```json
 {
   "taskComplete": false,
@@ -486,6 +497,7 @@ Your response is ALWAYS a JSON object with `taskComplete` at the top level and (
   }
 }
 ```
+{% endif %}
 
 **Anti-patterns that will silently fail:**
 
@@ -508,6 +520,9 @@ All three leave the literal string in the action input. Always inline real value
 
 Same rule as Turn 5 — inline literal values, no `payload.*` references. Copy the same `Code`, `Configuration`, and schema definitions you just tested.
 
+{% if _NATIVE_TOOL_CALLING %}
+Call the `create_runtime_action` tool with `Name`, `Description`, the same literal `Code` and `Configuration` you just tested, `InputParams`, `OutputParams`, `ResultCodes` and `CreatedByAgentID`.
+{% else %}
 ```json
 {
   "taskComplete": false,
@@ -546,6 +561,7 @@ Same rule as Turn 5 — inline literal values, no `payload.*` references. Copy t
   }
 }
 ```
+{% endif %}
 
 ### Turn type 7 — Terminal Success (ONLY after actionId is in payload)
 

@@ -1,0 +1,45 @@
+{
+  "id": "research-dispatch-reportwriter-01",
+  "agent": "Research Agent",
+  "tags": [
+    "sub-agent-dispatch",
+    "terminal-synthesis"
+  ],
+  "description": "Research gathered; synthesis is the Report Writer's job. Tests handoff at the end of the loop rather than the start.",
+  "input": {
+    "payload": {
+      "findings": [
+        {
+          "content": "Finding A"
+        },
+        {
+          "content": "Finding B"
+        }
+      ],
+      "sources": [
+        {
+          "id": "src_001"
+        },
+        {
+          "id": "src_002"
+        }
+      ]
+    },
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Research the market for solid-state batteries and write it up."
+      },
+      {
+        "role": "user",
+        "content": "[Sub-Agent Result] Web Research Agent completed with 2 findings across 2 sources."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "subAgent",
+    "subAgents": [
+      "Research Report Writer"
+    ]
+  }
+}

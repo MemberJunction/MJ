@@ -117,6 +117,19 @@ export interface FormContext {
   showRelatedEntities?: boolean;
   hiddenSectionKeys?: string[];
   visibleSectionKeys?: string[];
+  /**
+   * Fields a form contribution stands in for, so no section draws them. The panel that
+   * made the claim renders at the top of the section that held the field.
+   *
+   * Field-level, where `hiddenSectionKeys` is section-level: one removes an input from
+   * inside a card, the other removes the card.
+   */
+  claimedFieldNames?: string[];
+  /**
+   * Field names to omit from the form. A draft evaluation uses this to hide
+   * cohort figures until the viewer submits.
+   */
+  hiddenFieldNames?: string[];
 }
 
 /**
@@ -204,11 +217,16 @@ export type BaseFormContext = FormContext;
 /**
  * Creates a default FormContext with sensible defaults.
  */
-export function createDefaultFormContext(): FormContext {
+export function CreateDefaultFormContext(): FormContext {
   return {
     sectionFilter: '',
     showEmptyFields: false,
     showValidation: false,
     validationErrors: []
   };
+}
+
+/** @deprecated Use {@link CreateDefaultFormContext}. */
+export function createDefaultFormContext(): FormContext {
+  return CreateDefaultFormContext();
 }

@@ -40,7 +40,7 @@
  */
 
 import { RegisterClass } from '@memberjunction/global';
-import { LogError } from '@memberjunction/core';
+import { LogError, RunView } from '@memberjunction/core';
 import type {
   IRecordProcessor,
   RecordProcessorContext,
@@ -50,23 +50,30 @@ import type {
 import type {
   MJMLModelEntity,
 } from '@memberjunction/core-entities';
-import type {
-  PredictRequest,
-  PredictResponse,
-  Prediction,
-  FeatureSchemaEntry,
-  FittedPreprocessing,
-  SourceBinding,
-  AsOfStrategy,
-  LeakageGuard,
-  ProblemType,
-  FeatureStepGraph,
-  MatrixData,
+import {
+  resolveOutcomeConfig,
+  resolveScoreBand,
+  resolveOutcomeStyle,
+  type PredictRequest,
+  type PredictResponse,
+  type Prediction,
+  type FeatureSchemaEntry,
+  type FittedPreprocessing,
+  type SourceBinding,
+  type AsOfStrategy,
+  type LeakageGuard,
+  type ProblemType,
+  type FeatureStepGraph,
+  type MatrixData,
+  type OutcomeConfig,
 } from '@memberjunction/predictive-studio-core';
 
 import { FeatureAssemblyExecutor, type FeatureAssemblyResult, type DatedSourceSpec } from '../feature-assembly';
 import type { SourceRow } from '../feature-assembly';
+import { ModelHasTrainedArtifact, ModelNeedsTrainingMessage, ModelArtifactMissingMessage, ModelNeedsTrainingError } from './model-readiness';
 import type {
+  IModelAutoTrainer,
+  MLAutoTrainConfig,
   MLModelInferenceProcessorOptions,
   MLInferenceDeps,
   LoadedModel,
@@ -84,8 +91,11 @@ export const ML_INFERENCE_WORK_TYPE_ALIAS = 'MLModelInference';
  */
 @RegisterClass(MLModelInferenceProcessor, ML_INFERENCE_WORK_TYPE)
 export class MLModelInferenceProcessor implements IRecordProcessor {
-  private readonly modelId: string;
+  /** The model to score with. Mutable only so an opt-in auto-train can retarget the run at the freshly trained model. */
+  private modelId: string;
   private readonly deps: MLInferenceDeps;
+  private readonly autoTrain?: MLAutoTrainConfig;
+  private readonly autoTrainer?: IModelAutoTrainer;
   private readonly primaryKeyField: string;
   private readonly datedSources?: DatedSourceSpec[];
   private readonly assembler: FeatureAssemblyExecutor;
@@ -104,7 +114,55 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     this.deps = options.deps;
     this.primaryKeyField = options.primaryKeyField ?? 'ID';
     this.datedSources = options.datedSources;
+    this.autoTrain = options.autoTrain;
+    this.autoTrainer = options.autoTrainer;
     this.assembler = assembler ?? new FeatureAssemblyExecutor();
+  }
+
+  /**
+   * Run-level readiness check (the Record Set Processing `Preflight` seam): warm-loads
+   * the model + artifact ONCE before the first batch, so a model that needs training
+   * refuses the whole run with one clear message instead of failing every record into
+   * the error-rate circuit breaker. The loaded model is the same warm cache every
+   * record then reuses, so this costs no extra load.
+   *
+   * @param context the run-level execution context (user + provider)
+   * @throws when the model is missing, has no trained artifact, or its artifact can't be loaded
+   */
+  public async Preflight(context: RecordProcessorContext): Promise<void> {
+    try {
+      await this.ensureModel(context);
+      return;
+    } catch (err) {
+      // Clear the memoized failure so a retry (or the auto-train below) re-attempts the load.
+      this.resetModelCache();
+      if (!(err instanceof ModelNeedsTrainingError) || !this.autoTrain || !this.autoTrainer) {
+        throw err;
+      }
+    }
+    // Opt-in train-if-untrained: train the declared pipeline, publish, repoint, then score with it.
+    this.modelId = await this.autoTrainer.EnsureTrainedModel(
+      {
+        pipelineId: this.autoTrain.pipelineId,
+        currentModelId: this.modelId || null,
+        recordProcessId: context.RecordProcessID ?? null,
+        binding: this.autoTrain.binding,
+      },
+      context.ContextUser,
+      context.Provider,
+    );
+    try {
+      await this.ensureModel(context);
+    } catch (err) {
+      this.resetModelCache();
+      throw err;
+    }
+  }
+
+  /** Drop the warm-model cache (and any memoized failed load). */
+  private resetModelCache(): void {
+    this.loadPromise = null;
+    this.loadedModel = null;
   }
 
   /**
@@ -187,23 +245,29 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
 
   /** Resolve the `MJ: ML Models` row + its frozen contract + the artifact bytes. */
   private async loadModel(context: RecordProcessorContext): Promise<LoadedModel> {
-    const model = await this.deps.modelLoader.loadModel(this.modelId, context.contextUser, context.provider);
+    if (!this.modelId) {
+      throw new ModelNeedsTrainingError('MLModelInferenceProcessor: no ML Model is configured yet — the model needs training.');
+    }
+    const model = await this.deps.modelLoader.loadModel(this.modelId, context.ContextUser, context.Provider);
     if (!model) {
-      throw new Error(`MLModelInferenceProcessor: ML Model '${this.modelId}' not found`);
+      throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ML Model '${this.modelId}' not found`);
     }
-    if (!model.ArtifactFileID) {
-      throw new Error(`MLModelInferenceProcessor: ML Model '${this.modelId}' has no ArtifactFileID`);
+    if (!ModelHasTrainedArtifact(model) || !model.ArtifactFileID) {
+      throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ${ModelNeedsTrainingMessage(this.modelId)}`);
     }
-    const bytes = await this.deps.artifactLoader.load(model.ArtifactFileID, context.contextUser);
+    const bytes = await this.deps.artifactLoader.load(model.ArtifactFileID, context.ContextUser);
     if (!bytes) {
-      throw new Error(`MLModelInferenceProcessor: artifact '${model.ArtifactFileID}' not found for model '${this.modelId}'`);
+      throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ${ModelArtifactMissingMessage(this.modelId, model.ArtifactFileID)}`);
     }
-    return this.buildLoadedModel(model, bytes);
+    return this.buildLoadedModel(model, bytes, context);
   }
 
   /** Assemble the frozen inference contract from a loaded model row + artifact bytes. */
-  private buildLoadedModel(model: MJMLModelEntity, bytes: Uint8Array): LoadedModel {
-    const pipeline = this.resolvePipelineConfig(model);
+  private async buildLoadedModel(model: MJMLModelEntity, bytes: Uint8Array, context: RecordProcessorContext): Promise<LoadedModel> {
+    let pipeline = this.resolvePipelineConfig(model);
+    if ((pipeline.featureSteps.Steps.length === 0 || !pipeline.targetEntityName) && model.PipelineID) {
+      pipeline = await this.loadPipelineFallback(model.PipelineID, pipeline, context);
+    }
     return {
       modelId: model.ID,
       targetEntityName: pipeline.targetEntityName,
@@ -216,7 +280,58 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       featureSteps: pipeline.featureSteps,
       asOf: pipeline.asOf,
       leakageGuard: pipeline.leakageGuard,
+      outcomeConfig: pipeline.outcomeConfig,
     };
+  }
+
+  /**
+   * Fallback to query `MJ: ML Training Pipelines` when the model's frozen lineage blob
+   * lacks featureSteps or targetEntityName.
+   */
+  private async loadPipelineFallback(
+    pipelineId: string,
+    existing: ResolvedScoringPipeline,
+    context: RecordProcessorContext,
+  ): Promise<ResolvedScoringPipeline> {
+    try {
+      const rv = context.Provider ? RunView.FromMetadataProvider(context.Provider) : new RunView();
+      interface PipelineViewRow {
+        TargetEntityID?: string;
+        TargetEntity?: string;
+        SourceBindings?: string;
+        FeatureSteps?: string;
+        AsOfStrategy?: string;
+      }
+      const res = await rv.RunView<PipelineViewRow>(
+        {
+          EntityName: 'MJ: ML Training Pipelines',
+          ExtraFilter: `ID='${pipelineId}'`,
+          ResultType: 'simple',
+          MaxRows: 1,
+        },
+        context.ContextUser,
+      );
+      if (res.Success && res.Results.length > 0) {
+        const row = res.Results[0];
+        const rawSteps = parseJson<FeatureStepGraph>(row.FeatureSteps, { Steps: [] });
+        const targetEntity =
+          row.TargetEntity ||
+          (row.TargetEntityID && context.Provider ? context.Provider.EntityByID(row.TargetEntityID)?.Name : undefined) ||
+          existing.targetEntityName;
+
+        return {
+          targetEntityName: existing.targetEntityName || targetEntity,
+          sourceBindings: existing.sourceBindings.length > 0 ? existing.sourceBindings : parseJson<SourceBinding[]>(row.SourceBindings, []),
+          featureSteps: existing.featureSteps.Steps.length > 0 ? existing.featureSteps : (isFeatureStepGraph(rawSteps) ? rawSteps : { Steps: [] }),
+          asOf: existing.asOf.Mode !== 'none' ? existing.asOf : parseJson<AsOfStrategy>(row.AsOfStrategy, { Mode: 'none' }),
+          leakageGuard: existing.leakageGuard,
+          outcomeConfig: existing.outcomeConfig,
+        };
+      }
+    } catch (err) {
+      LogError(`MLModelInferenceProcessor: failed to load fallback pipeline '${pipelineId}': ${err instanceof Error ? err.message : String(err)}`);
+    }
+    return existing;
   }
 
   /**
@@ -227,6 +342,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
    */
   private resolvePipelineConfig(model: MJMLModelEntity): ResolvedScoringPipeline {
     const lineage = parseJson<Record<string, unknown>>(model.Lineage, {});
+    const outcomeConfig = resolveOutcomeConfig(model);
     return {
       // The target entity the model scores is the training-unit entity from lineage.
       targetEntityName: typeof lineage.targetEntityName === 'string' ? lineage.targetEntityName : (model.Pipeline ?? ''),
@@ -236,6 +352,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       // Scoring never re-fits or re-evaluates leakage — a permissive guard is fine here;
       // the frozen FeatureSchema is the contract that bounds which columns are produced.
       leakageGuard: { DenyFields: [], SingleFeatureDominanceThreshold: 1 },
+      outcomeConfig,
     };
   }
 
@@ -252,7 +369,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     rows: SourceRow[],
     context: RecordProcessorContext,
   ): Promise<FeatureAssemblyResult> {
-    return this.assembler.assemble({
+    const assembly = await this.assembler.assemble({
       targetEntityName: model.targetEntityName,
       records: rows,
       sources: model.sourceBindings,
@@ -263,9 +380,19 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       primaryKeyField: this.primaryKeyField,
       // No targetVariable at score time — the label is what we're predicting.
       context: 'on-demand',
-      contextUser: context.contextUser,
-      provider: context.provider,
+      contextUser: context.ContextUser,
+      provider: context.Provider,
     });
+
+    if (assembly.matrix.columns.length === 0 && model.featureSchema.length > 0) {
+      throw new Error(
+        `MLModelInferenceProcessor: feature assembly produced 0 columns for model '${model.modelId}' ` +
+          `which requires ${model.featureSchema.length} feature(s) [${model.featureSchema.map((f) => f.Name).join(', ')}]. ` +
+          `Refusing to score with empty features to avoid degenerate predictions.`,
+      );
+    }
+
+    return assembly;
   }
 
   // region: sidecar predict -----------------------------------------------------
@@ -281,7 +408,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       artifact_b64: model.artifactB64,
       fitted_preprocessing: model.fittedPreprocessing,
       feature_schema: model.featureSchema,
-      rows: matrixToFeatureRows(assembly.matrix, model.featureSchema),
+      rows: MatrixToFeatureRows(assembly.matrix, model.featureSchema),
     };
     return this.deps.sidecar.predict(req);
   }
@@ -290,12 +417,20 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
 
   /** Shape a single sidecar prediction into the record result payload. */
   private toPayload(model: LoadedModel, prediction: Prediction): MLInferenceResultPayload {
+    const band = resolveScoreBand(prediction.score, model.outcomeConfig);
+    const style = resolveOutcomeStyle(prediction.class, model.outcomeConfig);
     return {
       modelId: model.modelId,
       target: model.targetVariable,
       problemType: model.problemType,
       score: prediction.score,
       class: prediction.class,
+      status: band?.Label,
+      band: band?.Key,
+      badgeColor: band?.BadgeColor,
+      icon: band?.Icon ?? style?.Icon,
+      scoreLabel: model.outcomeConfig.ScoreLabel,
+      statusLabel: model.outcomeConfig.StatusLabel,
       // Top signed per-record drivers behind THIS prediction (P1-5), when the model supports exact
       // per-row attribution (linear models); omitted otherwise (the UI falls back to global importance).
       drivers: prediction.contributions?.map((c) => ({ feature: c.feature, value: c.value })),
@@ -346,6 +481,18 @@ export interface MLInferenceResultPayload {
    * which moves on any edit, not just scoring.
    */
   scoredAt: string;
+  /** Qualitative status label evaluated against model OutcomeConfig (e.g. "High", "Low Risk", "Severe"). */
+  status?: string;
+  /** Normalized status tier key (e.g. "high", "medium", "low"). */
+  band?: string;
+  /** Semantic badge color for UI rendering: 'green' | 'amber' | 'red' | 'blue' | 'gray'. */
+  badgeColor?: 'green' | 'amber' | 'red' | 'blue' | 'gray';
+  /** FontAwesome icon name (e.g. 'fa-circle-check', 'fa-triangle-exclamation'). */
+  icon?: string;
+  /** Display label for the score column (e.g. "Renewal Probability", "Default Risk"). */
+  scoreLabel?: string;
+  /** Display label for the status column (e.g. "Renewal Status", "Risk Level"). */
+  statusLabel?: string;
 }
 
 /** Internal — the assembly config resolved off a model for scoring. */
@@ -355,6 +502,7 @@ interface ResolvedScoringPipeline {
   featureSteps: FeatureStepGraph;
   asOf: AsOfStrategy;
   leakageGuard: LeakageGuard;
+  outcomeConfig: OutcomeConfig;
 }
 
 /**
@@ -363,7 +511,7 @@ interface ResolvedScoringPipeline {
  * present in the matrix but not in the schema are dropped; schema columns missing
  * from the matrix are emitted as `null` (the sidecar imputes via fitted params).
  */
-export function matrixToFeatureRows(
+export function MatrixToFeatureRows(
   matrix: MatrixData,
   featureSchema: FeatureSchemaEntry[],
 ): Array<Record<string, string | number | boolean | null>> {
@@ -378,6 +526,14 @@ export function matrixToFeatureRows(
     }
     return obj;
   });
+}
+
+/** @deprecated Use {@link MatrixToFeatureRows}. */
+export function matrixToFeatureRows(
+  matrix: MatrixData,
+  featureSchema: FeatureSchemaEntry[],
+): Array<Record<string, string | number | boolean | null>> {
+  return MatrixToFeatureRows(matrix, featureSchema);
 }
 
 /** Parse a possibly-null JSON column, falling back to a default on null/parse error. */

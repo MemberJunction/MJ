@@ -15,12 +15,20 @@ import { MJAIPromptRunEntity, MJAIAgentRunEntity } from '@memberjunction/core-en
  * @param contextUser - User context
  * @returns Total cost in dollars
  */
-export async function calculateAgentRunCost(
+export async function CalculateAgentRunCost(
     agentRun: MJAIAgentRunEntity,
     contextUser: UserInfo
 ): Promise<number> {
     // Agent run already has TotalCost calculated
     return agentRun.TotalCost || 0;
+}
+
+/** @deprecated Use {@link CalculateAgentRunCost}. */
+export async function calculateAgentRunCost(
+    agentRun: MJAIAgentRunEntity,
+    contextUser: UserInfo
+): Promise<number> {
+    return CalculateAgentRunCost(agentRun, contextUser);
 }
 
 /**
@@ -29,8 +37,13 @@ export async function calculateAgentRunCost(
  * @param testRunCosts - Array of individual test run costs
  * @returns Total cost
  */
-export function aggregateTestRunCosts(testRunCosts: number[]): number {
+export function AggregateTestRunCosts(testRunCosts: number[]): number {
     return testRunCosts.reduce((sum, cost) => sum + cost, 0);
+}
+
+/** @deprecated Use {@link AggregateTestRunCosts}. */
+export function aggregateTestRunCosts(testRunCosts: number[]): number {
+    return AggregateTestRunCosts(testRunCosts);
 }
 
 /**
@@ -40,8 +53,13 @@ export function aggregateTestRunCosts(testRunCosts: number[]): number {
  * @param testCount - Number of tests
  * @returns Average cost per test
  */
-export function calculateAverageCost(totalCost: number, testCount: number): number {
+export function CalculateAverageCost(totalCost: number, testCount: number): number {
     return testCount > 0 ? totalCost / testCount : 0;
+}
+
+/** @deprecated Use {@link CalculateAverageCost}. */
+export function calculateAverageCost(totalCost: number, testCount: number): number {
+    return CalculateAverageCost(totalCost, testCount);
 }
 
 /**
@@ -51,7 +69,7 @@ export function calculateAverageCost(totalCost: number, testCount: number): numb
  * @param precision - Decimal places (default: 4)
  * @returns Formatted cost string
  */
-export function formatCost(cost: number, precision: number = 4): string {
+export function FormatCost(cost: number, precision: number = 4): string {
     if (cost === 0) {
         return '$0.00';
     }
@@ -63,6 +81,11 @@ export function formatCost(cost: number, precision: number = 4): string {
     return `$${cost.toFixed(precision)}`;
 }
 
+/** @deprecated Use {@link FormatCost}. */
+export function formatCost(cost: number, precision: number = 4): string {
+    return FormatCost(cost, precision);
+}
+
 /**
  * Calculate cost per oracle evaluation.
  *
@@ -71,7 +94,7 @@ export function formatCost(cost: number, precision: number = 4): string {
  * @param oracleResults - Oracle results with cost details
  * @returns Map of oracle type to cost
  */
-export function calculateOracleCosts(
+export function CalculateOracleCosts(
     oracleResults: Array<{
         oracleType: string;
         details?: { llmCost?: number };
@@ -87,6 +110,16 @@ export function calculateOracleCosts(
     return costs;
 }
 
+/** @deprecated Use {@link CalculateOracleCosts}. */
+export function calculateOracleCosts(
+    oracleResults: Array<{
+        oracleType: string;
+        details?: { llmCost?: number };
+    }>
+): Map<string, number> {
+    return CalculateOracleCosts(oracleResults);
+}
+
 /**
  * Calculate cost breakdown by component.
  *
@@ -94,7 +127,7 @@ export function calculateOracleCosts(
  * @param oracleCosts - Costs by oracle type
  * @returns Cost breakdown
  */
-export function calculateCostBreakdown(
+export function CalculateCostBreakdown(
     testRunCost: number,
     oracleCosts: Map<string, number>
 ): {
@@ -127,6 +160,19 @@ export function calculateCostBreakdown(
     };
 }
 
+/** @deprecated Use {@link CalculateCostBreakdown}. */
+export function calculateCostBreakdown(
+    testRunCost: number,
+    oracleCosts: Map<string, number>
+): {
+    agentExecution: number;
+    oracleEvaluation: number;
+    total: number;
+    breakdown: Array<{ component: string; cost: number; percentage: number }>;
+} {
+    return CalculateCostBreakdown(testRunCost, oracleCosts);
+}
+
 /**
  * Estimate cost for test suite.
  *
@@ -134,8 +180,13 @@ export function calculateCostBreakdown(
  * @param avgCostPerTest - Average cost per test
  * @returns Estimated total cost
  */
-export function estimateSuiteCost(testCount: number, avgCostPerTest: number): number {
+export function EstimateSuiteCost(testCount: number, avgCostPerTest: number): number {
     return testCount * avgCostPerTest;
+}
+
+/** @deprecated Use {@link EstimateSuiteCost}. */
+export function estimateSuiteCost(testCount: number, avgCostPerTest: number): number {
+    return EstimateSuiteCost(testCount, avgCostPerTest);
 }
 
 /**
@@ -146,7 +197,7 @@ export function estimateSuiteCost(testCount: number, avgCostPerTest: number): nu
  * @param totalTests - Total number of tests
  * @returns Cost efficiency metrics
  */
-export function calculateCostEfficiency(
+export function CalculateCostEfficiency(
     totalCost: number,
     passedTests: number,
     totalTests: number
@@ -164,4 +215,17 @@ export function calculateCostEfficiency(
         costPerPassedTest,
         costEfficiencyRatio
     };
+}
+
+/** @deprecated Use {@link CalculateCostEfficiency}. */
+export function calculateCostEfficiency(
+    totalCost: number,
+    passedTests: number,
+    totalTests: number
+): {
+    costPerTest: number;
+    costPerPassedTest: number;
+    costEfficiencyRatio: number;
+} {
+    return CalculateCostEfficiency(totalCost, passedTests, totalTests);
 }

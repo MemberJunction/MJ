@@ -19,16 +19,18 @@
 import { AIConfig, OrganicKeyDetectionConfig } from '../types/config.js';
 import { DatabaseDocumentation } from '../types/state.js';
 import { OrganicKeyCluster, OrganicKeyDetectionPhase } from '../types/organic-keys.js';
-import { runSemanticPhase, ProgressCallback } from './SemanticPhase.js';
-import { runStructuralPhase } from './StructuralPhase.js';
-import { compose } from './Composer.js';
+import { RunSemanticPhase, ProgressCallback } from './SemanticPhase.js';
+import { RunStructuralPhase } from './StructuralPhase.js';
+import { BridgeViewProvider } from './BridgeViewSQLGenerator.js';
+import { Compose, ClusterVerification } from './Composer.js';
 import { DetectedOrganicKeysOutput } from './OrganicKeyTranslator.js';
+import { KeyVerifier } from './JoinProbe.js';
 
 export interface OrganicKeyDetectionResult {
-    clusters: OrganicKeyCluster[];
-    output: DetectedOrganicKeysOutput;
-    phase: OrganicKeyDetectionPhase;
-    summary: {
+    clusters: OrganicKeyCluster[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    output: DetectedOrganicKeysOutput;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    Phase: OrganicKeyDetectionPhase;
+    Summary: {
         columnsInScope: number;
         columnsNormalized: number;
         columnsRejectedByNormalizer: number;
@@ -40,50 +42,102 @@ export interface OrganicKeyDetectionResult {
         outputKeys: number;
         outputSpokes: number;
         transitiveBridges: number;
+        /** Clusters the value-overlap probe refuted outright. */
+        clustersDroppedUnverified: number;
+        /** Members dropped for not sharing the anchor's value space. */
+        membersDroppedUnverified: number;
+        /** Concepts not emitted because no member owns the value as its table's primary key. */
+        conceptsSkippedUnanchored: number;
+        /** Probes spent, and the cap they ran under. */
+        probesUsed: number;
+        probesAllowed: number;
     };
+    /** Per-cluster probe record, so a dropped key can be explained rather than just missing. */
+    Verification: ClusterVerification[];
 }
 
 export interface DetectorRunOptions {
-    onProgress?: ProgressCallback;
+    OnProgress?: ProgressCallback;
+}
+
+/** Emit-time behaviour for the detector. */
+export interface OrganicKeyEmitOptions {
+    /**
+     * Set `AutoCreateRelatedViewOnForm` on emitted keys. Default false — a
+     * machine-proposed key should not silently create a grid per spoke on every form.
+     */
+    AutoCreateRelatedViewOnForm?: boolean;
 }
 
 export class OrganicKeyDetector {
+    /**
+     * @param databaseProvider - Platform of the analyzed database. Bridge-view SQL is emitted in
+     *                           its dialect because CodeGen executes it verbatim. Default SQL Server.
+     * @param keyVerifier - Probes each cluster member against the cluster anchor before
+     *                      the key is emitted. Pass the SAME instance the analysis engine
+     *                      got, so one probe budget covers the whole run. When null, keys
+     *                      are emitted unverified — the previous behaviour — and the
+     *                      per-cluster record says they were never checked.
+     */
     constructor(
         private readonly config: OrganicKeyDetectionConfig,
         private readonly aiConfig: AIConfig,
+        private readonly databaseProvider?: BridgeViewProvider,
+        private readonly keyVerifier: KeyVerifier | null = null,
+        private readonly emitOptions: OrganicKeyEmitOptions = {},
     ) {}
 
-    public async detect(
+    public async Detect(
         state: DatabaseDocumentation,
         opts: DetectorRunOptions = {},
     ): Promise<OrganicKeyDetectionResult> {
-        const progress = opts.onProgress ?? (() => {});
+        const progress = opts.OnProgress ?? (() => {});
         const startedAt = new Date().toISOString();
 
-        const a = await runSemanticPhase(state, this.config, this.aiConfig, progress);
-        const b = runStructuralPhase(state, a.clusters);
-        progress(`structural: ${b.summary.transitiveBridgesFound} bridges`);
-        const c = compose(a.clusters, b.bridges);
-        progress(`compose: emitted ${c.emitted}/${a.clusters.length} clusters (${c.summary.outputKeys} keys, ${c.summary.outputSpokes} spokes)`);
+        const a = await RunSemanticPhase(state, this.config, this.aiConfig, progress);
+        const b = RunStructuralPhase(state, a.clusters, { Provider: this.databaseProvider });
+        // Say WHY when the phase produced nothing: "0 bridges" from a completed walk and
+        // "0 bridges" from a walk that never ran are different facts, and a truncated walk
+        // is a third. Reporting them separately is the difference between a schema with no
+        // transitive bridges and a schema whose walk we bounded.
+        progress(
+            b.Summary.walked
+                ? `structural: ${b.Summary.transitiveBridgesFound} bridges${b.Summary.truncationReasons ? ` (walk truncated: ${b.Summary.truncationReasons.join(', ')})` : ''}`
+                : `structural: skipped (${b.Summary.skipReason})`
+        );
+        const c = await Compose(a.clusters, b.Bridges, this.keyVerifier, {
+            AutoCreateRelatedViewOnForm: this.emitOptions.AutoCreateRelatedViewOnForm,
+        });
+        // Report what the probe removed, not just what survived: "emitted 5 clusters" and
+        // "emitted 5 of 161, 156 refuted" are the same output and completely different
+        // facts about the schema.
+        const budget = this.keyVerifier ? this.keyVerifier.Budget : null;
+        progress(
+            `compose: emitted ${c.Emitted}/${a.clusters.length} clusters (${c.Summary.outputKeys} keys, ${c.Summary.outputSpokes} spokes)`
+            + (c.SkippedUnanchored > 0 ? `; skipped ${c.SkippedUnanchored} concepts with no primary-key owner` : '')
+            + (budget
+                ? `; probe refuted ${c.DroppedUnverified} clusters and ${c.DroppedMembers} members using ${budget.ProbesUsed}/${budget.ProbesAllowed} probes`
+                : '; keys NOT verified (no probe configured)')
+        );
 
         // Net additional clusters produced by the concept-name split (sub-clusters created
         // beyond the raw clusterer output, counting both kept and dropped sub-clusters).
         const splitClusterCount = Math.max(
             0,
-            a.summary.clustersFound + a.summary.clustersDropped - a.summary.clustersBeforeSplit,
+            a.Summary.clustersFound + a.Summary.clustersDropped - a.Summary.clustersBeforeSplit,
         );
 
         return {
-            clusters: c.annotatedClusters,
+            clusters: c.AnnotatedClusters,
             output: c.output,
-            phase: {
+            Phase: {
                 triggered: true,
                 startedAt,
                 completedAt: new Date().toISOString(),
                 status: 'completed',
                 candidateClusterCount: a.clusters.length,
-                confirmedClusterCount: c.emitted,
-                rejectedClusterCount: a.summary.columnsRejectedByNormalizer,
+                confirmedClusterCount: c.Emitted,
+                rejectedClusterCount: a.Summary.columnsRejectedByNormalizer,
                 splitClusterCount,
                 tokensUsed: a.tokens.total,
                 inputTokens: a.tokens.input,
@@ -91,20 +145,34 @@ export class OrganicKeyDetector {
                 estimatedCost: this.estimateCost(a.tokens.input, a.tokens.output),
                 refinementModelUsed: this.aiConfig.model,
             },
-            summary: {
-                columnsInScope: a.summary.columnsInScope,
-                columnsNormalized: a.summary.columnsNormalized,
-                columnsRejectedByNormalizer: a.summary.columnsRejectedByNormalizer,
+            Summary: {
+                columnsInScope: a.Summary.columnsInScope,
+                columnsNormalized: a.Summary.columnsNormalized,
+                columnsRejectedByNormalizer: a.Summary.columnsRejectedByNormalizer,
                 clustersFound: a.clusters.length,
-                clustersEmitted: c.emitted,
-                clustersDropped: a.summary.clustersDropped,
-                outputSchemas: c.summary.outputSchemas,
-                outputTables: c.summary.outputTables,
-                outputKeys: c.summary.outputKeys,
-                outputSpokes: c.summary.outputSpokes,
-                transitiveBridges: b.summary.transitiveBridgesFound,
+                clustersEmitted: c.Emitted,
+                clustersDropped: a.Summary.clustersDropped,
+                outputSchemas: c.Summary.outputSchemas,
+                outputTables: c.Summary.outputTables,
+                outputKeys: c.Summary.outputKeys,
+                outputSpokes: c.Summary.outputSpokes,
+                transitiveBridges: b.Summary.transitiveBridgesFound,
+                clustersDroppedUnverified: c.DroppedUnverified,
+                membersDroppedUnverified: c.DroppedMembers,
+                conceptsSkippedUnanchored: c.SkippedUnanchored,
+                probesUsed: budget ? budget.ProbesUsed : 0,
+                probesAllowed: budget ? budget.ProbesAllowed : 0,
             },
+            Verification: c.Verification,
         };
+    }
+
+    /** @deprecated Use {@link Detect}. */
+    public async detect(
+        state: DatabaseDocumentation,
+        opts: DetectorRunOptions = {},
+    ): Promise<OrganicKeyDetectionResult> {
+        return this.Detect(state, opts);
     }
 
     private estimateCost(inputTokens: number, outputTokens: number): number {

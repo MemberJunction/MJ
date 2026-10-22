@@ -511,55 +511,177 @@ export interface MatrixColumnClickEvent {
 })
 export class TestResultsMatrixComponent {
   /** Matrix data to display */
-  @Input() data: TestResultsMatrixData | null = null;
+  @Input() Data: TestResultsMatrixData | null = null;
+
+  /** @deprecated Use {@link Data}. */
+  @Input() set data(value: TestResultsMatrixData | null) {
+    this.Data = value;
+  }
+  /** @deprecated Use {@link Data}. */
+  get data(): TestResultsMatrixData | null {
+    return this.Data;
+  }
 
   /** Loading state */
-  @Input() loading = false;
+  @Input() Loading = false;
+
+  /** @deprecated Use {@link Loading}. */
+  @Input() set loading(value: TestResultsMatrixComponent['Loading']) {
+    this.Loading = value;
+  }
+  /** @deprecated Use {@link Loading}. */
+  get loading(): TestResultsMatrixComponent['Loading'] {
+    return this.Loading;
+  }
 
   /** Show tags in column headers */
-  @Input() showTags = true;
+  @Input() ShowTags = true;
+
+  /** @deprecated Use {@link ShowTags}. */
+  @Input() set showTags(value: TestResultsMatrixComponent['ShowTags']) {
+    this.ShowTags = value;
+  }
+  /** @deprecated Use {@link ShowTags}. */
+  get showTags(): TestResultsMatrixComponent['ShowTags'] {
+    return this.ShowTags;
+  }
 
   /** Show pass rate in column headers */
-  @Input() showPassRate = true;
+  @Input() ShowPassRate = true;
+
+  /** @deprecated Use {@link ShowPassRate}. */
+  @Input() set showPassRate(value: TestResultsMatrixComponent['ShowPassRate']) {
+    this.ShowPassRate = value;
+  }
+  /** @deprecated Use {@link ShowPassRate}. */
+  get showPassRate(): TestResultsMatrixComponent['ShowPassRate'] {
+    return this.ShowPassRate;
+  }
 
   /** Show scores in cells */
-  @Input() showScores = false;
+  @Input() ShowScores = false;
+
+  /** @deprecated Use {@link ShowScores}. */
+  @Input() set showScores(value: TestResultsMatrixComponent['ShowScores']) {
+    this.ShowScores = value;
+  }
+  /** @deprecated Use {@link ShowScores}. */
+  get showScores(): TestResultsMatrixComponent['ShowScores'] {
+    return this.ShowScores;
+  }
 
   /** Show legend below matrix */
-  @Input() showLegend = true;
+  @Input() ShowLegend = true;
+
+  /** @deprecated Use {@link ShowLegend}. */
+  @Input() set showLegend(value: TestResultsMatrixComponent['ShowLegend']) {
+    this.ShowLegend = value;
+  }
+  /** @deprecated Use {@link ShowLegend}. */
+  get showLegend(): TestResultsMatrixComponent['ShowLegend'] {
+    return this.ShowLegend;
+  }
 
   /** Empty state title */
-  @Input() emptyTitle = 'No Data Available';
+  @Input() EmptyTitle = 'No Data Available';
+
+  /** @deprecated Use {@link EmptyTitle}. */
+  @Input() set emptyTitle(value: TestResultsMatrixComponent['EmptyTitle']) {
+    this.EmptyTitle = value;
+  }
+  /** @deprecated Use {@link EmptyTitle}. */
+  get emptyTitle(): TestResultsMatrixComponent['EmptyTitle'] {
+    return this.EmptyTitle;
+  }
 
   /** Empty state message */
-  @Input() emptyMessage = 'Test results will appear here once suite runs are completed.';
+  @Input() EmptyMessage = 'Test results will appear here once suite runs are completed.';
+
+  /** @deprecated Use {@link EmptyMessage}. */
+  @Input() set emptyMessage(value: TestResultsMatrixComponent['EmptyMessage']) {
+    this.EmptyMessage = value;
+  }
+  /** @deprecated Use {@link EmptyMessage}. */
+  get emptyMessage(): TestResultsMatrixComponent['EmptyMessage'] {
+    return this.EmptyMessage;
+  }
 
   /** Emitted when a cell is clicked */
-  @Output() cellClick = new EventEmitter<MatrixCellClickEvent>();
+  @Output() CellClick = new EventEmitter<MatrixCellClickEvent>();
+
+  /**
+   * @deprecated Use {@link CellClick}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (cellClick) keeps working. Must stay AFTER CellClick: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() cellClick = this.CellClick;
 
   /** Emitted when a row header (test name) is clicked */
-  @Output() rowClick = new EventEmitter<MatrixRowClickEvent>();
+  @Output() RowClick = new EventEmitter<MatrixRowClickEvent>();
+
+  /**
+   * @deprecated Use {@link RowClick}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (rowClick) keeps working. Must stay AFTER RowClick: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() rowClick = this.RowClick;
 
   /** Emitted when a column header (suite run) is clicked */
-  @Output() columnClick = new EventEmitter<MatrixColumnClickEvent>();
+  @Output() ColumnClick = new EventEmitter<MatrixColumnClickEvent>();
+
+  /**
+   * @deprecated Use {@link ColumnClick}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (columnClick) keeps working. Must stay AFTER ColumnClick: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() columnClick = this.ColumnClick;
 
   // Highlight tracking
-  highlightedRow: string | null = null;
-  highlightedColumn: string | null = null;
+  HighlightedRow: string | null = null;
+
+  /** @deprecated Use {@link HighlightedRow}. */
+  get highlightedRow(): string | null {
+    return this.HighlightedRow;
+  }
+  /** @deprecated Use {@link HighlightedRow}. */
+  set highlightedRow(value: string | null) {
+    this.HighlightedRow = value;
+  }
+  HighlightedColumn: string | null = null;
+
+  /** @deprecated Use {@link HighlightedColumn}. */
+  get highlightedColumn(): string | null {
+    return this.HighlightedColumn;
+  }
+  /** @deprecated Use {@link HighlightedColumn}. */
+  set highlightedColumn(value: string | null) {
+    this.HighlightedColumn = value;
+  }
 
   constructor(private cdr: ChangeDetectorRef) {}
 
   /**
    * Get the cell data for a specific test and suite run
    */
-  getCell(testId: string, column: MatrixColumnData): MatrixCellData | null {
+  GetCell(testId: string, column: MatrixColumnData): MatrixCellData | null {
     return column.testResults.get(testId) ?? null;
+  }
+
+  /** @deprecated Use {@link GetCell}. */
+  getCell(testId: string, column: MatrixColumnData): MatrixCellData | null {
+    return this.GetCell(testId, column);
   }
 
   /**
    * Get CSS class for cell based on status
    */
-  getCellClass(cell: MatrixCellData | null): string {
+  GetCellClass(cell: MatrixCellData | null): string {
     if (!cell) return 'cell-none';
     switch (cell.status) {
       case 'Passed': return 'cell-passed';
@@ -572,10 +694,15 @@ export class TestResultsMatrixComponent {
     }
   }
 
+  /** @deprecated Use {@link GetCellClass}. */
+  getCellClass(cell: MatrixCellData | null): string {
+    return this.GetCellClass(cell);
+  }
+
   /**
    * Get icon class for cell based on status
    */
-  getCellIcon(cell: MatrixCellData | null): string {
+  GetCellIcon(cell: MatrixCellData | null): string {
     if (!cell) return 'fas fa-minus';
     switch (cell.status) {
       case 'Passed': return 'fas fa-check';
@@ -588,10 +715,15 @@ export class TestResultsMatrixComponent {
     }
   }
 
+  /** @deprecated Use {@link GetCellIcon}. */
+  getCellIcon(cell: MatrixCellData | null): string {
+    return this.GetCellIcon(cell);
+  }
+
   /**
    * Get tooltip text for cell
    */
-  getCellTooltip(cell: MatrixCellData | null): string {
+  GetCellTooltip(cell: MatrixCellData | null): string {
     if (!cell) return 'Not run in this suite run';
     let tooltip = `${cell.testName}\nStatus: ${cell.status}`;
     if (cell.score != null) tooltip += `\nScore: ${(cell.score * 100).toFixed(1)}%`;
@@ -600,10 +732,15 @@ export class TestResultsMatrixComponent {
     return tooltip;
   }
 
+  /** @deprecated Use {@link GetCellTooltip}. */
+  getCellTooltip(cell: MatrixCellData | null): string {
+    return this.GetCellTooltip(cell);
+  }
+
   /**
    * Format date for column header
    */
-  formatDate(date: Date): string {
+  FormatDate(date: Date): string {
     const now = new Date();
     const d = new Date(date);
     const diffMs = now.getTime() - d.getTime();
@@ -620,13 +757,18 @@ export class TestResultsMatrixComponent {
     }
   }
 
+  /** @deprecated Use {@link FormatDate}. */
+  formatDate(date: Date): string {
+    return this.FormatDate(date);
+  }
+
   /**
    * Handle cell click
    */
-  onCellClicked(row: MatrixRowData, column: MatrixColumnData): void {
-    const cell = this.getCell(row.testId, column);
+  OnCellClicked(row: MatrixRowData, column: MatrixColumnData): void {
+    const cell = this.GetCell(row.testId, column);
     if (cell) {
-      this.cellClick.emit({
+      this.CellClick.emit({
         testRunId: cell.testRunId,
         testId: cell.testId,
         testName: cell.testName,
@@ -636,38 +778,63 @@ export class TestResultsMatrixComponent {
     }
   }
 
+  /** @deprecated Use {@link OnCellClicked}. */
+  onCellClicked(row: MatrixRowData, column: MatrixColumnData): void {
+    return this.OnCellClicked(row, column);
+  }
+
   /**
    * Handle row header click
    */
-  onRowHeaderClick(row: MatrixRowData): void {
-    this.rowClick.emit({
+  OnRowHeaderClick(row: MatrixRowData): void {
+    this.RowClick.emit({
       testId: row.testId,
       testName: row.testName
     });
   }
 
+  /** @deprecated Use {@link OnRowHeaderClick}. */
+  onRowHeaderClick(row: MatrixRowData): void {
+    return this.OnRowHeaderClick(row);
+  }
+
   /**
    * Handle column header click
    */
-  onColumnHeaderClick(column: MatrixColumnData): void {
-    this.columnClick.emit({
+  OnColumnHeaderClick(column: MatrixColumnData): void {
+    this.ColumnClick.emit({
       suiteRunId: column.suiteRunId,
       date: column.date,
       tags: column.tags
     });
   }
 
+  /** @deprecated Use {@link OnColumnHeaderClick}. */
+  onColumnHeaderClick(column: MatrixColumnData): void {
+    return this.OnColumnHeaderClick(column);
+  }
+
   /**
    * TrackBy function for columns
    */
-  trackColumn(index: number, col: MatrixColumnData): string {
+  TrackColumn(index: number, col: MatrixColumnData): string {
     return col.suiteRunId;
+  }
+
+  /** @deprecated Use {@link TrackColumn}. */
+  trackColumn(index: number, col: MatrixColumnData): string {
+    return this.TrackColumn(index, col);
   }
 
   /**
    * TrackBy function for rows
    */
-  trackRow(index: number, row: MatrixRowData): string {
+  TrackRow(index: number, row: MatrixRowData): string {
     return row.testId;
+  }
+
+  /** @deprecated Use {@link TrackRow}. */
+  trackRow(index: number, row: MatrixRowData): string {
+    return this.TrackRow(index, row);
   }
 }

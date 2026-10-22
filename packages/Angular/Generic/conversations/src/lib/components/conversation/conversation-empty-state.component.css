@@ -184,6 +184,11 @@
   width: 100%;
 }
 
+/* composerExtra slot: host UI directly above the composer. Spacing only; the host styles its content. */
+.composer-extra {
+  margin-bottom: 0.5rem;
+}
+
 /* Tips Section */
 .tips-section {
   display: flex;

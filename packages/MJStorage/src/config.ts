@@ -64,6 +64,8 @@ const storageProvidersSchema = z.object({
       refreshToken: z.string().optional(),
       redirectURI: z.string().optional(),
       rootFolderID: z.string().optional(),
+      // Shared Drive id (#3847) — the only place a service account can write (no personal quota)
+      driveID: z.string().optional(),
     })
     .optional(),
 
@@ -132,7 +134,7 @@ let _config: StorageConfig | null = null;
  * Gets the MJStorage configuration, loading it from mj.config.cjs if not already loaded
  * @returns The MJStorage configuration object
  */
-export function getStorageConfig(): StorageConfig {
+export function GetStorageConfig(): StorageConfig {
   if (_config) {
     return _config;
   }
@@ -179,6 +181,7 @@ export function getStorageConfig(): StorageConfig {
           refreshToken: result.config.googleDriveRefreshToken || process.env.STORAGE_GOOGLE_DRIVE_REFRESH_TOKEN,
           redirectURI: result.config.googleDriveRedirectURI || process.env.STORAGE_GOOGLE_DRIVE_REDIRECT_URI,
           rootFolderID: result.config.googleDriveRootFolderID || process.env.STORAGE_GDRIVE_ROOT_FOLDER_ID,
+          driveID: result.config.googleDriveDriveID || process.env.STORAGE_GDRIVE_DRIVE_ID,
         },
         dropbox: {
           accessToken: result.config.dropboxAccessToken || process.env.STORAGE_DROPBOX_ACCESS_TOKEN,
@@ -214,13 +217,23 @@ export function getStorageConfig(): StorageConfig {
   }
 }
 
+/** @deprecated Use {@link GetStorageConfig}. */
+export function getStorageConfig(): StorageConfig {
+  return GetStorageConfig();
+}
+
 /**
  * Gets the storage providers configuration
  * @returns The storage providers configuration object
  */
-export function getStorageProvidersConfig(): StorageProvidersConfig {
-  const config = getStorageConfig();
+export function GetStorageProvidersConfig(): StorageProvidersConfig {
+  const config = GetStorageConfig();
   return config.storageProviders;
+}
+
+/** @deprecated Use {@link GetStorageProvidersConfig}. */
+export function getStorageProvidersConfig(): StorageProvidersConfig {
+  return GetStorageProvidersConfig();
 }
 
 /**
@@ -228,14 +241,24 @@ export function getStorageProvidersConfig(): StorageProvidersConfig {
  * @param provider - The provider name ('aws', 'azure', 'googleCloud', etc.)
  * @returns The provider configuration or undefined if not configured
  */
-export function getProviderConfig<T extends keyof StorageProvidersConfig>(provider: T): StorageProvidersConfig[T] {
-  const config = getStorageProvidersConfig();
+export function GetProviderConfig<T extends keyof StorageProvidersConfig>(provider: T): StorageProvidersConfig[T] {
+  const config = GetStorageProvidersConfig();
   return config[provider];
+}
+
+/** @deprecated Use {@link GetProviderConfig}. */
+export function getProviderConfig<T extends keyof StorageProvidersConfig>(provider: T): StorageProvidersConfig[T] {
+  return GetProviderConfig(provider);
 }
 
 /**
  * Clears the cached configuration (useful for testing)
  */
-export function clearStorageConfig(): void {
+export function ClearStorageConfig(): void {
   _config = null;
+}
+
+/** @deprecated Use {@link ClearStorageConfig}. */
+export function clearStorageConfig(): void {
+  return ClearStorageConfig();
 }

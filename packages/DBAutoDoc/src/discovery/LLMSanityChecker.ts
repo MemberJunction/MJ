@@ -5,28 +5,29 @@
  */
 
 import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
+import { ResolveCallTimeoutMs, WithCallDeadline } from '../utils/call-deadline.js';
 import { PKCandidate, FKCandidate } from '../types/discovery.js';
 import { AIConfig } from '../types/config.js';
-import { createLLMInstance } from '../utils/llm-factory.js';
+import { CreateLLMInstance } from '../utils/llm-factory.js';
 import { ColumnStatsCache } from './ColumnStatsCache.js';
 
 export interface SanityCheckResult {
-  invalidPKs: Array<{
+  invalidPKs: Array<{  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     schema: string;
     table: string;
     column: string;
     reason: string;
   }>;
-  invalidFKs: Array<{
+  invalidFKs: Array<{  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     schema: string;
     table: string;
     column: string;
    reason: string;
   }>;
-  suggestions: string[];
-  tokensUsed: number;
-  inputTokens: number;
-  outputTokens: number;
+  Suggestions: string[];
+  tokensUsed: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  InputTokens: number;
+  OutputTokens: number;
 }
 
 export class LLMSanityChecker {
@@ -34,14 +35,14 @@ export class LLMSanityChecker {
 
   constructor(private aiConfig: AIConfig, private statsCache?: ColumnStatsCache) {
     // Create LLM instance using shared factory (DRY principle)
-    this.llm = createLLMInstance(aiConfig.provider, aiConfig.apiKey);
+    this.llm = CreateLLMInstance(aiConfig.provider, aiConfig.apiKey);
   }
 
   /**
    * Review all detected PKs and FKs for obvious errors
    * This is a one-time macro review after statistical detection
    */
-  public async reviewCandidates(
+  public async ReviewCandidates(
     pkCandidates: PKCandidate[],
     fkCandidates: FKCandidate[]
   ): Promise<SanityCheckResult> {
@@ -69,17 +70,29 @@ export class LLMSanityChecker {
     };
 
     console.log(`[LLMSanityChecker] Calling LLM for sanity check...`);
-    const chatResult: ChatResult = await this.llm.ChatCompletion(params);
+    // Bounded. This call reviews the ENTIRE candidate set in one request, so its prompt grows with
+    // the schema and it is the single largest call the discovery phase makes — and it had no
+    // deadline, no retry and no failover, so a stall here parked the whole run.
+    //
+    // The throw is deliberately NOT caught here: the caller in DiscoveryEngine already treats an
+    // exception from this checker as fatal to the iteration, whereas a returned failure is
+    // swallowed into "no candidates were invalid" — which would silently pass every statistically
+    // derived key through unreviewed. A timeout must not look like an all-clear.
+    const chatResult: ChatResult = await WithCallDeadline(
+      ResolveCallTimeoutMs(this.aiConfig.callTimeoutMs),
+      'PK/FK sanity check',
+      signal => this.llm.ChatCompletion({ ...params, cancellationToken: signal })
+    );
 
     if (!chatResult.success) {
       console.warn(`[LLMSanityChecker] LLM call failed: ${chatResult.errorMessage}`);
       return {
         invalidPKs: [],
         invalidFKs: [],
-        suggestions: [],
+        Suggestions: [],
         tokensUsed: 0,
-        inputTokens: 0,
-        outputTokens: 0
+        InputTokens: 0,
+        OutputTokens: 0
       };
     }
 
@@ -99,10 +112,10 @@ export class LLMSanityChecker {
       return {
         invalidPKs: result.invalidPKs,
         invalidFKs: result.invalidFKs,
-        suggestions: result.suggestions || [],
+        Suggestions: result.suggestions || [],
         tokensUsed: usage?.totalTokens || 0,
-        inputTokens: usage?.promptTokens || 0,
-        outputTokens: usage?.completionTokens || 0
+        InputTokens: usage?.promptTokens || 0,
+        OutputTokens: usage?.completionTokens || 0
       };
     } catch (parseError) {
       console.error(`[LLMSanityChecker] Failed to parse LLM response: ${(parseError as Error).message}`);
@@ -110,12 +123,20 @@ export class LLMSanityChecker {
       return {
         invalidPKs: [],
         invalidFKs: [],
-        suggestions: [],
+        Suggestions: [],
         tokensUsed: usage?.totalTokens || 0,
-        inputTokens: usage?.promptTokens || 0,
-        outputTokens: usage?.completionTokens || 0
+        InputTokens: usage?.promptTokens || 0,
+        OutputTokens: usage?.completionTokens || 0
       };
     }
+  }
+
+  /** @deprecated Use {@link ReviewCandidates}. */
+  public async reviewCandidates(
+    pkCandidates: PKCandidate[],
+    fkCandidates: FKCandidate[]
+  ): Promise<SanityCheckResult> {
+    return this.ReviewCandidates(pkCandidates, fkCandidates);
   }
 
   /**

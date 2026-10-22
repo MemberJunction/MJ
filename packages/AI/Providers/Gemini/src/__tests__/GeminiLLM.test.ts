@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
+import { ApiError } from '@google/genai';
 
 /* ------------------------------------------------------------------ */
 /*  Hoisted mocks                                                     */
@@ -15,6 +16,25 @@ vi.mock('@google/genai', () => ({
   Content: class {},
   Part: class {},
   Blob: class {},
+  FunctionCallingConfigMode: {
+    MODE_UNSPECIFIED: 'MODE_UNSPECIFIED',
+    AUTO: 'AUTO',
+    ANY: 'ANY',
+    NONE: 'NONE',
+    VALIDATED: 'VALIDATED',
+  },
+  ThinkingLevel: {
+    THINKING_LEVEL_UNSPECIFIED: 'THINKING_LEVEL_UNSPECIFIED',
+    MINIMAL: 'MINIMAL',
+    LOW: 'LOW',
+    MEDIUM: 'MEDIUM',
+    HIGH: 'HIGH',
+  },
+  // Shaped like the SDK's ApiError: an Error carrying the HTTP status.
+  ApiError: class extends Error {
+    status: number;
+    constructor(options: { message: string; status: number }) { super(options.message); this.status = options.status; }
+  },
 }));
 
 vi.mock('@memberjunction/global', () => ({
@@ -29,6 +49,8 @@ vi.mock('@memberjunction/ai', () => {
     constructor(apiKey: string) { this._apiKey = apiKey; }
     get apiKey() { return this._apiKey; }
     get SupportsStreaming() { return true; }
+    // Cancellation itself is covered against the real BaseLLM in GeminiLLM.cancellation.test.ts.
+    protected IsCancellationError(_error: unknown, signal?: AbortSignal | null): boolean { return signal?.aborted === true; }
   }
   class MockChatResult {
     success: boolean;
@@ -82,7 +104,9 @@ vi.mock('@memberjunction/ai', () => {
     ModelUsage: MockModelUsage,
     SummarizeParams: class {},
     SummarizeResult: class {},
-    ChatMessageRole: { user: 'user', assistant: 'assistant', system: 'system' },
+    ChatMessageRole: { user: 'user', assistant: 'assistant', system: 'system', tool: 'tool' },
+    ChatToolCall: class {},
+    CHAT_FINISH_REASON_TOOL_CALLS: 'tool_calls',
     ErrorAnalyzer: { analyzeError: vi.fn().mockReturnValue({ category: 'unknown' }) },
     BaseImageGenerator: MockBaseImageGenerator,
     ImageGenerationParams: class {},
@@ -131,92 +155,6 @@ describe('GeminiLLM', () => {
   describe('GeminiClient', () => {
     it('should throw if client is not yet initialized', () => {
       expect(() => llm.GeminiClient).toThrow('Gemini client not initialized');
-    });
-  });
-
-  /* ---- getThinkingBudget (private) ---- */
-  describe('getThinkingBudget', () => {
-    const callGetThinkingBudget = (effortLevel: string | number | undefined, modelName: string) => {
-      const fn = (llm as unknown as Record<string, (...args: unknown[]) => unknown>)['getThinkingBudget']
-        .bind(llm);
-      return fn(effortLevel, modelName) as number | undefined;
-    };
-
-    it('should return undefined for undefined effort level', () => {
-      expect(callGetThinkingBudget(undefined, 'gemini-2.5-flash')).toBeUndefined();
-    });
-
-    it('should return undefined for empty string effort level', () => {
-      expect(callGetThinkingBudget('', 'gemini-2.5-flash')).toBeUndefined();
-    });
-
-    it('should return undefined for NaN effort level', () => {
-      expect(callGetThinkingBudget('abc', 'gemini-2.5-flash')).toBeUndefined();
-    });
-
-    it('should return 0 only for effort 1 on Flash models (minimal)', () => {
-      expect(callGetThinkingBudget(1, 'gemini-2.5-flash')).toBe(0);
-      // effort 2 falls into the LOW band (1024-4096) — no longer disabled
-      const lowBudget = callGetThinkingBudget(2, 'gemini-2.5-flash');
-      expect(lowBudget).toBeGreaterThanOrEqual(1024);
-      expect(lowBudget).toBeLessThanOrEqual(4096);
-    });
-
-    it('should return low budget for effort level 20', () => {
-      const budget = callGetThinkingBudget(20, 'gemini-2.5-pro');
-      expect(budget).toBeGreaterThanOrEqual(1024);
-      expect(budget).toBeLessThanOrEqual(4096);
-    });
-
-    it('should return medium budget for effort level 50', () => {
-      const budget = callGetThinkingBudget(50, 'gemini-2.5-pro');
-      expect(budget).toBeGreaterThanOrEqual(4097);
-      expect(budget).toBeLessThanOrEqual(12288);
-    });
-
-    it('should return high budget for effort level 90', () => {
-      const budget = callGetThinkingBudget(90, 'gemini-2.5-pro');
-      expect(budget).toBeGreaterThanOrEqual(12289);
-      expect(budget).toBeLessThanOrEqual(24576);
-    });
-
-    it('should clamp effort level to 1-100', () => {
-      const low = callGetThinkingBudget(-10, 'gemini-2.5-pro');
-      const high = callGetThinkingBudget(200, 'gemini-2.5-pro');
-      expect(low).toBeGreaterThanOrEqual(0);
-      expect(high).toBeLessThanOrEqual(24576);
-    });
-
-    it('should parse string effort level', () => {
-      const budget = callGetThinkingBudget('50', 'gemini-2.5-pro');
-      expect(budget).toBeGreaterThanOrEqual(4097);
-    });
-  });
-
-  /* ---- supportsThinking (private) ---- */
-  describe('supportsThinking', () => {
-    const callSupportsThinking = (modelName: string) => {
-      const fn = (llm as unknown as Record<string, (...args: unknown[]) => boolean>)['supportsThinking']
-        .bind(llm);
-      return fn(modelName);
-    };
-
-    it('should return true for 2.5 models', () => {
-      expect(callSupportsThinking('gemini-2.5-pro')).toBe(true);
-      expect(callSupportsThinking('gemini-2.5-flash')).toBe(true);
-    });
-
-    it('should return true for gemini-3 models', () => {
-      expect(callSupportsThinking('gemini-3-pro')).toBe(true);
-    });
-
-    it('should return true for experimental models', () => {
-      expect(callSupportsThinking('gemini-exp-001')).toBe(true);
-    });
-
-    it('should return false for older models', () => {
-      expect(callSupportsThinking('gemini-pro')).toBe(false);
-      expect(callSupportsThinking('gemini-1.5-pro')).toBe(false);
     });
   });
 
@@ -558,32 +496,6 @@ describe('GeminiLLM', () => {
       expect(config.abortSignal).toBe(controller.signal);
     });
 
-    it('returns a cancelled ChatResult without calling the SDK when pre-aborted', async () => {
-      const controller = new AbortController();
-      controller.abort();
-      const mocks = await getChatMocks();
-
-      const result = await callNonStreaming(controller.signal);
-
-      expect(mocks.sendMessage).not.toHaveBeenCalled();
-      expect(result.success).toBe(false);
-      expect(result.statusText).toBe('Cancelled');
-    });
-
-    it('maps a mid-flight AbortError to a cancelled ChatResult (not a generic error)', async () => {
-      const controller = new AbortController();
-      const abortError = new Error('The operation was aborted');
-      abortError.name = 'AbortError';
-      const mocks = await getChatMocks();
-      mocks.sendMessage.mockRejectedValue(abortError);
-
-      const result = await callNonStreaming(controller.signal);
-
-      expect(result.success).toBe(false);
-      expect(result.statusText).toBe('Cancelled');
-      expect(result.exception).toBe(abortError);
-    });
-
     it('still reports non-cancellation failures as normal errors', async () => {
       const mocks = await getChatMocks();
       mocks.sendMessage.mockRejectedValue(new Error('boom'));
@@ -593,17 +505,551 @@ describe('GeminiLLM', () => {
       expect(result.success).toBe(false);
       expect(result.statusText).toBe('boom');
     });
+  });
+});
 
-    it('finalizeStreamingResponse reports cancellation when the stream was aborted mid-flight', () => {
-      const controller = new AbortController();
-      (llm as unknown as Record<string, AbortSignal | null>)['_streamingCancellationToken'] = controller.signal;
-      controller.abort();
+// =============================================================================
+// Native tool calling — request mapping + response normalization (plan §5)
+// =============================================================================
 
-      const fn = (llm as unknown as Record<string, (...a: unknown[]) => ChatResultLike>)['finalizeStreamingResponse'].bind(llm);
-      const result = fn('partial text', null, null);
+describe('GeminiLLM — native tool calling', () => {
+  let llm: GeminiLLM;
+  let sendMessage: Mock;
+
+  const WEATHER_TOOL = {
+    name: 'get_weather',
+    description: 'Call this when the user asks about weather.',
+    inputSchema: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] }
+  };
+
+  /** Invokes the protected driver entry point the way the base class would. */
+  const run = async (params: Record<string, unknown>): Promise<Record<string, unknown>> => {
+    const fn = (llm as unknown as Record<string, (p: unknown) => Promise<Record<string, unknown>>>)['nonStreamingChatCompletion'].bind(llm);
+    return fn({ model: 'gemini-2.5-flash', ...params });
+  };
+
+  /** The per-request config the driver handed the SDK. */
+  const sentConfig = (): Record<string, unknown> => sendMessage.mock.calls[0][0].config as Record<string, unknown>;
+
+  /** The history the driver handed chats.create(). */
+  let create: Mock;
+  const sentHistory = (): Array<Record<string, unknown>> => create.mock.calls[0][0].history;
+
+  /**
+   * The parts of the CURRENT turn. Gemini splits the conversation: everything but the last turn is
+   * `history`, and the last turn rides as `message` — so a trailing tool result lands here.
+   */
+  const sentMessageParts = (): Array<Record<string, unknown>> => sendMessage.mock.calls[0][0].message;
+
+  beforeEach(() => {
+    llm = new GeminiLLM('test-gemini-key');
+    sendMessage = vi.fn().mockResolvedValue({
+      candidates: [{ content: { parts: [{ text: 'hi' }] }, finishReason: 'STOP' }],
+      usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 2 }
+    });
+    create = vi.fn().mockReturnValue({ sendMessage, sendMessageStream: vi.fn() });
+    (llm as unknown as Record<string, unknown>)['_gemini'] = { chats: { create } };
+  });
+
+  it('declares SupportsTools', () => {
+    expect(llm.SupportsTools).toBe(true);
+  });
+
+  describe('request mapping', () => {
+    it('maps tool declarations onto functionDeclarations using parametersJsonSchema', async () => {
+      await run({ messages: [{ role: 'user', content: 'weather?' }], tools: [WEATHER_TOOL] });
+
+      expect(sentConfig().tools).toEqual([{
+        functionDeclarations: [{
+          name: 'get_weather',
+          description: 'Call this when the user asks about weather.',
+          parametersJsonSchema: WEATHER_TOOL.inputSchema
+        }]
+      }]);
+    });
+
+    it('sends no tool fields when the caller declares none', async () => {
+      await run({ messages: [{ role: 'user', content: 'hi' }] });
+
+      expect(sentConfig().tools).toBeUndefined();
+      expect(sentConfig().toolConfig).toBeUndefined();
+    });
+
+    it.each([
+      ['auto', 'AUTO'],
+      ['none', 'NONE'],
+      ['required', 'ANY']
+    ])("maps toolChoice '%s' onto functionCallingConfig mode %s", async (choice, mode) => {
+      await run({ messages: [{ role: 'user', content: 'x' }], tools: [WEATHER_TOOL], toolChoice: choice });
+
+      expect(sentConfig().toolConfig).toEqual({ functionCallingConfig: { mode } });
+    });
+
+    it('maps a named tool choice onto ANY restricted to that name', async () => {
+      await run({ messages: [{ role: 'user', content: 'x' }], tools: [WEATHER_TOOL], toolChoice: { name: 'get_weather' } });
+
+      expect(sentConfig().toolConfig).toEqual({
+        functionCallingConfig: { mode: 'ANY', allowedFunctionNames: ['get_weather'] }
+      });
+    });
+  });
+
+  describe('conversation round-tripping (§5.3)', () => {
+    it('replays a prior assistant turn as functionCall parts on a model turn', async () => {
+      await run({
+        messages: [
+          { role: 'user', content: 'weather?' },
+          { role: 'assistant', content: '', toolCalls: [{ id: 'call_1', name: 'get_weather', arguments: { city: 'NYC' } }] },
+          { role: 'tool', content: [{ type: 'tool_result', content: '72F', toolCallId: 'call_1', toolName: 'get_weather' }] }
+        ],
+        tools: [WEATHER_TOOL]
+      });
+
+      const modelTurn = sentHistory()[1];
+      expect(modelTurn.role).toBe('model');
+      // A synthesized call carries no signature, so the documented placeholder goes out.
+      expect(modelTurn.parts).toEqual([{ functionCall: { id: 'call_1', name: 'get_weather', args: { city: 'NYC' } }, thoughtSignature: 'skip_thought_signature_validator' }]);
+    });
+
+    it('replays the thought signature the model attached to its own call', async () => {
+      await run({
+        messages: [
+          { role: 'user', content: 'weather?' },
+          { role: 'assistant', content: '', toolCalls: [{ id: 'call_1', name: 'get_weather', arguments: { city: 'NYC' }, providerMetadata: { thoughtSignature: 'sig-abc' } }] },
+          { role: 'tool', content: [{ type: 'tool_result', content: '72F', toolCallId: 'call_1', toolName: 'get_weather' }] }
+        ],
+        tools: [WEATHER_TOOL]
+      });
+      const modelTurn = sentHistory()[1];
+      expect(modelTurn.parts).toEqual([{ functionCall: { id: 'call_1', name: 'get_weather', args: { city: 'NYC' } }, thoughtSignature: 'sig-abc' }]);
+    });
+
+    it('replays a signature minted here — same endpoint and model', async () => {
+      await run({
+        messages: [
+          { role: 'user', content: 'weather?' },
+          { role: 'assistant', content: '', toolCalls: [{ id: 'call_1', name: 'get_weather', arguments: {}, providerMetadata: { thoughtSignature: 'sig-here', thoughtSignatureOrigin: 'gemini-api:gemini-2.5-flash' } }] },
+          { role: 'user', content: 'thanks' }
+        ],
+        tools: [WEATHER_TOOL]
+      });
+      expect(sentHistory()[1].parts).toEqual([{ functionCall: { id: 'call_1', name: 'get_weather', args: {} }, thoughtSignature: 'sig-here' }]);
+    });
+
+    it('swaps in the placeholder for a signature minted by Vertex AI (failover) — AI Studio rejects it as corrupted', async () => {
+      await run({
+        messages: [
+          { role: 'user', content: 'weather?' },
+          { role: 'assistant', content: '', toolCalls: [{ id: 'call_1', name: 'get_weather', arguments: {}, providerMetadata: { thoughtSignature: 'sig-vertex', thoughtSignatureOrigin: 'vertex:gemini-2.5-flash' } }] },
+          { role: 'user', content: 'thanks' }
+        ],
+        tools: [WEATHER_TOOL]
+      });
+      expect(sentHistory()[1].parts).toEqual([{ functionCall: { id: 'call_1', name: 'get_weather', args: {} }, thoughtSignature: 'skip_thought_signature_validator' }]);
+    });
+
+    it('swaps in the placeholder for a signature minted by another model', async () => {
+      await run({
+        messages: [
+          { role: 'user', content: 'weather?' },
+          { role: 'assistant', content: '', toolCalls: [{ id: 'call_1', name: 'get_weather', arguments: {}, providerMetadata: { thoughtSignature: 'sig-other', thoughtSignatureOrigin: 'gemini-api:gemini-3-pro' } }] },
+          { role: 'user', content: 'thanks' }
+        ],
+        tools: [WEATHER_TOOL]
+      });
+      expect(sentHistory()[1].parts[0].thoughtSignature).toBe('skip_thought_signature_validator');
+    });
+
+    it('sends a tool result as a functionResponse part with the output key', async () => {
+      await run({
+        messages: [
+          { role: 'user', content: 'weather?' },
+          { role: 'assistant', content: '', toolCalls: [{ id: 'call_1', name: 'get_weather', arguments: {} }] },
+          { role: 'tool', content: [{ type: 'tool_result', content: '72F', toolCallId: 'call_1', toolName: 'get_weather' }] }
+        ],
+        tools: [WEATHER_TOOL]
+      });
+
+      // The tool result is the latest turn, so it rides as the message rather than in history.
+      expect(sentMessageParts()).toEqual([
+        { functionResponse: { id: 'call_1', name: 'get_weather', response: { output: '72F' } } }
+      ]);
+    });
+
+    it('uses the error key for a failed tool result', async () => {
+      await run({
+        messages: [
+          { role: 'user', content: 'weather?' },
+          { role: 'assistant', content: '', toolCalls: [{ id: 'call_1', name: 'get_weather', arguments: {} }] },
+          { role: 'tool', content: [{ type: 'tool_result', content: 'boom', toolCallId: 'call_1', toolName: 'get_weather', isError: true }] }
+        ],
+        tools: [WEATHER_TOOL]
+      });
+
+      expect(sentMessageParts()).toEqual([
+        { functionResponse: { id: 'call_1', name: 'get_weather', response: { error: 'boom' } } }
+      ]);
+    });
+
+    it('drops the empty text part on a pure tool-call turn — Gemini rejects empty parts', async () => {
+      await run({
+        messages: [
+          { role: 'user', content: 'weather?' },
+          { role: 'assistant', content: '', toolCalls: [{ id: 'call_1', name: 'get_weather', arguments: {} }] },
+          { role: 'user', content: 'thanks' }
+        ],
+        tools: [WEATHER_TOOL]
+      });
+
+      expect(sentHistory()[1].parts).toEqual([{ functionCall: { id: 'call_1', name: 'get_weather', args: {} }, thoughtSignature: 'skip_thought_signature_validator' }]);
+    });
+
+    it('keeps prose alongside the functionCall when the model produced both', async () => {
+      await run({
+        messages: [
+          { role: 'user', content: 'weather?' },
+          { role: 'assistant', content: 'Let me check.', toolCalls: [{ id: 'call_1', name: 'get_weather', arguments: {} }] },
+          { role: 'user', content: 'thanks' }
+        ],
+        tools: [WEATHER_TOOL]
+      });
+
+      expect(sentHistory()[1].parts).toEqual([
+        { text: 'Let me check.' },
+        { functionCall: { id: 'call_1', name: 'get_weather', args: {} }, thoughtSignature: 'skip_thought_signature_validator' }
+      ]);
+    });
+  });
+
+  describe('response normalization (§5.2)', () => {
+    it('normalizes functionCall parts into toolCalls', async () => {
+      sendMessage.mockResolvedValue({
+        candidates: [{ content: { parts: [{ functionCall: { id: 'call_1', name: 'get_weather', args: { city: 'NYC' } }, thoughtSignature: 'sig-from-model' }] }, finishReason: 'STOP' }],
+        usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 2 }
+      });
+
+      const result = await run({ messages: [{ role: 'user', content: 'x' }], tools: [WEATHER_TOOL] });
+
+      // The model's thought signature rides on the call so a replay can send it back.
+      expect(result.data.choices[0].message.toolCalls).toEqual([
+        { id: 'call_1', name: 'get_weather', arguments: { city: 'NYC' }, providerMetadata: { thoughtSignature: 'sig-from-model', thoughtSignatureOrigin: 'gemini-api:gemini-2.5-flash' } }
+      ]);
+      expect(result.data.choices[0].finish_reason).toBe('tool_calls');
+    });
+
+    it('does NOT report "no output received" for a text-free tool-call turn', async () => {
+      // The regression this guards: a pure tool call has no text, and the empty-output guard used
+      // to treat that as a failed generation and throw.
+      sendMessage.mockResolvedValue({
+        candidates: [{ content: { parts: [{ functionCall: { name: 'get_weather', args: {} } }] }, finishReason: 'STOP' }],
+        usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 2 }
+      });
+
+      const result = await run({ messages: [{ role: 'user', content: 'x' }], tools: [WEATHER_TOOL] });
+
+      expect(result.success).toBe(true);
+      expect(result.data.choices[0].message.toolCalls).toHaveLength(1);
+    });
+
+    it('synthesizes a stable id when Gemini omits one', async () => {
+      sendMessage.mockResolvedValue({
+        candidates: [{ content: { parts: [
+          { functionCall: { name: 'get_weather', args: {} } },
+          { functionCall: { name: 'get_time', args: {} } }
+        ] }, finishReason: 'STOP' }],
+        usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 2 }
+      });
+
+      const result = await run({ messages: [{ role: 'user', content: 'x' }], tools: [WEATHER_TOOL] });
+
+      expect(result.data.choices[0].message.toolCalls.map((c: { id: string }) => c.id))
+        .toEqual(['get_weather_0', 'get_time_1']);
+    });
+
+    it('still fails when the model returned neither text nor a tool call', async () => {
+      sendMessage.mockResolvedValue({
+        candidates: [{ content: { parts: [] }, finishReason: 'STOP' }],
+        usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 0 }
+      });
+
+      const result = await run({ messages: [{ role: 'user', content: 'x' }] });
 
       expect(result.success).toBe(false);
-      expect(result.statusText).toBe('Cancelled');
+      expect(String(result.errorMessage)).toContain('No output received from model');
+    });
+
+    it('leaves toolCalls undefined and finish_reason untouched on an ordinary turn', async () => {
+      const result = await run({ messages: [{ role: 'user', content: 'x' }] });
+
+      expect(result.data.choices[0].message.toolCalls).toBeUndefined();
+      expect(result.data.choices[0].finish_reason).toBe('STOP');
+    });
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  Generation config by model version                                */
+/*  Google is retiring temperature/topP/topK (ignored since Gemini    */
+/*  3.6, rejected by upcoming models) and thinkingBudget.             */
+/* ------------------------------------------------------------------ */
+/** The parts of a ChatResult these tests read; @memberjunction/ai is mocked in this file. */
+interface ChatResultShape {
+  success: boolean;
+  errorMessage?: string;
+  data: {
+    usage: Record<string, number>;
+    choices: Array<{ message: { content: string; thinking?: string } }>;
+  };
+}
+
+describe('GeminiLLM — generation config by model version', () => {
+  let llm: GeminiLLM;
+  let sendMessage: Mock;
+  let sendMessageStream: Mock;
+  let create: Mock;
+  let warn: ReturnType<typeof vi.spyOn>;
+
+  const run = async (params: Record<string, unknown>): Promise<ChatResultShape> => {
+    const fn = (llm as unknown as Record<string, (p: unknown) => Promise<unknown>>)['nonStreamingChatCompletion'].bind(llm);
+    return await fn({ messages: [{ role: 'user', content: 'hi' }], ...params }) as ChatResultShape;
+  };
+
+  const runStreaming = async (params: Record<string, unknown>): Promise<void> => {
+    const fn = (llm as unknown as Record<string, (p: unknown) => Promise<unknown>>)['createStreamingRequest'].bind(llm);
+    await fn({ messages: [{ role: 'user', content: 'hi' }], ...params });
+  };
+
+  /**
+   * The per-request config handed to sendMessage. @google/genai uses it INSTEAD of the session
+   * config (`params.config ?? this.config`), so this is exactly what goes on the wire.
+   */
+  const requestConfig = (): Record<string, unknown> => sendMessage.mock.calls[0][0].config as Record<string, unknown>;
+
+  beforeEach(() => {
+    llm = new GeminiLLM('test-gemini-key');
+    sendMessage = vi.fn().mockResolvedValue({
+      candidates: [{ content: { parts: [{ text: 'hi' }] }, finishReason: 'STOP' }],
+      usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 2 }
+    });
+    sendMessageStream = vi.fn().mockResolvedValue({});
+    create = vi.fn().mockReturnValue({ sendMessage, sendMessageStream });
+    (llm as unknown as Record<string, unknown>)['_gemini'] = { chats: { create } };
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // The warn-once and rejected-model sets are static (per process); clear them so each test starts clean.
+    const statics = GeminiLLM as unknown as Partial<Record<'_warnedUnsupportedSampling' | '_warnedThinking' | '_thinkingReplacements', { clear(): void }>>;
+    statics._warnedUnsupportedSampling?.clear();
+    statics._warnedThinking?.clear();
+    statics._thinkingReplacements?.clear();
+  });
+
+  afterEach(() => {
+    warn.mockRestore();
+  });
+
+  describe('models before Gemini 3.6 — sampling unchanged', () => {
+    it.each(['gemini-2.5-flash', 'gemini-3-pro-preview', 'gemini-3.1-pro-preview', 'gemini-3.5-flash'])(
+      '%s keeps the 0.5 default temperature', async (model) => {
+        await run({ model });
+        expect(requestConfig().temperature).toBe(0.5);
+      });
+
+    it('keeps sampling for non-Gemini models served by this driver (Gemma on Vertex)', async () => {
+      await run({ model: 'gemma-4-31b-it', temperature: 0.2, topP: 0.9 });
+      expect(requestConfig()).toMatchObject({ temperature: 0.2, topP: 0.9 });
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('sends an explicit temperature of 0 as 0 (not the 0.5 default)', async () => {
+      await run({ model: 'gemini-2.5-flash', temperature: 0 });
+      expect(requestConfig().temperature).toBe(0);
+    });
+
+    it('sends caller temperature / topP / topK under the SDK camelCase keys, without warning', async () => {
+      await run({ model: 'gemini-3.5-flash', temperature: 0.2, topP: 0.9, topK: 40 });
+      expect(requestConfig()).toMatchObject({ temperature: 0.2, topP: 0.9, topK: 40 });
+      expect(requestConfig()).not.toHaveProperty('top_p');
+      expect(requestConfig()).not.toHaveProperty('top_k');
+      expect(warn).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Gemini 3.6+ and unversioned ids — no sampling fields', () => {
+    it('omits temperature / topP / topK and warns once per model and field', async () => {
+      await run({ model: 'gemini-3.8-flash', temperature: 0.2, topP: 0.9, topK: 40 });
+      await run({ model: 'gemini-3.8-flash', temperature: 0.2, topP: 0.9, topK: 40 });
+
+      for (const field of ['temperature', 'topP', 'topK', 'top_p', 'top_k']) {
+        expect(requestConfig()).not.toHaveProperty(field);
+      }
+      const samplingWarnings = warn.mock.calls.filter(c => String(c[0]).includes('gemini-3.8-flash'));
+      expect(samplingWarnings).toHaveLength(3);
+    });
+
+    it.each(['gemini-3.6-flash', 'gemini-4-pro', 'gemini-flash-latest'])(
+      '%s gets no default temperature', async (model) => {
+        await run({ model });
+        expect(requestConfig()).not.toHaveProperty('temperature');
+      });
+
+    it('omits sampling fields on the streaming path too', async () => {
+      await runStreaming({ model: 'gemini-3.8-flash', temperature: 0.2, topP: 0.9, topK: 40 });
+      const config = sendMessageStream.mock.calls[0][0].config as Record<string, unknown>;
+      expect(config).not.toHaveProperty('temperature');
+      expect(config).not.toHaveProperty('topP');
+      expect(config).not.toHaveProperty('topK');
+    });
+  });
+
+  describe('thinking reaches the request (per-request config, not the chat session)', () => {
+    const thinkingConfig = (call = 0): unknown => (sendMessage.mock.calls[call][0].config as Record<string, unknown>).thinkingConfig;
+    const badRequest = (): ApiError => new ApiError({ message: 'thinking_level MINIMAL is not supported', status: 400 });
+
+    it.each(['gemini-2.5-pro', 'gemini-3.8-flash', 'gemini-flash-latest'])(
+      '%s sends no thinkingConfig without an effort level', async (model) => {
+        await run({ model });
+        expect(requestConfig()).not.toHaveProperty('thinkingConfig');
+        expect(create.mock.calls[0][0].config).toBeUndefined();
+      });
+
+    it.each([
+      ['1', 'LOW'], ['33', 'LOW'], ['34', 'MEDIUM'], ['66', 'MEDIUM'], ['67', 'HIGH'], ['100', 'HIGH'],
+    ])('gemini-3.8-flash at effort %s sends thinkingLevel %s, never MINIMAL', async (effortLevel, level) => {
+      await run({ model: 'gemini-3.8-flash', effortLevel });
+      expect(thinkingConfig()).toEqual({ thinkingLevel: level, includeThoughts: true });
+    });
+
+    it('an unversioned Gemini id gets a thinking level', async () => {
+      await run({ model: 'gemini-flash-latest', effortLevel: '50' });
+      expect(thinkingConfig()).toEqual({ thinkingLevel: 'MEDIUM', includeThoughts: true });
+    });
+
+    it('a named level is sent as that level, including MINIMAL when asked for by name', async () => {
+      await run({ model: 'gemini-3-flash-preview', effortLevel: 'minimal' });
+      expect(thinkingConfig()).toEqual({ thinkingLevel: 'MINIMAL', includeThoughts: true });
+    });
+
+    it('Gemini 2.5 gets a thinking budget, never a level', async () => {
+      await run({ model: 'gemini-2.5-pro', effortLevel: '90' });
+      expect(thinkingConfig()).toEqual({ thinkingBudget: 24576, includeThoughts: true });
+    });
+
+    it.each(['gemini-2.0-flash', 'gemma-3-27b-it'])('%s gets no thinking setting, with one warning', async (model) => {
+      await run({ model, effortLevel: '90' });
+      await run({ model, effortLevel: '90' });
+      expect(thinkingConfig(0)).toBeUndefined();
+      expect(warn).toHaveBeenCalledTimes(1);
+    });
+
+    it('an unrecognized effort sends nothing and warns once', async () => {
+      await run({ model: 'gemini-3.8-flash', effortLevel: 'turbo' });
+      expect(thinkingConfig()).toBeUndefined();
+      expect(warn).toHaveBeenCalledTimes(1);
+    });
+
+    it('sends the thinking setting on the streaming path too', async () => {
+      await runStreaming({ model: 'gemini-3.8-flash', effortLevel: '90' });
+      expect(sendMessageStream.mock.calls[0][0].config.thinkingConfig).toEqual({ thinkingLevel: 'HIGH', includeThoughts: true });
+      expect(create.mock.calls[0][0].config).toBeUndefined();
+    });
+
+    it('retries a rejected MINIMAL with LOW, then sends LOW for MINIMAL and still sends the other levels', async () => {
+      sendMessage.mockRejectedValueOnce(badRequest());
+      const first = await run({ model: 'gemini-3.8-flash', effortLevel: 'minimal' });
+      expect(first.success).toBe(true);
+      expect(thinkingConfig(0)).toEqual({ thinkingLevel: 'MINIMAL', includeThoughts: true });
+      expect(thinkingConfig(1)).toEqual({ thinkingLevel: 'LOW', includeThoughts: true });
+      expect(warn).toHaveBeenCalledTimes(1);
+
+      await run({ model: 'gemini-3.8-flash', effortLevel: 'minimal' });
+      expect(sendMessage).toHaveBeenCalledTimes(3);
+      expect(thinkingConfig(2)).toEqual({ thinkingLevel: 'LOW', includeThoughts: true });
+
+      await run({ model: 'gemini-3.8-flash', effortLevel: '90' });
+      expect(thinkingConfig(3)).toEqual({ thinkingLevel: 'HIGH', includeThoughts: true });
+    });
+
+    it('retries any other rejected setting without one, and only that setting is dropped afterwards', async () => {
+      sendMessage.mockRejectedValueOnce(new ApiError({ message: 'thinking_level HIGH is not supported', status: 400 }));
+      await run({ model: 'gemini-3-pro-preview', effortLevel: '90' });
+      expect(thinkingConfig(1)).toBeUndefined();
+
+      await run({ model: 'gemini-3-pro-preview', effortLevel: '90' });
+      expect(sendMessage).toHaveBeenCalledTimes(3);
+      expect(thinkingConfig(2)).toBeUndefined();
+
+      await run({ model: 'gemini-3-pro-preview', effortLevel: '10' });
+      expect(thinkingConfig(3)).toEqual({ thinkingLevel: 'LOW', includeThoughts: true });
+    });
+
+    it('a rejection through one driver class does not change what another sends', async () => {
+      class OtherGeminiDriver extends GeminiLLM {}
+      sendMessage.mockRejectedValueOnce(badRequest());
+      await run({ model: 'gemini-3.8-flash', effortLevel: 'minimal' });
+
+      const other = new OtherGeminiDriver('test-gemini-key');
+      (other as unknown as Record<string, unknown>)['_gemini'] = { chats: { create } };
+      const fn = (other as unknown as Record<string, (p: unknown) => Promise<unknown>>)['nonStreamingChatCompletion'].bind(other);
+      await fn({ messages: [{ role: 'user', content: 'hi' }], model: 'gemini-3.8-flash', effortLevel: 'minimal' });
+      expect(thinkingConfig(2)).toEqual({ thinkingLevel: 'MINIMAL', includeThoughts: true });
+    });
+
+    it('the streaming path retries the same way', async () => {
+      sendMessageStream.mockRejectedValueOnce(badRequest());
+      await runStreaming({ model: 'gemini-3.8-flash', effortLevel: 'minimal' });
+      expect(sendMessageStream).toHaveBeenCalledTimes(2);
+      expect(sendMessageStream.mock.calls[1][0].config.thinkingConfig).toEqual({ thinkingLevel: 'LOW', includeThoughts: true });
+    });
+
+    it('when the retry also fails, reports the original error and remembers nothing', async () => {
+      sendMessage.mockRejectedValueOnce(badRequest()).mockRejectedValueOnce(new ApiError({ message: 'contents is empty', status: 400 }));
+      const result = await run({ model: 'gemini-3.8-flash', effortLevel: '90' });
+      expect(result.success).toBe(false);
+      expect(result.errorMessage).toBe('thinking_level MINIMAL is not supported');
+
+      await run({ model: 'gemini-3.8-flash', effortLevel: '90' });
+      expect(thinkingConfig(2)).toEqual({ thinkingLevel: 'HIGH', includeThoughts: true });
+    });
+
+    it.each([
+      ['a non-400 error', () => new ApiError({ message: 'overloaded', status: 503 })],
+      ['a non-API error', () => new TypeError('fetch failed')],
+    ])('does not retry on %s', async (_label, error) => {
+      sendMessage.mockRejectedValueOnce(error());
+      const result = await run({ model: 'gemini-3.8-flash', effortLevel: '90' });
+      expect(result.success).toBe(false);
+      expect(sendMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not retry a request that carried no thinking setting', async () => {
+      sendMessage.mockRejectedValueOnce(badRequest());
+      await run({ model: 'gemini-3.8-flash' });
+      expect(sendMessage).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('thinking output and usage', () => {
+    it('counts thinking tokens in completion tokens', async () => {
+      sendMessage.mockResolvedValueOnce({
+        candidates: [{ content: { parts: [{ text: 'answer' }] }, finishReason: 'STOP' }],
+        usageMetadata: { promptTokenCount: 100, cachedContentTokenCount: 40, candidatesTokenCount: 20, thoughtsTokenCount: 300 },
+      });
+      const result = await run({ model: 'gemini-3.8-flash', effortLevel: '90' });
+      expect(result.data.usage).toMatchObject({ promptTokens: 60, completionTokens: 320, cacheReadTokens: 40 });
+    });
+
+    it('keeps every thought part, not only the first', async () => {
+      sendMessage.mockResolvedValueOnce({
+        candidates: [{ content: { parts: [{ text: 'first. ', thought: true }, { text: 'second.', thought: true }, { text: 'answer' }] }, finishReason: 'STOP' }],
+        usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 1 },
+      });
+      const result = await run({ model: 'gemini-3.8-flash', effortLevel: '90' });
+      expect(result.data.choices[0].message).toMatchObject({ content: 'answer', thinking: 'first. second.' });
+    });
+
+    it('counts streamed thinking tokens in completion tokens', () => {
+      const process = (llm as unknown as Record<string, (c: unknown) => { usage: Record<string, number> | null }>)['processStreamingChunk'].bind(llm);
+      const { usage } = process({ usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5, thoughtsTokenCount: 7 } });
+      expect(usage).toMatchObject({ promptTokens: 10, completionTokens: 12 });
     });
   });
 });

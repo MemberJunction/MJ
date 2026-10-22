@@ -3,18 +3,21 @@
  */
 
 import { DatabaseDocumentation } from '../types/state.js';
+import { ErdColumnMode } from '../types/config.js';
 
 export interface MermaidGeneratorOptions {
   approvedOnly?: boolean;
   confidenceThreshold?: number;
   includeComments?: boolean;
+  /** Columns drawn per entity: every column (default), primary/foreign keys only, or none. */
+  columns?: ErdColumnMode;
 }
 
 export class MermaidGenerator {
   /**
    * Generate Mermaid ERD diagram
    */
-  public generate(
+  public Generate(
     state: DatabaseDocumentation,
     options: MermaidGeneratorOptions = {}
   ): string {
@@ -63,6 +66,14 @@ export class MermaidGenerator {
     return lines.join('\n');
   }
 
+  /** @deprecated Use {@link Generate}. */
+  public generate(
+    state: DatabaseDocumentation,
+    options: MermaidGeneratorOptions = {}
+  ): string {
+    return this.Generate(state, options);
+  }
+
   /**
    * Append entity definitions for a schema
    */
@@ -87,6 +98,8 @@ export class MermaidGenerator {
       lines.push(`    ${table.name} {`);
 
       for (const column of table.columns) {
+        if (options.columns === 'none') continue;
+        if (options.columns === 'keys' && !column.isPrimaryKey && !column.isForeignKey) continue;
         const type = column.dataType.replace(/\s+/g, '_');
         const constraints = [];
 
@@ -193,11 +206,11 @@ export class MermaidGenerator {
    * Generate an HTML-wrapped version of the Mermaid diagram
    * Useful for standalone rendering
    */
-  public generateHtml(
+  public GenerateHtml(
     state: DatabaseDocumentation,
     options: MermaidGeneratorOptions = {}
   ): string {
-    const mermaidDiagram = this.generate(state, options);
+    const mermaidDiagram = this.Generate(state, options);
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -351,6 +364,14 @@ ${mermaidDiagram}
     </script>
 </body>
 </html>`;
+  }
+
+  /** @deprecated Use {@link GenerateHtml}. */
+  public generateHtml(
+    state: DatabaseDocumentation,
+    options: MermaidGeneratorOptions = {}
+  ): string {
+    return this.GenerateHtml(state, options);
   }
 
   private escapeHtml(text: string): string {

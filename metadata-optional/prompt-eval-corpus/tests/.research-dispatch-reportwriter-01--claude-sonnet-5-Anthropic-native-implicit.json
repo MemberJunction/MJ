@@ -1,0 +1,80 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "research-dispatch-reportwriter-01 [claude-sonnet-5 · Anthropic · native-implicit]",
+    "Description": "Research gathered; synthesis is the Report Writer's job. Tests handoff at the end of the loop rather than the start.",
+    "InputDefinition": {
+      "payload": {
+        "findings": [
+          {
+            "content": "Finding A"
+          },
+          {
+            "content": "Finding B"
+          }
+        ],
+        "sources": [
+          {
+            "id": "src_001"
+          },
+          {
+            "id": "src_002"
+          }
+        ]
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Research the market for solid-state batteries and write it up."
+        },
+        {
+          "role": "user",
+          "content": "[Sub-Agent Result] Web Research Agent completed with 2 findings across 2 sources."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "research-dispatch-reportwriter-01",
+      "expect": {
+        "kind": "subAgent",
+        "subAgents": [
+          "Research Report Writer"
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Research Agent",
+      "modelId": "31280CE6-5EFC-4407-BEFB-339322D0CC2E",
+      "vendorId": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "native",
+      "nativeControlFlow": "implicit",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "subAgent",
+            "subAgents": [
+              "Research Report Writer"
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "49A5FA78-6949-44C7-AB6A-494E0E6B494F"
+  }
+}

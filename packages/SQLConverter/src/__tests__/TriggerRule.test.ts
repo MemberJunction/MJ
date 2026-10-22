@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { TriggerRule } from '../rules/TriggerRule.js';
-import { createConversionContext } from '../rules/types.js';
+import { CreateConversionContext } from '../rules/types.js';
 
 const rule = new TriggerRule();
-const context = createConversionContext('tsql', 'postgres');
+const context = CreateConversionContext('tsql', 'postgres');
 
 function convert(sql: string): string {
   return rule.PostProcess!(sql, sql, context);

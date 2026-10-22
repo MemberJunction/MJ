@@ -19,7 +19,7 @@ vi.mock('@memberjunction/core', () => ({ LogError: vi.fn() }));
 import {
     TASK_GRAPH_FRAMES_TOPIC,
     TaskGraphFrameBroadcaster,
-    taskGraphFrameFilter,
+    TaskGraphFrameFilter,
     type TaskGraphFramePayload,
 } from '../resolvers/TaskGraphFrameResolver';
 import type { TaskGraphFrame } from '@memberjunction/task-graph';
@@ -44,7 +44,7 @@ const payload = (over: Partial<TaskGraphFramePayload> = {}): TaskGraphFramePaylo
 const context = (userId: string | null) => (userId ? { userPayload: { userRecord: { ID: userId } } } : {});
 
 const check = (over: Partial<TaskGraphFramePayload> = {}, args = GRAPH, userId: string | null = OWNER) =>
-    taskGraphFrameFilter({ payload: payload(over), args: { parentTaskId: args }, context: context(userId) });
+    TaskGraphFrameFilter({ payload: payload(over), args: { parentTaskId: args }, context: context(userId) });
 
 describe('taskGraphFrameFilter — the delivery gate', () => {
     it('delivers a frame for the watched graph to its owner', () => {
@@ -133,4 +133,26 @@ describe('TaskGraphFrameBroadcaster', () => {
         expect(p.CompletedCount).toBe(7);
         expect(p.TotalCount).toBe(7);
     });
+
+    it('bridges frames onto PUSH_STATUS_UPDATES_TOPIC when bridgeToPushStatus is enabled', () => {
+        new TaskGraphFrameBroadcaster(pubSub, true).OnFrame(
+            frame({ Kind: 'TaskCompleted', Status: 'Complete', CompletedCount: 1, TotalCount: 2 }),
+        );
+        expect(published).toHaveLength(2);
+        expect(published[0][0]).toBe(TASK_GRAPH_FRAMES_TOPIC);
+        expect(published[1][0]).toBe('PUSH_STATUS_UPDATES');
+        const pushPayload = published[1][1] as { sessionId: string; ownerUserId: string; message: string };
+        expect(pushPayload.sessionId).toBe('*');
+        expect(pushPayload.ownerUserId).toBe(OWNER);
+        const parsed = JSON.parse(pushPayload.message) as {
+            type: string;
+            status: string;
+            data: { Status: string; TaskID: string };
+        };
+        expect(parsed.type).toBe('TaskGraphFrame');
+        expect(parsed.status).toBe('ok');
+        expect(parsed.data.Status).toBe('Complete');
+        expect(parsed.data.TaskID).toBe('task-1');
+    });
 });
+

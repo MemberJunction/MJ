@@ -11,7 +11,8 @@ import {
     XAI_PCM_SAMPLE_RATE,
 } from '../drivers/xaiRealtimeClient';
 import { IOpenAIProtocolClientSocket, OpenAIProtocolServerEvent } from '../generic/openAIProtocolClient';
-import { collect, FakeMediaStream, FakeTrack } from './helpers/realtime-fakes';
+import { collect, FakeMediaStream, FakeMicCapture, FakeTrack } from './helpers/realtime-fakes';
+import { DescribePcmMicrophoneReplacement } from './helpers/microphone-replacement';
 
 // ── Fakes (no network, no Web Audio) ───────────────────────────────────────────
 
@@ -65,6 +66,12 @@ class FakePlayback implements IRealtimePcmPlayback {
     public Closed = false;
     /** Controllable stand-in for "playhead is ahead of the context clock". */
     public IsPlaying = false;
+    /** Stand-in for the Web Audio output stream the real playback exposes (issue #5153). */
+    public OutputStream: MediaStream | null = null;
+
+    public GetOutputStream(): MediaStream | null {
+        return this.OutputStream;
+    }
 
     public Enqueue(pcm16: ArrayBuffer): void {
         this.Enqueued.push(pcm16);
@@ -77,14 +84,6 @@ class FakePlayback implements IRealtimePcmPlayback {
     public Close(): void {
         this.Closed = true;
         this.IsPlaying = false;
-    }
-}
-
-/** Fake mic capture handle. */
-class FakeMicCapture implements IPcmMicCapture {
-    public Stopped = false;
-    public Stop(): void {
-        this.Stopped = true;
     }
 }
 
@@ -209,6 +208,14 @@ describe('xAIRealtimeClient', () => {
             expect(client.Fake.SentFrames().at(-1)).toEqual({ type: 'input_audio_buffer.append', audio: 'UENNMTY=' });
         });
 
+        it('should keep the client-side requestedTracks hint out of session.update', async () => {
+            await connect(client, { type: 'realtime', instructions: 'be the session voice', requestedTracks: [{ Direction: 'Inbound', Modality: 'Video' }] });
+            expect(client.Fake.SentFrames()[0]).toEqual({
+                type: 'session.update',
+                session: { type: 'realtime', instructions: 'be the session voice' },
+            });
+        });
+
         it('should NOT send a session.update when the session config is empty', async () => {
             await connect(client, {});
             expect(client.Fake.SentFrames().some((f) => f.type === 'session.update')).toBe(false);
@@ -298,11 +305,61 @@ describe('xAIRealtimeClient', () => {
             expect(transcripts.map(t => t.ReplacesPrevious)).toEqual([false, false]);
         });
 
-        it('should emit nothing for empty transcript payloads', () => {
+        it('should emit nothing for an empty assistant transcript', () => {
             const { transcripts } = collect(client);
-            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: '  ' });
             client.Emit({ type: 'response.output_audio_transcript.done', transcript: '' });
             expect(transcripts).toEqual([]);
+        });
+
+        it('should pass an empty user transcription through as a plain final, like the OpenAI base', () => {
+            // The host needs it to release the speech onset a VAD false positive stamped (MJ#5483).
+            const { transcripts } = collect(client);
+            client.Emit({ type: 'input_audio_buffer.speech_started' });
+            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: '  ' });
+            client.Emit({ type: 'input_audio_buffer.speech_started' });
+            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'I would like to apply' });
+            expect(transcripts).toEqual([
+                { Role: 'User', Text: '  ', IsFinal: true, Kind: 'normal' },
+                { Role: 'User', Text: 'I would like to apply', IsFinal: true, Kind: 'normal', ReplacesPrevious: false },
+            ]);
+        });
+
+        it('forwards item_id to OnUserSpeechStart and sets ItemId on every emitted user transcript in a streamed utterance, including empty pass-throughs', () => {
+            const startedIds: Array<string | undefined> = [];
+            const { transcripts } = collect(client);
+            client.OnUserSpeechStart((itemId) => startedIds.push(itemId));
+
+            client.Emit({ type: 'input_audio_buffer.speech_started', item_id: 'item_cough' });
+            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: '  ', item_id: 'item_cough' });
+
+            client.Emit({ type: 'input_audio_buffer.speech_started', item_id: 'item_u1' });
+            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'what', item_id: 'item_u1' });
+            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'what is MJ?', item_id: 'item_u1' });
+
+            expect(startedIds).toEqual(['item_cough', 'item_u1']);
+            expect(transcripts).toEqual([
+                { Role: 'User', Text: '  ', IsFinal: true, Kind: 'normal', ItemId: 'item_cough' },
+                { Role: 'User', Text: 'what', IsFinal: true, Kind: 'normal', ReplacesPrevious: false, ItemId: 'item_u1' },
+                { Role: 'User', Text: 'what is MJ?', IsFinal: true, Kind: 'normal', ReplacesPrevious: true, ItemId: 'item_u1' },
+            ]);
+        });
+
+        it('starts a new turn for the next item when the previous item transcript arrives after the next speech_started', () => {
+            // A's transcript is late: it lands after B's speech_started reset the per-turn flag. B's own
+            // first transcript belongs to another item, so it must append, not replace A's turn.
+            const { transcripts } = collect(client);
+            client.Emit({ type: 'input_audio_buffer.speech_started', item_id: 'item_a' });
+            client.Emit({ type: 'response.created' });
+            client.Emit({ type: 'input_audio_buffer.speech_started', item_id: 'item_b' });
+            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'Utterance A text', item_id: 'item_a' });
+            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'Utterance B text', item_id: 'item_b' });
+            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'Utterance B text grows', item_id: 'item_b' });
+
+            expect(transcripts.map((t) => [t.ItemId, t.ReplacesPrevious])).toEqual([
+                ['item_a', false],
+                ['item_b', false],
+                ['item_b', true],
+            ]);
         });
     });
 
@@ -603,9 +660,13 @@ describe('xAIRealtimeClient', () => {
         it('should send the instructions and tag the resulting turn as narration, then reset to normal', () => {
             const { transcripts } = collect(client);
             client.RequestSpokenUpdate('Say one short first-person sentence.');
+            // The session prompt rides AHEAD of the direction: `response.instructions` is a full
+            // override of the session prompt, so sending the direction alone would leave the model
+            // with no identity for exactly this one turn (#4591). `makeConfig` mints the session
+            // with `instructions: 'be the session voice'`.
             expect(client.Fake.SentFrames().at(-1)).toEqual({
                 type: 'response.create',
-                response: { instructions: 'Say one short first-person sentence.' },
+                response: { instructions: 'be the session voice\n\nSay one short first-person sentence.' },
             });
             expect(client.IsBusy).toBe(true);
 
@@ -654,6 +715,15 @@ describe('xAIRealtimeClient', () => {
             expect(client.IsBusy).toBe(false);
             expect(interruptions).toHaveLength(1);
             expect(states.at(-1)).toBe('listening');
+        });
+
+        it('invokes the OnUserSpeechStart handler on input_audio_buffer.speech_started', () => {
+            let count = 0;
+            client.OnUserSpeechStart(() => { count++; });
+            client.Emit({ type: 'input_audio_buffer.speech_started' });
+            expect(count).toBe(1);
+            client.Emit({ type: 'input_audio_buffer.speech_started' });
+            expect(count).toBe(2);
         });
 
         it('should NOT surface speech_started while idle (user simply taking their turn)', () => {
@@ -710,6 +780,22 @@ describe('xAIRealtimeClient', () => {
             expect(track.enabled).toBe(false);
             client.SetMuted(false);
             expect(track.enabled).toBe(true);
+        });
+
+        it('should publish the playback output stream on Connect and clear it on Disconnect (#5153)', async () => {
+            const agentStream = new FakeMediaStream([]);
+            client.Playback.OutputStream = agentStream;
+            const delivered: (MediaStream | null)[] = [];
+            client.OnRemoteMediaStream((s) => delivered.push(s));
+
+            await connect(client);
+
+            expect(client.GetRemoteMediaStream()).toBe(agentStream);
+            expect(delivered).toEqual([agentStream]);
+
+            await client.Disconnect();
+
+            expect(client.GetRemoteMediaStream()).toBeNull();
         });
 
         it('should tear everything down and emit closed on Disconnect', async () => {
@@ -998,3 +1084,12 @@ describe('QA re-audit fixes (S1/S3)', () => {
         expect(newSocket.SentFrames().some((f) => f.type === 'conversation.item.create')).toBe(true);
     });
 });
+
+DescribePcmMicrophoneReplacement(
+    async () => {
+        const client = new TestxAIClient();
+        const track = await connect(client);
+        return { Client: client, Track: track, Capture: client.Capture };
+    },
+    () => new TestxAIClient()
+);

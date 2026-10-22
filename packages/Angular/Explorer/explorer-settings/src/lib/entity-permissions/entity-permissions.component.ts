@@ -49,41 +49,127 @@ interface PermissionLevel {
 @RegisterClass(BaseDashboard, 'EntityPermissions')
 export class EntityPermissionsComponent extends BaseDashboard implements OnDestroy {
   // State management
-  public entityAccess: EntityAccess[] = [];
-  public filteredEntityAccess: EntityAccess[] = [];
-  public roles: MJRoleEntity[] = [];
+  public EntityAccess: EntityAccess[] = [];
+
+  /** @deprecated Use {@link EntityAccess}. */
+  public get entityAccess(): EntityAccess[] {
+    return this.EntityAccess;
+  }
+  /** @deprecated Use {@link EntityAccess}. */
+  public set entityAccess(value: EntityAccess[]) {
+    this.EntityAccess = value;
+  }
+  public FilteredEntityAccess: EntityAccess[] = [];
+
+  /** @deprecated Use {@link FilteredEntityAccess}. */
+  public get filteredEntityAccess(): EntityAccess[] {
+    return this.FilteredEntityAccess;
+  }
+  /** @deprecated Use {@link FilteredEntityAccess}. */
+  public set filteredEntityAccess(value: EntityAccess[]) {
+    this.FilteredEntityAccess = value;
+  }
+  public Roles: MJRoleEntity[] = [];
+
+  /** @deprecated Use {@link Roles}. */
+  public get roles(): MJRoleEntity[] {
+    return this.Roles;
+  }
+  /** @deprecated Use {@link Roles}. */
+  public set roles(value: MJRoleEntity[]) {
+    this.Roles = value;
+  }
   public isLoading = false;
   public error: string | null = null;
   
   // Permission dialog state
-  public showPermissionDialog = false;
-  public permissionDialogData: PermissionDialogData | null = null;
+  public ShowPermissionDialog = false;
+
+  /** @deprecated Use {@link ShowPermissionDialog}. */
+  public get showPermissionDialog() {
+    return this.ShowPermissionDialog;
+  }
+  /** @deprecated Use {@link ShowPermissionDialog}. */
+  public set showPermissionDialog(value) {
+    this.ShowPermissionDialog = value;
+  }
+  public PermissionDialogData: PermissionDialogData | null = null;
+
+  /** @deprecated Use {@link PermissionDialogData}. */
+  public get permissionDialogData(): PermissionDialogData | null {
+    return this.PermissionDialogData;
+  }
+  /** @deprecated Use {@link PermissionDialogData}. */
+  public set permissionDialogData(value: PermissionDialogData | null) {
+    this.PermissionDialogData = value;
+  }
   
   // Stats
-  public stats: PermissionsStats = {
+  public Stats: PermissionsStats = {
     totalEntities: 0,
     publicEntities: 0,
     restrictedEntities: 0,
     totalPermissions: 0
   };
+
+  /** @deprecated Use {@link Stats}. */
+  public get stats(): PermissionsStats {
+    return this.Stats;
+  }
+  /** @deprecated Use {@link Stats}. */
+  public set stats(value: PermissionsStats) {
+    this.Stats = value;
+  }
   
   // Filters
-  public filters$ = new BehaviorSubject<FilterOptions>({
+  public Filters$ = new BehaviorSubject<FilterOptions>({
     entitySearch: '',
     accessLevel: 'all',
     roleId: null
   });
+
+  /** @deprecated Use {@link Filters$}. */
+  public get filters$() {
+    return this.Filters$;
+  }
+  /** @deprecated Use {@link Filters$}. */
+  public set filters$(value) {
+    this.Filters$ = value;
+  }
   
   // UI State
-  public expandedEntityId: string | null = null;
-  public viewMode: 'grid' | 'list' = 'list';
+  public ExpandedEntityId: string | null = null;
+
+  /** @deprecated Use {@link ExpandedEntityId}. */
+  public get expandedEntityId(): string | null {
+    return this.ExpandedEntityId;
+  }
+  /** @deprecated Use {@link ExpandedEntityId}. */
+  public set expandedEntityId(value: string | null) {
+    this.ExpandedEntityId = value;
+  }
+  public ViewMode: 'grid' | 'list' = 'list';
+
+  /** @deprecated Use {@link ViewMode}. */
+  public get viewMode(): 'grid' | 'list' {
+    return this.ViewMode;
+  }
+  /** @deprecated Use {@link ViewMode}. */
+  public set viewMode(value: 'grid' | 'list') {
+    this.ViewMode = value;
+  }
 
   /** Options for the <mj-view-toggle> in the interior chrome. Icon-only;
       title drives the tooltip + aria-label. */
-  public readonly viewToggleOptions: ViewToggleOption[] = [
+  public readonly ViewToggleOptions: ViewToggleOption[] = [
     { key: 'list', icon: 'fa-solid fa-list', title: 'List View' },
     { key: 'grid', icon: 'fa-solid fa-th',   title: 'Grid View' }
   ];
+
+  /** @deprecated Use {@link ViewToggleOptions}. */
+  public get viewToggleOptions(): ViewToggleOption[] {
+    return this.ViewToggleOptions;
+  }
 
   protected override destroy$ = new Subject<void>();
   private get metadata() { return this.ProviderToUse; }
@@ -100,7 +186,7 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
   }
 
   protected loadData(): void {
-    this.loadInitialData();
+    this.LoadInitialData();
   }
 
   override ngOnDestroy(): void {
@@ -109,7 +195,7 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
     super.ngOnDestroy();
   }
   
-  public async loadInitialData(): Promise<void> {
+  public async LoadInitialData(): Promise<void> {
     try {
       this.isLoading = true;
       this.error = null;
@@ -122,7 +208,7 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
       ]);
       
       // Process the data
-      this.roles = roles;
+      this.Roles = roles;
       this.processEntityAccess(entities, permissions);
       this.calculateStats();
       this.applyFilters();
@@ -136,6 +222,11 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
         this.cdr.markForCheck();
       });
     }
+  }
+
+  /** @deprecated Use {@link LoadInitialData}. */
+  public async loadInitialData(): Promise<void> {
+    return this.LoadInitialData();
   }
 
   private async loadEntities(): Promise<MJEntityEntity[]> {
@@ -184,7 +275,7 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
     }
     
     // Create EntityAccess objects
-    this.entityAccess = entities.map(entity => {
+    this.EntityAccess = entities.map(entity => {
       const entityPermissions = permissionsByEntity.get(entity.ID) || [];
       const rolePermissions = new Map<string, PermissionLevel>();
       
@@ -210,7 +301,7 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
   }
   
   private setupFilterSubscription(): void {
-    this.filters$
+    this.Filters$
       .pipe(
         debounceTime(300),
         distinctUntilChanged((a, b) => JSON.stringify(a) === JSON.stringify(b)),
@@ -222,8 +313,8 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
   }
   
   private applyFilters(): void {
-    const filters = this.filters$.value;
-    let filtered = [...this.entityAccess];
+    const filters = this.Filters$.value;
+    let filtered = [...this.EntityAccess];
     
     // Apply entity search
     if (filters.entitySearch) {
@@ -254,30 +345,35 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
       );
     }
     
-    this.filteredEntityAccess = filtered;
+    this.FilteredEntityAccess = filtered;
   }
   
   private calculateStats(): void {
-    const publicEntities = this.entityAccess.filter(ea => ea.isPublic).length;
-    const customPermissions = this.entityAccess.filter(ea => !ea.isPublic && ea.permissions.length > 0).length;
-    const totalPermissions = this.entityAccess.reduce((sum, ea) => sum + ea.permissions.length, 0);
+    const publicEntities = this.EntityAccess.filter(ea => ea.isPublic).length;
+    const customPermissions = this.EntityAccess.filter(ea => !ea.isPublic && ea.permissions.length > 0).length;
+    const totalPermissions = this.EntityAccess.reduce((sum, ea) => sum + ea.permissions.length, 0);
     
-    this.stats = {
-      totalEntities: this.entityAccess.length,
+    this.Stats = {
+      totalEntities: this.EntityAccess.length,
       publicEntities,
-      restrictedEntities: this.entityAccess.length - publicEntities - customPermissions,
+      restrictedEntities: this.EntityAccess.length - publicEntities - customPermissions,
       totalPermissions
     };
   }
   
   // Public methods for template
-  public onAccessLevelChange(level: 'all' | 'public' | 'restricted' | 'custom'): void {
-    this.updateFilter({ accessLevel: level });
+  public OnAccessLevelChange(level: 'all' | 'public' | 'restricted' | 'custom'): void {
+    this.UpdateFilter({ accessLevel: level });
   }
 
-  public updateFilter(partial: Partial<FilterOptions>): void {
-    this.filters$.next({
-      ...this.filters$.value,
+  /** @deprecated Use {@link OnAccessLevelChange}. */
+  public onAccessLevelChange(level: 'all' | 'public' | 'restricted' | 'custom'): void {
+    return this.OnAccessLevelChange(level);
+  }
+
+  public UpdateFilter(partial: Partial<FilterOptions>): void {
+    this.Filters$.next({
+      ...this.Filters$.value,
       ...partial
     });
     // Discrete changes (chips, popover dropdowns) apply immediately. Text search
@@ -288,11 +384,16 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
     }
   }
 
+  /** @deprecated Use {@link UpdateFilter}. */
+  public updateFilter(partial: Partial<FilterOptions>): void {
+    return this.UpdateFilter(partial);
+  }
+
   // -- Filter panel binding (mj-filter-panel inside the one Filter popover) ---
   // Concise chrome: Access level + Role both live behind the single Filter
   // button; applied filters surface as removable chips below the card.
 
-  public get filterFields(): FilterFieldConfig[] {
+  public get FilterFields(): FilterFieldConfig[] {
     return [
       {
         key: 'accessLevel',
@@ -311,26 +412,36 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
         label: 'Role',
         icon: 'fa-solid fa-user-shield',
         placeholder: 'All Roles',
-        filterable: this.roles.length > 10,
+        filterable: this.Roles.length > 10,
         options: [
           { text: 'All Roles', value: '' },
-          ...this.roles.map(r => ({ text: r.Name ?? '', value: r.ID }))
+          ...this.Roles.map(r => ({ text: r.Name ?? '', value: r.ID }))
         ]
       }
     ];
   }
 
+  /** @deprecated Use {@link FilterFields}. */
+  public get filterFields(): FilterFieldConfig[] {
+    return this.FilterFields;
+  }
+
+  public get FilterValues(): Record<string, unknown> {
+    return { accessLevel: this.Filters$.value.accessLevel, roleId: this.Filters$.value.roleId ?? '' };
+  }
+
+  /** @deprecated Use {@link FilterValues}. */
   public get filterValues(): Record<string, unknown> {
-    return { accessLevel: this.filters$.value.accessLevel, roleId: this.filters$.value.roleId ?? '' };
+    return this.FilterValues;
   }
 
   /** Total active filters (Access level + Role) — drives the Filter button badge. */
   public get TotalActiveFilterCount(): number {
-    const f = this.filters$.value;
+    const f = this.Filters$.value;
     return (f.accessLevel !== 'all' ? 1 : 0) + (f.roleId ? 1 : 0);
   }
 
-  public onFilterPanelChange(values: Record<string, unknown>): void {
+  public OnFilterPanelChange(values: Record<string, unknown>): void {
     const partial: Partial<FilterOptions> = {};
     if ('accessLevel' in values) {
       partial.accessLevel = (values['accessLevel'] as FilterOptions['accessLevel']) || 'all';
@@ -338,80 +449,125 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
     if ('roleId' in values) {
       partial.roleId = (values['roleId'] as string) || null;
     }
-    this.updateFilter(partial);
+    this.UpdateFilter(partial);
+  }
+
+  /** @deprecated Use {@link OnFilterPanelChange}. */
+  public onFilterPanelChange(values: Record<string, unknown>): void {
+    return this.OnFilterPanelChange(values);
   }
 
   /** Clear all filters (Access level + Role); search persists. */
+  public ClearAllAppliedFilters(): void {
+    this.UpdateFilter({ accessLevel: 'all', roleId: null });
+  }
+
+  /** @deprecated Use {@link ClearAllAppliedFilters}. */
   public clearAllAppliedFilters(): void {
-    this.updateFilter({ accessLevel: 'all', roleId: null });
+    return this.ClearAllAppliedFilters();
   }
 
   /** True when search and/or panel filters are narrowing the list — gates the
    *  no-results empty-state "Reset filters" CTA. */
   public get IsListNarrowed(): boolean {
-    return this.filters$.value.entitySearch !== '' || this.TotalActiveFilterCount > 0;
+    return this.Filters$.value.entitySearch !== '' || this.TotalActiveFilterCount > 0;
   }
 
   /** Reset everything narrowing the list (search + Access level + Role) and
    *  refresh immediately. Wired to the no-results empty-state CTA. Unlike
    *  clearAllAppliedFilters(), this also clears the search box. */
-  public resetAllFiltersAndSearch(): void {
-    this.filters$.next({ entitySearch: '', accessLevel: 'all', roleId: null });
+  public ResetAllFiltersAndSearch(): void {
+    this.Filters$.next({ entitySearch: '', accessLevel: 'all', roleId: null });
     this.applyFilters();
     this.cdr.markForCheck();
   }
 
+  /** @deprecated Use {@link ResetAllFiltersAndSearch}. */
+  public resetAllFiltersAndSearch(): void {
+    return this.ResetAllFiltersAndSearch();
+  }
+
   /** Empty-state CTA handler: reset filters when the list is narrowed,
    *  otherwise reload the data (the original "Refresh" affordance). */
-  public onEmptyStateAction(): void {
+  public OnEmptyStateAction(): void {
     if (this.IsListNarrowed) {
-      this.resetAllFiltersAndSearch();
+      this.ResetAllFiltersAndSearch();
     } else {
-      this.refreshData();
+      this.RefreshData();
     }
   }
+
+  /** @deprecated Use {@link OnEmptyStateAction}. */
+  public onEmptyStateAction(): void {
+    return this.OnEmptyStateAction();
+  }
   
+  public ToggleEntityExpansion(entityId: string): void {
+    this.ExpandedEntityId = this.ExpandedEntityId === entityId ? null : entityId;
+  }
+
+  /** @deprecated Use {@link ToggleEntityExpansion}. */
   public toggleEntityExpansion(entityId: string): void {
-    this.expandedEntityId = this.expandedEntityId === entityId ? null : entityId;
+    return this.ToggleEntityExpansion(entityId);
   }
   
+  public IsEntityExpanded(entityId: string): boolean {
+    return this.ExpandedEntityId === entityId;
+  }
+
+  /** @deprecated Use {@link IsEntityExpanded}. */
   public isEntityExpanded(entityId: string): boolean {
-    return this.expandedEntityId === entityId;
+    return this.IsEntityExpanded(entityId);
   }
   
-  public editEntityPermissions(entityAccess: EntityAccess): void {
+  public EditEntityPermissions(entityAccess: EntityAccess): void {
     console.log('Opening permission dialog for entity:', entityAccess.entity.Name);
     console.log('Entity permissions:', entityAccess.permissions);
-    console.log('Available roles:', this.roles);
+    console.log('Available roles:', this.Roles);
     
-    this.permissionDialogData = {
+    this.PermissionDialogData = {
       entity: entityAccess.entity,
-      roles: this.roles,
+      roles: this.Roles,
       existingPermissions: entityAccess.permissions
     };
-    this.showPermissionDialog = true;
+    this.ShowPermissionDialog = true;
     
-    console.log('Dialog data set:', this.permissionDialogData);
-    console.log('Dialog visible:', this.showPermissionDialog);
+    console.log('Dialog data set:', this.PermissionDialogData);
+    console.log('Dialog visible:', this.ShowPermissionDialog);
+  }
+
+  /** @deprecated Use {@link EditEntityPermissions}. */
+  public editEntityPermissions(entityAccess: EntityAccess): void {
+    return this.EditEntityPermissions(entityAccess);
   }
   
-  public onPermissionDialogResult(result: PermissionDialogResult): void {
-    this.showPermissionDialog = false;
-    this.permissionDialogData = null;
+  public OnPermissionDialogResult(result: PermissionDialogResult): void {
+    this.ShowPermissionDialog = false;
+    this.PermissionDialogData = null;
 
     if (result.action === 'save') {
       // Refresh the data after save
-      this.loadInitialData();
+      this.LoadInitialData();
     }
   }
+
+  /** @deprecated Use {@link OnPermissionDialogResult}. */
+  public onPermissionDialogResult(result: PermissionDialogResult): void {
+    return this.OnPermissionDialogResult(result);
+  }
   
-  public async savePermissions(): Promise<void> {
+  public async SavePermissions(): Promise<void> {
     // This method is now handled by the dialog component
     // Keeping for backwards compatibility but not used
     console.warn('savePermissions method is deprecated - use PermissionDialogComponent instead');
   }
+
+  /** @deprecated Use {@link SavePermissions}. */
+  public async savePermissions(): Promise<void> {
+    return this.SavePermissions();
+  }
   
-  public getAccessLevelClass(entityAccess: EntityAccess): string {
+  public GetAccessLevelClass(entityAccess: EntityAccess): string {
     if (entityAccess.isPublic) {
       return 'access-public';
     } else if (entityAccess.permissions.length === 0) {
@@ -420,8 +576,13 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
       return 'access-custom';
     }
   }
+
+  /** @deprecated Use {@link GetAccessLevelClass}. */
+  public getAccessLevelClass(entityAccess: EntityAccess): string {
+    return this.GetAccessLevelClass(entityAccess);
+  }
   
-  public getAccessLevelLabel(entityAccess: EntityAccess): string {
+  public GetAccessLevelLabel(entityAccess: EntityAccess): string {
     if (entityAccess.isPublic) {
       return 'Public';
     } else if (entityAccess.permissions.length === 0) {
@@ -430,22 +591,47 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
       return 'Custom';
     }
   }
-  
-  public getRoleName(roleId: string): string {
-    const role = this.roles.find(r => UUIDsEqual(r.ID, roleId));
-    return role?.Name || 'Unknown Role';
+
+  /** @deprecated Use {@link GetAccessLevelLabel}. */
+  public getAccessLevelLabel(entityAccess: EntityAccess): string {
+    return this.GetAccessLevelLabel(entityAccess);
   }
   
-  public hasPermission(entityAccess: EntityAccess, roleId: string, permission: keyof PermissionLevel): boolean {
+  public GetRoleName(roleId: string): string {
+    const role = this.Roles.find(r => UUIDsEqual(r.ID, roleId));
+    return role?.Name || 'Unknown Role';
+  }
+
+  /** @deprecated Use {@link GetRoleName}. */
+  public getRoleName(roleId: string): string {
+    return this.GetRoleName(roleId);
+  }
+  
+  public HasPermission(entityAccess: EntityAccess, roleId: string, permission: keyof PermissionLevel): boolean {
     const rolePermission = entityAccess.rolePermissions.get(roleId);
     return rolePermission ? rolePermission[permission] : false;
   }
-  
-  public refreshData(): void {
-    this.loadInitialData();
+
+  /** @deprecated Use {@link HasPermission}. */
+  public hasPermission(entityAccess: EntityAccess, roleId: string, permission: keyof PermissionLevel): boolean {
+    return this.HasPermission(entityAccess, roleId, permission);
   }
   
+  public RefreshData(): void {
+    this.LoadInitialData();
+  }
+
+  /** @deprecated Use {@link RefreshData}. */
+  public refreshData(): void {
+    return this.RefreshData();
+  }
+  
+  public SetViewMode(mode: 'grid' | 'list'): void {
+    this.ViewMode = mode;
+  }
+
+  /** @deprecated Use {@link SetViewMode}. */
   public setViewMode(mode: 'grid' | 'list'): void {
-    this.viewMode = mode;
+    return this.SetViewMode(mode);
   }
 }

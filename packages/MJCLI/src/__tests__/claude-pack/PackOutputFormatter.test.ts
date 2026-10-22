@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-    formatJson,
-    formatPretty,
+    FormatJson,
+    FormatPretty,
 } from '../../lib/claude-pack/PackOutputFormatter.js';
 import type { InstallResult } from '../../lib/claude-pack/PackTypes.js';
 
@@ -29,7 +29,7 @@ describe('formatJson', () => {
             warnings: ['.claude/commands/commit.md differs from pack'],
             notes: ['Pack is up to date (v5.1.0).'],
         });
-        const json = JSON.parse(formatJson(result));
+        const json = JSON.parse(FormatJson(result));
         expect(json.ok).toBe(true);
         expect(json.packVersion).toBe('5.1.0');
         expect(json.installedMJVersion).toBe('5.33.0');
@@ -44,21 +44,21 @@ describe('formatJson', () => {
     it('always emits a `notes` array, even when empty (--json contract guarantee)', () => {
         // The §7.5 schema makes `notes` always-present, so downstream consumers
         // can do `result.notes.length` without optional-chaining or null checks.
-        const json = JSON.parse(formatJson(makeResult()));
+        const json = JSON.parse(FormatJson(makeResult()));
         expect(json).toHaveProperty('notes');
         expect(Array.isArray(json.notes)).toBe(true);
         expect(json.notes).toEqual([]);
     });
 
     it('pretty-prints with 2-space indent', () => {
-        const json = formatJson(makeResult());
+        const json = FormatJson(makeResult());
         expect(json).toContain('\n  ');
     });
 });
 
 describe('formatPretty', () => {
     it('shows a success banner with pack and MJ versions', () => {
-        const text = stripAnsi(formatPretty(makeResult({ actions: { added: ['CLAUDE.md'], updated: [], skipped: [], errors: [] } })));
+        const text = stripAnsi(FormatPretty(makeResult({ actions: { added: ['CLAUDE.md'], updated: [], skipped: [], errors: [] } })));
         expect(text).toContain('Claude Code pack v5.1.0');
         expect(text).toContain('MJ v5.33.0');
         expect(text).toContain('added (1)');
@@ -67,7 +67,7 @@ describe('formatPretty', () => {
 
     it('shows a failure banner when ok=false', () => {
         const text = stripAnsi(
-            formatPretty(
+            FormatPretty(
                 makeResult({
                     ok: false,
                     actions: { added: [], updated: [], skipped: [], errors: ['boom'] },
@@ -87,7 +87,7 @@ describe('formatPretty', () => {
                 errors: [],
             },
         });
-        const text = stripAnsi(formatPretty(result));
+        const text = stripAnsi(FormatPretty(result));
         expect(text).toContain('skipped (30)');
         expect(text).toContain('file-0.md');
         expect(text).toContain('25 more'); // 30 total - 5 shown = 25 elided
@@ -97,7 +97,7 @@ describe('formatPretty', () => {
         const result = makeResult({
             warnings: ['warning A', 'warning B'],
         });
-        const text = stripAnsi(formatPretty(result));
+        const text = stripAnsi(FormatPretty(result));
         expect(text).toContain('warnings (2)');
         expect(text).toContain('warning A');
         expect(text).toContain('warning B');
@@ -107,7 +107,7 @@ describe('formatPretty', () => {
         const result = makeResult({
             notes: ['Pack is up to date (v5.1.0).'],
         });
-        const text = stripAnsi(formatPretty(result));
+        const text = stripAnsi(FormatPretty(result));
         expect(text).toContain('notes (1)');
         expect(text).toContain('Pack is up to date');
         // Should NOT show a warnings section when there are none
@@ -119,7 +119,7 @@ describe('formatPretty', () => {
             notes: ['Update available: v5.1.0 → v5.2.0.'],
             warnings: ['Customized command would be overwritten'],
         });
-        const text = stripAnsi(formatPretty(result));
+        const text = stripAnsi(FormatPretty(result));
         expect(text).toContain('notes (1)');
         expect(text).toContain('Update available');
         expect(text).toContain('warnings (1)');
@@ -133,7 +133,7 @@ describe('formatPretty', () => {
         const result = makeResult({
             actions: { added: ['CLAUDE.md'], updated: [], skipped: [], errors: [] },
         });
-        const text = stripAnsi(formatPretty(result));
+        const text = stripAnsi(FormatPretty(result));
         expect(text).toContain('Claude Code pack v5.1.0');
         expect(text).toContain('added (1)');
         expect(text).not.toContain('notes');
@@ -144,7 +144,7 @@ describe('formatPretty', () => {
         // errorResult() builds an InstallResult with notes: []. Make sure the
         // failure path doesn't blow up when destructuring/rendering notes.
         const text = stripAnsi(
-            formatPretty(
+            FormatPretty(
                 makeResult({
                     ok: false,
                     actions: { added: [], updated: [], skipped: [], errors: ['boom'] },
@@ -158,12 +158,12 @@ describe('formatPretty', () => {
     });
 
     it('shows "(check only)" when packVersion is empty', () => {
-        const text = stripAnsi(formatPretty(makeResult({ packVersion: '' })));
+        const text = stripAnsi(FormatPretty(makeResult({ packVersion: '' })));
         expect(text).toContain('(check only)');
     });
 
     it('handles null installedMJVersion gracefully', () => {
-        const text = stripAnsi(formatPretty(makeResult({ installedMJVersion: null })));
+        const text = stripAnsi(FormatPretty(makeResult({ installedMJVersion: null })));
         expect(text).toContain('no local MJ detected');
     });
 });

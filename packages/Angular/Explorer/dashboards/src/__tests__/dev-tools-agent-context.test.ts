@@ -8,13 +8,13 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-    buildEventMonitorAgentContext,
-    buildClassRegistryAgentContext,
-    buildLazyModuleStatusAgentContext,
-    buildLayoutInspectorAgentContext,
-    buildAppStateInspectorAgentContext,
-    buildSettingsExplorerAgentContext,
-    boundDevToolsNames,
+    BuildEventMonitorAgentContext,
+    BuildClassRegistryAgentContext,
+    BuildLazyModuleStatusAgentContext,
+    BuildLayoutInspectorAgentContext,
+    BuildAppStateInspectorAgentContext,
+    BuildSettingsExplorerAgentContext,
+    BoundDevToolsNames,
     DEV_TOOLS_NAME_LIST_CAP,
     EventMonitorAgentContextInput,
 } from '../DevTools/dev-tools-agent-context';
@@ -48,19 +48,19 @@ function eventInput(overrides: Partial<EventMonitorAgentContextInput> = {}): Eve
 describe('boundDevToolsNames', () => {
     it('caps at DEV_TOOLS_NAME_LIST_CAP and never mutates the input', () => {
         const input = makeNames(DEV_TOOLS_NAME_LIST_CAP + 10);
-        const out = boundDevToolsNames(input);
+        const out = BoundDevToolsNames(input);
         expect(out).toHaveLength(DEV_TOOLS_NAME_LIST_CAP);
         expect(input).toHaveLength(DEV_TOOLS_NAME_LIST_CAP + 10); // unchanged
         expect(out).not.toBe(input);
     });
     it('returns short lists unchanged', () => {
-        expect(boundDevToolsNames(['a', 'b'])).toEqual(['a', 'b']);
+        expect(BoundDevToolsNames(['a', 'b'])).toEqual(['a', 'b']);
     });
 });
 
 describe('buildEventMonitorAgentContext', () => {
     it('passes through capture metrics and filter/sort state', () => {
-        const ctx = buildEventMonitorAgentContext(eventInput({
+        const ctx = BuildEventMonitorAgentContext(eventInput({
             EventCount: 142,
             BufferedCount: 100,
             FilteredCount: 40,
@@ -79,18 +79,18 @@ describe('buildEventMonitorAgentContext', () => {
     });
 
     it('reports HasActiveFilters=false with no filters set', () => {
-        expect(buildEventMonitorAgentContext(eventInput())['HasActiveFilters']).toBe(false);
+        expect(BuildEventMonitorAgentContext(eventInput())['HasActiveFilters']).toBe(false);
     });
 
     it('reports HasActiveFilters=true when any filter is non-empty', () => {
-        expect(buildEventMonitorAgentContext(eventInput({ TypeFilter: 'Save' }))['HasActiveFilters']).toBe(true);
-        expect(buildEventMonitorAgentContext(eventInput({ TextFilter: 'q' }))['HasActiveFilters']).toBe(true);
-        expect(buildEventMonitorAgentContext(eventInput({ ComponentFilter: 'X' }))['HasActiveFilters']).toBe(true);
-        expect(buildEventMonitorAgentContext(eventInput({ CodeFilter: 'C' }))['HasActiveFilters']).toBe(true);
+        expect(BuildEventMonitorAgentContext(eventInput({ TypeFilter: 'Save' }))['HasActiveFilters']).toBe(true);
+        expect(BuildEventMonitorAgentContext(eventInput({ TextFilter: 'q' }))['HasActiveFilters']).toBe(true);
+        expect(BuildEventMonitorAgentContext(eventInput({ ComponentFilter: 'X' }))['HasActiveFilters']).toBe(true);
+        expect(BuildEventMonitorAgentContext(eventInput({ CodeFilter: 'C' }))['HasActiveFilters']).toBe(true);
     });
 
     it('publishes bounded known-type/component/code lists with companion counts when truncated', () => {
-        const ctx = buildEventMonitorAgentContext(eventInput({
+        const ctx = BuildEventMonitorAgentContext(eventInput({
             KnownTypes: makeNames(DEV_TOOLS_NAME_LIST_CAP + 3, 'type'),
             KnownComponents: ['CompA', 'CompB'],
             KnownCodes: [],
@@ -103,7 +103,7 @@ describe('buildEventMonitorAgentContext', () => {
     });
 
     it('publishes bounded RecentEvents (secret-free summaries)', () => {
-        const ctx = buildEventMonitorAgentContext(eventInput({
+        const ctx = BuildEventMonitorAgentContext(eventInput({
             RecentEvents: [
                 { Type: 'Save', Component: 'FormX', Summary: '{ id, name }' },
                 { Type: 'Nav', Component: '(no component)', Summary: '—' },
@@ -116,13 +116,13 @@ describe('buildEventMonitorAgentContext', () => {
     });
 
     it('omits RecentEvents when there are none', () => {
-        expect(buildEventMonitorAgentContext(eventInput())['RecentEvents']).toBeUndefined();
+        expect(BuildEventMonitorAgentContext(eventInput())['RecentEvents']).toBeUndefined();
     });
 });
 
 describe('buildClassRegistryAgentContext', () => {
     it('passes through counts and search/filter state + visible base classes', () => {
-        const ctx = buildClassRegistryAgentContext({
+        const ctx = BuildClassRegistryAgentContext({
             TotalClassCount: 500,
             BaseClassCount: 40,
             OverrideCount: 3,
@@ -142,7 +142,7 @@ describe('buildClassRegistryAgentContext', () => {
     });
 
     it('caps VisibleBaseClasses + emits a companion count when truncated', () => {
-        const ctx = buildClassRegistryAgentContext({
+        const ctx = BuildClassRegistryAgentContext({
             TotalClassCount: 9999,
             BaseClassCount: 100,
             OverrideCount: 0,
@@ -157,14 +157,14 @@ describe('buildClassRegistryAgentContext', () => {
 
     it('reports HasActiveSearch=false for empty / whitespace-only search', () => {
         const base = { TotalClassCount: 1, BaseClassCount: 1, OverrideCount: 0, FilterByBase: '', VisibleGroupCount: 1, VisibleBaseClassNames: ['X'] };
-        expect(buildClassRegistryAgentContext({ ...base, SearchTerm: '' })['HasActiveSearch']).toBe(false);
-        expect(buildClassRegistryAgentContext({ ...base, SearchTerm: '   ' })['HasActiveSearch']).toBe(false);
+        expect(BuildClassRegistryAgentContext({ ...base, SearchTerm: '' })['HasActiveSearch']).toBe(false);
+        expect(BuildClassRegistryAgentContext({ ...base, SearchTerm: '   ' })['HasActiveSearch']).toBe(false);
     });
 });
 
 describe('buildLazyModuleStatusAgentContext', () => {
     it('derives PendingModules from total minus loaded and surfaces search/visible state', () => {
-        const ctx = buildLazyModuleStatusAgentContext({
+        const ctx = BuildLazyModuleStatusAgentContext({
             Available: true,
             TotalModules: 30,
             LoadedModules: 18,
@@ -185,7 +185,7 @@ describe('buildLazyModuleStatusAgentContext', () => {
     });
 
     it('never reports negative PendingModules', () => {
-        const ctx = buildLazyModuleStatusAgentContext({
+        const ctx = BuildLazyModuleStatusAgentContext({
             Available: true,
             TotalModules: 5,
             LoadedModules: 9, // defensive: shouldn't happen, but clamp anyway
@@ -202,7 +202,7 @@ describe('buildLazyModuleStatusAgentContext', () => {
 
 describe('buildLayoutInspectorAgentContext', () => {
     it('maps the selected section + count to the SelectedElement/ElementCount contract and lists sections', () => {
-        const ctx = buildLayoutInspectorAgentContext({
+        const ctx = BuildLayoutInspectorAgentContext({
             SelectedSection: 'golden',
             SelectedSectionLabel: 'Golden Layout',
             SectionCount: 2,
@@ -219,7 +219,7 @@ describe('buildLayoutInspectorAgentContext', () => {
 
 describe('buildAppStateInspectorAgentContext (METADATA-ONLY)', () => {
     it('emits size / key-count / section label+ids / top-level KEY NAMES', () => {
-        const ctx = buildAppStateInspectorAgentContext({
+        const ctx = BuildAppStateInspectorAgentContext({
             StateSize: 2048,
             KeyCount: 3,
             ActiveSection: 'provider',
@@ -236,7 +236,7 @@ describe('buildAppStateInspectorAgentContext (METADATA-ONLY)', () => {
     });
 
     it('🔒 exposes only metadata keys (counts/labels/key-names) — NO value-bearing keys', () => {
-        const ctx = buildAppStateInspectorAgentContext({
+        const ctx = BuildAppStateInspectorAgentContext({
             StateSize: 10,
             KeyCount: 1,
             ActiveSection: 'user',
@@ -253,7 +253,7 @@ describe('buildAppStateInspectorAgentContext (METADATA-ONLY)', () => {
 
 describe('buildSettingsExplorerAgentContext (METADATA-ONLY)', () => {
     it('emits counts, scope, search term, filtered count, and setting KEY NAMES', () => {
-        const ctx = buildSettingsExplorerAgentContext({
+        const ctx = BuildSettingsExplorerAgentContext({
             SettingCount: 12,
             UserSettingCount: 12,
             InstanceSettingCount: 4,
@@ -273,7 +273,7 @@ describe('buildSettingsExplorerAgentContext (METADATA-ONLY)', () => {
     });
 
     it('caps SettingKeys + emits a companion total when truncated', () => {
-        const ctx = buildSettingsExplorerAgentContext({
+        const ctx = BuildSettingsExplorerAgentContext({
             SettingCount: 100,
             UserSettingCount: 100,
             InstanceSettingCount: 0,
@@ -287,7 +287,7 @@ describe('buildSettingsExplorerAgentContext (METADATA-ONLY)', () => {
     });
 
     it('🔒 exposes only metadata keys (counts/scope/search/key-names) — NO setting-value keys', () => {
-        const ctx = buildSettingsExplorerAgentContext({
+        const ctx = BuildSettingsExplorerAgentContext({
             SettingCount: 0,
             UserSettingCount: 0,
             InstanceSettingCount: 0,

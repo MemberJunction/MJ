@@ -425,7 +425,7 @@ describe('executeModelWithFailover — skips uncredentialed candidates', () => {
 // ===========================================================================
 // selectModel must EXPOSE the credential probes it performed (credentialAvailability)
 // so the execution/failover layer can reuse them instead of recomputing
-// hasCredentialsAvailable for candidates selection already walked. The map only
+// HasCredentialsAvailable for candidates selection already walked. The map only
 // covers the probed prefix + the selected candidate — the short-circuited tail is
 // intentionally absent so failover still probes it lazily if it ever walks there.
 // ===========================================================================
@@ -476,7 +476,7 @@ describe('selectModel — exposes credentialAvailability for reuse', () => {
 // ===========================================================================
 // executeModelWithFailover must REUSE the credential probes selection already did
 // (threaded in via the credentialAvailability map) rather than recomputing
-// hasCredentialsAvailable on the happy path. This is the perf re-optimization:
+// HasCredentialsAvailable on the happy path. This is the perf re-optimization:
 // selection and failover walk the same prefix, so failover should not re-probe it.
 // The not-evaluated tail (absent from the seeded map) is still probed lazily only
 // if a real failure forces failover to walk down to it.
@@ -486,7 +486,7 @@ describe('executeModelWithFailover — reuses selection credential probes', () =
   type ReuseRunner = {
     executeModel: (...args: ExecArgs) => Promise<{ success: boolean; errorInfo?: unknown }>;
     executeModelWithFailover: (...args: ExecArgs) => Promise<{ success: boolean; errorMessage?: string }>;
-    hasCredentialsAvailable: (...args: ExecArgs) => boolean;
+    HasCredentialsAvailable: (...args: ExecArgs) => boolean;
   };
 
   function candidate(modelId: string, driverClass: string, vendorId: string, vendorName: string, priority: number) {
@@ -519,7 +519,7 @@ describe('executeModelWithFailover — reuses selection credential probes', () =
 
   it('does NOT re-probe credentials for a candidate selection already evaluated (happy path)', async () => {
     const runner = new AIPromptRunner();
-    const credSpy = vi.spyOn(runner as unknown as ReuseRunner, 'hasCredentialsAvailable');
+    const credSpy = vi.spyOn(runner as unknown as ReuseRunner, 'HasCredentialsAvailable');
     const execSpy = vi.spyOn(runner as unknown as ReuseRunner, 'executeModel').mockResolvedValue({ success: true });
 
     const c = candidate('m-gem', 'GeminiLLM', 'v-google', 'Google', 5251);
@@ -533,7 +533,7 @@ describe('executeModelWithFailover — reuses selection credential probes', () =
 
   it('treats the seeded map as authoritative — a seeded `true` runs even with NO drivers configured', async () => {
     const runner = new AIPromptRunner();
-    const credSpy = vi.spyOn(runner as unknown as ReuseRunner, 'hasCredentialsAvailable');
+    const credSpy = vi.spyOn(runner as unknown as ReuseRunner, 'HasCredentialsAvailable');
     const execSpy = vi.spyOn(runner as unknown as ReuseRunner, 'executeModel').mockResolvedValue({ success: true });
 
     const c = candidate('m-gem', 'GeminiLLM', 'v-google', 'Google', 5251);
@@ -548,7 +548,7 @@ describe('executeModelWithFailover — reuses selection credential probes', () =
 
   it('reuses a seeded `false` to skip the prefix without re-probing, landing on the seeded credentialed candidate', async () => {
     const runner = new AIPromptRunner();
-    const credSpy = vi.spyOn(runner as unknown as ReuseRunner, 'hasCredentialsAvailable');
+    const credSpy = vi.spyOn(runner as unknown as ReuseRunner, 'HasCredentialsAvailable');
     const execSpy = vi.spyOn(runner as unknown as ReuseRunner, 'executeModel').mockResolvedValue({ success: true });
 
     const top = candidate('m-oss', 'FireworksLLM', 'v-fireworks', 'Fireworks.ai', 5300);
@@ -564,7 +564,7 @@ describe('executeModelWithFailover — reuses selection credential probes', () =
 
   it('lazily probes ONLY the not-evaluated tail (absent from the seeded map) during a real failover', async () => {
     const runner = new AIPromptRunner();
-    const credSpy = vi.spyOn(runner as unknown as ReuseRunner, 'hasCredentialsAvailable'); // calls through to real impl
+    const credSpy = vi.spyOn(runner as unknown as ReuseRunner, 'HasCredentialsAvailable'); // calls through to real impl
     // First (seeded) candidate fails over-ably; the tail (lazily probed) then succeeds.
     const execSpy = vi.spyOn(runner as unknown as ReuseRunner, 'executeModel')
       .mockResolvedValueOnce({ success: false, errorInfo: { canFailover: true, errorType: 'ServiceError', severity: 'NonFatal' } })
@@ -577,7 +577,7 @@ describe('executeModelWithFailover — reuses selection credential probes', () =
 
     // Selection covered `sel`, so the only credential probe is the lazy one for the tail.
     expect(credSpy).toHaveBeenCalledTimes(1);
-    expect(credSpy.mock.calls[0][0]).toBe('AnthropicLLM'); // driverClass arg of hasCredentialsAvailable
+    expect(credSpy.mock.calls[0][0]).toBe('AnthropicLLM'); // driverClass arg of HasCredentialsAvailable
     expect(execSpy).toHaveBeenCalledTimes(2);
     expect(result.success).toBe(true);
   });
@@ -657,5 +657,65 @@ describe('ParallelExecutionCoordinator — reuses base execution path (no drift)
     expect(per.additionalParameters).toEqual({ temperature: 0.1, topP: 0.9 }); // per-model merged in
     per.onStreaming?.({ content: 'tok', isComplete: false });
     expect(onContent).toHaveBeenCalledWith('tok', false);              // OnContent bridged via onStreaming
+  });
+
+  it('coalesces rapid streaming token chunks within the 35ms window and flushes immediately on completion (MJ-AI-9)', async () => {
+    const runner = new AIPromptRunner();
+    const receivedChunks: Array<{ content: string; isComplete: boolean; modelName?: string }> = [];
+
+    type RunnerStreamingInternals = {
+      executeModel: (
+        model: unknown,
+        renderedPrompt: string,
+        prompt: unknown,
+        params: Record<string, unknown>,
+        vendorId: string | null,
+        conversationMessages?: unknown[],
+        templateMessageRole?: string,
+        cancellationToken?: AbortSignal,
+        vendorDriverClass?: string,
+        vendorApiName?: string
+      ) => Promise<unknown>;
+      ResolveCredentialForExecution: () => Promise<string>;
+      buildMessageArray: () => unknown[];
+      runChatCompletionBounded: (llm: unknown, chatParams: { streamingCallbacks?: { OnContent?: (c: string, d: boolean) => void } }) => Promise<unknown>;
+    };
+
+    const internals = runner as unknown as RunnerStreamingInternals;
+    vi.spyOn(internals, 'ResolveCredentialForExecution').mockResolvedValue('test-key');
+    vi.spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance').mockReturnValue({
+      GetFileCapabilities: () => ({}),
+      SupportsAssistantPrefill: false,
+    } as never);
+    vi.spyOn(internals, 'buildMessageArray').mockReturnValue([]);
+    vi.spyOn(internals, 'runChatCompletionBounded').mockImplementation(async (_llm, chatParams) => {
+      const onContent = chatParams.streamingCallbacks?.OnContent;
+      // First chunk should emit immediately
+      onContent?.('Hello', false);
+      // Rapid subsequent chunks in same tick should be buffered and coalesced
+      onContent?.(' ', false);
+      onContent?.('world', false);
+      onContent?.('!', true);
+      return { success: true, data: { choices: [{ message: { content: 'Hello world!' } }], usage: {} } };
+    });
+
+    await internals.executeModel(
+      { ID: 'm1', Name: 'Model One', DriverClass: 'OpenAILLM', APIName: 'gpt-4o' },
+      'rendered',
+      makePrompt(),
+      { onStreaming: (c: { content: string; isComplete: boolean; modelName?: string }) => receivedChunks.push(c) },
+      'v1',
+      [],
+      'system',
+      undefined,
+      'OpenAILLM',
+      'gpt-4o'
+    );
+
+    // 4 rapid token emissions were coalesced into 2 callbacks: immediate first chunk + flushed completion chunk
+    expect(receivedChunks).toEqual([
+      { content: 'Hello', isComplete: false, modelName: 'Model One' },
+      { content: ' world!', isComplete: true, modelName: 'Model One' },
+    ]);
   });
 });

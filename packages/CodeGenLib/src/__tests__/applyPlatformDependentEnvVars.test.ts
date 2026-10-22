@@ -41,7 +41,7 @@ vi.mock('cosmiconfig', () => ({
 }));
 
 import type { ConfigInfo } from '../Config/config';
-import { applyPlatformDependentEnvVars, _warnedEnvPrecedencePairs } from '../Config/config';
+import { ApplyPlatformDependentEnvVars, WarnedEnvPrecedencePairs } from '../Config/config';
 
 /** Build a minimal `ConfigInfo`-shaped object for tests. */
 function makeConfig(overrides: Partial<ConfigInfo> = {}): ConfigInfo {
@@ -63,7 +63,7 @@ function makeConfig(overrides: Partial<ConfigInfo> = {}): ConfigInfo {
 
 describe('applyPlatformDependentEnvVars — short-circuits', () => {
     beforeEach(() => {
-        _warnedEnvPrecedencePairs.clear();
+        WarnedEnvPrecedencePairs.clear();
         for (const key of ['PG_HOST', 'PG_PORT', 'PG_DATABASE', 'PG_USERNAME', 'PG_PASSWORD',
                             'DB_HOST', 'DB_PORT', 'DB_DATABASE', 'CODEGEN_DB_USERNAME', 'CODEGEN_DB_PASSWORD']) {
             delete process.env[key];
@@ -73,7 +73,7 @@ describe('applyPlatformDependentEnvVars — short-circuits', () => {
     it('is a no-op when dbPlatform is sqlserver (PG_* env vars are ignored)', () => {
         process.env.PG_HOST = 'pg.example.com';
         const config = makeConfig({ dbPlatform: 'sqlserver' as ConfigInfo['dbPlatform'], dbHost: 'sql.example.com' });
-        applyPlatformDependentEnvVars(config, {});
+        ApplyPlatformDependentEnvVars(config, {});
         expect(config.dbHost).toBe('sql.example.com');
     });
 });
@@ -82,7 +82,7 @@ describe('applyPlatformDependentEnvVars — PG_* precedence on postgresql', () =
     let warnSpy: ReturnType<typeof vi.spyOn>;
 
     beforeEach(() => {
-        _warnedEnvPrecedencePairs.clear();
+        WarnedEnvPrecedencePairs.clear();
         for (const key of ['PG_HOST', 'PG_PORT', 'PG_DATABASE', 'PG_USERNAME', 'PG_PASSWORD',
                             'DB_HOST', 'DB_PORT', 'DB_DATABASE', 'CODEGEN_DB_USERNAME', 'CODEGEN_DB_PASSWORD']) {
             delete process.env[key];
@@ -97,20 +97,20 @@ describe('applyPlatformDependentEnvVars — PG_* precedence on postgresql', () =
     it('applies PG_HOST when the user did NOT set dbHost in mj.config.cjs', () => {
         process.env.PG_HOST = 'pg.example.com';
         const config = makeConfig({ dbHost: 'fallback.from.defaults' });
-        applyPlatformDependentEnvVars(config, /* userConfig */ {});
+        ApplyPlatformDependentEnvVars(config, /* userConfig */ {});
         expect(config.dbHost).toBe('pg.example.com');
     });
 
     it('does NOT override dbHost when the user explicitly set it in mj.config.cjs', () => {
         process.env.PG_HOST = 'pg.example.com';
         const config = makeConfig({ dbHost: 'user.set.host' });
-        applyPlatformDependentEnvVars(config, /* userConfig */ { dbHost: 'user.set.host' });
+        ApplyPlatformDependentEnvVars(config, /* userConfig */ { dbHost: 'user.set.host' });
         expect(config.dbHost).toBe('user.set.host');
     });
 
     it('is a no-op when no PG_* env var is set (default-resolved config wins)', () => {
         const config = makeConfig({ dbHost: 'defaults.host' });
-        applyPlatformDependentEnvVars(config, {});
+        ApplyPlatformDependentEnvVars(config, {});
         expect(config.dbHost).toBe('defaults.host');
     });
 
@@ -122,7 +122,7 @@ describe('applyPlatformDependentEnvVars — PG_* precedence on postgresql', () =
         process.env.PG_PASSWORD = 'pg_pwd';
 
         const config = makeConfig();
-        applyPlatformDependentEnvVars(config, {});
+        ApplyPlatformDependentEnvVars(config, {});
 
         expect(config.dbHost).toBe('pg.host');
         expect(config.dbPort).toBe(5433);
@@ -138,7 +138,7 @@ describe('applyPlatformDependentEnvVars — PG_* precedence on postgresql', () =
 
         const config = makeConfig({ dbHost: 'will.be.overridden', dbPort: 9999, dbDatabase: 'user_db' });
         // User explicitly set dbDatabase in mj.config.cjs but NOT dbHost / dbPort.
-        applyPlatformDependentEnvVars(config, { dbDatabase: 'user_db' });
+        ApplyPlatformDependentEnvVars(config, { dbDatabase: 'user_db' });
 
         expect(config.dbHost).toBe('pg.host');           // overridden by PG_HOST
         expect(config.dbPort).toBe(5433);                // overridden by PG_PORT
@@ -148,7 +148,7 @@ describe('applyPlatformDependentEnvVars — PG_* precedence on postgresql', () =
     it('does NOT corrupt dbPort when PG_PORT is non-numeric — leaves the existing value', () => {
         process.env.PG_PORT = 'definitely-not-a-port';
         const config = makeConfig({ dbPort: 5432 });
-        applyPlatformDependentEnvVars(config, {});
+        ApplyPlatformDependentEnvVars(config, {});
         expect(config.dbPort).toBe(5432);
     });
 });
@@ -157,7 +157,7 @@ describe('applyPlatformDependentEnvVars — precedence warning', () => {
     let warnSpy: ReturnType<typeof vi.spyOn>;
 
     beforeEach(() => {
-        _warnedEnvPrecedencePairs.clear();
+        WarnedEnvPrecedencePairs.clear();
         for (const key of ['PG_HOST', 'PG_PORT', 'DB_HOST', 'DB_PORT']) {
             delete process.env[key];
         }
@@ -171,7 +171,7 @@ describe('applyPlatformDependentEnvVars — precedence warning', () => {
     it('warns when PG_HOST and DB_HOST are both set and differ', () => {
         process.env.PG_HOST = 'pg.host';
         process.env.DB_HOST = 'sql.host';
-        applyPlatformDependentEnvVars(makeConfig(), {});
+        ApplyPlatformDependentEnvVars(makeConfig(), {});
         expect(warnSpy).toHaveBeenCalledOnce();
         const msg = String(warnSpy.mock.calls[0]![0]);
         expect(msg).toContain('PG_HOST=pg.host');
@@ -182,13 +182,13 @@ describe('applyPlatformDependentEnvVars — precedence warning', () => {
     it('does NOT warn when PG_HOST and DB_HOST are set to the same value', () => {
         process.env.PG_HOST = 'same.host';
         process.env.DB_HOST = 'same.host';
-        applyPlatformDependentEnvVars(makeConfig(), {});
+        ApplyPlatformDependentEnvVars(makeConfig(), {});
         expect(warnSpy).not.toHaveBeenCalled();
     });
 
     it('does NOT warn when only PG_HOST is set (no DB_HOST to differ from)', () => {
         process.env.PG_HOST = 'pg.host';
-        applyPlatformDependentEnvVars(makeConfig(), {});
+        ApplyPlatformDependentEnvVars(makeConfig(), {});
         expect(warnSpy).not.toHaveBeenCalled();
     });
 
@@ -196,11 +196,11 @@ describe('applyPlatformDependentEnvVars — precedence warning', () => {
         process.env.PG_HOST = 'pg.host';
         process.env.DB_HOST = 'sql.host';
         // First call (e.g. module-load merge)
-        applyPlatformDependentEnvVars(makeConfig(), {});
+        ApplyPlatformDependentEnvVars(makeConfig(), {});
         // Second call (e.g. user invoked `initializeConfig(cwd)`)
-        applyPlatformDependentEnvVars(makeConfig(), {});
+        ApplyPlatformDependentEnvVars(makeConfig(), {});
         // Third call (e.g. CLI re-resolved cwd after navigating)
-        applyPlatformDependentEnvVars(makeConfig(), {});
+        ApplyPlatformDependentEnvVars(makeConfig(), {});
         expect(warnSpy).toHaveBeenCalledOnce();
     });
 
@@ -209,7 +209,7 @@ describe('applyPlatformDependentEnvVars — precedence warning', () => {
         process.env.DB_HOST = 'sql.host';
         process.env.PG_PORT = '5433';
         process.env.DB_PORT = '1433';
-        applyPlatformDependentEnvVars(makeConfig(), {});
+        ApplyPlatformDependentEnvVars(makeConfig(), {});
         // Two distinct divergences → two warnings.
         expect(warnSpy).toHaveBeenCalledTimes(2);
     });

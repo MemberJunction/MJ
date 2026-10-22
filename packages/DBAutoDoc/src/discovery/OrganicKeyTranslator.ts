@@ -18,8 +18,8 @@ import {
     OrganicKeyCluster,
     OrganicKeyClusterMember,
     OrganicKeyNormalizationStrategy,
-    memberColumns,
-    isCompoundMember,
+    MemberColumns,
+    IsCompoundMember,
 } from '../types/organic-keys.js';
 
 // ─── PR #2193 output shape ───────────────────────────────────────────────────
@@ -69,31 +69,53 @@ export type DetectedOrganicKeysOutput = Record<string, TableOrganicKeyConfig[]>;
 // ─── Transitive spoke input (from Phase B) ──────────────────────────────────
 
 export interface TransitiveSpokeInput {
-    hubSchema: string;
-    hubTable: string;
-    hubKeyFields: string[];
-    spokeSchema: string;
-    spokeTable: string;
-    transitiveView: TransitiveViewConfig;
-    transitiveMatchFieldNames: string[];
-    transitiveOutputFieldName: string;
-    relatedEntityJoinFieldName: string;
-    hubConcept?: string;
+    hubSchema: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    hubTable: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    hubKeyFields: string[];  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    spokeSchema: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    spokeTable: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    transitiveView: TransitiveViewConfig;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    transitiveMatchFieldNames: string[];  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    transitiveOutputFieldName: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    relatedEntityJoinFieldName: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    hubConcept?: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 // ─── Entry point — pure fan-out ─────────────────────────────────────────────
 
+/** Emit-time options for {@link TranslateClusters}. */
+export interface TranslateOptions {
+    /**
+     * Value for `AutoCreateRelatedViewOnForm` on every emitted key. Default FALSE.
+     *
+     * This was a hardcoded `true`, so every emitted key auto-created a related-record
+     * grid per spoke — around 22 grids per key on a real run, none of them asked for,
+     * each one a value-join on a column the detector had never verified. Opting in is
+     * the right default for a machine-proposed key.
+     */
+    AutoCreateRelatedViewOnForm?: boolean;
+    /**
+     * Called for each concept skipped because no member is its table's primary key, with the
+     * concept name and member count, so the caller can report what was not emitted.
+     */
+    OnUnanchored?: (concept: string, members: number) => void;
+}
+
 /**
  * Render gated clusters into PR #2193 JSON. Same-concept consolidation +
- * per-table fan-out + transitive spoke attachment. No filters, no thresholds.
+ * hub-and-spoke fan-out + transitive spoke attachment. No thresholds.
  *
- * The caller (Composer) is responsible for filtering. Anything passed in
- * gets emitted.
+ * The caller (Composer) is responsible for filtering by evidence. The one
+ * structural rule applied here: a concept is emitted only around the members
+ * that own it as a primary key (the hubs), and non-hub members are never
+ * linked to each other.
  */
-export function translateClusters(
+export function TranslateClusters(
     clusters: OrganicKeyCluster[],
     transitiveSpokes: TransitiveSpokeInput[] = [],
+    options: TranslateOptions = {},
 ): DetectedOrganicKeysOutput {
+    const autoCreateRelatedView = options.AutoCreateRelatedViewOnForm ?? false;
     // Step 1 — group by normalized canonical concept name.
     const byConcept = new Map<string, OrganicKeyCluster[]>();
     for (const cluster of clusters) {
@@ -112,7 +134,7 @@ export function translateClusters(
         const memberMap = new Map<string, OrganicKeyClusterMember>();
         for (const c of group) {
             for (const m of c.members) {
-                const k = `${m.schema}.${m.table}.${memberColumns(m).join(',')}`;
+                const k = `${m.schema}.${m.table}.${MemberColumns(m).join(',')}`;
                 if (!memberMap.has(k)) memberMap.set(k, m);
             }
         }
@@ -127,17 +149,29 @@ export function translateClusters(
             .sort((a, b) => (b.confidence - a.confidence) || (b.members.length - a.members.length))[0];
         const name = prettyConceptName(anchor.concept);
 
-        // Step 3 — fan out: one entry per unique owner, spokes = all OTHER unique members.
+        // Hubs are the members whose column is their table's primary key: the table that owns
+        // the value. Without one, every pair is a co-reference (two tables that both hold a
+        // customer key), which is many-to-many and multiplies rows when joined, so the concept
+        // is skipped rather than emitted as a join path.
+        const hubs = allMembers.filter((m) => m.isPrimaryKey);
+        if (hubs.length === 0) {
+            options.OnUnanchored?.(name, allMembers.length);
+            continue;
+        }
+
+        // Step 3 — fan out, hub and spoke: a hub links to every other member (one-to-many);
+        // any other member links only to the hubs (many-to-one), never to another non-hub.
         for (const owner of allMembers) {
             const tableEntry = upsertTable(out, owner.schema, owner.table);
+            const targets = owner.isPrimaryKey ? allMembers : hubs;
 
             const seenSpokes = new Set<string>();
             const spokes: OrganicKeyRelatedEntityConfig[] = [];
 
-            // Direct spokes — every other cluster member.
-            for (const target of allMembers) {
+            // Direct spokes.
+            for (const target of targets) {
                 if (target === owner) continue;
-                const targetColumns = memberColumns(target);
+                const targetColumns = MemberColumns(target);
                 const k = `${target.schema}.${target.table}.${targetColumns.join(',')}`;
                 if (seenSpokes.has(k)) continue;
                 seenSpokes.add(k);
@@ -149,14 +183,19 @@ export function translateClusters(
                 });
             }
 
-            // Transitive spokes — bridge views attached to matching hubs.
-            const ownerColumns = memberColumns(owner);
-            const matchingTransitive = transitiveSpokes.filter(
+            // Transitive spokes — bridge views attached to matching hubs. Only a hub owner gets
+            // them: a non-hub reaching another table through a bridge (orders -> registration via
+            // the customer key both hold) is the same co-reference the direct fan-out leaves out.
+            // A table the owner already links to directly is not added again through a bridge.
+            const ownerColumns = MemberColumns(owner);
+            const directTables = new Set(spokes.map((s) => `${s.SchemaName}.${s.TableName}`));
+            const matchingTransitive = !owner.isPrimaryKey ? [] : transitiveSpokes.filter(
                 (t) =>
                     t.hubSchema === owner.schema &&
                     t.hubTable === owner.table &&
                     t.hubKeyFields.length === ownerColumns.length &&
-                    t.hubKeyFields.every((f, idx) => f === ownerColumns[idx]),
+                    t.hubKeyFields.every((f, idx) => f === ownerColumns[idx]) &&
+                    !directTables.has(`${t.spokeSchema}.${t.spokeTable}`),
             );
             for (const t of matchingTransitive) {
                 spokes.push({
@@ -170,7 +209,7 @@ export function translateClusters(
                 });
             }
 
-            const compoundSuffix = isCompoundMember(owner) ? ` (compound: ${ownerColumns.join('+')})` : '';
+            const compoundSuffix = IsCompoundMember(owner) ? ` (compound: ${ownerColumns.join('+')})` : '';
             // Per-column normalization: each emitted EntityOrganicKey row carries the
             // transformation for ITS owner column. The runtime looks up each side's
             // own expression at match time (see EntityInfo.BuildOrganicKeyViewParams),
@@ -185,13 +224,22 @@ export function translateClusters(
                 MatchFieldNames: ownerColumns,
                 NormalizationStrategy: ownerNormalization,
                 CustomNormalizationExpression: ownerCustomExpression,
-                AutoCreateRelatedViewOnForm: true,
+                AutoCreateRelatedViewOnForm: autoCreateRelatedView,
                 RelatedEntities: spokes,
             });
         }
     }
 
     return out;
+}
+
+/** @deprecated Use {@link TranslateClusters}. */
+export function translateClusters(
+    clusters: OrganicKeyCluster[],
+    transitiveSpokes: TransitiveSpokeInput[] = [],
+    options: TranslateOptions = {},
+): DetectedOrganicKeysOutput {
+    return TranslateClusters(clusters, transitiveSpokes, options);
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -233,7 +281,7 @@ function upsertTable(
 }
 
 /** Tally the emit payload: number of schemas, tables, organic keys, and spokes it contains. */
-export function countOutputEntries(out: DetectedOrganicKeysOutput): {
+export function CountOutputEntries(out: DetectedOrganicKeysOutput): {
     schemas: number;
     tables: number;
     keys: number;
@@ -251,4 +299,14 @@ export function countOutputEntries(out: DetectedOrganicKeysOutput): {
         }
     }
     return { schemas, tables, keys, spokes };
+}
+
+/** @deprecated Use {@link CountOutputEntries}. */
+export function countOutputEntries(out: DetectedOrganicKeysOutput): {
+    schemas: number;
+    tables: number;
+    keys: number;
+    spokes: number;
+} {
+    return CountOutputEntries(out);
 }

@@ -24,7 +24,7 @@ const visibilityByPool = new WeakMap<sql.ConnectionPool, Promise<boolean>>();
  * True when the pool's login can see the full catalog: database-wide VIEW DEFINITION (or
  * CONTROL, which db_owner/sa imply). False on least-privilege application logins.
  */
-export function hasFullCatalogVisibility(pool: sql.ConnectionPool): Promise<boolean> {
+export function HasFullCatalogVisibility(pool: sql.ConnectionPool): Promise<boolean> {
     let cached = visibilityByPool.get(pool);
     if (!cached) {
         cached = pool.request()
@@ -35,4 +35,9 @@ export function hasFullCatalogVisibility(pool: sql.ConnectionPool): Promise<bool
         visibilityByPool.set(pool, cached);
     }
     return cached;
+}
+
+/** @deprecated Use {@link HasFullCatalogVisibility}. */
+export function hasFullCatalogVisibility(pool: sql.ConnectionPool): Promise<boolean> {
+    return HasFullCatalogVisibility(pool);
 }

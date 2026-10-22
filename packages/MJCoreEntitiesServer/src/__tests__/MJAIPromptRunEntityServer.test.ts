@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { hasRecordedUsage, normalizeRecordedUsage, RecordedRunUsage } from '../custom/MJAIPromptRunEntityServer.server';
+import { HasRecordedUsage, NormalizeRecordedUsage, RecordedRunUsage } from '../custom/MJAIPromptRunEntityServer.server';
 
 function usage(overrides: Partial<RecordedRunUsage> = {}): RecordedRunUsage {
     return {
@@ -22,29 +22,29 @@ function usage(overrides: Partial<RecordedRunUsage> = {}): RecordedRunUsage {
 
 describe('hasRecordedUsage', () => {
     it('is false for a run that recorded nothing', () => {
-        expect(hasRecordedUsage(usage())).toBe(false);
+        expect(HasRecordedUsage(usage())).toBe(false);
     });
 
     it('is true for ordinary token usage', () => {
-        expect(hasRecordedUsage(usage({ tokensPrompt: 1200, tokensCompletion: 300 }))).toBe(true);
+        expect(HasRecordedUsage(usage({ tokensPrompt: 1200, tokensCompletion: 300 }))).toBe(true);
     });
 
     it('is true for a fully-cached call with no net-new prompt tokens', () => {
         // Cache reads are still billed input, so this run costs money despite TokensPrompt === 0.
-        expect(hasRecordedUsage(usage({ tokensCacheRead: 5000 }))).toBe(true);
+        expect(HasRecordedUsage(usage({ tokensCacheRead: 5000 }))).toBe(true);
     });
 
     it('is true for a zero-token transcription run measured in seconds', () => {
         // The case that used to fail the gate and leave audio runs silently uncosted.
-        expect(hasRecordedUsage(usage({ unitsKind: 'Seconds', inputUnits: 128.5 }))).toBe(true);
+        expect(HasRecordedUsage(usage({ unitsKind: 'Seconds', inputUnits: 128.5 }))).toBe(true);
     });
 
     it('is true for an image run that produced output units only', () => {
-        expect(hasRecordedUsage(usage({ unitsKind: 'Images', outputUnits: 3 }))).toBe(true);
+        expect(HasRecordedUsage(usage({ unitsKind: 'Images', outputUnits: 3 }))).toBe(true);
     });
 
     it('is false when a units kind is declared but no quantity was recorded', () => {
-        expect(hasRecordedUsage(usage({ unitsKind: 'Seconds' }))).toBe(false);
+        expect(HasRecordedUsage(usage({ unitsKind: 'Seconds' }))).toBe(false);
     });
 });
 
@@ -55,7 +55,7 @@ describe('normalizeRecordedUsage', () => {
         // `hasRecordedUsage` on its token counts alone, would normalize to {input: 0, output: 0},
         // and would persist a cost of 0 — "free" recorded against work that was billed, which is
         // indistinguishable from a genuinely cheap run once it is in the database.
-        const result = normalizeRecordedUsage(
+        const result = NormalizeRecordedUsage(
             usage({ unitsKind: 'Seconds', inputUnits: 0, outputUnits: 0, tokensPrompt: 5000 }),
             'Seconds'
         );
@@ -68,7 +68,7 @@ describe('normalizeRecordedUsage', () => {
     it('still prices a non-token kind that reports only OUTPUT units', () => {
         // Guards against the refusal being written as "input is zero" — TTS bills on what it
         // produces, so an output-only quantity is ordinary, not a missing amount.
-        const result = normalizeRecordedUsage(
+        const result = NormalizeRecordedUsage(
             usage({ unitsKind: 'Images', inputUnits: 0, outputUnits: 4 }),
             'Images'
         );
@@ -77,7 +77,7 @@ describe('normalizeRecordedUsage', () => {
     });
 
     it('maps token usage onto the four token buckets for a token driver', () => {
-        const result = normalizeRecordedUsage(
+        const result = NormalizeRecordedUsage(
             usage({ tokensPrompt: 1000, tokensCompletion: 500, tokensCacheRead: 200, tokensCacheWrite: 100 }),
             'Tokens'
         );
@@ -89,7 +89,7 @@ describe('normalizeRecordedUsage', () => {
     });
 
     it('maps recorded seconds onto input/output for a time driver', () => {
-        const result = normalizeRecordedUsage(
+        const result = NormalizeRecordedUsage(
             usage({ unitsKind: 'Seconds', inputUnits: 5400, outputUnits: 0 }),
             'Seconds'
         );
@@ -98,7 +98,7 @@ describe('normalizeRecordedUsage', () => {
     });
 
     it('omits the cache buckets for continuous media, where they are meaningless', () => {
-        const result = normalizeRecordedUsage(usage({ unitsKind: 'Images', outputUnits: 3 }), 'Images');
+        const result = NormalizeRecordedUsage(usage({ unitsKind: 'Images', outputUnits: 3 }), 'Images');
 
         expect(result.ok).toBe(true);
         if (result.ok === true) {
@@ -109,7 +109,7 @@ describe('normalizeRecordedUsage', () => {
 
     it('refuses to price seconds against a token-priced cost row', () => {
         // Pricing it anyway would divide seconds by a million and report ~$0 as if it were real.
-        const result = normalizeRecordedUsage(usage({ unitsKind: 'Seconds', inputUnits: 5400 }), 'Tokens');
+        const result = NormalizeRecordedUsage(usage({ unitsKind: 'Seconds', inputUnits: 5400 }), 'Tokens');
 
         expect(result.ok).toBe(false);
         if (result.ok === false) {
@@ -119,13 +119,13 @@ describe('normalizeRecordedUsage', () => {
     });
 
     it('refuses to price tokens against an audio-priced cost row', () => {
-        const result = normalizeRecordedUsage(usage({ tokensPrompt: 1000 }), 'Seconds');
+        const result = NormalizeRecordedUsage(usage({ tokensPrompt: 1000 }), 'Seconds');
 
         expect(result.ok).toBe(false);
     });
 
     it('refuses to price images against a time-priced cost row', () => {
-        const result = normalizeRecordedUsage(usage({ unitsKind: 'Images', outputUnits: 3 }), 'Seconds');
+        const result = NormalizeRecordedUsage(usage({ unitsKind: 'Images', outputUnits: 3 }), 'Seconds');
 
         expect(result.ok).toBe(false);
     });
@@ -136,7 +136,7 @@ describe('normalizeRecordedUsage', () => {
         // the loaded catalog (deleted row, stale cache). Treating the run as token-billed would price
         // its zero token counts and persist Cost = 0 for work that was actually billed — B60's
         // failure mode through a different door.
-        const result = normalizeRecordedUsage(usage({ unitsKind: null, inputUnits: 5400 }), 'Tokens');
+        const result = NormalizeRecordedUsage(usage({ unitsKind: null, inputUnits: 5400 }), 'Tokens');
 
         expect(result.ok).toBe(false);
         if (result.ok === false) {
@@ -153,7 +153,7 @@ describe('normalizeRecordedUsage', () => {
         // would otherwise find no Tokens row and refuse at selection. With one, the token row is
         // selected, measures match, the token buckets are all zero, and Cost = 0 is persisted
         // against 5,400 units of billed work.
-        const result = normalizeRecordedUsage(usage({ unitsKind: 'Tokens', inputUnits: 5400 }), 'Tokens');
+        const result = NormalizeRecordedUsage(usage({ unitsKind: 'Tokens', inputUnits: 5400 }), 'Tokens');
 
         expect(result.ok).toBe(false);
         if (result.ok === false) {
@@ -162,7 +162,7 @@ describe('normalizeRecordedUsage', () => {
     });
 
     it('refuses output-only units recorded against the Tokens measure', () => {
-        const result = normalizeRecordedUsage(usage({ unitsKind: 'Tokens', outputUnits: 3 }), 'Tokens');
+        const result = NormalizeRecordedUsage(usage({ unitsKind: 'Tokens', outputUnits: 3 }), 'Tokens');
 
         expect(result.ok).toBe(false);
     });
@@ -170,7 +170,7 @@ describe('normalizeRecordedUsage', () => {
     it('still prices an ordinary token run, which records no units at all', () => {
         // The guard must key on units being POPULATED, not on the measure being Tokens — otherwise it
         // would refuse every normal LLM run.
-        const result = normalizeRecordedUsage(
+        const result = NormalizeRecordedUsage(
             usage({ unitsKind: 'Tokens', tokensPrompt: 1000, tokensCompletion: 500 }),
             'Tokens'
         );
@@ -183,11 +183,11 @@ describe('normalizeRecordedUsage', () => {
     });
 
     it('refuses output-only units recorded without a usage type', () => {
-        expect(normalizeRecordedUsage(usage({ unitsKind: null, outputUnits: 3 }), 'Tokens').ok).toBe(false);
+        expect(NormalizeRecordedUsage(usage({ unitsKind: null, outputUnits: 3 }), 'Tokens').ok).toBe(false);
     });
 
     it('treats a null units kind as Tokens, which is what every pre-existing run has', () => {
-        const result = normalizeRecordedUsage(usage({ tokensPrompt: 10, unitsKind: null }), 'Tokens');
+        const result = NormalizeRecordedUsage(usage({ tokensPrompt: 10, unitsKind: null }), 'Tokens');
 
         expect(result.ok).toBe(true);
     });

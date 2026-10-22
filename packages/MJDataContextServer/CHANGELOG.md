@@ -1,5 +1,235 @@
 # Change Log - @memberjunction/data-context-server
 
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- 74d44e1: Data Context Items of type `sql` no longer run caller-written SQL unchecked (security C7).
+  - **`GetDataContextData` / `GetDataContextItemData`.** A data context's SQL items now run only for its owner or an administrator (Owner-type user), never for a scope-limited (magic-link) session, and only on the read-only provider. The read-write pool is never used for them. Before it runs, each item's SQL must pass the checks `ExecuteAdhocQuery` applies: a single read statement (`RenderPipeline` with `RequireReadStatement`) whose every table is an entity base view the caller may read in full. Both queries reject an ID that is not a UUID, and items now load for the calling user.
+  - **Per-item results.** A SQL item that may not run is refused on its own. `GetDataContextData` still loads the other items and returns one entry per item, in item order, in `Results` (the data, or null) and `ErrorMessages` (null, or the reason). `Success` is true, and `ErrorMessages` null, only when every item loaded, so a client that treats `Success: false` as an error still sees one.
+  - **`DataContextItemServer.LoadFromSQL`** runs the item's SQL through the data source's `RunQuery({ SQL })` ad-hoc path for the context user. It refuses a raw connection pool, a missing context user, and an item with no SQL. `mssql` is no longer used.
+  - **`MJ: Data Context Items`.** A new server entity class, `MJDataContextItemEntityServer`, lets only an Owner-type user save an item that is a SQL item or holds SQL text: create it, change any of its fields, or move it. It reads the item's values, not which fields changed, and refuses a non-Owner's save of an existing item whose `Type` or `SQL` was not loaded. It applies the same rule to `ReplayOnly` saves, which skip `Validate()`.
+  - **`UpdateMJDataContextItem` always loads the stored row.** `ResolverBase.MustLoadTruthFromDatabase` now includes `MJ: Data Context Items`, as it already includes `MJ: Record Changes`. Client-supplied `OldValues___` can no longer decide the item's starting state, so a client cannot hide a SQL item by repeating its new values as old ones or by leaving `Type` and `SQL` out.
+
+  Upgrade note:
+  - Deployments without a read-only database login (`dbReadOnlyUsername` / `dbReadOnlyPassword`) can no longer run SQL data context items. The other items of a data context still load.
+  - Existing SQL items are refused when a non-owner loads them, when their SQL is not a single read over entity base views, or when the ad-hoc path's keyword check refuses it (for example a `REPLACE(` call, which `ExecuteAdhocQuery` already refuses). `GetDataContextItemData` also no longer returns a refused SQL item's cached data.
+  - Users who are not Owner-type can no longer edit any field of a SQL item, including its cached data. They can still delete it, or turn it into another type by removing its SQL.
+
+- Updated dependencies [39b35f1]
+- Updated dependencies [c159e2f]
+- Updated dependencies [db39145]
+- Updated dependencies [5e4205c]
+- Updated dependencies [81aea34]
+- Updated dependencies [5465489]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [2274f42]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [7e72c86]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [5f707d1]
+- Updated dependencies [dc38250]
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/data-context@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [49f26d9]
+- Updated dependencies [88e6902]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [25f7b82]
+- Updated dependencies [90829e3]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/data-context@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [dfe40a4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/data-context@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [e97d95c]
+- Updated dependencies [21f9e15]
+- Updated dependencies [4248fb3]
+- Updated dependencies [0adaf76]
+- Updated dependencies [705ab4e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [369e229]
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/data-context@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [a7da50b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/data-context@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [2c590b0]
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/data-context@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
+## 6.1.0
+
+### Patch Changes
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [394d276]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [4586215]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0ec1980]
+- Updated dependencies [1940a4d]
+- Updated dependencies [07cb22e]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [9699d0e]
+- Updated dependencies [394d276]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [2d14c62]
+- Updated dependencies [c996a56]
+- Updated dependencies [38d4482]
+- Updated dependencies [052b4c7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [c996a56]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [8d880cc]
+- Updated dependencies [cefc302]
+- Updated dependencies [841e6ea]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [080f4cd]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [d66a26a]
+- Updated dependencies [1d88e00]
+- Updated dependencies [647bd71]
+- Updated dependencies [8288711]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [48ff99f]
+- Updated dependencies [9f73528]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [27e4d09]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [23c2521]
+- Updated dependencies [048c5ce]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [98841bb]
+- Updated dependencies [53c341c]
+- Updated dependencies [b46330e]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [2be2960]
+- Updated dependencies [cf2484c]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [0967ba7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [de343b5]
+- Updated dependencies [5fc861f]
+- Updated dependencies [1748491]
+- Updated dependencies [a1a8989]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [905820a]
+- Updated dependencies [1bd9674]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [7fcdc2d]
+- Updated dependencies [15319b4]
+- Updated dependencies [d0a2a55]
+  - @memberjunction/global@6.1.0
+  - @memberjunction/core@6.1.0
+  - @memberjunction/data-context@6.1.0
+
+## 6.1.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+  - @memberjunction/data-context@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Patch Changes

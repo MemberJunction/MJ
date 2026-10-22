@@ -354,6 +354,41 @@ export interface EntityGraphClientFixture {
 }
 
 /**
+ * Accumulator fixture for the `record-cloning` bundle (client transport; IT96).
+ *
+ * Setup creates NO rows, so a deterministic-only run writes nothing: it only stamps the per-run
+ * prefix and start time. The mutating checks provision the throwaway subject user (and its API-key
+ * connection, the denied identity) on first use and append every row they, or a clone they ran,
+ * created. Teardown sweeps FK-safe: clone log items, clone logs and `ClonedFrom` links first, then
+ * `CreatedRows` in reverse creation order (retried so a parent that still has a child is picked up
+ * on a later pass), then everything hanging off the throwaway users, then the users themselves.
+ */
+export interface RecordCloningFixture {
+    /** Unique per-run prefix stamped on every row the bundle creates. */
+    Prefix: string;
+    /** When the bundle started. */
+    StartedAt: Date;
+    /** The throwaway source user (UI role only, one app, three settings, one query category), once provisioned. */
+    SubjectUserID?: string;
+    /** The subject's `MJ: Query Categories` row, the child RC5 forces to collide. */
+    SubjectQueryCategoryID?: string;
+    /** Secondary GraphQL provider authenticated as the subject through a user API key: the identity without clone authorizations. */
+    DeniedProvider?: IMetadataProvider;
+    /** Why provisioning the subject or its key failed, when it did. */
+    ProvisionError?: string;
+    /** Every row created by the bundle or by a clone it executed, in creation order. */
+    CreatedRows: CreatedRow[];
+    /** Throwaway users; their roles, applications, settings, audit logs and keys are swept before them. */
+    UserIDs: string[];
+    /** Clone logs the bundle's Executes returned (successes and refusals); teardown deletes exactly these. */
+    CloneLogIDs: string[];
+    /** Minted `MJ: API Keys` rows. */
+    ApiKeyIDs: string[];
+    /** `MJ: API Key Scopes` rows granting the minted keys `full_access`. */
+    ApiKeyScopeIDs: string[];
+}
+
+/**
  * Shared fixture for the `open-app-teardown` bundle: the throwaway `__mj` metadata rows seeded for the
  * teardown scenario (a used app's SchemaInfo/Entity/EntityField + a blocking RecordChange + a link-less
  * nav Application), reused by OAT1/OAT2 and removed in FK-safe order in teardown.
@@ -524,6 +559,29 @@ export interface AgentPlanModeFixture {
 }
 
 /**
+ * Shared fixture for the `native-tool-calling-live` bundle (live-model): the agents, prompts, the
+ * in-process Action and its params the lifecycle creates, plus the AI Agent Runs the checks spawn.
+ * Teardown purges the runs, then the fixture Action's execution logs, then deletes
+ * `CreatedRecords` in reverse creation order (FK-safe). The stock `Create SVG Chart` Action the chart
+ * agent calls is referenced read-only.
+ */
+export interface NativeToolCallingLiveFixture {
+    /** The agent whose one Action carries a ValueSchema on every param. */
+    ReportAgentID: string;
+    /** The agent that calls the stock `Create SVG Chart` Action, whose params carry backfilled ValueSchemas. */
+    ChartAgentID: string;
+    /** The in-process fixture Action the report agent calls. */
+    ReportActionID: string;
+    /** The report and chart agents' own prompts — where each check sets the native preference. */
+    ReportPromptID: string;
+    ChartPromptID: string;
+    /** Every record the lifecycle created, in creation order. */
+    CreatedRecords: Array<{ Entity: string; ID: string }>;
+    /** Every AI Agent Run the checks created. */
+    RunIds: string[];
+}
+
+/**
  * Accumulator fixture for the `agent-compaction-e2e` bundle (CE1–CE9): the fabricated conversation
  * histories (created INSIDE the checks, fabricate-then-observe) + the AI Agent Run IDs the live
  * turns spawn. Teardown deletes run steps → runs → conversation details → conversations (FK-safe).
@@ -594,6 +652,24 @@ export interface AgentLiveFixture {
     FabricatedStepIds: string[];
 }
 
+/** Fixture of the Feature Pipeline gate bundles (`fp-gate-*`) and the Feature Pipeline core bundle. */
+export interface FeaturePipelineGateFixture {
+    /** The fixture Record Process (a clone of the job-title pipeline on the stub driver, or the core bundle's own pipeline). */
+    RecordProcessID: string;
+    /** The fixture's own prompt (a clone, so the gates can edit it without touching the installed one). */
+    PromptID: string;
+    /** The fixture prompt's one `MJ: AI Prompt Models` binding. */
+    PromptModelID: string;
+    /** The stub's `MJ: Feature Pipeline Types` row. */
+    PipelineTypeID: string;
+    /** Entity the pipeline runs on. */
+    EntityID: string;
+    /** Fixture record ID → its title/name input. */
+    Inputs: Map<string, string>;
+    /** `MJ: Tests` rows a check created (a golden-set test), deleted at teardown. */
+    CreatedTestIDs: string[];
+}
+
 export interface IntegrationCheckContext {
     /** Resolved context user threaded from the engine (server) or bootstrap. */
     User: UserInfo;
@@ -637,6 +713,8 @@ export interface IntegrationCheckContext {
     EntityWritesFixture?: EntityWritesFixture;
     /** Accumulator fixture for the `entity-graph-client` bundle (client transport, mutating). */
     EntityGraphClientFixture?: EntityGraphClientFixture;
+    /** Accumulator fixture for the `record-cloning` bundle (client transport, IT96). */
+    RecordCloningFixture?: RecordCloningFixture;
     /** Shared fixture for the `transaction-groups` bundle (client transport, mutating). */
     TransactionGroupsFixture?: TransactionGroupsFixture;
     /** Fixture for the `transaction-groups-batched` bundle — same shape, its own per-run prefix. */
@@ -653,6 +731,8 @@ export interface IntegrationCheckContext {
     AgentPlanModeFixture?: AgentPlanModeFixture;
     /** Accumulator fixture for the `agent-compaction-e2e` bundle (fabricate-then-observe). */
     AgentCompactionE2EFixture?: AgentCompactionE2EFixture;
+    /** Shared fixture for the `native-tool-calling-live` bundle (live-model). */
+    NativeToolCallingLiveFixture?: NativeToolCallingLiveFixture;
     /** Shared fixture for the `agent-memory-guards` bundle (live-model, marker-isolated). */
     AgentMemoryGuardsFixture?: AgentMemoryGuardsFixture;
     /** Shared fixture for the `agent-rag-search` bundle (split-tier: deterministic engine + live agent legs). */
@@ -667,6 +747,8 @@ export interface IntegrationCheckContext {
     ShippedAgentsLiveFixture?: AgentLiveFixture;
     /** Accumulator fixture for the `agent-carry-forward` bundle (live-model, client transport, fabricate-then-observe). */
     AgentCarryForwardFixture?: AgentLiveFixture;
+    /** Feature Pipeline gate fixture (the `fp-gate-*` bundles and the Feature Pipeline core bundle). */
+    FeaturePipelineGateFixture?: FeaturePipelineGateFixture;
     /**
      * The opaque per-selector `config` bag from `Test.Configuration.checks[].config`,
      * set by the driver/script before each bundle runs. Bundles read their own keys

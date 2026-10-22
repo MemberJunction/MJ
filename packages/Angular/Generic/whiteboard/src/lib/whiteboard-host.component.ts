@@ -22,7 +22,7 @@ import {
 import {
   WhiteboardWidgetInteractionEvent, WhiteboardWidgetSubmitEvent, WhiteboardWidgetSubmittingEventArgs
 } from './whiteboard-widget-bridge';
-import { RealtimeWhiteboardToolbarComponent, WHITEBOARD_PEN_COLORS } from './whiteboard-toolbar.component';
+import { NormalizeWhiteboardPenPalette, RealtimeWhiteboardToolbarComponent, SameWhiteboardPenColor, WHITEBOARD_PEN_COLORS } from './whiteboard-toolbar.component';
 import { RealtimeWhiteboardZoomComponent } from './whiteboard-zoom.component';
 import { RealtimeWhiteboardAgentSeesPopoverComponent } from './whiteboard-agent-sees-popover.component';
 
@@ -47,7 +47,8 @@ const PRESENCE_MS = 4200;
  *    (`Whiteboard_AddNote` … see `WHITEBOARD_TOOL_DEFINITIONS`) with the violet pop-in,
  *    toast and presence-cursor garnish, returning the result JSON for the tool round-trip;
  *  - `AgentUndo` fires when the user clicks Undo on the agent-action toast;
- *  - `FocusModeChange` asks the shell to collapse/restore the call rail ("Focus board").
+ *  - `FocusModeChange` asks the host to move the board to the stage or back to its tab ("Move to stage").
+ *    A host with no stage hides the control with `[ShowFocusToggle]="false"`.
  *
  * Extensibility (before/after events): the host mirrors the engine's cancelable
  * BEFORE / AFTER mutation pairs as outputs (`ItemAdding`/`ItemAdded`,
@@ -78,6 +79,13 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
   @Input() BoardTitle = 'Whiteboard';
   /** Persistence chip text (e.g. "Saved to session · v14"). */
   @Input() SavedLabel = 'Saved to session';
+  /**
+   * Whether the header renders the Focus toggle ("Move to stage" / "Back to tab"). It only emits
+   * {@link FocusModeChange}; a host composing the board into its own chrome (a lesson's content
+   * seat, a full-surface room) has nothing to collapse and would otherwise ship a dead button.
+   * {@link SetOnStage} and {@link FocusMode} keep working with the toggle hidden.
+   */
+  @Input() ShowFocusToggle = true;
   /**
    * Opt back in to DOCUMENT-WIDE keyboard shortcuts.
    *
@@ -161,7 +169,7 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
   @Output() SceneDelta = new EventEmitter<string>();
   /** The user clicked Undo on the agent-action toast (the undo itself already applied). */
   @Output() AgentUndo = new EventEmitter<void>();
-  /** Focus-board toggle — the session shell collapses/restores the call rail. */
+  /** "Move to stage" / "Back to tab": asks the host to put the board on the stage (`true`) or back on its tab. */
   @Output() FocusModeChange = new EventEmitter<boolean>();
   /** Emitted when the user picks "Save to artifacts" — the channel plugin persists via its host context. */
   @Output() SaveToArtifactsRequested = new EventEmitter<void>();
@@ -247,6 +255,32 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
   }
   private _tool: WhiteboardTool = 'select';
   public PenColor: string = WHITEBOARD_PEN_COLORS[0];
+  /**
+   * The user pen palette (LXP P14.3), threaded to the toolbar's swatches. `null` (default) is
+   * {@link WHITEBOARD_PEN_COLORS}. An input rather than CSS custom properties on purpose: ink
+   * items persist the chosen hex, so a `var()` palette would make saved boards theme-dependent.
+   * When a palette arrives that excludes the current pen color, the pen moves to the palette's
+   * first entry, so the swatch that is "selected" is always one the user can see. Blank,
+   * non-string and non-hex entries are dropped ({@link NormalizeWhiteboardPenPalette}); a
+   * palette with nothing usable reads as no palette.
+   *
+   * A setter rather than `ngOnChanges`, for the same reason as {@link ToolRoster}: a channel's
+   * `BindSurface` assigns inputs directly on a dynamically-created component.
+   */
+  @Input()
+  set PenPalette(value: readonly string[] | null | undefined) {
+    const next = NormalizeWhiteboardPenPalette(value);
+    this._penPalette = next;
+    const palette = next ?? WHITEBOARD_PEN_COLORS;
+    // Hex is case-insensitive: a host's "#1D4ED8" must not reset a pen holding "#1d4ed8".
+    if (!palette.some((c) => SameWhiteboardPenColor(c, this.PenColor))) {
+      this.PenColor = palette[0];
+    }
+  }
+  get PenPalette(): readonly string[] | null {
+    return this._penPalette;
+  }
+  private _penPalette: readonly string[] | null = null;
   public PenWidth = 4;
   public ShapeKind: 'rect' | 'ellipse' | 'diamond' = 'rect';
   public TextSize = 12;
@@ -357,8 +391,7 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
     this.SeesOpen = !this.SeesOpen;
   }
 
-  @HostListener('document:click')
-  public CloseSees(): void {
+  private closeSees(): void {
     if (this.SeesOpen) {
       this.SeesOpen = false;
     }
@@ -369,6 +402,14 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
     this.FocusModeChange.emit(this.FocusMode);
   }
 
+  /** The host reports whether the board is on the stage, however it got there, so the header offers the way back. */
+  public SetOnStage(onStage: boolean): void {
+    if (onStage !== this.FocusMode) {
+      this.FocusMode = onStage;
+      this.cdr.markForCheck();
+    }
+  }
+
   // ────────────────────────────────────────────── export menu
 
   public ToggleExport(event: Event): void {
@@ -376,11 +417,25 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
     this.ExportOpen = !this.ExportOpen;
   }
 
-  @HostListener('document:click')
-  public CloseExport(): void {
+  private closeExport(): void {
     if (this.ExportOpen) {
       this.ExportOpen = false;
     }
+  }
+
+  /**
+   * The component's ONLY `document:click` listener — dismisses every open popover.
+   *
+   * ⚠️ Do NOT add a second `@HostListener('document:click')` here. Angular keys host
+   * listeners by event name, so a second declaration for the same event silently
+   * replaces the first (no build error, no warning). That had already happened:
+   * `closeSees` and `closeExport` each declared one, so only the latter registered
+   * and the Sees dropdown never closed on an outside click.
+   */
+  @HostListener('document:click')
+  public CloseOpenPopovers(): void {
+    this.closeSees();
+    this.closeExport();
   }
 
   /** Download the board as one self-contained HTML document. */

@@ -31,11 +31,16 @@ const PKG_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
  * who only `npm i -g @memberjunction/cli` still have it. Returns the first path
  * that exists, or the bundled path (so the caller can surface a clear error).
  */
-export function resolveStandaloneCompose(monorepoRelPath: string): string {
+export function ResolveStandaloneCompose(monorepoRelPath: string): string {
   const monorepo = path.resolve(monorepoRelPath);
   if (existsSync(monorepo)) return monorepo;
   const bundled = path.join(PKG_ROOT, 'regression-compose', path.basename(monorepoRelPath));
   return existsSync(bundled) ? bundled : monorepo;
+}
+
+/** @deprecated Use {@link ResolveStandaloneCompose}. */
+export function resolveStandaloneCompose(monorepoRelPath: string): string {
+  return ResolveStandaloneCompose(monorepoRelPath);
 }
 export const ENV_FILE = `${REGRESSION_DIR}/.env.test`;
 export const TARGETS_DIR = `${REGRESSION_DIR}/targets`;
@@ -57,7 +62,7 @@ export const AGENTIC_TEST_RUNNER_IMAGE = 'memberjunction/agentic-test-runner:lat
  * print a helpful message and exit. Phase 4 still requires the user to be in
  * the monorepo; Phase 8 will publish the docker image and lift this guard.
  */
-export function requireMonorepoRoot(): void {
+export function RequireMonorepoRoot(): void {
   if (!existsSync(COMPOSE_FILE)) {
     process.stderr.write(
       `✗ Expected to find ${COMPOSE_FILE} relative to the current directory.\n` +
@@ -69,6 +74,11 @@ export function requireMonorepoRoot(): void {
   }
 }
 
+/** @deprecated Use {@link RequireMonorepoRoot}. */
+export function requireMonorepoRoot(): void {
+  return RequireMonorepoRoot();
+}
+
 /**
  * Soft check — returns true when there's an MJ monorepo at-or-above cwd.
  * Used by commands (compare, up, export, remote) to pick monorepo-relative
@@ -78,7 +88,7 @@ export function requireMonorepoRoot(): void {
  * The sentinel is the regression base compose file: it lives in every
  * monorepo checkout and is never present in an external `npm i -g` install.
  */
-export function isInsideMonorepo(startDir: string = process.cwd()): boolean {
+export function IsInsideMonorepo(startDir: string = process.cwd()): boolean {
   let dir = path.resolve(startDir);
   const root = path.parse(dir).root;
   while (dir !== root) {
@@ -88,9 +98,19 @@ export function isInsideMonorepo(startDir: string = process.cwd()): boolean {
   return false;
 }
 
+/** @deprecated Use {@link IsInsideMonorepo}. */
+export function isInsideMonorepo(startDir: string = process.cwd()): boolean {
+  return IsInsideMonorepo(startDir);
+}
+
 /** Returns true when `<cwd>/<ENV_FILE>` exists (e.g. user copied .env.test.example). */
-export function envFileExists(): boolean {
+export function EnvFileExists(): boolean {
   return existsSync(ENV_FILE);
+}
+
+/** @deprecated Use {@link EnvFileExists}. */
+export function envFileExists(): boolean {
+  return EnvFileExists();
 }
 
 /**
@@ -98,7 +118,7 @@ export function envFileExists(): boolean {
  * The promise NEVER rejects on a non-zero exit code — callers inspect the
  * resolved number and propagate it to the user.
  */
-export function spawnInherit(
+export function SpawnInherit(
   command: string,
   args: string[],
   options: SpawnOptions = {},
@@ -116,12 +136,21 @@ export function spawnInherit(
   });
 }
 
+/** @deprecated Use {@link SpawnInherit}. */
+export function spawnInherit(
+  command: string,
+  args: string[],
+  options: SpawnOptions = {},
+): Promise<number> {
+  return SpawnInherit(command, args, options);
+}
+
 /**
  * Capture stdout from a child process (stderr inherited so errors surface).
  * Resolves with { code, stdout }. Used by the remote subcommand to read the
  * target-profile loader's JSON output without printing it to the user.
  */
-export function spawnCapture(
+export function SpawnCapture(
   command: string,
   args: string[],
   options: SpawnOptions = {},
@@ -144,6 +173,15 @@ export function spawnCapture(
   });
 }
 
+/** @deprecated Use {@link SpawnCapture}. */
+export function spawnCapture(
+  command: string,
+  args: string[],
+  options: SpawnOptions = {},
+): Promise<{ code: number; stdout: string }> {
+  return SpawnCapture(command, args, options);
+}
+
 /**
  * Build the base `docker compose -f <file> --env-file <file>` argument list.
  * Optionally prepends a profile and additional overlay files (Mode D).
@@ -154,7 +192,7 @@ export function spawnCapture(
  * directory (the base compose file at `docker/regression/`), NOT against the
  * overlay's own location.
  */
-export function dockerComposeArgs(
+export function DockerComposeArgs(
   profile?: string,
   extra: string[] = [],
   overlays: string[] = [],
@@ -163,13 +201,22 @@ export function dockerComposeArgs(
   for (const overlay of overlays) {
     args.push('-f', overlay);
   }
-  if (envFileExists()) {
+  if (EnvFileExists()) {
     args.push('--env-file', ENV_FILE);
   }
   if (profile) {
     args.push('--profile', profile);
   }
   return args.concat(extra);
+}
+
+/** @deprecated Use {@link DockerComposeArgs}. */
+export function dockerComposeArgs(
+  profile?: string,
+  extra: string[] = [],
+  overlays: string[] = [],
+): string[] {
+  return DockerComposeArgs(profile, extra, overlays);
 }
 
 /**
@@ -179,11 +226,16 @@ export function dockerComposeArgs(
  *   - "./my/elsewhere.target.json"  → ./my/elsewhere.target.json (passthrough)
  *   - absolute path                 → unchanged
  */
-export function resolveTargetPath(input: string): string {
+export function ResolveTargetPath(input: string): string {
   if (path.isAbsolute(input)) return input;
   if (input.includes('/')) return path.resolve(input);
   const withSuffix = input.endsWith('.target.json') ? input : `${input}.target.json`;
   return path.resolve(TARGETS_DIR, withSuffix);
+}
+
+/** @deprecated Use {@link ResolveTargetPath}. */
+export function resolveTargetPath(input: string): string {
+  return ResolveTargetPath(input);
 }
 
 /**
@@ -192,7 +244,7 @@ export function resolveTargetPath(input: string): string {
  * injected with `--env-file`; `host.docker.internal` is always mapped so a DB
  * published on the host is reachable on Linux too.
  */
-export function dockerRunArgs(
+export function DockerRunArgs(
   image: string,
   subArgs: string[],
   opts: { mounts?: Array<[string, string]>; envFile?: string } = {},
@@ -206,4 +258,13 @@ export function dockerRunArgs(
   }
   args.push(image, ...subArgs);
   return args;
+}
+
+/** @deprecated Use {@link DockerRunArgs}. */
+export function dockerRunArgs(
+  image: string,
+  subArgs: string[],
+  opts: { mounts?: Array<[string, string]>; envFile?: string } = {},
+): string[] {
+  return DockerRunArgs(image, subArgs, opts);
 }

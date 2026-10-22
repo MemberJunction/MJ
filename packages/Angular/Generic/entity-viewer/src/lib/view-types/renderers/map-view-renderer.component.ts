@@ -169,10 +169,28 @@ export class MapViewRendererComponent extends BaseAngularComponent implements IV
   // ---- Render state (seeded from config) ----
 
   /** The render mode bound to `<mj-map-view>`, derived from {@link config} (defaults to `'point'`). */
-  public activeRenderMode: MapRenderMode = 'point';
+  public ActiveRenderMode: MapRenderMode = 'point';
+
+  /** @deprecated Use {@link ActiveRenderMode}. */
+  public get activeRenderMode(): MapRenderMode {
+    return this.ActiveRenderMode;
+  }
+  /** @deprecated Use {@link ActiveRenderMode}. */
+  public set activeRenderMode(value: MapRenderMode) {
+    this.ActiveRenderMode = value;
+  }
 
   /** The display state bound to `<mj-map-view>`, derived from {@link config} (null when unset). */
-  public activeDisplayState: Partial<MapDisplayState> | null = null;
+  public ActiveDisplayState: Partial<MapDisplayState> | null = null;
+
+  /** @deprecated Use {@link ActiveDisplayState}. */
+  public get activeDisplayState(): Partial<MapDisplayState> | null {
+    return this.ActiveDisplayState;
+  }
+  /** @deprecated Use {@link ActiveDisplayState}. */
+  public set activeDisplayState(value: Partial<MapDisplayState> | null) {
+    this.ActiveDisplayState = value;
+  }
 
   ngOnInit(): void {
     // Maps need the complete record set, not a single page. Request it through the generic
@@ -183,26 +201,36 @@ export class MapViewRendererComponent extends BaseAngularComponent implements IV
 
   /** Re-derive the map's render mode + display state from the current opaque {@link config}. */
   private applyConfig(): void {
-    this.activeRenderMode = this._config.renderMode ?? 'point';
-    this.activeDisplayState = this._config.displayState ?? null;
+    this.ActiveRenderMode = this._config.renderMode ?? 'point';
+    this.ActiveDisplayState = this._config.displayState ?? null;
   }
 
   /**
    * Relay `<mj-map-view>`'s marker click, normalizing to the raw record the host expects (the host
    * builds the composite key itself from the record + entity).
    */
-  onMarkerClick(event: MapMarkerClickEvent): void {
+  OnMarkerClick(event: MapMarkerClickEvent): void {
     this.recordSelected.emit(event.Record);
+  }
+
+  /** @deprecated Use {@link OnMarkerClick}. */
+  onMarkerClick(event: MapMarkerClickEvent): void {
+    return this.OnMarkerClick(event);
   }
 
   /**
    * Persist a render-mode change into the opaque {@link config} and notify the host. The host
    * stores the blob verbatim; it has no knowledge that `renderMode` means anything map-specific.
    */
-  onRenderModeChange(mode: MapRenderMode): void {
+  OnRenderModeChange(mode: MapRenderMode): void {
     this._config = { ...this._config, renderMode: mode };
-    this.activeRenderMode = mode;
+    this.ActiveRenderMode = mode;
     this.configChanged.emit(this._config);
+  }
+
+  /** @deprecated Use {@link OnRenderModeChange}. */
+  onRenderModeChange(mode: MapRenderMode): void {
+    return this.OnRenderModeChange(mode);
   }
 
   /**
@@ -210,10 +238,15 @@ export class MapViewRendererComponent extends BaseAngularComponent implements IV
    * {@link config} and notify the host. This fires continuously as the user pans/zooms; that's
    * fine — the host debounces persistence of the config blob.
    */
-  onDisplayStateChange(state: MapDisplayState): void {
+  OnDisplayStateChange(state: MapDisplayState): void {
     this._config = { ...this._config, displayState: state };
-    this.activeDisplayState = state;
+    this.ActiveDisplayState = state;
     this.configChanged.emit(this._config);
+  }
+
+  /** @deprecated Use {@link OnDisplayStateChange}. */
+  onDisplayStateChange(state: MapDisplayState): void {
+    return this.OnDisplayStateChange(state);
   }
 }
 

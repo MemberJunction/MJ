@@ -15,8 +15,8 @@ import {
     SignatureRecipientInput,
 } from '../types';
 import { SignatureAccountWithProvider, SignatureEngineBase } from '../SignatureEngineBase';
-import { initializeDriverWithAccountCredentials } from './util';
-import { loadArtifactVersionBytes, writeSignedArtifact } from './artifacts';
+import { InitializeDriverWithAccountCredentials } from './util';
+import { LoadArtifactVersionBytes, WriteSignedArtifact } from './artifacts';
 
 /**
  * The DB-persistable subset of {@link EnvelopeStatus} — matches the `Status` CHECK constraint /
@@ -166,7 +166,7 @@ export class SignatureEngine extends BaseSingleton<SignatureEngine> {
         const contextUser = this._contextUser;
         const results = await Promise.allSettled(
             activeAccounts.map(async ({ account, provider }) => {
-                const driver = await initializeDriverWithAccountCredentials({ accountEntity: account, providerEntity: provider, contextUser });
+                const driver = await InitializeDriverWithAccountCredentials({ accountEntity: account, providerEntity: provider, contextUser });
                 this._driverCache.set(account.ID, driver);
             }),
         );
@@ -187,7 +187,7 @@ export class SignatureEngine extends BaseSingleton<SignatureEngine> {
         if (!resolved) {
             throw new Error(`SignatureEngine.GetDriver: account '${accountId}' not found in cached metadata. Did you call Config()?`);
         }
-        const driver = await initializeDriverWithAccountCredentials({
+        const driver = await InitializeDriverWithAccountCredentials({
             accountEntity: resolved.account,
             providerEntity: resolved.provider,
             contextUser,
@@ -420,7 +420,7 @@ export class SignatureEngine extends BaseSingleton<SignatureEngine> {
             return options.documents;
         }
         if (options.artifactVersionId) {
-            const doc = await loadArtifactVersionBytes(options.artifactVersionId, options.contextUser, options.provider);
+            const doc = await LoadArtifactVersionBytes(options.artifactVersionId, options.contextUser, options.provider);
             return doc ? [doc] : [];
         }
         return [];
@@ -513,7 +513,7 @@ export class SignatureEngine extends BaseSingleton<SignatureEngine> {
     ): Promise<void> {
         let artifactVersionId: string | undefined;
         try {
-            const written = await writeSignedArtifact({
+            const written = await WriteSignedArtifact({
                 filename: document.filename,
                 bytes: document.bytes,
                 contentType: document.contentType,

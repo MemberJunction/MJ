@@ -537,7 +537,7 @@ describe('EnumCandidateGate', () => {
 
   describe('Custom config', () => {
     it('should respect custom maxDistinctValues', () => {
-      const strictGate = new EnumCandidateGate({ maxDistinctValues: 5 });
+      const strictGate = new EnumCandidateGate({ MaxDistinctValues: 5 });
       const col = createColumn({
         name: 'Category',
         dataType: 'varchar(20)',
@@ -553,7 +553,7 @@ describe('EnumCandidateGate', () => {
 
     it('should respect custom excludeColumnNamePatterns', () => {
       const customGate = new EnumCandidateGate({
-        excludeColumnNamePatterns: [/^Custom/i],
+        ExcludeColumnNamePatterns: [/^Custom/i],
       });
       const col = createColumn({
         name: 'CustomField',

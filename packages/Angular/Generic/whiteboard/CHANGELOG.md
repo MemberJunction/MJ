@@ -1,5 +1,244 @@
 # @memberjunction/ng-whiteboard
 
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- 1aefcb4: `<mj-realtime-whiteboard-host>` gains a `ShowFocusToggle` input (default `true`). The header's Focus toggle ("Move to stage" / "Back to tab") only emits `FocusModeChange`; a host that composes the board into its own chrome has nothing to collapse, so the button was visible and did nothing, and could only be removed by `!important` CSS against an internal class name. Hosts without a stage now pass `[ShowFocusToggle]="false"`. `SetOnStage` and `FocusMode` keep working with the toggle hidden; the rest of the header is unchanged.
+
+  `<mj-livekit-whiteboard-surface>` passes it: the LiveKit room has no stage and never serviced `FocusModeChange`, so its board header no longer carries the inert button.
+
+- 2f9e209: Whiteboard: a resize gesture that doesn't move a markdown panel's top or bottom edge no longer changes its max-height cap. A click on a handle (including the pixel of travel a real mouse or trackpad adds, under the same 3px threshold as a move) commits nothing, and a corner dragged only sideways changes the width but keeps the cap. Before, both lowered the cap to the text's current height, so the agent's next, longer answer clipped there.
+- 382de4d: Trackpad zoom on the whiteboard now tracks the gesture. `OnWheel` read only the sign of `deltaY` and applied a fixed 10% step per event, so a macOS pinch (ctrl+wheel with small fractional deltas at the trackpad's sample rate) zoomed by event COUNT, not finger distance: about nine samples saturated the 25%–200% range, which is the "way too fast and abrupt, hard to fine-tune" report.
+  - **Magnitude-scaled factor.** The zoom factor is `exp(-delta * k)` with the delta capped at 50px per event and `k` tuned so one mouse notch is still exactly the familiar 10% step. A 5px trackpad sample moves ~1%, and ten small samples land where one sample of their sum lands.
+  - **`deltaMode` normalized.** Line and page deltas (Firefox mouse wheels) convert to pixels first instead of reading as a few pixels.
+  - **Only `ctrlKey` zooms.** `metaKey` used to zoom too, so Cmd+two-finger scroll zoomed and macOS momentum kept it zooming after the fingers lifted. Cmd-scroll now pans like a plain scroll.
+  - **Stepped zoom eases.** The zoom cluster's +/− buttons jump between presets (11%, then 25%, then 33%); the viewport now carries a 180ms transform transition for that button path only, honoring `prefers-reduced-motion`. The wheel and the hold-to-zoom tick path stay un-transitioned, since a transition on a continuous gesture lags it. New public `ViewportStepping` flag and `ZOOM_STEP_TRANSITION_MS` export on the board component.
+  - **Board CSS is token-clean.** The six hardcoded colors the hex gate flagged on first touch (sticky paper gradients, sticky ink, the Sage cursor ink, the text-label shadow, the widget frame's fixed white) now derive from the `--mj-color-warning-*` ramp, the neutral ramp, and the board's `--sage` accent, so re-tinting the agent accent re-tints its notes. No visual change intended.
+
+- 8576224: Three fixes in the HTML-widget input bridge's auto-submit fallback (the helper script every widget `srcdoc` carries).
+  - **A typeless `<button>` no longer auto-submits.** The submit-ish click test read the button's `type` PROPERTY, and a `<button>` with no type attribute reports `type === 'submit'`, so clicking "Show hint" or "Play" forwarded the form 150 ms later and told the agent the user had submitted. The test now reads the `type` attribute; a button is submit-ish by its label, or by an explicit `type="submit"`.
+  - **Checkbox groups keep every ticked value.** `collectFields` wrote `out[name] = 'checked'`, so two ticked boxes in a group collapsed to one `"checked"` with no record of which. Every ticked checkbox now lands in an array of its values under the group's label (`{ toppings: ["olives", "chili"] }`). A single ticked checkbox is a one-element array too, so the shape is stable whatever the count. Text, select and textarea values are unchanged.
+  - **A valueless box reports its label.** A ticked checkbox or radio with no `value` attribute used to serialize as the native `"on"`, so a group of valueless boxes still lost which ones were ticked. It now reports the box's own label text (`<label>` wrapper or `for=`), so `{ toppings: ["Olives", "Chili"] }` comes through from agent HTML that never set values. A non-blank `value` always wins (an empty or whitespace-only attribute counts as absent), and a box with neither keeps `"on"`.
+  - A new DOM spec executes the helper against a real document with `parent.postMessage` captured, so all three behaviours are pinned rather than the helper's source text.
+
+- Updated dependencies [81aea34]
+- Updated dependencies [8b62f8c]
+- Updated dependencies [2274f42]
+- Updated dependencies [c271ddf]
+- Updated dependencies [17a4137]
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/ng-ui-components@6.2.0-edge.5
+  - @memberjunction/ng-markdown@6.2.0-edge.5
+  - @memberjunction/ng-code-editor@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- 84fc9d4: The realtime overlay's channel surfaces can be moved. "Move to…", beside the active channel tab (and in the call pill while a surface is on the stage), puts a surface on the stage, back on its tab, or out of sight, and "Reset layout" puts every surface back. A surface on the stage is the focus layout: the call column folds away and the pill appears. A channel whose surface is elsewhere says where in its tab, with "Bring it here". Moves are saved per user (`mj.realtime.placement.v1`, through `UserInfoEngine`) and carry over to later sessions.
+
+  `BaseRealtimeChannelClient` gains an optional `OnSurfacePlacementChange(placement)` hook, called right after `BindSurface` with the surface's placement and then on every move. `mj-media-stage` gives each surface's template its `Placement`, and `mj-realtime-channel-pane` passes it on. The whiteboard's header button becomes "Move to stage", or "Back to tab" while the board is on the stage, kept true by the new hook.
+
+- 7d4906b: Whiteboard: markdown panels can be resized taller or shorter by dragging. Agents add panels with a max-height cap and the text beyond it was clipped with no way to reveal it, because the resize gesture never wrote the height. The drag now moves the cap (with a live preview) and is undoable like any resize.
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [490cd8d]
+- Updated dependencies [ae0a662]
+- Updated dependencies [5e1e343]
+- Updated dependencies [25f7b82]
+- Updated dependencies [e7b2ebc]
+- Updated dependencies [e0cf9ed]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/ng-ui-components@6.2.0-edge.4
+  - @memberjunction/ng-markdown@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/ng-code-editor@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [dfe40a4]
+- Updated dependencies [60bd774]
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/ng-ui-components@6.2.0-edge.3
+  - @memberjunction/ng-code-editor@6.2.0-edge.3
+  - @memberjunction/ng-markdown@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [4d647e6]
+- Updated dependencies [369e229]
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/ng-ui-components@6.2.0-edge.2
+  - @memberjunction/ng-code-editor@6.2.0-edge.2
+  - @memberjunction/ng-markdown@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- f78fd63: Ctrl/Cmd+/ opens the command palette, and the whiteboard's Sees dropdown closes on an
+  outside click.
+
+  Two components declared the same host event twice, silently disabling a handler. Angular
+  collects host listeners into an object keyed by event name, so a second `@HostListener`
+  for the same event **replaces** the first — no build error, no warning.
+  - `ShellComponent` declared `document:keydown` twice; the surviving handler did not
+    handle the command-palette chord, so Ctrl/Cmd+/ never fired for the entire life of
+    the feature.
+  - `RealtimeWhiteboardHostComponent` had the same bug for `document:click`, killing the
+    Sees dropdown's outside-click dismissal.
+
+  Both packages get a source-level guard test, because a behavioural test can only observe
+  the surviving handler — it cannot see that a second declaration clobbered the first.
+
+  With the chord live, Ctrl/Cmd+/ no longer collides with places that already used it:
+  - The shell leaves the chord to an element that already handled it, so Ctrl/Cmd+/ in a
+    code editor toggles a comment without also opening the palette.
+  - Component Studio's shortcuts panel opens with `?` only, and Data Explorer's `/` filter
+    shortcut ignores Ctrl/Cmd+/.
+
+  The palette could not be opened before, so two of its own bugs are fixed with it:
+  - It lists only the user's own apps — the same list Home, the app switcher and the
+    omnibar show — instead of every app in the system.
+  - Its search row, now "Search everything", opens Search Results; nothing handled its
+    event before. It shows only while the chrome shows search (`Shell.SearchBar.Enabled`),
+    like the header search.
+
+- Updated dependencies [80905a1]
+- Updated dependencies [920bef8]
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/ng-code-editor@6.2.0-edge.1
+  - @memberjunction/ng-markdown@6.2.0-edge.1
+  - @memberjunction/ng-ui-components@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- @memberjunction/ng-code-editor@6.2.0-edge.0
+- @memberjunction/ng-markdown@6.2.0-edge.0
+- @memberjunction/ng-ui-components@6.2.0-edge.0
+- @memberjunction/global@6.2.0-edge.0
+
+## 6.1.0
+
+### Patch Changes
+
+- 4273317: Accessibility: shell landmarks + skip link, focus containment, and focus-ring token safety.
+
+  Fixes eight WCAG 2.1 A/AA findings raised against the Explorer shell and shared primitives. A ninth — `mj-dropdown` having no way to be given an accessible name — was fixed independently on this line by #3860 and its follow-ups while this work was in flight, so it is not part of this changeset.
+
+  **Shell (`ng-explorer-core`)**
+  - Adds a "Skip to main content" link as the first focusable element in the shell, and marks the routed content region as the `main` landmark (`role="main"`, focusable target). **Consuming apps that added their own skip link should remove it on upgrade** — the shell's now comes first in DOM order, and two stacked skip links is worse than none.
+  - The global search input, the account/avatar button and the mobile-nav toggle now carry real accessible names. The avatar's name lives on the button, so it survives the icon-fallback path when the avatar image fails to load.
+  - The closed mobile nav drawer and the closed search popup are now `inert` and `visibility: hidden` (transitioned so the slide-out still animates). They previously kept every control inside them in the tab order while closed. When the drawer closes with focus inside it, focus returns to the toggle instead of dropping to `<body>`.
+  - The command palette already had `role="dialog"`/`aria-modal`; it now also traps Tab while open and returns focus to whatever was focused when it opened. `aria-modal` never stopped Tab on its own.
+
+  **Focus-ring tokens (`ng-shared-generic`)**
+  - New `--mj-focus-ring-color` companion to `--mj-focus-ring`. `--mj-focus-ring` is a two-part box-shadow value: `outline: 2px solid var(--mj-focus-ring)` looks correct, parses, and renders nothing. Use `--mj-focus-ring` in `box-shadow` and `--mj-focus-ring-color` in `outline`. A new `check:focus-ring` gate fails on the broken form.
+
+  **Whiteboard (`ng-whiteboard`)**
+  - The eleven bare single-character tool shortcuts (`v h p r s t m w i c e`) listened on `document` and fired anywhere on the page, failing WCAG 2.1.4. They are now scoped to focus being inside the whiteboard host, which is made click-focusable for that purpose. Scoping covers the host's whole keydown handler, so undo/redo (`Cmd/Ctrl+Z`, `+Y`), `Escape` and `Delete`/`Backspace` are focus-gated too — a board that swallows the document's `Cmd+Z` from anywhere on the page is its own bug. **Behavior change**: none of these fire while focus is elsewhere on the page. `EnableGlobalShortcuts` restores the old behavior for surfaces that accept the exposure.
+
+- b915983: Align the Angular toolchain on the current 21.x patch line: framework packages 21.1.3 → 21.2.22,
+  CLI/builders 21.1.3 → 21.2.23, CDK 21.1.3 → 21.2.14, ng-packagr → 21.2.7, PrimeNG 21.1.1 → 21.1.9.
+
+  This is a patch-level move inside the supported Angular 21 LTS line, not a framework migration.
+  It closes every open Angular security advisory on the repository — fifteen distinct GHSAs
+  (i18n and template-sanitizer XSS bypasses, service-worker header leakage and credential
+  stripping, HttpTransferCache cross-request leakage, and formatDate/number-format DoS), all fixed
+  in 21.2.19 or earlier — which together accounted for 438 of the 749 open Dependabot alerts.
+
+  Every published `@memberjunction/ng-*` package's `@angular/*` peer range moves from `^21.1.3`
+  (or `^21.0.0`) to `^21.2.22`, so consumers must be on at least that patch. The era-6 platform
+  manifest in `release-lines.json` records the new pin; era 5 (the certified 5.51 line) is
+  unchanged.
+
+  Also moves the exact `@angular/*` runtime pins that 23 libraries carried in `dependencies`
+  into caret `peerDependencies` (adding the missing peers on `ng-react`), so a consumer on any
+  in-range Angular 21.2.x build gets a single Angular copy instead of a nested second runtime, and
+  drops the unused `primeng` peer from `ng-base-forms` (nothing in the repo imports PrimeNG).
+
+- 394d276: Declare @angular/\* peer dependencies as ranges (^21.1.3) instead of exact pins across all Angular library packages. Peer declarations are compatibility claims, not install instructions: the exact pins falsely claimed incompatibility with every other Angular 21.x build, produced 502 peer-resolution errors under strict pnpm workspaces, and structurally blocked Angular security patches behind a full republish. Installed versions remain pinned by consuming apps and the era platform manifest; dependencies/devDependencies keep their exact pins.
+- ce3d526: Whiteboard: roster follow-ups — Restyle follows the text tool, an empty roster lands on Select, and the host gains `ReadOnly`.
+
+  Four corrections to the `ToolRoster` work, raised in review.
+
+  **Restyle… now follows the `text` tool.** It is the one item-menu action that is also a door to a tool: it opens the toolbar's text style flyout, which only exists because the text tool's button renders it. Under a roster without `text` the entry was present and did nothing. The rest of the item menu stays deliberately roster-blind — Edit, Duplicate, z-order and Delete are authoring on what already exists, not tool selection.
+
+  **An empty or all-typo roster now clamps the active tool to `select`.** It previously left the current tool alone, on the reasoning that the board must always hold something. It must — but holding the tool the roster just revoked was the one answer that kept a _creating_ tool live with no toolbar to see it and no key to change it: `Tool = 'html'` followed by `ToolRoster = []` went on placing widgets. An empty roster still does not make the board read-only.
+
+  **`RealtimeWhiteboardHostComponent` gains `@Input() ReadOnly` (default `false`).** The board component has had it all along; the host had no passthrough, so the documented advice to "use `ReadOnly` for that axis" was an `NG8002` for anyone who followed it. The host now binds it to the board and adds the chrome only it owns: no floating toolbar (matching `WhiteboardSnapshotComponent`), no Undo on the agent toast, and a keyboard handler that returns before any key can act — `Escape` included, because "the keyboard does nothing here" is a rule a user can hold and "does nothing except Escape" is one they have to be told. Pan and zoom stay live. `ReadOnly` does not reset `Tool`; the board ignores edits regardless.
+
+  The two axes are not substitutes: the roster answers _which tools are offered_, `ReadOnly` answers _whether anything mutates_.
+
+  **`ToolRoster` tolerates a non-array and re-clamps on content change.** A static attribute (`ToolRoster="select,pan"`, a plausible slip for the binding) set a string, which reached the roster helpers as an accidental substring matcher and rendered a garbage palette — or threw outright, when the string did not contain the held tool's name and the clamp's `.filter` ran on a `String`. Non-arrays now read as no roster. The kept value is a frozen copy compared by content rather than by identity, which was wrong in both directions: a bound array literal is a new reference every change-detection pass (re-clamping forever, fighting the user for the active tool), and an array mutated in place keeps its reference (never re-clamping, leaving a revoked tool held).
+
+  Behavior change: `ReadOnly` defaults to `false` and every roster default still reproduces today's rendering. `ToolRoster` ships in this same release, so the Restyle and empty-roster rules above are simply how it behaves from the start — the `ToolRoster` entry in these notes describes it the same way. Anyone who adopted the roster before this release from an unreleased build or the `lts/5` backport loses the Restyle entry on sticky and text items when their roster omits `text`; that entry did nothing for them.
+
+- ba71cd4: Whiteboard: a host-controllable `ToolRoster` that gates the toolbar, the keyboard shortcuts and the canvas context menu together.
+
+  `RealtimeWhiteboardHostComponent` gains `@Input() ToolRoster: readonly WhiteboardTool[] | null` (default `null` = all eleven tools, today's rendering). It governs which tools are AVAILABLE, and closes every door to a tool it leaves out: the toolbar button, the single-letter shortcut, and the canvas right-click "add … here" action.
+
+  The invariant is enforced where the tool is written rather than at each place it is read: the host's `Tool` is a setter that ignores a disallowed write, so a shortcut or gesture added later cannot reintroduce a hole by forgetting a guard. If the tool you are holding leaves the roster, the host moves to `select`, or to the roster's first known entry when `select` is not on it — never to whatever the host happened to list first. A roster that names no real tool at all lands on `select` too: the board always holds a tool, and `select` is the one that can create nothing.
+
+  The roster is deliberately NOT a content policy. It does not restrict what already exists on the board, what the agent places, or authoring on existing items: Duplicate, z-order, Delete and pasting an image are unaffected. The one exception is **Restyle…**, which is hidden when the roster omits `text` — Restyle opens the text tool's style flyout, so without that tool the entry would be present and do nothing. Whether anything mutates at all is the separate `ReadOnly` input on the same host.
+
+  Why all three at once: a consumer that hid five toolbar buttons with CSS found the right-click menu still offered "Add widget here" and the `w` key still placed one. A roster that gated only the toolbar would have shipped the same hole as a prop.
+
+  Behavior change: none. Every default reproduces today's rendering; `BuildWhiteboardContextMenu(item)` without a roster is unchanged.
+
+- Updated dependencies [394d276]
+- Updated dependencies [834f8d7]
+- Updated dependencies [b915983]
+- Updated dependencies [b895f92]
+- Updated dependencies [b895f92]
+- Updated dependencies [4586215]
+- Updated dependencies [197fdf8]
+- Updated dependencies [4c1de04]
+- Updated dependencies [1940a4d]
+- Updated dependencies [deea1a3]
+- Updated dependencies [c09c818]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [51017a5]
+- Updated dependencies [cefc302]
+- Updated dependencies [080f4cd]
+- Updated dependencies [e93f221]
+- Updated dependencies [10cbc60]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [d26e202]
+- Updated dependencies [48ff99f]
+- Updated dependencies [23c2521]
+- Updated dependencies [394d276]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [cf2484c]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [de343b5]
+- Updated dependencies [394d276]
+- Updated dependencies [1bd9674]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/ng-ui-components@6.1.0
+  - @memberjunction/global@6.1.0
+  - @memberjunction/ng-code-editor@6.1.0
+  - @memberjunction/ng-markdown@6.1.0
+
+## 6.1.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [cf2484c]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/ng-ui-components@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+  - @memberjunction/ng-code-editor@6.1.0-edge.7
+  - @memberjunction/ng-markdown@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Patch Changes

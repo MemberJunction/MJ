@@ -1,5 +1,1894 @@
 # @memberjunction/ng-conversations
 
+## 6.2.0-edge.5
+
+### Minor Changes
+
+- 39b35f1: Real-time task graph workflow UX, continuation synthesis with step outputs and artifacts, single-step delegation folding, per-user runnable agent directory & task graph validation, and a redesigned AI Agent Workflows & Tasks Command Center (#5878).
+  - **Single-step task graph folding (`@memberjunction/ai-agents`).** `LoopAgentType.DetermineNextStep` automatically folds single-node `Tasks` emissions with no dependencies into an in-turn `Sub-Agent` step (`terminateAfter: false`) so single-agent delegations complete in a single conversation turn without spawning a background task graph, while preserving durable `Tasks` execution for multi-step (`2+` node) workflows. When an orchestrator with `ArtifactCreationMode = 'Never'` or `'System Only'` delegates a folded step to a specialist agent that produces artifacts, `AgentRunner.ProcessAgentArtifacts` resolves the specialist's `DefaultArtifactTypeID` and creation mode so deliverables are persisted and attached to the conversation message.
+  - **Per-user runnable agent directory, pre-submission task graph validation, and sub-agent workflow propagation (`@memberjunction/ai-engine-base`, `@memberjunction/aiengine`, `@memberjunction/ai-core-plus`, `@memberjunction/ai-agents`, `@memberjunction/task-graph`, `@memberjunction/server`).** `AIEngineBase.GetUserRunnableAgentDirectory(user)` caches a per-user directory of active top-level agents permitted by `CanUserRunAgent`, invalidated on agent and permission changes. `BaseAgent` preloads `availableAgentCount` / `availableAgentDetails` into prompt templates, validates `Tasks` step targets before submission (converting unknown or restricted agent/action references into a self-correcting `Retry` step with the user's permitted agent list), propagates `conversationDetailId` and `Paused` workflow-awaiting state from sub-agents (`Workflow Planner`) to parent runs (`Sage`), includes `agentRun.Message` in sub-agent result markdown, and settles/reinvokes ancestor runs along `ParentRunID` in `TaskGraphDispatcher` and `TaskGraphContinuationDeliverer`.
+  - **Live task graph telemetry, isolated step artifact persistence, and adaptive continuation delivery (`@memberjunction/server`, `@memberjunction/ai-agents`, `@memberjunction/conversations-runtime`).** `TaskGraphAgentRunner` resolves the originating `ConversationDetailID`, passes `inputArtifacts: []` to isolate task-graph step runs from earlier conversation turn artifacts, and forces `behavior: 'create-new'` when persisting step deliverables so sibling/prior artifacts are never overwritten as `v2`. `AgentRunner.ProcessAgentArtifacts` infers `Research Content` (`report.html`) and extracts `report.name` / `report.description` / `synthesis.executiveSummary` for report-producing specialist steps. `TaskGraphContinuationDeliverer` strips inherited upstream keys from merged `OutputPayload`s, updates the originating workflow message in-place when no intervening messages were sent (`origin.IsLatest`), or posts a bottom continuation reply linked via `ConversationDetail.ParentID` when intervening messages were sent while the workflow ran.
+  - **First-class inline Workflow Execution Card, Workflow Context Header, & real-time chat reconciliation (`@memberjunction/ng-conversations`).** `ConversationChatAreaComponent` and `MessageItemComponent` reconcile live `TaskGraphProgress` frames in place, deduplicate parent container tasks from executable step rows, strip inherited upstream payload keys from step summaries, and render a relational `.workflow-continuation-banner` (`Completed workflow · <Name> · View workflow ↑`) on bottom continuation replies that scrolls to and highlights the originating workflow turn.
+  - **AI Agent Workflows & Tasks Command Center (`@memberjunction/ng-conversations`, `@memberjunction/ng-tasks`, `@memberjunction/ng-explorer-core`).** Redesigned `TasksFullViewComponent` with a 5-metric KPI telemetry ribbon, instant search and status/agent filters, a **Workflow Cards** DAG view, a second-resolution **Execution Timeline & DAG** waterfall view, and a slide-over **Step Inspector Drawer** with one-click navigation back to the originating conversation.
+
+- b14c72f: Add the personal Chief of Staff (`Chief of Staff`) AI agent, per-user narrowed governance (`MJ: AI Agent User Policies` + `AgentUserPolicyEngine`), 3-Tier Wake Gate on `MJ: User Routines` (`RoutineType = 'AgentWake'`), user-scoped calendar/email/availability actions (`EnterpriseMailboxSecurityGate`), and Communication Dashboard enterprise governance cards.
+- b4e2ceb: `mj-conversation-chat-area` gets an `AllowForking` input, like `AllowRealtime` and `AllowAttachments`. It defaults to true, so nothing changes unless a host sets it. With `[AllowForking]="false"` the chat offers no fork actions (Fork from here, Edit or Regenerate as a fork), and Edit and Regenerate change the latest turn in place, as they do for a person without the `Conversations: Fork` authorization. It only affects the UI: deny that authorization to a role to stop the server creating forks too.
+- 5fed75a: Agent runs no longer write `AIAgentRun.Result`; use `FinalPayload`, which holds the same value. The `Result` column remains, deprecated, for existing rows.
+
+  New column `AIAgentRunStep.PayloadAtStartSourceStepID`. When a step starts from the same payload an earlier step in the run ended with, `PayloadAtStart` is stored as NULL and this column points at that step. Readers resolve the value with `ResolvePayloadAtStart` / `ApplyResolvedPayloadAtStart` from `@memberjunction/ai-core-plus`. External API clients that read `PayloadAtStart` directly must follow the pointer.
+
+- 8420f36: Client-direct realtime recordings no longer depend on the browser surviving the end of the call (#5294).
+  - **Opus shards during the call.** The browser captures at 48 kHz into one continuous Opus encoder (WebCodecs, or libopus WebAssembly in a Worker where WebCodecs cannot encode Opus) and uploads a 5 s `MJOPUS1` shard as raw bytes to `POST /realtime/recording/:agentSessionId/shard/:index`. Each shard is kept in IndexedDB until the server acknowledges it, so shards survive network drops and reloads and are uploaded on the next page load.
+  - **Keepalive terminal.** End, `pagehide` and `visibilitychange`→hidden send `POST /realtime/recording/:agentSessionId/end` with the last partial window as a `keepalive` request, then re-send every unacknowledged shard with `keepalive`. A hidden tab's terminal carries `final=false`: the server stamps the counts but assembles only after the grace period, so switching tabs does not rewrite the recording. `EndRealtimeSession()` waits for the terminal's acknowledgement for at most 3 s. The whole-call `UploadRealtimeRecording` upload and the `beforeunload` prompt are gone from new clients. The mutations remain for older clients.
+  - **Server ledger and assembly.** Migration `V202610151535` adds `RecordingStatus`, `RecordingExpectedShards`, `RecordingCapturedSamples`, `RecordingGaps` and `RecordingAssemblyVersion` to `AIAgentSession`, and the new `MJ: AI Agent Session Recording Shards` entity, written through guarded stored procedures. MJAPI assembles `recording.wav` and `peaks.json` within seconds of the terminal. A recording with missing shards is assembled as `Partial` after `realtime.recordingAssemblyGraceSeconds` (default 90): each gap is silence and is listed in `RecordingGaps`. The session janitor assembles sessions that never sent a terminal. Recovery of legacy `seg-*.pcm` storage shards is unchanged.
+  - **Breaking for custom hosts:** `IRealtimeSessionRecorder` now returns Opus packets (`TakeEncodedPackets()`, `Stop(): Promise<number>`) instead of base64 audio. `BrowserRecordingUnloadGuard` is removed. A host that wires its own page-lifecycle events calls `SendRecordingTerminal({ Final: false })` when the page is hidden and `SendRecordingTerminal()` on `pagehide`.
+
+### Patch Changes
+
+- 81aea34: Enable full-conversation artifact manifest visibility (`artifactId`, `versionId`, `versionNumber`, `description`, `title`, and table/row summaries), `artifactDirective` forwarding across `LoopAgentResponse`/`LoopAgentType`/`BaseAgent` (including alpha-ID resolution to UUIDs and clean base payloads for `create-new`), `Data` artifact extract rules and payload title/description fallback on `MJ: Artifacts` and `MJ: Artifact Versions`, `QueryBuilderAgent` single-table vs. multi-table normalization on `Chat` and `Success` steps, and conversation artifact panel auto-opening on active branch paths.
+- 9898079: `AllowStopRun` on `mj-conversation-chat-area` now turns off everything about stopping, not just the Stop controls. It defaults to true, so nothing changes unless a host sets it. With `[AllowStopRun]="false"` the chat offers no Stop or Stop all in the composer, no Stop pill on an in-progress reply, no Continue button on a stopped reply, and no "Continue, or tell {agent} what to do differently" placeholder. It only affects the UI: a run stopped from another client still shows as stopped, and the next message still continues it. The input now sits with the other host-level caps (`AllowAttachments`, `AllowPlanMode`, `AllowRealtime`) and is listed in the README's feature toggles.
+- 189b702: The composer's status line ("Sage is working" with the elapsed time beside it, "2 agents working", and "Stopping Sage…" after a stop the viewer asked for) now shows whenever a reply is in flight, instead of only while the send slot is Stop. It is information, not a control, so a read-only viewer and a host with `AllowStopRun` off see it too; the Stop control itself is still gated as before. Nothing changes for the default host, where the slot was already Stop whenever the line showed. The elapsed time is its own pill after the text, with no comma, on the info status tokens so it reads in dark mode.
+- 0c634ba: Fix Explorer console errors: grant UI role create/update permissions on MJ: User Record Logs and guard RecentAccessService.LogAccess, emit Conversations$ synchronously on optimistic SaveConversation updates and run change detection on conversation rename/creation callbacks to prevent NG0100, fall back to user-settings persistence in EntityViewerComponent when UserCanEdit is false on a loaded UserView, and hide/omit Deprecated and Disabled entity fields in MjFormFieldComponent and AngularClientGeneratorBase.
+- 542795b: Memory-leak audit round 19 fixes.
+  - **Ollama**: a request carrying a cancellation token no longer leaves abort listeners on that (long-lived) token. Each request adds one listener, removed when the call or stream ends, and early stream termination safely invokes `iterator.return()` without masking stream errors.
+  - **Client tools & Realtime session signals**: `ClientToolRequestManager` session tool definitions are now an LRU with a 6 h idle TTL, capped at 1,000 sessions and 200 tools per session. `RealtimeClientSessionService.combineSignals` now pairs its combined `AbortSignal` with a `Dispose` callback called in `finally` so reused caller signals do not accumulate abort listeners across relayed tool calls.
+  - **MCP client**: a failed `connect` now closes the transport it created (falling back to `transport.close()` directly if the client has no attached transport), so a stdio server's child process or an SSE/HTTP stream is no longer orphaned.
+  - **Timers**: `ParallelExecuteAction` and the conversation-naming helper clear their timeout timer when the work finishes first.
+  - **Dev Tools**: `EventMonitorComponent` and the 7 sibling DevTools `BaseResourceComponent` subclasses call `super.ngOnInit()` / `super.ngOnDestroy()`.
+
+- fcc3f03: Clears the two Source guards failures on `next` from #5910 and #5912.
+  - **Saving a chat task graph as a workflow** runs the save operation through the conversation's own provider (`ProviderToUse`), not the global `Metadata.Provider`. With several connections open, the global provider could route the save to the wrong server.
+  - **Flow agents with several starting steps** check completed steps against a `UUIDSet` built once, instead of scanning the completed list with `UUIDsEqual` for every pending start step and every incoming join edge. Step IDs still match case-insensitively.
+
+- 1214eca: Renames `ConversationChatAreaComponent.openConversationArtifactForCommand` to `OpenConversationArtifactForCommand`, as MJ's naming standard requires for public members. The method came in with #5896 and hasn't been released, so there's no deprecated alias. Its callers in `ChatConversationsResource` are updated. This clears the MJ standards check that has failed on every PR since #5896.
+- 7e72c86: Phase 2 fresh efficiency and quality audit across Core Data Primitives, Task Graph Engine, AI Agent Runtime & PayloadManager, High-Volume Telemetry SaveReturnMode, and Angular Chat / Step Inspector UI:
+  - **Core Data Primitives (`@memberjunction/core`, `@memberjunction/generic-database-provider`, `@memberjunction/sqlserver-dataprovider`, `@memberjunction/server`, `@memberjunction/templates-base-types`)**:
+    - Restore lazy `_raw` `BaseEntity` hydration on `GetEntityObject()` + `LoadFromData()` (`20.87x` faster, `-100%` `EntityField` allocations on read-only `entity_object` views) while guarding subsequent `LoadFromData()` calls on already-loaded instances.
+    - Support runtime `options.SaveReturnMode === 'datestamps_only'` projection in `SQLServerDataProvider.WrapSaveCallForResult`.
+    - Eliminate duplicate `DiffObjects()` and `CreateUserDescriptionOfChanges()` calls in `GenericDatabaseProvider.Save()`.
+    - Add precomputed `FieldMappingPlan` in `ResolverBase.ArrayMapFieldNamesToCodeNames` and `O(1)` `EntityInfo.FieldByCodeName()` lookup.
+    - Deduplicate `entity.GetAll()` across `DatabaseProviderBase.Save()` and `BaseEntity.finalizeSave()` via `__mj_preMerged`, mark unpopulated virtual fields `NotLoaded = true` on new `datestamps_only` inserts, compute `ProviderBase.prepareSmartCacheCheckParams` fingerprint before widening `param.Fields`, and avoid double property reads in `NunjucksSandbox.guardMemberLookup`.
+  - **Task Graph Engine (`@memberjunction/task-graph`)**:
+    - Collapse `TaskGraphDispatcher.pollOnce` from `6 + 13G` to `3 + 2G` DB queries via a single `loadGraphState` per active graph per poll, gate `checkHumanTaskCompletion` with an in-memory `pendingHumanTasks` set, pass pre-hydrated `ClaimedTaskCandidate` into `executeClaimed` (`0` re-queries), parallelize `TaskGraphService.Submit` and `persistComputedLayout`, and complete `AgentSpecSync.LoadFromDatabase` round-trip hydration.
+  - **AI Agent Runtime, Prompts & PayloadManager (`@memberjunction/ai-agents`, `@memberjunction/ai-prompts`)**:
+    - Gate `BaseAgent.runPostRunCompaction` on `!IsVolatileResultMessage(msg)` and `!msg.toolCalls?.length`, reuse `_promptRunner`, queue compaction steps via `_stepSaveQueue`, and account for compaction steps in `_treeBudget`.
+    - Remove synchronous `stepEntity.Save()` queue bypasses in `checkExecutionGuardrails` and `validateSuccessNextStep`, and route `AIPromptRunner.executePromptInParallel` parent completion save through `queuePromptRunCompletionUpdate`.
+    - Fix `PayloadManager.mergeAllowedPaths` `arguments[2]` warning bug and cache compiled glob/wildcard `RegExp` and parsed path specs statically (`49,150x` fewer regex compilations).
+    - Add `O(1)` reference + metadata snapshot fast path to `BaseAgent.capturePromptStepMessages` (`16.2x` faster) and memoize child template placeholder analysis.
+  - **High-Volume Telemetry `SaveReturnMode: 'datestamps_only'` (`@memberjunction/ai-core-plus`, `@memberjunction/ai-agents`, `@memberjunction/ai-prompts`, `@memberjunction/actions`)**:
+    - Pass `{ SaveReturnMode: 'datestamps_only' }` in `AgentRunStepSaveQueue`, `BaseAgent._agentRun.Save`, `BaseModelRunner._promptRunQueue`, and `ActionEngineServer._logQueue`.
+  - **Angular Chat, Task Graph & Step Inspector (`@memberjunction/ng-conversations`, `@memberjunction/ng-ai-test-harness`, `@memberjunction/ng-core-entity-forms`)**:
+    - Memoize `DisplayArtifacts`, `SupportingArtifacts`, and single-pass `buildWorkflowStepSummaries` in `MessageItemComponent`, memoize JSON parsing and graph layout positions in `AIAgentRunStepDetailComponent` and `MJAIAgentRunFormComponentExtended`, add `ShouldReplaceDetailAgentRun` guard and `RefreshRenderedMessage` in `ConversationMessageListComponent`, migrate `artifactPaneWidth` from `localStorage` to `UserInfoEngine`, and remove redundant `MJ: AI Agent Runs` query in `AIAgentRunDataHelper`.
+
+- 130cc7e: Opening a record from the Tasks Command Center now builds its key from the entity's real primary key, so a record whose key isn't a single `ID` column opens, and composite keys work. Opening a workflow step's agent run uses `CompositeKey.FromID` for the `MJ: AI Agent Runs` core entity. This clears the Primary Key Compliance gate that #5878 broke.
+- 2a7a098: A user who cannot read MJ's AI entities now sees a conversation's messages and its composer. `AIEngineBase` gains `ReadableAgents`: the agents when the user may read them, else none, where `Agents` throws `PermissionConstrainedError`. The mention engine initialises with no agents for such a user instead of throwing, and every agent lookup in the chat area, the message item, the message input, the tasks dropdown, the agent picker, the conversation-agent service and the default-agent resolver reads the agents through it (#5240).
+- c7d1170: Security: client SQL fragments reach RunView only through the base-view clause screen. The screen moves from MJServer's `ResolverBase` into `@memberjunction/generic-database-provider` as `ClientClauseScreen`, and the provider exposes it as `ScreenClientClause`. It now also guards `RunViewsWithCacheCheck` (which also gets the `view:batch` API-key scope check), every ad-hoc list source by default (client-supplied, from the list and audience actions, or rebuilt from a stored list snapshot), the REST view routes (which also refuse a `ViewEntity` that was not loaded as an entity), and a saved view's stored WhereClause and sort (on save, and again when the view runs). The screen refuses a subquery over an entity the acting user reads under a row filter (role row-level security or an API-key row filter) or with denied fields, the queried entity included, because a subquery reads the base view without them; the ad-hoc SQL screen uses the same rule. Both screens read table references from a walk of the whole parse tree (subqueries in CASE branches, HAVING and window clauses included, and every FROM item even when an alias repeats), refuse SQL whose SELECT keywords the walk does not account for, refuse a table function in FROM unless it is an unqualified built-in that reads only its arguments, and skip only the parse wrapper's own FROM item. `SQLParser.IdentifierAliases` exposes the names a fallback parse renamed, so bracket-quoted CTE names still resolve. The fallback takes those names from a prefix the SQL does not contain and keeps each one a separate token, so every name in that map is one the parser renamed. `SQLParser.IsIdentifierAliasName` reports that name form, and both screens refuse client SQL that uses it. The ad-hoc SQL screen exempts a FROM item as a CTE reference only when it is unqualified (`dbo` counts as a schema), is in the scope of a WITH that declares the name (its own SELECT or an enclosing one; a CTE body sees the CTEs before it, itself on SQL Server, and every CTE of a PostgreSQL WITH RECURSIVE list), and matches by the dialect's identifier rules (case-insensitive on SQL Server; on PostgreSQL unquoted names fold to lower case and quoted names match exactly). The parse-tree walk takes time linear in the size of the parse tree, and the fallback renaming and the forbidden-function check take time linear in the size of the SQL. A schema-qualified table reference, `dbo` included, resolves only to an entity in that schema. Client clauses may no longer call the functions the dialect forbids in caller SQL (`CallerSQLForbiddenFunctions`), and that shared list now also covers `pg_sleep*` on PostgreSQL and `OPENXML` on SQL Server. The rubric comparison matrix and the conversations UI (the tasks view, task search and the agent artifact lookup) now read the IDs they filter by with their own RunView instead of a subquery over those views; the conversations Tasks tab rebuilds that filter on every load and refresh. On PostgreSQL the screen reads `[Name]` bracket identifiers as the PostgreSQL provider does. Every RunView caller also gets a bracket- and `E''`-aware check that refuses statement separators and comments in filter, sort and search fragments, and a view ID is spliced into SQL only when it is a GUID. A stacked statement hidden from the keyword denylist by a quote inside a bracket identifier no longer reaches the database on these paths.
+- Updated dependencies [0d81c53]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [189b702]
+- Updated dependencies [5465489]
+- Updated dependencies [83486cf]
+- Updated dependencies [c6b4b85]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [8b62f8c]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [60bb4b5]
+- Updated dependencies [2274f42]
+- Updated dependencies [35ed364]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [c271ddf]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [230cdad]
+- Updated dependencies [7e72c86]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [2a7a098]
+- Updated dependencies [8420f36]
+- Updated dependencies [72dd65c]
+- Updated dependencies [7fb8598]
+- Updated dependencies [1d29837]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [5f707d1]
+- Updated dependencies [e1f2583]
+- Updated dependencies [dc38250]
+- Updated dependencies [1aefcb4]
+- Updated dependencies [2f9e209]
+- Updated dependencies [382de4d]
+- Updated dependencies [8576224]
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/ai@6.2.0-edge.5
+  - @memberjunction/ai-core-plus@6.2.0-edge.5
+  - @memberjunction/ai-engine-base@6.2.0-edge.5
+  - @memberjunction/conversations-runtime@6.2.0-edge.5
+  - @memberjunction/ng-tasks@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.5
+  - @memberjunction/ng-user-routines@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/ng-composer@6.2.0-edge.5
+  - @memberjunction/ng-shared-generic@6.2.0-edge.5
+  - @memberjunction/ng-ui-components@6.2.0-edge.5
+  - @memberjunction/ng-base-forms@6.2.0-edge.5
+  - @memberjunction/ng-markdown@6.2.0-edge.5
+  - @memberjunction/ng-notifications@6.2.0-edge.5
+  - @memberjunction/realtime-runtime@6.2.0-edge.5
+  - @memberjunction/ai-realtime-client@6.2.0-edge.5
+  - @memberjunction/ng-whiteboard@6.2.0-edge.5
+  - @memberjunction/ng-testing@6.2.0-edge.5
+  - @memberjunction/ng-artifacts@6.2.0-edge.5
+  - @memberjunction/ng-base-types@6.2.0-edge.5
+  - @memberjunction/ng-code-editor@6.2.0-edge.5
+  - @memberjunction/ng-react@6.2.0-edge.5
+  - @memberjunction/ng-resource-permissions@6.2.0-edge.5
+  - @memberjunction/ng-task-graph-editor@6.2.0-edge.5
+  - @memberjunction/ng-realtime-channels@6.2.0-edge.5
+  - @memberjunction/ng-realtime-media@6.2.0-edge.5
+  - @memberjunction/ai-agent-client@6.2.0-edge.5
+  - @memberjunction/ng-forms@6.2.0-edge.5
+  - @memberjunction/ng-container-directives@6.2.0-edge.5
+  - @memberjunction/ng-media-player@6.2.0-edge.5
+  - @memberjunction/interactive-component-types@6.2.0-edge.5
+  - @memberjunction/ng-agent-client@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Minor Changes
+
+- 7384dd6: Conversation forks: a conversation is Main (the messages with no branch) plus forks (`MJ: Conversation Branches`). A fork starts at a message and shows as a chip under it (kind icon, up to three avatars, message count, name, last activity); it opens as a full view where the inherited history sits faded behind a dashed rail, up to a fork marker, and the fork's own messages behind a solid rail. "Fork from here" on one of your own messages opens a new fork that replaces that message at once (it starts from the message before it, the composer starts with the message's text, the fork is created on the first send and named from that message, and leaving without sending creates nothing), Edit ("Save as fork"; the original message stays) and Regenerate (the first answer stays) each start a fork. A Forks button lists every fork, nested under its parent, with All and Mine filters. Everyone who can see a conversation sees its forks and who started each one. What a person is looking at is per person and in memory; nothing about the view is stored on the conversation, and changing the view ends an active voice session.
+  - New entity `MJ: Conversation Branches` with `Kind` (Fork, Edit, Regenerate; default Fork), `SourceDetailID` and `UserID`; new columns `ConversationDetail.BranchID` and `ConversationDetail.ReplacedAt` (migration, so `minor`).
+  - New authorization `Conversations: Fork`, granted to the UI role. The server refuses to create a fork for a person without it; deny it to a role to turn forking off for that role's members. Each person can also switch forking off in My Profile ("Fork when I edit or regenerate"; user setting `mj.conversations.forking.v1`).
+  - When forking is off for a person, Edit and Regenerate change the latest turn in place: Regenerate (latest answer) and "Save and resend" (latest user message) hide the current answer and run the agent again; earlier user messages can still be edited ("Save", shown as edited). A replaced answer keeps its row (`ReplacedAt` and `HiddenToUser` set) and is left out of the chat, export, pins, the mobile transcript, rubric subjects, the returning-visitor recap and every agent context read (`ConversationEngine.LiveRowsFilter` and `IsReplacedRow`). A turn a fork depends on is not changed in place.
+  - Every writer sets `BranchID` itself (null is Main): the composer and its agent turns, `AgentRunner`, the task-graph deliverer, an agent request resumed from the Agent Requests dashboard or API (the fork of the message that started the run) and realtime transcripts (a voice session's fork is fixed when it starts). The server no longer stamps it and refuses a `BranchID` that names a fork of another conversation.
+  - A fork that still has its own messages or child forks cannot be deleted on its own (its messages would move into Main); deleting the conversation deletes its forks and messages.
+  - `ConversationEngine` gains `CreateFork`, `ForkPointFrom`, `EditForkPoint`, `RegenerateForkPoint`, `SourceRowsFilter`, `BuildForkSummaries`, `LoadForkSummaries`, `ForkDisplayName`, `LiveRowsFilter` and `IsReplacedRow`.
+  - **Removed public Angular API** (the ParentID-based thread panel; a host app that binds any of these must drop the binding): `ConversationChatAreaComponent`'s `ThreadId` input and `ThreadOpened`/`ThreadClosed` outputs; the `ThreadPanelComponent` export; `ConversationWorkspaceComponent`'s `OpenThread`, `CloseThread` and `SelectedThreadId`; `ChatConversationsResource`'s `SelectedThreadId`, `OnThreadOpened` and `OnThreadClosed`; `MessageListComponent`'s `ReplyInThread` and `ViewThread` outputs. Their deprecated camelCase aliases (`threadId`, `threadOpened`, `threadClosed`, `openThread`, `closeThread`, `selectedThreadId`, `onThreadOpened`, `onThreadClosed`, `replyInThread`, `viewThread`) are removed with them.
+
+  Message-anchored scope: every reader of one conversation reads one path through `ConversationScope` (`LoadScope`, `TrunkScope`, `ScopeFilter`, `ScopeSubquery`, `IsInScope`, `FilterToScope`, `ArtifactVersionScopeFilter`): the open view in the chat (window, pins, artifacts, agent polling, export, voice start), and Main for the mobile app, the realtime widget, meeting transcripts, the conversation overview, rubric subjects and the returning-visitor recap. Artifact history is path-aware: the viewer takes a `Scope` input and lists only the versions a message on the path links (any direction) or that no message links, labels a gap as `v4 · from v2`, and falls back to the newest visible version with a notice. Search results carry the fork of each hit; opening one opens that fork, or Main. Skip requests carry `conversationBranchID` from the reply's fork, so Skip Brain keeps one mirror record per path.
+
+- 666d078: A new realtime channel shows the agent's video when the model sends one (an avatar): **Avatar** (`RealtimeAvatarChannel`), with an `MJ: AI Agent Channels` row on the generic `ClientOnlyChannelServer` whose `UIConfig` places its surface on the stage. It is in every call and inert without video: open from the start, it gives the agent no verbs, nouns or instructions (the agent's channel note leaves it out) and shows the agent nothing. It sinks outbound video, so the session requests the agent's video when it connects; when the video arrives, the runtime marks the channel as used and the overlay brings its surface up where the row places it. The surface (`mj-realtime-avatar-surface`) shows the video in an `mj-media-tile`. `mj-media-tile` now labels a shown avatar "AI-generated video" for as long as it shows one; its chips sit in a row in the tile's top-left corner, so the label and "Sharing" can show together.
+- 4889ca0: Two new realtime channels let the agent ask to see the user's camera or screen: **Camera** (`RealtimeCameraChannel`) and **Screen Share** (`RealtimeScreenShareChannel`), with `MJ: AI Agent Channels` rows on the generic `ClientOnlyChannelServer` whose `UIConfig` places their surface in picture-in-picture. Both are opt-in and on demand: the agent opens one with a `reason`, which is the request, and only the user turns the capture on or off. The surface (`mj-realtime-capture-surface`) shows the ask with Turn on camera (or Share your screen) and Not now, then the user's self-view or share preview. The conversations UI brings both channels to its calls (`CONVERSATION_CALL_HOST_CHANNELS`); other hosts get them when their agent or app includes them. A channel's context gains `Captures$`, `StartCapture` and `StopCapture`, so a channel that fronts a capture can follow it and run the user's clicks under the runtime's policy.
+- 1ea4085: A realtime channel's surface now shows where its `MJ: AI Agent Channels` row says. The row's `UIConfig` JSON gains `Placement` (`stage`, `pip`, `tab` or `hidden`; the tab when absent) and `AllowedPlacements` (where the user may move it; anywhere when absent), and CodeGen regenerates the typed `UIConfigObject` accessor. The runtime reads each row's placement when it builds the channel (a row whose `UIConfig` is not valid JSON keeps its channel and starts on its tab) and exposes it as `BaseRealtimeChannelClient.SurfacePlacement`. The call overlay starts each surface there, offers only the allowed placements in "Move to…", hides "Bring it here" when the tab is not allowed, and sends a surface leaving the stage to where its channel places it, using the media module's newly exported `PlacementOffStage`. No existing row sets a placement, so every surface still starts on its tab.
+- 975948b: Realtime Channels v2, third phase: verb-level exposure policy, an Angular adapter that wraps an existing component as a channel, an opt-in DOM rasterizer, a sample game channel, and the channels guide. Existing channels, tool names and hosts are unchanged.
+
+  `minor` because this branch edits `metadata/` earlier (see the first two phases) and adds two new packages. There is no migration and no new entity column.
+  - **Verb results obey exposure** (`@memberjunction/ai-core-plus`, `@memberjunction/realtime-runtime`, `@memberjunction/ng-conversations`). A verb whose result carries what the channel holds declares `ReturnsChannelData: 'state' | 'pixels'` on its descriptor entry. When the channel's effective exposure is below that level the dispatcher, and the native-tool route for a channel mounted at start, refuse the whole call with `exposure_restricted` (policy, not redaction: the verb is refused whole and its result is never filtered); the check comes after `InvokableBy` and before parameter validation, so a malformed call cannot probe a withheld verb. The catalog note and the `exposure_changed` note list the verbs that are unavailable and why. New pure helpers `IsVerbWithheld`, `WithheldVerbs` and `DescribeWithheldVerb`; `BuildToolBackedVerbs` accepts a per-verb flag map. Remote Browser flags `GetPageText` and `AchieveGoal` (`'state'`) and `DescribePage` and `LocateElement` (`'pixels'`); the Interactive Component channel flags `GetDataState`, `Validate`, `IsDirty` and custom methods with a non-void return type (merged verb offers are withheld only when every offer is flagged). This replaces the earlier statement that exposure is not a redaction layer over verb results.
+  - **`AngularComponentChannel<TComponent>`** (new package `@memberjunction/ng-realtime-channels`). Wraps an existing Angular component as a channel surface without rewriting it: a descriptor plus `ReadSurfaceState`, `ApplySurfaceVerb` and `SurfaceEvents`, and optional `OnSurfaceOpen`, `SurfaceCompletion`, `OnSurfaceBound` and `SurfaceElement`. It owns binding and unbinding, change-driven perception (an event emitted while the agent's verb runs is attributed to the agent), verb resolution, validation and serialization, completion, state of record, and pictures. A verb that arrives before the surface exists waits, bounded (5 s), for the real component and otherwise fails with `surface_unavailable`; it neither runs against a hidden instance nor is acknowledged and applied later.
+  - **Opt-in DOM rasterizer** (`@memberjunction/ng-realtime-channels`). `EnableChannelFrameCapture()` registers a bounded `html-to-image` based capturer (3000 nodes, 4 s, one capture at a time, 1024 px longest edge, no web fonts) that fails soft and turns itself off after repeated or unrecoverable failures, logging one reason. Core ships none by default; Explorer opts in (`@memberjunction/ng-explorer-app`), and the Interactive Component channel sources pictures only while the user allows pixels and a video track is up. `InteractiveComponentFrameCapture` is now `ChannelFrameCapture` in the new package, and `html-to-image` moved with it.
+  - **Sample channel** (new package `@memberjunction/ng-realtime-channel-examples`). A tic-tac-toe channel built only through the adapter, not a dependency of anything and loaded only when a host imports it, with tests that play whole games (user win, agent win, draw) against the real component with interleaved user clicks and agent verbs, plus collapse and re-expand, resume, exposure and pictures.
+  - **Guide.** `guides/REALTIME_CHANNELS_GUIDE.md` (indexed in `guides/README.md`): the contract, writing a channel from scratch, wrapping a component, scoping, opening on demand, visual perception, the Interactive Component channel, publishing from an Open App, and testing.
+  - **Per-verb timeout in the adapter** (`@memberjunction/ng-realtime-channels`). `AngularComponentChannel.VerbTimeoutMs` (15 s, overridable) bounds `ApplySurfaceVerb`. On timeout the call fails with `verb_timeout` and a message the agent can act on, the serialized queue is released and the timeout is logged once with the channel and verb. A late result is never delivered, a late failure is logged, and a late success is recorded as a change so the next perception note shows the real state; nothing is rolled back.
+  - **Generic `ClientOnlyChannelServer`** (`@memberjunction/ai-agents`, loaded by `@memberjunction/server`). `MJ: AI Agent Channels.ServerPluginClass` is required, so a channel that runs entirely in the browser sets it to `ClientOnlyChannelServer` instead of writing an empty plugin. It takes its channel name from the registry row, contributes no server tools and does not rewrite saves. `InteractiveComponentChannelServer` and `IdentityVerificationChannelServer` are now thin subclasses of it that keep their existing registry keys and behavior.
+
+- 22c9074: Realtime Channels v2, second phase: an Interactive Component channel, several video sources with one arbiter, and exposure policy. Existing channels, tool names and hosts are unchanged.
+
+  `minor` because the branch edits `metadata/` (a new `MJ: AI Agent Channels` row, and `Privacy.ZeroDataRetention` and `RequireZeroDataRetentionFor` in the `IAIConfiguration` / `IAgentSettings` JSON types). There is no migration and no new entity column.
+  - **Interactive Component channel** (`@memberjunction/ng-conversations`, `@memberjunction/ai-agents`, `@memberjunction/ng-react`). Shows any component artifact next to the call and lets the agent operate it. Multi-instance, opt-in, on-demand. Its contract is derived from the component's spec: custom methods and the standard methods it supports become verbs with parameter schemas, `getCurrentDataState` becomes the instance's data, spec events become channel events, spec properties become the schema of the opening inputs. Built-ins: `open`, `show_version` (swaps an open instance to another version of its own artifact in place, keeping its id), `close`. Artifacts load through the signed-in user's own access. Delegated component artifacts can open automatically (`channels.config.InteractiveComponent.autoOpenDelegatedComponents`, off by default), and a newer version of an open component replaces it in place. `MJReactComponent` gains a public `Refresh()`. New `InteractiveComponentChannelServer` and a `MJ: AI Agent Channels` row.
+  - **Multi-instance and delegated-artifact hooks** (`@memberjunction/realtime-runtime`). `OnOpen` can name the instance it created; `Complete` and `EmitChannelEvent` take an optional instance. A channel can ask to be offered the artifacts of a delegated run (`AcceptsDelegationArtifacts` / `OnDelegationArtifacts`); the runtime mounts it if needed and reveals its tab.
+  - **Several video sources** (`@memberjunction/ai`, `@memberjunction/ai-gemini`, `@memberjunction/ai-realtime-client`). Tracks carry a `SourceID` and `Label`; model profiles declare `MaxInboundVideoStreams` (1 for Gemini 3.8 Live and Extended Thinking, 0 without video input) and negotiation caps the streams to it. `SendVideoFrame(data, mime, sourceId?)`. `VideoSourceArbiter` is the single writer of inbound video: it passes every enabled source through on a multi-stream model; on a one-stream model it picks by a policy that is data (user pick, most recent capture, focused surface, newest), tells the model `[The agent is now viewing: <label>]` on every switch, and paces to the negotiated rate. The channel video bridge now registers with the arbiter; its exports are unchanged.
+  - **"Agent can see" and exposure policy** (`@memberjunction/ai-core-plus`, `@memberjunction/ai-agents`, `@memberjunction/realtime-runtime`, `@memberjunction/ng-conversations`). The realtime overlay shows which sources the agent can see, with a switch per source, remembered per user per channel. A channel's exposure is the lowest of its own ceiling, the agent's `channels.config.<Key>.maxExposure`, a zero-data-retention requirement and the user's choice; the server decides all but the last and returns it in the session policy. `requireZeroDataRetentionFor: ['state' | 'pixels']` lowers exposure when the session model's configuration does not declare `Privacy.ZeroDataRetention: true`, and the agent is told why. Exposure gates what is volunteered to the model (state notes and frames), and, for a verb that declares `ReturnsChannelData`, what the agent may ask for (the verb is refused whole below its level; see the third phase).
+  - **Session tuning.** `realtime.session.unverifiedMaxSeconds` and `verifiedMaxSeconds` (positive integers) pass through the configuration cascade; `channels.config.<Key>` reaches a channel intact.
+
+- 88b85fc: Realtime Channels v2, first phase: a self-describing channel contract, per-agent/app/host channel scoping, a validated `ContextTool` proxy, and a lifted visual-perception pump. Existing channels, tool names and hosts are unchanged.
+
+  `minor` because the branch edits `metadata/entities/JSONType-interfaces/IAgentSettings.ts` (the new `Realtime.Channels` block); there is no migration, and no new entity column.
+  - **Channel descriptors** (`@memberjunction/ai-core-plus`, `@memberjunction/realtime-runtime`). `RealtimeChannelDescriptor` (nouns, verbs with parameter schemas and `InvokableBy`, events, inputs/output, display policy, default availability, exposure ceiling) and the new `BaseRealtimeChannelClient` members `GetDescriptor`, `GetState`, `ApplyVerb`, `Events$`, `Output$`, `Open`, `Complete`, `InstanceId`. A channel that implements only the original members is synthesized a descriptor, so nothing changes for it. The Whiteboard, Remote Browser, Media and Client Context channels ship authored descriptors; their native tool names are unchanged. Perception notes are structured and debounced (`[channel:<Key>#<instance>] state_changed {…}`, a snapshot first and then deltas).
+  - **Channel scoping.** Code default, then agent (`realtime.channels` in the configuration cascade), then app (`Application.AgentSettings.Realtime.Channels`), then host-declared channels (`StartRealtimeSession(…, { HostChannels })`, which work on connect-only providers with no registry rows). `IsActive = false` on a registry row remains a master kill switch. At mint the browser reports its candidates (`channelCandidatesJson`) and the server returns the resolved policy (`ClientPolicyJson`), narrows the declared tools to match, persists the in-scope channel keys on the session, and drops the excluded channels' server plugins. A client with no server policy resolves the same scope locally, and a client against an older server falls back to the original mint mutation.
+  - **`ContextTool` proxy.** Accepts `target: { channel, instance? }`; a targeted call is validated against the addressed verb's parameter schema and returns a structured, model-recoverable error on failure. `on-demand` channels are opened mid-session with `action: "open"`. A catalog note rendered from the descriptors tells the model which channels exist.
+  - **App client tools.** `Application.AgentSettings.ClientTools` is now read by the realtime path and resolved through `ResolveClientTools`. `RegisterAppClientTools(tools, owner?)` is owner-keyed (new `UnregisterAppClientTools` / `ClearAppClientTools`); Explorer registers its globals and the active surface under separate owners and clears the previous app's surface tools on an app switch (previously they lingered). `FormatClientToolsForPrompt` is removed: it never had a caller.
+  - **Visual perception.** The Whiteboard's change-driven frame pump now lives in the base channel (`EnableVisualPerception`); frames are tagged with the change id of the state they describe. The Whiteboard's behavior is unchanged.
+  - **Session config rewrites no longer drop fields.** `RealtimeClientSessionResolver` rebuilt the persisted session config field by field on the run-id and pending-feedback rewrites, dropping `mediaCollectionID` and `directActions`; it now carries the existing config forward.
+
+- 02bb563: `<mj-realtime-widget>`, the `IdentityVerification` channel, session events in the runtime, and a session-launcher seam.
+  - **Session launcher** (`@memberjunction/realtime-runtime`). `IRealtimeSessionLauncher` is the one place a session is minted. `DefaultRealtimeSessionLauncher` is the stock `StartRealtimeClientSession` mutation with the channel candidates and client policy, unchanged, including the fallback for servers that predate channel scoping. Set `RealtimeSessionRuntime.Launcher` to mint through your own endpoint without wrapping the provider in a Proxy; set it to `null` to restore the default.
+  - **Session events in the runtime** (`@memberjunction/realtime-runtime`). The runtime subscribes for the life of the session (tolerating a provider with no subscriptions), exposes `SessionEvents$`, and routes events to per-type handlers. `identity.verified` sends the agent a context note (JSON-framed so user-entered text cannot break out), optionally asks it to speak (`IdentityVerifiedSpokenResponse`), and moves the client deadline from the payload; the server stays authoritative and the deadline only ever moves later. On a reconnect it re-subscribes and reads `GetVerificationStatus` once, so a verification that completed while offline is still announced, flagged `Recovered`. Channels receive `SessionEvents$` on their context. Also adds `OpenChannel(key, inputs)`.
+  - **`IdentityVerification` channel** (`@memberjunction/ng-conversations`, `@memberjunction/ai-agents`, `@memberjunction/server`). An opt-in v2 channel with nouns name, email and status and verbs `fill` (agent or user), `confirm` (**the user only**, refused for the agent in the channel itself, not just the surface), `submit`, `resend` and `enter_code`. A value the agent fills is marked as a suggestion until the user confirms it. The code is never stored and never reaches the agent. The surface is a small accessible Angular component using only design tokens and `mjButton`. A thin server plugin keeps no PII on the channel row. Ships with its `metadata/ai-agent-channels` row.
+  - **`@memberjunction/ng-realtime-widget`** (new package). `<mj-realtime-widget>` as an Angular component and as a one-script custom element (`dist/element/mj-realtime-widget.js`: Angular linker, no `unsafe-eval`, CSP nonce, guarded define). Auth modes `widget-key`, `invite-token`, `token` and a JS-only `launcher`; a consent gate before the microphone; resume and tab-close cleanup; `--mj-*` theming; attributes, properties, methods (`start`, `end`, `openChannel`, `sendContextNote`, `requestSpokenResponse`, `registerChannel`) and bubbling, composed DOM events (`mj-ready`, `mj-session-started`, `mj-session-ended`, `mj-phase-changed`, `mj-verified`, `mj-session-event`, `mj-channel-opened`, `mj-channel-event`, `mj-channel-output`, `mj-error`). It hosts the existing realtime overlay by deep import, so the heavy `ConversationsModule` barrel stays out of the bundle. A static sample page and an embed guide ship in the package.
+  - **A small shell and a lazily loaded call** (`@memberjunction/ng-realtime-widget`). The one-script embed is now a classic-script **shell** (about 8 KB gzipped, no Angular) that defines the element, exposes the whole contract and draws the start button, the consent notice and the status screens, plus the **call** (Angular, the realtime overlay, runtime, drivers, built-in channels) as split ES modules fetched relative to the shell's own URL on `start()`, `auto-start`, or a `preload` hint (`none|hover|idle|eager`, default `hover`, a `modulepreload` link that downloads without running). Declining consent downloads nothing. Calls made before the call code loads are specified and tested: `openChannel` and `sendContextNote` queue (notes are capped and never replayed into the next call), `requestSpokenResponse` is never queued, `end()` abandons a pending start. The Interactive Component channel is its own lazily loaded chunk, loaded only when it could be in the session. New attributes: `perception` (`on|off|ask`, default `ask`; pre-sets the person's exposure choice and is reported by a new `mj-perception-changed` event), `frame-capture` (a marked hook for Phase 2's rasterizer), `preload`, `session-url`. The build fails if the shell exceeds its size budget or a heavy dependency leaks into it. The bundle test boots the shell under a no-eval window, calls `start()`, and proves the call chunk loads.
+  - **`frame-capture` loads the DOM rasterizer lazily** (`@memberjunction/ng-realtime-widget`). The attribute calls `EnableChannelFrameCapture()` from `@memberjunction/ng-realtime-channels` (now a dependency), as its own chunk (16 KB raw / 6.6 KB gzipped, `html-to-image` included) loaded before the session is minted, so neither the shell nor a call that does not want frames pays for it. If it cannot be loaded the widget warns once and channels stay state-only; a capturer the page registered itself is respected.
+  - **Runtime hooks** (`@memberjunction/realtime-runtime`). `ChannelClassLoader` lets a host load channel code on demand (called with the `ClientPluginClass` keys of every channel about to be resolved; a failure is logged, never fatal), and `ExposurePreferences` exposes the current store so a host can layer over it.
+  - **Event payload** (`@memberjunction/ai-core-plus`). `IdentityVerifiedEventPayload` gains an optional `Recovered` flag, validated by `IsIdentityVerifiedEventPayload`.
+
+### Patch Changes
+
+- 96d6ec2: A Stop button on an in-progress agent reply now actually stops the run, the stop keeps the work, and the next turn continues from it instead of starting over.
+  - **Stop reaches the running agent.** The run's row is the control channel: the chat marks the run `Cancelled` with reason `User Request`, and the agent-run watchdog on the process that owns the run polls for that (every 3 seconds, `cancellationPollIntervalMs`) and aborts the run's own cancellation token. `BaseAgent` already honors that token throughout its loop and forwards it into prompts and actions, so the in-flight step ends and the run finalizes as Cancelled. Because the row is the channel, this works whichever MJAPI replica owns the run. `AgentRunWatchdog.Track` takes the run's `AbortController`; `RequestCancel` and `IsStoppable` cover in-process callers; `AgentRunWatchdog.UserCancelAbortReason` is the reason the agent sees. The watchdog's reads (this poll and the tracked-set prune) go through `RunView` over the entity, with the fields named and the cache bypassed; only its batched writes remain stored-proc calls.
+  - **The stopped run records the reason and the payload.** The cancelled result sets `CancellationReason` from the abort reason (`User Request`, `Timeout`, or `System`) rather than overwriting the UI's write with null, and promotes the last completed step's `PayloadAtEnd` to `FinalPayload` so the next turn, chained by `LastRunID`, starts from where the stopped one left off.
+  - **The reply reads as stopped, not failed.** `AgentRunner.ResolveFinalDetailState` marks a user-stopped reply `Complete` with "Stopped by user" instead of `Error` with the cancellation text.
+  - **The button.** `mj-conversation-message-item` shows a Stop control beside the time pill while the reply is in progress (hidden for read-only viewers, and when the host sets `AllowStopRun` false on the chat area), reads "Stopping…" until the message leaves In-Progress, and offers itself again after 15 s if the stop did not take. It follows the package's Before/After pair: a click fires the cancelable `BeforeStopClicked` (`BeforeStopClickedEventArgs`, with the reply's detail id and the run id when known); if no listener cancels, the request is relayed to the chat area, which stops the run and fires `AfterStopClicked` (`AfterStopClickedEventArgs`, with whether the run's row was marked Cancelled). The list relays it as `StopMessage`; the chat area resolves the run (mapped, or by the reply's detail id) and calls `AgentStateService.CancelAgent`, which now loads the row fresh, refuses a run that already finished, and records the reason. New: `AgentStateService.CancelAgentForDetail`.
+  - **The next turn continues the stopped work.** Observed before: a stopped Sage run had five weather lookups and fifteen searches done, and "keep going" redid every one, because the settled-run carry-forward skips a Cancelled run and only ever carried inline Tool steps. Now, when the agent's newest root run in the conversation is one the user stopped, `BaseAgent.injectStoppedRunResults` carries that run's completed Actions and Tool step results into the new run's context with a note to continue rather than restart (`BuildStoppedRunResultsMessage`, same gates and size budget as the settled path), and `RunAIAgentFromConversationDetail` chains the new run to it by `LastRunID`, rolling the stopped run's `FinalPayload` in when the caller supplied no payload. A caller-supplied `lastRunId` still wins, and a run that arrives chained (`lastRunId` set, by the resolver or a client) checks that one row instead of searching the conversation again, so the predecessor is resolved once per turn. Both lookups read the database (`BypassCache`), since the row they look for was written by the Stop button moments before. New type `StoppedRunStepRecord`.
+  - **The next turn resumes the stopped run's own stack by default.** `ExecuteAgentParams.stopContinuationMode` (`StopContinuationMode`: `'full_stack'` | `'summary'`, default `BaseAgent.DefaultStopContinuationMode = 'full_stack'`) picks how a user-stopped predecessor carries forward. Full stack: the stopped run's turns come back in the shape the loop wrote them while running. Its last prompt step recorded the run's message stack, its first prompt step recorded where the run started, and the difference is the run's own turns. The last decision and the actions that finished after it are rebuilt with the loop's own builders, now shared as `buildActionInvocationMessage` and `buildActionResultsMessage`. An action the stop cut off is listed as not executed, native tool calls are answered, and runtime-state fragments are left for the new run to add. The turns are spliced in ahead of the stopped run's reply and the user's new message, followed by `BaseAgent.StoppedRunResumeNotice`. The steps load in the pre-execution parallel phase and the splice happens once that phase settles, so it never races the memory and RAG injections. When the stack cannot be resumed, or resuming throws, the run falls back to the summary. `'summary'` keeps the earlier behavior. An empirical A/B across Sage, Query Builder and Research Agent favored the full stack on speed, tokens and cost.
+  - **A stopped run is resumed only on its own branch path.** With conversation branching, a run stopped on a sibling branch is not the next turn's history. `MJAIAgentRunEntityExtended.BuildReplyOnBranchPathFilter` is the one predicate for "this run replied on this turn's branch path and no rerun replaced its answer"; `BuildStoppedPredecessorFilter` applies it (so it now takes the branch and the conversation's branch rows), `BaseAgent.BuildPriorTurnRunFilter` is built on it too, and `RunAIAgentFromConversationDetail` loads the branch rows for a reply on a branch before it looks for a stopped predecessor.
+  - **The composer's send slot can be a stop control.** `mj-message-input-box` gains `SendSlotMode` (`'send' | 'stop' | 'stopping'`), `StopCount`, `StopLabel`, `StatusText` and `StatusElapsed`, and emits `StopClicked`. In `stop` mode the same button is red with a stop icon and is always live; above a count of one it widens to "Stop all" with the count; `stopping` disables it with a spinner. A status line renders bottom-left inside the box as a polite live region, with the elapsed time in an `aria-hidden` child so its ticking is never announced; the elapsed time is dropped at 768px and the line truncates at 480px. The box decides none of this: `mj-ai-composer` and `mj-conversation-message-input` pass the inputs and the output straight through, and the chat area decides what they mean.
+  - **Stop lives in the composer.** While one reply is in flight the chat area makes the composer's send slot the stop control, labelled "Stop {agent}", with a status line "{agent} is working" and the elapsed time beside it; the per-reply pill is hidden (`InFlightCount` on the message item and list gates it to more than one run). With several replies in flight the slot reads "Stop all N runs", the status line counts agents, and each reply keeps its own pill. A click stops every in-flight run through the same path as the pill (`BeforeStopClicked`, then `OnStopMessage`, then `AfterStopClicked`; a vetoed run stays in flight), the slot reads as stopping until the reply leaves In-Progress, and after the retry window a warning toast says "{agent} did not stop. Try again." After a reply the user stopped, the composer placeholder reads "Continue, or tell {agent} what to do differently". New on the chat area: `InFlightCount`, `SendSlotMode`, `StopCount`, `StopLabel`, `StatusText`, `StatusElapsed`, `StoppingDetailIds`, `OnComposerStopClicked`, `FormatElapsed`.
+  - **A stopped reply looks stopped, and offers Continue.** The reply's time pill takes a neutral `stopped` state (never the blue `complete`) reading "Stopped · {elapsed}" with a stop icon; a "{n} steps kept" line shows what the run kept; and on the last message of a conversation the viewer may write to, a Continue control sends "Continue where you left off" through the existing `SuggestedResponseSelected` path, which the chat area sends as the next message and the run chain resumes. The stopped reply text from `AgentRunner.ResolveFinalDetailState` drops its emoji ("Stopped by user", "Stopped: {reason}"). New on the message item: `IsStoppedRun`, `WasStoppedByUser`, `StoppedLineText`, `CanContinueStoppedRun`, `OnContinueClick`, static `ContinueMessage`.
+  - **The run-state vocabulary lives on the entity.** `MJAIAgentRunEntityExtended` gains `SettledStatuses`, `CancelledStatus`, `UserRequestCancellationReason`, static `IsUserStopped` with instance `WasStoppedByUser`, and static `BuildStoppedPredecessorFilter`, typed from the entity unions; BaseAgent, the watchdog and the run resolver all use them. The abort-signal reasons are statics on the classes that raise them: `AgentRunWatchdog.UserCancelAbortReason` and `ExternalCancelAbortReason`, `BaseAgent.AgentTimeoutAbortReason`.
+
+  Known limit: the previous `CancelAgent` only wrote the row, which the running agent then overwrote on finish. That path is what this replaces.
+
+- e4c355e: The agent's video holds its last frame while a call resumes on a new connection, for up to 5 s, instead of giving way to the orb after a second (#5357). On Gemini Enterprise (Vertex AI) new video comes about 3 s after each move (Google's `goAway`, about every 9 minutes, and any dropped socket), so the avatar's tile showed the orb for about 2 s each time, as if the agent had left. `RealtimeSessionRuntime.Resuming$`, also on `RealtimeChannelContext`, is `true` from a `'connecting'` the driver reports while the call is live until the call is live again, fails or ends; a call's first connect is not a resume. `mj-media-tile` takes `HoldLastFrame`, which keeps the frame on show through a stall, and emits `FramesFlowingChange` when the video's frames stop or come back. The Avatar channel's surface holds from a resume's start until new frames come, `AGENT_VIDEO_RESUME_HOLD_MS` (5 s) pass, or the call fails or ends; the orb then shows if the video is still out of frames. A stall outside a resume still shows the orb after about a second.
+- 6dce70c: A call keeps the agent's video in its place while the session resumes on a new connection. A resume (Google's `goAway`, a dropped socket, or the Enterprise relay's new socket) takes the call through `'connecting'`, and the overlay used to swap its hero for the connecting screen then: the video lost its place, and the stage laid it over the whole call, banner and controls included, until the call was back. Now the connecting screen gives way to a hero the agent's video presents in (`RealtimeSessionOverlayComponent.ShowConnectingScreen`), so the video keeps its place and its element, its last frame stays on screen, and its tile says "Connecting". After about a second without a frame, the tile's stall fallback shows the orb in the video's place, as before, and the next frame brings the video back. Video that arrives while a call first connects goes to the hero the same way. The console chrome, a video moved to picture-in-picture and a call with no video still show the connecting screen as before.
+
+  `@memberjunction/ai-realtime-client` has no code change. Its tests now drive a resume with the real `VideoPlayout` (after `goAway`, after a dropped socket, and through the Enterprise relay) and check that the player keeps one element, media source and source buffer, lets the cut turn play out without a flush, appends the new connection's init segment and fragments to the same buffer and plays on from the last frame, and still flushes on barge-in. The test MSE fake now reopens an ended stream on the next append, as browsers do.
+
+- 6cd23e1: A call whose agent asked for a live avatar it can't show says so once. Core gains `RealtimeAvatarStatus`, `ClientRealtimeSessionConfig.AvatarStatus`, `BaseRealtimeModel.SupportsAvatarOutput(model)` (default `false`; Gemini answers from its Live profile) and `ParseRealtimeAvatarStatus`, and the browser-side reason `downgraded` becomes `host` and `browser` (the Gemini and Gemini Enterprise browser clients log the new reason). Both Gemini drivers (`GeminiRealtime`, and `GeminiEnterpriseRealtime` in `@memberjunction/ai-vertex`) return their avatar decision on the mint, through the protected `AvatarStatusFor`; `RealtimeClientSessionService.PrepareClientSession` merges it with the persona resolution (`endpoint` first, then `no-binding` / `unknown-avatar`, else the driver's decision), logs one line, and returns `AvatarStatus`, which MJServer sends as `StartRealtimeClientSessionResult.AvatarStatusJson`. The stock launcher asks for the field and drops it alone against a server that predates it. After the call connects, the runtime publishes `AvatarNotice$` (`host` when the app asked for no agent video, `browser` when the track did not go live, else the status's reason), once per call, and clears it when the call ends. `ng-realtime-media` holds the wording (`AvatarNoticeText`, "Audio only: …", per-reason host overrides) and declares `@memberjunction/ai`; the call overlay shows it as a small info `mj-alert` under the banner in both chromes, with a dismiss button, hiding after 10 s, never in review (`AvatarNoticeLabels` overrides the words). Calls whose agent asked for no avatar look as before. Integration check RD13 also checks that a voiced agent without a face on the session's vendor asks for no avatar and reports `no-binding`.
+- 51634e7: A picked voice's avatar now shows only when the voiced agent's own video setting is on, so a pick no longer turns on billed avatar video by itself. The runtime override can't turn `realtime.video.enabled` on in `ResolveEffectiveRealtimeConfig` (it can still turn it off), and both override builders (`BuildRealtimeOverridesJson`, `BuildRealtimeConfigOverridesJson`) send the pick as `realtime.video.avatarId` alone. A call that picked an avatar while the setting is off is audio only with the new reason `video-off` (`RealtimeAvatarUnavailableReason`, `ResolveRealtimeAvatar`'s `AvatarPicked`), which stands whatever the model renders; the call and mobile notices say "Audio only: this agent's avatar isn't turned on". An older client reads the reason as unknown and says "Audio only: the avatar can't be shown in this call".
+- a4b23b7: A call whose mint gives an avatar reason this version doesn't know, such as a newer server's, now says it is audio only instead of showing no notice. `ParseRealtimeAvatarStatus` keeps such a status without the reason and marks it `ReasonUnknown` (`ParsedRealtimeAvatarStatus`); a reason that isn't text still reads as no status. The runtime's notice then has no `Reason` (`RealtimeAvatarNotice.Reason` is optional), and the call overlay and the mobile voice screen say "Audio only: the avatar can't be shown in this call" (`AVATAR_NOTICE_CALL_UNKNOWN_REASON_TEXT` in `ng-realtime-media`, with a copy in the mobile app). `AvatarNoticeText` gives a `null` reason that line without `NameAgent` and the meeting's `AVATAR_NOTICE_UNKNOWN_REASON_TEXT` with it, so the meeting room reads as before. A host words it with `unknown` in the call overlay's `AvatarNoticeLabels`, as in the meeting room.
+- bb3028a: A Config dashboard's tab has an AI assistant: a resizable side pane that chats, in text or in a Gemini 3.8 Live voice session, with the new **Dashboards Expert** agent, which the Dashboards application pins through its `AgentSettings`.
+  - **Client tools.** The tab gives the agent client tools: `GetDashboardState`, `GetDashboardScreenshot` and `SearchSources` read the dashboard and find views, queries, entities and artifacts; `AddPanel`, `RemovePanel`, `MovePanel`, `ResizePanel` and `UpdatePanelSettings` make in-memory edits, one at a time, that put the tab in edit mode and that Cancel discards; and `RequestSaveDashboard` and `RequestPinToHome` ask the user in a confirm dialog, so a save or a Home pin happens only when the user confirms it. The edit and request tools take the `dashboardId` that `GetDashboardState` returns and refuse a call for a dashboard that is no longer open.
+  - **`DashboardResource`** (`@memberjunction/ng-explorer-core`, the dashboard tab) adds the AI pane's members: the pane state `ChatOpen`, `CopilotExpanded`, `MainSizePct`, `CopilotSizePct`, `CopilotMinPct`, `CopilotMaxPct` and `ShowCloseChatConfirm`; the chat state `ChatAgentId`, `ChatAgentName`, `ChatAgentError`, `ChatConversation`, `ChatConversationId`, `ChatIsNewConversation`, `ChatPendingMessage`, `ChatPendingAttachments`, `ChatAppContext`, `ChatApplicationId` and `ChatEnvironmentId`; the open save or pin confirm, `AgentConfirm`, with `OnAgentConfirm()`; and the methods `ToggleChat()`, `CloseChat()`, `OnCloseChatConfirmed()`, `OnCloseChatCancelled()`, `ToggleCopilotExpanded()`, `OnCopilotSplitDragEnd()`, `OnChatConversationCreated()`, `OnChatRealtimeConversationReady()`, `OnChatPendingMessageConsumed()`, `OnChatNavigationRequest()` and `OnChatOpenEntityRecord()`.
+  - **Layout editor** (`@memberjunction/ng-dashboard-viewer`). The package exports the pure layout editor behind the tab's edit tools (`InsertPanel`, `MovePanel`, `ResizePanel`, `RemovePanelFromLayout`, `SimplifyLayout`, `FindPanelPath`, `DescribePath`, `LayoutEditError`, `PANEL_PLACEMENTS`) and its types `PanelPlacement`, `PanelPosition`, `LayoutPathStep` and `SimplifiedLayoutNode`. `DashboardViewerComponent` adds `ApplyLayout()`, which shows a layout that these functions built, and `GetPanelPath()`, which gives a panel's address in the layout. The viewer's `AddPanel` returns the new panel's ID and honours its position: its optional `location` argument is now a `PanelPosition`, not a `LayoutLocation`, so a caller that passes a `LayoutLocation` must change, and a position that is not valid throws `LayoutEditError`. `UpdatePanelConfig()` now returns a `Promise` that settles when the layout is rebuilt (it rejects when the rebuild fails). A subclass that overrides `AddPanel()` or `addPanel()` must take a `PanelPosition` and return `Promise<string | null>`, and one that overrides `UpdatePanelConfig()` or `updatePanelConfig()` must return `Promise<void>`. Each panel's content element has a `data-panel-id` attribute.
+  - **Screenshots** (`@memberjunction/ng-shared`). The package adds `CaptureElementJpeg`, with the types `ElementCaptureOptions` and `ElementCapture`, the defaults `ELEMENT_CAPTURE_DEFAULTS`, and the helpers `ComputePixelRatio()` and `StripDataUrlPrefix()`.
+  - **Client tool results.** A client tool result now reaches the model in full: the results of one `ClientTools` step go into one message that expires after 3 turns, and the optional Loop prompt parameter `clientToolResultMaxChars` truncates them with a visible note. In `@memberjunction/ai-agents` it is `LoopAgentTypePromptParams.clientToolResultMaxChars`, and `DEFAULT_LOOP_AGENT_PROMPT_PARAMS` sets it to `-1` (no cap); code that builds its own `Required<LoopAgentTypePromptParams>` must add it.
+  - **Images in tool results.** A result can also carry images (`Media`: JPEG, PNG or WebP, at most 4 items of at most 2,000,000 decoded bytes each), which `ParseClientToolMedia` (`@memberjunction/ai-core-plus`) checks in `RespondToClientToolRequest`, a bad item giving a failed tool result; the agent client sends them, and the agent and prompt runner pass them to the model as image blocks that expire after 2 turns, while the step output keeps only their metadata. `@memberjunction/ai-core-plus` adds `ClientToolMediaItem` (`MimeType`, `Base64`, optional `Width` and `Height`), `ClientToolMediaParse` and `CLIENT_TOOL_MEDIA_LIMITS`, and an optional `Media` on `ClientToolResponse` and `ClientToolResultSummary`; `@memberjunction/ai-agent-client` adds an optional `Media` on `ClientToolResult`.
+  - **`RespondToClientToolRequest`** (`@memberjunction/server`) takes a new optional GraphQL argument, `media`: a string that holds the images as a JSON array. In TypeScript, `ClientToolRequestResolver.RespondToClientToolRequest()` has the new parameter before the context, so a direct caller that passes the context by position, or a subclass that overrides the method, must change. The agent client's mutation always names the `media` argument, so it needs a server from this release: an older server rejects every client tool response (`Unknown argument "media"`), and each client tool call then fails when it times out. A `result` that is not valid JSON now also gives a failed tool result, so the agent no longer waits for the request to time out.
+  - **Media in the agent and prompt runner.** `BaseAgent`'s protected `contentToString()` now turns an image, audio, video or file block into a short stub (for example `[image omitted]`), not its base64 text, and its protected `estimateTokens()` counts each such block as 1,600 tokens. The prompt runner keeps the content blocks that a user message already has when it adds file blocks, and it no longer changes the caller's message objects when it replaces media that the model cannot read.
+  - **Voice.** Voice tool results stay text, since the Explorer shell strips `Media` before a realtime session sees them (`WithoutMedia()`, `@memberjunction/ng-explorer-app`). A voice session's delegated run (`invoke-target-agent`) receives the browser session ID and the app context from the session start (`ExecuteRelayedToolInput.BrowserSessionID` and `AppContext`, `@memberjunction/ai-agents`), so the delegated agent can call the page's client tools; a scoped anonymous caller's run, which executes as the system user, gets no app context. The server does not store an app context whose JSON is longer than 256,000 characters, and the delegated runs then get none. A voice session also keeps its direct actions when a delegated run pauses for the user's answer. In `@memberjunction/realtime-runtime`, a surface client tool whose handler returns `Success: false` gives the voice model a failed result, and `RealtimeSessionRuntime.SendVideoFrame` returns whether the frame was sent; a subclass that overrides it must return a `boolean`.
+  - **Agent context.** The sub-agent catalog lists only Active relationship targets. The Explorer shell keeps the page's additional context when it rebuilds the app-context snapshot while the page's tab is attached, clears it when the tab is detached, and restores it when the tab is reattached. The client tools a page registered now follow the same rule: only the detach of that page's own tab clears them, so the detach of another tab no longer takes the open dashboard's tools away from the agent. In `@memberjunction/ng-shared`, `AgentContextUpdate` gains `Lifecycle` (`'Detached'` or `'Reattached'`), which `NavigationService.NotifyResourceDetached()` and `NotifyResourceReattached()` set; the detach of another tab now sends an update with only `Caller` and `Lifecycle`, not an empty `AgentClientTools` list.
+  - **Chat area** (`@memberjunction/ng-conversations`). The chat area's empty-state composer now receives the host's default agent, application and app context, so a voice call can start before the first message, and the dashboard tab adopts the conversation that call created when it ends.
+
+- f325baa: Fix (#5153): realtime voice-session recordings on PCM-playback drivers (Gemini Live, ElevenLabs Agents, AssemblyAI, xAI Grok Voice, HuggingFace) contained only the participant's microphone — the agent's turns were digital silence — because the agent audio played through `RealtimePcmPlayback`'s own AudioContext straight to the speakers and was never exposed as a stream the recorder could mix.
+
+  ai-realtime-client: `RealtimePcmPlayback` now also feeds its master gain into a `MediaStreamAudioDestinationNode` exposed by `GetOutputStream()`; every PCM driver publishes it through `GetRemoteMediaStream()` / `OnRemoteMediaStream()`. The remote-stream slot (stream + subscribers + isolated fan-out + per-session reset) moved into `BaseRealtimeClient`, replacing two copies in the OpenAI WebRTC drivers; both methods are now concrete on the base (returning `null` / never firing when a driver has no agent-audio plane), so `?.` call sites keep working.
+
+  ng-conversations: `RealtimeAudioRecorder` keeps recording mic-only (with a warning) when the agent stream cannot be connected — e.g. a browser that refuses a cross-sample-rate MediaStream source — instead of losing the whole recording. It also closes its AudioContext, and wires no microphone, when the call ends while the recorder is still starting (the context is resuming or the capture worklet is loading); before, that context was left open.
+
+  ai: `RealtimeDiagLog` no longer throws `ReferenceError: process is not defined` in the browser. Gemini Live's transport close and error handlers call it first, so an abnormal provider close or a transport error used to throw before the fatal error was emitted, leaving the call stuck in 'listening'. It now returns silently when there is no `process` (diagnostics stay off), and the handlers surface the error.
+
+- dbc3462: The realtime picker marks the voices that come with an avatar. `GetRealtimeModelVoices` lists one voice per persona, keyed by `PersonaID`, so two personas that share a voice (a voice, and the same voice with a face) both list. A persona voice also carries the `APIName` of the same persona's preset Video binding on the model's vendor (`AvatarID`) and the persona's `PreviewImageURL`; a binding on another vendor or a custom avatar doesn't count, and a voice only the driver declares carries none of the three. A driver voice is now left out only when a persona offers the same voice without a face, so a voice stays pickable without its face. The GraphQL voice option (`RealtimeVoiceOptionResult`) and the client's `RealtimeVoiceOption` carry the three as nullable fields, and the client selects them. For holders of `Realtime: Advanced Session Controls`, the picker's voice list is now an `mj-dropdown` with one option per persona: a camera icon on voices with an avatar, the persona's preview image when it has one, and a hint under the list ("Comes with an avatar") when the picked voice has a face. A pick sends the voice id, plus the avatar (`RealtimeAgentPick.PreferredAvatarId`) when the persona has a face; the override envelope from both builders (`BuildRealtimeConfigOverridesJson`, `BuildRealtimeOverridesJson`) carries it as `realtime.video.avatarId`. The session asks for that face only when the voiced agent's own video setting is on and it names a Video binding on the vendor it resolves. The meeting room's voice lists (the add-agent list in `mj-livekit-agent-room` and the pre-join list on the Meet page) also key their options by persona, so two personas sharing a voice no longer collide and only the picked one shows picked; either still sends the voice id (`AddVoiceOption`, `SelectedVoiceOption`).
+- 4fb501e: In a realtime call, the camera's self-view says "Agent can see this" only while the model is being sent the camera's frames (#5373). It used to show whenever the camera was on and the Camera channel allowed pixels. On a model that takes one video stream, a screen share started after the camera is what the model is sent, so the badge stayed on while the "Agent can see" chip said "Agent sees: Shared screen". The badge now also needs the camera's source among the session's video sources to be on and active, which is what the chip reads, and it comes back when the user picks the camera. A channel's context gains `VideoSources$` (the runtime's `VideoSources$`), and `REALTIME_CAPTURE_SOURCE_IDS` names the camera's and the screen share's sources (`capture:camera`, `capture:screen`). A host whose channel context has no `VideoSources$` keeps the previous rule.
+- c388714: The "Agent can see" chip lets the user pick which source the agent sees when more are on than it sees. Its summary names the source the agent actually sees ("Agent sees: Camera", "Agent sees 2 of 3 sources") instead of counting the sources that are on. Each source that is on but not seen gets a "Show" button, the picked one reads "Viewing now, your pick", and "Let the call choose" clears the pick. The chip raises `SourcePicked` (an id, or `null`), which the call overlay passes to the session's `SelectVideoSource`.
+- 5a5f8d5: Captions run over the agent's video. While the avatar presents in the call's hero, turning captions on keeps the hero and shows the newest caption, two lines at most (one in a small tile), over the video's lower third, with the user's marked "You". "Show the conversation" still opens the thread, and without the agent's video captions open the thread as before. The captions are hidden from assistive technology; the thread is the accessible transcript.
+- ae78a45: The call's orb stands in for the agent's video. The hero's orb becomes a component, `mj-realtime-agent-orb` (the orb, its sound-wave rings, its turn states and its reactions to the overlay's audio meter, sized by `--mj-realtime-orb-size`), and the hero renders it as before. `mj-media-tile` takes content marked `mjMediaTilePlaceholder` in place of the participant's picture or initials. The Avatar channel's surface puts the orb there, so until the agent's video sends its first frame, and after a second without one, the tile shows the orb, sized to the tile and following the agent's turn. A channel's context gains `ConnectionState$` (the call's state), which the Avatar channel passes to its surface.
+- b2f8b5b: The agent's video shows in the agent's place in the call rather than in the focus layout. `BaseRealtimeChannelClient.ShowsAgentVideo` (new) says whether a channel shows the agent's video (it sinks outbound video); the runtime uses it to mark that channel as used when the video arrives. `mj-media-stage` gains `StageSlot`: a stage surface covers that element instead of filling the stage, followed as it moves and resizes, and out of sight while it has no size. The call overlay gives the stage that slot while a channel that shows the agent's video holds the stage: in the hero it takes the orb's place, in the console it is a compact tile above the thread, and the surface carries its own "Move to…" menu. Any other surface on the stage is the focus layout as before. The agent's first video gives its channel a tab without opening the panel.
+- 4cff918: The avatar's tile says what the agent is doing. `mj-media-tile` gains `Status`, a short status it shows as a chip after its own labels. The Avatar channel's surface sets it from the call's state (Speaking, Thinking, Listening, Connecting, Connection error), and frames the tile with a ring while the agent speaks, which follows the agent's voice where the call overlay meters it. While the avatar presents in the hero, the hero's own name and state line give way to the tile, and the hero's live region keeps the state for screen readers.
+- dcfdda4: A realtime call says when no microphone works, and a pick in the device menu brings the microphone back (#5406). When the microphone in use fails and the fallback to the default fails too, or the last microphone goes away, `Microphone$` now carries a `Failure` (`RealtimeMicrophoneState.Failure`, the controller's reason) until a microphone is on again. `SwitchMicrophone` then opens the picked microphone instead of doing nothing: the runtime follows the controller's current microphone stream, so the driver and the call's recording move to the new stream, which keeps the call's mute and becomes the stream that mute and teardown act on. While the call has no microphone track, `ToggleMute` changes nothing and returns the call's mute instead of `false`. The call overlay shows a warning under the banner while no microphone works (the agent can't hear the user; connect a microphone or choose one from the arrow next to the microphone button, or allow it first when the browser blocked it), and it goes once a microphone is on.
+- d714f25: A user can switch microphone and camera during a realtime call (#5371). The runtime gains `SwitchMicrophone(deviceId)` beside `SwitchCamera`, through the host's `LocalMediaController.SwitchDevice`: the new track goes into the same stream with the mute carried over, and the driver and the call's recording move to it. `Microphone$` (`RealtimeMicrophoneState`: the microphone in use and the microphones listed, or `REALTIME_MICROPHONE_NONE`) offers it from the moment the call connects until it ends; a host without a controller gets none. `mj-media-controls` gains an optional device chevron on the microphone (`ShowDeviceMenu`, `Devices`, `SelectedMicrophoneID`, `SelectedCameraID`, `DeviceSelected`) that opens `mj-media-device-menu` above the controls with the microphones and cameras; it lists no speakers, and closes from its close button, the chevron, Escape or a click outside. The call overlay offers it in the composer's strip and lean dock (not the typed-input dock, which also has no Share arrow), listing the call's microphones and, while the camera is open, its cameras; a pick switches through the session and emits `ControlInvoked` with the new `'devices'` id. A narrow lean dock tightens its gaps, and wraps if needed, so the chevron fits.
+- 989b3d0: The conversations UI's calls check the camera before the agent sees it. The first time the user turns the camera on in a call, a card over the call ("Check your camera") shows it mirrored, with the cameras to choose from. "Turn on camera" lets the agent see it; "Not now", the close button or Escape turns it off, and declines the agent's request when it asked. `mj-camera-check` gains `ShowControls`, no heading when `Heading` is empty, and a way out (`CancelLabel`, `Cancelled`); given cameras only and no microphone level, it checks the camera alone.
+- 891dc77: Realtime drivers can follow a replaced microphone track mid-call. `BaseRealtimeClient` gains the optional `ReplaceMicrophone(micStream)` (driver obligation #10), and every browser driver implements it: the OpenAI WebRTC drivers move their senders with `replaceTrack`, and the PCM-capture drivers (Gemini, ElevenLabs, AssemblyAI, xAI, Hugging Face) rebind the shared capture through the new `IPcmMicCapture.Rebind`. Each rebuilds its input meter on the new track. `IRealtimePeerConnection.addTrack` now returns the sender (`IRealtimeRtpSender`), as the platform API does. `LocalMediaController` keeps a muted microphone muted across a device switch or a lost device. The session recorder gains an optional `ReplaceMicrophone` on `IRealtimeSessionRecorder`, implemented by the browser recorder. The runtime starts calling these when its microphone moves onto the controller.
+- 0a952ee: The realtime call overlay's composer shows Camera and Share whenever the call offers them, in all three layouts. A call offers a capture while it is connected, the model takes inbound video (`BaseRealtimeClient.SupportsInboundVideo`, new), the host can open it, and its channel's policy admits it; the runtime publishes this as `CaptureOffers$` (new). The buttons follow `Captures$` and call `StartCamera` / `StopCamera` / `StartScreenShare` (offering the kind of surface picked in the Share menu first) / `StopScreenShare`. The camera is optional in an agent call, so it is neutral while off and filled while on: `mj-media-controls` gains `CameraOptional` for this, and the LiveKit room keeps its red. In the fused dock the Share arrow is left out for room, and on a narrow composer the strip wraps onto a second row and the dock puts its text box on a row of its own (a container query on the composer's width). `RealtimeControlId` gains `camera` and `share`.
+- ee81865: The realtime call overlay's controls are now the design system's. In all three of the composer's layouts (the lean dock, the labelled phone-call strip and the fused dock), the microphone is `mj-media-controls`, the call controls the LiveKit room uses, and Captions, Details, Type, the "•••" overflow, hide and End are `mjButton` circles: 52 px in the strip and for the lean dock's microphone and End, 44 px for the lean dock's other controls, 32 px in the fused dock. Captions and Details use the button's own toggle (`Toggleable` / `Selected`, which sets `aria-pressed`). A muted microphone now reads red, as in the room, where it was amber. `mj-media-controls` gains `Size` (its circles' size; the Share arrow stays small) and `ShowLabels` (a short label under each control, which the strip uses).
+- a70af2d: The realtime voice picker's "Voice" label and the Realtime Recordings list's audio-only sessions now show their icon. Both used `fa-waveform-lines`, which only Font Awesome Pro has; Explorer loads Font Awesome Free, so the icon rendered blank. Both now use `fa-wave-square`, the wave icon in Font Awesome Free. A unit test in each package fails when a realtime template or component uses an `fa-*` class that Font Awesome Free's stylesheet has no rule for; `@fortawesome/fontawesome-free` 6.7.2, the version the realtime widget vendors, becomes a devDependency of both packages for it.
+- 84fc9d4: The realtime overlay's channel surfaces can be moved. "Move to…", beside the active channel tab (and in the call pill while a surface is on the stage), puts a surface on the stage, back on its tab, or out of sight, and "Reset layout" puts every surface back. A surface on the stage is the focus layout: the call column folds away and the pill appears. A channel whose surface is elsewhere says where in its tab, with "Bring it here". Moves are saved per user (`mj.realtime.placement.v1`, through `UserInfoEngine`) and carry over to later sessions.
+
+  `BaseRealtimeChannelClient` gains an optional `OnSurfacePlacementChange(placement)` hook, called right after `BindSurface` with the surface's placement and then on every move. `mj-media-stage` gives each surface's template its `Placement`, and `mj-realtime-channel-pane` passes it on. The whiteboard's header button becomes "Move to stage", or "Back to tab" while the board is on the stage, kept true by the new hook.
+
+- 038f7dc: A call's side panel keeps the user's collapse through a window resize, and comes back at the right width tier. When the call got narrower than the console breakpoint and wider again, the panel was created again expanded although the user had collapsed it and only resized; it now comes back collapsed to its strip. It still comes back expanded after Details, a channel on the stage or a reviewed session turning into a live call, which ask to see the panel, including when one of those happens while the call is too narrow for the panel. `RealtimeSurfaceTabsComponent.Collapsed` is now an input the overlay binds, so a new panel starts as the user left the old one, and `ResolvedRealtimeUi` gains `SurfacePanelWaitsForRoom` (the panel is hidden only for lack of room). Separately, a panel created again on its Activity tab (the channel whose tab was focused left the call while the panel was away) kept the wide width; the overlay now takes the width tier from the tab the panel lands on.
+- 87babe6: A call's side panel comes back expanded, at its usual width, after the panel area hides while the panel is collapsed to its strip. The panel area hides when a channel's surface takes the stage, when the call gets narrower than the console breakpoint, when the Details control closes it, and when a reviewed session becomes a live call. The panel is created again each time it comes back, and a new panel starts expanded, but the overlay kept the collapsed state the old panel had reported (`RealtimeSessionOverlayComponent.PanelCollapsed`) and sized the new panel as the 40 px strip, with no resize handle. The overlay now sets `PanelCollapsed` back to `false` when the panel goes away, so the panel's width, its resize handle and what it shows agree when it returns.
+- 54cd610: Realtime channel surfaces can go picture-in-picture. "Move to…" gains "Picture-in-picture": the surface floats in a box over the call that the user drags by its bar, resizes from its corner, or moves with the arrow keys (Shift and the arrow keys resize it). Boxes stack upward from the bottom-right corner, newest in the corner, until moved; the one touched last floats highest. A box's bar carries the same "Move to…" menu, and its channel's tab says where it went, with "Bring it here".
+
+  `mj-media-stage` adds the `pip` placement, `PipRects` (where the user put each box, as fractions of the stage), `PipRectChange`, and an `mjMediaStagePipActions` template for the bar's buttons; `MediaStageSurface` gains `Label` and `PipIndex`. The geometry helpers (`DefaultPipBox`, `ClampPipBox`, `MovePipBox`, `ResizePipBox`, `PipBoxToRect`, `PipRectToBox`) are exported. The overlay saves each box per user under `mj.realtime.pip.v1`, and "Reset layout" puts every box back in its corner.
+
+- 1bed7f7: A call's picture-in-picture boxes (the camera, a shared screen) start clear of the call's controls. The call overlay's stage paints over the whole call, controls included, and a box the user has not moved started in the stage's bottom-right corner, so with no side panel open the camera's box covered End call and the controls beside it until the user moved it. `mj-media-stage` gains `PipKeepClear`, an element along the stage's foot that the default boxes start clear of: while the box in the corner would cover any of it, the boxes stack upward from just above it. `DefaultPipBox` takes that element's box as an optional third argument. The call overlay wraps the "Agent can see" chip, the channel strip and the composer in `.call-controls` and passes it to the stage. A box the user moved keeps its saved place, and with the side panel open beside the controls the box keeps its corner over the panel.
+- 6328ed3: Realtime call recordings are no longer _silently_ lost when the tab is closed right after End (#5195): the session is left `Closed` and the browser warns before the tab closes. Teardown now closes the session before it uploads the recording, so a tab closed mid-upload leaves the session `Closed` instead of open, and a driver `Disconnect()` that throws no longer skips the close.
+
+  The runtime exposes `SavingRecording$` / `IsSavingRecording`, and `RealtimeSessionService` uses it to show the browser's "Leave site?" prompt while the recording is still uploading (desktop browsers only).
+
+- b6b3990: `RealtimeSessionRuntime` can show the agent the user's camera and a shared screen: `StartCamera(deviceId?)`, `StopCamera()`, `StartScreenShare(options?)` and `StopScreenShare()`, with both reported on `Captures$` (off, starting, on with the stream to show the user, or failed with the reason and a message). A start first makes sure the model takes video, adding the inbound video track only now (`AddTrack`), so a session is not limited or billed for video before anyone shares; then it opens the camera through the host's `ILocalMediaController`, or asks for a screen, window or tab through the host's new optional `IRealtimeMediaHost.RequestDisplayCapture`. The capture becomes a source of the video source arbiter, sampled at the negotiated rate. Stopping undoes it all, and removes the track again when the runtime added it and nothing else is captured; a camera that goes away or a share ended from the browser's bar stops the same way, and the session's end stops both. The browser host implements `RequestDisplayCapture`. No UI uses this yet.
+- 20d1f4a: A realtime call keeps going when the microphone changes. `IRealtimeMediaHost` gains an optional `CreateLocalMediaController()`, and the browser host returns a `LocalMediaController`. When a host offers one, the runtime starts the microphone through it instead of `AcquireMicrophone`, moves the driver and the recorder onto the new track when the controller swaps one in (a device switch, or a lost headset replaced by the default), and disposes it at teardown. A failed start keeps the `getUserMedia` error names (`NotAllowedError`, `NotFoundError`, …), so hosts that tell a denied microphone apart work unchanged. A start the host abandoned while the microphone was opening now unwinds without reporting an error. `/media` exports the `ILocalMediaController` interface, which `LocalMediaController` implements, so other hosts and tests can supply their own.
+- 6a19f78: A call's Share menu offers "This panel ▸", listing the panels of the page that are on screen: the call's Whiteboard and Explorer's main content ("Main content"). Picking one shares that element alone. A new `[mjSharePanel]="<label>"` directive (with `mjSharePanelIcon`) in `ng-realtime-media` marks a shareable region and registers it with the app's `SharePanelRegistry`, whose `PanelsFor$(host)` lists the panels whose box overlaps the viewport, in page order, leaving out any panel that holds the call itself, and nothing where the browser cannot share a single panel (`Supported`: `getDisplayMedia` plus Element or Region Capture, so Chrome and Edge on the desktop). Registry changes reach its streams in a microtask. A channel opts its call surface in with `BaseRealtimeChannelClient.SurfaceShareable` (default `false`; the Whiteboard channel returns `true`), and the Explorer shell marks `mj-tab-container#mj-main-content`, so `ng-explorer-core` now depends on `ng-realtime-media`. The call overlay passes the list to the composer's Share menus (`RealtimeComposerComponent.SharePanels`), starts `StartScreenShare({ Panel, PanelLabel })` for a pick, and stops the share when the shared panel goes away; a panel only out of sight keeps its share. In `/media`, a panel share now uses Element Capture wherever the browser has it (Chromium 132+), giving the panel `isolation: isolate` inline for the share and its own value back when the share ends, and Region Capture otherwise; `DisplayCaptureOptions.PanelLabel` names the panel and `DisplayCapture.PanelLabel` carries the name. The runtime's share state carries it (`RealtimeCaptureState.PanelLabel`), the agent sees the share as "Whiteboard (shared panel)" in the "Agent can see" chip and its switch note, and `mj-share-preview` reads "Sharing a panel: Whiteboard" (`SharePreviewComponent.PanelLabel`). The Screen Share channel's state still reports `surface: 'tab'`.
+- e402de5: Adds the meter smoothing every audio display shares to `@memberjunction/ai-realtime-client/media`: `GateAudioLevel`, `SmoothAudioLevel`, `SmoothAudioBars`, `SynthesizeAudioBars`, and `AudioLevelSmoother`, which smooths one source's level and bars (from its spectrum, or synthesized from the level when it has none). The call overlay's `RealtimeAudioVisualSmoother` in `@memberjunction/ng-conversations` now uses them and produces the same frames as before. Its `GateLevel` and `SmoothLevel` exports are deprecated in favor of the `/media` functions.
+- 74d9357: The realtime overlay's channel surfaces (whiteboard, remote browser, media, interactive component) move onto one stage over the call, so they are no longer destroyed and recreated. Focus mode fills the stage with the focused surface: before, it removed the surface panel along with the whiteboard, leaving the call empty. Collapsing or hiding the panel and switching tabs now only hide a surface, so a board keeps its view and a stream keeps playing. A surface is created the first time it is shown and kept until its channel leaves the session; focus also ends when its channel leaves.
+
+  `ng-realtime-media` adds `mj-media-stage` (`MediaStageComponent` with `MediaStageSurfaceDirective`): it shows each surface filling the stage, over a tab slot it follows as the panel resizes or slides, or out of sight, without moving it in the DOM. In `ng-conversations`, a plugin channel's tab pane keeps a slot (`RealtimeSurfaceTabsComponent.ChannelSlotChange`), `RealtimeSurfaceStageModel` decides which surfaces exist and where, and `mj-realtime-channel-pane` follows a new plugin instance by rebinding. The focus pill's exit now restores the panel even for a channel that does not leave focus itself. The channel contract docs in `realtime-runtime` and `ng-realtime-channels` describe the new surface lifecycle.
+
+- a5b4a72: Realtime channels now hear when their surface goes out of sight and comes back, so they can pause work nobody sees. `BaseRealtimeChannelClient.OnSurfaceVisibilityChange(visible)` is a new optional hook (a no-op by default): the host calls it right after `BindSurface` with the surface's current visibility, then on every change. In the realtime overlay a surface is out of sight when the panel is collapsed or hidden, another tab is active, or the call is minimized.
+
+  `mj-media-stage` gives each surface's template whether it is on screen (`Visible` in `MediaStageSurfaceContext`), and counts every surface out of sight while the stage itself has no size. `mj-realtime-channel-pane` takes `Visible` and tells its plugin. The remote browser is the first user: its snapshot poll pauses out of sight and polls again at once when shown, while the pushed screencast and the audio keep running.
+
+- eee025e: A video that stops sending frames gives way to its placeholder. `mj-media-tile` gains `StallAfterMs`: until the video's first frame, and once no frame has come for that long, the video fades out (it stays attached) and the participant's picture or initials fade in, until frames come back; the "AI-generated video" label shows only while the avatar's video does. The tile watches its own `<video>` element through `VideoFrameWatch` (new), which uses `requestVideoFrameCallback` where the browser has it and the moving playback position otherwise, outside Angular's zone. The Avatar channel's surface waits about a second (plan section 5) before it shows the agent's initials.
+- afe9eb4: A relayed call (Gemini Enterprise) that reaches its 30-minute cap, or its shorter `MaxSessionSeconds`, now ends with its own message instead of a connection error. MJAPI's relay closes the browser leg with `REALTIME_RELAY_TIME_LIMIT_CLOSE_CODE` (4000, "Call time limit reached"; the upstream still gets 1000). `GeminiRealtimeClient` ends the call on that code with a fatal error whose `Code` is `REALTIME_CLIENT_TIME_LIMIT_ERROR_CODE` (`'time-limit'`), without trying to resume. `RealtimeSessionRuntime.LastSessionError` keeps the call's fatal client error until the next start, and `DescribeCallEnd` words a time-limit end (`REALTIME_CALL_TIME_LIMIT_END`): the call bar and the audio hero say "Time limit reached" (`RealtimeAgentBannerComponent.ErrorLabel`), and the widget (`mj-error` code `time-limit`) and the phone's error screen say "This call reached its time limit. Start a new call to keep talking." The avatar tile's state chip still says "Connection error".
+- 0a3a56a: `MediaLayoutPrefs` in `@memberjunction/ai-realtime-client/media` reads and saves a host's layout (its moves and picture-in-picture boxes) in a per-user settings store under the host's own keys. MJ's `UserInfoEngine` is such a store (`MediaLayoutSettings`). A store that is not ready reads as nothing saved and is skipped when writing, and a saved layout keeps the newest `MEDIA_LAYOUT_SAVED_LIMIT` (50) moves and boxes. `RecordPipRect` keeps the boxes the user moved most recently last. The realtime call saves its layout through them, under its existing keys, with nothing changing on screen; the meeting room's MJ host is next.
+- 7a08dc1: The realtime call and the meeting room keep and save the user's layout through one shared set of helpers in `@memberjunction/ai-realtime-client/media`: `RecordPlacementMove` and `WithoutStageMoves` keep the moves, `ParsePlacementMoves` / `SerializePlacementMoves` and `ParsePipRects` / `SerializePipRects` give their saved form, and `MediaPipRect` is the saved picture-in-picture box. `ParticipantTileKey`, `ParticipantTileSurface` and `StageParticipantIdentity` let any host show participants as movable tiles, as the meeting room now does through them. Nothing changes on screen.
+
+  Removed, since no release shipped them: the call's own copies of these helpers (`ParseSurfacePlacementPref`, `SerializeSurfacePlacementPref`, `RecordSurfaceMove`, `ParseSurfacePipPref`, `SerializeSurfacePipPref`) and the deprecated `mj-realtime-surface-move-menu` / `RealtimeSurfaceMove` from `@memberjunction/ng-conversations`, and `MediaPipRect` from `@memberjunction/ng-realtime-media`. The call's setting keys (`SURFACE_PLACEMENT_PREF_KEY`, `SURFACE_PIP_PREF_KEY`) stay.
+
+- 005612e: The "Move to…" menu moves into `@memberjunction/ng-realtime-media` as `mj-media-move-menu` (`MediaMoveMenuComponent`, with `MediaMoveRequest` and `MEDIA_MOVE_LABELS`), so the realtime call and the meeting room share one menu. It lists the places a surface may go (stage, picture-in-picture, tab, hidden), the current one disabled, then "Reset layout"; a host can name its places with `Labels` (the room will call the stage "Spotlight"), and each place keeps its icon. The call overlay and its tab strip use it, with no visible change. `mj-realtime-surface-move-menu` (`RealtimeSurfaceMoveMenuComponent`) and `RealtimeSurfaceMove` in `@memberjunction/ng-conversations` are deprecated; the component is now a wrapper around the shared menu with the same inputs and outputs.
+- b8a9e5e: Remove nested `UUIDsEqual` scans where both lists grow with the data or the code runs on every render. Fix one cross-database lookup bug.
+  - **Rubric publish validation could miss advisory parents.** `ValidateRubricTree` looked a raw `parentId` up in a map with normalized keys. On SQL Server (upper-case IDs) the advisory-ancestor walk silently stopped, so a non-advisory criterion under an advisory group was not reported. The map is now a `UUIDMap`.
+  - **Per-render getters no longer rescan the entity list.** The Entity form's `FormChromeCandidates`, the Data Explorer's `RecentEntities` / `FavoriteEntities` and the storage admin's `FilteredAccountRows` now read cached or once-built indexes.
+  - **Entity lookups by ID** in the ERD, the get-entity-details and list-entities actions, recent-access and the form builder now use the provider's indexed `EntityByID`. The application dialog uses a once-built index.
+  - **Other once-built indexes:** tag lookups, permission grantee names, orphaned-conversation owners and flow-editor node moves.
+  - `createFakeProvider` (`ng-test-utils`) now implements `EntityByID`, like a real provider.
+  - **New helper:** `GroupByUUID(items, getId?)` in `@memberjunction/global` groups items by a UUID in one pass, each group in input order.
+  - **Server sites that matched two growing lists:** the user cache (users × user roles), resource-permission deduplication, user/role sync, default-app user applications, scheduled-job statistics, MCP action discovery, REST connector schema introspection and rubric calibration.
+  - **Offline tools:** CodeGen relationship sync and CHECK-constraint value lists, CodeGen's related-entity form lookups, and `mj artifacts reclassify`.
+  - **Angular screens that scale with the data:** the AI Agent form's linked prompts and actions, the prompt priority matrix, the Testing explorer, the conversations message cache, the Query Browser tree, the Actions overview and categories, the dashboard browser, list-form bulk remove and credentials bulk actions.
+
+  Behaviour is unchanged otherwise, and each site has a test that also passes against the old code.
+
+- e8258a1: `@memberjunction/global` gains set-based UUID helpers, so matching one list against another no longer means a nested `UUIDsEqual` scan (#4719).
+  - **Collections:** `UUIDSet` and `UUIDMap` normalize on every insert and lookup, so upper-case and lower-case IDs match without anyone having to remember `NormalizeUUID` on both sides.
+  - **Helpers:** `FilterByUUIDs`, `ExcludeByUUIDs`, `CountByUUID` and `IndexByUUID` cover keeping matches, dropping matches, counting per ID and looking up by ID in one linear pass. Each takes an optional ID selector.
+  - **Faster `UUIDsEqual`:** it now compares without allocating. It produces exactly the old result, falling back to the old path for non-ASCII input.
+  - **New guard:** the UUID compliance scan fails on new nested `UUIDsEqual` scans. The check is AST-based, and a per-file baseline records the sites that predate it.
+  - **Adopted:** the sites fixed in #4716 now use the helpers.
+  - **Guide:** `guides/UUID_COMPARISON_GUIDE.md` Patterns 5 and 8 are rewritten around the new API.
+
+- Updated dependencies [96d6ec2]
+- Updated dependencies [a709bb6]
+- Updated dependencies [d17de94]
+- Updated dependencies [c8409ce]
+- Updated dependencies [7ada797]
+- Updated dependencies [51c469d]
+- Updated dependencies [432cb73]
+- Updated dependencies [293c316]
+- Updated dependencies [155aa45]
+- Updated dependencies [e4c355e]
+- Updated dependencies [4412e85]
+- Updated dependencies [6dce70c]
+- Updated dependencies [8c157aa]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [822ed69]
+- Updated dependencies [1da00cb]
+- Updated dependencies [b699a37]
+- Updated dependencies [0dbd455]
+- Updated dependencies [dde482c]
+- Updated dependencies [a4b23b7]
+- Updated dependencies [676f0dc]
+- Updated dependencies [49f26d9]
+- Updated dependencies [961d529]
+- Updated dependencies [10c2311]
+- Updated dependencies [6a1a7b6]
+- Updated dependencies [1dc0681]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [bb3028a]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [490cd8d]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [4889fb2]
+- Updated dependencies [b2441c3]
+- Updated dependencies [69e19c5]
+- Updated dependencies [7316ac3]
+- Updated dependencies [91be34f]
+- Updated dependencies [8ef5e86]
+- Updated dependencies [596855c]
+- Updated dependencies [fdf6669]
+- Updated dependencies [4c682c1]
+- Updated dependencies [f325baa]
+- Updated dependencies [ae0a662]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [b09fe34]
+- Updated dependencies [318084b]
+- Updated dependencies [69bf67c]
+- Updated dependencies [97a85b9]
+- Updated dependencies [efe4738]
+- Updated dependencies [1403d04]
+- Updated dependencies [8bac4d6]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [dbc3462]
+- Updated dependencies [d9da1ad]
+- Updated dependencies [1c9ac95]
+- Updated dependencies [c5472d2]
+- Updated dependencies [4fb501e]
+- Updated dependencies [2de7fe0]
+- Updated dependencies [5a3de97]
+- Updated dependencies [0d0ba18]
+- Updated dependencies [666d078]
+- Updated dependencies [b6fcb30]
+- Updated dependencies [f73e192]
+- Updated dependencies [ae78a45]
+- Updated dependencies [8704df6]
+- Updated dependencies [b2f8b5b]
+- Updated dependencies [4cff918]
+- Updated dependencies [5345e3d]
+- Updated dependencies [dcfdda4]
+- Updated dependencies [d714f25]
+- Updated dependencies [989b3d0]
+- Updated dependencies [a35b50f]
+- Updated dependencies [368ce6d]
+- Updated dependencies [3e7f8c8]
+- Updated dependencies [4889ca0]
+- Updated dependencies [ca2791b]
+- Updated dependencies [1ea4085]
+- Updated dependencies [975948b]
+- Updated dependencies [22c9074]
+- Updated dependencies [88b85fc]
+- Updated dependencies [7f243eb]
+- Updated dependencies [a3fcce8]
+- Updated dependencies [a08ed58]
+- Updated dependencies [2bc4677]
+- Updated dependencies [42f8016]
+- Updated dependencies [6b587b3]
+- Updated dependencies [891dc77]
+- Updated dependencies [98dbb78]
+- Updated dependencies [0a952ee]
+- Updated dependencies [ee81865]
+- Updated dependencies [72827e6]
+- Updated dependencies [aee2d53]
+- Updated dependencies [5dc3752]
+- Updated dependencies [18c66ce]
+- Updated dependencies [5e1e343]
+- Updated dependencies [84fc9d4]
+- Updated dependencies [54cd610]
+- Updated dependencies [1bed7f7]
+- Updated dependencies [6328ed3]
+- Updated dependencies [b3db2aa]
+- Updated dependencies [6c8798b]
+- Updated dependencies [b6b3990]
+- Updated dependencies [20d1f4a]
+- Updated dependencies [f1fb411]
+- Updated dependencies [f0c78c3]
+- Updated dependencies [6a19f78]
+- Updated dependencies [e402de5]
+- Updated dependencies [74d9357]
+- Updated dependencies [a5b4a72]
+- Updated dependencies [25f7b82]
+- Updated dependencies [35ed7b5]
+- Updated dependencies [d0df5a1]
+- Updated dependencies [d853bf8]
+- Updated dependencies [e293b68]
+- Updated dependencies [44428b5]
+- Updated dependencies [1b8791e]
+- Updated dependencies [eee025e]
+- Updated dependencies [02bb563]
+- Updated dependencies [c26b355]
+- Updated dependencies [afe9eb4]
+- Updated dependencies [90829e3]
+- Updated dependencies [d09f068]
+- Updated dependencies [161b7bc]
+- Updated dependencies [c9e1891]
+- Updated dependencies [aac148b]
+- Updated dependencies [d2cb42e]
+- Updated dependencies [0a3a56a]
+- Updated dependencies [7a08dc1]
+- Updated dependencies [005612e]
+- Updated dependencies [cf50330]
+- Updated dependencies [cbddadb]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [e7b2ebc]
+- Updated dependencies [e0cf9ed]
+- Updated dependencies [57fea6a]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [f00d5fc]
+- Updated dependencies [6b487b8]
+- Updated dependencies [7d4906b]
+  - @memberjunction/ai-core-plus@6.2.0-edge.4
+  - @memberjunction/ng-composer@6.2.0-edge.4
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/ai-engine-base@6.2.0-edge.4
+  - @memberjunction/ai@6.2.0-edge.4
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.4
+  - @memberjunction/ai-realtime-client@6.2.0-edge.4
+  - @memberjunction/ng-realtime-media@6.2.0-edge.4
+  - @memberjunction/realtime-runtime@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/ng-base-forms@6.2.0-edge.4
+  - @memberjunction/ng-artifacts@6.2.0-edge.4
+  - @memberjunction/ai-agent-client@6.2.0-edge.4
+  - @memberjunction/ng-shared-generic@6.2.0-edge.4
+  - @memberjunction/ng-ui-components@6.2.0-edge.4
+  - @memberjunction/ng-markdown@6.2.0-edge.4
+  - @memberjunction/conversations-runtime@6.2.0-edge.4
+  - @memberjunction/ng-realtime-channels@6.2.0-edge.4
+  - @memberjunction/ng-react@6.2.0-edge.4
+  - @memberjunction/ng-whiteboard@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/ng-forms@6.2.0-edge.4
+  - @memberjunction/ng-task-graph-editor@6.2.0-edge.4
+  - @memberjunction/ng-tasks@6.2.0-edge.4
+  - @memberjunction/ng-user-routines@6.2.0-edge.4
+  - @memberjunction/ng-testing@6.2.0-edge.4
+  - @memberjunction/ng-base-types@6.2.0-edge.4
+  - @memberjunction/ng-code-editor@6.2.0-edge.4
+  - @memberjunction/ng-notifications@6.2.0-edge.4
+  - @memberjunction/ng-resource-permissions@6.2.0-edge.4
+  - @memberjunction/ng-media-player@6.2.0-edge.4
+  - @memberjunction/ng-container-directives@6.2.0-edge.4
+  - @memberjunction/interactive-component-types@6.2.0-edge.4
+  - @memberjunction/ng-agent-client@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Minor Changes
+
+- 60bd774: Form contributions can be metadata rows, not only compiled panels, and users can place, share, hide and remove them from the form itself.
+
+  **Contributions from metadata.** A `MJ: Entity Form Contributions` row (migration `V202610051244__v6.2.x__Entity_Form_Contributions`) mounts a `MJ: Components` row (`Type='Widget'`, spec `componentRole: 'form-panel'`) on an entity's form. It carries the same registration bag as `@RegisterClassEx` plus `Presentation`, `Title`, `Icon`, `Configuration`, `Precedence` and User/Role/Global scope. `CollectFormContributionRegistrations` merges rows with class registrations, and the form collapses the list once per resolve (`ResolveFormContributionWinners`): one winner per `ContributionKey`, the higher rank wins, a compiled panel wins a tie against any row, and between rows `User` beats `Role` beats `Global` (`FormContributionOutranks`). `CollectFormPanelRegistrations` stays as a deprecated wrapper that returns compiled registrations only. Wildcard (`'*'`) registrations take part on every form, but their place claims are ignored: one that claims a grid, a section or a tab replaces nothing, and one that names a section to draw in draws at its slot. `InteractiveFormsEngine` caches the rows and the full custom forms (in the browser, the shared ones and the signed-in user's own) and fetches each panel component by ID once (`GetComponentByID`); `InteractiveFormPanelComponent` renders them, and a panel can change only the fields it claims, in edit mode. On the 11 identity, permission and form-metadata entities in `RESTRICTED_FORM_ENTITIES`, only `User` rows and full custom forms render.
+
+  **One rule set, shared by the browser and the server.** The contribution key is derived once (`ResolveContributionWriteKey` in `@memberjunction/interactive-component-types/forms`). `@memberjunction/core-entities` `custom/FormScope/` holds the spec-to-row mapper (`ApplyContributionSpecToRow`), the claim validator (`ContributionClaimRefusal`), the scope rules (`FormScopeWriteRefusal`, which normalizes Scope and fails closed, `ComponentWriteRefusal`, `FormRowComponentRefusal`, `ComponentNameCollisionRefusal`, `IsCallersOwnComponent`, `IsCanonicalFormScope`, `ContributionScopeRank`, `FormContributionOutranks`, `IsSelectableFormOverride`, `FormScopeAllowedOnEntity`, `UserCanManageFormDefaults`), the hide-setting key helpers, and the retire rule (`ActiveContributionSiblings`, which compares keys ignoring case as the SQL Server unique index does).
+
+  **What a panel can stand in for.** One claim per row, enforced by the database: a related grid, one or several field sections (`ReplacesSectionKey`, `ReplacesSectionKeys`), a group of fields (`ReplacesFieldNames`, rendered once inside that section), or a place inside a section (`InSectionKey` + `SectionPosition`). A compiled panel renders at the slot it registered for, and a panel standing in for something takes its place. The `top-area` slot is accepted by the CHECK constraint but no form emits it, so the placement dialog does not offer it.
+
+  **Authoring.** New actions `Create Form Contribution`, `Modify Form Contribution`, `Activate Form Contribution Version`, `Get Form Contributions For Entity` and `Get Form Composition For Entity`. The write actions, and the existing Modify / Activate / Revert Interactive Form actions, change only the caller's own `User` rows; a `Role` or `Global` row returns `FORBIDDEN` for every caller. A spec with more than one claim returns `INVALID_CLAIM` before any write. The contribution actions write the Component and the row in one transaction, and so do the Modify and Activate Interactive Form paths for a full form's Component and override; Create and Revert Interactive Form do not. Modify and Activate Interactive Form set the prior version aside after that transaction, and Activate returns `PERSIST_FAILED`, with the new form already Active, when it cannot. Activating a target that is already Active also sets aside the caller's other Active personal forms for that entity. `Modify Form Contribution` accepts an optional `Precedence`. `Get Form Composition For Entity` answers for the form the user sees as far as metadata can tell (hidden panels, restricted entities, the same collapse; no compiled panels, and no rows while the kill switch is off) and returns `QUERY_FAILED` when a query fails. The artifact viewer previews a form-panel spec and offers **Add to my form**, which opens a placement dialog: the entity's real form, read-only and scaled, with the panel drawn where it will go, the positions the form actually has, order within a position, what it replaces, and draft or active. The dialog starts from the claims the panel proposes that it offers on the open form, and on a full custom form the panel starts as a draft. New `mj-icon-picker` (`@memberjunction/ng-ui-components`) chooses a Font Awesome solid or regular icon by looking at it.
+
+  **Managing a form.** A "Manage this form" drawer lists the form choice and every panel; Escape closes it and focus stays inside it. Any user can hide a panel shared with them and remove their own. Hide and Show change the open form at once: its slot-mounted panels remount, and a stock grid comes back when the panel that took it over is hidden. Publishing a panel or a full custom form to a role or everyone needs the new `Manage Form Defaults` authorization (Developer and Integration; owners count). `MJEntityFormContributionEntityServer` and `MJEntityFormOverrideEntityServer` enforce it on every save, replayed save and delete. Turning a panel on, or publishing it, retires the Active sibling for the same audience and key in the same transaction and sets the panel component's status. The stock UI role can create and update `MJ: Components` (not delete), so any user can create or change their own panel through the actions and turn it on, off or to a draft in the drawer. Without `Manage Form Defaults` the server requires the component to be the caller's own (`IsCallersOwnComponent`): used only by their own personal rows, or used by no row and created by them, as its Internal `Create` record in `MJ: Record Changes` shows. That applies to any update or delete of the component, whatever columns it changes (`MJComponentEntityServer`, `ComponentWriteRefusal`), to a contribution or override row created or re-pointed at it (`FormRowComponentRefusal`), and to reusing its name (`ComponentNameCollisionRefusal`, names compared trimmed and lower-cased, in any namespace, and sent as a Unicode literal on SQL Server); a form can also load a component by name, so a component no row uses still matters. With the grant, a delete or a change to a component's specification, status, name, namespace or type, and pointing a row at it, are refused only when another user's personal row uses the component. The reads run as the caller in one batch, the changed columns come from the stored row, and a failed read refuses the write. Publishing a draft, an off panel or a set-aside form turns it on, and the chooser says so. A set-aside (`Inactive`) shared form is retracted; a set-aside personal form stays in its owner's picker. The placement preview never saves form state.
+
+  **Form context.** The record container publishes its full composition snapshot to `FormCompositionRegistry` (`@memberjunction/ng-base-forms`), where the apply path reads it. Agents get a compact `FormAgentContext` in `AdditionalContext.Form` (entity, record key, form choice, and each section's key, title, variant, hidden flag and holding contribution), published by the record tab while it is the tab on screen. `RecordPrimaryKey` is a `CompositeKey.ToURLSegment()` string, or null for an unsaved record. The `SkipFormContext` mirror in `@askskip/types` must follow this shape.
+
+  **Kill switch.** On a Node host, `MJ_FORMS_METADATA_CONTRIBUTIONS=false` makes the engine on that process load no row. In Explorer, the `MJ: Instance Configurations` key `Forms.MetadataContributions.Enabled` set to `false` turns rows off on every form; the shell applies it after `InstanceConfigEngine.Config()` and before any form opens, it can only turn the source off, and the source stays on when Instance Config fails to load. `Get Form Contributions For Entity` and `Get Form Composition For Entity` list no row when either setting is off and report `MetadataContributionsEnabled`. The write actions still write rows. The seed row reaches a database through `mj sync push`.
+
+  **Section counts and empty sections.** A saved record fetches every related-section count and the tag, attachment and version badges in one `RunViews` call; an all-`count_only` batch runs as one `UNION ALL` statement in `GenericDatabaseProvider`, with each view's security path intact. New `whenEmpty` (`'show'` default | `'hide'` | `'more'`) and `showCount` on `EntityRelationship.Configuration.UI` and on contributions, with entity defaults `UI.Form.RelatedWhenEmpty` and `UI.Form.ShowRelatedCounts`.
+
+  **Fixes.** Eleven compiled panel registrations named their entity without the `MJ: ` prefix: the five overview cards and the realtime panel mounted only through the slot host's loose name match, which the rail did not apply, and the five header panels also used `slot: 'header'`, which is not a `FormPanelSlot`, so they never rendered. All eleven now use `MJ: ` names and the slot host matches names exactly, so the hero headers render above the overview cards on `MJ: Users`, `MJ: Companies`, `MJ: Employees`, `MJ: Conversations` and `MJ: AI Agent Categories`. The overview cards query `MJ: ` entity names (four of them queried unprefixed names and showed empty states), the overview cards and the realtime panel show a load error instead of an empty state when a query fails, and conversation turn pills and counts use the stored `User`/`AI` roles. CodeGen no longer corrupts generated validators that contain escapes, and a table-level validator's metadata guard includes the validator's `Name`.
+
+  **Behaviour changes to know about.** `BaseFormPanel.Validate()` now runs on Save (through `BaseFormComponent.ValidateAsync()`) and may return a Promise. A React panel whose `Validate` throws does not block the save and shows the failure in the panel, as it does an error from `<mj-react-component>`; a field edit from a panel that the record refuses is logged and dropped. After upgrade, editing or deleting an existing `Role` or `Global` full custom form needs `Manage Form Defaults`, and an `mj sync push` of `Global` rows needs a sync user who holds it or is an Owner. The UI role gains Create and Update on `MJ: Components`. Without `Manage Form Defaults`, whatever role grants component rights, a caller can change or delete a component, on any column, only when it is their own (used only by their own personal rows, or used by none and created by them), and two such users cannot give components the same name. With the grant, a delete or a change to one of the five guarded columns (specification, status, name, namespace or type) is refused only when another user's personal row uses the component, and a change to any other column passes. `MJRecordChangeEntityServer` refuses a caller creating a record change whose `Source` is `Internal` and `Type` is `Create` through the API; other record changes, such as version-label snapshots, are unchanged. `mj sync push` runs as the `System` user, which must hold the Developer role and so holds the grant by default; a sync user that is neither an Owner nor a holder of the grant can push changes only to components of its own. Every `mj-form-field` carries `data-field-name` and `data-field-label`. Collapsible-panel move up/down follows the visual order. New user setting `mj.formPanels.hidden.<entity>`; the existing `mj.formVariant.<entity>` is also read by `Get Form Composition For Entity`. `ng-conversations` gains a type-only dependency on `ng-base-forms`. `Get Active Form For Entity` applies the restricted-entity rule, so a Role or Global form on one of those entities is neither active nor listed. A `form-panel` spec must set `entityName`; the artifact viewer no longer falls back to `dataRequirements` for a panel.
+
+  **PostgreSQL.** `UQ_EntityFormContribution_Key` and `UQ_EntityFormContribution_RelatedClaim` include nullable columns (`UserID`, `RoleID`, `RelatedJoinField`). SQL Server treats NULLs as equal in a unique index; PostgreSQL does not, so the converted indexes need `NULLS NOT DISTINCT` (PostgreSQL 15+) or a `COALESCE` expression index to refuse the same duplicates. PostgreSQL also compares the key case-sensitively, so there the case-insensitive retire rule is stricter than the index.
+
+  **Deploy order:** deploy the server code before pushing the metadata. The UI role's grants ship as metadata only: write access to `MJ: Entity Form Contributions` and `MJ: Entity Form Overrides`, and Create and Update on `MJ: Components`. Only the new server subclasses keep that access to the user's own rows and components, so the component guard must be live before the UI role gains Update: apply the release build's consolidated metadata-sync migration together with the server deploy, never before it. A development database that already ran an earlier copy of the migration needs a Flyway repair or a rebuild.
+
+### Patch Changes
+
+- 5037000: fix(conversations): render a streamed reply in place. A streamed delta no longer replaces the messages array (which rebuilt the whole timeline and armed a scroll-to-bottom timer on every delta); the bubble is refreshed through a new `MessageStreamed` output and `MessageListComponent.RefreshRenderedMessage`, coalesced to one render per animation frame. With `ReadReplyFromTop` the turn lands at its top once, on the first delta, and completion no longer lands it again. The in-progress bubble's 150px status-line cap is lifted while streamed text is shown.
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [131f3c4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [279b93e]
+- Updated dependencies [5acbec6]
+- Updated dependencies [50a2cf6]
+- Updated dependencies [66fd011]
+- Updated dependencies [f41442f]
+- Updated dependencies [196160a]
+- Updated dependencies [bea2386]
+- Updated dependencies [d046715]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [72e082b]
+- Updated dependencies [28c92e0]
+- Updated dependencies [d0a8dbf]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [b1b6d3d]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/ai@6.2.0-edge.3
+  - @memberjunction/core-entities@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.3
+  - @memberjunction/ai-engine-base@6.2.0-edge.3
+  - @memberjunction/ai-realtime-client@6.2.0-edge.3
+  - @memberjunction/realtime-runtime@6.2.0-edge.3
+  - @memberjunction/ng-base-forms@6.2.0-edge.3
+  - @memberjunction/ai-core-plus@6.2.0-edge.3
+  - @memberjunction/interactive-component-types@6.2.0-edge.3
+  - @memberjunction/ng-artifacts@6.2.0-edge.3
+  - @memberjunction/ng-ui-components@6.2.0-edge.3
+  - @memberjunction/ng-testing@6.2.0-edge.3
+  - @memberjunction/ng-base-types@6.2.0-edge.3
+  - @memberjunction/ng-code-editor@6.2.0-edge.3
+  - @memberjunction/ng-notifications@6.2.0-edge.3
+  - @memberjunction/ng-resource-permissions@6.2.0-edge.3
+  - @memberjunction/ng-shared-generic@6.2.0-edge.3
+  - @memberjunction/ng-task-graph-editor@6.2.0-edge.3
+  - @memberjunction/ng-tasks@6.2.0-edge.3
+  - @memberjunction/ng-user-routines@6.2.0-edge.3
+  - @memberjunction/conversations-runtime@6.2.0-edge.3
+  - @memberjunction/ai-agent-client@6.2.0-edge.3
+  - @memberjunction/ng-agent-client@6.2.0-edge.3
+  - @memberjunction/ng-composer@6.2.0-edge.3
+  - @memberjunction/ng-container-directives@6.2.0-edge.3
+  - @memberjunction/ng-whiteboard@6.2.0-edge.3
+  - @memberjunction/ng-media-player@6.2.0-edge.3
+  - @memberjunction/ng-forms@6.2.0-edge.3
+  - @memberjunction/ng-markdown@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 28fdf22: Add a `Decision Eval` test type that measures typed decisions against labels inside MJ's test harness, with a suite generator and a scorecard for agreement, repeatability and calibration. The conversation-routing decision's builders (and `IsAgentAllowed`) move from `@memberjunction/ng-conversations` to `@memberjunction/ai-core-plus`, so the chat and the harness build the decision with the same code; import them from there.
+- 369e229: Developer can create and update MJ: Row Level Security Filters. Sync push reloads metadata inside its transaction. An IS-A parent's delete returns, a new record does not load a missing child row, the GraphQL provider does not send a second delete, and a parent built by its child stays linked. The chat area accepts ReadOnly. A dialog manages its focus, names itself when it has no title, and leaves Tab inside a modal or an open dropdown or calendar above it. Tab that a dropdown or calendar hands back at the first or last stop wraps inside the dialog, and a dialog that does not trap focus does not let the dialog under it take the page's Tab. A host publishes an in-progress agent turn's live status through AgentRunStatusPublisher, including the completion when a background run fails before it has a run. A reply that finishes before the chat shows it completes without loading the conversation again.
+
+### Patch Changes
+
+- f555162: Add a `compose:email` actionable command so an agent can hand the user a pre-filled email draft.
+
+  The agent drafts; the user sends. Nothing in this path transmits mail — the host opens the user's
+  own compose window via a `mailto:` URL and the user decides whether to send.
+  - **ai-core-plus** — `ComposeEmailCommand` joins the `ActionableCommand` union, with `BuildMailtoURL`,
+    `MAILTO_MAX_URL_LENGTH` and `IsMailtoURLWithinLimit`. The command carries no target field: which
+    compose surface opens is the host's decision, so retargeting later is a one-handler change rather
+    than a migration across every agent that emits one.
+  - **ng-conversations** — the handler opens the mail client via a synthesized anchor click (not
+    `window.open`, which strands an `about:blank` tab on a non-http scheme). Past the length limit it
+    refuses to open, copies the body best-effort, and emits for the host to open the draft artifact
+    instead: a mail client handed an over-long URL does not error, it opens a draft with the body
+    **silently truncated**. The emitted request carries `DraftCopiedToClipboard`, so the host can say
+    the clipboard changed without ever claiming a copy that failed. compose:email is logged by type
+    only, never with its body or recipients.
+  - **ng-explorer-core** — handles the over-length fallback by opening the draft artifact (by
+    `artifactId`, else the conversation's most recent) and showing one notification that says why
+    the mail client did not open, names the artifact that opened, and says whether the text is on the
+    clipboard. A stated `artifactId` that is not loaded opens nothing rather than a different
+    artifact, and "nothing to open" is a notification rather than a console warning.
+  - **messaging-adapters** — Slack and Teams degrade to a note naming the draft, because a `mailto:`
+    URL fails both platforms' button-URL checks and the command would otherwise render as nothing.
+    The note carries the label and the route back to Explorer only — never the recipient or subject:
+    a channel is a shared, retained surface, and what is safe beside the composing user's own button
+    is not safe for every participant.
+
+  The button shows the draft's recipients next to it: it otherwise renders only the agent-authored
+  label, so an agent influenced by injected content could pair a benign label with an unexpected
+  address and the user would not see it until their own mail client was already populated. The line
+  wraps rather than truncating, so a Bcc (listed last) is never cut off.
+
+- 75d4e8c: Add an opt-in `EnableDecisionRouting` input to the chat area: an untagged message can ask one fast typed decision which agent in the conversation should answer it, and which artifact version it modifies, instead of always going back to the last agent. Only agents in the person's '@' list (the ones they may run) are offered. It is off by default, and any error, slow answer (over 250 ms) or unsure answer keeps today's routing; a routed turn carries the new `DecisionRouted` route. A host `AgentTurnHandler` receives the artifact version the decision named as the new `AgentTurnRequest.TargetArtifactVersionId`.
+- f3c6161: Conversation routing acts on calibrated probabilities (plan Task 2.4). `ApplyPlattCalibration` and `PlattCalibration` in `@memberjunction/ai` map a decision model's raw probability to a calibrated one. Routing calibrates the thread Likelihood only for the exact model each fit was made on (`ROUTING_CONTINUES_CALIBRATION`: Jev at `typesafe/jev-1.13-20260917`, and LLM Decision when GPT-OSS-120B answered, fitted by the Phase 2 Decision Eval), and treats any other model's answer as unsure. `FindDecisionCalibration` in `@memberjunction/ai-core-plus` looks a calibration up by the decision model and the model behind it, for any consumer that calibrates. The `RunDecision` mutation and `GraphQLAIClient.RunDecision` return that model as `resolvedModel` / `ResolvedModel`. Routing waits 350 ms instead of 250 ms, which covers about 95% of Jev's answers in-process. The Decision Eval records production's routing verdict with the model that answered and the policy it was reached under, and its scorecard scores that verdict end to end, per run.
+- ea4080e: fix: an agent completion reaches the conversation even when the WebSocket dies without closing (MJ#4222)
+
+  On an unstable connection, sending a message to an agent left the message spinning forever: status updates stopped, the elapsed timer counted up with no ceiling, and no error appeared. The agent ran fine and its answer persisted; only a refresh revealed it.
+
+  The cause was not a missing timeout but a single point of failure. Five recovery mechanisms — graphql-ws `retryAttempts`, `GraphQLDataProvider._socketStateSubject`, Explorer's `ServerConnectivityService`, `ConversationStreaming.scheduleReconnection()` and `FireAndForgetHelper.onStreamEnd` — were all triggered by the socket `closed` event, and the failure mode is precisely "the socket never closes". They failed together. graphql-ws re-arms its keepalive only on pong receipt, so a half-open socket gets one ping and then permanent silence; its own JSDoc says nothing happens automatically if the server never responds.
+
+  **Transport.** `getOrCreateWSClient()` now arms a pong watchdog on each ping it sends and calls `client.terminate()` if no pong returns, producing a real `4499` close that the existing retry apparatus can act on. Each client owns its own pong timer, and a close from a client that has already been replaced is ignored, so one socket can never terminate or disarm its replacement. `connectionAckWaitTimeout` is set, and `keepAlive` drops to 10s, making detection ~14s in practice instead of never. MJServer passes its `useServer` keepAlive explicitly rather than relying on an invisible library default.
+
+  **Recovery triggers.** New `ConversationLiveness` (L0, no Angular) aggregates socket reconnect, stream re-subscribe, tab-visible and browser-online into one coalesced reconciliation request, throttled leading-edge at 500ms. `ng-conversations` adds a root-provided DOM bridge and `ReconcileNow()`, which refreshes agent runs **before** comparing status — without that the comparison reads the stale in-memory map the outage froze and silently no-ops. The reconciliation path runs over HTTP, so it repairs a message while the socket is still dead.
+
+  **Durable read model.** New `TailConversationEvents` query over existing `AIAgentRunStep` rows — no table, no migration. The cursor never rewinds, events are capped at 200, authorization is delegated to `RunView` as the calling user through the request's read-only provider, and not-found and not-authorized are indistinguishable. Only the columns an event carries are read, never the step's input, output or payload columns. A run `Paused` on a still-running workflow reports `IsInFlight: true`, and a failed call does too, because it knows nothing about the run. `FinalPayload` falls back to the conversation detail's message because `AIAgentRun.Result` is agent-dependent and null on many successful runs; callers must decide terminality from `IsInFlight`/`DetailStatus`, never from its presence. `GraphQLConversationClient` and `ConversationTail` hold a per-message cursor that advances only on a successful read. When the tail call fails, for example a new client against an older server, the client completes a message from its run list as it did before.
+
+  **Cross-instance delivery.** Push-status updates now carry `SourceServerId` and fan out over Redis through a generic `PublishMessage`/`SubscribeToChannel` pair on `RedisLocalStorageProvider`, closing the case where the mutation lands on one replica and the browser's socket on another. Inbound messages are type-checked, then republish onto the local topic and still pass the identity filter, so a replica never decides who sees what. Streaming deltas are deliberately not replicated. Measured: 5 push frames delivered cross-replica with Redis, 0 without — and the message still completed without it, so fan-out is a latency optimization rather than a requirement.
+
+  **Deployment order.** A client deployed before the server gets a failed tail call on every reconcile and falls back to the run list, which cannot see the conversation detail's own status. The liveness pulse (`DEFAULT_PULSE_INTERVAL_MS`, 5 min → 60 s in MJServer) and the client's idle window (`DEFAULT_IDLE_TIMEOUT_MS`, 12 min → 3 min in GraphQLDataProvider) are a matched pair in separate packages. Ship the server first or with the client: a client on the 3-minute window against a server still pulsing every 5 minutes times out on every pulse gap. `DEFAULT_MAX_STALL_RECONCILES` stays at 6, so the give-up horizon moves from roughly 72 minutes to roughly 18.
+
+  **Honest UI.** The message time pill degrades `live → checking → stalled`, with thresholds anchored to the agent watchdog's own 30s heartbeat and 5-minute stale threshold rather than invented values. Silence is measured from the last push frame the browser received for the run or the message, including the server's 60s liveness pulse, and from the run's database timestamps when the run was re-read. Progress frames carry the server's in-memory run, whose timestamps do not move until the run ends, so they cannot be the only signal. A row with no MJ agent run, such as one written by a host's own turn handler, stays live while frames that name it arrive. The database timestamp is bounded by how long the component has been watching, so browser-versus-database clock skew cannot invent a stall. While HTTP works, a dead socket alone does not degrade the pill: each reconcile re-reads the run and its fresh heartbeat. The connectivity banner reports the socket. The pill's one-second timer stops whenever nothing is in flight.
+
+  A quiet pill's request for a re-check goes through the same 500ms coalescing trigger as the transport signals, and only one reconcile pass runs at a time. A request that arrives during a pass shares it and schedules one follow-up, so no request is lost and no message is completed twice.
+
+  Also fixes three defects found by manual testing that unit tests missed, each an instance of the same pattern as the original bug — a mechanism wired to a signal the failure mode suppresses: liveness was computed only in `ngDoCheck`, which `detectChanges()` does not re-invoke; `agentRunMap` was absent from `message-list`'s `ngOnChanges`, so a refreshed heartbeat never reached the rendered bubble; and the reconnection backoff reset on every re-subscribe, which succeeds against a dead socket, pinning the delay at its base value and leaving the escalation inert. The backoff escalates to a 60s ceiling and retries for the life of the page; it has no attempt cap, because no host calls `initialize()` outside `ngOnInit`, so a stream that stopped retrying would stay stopped until a reload. Up to 20% is taken off each delay at random so tabs do not retry in lockstep, and the backoff clears when the socket reports `connected`, which follows the server's acknowledgement, so a quiet healthy stream does not start its next outage at the ceiling.
+
+  Two further defects this surfaced, both fixed here. Explorer's connectivity warning cleared on an HTTP 200 from `/healthcheck`, before the socket was back — reachable over HTTP and able to carry frames are different properties, and a half-open socket satisfies the first while dropping every push. The warning now clears when the socket itself reports `connected`, and a `degraded` flag makes that sticky so the transient `unknown` emitted by the service's own `ForceSocketReconnect()` cannot read as recovery. The one exception is a screen with no active subscription: no socket exists there, so no `connected` can arrive, and an HTTP 200 clears the warning. A subscription opened later against a socket that is still down raises it again.
+
+  And a new `OrphanedConversationDetailReconciler` closes conversation details left `In-Progress` by a run that is already over. `AgentRunner` closes the detail as a run's final step, so a process that dies mid-run never reaches it; the agent-run watchdog repairs the run but nothing repaired the detail, which is the row the chat renders from. It runs at boot and every five minutes, asks only for details that have a finished run so stuck rows cannot fill its 200-row window, waits a grace period so it cannot race a normal completion, skips a detail that something else closed after it was listed, and writes as the conversation's OWNER — `MJConversationDetailEntityExtended.Save()` refuses a non-owner without a resource grant, so a maintenance pass running as the system user is silently rejected, returning false with no `LatestResult` to read. Verified against five real orphaned details aged 42 to 246 minutes: all five closed, none left.
+
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [2552b1e]
+- Updated dependencies [5114c10]
+- Updated dependencies [660ef45]
+- Updated dependencies [21f9e15]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [f3c6161]
+- Updated dependencies [5148534]
+- Updated dependencies [0adaf76]
+- Updated dependencies [5ee02db]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [ea4080e]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [7e57b48]
+- Updated dependencies [705ab4e]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [bb33c77]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/ng-artifacts@6.2.0-edge.2
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.2
+  - @memberjunction/realtime-runtime@6.2.0-edge.2
+  - @memberjunction/conversations-runtime@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/ng-testing@6.2.0-edge.2
+  - @memberjunction/ai-engine-base@6.2.0-edge.2
+  - @memberjunction/ng-composer@6.2.0-edge.2
+  - @memberjunction/ng-ui-components@6.2.0-edge.2
+  - @memberjunction/ng-forms@6.2.0-edge.2
+  - @memberjunction/ng-task-graph-editor@6.2.0-edge.2
+  - @memberjunction/ng-tasks@6.2.0-edge.2
+  - @memberjunction/ai-agent-client@6.2.0-edge.2
+  - @memberjunction/ng-base-types@6.2.0-edge.2
+  - @memberjunction/ng-code-editor@6.2.0-edge.2
+  - @memberjunction/ng-container-directives@6.2.0-edge.2
+  - @memberjunction/ng-media-player@6.2.0-edge.2
+  - @memberjunction/ng-notifications@6.2.0-edge.2
+  - @memberjunction/ng-resource-permissions@6.2.0-edge.2
+  - @memberjunction/ng-shared-generic@6.2.0-edge.2
+  - @memberjunction/ng-user-routines@6.2.0-edge.2
+  - @memberjunction/interactive-component-types@6.2.0-edge.2
+  - @memberjunction/ai-realtime-client@6.2.0-edge.2
+  - @memberjunction/ng-agent-client@6.2.0-edge.2
+  - @memberjunction/ng-whiteboard@6.2.0-edge.2
+  - @memberjunction/ng-markdown@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Minor Changes
+
+- 6b08ebf: `Project.OwnerUserID`: conversation folders can be personal. One additive, nullable column — NULL keeps a folder shared with the environment exactly as today; set, the folder belongs to that user.
+
+  The sidebar and the Assign Project picker list only shared folders plus the user's own, for every user. Server-side, the migration attaches a row-level-security filter (`OwnerUserID IS NULL OR OwnerUserID = '{{UserID}}'`) to the UI role's read permission on `MJ: Projects`, so for a user whose every read grant on the entity is filtered, a personal folder's NAME is unreadable through any reader — `RunView`, the entity browser, the Projects grid on the User form — and not merely absent from the sidebar. Developer and Integration stay unfiltered, and RLS exemption is per user: holding either role lifts the filter. With the seeded permissions those are the only roles that can create a folder, so by default the server-side guarantee covers read-only UI users. Hosts that want personal folders private between the people who create them should give those users a role that grants Create/Update on `MJ: Projects` without unfiltered Read, rather than Developer.
+
+  What it does NOT change: a SHARED folder is readable by everyone in the environment, which is what shared means and is the state every folder that already exists is in. This makes personal folders possible; it is not a tenancy model, and tenant separation stays the host's Environment or its own row-level security.
+
+  Visibility is a create-time choice, and one-way afterwards. A personal folder can be shared; a shared folder cannot be taken private, because NULL-means-shared conflates "shared" with "unowned" — sharing erases the owner, so the system cannot tell reclaiming from appropriating, and every folder that exists today would otherwise be one click from belonging to whoever opened its settings first.
+
+  Also: `ConversationEngine` keys its folder cache by user as well as environment, its remote-save handler drops a folder that just became someone else's, and `DeleteProject` reads a folder's children by `ParentID` instead of trusting the now-narrowed cache — an unseen subfolder still holds the RESTRICT foreign key.
+
+### Patch Changes
+
+- 67f6c85: feat: the conversation sidebar gains multi-select (keyboard, mouse and touch), bulk actions, sorting, a search clear button, and multi-resource sharing
+
+  **Selecting.** Ctrl/Cmd-click toggles one conversation, and Shift-click selects the range from the last row picked. A range follows the order the list renders and never reaches rows hidden inside a collapsed folder or section. A Ctrl-click that starts a selection takes the open conversation along, and a Shift-click with nothing picked yet ranges from it. Selecting needs no keyboard: a checkbox appears in a row's left padding when the pointer is over the row, and on every row while a selection exists. On touch, a long-press on a row selects it, after which a tap adds or removes a row. A selected row shows a ticked checkbox and an accent tint; the open conversation keeps its solid fill. Escape, a click on empty space, or deselecting the last row ends selection mode. The ⋯ menu's "Select Conversations" entry is gone.
+
+  **The selection only holds rows on screen.** Select All picks the visible rows. A search edit, a collapse or a grouping change drops the selected rows it hides, and a conversation that leaves the list leaves the selection.
+
+  **The selection bar.** While a selection exists, the search row becomes a bar with the count, Pin or Unpin, Move to folder, Share, Delete and a clear button. The sort buttons stay in place, so the list does not jump.
+
+  **One right-click menu.** It replaces the per-row ⋯ menu's contents and the old bottom selection bar. On a selected row it acts on the whole selection ("3 selected", Pin, Unpin, Move to folder ▸, Share, Delete 3). On any other row it acts on that row alone and leaves the selection untouched. On a folder it offers New Subfolder, Rename and Delete, so the hover icons on folder rows are gone. On empty space it offers New Conversation, New Folder and Select All. The ⋯ button opens the same menu and is always shown on touch screens. The menu stays inside the window, opening upward or moving left near an edge.
+
+  **Who can do what.** Share needs ownership or an Owner grant, the same rule the chat header uses. Move and Pin need ownership or an Edit/Owner grant. Each action is disabled when none of its targets qualify. A row you hold only View access to cannot be dragged into a folder. The conversations an action leaves out are named, with the reason. Folder and pin are still stored on the conversation itself, so a person with Edit access changes them for the owner too; per-user folder and pin is tracked in #4742.
+
+  **Bulk actions and dragging.** Move and Pin keep the selection so a second action can follow. Delete removes only the deleted rows from the selection, so deleting a row outside the selection leaves it alone. Bulk actions report any conversations they could not change. Grabbing a selected row drags the whole selection onto a folder, onto Ungrouped, or onto the conversations inside a folder; grabbing an unselected row drags that row alone. Conversations already in the destination are skipped rather than re-saved.
+
+  **Sorting and search.** A Date / Name button pair sorts the Pinned section, every folder and the Ungrouped list together; clicking the active button flips the direction. The choice is saved with the folder collapse state and group-by mode. The search box gains a clear button, and Escape inside it clears the query.
+
+  **Sharing several resources — `ng-resource-permissions`.** `mj-resource-share-dialog` gains a `Contexts` input for sharing several resources at once. It merges everyone's access across them, labels a person whose access covers only some ("2 of 3") or differs in level ("Mixed"), and applies add, level change and removal across the whole set. `Context` is unchanged, so dashboards and the chat header are not affected. `ResourceLabel` sets the noun in the title, and `Notice` shows a caller-supplied line (the sidebar uses it to report conversations left out). The dialog leaves every resource's owner out of "Add people", and a retry after a partly failed save picks up where it stopped.
+
+  **Engine — `core-entities`.** `ConversationEngine` gains `CanShareConversation` and `CanEditConversation`, the rules above, shared by the chat header and the sidebar. It also gains `MoveMultipleConversationsToProject` and `PinMultipleConversations`. They refuse a View-only conversation without saving it, save one conversation at a time so a single rejection cannot fail the batch, roll a failed conversation's fields back in memory, and emit the updated list once per batch.
+
+- eb3a8d3: feat(conversations): host rules for chats with several people
+
+  `mj-conversation-chat-area` gains opt-in inputs, one reworked event, a hook and a slot, so a host can run a chat between several people without forking the chat area. Every default keeps today's behavior.
+
+  **Inputs — `ng-conversations`.** Set on `mj-conversation-chat-area` (and on `mj-message-input` directly):
+  - `AgentReplyMode` — `'Always'` (default) answers every message; `'MentionOnly'` answers only a message that tags an agent and posts any other message with no turn at all: no reply row, no placeholder, no turn events.
+  - `AllowedAgentIDs` — the agents that may answer. Narrows the composer's `@` list, every route (tagged agent, continuity, pinned and host default agents, the conversation manager), the manager's delegation — including each agent step of a workflow it plans — and the pin and voice pickers. Null allows every agent; an empty list allows none.
+  - `MentionPeople` — the people the `@` list offers (today it offers only the current user). Each composer keeps its own list: two composers on one page never see each other's.
+  - `AgentHistoryFrom` — the first moment of the conversation an agent turn may read (see below).
+  - `AgentTurnHandler` — an async hook that runs the turn on the host's server instead of MJ's path, once per turn, before any reply row exists. The chat area shows the rows it reports.
+  - `AutoNameConversation` — turns MJ's auto-naming of a new conversation off (text and voice).
+
+  **Behavior change: `BeforeAgentTurn`.** It now fires once per turn on every route, before any row exists, and carries the resolved `AgentId`, `AgentName`, `Route` and `UserMessageId`. A listener can cancel the turn or send it to another allowed agent with `RedirectAgentId`. Canceling now leaves nothing behind. Previously the event fired only on the conversation manager's route, after that route's placeholder row was saved, and a cancel left the row behind, marked "Turn canceled before agent invocation". `AfterAgentTurn` now fires on every route too.
+
+  **Slot.** `composerExtra` renders host UI directly above the composer, wherever the chat area shows one, with an `IMJChatComposerExtraContext`.
+
+  **History floor — `server`, `core-entities`, `ai-core-plus`, `ai-agents`, clients.** `RunAIAgentFromConversationDetail` takes a new nullable `agentHistoryFrom` argument (ISO-8601). The server loads the agent's history from that moment and uses no summary of earlier messages; an unreadable value fails the request. The run carries it as `ExecuteAgentParams.ConversationHistoryFrom`, so the conversation-history tools, the conversation's artifacts, cross-turn compaction (skipped) and the carried-forward tool results of the previous turn (not carried) hold it too. `ConversationEngine.LoadWindowRowsFresh` and `AssembleContextWindow` accept the floor, and `ConversationEngine.HistoryFromFilter` writes it. The GraphQL client names the argument only when a floor is set, so a client that sets none keeps working against an older MJAPI.
+
+  **Runtime — `conversations-runtime`.** `MentionAutocomplete.GetSuggestions` takes an optional per-call `MentionSuggestionScope`; `ConversationAgentRunner.processMessage` takes `AllowedAgentIDs` (narrows the manager's `ALL_AVAILABLE_AGENTS`) and `AgentHistoryFrom`.
+
+- 307da67: Make the Chat cross-entity search panel reachable and usable in Explorer.
+
+  `SearchPanelComponent` (search across conversations, messages, artifacts, collections
+  and tasks) was only ever rendered by `ConversationWorkspaceComponent`, which has no
+  consumers anywhere in the repo — Explorer composes the chat UI from resource wrappers
+  instead. The panel therefore never mounted, leaving the feature with no route to it from
+  any shipped surface. `ChatConversationsResourceComponent` now renders it.
+
+  The entry point is an escalation row beneath the conversation list, shown only while the
+  list's own filter is active: "Search all of Chat for …". It carries the term the user has
+  already typed into the panel, so the two scopes read as one continuum rather than two
+  identical-looking search boxes offering different reach. `mj-conversation-list` emits the
+  new `SearchEscalated` output rather than routing itself, per the widget layer's event
+  contract, and `SearchPanelComponent` accepts the term via a new `InitialQuery` input.
+  Ctrl+K is deliberately not the shortcut: Explorer's global command palette already owns it.
+
+  Search shows only what the user can already see:
+  - **Conversations and messages** match only the conversations the conversation list shows:
+    owned by the user or shared with them, not archived, and Global or Both scope. The rule
+    lives in the new `ConversationEngine.GetVisibleConversationsFilter`, which
+    `LoadConversations` also uses, so the list and search cannot drift apart. Unlike the list
+    load, it has no row cap.
+  - **Artifacts** match only artifacts the user can read, by the same rule as opening one:
+    owner, else an explicit grant, else a read grant on a collection that holds it. The rule
+    lives in the new `ArtifactPermissionService.GetReadableArtifactsFilter`.
+
+  Several defects made the surface look wired up while returning nothing:
+  - **Message search could never match.** The filter named `vwConversations` in a subquery,
+    unqualified, but the SQL login's default schema is `dbo`, so it resolved to nothing and the
+    query errored. Every sub-search reports failure as `return []`, so a hard SQL error and
+    "no matches" rendered identically. Message search now reads the visible conversation IDs
+    first, then filters messages by `ConversationID IN (...)`, so each filter names only its
+    own entity's columns and works on SQL Server and PostgreSQL.
+  - **Artifact results did not open.** Routing branched on `collectionId` then
+    `conversationId`, but the artifact mapper only ever sets `collectionId` — so an
+    artifact in no collection matched neither branch and the click did nothing. Artifacts
+    need no parent; `NavigationService.OpenArtifact` opens one directly.
+  - **Results did not render until an unrelated DOM event.** The emission does not reliably
+    schedule a change-detection pass, so results landed on the component while the panel
+    kept painting the previous state until a click or keypress triggered the next one.
+  - **Quadratic work per keystroke.** `isResultSelected()` is bound once per row and rebuilt
+    a flat array of every result on each call; the flat list is now cached per emission.
+  - **Focus theft.** `ngOnChanges` fired for every input, so a `currentUser` or
+    `environmentId` re-emit while the panel was open pulled focus out of whatever field the
+    user was in. Replaced with a setter keyed on the open transition.
+  - **The search icon escaped its input.** Explorer's app-wide `_shared-patterns.scss`
+    absolutely-positions any bare `.search-icon` and pairs that with a `padding-left` scoped
+    to three wrapper classes this panel does not use, so the icon positioned against the
+    overlay while the input slid into its vacated flex slot.
+
+  Also exports the `SearchResult` / `SearchResultType` types from
+  `@memberjunction/ng-conversations` — they are the payload of
+  `SearchPanelComponent.ResultSelected`, so consumers previously could not type a handler for it.
+
+- 67f6c85: fix: the New/Edit Folder dialog reports why a save was refused instead of "Failed to save project"
+
+  `BaseEntity.Save()` returns false and records the reason on `LatestResult` — a server refusal, a constraint violation, a failed hook. The folder modal threw that reason away and raised its own generic message, so the console read `Error: Failed to save project` with nothing pointing at the cause. It now raises `LatestResult.CompleteMessage` and shows it in the failure alert, matching what every other save path in this package already does.
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- 9845c00: A realtime session in a conversation now reads as a voice call that belongs to the thread, not a banner laid across it.
+  - `ng-conversations`: the session card is laid out like a chat message, with the call icon in the avatar column, a header with the title and start time, and a bubble with the status, how long the call ran, how many messages were exchanged, the last line said, and a **Review call** button (**View call** while live). It keeps the message list's margins at every breakpoint. The card takes the viewer's id (`CurrentUserID`, passed by the message list), so the quoted line says "You" on your own call, names the caller on someone else's, and says "Caller" when the session row doesn't say whose call it was.
+  - `conversations-runtime`: the wording both surfaces share. The title is "Voice call with Sage" rather than "Realtime session · Sage", a server-shutdown close reads "Interrupted", and there are new helpers: `SessionCardStartedAt`, `SessionCardDurationLabel` ("Under a minute", "12 min", "1 hr 5 min"), `SessionCardMessageCountLabel` and `SessionCardSpeakerLabel`. The session lookup (`REALTIME_SESSION_META_FIELDS`) also reads `UserID`, `User` and `__mj_CreatedAt`, and the new `RealtimeSessionTimelineMeta` fields are optional, so existing callers still type-check.
+  - `mobile-app`: the session card takes the same title and message count as the web, and names the agent on its lines. The chat screen passes the viewer's id (`CurrentUserID`), so the preview and the expanded transcript label the user's lines by the web's rule.
+
+- e2fa695: Five nested `UUIDsEqual` scans, each over two lists that grow with the data, now match against a normalized `Set` (or a first-index `Map`) built once. The affected sites are:
+  - the message placeholder getter
+  - the user-row role lookup
+  - the entity-permission fill-in (in Role mode, every entity × every saved row)
+  - the dashboard drop handlers
+  - the flow editor's `HighlightPath` and delete-selection
+
+  Results, ordering and case-insensitive matching are unchanged. New tests pin each one and pass against the old code as well.
+
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [15a4333]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [5da3ad2]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [c261eb8]
+- Updated dependencies [307da67]
+- Updated dependencies [f78fd63]
+- Updated dependencies [a7da50b]
+- Updated dependencies [1d43161]
+- Updated dependencies [7110019]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [9845c00]
+- Updated dependencies [920bef8]
+  - @memberjunction/ai@6.2.0-edge.1
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/ai-core-plus@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/ng-resource-permissions@6.2.0-edge.1
+  - @memberjunction/ng-user-routines@6.2.0-edge.1
+  - @memberjunction/conversations-runtime@6.2.0-edge.1
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.1
+  - @memberjunction/ai-agent-client@6.2.0-edge.1
+  - @memberjunction/ng-whiteboard@6.2.0-edge.1
+  - @memberjunction/ai-realtime-client@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/interactive-component-types@6.2.0-edge.1
+  - @memberjunction/ng-artifacts@6.2.0-edge.1
+  - @memberjunction/ng-code-editor@6.2.0-edge.1
+  - @memberjunction/ng-composer@6.2.0-edge.1
+  - @memberjunction/ng-container-directives@6.2.0-edge.1
+  - @memberjunction/ng-markdown@6.2.0-edge.1
+  - @memberjunction/ng-media-player@6.2.0-edge.1
+  - @memberjunction/ng-notifications@6.2.0-edge.1
+  - @memberjunction/ng-shared-generic@6.2.0-edge.1
+  - @memberjunction/ng-tasks@6.2.0-edge.1
+  - @memberjunction/ng-testing@6.2.0-edge.1
+  - @memberjunction/ng-ui-components@6.2.0-edge.1
+  - @memberjunction/realtime-runtime@6.2.0-edge.1
+  - @memberjunction/ai-engine-base@6.2.0-edge.1
+  - @memberjunction/ng-base-types@6.2.0-edge.1
+  - @memberjunction/ng-task-graph-editor@6.2.0-edge.1
+  - @memberjunction/ng-forms@6.2.0-edge.1
+  - @memberjunction/ng-agent-client@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Minor Changes
+
+- b87e4ac: feat(ai): Gemini 3.8 Live multimodal realtime streaming, video tracks, asynchronous reasoning, and per-model legality
+
+  This release adds comprehensive support for Google's Gemini 3.8 Live multimodal realtime models (`gemini-3.8-live` and `gemini-3.8-live-extended-thinking`), including a first-class media plane for video/audio tracks, non-blocking tool execution, thought summaries, session continuity, and complete catalog metadata.
+
+  In `@memberjunction/server`, the default configuration for `realtime.enabled` is flipped from `false` to `true`, enabling the `/realtime/sdp-exchange` WebRTC broker endpoint on all MemberJunction API servers by default (configurable via `MJ_REALTIME_ENABLED`).
+
+  ### Phase Summary:
+  - **Phase A (Contracts & Media Plane)**: Introduced directional media tracks (`RealtimeTrackDescriptor`, `RealtimeTrackDirection`), open modality vocabulary via `RealtimeModalityRegistry`, track negotiation in `BaseRealtimeClient`, and channel track sourcing/sinking (`GetSourcedTracks`/`GetSunkTracks`).
+  - **Phase B (Audio Retrofit & SDK Convergence)**: Upgraded and converged `@google/genai` to `^2.8.0` across dependents.
+  - **Phase C (Gemini Live Config Legality)**: Added per-model legality enforcement in `GeminiRealtime`: stripped `enable_affective_dialog`, preserved `proactive_audio: true` while rejecting `false`, enforced `thinkingConfig` rules (omitted on 3.8-live, validated levels low/medium/high and rejected `minimal` on Extended Thinking), explicit turn coverage, local refusal of `BLOCKING` tools on Extended Thinking, default `NON_BLOCKING` state on all declarations, and config bag sanitization.
+  - **Phase D (Async Tool Execution & Idle Contract)**: Implemented per-model idle detection honoring `IdleSignal` (`generationComplete` for 3.8-live, `interactionStatus` for Extended Thinking); decoupled tool call arrival from response activity so generation is not falsely interrupted; drained `queuedSends` only on true idle or turn complete; integrated `RealtimeToolBatchBarrier` for parallel/out-of-order tool calls; and added function scheduling resolution (`__mj_scheduling` / `scheduling` with `INTERRUPT`/`INTERRUPTED` support).
+  - **Phase E (Extended Thinking & Narration)**: Routed model thought parts (`IsThought: true`) to `ThoughtNarration$` and created immutable narration delegation cards (`Kind: 'narration'`), keeping scratch thoughts distinct from spoken responses and user-cancelable actions.
+  - **Phase F (Video Tracks & Session Continuity)**: Implemented video frame capture (`getDisplayMedia`/`getUserMedia` in `src/media/frameCapture.ts`), throttled inbound video frame transmission via `ChannelInboundVideoBridge` (whiteboard and remote browser channels), and resilient session continuity across the vendor session cap via `sessionResumptionUpdate` / `goAway`.
+  - **Phase G (Metadata & Release)**: Added declarative catalog metadata and multi-channel pricing for `Gemini 3.8 Live` and `Gemini 3.8 Live Extended Thinking` in `metadata/ai-models/.ai-models.json`.
+
+  ### Reviewer Punch List Resolutions:
+  - **Items 16–18 (Scheduling)**: Supported `__mj_scheduling` alongside `scheduling`, sanitized payload keys, accepted both `INTERRUPT` and `INTERRUPTED`, and added diagnostic warnings on unknown values.
+  - **Item 19 (Non-blocking getter)**: Extracted and centralized `isNonBlocking` getter on `GeminiRealtimeClient`.
+  - **Item 20 (Generation Complete)**: Ensured `handleGenerationComplete` updates `responseActive` without prematurely draining queued sends.
+  - **Items 21–23 (Thought Narration)**: Cleanly separated thought summaries from spoken narrations and the ephemeral live note across `RealtimeSessionService` and `RealtimeSessionState`.
+  - **Item 24 (Activity Rail)**: Restricted open-run button rendering to agent runs (`card.Kind === 'agent' && !!card.RunID`).
+  - **Items 25–27 (Video Bridge & Throttle)**: Separated `sendFrameDirect`, resolved throttle contention between bridge and driver with jitter headroom, added graceful headless DOM detection, and guarded against unimplemented `SendVideoFrame`.
+  - **Item 28 (File organization)**: Moved `frameCapture.ts` from `audio/` to `media/` with clean import paths.
+  - **C5a–C5c (Config Sanitization & Tool Behavior)**: Stated explicit tool behavior on all declarations, warned on unknown values, and added `tooling`, `toolBehavior`, and `functionCallingBehavior` to `REALTIME_SHARED_CONFIG_KEYS`.
+
+- c157749: Extract the mention-autocomplete engine out of Angular into `@memberjunction/conversations-runtime`, so a non-Angular host can offer the same `@` / `#` / `/` pickers.
+
+  **Why.** `MentionAutocompleteService` was 503 lines of permission-filtered caching and ranking — the agent / user / entity / query / skill sets behind every composer trigger, the `/` picker's target-agent narrowing, and the per-trigger match scoring. It imported nothing from `@angular/*` and carried no decorator; it was Angular-coupled purely by which package it sat in. `MentionParser`, the other half of the same feature, already lived in the runtime.
+
+  That location was the problem. The React Native app needs the same three pickers, and a native host cannot depend on an Angular library — so reaching them would have meant writing the agent/skill run-permission filtering, the accepted-skills intersection and the ranking a second time. A second copy of a _permission_ rule is the copy that drifts, and it drifts silently in the direction of showing someone a skill they may not run.
+
+  **What moved:** `MentionAutocomplete` (the engine), `IntersectAcceptedSkills` (the `/` narrowing rule), and the `MentionSuggestion` / `MentionSuggestionPreset` data shapes. Reachable as `ConversationsRuntime.Instance.MentionSuggestions` or directly as `MentionAutocomplete.Instance`.
+
+  **On the suggestion types.** `@memberjunction/ng-composer` keeps its own structurally identical `MentionSuggestion` — that one is a _rendering_ contract (what a dropdown row and a chip display), this one is a _data_ contract (what a suggestion engine produces). They are kept assignable so the Angular shim passes runtime suggestions straight through with no mapping. Deliberately NOT consolidated: `ng-composer`'s type is consumed by Explorer's omnibar across a dozen files, and MJ forbids cross-package re-exports, so unifying them would have meant a wide, unrelated churn in a branch that had no business causing it.
+
+  **No behaviour change.** `MentionAutocompleteService` remains importable from `@memberjunction/ng-conversations` with the same name and the same `.Instance` accessor — it is now an alias for the runtime engine, so there is still exactly one instance and one cache warm-up shared with the ClassFactory-instantiated trigger providers. Verified by the package's own suites: 1,319 tests green in `ng-conversations`, 122 in the runtime (the five skill-narrowing tests moved with the code they cover).
+
+  `skill-picker-narrowing.ts` is gone from `ng-conversations`; import `IntersectAcceptedSkills` from `@memberjunction/conversations-runtime` instead. No in-repo consumer outside its own test.
+
+- 7658d68: Mobile app v6: make realtime voice actually resolve on a device, route hosted applications' generic nav items, and scope the new agent-session grants with row-level security.
+
+  **Why `minor`.** The branch adds metadata — two `MJ: Row Level Security Filters` rows and the `UI` role's `MJ: AI Agent Sessions` / `MJ: AI Agent Session Channels` permissions — which becomes a consolidated metadata-sync migration at release.
+
+  **Realtime voice could not have worked on a device.** The React Native WebRTC drivers registered against `OpenAILiveClient` / `OpenAIRealtimeClient`, but `ClassFactory` matches on the registered base class's _name_ and the session runtime resolves against `BaseRealtimeClient` — so the RN drivers were filed in a bucket lookup never reads, the browser driver won, and `new RTCPeerConnection()` threw under Hermes. They now register against `BaseRealtimeClient` under the same provider keys the browser drivers use, `registerGlobals()` from `react-native-webrtc` runs at module load, and a unit test asserts on the resolved _class_ rather than merely that something resolves.
+
+  Two related corrections: the RN drivers now override `createAudioSink()` rather than `attachRemoteAudio()` — the latter is where the base driver installs `pc.ontrack`, so overriding it silently removed the remote stream, its subscribers and the output audio meter — and `'xai'` is no longer advertised as supported. Grok Voice speaks the OpenAI protocol but over a websocket with a client-owned PCM plane, so it would have hit the `AudioContext` crash the provider filter exists to prevent.
+
+  **Session lifecycle.** `RealtimeSessionRuntime` gains three fixes that apply to every host, Explorer included: a start abandoned mid-flight (the user leaves while the mint is in progress) now releases the microphone, the provider connection and the server-side session instead of leaking all three; concurrent teardowns coalesce onto one run instead of racing into two `Disconnect()` calls and two `CloseAgentSession` mutations; and a host that declines the resolved provider now unwinds through the shared teardown, so channel plugins are disposed rather than left published with live tool handlers. `IRealtimeMediaHost` gains an optional `ReleaseMicrophone()` — iOS is put into a record-and-play audio category for a call, and nothing was putting it back. `LastStartError` lets a host tell a denied microphone apart from a provider failure.
+
+  **Agent runs reported failure as success.** `ConversationAgentRunner.processMessage` returns `null` only when no agent resolves; every other failure — a quota rejection, an agent that threw, a transport error — comes back as a well-formed result carrying `success: false`. The mobile send path tested only for `null`, so those turns reported success and left a permanently spinning bubble with no error anywhere in the UI.
+
+  **Attachments were uploaded after the agent had already answered.** Photograph an invoice, ask for the totals, and the agent replied "I don't see an attachment" while the file appeared a second later. `SendMessage` now takes an `onUserMessageSaved` hook that runs in the window between the user's row existing and the run starting.
+
+  **Hosted applications.** Nav items are parsed into a shape derived from the generated `MJApplicationEntity_IDefaultNavItem` rather than a hand-copy, which restores `RecordID` — the field identifying which record a non-`Custom` item opens. Generic resource types now resolve through the same registry as `Custom` ones, keyed by the type name, and this build ships a `Dashboards` surface backed by the same `DashboardView` the Explorer route mounts. Retired applications and deactivated nav items are filtered the way MJ Explorer filters them, and the launcher's ordering now matches `compareUserApplications`.
+
+  **Storage seam corrections.** `MJStorageBlobStore` restores the compensating `DeleteObject` when the `MJ: Files` row fails to save (otherwise a successful upload with a failed row leaves permanently orphaned bytes) and configures `FileStorageEngine` before reading its accounts, so a cold process does not silently fall back to environment-only credentials. `ConversationAttachmentService.DeleteAttachment` now honours the store's return value instead of deleting the row regardless — the anti-orphan guarantee three doc comments promised. The browser store implements `GetDownloadUrl` through `CreateMediaAccessToken`, which is what makes Explorer's new storage-backed attachments readable rather than write-only, and `saveAttachments` accepts the agent whose `InlineStorageThresholdBytes` the decision should honour.
+
+  **Security.** The `UI` role's new read/update permissions on agent sessions and session channels are scoped by two new RLS filters (`UI: Own Agent Sessions`, `UI: Own Agent Session Channels`), matching the pattern the Widget Guest rows already use. Unscoped, any signed-in user could read and modify another user's sessions.
+
+  The sample application no longer sets `DefaultForNewUser` — a worked example should not install itself into every deployment's new users — and its screen now handles transport failures rather than showing "Loading…" forever on a dead network.
+
+### Patch Changes
+
+- 37891d3: Move the conversation-attachment blob seam (`IAttachmentBlobStore`, `AttachmentBlobUploadInput`,
+  `AttachmentBlobUploadResult`, `AttachmentBlobStoreUnavailableError`) from `@memberjunction/aiengine`
+  to `@memberjunction/ai-core-plus`, next to the placement policy in `ConversationUtility`. `aiengine`
+  re-exports it, so existing consumers are unaffected.
+
+  `ng-conversations` implements this seam for the browser and imported the types with `import type`,
+  on the reasoning that an erased import costs nothing. It costs nothing at _runtime_ — but the
+  class-registration manifest generator walks **package.json**, not imports, so the declared
+  dependency was a live edge regardless. When `aiengine` gained a `@memberjunction/storage`
+  dependency, that edge carried seven storage-driver classes into the browser manifest and broke the
+  MJExplorer bundle on `node:net` / `node:stream` / `node-fetch`.
+
+  The rule this encodes: a browser-reachable package must not _declare_ a server-only dependency,
+  even for a type. `ng-conversations` no longer declares `aiengine` at all.
+
+- 6ad6434: Put conversation-attachment blob access behind a seam, so the attachment service stops being server-only — and fix the inline-everything bug that duplication had already caused.
+
+  `ConversationAttachmentService` is 859 lines of attachment _policy_: limit validation, the inline-vs-MJStorage threshold, modality resolution, thumbnails, content URLs for AI consumption. None of it is platform-specific. But it imported `@memberjunction/storage` for four members, and that package depends on `@aws-sdk/client-s3`, `@azure/storage-blob`, `dropbox` and more — so one import made the whole package unusable from any browser or React Native client. It was that package's **only** server-only dependency.
+
+  The predictable result was three implementations of one policy: this service, a 494-line copy in `@memberjunction/ng-conversations`, and a third in the mobile app. And they had already drifted — **the Angular copy stored every attachment inline**, never consulting `ConversationUtility.ShouldStoreInline`, so a 5 MB image went into a database column instead of MJStorage, contradicting the `MJ: Conversation Detail Attachments` contract that `InlineData` is for small attachments and `FileID` for large ones.
+
+  **The seam.** `IAttachmentBlobStore` — `Upload` / `Download` / `GetDownloadUrl` / `Delete`. Three deliberate choices:
+  - **base64 at the boundary, never `Buffer`.** `Buffer` is a Node global; its presence in a shared signature is precisely what pinned this to one runtime. (The realtime runtime extraction learned the same lesson when `Blob` had leaked into session orchestration.)
+  - **Optional by contract.** A host binding nothing gets inline attachments and a distinct, recognizable "storage not available on this host" — so a caller can tell a _deployment shape_ from an _incident_. That is the normal case for an end user, who typically cannot write to MJStorage at all.
+  - **Bindings live outside the service.** `MJStorageBlobStore` (MJServer, wrapping `FileStorageEngine`) and `GraphQLAttachmentBlobStore` (ng-conversations, wrapping the existing `GraphQLFileStorageClient`). Neither is imported by the service.
+
+  **What changed behaviourally:** Explorer now honours the storage threshold — large attachments go to MJStorage through MJAPI instead of silently inline. Everything else is a same-shape substitution.
+
+  `DownloadFileContent` returns `string` (base64) rather than `Buffer | null`; its one caller, `RunAIAgentResolver`, is updated. Behaviour is otherwise unchanged: the MJStorage bodies moved verbatim, and the account-vs-provider credential resolution — which previously existed in only one of the three near-identical driver-resolution blocks — is now shared by all of them.
+
+  Verified: full monorepo build 306/306 + 278/278; ng-conversations 1,324 tests green; aiengine 130 tests green (including new seam coverage); mobile 195 green.
+
+  **Scope of the portability win, stated exactly.** This takes `@memberjunction/storage` — and with it the AWS, Azure and Dropbox SDKs — out of the attachment service's dependency graph, and it puts the inline-vs-storage decision behind one shared `ConversationUtility.ShouldStoreInline` call on every surface. It does **not** make `@memberjunction/aiengine` importable from a browser at runtime: the package's entry point also exports `AIEngine`, which imports Node's `crypto` at module scope for an embedding-cache key, and Explorer's bundler cannot resolve that. So the Angular host takes the _type_ from this package (`import type`, erased at compile time) and the _policy_ from `@memberjunction/ai-core-plus`, holding its own `GraphQLAttachmentBlobStore` rather than reaching through `GetAttachmentService()`. Removing that one `crypto` import — or splitting the package's entry points — is the remaining step, and it belongs to `aiengine`'s owners.
+
+- d665a6e: feat(ai): Gemini Live direct tools support, prompt framing alignment, and change-driven remote browser screencast deduplication
+  - Declared `SupportsDynamicToolSet = true` on `GeminiRealtime` and its session capabilities so target agent direct action tools are projected into Gemini Live sessions.
+  - Fixed `hasDirectTools` calculation in `RealtimeClientSessionService` to consider `input.ExtraTools` (whiteboard, browser, media, context tools), ensuring interactive surface tools prevent the negative "do not attempt to do the work yourself" prompt guidance.
+  - Implemented change-driven screencast frame deduplication in `RemoteBrowserChannel` with a 15-second heartbeat, preserving ~15k tokens/min on static pages while maintaining instant visual push on user interactions.
+  - Reworded `ResolveGeminiThinkingLevel` fallback warning and added `CompileBrowserDelegationPolicy` doc clarification per PR review feedback.
+  - Added Node < 23 `CloseEvent` compatibility polyfills in `ai-realtime-client` test suites.
+
+- 575bfae: fix(ai-realtime): OpenAI Live planning model fallback, tool barrier synchronization, and remote video bridge
+  - **OpenAI Live Default Planning Model**: Exported `DEFAULT_OPENAI_LIVE_PLANNING_MODEL = 'gpt-5.6-terra'` and warned with `console.warn` whenever `Reasoning.Remote.Ref` is undefined instead of falling back to legacy `gpt-4o`.
+  - **Delegation Policy & Tool Framing**: Added `CompileBrowserDelegationPolicy` which omits the spoken holding phrase clause for browser-direct sessions. Guarded against appending delegation policy instructions when the session prompt already contains tool framing or interactive-surface execution rules.
+  - **SendText Barrier Guard**: Prevented premature `response.create` emissions during `SendText` when background tool batches are in-flight (`!this.toolBatchBarrier.IsEmpty`). The creation is safely deferred until the tool batch completes via `SendToolResult`.
+  - **Dedupe & Tool Barrier Lifetimes**: Maintained tool deduplication (`emittedToolCallIds`) throughout the lifetime of active tool batches, preventing duplicate execution from redelivered events when `response.completed` arrives before tool outputs. Cleared deduplication state upon batch completion and barrier timeout flushes.
+  - **Remote Browser Video Bridge**: Wired `ChannelInboundVideoBridge` with client-getter support and hooked `OnSessionStarted` into active channels after WebRTC track negotiation so screencast frames stream reliably to the live model.
+  - **Full-Duplex Barge-in Unblock**: Removed premature state gate in `GeminiRealtimeClient.sendMicChunk` so mic streaming and barge-in remain uninterrupted while the model is speaking or in extended thinking.
+  - **Track Descriptors**: Added `Required?: boolean` to `RealtimeTrackDescriptor` so optional and channel-sourced media tracks are cleanly negotiated without breaking the session.
+
+- 3977917: Extract the realtime co-agent session runtime out of Angular into `@memberjunction/realtime-runtime`, and register the GPT-Live client driver so it survives bundling.
+
+  **Why.** `RealtimeSessionService` was 2,768 lines of client-direct realtime orchestration — mint, driver resolution, transcripts, tool relay, delegation narration, channel lifecycle, usage relay, teardown — living inside `@memberjunction/ng-conversations`. Its own header noted it stays component-free so it "must stay importable in plain-node tests", and the measurement bore that out: its entire Angular surface was `import { Injectable }` plus the decorator, and its entire DOM surface was one `navigator.mediaDevices.getUserMedia` call. But because it shipped in an Angular package, no other host could drive a realtime session without reimplementing it — and a second copy drifts from the first at the next protocol change, which GPT-Live just demonstrated is a frequent event.
+
+  This follows the precedent set by `@memberjunction/conversations-runtime`, whose extraction plan explicitly noted realtime was landing in parallel and would need the same treatment.
+
+  **What moved** into the new pure-TypeScript package: the session runtime (now `RealtimeSessionRuntime`), the channel plugin base class, the delegation-result parser, and the narration template builder.
+
+  **The host seam.** `IRealtimeMediaHost` supplies the two genuinely platform-specific pieces: microphone acquisition (the Real-Time Co-Agents guide already specifies "the host acquires the mic — it owns the permission UX"; that seam simply had never been cut) and optional audio recording. Recording now returns base64 across the seam, so the runtime no longer touches `Blob` or `FileReader` — a browser reaches for `FileReader`, React Native reads a file, a test harness holds bytes in memory, and the orchestration layer should never have been asking.
+
+  **`BaseRealtimeChannelClient`'s only Angular tie** was a type-only `Type<T>` import, used in one method the runtime never calls. It is now an opaque component-class reference that Angular's `Type<T>` satisfies unchanged, with the narrowing done at the single Angular call site that instantiates a component. This is what makes interactive channels authorable from a non-Angular host at all.
+
+  **Bug fixed alongside:** `LoadOpenAILiveClient()` was exported but never called, while every sibling driver's Load function was. Since client drivers resolve dynamically through the ClassFactory, GPT-Live's driver could be tree-shaken out of a production bundle and fail to resolve at runtime while working in dev — the exact failure mode the Load-function convention exists to prevent.
+
+  **No behaviour change for Explorer.** `RealtimeSessionService` keeps its name, injectable token and methods; it is now a thin subclass supplying the browser media host, and Explorer is untouched. `@memberjunction/ng-conversations` does, however, stop _exporting_ the types that moved — `public-api.ts` no longer re-exports `base-realtime-channel-client`, `delegation-result-parser` or `FormatToolName` — so a downstream consumer importing them from there must re-point at `@memberjunction/realtime-runtime`. No in-repo consumer does. The bump stays `patch` because MJ ties changeset level to database impact rather than semver breakage (see `.claude/rules/changesets.md`); the required import change is called out here instead. Verified by the package's existing suites: 108 test files / 1,324 tests green, including all 13 realtime-session suites.
+
+  Types that moved (`RealtimeCaption`, `RealtimeConnectionState`, `RealtimeSessionRunOptions`, `BaseRealtimeChannelClient`, `ParseDelegationResultJson`, …) must now be imported from `@memberjunction/realtime-runtime`, since MJ does not re-export across package boundaries.
+
+- d61b425: Voice and text now share a conversation properly, in both directions and on both surfaces.
+
+  **Context flows into a voice session.** `ConversationMessages` was a hardcoded `[]` with an MVP
+  note, so a call started mid-thread opened knowing nothing about what had been typed — the symptom
+  being the agent asking the user to repeat something they had just written. The consumer had been
+  written all along; only the plumbing was missing. The conversation's turns are now hydrated at
+  session mint under the same caps the session-resume path uses (newest 30 turns, 8,000 characters,
+  oldest dropped first). Because voice turns are themselves conversation rows, a resumed session
+  would otherwise receive its previous leg twice, so the prior-transcript loader returns its leg ids
+  and those legs are excluded; earlier calls that are not being resumed stay in.
+
+  **Voice sessions collapse in the mobile thread.** The realtime-session timeline grouping and the
+  card's presentation logic move from `ng-conversations` to `@memberjunction/conversations-runtime`
+  (`BuildConversationTimeline`, `SessionCardTitle`, `SessionCardStatusChip`,
+  `SessionCardIsSameDayRange`, `CollectRealtimeSessionIDs`, `MapRealtimeSessionMeta`,
+  `FindRealtimeSessionMeta`, `IsVisibleRealtimeTurn`). The module was always pure TypeScript — and
+  its own header already said rendering session-stamped rows as chat bubbles was wrong — but living
+  behind an Angular import meant the React Native thread did exactly that. Both surfaces now run the
+  same pass. `ng-conversations` re-exports from `lib/utils/realtime-session-timeline`, so its call
+  sites are unchanged, and the Angular card delegates to the promoted functions instead of keeping
+  its own copies.
+
+  Mobile renders the collapsed card natively, expandable in place to the turns it counted, with a new
+  `realtimeSessionCard` slot so a host can replace it.
+
+- fc3da91: fix(realtime): confirm whiteboard agent edits only when the tool succeeded, and source inbound-video capability from per-model profile data
+
+  Review follow-ups to #4512.
+  - **A failed whiteboard tool no longer reports success to the model.** `ApplyAgentTool` pushed a confirmation frame and a "visual confirmation of your action — do NOT narrate or announce your own change" note unconditionally, including when the tool returned `{ success: false, error }` (invalid JSON arguments, unknown tool, per-tool validation). The model received its failure result alongside an assertion that the edit had landed, plus an instruction not to mention it — so a failed edit disappeared from the user's view. It also pushed a frame identical to the previous one, since a failed tool mutates nothing.
+  - **Inbound-video capability and its frame-rate ceiling are now per-model data.** `GeminiLiveModelProfile` gains `MaxInboundVideoRate`, the mint carries both it and `SupportsInboundVideo` in the session config, and the browser driver reads them instead of inferring capability from the model id with `startsWith('gemini-3.8-live')`. That sniff and the profile table were two answers to one question, agreeing only because the model names happened to line up; a model that broke the naming pattern would have diverged silently. A future model that accepts a faster feed now declares it in the profile and every consumer follows.
+  - **The whiteboard channel is change-driven with no liveness heartbeat.** Its `WHITEBOARD_HEARTBEAT_MS` constant could never fire — the elapsed check lived inside the mutation path, which an idle board never enters — so it read as a liveness guarantee while providing none.
+  - `RealtimeTrack.Descriptor`'s doc now states that negotiation refinement covers `Rate` only, so no one reads `Encoding` or `UsageBasis` off a live track expecting the model's answer.
+
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [b518dfa]
+- Updated dependencies [37891d3]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [d665a6e]
+- Updated dependencies [5df9486]
+- Updated dependencies [e225ece]
+- Updated dependencies [c157749]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [7658d68]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [575bfae]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [3977917]
+- Updated dependencies [d61b425]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8d1a373]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [e962151]
+- Updated dependencies [af57e8d]
+- Updated dependencies [2c590b0]
+- Updated dependencies [fc3da91]
+  - @memberjunction/ai@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/ai-core-plus@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/ai-realtime-client@6.2.0-edge.0
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.0
+  - @memberjunction/ng-shared-generic@6.2.0-edge.0
+  - @memberjunction/conversations-runtime@6.2.0-edge.0
+  - @memberjunction/realtime-runtime@6.2.0-edge.0
+  - @memberjunction/ai-engine-base@6.2.0-edge.0
+  - @memberjunction/ng-user-routines@6.2.0-edge.0
+  - @memberjunction/ng-testing@6.2.0-edge.0
+  - @memberjunction/ng-artifacts@6.2.0-edge.0
+  - @memberjunction/ng-base-types@6.2.0-edge.0
+  - @memberjunction/ng-code-editor@6.2.0-edge.0
+  - @memberjunction/ng-notifications@6.2.0-edge.0
+  - @memberjunction/ng-resource-permissions@6.2.0-edge.0
+  - @memberjunction/ng-task-graph-editor@6.2.0-edge.0
+  - @memberjunction/ng-tasks@6.2.0-edge.0
+  - @memberjunction/ng-forms@6.2.0-edge.0
+  - @memberjunction/ai-agent-client@6.2.0-edge.0
+  - @memberjunction/ng-composer@6.2.0-edge.0
+  - @memberjunction/ng-container-directives@6.2.0-edge.0
+  - @memberjunction/ng-media-player@6.2.0-edge.0
+  - @memberjunction/interactive-component-types@6.2.0-edge.0
+  - @memberjunction/ng-whiteboard@6.2.0-edge.0
+  - @memberjunction/ng-agent-client@6.2.0-edge.0
+  - @memberjunction/ng-markdown@6.2.0-edge.0
+  - @memberjunction/ng-ui-components@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
+## 6.1.0
+
+### Minor Changes
+
+- 22ec804: Clickable record-link tokens in Chat messages (`type: "record"`). Agents emit `@{…}` JSON; the renderer turns it into a pill that opens the row via OpenEntityRecord, including composite primary keys. `name` is optional — omit it for an icon-only pill when surrounding prose already names the record. Loop prompt teaches the grammar and asks for world-class UX: prefer icon-only, one citation per record per section.
+- 2792d97: Add a Skills button to the composer, beside Plan Mode.
+
+  `/` skill commands already worked, but were reachable only by knowing to type `/`. Nothing on
+  screen said the feature existed, so a user who had never been told about it had no way to find it.
+  The button is the visible door to the same trigger.
+
+  Clicking it calls the new `MentionEditorComponent.OpenTrigger('/')`, which opens the dropdown
+  WITHOUT writing anything into the editor. The trigger character only ever exists as the chip the
+  user picks, so dismissing leaves the message exactly as they left it. With no character to anchor
+  on, the editor captures a baseline length when a trigger opens this way, and three paths consult
+  it: typing filters against the baseline rather than searching for the character, chip insertion
+  removes only what was typed, and dismissal has nothing to undo.
+
+  It also toggles: a second click closes, because a disclosure control has to be able to close what
+  it opened. Without that the second click re-ran the open path, re-emitting the event pair and
+  re-capturing the baseline at the new caret.
+
+  Built as a sibling of the existing strip controls, with the same `attach-button-icon` chrome and
+  the same active treatment as Plan Mode. The ARIA deliberately differs: Plan Mode is a toggle button
+  (a mode that stays on) so `aria-pressed` is correct there, while this opens a popup and therefore
+  uses `aria-expanded` + `aria-haspopup`. Announcing "pressed" for revealing a list is the wrong
+  thing for a screen reader to say. It joins the strip's
+  visibility gate so a composer offering skills but no attachments, voice or plan mode still renders
+  the strip.
+
+  **Before/After pair, per `guides/UI_LAYERING_GUIDE.md` section 6.** Opening skills is an action a
+  host might veto, so it ships as `BeforeSkillsOpened` (carrying `BeforeSkillsOpenedEventArgs` with
+  `Cancel` / `CancelReason`) and `AfterSkillsOpened`. `After` is not emitted on the canceled path, and
+  not emitted when no active provider owns the trigger, so a host counting it counts dropdowns the
+  user saw rather than clicks. `Before` handlers must be synchronous: EventEmitter's synchronous
+  dispatch is how `Cancel` travels back.
+
+  The base, `CancellableComposerEventArgs`, is per-domain rather than shared. That matches the same
+  guide's naming table, which specifies `Cancellable<Domain>EventArgs` for exactly this class, and the
+  sixteen packages already following it. It is also the only option here on dependency grounds:
+  `ng-composer` is the generic layer and cannot import from `ng-conversations`.
+
+  **The expanded state is derived, not an input.** Plan Mode's active state is a persisted user
+  preference the host owns and threads down. "Is the skill dropdown open" is intrinsic to the
+  composer, so it reads `MentionEditorComponent.IsTriggerOpen('/')` instead. An `@Input` there would
+  be an API no host could answer, and would leave the button permanently collapsed if nobody bound it.
+
+  No new host-level cap: the button is gated on the existing `EnableSkillCommands` /
+  `enableSkillCommands` / `allowSkillCommands` chain, which already defaults true at every layer. The
+  button and the keystroke are two doors to one feature, so one flag governs both rather than letting
+  a composer advertise skills it will not serve.
+
+  **Two pre-existing dropdown bugs fixed along the way**, both of which affect every trigger
+  (`@`, `#`, `/`) rather than only the new button:
+  - **Click-away never dismissed.** Dismissal relied entirely on the editor's blur, and clicking a
+    non-focusable area does not blur a contenteditable, so the dropdown stayed open with nothing able
+    to close it. A `document:mousedown` listener now closes it, chosen over `click` because mousedown
+    fires before focus moves and therefore cannot race blur's 200ms timer. Clicks inside the
+    component are exempt, so a suggestion row still selects. The Skills button sits OUTSIDE the
+    editor's host, so it needs the same exemption: without it the button's mousedown read as an
+    outside press and closed the dropdown, then the click saw it already closed and reopened it, so
+    the toggle never appeared to work. That seam is covered by a DOM test that fires real bubbling
+    mousedown/click rather than calling the handler, which is what hid the bug.
+  - **The dropdown could land off screen.** Positioning measures the caret, and a collapsed range in
+    an empty editor measures 0x0 at 0,0 in every browser, pinning the menu to the bottom-left corner
+    of the viewport. It now falls back to the editor's own box. The menu also prefers to open ABOVE
+    the composer: the composer sits at the bottom of the chat, so a downward menu covers the text
+    being typed.
+  - **A button-opened menu anchors to the button, not the caret.** On the typed path the user's eyes
+    and query are both at the caret, so the caret is the right anchor. On the button path nobody is
+    looking at the caret. The anchored menu aligns left and grows rightward, flipping to right-aligned
+    only when that would overflow the viewport — and the flip aligns to the COMPOSER's right edge
+    rather than the button's, because the strip is pinned bottom-right and Skills is the leftmost of
+    five icons, so pinning to that one icon hangs the menu's whole width out to its left. Coordinates
+    are viewport-relative throughout, since the dropdown renders with `useFixedPositioning`.
+
+  `OpenTrigger` and `IsTriggerOpen` are public and generic. Any trigger character with an active
+  provider can now be opened from a control, and any control can reflect whether its trigger is open.
+
+  **BREAKING (renames), and the reason this is `minor` rather than `patch`.** `MessageInputBoxComponent`
+  was violating MJ's convention that public class members are `PascalCase`, so every public input,
+  output, getter and method on it is renamed: `placeholder` to `Placeholder`, `disabled` to `Disabled`,
+  `value` to `Value`, `valueChange` to `ValueChange`, `textSubmitted` to `TextSubmitted`,
+  `planModeToggle` to `PlanModeToggle`, `canSend` to `CanSend`, `onSendClick` to `OnSendClick`, and so
+  on for all of them. `TriggerProviders`, `ExcludedTriggerKeys` and `Provider` were already correct.
+
+  Native DOM bindings and framework members are deliberately untouched: `[disabled]` on a `<button>`
+  is a DOM property, `ngOnInit` / `writeValue` / `registerOnChange` are framework contracts, and
+  `mj-mention-editor`'s own inputs keep their current casing because that component is not renamed
+  here.
+
+  `mj-ai-composer` is updated to the new names. Any other consumer binding these inputs or listening
+  to these outputs must rename accordingly.
+
+- 9fc0e2d: Carry an authored realtime voice to any provider, not just OpenAI — both override builders filed the voice under a hardcoded `openai` provider key, so a session resolving to ElevenLabs, Gemini, Inworld, AssemblyAI or HuggingFace silently got nothing: the setting stayed visible in the effective config and never reached a driver. On the default-model path the framework picks the vendor itself and never disclosed which, making a provider-keyed voice unauthorable rather than merely wrong. Adds the provider-agnostic `realtime.voice.default.voice` slot, filed onto whichever driver resolves — every realtime driver already reads the same neutral `voice` bag key by design (ElevenLabs maps it to `tts.voice_id` on the wire), so no per-driver accessor is needed. Precedence is per-key: the agnostic value wins `voice` while a matching `providers.<key>` bag still contributes its other settings, so a runtime pick beats a vendor-pinned value in agent metadata. With no agnostic voice authored, behavior is unchanged. Also ends the silence around it — the mint log now carries the resolved driver and the voice that reached it, both realtime surfaces log when authored provider bags matched nothing, and the resolved `DriverClass` is surfaced to the browser on `StartRealtimeClientSessionResult` — and consolidates three byte-identical copies of the vendor-selection walk into one `SelectRealtimeVendorForModel`.
+
+  Minor rather than patch because the change is additive to the public API: `SelectRealtimeVendorForModel`, `RealtimeVendorSelection`, `MatchProviderVoiceSettings` and `WarnOnUnmatchedProviderVoice` are newly exported from `@memberjunction/ai-agents`, and `RealtimeClientSessionPrepResult` / `StartRealtimeClientSessionResult` gain `DriverClass`.
+
+  Three compatibility notes, in rough order of how likely they are to bite:
+  1. **Deploy the client and server together.** A new `@memberjunction/ng-conversations` against an older MJAPI silently drops a picked voice for **every** provider including OpenAI, because the older server's `normalizeVoice` does not carry `default.voice` through the cascade — a regression of currently-working behavior, so a same-version bump is not enough if the two deploy independently. The reverse (old client, new server) is safe: the `providers.openai` shape is still honored.
+  2. **The agent-type `ConfigSchema` reaches a database only via `mj sync push`.** The schema gains the agnostic slot and marks `providers.*.voiceId` deprecated (no driver has ever read it). Until that push runs, authoring `realtime.voice.default.voice` in an agent's `TypeConfiguration` **fails the save** — the old schema validates `voice.default` with `additionalProperties: false`. Runtime overrides are unaffected; they bypass that validator.
+  3. **Bridge hosts that supply a voice without pinning a model now forward that id to whatever vendor wins the priority walk.** `BridgeRealtimeSessionContext.RealtimeVoice` is host-supplied (LiveKit/Twilio/Teams) and independent of the model pin, so a previously inert misconfiguration becomes reachable: an OpenAI voice name like `echo` reaching ElevenLabs is sent as `tts.voice_id`, and an invalid voice id there fails the session rather than degrading. An agnostic voice is only as portable as the id itself — pin the model alongside the voice, or author per-vendor ids under `providers.<key>`.
+
+  One gap found here was closed separately in the same release: **Gemini** consumed the neutral `voice` key no further than its config object — `buildConnectConfig` assigned the bag onto a `LiveConnectConfig` with no `voice` property, so the value was dropped before the wire. `@memberjunction/ai-gemini` now maps it to `speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName` on both topologies (#3721). Separately, only `OpenAIRealtime`, `xAIRealtime` and `HuggingFaceRealtime` declare `SupportedVoices` (HuggingFace returns none) and the native picker's dropdown is gated on that list, so for the vendors this unblocks the voice is reachable through agent metadata and programmatic hosts rather than the picker.
+
+- 71ccf29: Realtime: mint and run become separable.
+
+  `RealtimeSessionService.StartRealtimeSession` fused two responsibilities — **minting** the session through the `StartRealtimeClientSession` mutation, and **running** it: resolving the driver from the result's `Provider`, booting it with the ephemeral token, wiring tool and transcript relays, connection state and teardown. A host that must mint the session itself, because it attaches server-side context the stock mutation cannot carry, had no way to reuse the second half. The public API was all-or-nothing.
+
+  The only way through was to subclass `GraphQLDataProvider`, install it on the service's public `Provider` seam, intercept the single armed mint operation, redirect it to the host's own mutation and reshape the reply into the ten fields the client consumes. That works, but it depends on an implementation detail nobody promised — that _every_ GraphQL call the service makes goes through `Provider` — so a refactor entirely reasonable on MJ's own terms would break such a host silently.
+
+  `StartRealtimeSessionFromResult(result, options)` exposes the run half directly, with `StartRealtimeClientSessionResult` and `RealtimeSessionRunOptions` now exported. `StartRealtimeSession` becomes `mintSession` + the new method, so **existing callers see no behavioural change**.
+
+- e1ebab9: Remote Browser: the agent is told when the page moves, whoever moved it (#3496)
+
+  A user takes over the browser and navigates. Asked "what do I have open right now?", the agent
+  confidently describes the **previous** page and corrects only when told to look again.
+
+  `RemoteBrowserChannel` pushed its `[browser] current page:` note from exactly two call sites, both
+  immediately after a server action the model itself initiated. Nothing observed a page change from any
+  other origin: human-relayed input drove the page without producing a note, and pushed screencast
+  frames carried only image bytes. The effective rule was **a surface change the agent did not cause is
+  invisible to it** — not stale caching, it was never told. Human takeover is on by default for
+  `Collaborative` providers, so the default configuration was the broken one, and the failure mode was
+  confident misdescription rather than a visible error.
+
+  Every observation now funnels through one `notePageChange(url, cause)`, so "the agent hears about the
+  page whenever it MOVES" is a property of that method rather than of where callers happen to sit. It
+  is fed from three places: the agent's own actions and goals (as before), the perception poll (which
+  already carried the URL — only the surface read it), and pushed screencast frames, which now carry
+  `currentUrl` because under streaming the poll is stopped and frames were the only thing seeing the
+  page.
+
+  `cause` is the part the agent could never work out for itself. A change it made reads as before; a
+  change it did not reads _"the page changed to X — you did not navigate here, so someone else is
+  driving"_, which is the difference between knowing the page moved and knowing it is no longer the one
+  moving it. The first page of a session is announced plainly: a session opening somewhere is nobody's
+  takeover. Unchanged URLs are silent, which is a requirement rather than an optimisation — the poll
+  runs every ~700ms.
+
+  `currentUrl` on the frame envelope is optional on the client, so an older MJAPI behaves exactly as it
+  did rather than reading a missing field as "the page has no URL". `GetCurrentUrl()` is a synchronous
+  last-known read, so it costs nothing per frame.
+
+  `cause` alone cannot settle attribution, because a pushed frame or a perception poll only says the
+  page moved — never who moved it. Two cases make that decisive rather than pedantic: under streaming,
+  frames of the new page are pushed while the action's mutation is still in flight, so the observation
+  reliably lands BEFORE the URL is returned; and `browser_AchieveGoal` drives an autonomous loop
+  server-side for minutes with nothing returned until it ends. Both would have reported the agent's own
+  navigation back to it as somebody else's takeover — the original lie, inverted. So an agent-initiated
+  operation raises a depth counter for its whole span (a counter, not a flag: goals and actions overlap,
+  and `finally` closes the window on a thrown transport error too), and a change observed inside that
+  window is the agent's own whichever feed spotted it first.
+
+- 394d276: Phase 1 of the unified workflow DAG engine program (plan: PR #3456) — makes the task substrate tell the truth about what actually happened.
+
+  **Payloads become columns.** `Task` gains `InputPayload`, `OutputPayload`, `ErrorMessage`, and `AgentRunID`. Inputs and outputs previously rode inside `Task.Description` behind `__TASK_METADATA__` / `__TASK_OUTPUT__` markers, which leaked orchestration plumbing into search results and the task detail panel. A one-time migration backfill converts existing marker rows into the new columns and strips the markers; there is deliberately **no fallback parse** in code, because a fallback with no backfill never dies. The backfill is conservative — a row whose marker text doesn't parse as JSON is left byte-for-byte intact for inspection rather than silently discarded.
+
+  **Failures propagate instead of stalling.** A `Failed` dependency used to leave its dependents `Pending` forever: they never became eligible, so the graph appeared to finish while work silently never ran — and the parent was marked `Complete` at 100% regardless. Now failure propagates transitively to `Blocked`, and the parent rolls its children up honestly (`Failed` > `Blocked` > `Cancelled` > `Complete`, with progress counting only completed children). Completion notifications fire only for genuinely successful graphs.
+
+  **Bad graphs are rejected before they are persisted.** Dependency cycles are detected at creation (a cyclic graph could previously be saved and then deadlock silently), and a graph naming an unknown agent is now an error rather than being logged-and-skipped — which used to execute the graph with holes where the caller's tasks should have been.
+
+  **Waves run in parallel.** Eligible tasks execute with bounded concurrency (5) rather than one at a time, and each pass loads the graph once instead of issuing a dependency query per candidate task. Stalled graphs — pending work, nothing runnable, nothing in flight — are now detected and logged rather than exiting quietly.
+
+  **The Gantt links the right run.** `Task.AgentRunID` records the specific run that executed each task. The UI previously joined tasks to runs through the shared `ConversationDetailID`, so every sibling task in a graph resolved to the _same_ agent run; the link was wrong for all but one. `Blocked` and `Failed` also now render distinctly instead of inheriting the pending treatment.
+
+  **New pure graph algorithms** in `@memberjunction/ai-core-plus` (`computeEligibleTasks`, `computeTasksToBlock`, `computeParentRollup`, `detectCycle`, `isGraphStalled`, `findUnknownDependencyRefs`) — dependency-free, operating on plain shapes rather than entities, with 44 unit tests. Phase 2's durable dispatcher consumes these unchanged rather than reimplementing eligibility and propagation.
+
+  **Also:** dispatcher claim columns (`ClaimedBy`, `ClaimExpiresAt`) and their supporting indexes land now so Phase 2 adds the dispatcher without further schema churn — nothing reads them yet. `AIAgentRunStep.StepType` gains `TaskGraph`. New deterministic integration bundle `task-graph-orchestration` (TG1–TG4) covering cycle rejection, unknown-agent rejection, payload columns, and the new schema's presence in generated metadata.
+
+- 394d276: Phase 2 of the unified workflow DAG engine program (plan: PR #3456) — task-graph execution moves server-side and becomes invocation-agnostic.
+
+  **New package `@memberjunction/task-graph`.** Deliberately not AI-prefixed (D11): an LLM, deterministic code, or a human UI can all construct and submit a DAG. It contains `TaskGraphSpec` (the one fully-qualified contract every producer authors against, D16), a pure validator, `TaskGraphService` (submission), `TaskClaimStore` (the CAS claim protocol), and `TaskGraphDispatcher` (durable execution). Graph _semantics_ stay in the Phase 1 pure algorithms in `ai-core-plus` — eligibility, failure propagation, parent rollup and stall detection are consumed unchanged, so the in-run and durable executors cannot drift apart.
+
+  **Submission is split from execution (D2).** `TaskGraphService.Submit` validates, resolves agents, persists parent + children + edges, and returns. Nothing waits for the work. That is what makes every channel equal (D1).
+
+  **BREAKING: `ExecuteTaskGraph` is removed (D12).** It awaited an entire multi-step workflow inside one long-lived GraphQL request, so a page reload lost the awaited promise, a server restart orphaned every in-flight task, and no channel but Explorer could reach the substrate. Replaced by `SubmitTaskGraph`, `CancelTaskGraph`, and `RetryTask`. Accepted deliberately in the open v6 window; its sole known caller — the Explorer conversation client — becomes an observer in this same change.
+
+  **The durable dispatcher.** A compare-and-swap claim protocol over `ClaimedBy`/`ClaimExpiresAt` (the columns Phase 1 landed): claiming is a single guarded `UPDATE ... WHERE Status='Pending'` whose rowcount decides the winner, so two instances never run the same task without a distributed lock manager. Long tasks heartbeat to extend their claim; startup and periodic reconciliation return expired claims to `Pending`, which is what turns a crash from "work stranded forever" into "work resumes". Per D20 _every_ state transition is guarded on `ClaimedBy=@me`, not just the initial claim, because `MJ: Tasks` stays user-writable — a stale executor's completion write fails cleanly instead of double-completing. Human tasks are exempt from reclamation: a task parked on a person legitimately has no claim, and reclaiming it would reset an approval out from under the user.
+
+  **Server-side detection at three seams.** Task graphs emitted in an agent's payload are now detected and submitted from the MJServer run path, `BaseMessagingAdapter` (ahead of the existing text-regex delegation, since a structured graph is unambiguous), and the Scheduling drivers. Previously only the Explorer client looked, so **Slack/Teams and scheduled routines silently dropped every graph an agent emitted** — the plan's core verified gap. The detection shim is explicitly temporary and dies in Phase 3 when `Tasks` becomes a typed `nextStep`.
+
+  **Provider isolation.** The dispatcher mints a fresh provider per task via an injected `ProviderFactory`, so parallel tasks never share a transaction scope. MJServer supplies the implementation, keeping the dependency MJServer → task-graph and never the reverse.
+
+  **Also:** 18 new unit tests for the validator; integration bundle grows with the three seam checks deferred from Phase 1 (cycle rejection, unknown-agent rejection, payload columns), now targeting `TaskGraphService`'s public API.
+
+- 394d276: Follow-up to Phase 2 of the unified workflow DAG program (plan: PR #3456) — the task-graph control plane becomes **Remote Operations**, and the durable dispatcher actually starts.
+
+  **BREAKING: the `SubmitTaskGraph`, `CancelTaskGraph`, and `RetryTask` GraphQL mutations are removed**, one release after they were added. They shipped in Phase 2 as bespoke resolvers, which fixed the _durability_ problem — nothing awaits a whole workflow inside one request anymore — but left the _reachability_ problem exactly where it was: callable from the Explorer client and nothing else. That undercuts the program's own goal of letting agents **set up** workflows rather than only navigate to them.
+
+  Remote Operations are MJ's typed control plane, and the closest analogous substrate already uses them for precisely this shape of verb: Record Set Processing exposes `Run` / `Pause` / `Resume` / `Cancel` / `Get Run Status` entirely as Remote Operations. One registration is reachable from MCP (external agents), from an Action wrapper (internal agents), and from the UI, with the framework's authorization scopes applied uniformly rather than re-implemented per resolver.
+
+  The replacements are `TaskGraph.Submit`, `TaskGraph.Cancel`, `TaskGraph.RetryTask`, and `TaskGraph.GetStatus`. `GetStatus` is new — it has no mutation predecessor. It is the observation half of making execution durable: once nobody holds a request open, a caller re-attaching after a reload, an agent checking work it submitted, or an external MCP caller all need a way to ask "where is it?". Its rollup runs the same pure algorithm the dispatcher runs, so the reported status cannot disagree with the engine's own view.
+
+  There is deliberately no `TaskGraph.Pause`. The dispatcher has no pause concept — pausing a claimed task means deciding what happens to its claim, and inventing that here to round out a verb set would be guessing ahead of Phase 4.
+
+  **The durable dispatcher now starts.** Phase 2 landed `TaskGraphDispatcher` but nothing ever instantiated it, so a submitted graph persisted correctly and then sat in `Pending` forever — durable and inert, which is strictly worse than the client-driven path it replaced. MJServer now starts one instance per process after `listen()`, alongside the other boot-time reconcilers, keyed by hostname + pid so reconciliation can tell its own orphaned work from a peer's live work. It is gated on SQL Server because the provider factory mints a `SQLServerDataProvider`; the PostgreSQL branch lands with PG parity.
+
+  **The dispatcher self-registers with `ShutdownRegistry`** rather than making each host remember to stop it. A dispatcher still polling through a graceful shutdown would claim work the process is about to abandon — creating exactly the orphaned-claim state reconciliation exists to clean up.
+
+  The Angular conversation client now calls `TaskGraph.Submit` through the generic `ExecuteRemoteOperation` transport, so the hand-written GraphQL document is gone from the client as well.
+
+- 394d276: Phase 5 continued — the two **Save as Workflow** surfaces deferred out of Phase 4 (D17). Phase 4 shipped the converter; these are where a person actually reaches it.
+
+  **Agent Run admin — a Workflow tab on the `TaskGraph` run step.** Phase 3 writes that step for _every_ emitted graph, dispatched or constant-folded, which is what makes a folded single-node graph just as promotable as a dispatched one — the point of recording the fold rather than letting it vanish. The tab opens by default on a `TaskGraph` step, because that step's whole content _is_ the graph and opening on the JSON would bury the one thing it exists to show. A folded graph says so, so the reader sees _why_ it never reached the dispatcher instead of inferring it.
+
+  **ng-conversations — a plan card.** The moment this serves: an agent breaks a request into steps, the work runs, it was good, and today that is where it ends — the decomposition was ephemeral, so the next person who wants the same thing asks an agent to invent it again. Save is offered only once the work has **settled**; offering it mid-run invites saving a shape that may yet change under a retry or a failure routing down a recovery branch. The card starts collapsed, because it sits inline in a thread and must not dominate it.
+
+  **Both render through the same `TaskGraphSpec` component the editor uses**, in `ReadOnly` mode. A second, simpler renderer for chat would be a second thing that can disagree with the canvas about what a graph means — which is the exact class of divergence this whole program has been removing.
+
+  **Save is intent only** on both surfaces. Neither persists agents; the host converts and writes through `AgentSpecSync`, keeping the one place that writes an agent the one place that writes an agent.
+
+- 768980d: **A Workflows app, and the Create Workflow front door inside it.**
+
+  Phase 5 shipped every component this composes — the canvas, the properties panel, the runtime-overlay
+  source, both Save-as-Workflow surfaces — but not the front door, because the design was not locked.
+  It is now: `mockups/workflow-ux/front-door-v1.html` carries five ratified answers, and this builds
+  all three of its screens against them.
+
+  **Its own Explorer app, not a tab in AI.** D18 puts _Workflow_ in front of end users while _Flow
+  Agent_ survives in metadata and dev docs — filing the surface under "AI" would contradict that at the
+  navigation level, and D19 exists precisely because the editor is today buried inside a saved agent
+  record. Scheduling and Routines set the precedent for an AI-adjacent domain getting its own app.
+
+  **Three doors**, in the locked order, with "Describe it" pre-selected — the only one that needs no
+  prior knowledge of the product. Each states _when to pick it_, not just what it does, because that is
+  the actual question someone has on this screen. Only settled runs are promotable: an in-flight run
+  may still change shape under a retry or a recovery branch, so the saved workflow would not be the one
+  that ran. That is enforced three ways — the handler guards, the row leaves the tab order, and
+  `aria-disabled` is set — because dimming alone leaves a row clickable and keyboard-reachable.
+
+  **Save as Workflow now names it inline and offers the editor** (answer ④). The card previously
+  emitted a save with no name and no way to continue editing, leaving the host to invent both. The name
+  seeds from the plan's own — making someone invent another is the difference between saving and not
+  bothering — but once touched it keeps what was typed, including empty. "Open in editor" is secondary
+  on purpose: making the editor mandatory turns a two-second capture into a task.
+
+  **Nothing anywhere asks for a trigger or a schedule.** Saving is capture, not scheduling; a workflow
+  runs on demand until someone gives it a cadence, and the card says so rather than leaving it to be
+  discovered.
+
+  **D18 is enforced by test.** The vocabulary rule is invisible to a compiler and erodes one label at a
+  time, so the templates and user-facing copy are asserted to contain no _graph_ / _DAG_ / _node_ /
+  _Flow Agent_ — with a companion assertion that _step_ IS present, so the rule cannot be satisfied by
+  deleting the concept instead of renaming it.
+
+  The front door emits a draft rather than persisting anything, because the middle tile promises
+  "Nothing is saved until you approve it" in so many words, and approval happens on the canvas.
+
+### Patch Changes
+
+- 634aa8c: Let an agent tell the framework whether its payload is a **new** artifact or a **new version** of an existing one, instead of leaving that to be inferred at the write.
+
+  `ProcessAgentArtifacts` chose its target from continuity signals alone: an explicit `sourceArtifactId`, else the previous artifact on the conversation detail. Both signals say only "this conversation already has an artifact" — neither distinguishes a restyle of the current component from a request for a different one. So an agent that produced an unrelated deliverable mid-conversation had it saved as version N of whatever came before (Skip-Brain #529).
+
+  `BaseAgentNextStep` and `ExecuteAgentResult` now carry an optional `ArtifactDirective`: `create-new`, `version-source` (with an optional `targetArtifactId`), or `suppress`. `planArtifactTarget()` is exported from `@memberjunction/ai-agents` so the resulting precedence is testable without a database.
+
+  Precedence is deliberately narrow — the directive is advice from an agent, not a command, and is consulted only **after** the checks that already existed, so it can never widen what a caller or an agent's configuration refused:
+  1. `createArtifacts === false` → nothing written; a directive cannot re-enable creation.
+  2. `ArtifactCreationMode: 'Never'` → nothing written.
+  3. The directive.
+  4. **No directive → the historical chain, byte-for-byte unchanged.** Every existing agent is unaffected.
+
+  `suppress` covers everything the step would persist as an artifact — the payload, and the artifacts wrapping any generated files or media. The run's media audit rows are still written: suppression governs what the user is shown, not lineage.
+
+  **Every field of a directive is model output, and is treated as such.** A named `targetArtifactId` is honored only if it is a UUID-shaped string naming an artifact that exists AND that the run's user either owns or holds an explicit `CanEdit` grant on — otherwise the run falls back to the caller's `sourceArtifactId`, then to the historical chain. Without the ownership test, an agent could name any artifact id in the instance and have the run's payload appended to it, because `vwArtifacts` has no per-user predicate and a successful load proves only that a row exists. Existence and authorization resolve in one `RunViews` round trip rather than through `BaseEntity.Load`, which throws on a permission denial or a transient fault where this path needs a fallback. A directive's `name` is trimmed and clamped to its 255-character column rather than rejected, so an over-long model-written title costs a truncation instead of the entire artifact. Provenance ('did the agent name this id, or did the caller?') is carried on the plan instead of inferred by comparing values, so an agent echoing the run's own source id no longer routes a caller-supplied id through the model-output guards — nor lets a rejected id reappear through the fallback. A `targetArtifactId` that is not a string is discarded by `planArtifactTarget` itself, at the boundary that introduces it, so the plan's id is always a string by the time the runner vets its shape, existence and authorization; the discarded value is logged.
+
+  A `behavior` this consumer cannot parse discards the **whole** directive, not just its targeting: `name` and `description` go with it, and the artifact falls back to the extracted-name pass exactly as it would with no directive at all. Trusting the free-text half of an object whose one enumerated field is unparseable would mean a directive the log says is being ignored still renaming the artifact.
+
+  Ids reaching a `RunView.ExtraFilter` are now escaped **where the filter is built** rather than at one audited call site, so `GetMaxVersionForArtifact`, `CheckForDuplicateVersion` and `FindPreviousArtifactForMessage` are safe for every caller, including the `sourceArtifactId` that arrives from the GraphQL boundary. `ExtraFilter` has no parameterized form and the upstream clause validator permits `OR`, so this was a real predicate-injection surface.
+
+  An artifact directive governs the payload of the agent that issued it and never crosses the parent/child boundary. A sub-agent's directive is logged and dropped rather than inherited by the parent's terminal step, which carries a merged payload and would otherwise be written onto an artifact the child named. Conversely, the two places that rebuild an agent's OWN terminal step — the client-tools `terminateAfterExecution` branch and `executeChatStep` — now carry the directive instead of dropping it.
+
+  Two supporting changes ride along:
+  - **`PayloadManager` no longer leaves data-free shells in arrays.** When a sub-agent returns a _shorter_ array than the parent holds, every scalar under the vacated index is deleted — and `_.unset` removes leaves while leaving the containers that held them. The result is an element that carries no data but is not key-free, which the previous `Object.keys().length === 0` cleanup could not see. Such elements are now pruned by a sweep **scoped to the indices this merge actually vacated**, so the recursive emptiness test cannot reach elements the merge never touched: a legitimate all-null record elsewhere in the payload, or one whose deletion the upstream-path guardrail refused, survives exactly as before. The global key-less-`{}` cleanup is unchanged. The scoped sweep also closes the hole `_.unset` leaves when a scalar array is shortened, and prunes a fully vacated NESTED array — a latent defect that predates this work and that the recursive test now covers. Before this, a sub-agent legitimately removing one item from a structured array left a nameless residue that downstream consumers read as a real record; for component pipelines that meant a crash at the last step, after the full generation run.
+  - **`ng-conversations` stops guessing which artifact to open.** The chat area snapshots artifact versions before a turn and diffs after, with _created_ beating _bumped_, so a newly created artifact wins the panel over one that merely gained a version — including when the panel is already open on something else, which the previous `!showArtifactPanel` gate suppressed. Because the panel is no longer gated on being closed, the decision is applied only while the conversation it was computed for is still on screen and only while the user has not made a selection of their own in the meantime; a run that finishes during a conversation switch or a scroll-up no longer mistakes artifacts arriving in the map for artifacts the run created. A creation is also chosen by the newest version's timestamp rather than by whichever conversation detail the map happened to iterate last, and artifact ids are grouped as UUIDs wherever they are deduplicated, so the two casings the two database engines return can no longer render one artifact as two cards. Dead `targetArtifactVersionId` plumbing in the message input is left intact on this line, where the Check Sage Intent prompt populates it.
+
+  The artifact viewer no longer loads twice per open or refresh: switching artifact and version together delivered both inputs in one change-detection pass and its two independent `ngOnChanges` branches each ran a full load, the second without a cancellation token. Its refresh guard also compares artifact ids as UUIDs now, so a refresh is no longer dropped when the two sides picked the id up from differently-cased sources.
+
+- b915983: Align the Angular toolchain on the current 21.x patch line: framework packages 21.1.3 → 21.2.22,
+  CLI/builders 21.1.3 → 21.2.23, CDK 21.1.3 → 21.2.14, ng-packagr → 21.2.7, PrimeNG 21.1.1 → 21.1.9.
+
+  This is a patch-level move inside the supported Angular 21 LTS line, not a framework migration.
+  It closes every open Angular security advisory on the repository — fifteen distinct GHSAs
+  (i18n and template-sanitizer XSS bypasses, service-worker header leakage and credential
+  stripping, HttpTransferCache cross-request leakage, and formatDate/number-format DoS), all fixed
+  in 21.2.19 or earlier — which together accounted for 438 of the 749 open Dependabot alerts.
+
+  Every published `@memberjunction/ng-*` package's `@angular/*` peer range moves from `^21.1.3`
+  (or `^21.0.0`) to `^21.2.22`, so consumers must be on at least that patch. The era-6 platform
+  manifest in `release-lines.json` records the new pin; era 5 (the certified 5.51 line) is
+  unchanged.
+
+  Also moves the exact `@angular/*` runtime pins that 23 libraries carried in `dependencies`
+  into caret `peerDependencies` (adding the missing peers on `ng-react`), so a consumer on any
+  in-range Angular 21.2.x build gets a single Angular copy instead of a nested second runtime, and
+  drops the unused `primeng` peer from `ng-base-forms` (nothing in the repo imports PrimeNG).
+
+- b895f92: Angular DOM unit-testing — Phase 4 coverage push. Dev-only (test files + test-config/CI-gate scoping); no runtime change.
+
+  Drives the Generic DOM-coverage ratchet (`scripts/dom-test-report.mjs … --max-none`) from **185 → 137** by writing DOM specs, in usage-ranked order, for every Generic Angular component appropriate for a DOM unit test. Highlights:
+  - **Highest-leverage primitives** — `MjFormFieldComponent` (the field renderer behind ~4,000 usages) across its read/edit type matrix; the `ui-components` design system (`MJEmptyStateComponent`, the `mj-page-*` chrome family, `MJDropdown`/`MJCombobox`/`MJFilterPopover` via a new CDK-overlay test helper in `ng-test-utils`, the `mj-dialog` family, tabs, filter panel, left-nav).
+  - **Form host stack** — `MjRecordFormContainer`, `MjFormToolbar`, `MjEntityFormHost`, `MjIsaRelatedPanel`, `FormPanelSlot`, `ExplorerEntityDataGrid`, `InteractiveForm`.
+  - **Viewers, grids & dialogs** — `EntityDataGrid` + `QueryDataGrid` (AG-Grid chrome), `EntityViewer`, `ArtifactViewerPanel`, the ERD component family (`ERDComposite`/`MJEntityERD`/`ERDDiagram`), plus a broad set of panels/editors/dialogs across agents, artifacts, search, composer, list-management, scheduling, record-process-studio, user-routines, entity-action-ux, actions, and testing.
+  - **`Angular/Bootstrap` onboarded** — the last untracked library tree gains a DOM test tier (`MJAuthShell`, `MJBootstrap`) and its own `--max-none=0` CI gate, so every shipped Angular library tree (Explorer, Generic, Bootstrap) is now gated.
+
+  Reusable patterns established for the harder components: drive internal state before the first render (`setup`) rather than mutating post-render (unreliable under zoneless CD); stub the heavy core (AG-Grid, React bridge, SVG layout, plugin viewers) and spy async loaders so specs exercise the component's own chrome/wiring; add each component **and its injected services** to enumerated `tsconfig.spec.json` files (or AOT drops decorator metadata → NG0202).
+
+  Deliberately **not** covered, and left at the 137 floor: five integration/e2e-tier orchestrators (`ConversationChatArea`, `MessageInput`, `RealtimeWhiteboardBoard`, `AITestHarness`, `RealtimeSessionOverlay`) — 1,800–4,600-line components with realtime/WebRTC/canvas cores or 14–30 dependencies, which belong in the browser regression suite rather than DOM units.
+
+- 1bced7c: Show that a generated artifact is still loading
+
+  A message with a generated image rendered as finished with nothing where the image belonged, then
+  the image appeared unannounced a few seconds later. It read as a failed generation rather than one
+  still in flight. Two windows had no visual state at all:
+  - `applyArtifactsToInstance` awaited each artifact and version row before rendering anything, even
+    though `resolveDistinctArtifacts` had already returned them synchronously from an in-memory map.
+    The artifacts that still need one are now published to the message immediately — name and
+    visibility included, since `LazyArtifactInfo` carries both and only the ENTITY rows are lazy —
+    and each draws a named `mj-loading` placeholder until its card is ready. `isLoaded` decides what
+    counts as pending, so an artifact already in hand is never announced; the rest is filtered per
+    artifact (by `UUIDsEqual`, since the two IDs come from different sources and differ in case
+    between SQL Server and PostgreSQL), so a message showing a loaded report and still fetching an
+    image renders both. Placeholders sort after the loaded cards, so an arrival appends rather than
+    reorders. Applies to every artifact type.
+  - The image, audio and video previews each had only an `error` and a `loaded` branch, so they drew
+    nothing while `resolveContentUrl()` resolved. All three now show `mj-loading`. The image holds it
+    until the `<img>` `load` event fires rather than until `src` is assigned, because an inline
+    `data:` URI — what MJ stores whenever no file storage account is configured — can be several MB
+    and the decode is the part the user waits on; the pending image is hidden with `opacity` rather
+    than `display: none`, which would take it out of the paint tree and stop the decode it is
+    waiting for.
+
+  Three defects fixed alongside, all in the same code path: the artifact apply now runs after the
+  message's other inputs are assigned (it forces the child's first change-detection pass, so running
+  it early meant `ngAfterViewInit` saw a null agent run and never started the run-duration timer); a
+  per-message generation counter stops a stale in-flight load clobbering a newer one; and the
+  settle handlers no longer touch a destroyed view.
+
+  This does not change how long anything takes, and it does not address the separate delay before an
+  artifact exists server-side.
+
+- c1fea88: Chat area scrolling: an in-place message update (progress, status, streamed text) no longer scrolls a reader who has scrolled up back to the bottom — the tail is followed only for a reader already at it. New opt-in `readReplyFromTop` on `mj-conversation-chat-area` scrolls a finished turn to the top of the pane when it is taller than the pane, so the run ends at the start of the answer.
+
+  Agent completion is announced once, as a rich toast: `MJNotificationService.CreateRichNotification` (image or icon, title, detail, on the surface tokens with the brand colour as accent; dismissible with hover-pause; a same-key toast already on screen is kept, one still held back by `deferMs` is superseded). The server's Agent Completion notification (deferred) and message-input's client-side completion share a key per conversation, so the reader sees one toast in one wording — the client's, with the conversation's current name. New `CompletionImageUrlResolver` host hook lets a white-label host put its assistant's avatar on the toast.
+
+- 241c2c1: Make the conversation UI's diagnostic logging opt-in instead of unconditional.
+
+  Reported from a deployed app: "the browser's dev console is absolutely packed with spam. Every single character a user types into the input box triggers a message in the console. This isn't something we can put out into the world since some users will bring that up and it looks terrible."
+
+  Nothing is removed — twelve `console.*` calls become `LogStatusEx({ …, verboseOnly: true })`, so they are silent by default and still there for anyone tracing this code. In a browser, verbose is enabled by `window.MJ_VERBOSE = true`, `localStorage.setItem('MJ_VERBOSE','true')`, or a `?MJ_VERBOSE=true` URL parameter.
+
+  **The per-keystroke pair**, which is the specific behaviour in the report: `ComposerDraftStore.SetDraft` logs on every character typed, and `conversation-chat-area` logs the same event again on the way in. Together they are the largest single source of console output in the app.
+
+  **Task-lifecycle narration**: `ActiveTasksService.add()` and `.remove()` each printed three lines per call (`➕ Task added:`, `📊 Total tasks:`, `🗂️ Conversation IDs with tasks:`), and `markMessageComplete` printed two more describing its own happy path.
+
+  **One `console.warn` that was misdiagnosing itself.** `⚠️ No task found for completed message … - task may have been removed prematurely or not added` fired on every turn, by construction. A turn registers exactly one task, against whichever message its flow chose — `activeTasks.add()` is called with the user message, a Sage delegation message, a status message, or the agent response depending on the path — while `markMessageComplete` runs for _every_ message in the turn that reaches `Complete` or `Error`. Most calls therefore find no task, which is the normal case and not the lifecycle race the text described. It is now verbose-only and reworded to say what it actually means.
+
+  `console.error` is untouched — all 179 in the package.
+
+  Scoped deliberately to the per-keystroke path and this instrumentation rather than converting the package's remaining `console.*` calls: raw `console` is the prevailing style across MJ's Angular packages (863 calls vs 105 `LogStatus`), so a wholesale conversion is a convention decision rather than a bug fix.
+
+- 919f0c7: Input dialog (rename conversation, and every `dialogService.input()` prompt) gets the same horizontal padding as the rating dialog. The dialog container pads only string content, so a component body's message, labels and inputs sat flush against the dialog edges while the header and footer were padded.
+- 92f2ac9: Repo-wide sweep of code that assumed an entity's primary key is a single column named `ID`, plus a `PrimaryKeyCompliance` gate in `@memberjunction/core` so the pattern cannot come back.
+
+  MJ supports primary keys with any column name(s) and type(s). Every MJ core entity happens to use `ID`, so hardcoding it works across the whole core product and silently breaks on customer entities mapped from external schemas — `Load()` rejects the invented field name, or a composite key is truncated to its first column. #4179 (search result click-through) was one instance; this sweep found the same shape in ~90 files and fixes all of it on top of the `CompositeKey.FromURLSegment` / `FromEntityRecord` / `ToCompactURLSegment` primitives introduced with that fix.
+
+  **What changed, by kind**
+  - **Literal `ID` key construction** (`{ FieldName: 'ID', Value: x }`, `LoadFromSingleKeyValuePair('ID', …)`, `FromKeyValuePair('ID', …)`) — ~135 sites. Where the entity is a literal MJ core entity the key is now `CompositeKey.FromID(x)`, the one sanctioned way to say "this entity's key is `ID`". Where the entity is a variable (an event's `EntityName`, an `entityInfo`, a configured entity) the key is `CompositeKey.FromURLSegment(entityInfo, recordId)`, which reads a bare value or a `F1|v1||F2|v2` segment against the entity's real primary key(s).
+  - **`PrimaryKeys[0]` → `FirstPrimaryKey`** — 39 sites. Same semantics, a named accessor the gate can track. IS-A shared-key and keyset uses are annotated `// first-pk-ok`.
+  - **Real defects fixed** (arbitrary entity keyed as `ID`): Mobile app record load/edit/offline sync; the generic form overlay; the ERD "open record" path; version-history label/diff/micro-view links (which stripped `ID|` off a stored key and re-wrapped the value as `ID`); `RestoreEngine` and `buildPrimaryKeyForLoad`; the Apollo enrichment connector (six `GetEntityObject(configuredEntity, FromID(record.ID))` calls); geocoding record reload; List Detail record-open (composite keys now open instead of showing a notice); `EmbeddedRecord`; `DatabaseReferenceScanner`; hardcoded `ID` filters on a variable entity in Data Explorer's record load, Predictive Studio's label lookup, the realtime-widget visitor identity lookup, `DuplicateRecordDetector.LoadRecordsByListID`, and MetadataSync's `@lookup` GUID conversion.
+  - **REST API**: `EntityCRUDHandler` / `RESTEndpointHandler` built the key from the `:id` segment for single-column keys only and threw "Composite primary keys are not supported". Both now accept a bare value or a URL-encoded `Field1|Value1||Field2|Value2` segment. Single-column behavior is unchanged.
+  - **One serializer instead of eight**: `ListOperations.serializeRecordId`, `list-set-operations.serializeRecordId`, RecordSetProcessor's `serializeRecordId`, `GetListRecordsAction`'s inline copy, `MJListDetailEntityExtended.BuildRecordID` / `GetCompositeKey`, `record.util.buildCompositeKey`, `VersionHistory.buildCompositeKeyFromRecord` and `ChangeDetector.buildDeleteItem` all delegate to `CompositeKey.FromEntityRecord(...).ToCompactURLSegment()` / `FromURLSegment(...)`. Output is byte-identical for single-column keys.
+
+  **`FirstPrimaryKey` triage** — every one of the ~390 `FirstPrimaryKey` / `FromID` uses in the repo was read in context and either rewritten or annotated with a reason (154 annotations). Real defects found and fixed along the way, all of the shape "first key column used as the whole key" on an entity that can be composite-keyed:
+  - **Data providers**: the deterministic `ORDER BY` fallback for row-limited queries ordered by the first key column only, leaving composite-key pages in undefined order; it now orders by every key column. Saved-view run logging / exclusion and the `{%UserView%}` template subquery, whose persisted `RecordID` cannot hold a composite key, now refuse loudly instead of excluding wrong rows. The dependency-link subquery now predicates on the full key. Single-column SQL is byte-identical.
+  - **CodeGen**: generated cascade delete/update procs bound the child FK to `@<firstPK>` regardless of which parent key column the FK references; a composite key containing an identity column dropped the other key columns from the generated INSERT (both providers); the PostgreSQL JSON-arg `spCreate` inserted only the first key column; the generated join-grid/timeline filters and the GraphQL audit-log `RecordID` truncated composite keys. Single-key generator output verified byte-identical against `HEAD` (168 shapes).
+  - **Smart cache** (`ProviderBase` differential merge): keyed rows on the first PK, so composite-key deletes never applied and rows sharing the first column collapsed.
+  - **Integration push sync**: composed record identity from the first key column while the record map stores all columns joined, so every already-synced composite-key row was re-created externally as a duplicate on each full push; the changed-record path silently dropped rows.
+  - **Scheduled geocoding orphan cleanup** (destructive): compared a cast of the first key column to a `RecordID` holding all columns, so every geocode row for a composite-key entity was deleted on each run.
+  - **Lists**: list membership, export and add-record paths filtered on the first key column and wrote only its value into `ListDetail.RecordID`; Explorer "open record" paths on user-selected entities, duplicate detection, omnibar record search, Data Explorer deep links, the sharing center revoke, recent-access, tree dropdowns, the mobile app's record ids and offline queue.
+  - **AI**: duplicate detection, vector sync record ids, Predictive Studio list scope and write-back; the Recommendations engine also wrote a record id into `SourceEntityID` (an FK to Entities) and never set `SourceEntityRecordID`.
+  - **Apollo enrichment**: `Accounts` (a customer entity) loaded by literal `ID`; the contacts path read its key off an entity that had never been loaded.
+  - Every `entityInfo.FirstPrimaryKey?.Name ?? 'ID'` fallback is gone; where the entity can be missing the code now fails loudly instead of inventing `ID`.
+
+  **The gate** — `packages/MJCore/src/__tests__/PrimaryKeyCompliance.test.ts`, modelled on `MultiProviderCompliance` / `UUIDCompliance`:
+  1. _Strict_: a key built with a literal `ID` field name. Marker `// pk-literal-ok: <reason>`.
+  2. _Strict_: `PrimaryKeys[0]` / `PrimaryKeys.at(0)`.
+  3. _Strict_: `FirstPrimaryKey` and `CompositeKey.FromID(`. These are legitimate only where MJ is single-column by design (foreign-key targets, keyset `ORDER BY` / `AfterKey`, IS-A shared keys, core entities), so every use must be self-evidently on a core entity or say why: `FromID` is exempt when a `'MJ: …'` entity literal is on the same line or within 8 lines above (the `GetEntityObject` / `OpenEntityRecord` naming the core entity); everything else carries `// first-pk-ok: <reason>` on the same line, reason mandatory.
+  4. _Strict_: an `ID = …` / `ID IN (…)` `ExtraFilter` or `Fields: ['ID']` within eight lines of an `EntityName:` that is a variable rather than a string literal or ALL_CAPS constant. Marker `// pk-filter-ok: <reason>`.
+
+  Generated code, tests, `dist/`, and the `TestingFramework` / `UnitTesting` packages are not scanned. The rule is written up in `.claude/rules/data-access.md` § "Primary keys: never assume a column named ID". There is no baseline file: all four gates are strict.
+
+  No public signatures change; every edit is additive or a same-shape substitution, so this is `patch` throughout.
+
+- 394d276: Declare @angular/\* peer dependencies as ranges (^21.1.3) instead of exact pins across all Angular library packages. Peer declarations are compatibility claims, not install instructions: the exact pins falsely claimed incompatibility with every other Angular 21.x build, produced 502 peer-resolution errors under strict pnpm workspaces, and structurally blocked Angular security patches behind a full republish. Installed versions remain pinned by consuming apps and the era platform manifest; dependencies/devDependencies keep their exact pins.
+- dd6d1f0: The realtime client says it is alive, so the janitor stops reaping live calls.
+
+  `SessionJanitor` force-closed sessions people were actively talking to — three consecutive sessions with conversation throughout, each closed roughly 15 minutes after the last _server-side_ event. This is topology rather than a janitor defect: in the client-direct realtime path audio goes browser → provider over WebRTC, so the server sees the mint, a few early channel actions, then nothing. `RecordActivity` is only reached by server-side events, so `LastActiveAt` freezes about 45 seconds in and never moves again, and an active call is indistinguishable from an abandoned one. A session whose channels are all client-side goes quiet from the server's point of view almost immediately.
+
+  The server half already existed and was simply never connected: `SessionManager.Heartbeat` (coalesced writes, reactivates `Idle → Active`, refuses a `Closed` session) and the `AgentSessionHeartbeat` mutation with its ownership check. A grep for that mutation across the tree returned exactly one hit — its own definition. This change is the missing caller, not new plumbing: a pulse in `RealtimeSessionService`, started where `SessionStarted$` is emitted (the point at which the session is connected _and_ `agentSessionId` is set) and stopped first thing in teardown.
+
+  Three details worth knowing. The 60s interval is chosen against both neighbours — comfortably under the 15-minute close threshold, so several beats must be missed in a row before a live session is reaped, and well above the server's write-coalescing window, so the database sees a trickle rather than a stream. The session id is read at fire time rather than captured at start, so a beat landing during teardown finds `null` and does nothing instead of resurrecting a row that was just closed. And the pulse is stopped _before_ anything else in teardown, so a beat racing the close cannot re-stamp `LastActiveAt` on a session being deliberately ended.
+
+- a8710bf: Realtime: the agent can speak FIRST
+
+  Every existing path into the live model's voice is reactive — the human spoke, or a channel
+  reported input. A host that needs the agent to open the conversation (an interviewer greeting a
+  candidate, a guide introducing a task) had nothing to call, so the session connected and both
+  sides waited for the other. The service already had the primitive; it was private and reachable
+  only from a channel.
+
+  `RealtimeSessionService.RequestSpokenOpening(instructions)` exposes it at the session level. The
+  instructions say what to open with, in the host's words; the model still speaks in its own voice
+  and persona.
+
+  It returns whether the request was DELIVERED, which is the one way it deliberately differs from
+  `SendContextNote` beside it: a dropped context note costs the model a little perception, while a
+  dropped opening line is a session that sits in silence. `false` means no session was live — a host
+  that asked before the connection reached a speaking state can retry, but only if it is told.
+
+- cf2484c: Review follow-ups to #4358 and #4366.
+  - `EntityPermissionInfo.IsDeny` — one predicate for "this is a Deny row" (case- and whitespace-insensitive; blank Type is Allow), used by `GetUserPermisions` and now by both RLS readers: `UserExemptFromRowLevelSecurity` and `GetUserRowLevelSecurityInfo` skip Deny rows, so a set `Can*` flag on a Deny row is never read as a grant. Unreachable in practice (a user carrying a Deny row fails the permission gate first), but the methods now implement the invariant their docs state. Tests cover the Deny axis with typed builders.
+  - The materialization leak gate's comments no longer claim parity with the runtime RLS reader; they say the gate is deliberately wider.
+  - Input dialog: `box-sizing: border-box` parity with the rating dialog. The dialog container documents its contract — component bodies pad themselves.
+
+- 938cd9e: Internal: memoise the `/` skill picker's `@agent` chip lookup.
+
+  `pickerTargetAgentId` is bound in `mj-message-input`'s template on a default-change-detection component and walked the editor DOM (`getMentionChipsData()` → `querySelectorAll('.mention-chip')`) on every change-detection cycle. It now reads a memo invalidated from `messageText`'s setter — the one point every chip change passes through, including programmatic writes (a restored draft, a post-send reset, a host assigning `messageText` directly) which rebuild or empty the chip DOM via `ngModel.writeValue` without emitting `valueChange`. `messageText` becomes a get/set pair; it is read-compatible and has no two-way `ngModel` binding. No behaviour change.
+
+- dbaa967: **The `/` skill picker offers only what the target agent accepts.**
+
+  The composer's '/' trigger listed every skill the _user_ could run, including ones the agent the
+  message goes to would refuse (`AcceptsSkills='Limited'` without a grant, or `'None'`). The refusal
+  only surfaced after send, as a system note. `mj-ai-composer` now takes `TargetAgentId`;
+  `mj-message-input` binds it to an explicit `@agent` chip in the draft, else the agent it resolves for
+  the message (continuity, pinned, embedder default), and the picker narrows to
+  `AIEngineBase.GetSkillsForAgent(agent)` ∩ the user's runnable set (`IntersectAcceptedSkills`).
+  Intersection only — it never adds a skill the user could not run; an unknown agent means no
+  narrowing, as before. First-adopter feedback.
+
+- d7feeae: Stop Explorer from showing "Unknown error" with a stuck Running timer when a Skip/sub-agent transport path fails. Pass the real error through invokeSubAgent, keep In-Progress when the agent may still be running, and persist Failed/Error on the run and conversation detail if executeAIAgent throws.
+- 4b1257f: Window the chat transcript: load the latest display page on open, prepend older pages from a top sentinel, and keep the ConversationEngine full-history API unchanged for agents.
+
+  Opening a conversation previously ran `GetConversationComplete` for every row, hydrated all of them, and mounted a component per timeline item. It now reads only the newest page. `ConversationEngine.LoadDetailWindow` is additive and pages on `Sequence` (not `AfterKey` — the primary key is a uniqueidentifier, so PK order is not chat order); `LoadConversationDetails` is untouched and still returns complete history, which `GetAgentContextWindow` and the server callers depend on. A window is deliberately never written into `_detailCache`.
+
+  Paging is counted in display items rather than rows, so a realtime session still collapses to one card and is never split across pages.
+
+- 394d276: DOM specs for the three components Phase 5 added, which takes the `packages/Angular/Generic` coverage ratchet from **138 (failing) to 135 (passing)** — better than the state it has been in on `next`.
+
+  Each covers only what exists in the rendered template rather than the class, because the graph _logic_ is already tested against the pure adapter and the component classes where no TestBed is needed:
+  - **The validation banner** earns DOM coverage specifically. It is the one place author-time feedback from the engine becomes visible, and a template regression there is silent — the component would still compute `IsValid` correctly while showing the user nothing.
+  - **The properties panel never writes.** Every control emits a request the parent applies; a regression there would not throw, it would quietly bypass the veto contract.
+  - **When "Save as Workflow" appears** is the plan card's highest-stakes rule. Offering it while work is still running invites saving a shape that may yet change under a retry or a failure routing down a recovery branch — so the graph a user believed they saved would not be the one that ran.
+
+- Updated dependencies [4273317]
+- Updated dependencies [394d276]
+- Updated dependencies [634aa8c]
+- Updated dependencies [834f8d7]
+- Updated dependencies [a987913]
+- Updated dependencies [e533ce5]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [2c826f7]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [b915983]
+- Updated dependencies [b895f92]
+- Updated dependencies [b895f92]
+- Updated dependencies [1bced7c]
+- Updated dependencies [05b4cb5]
+- Updated dependencies [b7819d2]
+- Updated dependencies [394d276]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [c1fea88]
+- Updated dependencies [4586215]
+- Updated dependencies [22ec804]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [2792d97]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [4c1de04]
+- Updated dependencies [0d3094c]
+- Updated dependencies [255d506]
+- Updated dependencies [0ec1980]
+- Updated dependencies [199eb2b]
+- Updated dependencies [7a71c96]
+- Updated dependencies [f80bdb7]
+- Updated dependencies [1940a4d]
+- Updated dependencies [e7f1f88]
+- Updated dependencies [07cb22e]
+- Updated dependencies [deea1a3]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [c09c818]
+- Updated dependencies [711c208]
+- Updated dependencies [3c591a3]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [59def38]
+- Updated dependencies [2412415]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [9699d0e]
+- Updated dependencies [394d276]
+- Updated dependencies [43f9133]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [2d14c62]
+- Updated dependencies [394d276]
+- Updated dependencies [c996a56]
+- Updated dependencies [de6eb14]
+- Updated dependencies [b9de989]
+- Updated dependencies [38d4482]
+- Updated dependencies [052b4c7]
+- Updated dependencies [51017a5]
+- Updated dependencies [ada8784]
+- Updated dependencies [8ec1515]
+- Updated dependencies [9a905e8]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [c996a56]
+- Updated dependencies [d907a1b]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [8d880cc]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [11de1a3]
+- Updated dependencies [cefc302]
+- Updated dependencies [841e6ea]
+- Updated dependencies [394d276]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [080f4cd]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [d66a26a]
+- Updated dependencies [c643ba3]
+- Updated dependencies [e9e9873]
+- Updated dependencies [1d88e00]
+- Updated dependencies [647bd71]
+- Updated dependencies [e93f221]
+- Updated dependencies [8288711]
+- Updated dependencies [10cbc60]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [5f33ca8]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [d26e202]
+- Updated dependencies [48ff99f]
+- Updated dependencies [076fa5d]
+- Updated dependencies [9f73528]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [27e4d09]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [23c2521]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [98841bb]
+- Updated dependencies [53c341c]
+- Updated dependencies [2e2879e]
+- Updated dependencies [394d276]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [b46330e]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [53d256f]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [9a29da4]
+- Updated dependencies [cf2484c]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [0967ba7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [7a630ba]
+- Updated dependencies [de343b5]
+- Updated dependencies [5fc861f]
+- Updated dependencies [1748491]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [0db6105]
+- Updated dependencies [d7feeae]
+- Updated dependencies [7fefca2]
+- Updated dependencies [a1a8989]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [905820a]
+- Updated dependencies [394d276]
+- Updated dependencies [ca3657d]
+- Updated dependencies [394d276]
+- Updated dependencies [1bd9674]
+- Updated dependencies [9f6a53b]
+- Updated dependencies [6d7d3da]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [5c6e36c]
+- Updated dependencies [d078c54]
+- Updated dependencies [7fcdc2d]
+- Updated dependencies [15319b4]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [ce3d526]
+- Updated dependencies [ba71cd4]
+- Updated dependencies [4b1257f]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [63ea273]
+- Updated dependencies [1be0f14]
+- Updated dependencies [6cd337d]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [1c0d586]
+  - @memberjunction/ng-shared-generic@6.1.0
+  - @memberjunction/ng-whiteboard@6.1.0
+  - @memberjunction/ng-ui-components@6.1.0
+  - @memberjunction/ai-core-plus@6.1.0
+  - @memberjunction/ng-artifacts@6.1.0
+  - @memberjunction/global@6.1.0
+  - @memberjunction/core@6.1.0
+  - @memberjunction/core-entities@6.1.0
+  - @memberjunction/ai-engine-base@6.1.0
+  - @memberjunction/ai@6.1.0
+  - @memberjunction/ng-agent-client@6.1.0
+  - @memberjunction/ng-base-types@6.1.0
+  - @memberjunction/ng-code-editor@6.1.0
+  - @memberjunction/ng-composer@6.1.0
+  - @memberjunction/ng-container-directives@6.1.0
+  - @memberjunction/ng-forms@6.1.0
+  - @memberjunction/ng-markdown@6.1.0
+  - @memberjunction/ng-media-player@6.1.0
+  - @memberjunction/ng-notifications@6.1.0
+  - @memberjunction/ng-resource-permissions@6.1.0
+  - @memberjunction/ng-task-graph-editor@6.1.0
+  - @memberjunction/ng-tasks@6.1.0
+  - @memberjunction/ng-testing@6.1.0
+  - @memberjunction/ng-user-routines@6.1.0
+  - @memberjunction/graphql-dataprovider@6.1.0
+  - @memberjunction/ai-realtime-client@6.1.0
+  - @memberjunction/conversations-runtime@6.1.0
+  - @memberjunction/interactive-component-types@6.1.0
+  - @memberjunction/ai-agent-client@6.1.0
+
+## 6.1.0-edge.7
+
+### Patch Changes
+
+- 919f0c7: Input dialog (rename conversation, and every `dialogService.input()` prompt) gets the same horizontal padding as the rating dialog. The dialog container pads only string content, so a component body's message, labels and inputs sat flush against the dialog edges while the header and footer were padded.
+- cf2484c: Review follow-ups to #4358 and #4366.
+  - `EntityPermissionInfo.IsDeny` — one predicate for "this is a Deny row" (case- and whitespace-insensitive; blank Type is Allow), used by `GetUserPermisions` and now by both RLS readers: `UserExemptFromRowLevelSecurity` and `GetUserRowLevelSecurityInfo` skip Deny rows, so a set `Can*` flag on a Deny row is never read as a grant. Unreachable in practice (a user carrying a Deny row fails the permission gate first), but the methods now implement the invariant their docs state. Tests cover the Deny axis with typed builders.
+  - The materialization leak gate's comments no longer claim parity with the runtime RLS reader; they say the gate is deliberately wider.
+  - Input dialog: `box-sizing: border-box` parity with the rating dialog. The dialog container documents its contract — component bodies pad themselves.
+
+- Updated dependencies [a987913]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [076fa5d]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core-entities@6.1.0-edge.7
+  - @memberjunction/ai-engine-base@6.1.0-edge.7
+  - @memberjunction/ai@6.1.0-edge.7
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.7
+  - @memberjunction/ai-core-plus@6.1.0-edge.7
+  - @memberjunction/ng-ui-components@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+  - @memberjunction/ng-testing@6.1.0-edge.7
+  - @memberjunction/ng-artifacts@6.1.0-edge.7
+  - @memberjunction/ng-base-types@6.1.0-edge.7
+  - @memberjunction/ng-code-editor@6.1.0-edge.7
+  - @memberjunction/ng-notifications@6.1.0-edge.7
+  - @memberjunction/ng-resource-permissions@6.1.0-edge.7
+  - @memberjunction/ng-shared-generic@6.1.0-edge.7
+  - @memberjunction/ng-task-graph-editor@6.1.0-edge.7
+  - @memberjunction/ng-tasks@6.1.0-edge.7
+  - @memberjunction/ng-user-routines@6.1.0-edge.7
+  - @memberjunction/conversations-runtime@6.1.0-edge.7
+  - @memberjunction/ai-realtime-client@6.1.0-edge.7
+  - @memberjunction/ai-agent-client@6.1.0-edge.7
+  - @memberjunction/ng-composer@6.1.0-edge.7
+  - @memberjunction/ng-container-directives@6.1.0-edge.7
+  - @memberjunction/ng-media-player@6.1.0-edge.7
+  - @memberjunction/interactive-component-types@6.1.0-edge.7
+  - @memberjunction/ng-forms@6.1.0-edge.7
+  - @memberjunction/ng-whiteboard@6.1.0-edge.7
+  - @memberjunction/ng-agent-client@6.1.0-edge.7
+  - @memberjunction/ng-markdown@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Patch Changes

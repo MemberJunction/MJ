@@ -210,7 +210,7 @@ export interface IGraphCalendarLike {
      * @param userId The mailbox/identity address whose calendar to read.
      * @param cursor The Graph delta/next link to resume from (opaque), or `undefined` to start fresh.
      */
-    listEvents(userId: string, cursor?: string): Promise<GraphEventPage>;
+    listEvents(userId: string, cursor?: string): Promise<GraphEventPage>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -219,7 +219,7 @@ export interface IGraphCalendarLike {
  * for a non-UTC named zone it parses the wall-clock string and appends `Z` (best-effort — production
  * SHOULD request UTC via the `Prefer: outlook.timezone="UTC"` header). Returns `null` on absent/invalid.
  */
-export function parseGraphDateTime(value?: GraphDateTimeTimeZone): Date | null {
+export function ParseGraphDateTime(value?: GraphDateTimeTimeZone): Date | null {
     const raw = value?.dateTime?.trim();
     if (!raw) {
         return null;
@@ -231,13 +231,18 @@ export function parseGraphDateTime(value?: GraphDateTimeTimeZone): Date | null {
     return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+/** @deprecated Use {@link ParseGraphDateTime}. */
+export function parseGraphDateTime(value?: GraphDateTimeTimeZone): Date | null {
+    return ParseGraphDateTime(value);
+}
+
 /** Appends `Z` to a bare wall-clock string that lacks any zone suffix, leaving zoned strings untouched. */
 function ensureUtcSuffix(raw: string): string {
     return /[zZ]$|[+-]\d{2}:?\d{2}$/.test(raw) ? raw : `${raw}Z`;
 }
 
 /** Maps a Graph attendee `status.response` to the normalized {@link CalendarInviteAttendee.ResponseStatus}. */
-export function mapGraphResponseStatus(
+export function MapGraphResponseStatus(
     response?: string,
 ): CalendarInviteAttendee['ResponseStatus'] | undefined {
     switch ((response ?? '').trim().toLowerCase()) {
@@ -256,17 +261,29 @@ export function mapGraphResponseStatus(
     }
 }
 
+/** @deprecated Use {@link MapGraphResponseStatus}. */
+export function mapGraphResponseStatus(
+    response?: string,
+): CalendarInviteAttendee['ResponseStatus'] | undefined {
+    return MapGraphResponseStatus(response);
+}
+
 /**
  * **Pure** extraction of an online-meeting join URL from a Graph event. Prefers the structured
  * `onlineMeeting.joinUrl`, then the legacy flat `onlineMeetingUrl`, then the first Teams `meetup-join`
  * URL found in the event body (HTML or text). Returns `undefined` when no join URL is present.
  */
-export function extractGraphJoinUrl(event: GraphCalendarEvent): string | undefined {
+export function ExtractGraphJoinUrl(event: GraphCalendarEvent): string | undefined {
     const structured = event.onlineMeeting?.joinUrl?.trim() || event.onlineMeetingUrl?.trim();
     if (structured) {
         return structured;
     }
     return extractJoinUrlFromText(event.body?.content);
+}
+
+/** @deprecated Use {@link ExtractGraphJoinUrl}. */
+export function extractGraphJoinUrl(event: GraphCalendarEvent): string | undefined {
+    return ExtractGraphJoinUrl(event);
 }
 
 /** Best-effort first online-meeting join URL embedded in a free-text/HTML body. Never throws. */
@@ -284,8 +301,8 @@ function extractJoinUrlFromText(content?: string): string | undefined {
  * **Pure** normalization of one Graph calendar event to a {@link NormalizedCalendarInvite}. Skips
  * (returns `null`) an event with no id or no resolvable start time, so the caller can drop it cleanly.
  */
-export function normalizeGraphEvent(event: GraphCalendarEvent): NormalizedCalendarInvite | null {
-    const start = parseGraphDateTime(event.start);
+export function NormalizeGraphEvent(event: GraphCalendarEvent): NormalizedCalendarInvite | null {
+    const start = ParseGraphDateTime(event.start);
     if (!event.id || !start) {
         return null;
     }
@@ -293,11 +310,11 @@ export function normalizeGraphEvent(event: GraphCalendarEvent): NormalizedCalend
         .map(toNormalizedAttendee)
         .filter((a): a is CalendarInviteAttendee => a !== null);
     const organizerEmail = event.organizer?.emailAddress?.address?.trim();
-    const end = parseGraphDateTime(event.end);
+    const end = ParseGraphDateTime(event.end);
     return {
         ExternalEventID: event.id,
         ...(event.subject ? { Subject: event.subject } : {}),
-        ...(extractGraphJoinUrl(event) ? { JoinUrl: extractGraphJoinUrl(event) } : {}),
+        ...(ExtractGraphJoinUrl(event) ? { JoinUrl: ExtractGraphJoinUrl(event) } : {}),
         StartTime: start,
         ...(end ? { EndTime: end } : {}),
         Attendees: attendees,
@@ -314,13 +331,18 @@ export function normalizeGraphEvent(event: GraphCalendarEvent): NormalizedCalend
     };
 }
 
+/** @deprecated Use {@link NormalizeGraphEvent}. */
+export function normalizeGraphEvent(event: GraphCalendarEvent): NormalizedCalendarInvite | null {
+    return NormalizeGraphEvent(event);
+}
+
 /** Maps one Graph attendee to a normalized attendee, or `null` when it carries no email address. */
 function toNormalizedAttendee(attendee: GraphAttendee): CalendarInviteAttendee | null {
     const email = attendee.emailAddress?.address?.trim();
     if (!email) {
         return null;
     }
-    const responseStatus = mapGraphResponseStatus(attendee.status?.response);
+    const responseStatus = MapGraphResponseStatus(attendee.status?.response);
     return {
         Email: email,
         ...(attendee.emailAddress?.name ? { DisplayName: attendee.emailAddress.name } : {}),
@@ -372,7 +394,7 @@ export class GraphCalendarSource implements ICalendarSource {
         for (let page = 0; page < MAX_GRAPH_PAGES; page++) {
             const result = await this.graph.listEvents(identityValue, cursor);
             for (const event of result.value ?? []) {
-                const invite = normalizeGraphEvent(event);
+                const invite = NormalizeGraphEvent(event);
                 if (invite) {
                     invites.push(invite);
                 }
@@ -479,7 +501,7 @@ export interface GoogleListEventsArgs {
  */
 export interface IGoogleCalendarLike {
     /** Lists one page of events for a calendar, paging via `pageToken` and syncing via `syncToken`. */
-    listEvents(args: GoogleListEventsArgs): Promise<GoogleEventPage>;
+    listEvents(args: GoogleListEventsArgs): Promise<GoogleEventPage>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -487,7 +509,7 @@ export interface IGoogleCalendarLike {
  * `dateTime` (which carries its own offset) when present, else an all-day `date` as UTC midnight.
  * Returns `null` on absent/invalid.
  */
-export function parseGoogleDateTime(value?: GoogleEventDateTime): Date | null {
+export function ParseGoogleDateTime(value?: GoogleEventDateTime): Date | null {
     const timed = value?.dateTime?.trim();
     if (timed) {
         const parsed = new Date(timed);
@@ -501,8 +523,13 @@ export function parseGoogleDateTime(value?: GoogleEventDateTime): Date | null {
     return null;
 }
 
+/** @deprecated Use {@link ParseGoogleDateTime}. */
+export function parseGoogleDateTime(value?: GoogleEventDateTime): Date | null {
+    return ParseGoogleDateTime(value);
+}
+
 /** Maps a Google `responseStatus` to the normalized {@link CalendarInviteAttendee.ResponseStatus}. */
-export function mapGoogleResponseStatus(
+export function MapGoogleResponseStatus(
     response?: string,
 ): CalendarInviteAttendee['ResponseStatus'] | undefined {
     switch ((response ?? '').trim().toLowerCase()) {
@@ -519,27 +546,39 @@ export function mapGoogleResponseStatus(
     }
 }
 
+/** @deprecated Use {@link MapGoogleResponseStatus}. */
+export function mapGoogleResponseStatus(
+    response?: string,
+): CalendarInviteAttendee['ResponseStatus'] | undefined {
+    return MapGoogleResponseStatus(response);
+}
+
 /**
  * **Pure** extraction of the Meet/online-meeting join URL from a Google event. Prefers the first
  * `video` entry-point in `conferenceData`, then the legacy `hangoutLink`. Returns `undefined` when no
  * video conferencing is attached.
  */
-export function extractGoogleJoinUrl(event: GoogleCalendarEvent): string | undefined {
+export function ExtractGoogleJoinUrl(event: GoogleCalendarEvent): string | undefined {
     const video = (event.conferenceData?.entryPoints ?? []).find(
         (e) => (e.entryPointType ?? '').trim().toLowerCase() === 'video' && !!e.uri?.trim(),
     );
     return video?.uri?.trim() || event.hangoutLink?.trim() || undefined;
 }
 
+/** @deprecated Use {@link ExtractGoogleJoinUrl}. */
+export function extractGoogleJoinUrl(event: GoogleCalendarEvent): string | undefined {
+    return ExtractGoogleJoinUrl(event);
+}
+
 /**
  * **Pure** normalization of one Google calendar event to a {@link NormalizedCalendarInvite}. Skips
  * (returns `null`) a cancelled event or one with no id or no resolvable start time.
  */
-export function normalizeGoogleEvent(event: GoogleCalendarEvent): NormalizedCalendarInvite | null {
+export function NormalizeGoogleEvent(event: GoogleCalendarEvent): NormalizedCalendarInvite | null {
     if ((event.status ?? '').trim().toLowerCase() === 'cancelled') {
         return null;
     }
-    const start = parseGoogleDateTime(event.start);
+    const start = ParseGoogleDateTime(event.start);
     if (!event.id || !start) {
         return null;
     }
@@ -547,8 +586,8 @@ export function normalizeGoogleEvent(event: GoogleCalendarEvent): NormalizedCale
         .map(toNormalizedGoogleAttendee)
         .filter((a): a is CalendarInviteAttendee => a !== null);
     const organizerEmail = event.organizer?.email?.trim();
-    const joinUrl = extractGoogleJoinUrl(event);
-    const end = parseGoogleDateTime(event.end);
+    const joinUrl = ExtractGoogleJoinUrl(event);
+    const end = ParseGoogleDateTime(event.end);
     return {
         ExternalEventID: event.id,
         ...(event.summary ? { Subject: event.summary } : {}),
@@ -567,13 +606,18 @@ export function normalizeGoogleEvent(event: GoogleCalendarEvent): NormalizedCale
     };
 }
 
+/** @deprecated Use {@link NormalizeGoogleEvent}. */
+export function normalizeGoogleEvent(event: GoogleCalendarEvent): NormalizedCalendarInvite | null {
+    return NormalizeGoogleEvent(event);
+}
+
 /** Maps one Google attendee to a normalized attendee, or `null` when it carries no email address. */
 function toNormalizedGoogleAttendee(attendee: GoogleAttendee): CalendarInviteAttendee | null {
     const email = attendee.email?.trim();
     if (!email) {
         return null;
     }
-    const responseStatus = mapGoogleResponseStatus(attendee.responseStatus);
+    const responseStatus = MapGoogleResponseStatus(attendee.responseStatus);
     return {
         Email: email,
         ...(attendee.displayName ? { DisplayName: attendee.displayName } : {}),
@@ -628,7 +672,7 @@ export class GoogleCalendarSource implements ICalendarSource {
                     : { calendarId: identityValue, ...(sinceCursor ? { syncToken: sinceCursor } : {}) };
             const result = await this.calendar.listEvents(args);
             for (const event of result.items ?? []) {
-                const invite = normalizeGoogleEvent(event);
+                const invite = NormalizeGoogleEvent(event);
                 if (invite) {
                     invites.push(invite);
                 }

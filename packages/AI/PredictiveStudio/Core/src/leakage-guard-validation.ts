@@ -98,8 +98,13 @@ export interface LeakageGuardValidationContext {
 }
 
 /** Lowercase + trim, for case/whitespace-insensitive name matching. */
-export function normalizeName(name: string): string {
+export function NormalizeName(name: string): string {
   return name.trim().toLowerCase();
+}
+
+/** @deprecated Use {@link NormalizeName}. */
+export function normalizeName(name: string): string {
+  return NormalizeName(name);
 }
 
 /**
@@ -110,9 +115,14 @@ export function normalizeName(name: string): string {
  * schema knowledge required: `"[CheckInTime"` and `"Status]"` are both malformed
  * on their face.
  */
-export function isMalformedNameToken(token: string): boolean {
+export function IsMalformedNameToken(token: string): boolean {
   const trimmed = token.trim();
   return trimmed.length === 0 || ILLEGAL_NAME_CHARS.test(trimmed);
+}
+
+/** @deprecated Use {@link IsMalformedNameToken}. */
+export function isMalformedNameToken(token: string): boolean {
+  return IsMalformedNameToken(token);
 }
 
 /**
@@ -123,7 +133,7 @@ export function isMalformedNameToken(token: string): boolean {
  * `0.95`, and those rows must not be able to silently switch the guard off.
  * Non-finite input falls back to {@link DOMINANCE_THRESHOLD_DEFAULT}.
  */
-export function clampDominanceThreshold(value: number): number {
+export function ClampDominanceThreshold(value: number): number {
   if (!Number.isFinite(value)) {
     return DOMINANCE_THRESHOLD_DEFAULT;
   }
@@ -131,6 +141,11 @@ export function clampDominanceThreshold(value: number): number {
     return DOMINANCE_THRESHOLD_MIN;
   }
   return value > DOMINANCE_THRESHOLD_MAX ? DOMINANCE_THRESHOLD_MAX : value;
+}
+
+/** @deprecated Use {@link ClampDominanceThreshold}. */
+export function clampDominanceThreshold(value: number): number {
+  return ClampDominanceThreshold(value);
 }
 
 /**
@@ -143,8 +158,13 @@ export function clampDominanceThreshold(value: number): number {
  * anything it fails to clean still gets rejected loudly rather than silently
  * accepted.
  */
-export function sanitizeNameToken(token: string): string {
+export function SanitizeNameToken(token: string): string {
   return token.replace(/^[[\]{}"'`\s]+/, '').replace(/[[\]{}"'`\s]+$/, '');
+}
+
+/** @deprecated Use {@link SanitizeNameToken}. */
+export function sanitizeNameToken(token: string): string {
+  return SanitizeNameToken(token);
 }
 
 /**
@@ -153,11 +173,16 @@ export function sanitizeNameToken(token: string): string {
  * Handles the paste-a-bracketed-list case (`[CheckInTime, Status]`) that
  * produced the original silent-disarm bug.
  */
-export function parseDenyList(text: string): string[] {
+export function ParseDenyList(text: string): string[] {
   return text
     .split(',')
-    .map(sanitizeNameToken)
+    .map(SanitizeNameToken)
     .filter((t) => t.length > 0);
+}
+
+/** @deprecated Use {@link ParseDenyList}. */
+export function parseDenyList(text: string): string[] {
+  return ParseDenyList(text);
 }
 
 /**
@@ -175,7 +200,7 @@ export function parseDenyList(text: string): string[] {
  * @param context what is known about the pipeline's bound sources
  * @returns every issue found; empty means the guard is sound
  */
-export function validateLeakageGuard(
+export function ValidateLeakageGuard(
   guard: LeakageGuard,
   context: LeakageGuardValidationContext = {}
 ): LeakageGuardIssue[] {
@@ -186,14 +211,22 @@ export function validateLeakageGuard(
   ];
 }
 
+/** @deprecated Use {@link ValidateLeakageGuard}. */
+export function validateLeakageGuard(
+  guard: LeakageGuard,
+  context: LeakageGuardValidationContext = {}
+): LeakageGuardIssue[] {
+  return ValidateLeakageGuard(guard, context);
+}
+
 /** Structural + semantic checks for `DenyFields`. */
 function validateDenyFields(denyFields: string[], context: LeakageGuardValidationContext): LeakageGuardIssue[] {
   const issues: LeakageGuardIssue[] = [];
-  const known = new Set((context.KnownColumns ?? []).map(normalizeName));
+  const known = new Set((context.KnownColumns ?? []).map(NormalizeName));
   const canCheckSemantics = context.ColumnsFullyResolved === true && known.size > 0;
 
   for (const entry of denyFields) {
-    if (isMalformedNameToken(entry)) {
+    if (IsMalformedNameToken(entry)) {
       issues.push({
         Field: 'DenyFields',
         Message:
@@ -207,7 +240,7 @@ function validateDenyFields(denyFields: string[], context: LeakageGuardValidatio
       continue;
     }
 
-    if (canCheckSemantics && !known.has(normalizeName(entry))) {
+    if (canCheckSemantics && !known.has(NormalizeName(entry))) {
       issues.push({
         Field: 'DenyFields',
         Message:
@@ -225,7 +258,7 @@ function validateDenyFields(denyFields: string[], context: LeakageGuardValidatio
 /** Structural + semantic checks for the optional `DenySources`. */
 function validateDenySources(denySources: string[], context: LeakageGuardValidationContext): LeakageGuardIssue[] {
   const issues: LeakageGuardIssue[] = [];
-  const known = new Set((context.KnownSources ?? []).map(normalizeName));
+  const known = new Set((context.KnownSources ?? []).map(NormalizeName));
 
   for (const entry of denySources) {
     if (entry.trim().length === 0) {
@@ -238,7 +271,7 @@ function validateDenySources(denySources: string[], context: LeakageGuardValidat
       continue;
     }
 
-    if (known.size > 0 && !known.has(normalizeName(entry))) {
+    if (known.size > 0 && !known.has(NormalizeName(entry))) {
       issues.push({
         Field: 'DenySources',
         Message:

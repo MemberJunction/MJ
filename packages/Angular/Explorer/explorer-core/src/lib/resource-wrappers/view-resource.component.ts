@@ -1,13 +1,16 @@
-import { Component, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
-import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { Component, ViewChild, ElementRef, ChangeDetectorRef, OnInit, inject } from '@angular/core';
+import { BaseResourceComponent, NavigationService, SafeDetectChanges } from '@memberjunction/ng-shared';
 import { ResourceData, MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal, MJEventType , UUIDsEqual } from '@memberjunction/global';
-import { CompositeKey, Metadata, EntityInfo } from '@memberjunction/core';
-import { RecordOpenedEvent, ViewGridState, EntityViewerComponent, ViewRelatedRecordNavigation } from '@memberjunction/ng-entity-viewer';
+import { CompositeKey, Metadata, EntityInfo, BaseEntity, BaseEntityEvent, LogError } from '@memberjunction/core';
+import { FormResolverService } from '@memberjunction/ng-base-forms';
+import { RecordOpenedEvent, ViewGridState, EntityViewerComponent, ViewRelatedRecordNavigation, ExportColumnTypeForSQLType } from '@memberjunction/ng-entity-viewer';
 import { ExportService } from '@memberjunction/ng-export-service';
 import { ExportColumn } from '@memberjunction/export-engine';
 import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql-dataprovider';
 import type { SaveViewAsListResult } from '@memberjunction/ng-list-management';
+import { ShouldOfferStandardFormCreate } from './standard-form-create';
+import { debounceTime, filter, takeUntil } from 'rxjs/operators';
 /**
  * UserViewResource - Resource wrapper for displaying User Views in tabs
  *
@@ -136,34 +139,154 @@ import type { SaveViewAsListResult } from '@memberjunction/ng-list-management';
     `]
 })
 export class UserViewResource extends BaseResourceComponent {
-    @ViewChild('container', { static: true }) containerElement!: ElementRef<HTMLDivElement>;
-    @ViewChild('entityViewer') entityViewerRef?: EntityViewerComponent;
+    @ViewChild('container', { static: true }) ContainerElement!: ElementRef<HTMLDivElement>;
+
+    /** @deprecated Use {@link ContainerElement}. */
+    get containerElement(): ElementRef<HTMLDivElement> {
+      return this.ContainerElement;
+    }
+    /** @deprecated Use {@link ContainerElement}. */
+    set containerElement(value: ElementRef<HTMLDivElement>) {
+      this.ContainerElement = value;
+    }
+    @ViewChild('entityViewer') EntityViewerRef?: EntityViewerComponent;
+
+    /** @deprecated Use {@link EntityViewerRef}. */
+    get entityViewerRef(): EntityViewerComponent | undefined {
+      return this.EntityViewerRef;
+    }
+    /** @deprecated Use {@link EntityViewerRef}. */
+    set entityViewerRef(value: EntityViewerComponent | undefined) {
+      this.EntityViewerRef = value;
+    }
 
     public isLoading: boolean = false;
     public errorMessage: string | null = null;
-    public entityInfo: EntityInfo | null = null;
-    public viewEntity: MJUserViewEntityExtended | null = null;
-    public gridState: ViewGridState | null = null;
+    public EntityInfo: EntityInfo | null = null;
+
+    /** @deprecated Use {@link EntityInfo}. */
+    public get entityInfo(): EntityInfo | null {
+      return this.EntityInfo;
+    }
+    /** @deprecated Use {@link EntityInfo}. */
+    public set entityInfo(value: EntityInfo | null) {
+      this.EntityInfo = value;
+    }
+    public ViewEntity: MJUserViewEntityExtended | null = null;
+
+    /**
+     * Show "New in standard form" (MJ#4755): a custom form hides the CodeGen
+     * form for this entity and the user may create. Resolved after load.
+     */
+    public ShowNewInStandardForm = false;
+
+    /** @deprecated Use {@link ViewEntity}. */
+    public get viewEntity(): MJUserViewEntityExtended | null {
+      return this.ViewEntity;
+    }
+    /** @deprecated Use {@link ViewEntity}. */
+    public set viewEntity(value: MJUserViewEntityExtended | null) {
+      this.ViewEntity = value;
+    }
+    public GridState: ViewGridState | null = null;
+
+    /** @deprecated Use {@link GridState}. */
+    public get gridState(): ViewGridState | null {
+      return this.GridState;
+    }
+    /** @deprecated Use {@link GridState}. */
+    public set gridState(value: ViewGridState | null) {
+      this.GridState = value;
+    }
 
     // Export state. The header Export button is a FALLBACK shown only for view types that don't
     // provide their own export UI (Cards / Map / Timeline). The Grid renderer has its own in-toolbar
     // Export (full result set + format/sampling dialog), so we suppress this one there to avoid a
     // duplicate/confusing second button — while keeping export available for every other view type.
-    public isExporting: boolean = false;
-    public showFallbackExportButton: boolean = false;
+    public IsExporting: boolean = false;
+
+    /** @deprecated Use {@link IsExporting}. */
+    public get isExporting(): boolean {
+      return this.IsExporting;
+    }
+    /** @deprecated Use {@link IsExporting}. */
+    public set isExporting(value: boolean) {
+      this.IsExporting = value;
+    }
+    public ShowFallbackExportButton: boolean = false;
+
+    /** @deprecated Use {@link ShowFallbackExportButton}. */
+    public get showFallbackExportButton(): boolean {
+      return this.ShowFallbackExportButton;
+    }
+    /** @deprecated Use {@link ShowFallbackExportButton}. */
+    public set showFallbackExportButton(value: boolean) {
+      this.ShowFallbackExportButton = value;
+    }
 
     // Save-as-list dialog state
-    public saveAsListDialogVisible = false;
-    public saveAsListRecordCount: number | null = null;
-    public isSavingAsList = false;
+    public SaveAsListDialogVisible = false;
+
+    /** @deprecated Use {@link SaveAsListDialogVisible}. */
+    public get saveAsListDialogVisible() {
+      return this.SaveAsListDialogVisible;
+    }
+    /** @deprecated Use {@link SaveAsListDialogVisible}. */
+    public set saveAsListDialogVisible(value) {
+      this.SaveAsListDialogVisible = value;
+    }
+    public SaveAsListRecordCount: number | null = null;
+
+    /** @deprecated Use {@link SaveAsListRecordCount}. */
+    public get saveAsListRecordCount(): number | null {
+      return this.SaveAsListRecordCount;
+    }
+    /** @deprecated Use {@link SaveAsListRecordCount}. */
+    public set saveAsListRecordCount(value: number | null) {
+      this.SaveAsListRecordCount = value;
+    }
+    public IsSavingAsList = false;
+
+    /** @deprecated Use {@link IsSavingAsList}. */
+    public get isSavingAsList() {
+      return this.IsSavingAsList;
+    }
+    /** @deprecated Use {@link IsSavingAsList}. */
+    public set isSavingAsList(value) {
+      this.IsSavingAsList = value;
+    }
 
     private dataLoaded = false;
+    private formResolver = inject(FormResolverService);
     private get metadata() { return this.ProviderToUse; }
     constructor(
         private cdr: ChangeDetectorRef,
         private exportService: ExportService
     ) {
         super();
+    }
+
+    public override ngOnInit(): void {
+        super.ngOnInit();
+
+        // Refresh when rows of this view's entity change: a local save/delete, or a server-side
+        // write announced as remote-invalidate (a clone, or another server). Debounced, so a burst
+        // of writes (a clone creating many rows) reloads the view once.
+        MJGlobal.Instance.GetEventListener()
+            .pipe(
+                filter((event) => {
+                    if (event.event !== MJEventType.ComponentEvent || event.eventCode !== BaseEntity.BaseEventCode) return false;
+                    const entityEvent = event.args as BaseEntityEvent;
+                    const type = entityEvent?.type;
+                    if (type !== 'save' && type !== 'delete' && type !== 'remote-invalidate') return false;
+                    const affectedName = (entityEvent.baseEntity?.EntityInfo?.Name ?? entityEvent.entityName)?.trim().toLowerCase();
+                    return !!affectedName && affectedName === this.entityInfo?.Name?.trim().toLowerCase();
+                }),
+                debounceTime(300),
+                takeUntil(this.destroy$)
+            )
+            // In place: a change made elsewhere shouldn't move the user off their page or sort.
+            .subscribe(() => this.entityViewerRef?.RefreshInPlace());
     }
 
     override set Data(value: ResourceData) {
@@ -181,10 +304,11 @@ export class UserViewResource extends BaseResourceComponent {
         if (!this.dataLoaded || newRecordId !== previousRecordId || newEntity !== previousEntity) {
             this.dataLoaded = true;
             // Reset state before loading new view
-            this.entityInfo = null;
-            this.viewEntity = null;
-            this.gridState = null;
+            this.EntityInfo = null;
+            this.ViewEntity = null;
+            this.GridState = null;
             this.errorMessage = null;
+            this.ShowNewInStandardForm = false;
             this.loadView();
         }
     }
@@ -228,6 +352,8 @@ export class UserViewResource extends BaseResourceComponent {
             else {
                 this.errorMessage = 'No view ID or entity specified';
             }
+            // Deliberately not awaited: the extra button must never hold up the view.
+            void this.refreshStandardFormCreate();
         } catch (error) {
             console.error('Error loading view:', error);
             this.errorMessage = error instanceof Error ? error.message : 'Failed to load view';
@@ -254,29 +380,29 @@ export class UserViewResource extends BaseResourceComponent {
             throw new Error(`View with ID ${viewId} not found`);
         }
 
-        this.viewEntity = view as MJUserViewEntityExtended;
+        this.ViewEntity = view as MJUserViewEntityExtended;
 
         // Check permissions
-        if (!this.viewEntity.UserCanView) {
+        if (!this.ViewEntity.UserCanView) {
             throw new Error('You do not have permission to view this view');
         }
 
         // Load the entity info
-        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, this.viewEntity!.EntityID));
+        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, this.ViewEntity!.EntityID));
 
         if (!entity) {
             throw new Error(`Entity for view not found`);
         }
 
-        this.entityInfo = entity;
+        this.EntityInfo = entity;
 
         // Parse grid state if available
-        if (this.viewEntity.GridState) {
+        if (this.ViewEntity.GridState) {
             try {
-                this.gridState = JSON.parse(this.viewEntity.GridState) as ViewGridState;
+                this.GridState = JSON.parse(this.ViewEntity.GridState) as ViewGridState;
             } catch (e) {
                 console.warn('Failed to parse GridState:', e);
-                this.gridState = null;
+                this.GridState = null;
             }
         }
 
@@ -297,9 +423,9 @@ export class UserViewResource extends BaseResourceComponent {
             throw new Error(`Entity '${entityName}' not found`);
         }
 
-        this.entityInfo = entity;
-        this.viewEntity = null;
-        this.gridState = null;
+        this.EntityInfo = entity;
+        this.ViewEntity = null;
+        this.GridState = null;
 
         // For dynamic views, we could create a synthetic viewEntity with just the WhereClause
         // but for now, we'll rely on the entity-viewer's default behavior
@@ -308,17 +434,22 @@ export class UserViewResource extends BaseResourceComponent {
     /**
      * Handle record opened event - open in new tab
      */
-    public onRecordOpened(event: RecordOpenedEvent): void {
+    public OnRecordOpened(event: RecordOpenedEvent): void {
         if (event && event.entity && event.compositeKey) {
             this.navigationService.OpenEntityRecord(event.entity.Name, event.compositeKey);
         }
+    }
+
+    /** @deprecated Use {@link OnRecordOpened}. */
+    public onRecordOpened(event: RecordOpenedEvent): void {
+      return this.OnRecordOpened(event);
     }
 
     /**
      * Handle a related-record navigation requested from within a view-type renderer
      * (e.g. a foreign-key cell) - open the target record in a new tab.
      */
-    public onOpenRelatedRecord(nav: ViewRelatedRecordNavigation): void {
+    public OnOpenRelatedRecord(nav: ViewRelatedRecordNavigation): void {
         if (nav?.entityName && nav.recordKey != null) {
             // The related entity is arbitrary, so its key column can have any name — resolve the key
             // against its metadata rather than hardcoding `ID` via FromID.
@@ -327,17 +458,32 @@ export class UserViewResource extends BaseResourceComponent {
         }
     }
 
+    /** @deprecated Use {@link OnOpenRelatedRecord}. */
+    public onOpenRelatedRecord(nav: ViewRelatedRecordNavigation): void {
+      return this.OnOpenRelatedRecord(nav);
+    }
+
     /**
      * Handle data loaded event from entity-viewer
      */
-    public onDataLoaded(): void {
+    public OnDataLoaded(): void {
         this.NotifyLoadComplete();
         this.refreshFallbackExportVisibility();
     }
 
+    /** @deprecated Use {@link OnDataLoaded}. */
+    public onDataLoaded(): void {
+      return this.OnDataLoaded();
+    }
+
     /** The active view type changed — recompute whether the fallback Export button is needed. */
-    public onViewTypeChanged(): void {
+    public OnViewTypeChanged(): void {
         this.refreshFallbackExportVisibility();
+    }
+
+    /** @deprecated Use {@link OnViewTypeChanged}. */
+    public onViewTypeChanged(): void {
+      return this.OnViewTypeChanged();
     }
 
     /**
@@ -347,9 +493,9 @@ export class UserViewResource extends BaseResourceComponent {
      * detection to avoid an ExpressionChanged error from reading child state during a CD pass.
      */
     private refreshFallbackExportVisibility(): void {
-        const next = !!this.entityViewerRef && !this.entityViewerRef.ActiveViewTypeHasOwnExport;
-        if (next !== this.showFallbackExportButton) {
-            this.showFallbackExportButton = next;
+        const next = !!this.EntityViewerRef && !this.EntityViewerRef.ActiveViewTypeHasOwnExport;
+        if (next !== this.ShowFallbackExportButton) {
+            this.ShowFallbackExportButton = next;
             this.cdr.detectChanges();
         }
     }
@@ -359,21 +505,21 @@ export class UserViewResource extends BaseResourceComponent {
      * FULL result set via the entity-viewer's capped, filter/sort-aware fetch (same path the grid uses,
      * so it's bounded and warns past the cap) and writes an Excel file.
      */
-    public async onExport(): Promise<void> {
+    public async OnExport(): Promise<void> {
         // Never fail silently — a "nothing happens" click is impossible to diagnose. Surface the
         // reason both in the UI and the console.
-        if (!this.entityInfo || !this.entityViewerRef) {
+        if (!this.EntityInfo || !this.EntityViewerRef) {
             console.error('[ViewResource] Export: viewer not ready', {
-                hasEntity: !!this.entityInfo, hasViewer: !!this.entityViewerRef
+                hasEntity: !!this.EntityInfo, hasViewer: !!this.EntityViewerRef
             });
             this.showNotification('Export is not ready yet — try again in a moment.', 'error', 5000);
             return;
         }
-        this.isExporting = true;
+        this.IsExporting = true;
         this.cdr.detectChanges();
         this.showNotification('Preparing your Excel export…', 'info', 2000);
         try {
-            const rows = await this.entityViewerRef.FetchAllRowsForExport();
+            const rows = await this.EntityViewerRef.FetchAllRowsForExport();
             if (!rows || rows.length === 0) {
                 this.showNotification('Nothing to export — the view returned no records.', 'warning', 5000);
                 return;
@@ -394,32 +540,46 @@ export class UserViewResource extends BaseResourceComponent {
             this.showNotification('Error exporting data — see console for details.', 'error', 5000);
             console.error('[ViewResource] Export error:', e);
         } finally {
-            this.isExporting = false;
+            this.IsExporting = false;
             this.cdr.detectChanges();
         }
     }
 
-    /** Columns to export — from grid state, else the view's columns, else the entity's real fields. */
+    /** @deprecated Use {@link OnExport}. */
+    public async onExport(): Promise<void> {
+      return this.OnExport();
+    }
+
+    /**
+     * Columns to export — from grid state, else the view's columns, else the entity's real fields. Each
+     * column carries its field's export type, as the grid's export does, so a date-only field writes
+     * a date cell on its stored day rather than a timestamp.
+     */
     private buildExportColumns(): ExportColumn[] {
-        if (!this.entityInfo) return [];
-        if (this.gridState?.columnSettings && this.gridState.columnSettings.length > 0) {
-            return this.gridState.columnSettings
+        if (!this.EntityInfo) return [];
+        const entity = this.EntityInfo;
+        const typed = (name: string, displayName: string): ExportColumn => {
+            const field = entity.Fields.find(f => f.Name.toLowerCase() === name.toLowerCase());
+            return { name, displayName, dataType: ExportColumnTypeForSQLType(field?.Type) };
+        };
+        if (this.GridState?.columnSettings && this.GridState.columnSettings.length > 0) {
+            return this.GridState.columnSettings
                 .filter(col => col.hidden !== true)
-                .map(col => ({ name: col.Name, displayName: col.DisplayName || col.Name }));
+                .map(col => typed(col.Name, col.DisplayName || col.Name));
         }
-        if (this.viewEntity?.Columns) {
-            return this.viewEntity.Columns
+        if (this.ViewEntity?.Columns) {
+            return this.ViewEntity.Columns
                 .filter(col => !col.hidden)
-                .map(col => ({ name: col.Name, displayName: col.DisplayName || col.Name }));
+                .map(col => typed(col.Name, col.DisplayName || col.Name));
         }
-        return this.entityInfo.Fields
+        return entity.Fields
             .filter(f => !f.IsVirtual)
-            .map(f => ({ name: f.Name, displayName: f.DisplayNameOrName }));
+            .map(f => typed(f.Name, f.DisplayNameOrName));
     }
 
     private buildExportFileName(): string {
-        const viewName = this.viewEntity?.Name || 'Data';
-        return `${this.entityInfo!.Name}_${viewName}_${new Date().toISOString().split('T')[0]}`;
+        const viewName = this.ViewEntity?.Name || 'Data';
+        return `${this.EntityInfo!.Name}_${viewName}_${new Date().toISOString().split('T')[0]}`;
     }
 
     /**
@@ -449,11 +609,48 @@ export class UserViewResource extends BaseResourceComponent {
     /**
      * Handle creating a new record for the current entity
      */
-    public onCreateNewRecord(): void {
-        if (!this.entityInfo) return;
+    public OnCreateNewRecord(): void {
+        if (!this.EntityInfo) return;
 
         // Use NavigationService to open a new record form
-        this.navigationService.OpenNewEntityRecord(this.entityInfo.Name);
+        this.navigationService.OpenNewEntityRecord(this.EntityInfo.Name);
+    }
+
+    /** @deprecated Use {@link OnCreateNewRecord}. */
+    public onCreateNewRecord(): void {
+      return this.OnCreateNewRecord();
+    }
+
+    /**
+     * Create a new record in the CodeGen standard form (MJ#4755) — the escape
+     * hatch for entities whose custom form cannot create records.
+     */
+    public OnCreateNewRecordInStandardForm(): void {
+        if (!this.EntityInfo) return;
+        this.navigationService.OpenNewEntityRecord(this.EntityInfo.Name, { formMode: 'standard' });
+    }
+
+    /**
+     * Decide whether to offer "New in standard form" for the loaded entity.
+     * Discards the answer if the view moved to another entity meanwhile.
+     */
+    private async refreshStandardFormCreate(): Promise<void> {
+        const entity = this.EntityInfo;
+        if (!entity) return;
+        let show = false;
+        try {
+            const p = this.ProviderToUse;
+            const res = await this.formResolver.ResolveFormForEntity(entity, p.CurrentUser, p);
+            const canCreate = entity.GetUserPermisions(p.CurrentUser).CanCreate;
+            show = ShouldOfferStandardFormCreate(res, canCreate);
+        } catch (err) {
+            LogError(`ViewResource: could not resolve forms for "${entity.Name}": ${err instanceof Error ? err.message : String(err)}`);
+        }
+        if (this.EntityInfo !== entity) return;
+        this.ShowNewInStandardForm = show;
+        // Safe variant: this runs after an await in a fire-and-forget promise,
+        // so the view may be destroyed (tab closed) or mid-pass by now.
+        SafeDetectChanges(this.cdr);
     }
 
     /**
@@ -461,28 +658,38 @@ export class UserViewResource extends BaseResourceComponent {
      * ViewID is required to materialize). Dynamic views fall back to a
      * user-visible notification rather than silently doing nothing.
      */
-    public onSaveAsList(): void {
-        if (!this.viewEntity?.ID) {
+    public OnSaveAsList(): void {
+        if (!this.ViewEntity?.ID) {
             this.showNotification('Save as List requires a saved View. Save this view first.', 'info', 4000);
             return;
         }
         // Best-effort record-count hint — the entity-viewer exposes the
         // grid's row count on its gridState; we surface it so the dialog's
         // confirm button can say "Save List (476 records)".
-        this.saveAsListRecordCount = this.entityViewerRef?.TotalRecordCount ?? null;
-        this.saveAsListDialogVisible = true;
+        this.SaveAsListRecordCount = this.EntityViewerRef?.TotalRecordCount ?? null;
+        this.SaveAsListDialogVisible = true;
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link OnSaveAsList}. */
+    public onSaveAsList(): void {
+      return this.OnSaveAsList();
+    }
+
+    public OnSaveAsListCancelled(): void {
+        this.SaveAsListDialogVisible = false;
+        this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link OnSaveAsListCancelled}. */
     public onSaveAsListCancelled(): void {
-        this.saveAsListDialogVisible = false;
-        this.cdr.detectChanges();
+      return this.OnSaveAsListCancelled();
     }
 
-    public async onSaveAsListSubmit(payload: SaveViewAsListResult): Promise<void> {
-        const viewId = this.viewEntity?.ID;
+    public async OnSaveAsListSubmit(payload: SaveViewAsListResult): Promise<void> {
+        const viewId = this.ViewEntity?.ID;
         if (!viewId) return;
-        this.isSavingAsList = true;
+        this.IsSavingAsList = true;
         this.cdr.detectChanges();
         try {
             const provider = this.ProviderToUse as unknown as GraphQLDataProvider;
@@ -496,7 +703,7 @@ export class UserViewResource extends BaseResourceComponent {
                 RefreshMode: payload.RefreshMode,
             });
             if (result.Success && result.CreatedListId) {
-                this.saveAsListDialogVisible = false;
+                this.SaveAsListDialogVisible = false;
                 this.showNotification(
                     `List created with ${result.Counts?.Added ?? 0} record(s).`,
                     'success',
@@ -510,9 +717,14 @@ export class UserViewResource extends BaseResourceComponent {
             const message = e instanceof Error ? e.message : String(e);
             this.showNotification(`Save failed: ${message}`, 'error', 5000);
         } finally {
-            this.isSavingAsList = false;
+            this.IsSavingAsList = false;
             this.cdr.detectChanges();
         }
+    }
+
+    /** @deprecated Use {@link OnSaveAsListSubmit}. */
+    public async onSaveAsListSubmit(payload: SaveViewAsListResult): Promise<void> {
+      return this.OnSaveAsListSubmit(payload);
     }
 
 

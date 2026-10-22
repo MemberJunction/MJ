@@ -1,5 +1,1805 @@
 # @memberjunction/core-entities-server
 
+## 6.2.0-edge.5
+
+### Minor Changes
+
+- b14c72f: Add the personal Chief of Staff (`Chief of Staff`) AI agent, per-user narrowed governance (`MJ: AI Agent User Policies` + `AgentUserPolicyEngine`), 3-Tier Wake Gate on `MJ: User Routines` (`RoutineType = 'AgentWake'`), user-scoped calendar/email/availability actions (`EnterpriseMailboxSecurityGate`), and Communication Dashboard enterprise governance cards.
+- 8420f36: Client-direct realtime recordings no longer depend on the browser surviving the end of the call (#5294).
+  - **Opus shards during the call.** The browser captures at 48 kHz into one continuous Opus encoder (WebCodecs, or libopus WebAssembly in a Worker where WebCodecs cannot encode Opus) and uploads a 5 s `MJOPUS1` shard as raw bytes to `POST /realtime/recording/:agentSessionId/shard/:index`. Each shard is kept in IndexedDB until the server acknowledges it, so shards survive network drops and reloads and are uploaded on the next page load.
+  - **Keepalive terminal.** End, `pagehide` and `visibilitychange`→hidden send `POST /realtime/recording/:agentSessionId/end` with the last partial window as a `keepalive` request, then re-send every unacknowledged shard with `keepalive`. A hidden tab's terminal carries `final=false`: the server stamps the counts but assembles only after the grace period, so switching tabs does not rewrite the recording. `EndRealtimeSession()` waits for the terminal's acknowledgement for at most 3 s. The whole-call `UploadRealtimeRecording` upload and the `beforeunload` prompt are gone from new clients. The mutations remain for older clients.
+  - **Server ledger and assembly.** Migration `V202610151535` adds `RecordingStatus`, `RecordingExpectedShards`, `RecordingCapturedSamples`, `RecordingGaps` and `RecordingAssemblyVersion` to `AIAgentSession`, and the new `MJ: AI Agent Session Recording Shards` entity, written through guarded stored procedures. MJAPI assembles `recording.wav` and `peaks.json` within seconds of the terminal. A recording with missing shards is assembled as `Partial` after `realtime.recordingAssemblyGraceSeconds` (default 90): each gap is silence and is listed in `RecordingGaps`. The session janitor assembles sessions that never sent a terminal. Recovery of legacy `seg-*.pcm` storage shards is unchanged.
+  - **Breaking for custom hosts:** `IRealtimeSessionRecorder` now returns Opus packets (`TakeEncodedPackets()`, `Stop(): Promise<number>`) instead of base64 audio. `BrowserRecordingUnloadGuard` is removed. A host that wires its own page-lifecycle events calls `SendRecordingTerminal({ Final: false })` when the page is hidden and `SendRecordingTerminal()` on `pagehide`.
+
+- 3cb20c0: Template parameter extraction keeps the AI-written parameter descriptions again. Since the PascalCase rename the pipeline read `Description` from the model's output, which returns `description`, so every save fell back to generic text such as "Template scalar parameter 'x'" and overwrote better descriptions.
+
+### Patch Changes
+
+- 0cc6b08: Storage permissions: close the gaps a review found around `StorageAccessEvaluator`. The rules, in one place:
+  - **Account gate everywhere.** Every path that acts on a storage account for a user asks `StorageAccessEvaluator` first — the GraphQL storage routes, and now the File Storage core actions (Get Download URL, Get Object, Get File Content, Get Metadata, List Objects, Search Storage Files, Object/Directory Exists need `Read`; Get Upload URL, Copy, Move, Delete Object, Create/Delete Directory need `Write`), `List Storage Accounts` (lists only accounts the caller may read) and `BaseFileHandlerAction` (`Write` on the account a save lands in; reads go through the file-ID gate). These actions are reachable by any user through `RunAction` and by any agent. An unknown account name and a refused account return the same `ACCESS_DENIED` result. Zero permission rows on an account still means open (the current product rule, unchanged).
+  - **File-ID routes gate the account the row resolves to.** `FileStorageEngine.ResolveFileObject` (new) resolves an `MJ: Files` row's provider to its account, requires the caller's access on it, and applies the tracked-file rule to the row's object. `DownloadUrl`, `GetFileContents`, `CreateMediaAccessToken`, `DeleteFile` and the `UpdateFile` rename (`Write`), `ArtifactFileDownloadUrl`, the conversation-attachment blob store, the agent file handler and `ReadRealtimeRecordingFile` use it, so a row whose `ProviderKey`/`Name` aliases another row's object is refused.
+  - **Tracked-file rule.** An object backing an `MJ: Files` row may be read, signed, listed, returned by search, overwritten, moved, copied or deleted only when the caller can read that row (the minimum for a write; `CanWrite` is still required). Applied to the Get Object / Get File Content / Get Metadata / Get Download URL / Get Upload URL / Copy / Move / Delete Object actions, `CreatePreAuthDownloadUrl`/`CreatePreAuthUploadUrl`, `DeleteStorageObject`, `MoveStorageObject` and `CopyStorageObject` (source and destination), `CopyObjectBetweenAccounts` (both ends), `UploadFile` (before `PutObject`), and as a filter on `ListStorageObjects`, `SearchAcrossAccounts`, the List Objects / Search Storage Files actions and `SearchEngine`'s storage hits.
+  - **Key canonicalization.** Client and stored keys go through one canonicalizer, `FileStorageBase.NormalizeObjectKey` (default: trim, collapse repeated `/`, strip leading/trailing `/`; S3 overrides it to strip its key prefix the way it addresses keys), and are compared case-insensitively (`LOWER(...)` in SQL). Keys with a `.`/`..` segment, a backslash, a percent-encoded `/`, `\`, `.` or control character, or a raw control character are refused outright.
+  - **One object-key rule.** `StorageObjectKeyOf` (new) resolves an `MJ: Files` row to `ProviderKey`, or `Name` when `ProviderKey` is null or empty; the tracked-file lookup, `ResolveFileObject`, the file resolver and the conversation-attachment blob store all use it, so a row stored with an empty `ProviderKey` is checked under the same key it is served from.
+  - **Cache refresh on a miss runs as the system user.** `FileStorageEngine.RefreshAfterMiss` (new) reloads the account cache as the MJ system user; `ResolveFileObject`, `GetDriver`, `UploadFile`, the file resolver and the realtime recording store use it instead of a forced `Config` as the caller, which emptied the shared cache for everyone when the caller could not read `MJ: File Storage Accounts`. `GetFileContents` reads a row with no `ProviderKey` from its `Name`, as the other file routes do.
+  - **No truncation.** Every evaluator read sets `IgnoreMaxRows`, so the entity row cap can no longer drop an account's rows (which read as "zero rows → open") or a tracked file's row; lookups are batched.
+  - **Azure pre-authenticated URLs** are blob-scoped service SAS tokens (`r` to download, `cw` to upload) instead of account-wide SAS tokens; expiry is unchanged (10 minutes).
+  - **`MJ: Files` storage location is server-owned on existing rows.** `MJFileEntityServer` refuses a save that changes `ProviderID` or `ProviderKey` on an existing row (including `ReplayOnly`) unless trusted server code sets `AllowStorageLocationChange` (registered in both server-bootstrap class manifests). A new row may still carry a client-chosen `ProviderKey` (Explorer's direct-upload path registers its upload that way); the routes' gate above is what makes such a row harmless.
+  - **Search details.** `SearchAcrossAccounts` reports accounts in request order and withholds `totalMatches`/`nextPageToken` once hits are dropped; under an `Audience` storage hits are dropped (re-checked for the caller only; per-reader storage checks are a follow-up). `ListStorageObjects` reads the typed `Configuration` property.
+
+  Also fixed: the `List Storage Providers` action could never run. Its class was registered as `List Storage Accounts`, which no metadata row names; it is now registered under the shipped action's `DriverClass`, `List Storage Providers`.
+
+- a9614be: Saving a query with `SkipEntityAIActions` now skips the LLM enrichment step of query extraction.
+
+  Every save of a new query, or of a query whose SQL changed, runs the extraction pipeline, and with an AI vendor key present that includes an awaited LLM call (the `SQL Query Parameter Extraction` prompt) to describe parameters and fields. Nothing could turn it off. `MJQueryEntityServer.Save()` and the re-extraction a matching `MJ: Query SQLs` dialect save triggers now honour `EntitySaveOptions.SkipEntityAIActions`: the deterministic extraction still runs and writes parameters, fields, entities and dependencies, with heuristic descriptions in place of the LLM's, exactly as when the call fails. Without the option nothing changes. `RerunExtraction()` takes an optional `skipAIEnrichment` argument.
+
+  The integration bundles that create queries (runquery-rendering, runquery-cache, runquery-features, materialized-read, server-cache) now save them with this option through a shared `FixtureQuerySaveOptions()`. They assert only on deterministic extraction, and the deterministic tier is meant to need no credentials, but with keys present IT102 made about 80 paid LLM calls and timed out at 300 s. It now passes 13/13 in 39 s with keys present.
+
+- ba61c0b: Role row-level-security filters that use subqueries, or that are shared across several entities, can be edited again once permission rows reference them. Editing such a filter's `FilterText` (through the entity layer or `mj sync push`) used to be refused by the checks built for API-key row filters, which treat every word of a subquery as a column and require every referrer to be on one entity. A filter referenced only by role permission rows is now screened for dangerous SQL (subqueries and function calls allowed; DDL/DML/EXEC, comments, semicolons and system catalogs still refused) and compiled against the base view of every entity that references it, so a bad column, table or function is still refused with the database's own error. A filter referenced by any API-key or API-application scope rule keeps the strict API-key rules unchanged. New mutation-gated integration checks RF1–RF3 in the `rls-isolation` bundle cover the edit, the read restriction for users whose only role carries the filter, and both negative cases.
+- 8c120db: Cached RunQuery results now carry the definition of the query that produced them, so an edited query's old results are no longer served. A read under another definition misses; a client's cache check is answered stale when its slot came from another definition; on a shared cache a mismatch holds back writes instead of deleting the slot. The server where an edit was saved deletes the query's slots, and those of queries that compose it, once the edit settles. Slots are keyed by the resolved query, so requests by ID, by name or by both share one. Query extraction rewrites the shared cache slots once per save instead of once per row. The SQL Server cache-status check now reads the documented `TotalRows` column. A client talking to a server that predates the definition check (during a rolling deploy) retries its cache check without the definition, and tries it again a few minutes later.
+- 74d44e1: Data Context Items of type `sql` no longer run caller-written SQL unchecked (security C7).
+  - **`GetDataContextData` / `GetDataContextItemData`.** A data context's SQL items now run only for its owner or an administrator (Owner-type user), never for a scope-limited (magic-link) session, and only on the read-only provider. The read-write pool is never used for them. Before it runs, each item's SQL must pass the checks `ExecuteAdhocQuery` applies: a single read statement (`RenderPipeline` with `RequireReadStatement`) whose every table is an entity base view the caller may read in full. Both queries reject an ID that is not a UUID, and items now load for the calling user.
+  - **Per-item results.** A SQL item that may not run is refused on its own. `GetDataContextData` still loads the other items and returns one entry per item, in item order, in `Results` (the data, or null) and `ErrorMessages` (null, or the reason). `Success` is true, and `ErrorMessages` null, only when every item loaded, so a client that treats `Success: false` as an error still sees one.
+  - **`DataContextItemServer.LoadFromSQL`** runs the item's SQL through the data source's `RunQuery({ SQL })` ad-hoc path for the context user. It refuses a raw connection pool, a missing context user, and an item with no SQL. `mssql` is no longer used.
+  - **`MJ: Data Context Items`.** A new server entity class, `MJDataContextItemEntityServer`, lets only an Owner-type user save an item that is a SQL item or holds SQL text: create it, change any of its fields, or move it. It reads the item's values, not which fields changed, and refuses a non-Owner's save of an existing item whose `Type` or `SQL` was not loaded. It applies the same rule to `ReplayOnly` saves, which skip `Validate()`.
+  - **`UpdateMJDataContextItem` always loads the stored row.** `ResolverBase.MustLoadTruthFromDatabase` now includes `MJ: Data Context Items`, as it already includes `MJ: Record Changes`. Client-supplied `OldValues___` can no longer decide the item's starting state, so a client cannot hide a SQL item by repeating its new values as old ones or by leaving `Type` and `SQL` out.
+
+  Upgrade note:
+  - Deployments without a read-only database login (`dbReadOnlyUsername` / `dbReadOnlyPassword`) can no longer run SQL data context items. The other items of a data context still load.
+  - Existing SQL items are refused when a non-owner loads them, when their SQL is not a single read over entity base views, or when the ad-hoc path's keyword check refuses it (for example a `REPLACE(` call, which `ExecuteAdhocQuery` already refuses). `GetDataContextItemData` also no longer returns a refused SQL item's cached data.
+  - Users who are not Owner-type can no longer edit any field of a SQL item, including its cached data. They can still delete it, or turn it into another type by removing its SQL.
+
+- c7d1170: Security: client SQL fragments reach RunView only through the base-view clause screen. The screen moves from MJServer's `ResolverBase` into `@memberjunction/generic-database-provider` as `ClientClauseScreen`, and the provider exposes it as `ScreenClientClause`. It now also guards `RunViewsWithCacheCheck` (which also gets the `view:batch` API-key scope check), every ad-hoc list source by default (client-supplied, from the list and audience actions, or rebuilt from a stored list snapshot), the REST view routes (which also refuse a `ViewEntity` that was not loaded as an entity), and a saved view's stored WhereClause and sort (on save, and again when the view runs). The screen refuses a subquery over an entity the acting user reads under a row filter (role row-level security or an API-key row filter) or with denied fields, the queried entity included, because a subquery reads the base view without them; the ad-hoc SQL screen uses the same rule. Both screens read table references from a walk of the whole parse tree (subqueries in CASE branches, HAVING and window clauses included, and every FROM item even when an alias repeats), refuse SQL whose SELECT keywords the walk does not account for, refuse a table function in FROM unless it is an unqualified built-in that reads only its arguments, and skip only the parse wrapper's own FROM item. `SQLParser.IdentifierAliases` exposes the names a fallback parse renamed, so bracket-quoted CTE names still resolve. The fallback takes those names from a prefix the SQL does not contain and keeps each one a separate token, so every name in that map is one the parser renamed. `SQLParser.IsIdentifierAliasName` reports that name form, and both screens refuse client SQL that uses it. The ad-hoc SQL screen exempts a FROM item as a CTE reference only when it is unqualified (`dbo` counts as a schema), is in the scope of a WITH that declares the name (its own SELECT or an enclosing one; a CTE body sees the CTEs before it, itself on SQL Server, and every CTE of a PostgreSQL WITH RECURSIVE list), and matches by the dialect's identifier rules (case-insensitive on SQL Server; on PostgreSQL unquoted names fold to lower case and quoted names match exactly). The parse-tree walk takes time linear in the size of the parse tree, and the fallback renaming and the forbidden-function check take time linear in the size of the SQL. A schema-qualified table reference, `dbo` included, resolves only to an entity in that schema. Client clauses may no longer call the functions the dialect forbids in caller SQL (`CallerSQLForbiddenFunctions`), and that shared list now also covers `pg_sleep*` on PostgreSQL and `OPENXML` on SQL Server. The rubric comparison matrix and the conversations UI (the tasks view, task search and the agent artifact lookup) now read the IDs they filter by with their own RunView instead of a subquery over those views; the conversations Tasks tab rebuilds that filter on every load and refresh. On PostgreSQL the screen reads `[Name]` bracket identifiers as the PostgreSQL provider does. Every RunView caller also gets a bracket- and `E''`-aware check that refuses statement separators and comments in filter, sort and search fragments, and a view ID is spliced into SQL only when it is a GUID. A stacked statement hidden from the keyword denylist by a quote inside a bracket identifier no longer reaches the database on these paths.
+- 8389c99: A vector index created without an explicit `Dimensions` is now provisioned at its embedding model's real width instead of 1536.
+
+  Every index created from the UI (the Config page's Create Index and the Knowledge Hub "Vector Index: Auto" path) leaves `Dimensions` null, and `MJ: AI Models` has no width column to copy from, so `MJVectorIndexEntityServer` created the provider index at a 1536 fallback whatever the model. Models that can reduce their output width (OpenAI `text-embedding-3-*`) coped, because the sync passes the index's `Dimensions` into the embedding call; a model that cannot (a 384-dimension local model) got an index that rejected every write, since Pinecone, Qdrant, SQL Server and pgvector all fix the width at create time.
+
+  Before creating the provider index, the hook now embeds one short string with the index's own model (`AIEmbeddingRunner`, model pinned, no run row written, bounded by `DIMENSION_PROBE_TIMEOUT_MS`) and uses the returned vector's length. An explicit `Dimensions` on the record still wins. When the probe cannot run or fails (no model, no user context, no credentials, provider error), the index is created at `DEFAULT_DIMENSIONS` (1536) and the reason is logged so the width can be set by hand. The width used is written back to `Dimensions` with the rest of the provider metadata, as before. Closes #4988.
+
+- 03c085c: A vector index records whether it was provisioned, vectorizing refuses embeddings the index cannot hold, and the embedding model is chosen deterministically.
+
+  `MJVectorIndexEntityServer` still provisions in the background, so the save that creates the row returns at once. But the outcome of that background call used to reach only the server log, and a row whose provider refused, threw or never answered looked identical to one with an index behind it. The outcome is now written onto the row's `ProviderConfig` as `provisionState`, `provisionMessage` and `provisionCheckedAt`: `provisioned`, `failed` (with the provider's message), `timed-out` (the provider did not answer within `CREATE_INDEX_TIMEOUT_MS` and may still finish, so this is not recorded as a failure), `not-applicable` (the driver owns no index objects) or `unprovisioned` (no driver instance in this process). `Save()` never throws over provisioning. `Dimensions` and `Metric` are written back from the provider's response when it reports them, and `Metric` is requested from the row instead of hardcoded to `cosine`.
+
+  `VectorDBBase.ManagesIndexes` (default `true`, `false` on both Memory drivers) separates "this driver owns no index objects" from `IsReadOnly`, which is about record ingestion. MJ ships a Vector Index row for `SimpleVectorServiceProvider`, whose `CreateIndex` correctly answers `success: false`; that is now recorded as `not-applicable`, not as a failure, and its delete no longer asks the driver to remove an index it never had.
+
+  Vectorizing now refuses an index whose width disagrees with the embeddings it was handed, naming both widths, the index and the model. The width is the index's `Dimensions`, which is set at create time from the embedding-model probe. For rows whose `Dimensions` is still null, such as indexes created before that probe existed, the width is backfilled from `ListIndexes()` (matched on `ExternalID`, then `Name`), and a reported `dimension: 0` is treated as unknown rather than zero.
+
+  Embedding-model selection is no longer whichever row the view happened to return first. `GetAIModel`'s no-id branch orders active models ahead of inactive ones, then by `PowerRank`, then by name, and logs that nobody asked for the model it picked. The model-type comparison is normalised, so a type row spelled `embeddings` no longer hides every embedding model. Vectorizing takes the model from `VectorIndex.EmbeddingModelID`, which is NOT NULL, rather than the nullable `EntityDocument.AIModelID`, and logs a disagreement between the two without failing the run.
+
+  `EntityDocumentCache` no longer needs a process restart to see a new or edited entity document. Its `_loaded` flag was a one-way latch, and every production caller passes `refresh: false`. The cache now has a staleness window (`StaleAfterMs`, default 60s) plus an `Invalidate()` hook, and within the window a vectorize run over many entities still does not re-read metadata per entity.
+
+- Updated dependencies [3b0e8db]
+- Updated dependencies [0d81c53]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [52b9fd5]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [5465489]
+- Updated dependencies [a9344ad]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [0ab85d7]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [2274f42]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [db39145]
+- Updated dependencies [a0db1fb]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [230cdad]
+- Updated dependencies [7e72c86]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [2a7a098]
+- Updated dependencies [8420f36]
+- Updated dependencies [72dd65c]
+- Updated dependencies [9c2a051]
+- Updated dependencies [1d29837]
+- Updated dependencies [006a5e7]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [2ca8690]
+- Updated dependencies [c7d1170]
+- Updated dependencies [79d4f27]
+- Updated dependencies [5f707d1]
+- Updated dependencies [091e7ea]
+- Updated dependencies [d1b1958]
+- Updated dependencies [e1f2583]
+- Updated dependencies [03c085c]
+- Updated dependencies [dc38250]
+  - @memberjunction/generic-database-provider@6.2.0-edge.5
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.5
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/ai-prompts@6.2.0-edge.5
+  - @memberjunction/ai@6.2.0-edge.5
+  - @memberjunction/ai-core-plus@6.2.0-edge.5
+  - @memberjunction/actions-base@6.2.0-edge.5
+  - @memberjunction/ai-engine-base@6.2.0-edge.5
+  - @memberjunction/aiengine@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/communication-types@6.2.0-edge.5
+  - @memberjunction/scheduling-engine@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/templates@6.2.0-edge.5
+  - @memberjunction/feature-pipelines@6.2.0-edge.5
+  - @memberjunction/integration-engine@6.2.0-edge.5
+  - @memberjunction/sql-parser@6.2.0-edge.5
+  - @memberjunction/sql-dialect@6.2.0-edge.5
+  - @memberjunction/ai-vectordb@6.2.0-edge.5
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.5
+  - @memberjunction/tag-engine@6.2.0-edge.5
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.5
+  - @memberjunction/communication-engine@6.2.0-edge.5
+  - @memberjunction/doc-utils@6.2.0-edge.5
+  - @memberjunction/integration-pk-classifier@6.2.0-edge.5
+  - @memberjunction/rubrics-base@6.2.0-edge.5
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.5
+  - @memberjunction/sql-converter@6.2.0-edge.5
+  - @memberjunction/predictive-studio-core@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Minor Changes
+
+- 1d6e3e8: The avatar video price can be per token (#5312). `Realtime.Pricing.AvatarVideoOutput.Unit` accepts `'Per 1M Tokens'` beside `'Per Minute'`, in Core's configuration types, the AI configuration JSON type and the generated entity types. At that unit, pricing puts the run's output video tokens (`RealtimeUsage.Output.VideoTokens`) on the video cost line, measured in tokens; the tokens still leave the cost row's output bucket. A run that stored video seconds but no video tokens is priced as before, with one log line. A per-minute price prices the stored seconds exactly as before. The stored output video tokens are now capped like the seconds: at 6,192 tokens a second of the run's elapsed time plus 30 seconds, with a log line when the cap applies. Gemini 3.8 Live's Vertex AI row is seeded at $1.00 per 1M tokens: Google bills avatar video only while the avatar speaks, and the stored seconds also count the idle avatar between answers.
+- 7384dd6: Conversation forks: a conversation is Main (the messages with no branch) plus forks (`MJ: Conversation Branches`). A fork starts at a message and shows as a chip under it (kind icon, up to three avatars, message count, name, last activity); it opens as a full view where the inherited history sits faded behind a dashed rail, up to a fork marker, and the fork's own messages behind a solid rail. "Fork from here" on one of your own messages opens a new fork that replaces that message at once (it starts from the message before it, the composer starts with the message's text, the fork is created on the first send and named from that message, and leaving without sending creates nothing), Edit ("Save as fork"; the original message stays) and Regenerate (the first answer stays) each start a fork. A Forks button lists every fork, nested under its parent, with All and Mine filters. Everyone who can see a conversation sees its forks and who started each one. What a person is looking at is per person and in memory; nothing about the view is stored on the conversation, and changing the view ends an active voice session.
+  - New entity `MJ: Conversation Branches` with `Kind` (Fork, Edit, Regenerate; default Fork), `SourceDetailID` and `UserID`; new columns `ConversationDetail.BranchID` and `ConversationDetail.ReplacedAt` (migration, so `minor`).
+  - New authorization `Conversations: Fork`, granted to the UI role. The server refuses to create a fork for a person without it; deny it to a role to turn forking off for that role's members. Each person can also switch forking off in My Profile ("Fork when I edit or regenerate"; user setting `mj.conversations.forking.v1`).
+  - When forking is off for a person, Edit and Regenerate change the latest turn in place: Regenerate (latest answer) and "Save and resend" (latest user message) hide the current answer and run the agent again; earlier user messages can still be edited ("Save", shown as edited). A replaced answer keeps its row (`ReplacedAt` and `HiddenToUser` set) and is left out of the chat, export, pins, the mobile transcript, rubric subjects, the returning-visitor recap and every agent context read (`ConversationEngine.LiveRowsFilter` and `IsReplacedRow`). A turn a fork depends on is not changed in place.
+  - Every writer sets `BranchID` itself (null is Main): the composer and its agent turns, `AgentRunner`, the task-graph deliverer, an agent request resumed from the Agent Requests dashboard or API (the fork of the message that started the run) and realtime transcripts (a voice session's fork is fixed when it starts). The server no longer stamps it and refuses a `BranchID` that names a fork of another conversation.
+  - A fork that still has its own messages or child forks cannot be deleted on its own (its messages would move into Main); deleting the conversation deletes its forks and messages.
+  - `ConversationEngine` gains `CreateFork`, `ForkPointFrom`, `EditForkPoint`, `RegenerateForkPoint`, `SourceRowsFilter`, `BuildForkSummaries`, `LoadForkSummaries`, `ForkDisplayName`, `LiveRowsFilter` and `IsReplacedRow`.
+  - **Removed public Angular API** (the ParentID-based thread panel; a host app that binds any of these must drop the binding): `ConversationChatAreaComponent`'s `ThreadId` input and `ThreadOpened`/`ThreadClosed` outputs; the `ThreadPanelComponent` export; `ConversationWorkspaceComponent`'s `OpenThread`, `CloseThread` and `SelectedThreadId`; `ChatConversationsResource`'s `SelectedThreadId`, `OnThreadOpened` and `OnThreadClosed`; `MessageListComponent`'s `ReplyInThread` and `ViewThread` outputs. Their deprecated camelCase aliases (`threadId`, `threadOpened`, `threadClosed`, `openThread`, `closeThread`, `selectedThreadId`, `onThreadOpened`, `onThreadClosed`, `replyInThread`, `viewThread`) are removed with them.
+
+  Message-anchored scope: every reader of one conversation reads one path through `ConversationScope` (`LoadScope`, `TrunkScope`, `ScopeFilter`, `ScopeSubquery`, `IsInScope`, `FilterToScope`, `ArtifactVersionScopeFilter`): the open view in the chat (window, pins, artifacts, agent polling, export, voice start), and Main for the mobile app, the realtime widget, meeting transcripts, the conversation overview, rubric subjects and the returning-visitor recap. Artifact history is path-aware: the viewer takes a `Scope` input and lists only the versions a message on the path links (any direction) or that no message links, labels a gap as `v4 · from v2`, and falls back to the newest visible version with a notice. Search results carry the fork of each hit; opening one opens that fork, or Main. Skip requests carry `conversationBranchID` from the reply's fork, so Skip Brain keeps one mirror record per path.
+
+- f0c78c3: Realtime session events and mid-session identity verification (server side), with a typed client.
+  - **Session events** (`@memberjunction/ai-core-plus`, `@memberjunction/server`). A framework-neutral event contract (`RealtimeSessionEvent`, an extensible payload map whose first type is `identity.verified`, and a validating `ParseRealtimeSessionEvent`), a `RealtimeSessionEventService` apps publish through, and a `RealtimeSessionEvents(agentSessionId)` GraphQL subscription. It is authorized twice: when it opens and for every event. The session's `UserID` must be the caller's; an anonymous widget guest must also present a signed per-session scope matching the session's conversation. A refusal reads "not found" whether the session is missing or simply not the caller's.
+  - **Identity verification** (`@memberjunction/server`). A person proves they control an email address without leaving the conversation: `RequestRealtimeSessionVerification`, `SubmitRealtimeSessionVerificationCode` and `RealtimeSessionVerificationStatus`, plus the public `GET/POST /realtime/verify` link routes (GET only renders a confirm button, so mail scanners cannot consume the link). Single use, expiring, constant-time compared. Policy: `requireBusinessDomain`, `consumerDomains`, `blockedDomains`, `linkTtlMinutes`, `maxSendsPerSession`, `maxCodeAttempts`, `unverifiedMaxSeconds`, `verifiedMaxSeconds`, plus per-IP, per-domain, per-address and per-session limits. On success the session is marked verified, its deadline extended, `identity.verified` published and an audit entry written. It never creates an MJ user or changes the session's principal. Off by default; needs `realtime.identityVerification.enabled`, a `communicationProvider` and an `hmacSecret` (at least 16 characters). `deliveryMode: 'dry-run'` builds and logs the email without delivering it, for rehearsal and integration environments. See `packages/MJServer/src/realtimeSessions/README.md`.
+  - **The typed code is keyed.** The six-digit code is stored as an HMAC under a server-only secret, because the session's owner can read their own session row and an unkeyed hash of a six-digit code can be reversed offline.
+  - **Server-decided session state is protected** (`@memberjunction/core-entities-server`). `MJAIAgentSessionEntityServer` refuses any write to `Config.identityVerification` or `Config.maxSessionDeadlineIso` that does not come from trusted server code, including from the session's own owner. Without it the owner could forge a verified identity or move their own deadline.
+  - **`StartRealtimeClientSession`** stamps the verification policy snapshot and the unverified duration cap on any principal, and carries a verified identity forward from `lastSessionId` when the caller is authorized on it. It also stops dropping `Config` keys (`directActions`, `mediaCollectionID`) when it records the run ids.
+  - **`AppContext.ClientIp`** (`@memberjunction/server`) carries `req.ip` for abuse limits.
+  - **`GraphQLRealtimeSessionClient`** (`@memberjunction/graphql-dataprovider`). The typed transport for the three operations and the subscription: `RequestVerification`, `SubmitVerificationCode`, `GetVerificationStatus`, `SubscribeToSessionEvents` and `SubscribeToSessionEventsOfType`. It never throws, never logs the email address or code, parses `PayloadJson` with `ParseRealtimeSessionEvent` and passes unknown event types through so a newer server cannot break an older client. It reuses `GraphQLDataProvider.Subscribe`.
+  - **Metadata.** Adds the audit log type "Realtime Identity Verified".
+  - **Integration tests** (`@memberjunction/integration-test-suite`). IT111 (server transport) proves the session guard in process and seeds the server-decided fixtures; IT112 (client transport) drives verification end to end over the GraphQL wire and a real HTTP GET and POST of `/realtime/verify`.
+
+- 0e5a4cd: Template users: an account set up to be copied, with its pinned apps, views, settings, dashboards and Skip conversations, so a new user starts with all of it.
+  - **`User.IsTemplate`** (migration). The User form shows it under Account Settings. A copy is never a template itself.
+  - **The `template` preset on `MJ: Users`** copies a template user whole: views, settings, dashboards with their categories and links, conversations with their messages, and the artifacts and versions in them. Dashboard layouts, pinned items and artifact references point at the copies. The planner refuses the preset for any user not flagged `IsTemplate` (`TEMPLATE_SOURCE_REQUIRED`), so one person's private work is never copied to another. Only a template-mode preset may open a Locked edge or copy an entity marked `CloneableFromTemplate` (conversations and their messages); request overrides still cannot.
+  - **First sign-in.** `userHandling.newUserTemplate: { email, preset }` in `mj.config.cjs` makes MJAPI create each new user as a copy of that template. Any problem falls back to a plain user, so sign-in never breaks.
+  - **`mj user clone`** creates a user as a copy of another: `--from`, `--email`, `--first`, `--last`, `--preset` (default `template`), `--inactive`, `--dry-run`.
+  - **Open Apps can ship a template user.** `templateUser: { email, description?, preset?, newUsers?: offer | always | never }` in `mj-app.json`. After install, the installer gets their own copy, from `MJ_INSTALL_USER_EMAIL` / `_FIRST_NAME` / `_LAST_NAME` or prompts. The template can also be set for later sign-ins (`MJ_INSTALL_TEMPLATE_FOR_NEW_USERS`). The step only warns on failure; it never fails the install.
+  - **Explorer** shows a red banner while a template user is signed in, because everything changed there reaches every later copy.
+
+  Fixes found on the way:
+  - **CurrentUser** now returns `IsTemplate`, `FirstLast` and the `Employee*` fields. It returned null for every `UserInfo` field missing from its hand-written list. The list is now `SessionUserFields`, with a test that it covers every field the client requests.
+  - **Artifact version saves inside a transaction.** `MJArtifactVersionEntityServer` read attributes through the global provider. On a server's per-request provider, inside a clone's transaction, each read waited about 30 s on the transaction's own locks. A 23-version copy took 11 minutes instead of seconds. It now reads through the entity's provider.
+  - **Copies keep their rows' order.** The dependency walker reads children oldest first (`__mj_CreatedAt`). A row whose remapped column points only at its own ancestors, such as a copied user's messages naming the new user, now saves within the graph save instead of after it. Copied conversations kept their messages, but showed each answer above its question.
+  - **User copies keep dashboard and view names.** The entities' `(copy)` rename applies only where a name could collide. A user copy owns its rows, so the rename only mislabelled them.
+  - Record cloning: `Child.JoinField` preset keys, case-insensitive key lookup in JSON remap, Golden Layout and top-level-array JSON remap paths, and a descendant's `JsonRemap` merged with the entity's own.
+  - A conversation message can be created during a clone save (`CloneContext`) by a user who doesn't own the conversation yet. Updates and deletes are still checked.
+
+### Patch Changes
+
+- de2dc2f: Avatar video in realtime usage and cost. The Gemini browser client counts the seconds of avatar video a model turn generated from the fragments' durations (Core's fragmented MP4 reader gains track timescales and `Fmp4VideoSeconds`), until `generationComplete` (an interrupted turn counts what arrived before `interrupted`), and emits them once, as amounts, in `OutputTokenDetails.VideoSeconds`; it also reads Google's response-side token split, VIDEO included (`RealtimeUsageModalityDetail.VideoTokens`). The runtime relays the full input and output detail blocks, and an update that carries only video seconds; `RelayRealtimeUsage` takes them as an optional `usageDetailsJson` argument, and `AccumulatePromptRunUsage` adds them into the co-agent prompt run's `ModelSpecificResponseDetails.RealtimeUsage` record, with the stored video seconds capped at the run's elapsed time plus 30 seconds. At finalize, a run whose model vendor configuration has `Realtime.Pricing.AvatarVideoOutput` (per minute) is priced at its cost row plus a video line, the video's output tokens leave the cost row's output bucket, and the lines are written under `CostLines`; without that price the run prices as before. The agent-run analytics cost card shows the avatar video on its own line and no longer prices the video's tokens as output. Integration check RD16 stores a minute of avatar usage on a co-agent-shaped prompt run for Gemini 3.8 Live on Vertex AI, finalizes it, and checks its cost lines.
+- 0c68021: Knowledge Hub: the Record Duplicates board loads one run instead of the whole review history, and "Vector Index: Auto" actually finds or creates an index.
+
+  **Record Duplicates** showed "0 Total Groups / No duplicate detection results found" for an entity with results, because it never finished loading them. `loadRunData()` pulled `MJ: Duplicate Run Details` and `MJ: Duplicate Run Detail Matches` unscoped, for every entity and every run ever performed (391,370 rows on one production tenant, for a run holding 160 matches), and the request timed out. Both queries are now bounded to the selected entity document's current run: its newest run that did not fail and covered the whole entity, falling back to its newest run of any kind. Not "latest Complete run", since a cancelled run stays `In Progress` and an older Complete run would hide the rows the user just watched being produced; not plain "newest" either, since a `Failed` run usually has no details and a list-scoped run holds a subset. Before the user picks a document, the board defaults to the document whose entity has the most recent run, so a first visit does not land on an unrelated document and report "no results" beside a real run. A fast switch between documents can no longer let the slower load overwrite the faster one. The run's details load first and the matches are then fetched by those detail IDs (`IN (...)`, chunked at 500), rather than through a subquery against the details view: the join is exact, and the client never has to name a schema or view for whatever database sits behind the API. Changing the entity document swaps the board to that document's run. `IgnoreMaxRows` stays on both queries on purpose: details truncate by date and matches by probability, so those two subsets diverge inside any run larger than `UserViewMaxRows`, the details load with no matches, and the board is empty again by a different route. The scoping bounds the volume; the flag keeps the join complete within it. Covered by a test that loads one run out of several, each above the 1000-row cap, and checks that every detail of the selected run still joins to its matches.
+
+  **Vector Index: Auto (create/find matching index)** left the entity document with no `VectorIndexID`, and the syncer refuses to run without one, so the choice was a dead end. Both the AI Document Suggestion "Save as Entity Document" flow and the entity-document edit panel now resolve it: reuse the index on the same vector database built for the same embedding model, or create the `MJ: Vector Indexes` record for one. A same-database index for a different model is never reused, since its vector width would reject every upsert.
+
+  **`MJVectorIndexEntityServer`** provisions the provider index after the save that creates the record returns (unchanged), and that provider call is now bounded by `CREATE_INDEX_TIMEOUT_MS` (60 s): after that the hook stops waiting, logs, and skips the metadata write-back (the provider call itself is abandoned, not cancelled). The provider metadata write-back (`ExternalID`, `Dimensions`, `Metric`, spec) is unchanged and now covered by tests. An auto-created index is named in the form the server's provider-name sanitizing leaves unchanged (`<entity>-<model>-<hash>`, lowercase, hyphens, under 45 characters), so the provider index and the `Name` the sync, the detector and the vectors resolver address are the same index. `Dimensions` is still left for the server to resolve, as the Config page's Create Index does; a follow-up will have the server probe the embedding model for its width instead of defaulting to 1536.
+
+  Two behaviour notes for reviewers of a run-scoped board: the Approved and Rejected columns reflect the run being shown, so re-running detection starts the review over for that run (decisions from earlier runs are not carried forward; a detector follow-up could do that), and two sessions creating an Auto index for the same database and model at the same moment can each create one, since matching is done against the loaded index list.
+
+- b8a9e5e: Remove nested `UUIDsEqual` scans where both lists grow with the data or the code runs on every render. Fix one cross-database lookup bug.
+  - **Rubric publish validation could miss advisory parents.** `ValidateRubricTree` looked a raw `parentId` up in a map with normalized keys. On SQL Server (upper-case IDs) the advisory-ancestor walk silently stopped, so a non-advisory criterion under an advisory group was not reported. The map is now a `UUIDMap`.
+  - **Per-render getters no longer rescan the entity list.** The Entity form's `FormChromeCandidates`, the Data Explorer's `RecentEntities` / `FavoriteEntities` and the storage admin's `FilteredAccountRows` now read cached or once-built indexes.
+  - **Entity lookups by ID** in the ERD, the get-entity-details and list-entities actions, recent-access and the form builder now use the provider's indexed `EntityByID`. The application dialog uses a once-built index.
+  - **Other once-built indexes:** tag lookups, permission grantee names, orphaned-conversation owners and flow-editor node moves.
+  - `createFakeProvider` (`ng-test-utils`) now implements `EntityByID`, like a real provider.
+  - **New helper:** `GroupByUUID(items, getId?)` in `@memberjunction/global` groups items by a UUID in one pass, each group in input order.
+  - **Server sites that matched two growing lists:** the user cache (users × user roles), resource-permission deduplication, user/role sync, default-app user applications, scheduled-job statistics, MCP action discovery, REST connector schema introspection and rubric calibration.
+  - **Offline tools:** CodeGen relationship sync and CHECK-constraint value lists, CodeGen's related-entity form lookups, and `mj artifacts reclassify`.
+  - **Angular screens that scale with the data:** the AI Agent form's linked prompts and actions, the prompt priority matrix, the Testing explorer, the conversations message cache, the Query Browser tree, the Actions overview and categories, the dashboard browser, list-form bulk remove and credentials bulk actions.
+
+  Behaviour is unchanged otherwise, and each site has a test that also passes against the old code.
+
+- Updated dependencies [96d6ec2]
+- Updated dependencies [a709bb6]
+- Updated dependencies [d17de94]
+- Updated dependencies [7ada797]
+- Updated dependencies [51c469d]
+- Updated dependencies [432cb73]
+- Updated dependencies [293c316]
+- Updated dependencies [155aa45]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [822ed69]
+- Updated dependencies [1da00cb]
+- Updated dependencies [b699a37]
+- Updated dependencies [0dbd455]
+- Updated dependencies [dde482c]
+- Updated dependencies [a4b23b7]
+- Updated dependencies [49f26d9]
+- Updated dependencies [961d529]
+- Updated dependencies [10c2311]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [bb3028a]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [1a95eaf]
+- Updated dependencies [0a7c255]
+- Updated dependencies [64b6fa5]
+- Updated dependencies [fcf8e1c]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [ef182be]
+- Updated dependencies [af6f892]
+- Updated dependencies [432fe69]
+- Updated dependencies [4889fb2]
+- Updated dependencies [b2441c3]
+- Updated dependencies [69e19c5]
+- Updated dependencies [7316ac3]
+- Updated dependencies [8ef5e86]
+- Updated dependencies [596855c]
+- Updated dependencies [fdf6669]
+- Updated dependencies [4c682c1]
+- Updated dependencies [f325baa]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [b09fe34]
+- Updated dependencies [6d5c6ad]
+- Updated dependencies [8bac4d6]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [20650af]
+- Updated dependencies [5a3de97]
+- Updated dependencies [0d0ba18]
+- Updated dependencies [b6fcb30]
+- Updated dependencies [f73e192]
+- Updated dependencies [8704df6]
+- Updated dependencies [5345e3d]
+- Updated dependencies [1ea4085]
+- Updated dependencies [975948b]
+- Updated dependencies [22c9074]
+- Updated dependencies [88b85fc]
+- Updated dependencies [aee2d53]
+- Updated dependencies [5dc3752]
+- Updated dependencies [6c8798b]
+- Updated dependencies [f0c78c3]
+- Updated dependencies [25f7b82]
+- Updated dependencies [35ed7b5]
+- Updated dependencies [d853bf8]
+- Updated dependencies [e293b68]
+- Updated dependencies [02bb563]
+- Updated dependencies [afe9eb4]
+- Updated dependencies [90829e3]
+- Updated dependencies [57096ab]
+- Updated dependencies [1ef460d]
+- Updated dependencies [aac148b]
+- Updated dependencies [9ce70b3]
+- Updated dependencies [e1942c7]
+- Updated dependencies [d2cb42e]
+- Updated dependencies [cbddadb]
+- Updated dependencies [bdea87a]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [b653746]
+- Updated dependencies [57fea6a]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [6b487b8]
+  - @memberjunction/ai-core-plus@6.2.0-edge.4
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/ai-engine-base@6.2.0-edge.4
+  - @memberjunction/aiengine@6.2.0-edge.4
+  - @memberjunction/ai@6.2.0-edge.4
+  - @memberjunction/generic-database-provider@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/ai-prompts@6.2.0-edge.4
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.4
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.4
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.4
+  - @memberjunction/scheduling-engine@6.2.0-edge.4
+  - @memberjunction/sql-dialect@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/templates@6.2.0-edge.4
+  - @memberjunction/sql-parser@6.2.0-edge.4
+  - @memberjunction/integration-engine@6.2.0-edge.4
+  - @memberjunction/tag-engine@6.2.0-edge.4
+  - @memberjunction/feature-pipelines@6.2.0-edge.4
+  - @memberjunction/actions-base@6.2.0-edge.4
+  - @memberjunction/communication-types@6.2.0-edge.4
+  - @memberjunction/communication-engine@6.2.0-edge.4
+  - @memberjunction/doc-utils@6.2.0-edge.4
+  - @memberjunction/integration-pk-classifier@6.2.0-edge.4
+  - @memberjunction/ai-vectordb@6.2.0-edge.4
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.4
+  - @memberjunction/rubrics-base@6.2.0-edge.4
+  - @memberjunction/sql-converter@6.2.0-edge.4
+  - @memberjunction/predictive-studio-core@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Minor Changes
+
+- dfe40a4: Binary fields work end to end, and persisted embeddings gain a binary float32 copy that loads about 14× faster than the JSON one.
+
+  **Binary fields (varbinary / binary / image on SQL Server, bytea on PostgreSQL).** Previously a binary column reached `BaseEntity` as whatever the driver returned. A Node `Buffer` then serialized over GraphQL as `{"type":"Buffer","data":[…]}`, and saves wrote the base64 text into the column. Now a binary field's value is a **base64 string** everywhere above the database: in `BaseEntity`, every cache, RunView results and the GraphQL wire. Providers convert at the boundary. SQL Server binds a `0x…` hex literal, PostgreSQL binds a `Buffer`, and rows read back become base64, including rows returned from a transaction group save. CodeGen now declares a length-less `varbinary` parameter as `varbinary(MAX)`; it used to emit `varbinary`, which T-SQL truncates to one byte. Generated getters document the encoding, and generated forms skip binary fields.
+  - **`RunView` omits binary fields by default.** Set `IncludeBinaryFields: true`, or name a binary field in `Fields`, which sets it for you. The flag is part of the cache fingerprint, so the two shapes never share an entry. A single-record `Load()` always includes binary fields. Engine configs take `IncludeBinaryFields: true | 'DatabaseProviderOnly'`; the second loads binary fields only in server processes.
+  - **Validation.** Saving a value that is not canonical base64 into a binary field fails `Validate()` with a message naming base64. A value whose decoded length exceeds a fixed-length column also fails.
+  - **`@memberjunction/global` codecs.** `BytesToBase64` / `Base64ToBytes` / `TryBase64ToBytes` pick the fastest host implementation: native `Uint8Array.fromBase64`, then Node `Buffer`, then `atob`. On Node, validation is fused into the decode and is fuzz-tested to accept exactly what `IsValidBase64` accepts. `Float32VectorToBase64` / `Base64ToFloat32Vector` handle little-endian float32 vectors. `ReplaceByteArraysWithBase64` makes any raw query row JSON-safe.
+
+  **Binary vector columns (migration `V202610021716`).** These nullable `varbinary(MAX)` companions of the JSON vector columns are added:
+  - `EntityRecordDocument.VectorBinary`
+  - `EmbeddingVectorBinary` on `AIAgentNote`, `AIAgentExample`, `Query` and `Tag`
+  - `Component.FunctionalRequirementsVectorBinary` and `Component.TechnicalDesignVectorBinary`
+
+  Every writer now fills both columns: `BaseEntity.GenerateEmbedding*` (new optional binary field parameter), the note, example, component, query and tag entity servers, `TagEngine`, and the entity vectorizer (`EntityVectorSyncer`). Readers prefer the binary column through the new `ReadStoredVector` and `DecodeVectorBinary` in `@memberjunction/ai-vectors-memory`, and fall back to JSON for rows written before the column existed or for invalid binary values. The readers are `SimpleVectorServiceProvider`, `SimpleVectorDatabase` (new `binaryVectorField` ProviderConfig key), `AIEngine`, `TagEngine`, `TagHealthJob`, `QueryEngineServer` and clustering. For 20,000 × 1,536 vectors, decoding takes 0.28 s, against 3.9 s to parse the JSON.
+
+  Fixes found along the way:
+  - Clustering no longer counts a binary-only row as having no vector.
+  - A note, example or tag whose stored JSON vector is malformed is now dropped from the in-memory index instead of throwing.
+  - A PostgreSQL transaction group post-processes each row with its entity's own provider rather than the process-global one.
+
+- b545842: Rubric evaluators are pluggable. `RubricEngine` creates the evaluator a call names through the class factory (`BaseRubricEvaluator`), so a host can register its own and run it from `EvaluateRecord`, an agent-rubric link's `EvaluatorConfig`, a calibration test, the Evaluate Record Against Rubric action, or `mj rubric evaluate`. Adds a `Decision` evaluator that scores every level-scale criterion as a typed Score question on a Decision-type model (Default Decision: Jev, then LLM Decision) in one call. The LLM evaluator now honors `PromptID`/`PromptName`, `ModelID`, `Mode`, and `Samples`. Self-check, production sampling, and the rubric test oracle honor the link's whole evaluator selection. Evaluations record the evaluator's own type and name, and `AIPromptRunID`/`AIAgentRunID` now point at the run that produced the evaluation instead of the subject. The minor bump is for the updated Evaluate Record Against Rubric action metadata.
+
+  The LLM evaluator's prompts are now metadata. It builds template data and composes three stored prompts into one call: **Rubric Evaluator** (the parent, which owns the JSON reply contract), a **judge** rendered into its `judgePrompt` slot through the prompt runner's child-prompt composition, and **Rubric Criterion**, which renders each criterion (the Decision evaluator asks the same text). The subject is a separate, nonce-delimited user message. `PromptID`/`PromptName` now name the judge; `SystemPromptID`/`Name`, `CriterionPromptID`/`Name`, and `ModelSelection` are new settings. The packaged template copy and `RenderRubricEvaluatorPrompt`, `BuildRubricEvaluatorMessages`, and `FillRubricEvaluatorTemplate` are removed; `BuildCriteriaPromptData`, `PromptData`, `RenderCriteriaText`, and `BuildSubjectMessage` replace them, and `RubricPromptService` gains `RenderCriteria` and `Preview`. Sixteen judge prompts ship, a default and one per core agent (Research Agent and its sub-agents, Sage, Query Builder, Query Strategist, ActionSmith, SkillSmith, Codesmith, Database Designer, Duplicate Resolution, Infographic), every core agent's rubric link names its own, and Sage gains an **Assistant reply** rubric and a Core agent rubrics test. The `llm-judge` oracle runs through the same prompts and accepts a `judgePrompt` config. Agent evaluation tests now propagate the agent link's evaluator configuration to implicit rubric oracles, conversational agent responses fall back to `Message` when `FinalPayload` is empty, and `TraceValidatorOracle` orders step records by `StepNumber` instead of `Sequence`.
+
+- 60bd774: Form contributions can be metadata rows, not only compiled panels, and users can place, share, hide and remove them from the form itself.
+
+  **Contributions from metadata.** A `MJ: Entity Form Contributions` row (migration `V202610051244__v6.2.x__Entity_Form_Contributions`) mounts a `MJ: Components` row (`Type='Widget'`, spec `componentRole: 'form-panel'`) on an entity's form. It carries the same registration bag as `@RegisterClassEx` plus `Presentation`, `Title`, `Icon`, `Configuration`, `Precedence` and User/Role/Global scope. `CollectFormContributionRegistrations` merges rows with class registrations, and the form collapses the list once per resolve (`ResolveFormContributionWinners`): one winner per `ContributionKey`, the higher rank wins, a compiled panel wins a tie against any row, and between rows `User` beats `Role` beats `Global` (`FormContributionOutranks`). `CollectFormPanelRegistrations` stays as a deprecated wrapper that returns compiled registrations only. Wildcard (`'*'`) registrations take part on every form, but their place claims are ignored: one that claims a grid, a section or a tab replaces nothing, and one that names a section to draw in draws at its slot. `InteractiveFormsEngine` caches the rows and the full custom forms (in the browser, the shared ones and the signed-in user's own) and fetches each panel component by ID once (`GetComponentByID`); `InteractiveFormPanelComponent` renders them, and a panel can change only the fields it claims, in edit mode. On the 11 identity, permission and form-metadata entities in `RESTRICTED_FORM_ENTITIES`, only `User` rows and full custom forms render.
+
+  **One rule set, shared by the browser and the server.** The contribution key is derived once (`ResolveContributionWriteKey` in `@memberjunction/interactive-component-types/forms`). `@memberjunction/core-entities` `custom/FormScope/` holds the spec-to-row mapper (`ApplyContributionSpecToRow`), the claim validator (`ContributionClaimRefusal`), the scope rules (`FormScopeWriteRefusal`, which normalizes Scope and fails closed, `ComponentWriteRefusal`, `FormRowComponentRefusal`, `ComponentNameCollisionRefusal`, `IsCallersOwnComponent`, `IsCanonicalFormScope`, `ContributionScopeRank`, `FormContributionOutranks`, `IsSelectableFormOverride`, `FormScopeAllowedOnEntity`, `UserCanManageFormDefaults`), the hide-setting key helpers, and the retire rule (`ActiveContributionSiblings`, which compares keys ignoring case as the SQL Server unique index does).
+
+  **What a panel can stand in for.** One claim per row, enforced by the database: a related grid, one or several field sections (`ReplacesSectionKey`, `ReplacesSectionKeys`), a group of fields (`ReplacesFieldNames`, rendered once inside that section), or a place inside a section (`InSectionKey` + `SectionPosition`). A compiled panel renders at the slot it registered for, and a panel standing in for something takes its place. The `top-area` slot is accepted by the CHECK constraint but no form emits it, so the placement dialog does not offer it.
+
+  **Authoring.** New actions `Create Form Contribution`, `Modify Form Contribution`, `Activate Form Contribution Version`, `Get Form Contributions For Entity` and `Get Form Composition For Entity`. The write actions, and the existing Modify / Activate / Revert Interactive Form actions, change only the caller's own `User` rows; a `Role` or `Global` row returns `FORBIDDEN` for every caller. A spec with more than one claim returns `INVALID_CLAIM` before any write. The contribution actions write the Component and the row in one transaction, and so do the Modify and Activate Interactive Form paths for a full form's Component and override; Create and Revert Interactive Form do not. Modify and Activate Interactive Form set the prior version aside after that transaction, and Activate returns `PERSIST_FAILED`, with the new form already Active, when it cannot. Activating a target that is already Active also sets aside the caller's other Active personal forms for that entity. `Modify Form Contribution` accepts an optional `Precedence`. `Get Form Composition For Entity` answers for the form the user sees as far as metadata can tell (hidden panels, restricted entities, the same collapse; no compiled panels, and no rows while the kill switch is off) and returns `QUERY_FAILED` when a query fails. The artifact viewer previews a form-panel spec and offers **Add to my form**, which opens a placement dialog: the entity's real form, read-only and scaled, with the panel drawn where it will go, the positions the form actually has, order within a position, what it replaces, and draft or active. The dialog starts from the claims the panel proposes that it offers on the open form, and on a full custom form the panel starts as a draft. New `mj-icon-picker` (`@memberjunction/ng-ui-components`) chooses a Font Awesome solid or regular icon by looking at it.
+
+  **Managing a form.** A "Manage this form" drawer lists the form choice and every panel; Escape closes it and focus stays inside it. Any user can hide a panel shared with them and remove their own. Hide and Show change the open form at once: its slot-mounted panels remount, and a stock grid comes back when the panel that took it over is hidden. Publishing a panel or a full custom form to a role or everyone needs the new `Manage Form Defaults` authorization (Developer and Integration; owners count). `MJEntityFormContributionEntityServer` and `MJEntityFormOverrideEntityServer` enforce it on every save, replayed save and delete. Turning a panel on, or publishing it, retires the Active sibling for the same audience and key in the same transaction and sets the panel component's status. The stock UI role can create and update `MJ: Components` (not delete), so any user can create or change their own panel through the actions and turn it on, off or to a draft in the drawer. Without `Manage Form Defaults` the server requires the component to be the caller's own (`IsCallersOwnComponent`): used only by their own personal rows, or used by no row and created by them, as its Internal `Create` record in `MJ: Record Changes` shows. That applies to any update or delete of the component, whatever columns it changes (`MJComponentEntityServer`, `ComponentWriteRefusal`), to a contribution or override row created or re-pointed at it (`FormRowComponentRefusal`), and to reusing its name (`ComponentNameCollisionRefusal`, names compared trimmed and lower-cased, in any namespace, and sent as a Unicode literal on SQL Server); a form can also load a component by name, so a component no row uses still matters. With the grant, a delete or a change to a component's specification, status, name, namespace or type, and pointing a row at it, are refused only when another user's personal row uses the component. The reads run as the caller in one batch, the changed columns come from the stored row, and a failed read refuses the write. Publishing a draft, an off panel or a set-aside form turns it on, and the chooser says so. A set-aside (`Inactive`) shared form is retracted; a set-aside personal form stays in its owner's picker. The placement preview never saves form state.
+
+  **Form context.** The record container publishes its full composition snapshot to `FormCompositionRegistry` (`@memberjunction/ng-base-forms`), where the apply path reads it. Agents get a compact `FormAgentContext` in `AdditionalContext.Form` (entity, record key, form choice, and each section's key, title, variant, hidden flag and holding contribution), published by the record tab while it is the tab on screen. `RecordPrimaryKey` is a `CompositeKey.ToURLSegment()` string, or null for an unsaved record. The `SkipFormContext` mirror in `@askskip/types` must follow this shape.
+
+  **Kill switch.** On a Node host, `MJ_FORMS_METADATA_CONTRIBUTIONS=false` makes the engine on that process load no row. In Explorer, the `MJ: Instance Configurations` key `Forms.MetadataContributions.Enabled` set to `false` turns rows off on every form; the shell applies it after `InstanceConfigEngine.Config()` and before any form opens, it can only turn the source off, and the source stays on when Instance Config fails to load. `Get Form Contributions For Entity` and `Get Form Composition For Entity` list no row when either setting is off and report `MetadataContributionsEnabled`. The write actions still write rows. The seed row reaches a database through `mj sync push`.
+
+  **Section counts and empty sections.** A saved record fetches every related-section count and the tag, attachment and version badges in one `RunViews` call; an all-`count_only` batch runs as one `UNION ALL` statement in `GenericDatabaseProvider`, with each view's security path intact. New `whenEmpty` (`'show'` default | `'hide'` | `'more'`) and `showCount` on `EntityRelationship.Configuration.UI` and on contributions, with entity defaults `UI.Form.RelatedWhenEmpty` and `UI.Form.ShowRelatedCounts`.
+
+  **Fixes.** Eleven compiled panel registrations named their entity without the `MJ: ` prefix: the five overview cards and the realtime panel mounted only through the slot host's loose name match, which the rail did not apply, and the five header panels also used `slot: 'header'`, which is not a `FormPanelSlot`, so they never rendered. All eleven now use `MJ: ` names and the slot host matches names exactly, so the hero headers render above the overview cards on `MJ: Users`, `MJ: Companies`, `MJ: Employees`, `MJ: Conversations` and `MJ: AI Agent Categories`. The overview cards query `MJ: ` entity names (four of them queried unprefixed names and showed empty states), the overview cards and the realtime panel show a load error instead of an empty state when a query fails, and conversation turn pills and counts use the stored `User`/`AI` roles. CodeGen no longer corrupts generated validators that contain escapes, and a table-level validator's metadata guard includes the validator's `Name`.
+
+  **Behaviour changes to know about.** `BaseFormPanel.Validate()` now runs on Save (through `BaseFormComponent.ValidateAsync()`) and may return a Promise. A React panel whose `Validate` throws does not block the save and shows the failure in the panel, as it does an error from `<mj-react-component>`; a field edit from a panel that the record refuses is logged and dropped. After upgrade, editing or deleting an existing `Role` or `Global` full custom form needs `Manage Form Defaults`, and an `mj sync push` of `Global` rows needs a sync user who holds it or is an Owner. The UI role gains Create and Update on `MJ: Components`. Without `Manage Form Defaults`, whatever role grants component rights, a caller can change or delete a component, on any column, only when it is their own (used only by their own personal rows, or used by none and created by them), and two such users cannot give components the same name. With the grant, a delete or a change to one of the five guarded columns (specification, status, name, namespace or type) is refused only when another user's personal row uses the component, and a change to any other column passes. `MJRecordChangeEntityServer` refuses a caller creating a record change whose `Source` is `Internal` and `Type` is `Create` through the API; other record changes, such as version-label snapshots, are unchanged. `mj sync push` runs as the `System` user, which must hold the Developer role and so holds the grant by default; a sync user that is neither an Owner nor a holder of the grant can push changes only to components of its own. Every `mj-form-field` carries `data-field-name` and `data-field-label`. Collapsible-panel move up/down follows the visual order. New user setting `mj.formPanels.hidden.<entity>`; the existing `mj.formVariant.<entity>` is also read by `Get Form Composition For Entity`. `ng-conversations` gains a type-only dependency on `ng-base-forms`. `Get Active Form For Entity` applies the restricted-entity rule, so a Role or Global form on one of those entities is neither active nor listed. A `form-panel` spec must set `entityName`; the artifact viewer no longer falls back to `dataRequirements` for a panel.
+
+  **PostgreSQL.** `UQ_EntityFormContribution_Key` and `UQ_EntityFormContribution_RelatedClaim` include nullable columns (`UserID`, `RoleID`, `RelatedJoinField`). SQL Server treats NULLs as equal in a unique index; PostgreSQL does not, so the converted indexes need `NULLS NOT DISTINCT` (PostgreSQL 15+) or a `COALESCE` expression index to refuse the same duplicates. PostgreSQL also compares the key case-sensitively, so there the case-insensitive retire rule is stricter than the index.
+
+  **Deploy order:** deploy the server code before pushing the metadata. The UI role's grants ship as metadata only: write access to `MJ: Entity Form Contributions` and `MJ: Entity Form Overrides`, and Create and Update on `MJ: Components`. Only the new server subclasses keep that access to the user's own rows and components, so the component guard must be live before the UI role gains Update: apply the release build's consolidated metadata-sync migration together with the server deploy, never before it. A development database that already ran an earlier copy of the migration needs a Flyway repair or a rebuild.
+
+### Patch Changes
+
+- 131f3c4: Identity Claims can be issued without a recipient email, and with an exact expiry.
+  - **Token-only claims.** `CreateClaim` no longer requires `NormalizedEmail` when the claim type's `Configuration` sets `RequireToken: true`. The claim is stored with an empty `NormalizedEmail`, which no account's normalized email can equal, so email-match redemption and auto-claim on login never reach it, and `GetPendingClaimsForEmail` already returns nothing for an empty address. No email is sent for such a claim, so the caller must supply the token (`VerificationToken`, or a `MagicLinkInviteID`); a token-only claim without one is refused, because a generated token would be delivered to no one. Every other claim type still requires an email, with an error that now names the type.
+  - **`ExpiresAt`.** `CreateClaimParams` accepts an exact `ExpiresAt` instant, which takes precedence over `ExpiresInDays`, for claims that must live minutes rather than days. An `ExpiresAt` that is invalid or not in the future is refused before anything is saved.
+
+  Use case: handing an anonymous visitor's conversation to whoever signs in holding a short-lived link, where the server knows no email and the link must expire in minutes.
+
+- 801036d: Update the rubric prompt metadata test for the release metadata-sync writeback: stop asserting that the shipped rubric prompt records carry no `sync` block, which every metadata push writes.
+- 28c92e0: Saved queries, ad-hoc SQL and composed queries now render and run correctly on SQL Server and PostgreSQL in the shapes that previously failed or returned the wrong rows.
+  - **Row caps and paging.** A query's own `TOP` / `LIMIT` / `OFFSET … FETCH` is kept: when the caller also passes `MaxRows`, the smaller wins and `TotalRowCount` follows. CTEs, `WITH RECURSIVE`, query hints, `SELECT DISTINCT`, set operations, `TOP PERCENT` / `WITH TIES` and SQL the parser cannot read are paged and capped by editing the statement in place, or as a derived table, instead of being rewritten from the syntax tree. Ad-hoc SQL with `MaxRows` is paged in the database instead of fetching every row. A requested cap that cannot be applied is logged; paging a `FOR JSON` / `FOR XML` query fails with an error that says so.
+  - **Composition.** A dependency's trailing `;`, SQL Server `OPTION (…)` hints, template tags (`{% if %}` and similar) and doubled quotes in static values now compose correctly. The real composition token is resolved, not a copy in a comment or string literal. Composing into an outer `WITH` / `WITH RECURSIVE` produces one valid clause, and a dependency CTE that shares a name with one of the outer query's CTEs is renamed instead of declared twice. A query that references the same dependency twice saves one dependency row.
+  - **PostgreSQL.** Pools get the `statement_timeout` and `idle_in_transaction_session_timeout` that match SQL Server's request timeout. Caller-supplied SQL runs in a rolled-back read-only transaction, and the read-only provider gets its own pool on the read-only login. Column references are read as names, and comment stripping no longer breaks dollar-quoted and `E''` strings.
+  - **Caller-supplied SQL** must be a single read query. Ad-hoc SQL over GraphQL (`ExecuteAdhocQuery`) now runs through the read-only provider's own ad-hoc path, so it works on PostgreSQL too and pages the same way everywhere. `RunQueryParams.TimeoutSeconds` (ad-hoc SQL) and `ExecuteSQLOptions.timeoutMs` set a per-call limit that the database enforces: the request is cancelled on SQL Server, and `statement_timeout` applies on PostgreSQL. That limit can shorten the server's own limit but never lengthen it.
+  - **What caller-supplied SQL may call.** Ad-hoc SQL, `TestQuerySQL` and query specs are refused when they call a function that runs SQL given as a string, or reads files or other databases (on PostgreSQL `query_to_xml` and its family, `ts_stat` and `ts_rewrite`, `dblink`, the server-file and large-object functions, and server-administration functions; on SQL Server `OPENROWSET`, `OPENQUERY`, `OPENDATASOURCE` and the trace and audit file readers). The list is the new `SQLDialect.CallerSQLForbiddenFunctions`. On PostgreSQL, advisory locks taken by such SQL are released before its connection returns to the pool, and MJAPI warns at startup when the read-only login can read base tables or server files.
+  - **Dialects.** The rendering pipeline reads `SQLDialect` members (`SelectListPagingOrderBy`, `PagingRequiresOrderBy`, `QueryHintKeyword`, `SupportsEscapeStringLiterals`, `SupportsDollarQuotedStrings`, `StringLiteralPrefix`, `EscapeLikePattern`, `BooleanParameterValue`) instead of checking the platform name, so a new dialect declares its behaviour in one class.
+  - **Text filters.** `sqlString` / `sqlIn` keep non-ASCII text on SQL Server, and the LIKE filters escape `[` (SQL Server) and `\` (PostgreSQL). SQL Server bracket-quoted identifiers escape `]`.
+  - `RunQueryParams.MaxRows` documents that there is no default row limit, and that `MaxRows` limits the rows returned, not the work the database does.
+
+- 3204a32: Add Interaction lifecycle tracking, append-only InteractionEvent enforcement, caller linking, and outbound number pool selection.
+  - **Append-only InteractionEvent**: `MJInteractionEventEntityServer` blocks update and delete operations on `MJ: Interaction Events`.
+  - **Interaction lifecycle**: `InteractionLifecycleService` manages creation, state transitions, caller linking, event logging, and duration/cost computation across phone and room calls.
+  - **Outbound number pool selection**: `NumberPoolSelector` supports `RoundRobin`, `LocalPresence`, and `Random` selection policies, respecting `MaxConcurrentPerNumber` limits.
+  - **Inbound routing**: Resolves dialed numbers to active agent identities and associated `PhoneNumber` records.
+
+- 28df136: In-memory vector search is faster, keeps its index current incrementally, and on a server no longer blocks the event loop.
+
+  **`@memberjunction/ai-vectors-memory`** (browser-safe; same public API)
+  - **Packed storage.** Vectors are stored in one contiguous typed array with cached norms, not a `Map` of number arrays. `float64` (the default) gives results bit-identical to before. `new SimpleVectorService({ Precision: 'float32' })` halves the memory for embeddings. Results are re-scored with the same kernels, so `FindNearest`, `FindSimilar`, `FindAboveThreshold`, K-Means and DBSCAN return exactly what they did before.
+  - **Faster kernels.** Cosine, euclidean and dot product scans are specialised per precision and reuse cached norms. In JavaScript alone, a top-10 cosine search over 20,000 × 1,536 vectors drops from 80 ms to 65 ms. With a metadata filter it drops from 12 ms to 9 ms.
+  - **Async variants.** `FindNearestAsync`, `KMeansClusterAsync` and `DBSCANClusterAsync` let a registered `BaseVectorAccelerator` run the work elsewhere. Without one they run in-process.
+  - **Incremental index cache.** `SimpleVectorServiceProvider` applies entity saves and deletes to a loaded index in place instead of discarding it. Patching one row takes about 0.2 ms; the old rebuild re-read and re-parsed every row, about 4.4 s of parsing alone for 20,000 vectors. A remote invalidate without record data is re-read in one batched query, once per user an index was loaded as. A stale index keeps serving while it reloads. `InvalidateIndex` now also supersedes a load already in flight, so the next query cannot be answered from rows read before the invalidate.
+  - **`SimpleVectorDatabase` no longer serves one user's cached rows to another.** Rows are read as the calling user, but the parsed index was reused whenever the row count matched. A user who could see a different set of rows of the same size got the first user's rows. The cache is now reused only when the rows' keys, `__mj_UpdatedAt` values and vector presence, and the index config, all match. A row whose vector size differs from the rest is now skipped, with one log line, instead of failing every query. An empty query vector now returns a failure response instead of throwing.
+  - **`SimpleVectorDatabase` applies metadata filters.** `QueryIndex` used to ignore `filter`, so a search scope's `MetadataFilter` — including a tenant push-down — had no effect on this driver. It is now evaluated in memory (`$eq $ne $gt $gte $lt $lte $in $nin $exists $and $or`), and a filter it cannot apply fails the query instead of running unfiltered. The evaluator is exported as `CompileMetadataFilter`. The driver now also reports `IsReadOnly = true` and `RequiresAPIKey = false`, and `ListVectorIDs` returns the contract's `NextPaginationToken` (it returned `NextCursor`); `SimpleVectorServiceProvider.ListVectorIDs` had the same bug.
+  - **Fixes.** A query whose dimensions differ from the index, or an unknown metric, is logged once rather than once per row. `GetVector` and `ExportVectors` return copies, never live storage.
+
+  **`@memberjunction/ai-vectors-memory-server`** (new, server-only)
+
+  Registers a `WorkerPoolVectorAccelerator`. Under 32 concurrent searches the longest event-loop stall drops from 2.5 s to 13 ms. Stores are allocated in `SharedArrayBuffer`, so large searches and clustering run on a worker-thread pool without copying. Exact searches use the optional `usearch` native SIMD backend, but only when its candidate set can be proven complete. Otherwise they fall back to JavaScript. Opt-in HNSW approximate search (`MJ_VECTOR_ANN=1`) is available for very large cosine indexes. Every failure degrades to in-process work. The browser-manifest leakage gate denies the package.
+
+  **`@memberjunction/core-entities-server`.** When the embedder returns an empty vector or throws, `MJQueryEntityServer` now clears the stored vector (both columns and the model ID) and logs the error, as `MJTagEntityServer` already did, instead of keeping a vector computed from the previous text. The save still succeeds.
+
+  **Consumers.** `AIEngine` (notes, examples), `TagEngine` and `QueryEngineServer` use `float32` storage and `FindNearestAsync`. `ClusteringEngine` uses the async clustering methods. `@memberjunction/server-bootstrap` loads the server accelerator, so a standard MJAPI gets it with no configuration.
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [131f3c4]
+- Updated dependencies [0f04590]
+- Updated dependencies [0a75bb2]
+- Updated dependencies [41c2c08]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [279b93e]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [bea2386]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [28df136]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/ai@6.2.0-edge.3
+  - @memberjunction/aiengine@6.2.0-edge.3
+  - @memberjunction/core-entities@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/generic-database-provider@6.2.0-edge.3
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.3
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.3
+  - @memberjunction/ai-engine-base@6.2.0-edge.3
+  - @memberjunction/tag-engine@6.2.0-edge.3
+  - @memberjunction/ai-prompts@6.2.0-edge.3
+  - @memberjunction/ai-core-plus@6.2.0-edge.3
+  - @memberjunction/actions-base@6.2.0-edge.3
+  - @memberjunction/sql-dialect@6.2.0-edge.3
+  - @memberjunction/sql-parser@6.2.0-edge.3
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.3
+  - @memberjunction/templates@6.2.0-edge.3
+  - @memberjunction/feature-pipelines@6.2.0-edge.3
+  - @memberjunction/communication-types@6.2.0-edge.3
+  - @memberjunction/communication-engine@6.2.0-edge.3
+  - @memberjunction/doc-utils@6.2.0-edge.3
+  - @memberjunction/integration-engine@6.2.0-edge.3
+  - @memberjunction/integration-pk-classifier@6.2.0-edge.3
+  - @memberjunction/scheduling-engine@6.2.0-edge.3
+  - @memberjunction/ai-vectordb@6.2.0-edge.3
+  - @memberjunction/rubrics-base@6.2.0-edge.3
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.3
+  - @memberjunction/sql-converter@6.2.0-edge.3
+  - @memberjunction/predictive-studio-core@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 4d647e6: Add Rubrics, a core way to score any record against a published set of weighted criteria.
+
+  What ships:
+  - Schema for rubrics, versions, criteria, scales, anchors, bands, evaluations, and score rows, plus layered consensus views. Published versions are frozen. Raw writes to a frozen row throw 51101–51110. A draft version delete is an `INSTEAD OF DELETE` trigger. `MJ: Test Rubrics` is deprecated in metadata.
+  - `RubricScoring` and `RubricVersionDiff` in `@memberjunction/rubrics-base`. The outcome ladder is Incomplete, NotApplicableFailure, GateFailed, Passed or BelowThreshold, then Scored. The publish base is the highest Published or Retired version.
+  - `@memberjunction/rubrics`: LLM, agent, deterministic, and human evaluators. Actions are Evaluate Record Against Rubric, Get Rubric, Get Rubric Subject, Get Rubric Consensus, Create Rubric Draft, and Submit Human Rubric. Create Rubric Draft and the architect import do not publish. The evaluation agent does not call Get Rubric Consensus.
+  - Presentational widgets in `@memberjunction/ng-rubrics`, Explorer forms, and a Rubrics application. The agent form has a Rubrics tab.
+  - Six guide-example rubrics stay Draft. Seven agent rubrics publish at 1.0.0 and bind to their agents. Marketing Agent is not bound. Shipped self-check links and the sampling job stay Disabled. A test that already has an `llm-judge` oracle keeps it.
+  - Testing: rubric resolution, a `rubric` oracle, judge calibration, per-criterion spread on `--flaky-check`, `mj rubric`, and `mj test promote-criteria`. `Test.RubricID` and `TestSuite.RubricID` select a rubric. `TestSuiteRun.Score` is stored.
+  - The deterministic integration bundle is IT98 at sequence 49.
+
+  `GeneratePluralName` keeps the head of a name verbatim and pluralizes only the tail, preserving that tail's case. A linear scan finds the tail, so `user_profile` and `userProfile` no longer produce the same view name, a leading character such as Ä stays on the head, and `Contact Person` pluralizes to `Contact People`. The base view for a criterion is `vwRubricCriteria`.
+
+- 7e57b48: Fix server-side hook cooperation during record cloning:
+  - Support cloning generated actions and AI remote operations without erroneously triggering code regeneration when code is already provided.
+  - Forward `EntitySaveOptions` across `MJVectorIndexEntityServer`, `MJDuplicateRunEntityServer`, and `MJComponentEntityServer` `Save()` overrides.
+  - Introduce `MJRecordChangeEntityServer`: an update to an `MJ: Record Changes` row must change only `Comments`, and the user must hold the `Record Changes: Annotate` authorization as well as the entity's usual Update permission. Every other change to an audit record is refused.
+
+### Patch Changes
+
+- 513e608: Add pipeline type picker, capability-aware output filtering and validation, Decision-specific constraint editors, and type badges for Feature Pipelines. What each pipeline type can produce is now one rule set, shared by the server, the builder and the save check. A Decision pipeline reads enum values and descriptions from its own entity's fields only; before, it read them from any entity with a field of the same name. An enum reads field metadata only when it sets FromFieldMetadata or lists no values, and only a type that needs listed values (Decision) requires them.
+
+  A Record Process now refuses at save an Infer pipeline its type cannot run, on both tiers and every save path, through the shared MJRecordProcessEntityExtended; the Record Process form also refuses while the builder reports errors. The builder loads and edits CaptureReasoning, and keeps Watermark. Its pickers now show the saved pipeline type, prompt, entity document, target and constraint, not the first option, and a placeholder when the saved value is not offered.
+
+- 7408dbb: Update the rubric metadata tests for the release metadata-sync writeback: pin the tombstone's recorded `deletedAt`, and stop asserting that the authorization records carry no `sync` block.
+- 2854a2e: Address vector indexes by their provider-side name (`ExternalID`), not the MJ display `Name`. Entity vectorization, duplicate detection and the entity-vectors resolver passed `Name`, so any index whose label differs from its provider name (e.g. "More Cheese Content (Pinecone)" vs `morecheese-content`) returned 404 on every upsert/query.
+
+  `AIEngineBase` now owns the single `MJ: Vector Indexes` cache (`VectorIndexes`, `GetVectorIndexByID`) and the one rule for the provider name (`GetProviderIndexName`: ExternalID, falling back to `Name`), proxied on `AIEngine`. `KnowledgeHubMetadataEngine` no longer caches Vector Indexes; its `VectorIndexes` / `GetVectorIndexByID` proxy the AIEngineBase cache. Every caller, including `MJVectorIndexEntityServer`'s delete path, now resolves the provider name through `GetProviderIndexName`.
+
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [3fbda62]
+- Updated dependencies [eaa9455]
+- Updated dependencies [ff00d60]
+- Updated dependencies [2552b1e]
+- Updated dependencies [660ef45]
+- Updated dependencies [8fd1c46]
+- Updated dependencies [21f9e15]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [664baea]
+- Updated dependencies [f3c6161]
+- Updated dependencies [01fafc6]
+- Updated dependencies [35ffb95]
+- Updated dependencies [5148534]
+- Updated dependencies [cf97480]
+- Updated dependencies [0adaf76]
+- Updated dependencies [5ee02db]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [513e608]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [861cbf0]
+- Updated dependencies [705ab4e]
+- Updated dependencies [e51ce8a]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [d4e30c3]
+- Updated dependencies [e9ab27b]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [14e2a3a]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [7bcba8c]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [bb33c77]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/ai-prompts@6.2.0-edge.2
+  - @memberjunction/tag-engine@6.2.0-edge.2
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.2
+  - @memberjunction/aiengine@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/feature-pipelines@6.2.0-edge.2
+  - @memberjunction/sql-converter@6.2.0-edge.2
+  - @memberjunction/generic-database-provider@6.2.0-edge.2
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/rubrics-base@6.2.0-edge.2
+  - @memberjunction/scheduling-engine@6.2.0-edge.2
+  - @memberjunction/ai-engine-base@6.2.0-edge.2
+  - @memberjunction/templates@6.2.0-edge.2
+  - @memberjunction/ai-vectordb@6.2.0-edge.2
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.2
+  - @memberjunction/actions-base@6.2.0-edge.2
+  - @memberjunction/communication-types@6.2.0-edge.2
+  - @memberjunction/communication-engine@6.2.0-edge.2
+  - @memberjunction/doc-utils@6.2.0-edge.2
+  - @memberjunction/integration-engine@6.2.0-edge.2
+  - @memberjunction/integration-pk-classifier@6.2.0-edge.2
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.2
+  - @memberjunction/predictive-studio-core@6.2.0-edge.2
+  - @memberjunction/sql-dialect@6.2.0-edge.2
+  - @memberjunction/sql-parser@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Minor Changes
+
+- 0eeb89d: **AI usage analytics: a trustworthy cost basis, and the dimensions to slice it by (#4396)**
+
+  Cost reporting was wrong in both directions and could not be sliced by the dimensions anyone
+  actually asks about. This settles the basis, gives runs the keys they were missing, and rebuilds
+  the reporting layer on top.
+  - **Cost doctrine.** `guides/AI_USAGE_AND_COST_ANALYTICS_GUIDE.md` states the rules every consumer
+    now follows: the additive basis is own cost at the prompt-run grain, `Cost IS NULL` means
+    unpriced and is never coalesced to zero, rollups are derived from the hierarchy at query time and
+    never summed from stored inclusive columns, and coverage ships beside every cost figure.
+  - **Attribution.** `AIPromptRun` gains `UserID`, written when the run is created. The agent run a
+    prompt run belongs to is not stored on it: the agent layer owns that link as
+    `AIAgentRunStep.TargetLogID`, now indexed, and the fact view resolves it at query time. Cost
+    precision is aligned on `decimal(19,8)` across both run tables, and six analytics indexes are
+    added. Sub-agent runs now inherit `CompanyID`.
+  - **Parallel execution accounting.** The consolidated parent is created before its arms run, so the
+    arms persist as `ParallelChild` rows with their own cost and the parent carries none — previously
+    the losing arms were never recorded at all.
+  - **Semantic layer.** `vwAIUsageFacts` gives one row per prompt run over the base tables, with
+    time buckets, every dimension, and the flags that carry semantics no column expresses
+    (`IsPriced`, `IsParallelParent`, `IsUnmeasured`, `SourceKind`).
+  - **Aggregates.** Eight saved queries in the `AI` category, every cost figure grouped by currency
+    and carried with its priced/unpriced counts. They run live; materializing the hourly and daily
+    grains is a follow-up.
+  - **Honest dashboards.** The seven analytics surfaces read the aggregates instead of pulling
+    unbounded raw rows, unpriced cost renders as an em dash rather than `$0.00`, and coverage is
+    shown beside every total.
+  - **`mj-query-pivot`.** A generic pivot over any saved Query in `@memberjunction/ng-query-viewer`;
+    the AI Usage Explorer is a thin configuration of it. `ColumnLabels` titles columns, and
+    `HiddenColumns` lets a host group by an ID it does not display (so two records that share a name
+    stay apart while only the name shows).
+
+### Patch Changes
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [ddcd666]
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [15a4333]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [5da3ad2]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [9b8a84e]
+- Updated dependencies [c261eb8]
+- Updated dependencies [520bd09]
+- Updated dependencies [307da67]
+- Updated dependencies [7110019]
+- Updated dependencies [9d4a28a]
+- Updated dependencies [a7da50b]
+- Updated dependencies [1d43161]
+- Updated dependencies [7110019]
+- Updated dependencies [f2a4171]
+- Updated dependencies [e482249]
+- Updated dependencies [37e2f6b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [351ba9f]
+  - @memberjunction/aiengine@6.2.0-edge.1
+  - @memberjunction/ai@6.2.0-edge.1
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.1
+  - @memberjunction/ai-core-plus@6.2.0-edge.1
+  - @memberjunction/ai-prompts@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/actions-base@6.2.0-edge.1
+  - @memberjunction/communication-engine@6.2.0-edge.1
+  - @memberjunction/communication-types@6.2.0-edge.1
+  - @memberjunction/generic-database-provider@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/integration-engine@6.2.0-edge.1
+  - @memberjunction/predictive-studio-core@6.2.0-edge.1
+  - @memberjunction/sql-converter@6.2.0-edge.1
+  - @memberjunction/sql-dialect@6.2.0-edge.1
+  - @memberjunction/sql-parser@6.2.0-edge.1
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.1
+  - @memberjunction/tag-engine@6.2.0-edge.1
+  - @memberjunction/templates@6.2.0-edge.1
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.1
+  - @memberjunction/ai-engine-base@6.2.0-edge.1
+  - @memberjunction/doc-utils@6.2.0-edge.1
+  - @memberjunction/integration-pk-classifier@6.2.0-edge.1
+  - @memberjunction/scheduling-engine@6.2.0-edge.1
+  - @memberjunction/ai-vectordb@6.2.0-edge.1
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [abf8778]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [b518dfa]
+- Updated dependencies [37891d3]
+- Updated dependencies [6ad6434]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [42d701e]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [7658d68]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [575bfae]
+- Updated dependencies [a17a228]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [e9dbf77]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [3d633ed]
+- Updated dependencies [e962151]
+- Updated dependencies [2c590b0]
+- Updated dependencies [fc3da91]
+  - @memberjunction/actions-base@6.2.0-edge.0
+  - @memberjunction/ai@6.2.0-edge.0
+  - @memberjunction/aiengine@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/ai-prompts@6.2.0-edge.0
+  - @memberjunction/ai-core-plus@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/generic-database-provider@6.2.0-edge.0
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.0
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.0
+  - @memberjunction/predictive-studio-core@6.2.0-edge.0
+  - @memberjunction/ai-engine-base@6.2.0-edge.0
+  - @memberjunction/sql-parser@6.2.0-edge.0
+  - @memberjunction/sql-converter@6.2.0-edge.0
+  - @memberjunction/scheduling-engine@6.2.0-edge.0
+  - @memberjunction/tag-engine@6.2.0-edge.0
+  - @memberjunction/templates@6.2.0-edge.0
+  - @memberjunction/communication-types@6.2.0-edge.0
+  - @memberjunction/communication-engine@6.2.0-edge.0
+  - @memberjunction/doc-utils@6.2.0-edge.0
+  - @memberjunction/integration-engine@6.2.0-edge.0
+  - @memberjunction/integration-pk-classifier@6.2.0-edge.0
+  - @memberjunction/ai-vectordb@6.2.0-edge.0
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.0
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+  - @memberjunction/sql-dialect@6.2.0-edge.0
+
+## 6.1.0
+
+### Minor Changes
+
+- d4a5b4c: Content vectorization: make colocated vector stores usable, and stop ignoring an index's declared dimensions
+
+  A colocated vector provider (`SQLServerVectorDatabase`, pgvector) keeps vectors in the application's own
+  database. It has no credentials to present, and it needs the active data-provider connection handed to it
+  before use. The ContentSource pipeline honored neither, so a colocated store could be **searched** but
+  never **written** — and it failed in a way that pointed somewhere else entirely: `CreateIndex` logged
+  `"requires a host connection"` and continued, then vectorization died later on a vector-database cache
+  miss, which reads like bad metadata rather than a missing wire-up.
+
+  Four changes, in two places that both create provider instances:
+  - **`AutotagBaseEngine.createVectorDBInstance`** now instantiates first, calls `TryWireColocatedHost`, and
+    only then requires an API key — for providers that actually need one (`!SupportsColocatedQuery &&
+RequiresAPIKey`). The old order could not work: whether a provider is colocated is not knowable until it
+    exists. A non-empty sentinel is passed to the constructor because `VectorDBBase` rejects an empty key
+    outright and colocated providers do not override it, so `''` would throw for precisely the keyless case.
+  - **`MJVectorIndexEntityServer.getVectorDBInstance`** gets the same treatment. This is the site that runs
+    on `VectorIndex.Save()`, so without it the provider index is never created regardless of the above.
+  - **`AutotagBaseEngine.createEmbeddingInstance`** drops its pre-flight key check, matching the decision
+    already documented in the EntityDocument pipeline: an empty key is legitimate for local-only drivers
+    (`LocalEmbedding` runs ONNX in-process and defends itself with `super(apiKey || 'local')`), and a cloud
+    driver that genuinely needs one raises a real provider-level auth error, which is more actionable than a
+    guard here. Gating up front made local embedding models unusable from this pipeline.
+  - **`MJVectorIndexEntityServer.resolveDimensions`** now honors the index's own `Dimensions` column instead
+    of returning a hardcoded 1536. This was a latent bug with real consequences on any store that enforces
+    width: a colocated SQL Server index is a `VECTOR(n)` column, so a 384-dimension model got a
+    `VECTOR(1536)` table and every insert was rejected.
+
+  **Behaviour change worth noting before upgrading:** a `MJ: Vector Indexes` record whose `Dimensions`
+  differs from 1536 will now have its provider index created at the stated width. That is the intent — the
+  column exists to be honored, and the embedding call already honored it — but an index created earlier at
+  1536 will not match, and wants recreating.
+
+  Verified end to end against SQL Server 2025 with local embeddings: two content sources differing only in
+  whether they declare `VectorEntityName`, both vectorized through the real pipeline into a real colocated
+  index. Before these changes the pipeline could not reach that state at all.
+
+  Both entries are `minor` rather than `patch` because the bump level is evaluated per branch and this branch
+  also changes `metadata/` — see `.claude/rules/changesets.md`. The changes here are code only.
+
+- 1a2ce13: Pricing for models that aren't billed by the token, and OpenAI as a second Whisper provider.
+
+  **The problem.** MJ's pricing _schema_ was always general — a cost row names a price unit type, and the unit type names a `DriverClass` the ClassFactory resolves. The _execution layer_ was not: `BasePriceUnitType` took two token counts, only the three token drivers were ever registered, and `MJAIPromptRunEntityServer` refused to cost any run reporting zero tokens. So the three continuous-media unit types that already shipped — `Per Image`, `Per Minute`, `Per Hour` — resolved to nothing, and every run priced by one was silently uncosted. Six ACTIVE image cost rows were in that state. (Bug register B60.)
+
+  Speech-to-text made it concrete: Groq bills Whisper by the audio-hour, the just-landed `GroqAudioGenerator` requested `response_format: 'json'` which discards the duration entirely, and the two Whisper models shipped with no cost rows because there was no honest way to write one.
+
+  **Usage grows a second axis.** `ModelUsage` gains `unitKind` (`'Tokens' | 'Seconds' | 'Characters' | 'Images'`), `inputUnits` and `outputUnits`, plus a `ModelUsage.ForMedia(kind, input, output?)` constructor. Continuous quantities are deliberately _not_ folded into the token fields: a run reporting 90 "tokens" that means 90 minutes corrupts `TokensUsed`, every rollup above it, and every dashboard downstream. `SpeechResult` gains `usage?`, matching `ImageGenerationResult`.
+
+  Quantities are always recorded in the **base** measure, never the billing measure — audio billed per hour is still recorded in seconds, and the driver converts. That is what lets one measured duration be priced against a per-minute row from one vendor and a per-hour row from another.
+
+  **Pricing takes quantities.** `BasePriceUnitType` gains a `UnitKind` getter (defaulting to `'Tokens'`, so external subclasses need no change) and `CalculateCost(activeCost, usage)`, the preferred entry point — its default delegates to the existing cache-aware path, so every current driver behaves identically. `TimePerMinutePriceUnitType`, `TimePerHourPriceUnitType` and `PerImagePriceUnitType` register against the unit types that were already seeded, closing the driver half of B60.
+
+  Each driver also exposes `UnitsPerBillingUnit` — 1,000,000 for a per-million-token rate, 3,600 for per-hour, 1 for per-image — so a divisor exists in exactly one place per driver. `TOKEN_PRICE_UNIT_TYPE_DIVISORS` is _derived_ from the driver instances rather than restated, which makes drift between the exported table and the arithmetic that prices every run impossible instead of merely detectable. The map deliberately covers only the token drivers: a missing key is the signal for a consumer doing token-rate math to SKIP a row priced by audio duration, not to fall back to a per-token divisor.
+
+  `BasePriceUnitType` is marked `@RequiresSubclass()`. `ClassFactory.CreateInstance` has never returned `null` for an unregistered key — it falls back to `new BaseClass(...)` — so `if (!calculator)` was a dead branch that installed a hollow object whose only pricing method is `undefined`, surfacing as a `TypeError` inside cost math rather than "this driver is not registered". The new `UnitKind` default made that hollow instance _more_ convincing, since it answers `'Tokens'` and so passes the measure check before throwing. `GetPriceCalculator` now resolves via `TryCreateInstance` and reports the failure, so its documented `null` return is real.
+
+  `AIEngineBase.CalculateModelCost(modelID, vendorID, usage)` is a new costing surface for callers holding a result but no prompt run — transcription and image actions, downstream apps. It returns `null`, having logged why, when there is no active cost row in the measure the run recorded, no registered driver, or a mismatch between what the run measured and what the row prices. A null means "we don't know what this cost" and must never be read as zero.
+
+  **Cost-row selection is measure-aware.** `GetActiveModelCost` takes an optional `usageKind` and excludes rows priced in any other measure before the most-recently-started tiebreak. Without it the effective key is `(Model, Vendor, ProcessingType)`, which cannot represent a model billing in two measures — per-image output alongside per-token prompt — so which measure you got was a sort-order coin flip that was then refused downstream and reported as a pricing gap. The measure is now established _before_ a row is chosen. Omitting the argument keeps the previous behaviour, and no shipped model+vendor carries two measures today, so nothing changes for existing data.
+
+  **The measure is a first-class row, not a string.** A new `MJ: AI Usage Types` entity (`Tokens`, `Seconds`, `Characters`, `Images`) is what a run and a price unit type point at, so "what does this price buy" is answerable by a join instead of by convention. An earlier revision carried it as `AIPromptRun.UnitsKind NVARCHAR(20)` behind a CHECK constraint, which made the set of measures a property of a constraint on one column: nothing else in the schema could reference a measure, and adding one meant editing a CHECK on a table with nothing to do with pricing.
+
+  Note the usage type and the price unit type answer **different** questions and stay separate: `AIUsageType` is the BASE measure of a quantity, while `AIModelPriceUnitType` is the BILLING unit and its scale. Audio is recorded in `Seconds` and billed `Per Hour`. Collapsing them would force a new usage type per billing granularity.
+
+  **The measure lives on `AIModelPriceUnitType`, and nowhere else.** It gains `UsageTypeID` — so a cost row has exactly one place to look for its measure, reached through its `UnitTypeID`, and the FK there means whatever it finds is a real catalog row rather than a string. `AIModelCost` deliberately carries **no** usage-type column: it would be a second copy of a derivable fact, and nothing would arbitrate a cost row claiming `Seconds` while its unit type says `Tokens` — which is precisely the comparison the safety checks depend on. Single-sourcing makes that contradiction unrepresentable rather than merely unlikely.
+
+  **The divisor becomes data, which closes B60's class rather than its instance.** `AIModelPriceUnitType.UnitsPerBillingUnit` (`CHECK > 0`) holds the number that converts base measure to billed unit — 1,000,000 for per-1M-tokens, 3,600 for per-hour, 1 for per-image. That number previously existed _only_ inside a TypeScript class, and that is the root cause of B60: `Per Image` / `Per Minute` / `Per Hour` were seeded as data by one person while the driver classes were never written by another, and the seam was silent for months. A new `LinearPriceUnitType` (`DriverClass = 'Linear'`) reads both columns off its own row, so a linear billing unit — "Per 1,000 Characters" — now ships as one seeded row with no class, no registration and no build. `DriverClass` remains the escape hatch for genuinely non-linear pricing (tiered rates, per-image-by-resolution, minimum-billing increments like the Groq 10-second floor). An _unregistered_ driver still refuses to price, deliberately: `DriverClass` is NOT NULL, so an unrecognised name is ambiguous between "a new linear unit" and "a non-linear driver whose code is missing", and pricing the second linearly would produce a confident wrong number.
+
+  **`AIModelPriceType` is demoted alongside.** It was a NOT NULL FK that nothing prices, filters or branches on, while `AIModelPriceUnitType` carried the real contract — three vocabularies for one concept, with the _mandatory_ one the one nothing read. Adding a usage type without demoting it would have locked that ambiguity in permanently. Not dropped (NOT NULL, 235 metadata rows, and dropping is on the Forbidden list in `PUBLISH_NO_BREAK_POLICY.md`): the field is flagged `Status = 'Deprecated'`, removed from the generated form (`IncludeInGeneratedForm = 0`, which is the step that actually ends the ambiguity rather than documenting it), and has `AutoUpdateDescription` cleared so CodeGen cannot overwrite the demotion text — all declared in `metadata/entities`, where field-level editorial decisions belong, rather than as EntityField UPDATEs in a migration. The migration keeps only the schema half: a database default of `Tokens`, so new cost rows need not name a value from the vocabulary they are being told to ignore.
+
+  **Prompt runs can record it.** `AIPromptRun` gains `InputUnitsUsed`, `OutputUnitsUsed` (both `CHECK >= 0`) and `UsageTypeID`, where NULL means token-billed — which is what every row written before the column existed IS, since the schema had no way to say anything else. That reading happens at exactly one seam (`MJAIPromptRunEntityServer.RecordedUsage`) rather than in four places, so the rest of the runtime still sees a definite measure. The save-time cost gate passes on units as well as tokens, and refuses — loudly — to price a run whose measure disagrees with its cost row's, rather than dividing seconds by a million and reporting the ~$0 that produces. No units rollup was added: units of different kinds cannot be summed, so cost remains the universal aggregate.
+
+  **The catalog rows are declarative metadata, and that is what makes the new columns nullable.** The four measures live in `metadata/ai-usage-types`, and the measure + divisor for all six shipped billing units in `metadata/ai-model-price-unit-types` — seeded and backfilled by `mj sync push`, not by INSERT and UPDATE statements in the migration, so they are reviewable data in the same form as the rest of the catalog. Metadata is pushed by the release-time consolidated `*__Metadata_Sync.sql`, which by construction carries a later timestamp than any migration a PR can author, so a NOT NULL column defaulted to the Tokens row would fail the from-scratch build on the ADD itself: SQL Server materialises the default into every existing row and the foreign key has nothing to resolve. Nullable + FK is the strongest guarantee available before the seed exists — any non-null value is a real measure — and the runtime is written to that contract rather than around it: a price unit type with no measure refuses to price rather than guessing Tokens. Tightening both `UsageTypeID` columns to NOT NULL is a one-statement follow-up in the release _after_ the one that ships the seed.
+
+  A clean-room bootstrap also found that `sp_updateextendedproperty` throws when the property does not already exist, so the demotion uses drop-then-add — the same fresh-install-only class as the `EntityField.Sequence` trap in `migrations/CLAUDE.md`.
+
+  **`ModelUsageUnitKind` must stay a superset of the `AIUsageType` catalog, and the catalog rows are the source.** `MJAIPromptRunEntityServer` resolves a run's `UsageTypeID` to the catalog row's `Name` and hands that string straight to `ModelUsageUnitKind`. Nothing about that is checked by the compiler — the name arrives as a plain `string` from a database row — so seeding a usage type whose name the union does not carry produces no build error, just a runtime hole on exactly the rows using the new measure. `MODEL_USAGE_UNIT_KINDS` exists so a test can assert the two agree by reading the seed file rather than restating it. `Characters` is present for that reason and has no pricing driver yet, which is not a defect: the costing path refuses to price a measure no driver claims and logs why, which is strictly better than a plausible wrong number. A compile-time assignability pin backs this up (Vitest does not typecheck by default, which is how a narrowing slipped through once).
+
+  **Providers.** Groq now requests `verbose_json` and reports the duration it was already being billed for, summed across split pieces. If any piece fails to report one, usage is left undefined rather than under-reported — a partial sum understates the bill while looking complete. `OpenAIAudioGenerator.SpeechToText` is implemented (it previously threw), with the same 25MB ceiling, the same injected `AudioSplitter`, and the same duration capture. The split-and-join loop moved onto `BaseAudioGenerator.TranscribeWithSplitting` so both providers share one implementation.
+
+  **Cost rows now ship** for Groq Whisper Large v3 ($0.111/audio-hour) and Turbo ($0.04/audio-hour), verified against Groq's published pricing. `Whisper 1` is a **new** model rather than a vendor row on Whisper Large v3: OpenAI's endpoint serves the large-v2 checkpoint, and attaching it to the v3 record would misreport which weights transcribed a given run. It carries a $0.006/minute cost row.
+
+  **Also:** the AC1 integration check flips from warning to hard assert now that every shipped unit type resolves — a future unit type added without a driver reddens the deterministic tier instead of scrolling past. The assert is scoped to unit types an **Active cost row actually references**, since those are the ones whose missing driver silently uncosts real runs; a custom unit type awaiting its driver, referenced by nothing, is reported rather than failed.
+
+  A new **AC7** check is the monitoring counterpart to the whole refusal doctrine. Everything here turns a wrong number into a `NULL`, which is right — but a null plus a `LogError` in a server log is invisible, and that is precisely how B60 survived months with six dormant ACTIVE image cost rows. AC7 asks the question nothing asked: completed runs that did measurable work and carry no cost. It grades the two populations differently — no active cost row in the run's measure is a pricing-coverage gap and is reported; an active cost row in that measure _existing_ while the run is still uncosted means the pipeline had everything it needed and produced nothing, which is asserted.
+
+  The two Explorer cost dashboards no longer carry their own copy of the divisor table. They now resolve a cost row's scale through its unit type's `DriverClass` against the exported `TOKEN_PRICE_UNIT_TYPE_DIVISORS`, and skip rows priced by a non-token unit type rather than defaulting them to the per-1M divisor — which had been dividing an hourly audio rate by a million. Both local tables were keyed by unit-type _display name_ using names (`Per Million Tokens`) that never matched the seeded ones (`Per 1M Tokens`), so every lookup missed and only the per-1M fallback made the numbers come out right; keying off the driver class removes both the miss and the fallback that hid it.
+
+  Pricing also refuses, rather than reporting $0, when a run records continuous units without a resolvable usage type to name their measure — the same "we don't know what this cost" rule the rest of the path follows.
+
+  Both transcription providers request `verbose_json` only for models that accept it. OpenAI's GPT-4o transcription models reject it outright, so they fall back to `json` and report no duration instead of failing the transcription; Groq's STT surface is Whisper-only today, so the guard there is prospective — matched on `includes('whisper')`, because `distil-whisper-large-v3-en` does support `verbose_json` and a `startsWith` test would strip its duration and leave every run through it uncosted. A reported duration of exactly `0` now leaves usage undefined rather than producing a measure with no quantity, which the pricing layer would refuse and log as a fault for genuinely silent audio.
+
+  The PostgreSQL counterpart to the migration is deferred to the release build, per `migrations/CLAUDE.md`.
+
+- 59def38: The entity-action substrate finishes what its schema has been promising. Seven pieces, all of which
+  share a failure shape: a column, a flag or a field that read as configured and did nothing.
+
+  **Action Filters now actually prevent execution.** `RunAction`'s filter-refusal branch built its
+  result, logged it, and then fell through to run the action anyway — there was no `return`. Every
+  Action Filter has therefore recorded that it prevented something while preventing nothing, since the
+  mechanism shipped. The refusal row is why it went unnoticed: the observable said "prevented" and the
+  side effect happened regardless, so #3606's claim that filters fail closed described evaluation,
+  which landed, rather than enforcement, which did not. **Anyone relying on an Action Filter to gate an
+  action has been getting the action anyway; after this it stops, which is the configured behaviour but
+  a visible change.** A prevented run still writes a log row, deliberately — an operator should be able
+  to see that a filter refused rather than wonder why nothing happened — so its `Message` is now an
+  exported constant, since that is the only thing distinguishing a prevented run from an executed one.
+
+  **Transition filters.** An entity action could see a record's current state and nothing else, so
+  "when Status _becomes_ Approved" was indistinguishable from "when Status _is_ Approved" — which is
+  true on every subsequent save too. `EntityChangeContext` now carries both sides of the save to where
+  filters run, built from `EntityField.OldValue`, which `BaseEntity` has tracked all along and simply
+  never carried anywhere. Filter code gets `DidFieldChange`, `DidFieldChangeToValue`, `OldValues` and
+  `NewValues` on `ActionFilterContext`. A create reports no changes, because a record whose Status
+  started at Approved did not _become_ anything. Comparison is loose across the string boundary
+  metadata forces, so a configured `'1'` matches a numeric `1` rather than silently never matching.
+
+  The capture happens as the first statement of `HandleEntityActions`, deliberately before its first
+  `await`: After-hooks are fire-and-forget, and the moment that method yields, the save completes and
+  reloads the entity, resetting every `OldValue`. Reading `IsCreate` from that same synchronous
+  snapshot also closes a latent bug — `entity.IsSaved` was previously read _after_ an await, so a
+  create whose save finalized in that window dispatched as `AfterUpdate`.
+
+  **Two filter-substrate fixes fall out of using it for real.** `EntityActionFilter.Status` was never
+  consulted, so a `Disabled` binding still gated — and filters fail closed, so that was not an inert
+  row but a permanent block whose only symptom is a trigger that quietly stopped firing. And a binding
+  pointing at an unresolvable filter used to reach the evaluator as `undefined` and throw there:
+  fail-closed by accident, with no usable reason logged. It now returns a failed result naming the
+  filter.
+
+  **Workflow triggers accept a filter.** `ValidateWorkflowSpec` refused `WorkflowEntityEventTrigger.filter`
+  outright because the contract to honor it did not exist. It now reconciles onto an owned
+  `ActionFilter` bound through `EntityActionFilter` — the additive path — and validates that the
+  expression parses, because filters fail closed and a syntax error is not a loud failure, it is a
+  trigger that silently never fires.
+
+  **Record Process on-change triggers.** `OnChangeEnabled` has described itself as running "per-record
+  on save via an owned Entity Action" since the column shipped, and `OnChangeFilter` promised to
+  "compile into the owned Entity Action Filter". Neither owned anything. Saving a Record Process now
+  reconciles that binding, matching ownership on the `RecordProcessID` param — `Run Record Process` is
+  one shared action, so matching on entity + action alone would let a second process silently repoint
+  the first one's trigger. `OnChangeFilter` compiles through the same builder workflow triggers use, so
+  one expression vocabulary covers both surfaces.
+
+  **Durable `After*` dispatch (D14).** After-hooks are fire-and-forget, so a process dying mid-flight
+  loses the action with nothing to retry it. `EntityAction.RunMode = 'Durable'` routes the dispatch to
+  the task-graph substrate as a single-node durable graph — the claim protocol, restart recovery and
+  orphan reclaim that already exist there — rather than adding a third async substrate. Opt-in per
+  binding, because it costs a Task row, a dispatcher hop, and params persisted at rest. When no
+  submitter is registered or submission fails, the work runs **inline**: `Durable` asks for the work to
+  be harder to lose, so dropping it would make opting in less reliable than leaving it off. New
+  `Task.ActionID` widens the assignment exclusivity to three ways, and `TaskGraphSpecNode.actionName`
+  joins `agentName`/`assignToUser`.
+
+  Durability replaces _execution_, not _dispatch_: `RunActionParams.DeferExecution` is called by
+  `RunAction` in place of running the action, after validation and filters have passed, so a durable
+  binding is gated by exactly what an inline one is gated by. Submitting at dispatch time instead —
+  which is where this first landed — would have fired a scoped durable trigger for every record of the
+  entity and a filtered one on every save.
+
+  **Execution-log retention.** `Action.RetentionPeriod` and `ActionExecutionLog.RetentionPeriod` shipped
+  with descriptions and no reader anywhere in the codebase; the log grew forever while the schema
+  claimed otherwise. Retention is now stamped onto each row when the run starts — decided at write
+  time, so editing an action's retention is a going-forward change rather than a retroactive deletion —
+  and a new opt-in `Action Log Retention` scheduled job purges expired rows oldest-first, bounded per
+  run, reporting when it stopped at its ceiling rather than because it was finished.
+
+  **The `Validate` invocation hole.** `EntityActionInvocationValidate` overrode single-record invocation
+  with a near-copy that had drifted into a strict subset: no scope resolution (so a binding narrowed to
+  one record ran `Validate` against every record of the entity) and no provenance (so a whole-record
+  parameter was logged raw, ignoring the binding's `LogValue` rows). The override is deleted; the class
+  inherits, which is what keeps both facts true for `Validate` permanently rather than until the copies
+  drift again.
+
+  **The `RunEntityAction` null contract.** `null` means the action did not run — the binding is scoped
+  and this record falls outside it. `HandleEntityActions` guarded for it; the GraphQL resolver did not,
+  so an out-of-scope binding surfaced to clients as a server error. The signature now says so and the
+  resolver reports it as the ordinary outcome it is.
+
+- c996a56: Field-Level Security: per-field Read/Update/Create control by role.
+
+  Field security is switched **on or off per entity**, explicitly, via a new
+  `Entity.EnableFieldLevelSecurity` flag. Nothing is inferred from whether permission rows happen to
+  exist, so adding a rule can never change access on an entity that has not opted in.
+
+  A new `EntityFieldPermission` table holds one row per (field, role) with three independent
+  verbs — `ReadAccess`, `UpdateAccess`, `CreateAccess` — each `Allow`, `Deny`, or `No Access`:
+  - **`No Access`** is neutral, and the default. It grants nothing and blocks nothing; another
+    role's Allow still wins.
+  - **`Allow`** grants the action for that role.
+  - **`Deny`** wins over everything. One Deny anywhere across the user's roles beats any number of
+    Allows.
+
+  **Read is required for Update and Create.** A field a user cannot see is one they cannot change,
+  so this is enforced twice: a CHECK constraint refuses the combination within a row, and the
+  aggregation clamps it again across roles — because two individually legal rows held by one user
+  (role A grants Read+Update, role B denies Read) would otherwise aggregate to write-only access
+  that no constraint could see.
+
+  **Turning the flag on is safe.** It snapshots the entity's existing entity-level permissions into
+  per-field rows, so enabling changes nothing until an administrator tightens a specific field.
+  Turning it off keeps the rows, inactive, so re-enabling does not lose the configuration. Those rows
+  maintain themselves: adding a column, granting a role entity access, or dropping either one is
+  reconciled automatically, and an administrator's tightening is never overwritten by that process.
+
+  **Nobody is exempt** — no admin bypass, no Owner carve-out, and no exempt account anywhere in
+  permission evaluation. That includes the **MJ system user**, the account the server runs its own
+  work as: it is not special-cased at runtime, and gets its access from ordinary `Allow` rows
+  written for the standard roles it holds. What is protected instead is the CONFIGURATION — a rule
+  that _denies_ anything to a role the system user holds is refused, and so is giving that account a
+  role which already denies a field. Grants save normally, since they are what the server's own
+  access depends on. Restricting that account would matter because its engine caches are
+  process-wide, so a partially loaded cache would reach every user; a configuration rule stops that
+  somewhere an administrator can see it, rather than behind a bypass that has to be trusted.
+  Primary keys, `__mj_` columns, and the security/identity entities can never be restricted.
+
+  Enforcement (server-side and authoritative):
+  - **Reads.** Denied columns are stripped from RunView results on both the cache-hit and cache-miss
+    paths, and from single-record GraphQL responses.
+  - **The audit trail.** `MJ: Record Changes` rows carry another entity's old and new values, and the
+    audit entity's own field security is off — so without a dedicated control, anyone with entity read
+    on it could read a denied field straight out of the payload, in the default configuration. Each
+    row is now projected against **the entity it is about**, resolved per row from its `EntityID`:
+    denied keys are dropped from `ChangesJSON` and `FullRecordJSON`, and `ChangesDescription` is
+    withheld entirely. Prose cannot be safely redacted — it would leak on the first value that
+    appears in an unexpected form — so it is dropped rather than edited, and callers degrade to a
+    generic label. Rows are never hidden: a user denied one field still sees that a record changed,
+    when, by whom, and which of the fields they may read. It fails closed when the subject entity
+    cannot be resolved, including when a query narrows `Fields` such that no `EntityID` reaches the
+    projection — otherwise `Fields: ['ChangesJSON']` would be a one-parameter bypass. Payload queries
+    in the platform now select `EntityID` alongside; a saved query reading Record Changes directly is
+    not projected, for the same reason no `RunQuery` is. On the write side, an update to a Record
+    Change from a caller carrying any denial ignores every payload column the client sends and
+    reloads the stored values first — a narrowed payload hydrates as an ordinary loaded value and
+    save-SQL generation writes every field, so without this a restricted user editing `Comments`
+    would silently overwrite the audit payload with the narrowed copy they were shown. Nothing is
+    manufactured anywhere in this path: a reader gets the stored value or a strict subset of it, and
+    only the stored value is ever persisted.
+  - **Caller-written SQL.** A request is rejected if `ExtraFilter`, `OrderBy`, or an `Aggregates`
+    expression names a denied field. Without this, `MIN(Salary)` or `Salary > 200000` reads the
+    values back without the column ever appearing in a result. `UserSearchString` is not rejected;
+    denied fields are simply excluded from the search.
+  - **Writes.** A save that changes a field the user cannot update is rejected. Values a client
+    sends for fields it cannot read are ignored — such a field was absent from every payload that
+    client received, so any value coming back is fabricated by the transport.
+  - **Creates.** A value supplied for a field the user may not create is dropped and the column
+    takes its default. This never rejects: an error naming the field would confirm it exists and is
+    restricted, and silently defaulting is what an unrestricted user gets by leaving it blank.
+  - **Typed accessors.** `BaseEntity.Get()` and `.Set()` throw for a field the user cannot read, so
+    a restricted field surfaces as a clear failure rather than a silent blank. Entity forms check
+    access before rendering, so a denied field is simply not shown.
+  - **Direct database connections (SQL Server only).** CodeGen emits column-level `DENY SELECT` on
+    base views for roles with an explicit `ReadAccess = 'Deny'` rule on an enabled entity, restricted
+    to custom DBA-created roles, and skips any role a service login belongs to. PostgreSQL emits
+    nothing — it has no DENY, so Deny-wins cannot be expressed there. See the guide.
+
+  RunView caching is unchanged for everyone else: the server keeps full-width slots shared across
+  users and narrows each response at read time, so a permission change takes effect on the next
+  metadata refresh without invalidating cached results. Browsers key their own cache on the fields
+  the user may see, so tightening access does not leave a stale column on screen.
+
+  Also in this release:
+  - **Permission removal now reaches the database.** CodeGen reads live permission state and
+    re-asserts it each run, so deleting a permission row actually revokes the grant or deny.
+    Previously CodeGen only ever added grants, so a deleted `EntityPermission` row left its `GRANT`
+    in place until the view happened to be rebuilt.
+  - **Partial entity objects are now safe.** `EntityField` gains a not-loaded marker, set when the
+    data an entity was loaded from left a field out. Such fields are skipped on save, are never
+    dirty, and are exempt from the required-field check, so the stored value is kept instead of
+    being overwritten with a default. This fixes silent data loss when a user edits an unrelated
+    field on a record containing columns they cannot read.
+  - **`entity_object` requests always fetch every column the user may see**, whether or not the
+    query is cacheable. This was already true on the server but not for clients, so a client could
+    build a partial entity and write defaults over real data on the next save.
+  - **Server-side `BaseEngine` loads now run as the MJ system user**, regardless of which caller
+    reached `Config()` first. Engine data is infrastructure: the cache is process-wide and shared by
+    every user of the process, so its contents must not depend on the first caller's permissions — one
+    carrying entity denials, RLS row scoping, or field denials would otherwise seal a partial cache
+    that then serves everyone until restart. The identity is sticky once applied, so a later
+    `Config(forceRefresh, someUser)` cannot pull the shared cache back under that user's permissions.
+    Restricting what a given user may SEE stays where it belongs, at the point data is served to them.
+    Client-side (`ProviderType.Network`) behavior is unchanged. Resolution goes through a new
+    ClassFactory seam, `WellKnownUserSource` in `@memberjunction/core`, whose server-side
+    implementation answers from `UserCache`; when nothing is registered — a browser, a test, a
+    database with no such row — the engine degrades to acting as the caller exactly as before, with a
+    once-per-engine-class warning. This is a pre-existing `BaseEngine` defect fixed alongside field
+    security rather than because of it: neither depends on the other, though it is what lets the guide
+    say engine caches cannot be narrowed by a restricted caller.
+
+  New guide: `guides/FIELD_LEVEL_SECURITY_GUIDE.md`. Read the configuration limits before
+  restricting anything. Saved queries are not field-filtered; run access to a query is the grant.
+
+- c996a56: Field-Level Security: NOT NULL columns can now be restricted.
+
+  **BREAKING (GraphQL schema).** Generated object types lose non-nullability on roughly **2,150 of
+  4,650 restrictable fields, across all 384 generated object types** — `String!` becomes `String`, and
+  likewise for the other scalars. Any external consumer holding GraphQL types generated against the
+  previous schema will fail to compile against this one until those types are regenerated; a consumer
+  that reads the fields without regenerating sees no runtime change. Input types are **not** affected,
+  so no write contract changes. Non-nullability is retained only where field security is structurally
+  incapable of stripping a value: primary keys and `__mj_` system columns.
+
+  The guide previously said not to restrict a NOT NULL column, because the generated GraphQL object
+  types marked those fields non-nullable and an FLS-omitted value then failed response serialization.
+  That constraint is gone, and with it the largest gap in what the feature could actually protect —
+  roughly 2,150 of 4,650 restrictable fields were off-limits, including the ~400 foreign-key display
+  columns that inherit non-nullability from the key they display ("hide which client this contract
+  belongs to" is a common ask, and it did not work).
+
+  The underlying error was one wrong inference. A column's NOT NULL constraint and a GraphQL `!` say
+  different things — "no ROW stores an empty value here" versus "every RESPONSE, to every caller,
+  carries a value here" — and the second does not follow from the first. They coincided only while
+  every caller saw every column of every row they could read, which is exactly what field security
+  ends. Generated output types are now non-nullable only where FLS is structurally incapable of
+  stripping a field: primary keys and `__mj_` system columns. **Input types are unchanged** — they
+  carry the write contract, which the database constraint does still govern.
+
+  Symptoms this removes, all of which required a denied NOT NULL column: single-record loads nulling
+  the entire record, typed list queries nulling the entire query, and — the worst — a mutation whose
+  write landed in the database while its response failed to serialize, so the client reported a
+  failed save for an edit that had actually succeeded.
+
+  **`ReadableFields___`** is added to every generated object type. Deleting a denied key server-side
+  is not sufficient on its own: GraphQL emits every field the client _selected_, so a denied field
+  that was asked for arrives as an explicit `null` indistinguishable from a genuine one. The client
+  cannot settle that from its own metadata — that copy is stale in the window after a permission
+  change, and may be filtered away entirely once metadata tiering lands. The server now states it
+  in-band for the request that actually ran. It lists **readable** fields rather than denied ones
+  deliberately: naming denied fields would hand back precisely what metadata filtering exists to
+  withhold.
+
+  Also in this release:
+  - **Read-only fields no longer receive write permissions.** A joined display column or computed
+    field cannot be written through the API by anyone, so Update and Create verbs on one decide
+    nothing. Reconciliation was authoring `Allow` on both across ~1,000 such fields per qualifying
+    role — rows that read as granted permissions and were inert. They are now `No Access`, the
+    save-time guard refuses a rule that sets them, and the system-user access guard no longer reads
+    their absence as lost access. Read is untouched.
+  - **Two paths that returned a record's NAME without checking field security are closed.** The
+    `GetEntityRecordName` query took no user context at all, so a caller denied read on an entity's
+    name field could still obtain it — and the foreign-key control in forms falls through to that
+    query _precisely when_ the joined display column is denied, so the fallback that exists to handle
+    a denial was the thing that defeated it. Separately, `BaseEntity.GetRecordName()` read through
+    `Get()`, which throws for a denied field, and it runs automatically after every load and save —
+    so denying an entity's name field made every record on it fail to open. Both now degrade to the
+    primary key.
+  - **A write refusal on a field you can read now names the missing permission** rather than using
+    the ambiguous "does not exist on entity … or you do not have access to it". That wording exists
+    to stop a caller probing which columns a deployment treats as sensitive, which is a question
+    about fields they cannot _read_; when they can see the field and its value, it only tells them a
+    field they are looking at might not exist. Read denials keep the ambiguous wording.
+  - **The view-configuration panel no longer offers denied fields as columns.**
+
+- 00a2483: Introduces Identity Claims infrastructure in MemberJunction core for guest record claiming, account linking, and invite verification workflows (#4012).
+  - Schema & Entities: Adds `IdentityClaimType` and `IdentityClaim` entities with lifecycle state transitions (`Pending`, `Claimed`, `Expired`, `Revoked`).
+  - Pluggable Driver Substrate: Supports custom claim handler implementations via `BaseIdentityClaimDriver` and `@RegisterClass`.
+  - Server Engine: `IdentityClaimEngineServer` handles cryptographic claim creation, SHA-256 token hashing at rest, timing-safe token verification, email notifications via MJ Communications framework with HTML escaping, configurable email providers, polymorphic entity resolution, and atomic claim redemption.
+
+- 9cd81ca: Integration apply path: stop record-map write amplification, surface pagination violations, and stop blocking the connection wizard on a schema refresh.
+
+  `MJ: Company Integration Record Maps` is the highest-volume table the sync path writes — one row per external record ever mapped, re-touched every sync — and unlike its run-log siblings it still shipped with `TrackRecordChanges = 1`, so every mapping upsert also wrote a `RecordChange` row and doubled a sync's write volume. Nothing reads that history: the mapping row is the current state, and operators audit a sync through the per-run artifact stream. Change tracking is now off for that entity; existing history rows are left in place. Separately, a connector returning an oversized batch (a pagination-contract violation) is now reported rather than absorbed silently, and `IntegrationUpdateConnection` can launch its schema refresh without waiting on it.
+
+  `MJCompanyIntegrationEntityServer` gains `SuppressActivationSchemaRefresh`, a transient opt-out that stops the activation (`IsActive` false→true) schema refresh from running inside `Save()` when the caller is going to run it itself. `IntegrationCreateConnection` sets it for `awaitSchemaRefresh: false`, which makes that flag actually non-blocking on create — previously the Save-side refresh ran first and awaited, so the mutation paid a full live introspect regardless — and moves the introspect after the connection test, so a connection rejected by that test is rolled back without having written IntegrationObject rows. Default false, so every other activation path is unchanged.
+
+  `IntegrationConnectorCreationPipeline.Run()` now honours a caller-supplied `RunID` even when it coalesces onto an already-running or just-completed run for the same CompanyIntegration. Previously the supplied ID was silently discarded, so a caller that had already handed it to a client as "the run to tail" left that client polling a run directory that was never created — `IntegrationTailRunEvents` answering "Run not found" forever, which is indistinguishable from "hasn't started yet". A coalesced call now publishes a terminal alias run under the requested ID that mirrors the served run's outcome and names it, so the ID is always tailable.
+
+### Patch Changes
+
+- 8f199e2: Identity Claims: ship the redemption surface and close the trust gaps.
+  - New `IdentityClaimRedemptionResolver` (MJServer): `RedeemIdentityClaim` /
+    `AutoClaimPendingIdentityClaims` mutations and `GetMyPendingIdentityClaims` query, with an
+    in-memory per-user rate limit on redemption attempts.
+  - New Explorer `/claims/redeem` page (explorer-core) — the landing target of claim emails'
+    `?id=..&token=..` links, previously a dead URL.
+  - Automatic claim-on-login: `getUserPayload` now fires `AutoClaimForUser` once per issued
+    token (deduped alongside the session audit), so pending claims addressed to a user's email
+    attach at sign-in.
+  - Email-verification gate: the OIDC `email_verified` claim is read off the verified JWT onto
+    `UserPayload.emailVerified` and threaded into redemption — an IdP that explicitly asserts
+    an unverified email can no longer redeem by email match (the token path still works).
+  - `IdentityClaimType.Configuration` is now read: `RequireVerifiedEmail`, `RequireToken`, and
+    `AutoClaim` gates (typed as `IdentityClaimTypeConfiguration` on the client engine).
+  - `IdentityClaimType.IsActive` is now enforced on both create and redeem.
+  - `GetPendingClaimsForEmail` uses `EscapeSQLString` and a platform-neutral expiry literal
+    (was `GETUTCDATE()`, SQL Server-only); `RevokeClaim` checks its save result and skips the
+    driver's `OnRevoke` when the revocation did not persist.
+
+- 516f4fb: Scope `MJ: Identity Claims` reads to the requesting user, and decouple redemption from that read grant.
+
+  `IdentityClaim` shipped with CodeGen's default permission set (UI read-only; Developer/Integration full CRUD). That default is correct for most entities but too broad here: each row pairs a guest purchaser's email (`NormalizedEmail`) with the record they bought (`EntityID` / `RecordID`), so an unfiltered read grant let any authenticated UI user enumerate every guest email and its purchase linkage.
+
+  A new migration keeps `CanRead` and attaches a `ReadRLSFilterID` — the pattern core already uses for `UI: Own AI Agent Runs` / `UI: Own AI Prompt Runs`. The filter matches on `ClaimedByUserID` **or** `NormalizedEmail`, because `ClaimedByUserID` is NULL until redemption and an ID-only filter would hide every pending claim from the user entitled to redeem it. Developer and Integration keep filter-less rows and stay exempt.
+
+  `RedeemClaim` now reads the claim (and any associated magic-link invite) under the system user rather than the caller. Row filters are applied to single-record loads and not just `RunView`, so without this the filter would have silently broken the entity's own workflow #3 — redeeming when the purchase email differs from the login email, which is exactly the case the verification token exists to serve. Authorization is unchanged and still enforced in the engine: email match, or a timing-safe comparison against the stored token hash.
+
+  Note the `TokenHash` in `MetadataJSON` was not the exposure. The token is `crypto.randomBytes(32)` and is not recoverable from its SHA-256; the issue was PII enumeration.
+
+  ***
+
+  Also threads metadata providers through the identity-claim engines instead of reaching for the process-global default, removing all 8 `global-provider-ok` suppressions across the two files.
+
+  `IdentityClaimEngineServer.RedeemClaim` now **requires** an `IMetadataProvider` (breaking, deliberately). Redemption reads a claim, reads a magic-link invite, and executes a raw CAS `UPDATE` — three operations that must hit the same database. An optional provider would let a caller thread one into the entity reads while the CAS silently fell back to the global, which is the failure this signature makes impossible. `CreateClaim`, `RevokeClaim` and `GetPendingClaimsForEmail` take an optional trailing `provider?` instead, so they stay source-compatible.
+
+  The CAS helpers previously resolved schema and table names from the passed `md` but took `ExecuteSQL` from the global — identical objects in a single-provider process, but the statement would have been built for one database and run against another the moment anyone threaded a provider. Both now use a single provider.
+
+  `IdentityClaimEngine` (client) extends `BaseEngine` and so already owns a provider; its three `new Metadata()` calls are replaced with `this.ProviderToUse` per the repo's data-access rule. Two bare `new RunView()` calls — which resolve a _separate_ global RunView provider slot that the compliance scanner does not cover — now receive the engine's provider.
+
+  `IdentityClaimEngineServer` gains a settable `Provider` accessor with a `?? new Metadata()` fallback, matching `AIEngine` (the pattern `QueryEngineServer` and `ComponentMetadataEngineServer` both cite) and structurally exempt from the compliance scanner.
+
+  ***
+
+  **Breaking:** the claim lifecycle is removed from `IdentityClaimEngine` (`@memberjunction/core-entities`) and now lives only on `IdentityClaimEngineServer`.
+
+  `CreateClaim`, `RedeemClaim`, `RevokeClaim`, `GetPendingClaimsForEmail` and `AutoClaimForUser` are gone from the client+server class. It retains what is safe and useful in any host — the `IdentityClaimType` cache, type lookups, `ClassFactory` driver resolution, `NormalizeEmail`, and the `BaseIdentityClaimDriver` contract — and the server engine contains an instance of it, proxying those cached members. Same split as `AIEngineBase` / `AIEngine`.
+
+  The two copies had diverged. The client's `RedeemClaim` was the pre-hardening implementation: no email match, no token verification of any kind (it accepted a `token` and handed it to the driver unchecked), check-then-set instead of an atomic CAS, and the driver invoked before the status transition with no error handling. Those defects were fixed on the server copy only, leaving a weaker implementation of a security-critical operation exported from a package server code also imports — where `IdentityClaimEngine` and `IdentityClaimEngineServer` differ by one word.
+
+  Nothing outside the engines called the removed methods. `AutoClaimForUser` moves to the server engine and now runs each redemption through the hardened `RedeemClaim`, so the email lookup that finds pending claims is a convenience rather than the security boundary.
+
+- 2875f6f: Stop running a live source introspection inside `CompanyIntegration.Save()`
+
+  `MJCompanyIntegrationEntityServer` no longer overrides `Save()` to fire
+  `IntegrationConnectorCreationPipeline` on an `IsActive false→true` transition.
+  That hook made an unbounded scan of the customer's source a side effect of
+  writing a row — it ran for any writer of that transition, inside the caller's
+  HTTP request, and on the create path it ran before the credential had been
+  tested.
+
+  Discovery is now something a caller asks for:
+  - `IntegrationCreateConnection` creates the row inactive and activates it only
+    after the credential test, so the scan can never run against a password that
+    is about to be rejected and rolled back.
+  - `IntegrationReactivateConnection` gains a `runSchemaRefresh` argument
+    (default `true`, matching the previous behaviour) so the refresh is visible
+    in the API and can be declined.
+  - `runSchemaRefreshPipeline` now takes the `IntegrationEngine` maintenance lock,
+    which the other pipeline call sites already held, and supplies the
+    SoftPKClassifier LLM callback the save hook used to provide.
+
+  `MJCompanyIntegrationEntityServer.RunSchemaRefreshPipeline()` is public for
+  callers that want the old behaviour explicitly.
+
+- 23c2521: Close silent-failure gaps in Open App config writes, class registration, and update checks — and
+  fix the first real collision the new class-registration diagnostic found.
+
+  `dynamicPackages` idempotency matched the whole config file rather than the target array, so a
+  `shared` package — which must be written to both `server` and `client` — had its client insert
+  skipped by the server entry written moments earlier. The package never reached
+  `dynamicPackages.client`, so its `@RegisterClass` components were tree-shaken out of the browser
+  bundle with no error raised anywhere. The check is now scoped to the target array's body.
+
+  Upgrades were add-only, so `mj.config.cjs` converged on the union of every version ever installed
+  and a package dropped in v2 kept being bootstrapped. `PruneDynamicPackagesNotInManifest` now runs
+  on the upgrade path, after the adds; surviving entries are left byte-identical so an operator's
+  `Enabled: false` is not silently reset, keep-sets are per-array, and an entry shape that cannot be
+  parsed is a no-op rather than a guess. A renamed `startupExport` is retargeted in place — keying
+  only on package name left the old export name in the config forever, and ServerBootstrap then reads
+  `mod[StartupExport]`, gets `undefined`, skips it because it is not a function, and still logs
+  `(ran <old name>)`. The add-then-prune order is chosen for the failure case: these are two writes
+  to the same files with no rollback between them, and adding first leaves that window holding
+  (old ∪ new), so a server that restarts mid-upgrade still finds every entry it needs. Pruning first
+  would leave a subset of both versions and the app's registrations would vanish.
+
+  `@RegisterClass` passes `priority = 0`, which routes to the auto-increment branch, so a later
+  registration always wins — correct for an inheritance chain, silently wrong for two unrelated
+  classes colliding on a key. Only `priority > 0` ever warned, so in practice nothing warned.
+  `ClassFactory.Register` now warns naming every prior unrelated registration for that
+  `(base class, key)` pair, using a new `AreClassesRelated` that compares by name as well as identity
+  so a module loaded through two paths does not read as a collision. Registration behavior is
+  unchanged; the warning is diagnostic only. Measured over a realistic MJAPI load — 1,318 real
+  registrations across 697 `(base, key)` groups — it fires on exactly one pair, with no false
+  positives.
+
+  That one pair was a real bug, fixed here. `MJConversationDetailEntityServer` and
+  `MJConversationDetailEntityExtended` both registered for `BaseEntity` under
+  `'MJ: Conversation Details'` as siblings, each extending the generated entity directly. The server
+  package loads last, so it won outright and the Extended class's `Save`/`Delete` permission gate —
+  the check that only a conversation's owner may set `UserRating`/`UserFeedback`, and that a
+  non-owner without a resource grant cannot write at all — never ran. The gate is explicitly written
+  to run server-side (`ProviderType === 'Database'`), which is exactly where it was being shadowed
+  out. `MJConversationDetailEntityServer` now extends `MJConversationDetailEntityExtended`, so the
+  edit-flag logic and the permission gate compose instead of one replacing the other. The resolved
+  class is unchanged; only its base is.
+
+  `mj app check-updates` dropped the per-repo `TokenMap` that `install` and `upgrade` both use, so
+  private repos reported "up to date" forever; dropped each app's `Subpath`, so a multi-app repo
+  reported a **sibling app's** version as this app's latest; and let one throwing app kill the sweep
+  or vanish from a report that still concluded "All apps are up to date". The loop moved into a
+  testable `CheckAppsForUpdates` helper with the version lookup injected, and failures are collected
+  per app and reported.
+
+  A lookup that returns no version at all is now reported as `Unresolved` — a third outcome, distinct
+  from both an update and a failure — and the green "All apps are up to date" line is printed only
+  when every app actually produced an answer. Every app in the list is installed, so it resolved from
+  a real ref once; finding no version now means the resolver and the repository disagree. This matters
+  because `ListGitHubTags` reads a single page of the GitHub tags API: against
+  `MemberJunction/Integrations` (374 tags), the scoped `<subpath>@<semver>` tag line for every
+  installed connector sits past page 1, so all nine apps resolve to nothing. Without this, scoping the
+  lookup by `Subpath` would have traded a wrong-but-obvious answer for a confident false green.
+  Pagination itself is fixed separately in #3353, which should land with or before this.
+
+- 512bb53: Security: close the role-elevation path on `MJ: Roles` and `MJ: User Roles` (issue #4282).
+
+  Issue #4260 closed the `User.Type` route to elevated capability. Role assignment is the platform's other authority mechanism and was unguarded: no server-side entity subclass existed for either entity, so `ClassFactory` resolved the generated classes, whose `Validate()` knows nothing about who is calling. On a baseline seed — and verified against a live database — the `Developer` and `Integration` roles hold unfiltered `CanCreate`/`CanUpdate`/`CanDelete` on both entities. Reproduced end to end on the real stack before the fix: a caller whose `Type` is `'User'`, holding only `Developer` and `UI`, inserted a row granting itself `Integration` (`Validate()` passed, `Save()` returned `true`), and separately created a brand-new role.
+
+  **`MJUserRoleEntityServer`** — a non-Owner may only grant, move or revoke a role they themselves hold. That subset rule is a ceiling: whatever a non-Owner does through this entity, the authority they hand out is authority they already had, so no sequence of calls lets a caller exceed their own grant. Delegated administration, IdP/group sync and onboarding automation — the legitimate non-Owner uses `User.Type` does not have — all keep working. On an update the pre-save `RoleID` is checked as well as the new one, so an assignment cannot be repointed to strip someone of a role the caller does not hold. `UserID` is deliberately not frozen: moving a grant between users stays inside the same ceiling. One consequence of that is chosen knowingly rather than incidental — because revocation shares the granting ceiling, a non-Owner may repoint or delete **any** user's assignment of a role the caller also holds, including an Owner's. That is not escalation: Owner authority lives in `User.Type`, which #4260 froze, and not in a role. It does let one non-Owner strip peers of a role they share, which is deprivation rather than elevation — reversible by an Owner and recorded in Record Changes. Narrowing revocation to the caller's own row would close it only by breaking delegated administration, the legitimate non-Owner use this rule exists to preserve.
+
+  **`MJRoleEntityServer`** — a non-Owner may not create, change or delete a role. Every field on this entity is authority-bearing: `Name` is what user/role synchronization matches on, `DirectoryID` maps an external directory group to the role, and `SQLName` decides which database role CodeGen grants object rights to.
+
+  Both guards override `Save()` and `Delete()` alongside `Validate()`, so the rules hold on every write path — GraphQL resolvers, Remote Operations, the Create/Update/Delete Record actions, metadata sync, one-off scripts — and cannot be switched off by the `ReplayOnly` save option, which skips `Validate()` while still performing the write. Both are pure: they read only the record's own field state and the caller's already-cached roles, so they cost nothing per save and are unit-testable without a database.
+
+  **Upgrade notes.**
+  - **Explorer's role-management screen stops working for non-Owner administrators.** It has no Owner gate of its own today, so a Developer-role non-Owner reaches it in practice; creating, renaming and deleting roles from it are now refused with a message naming the rule. This is the same trade-off #4260 accepted for the user-management screen.
+  - **Explorer's bulk role assignment now checks each `Save()` return.** `executeBulkRoleAssign` enrols each row in a transaction group, where `Save()` reports only _enrolment_ — the provider queues the item locally and returns `true` without a round trip. A row refused **client-side** (a `CheckPermissions` denial or a field-rule failure) does return `false` and is never enrolled; that return was ignored, so an all-refused batch left the group empty, and an empty group's `Submit()` returns `true` for having nothing to do — the screen reported success having assigned nothing. It now collects each such refusal with the user it applies to and surfaces them.
+
+    To be precise about what this does **not** cover: the role-elevation guard added here is server-side only (`@memberjunction/core-entities-server` is not a browser dependency), so it refuses during `Submit()`, not during `Save()` — and that refusal currently reaches the user nowhere at all. `ExecuteTransactionGroup` on the server discards its own `Save()`/`Delete()` return values, so a refused row never enrols in the server's group either; an all-refused batch submits an empty group, whose `Submit()` returns `true` for having nothing to do, and the screen closes with no message. Verified end to end against a live server: a non-Owner assigning a role they do not hold is correctly **refused** — no row is written, the guard works — but is **reported as success**. This is a pre-existing gap in that resolver (it predates this PR and equally affects `MJ: Users` via issue #4260), tracked as issue #4309 and deliberately not closed here.
+
+  - **`AssignUserRolesAction` now fails the whole batch when the caller does not hold the role.** The core action (`CoreActions/src/custom/user-management/assign-user-roles.action.ts`) builds its `MJ: User Roles` object with `params.ContextUser` and assigns atomically, so a refused `Save()` rolls the transaction back and the action returns `Success: false` with `ResultCode: 'FAILED'` carrying the guard's message. Nothing is partially assigned and nothing is swallowed — unlike the transaction-group paths above, this one already reports its refusal. The "onboarding automation" the subset rule preserves is therefore preserved exactly where the automation's context user holds the role being granted: an automation running as a non-Owner that grants roles its own context user does not hold must be given those roles, or an Owner context user.
+  - **`SyncRoles` / `SyncUsers` / `SyncRolesAndUsers` are unaffected on a default install** — all three carry `@RequireSystemUser()`, and `getSystemUser()` resolves the seeded `Type='Owner'` system user. A deployment whose system user is **not** an Owner will see those sync paths fail closed at the save, loudly rather than silently, for the same reason #4260 documented.
+  - **Not closed by this change:** `MJ: Entity Permissions` carries the same unfiltered `Developer`/`Integration` grant, so a holder of either role can still widen a role's permissions directly. That is an independent route with its own decision to make about the invariant, so it is deliberately out of scope here rather than fixed in passing; this changeset does not claim to close it.
+
+  New unit coverage in MJCoreEntitiesServer (41 tests across both guards, including the pre-fix reproduction) and a new deterministic integration bundle, **IT89 — Role Privilege Elevation Guard** (`role-elevation`, RE1–RE6), which proves the ClassFactory wiring and both guards against a real provider the way IT88 does for `MJ: Users`.
+
+- 041865c: Fix mixed-provider deadlocks on nested mj sync push (Action + Action Params).
+
+  `GetEntityObject` now always `BindProvider(this)` after construct so a 1-arg subclass (`MJActionEntityServer` et al.) cannot silently drop the graph instance and Save on the global host. Every `BaseEntity` instance RunView uses `ProviderToUse`. MetadataSync isolates one provider per JSON-root graph; it drains a graph when its last level finishes or when TransactionDepth is already 0 (Save settled — a fresh instance at the next level is safe). Leftover depth is committed on success and explicitly rolled back on failure; always release. Fail-fast on the first thrown record error. A non-throwing `status: 'error'` no longer commits. If the first CreateIndependentInstance in a file fails, every graph uses the host; if it fails after independents already exist, the file aborts — never a mix. GeoCodeSyncService writes RecordGeoCode on the owning entity's provider.
+
+- d0eab88: Security: a non-Owner can no longer create, delete, or change privileged fields on `MJ: Users` rows (#4260)
+
+  `MJ: Users` now has a server-side entity subclass enforcing, for any caller whose `Type` is not `'Owner'`:
+  - **Create is refused outright.** The two config-driven creators of a `MJ: Users` row (JWT auto-provisioning, magic-link provisioning) resolve their creating user against the deployment's `contextUserForNewUserCreation` / `contextUserForProvisioning` setting, which — under the shipped default — names the seeded Owner-type system user. This closes a bypass where a non-Owner could instead create a row with a chosen `Name` (which has no unique index) matching that configured string, and win the "lowest ID" tiebreak `resolvePrincipalFrom` uses to pick which user the server provisions as.
+  - **`Type` may not be changed** on an existing row — it is the column every Owner check in the platform reads, so writing it was equivalent to granting yourself superuser.
+  - **Only the caller's own row may be modified**, compared against the pre-save `ID` so that rewriting `ID` cannot bypass it. If the pre-save identity cannot be established at all, the save is now refused rather than silently allowed.
+  - **`Name` may not be changed** on an existing row — the same `resolvePrincipalFrom` matching described above runs on update too, so renaming yourself is an equally valid path to the same redirection.
+  - **Delete is refused outright.** MJ deactivates users via `IsActive`; it does not delete them, and an unguarded delete let a non-Owner remove any account, Owners included.
+
+  Owner-type callers — admins, and the seeded system user that auto-provisioning and magic-link provisioning run as under the shipped default — are exempt from all of the above, so user administration and JWT/magic-link provisioning are unaffected for a default install. `FirstName`, `LastName`, `Title` and `Email` remain freely editable by their owner.
+
+  **Upgrade note — read before upgrading if you have customized user provisioning or administer users through a non-Owner role:**
+  - **The broadest change: a non-Owner can no longer modify any OTHER user's row at all**, not merely the `Type` and `Name` fields (both of which are themselves _new_ restrictions in this same changeset, not pre-existing ones — see above). Every field on a row that is not the caller's own is now refused for a non-Owner caller. Concretely, this breaks Explorer's user-management screen for any role but Owner: `user-management.component.ts` has no Owner-only gate of its own, so a `Developer`-role admin who already reaches it today edits other users via `user-dialog.component.ts:181` and deactivates them via `toggleUserStatus` (`user-management.component.ts:570`) — after this change, **every one of those saves is refused** for a non-Owner. That is the screen's primary function.
+  - If your `contextUserForNewUserCreation` or `contextUserForProvisioning` setting names a **non-Owner** user's `Name` or `Email` (the resolution ladder matches those two rungs without checking `Type`; only its System-by-ID and lowest-ID-Owner rungs guarantee an Owner), JWT auto-provisioning and magic-link provisioning will now **fail closed** at save time instead of silently creating rows as that non-Owner. Point the setting at an Owner-type user before upgrading.
+  - **Deployments that grant non-Owner roles (e.g. `Developer`, `Integration`) update/create/delete access on `MJ: Users` should treat all of the above — create, delete, editing another user's row, and the `Type`/`Name` restrictions — as new behavior for that role**, not as pre-existing restrictions this release only tightens.
+
+  This closes the capability half of #4260. The reachability half was fixed separately by narrowing the shipped `newUserRoles` default to `['UI']`. The guard is the durable fix of the two: it holds for any role a deployment grants, including custom ones, on every write path, whereas the config default only governs who gets the seeded roles. Enforcement is in `Validate()` plus `Save()` and `Delete()` overrides — the overrides matter because `BaseEntity.Save()` skips `Validate()` entirely for a `ReplayOnly` save without suppressing the write, so a validation-only guard would have been switchable off by a save option.
+
+- Updated dependencies [6dbe524]
+- Updated dependencies [323df0f]
+- Updated dependencies [634aa8c]
+- Updated dependencies [834f8d7]
+- Updated dependencies [a987913]
+- Updated dependencies [e533ce5]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [2c826f7]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [405c035]
+- Updated dependencies [b7819d2]
+- Updated dependencies [394d276]
+- Updated dependencies [afd6fd6]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [b9a8324]
+- Updated dependencies [ff1b875]
+- Updated dependencies [4586215]
+- Updated dependencies [6242df1]
+- Updated dependencies [22ec804]
+- Updated dependencies [197fdf8]
+- Updated dependencies [b8c2e33]
+- Updated dependencies [d38845a]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [2003cd3]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [0d3094c]
+- Updated dependencies [698aeaf]
+- Updated dependencies [255d506]
+- Updated dependencies [0ec1980]
+- Updated dependencies [199eb2b]
+- Updated dependencies [1940a4d]
+- Updated dependencies [489aecd]
+- Updated dependencies [bb79505]
+- Updated dependencies [d40251e]
+- Updated dependencies [653c51d]
+- Updated dependencies [52490a7]
+- Updated dependencies [a59e52d]
+- Updated dependencies [716b930]
+- Updated dependencies [fa616d3]
+- Updated dependencies [e7f1f88]
+- Updated dependencies [07cb22e]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [711c208]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [59def38]
+- Updated dependencies [2412415]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [9699d0e]
+- Updated dependencies [394d276]
+- Updated dependencies [43f9133]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [29187f8]
+- Updated dependencies [2d14c62]
+- Updated dependencies [394d276]
+- Updated dependencies [c996a56]
+- Updated dependencies [de6eb14]
+- Updated dependencies [b9de989]
+- Updated dependencies [38d4482]
+- Updated dependencies [052b4c7]
+- Updated dependencies [fe7bd9d]
+- Updated dependencies [ada8784]
+- Updated dependencies [8ec1515]
+- Updated dependencies [eb962a1]
+- Updated dependencies [9a905e8]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [c996a56]
+- Updated dependencies [d907a1b]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [8d880cc]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [806e7f2]
+- Updated dependencies [11de1a3]
+- Updated dependencies [cefc302]
+- Updated dependencies [841e6ea]
+- Updated dependencies [394d276]
+- Updated dependencies [f2fa6b3]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [5b30129]
+- Updated dependencies [e7b4833]
+- Updated dependencies [9cd81ca]
+- Updated dependencies [080f4cd]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [d66a26a]
+- Updated dependencies [c643ba3]
+- Updated dependencies [9cce262]
+- Updated dependencies [e9e9873]
+- Updated dependencies [1d88e00]
+- Updated dependencies [647bd71]
+- Updated dependencies [8288711]
+- Updated dependencies [6cbed1d]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [48ff99f]
+- Updated dependencies [79afbff]
+- Updated dependencies [076fa5d]
+- Updated dependencies [9f73528]
+- Updated dependencies [7857d8e]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [d29d6b9]
+- Updated dependencies [e3a1425]
+- Updated dependencies [27e4d09]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [23c2521]
+- Updated dependencies [427fa8b]
+- Updated dependencies [8e469c3]
+- Updated dependencies [d10f112]
+- Updated dependencies [1fdd5d0]
+- Updated dependencies [517d18b]
+- Updated dependencies [9864d86]
+- Updated dependencies [1d3ab82]
+- Updated dependencies [a788e27]
+- Updated dependencies [44fca09]
+- Updated dependencies [44fca09]
+- Updated dependencies [2741d46]
+- Updated dependencies [4eb87c5]
+- Updated dependencies [048c5ce]
+- Updated dependencies [8d0d45a]
+- Updated dependencies [63bc733]
+- Updated dependencies [f52be10]
+- Updated dependencies [4f7f929]
+- Updated dependencies [87aa62a]
+- Updated dependencies [595c945]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [98841bb]
+- Updated dependencies [53c341c]
+- Updated dependencies [0aa2b91]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [74e161d]
+- Updated dependencies [b46330e]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [53d256f]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [a04d5c9]
+- Updated dependencies [9a29da4]
+- Updated dependencies [cf2484c]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [af4bd79]
+- Updated dependencies [f315e44]
+- Updated dependencies [e26c866]
+- Updated dependencies [0967ba7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [7a630ba]
+- Updated dependencies [64915b9]
+- Updated dependencies [de343b5]
+- Updated dependencies [2741d46]
+- Updated dependencies [5fc861f]
+- Updated dependencies [1748491]
+- Updated dependencies [1100077]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [0db6105]
+- Updated dependencies [d7feeae]
+- Updated dependencies [7fefca2]
+- Updated dependencies [cda0187]
+- Updated dependencies [2741d46]
+- Updated dependencies [f2f1491]
+- Updated dependencies [5c1d762]
+- Updated dependencies [a1a8989]
+- Updated dependencies [b00a985]
+- Updated dependencies [d31cba4]
+- Updated dependencies [041865c]
+- Updated dependencies [905820a]
+- Updated dependencies [cc474d5]
+- Updated dependencies [2c8fbc7]
+- Updated dependencies [ca3657d]
+- Updated dependencies [394d276]
+- Updated dependencies [1bd9674]
+- Updated dependencies [9f6a53b]
+- Updated dependencies [6d7d3da]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [4f20e10]
+- Updated dependencies [d8adda1]
+- Updated dependencies [88f8898]
+- Updated dependencies [d078c54]
+- Updated dependencies [7fcdc2d]
+- Updated dependencies [15319b4]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [394d276]
+- Updated dependencies [ec71199]
+- Updated dependencies [1f66f31]
+- Updated dependencies [4b1257f]
+- Updated dependencies [c4e98ce]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [394d276]
+- Updated dependencies [1c0d586]
+  - @memberjunction/sql-converter@6.1.0
+  - @memberjunction/integration-engine@6.1.0
+  - @memberjunction/ai-core-plus@6.1.0
+  - @memberjunction/global@6.1.0
+  - @memberjunction/core@6.1.0
+  - @memberjunction/core-entities@6.1.0
+  - @memberjunction/aiengine@6.1.0
+  - @memberjunction/scheduling-engine@6.1.0
+  - @memberjunction/ai-engine-base@6.1.0
+  - @memberjunction/ai@6.1.0
+  - @memberjunction/sqlserver-dataprovider@6.1.0
+  - @memberjunction/generic-database-provider@6.1.0
+  - @memberjunction/communication-types@6.1.0
+  - @memberjunction/ai-prompts@6.1.0
+  - @memberjunction/sql-parser@6.1.0
+  - @memberjunction/actions-base@6.1.0
+  - @memberjunction/sql-dialect@6.1.0
+  - @memberjunction/doc-utils@6.1.0
+  - @memberjunction/ai-vector-dupe@6.1.0
+  - @memberjunction/ai-vectors-memory@6.1.0
+  - @memberjunction/ai-vectordb@6.1.0
+  - @memberjunction/tag-engine@6.1.0
+  - @memberjunction/templates@6.1.0
+  - @memberjunction/communication-engine@6.1.0
+  - @memberjunction/integration-pk-classifier@6.1.0
+  - @memberjunction/ai-provider-bundle@6.1.0
+  - @memberjunction/predictive-studio-core@6.1.0
+
+## 6.1.0-edge.7
+
+### Minor Changes
+
+- c996a56: Field-Level Security: per-field Read/Update/Create control by role.
+
+  Field security is switched **on or off per entity**, explicitly, via a new
+  `Entity.EnableFieldLevelSecurity` flag. Nothing is inferred from whether permission rows happen to
+  exist, so adding a rule can never change access on an entity that has not opted in.
+
+  A new `EntityFieldPermission` table holds one row per (field, role) with three independent
+  verbs — `ReadAccess`, `UpdateAccess`, `CreateAccess` — each `Allow`, `Deny`, or `No Access`:
+  - **`No Access`** is neutral, and the default. It grants nothing and blocks nothing; another
+    role's Allow still wins.
+  - **`Allow`** grants the action for that role.
+  - **`Deny`** wins over everything. One Deny anywhere across the user's roles beats any number of
+    Allows.
+
+  **Read is required for Update and Create.** A field a user cannot see is one they cannot change,
+  so this is enforced twice: a CHECK constraint refuses the combination within a row, and the
+  aggregation clamps it again across roles — because two individually legal rows held by one user
+  (role A grants Read+Update, role B denies Read) would otherwise aggregate to write-only access
+  that no constraint could see.
+
+  **Turning the flag on is safe.** It snapshots the entity's existing entity-level permissions into
+  per-field rows, so enabling changes nothing until an administrator tightens a specific field.
+  Turning it off keeps the rows, inactive, so re-enabling does not lose the configuration. Those rows
+  maintain themselves: adding a column, granting a role entity access, or dropping either one is
+  reconciled automatically, and an administrator's tightening is never overwritten by that process.
+
+  **Nobody is exempt** — no admin bypass, no Owner carve-out, and no exempt account anywhere in
+  permission evaluation. That includes the **MJ system user**, the account the server runs its own
+  work as: it is not special-cased at runtime, and gets its access from ordinary `Allow` rows
+  written for the standard roles it holds. What is protected instead is the CONFIGURATION — a rule
+  that _denies_ anything to a role the system user holds is refused, and so is giving that account a
+  role which already denies a field. Grants save normally, since they are what the server's own
+  access depends on. Restricting that account would matter because its engine caches are
+  process-wide, so a partially loaded cache would reach every user; a configuration rule stops that
+  somewhere an administrator can see it, rather than behind a bypass that has to be trusted.
+  Primary keys, `__mj_` columns, and the security/identity entities can never be restricted.
+
+  Enforcement (server-side and authoritative):
+  - **Reads.** Denied columns are stripped from RunView results on both the cache-hit and cache-miss
+    paths, and from single-record GraphQL responses.
+  - **The audit trail.** `MJ: Record Changes` rows carry another entity's old and new values, and the
+    audit entity's own field security is off — so without a dedicated control, anyone with entity read
+    on it could read a denied field straight out of the payload, in the default configuration. Each
+    row is now projected against **the entity it is about**, resolved per row from its `EntityID`:
+    denied keys are dropped from `ChangesJSON` and `FullRecordJSON`, and `ChangesDescription` is
+    withheld entirely. Prose cannot be safely redacted — it would leak on the first value that
+    appears in an unexpected form — so it is dropped rather than edited, and callers degrade to a
+    generic label. Rows are never hidden: a user denied one field still sees that a record changed,
+    when, by whom, and which of the fields they may read. It fails closed when the subject entity
+    cannot be resolved, including when a query narrows `Fields` such that no `EntityID` reaches the
+    projection — otherwise `Fields: ['ChangesJSON']` would be a one-parameter bypass. Payload queries
+    in the platform now select `EntityID` alongside; a saved query reading Record Changes directly is
+    not projected, for the same reason no `RunQuery` is. On the write side, an update to a Record
+    Change from a caller carrying any denial ignores every payload column the client sends and
+    reloads the stored values first — a narrowed payload hydrates as an ordinary loaded value and
+    save-SQL generation writes every field, so without this a restricted user editing `Comments`
+    would silently overwrite the audit payload with the narrowed copy they were shown. Nothing is
+    manufactured anywhere in this path: a reader gets the stored value or a strict subset of it, and
+    only the stored value is ever persisted.
+  - **Caller-written SQL.** A request is rejected if `ExtraFilter`, `OrderBy`, or an `Aggregates`
+    expression names a denied field. Without this, `MIN(Salary)` or `Salary > 200000` reads the
+    values back without the column ever appearing in a result. `UserSearchString` is not rejected;
+    denied fields are simply excluded from the search.
+  - **Writes.** A save that changes a field the user cannot update is rejected. Values a client
+    sends for fields it cannot read are ignored — such a field was absent from every payload that
+    client received, so any value coming back is fabricated by the transport.
+  - **Creates.** A value supplied for a field the user may not create is dropped and the column
+    takes its default. This never rejects: an error naming the field would confirm it exists and is
+    restricted, and silently defaulting is what an unrestricted user gets by leaving it blank.
+  - **Typed accessors.** `BaseEntity.Get()` and `.Set()` throw for a field the user cannot read, so
+    a restricted field surfaces as a clear failure rather than a silent blank. Entity forms check
+    access before rendering, so a denied field is simply not shown.
+  - **Direct database connections (SQL Server only).** CodeGen emits column-level `DENY SELECT` on
+    base views for roles with an explicit `ReadAccess = 'Deny'` rule on an enabled entity, restricted
+    to custom DBA-created roles, and skips any role a service login belongs to. PostgreSQL emits
+    nothing — it has no DENY, so Deny-wins cannot be expressed there. See the guide.
+
+  RunView caching is unchanged for everyone else: the server keeps full-width slots shared across
+  users and narrows each response at read time, so a permission change takes effect on the next
+  metadata refresh without invalidating cached results. Browsers key their own cache on the fields
+  the user may see, so tightening access does not leave a stale column on screen.
+
+  Also in this release:
+  - **Permission removal now reaches the database.** CodeGen reads live permission state and
+    re-asserts it each run, so deleting a permission row actually revokes the grant or deny.
+    Previously CodeGen only ever added grants, so a deleted `EntityPermission` row left its `GRANT`
+    in place until the view happened to be rebuilt.
+  - **Partial entity objects are now safe.** `EntityField` gains a not-loaded marker, set when the
+    data an entity was loaded from left a field out. Such fields are skipped on save, are never
+    dirty, and are exempt from the required-field check, so the stored value is kept instead of
+    being overwritten with a default. This fixes silent data loss when a user edits an unrelated
+    field on a record containing columns they cannot read.
+  - **`entity_object` requests always fetch every column the user may see**, whether or not the
+    query is cacheable. This was already true on the server but not for clients, so a client could
+    build a partial entity and write defaults over real data on the next save.
+  - **Server-side `BaseEngine` loads now run as the MJ system user**, regardless of which caller
+    reached `Config()` first. Engine data is infrastructure: the cache is process-wide and shared by
+    every user of the process, so its contents must not depend on the first caller's permissions — one
+    carrying entity denials, RLS row scoping, or field denials would otherwise seal a partial cache
+    that then serves everyone until restart. The identity is sticky once applied, so a later
+    `Config(forceRefresh, someUser)` cannot pull the shared cache back under that user's permissions.
+    Restricting what a given user may SEE stays where it belongs, at the point data is served to them.
+    Client-side (`ProviderType.Network`) behavior is unchanged. Resolution goes through a new
+    ClassFactory seam, `WellKnownUserSource` in `@memberjunction/core`, whose server-side
+    implementation answers from `UserCache`; when nothing is registered — a browser, a test, a
+    database with no such row — the engine degrades to acting as the caller exactly as before, with a
+    once-per-engine-class warning. This is a pre-existing `BaseEngine` defect fixed alongside field
+    security rather than because of it: neither depends on the other, though it is what lets the guide
+    say engine caches cannot be narrowed by a restricted caller.
+
+  New guide: `guides/FIELD_LEVEL_SECURITY_GUIDE.md`. Read the configuration limits before
+  restricting anything. Saved queries are not field-filtered; run access to a query is the grant.
+
+- c996a56: Field-Level Security: NOT NULL columns can now be restricted.
+
+  **BREAKING (GraphQL schema).** Generated object types lose non-nullability on roughly **2,150 of
+  4,650 restrictable fields, across all 384 generated object types** — `String!` becomes `String`, and
+  likewise for the other scalars. Any external consumer holding GraphQL types generated against the
+  previous schema will fail to compile against this one until those types are regenerated; a consumer
+  that reads the fields without regenerating sees no runtime change. Input types are **not** affected,
+  so no write contract changes. Non-nullability is retained only where field security is structurally
+  incapable of stripping a value: primary keys and `__mj_` system columns.
+
+  The guide previously said not to restrict a NOT NULL column, because the generated GraphQL object
+  types marked those fields non-nullable and an FLS-omitted value then failed response serialization.
+  That constraint is gone, and with it the largest gap in what the feature could actually protect —
+  roughly 2,150 of 4,650 restrictable fields were off-limits, including the ~400 foreign-key display
+  columns that inherit non-nullability from the key they display ("hide which client this contract
+  belongs to" is a common ask, and it did not work).
+
+  The underlying error was one wrong inference. A column's NOT NULL constraint and a GraphQL `!` say
+  different things — "no ROW stores an empty value here" versus "every RESPONSE, to every caller,
+  carries a value here" — and the second does not follow from the first. They coincided only while
+  every caller saw every column of every row they could read, which is exactly what field security
+  ends. Generated output types are now non-nullable only where FLS is structurally incapable of
+  stripping a field: primary keys and `__mj_` system columns. **Input types are unchanged** — they
+  carry the write contract, which the database constraint does still govern.
+
+  Symptoms this removes, all of which required a denied NOT NULL column: single-record loads nulling
+  the entire record, typed list queries nulling the entire query, and — the worst — a mutation whose
+  write landed in the database while its response failed to serialize, so the client reported a
+  failed save for an edit that had actually succeeded.
+
+  **`ReadableFields___`** is added to every generated object type. Deleting a denied key server-side
+  is not sufficient on its own: GraphQL emits every field the client _selected_, so a denied field
+  that was asked for arrives as an explicit `null` indistinguishable from a genuine one. The client
+  cannot settle that from its own metadata — that copy is stale in the window after a permission
+  change, and may be filtered away entirely once metadata tiering lands. The server now states it
+  in-band for the request that actually ran. It lists **readable** fields rather than denied ones
+  deliberately: naming denied fields would hand back precisely what metadata filtering exists to
+  withhold.
+
+  Also in this release:
+  - **Read-only fields no longer receive write permissions.** A joined display column or computed
+    field cannot be written through the API by anyone, so Update and Create verbs on one decide
+    nothing. Reconciliation was authoring `Allow` on both across ~1,000 such fields per qualifying
+    role — rows that read as granted permissions and were inert. They are now `No Access`, the
+    save-time guard refuses a rule that sets them, and the system-user access guard no longer reads
+    their absence as lost access. Read is untouched.
+  - **Two paths that returned a record's NAME without checking field security are closed.** The
+    `GetEntityRecordName` query took no user context at all, so a caller denied read on an entity's
+    name field could still obtain it — and the foreign-key control in forms falls through to that
+    query _precisely when_ the joined display column is denied, so the fallback that exists to handle
+    a denial was the thing that defeated it. Separately, `BaseEntity.GetRecordName()` read through
+    `Get()`, which throws for a denied field, and it runs automatically after every load and save —
+    so denying an entity's name field made every record on it fail to open. Both now degrade to the
+    primary key.
+  - **A write refusal on a field you can read now names the missing permission** rather than using
+    the ambiguous "does not exist on entity … or you do not have access to it". That wording exists
+    to stop a caller probing which columns a deployment treats as sensitive, which is a question
+    about fields they cannot _read_; when they can see the field and its value, it only tells them a
+    field they are looking at might not exist. Read denials keep the ambiguous wording.
+  - **The view-configuration panel no longer offers denied fields as columns.**
+
+### Patch Changes
+
+- Updated dependencies [a987913]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [076fa5d]
+- Updated dependencies [9864d86]
+- Updated dependencies [44fca09]
+- Updated dependencies [44fca09]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [88f8898]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core-entities@6.1.0-edge.7
+  - @memberjunction/ai-engine-base@6.1.0-edge.7
+  - @memberjunction/aiengine@6.1.0-edge.7
+  - @memberjunction/ai@6.1.0-edge.7
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/generic-database-provider@6.1.0-edge.7
+  - @memberjunction/sql-dialect@6.1.0-edge.7
+  - @memberjunction/ai-prompts@6.1.0-edge.7
+  - @memberjunction/ai-core-plus@6.1.0-edge.7
+  - @memberjunction/sql-converter@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+  - @memberjunction/tag-engine@6.1.0-edge.7
+  - @memberjunction/ai-vector-dupe@6.1.0-edge.7
+  - @memberjunction/actions-base@6.1.0-edge.7
+  - @memberjunction/communication-types@6.1.0-edge.7
+  - @memberjunction/communication-engine@6.1.0-edge.7
+  - @memberjunction/doc-utils@6.1.0-edge.7
+  - @memberjunction/integration-engine@6.1.0-edge.7
+  - @memberjunction/integration-pk-classifier@6.1.0-edge.7
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.7
+  - @memberjunction/scheduling-engine@6.1.0-edge.7
+  - @memberjunction/templates@6.1.0-edge.7
+  - @memberjunction/ai-vectordb@6.1.0-edge.7
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.7
+  - @memberjunction/sql-parser@6.1.0-edge.7
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.7
+  - @memberjunction/predictive-studio-core@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Patch Changes

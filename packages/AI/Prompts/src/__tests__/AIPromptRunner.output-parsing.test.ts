@@ -18,6 +18,11 @@ type ParseInternals = {
   parseDateOutput(s: string, skip: boolean, errs: ValidationErrorInfo[]): Date;
   parseObjectOutput(s: string, prompt: unknown, skip: boolean, clean: boolean, errs: ValidationErrorInfo[], run: unknown, params?: unknown): Promise<unknown>;
   validateAgainstSchema(parsed: unknown, outputExample: string, promptId: string): Promise<ValidationErrorInfo[]>;
+  parsesAsJSON(text: string): boolean;
+  parseAndValidateResultEnhanced(
+    modelResult: unknown, prompt: unknown, skipValidation: boolean, cleanValidationSyntax: boolean,
+    currentPromptRun: unknown, params?: unknown
+  ): Promise<{ result: unknown; validationErrors?: ValidationErrorInfo[] }>;
 };
 function priv(r: AIPromptRunner): ParseInternals { return r as unknown as ParseInternals; }
 
@@ -95,6 +100,18 @@ describe('parseObjectOutput', () => {
     expect(res).toEqual({ ok: true });
   });
 
+  // Output that starts with '{' or '[' is tried with a plain JSON.parse first; only when that fails
+  // does CleanJSON's recovery run, so recoverable output must still parse.
+  it('parses an object with surrounding whitespace on the direct-parse path', async () => {
+    const res = await priv(runner).parseObjectOutput('  \n{"a":[1,{"b":null}]}\n', prompt(), false, false, [], {});
+    expect(res).toEqual({ a: [1, { b: null }] });
+  });
+
+  it('still recovers output that starts with "{" but is not valid JSON (an extra closing brace)', async () => {
+    const res = await priv(runner).parseObjectOutput('{"ok":true}}', prompt(), false, false, [], {});
+    expect(res).toEqual({ ok: true });
+  });
+
   it('throws + records an error on invalid JSON when validation is on and repair is off', async () => {
     const errs: ValidationErrorInfo[] = [];
     await expect(priv(runner).parseObjectOutput('{broken', prompt(), false, false, errs, {})).rejects.toThrow();
@@ -124,6 +141,22 @@ describe('parseObjectOutput', () => {
   });
 });
 
+describe('parsesAsJSON', () => {
+  it('accepts valid JSON, including with surrounding whitespace', () => {
+    expect(priv(runner).parsesAsJSON('{"a":1}')).toBe(true);
+    expect(priv(runner).parsesAsJSON('  [1, 2]  ')).toBe(true);
+  });
+
+  it('accepts output CleanJSON can recover even when it starts with "{"', () => {
+    expect(priv(runner).parsesAsJSON('{"a":1}}')).toBe(true);
+    expect(priv(runner).parsesAsJSON('```json\n{"a":1}\n```')).toBe(true);
+  });
+
+  it('rejects plain prose', () => {
+    expect(priv(runner).parsesAsJSON('The answer is forty-two.')).toBe(false);
+  });
+});
+
 describe('validateAgainstSchema', () => {
   it('passes when the result matches the OutputExample shape', async () => {
     const example = JSON.stringify({ sentiment: 'positive', score: 0.9 });
@@ -148,4 +181,49 @@ describe('validateAgainstSchema', () => {
     expect(errs.length).toBe(1);
     expect(errs[0].Message).toMatch(/Invalid OutputExample JSON/);
   });
+});
+
+/**
+ * A turn that is nothing but native tool calls.
+ *
+ * Every provider returns `content: null` for it, so the emptiness check that guards text parsing
+ * fires on the one response native mode is designed to produce. Under `ValidationBehavior: 'Warn'`
+ * that is a spurious warning on every native turn; under `'Strict'` it is a retry loop that cannot
+ * terminate, because the model already answered correctly and will answer the same way again.
+ */
+describe('parseAndValidateResultEnhanced — native tool calls', () => {
+    const objectPrompt = { ID: 'p1', OutputType: 'object', ValidationBehavior: 'Strict', OutputExample: null };
+    const turn = (message: Record<string, unknown>) => ({
+        success: true,
+        data: { choices: [{ message }] }
+    });
+
+    it('accepts a tool-call-only turn instead of calling it "no output"', async () => {
+        const result = await priv(runner).parseAndValidateResultEnhanced(
+            turn({ role: 'assistant', content: null, toolCalls: [{ id: '1', name: 'get_weather', arguments: {} }] }),
+            objectPrompt, false, false, {});
+
+        expect(result.result).toBeNull();
+        expect(result.validationErrors ?? []).toEqual([]);
+    });
+
+    it('still reports genuinely empty output as a failure', async () => {
+        const result = await priv(runner).parseAndValidateResultEnhanced(
+            turn({ role: 'assistant', content: null }), objectPrompt, false, false, {});
+
+        expect(result.result).toBeUndefined();
+        expect(result.validationErrors?.[0]?.Message).toContain('No output received');
+    });
+
+    it('parses text normally when a turn carries both', async () => {
+        const result = await priv(runner).parseAndValidateResultEnhanced(
+            turn({
+                role: 'assistant',
+                content: '{"taskComplete":false}',
+                toolCalls: [{ id: '1', name: 'get_weather', arguments: {} }]
+            }),
+            objectPrompt, false, false, {});
+
+        expect(result.result).toEqual({ taskComplete: false });
+    });
 });

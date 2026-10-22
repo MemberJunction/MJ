@@ -17,6 +17,8 @@ import {
     JSONObject,
     RealtimeTurnDetectionMode,
     RealtimeTurnDetectionSettings,
+    RealtimeDroppedInputReporter,
+    type RealtimeInputFrame,
 } from '@memberjunction/ai';
 import { ClientRealtimeSessionConfig, ResolveResponseDoneUsage } from '@memberjunction/ai';
 import { OpenAI } from 'openai';
@@ -186,6 +188,11 @@ export interface OpenAIRealtimeProfile {
      * emits anything). Compat endpoints without `create_response` gating set false.
      */
     supportsLiveReconfigure: boolean;
+    /**
+     * Whether this driver/session supports dynamic, multi-tool sets projected into the realtime
+     * session (e.g. per-agent direct action invocation).
+     */
+    supportsDynamicToolSet: boolean;
     /** The fatal-error message surfaced when the socket closes unexpectedly. */
     unexpectedCloseMessage: string;
     /**
@@ -276,6 +283,7 @@ export const OPENAI_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     supportsMcpTools: true,
     supportsVoiceOutput: true,
     supportsLiveReconfigure: true,
+    supportsDynamicToolSet: true,
     unexpectedCloseMessage: 'OpenAI realtime connection closed unexpectedly',
     supportedTurnModes: ['serverVad', 'semanticVad'],
     // A normalized request (catalog/cascade `turnDetection`) maps first; otherwise OpenAI's default
@@ -316,14 +324,19 @@ interface ExtractedRealtimeFeatures {
     /** Per-session input-transcription model override (`inputTranscriptionModel` bag key). */
     inputTranscriptionModel?: string;
     /**
-     * MJ-side transport settings (`endpoint`, `sampleRate`, `proxyBaseUrl` bag keys) consumed by
-     * self-hosted/proxied drivers — ALWAYS scrubbed so they never leak into a provider payload.
+     * MJ-side transport settings (`endpoint`, `sampleRate`, `proxyBaseUrl`, `brokerBaseUrl` bag keys) consumed by
+     * self-hosted/proxied drivers and OpenAI Live — ALWAYS scrubbed so they never leak into a provider payload.
      */
     endpoint?: string;
     /** See {@link ExtractedRealtimeFeatures.endpoint}. */
     sampleRate?: number;
     /** See {@link ExtractedRealtimeFeatures.endpoint}. */
     proxyBaseUrl?: string;
+    /**
+     * OpenAI Live's SDP broker origin. No driver in this family reads it, but a co-agent's provider bag keyed
+     * `openai` is filed onto OpenAI Realtime as well as OpenAI Live. See {@link ExtractedRealtimeFeatures.endpoint}.
+     */
+    brokerBaseUrl?: string;
     /** The remaining bag entries, safe to spread into the session payload. */
     rest: JSONObject;
 }
@@ -418,10 +431,16 @@ export function ExtractRealtimeFeatures(config: JSONObject | undefined): Extract
 
     // Per-session transcription-model override + MJ-side transport settings. All scrubbed
     // unconditionally — none of these are wire fields on ANY provider in the family.
-    const bag = rest as JSONObject & { inputTranscriptionModel?: unknown; endpoint?: unknown; sampleRate?: unknown; proxyBaseUrl?: unknown };
+    const bag = rest as JSONObject & {
+        inputTranscriptionModel?: unknown; transcriptionLanguages?: unknown; endpoint?: unknown; sampleRate?: unknown; proxyBaseUrl?: unknown;
+        brokerBaseUrl?: unknown;
+    };
     const rawItm = bag.inputTranscriptionModel;
     delete bag.inputTranscriptionModel;
     const inputTranscriptionModel = typeof rawItm === 'string' && rawItm.trim().length > 0 ? rawItm.trim() : undefined;
+    // The caption-language hint is not mapped for this family yet (the model's own text is the
+    // agent caption, so only user ASR could use it, and the compat endpoints' support is unverified).
+    delete bag.transcriptionLanguages;
     const rawEndpoint = bag.endpoint;
     delete bag.endpoint;
     const endpoint = typeof rawEndpoint === 'string' && rawEndpoint.trim().length > 0 ? rawEndpoint.trim() : undefined;
@@ -431,8 +450,11 @@ export function ExtractRealtimeFeatures(config: JSONObject | undefined): Extract
     const rawProxy = bag.proxyBaseUrl;
     delete bag.proxyBaseUrl;
     const proxyBaseUrl = typeof rawProxy === 'string' && rawProxy.trim().length > 0 ? rawProxy.trim() : undefined;
+    const rawBroker = bag.brokerBaseUrl;
+    delete bag.brokerBaseUrl;
+    const brokerBaseUrl = typeof rawBroker === 'string' && rawBroker.trim().length > 0 ? rawBroker.trim() : undefined;
 
-    return { effortLevel, parallelToolCalls, mcpTools, voice, disableAutoResponse, turnDetection, inputTranscriptionModel, endpoint, sampleRate, proxyBaseUrl, rest };
+    return { effortLevel, parallelToolCalls, mcpTools, voice, disableAutoResponse, turnDetection, inputTranscriptionModel, endpoint, sampleRate, proxyBaseUrl, brokerBaseUrl, rest };
 }
 
 /**
@@ -567,28 +589,28 @@ export interface IOpenAIRealtimeConnection {
      * SDK's `EventEmitter` returns `this` for chaining. A void-returning method is assignable from a
      * value-returning one, so a real `OpenAIRealtimeWebSocket` still satisfies this interface.
      */
-    on(event: 'event', listener: (event: RealtimeServerEvent) => void): void;
+    on(event: 'event', listener: (event: RealtimeServerEvent) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /**
      * Registers a listener for connection errors. The SDK routes BOTH transport-level failures
      * (socket error, unparseable frame, failed send — `error.error` is undefined) and provider
      * `error` server frames (`error.error` carries the payload) through this channel; the driver
      * classifies fatality from that distinction.
      */
-    on(event: 'error', listener: (error: OpenAIRealtimeError) => void): void;
+    on(event: 'error', listener: (error: OpenAIRealtimeError) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Removes a previously-registered listener. See {@link IOpenAIRealtimeConnection.on} re: return type. */
-    off(event: 'event', listener: (event: RealtimeServerEvent) => void): void;
+    off(event: 'event', listener: (event: RealtimeServerEvent) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Removes a previously-registered error listener. */
-    off(event: 'error', listener: (error: OpenAIRealtimeError) => void): void;
+    off(event: 'error', listener: (error: OpenAIRealtimeError) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Sends a client event to the realtime API. */
-    send(event: RealtimeClientEvent): void;
+    send(event: RealtimeClientEvent): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Closes the underlying socket. */
-    close(props?: { code: number; reason: string }): void;
+    close(props?: { code: number; reason: string }): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /**
      * Optional raw WebSocket surface (present on the real `OpenAIRealtimeWebSocket`, which exposes
      * its underlying `socket`). Used solely to detect UNEXPECTED closure — the SDK emitter has no
      * close event of its own. The driver feature-detects; fakes may omit it.
      */
-    socket?: { addEventListener(type: 'close', listener: () => void): void };
+    socket?: { addEventListener(type: 'close', listener: () => void): void };  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -617,6 +639,8 @@ export interface IOpenAIRealtimeConnection {
  */
 @RegisterClass(BaseRealtimeModel, 'OpenAIRealtime')
 export class OpenAIRealtime extends BaseRealtimeModel {
+    public static override readonly SupportsDynamicToolSet = OPENAI_REALTIME_PROFILE.supportsDynamicToolSet;
+
     private _openAI: OpenAI;
 
     /**
@@ -697,8 +721,10 @@ export class OpenAIRealtime extends BaseRealtimeModel {
             { ID: 'alloy', Name: 'Alloy' },
             { ID: 'ash', Name: 'Ash' },
             { ID: 'ballad', Name: 'Ballad' },
+            { ID: 'cedar', Name: 'Cedar' },
             { ID: 'coral', Name: 'Coral' },
             { ID: 'echo', Name: 'Echo' },
+            { ID: 'marin', Name: 'Marin' },
             { ID: 'sage', Name: 'Sage' },
             { ID: 'shimmer', Name: 'Shimmer' },
             { ID: 'verse', Name: 'Verse' },
@@ -852,12 +878,19 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
     private lastUserTranscript = '';
 
     /**
+     * Reports the frames {@link SendInput} drops, once per kind and type. Named for the profile's provider, so an xAI or
+     * Hugging Face session's line says which it is.
+     */
+    private readonly droppedInput: RealtimeDroppedInputReporter;
+
+    /**
      * @param connection The injectable provider-connection seam.
      * @param profile The provider profile (defaults to OpenAI's so existing direct construction keeps working).
      */
     constructor(connection: IOpenAIRealtimeConnection, profile: OpenAIRealtimeProfile = OPENAI_REALTIME_PROFILE) {
         this.connection = connection;
         this.profile = profile;
+        this.droppedInput = new RealtimeDroppedInputReporter(`${profile.providerKey}Realtime`, 'this session sends audio only');
         this.configAppliedPromise = new Promise<void>((resolve, reject) => {
             this.resolveConfigApplied = resolve;
             this.rejectConfigApplied = reject;
@@ -996,11 +1029,21 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
 
     // ---- IRealtimeSession outbound ----
 
-    /** @inheritdoc */
-    public SendInput(chunk: ArrayBuffer): void {
+    /**
+     * @inheritdoc
+     *
+     * Appends one audio frame to the input audio buffer. The session sends audio only, so a frame of another kind (a
+     * camera or screen frame) is dropped, never appended as audio, and reported once per kind and type. The xAI and
+     * Hugging Face sessions inherit this.
+     */
+    public SendInput(frame: RealtimeInputFrame): void {
+        if (frame.Kind !== 'audio') {
+            this.droppedInput.Report(frame);
+            return;
+        }
         this.connection.send({
             type: 'input_audio_buffer.append',
-            audio: this.encodeBase64(chunk),
+            audio: this.encodeBase64(frame.Data),
         });
     }
 
@@ -1069,8 +1112,8 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
      * back-to-back local triggers can't both fire.
      *
      * @param instructions Instructions for the single spoken update. **Blank/empty means "respond now using
-     *   the SESSION system prompt"** (the meeting-mode bridge trigger passes `''`); only a non-empty value is
-     *   forwarded as a per-response override.
+     *   the SESSION system prompt"** (the meeting-mode bridge trigger passes `''`); a non-empty value is
+     *   forwarded as a per-response override **carrying the session prompt ahead of it** — see below.
      */
     public RequestSpokenUpdate(instructions: string): boolean {
         if (this.responseActive) {
@@ -1078,22 +1121,42 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
             return false; // NOT sent — the caller (bridge) releases the floor instead of wedging on it
         }
         this.responseActive = true;
-        RealtimeDiagLog(`[${this.profile.providerKey}Realtime][diag] RequestSpokenUpdate → sending response.create (perResponseInstructions=${typeof instructions === 'string' && instructions.trim().length > 0 ? 'yes' : 'none → session prompt governs'})`);
-        // CRITICAL: only set per-response `instructions` when the caller actually supplied some. OpenAI's
-        // `response.create` treats `response.instructions` as a FULL override of the session system prompt for
-        // that response — so forwarding `''` would wipe the co-agent identity framing (incl. the
-        // "call invoke-target-agent, don't do the work yourself" directive), and the model would answer
-        // directly instead of delegating. A blank value ⇒ plain `response.create` ⇒ the session prompt governs.
-        const hasInstructions = typeof instructions === 'string' && instructions.trim().length > 0;
+        const direction = typeof instructions === 'string' ? instructions.trim() : '';
+        RealtimeDiagLog(`[${this.profile.providerKey}Realtime][diag] RequestSpokenUpdate → sending response.create (perResponseInstructions=${direction.length > 0 ? 'yes, with the session prompt carried ahead of it' : 'none → session prompt governs'})`);
+        // CRITICAL: OpenAI's `response.create` treats `response.instructions` as a FULL override of the
+        // session system prompt for that response. A blank value ⇒ plain `response.create` ⇒ the session
+        // prompt governs; forwarding `''` as an override would wipe the co-agent identity framing (incl.
+        // the "call invoke-target-agent, don't do the work yourself" directive) and the model would answer
+        // directly instead of delegating.
+        //
+        // ⚠️ THE SAME IS TRUE OF A NON-BLANK VALUE, and that half went unguarded until #4591. A caller
+        // handing over a real direction — an opening nudge, a silence check-in, a progress narration —
+        // wiped the identity just as thoroughly and far less visibly: only the ONE turn riding this method
+        // lost it, so the session read as intermittently amnesiac rather than as misconfigured. Observed
+        // downstream (bizapps-caliber#397) as an interviewer opening a hiring assessment with "I'm ChatGPT,
+        // your friendly voice companion" while every other turn in the same session correctly gave her
+        // configured name. So the session prompt is carried AHEAD of the direction, which keeps the
+        // direction last — the most recent line is the one the model weights hardest — and means no caller
+        // has to restate an identity the session already holds.
+        const identity = this.activeSystemPrompt;
+        const perResponse = identity === null ? direction : `${identity}\n\n${direction}`;
         this.connection.send(
-            hasInstructions ? { type: 'response.create', response: { instructions } } : { type: 'response.create' },
+            direction.length > 0
+                ? { type: 'response.create', response: { instructions: perResponse } }
+                : { type: 'response.create' },
         );
         return true; // a response.create was issued — the bridge may hold the floor for this turn
     }
 
     /** @inheritdoc — profile-gated: only providers whose endpoint honors a live partial `session.update`. */
     public get Capabilities(): RealtimeSessionCapabilities {
-        return { CanReconfigureTurnMode: this.profile.supportsLiveReconfigure };
+        const caps: RealtimeSessionCapabilities = {
+            CanReconfigureTurnMode: this.profile.supportsLiveReconfigure,
+        };
+        if (this.profile.supportsDynamicToolSet) {
+            caps.SupportsDynamicToolSet = true;
+        }
+        return caps;
     }
 
     /**
@@ -1178,6 +1241,22 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         this.connection.off('event', this.eventListener);
         this.connection.off('error', this.errorListener);
         this.connection.close();
+        this.clearHandlers();
+    }
+
+    /**
+     * Drops all registered callback handlers so a closed session can't keep the caller's
+     * dispatch/UI context reachable through a stale closure. Mirrors the same cleanup in the
+     * Gemini and ElevenLabs realtime sessions.
+     */
+    private clearHandlers(): void {
+        this.outputHandler = undefined;
+        this.transcriptHandler = undefined;
+        this.toolCallHandler = undefined;
+        this.interruptionHandler = undefined;
+        this.usageHandler = undefined;
+        this.errorHandler = undefined;
+        this.closeHandler = undefined;
     }
 
     // ---- Inbound event translation ----
@@ -1390,8 +1469,21 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
 
     // ---- Config helpers ----
 
+    /**
+     * The session system prompt currently in force — the co-agent's identity, persona and standing
+     * directives, exactly as the last `session.update` established them.
+     *
+     * Retained because {@link RequestSpokenUpdate} has to carry it: a per-response `instructions`
+     * override REPLACES it rather than adding to it, so a spoken update that does not restate it
+     * speaks with no identity at all (#4591). Null before the first `session.update`.
+     */
+    private activeSystemPrompt: string | null = null;
+
     /** Sends the `session.update` that establishes instructions, input transcription, tools, and GA features. */
     private sendSessionUpdate(systemPrompt: string, tools?: RealtimeToolDefinition[], config?: JSONObject): void {
+        // Remembered here rather than at the call site so a LIVE Reconfigure that rebuilds the session
+        // cannot leave the two disagreeing: whatever was last SENT is what the model is holding.
+        this.activeSystemPrompt = systemPrompt.trim().length > 0 ? systemPrompt : null;
         // Pull the MJ-idiomatic feature keys OUT of the open Config bag: the host-neutral meeting flag
         // (disableAutoResponse), the output voice, and the GA features (reasoningEffort/parallelToolCalls/
         // mcpTools) — each translated to its provider-native field only when the profile confirms support,

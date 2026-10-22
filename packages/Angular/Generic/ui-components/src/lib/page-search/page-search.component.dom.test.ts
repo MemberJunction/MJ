@@ -35,3 +35,40 @@ describe('MJPageSearchComponent (DOM)', () => {
     ).toBe(true);
   });
 });
+
+describe('MJPageSearchComponent — accessible name (#4116)', () => {
+  const render = (inputs: Record<string, unknown> = {}) =>
+    renderComponentFixture(MJPageSearchComponent, { inputs });
+  const input = (f: ComponentFixture<MJPageSearchComponent>) =>
+    f.nativeElement.querySelector('input') as HTMLInputElement;
+
+  it('names the search box with AriaLabel', () => {
+    expect(input(render({ AriaLabel: 'Search templates' })).getAttribute('aria-label')).toBe('Search templates');
+  });
+
+  it('names the search box from a visible label via AriaLabelledBy', () => {
+    expect(input(render({ AriaLabelledBy: 'search-label' })).getAttribute('aria-labelledby')).toBe('search-label');
+  });
+
+  it('puts InputId on the real <input>, which IS a valid <label for> target', () => {
+    const f = render({ InputId: 'template-search' });
+    expect(input(f).getAttribute('id')).toBe('template-search');
+    expect(input(f).tagName).toBe('INPUT');
+  });
+
+  it('passes AriaDescribedBy through for hint and error text', () => {
+    expect(input(render({ AriaDescribedBy: 'search-hint' })).getAttribute('aria-describedby')).toBe('search-hint');
+  });
+
+  it('renders NO empty name attributes when nothing is configured — absent beats empty', () => {
+    const el = input(render());
+    expect(el.hasAttribute('aria-label')).toBe(false);
+    expect(el.hasAttribute('aria-labelledby')).toBe(false);
+    expect(el.hasAttribute('id')).toBe(false);
+    expect(el.hasAttribute('aria-describedby')).toBe(false);
+  });
+
+  it('hides the decorative magnifier from the accessibility tree', () => {
+    expect(render().nativeElement.querySelector('i')?.getAttribute('aria-hidden')).toBe('true');
+  });
+});

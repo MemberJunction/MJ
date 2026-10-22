@@ -35,6 +35,7 @@ import type {
   LeakageGuard,
   ProblemType,
   FeatureStepGraph,
+  OutcomeConfig,
 } from '@memberjunction/predictive-studio-core';
 
 import type { DatedSourceSpec } from '../feature-assembly';
@@ -52,7 +53,7 @@ export interface IMLModelLoader {
    * @param contextUser request user — required server-side for isolation/audit
    * @param provider optional provider for multi-provider correctness
    */
-  loadModel(modelId: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<MJMLModelEntity | null>;
+  loadModel(modelId: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<MJMLModelEntity | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -68,7 +69,7 @@ export interface IArtifactLoader {
    * @param contextUser request user — required server-side for isolation/audit
    * @returns the artifact bytes, or `null` when not found
    */
-  load(fileId: string, contextUser?: UserInfo): Promise<Uint8Array | null>;
+  load(fileId: string, contextUser?: UserInfo): Promise<Uint8Array | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -84,7 +85,7 @@ export interface ISidecarPredictor {
    *
    * @param req the predict request (artifact + frozen preprocessing + schema + rows)
    */
-  predict(req: PredictRequest): Promise<PredictResponse>;
+  predict(req: PredictRequest): Promise<PredictResponse>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -115,6 +116,8 @@ export interface LoadedModel {
   asOf: AsOfStrategy;
   /** Leakage guard frozen on the model's pipeline (assembly input). */
   leakageGuard: LeakageGuard;
+  /** Metadata-driven outcome and band configuration frozen on the model or resolved from defaults. */
+  outcomeConfig: OutcomeConfig;
 }
 
 /**
@@ -146,6 +149,70 @@ export interface MLModelInferenceProcessorOptions {
    * model's pipeline uses them. Carried through to the FeatureAssembly executor.
    */
   datedSources?: DatedSourceSpec[];
+  /**
+   * Opt-in **train-if-untrained** behavior (see {@link MLAutoTrainConfig}). When set
+   * together with {@link autoTrainer}, a run whose model needs training trains the
+   * declared pipeline, publishes the result, repoints the run's Record Process and
+   * bindings at it, and then scores — instead of refusing the run. When absent, a
+   * model that needs training refuses the run with a clear message.
+   */
+  autoTrain?: MLAutoTrainConfig;
+  /** The trainer that fulfils {@link autoTrain}. Required for auto-train to take effect. */
+  autoTrainer?: IModelAutoTrainer;
+}
+
+/**
+ * Opt-in **train-if-untrained** declaration carried in an `'ML Model'` Record
+ * Process's `Configuration` (`{ "modelId": "...", "autoTrain": { ... } }`).
+ *
+ * Why it exists: a trained model artifact is per-host (its bytes live on the server
+ * that trained it) and training always creates a NEW immutable model row. So an app
+ * that ships a scoring process can't ship a usable model — on a fresh install the
+ * model has to be trained there. Declaring `autoTrain` lets the scoring run itself do
+ * that, once, with no hand steps. Processes that don't declare it are unaffected.
+ */
+export interface MLAutoTrainConfig {
+  /** The `MJ: ML Training Pipelines` id to train when the configured model needs training. */
+  pipelineId: string;
+  /**
+   * Optional scoring binding to ensure for the trained model when the process has none
+   * yet (bindings that already point at this process are always repointed). Lets an
+   * app declare where scores land without shipping a binding row that would have to
+   * reference a model id that doesn't exist on a fresh install.
+   */
+  binding?: {
+    /** The target-entity column the process writes the score to (shown by the prediction panel). */
+    targetColumn?: string;
+    /** Binding mode; defaults to `Scheduled` when the process is scheduled, else `OnDemand`. */
+    mode?: 'OnDemand' | 'Scheduled';
+  };
+}
+
+/** Input to {@link IModelAutoTrainer.EnsureTrainedModel}. */
+export interface AutoTrainRequest {
+  /** The pipeline to train. */
+  pipelineId: string;
+  /** The model the process currently points at (may be empty or missing). */
+  currentModelId: string | null;
+  /** The `MJ: Record Processes` row driving this run, to repoint at the trained model. */
+  recordProcessId: string | null;
+  /** Optional binding to ensure (see {@link MLAutoTrainConfig.binding}). */
+  binding?: MLAutoTrainConfig['binding'];
+}
+
+/**
+ * Seam that turns "this model needs training" into a published, scoreable model.
+ * Production: `PipelineAutoTrainer` (train via the real `TrainingEngine`, publish via
+ * the promotion gate, repoint the Record Process + bindings). Injected so the
+ * processor stays free of training dependencies and is unit-testable.
+ */
+export interface IModelAutoTrainer {
+  /**
+   * Ensure a published, artifact-backed model exists for the pipeline and that the
+   * Record Process + its bindings point at it. Returns that model's id.
+   * @throws when training or publishing fails (e.g. leakage-flagged model needing sign-off)
+   */
+  EnsureTrainedModel(request: AutoTrainRequest, contextUser: UserInfo, provider: IMetadataProvider): Promise<string>;
 }
 
 /** Re-export for downstream scoring consumers without reaching into core. */

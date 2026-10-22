@@ -3,33 +3,33 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, realpathSync } from 'nod
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { importFromHost, isResolutionFailure, resolvePackageJsonFromHost } from '../host-import';
+import { ImportFromHost, IsResolutionFailure, ResolvePackageJsonFromHost } from '../host-import';
 
 describe('isResolutionFailure', () => {
     it('recognizes coded ESM resolution failures (ERR_MODULE_NOT_FOUND)', () => {
-        expect(isResolutionFailure(Object.assign(new Error('x'), { code: 'ERR_MODULE_NOT_FOUND' }))).toBe(true);
+        expect(IsResolutionFailure(Object.assign(new Error('x'), { code: 'ERR_MODULE_NOT_FOUND' }))).toBe(true);
     });
 
     it('recognizes coded CJS resolution failures (MODULE_NOT_FOUND)', () => {
-        expect(isResolutionFailure(Object.assign(new Error('x'), { code: 'MODULE_NOT_FOUND' }))).toBe(true);
+        expect(IsResolutionFailure(Object.assign(new Error('x'), { code: 'MODULE_NOT_FOUND' }))).toBe(true);
     });
 
     it('recognizes exports-map mismatches (ERR_PACKAGE_PATH_NOT_EXPORTED)', () => {
-        expect(isResolutionFailure(Object.assign(new Error('x'), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' }))).toBe(true);
+        expect(IsResolutionFailure(Object.assign(new Error('x'), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' }))).toBe(true);
     });
 
     it("recognizes ts-node-shaped code-less resolution failures by Node's resolver message", () => {
-        expect(isResolutionFailure(new Error("Cannot find package 'x' imported from /a/b.js"))).toBe(true);
-        expect(isResolutionFailure(new Error("Cannot find module 'x' imported from /a/b.js"))).toBe(true);
+        expect(IsResolutionFailure(new Error("Cannot find package 'x' imported from /a/b.js"))).toBe(true);
+        expect(IsResolutionFailure(new Error("Cannot find module 'x' imported from /a/b.js"))).toBe(true);
     });
 
     it('does NOT match code-less errors with unrelated messages (genuine load errors)', () => {
-        expect(isResolutionFailure(new Error('boom during module evaluation'))).toBe(false);
+        expect(IsResolutionFailure(new Error('boom during module evaluation'))).toBe(false);
     });
 
     it('does NOT match errors with unrelated codes, whatever the message', () => {
-        expect(isResolutionFailure(Object.assign(new Error("Cannot find package 'x'"), { code: 'ERR_INVALID_URL' }))).toBe(false);
-        expect(isResolutionFailure(undefined)).toBe(false);
+        expect(IsResolutionFailure(Object.assign(new Error("Cannot find package 'x'"), { code: 'ERR_INVALID_URL' }))).toBe(false);
+        expect(IsResolutionFailure(undefined)).toBe(false);
     });
 });
 
@@ -74,29 +74,29 @@ describe('importFromHost', () => {
     });
 
     it('loads a package visible only from the host anchor (the pnpm scenario)', async () => {
-        const mod = await importFromHost(`${scope}/good`, hostConfigPath);
+        const mod = await ImportFromHost(`${scope}/good`, hostConfigPath);
         expect(mod.RESOLVER_PATHS).toEqual(['/abs/generated.js']);
         expect((mod.load as () => string)()).toBe('loaded');
     });
 
     it("surfaces a resolved module's own top-level throw instead of masking it as 'cannot find'", async () => {
-        await expect(importFromHost(`${scope}/throwing`, hostConfigPath)).rejects.toThrow(/boom-load/);
+        await expect(ImportFromHost(`${scope}/throwing`, hostConfigPath)).rejects.toThrow(/boom-load/);
     });
 
     it("surfaces a resolved module's missing TRANSITIVE dependency, naming the transitive dep", async () => {
-        await expect(importFromHost(`${scope}/broken-transitive`, hostConfigPath)).rejects.toThrow(/sb-hosttest-definitely-missing-dep/);
+        await expect(ImportFromHost(`${scope}/broken-transitive`, hostConfigPath)).rejects.toThrow(/sb-hosttest-definitely-missing-dep/);
     });
 
     it('explains an exports map with no CJS-resolvable condition instead of repeating "cannot find"', async () => {
-        await expect(importFromHost(`${scope}/importonly`, hostConfigPath)).rejects.toThrow(/exports map has no CJS-resolvable condition/);
+        await expect(ImportFromHost(`${scope}/importonly`, hostConfigPath)).rejects.toThrow(/exports map has no CJS-resolvable condition/);
     });
 
     it('rethrows the original bare-import failure when no anchor resolves the package', async () => {
-        await expect(importFromHost(`${scope}/does-not-exist-anywhere`, hostConfigPath)).rejects.toThrow(/Cannot find (package|module)/);
+        await expect(ImportFromHost(`${scope}/does-not-exist-anywhere`, hostConfigPath)).rejects.toThrow(/Cannot find (package|module)/);
     });
 
     it('resolvePackageJsonFromHost: uses the exports map when package.json is exposed', () => {
-        const resolved = resolvePackageJsonFromHost(`${scope}/jsonexport`, hostConfigPath);
+        const resolved = ResolvePackageJsonFromHost(`${scope}/jsonexport`, hostConfigPath);
         expect(resolved).toBeTruthy();
         expect(realpathSync(resolved!)).toBe(
             realpathSync(path.join(hostDir, 'node_modules', scope, 'jsonexport', 'package.json')),
@@ -104,7 +104,7 @@ describe('importFromHost', () => {
     });
 
     it('resolvePackageJsonFromHost: walks up from main when package.json is not a subpath export', () => {
-        const resolved = resolvePackageJsonFromHost(`${scope}/good`, hostConfigPath);
+        const resolved = ResolvePackageJsonFromHost(`${scope}/good`, hostConfigPath);
         expect(resolved).toBeTruthy();
         expect(realpathSync(resolved!)).toBe(
             realpathSync(path.join(hostDir, 'node_modules', scope, 'good', 'package.json')),
@@ -112,6 +112,6 @@ describe('importFromHost', () => {
     });
 
     it('resolvePackageJsonFromHost: returns null when no host anchor can see the package', () => {
-        expect(resolvePackageJsonFromHost(`${scope}/does-not-exist-anywhere`, hostConfigPath)).toBeNull();
+        expect(ResolvePackageJsonFromHost(`${scope}/does-not-exist-anywhere`, hostConfigPath)).toBeNull();
     });
 });

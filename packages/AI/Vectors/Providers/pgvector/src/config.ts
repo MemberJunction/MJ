@@ -19,26 +19,48 @@ export interface PgVectorConnectionConfig {
 }
 
 /** Environment-variable-based defaults */
-export const pgVectorHost: string = process.env.PG_VECTOR_HOST || 'localhost';
-export const pgVectorPort: number = Number(process.env.PG_VECTOR_PORT) || 5432;
+export const PgVectorHost: string = process.env.PG_VECTOR_HOST || 'localhost';
+
+/** @deprecated Use {@link PgVectorHost}. */
+export const pgVectorHost = PgVectorHost;
+export const PgVectorPort: number = Number(process.env.PG_VECTOR_PORT) || 5432;
+
+/** @deprecated Use {@link PgVectorPort}. */
+export const pgVectorPort = PgVectorPort;
+// The package's barrel re-exports both this file and ./models/PgVectorDatabase, which exports a
+// CLASS of that name. Pascalizing this const collides with it at the barrel (TS2308) even though
+// nothing conflicts inside this file.
+// case-violation-ok-legacy-back-compat: PascalCase name is the exported class in ./models
 export const pgVectorDatabase: string = process.env.PG_VECTOR_DATABASE || 'vectors';
-export const pgVectorUser: string = process.env.PG_VECTOR_USER || 'postgres';
-export const pgVectorPassword: string = process.env.PG_VECTOR_PASSWORD || '';
-export const pgVectorSchema: string = process.env.PG_VECTOR_SCHEMA || 'public';
-export const pgVectorSSL: boolean = process.env.PG_VECTOR_SSL === 'true';
+export const PgVectorUser: string = process.env.PG_VECTOR_USER || 'postgres';
+
+/** @deprecated Use {@link PgVectorUser}. */
+export const pgVectorUser = PgVectorUser;
+export const PgVectorPassword: string = process.env.PG_VECTOR_PASSWORD || '';
+
+/** @deprecated Use {@link PgVectorPassword}. */
+export const pgVectorPassword = PgVectorPassword;
+export const PgVectorSchema: string = process.env.PG_VECTOR_SCHEMA || 'public';
+
+/** @deprecated Use {@link PgVectorSchema}. */
+export const pgVectorSchema = PgVectorSchema;
+export const PgVectorSSL: boolean = process.env.PG_VECTOR_SSL === 'true';
+
+/** @deprecated Use {@link PgVectorSSL}. */
+export const pgVectorSSL = PgVectorSSL;
 
 /**
  * Build a connection config from environment variables.
  */
 export function GetDefaultConfig(): PgVectorConnectionConfig {
     return {
-        Host: pgVectorHost,
-        Port: pgVectorPort,
+        Host: PgVectorHost,
+        Port: PgVectorPort,
         Database: pgVectorDatabase,
-        User: pgVectorUser,
-        Password: pgVectorPassword,
-        Schema: pgVectorSchema,
-        SSL: pgVectorSSL,
+        User: PgVectorUser,
+        Password: PgVectorPassword,
+        Schema: PgVectorSchema,
+        SSL: PgVectorSSL,
     };
 }
 

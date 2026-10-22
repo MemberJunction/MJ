@@ -33,7 +33,7 @@ export interface IAngularAuthProvider {
   /**
    * Provider type identifier (e.g., 'msal', 'auth0', 'okta')
    */
-  readonly type: string;
+  readonly type: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   // ============================================================================
   // CORE AUTHENTICATION METHODS
@@ -45,7 +45,7 @@ export interface IAngularAuthProvider {
    * This should handle callback processing, session restoration, etc.
    * Called automatically during app startup.
    */
-  initialize(): Promise<void>;
+  initialize(): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Initiate login flow
@@ -58,7 +58,7 @@ export interface IAngularAuthProvider {
    * await this.authBase.login({ appState: { target: '/dashboard' } });
    * ```
    */
-  login(options?: Record<string, unknown>): Observable<void> | Promise<void>;
+  login(options?: Record<string, unknown>): Observable<void> | Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Log out the current user
@@ -70,7 +70,7 @@ export interface IAngularAuthProvider {
    * await this.authBase.logout();
    * ```
    */
-  logout(): Promise<void>;
+  logout(): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Handle OAuth callback after redirect
@@ -78,7 +78,7 @@ export interface IAngularAuthProvider {
    * This is called automatically by the redirect component.
    * Application code typically doesn't need to call this directly.
    */
-  handleCallback(): Promise<void>;
+  handleCallback(): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   // ============================================================================
   // AUTHENTICATION STATE (Observable Streams)
@@ -97,7 +97,7 @@ export interface IAngularAuthProvider {
    * });
    * ```
    */
-  isAuthenticated(): Observable<boolean>;
+  isAuthenticated(): Observable<boolean>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Observable stream of user profile information
@@ -114,7 +114,7 @@ export interface IAngularAuthProvider {
    * });
    * ```
    */
-  getUserInfo(): Observable<StandardUserInfo | null>;
+  getUserInfo(): Observable<StandardUserInfo | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Observable stream of user's email address
@@ -126,7 +126,7 @@ export interface IAngularAuthProvider {
    * this.userEmail$ = this.authBase.getUserEmail();
    * ```
    */
-  getUserEmail(): Observable<string>;
+  getUserEmail(): Observable<string>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   // ============================================================================
   // TOKEN MANAGEMENT (v3.0.0 - Fixes Leaky Abstraction)
@@ -150,7 +150,7 @@ export interface IAngularAuthProvider {
    * }
    * ```
    */
-  getIdToken(): Promise<string | null>;
+  getIdToken(): Promise<string | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Get complete token information
@@ -168,7 +168,7 @@ export interface IAngularAuthProvider {
    * }
    * ```
    */
-  getTokenInfo(): Promise<StandardAuthToken | null>;
+  getTokenInfo(): Promise<StandardAuthToken | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Refresh the current authentication token
@@ -192,7 +192,7 @@ export interface IAngularAuthProvider {
    * return token.idToken; // Always succeeds or throws
    * ```
    */
-  refreshToken(): Promise<StandardAuthToken>;
+  refreshToken(): Promise<StandardAuthToken>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   // ============================================================================
   // ERROR HANDLING (v3.0.0 - Fixes Error Type Leakage)
@@ -229,7 +229,7 @@ export interface IAngularAuthProvider {
    * }
    * ```
    */
-  classifyError(error: unknown): StandardAuthError;
+  classifyError(error: unknown): StandardAuthError;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   // ============================================================================
   // CONFIGURATION & VALIDATION
@@ -246,7 +246,7 @@ export interface IAngularAuthProvider {
    * // MSAL requires: ['clientId', 'tenantId']
    * ```
    */
-  getRequiredConfig(): string[];
+  getRequiredConfig(): string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Validate provider configuration
@@ -254,5 +254,5 @@ export interface IAngularAuthProvider {
    * @param config Configuration object to validate
    * @returns True if configuration is valid
    */
-  validateConfig(config: Record<string, unknown>): boolean;
+  validateConfig(config: Record<string, unknown>): boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }

@@ -59,16 +59,22 @@ vi.mock('jsonwebtoken', () => ({
 }));
 
 vi.mock('../auth/index.js', () => ({
-  getSigningKeys: mockGetSigningKeys,
-  getSystemUser: vi.fn(),
-  getValidationOptions: mockGetValidationOptions,
-  verifyUserRecord: mockVerifyUserRecord,
-  extractUserInfoFromPayload: mockExtractUserInfo,
+  GetSigningKeys: mockGetSigningKeys,
+    get getSigningKeys() { return this.GetSigningKeys; },
+  GetSystemUser: vi.fn(),
+    get getSystemUser() { return this.GetSystemUser; },
+  GetValidationOptions: mockGetValidationOptions,
+    get getValidationOptions() { return this.GetValidationOptions; },
+  VerifyUserRecord: mockVerifyUserRecord,
+    get verifyUserRecord() { return this.VerifyUserRecord; },
+  ExtractUserInfoFromPayload: mockExtractUserInfo,
+    get extractUserInfoFromPayload() { return this.ExtractUserInfoFromPayload; },
 }));
 
 vi.mock('../cache.js', () => {
   const map = new Map<string, boolean>();
-  return { authCache: map };
+  return { AuthCache: map,
+    get authCache() { return this.AuthCache; } };
 });
 
 vi.mock('../config.js', () => ({
@@ -95,7 +101,7 @@ vi.mock('@memberjunction/api-keys', () => ({
   GetAPIKeyEngine: vi.fn(),
 }));
 
-import { createUnifiedAuthMiddleware } from '../context.js';
+import { CreateUnifiedAuthMiddleware } from '../context.js';
 import type { Request, Response, NextFunction } from 'express';
 import type { DataSourceInfo } from '../types.js';
 
@@ -178,11 +184,11 @@ function setupSuccessfulAuth() {
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 describe('createUnifiedAuthMiddleware', () => {
-  let middleware: ReturnType<typeof createUnifiedAuthMiddleware>;
+  let middleware: ReturnType<typeof CreateUnifiedAuthMiddleware>;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    middleware = createUnifiedAuthMiddleware(mockDataSources);
+    middleware = CreateUnifiedAuthMiddleware(mockDataSources);
   });
 
   describe('OPTIONS passthrough', () => {

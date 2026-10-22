@@ -234,6 +234,14 @@ export class OAuthCallbackComponent extends BaseAngularComponent implements OnIn
         }
     }
 
+    /** Pre-#5674 exchange URL for hosts that have not configured MJAPI_URI: derived from the GraphQL URL. */
+    private legacyExchangeUrl(graphqlUrl: string): string {
+        if (graphqlUrl.includes('/graphql')) {
+            return graphqlUrl.replace('/graphql', '/oauth/exchange');
+        }
+        return graphqlUrl.replace(/\/$/, '') + '/oauth/exchange';
+    }
+
     /**
      * Call the backend to exchange the authorization code for tokens
      */
@@ -242,15 +250,9 @@ export class OAuthCallbackComponent extends BaseAngularComponent implements OnIn
         const gqlProvider = this.ProviderToUse as GraphQLDataProvider;
         const configData = gqlProvider.ConfigData;
 
-        // Build the exchange endpoint URL from the GraphQL URL
-        // Handle both cases: URL with /graphql suffix and URL without
-        let apiUrl = configData.URL;
-        if (apiUrl.includes('/graphql')) {
-            apiUrl = apiUrl.replace('/graphql', '/oauth/exchange');
-        } else {
-            // URL doesn't have /graphql, append /oauth/exchange
-            apiUrl = apiUrl.replace(/\/$/, '') + '/oauth/exchange';
-        }
+        // The exchange endpoint hangs off the configured MJAPI URL (MJAPI_URI, MJ #5674). Without one,
+        // keep the pre-#5674 derivation from the GraphQL URL.
+        const apiUrl = configData.MJAPIURL ? `${configData.MJAPIURL}/oauth/exchange` : this.legacyExchangeUrl(configData.URL);
 
         try {
             const response = await fetch(apiUrl, {
@@ -367,18 +369,28 @@ export class OAuthCallbackComponent extends BaseAngularComponent implements OnIn
     /**
      * Handle retry button click
      */
-    public onRetry(): void {
+    public OnRetry(): void {
         // Get the stored return URL and redirect there to start fresh
         const returnUrl = localStorage.getItem('oauth_return_url') || '/app/admin/MCP';
         this.clearStoredReturnUrls();
         this.router.navigateByUrl(returnUrl);
     }
 
+    /** @deprecated Use {@link OnRetry}. */
+    public onRetry(): void {
+      return this.OnRetry();
+    }
+
     /**
      * Handle close button click (return to MCP dashboard)
      */
-    public onClose(): void {
+    public OnClose(): void {
         this.clearStoredReturnUrls();
         this.router.navigate(['/app/admin/MCP']);
+    }
+
+    /** @deprecated Use {@link OnClose}. */
+    public onClose(): void {
+      return this.OnClose();
     }
 }

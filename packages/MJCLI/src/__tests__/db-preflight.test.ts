@@ -9,10 +9,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // resolve the spy that's defined just below.
 const openConnectionMock = vi.fn();
 vi.mock('../baseline/connection', () => ({
-  openConnection: (...args: unknown[]) => openConnectionMock(...args),
+  OpenConnection: (...args: unknown[]) => openConnectionMock(...args),
+    get openConnection() { return this.OpenConnection; },
 }));
 
-import { verifyDatabaseConnection, type DbConnectionConfig } from '../lib/db-preflight';
+import { VerifyDatabaseConnection, type DbConnectionConfig } from '../lib/db-preflight';
 
 const baseConfig: DbConnectionConfig = {
   dbPlatform: 'sqlserver',
@@ -44,7 +45,7 @@ describe('verifyDatabaseConnection', () => {
     const close = vi.fn().mockResolvedValue(undefined);
     openConnectionMock.mockResolvedValue(fakeRunner(close));
 
-    const result = await verifyDatabaseConnection(baseConfig);
+    const result = await VerifyDatabaseConnection(baseConfig);
 
     expect(result.Ok).toBe(true);
     expect(close).toHaveBeenCalledTimes(1);
@@ -53,13 +54,13 @@ describe('verifyDatabaseConnection', () => {
   it('passes the configured encrypt/trust settings through to the connection', async () => {
     openConnectionMock.mockResolvedValue(fakeRunner());
 
-    await verifyDatabaseConnection(baseConfig);
+    await VerifyDatabaseConnection(baseConfig);
 
     expect(openConnectionMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        dialect: 'mssql',
-        host: 'localhost',
-        user: 'MJ_CodeGen',
+        Dialect: 'mssql',
+        Host: 'localhost',
+        User: 'MJ_CodeGen',
         encrypt: true,
         trustServerCertificate: false,
       }),
@@ -69,15 +70,15 @@ describe('verifyDatabaseConnection', () => {
   it('maps postgresql platform to the postgres dialect', async () => {
     openConnectionMock.mockResolvedValue(fakeRunner());
 
-    await verifyDatabaseConnection({ ...baseConfig, dbPlatform: 'postgresql' });
+    await VerifyDatabaseConnection({ ...baseConfig, dbPlatform: 'postgresql' });
 
-    expect(openConnectionMock).toHaveBeenCalledWith(expect.objectContaining({ dialect: 'postgres' }));
+    expect(openConnectionMock).toHaveBeenCalledWith(expect.objectContaining({ Dialect: 'postgres' }));
   });
 
   it('classifies a self-signed cert error and suggests trusting the cert when trust is off', async () => {
     openConnectionMock.mockRejectedValue(new Error('Failed to connect to localhost:1433 - self-signed certificate'));
 
-    const result = await verifyDatabaseConnection(baseConfig);
+    const result = await VerifyDatabaseConnection(baseConfig);
 
     expect(result.Ok).toBe(false);
     expect(result.Reason).toBe('tls-untrusted-cert');
@@ -87,7 +88,7 @@ describe('verifyDatabaseConnection', () => {
   it('omits the trust suggestion when the cert is already trusted', async () => {
     openConnectionMock.mockRejectedValue(new Error('self-signed certificate'));
 
-    const result = await verifyDatabaseConnection({ ...baseConfig, dbTrustServerCertificate: true });
+    const result = await VerifyDatabaseConnection({ ...baseConfig, dbTrustServerCertificate: true });
 
     expect(result.Reason).toBe('tls-untrusted-cert');
     expect(result.Suggestion).toBeUndefined();
@@ -96,7 +97,7 @@ describe('verifyDatabaseConnection', () => {
   it('classifies a login failure as auth', async () => {
     openConnectionMock.mockRejectedValue(new Error("Login failed for user 'MJ_CodeGen'."));
 
-    const result = await verifyDatabaseConnection(baseConfig);
+    const result = await VerifyDatabaseConnection(baseConfig);
 
     expect(result.Reason).toBe('auth');
   });
@@ -104,7 +105,7 @@ describe('verifyDatabaseConnection', () => {
   it('classifies a refused connection as unreachable', async () => {
     openConnectionMock.mockRejectedValue(new Error('Failed to connect to localhost:1433 - ECONNREFUSED 127.0.0.1:1433'));
 
-    const result = await verifyDatabaseConnection(baseConfig);
+    const result = await VerifyDatabaseConnection(baseConfig);
 
     expect(result.Reason).toBe('unreachable');
   });
@@ -112,7 +113,7 @@ describe('verifyDatabaseConnection', () => {
   it('falls back to "other" for an unrecognized error', async () => {
     openConnectionMock.mockRejectedValue(new Error('something unexpected'));
 
-    const result = await verifyDatabaseConnection(baseConfig);
+    const result = await VerifyDatabaseConnection(baseConfig);
 
     expect(result.Reason).toBe('other');
     expect(result.Suggestion).toBeUndefined();
@@ -124,7 +125,7 @@ describe('verifyDatabaseConnection', () => {
     runner.query = vi.fn().mockRejectedValue(new Error('self-signed certificate'));
     openConnectionMock.mockResolvedValue(runner);
 
-    const result = await verifyDatabaseConnection(baseConfig);
+    const result = await VerifyDatabaseConnection(baseConfig);
 
     expect(result.Reason).toBe('tls-untrusted-cert');
     expect(close).toHaveBeenCalled();

@@ -52,6 +52,16 @@
 
     <!-- Message Input (using full mj-message-input in empty state mode) -->
     <div class="message-input-wrapper">
+      <!-- composerExtra slot — host UI directly above the composer (IMJChatComposerExtraContext). -->
+      @if (ComposerExtraTemplate) {
+        <div class="composer-extra">
+          <ng-container *ngTemplateOutlet="ComposerExtraTemplate; context: {
+            $implicit: null,
+            ConversationId: null,
+            IsProcessing: disabled
+          }"></ng-container>
+        </div>
+      }
       <mj-message-input
         [initialDraft]="initialDraft"
         (initialDraftApplied)="initialDraftApplied.emit()"
@@ -65,6 +75,8 @@
         [enableAgentMentions]="enableAgentMentions"
         [enableEntityMentions]="enableEntityMentions"
         [enableSkillCommands]="enableSkillCommands"
+        [AllowedAgentIDs]="AllowedAgentIDs"
+        [MentionPeople]="MentionPeople"
         [enableAttachments]="enableAttachments"
         [maxAttachments]="maxAttachments"
         [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"

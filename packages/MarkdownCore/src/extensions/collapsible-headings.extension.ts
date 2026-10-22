@@ -77,7 +77,7 @@ const DEFAULT_OPTIONS: ResolvedOptions = {
  * Note: The toggle button is added dynamically by the host (e.g. the Angular
  * component) after rendering to avoid issues with HTML sanitizers.
  */
-export function createCollapsibleHeadingsExtension(
+export function CreateCollapsibleHeadingsExtension(
   options?: CollapsibleHeadingsOptions
 ): MarkedExtension {
   const opts: ResolvedOptions = { ...DEFAULT_OPTIONS, ...options };
@@ -109,6 +109,13 @@ export function createCollapsibleHeadingsExtension(
       }
     }
   };
+}
+
+/** @deprecated Use {@link CreateCollapsibleHeadingsExtension}. */
+export function createCollapsibleHeadingsExtension(
+  options?: CollapsibleHeadingsOptions
+): MarkedExtension {
+  return CreateCollapsibleHeadingsExtension(options);
 }
 
 interface ContentPart {

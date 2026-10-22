@@ -5,15 +5,26 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { BaseSingleton, GetGlobalObjectStore } from '@memberjunction/global';
 import { SubsetOfEntityFieldsValidator } from './subset-of-entity-fields-validator';
 import { SqlWhereClauseValidator } from './sql-where-clause-validator';
 import { SemanticValidatorRegistry } from './semantic-validator-registry';
+import { LibraryLintCache } from '../../library-lint-cache';
 import type { ValidationContext } from './validation-context';
 import type { PropertyConstraint } from '@memberjunction/interactive-component-types';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 describe('Semantic Validator Integration', () => {
   describe('SemanticValidatorRegistry', () => {
+    it('should extend BaseSingleton and return the same instance across accessors', () => {
+      const registry = SemanticValidatorRegistry.getInstance();
+      expect(registry).toBeInstanceOf(BaseSingleton);
+      expect(SemanticValidatorRegistry.Instance).toBe(registry);
+      expect(SemanticValidatorRegistry.GetInstance()).toBe(registry);
+      const globalStore = GetGlobalObjectStore();
+      expect(globalStore?.['___SINGLETON__SemanticValidatorRegistry']).toBe(registry);
+    });
+
     it('should have subset-of-entity-fields validator registered', () => {
       const registry = SemanticValidatorRegistry.getInstance();
       expect(registry.has('subset-of-entity-fields')).toBe(true);
@@ -28,6 +39,17 @@ describe('Semantic Validator Integration', () => {
       const registry = SemanticValidatorRegistry.getInstance();
       const validator = registry.get('subset-of-entity-fields');
       expect(validator).toBeInstanceOf(SubsetOfEntityFieldsValidator);
+    });
+  });
+
+  describe('LibraryLintCache', () => {
+    it('should extend BaseSingleton and return the same instance across accessors', () => {
+      const cache = LibraryLintCache.getInstance();
+      expect(cache).toBeInstanceOf(BaseSingleton);
+      expect(LibraryLintCache.Instance).toBe(cache);
+      expect(LibraryLintCache.GetInstance()).toBe(cache);
+      const globalStore = GetGlobalObjectStore();
+      expect(globalStore?.['___SINGLETON__LibraryLintCache']).toBe(cache);
     });
   });
 
@@ -192,16 +214,16 @@ function createMockContext(overrides: Partial<ValidationContext> & { entityField
   const entityName = overrides.siblingProps?.get('entityName') as string || 'MJTestEntity';
 
   return {
-    node: {} as ValidationContext['node'],
-    path: {} as ValidationContext['path'],
-    componentName: 'TestComponent',
-    componentSpec: {} as ComponentSpec,
+    Node: {} as ValidationContext['Node'],
+    Path: {} as ValidationContext['Path'],
+    ComponentName: 'TestComponent',
+    ComponentSpec: {} as ComponentSpec,
     propertyName: 'fields',
     propertyValue: overrides.propertyValue || [],
     siblingProps: overrides.siblingProps || new Map(),
-    entities: new Map(),
-    queries: new Map(),
-    typeEngine: null as unknown as ValidationContext['typeEngine'],
+    Entities: new Map(),
+    Queries: new Map(),
+    TypeEngine: null as unknown as ValidationContext['TypeEngine'],
 
     getEntityFields: (name: string) => {
       if (name === entityName) {

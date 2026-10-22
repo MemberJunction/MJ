@@ -477,7 +477,6 @@ flowchart TD
         PARENT["@parent:\nParent record field"]
         ROOT["@root:\nRoot record field"]
         ENV["@env:\nEnvironment variable"]
-        TEMPLATE["@template:\nJSON template merge"]
         INCLUDE["@include\nJSON composition"]
     end
 
@@ -509,7 +508,6 @@ flowchart TD
     PARENT --> PR
     ROOT --> RR
     ENV --> EV
-    TEMPLATE --> EF
     INCLUDE --> EF
 
     style References fill:#64748b,stroke:#475569,color:#fff
@@ -577,7 +575,7 @@ flowchart TD
     B -->|Found| C[Return ID immediately]
     B -->|Not found| D{Has ?allowDefer?}
     D -->|Yes| E[Skip this field, continue processing]
-    D -->|No| F[Fatal error - rollback transaction]
+    D -->|No| F[Push fails - transaction rolled back]
     E --> G[Save record without deferred field]
     G --> H[Queue record for re-processing]
     H --> I[Phase 2.5: Re-process entire record]
@@ -642,7 +640,7 @@ This means: "Look up the category, create if missing, and if the lookup still fa
 
 **Important notes:**
 - Deferred records are processed before the final commit (Phase 2.5)
-- If any deferred record fails on retry, the entire push transaction is rolled back
+- If any deferred record fails on retry, the push stops and its transaction is rolled back. In an atomic push (the default) that undoes everything. In a directory using isolated transactions, creates and updates from Phase 1 were already committed and stay, including the deferred record's first save without the deferred field
 - Use sparingly -- only for genuine circular dependencies
 - The record must have a primaryKey defined in the metadata file
 
@@ -664,9 +662,58 @@ Reference fields synchronously in-memory from the owner record for children nest
 - Cannot be used at root level; valid only within child collections, embeds, or extensions where an enclosing owner entity exists.
 
 ### @env: References
-Support environment-specific values:
-- `@env:VARIABLE_NAME`
-- Useful for different environments (dev/staging/prod)
+Read a value from an environment variable at push time:
+- `@env:VARIABLE_NAME` — push fails when the variable is not set.
+- `@env:VARIABLE_NAME?optional` — when the variable is not set, push leaves the field out: an update keeps the database value, a create gets the column default, and push gives a warning. Not allowed in `primaryKey`.
+- In `defaults` (`.mj-sync.json` or `.mj-folder.json`), an unset `?optional` variable skips that one default, with a warning. It does not fall back to a default from a higher folder or from the entity `.mj-sync.json`.
+- On push, a missing `?optional` variable inside a JSON object field leaves out the whole field.
+
+Pull keeps the reference. When a file holds `@env:VAR`, `mj sync pull` writes the reference back, not the database value, so the resolved value is not written to the file. If `VAR` is set and its value differs from the database, pull warns (it never prints either value). This applies to:
+- a field (`"Token": "@env:VAR"`), also with `--multi-file`;
+- a leaf inside a JSON object or array field, matched by path (array items by position). When the field is `@file:x.json`, pull updates `x.json` and keeps the `@file:` reference (not when `x.json` uses `@include` or a nested `@file:`; pull then warns and leaves `x.json` as it is);
+- `@lookup:` criteria or create fields that use `@env:` (`@lookup:Entity.Field=@env:VAR`). Pull keeps the lookup. When the record that the database value points to is missing or does not match the criteria, pull warns (it does not check when a criteria variable is not set);
+- the fields of `collections`, `embeds` and `extension` items;
+- a primary key (`"primaryKey": { "ID": "@env:VAR" }`). Pull finds the existing record by the variable's value. When a key variable of a top-level record is not set, pull stops before it writes any file. When the key variable of a `relatedEntities` child, a `collections` child or an embed is not set, pull also stops, with an error that names the file and the variable.
+
+When the database value of a JSON field that holds `@env:` is not JSON, pull keeps the file value and warns.
+
+Pull leaves out a read-only field (one that push ignores) whose database value holds the value of an `@env:` reference in the record file, such as a key path that the database builds from an `@env:` key. A UUID value matches without case; another value matches when it has 6 or more characters. When the existing file already holds such a field, pull removes it from the file, with `merge` too. With `-v`, pull names the field and the variable, never the value.
+
+With `--multi-file`, pull also finds an existing record in the folder's other record files, so it keeps the `@env:` references of that record in the multi-file. As in a single-file pull, a record file that cannot be read, or an unset key variable in any of them, stops pull before it writes.
+
+`?optional` does not work inside `@lookup:`, because `?` starts the lookup flags. Validation and push report it as an error.
+
+Push does not print values that come from `@env:`. The `--verbose` diff and the `--change-detail` report show `<hidden>` for the old value and `<from @env:VAR>` for the new one. Save errors replace each value of 6 or more characters with `<from @env:VAR>`; a shorter value can print. On create, push keeps an `@env:` `primaryKey` reference in the file when the database saved the variable's value as the key. Push also resolves an `@env:` `primaryKey` of a `collections` child (to find the existing child, or to set the key of a new one) and of a record to delete; an unset key variable stops push with an error that names the variable. When a variable that a record's `fields` or `primaryKey` uses is not set (and the reference is not `?optional`), push stops with an error that names the record file and the line where the record starts, the entity, the field and the variable, for example `/abs/path/.tags.json:12: MJ: Tags primaryKey.ID uses @env:MJ_KEY_ID, which is not set`. With SQL logging on, push leaves the `SET` line of an env-sourced field out of the log and writes `-- <Entity>.<Field>: not recorded, value comes from @env:VAR` in its place. A replayed update then keeps the target's value. A replayed create gets the column default, or fails if the column is NOT NULL with no default. This works for SQL Server logs only; other providers keep the value in the log, and push gives the names-only warning. A primary key from `@env:` stays in the log; push warns with names only. When a value of 6 or more characters is still in the log, push warns with the variable name.
+
+`mj sync watch` resolves `@env:` as push does, for the parts of a record file that watch handles. See [Watch](#watch-mj-sync-watch).
+
+#### Known limits
+- When a save fails, MJCore's error log (for a composition graph save) and the SQL Server provider's execute error (`Query: …` with its parameters, logged by the provider) can print the SQL text with values. MetadataSync's own output masks these values (values of 6 or more characters), but the MJCore and provider logs do not.
+- `mj sync watch` writes record-change data to its SQL log. On an update, this data can hold the OLD database value of an env-sourced field. The SQL-log warnings cannot detect old values. Check a watch log before you share it.
+- An `@env:` reference that is only inside a file brought in by `@include`, or by a nested `@file:` inside a side file, is not kept. Pull writes the database value there.
+- A dotted `externalizeFields` side file (`Field.sub`) that you write by hand with `@env:` references inside is not kept. Pull writes the database value there. Pull itself never moves a sub-object that holds `@env:` into a side file.
+- A `@file:` JSON side file that pull rewrites, and a file that `externalizeFields` writes, are not part of the pull backup. A failed pull (for example, an unset key variable on a child) does not roll them back. A side file holds `@env:` references, never their values. An externalized file holds database values. It does not hold the value of an `@env:` reference that is in the record file, but it can hold one when the reference is only in a nested `@file:` or `@include` file (see above).
+- Pull does not clean up a side file that an earlier version of pull wrote with a resolved value. Check old side files and replace those values with `@env:` references.
+- When pull rewrites a `@file:` JSON side file to keep its `@env:` leaves, the other reference leaves in that file (such as `@lookup:` or `@file:`) get the database value.
+- `mj sync status` does not resolve an `@env:` `primaryKey`. It counts such a record as deleted. It prints no value.
+- For a delete record with an `@env:` `primaryKey`, push does not find the records that refer to it only in the database, so it does not list them. If such a record exists, the delete fails with a foreign-key error, or, for an entity with cascade deletes, the database removes or changes those records. MetadataSync masks values of 6 or more characters in the error text.
+- A `collections` child that has no `primaryKey` in the file is not matched on pull, so its `@env:` fields get the database value. Give each child its key. Push writes keys back only for top-level records.
+- `?optional` on an `@env:` value inside a lookup's create fields (`?create&Code=@env:C?optional`) is not an error. When `C` is not set, push leaves the whole foreign-key field out of the save, with a warning.
+
+### Push only in some environments (`pushWhen`)
+An entity folder's `.mj-sync.json` can gate the whole folder on an environment variable:
+
+```json
+{ "entity": "MJ: AI Agents", "pushWhen": "@env:DEMO_AGENTS_ENABLED" }
+```
+
+- The folder is pushed when the variable is `true` or `1` (any case, surrounding spaces ignored).
+- Otherwise push skips the folder, logs `Skipped folder <name>: <VAR> is not set` (or `is not true`), and continues. `--format=json` lists them in `data.skippedDirectories`.
+- Records and deletes in a skipped folder are not applied. Pull ignores `pushWhen`.
+- The value must be a plain `@env:VAR`. `pushWhen` in the root `.mj-sync.json` is a validation error.
+- `pushWhen` applies to the folders push runs over: the entity folders directly under the root, or the `--dir` folder. A `pushWhen` in a nested entity folder (for example `actions/runtime`) has no effect unless `--dir` names that folder.
+- `mj sync push` does not validate a folder it will skip. `mj sync validate` validates every folder, and warns about a `pushWhen` in a nested folder.
+- `mj sync watch` reads `pushWhen` too. See [Watch](#watch-mj-sync-watch).
 
 ### First-Class Composition Axes (`collections`, `embeds`, `extension`)
 MetadataSync natively supports three composition axes directly within `RecordData`, persisted in a single `Save()` call on the root entity graph:
@@ -839,55 +886,23 @@ Use dot notation (`@include.anything`) to include multiple files at different po
 #### Processing Order
 1. `@include` directives are processed first (recursively)
 2. `@file` references are recursively resolved (including nested ones in JSON)
-3. Then `@template` references
-4. Finally, other `@` references (`@lookup`, etc.)
+3. Finally, other `@` references (`@lookup`, etc.)
 
 This ensures that included content can contain other special references that will be properly resolved.
 
 ### @template: References
-Enable JSON template composition for reusable configurations:
-
-**String Template Reference:**
-```json
-{
-  "relatedEntities": {
-    "MJ: AI Prompt Models": "@template:templates/standard-ai-models.json"
-  }
-}
-```
-
-**Object Template Merging:**
-```json
-{
-  "fields": {
-    "Name": "My Prompt",
-    "@template": "templates/standard-prompt-settings.json",
-    "Temperature": 0.9
-  }
-}
-```
-
-**Multiple Template Merging** (later templates override earlier ones):
-```json
-{
-  "fields": {
-    "@template": [
-      "templates/base-settings.json",
-      "templates/customer-service-defaults.json"
-    ],
-    "Name": "Customer Bot"
-  }
-}
-```
+`mj sync push` does not support `@template:`. Push saves the literal text (for example `@template:templates/settings.json`), not the content of the file. `mj sync validate` reports a field value that starts with `@template:` as an error. Use `@file:` instead.
 
 ## Default Value Inheritance
 
 The tool implements a cascading inheritance system for field defaults, similar to CSS or OOP inheritance:
 
-1. **Entity-level defaults** (in `.mj-sync.json`) -- Base defaults for all records
-2. **Folder-level defaults** (in `.mj-folder.json`) -- Override/extend entity defaults
-3. **Nested folder defaults** -- Override/extend parent folder defaults
+1. **Entity-level defaults** (in the entity folder's `.mj-sync.json`) -- Base defaults for all records
+2. **Folder-level defaults** (in `.mj-folder.json`) -- Every `.mj-folder.json` from the sync root down to the folder of the record file. Any of them, the root's too, wins over the entity's `.mj-sync.json` defaults
+3. **Nested folder defaults** -- A deeper `.mj-folder.json` wins over a higher one
 4. **Record-level values** -- Override all inherited defaults
+
+Push and `mj sync watch` apply these defaults. See [Folder Defaults](#folder-defaults-metadataai-promptscustomer-servicemj-folderjson) for the details.
 
 ```mermaid
 flowchart TD
@@ -1044,7 +1059,7 @@ mj sync push
 mj sync push --dir="ai-prompts"
 mj sync push -v
 mj sync push --dry-run
-mj sync push --parallel-batch-size=20
+mj sync push --isolated-transactions --parallel-batch-size=20   # parallel, NOT rolled back on failure
 
 # Directory filtering
 mj sync push --exclude="actions"
@@ -1077,6 +1092,8 @@ mj sync pull --incremental
 mj sync pull --entity "MJ: AI Prompts" --since "2026-04-07T10:00:00Z"
 ```
 
+`--dir` can name the metadata root or one entity folder. For an entity folder, push walks up through parent folders that have a `.mj-sync.json` and reads its root settings from the first one that has no `entity`; if it finds none, it uses the folder's own file. `--include` and `--exclude` are not applied to a single entity folder. With `--incremental`, an entity-folder push shares the root's state file.
+
 ### Incremental Push (`--incremental`)
 
 Skips unchanged files and records using stored checksums, significantly speeding up repeated pushes when only a few files have changed.
@@ -1087,13 +1104,14 @@ Skips unchanged files and records using stored checksums, significantly speeding
 - Unchanged files and records are skipped without any database calls
 - State is stored in `~/.mj/sync-state/` (machine-local, not committed to version control)
 - Combine freely with other flags: `mj sync push --dir ./metadata --incremental --verbose`
+- `--incremental` compares file content only. After you set a variable that `?optional` left out, push once without `--incremental`.
 
 ### Incremental Pull (`--incremental`)
 
 Only pulls records updated since the last successful pull, avoiding a full re-pull of every record.
 
 - Filters by the `__mj_UpdatedAt` column (maintained by database triggers on all tracked entities)
-- Detects soft-deleted records (`__mj_DeletedAt`) and removes their local files
+- Detects soft-deleted records (`__mj_DeletedAt`) and removes their local files (with `--multi-file`, their entries in the file)
 - State is stored in `~/.mj/sync-state/`
 
 ### Pull Since Timestamp (`--since`)
@@ -1103,6 +1121,21 @@ Explicit alternative to `--incremental` -- pulls only records updated after a gi
 ```bash
 mj sync pull --entity "MJ: AI Prompts" --since "2026-04-07T10:00:00Z"
 ```
+
+### Watch (`mj sync watch`)
+
+`mj sync watch` pushes a record file each time it changes.
+
+- **Folders.** It chooses folders as push does: `directoryOrder`, the root `ignoreDirectories`, and `pushWhen`. It reads `pushWhen` once when it starts and does not watch a skipped folder. When every folder is skipped, it stops with `No entity directories to watch: pushWhen skips every folder`. It has no `--include` or `--exclude` flag.
+- **Files.** It watches the record files push reads: the folder's `filePattern` (default `*.json`, dot files included), without `node_modules` and `.mj-*.json` files. It also watches `.md`, `.txt`, `.html`, `.liquid` and `.sql` files, which a record can bring in with `@file:`.
+- **Records.** It handles the `fields` and `primaryKey` of a file that holds one record. It does not handle `relatedEntities`, `collections`, `embeds` or `extension`. A file that holds an array of records fails. A relative `@file:` in a record field resolves from the folder of the record file (push resolves it from the entity folder).
+- **`@env:`.** It applies folder defaults, `@env:` references, `?optional` and an `@env:` primary key as push does. As in push, a name in `fields` or in defaults that matches an entity field without regard to case is set with the entity's spelling. Another name in `fields` is set as written, so a virtual property such as `TemplateText` works. Another default name applies only when the entity has a property with that exact name. With `-v`, it shows `<hidden>` / `<from @env:VAR>` in place of env values. Its SQL log leaves env-sourced fields out of the SQL statements, with the same names-only warnings as push. The record-change data in its log is not masked and can hold old database values (see [Known limits](#known-limits)).
+- **Differences from push.**
+  - Watch creates a record whose key is not found in the database. It does not need `push.autoCreateMissingRecords`.
+  - On create, watch sets only the `@env:` key fields from the file. A literal key gets a new value from the entity (a new UUID), and watch writes that value over the file key. Push uses the file key.
+  - Watch does not run validation before a save.
+  - Watch does not use `push.alwaysPush`.
+  - When one file fails, watch prints the error and goes on watching the other files.
 
 ### Performance Improvements
 
@@ -1134,7 +1167,8 @@ The tool uses the existing `mj.config.cjs` for database configuration and a hier
     "validateBeforePush": true,
     "requireConfirmation": true,
     "autoCreateMissingRecords": false,
-    "alwaysPush": false
+    "alwaysPush": false,
+    "isolatedTransactions": false
   },
   "sqlLogging": {
     "enabled": true,
@@ -1201,6 +1235,11 @@ The tool uses the existing `mj.config.cjs` for database configuration and a hier
 }
 ```
 
+Push and `mj sync watch` apply `.mj-folder.json` defaults from the sync root down to the folder of the record file. A deeper folder wins over a higher one, and a field in the record wins over every default. A `.mj-folder.json` default (the root's too) wins over a default in the entity's `.mj-sync.json`. `.mj-folder.json` holds only `defaults`; the folder's entity comes from `.mj-sync.json`. Push applies them to records nested in a file (`relatedEntities`) too; watch does not handle nested records. A default applies when the nested record's entity has a field with that name. Default and record field names match the entity's fields without regard to case. A default whose name is not an entity field applies only when the entity has a property with that exact name, such as the virtual property `TemplateText`. Validation reports another spelling of such a name as an unknown field.
+
+- A relative `@file:` in a default resolves from the folder of the record file, not from the folder of the `.mj-folder.json`.
+- An unset `@env:VAR?optional` variable in a default skips that one default, with a warning. It does not fall back to a default from a higher folder or from the entity `.mj-sync.json`.
+
 ### Push Configuration Options
 
 #### autoCreateMissingRecords
@@ -1233,6 +1272,25 @@ Use cases:
 ```
 
 **Note**: This flag should be used judiciously as it causes database writes for all records. Enable temporarily when needed, then disable for normal operations.
+
+#### isolatedTransactions
+
+Whether each JSON-root graph gets its own connection and transaction. Defaults to `false`, and can be set **per entity directory** as well as at the root.
+
+- `false`: all-or-nothing. Every create, update and delete runs in one database transaction, one graph at a time. If anything fails, nothing is saved and the metadata files are restored.
+- `true`: sibling graphs run in parallel (`--parallel-batch-size`) on their own connections, and each create and update is committed as soon as it is saved. A failure does **not** roll those back.
+
+An entity's own `.mj-sync.json` overrides the root, and the CLI flags `--isolated-transactions` and `--no-isolated-transactions` override both, in either direction. See [Atomic and Isolated Pushes](#atomic-and-isolated-pushes).
+
+```json
+// root .mj-sync.json — the default for this tree
+{ "push": { "isolatedTransactions": false } }
+
+// orders/.mj-sync.json — this entity opts in
+{ "entity": "MJ_BizApps_Orders: Orders", "push": { "isolatedTransactions": true } }
+```
+
+Choose it for throughput on entities whose partial writes are acceptable. Nested transaction scopes inside a save work either way: on the shared connection they become savepoints.
 
 ### Directory Processing Order
 
@@ -1370,7 +1428,7 @@ The pull command supports smart update capabilities with extensive configuration
 
 `push.skipGeoCoding` maps to `EntitySaveOptions.SkipGeoCoding` for this entity only. Use it on display-only geo entities (People/Organizations whose coords are virtual `PrimaryAddressLatitude`). Do **not** use a global CLI `--skip-geocode` as the only control. Addresses with native lat/lng already set do not call the provider even without this flag.
 
-Parallel `--parallel-batch-size` defaults to **10**. Isolation is **per JSON-root graph**, not per flattened row: an Action and its nested Action Params share one `CreateIndependentInstance()` (shared pool, own transaction stack), the same pattern MJAPI uses per request. Durable AfterCreate actions without a queue submitter fire after that instance's transaction depth is 0 — they must not nest in the caller's `EntityTransactionScope`.
+A push is atomic by default, so every save runs inside the push transaction. Durable After* entity actions without a queue submitter wait until the push transaction ends before they run. In a directory using isolated transactions each graph runs on its own `CreateIndependentInstance()`, and those actions run once that instance's own save commits. See [Atomic and Isolated Pushes](#atomic-and-isolated-pushes).
 
 ### Pull Configuration Options
 
@@ -1383,8 +1441,8 @@ Parallel `--parallel-batch-size` defaults to **10**. Isolation is **per JSON-roo
 | `updateExistingRecords` | boolean | true | Update existing records in local files |
 | `preserveFields` | string[] | [] | Fields that retain local values during updates |
 | `mergeStrategy` | string | "merge" | How to merge: "merge", "overwrite", or "skip" |
-| `backupBeforeUpdate` | boolean | false | Create timestamped backups before updates |
-| `backupDirectory` | string | ".backups" | Directory for backup files |
+| `backupBeforeUpdate` | boolean | false | Back up every file a pull rewrites. The backups restore the files if the pull fails and are removed once it succeeds |
+| `backupDirectory` | string | ".backups" | Directory for backup files, relative to the folder of the files being backed up. It must stay inside that folder |
 | `filter` | string | -- | SQL WHERE clause for filtering records |
 | `externalizeFields` | array/object | -- | Fields to save as external files |
 | `excludeFields` | string[] | [] | Fields to omit from pulled data |
@@ -1395,9 +1453,22 @@ Parallel `--parallel-batch-size` defaults to **10**. Isolation is **per JSON-roo
 
 ### Merge Strategies
 
-- **`merge`** (default): Combines fields from database and local file, with database values taking precedence for existing fields
-- **`overwrite`**: Completely replaces local record with database version (except preserved fields)
+- **`merge`** (default): Combines fields from database and local file, with database values taking precedence for existing fields (except `@env:` references)
+- **`overwrite`**: Completely replaces local record with database version (except preserved fields and `@env:` references)
 - **`skip`**: Leaves existing records unchanged, only adds new records
+
+`mj sync pull` flags override the folder's `pull` settings for one run:
+- `--merge-strategy=merge|overwrite|skip` replaces `pull.mergeStrategy`.
+- `--preserve-fields` and `--exclude-fields` add to `pull.preserveFields` and `pull.excludeFields`. Repeat the flag or separate names with commas.
+- `--update-existing` / `--no-update-existing` sets `pull.updateExistingRecords`, and `--create-new` / `--no-create-new` sets `pull.createNewFileIfNotFound`. Without the flag, the folder setting applies (default `true`).
+
+`--preserve-fields` and `--exclude-fields` apply to the folder's own records, not to related (child) records.
+
+Pull stops before it writes any file when a record file in the folder cannot be read (for example, it is not valid JSON). Otherwise pull would not find the records in that file and would write them again as new files.
+
+`--multi-file` writes the query result to one file. With `--since`/`--incremental` it updates matched entries in place, adds new ones and keeps the rest. It uses `--exclude-fields`, and `--merge-strategy` only to decide if an externalized field keeps its existing `@file:` path. It does not use `--preserve-fields`, `--update-existing` or `--create-new`. An empty or whitespace-only file counts as no records. Pull stops, and does not write, when the file is not valid JSON. With `--since`/`--incremental`, pull removes the entries of records that were soft-deleted since the timestamp from the file; it does not delete the file.
+
+With `mergeStrategy: "skip"`, existing records are left as they are and count as `skipped`; new records are still written.
 
 ### Understanding excludeFields vs preserveFields
 
@@ -1532,38 +1603,82 @@ When `recursive: true` is set:
 3. Circular reference protection prevents infinite loops by tracking processed record IDs
 4. All recursive levels use the same `lookupFields`, `externalizeFields`, etc.
 
-## Parallel Processing
+## Atomic and Isolated Pushes
 
-MetadataSync supports parallel processing of records during push operations for improved performance with large datasets.
+A push is **all-or-nothing by default**. One database transaction covers every create, update and delete, and graphs run one at a time inside it.
 
-Records are automatically grouped into dependency levels:
+An entity directory can opt out with `push.isolatedTransactions: true`, which gives each of its JSON-root graphs its own connection and transaction so siblings run in parallel. That buys throughput and costs atomicity: those creates and updates commit as they are saved and are not rolled back with the push.
+
+| | Shared (default) | Isolated (`isolatedTransactions: true`) |
+|---|---|---|
+| Creates and updates | Host connection, inside the push transaction | One connection per JSON-root graph |
+| Graphs at once | 1 | `--parallel-batch-size` (default 10) |
+| A failure anywhere | Rolls back **everything** that directory wrote, with every other shared directory; metadata files are restored | Rolls back deletes and deferred records only. Creates and updates that already ran **stay committed** |
+| After a failure the push says | `rolled back successfully. Nothing from this push was saved.` | Which files and records are still in the database |
+
+The setting resolves per entity directory: the CLI flag wins, then that directory's `.mj-sync.json`, then the root's, then shared.
+
+```bash
+# Default: all-or-nothing
+mj sync push
+
+# One run with isolation forced on or off, whatever the files say
+mj sync push --isolated-transactions
+mj sync push --no-isolated-transactions
+mj sync push --isolated-transactions --parallel-batch-size=20
+```
+
+**A mixed push is not all-or-nothing as a whole.** It is all-or-nothing for the shared directories, and best effort for the isolated ones. A failure names the files and records that stayed.
+
+**Order isolated directories first** in `directoryOrder` when they touch rows the shared directories also write. The push transaction holds its locks until the end, so an isolated directory running after a shared one can block against the push's own transaction.
+
+### How a push runs
+
+```mermaid
+flowchart TD
+    B[Begin push transaction] --> P1[Phase 1: creates and updates]
+    P1 --> P2[Phase 2: deletes, reverse dependency order]
+    P2 --> P25[Phase 2.5: deferred records]
+    P25 --> C{Commit}
+    C -->|OK| P3[Phase 3: write files with deletions, save incremental state]
+    C -->|Rejected| RB
+    P1 -->|Any record error| RB[Roll back, restore files, report what is left]
+    P2 -->|Any delete error| RB
+    P25 -->|Any deferred error| RB
+
+    style RB fill:#b8762f,stroke:#8a5722,color:#fff
+    style P3 fill:#2d8659,stroke:#1a5c3a,color:#fff
+```
+
+- **Every record error stops the push.** That includes a record that fails without throwing, such as a missing primary key with `autoCreateMissingRecords=false`. A dry run keeps counting errors instead, since it writes nothing.
+- **Incremental state** (`--incremental`) is saved only after the commit, so a failed push never marks its files as pushed.
+- **PostgreSQL checks deferred foreign keys at COMMIT.** A delete that breaks a foreign key therefore fails when the push commits, and the error cannot be tied to one record.
+- **On PostgreSQL, any statement that fails inside the push transaction aborts it,** including a read. A healthy database does not hit this. A database whose views are missing columns that the metadata expects fails the whole atomic push at the first such read.
+- **Metadata is reloaded inside the transaction.** After a directory writes a metadata-dataset entity, the push reloads metadata on that same transaction before the next directory runs, so the next directory sees those rows. Each reload is a full metadata load. Phase 2 does not reload again; the per-directory reload already covered those writes. Before Phase 2.5 the push reloads only when a deletion since the start of Phase 2 touched a metadata dataset. A dry run does not reload. After a rollback, a pool read puts back only the committed rows. If that read fails, the rollback error is still the one reported.
+
+### Trade-offs of the shared default
+
+- **Speed.** Creates and updates are roughly 30–50% slower than an isolated one. A push with no changes is not slower.
+- **Locks.** The transaction holds its locks until the push commits. With read committed snapshot off, other sessions that read the touched tables wait for the push, and that includes MJAPI.
+- **Deadlocks with other sessions.** An atomic push cannot deadlock against itself: everything runs on one connection. It can still deadlock against another session, such as MJAPI or a data import. The whole push then fails and must be re-run.
+
+### Graphs and providers
+
+Records are grouped into dependency levels:
 - **Level 0**: Records with no dependencies
 - **Level 1**: Records that depend only on Level 0 records
 - **Level 2**: Records that depend on Level 0 or Level 1 records
 
-Records are grouped into **JSON-root graphs** (an Action and its nested Action Params share one graph). Each graph gets one `CreateIndependentInstance()`. After each parallel batch the pool releases a graph when it will not appear at a later level, **or** when `TransactionDepth` is already 0 (`Save()` settled, so a fresh instance at the next level is safe). Graphs with leftover depth stay live until their last level. Peak live independent instances is therefore bounded by `--parallel-batch-size`, plus any still-open leftover-depth graphs — not "always equal to the file's root count", and not "always equal to the batch size" if leftover depth is holding graphs across levels.
+Records are also grouped into **JSON-root graphs**: an Action and its nested Action Params share one graph. Every DB read and write for a graph uses the graph's provider: `GetEntityObject`, `Save`, `Load`, `RunView`, lookups and RecordGeoCode. That is an **ORM** invariant (`BaseEntity.BindProvider`). Mixing the host connection with a graph instance in one tree is a deadlock, because the child FK waits on an uncommitted parent on another pooled connection.
 
-Every DB read and write for a graph — `GetEntityObject`, `Save`, `Load`, `RunView`, lookups, RecordGeoCode — must use that same provider. That is an **ORM** invariant (`BaseEntity.BindProvider`); mixing the host connection with a graph instance in one tree is a deadlock: the child FK waits on an uncommitted parent on another pooled connection. `BaseEntity.Save()` still opens and settles its own `EntityTransactionScope` per record; leftover depth (a subclass `BeginTransaction`, a nested entity action) is committed at drain on success and rolled back on failure. If the **first** `CreateIndependentInstance` in a file fails, **all** graphs in that file use the host (inside the push transaction). If it fails *after* independent instances already exist, the file is aborted — never a mix.
+In a **shared** directory every graph's provider is the host, and graphs run one at a time. The pool refuses to hand the host to a second graph while another graph holds it.
 
-The first thrown record error **fails the file** (fail-fast). A record that returns `status: 'error'` without throwing (e.g. missing primaryKey with `autoCreateMissingRecords=false`) also prevents that graph's leftover depth from being committed.
-
-**Sibling graphs** at the same dependency level run in parallel. The default `--parallel-batch-size` is **10**, not 1. Defaulting to 1 was a wrong workaround for mixed-provider hangs; pass `1` only when you want to serialize graphs for debugging. `--parallel-batch-size 1` does **not** mean one global provider — it only serializes graphs.
-
-Releasing settled graphs between levels bounds peak live instances at the batch size. The cost is more `CreateIndependentInstance` calls (one per graph per level when `Save()` settles, so L×N instead of N, each doing a `Config()` / metadata round trip). That is the chosen tradeoff for a CLI. If a large push is slow, this is the first place to look.
-
-```bash
-# Default processing (batch size 10, isolated providers)
-mj sync push
-
-# Process 20 records in parallel
-mj sync push --parallel-batch-size=20
-
-# Maximum parallelism (50 records)
-mj sync push --parallel-batch-size=50
-
-# Serialize graphs for debugging — not the default
-mj sync push --parallel-batch-size=1
-```
+In an **isolated** directory each graph gets one `CreateIndependentInstance()`.
+- After each parallel batch the pool releases a graph when it will not appear at a later level, **or** when `TransactionDepth` is already 0. In the second case `Save()` has settled, so a fresh instance at the next level is safe.
+- Graphs with leftover depth stay live until their last level. Peak live independent instances is therefore bounded by `--parallel-batch-size`, plus any still-open leftover-depth graphs.
+- Leftover depth, such as a subclass `BeginTransaction` or a nested entity action, is committed at drain on success and rolled back on failure.
+- The push checks once, before any graph runs, that independent instances are available. If they are not, every directory runs shared and the push says so. If `CreateIndependentInstance` fails later, the file is aborted; a graph never falls back to the host.
+- Releasing settled graphs between levels costs more `CreateIndependentInstance` calls: one per graph per level when `Save()` settles, so L×N instead of N. If a large isolated push is slow, look here first.
 
 ## Validation System
 
@@ -1577,7 +1692,7 @@ flowchart TD
 
     LOOP --> ENT["Validate Entity Names"]
     LOOP --> FLD["Validate Field Names & Types"]
-    LOOP --> REF["Validate References\n(@file, @lookup, @template)"]
+    LOOP --> REF["Validate References\n(@file, @lookup, @env)"]
     LOOP --> DEP["Analyze Dependencies"]
 
     ENT --> COLLECT["Collect Errors & Warnings"]
@@ -1621,6 +1736,11 @@ mj sync pull --entity="AI Prompts" --no-validate
 
 ### What Gets Validated
 
+**Files Validated:**
+- The record files of each entity folder, found with the folder's `filePattern` (default `*.json`) the way push finds them. Files in sub-folders are included when the pattern matches them (for example `**/*.json`). `.mj-*.json` files and files under `node_modules` are left out. A file that is not valid JSON is an error.
+- Folders that push leaves out (dot folders and the root `ignoreDirectories`) are not validated.
+- Because validation reads the record files, `mj sync push --ci` can stop on errors that earlier versions did not find: unknown fields and unknown top-level keys, a `__mj_` field or the primary key in `fields`, `@template:` values, `?optional` in `@lookup:`, missing `@file:` targets and conflicting record entries. Fix the files, or push with `--no-validate`.
+
 **Entity Validation:**
 - Entity names exist in database metadata
 - Entity is accessible to current user
@@ -1629,15 +1749,21 @@ mj sync pull --entity="AI Prompts" --no-validate
 **Field Validation:**
 - Field names exist on the entity
 - Virtual properties (getter/setter methods) are automatically detected
-- Fields are settable (not system fields)
+- Fields are settable: a `__mj_` field or the primary key in `fields` is an error. Another read-only field (such as a joined display field that pull writes) is a warning, because push ignores it. For a virtual field, the warning says to set `pull.ignoreVirtualFields: true`; for another read-only field, it says to add the field to `pull.excludeFields`. Field names match the entity's fields without regard to case. A name that is not an entity field must match an entity property exactly (for example `TemplateText`); validation reports another spelling as an unknown field.
 - Field values match expected data types
 - Required fields are checked intelligently (skips fields with defaults, computed fields, ReadOnly fields)
 - Foreign key relationships are valid
 
+**Record Conflicts:**
+- Several entries (in one file or in several files) can describe the same record: the same entity and `primaryKey`. This is allowed when they do not disagree.
+- Two such entries that set the same field to different raw values are an error. The message names the entity, the `primaryKey` and the field, and gives the full path and start line (`path:line`) of each entry.
+- Entries whose `primaryKey` holds an `@parent:`, `@owner:` or `@root:` reference (also inside a `@lookup:`), or an object value, are not compared, because the same text can name different records.
+
 **Reference Validation:**
-- `@file:` references point to existing files
+- `@file:` references point to existing files. In record fields, the path resolves from the entity folder, as push does
+- `?optional` inside `@lookup:` is an error
 - `@lookup:` references find matching records
-- `@template:` references load valid JSON
+- `@template:` values are errors, because push does not support them
 - `@parent:` and `@root:` have proper context
 - Circular references are detected
 
@@ -1703,6 +1829,8 @@ Errors
 | `Lookup not found` | No matching record | Verify lookup value or use ?create |
 | `Circular dependency` | A -> B -> A references | Restructure to avoid cycles |
 | `Required field missing` | Missing required field | Add field with appropriate value |
+| `Conflicting values for <entity> record …` | Two entries for one record set a field to different values | Set the same value in both entries, or set the field in one entry only |
+| `@template: is not supported by mj sync push` | A field value starts with `@template:` | Use `@file:` instead |
 
 ## Programmatic Usage
 

@@ -1,0 +1,94 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "webresearch-recover-dead-url-01 [gemini-3.7-flash · Google · native-implicit-results]",
+    "Description": "A source 404'd. The recovery is to find another source, not to re-fetch the dead URL.",
+    "InputDefinition": {
+      "payload": {
+        "sources": []
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Get details on the 2025 quantum computing roadmap from nature.com."
+        },
+        {
+          "role": "user",
+          "content": "[Action Result] Web Page Content FAILED: 404 Not Found for https://www.nature.com/articles/quantum-2025."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "webresearch-recover-dead-url-01",
+      "expect": {
+        "kind": "anyOf",
+        "anyOf": [
+          {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Web Search"
+              }
+            ],
+            "allowAdditionalActions": true
+          },
+          {
+            "kind": "chat",
+            "message": {
+              "matcher": "nonEmpty"
+            }
+          }
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Web Research Agent",
+      "modelId": "63B1434F-0400-4A98-A1B9-0765BE4362F0",
+      "vendorId": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "native",
+      "nativeControlFlow": "implicit",
+      "nativeToolResults": true,
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "anyOf",
+            "anyOf": [
+              {
+                "kind": "action",
+                "actions": [
+                  {
+                    "name": "Web Search"
+                  }
+                ],
+                "allowAdditionalActions": true
+              },
+              {
+                "kind": "chat",
+                "message": {
+                  "matcher": "nonEmpty"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "B6B53C6C-0C4E-41F9-A70D-4E212A0E4E22"
+  }
+}

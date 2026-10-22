@@ -15,6 +15,20 @@ import { ensureRegExps } from '@memberjunction/global';
 import { SQLDialect, SQLServerDialect } from '@memberjunction/sql-dialect';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 
+/** Line written in place of a statement whose `TransformStatement` threw. */
+export const TRANSFORM_FAILED_LINE = '-- Statement not logged: TransformStatement failed';
+
+/** Text `ApplyStatementTransforms` returns when a transform throws. */
+export const TRANSFORM_FAILED_PLACEHOLDER = '[statement hidden: TransformStatement failed]';
+
+/** The text parts of one statement that `TransformStatement` runs on. */
+interface StatementParts {
+  query: string;
+  simpleSQLFallback?: string;
+  description?: string;
+  paramComment?: string;
+}
+
 /**
  * Internal implementation of SqlLoggingSession that handles SQL statement logging to files.
  * This class manages file I/O, SQL formatting, and filtering based on session options.
@@ -88,7 +102,19 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
    * @param isMutation - Whether this is a data mutation operation
    * @param simpleSQLFallback - Optional simple SQL to use if logRecordChangeMetadata=false
    */
-  public async logSqlStatement(query: string, parameters?: unknown, description?: string, isMutation: boolean = false, simpleSQLFallback?: string): Promise<void> {
+  public async LogSqlStatement(query: string, parameters?: unknown, description?: string, isMutation: boolean = false, simpleSQLFallback?: string): Promise<void> {
+    // The SQL that ran decides the "(core SP call only)" tag
+    const fallbackDiffersFromQuery = simpleSQLFallback !== query;
+    let paramComment = this._buildParameterComment(parameters);
+
+    // The session reads only the transformed text from here on
+    if (this.options.TransformStatement) {
+      const transformed = this._transformParts({ query, simpleSQLFallback, description, paramComment });
+      if (!transformed) {
+        return this._writeTransformFailure(isMutation);
+      }
+      ({ query, simpleSQLFallback, description, paramComment } = transformed);
+    }
     const verbose = this.options.verboseOutput === true;
 
     if (verbose) {
@@ -142,8 +168,10 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     // Use simple SQL fallback if this session has logRecordChangeMetadata=false (default) and fallback is provided
     if (this.options.logRecordChangeMetadata !== true && simpleSQLFallback) {
       processedQuery = simpleSQLFallback;
-      // Update description to indicate we're using the simplified version
-      if (description && !description.includes('(core SP call only)')) {
+      // Tag the description only when the logged text actually differs from what ran.
+      // A save on an entity without record-change tracking can hand over a fallback that is
+      // byte-identical to the executed SQL (a forced update), and tagging that would misreport it.
+      if (description && fallbackDiffersFromQuery && !description.includes('(core SP call only)')) {
         logEntry = logEntry.replace(`-- ${description}\n`, `-- ${description} (core SP call only)\n`);
       }
     }
@@ -206,19 +234,8 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     logEntry += `${processedQuery};\n`;
 
     // Add parameter comment if parameters exist
-    if (parameters) {
-      if (Array.isArray(parameters)) {
-        if (parameters.length > 0) {
-          logEntry += `-- Parameters: ${parameters.map((p: unknown, i: number) => `@p${i}='${p}'`).join(', ')}\n`;
-        }
-      } else if (typeof parameters === 'object') {
-        const paramStr = Object.entries(parameters as Record<string, unknown>)
-          .map(([key, value]) => `@${key}='${value}'`)
-          .join(', ');
-        if (paramStr) {
-          logEntry += `-- Parameters: ${paramStr}\n`;
-        }
-      }
+    if (paramComment !== undefined) {
+      logEntry += `${paramComment}\n`;
     }
 
     // Batch separator logic:
@@ -268,6 +285,62 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
       console.error(`Session ${this.id}: Error writing to file:`, error);
       throw error;
     }
+  }
+
+  /** Builds the `-- Parameters: …` line, or undefined when there are no parameters to show. */
+  private _buildParameterComment(parameters: unknown): string | undefined {
+    let paramStr = '';
+    if (Array.isArray(parameters)) {
+      paramStr = parameters.map((p: unknown, i: number) => `@p${i}='${p}'`).join(', ');
+    } else if (parameters && typeof parameters === 'object') {
+      paramStr = Object.entries(parameters as Record<string, unknown>)
+        .map(([key, value]) => `@${key}='${value}'`)
+        .join(', ');
+    }
+    return paramStr ? `-- Parameters: ${paramStr}` : undefined;
+  }
+
+  /** Runs `TransformStatement` on each text part. Returns null when the transform throws. */
+  private _transformParts(parts: StatementParts): StatementParts | null {
+    const transform = this.options.TransformStatement;
+    if (!transform) {
+      return parts;
+    }
+    try {
+      return {
+        query: transform(parts.query),
+        simpleSQLFallback: parts.simpleSQLFallback !== undefined ? transform(parts.simpleSQLFallback) : undefined,
+        description: parts.description !== undefined ? transform(parts.description) : undefined,
+        paramComment: parts.paramComment !== undefined ? transform(parts.paramComment) : undefined,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Writes the fixed placeholder line in place of a statement whose transform threw. */
+  private async _writeTransformFailure(isMutation: boolean): Promise<void> {
+    console.error(`Session ${this.id}: TransformStatement failed; the statement was not logged`);
+    if (this._disposed || !this._fileHandle) {
+      return;
+    }
+    const statementTypes = this.options.statementTypes || 'both';
+    if ((statementTypes === 'mutations' && !isMutation) || (statementTypes === 'queries' && isMutation)) {
+      return;
+    }
+    try {
+      await this._fileHandle.writeFile(`${TRANSFORM_FAILED_LINE}\n\n`);
+      this._statementCount++;
+      this._emittedStatementCount++;
+    } catch (error) {
+      console.error(`Session ${this.id}: Error writing to file:`, error);
+      throw error;
+    }
+  }
+
+  /** @deprecated Use {@link LogSqlStatement}. */
+  public async logSqlStatement(query: string, parameters?: unknown, description?: string, isMutation: boolean = false, simpleSQLFallback?: string): Promise<void> {
+    return this.LogSqlStatement(query, parameters, description, isMutation, simpleSQLFallback);
   }
 
   /**
@@ -501,4 +574,23 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     return this._dialect.EscapeFlywayStringInterpolation(sql);
   }
 
+}
+
+/**
+ * Runs the `TransformStatement` of each session in turn; sessions without one leave the text as is.
+ * Returns a fixed placeholder when a transform throws.
+ */
+export function ApplyStatementTransforms(sql: string, sessions: Iterable<{ options: SqlLoggingOptions }>): string {
+  let result = sql;
+  try {
+    for (const session of sessions) {
+      const transform = session.options.TransformStatement;
+      if (transform) {
+        result = transform(result);
+      }
+    }
+  } catch {
+    return TRANSFORM_FAILED_PLACEHOLDER;
+  }
+  return result;
 }

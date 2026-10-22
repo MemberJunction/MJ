@@ -24,6 +24,7 @@
 import {
     BaseRealtimeModel,
     REALTIME_SHARED_CONFIG_KEYS,
+    RealtimeDroppedInputReporter,
     type IRealtimeSession,
     type RealtimeSessionParams,
     type RealtimeToolDefinition,
@@ -33,6 +34,7 @@ import {
     type RealtimeSessionError,
     type JSONObject,
     type JSONValue,
+    type RealtimeInputFrame,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 
@@ -341,6 +343,9 @@ export class InworldRealtimeSession implements IRealtimeSession {
      */
     private currentToolsFingerprint: string;
 
+    /** Reports the frames {@link SendInput} drops, once per kind and type. */
+    private readonly droppedInput = new RealtimeDroppedInputReporter('InworldRealtime', 'this session sends audio only');
+
     /**
      * @param params The session parameters (model, system prompt, tools, initial context, config bag).
      */
@@ -386,9 +391,18 @@ export class InworldRealtimeSession implements IRealtimeSession {
 
     // ── IRealtimeSession outbound ──
 
-    /** @inheritdoc — streams one client media frame as a base64 input audio-append frame. */
-    public SendInput(chunk: ArrayBuffer): void {
-        this.sendFrame(this.buildAudioAppendFrame(chunk));
+    /**
+     * @inheritdoc
+     *
+     * Streams one audio frame as a base64 input audio-append frame. The session sends audio only, so a frame of another
+     * kind (a camera or screen frame) is dropped, never sent as audio, and reported once per kind and type.
+     */
+    public SendInput(frame: RealtimeInputFrame): void {
+        if (frame.Kind !== 'audio') {
+            this.droppedInput.Report(frame);
+            return;
+        }
+        this.sendFrame(this.buildAudioAppendFrame(frame.Data));
     }
 
     /**
@@ -922,8 +936,14 @@ export class InworldRealtimeSession implements IRealtimeSession {
 
     // ── Shared helpers ──
 
-    /** Resolves the underlying LLM id Inworld brokers (param model, falling back to the default). */
+    /** Resolves the underlying LLM id Inworld brokers (Reasoning.Remote.Ref, param model, falling back to default). */
     private resolveModelId(): string {
+        const reasoning = (this.params.Config as Record<string, unknown> | undefined)?.Reasoning as
+            | { Remote?: { Ref?: string } }
+            | undefined;
+        if (reasoning?.Remote?.Ref && reasoning.Remote.Ref.length > 0) {
+            return reasoning.Remote.Ref;
+        }
         return this.params.Model && this.params.Model.length > 0 ? this.params.Model : INWORLD_DEFAULT_MODEL_ID;
     }
 

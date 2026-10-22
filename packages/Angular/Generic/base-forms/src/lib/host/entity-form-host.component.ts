@@ -1,9 +1,9 @@
 import {
-  Component, Input, Output, EventEmitter, ViewChild, ViewContainerRef,
+  Component, Input, Output, EventEmitter, ViewChild, ViewContainerRef, ElementRef,
   ComponentRef, ChangeDetectorRef, inject, AfterViewInit, OnDestroy, Type
 } from '@angular/core';
 import {
-  CompositeKey, BaseEntity, BaseEntityEvent, FieldValueCollection, EntityFieldTSType
+  CompositeKey, BaseEntity, BaseEntityEvent, FieldValueCollection, EntityFieldTSType, LogError
 } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { Subscription } from 'rxjs';
@@ -12,7 +12,11 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { BaseFormComponent } from '../base-form-component';
 import { BaseFormSectionComponent } from '../base-form-section-component';
 import { InteractiveFormComponent } from '../interactive-form/interactive-form.component';
-import { FormResolverService } from '../resolver/form-resolver.service';
+import {
+  EntityFormMode, FormResolution, FormResolverService,
+  HasStandardFormAlternative as hasStandardFormAlternative
+} from '../resolver/form-resolver.service';
+import { FormVariantChoices } from '../resolver/form-variants';
 import { EntityFormConfig } from '../types/entity-form-config';
 import { FormNavigationEvent } from '../types/navigation-events';
 import {
@@ -47,6 +51,15 @@ import {
  * ```html
  * <mj-entity-form-host [Record]="myEntity" [Config]="DIALOG_FORM_CONFIG"></mj-entity-form-host>
  * ```
+ *
+ * **Standard-form switch.** When a custom form (a higher-priority class form or
+ * an interactive override) hides the CodeGen-generated form, the host renders a
+ * one-line strip above it offering "Open standard form" — every field, same
+ * permissions — and back. It lives here rather than in `<mj-form-toolbar>`
+ * because a fully custom form may not render the toolbar at all, which would
+ * leave the generated form unreachable. Surfaces drive/persist the choice via
+ * {@link FormMode} / {@link FormModeChange}; hosts that must not offer it set
+ * {@link ShowFormModeSwitch} to false.
  */
 @Component({
   standalone: false,
@@ -60,6 +73,8 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
 
   /** Anchor for the dynamically-created form component. Always present in the DOM. */
   @ViewChild('anchor', { read: ViewContainerRef, static: true }) private anchor!: ViewContainerRef;
+  /** The strip's switch button — present only while the strip renders. */
+  @ViewChild('modeSwitch') private modeSwitchButton?: ElementRef<HTMLButtonElement>;
 
   // ── Inputs ──────────────────────────────────────────────────────────────
 
@@ -123,6 +138,25 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
   /** Per-instance form presentation config (toolbar, sections, width, links). */
   @Input() Config: EntityFormConfig | null = null;
 
+  private _formMode: EntityFormMode = 'default';
+  /**
+   * Which form to mount: `'default'` = the resolver's normal pick; `'standard'`
+   * = the CodeGen-generated form, even when a custom form outranks it. Falls
+   * back to the default (and logs) when the entity has no standard form.
+   * A change after the view initializes reloads the form.
+   */
+  @Input()
+  set FormMode(value: EntityFormMode) {
+    const next = value ?? 'default';
+    const changed = this._formMode !== next;
+    this._formMode = next;
+    if (changed && this._viewInitialized) this.reload();
+  }
+  get FormMode(): EntityFormMode { return this._formMode; }
+
+  /** Offer the standard-form strip when a custom form hides the generated one. Set false to suppress it. */
+  @Input() ShowFormModeSwitch = true;
+
   // ── Outputs ─────────────────────────────────────────────────────────────
 
   /** Form navigation request (record link, new record, hierarchy, email, external, dismiss). */
@@ -151,12 +185,46 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
   @Output() LoadError = new EventEmitter<{ title: string; detail: string }>();
   /** The live form instance, emitted right after it's created (for power-user wiring). */
   @Output() FormCreated = new EventEmitter<BaseFormComponent>();
+  /** The user switched between the custom and the standard form (so the surface can persist it, e.g. in the URL). */
+  @Output() FormModeChange = new EventEmitter<EntityFormMode>();
+  /**
+   * Re-emitted form `EditModeChanged` (true = edit started, false = ended),
+   * plus one `true` right after mount when the form was created already in
+   * edit mode (`StartInEditMode`, or a new record) — StartEditMode never runs
+   * in that path, so without this the shell would never hear about it.
+   */
+  @Output() EditModeChanged = new EventEmitter<boolean>();
 
   // ── State ───────────────────────────────────────────────────────────────
 
-  public loading = true;
-  public errorTitle: string | null = null;
+  public Loading = true;
+
+  /** @deprecated Use {@link Loading}. */
+  public get loading() {
+    return this.Loading;
+  }
+  /** @deprecated Use {@link Loading}. */
+  public set loading(value) {
+    this.Loading = value;
+  }
+  public ErrorTitle: string | null = null;
+
+  /** @deprecated Use {@link ErrorTitle}. */
+  public get errorTitle(): string | null {
+    return this.ErrorTitle;
+  }
+  /** @deprecated Use {@link ErrorTitle}. */
+  public set errorTitle(value: string | null) {
+    this.ErrorTitle = value;
+  }
   public errorDetail: string | null = null;
+
+  /**
+   * True when a custom form is hiding the standard (CodeGen) form — so the
+   * switch strip has somewhere to go. Stays true while the standard form is
+   * the one mounted, so the strip can offer the way back.
+   */
+  public HasStandardFormAlternative = false;
 
   private _formComponentRef: ComponentRef<BaseFormComponent> | null = null;
   private _sectionRef: ComponentRef<BaseFormSectionComponent> | null = null;
@@ -165,6 +233,26 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
   private _saveHandlerSub: Subscription | null = null;
   private _formEventSubs: Subscription[] = [];
   private _viewInitialized = false;
+  /**
+   * An unsaved new record carried across a form switch. A brand-new record is
+   * always `Dirty` (never saved), so the dirty guard can't protect it; instead
+   * the switch re-binds the same live instance rather than creating a fresh one,
+   * so whatever the user typed survives. Consumed by the next {@link obtainRecord}.
+   */
+  private _carryNewRecord: BaseEntity | null = null;
+  /**
+   * Set when the strip's own button started a switch. The reload unmounts the
+   * strip (and the focused button with it), so focus is handed to the new
+   * button once the mount completes instead of falling to `<body>`.
+   */
+  private _refocusModeSwitch = false;
+  /**
+   * Bumped by every {@link teardown} (so by every reload and by destroy). A
+   * load captures it on entry and gives up after any `await` once it has
+   * moved: a superseded load must not mount, emit, register a save handler,
+   * or report a failure over the load that replaced it.
+   */
+  private _loadGeneration = 0;
 
   /** The live form component instance, or null before mount / after teardown. */
   get Form(): BaseFormComponent | null {
@@ -223,17 +311,71 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
     return f.RefreshRecord();
   }
 
+  /**
+   * Switch between the custom (`'default'`) and the standard form. Refuses —
+   * returning false and emitting a `warning` Notification — when remounting
+   * would silently discard unsaved work (see {@link hasUnsavedWorkToLose}).
+   * A brand-new record is carried across instead (see {@link _carryNewRecord}).
+   * With a form mounted but no standard alternative (the generated form is
+   * the only one), both modes mount the same form: the mode is recorded and
+   * emitted, with no reload and so nothing for the unsaved-work guard to
+   * protect. The error state is excluded: `fail()` also clears
+   * `HasStandardFormAlternative` and `Loading`, and there the switch must
+   * still reload — it is the retry of the failed load.
+   */
+  public SwitchFormMode(mode: EntityFormMode): boolean {
+    if (mode === this._formMode) return true;
+    if (!this.HasStandardFormAlternative && !this.Loading && !this.ErrorTitle) {
+      this._formMode = mode;
+      this.FormModeChange.emit(mode);
+      return true;
+    }
+    if (this.hasUnsavedWorkToLose()) {
+      this.Notification.emit({ Message: 'Save or discard your changes before switching forms.', Type: 'warning', Duration: 4000 });
+      return false;
+    }
+    const record = this._currentRecord;
+    // A bound Record input is reused by every reload anyway; only a host-created new record needs carrying.
+    if (record && !record.IsSaved && !this._record) this._carryNewRecord = record;
+    this._formMode = mode;
+    this.FormModeChange.emit(mode);
+    this.reload();
+    return true;
+  }
+
+  /** Template handler for the strip's button: switch, and keep keyboard focus on the button. */
+  public OnModeSwitchClick(): void {
+    this._refocusModeSwitch = true;
+    const next: EntityFormMode = this._formMode === 'standard' ? 'default' : 'standard';
+    if (!this.SwitchFormMode(next)) this._refocusModeSwitch = false; // refused: the button never left
+  }
+
+  /**
+   * Whether tearing the mounted form down would lose unsaved work. A saved
+   * record's field edits count; a brand-new record's don't, because its live
+   * instance is carried across the switch. Work the form holds outside the
+   * record (pending related records, designer/canvas state) always counts —
+   * it lives in the form component, which the switch destroys.
+   */
+  private hasUnsavedWorkToLose(): boolean {
+    const record = this._currentRecord;
+    if (record?.IsSaved && record.Dirty) return true;
+    return this.Form?.HasUnsavedChangesBeyondRecord ?? false;
+  }
+
   // ── Core: resolve → load → create → bind → wire ──────────────────────────
 
   private reload(): void {
     this.teardown();
-    this.loading = true;
-    this.errorTitle = null;
+    this.Loading = true;
+    this.HasStandardFormAlternative = false;
+    this.ErrorTitle = null;
     this.errorDetail = null;
     void this.loadAndMount();
   }
 
   private async loadAndMount(): Promise<void> {
+    const generation = this._loadGeneration;
     const md = this.ProviderToUse;
     // When a pre-loaded record is supplied, derive the entity from it.
     const entityName = this._record?.EntityInfo?.Name ?? this._entityName;
@@ -254,32 +396,39 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
 
       // Section mode short-circuits the full-form resolver / container.
       if (this.SectionName) {
-        await this.mountSection(entityName, permissions);
+        await this.mountSection(entityName, permissions, generation);
         return;
       }
 
       const resolution = await this.formResolver.ResolveFormForEntity(entity, md.CurrentUser, md);
+      if (this.isSuperseded(generation)) return;
+      this.HasStandardFormAlternative = hasStandardFormAlternative(resolution);
       if (resolution.kind === 'none') {
         this.fail(`No form is registered for "${entityName}".`,
           `No EntityFormOverride or class-based form (@RegisterClass(BaseFormComponent, '${entityName}')) was found. Run CodeGen or register a custom form.`);
         return;
       }
 
-      const record = await this.obtainRecord(entityName, md);
-      if (!record) return; // fail() already called
+      const record = await this.obtainRecord(entityName, generation, md);
+      if (!record || this.isSuperseded(generation)) return; // a failure already called fail()
 
       // Emit Saved on the record's own save event (covers all save paths).
       this._saveHandlerSub = record.RegisterEventHandler((e: BaseEntityEvent) => {
         if (e.type === 'save') this.Saved.emit(record);
       });
 
-      this.anchor.clear();
-      const componentRef: ComponentRef<BaseFormComponent> = resolution.kind === 'interactive'
-        ? this.anchor.createComponent(InteractiveFormComponent)
-        : this.anchor.createComponent(resolution.subClass);
+      const standardForm = this.standardFormToMount(resolution, entityName);
 
-      if (resolution.kind === 'interactive') {
-        (componentRef as ComponentRef<InteractiveFormComponent>).instance.ComponentID = resolution.override.ComponentID;
+      this.anchor.clear();
+      let componentRef: ComponentRef<BaseFormComponent>;
+      if (standardForm) {
+        componentRef = this.anchor.createComponent(standardForm);
+      } else if (resolution.kind === 'interactive') {
+        const interactiveRef = this.anchor.createComponent(InteractiveFormComponent);
+        interactiveRef.instance.ComponentID = resolution.override.ComponentID;
+        componentRef = interactiveRef;
+      } else {
+        componentRef = this.anchor.createComponent(resolution.subClass);
       }
 
       this._formComponentRef = componentRef;
@@ -292,19 +441,77 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
       instance.EditMode = this._editMode ?? this.Config?.StartInEditMode ?? !record.IsSaved;
 
       this.applyVariants(instance, resolution, entityName);
+      // The picker's "current" row describes the resolver's pick; the standard form is none of them.
+      if (standardForm) instance.CurrentVariantID = null;
       this.subscribeToFormEvents(instance);
+      this.announceInitialEditMode(instance);
 
       this.FormCreated.emit(instance);
-      this.errorTitle = null;
+      this.ErrorTitle = null;
       this.errorDetail = null;
       this.LoadComplete.emit();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      if (this.isSuperseded(generation)) {
+        LogError(`MjEntityFormHost: a superseded load of "${entityName}" failed: ${msg}`);
+        return;
+      }
       this.fail(`Failed to load ${entityName} record.`, `An unexpected error occurred: ${msg}`);
     } finally {
-      this.loading = false;
-      this.cdr.detectChanges();
+      // The load that replaced this one owns Loading, change detection and focus.
+      if (!this.isSuperseded(generation)) this.settleLoad();
     }
+  }
+
+  /** Whether a newer load (or destroy) has replaced the load that captured `generation`. */
+  private isSuperseded(generation: number): boolean {
+    return generation !== this._loadGeneration;
+  }
+
+  /** End the current load: clear the loading state, render, and restore the switch's focus. */
+  private settleLoad(): void {
+    this.Loading = false;
+    this.cdr.detectChanges();
+    this.restoreModeSwitchFocus();
+  }
+
+  /** After a strip-initiated switch, hand focus to the re-rendered switch button (if the strip is back). */
+  private restoreModeSwitchFocus(): void {
+    if (!this._refocusModeSwitch) return;
+    this._refocusModeSwitch = false;
+    this.modeSwitchButton?.nativeElement.focus();
+  }
+
+  /**
+   * The standard form class to mount instead of the resolver's pick, or null
+   * to mount the pick. Only non-null in `'standard'` mode when a custom form is
+   * actually hiding the standard one; when the pick already IS the standard
+   * form there is nothing to swap. A `'standard'` request for an entity with
+   * no standard form falls back to the pick and logs, so a stale deep link
+   * can't break the record.
+   */
+  private standardFormToMount(resolution: FormResolution, entityName: string): Type<BaseFormComponent> | null {
+    if (this._formMode !== 'standard') return null;
+    if (!resolution.standard) {
+      this.logMissingStandardFormOnce(entityName);
+      return null;
+    }
+    return hasStandardFormAlternative(resolution) ? resolution.standard : null;
+  }
+
+  /** Entities this host has already logged a missing standard form for (lowercased names). */
+  private readonly _missingStandardLogged = new Set<string>();
+
+  /**
+   * Log the "standard requested, none registered" fallback once per entity per
+   * host. A stale `?form=standard` would otherwise log on every reload (each
+   * variant pick, switch or input change).
+   */
+  private logMissingStandardFormOnce(entityName: string): void {
+    const key = entityName.trim().toLowerCase();
+    if (this._missingStandardLogged.has(key)) return;
+    this._missingStandardLogged.add(key);
+    LogError(`MjEntityFormHost: standard form requested for "${entityName}" but none is registered; showing the default form`);
   }
 
   /**
@@ -328,7 +535,7 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
    * variants, container, or form-event surface — section components are bare
    * field editors; the host saves the record directly (see {@link Save}).
    */
-  private async mountSection(entityName: string, permissions: unknown): Promise<void> {
+  private async mountSection(entityName: string, permissions: unknown, generation: number): Promise<void> {
     const key = `${entityName}.${this.SectionName}`;
     const reg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormSectionComponent, key);
     if (!reg?.SubClass) {
@@ -337,8 +544,8 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
       return;
     }
 
-    const record = await this.obtainRecord(entityName);
-    if (!record) return;
+    const record = await this.obtainRecord(entityName, generation);
+    if (!record || this.isSuperseded(generation)) return;
 
     this._saveHandlerSub = record.RegisterEventHandler((e: BaseEntityEvent) => {
       if (e.type === 'save') this.Saved.emit(record);
@@ -359,12 +566,20 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
     this.LoadComplete.emit();
   }
 
-  /** Resolve the BaseEntity to bind: the supplied instance, or a freshly loaded/new one. */
-  private async obtainRecord(entityName: string, md = this.ProviderToUse): Promise<BaseEntity | null> {
+  /**
+   * Resolve the BaseEntity to bind: the supplied instance, or a freshly loaded/new one.
+   * Returns null on failure; reports it through {@link fail} only while `generation` is still current.
+   */
+  private async obtainRecord(entityName: string, generation: number, md = this.ProviderToUse): Promise<BaseEntity | null> {
     if (this._record) return this._record;
+    const carried = this._carryNewRecord;
+    this._carryNewRecord = null;
+    // Only honor the carry for the same new record — an input swap since the switch loads normally.
+    if (carried && carried.EntityInfo.Name === entityName && !this._primaryKey.HasValue) return carried;
 
     const record = await md.GetEntityObject<BaseEntity>(entityName, md.CurrentUser);
     if (!record) {
+      if (this.isSuperseded(generation)) return null;
       this.fail(`Failed to load ${entityName} record.`, `Unable to instantiate entity "${entityName}".`);
       return null;
     }
@@ -372,6 +587,7 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
     if (this._primaryKey.HasValue) {
       const loadOk = await record.InnerLoad(this._primaryKey);
       if (!loadOk) {
+        if (this.isSuperseded(generation)) return null;
         this.fail(`Could not load ${entityName} record.`,
           record.LatestResult?.Message
             ? `Server error: ${record.LatestResult.Message}`
@@ -388,18 +604,21 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
   /** Push variant list + active selection and wire the variant-switch handler. */
   private applyVariants(
     instance: BaseFormComponent,
-    resolution: Awaited<ReturnType<FormResolverService['ResolveFormForEntity']>>,
+    resolution: FormResolution,
     entityName: string,
   ): void {
-    instance.Variants = (resolution.variants ?? [])
-      .filter(v => v.Status === 'Active')
-      .map(v => ({ ID: v.ID, Label: v.Name ?? `Override ${v.ID.substring(0, 8)}`, Scope: v.Scope, Status: v.Status }));
+    instance.Variants = FormVariantChoices(resolution.variants ?? []);
     instance.CurrentVariantID = resolution.kind === 'interactive' ? resolution.override.ID : null;
     instance.OnVariantChanged = (variantID: string | null) => {
       if (variantID === null) {
         this.formResolver.SetExplicitDefault(entityName);
       } else {
         this.formResolver.SetSelectedVariant(entityName, variantID);
+      }
+      // Picking a variant means "show me that one" — leave the standard form.
+      if (this._formMode === 'standard') {
+        this._formMode = 'default';
+        this.FormModeChange.emit('default');
       }
       // Reload via the resolver so tier/priority + the new selection apply.
       this._record = null; // force a fresh load against the new variant
@@ -419,11 +638,25 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
       form.RecordSaveFailed.subscribe(e => this.RecordSaveFailed.emit(e)),
       form.ValidationFailed.subscribe(e => this.ValidationFailed.emit(e)),
       form.RecordReady.subscribe(e => this.RecordReady.emit(e)),
+      form.EditModeChanged.subscribe(e => this.EditModeChanged.emit(e)),
     );
     // Surface 'dismiss' navigation as a first-class Dismissed event too.
     this._formEventSubs.push(
       form.Navigate.subscribe(e => { if (e.Kind === 'dismiss') this.Dismissed.emit(); }),
     );
+  }
+
+  /**
+   * Announce edit mode that was set by ASSIGNMENT rather than by
+   * StartEditMode() — the mount path writes `instance.EditMode` directly, so
+   * a form that starts in edit mode would otherwise be editing, unpinned and
+   * italic in a records preview tab. Safe to fire alongside ngOnInit's own
+   * StartEditMode for a new record: the shell's pin is idempotent.
+   */
+  private announceInitialEditMode(form: BaseFormComponent): void {
+    if (form.EditMode) {
+      this.EditModeChanged.emit(true);
+    }
   }
 
   // ── New-record value application (URL segment or object) ──────────────────
@@ -473,9 +706,10 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   private fail(title: string, detail: string): void {
-    this.errorTitle = title;
+    this.ErrorTitle = title;
     this.errorDetail = detail;
-    this.loading = false;
+    this.Loading = false;
+    this.HasStandardFormAlternative = false; // no form mounted → nothing to switch between
     if (this._formComponentRef) {
       try { this._formComponentRef.destroy(); } catch { /* noop */ }
       this._formComponentRef = null;
@@ -504,6 +738,7 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
   }
 
   private teardown(): void {
+    this._loadGeneration++;
     this.cleanupFormSubs();
     if (this._saveHandlerSub) {
       this._saveHandlerSub.unsubscribe();

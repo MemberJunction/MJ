@@ -1,6 +1,8 @@
-import { AIErrorInfo, BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer, ChatMessage, ChatMessageContentBlock } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, toClassicChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer, ChatMessage, ChatMessageContentBlock,
+    buildOpenAICompatibleTools, buildOpenAICompatibleToolChoice, buildOpenAICompatibleToolCalls, buildOpenAICompatibleToolResults, extractOpenAICompatibleToolCalls,
+    type RawOpenAICompatibleToolCall } from '@memberjunction/ai';
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
-import Groq, { APIUserAbortError } from 'groq-sdk';
+import Groq from 'groq-sdk';
 import { ChatCompletion, ChatCompletionCreateParamsNonStreaming, ChatCompletionCreateParamsStreaming, ChatCompletionMessageParam, ChatCompletionContentPart, ChatCompletionChunk } from 'groq-sdk/resources/chat/completions';
 
 /**
@@ -9,11 +11,6 @@ import { ChatCompletion, ChatCompletionCreateParamsNonStreaming, ChatCompletionC
 @RegisterClass(BaseLLM, "GroqLLM")
 export class GroqLLM extends BaseLLM {
     private _client: Groq;
-    /**
-     * Set when the in-flight streaming request was cancelled via ChatParams.cancellationToken.
-     * Reset at the start and end of every streaming request by resetStreamingState().
-     */
-    private streamCancelled: boolean = false;
 
     constructor(apiKey: string) {
         super(apiKey);
@@ -30,8 +27,13 @@ export class GroqLLM extends BaseLLM {
     /**
      * Read only getter method to get the Groq client instance
      */
-    public get client(): Groq {
+    public get Client(): Groq {
         return this.GroqClient;
+    }
+
+    /** @deprecated Use {@link Client}. */
+    public get client(): Groq {
+        return this.Client;
     }
     
     /**
@@ -54,92 +56,6 @@ export class GroqLLM extends BaseLLM {
      */
     protected supportsThinkingModels(): boolean {
         return true;
-    }
-
-    /**
-     * Determines whether an error (or the current state of the signal) represents a caller-initiated
-     * cancellation rather than a genuine API failure. Groq's SDK raises APIUserAbortError when the
-     * request options carry a signal that aborts.
-     */
-    private isCancellation(error: unknown, signal?: AbortSignal): boolean {
-        if (signal?.aborted) {
-            return true;
-        }
-        if (error instanceof APIUserAbortError) {
-            return true;
-        }
-        return error instanceof Error && error.name === 'AbortError';
-    }
-
-    /**
-     * Builds the ChatResult returned when a request is cancelled through ChatParams.cancellationToken
-     * (caller abort or AIPromptRunner timeout). Marked Fatal / non-failover so no layer retries a request
-     * the caller explicitly gave up on.
-     */
-    private buildCancelledResult(startTime: Date): ChatResult {
-        const errorInfo: AIErrorInfo = {
-            errorType: 'Unknown',
-            severity: 'Fatal',
-            canFailover: false,
-            providerErrorCode: 'request_cancelled',
-            context: { provider: 'groq', cancelled: true }
-        };
-
-        const result = new ChatResult(false, startTime, new Date());
-        result.statusText = 'cancelled';
-        result.errorMessage = 'Request cancelled via cancellationToken';
-        result.exception = null;
-        result.errorInfo = errorInfo;
-        result.data = {
-            choices: [],
-            usage: new ModelUsage(0, 0)
-        };
-        return result;
-    }
-
-    /**
-     * Wraps the Groq stream so that an abort ends iteration cleanly (flagging the cancellation for
-     * finalizeStreamingResponse) instead of surfacing as a mid-stream exception that the base class
-     * would otherwise swallow and report as a truncated success.
-     */
-    private async *iterateWithCancellation(
-        stream: AsyncIterable<ChatCompletionChunk>,
-        signal?: AbortSignal
-    ): AsyncGenerator<ChatCompletionChunk> {
-        try {
-            for await (const chunk of stream) {
-                if (signal?.aborted) {
-                    this.streamCancelled = true;
-                    return;
-                }
-                yield chunk;
-            }
-            if (signal?.aborted) {
-                this.streamCancelled = true;
-            }
-        } catch (error) {
-            if (this.isCancellation(error, signal)) {
-                this.streamCancelled = true;
-                return;
-            }
-            throw error;
-        }
-    }
-
-    /**
-     * An already-exhausted stream, used when the request was cancelled before it was sent.
-     */
-    private async *emptyStream(): AsyncGenerator<ChatCompletionChunk> {
-        // intentionally yields nothing
-    }
-
-    /**
-     * Clear per-request streaming state. Invoked by the base class at the start and end of every
-     * streaming request.
-     */
-    protected override resetStreamingState(): void {
-        super.resetStreamingState();
-        this.streamCancelled = false;
     }
 
     protected setGroqParamsEffortLevel(groqParams: any, params: ChatParams): void {
@@ -180,16 +96,67 @@ export class GroqLLM extends BaseLLM {
      * Convert MJ messages to Groq-compatible format with proper multimodal support
      * Groq uses OpenAI-compatible format: { type: "image_url", image_url: { url: "..." } }
      */
+    /**
+     * Groq exposes OpenAI-compatible function calling across its hosted catalog, so the shared
+     * OpenAI-shaped mapping applies unchanged.
+     *
+     * This is load-bearing for MJ specifically: GPT-OSS-120B on Groq is the second-most-deployed
+     * (model, vendor) pair across the shipped agents, and until this override the capability gate
+     * resolved to the envelope for it regardless of metadata.
+     *
+     * **Parallel calls are NOT universal here.** Groq documents parallel tool calling on
+     * llama-3.3-70b, llama-3.1-8b, qwen3.6-27b and minimax-m2.7, but *not* on the gpt-oss models —
+     * which is exactly the family MJ deploys most. {@link applyToolParams} therefore forwards
+     * `parallel_tool_calls` only when the caller sets it explicitly, and never infers it. Groq's
+     * Compound models reject caller-supplied tools outright; that is a per-model catalog fact for
+     * the vendor-level capability flag, not something a driver can paper over.
+     */
+    public override get SupportsTools(): boolean {
+        return true;
+    }
+
+    /**
+     * Adds the native tool-calling fields when the caller declared tools.
+     *
+     * @param request The request body being assembled (mutated in place)
+     * @param params The chat params for this request
+     */
+    protected applyToolParams(
+        request: ChatCompletionCreateParamsNonStreaming | ChatCompletionCreateParamsStreaming,
+        params: ChatParams
+    ): void {
+        if (!params.tools || params.tools.length === 0) {
+            return;
+        }
+        request.tools = buildOpenAICompatibleTools(params.tools);
+        if (params.toolChoice !== undefined) {
+            request.tool_choice = buildOpenAICompatibleToolChoice(params.toolChoice);
+        }
+        // Deliberately only when asked — see SupportsTools on the gpt-oss parallel gap.
+        if (params.parallelToolCalls !== undefined) {
+            request.parallel_tool_calls = params.parallelToolCalls;
+        }
+    }
+
     private convertToGroqMessages(messages: ChatMessage[]): ChatCompletionMessageParam[] {
         const groqMessages: ChatCompletionMessageParam[] = [];
 
         for (const msg of messages) {
+            // A tool turn is not one message: it expands into one `tool` message per result, each
+            // carrying the id of the call it answers.
+            if (msg.role === ChatMessageRole.tool) {
+                groqMessages.push(...buildOpenAICompatibleToolResults(msg, 'Groq provider'));
+                continue;
+            }
+
             // Simple string content
             if (typeof msg.content === 'string') {
-                groqMessages.push({
-                    role: msg.role as 'system' | 'user' | 'assistant',
-                    content: msg.content
-                });
+                const role = toClassicChatMessageRole(msg.role);
+                groqMessages.push(role === 'assistant'
+                    // The assistant's own calls must ride along, or the tool results answering
+                    // them are orphaned and the request is rejected.
+                    ? { role, content: msg.content, ...(msg.toolCalls?.length ? { tool_calls: buildOpenAICompatibleToolCalls(msg.toolCalls) } : {}) }
+                    : { role, content: msg.content });
                 continue;
             }
 
@@ -214,9 +181,11 @@ export class GroqLLM extends BaseLLM {
                 // Note: audio_url, video_url, file_url not yet supported by Groq
             }
 
-            // If we have converted content blocks, use them; otherwise fall back to empty text
+            // If we have converted content blocks, use them; otherwise fall back to empty text.
+            // toClassicChatMessageRole rather than a cast: a `tool` role is handled above, and
+            // casting one through here would send a role the API rejects.
             groqMessages.push({
-                role: msg.role as 'system' | 'user' | 'assistant',
+                role: toClassicChatMessageRole(msg.role),
                 content: groqContent.length > 0 ? groqContent : ''
             } as ChatCompletionMessageParam);
         }
@@ -230,11 +199,6 @@ export class GroqLLM extends BaseLLM {
     protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
         const startTime = new Date();
 
-        // Already cancelled before we even dial out — don't open a socket at all
-        if (params.cancellationToken?.aborted) {
-            return this.buildCancelledResult(startTime);
-        }
-
         // Convert to Groq-compatible message format with proper multimodal support
         const messages = this.convertToGroqMessages(params.messages);
 
@@ -246,8 +210,13 @@ export class GroqLLM extends BaseLLM {
                 content: params.assistantPrefill
             });
         } else {
-            // Groq requires the last message to be a user message (when not using prefill)
-            if (messages.length > 0 && messages[messages.length - 1].role !== 'user') {
+            // Groq wants a user message last (when not using prefill) — but a `tool` message is a
+            // legitimate final turn in a tool conversation, and wedging a dummy user turn after
+            // the results would separate them from the assistant call they answer. Same hazard as
+            // the Anthropic alternation filler; skip the filler whenever tool results end the turn.
+            const last = messages[messages.length - 1];
+            const endsWithToolResults = last?.role === 'tool';
+            if (messages.length > 0 && last.role !== 'user' && !endsWithToolResults) {
                 messages.push({
                     role: 'user',
                     content: 'OK' // Dummy message to satisfy Groq's requirement
@@ -264,6 +233,7 @@ export class GroqLLM extends BaseLLM {
 
         // Add reasoning_effort if supported by the model
         this.setGroqParamsEffortLevel(groqParams, params);
+        this.applyToolParams(groqParams, params);
 
         // Add sampling and generation parameters
         if (params.topP != null) {
@@ -304,10 +274,10 @@ export class GroqLLM extends BaseLLM {
         // underlying HTTP socket rather than merely abandoning this promise.
         let chatResponse: ChatCompletion;
         try {
-            chatResponse = await this.client.chat.completions.create(groqParams, { signal: params.cancellationToken });
+            chatResponse = await this.Client.chat.completions.create(groqParams, { signal: params.cancellationToken });
         } catch (error) {
-            if (this.isCancellation(error, params.cancellationToken)) {
-                return this.buildCancelledResult(startTime);
+            if (this.IsCancellationError(error, params.cancellationToken)) {
+                return this.BuildCancelledChatResult(startTime, { error, signal: params.cancellationToken });
             }
             throw error;
         }
@@ -321,13 +291,18 @@ export class GroqLLM extends BaseLLM {
             // Extract thinking content if present using base class helper
             const extracted = this.extractThinkingFromContent(rawMessage);
 
+            const toolCalls = extractOpenAICompatibleToolCalls(
+                choice.message?.tool_calls as RawOpenAICompatibleToolCall[] | undefined, 'Groq provider');
             const res: ChatResultChoice = {
                 message: {
                     role: ChatMessageRole.assistant,
                     content: extracted.content,
-                    thinking: extracted.thinking || choice.message.reasoning               
+                    thinking: extracted.thinking || choice.message.reasoning,
+                    ...(toolCalls ? { toolCalls } : {})
                 },
-                finish_reason: choice.finish_reason,
+                // Normalize the one value the tool surface defines; the rest passes through
+                // untouched (MJ#4335 tracks normalizing the others).
+                finish_reason: toolCalls ? 'tool_calls' : choice.finish_reason,
                 index: choice.index
             };
             return res;
@@ -399,13 +374,6 @@ export class GroqLLM extends BaseLLM {
             this.initializeThinkingStreamState();
         }
 
-        // Already cancelled before we dial out — hand back an empty stream; finalizeStreamingResponse
-        // will report the cancellation.
-        if (params.cancellationToken?.aborted) {
-            this.streamCancelled = true;
-            return this.emptyStream();
-        }
-
         // Convert to Groq-compatible message format with proper multimodal support
         const messages = this.convertToGroqMessages(params.messages);
 
@@ -427,6 +395,7 @@ export class GroqLLM extends BaseLLM {
         
         // Add reasoning_effort if supported by the model
         this.setGroqParamsEffortLevel(groqParams, params);
+        this.applyToolParams(groqParams, params);
         
         // Add sampling and generation parameters
         if (params.topP != null) {
@@ -460,10 +429,9 @@ export class GroqLLM extends BaseLLM {
                 break;
         }
         
-        // Forward the cancellation token so an abort closes the streaming socket, and wrap the stream
-        // so the abort is reported as a cancellation rather than a truncated success.
-        const stream = await this.client.chat.completions.create(groqParams, { signal: params.cancellationToken });
-        return this.iterateWithCancellation(stream, params.cancellationToken);
+        // Forward the cancellation token so an abort closes the streaming socket; BaseLLM reports the
+        // aborted stream as cancelled.
+        return this.Client.chat.completions.create(groqParams, { signal: params.cancellationToken });
     }
 
     /**
@@ -510,12 +478,6 @@ export class GroqLLM extends BaseLLM {
         lastChunk: any | null | undefined,
         usage: any | null | undefined
     ): ChatResult {
-        // If the stream was aborted via the cancellation token, report a cancellation instead of
-        // presenting whatever partial content we managed to accumulate as a successful response.
-        if (this.streamCancelled) {
-            return this.buildCancelledResult(new Date());
-        }
-
         // Extract finish reason from last chunk if available
         let finishReason = 'stop';
         if (lastChunk?.choices && lastChunk.choices.length > 0 && lastChunk.choices[0].finish_reason) {

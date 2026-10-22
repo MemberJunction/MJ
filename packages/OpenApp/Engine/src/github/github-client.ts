@@ -71,6 +71,28 @@ export interface MigrationDownloadResult {
 }
 
 /**
+ * Strips leading and trailing `/` from an in-repo path.
+ *
+ * DELIBERATELY NOT A REGEX. The obvious `replace(/^\/+|\/+$/g, '')` is quadratic in a run of
+ * slashes — the `\/+$` alternative is retried from every index and gives the run back one
+ * character at a time — and the strings reaching here come from a repository URL, which is
+ * caller-supplied. CodeQL flags exactly that shape. Index arithmetic is linear and says the same
+ * thing.
+ */
+function trimSlashes(value: string): string {
+    let start = 0;
+    let end = value.length;
+    while (start < end && value.charCodeAt(start) === 47 /* / */) start++;
+    while (end > start && value.charCodeAt(end - 1) === 47 /* / */) end--;
+    return value.slice(start, end);
+}
+
+/** `trimSlashes`, preserving `undefined` the way the optional chaining it replaces did. */
+function SubpathOrUndefined(value: string | undefined): string | undefined {
+    return value === undefined ? undefined : trimSlashes(value);
+}
+
+/**
  * Parses a GitHub repository URL into owner, repo, and an optional in-repo subpath.
  *
  * Supports two forms:
@@ -95,25 +117,41 @@ export function ParseGitHubUrl(repoUrl: string): { Owner: string; Repo: string; 
     }
     const owner = match[1];
     const repo = match[2].replace(/\.git$/, '');
-    const rawSubpath = (match[3] ?? '').replace(/^\/+|\/+$/g, '');
+    const rawSubpath = trimSlashes(match[3] ?? '');
     const subpath = rawSubpath.length > 0 ? rawSubpath : undefined;
     return { Owner: owner, Repo: repo, Subpath: subpath };
 }
 
 /**
  * Resolves the appropriate token for a given repository URL.
- * Checks the TokenMap first (matching by normalized URL), then falls back to the default Token.
+ * Checks the TokenMap first, then falls back to the default Token.
+ *
+ * A TokenMap entry matches by normalized URL first, then by repository (owner/repo). The second
+ * pass is what lets a multi-app install URL (`https://github.com/<owner>/<repo>/<subpath>`, passed
+ * through as-is) use an entry keyed by the repository URL: a GitHub credential grants access to a
+ * repository, not to a path inside it. An entry keyed by the exact subpath URL still wins.
  */
 function ResolveToken(repoUrl: string, options: GitHubClientOptions): string | undefined {
     if (options.TokenMap) {
+        const entries = Object.entries(options.TokenMap);
         const normalized = normalizeRepoUrl(repoUrl);
-        for (const [mapUrl, mapToken] of Object.entries(options.TokenMap)) {
-            if (normalizeRepoUrl(mapUrl) === normalized) {
-                return mapToken;
-            }
+        const exact = entries.find(([mapUrl]) => normalizeRepoUrl(mapUrl) === normalized);
+        if (exact) {
+            return exact[1];
+        }
+        const repoKey = repositoryKey(repoUrl);
+        const sameRepo = repoKey ? entries.find(([mapUrl]) => repositoryKey(mapUrl) === repoKey) : undefined;
+        if (sameRepo) {
+            return sameRepo[1];
         }
     }
     return options.Token;
+}
+
+/** `owner/repo`, lowercased, for a GitHub URL with or without a subpath; null if it is not one. */
+function repositoryKey(url: string): string | null {
+    const parsed = ParseGitHubUrl(url);
+    return parsed ? `${parsed.Owner}/${parsed.Repo}`.toLowerCase() : null;
 }
 
 /**
@@ -129,7 +167,58 @@ function normalizeRepoUrl(url: string): string {
  * appropriate token from the client options.
  */
 function CreateOctokit(repoUrl: string, options: GitHubClientOptions): Octokit {
-    return new Octokit({ auth: ResolveToken(repoUrl, options), userAgent: 'open-app-engine' });
+    const octokit = new Octokit({ auth: ResolveToken(repoUrl, options), userAgent: 'open-app-engine' });
+    // An install chain makes hundreds of GitHub calls (manifests, tags, every migration file of
+    // every dependency). One dropped connection used to fail the whole chain mid-way with
+    // `read ECONNRESET`, rolling back the app being installed. Retry the transient ones.
+    octokit.hook.wrap('request', (request, requestOptions) => RequestWithRetry(async () => request(requestOptions)));
+    return octokit;
+}
+
+/** Delays between attempts for a transient GitHub failure; its length is the retry count. */
+export const GITHUB_RETRY_DELAYS_MS: readonly number[] = [1000, 3000, 9000];
+
+const TRANSIENT_NETWORK_CODES = new Set(['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EPIPE', 'EAI_AGAIN', 'ENETUNREACH', 'UND_ERR_SOCKET', 'UND_ERR_CONNECT_TIMEOUT']);
+
+/**
+ * True for a failure worth retrying: a network-level error (reset, timeout, DNS blip) or a
+ * gateway status GitHub returns while it is briefly unavailable. Never a 4xx — those are
+ * answers (not found, forbidden, rate limited) and retrying cannot change them.
+ */
+export function IsTransientGitHubError(error: unknown): boolean {
+    const status = OctokitStatus(error);
+    if (status === 502 || status === 503 || status === 504) return true;
+    if (status !== undefined && status !== 500) return false;
+    for (let e: unknown = error, depth = 0; e && typeof e === 'object' && depth < 4; depth++) {
+        const code = (e as { code?: unknown }).code;
+        if (typeof code === 'string' && TRANSIENT_NETWORK_CODES.has(code)) return true;
+        const message = (e as { message?: unknown }).message;
+        if (typeof message === 'string' && /ECONNRESET|ETIMEDOUT|socket hang up|other side closed|fetch failed/i.test(message)) return true;
+        e = (e as { cause?: unknown }).cause;
+    }
+    return false;
+}
+
+/**
+ * Runs a GitHub request, retrying transient failures with backoff.
+ *
+ * @param attempt - Issues the request once.
+ * @param delaysMs - Wait before each retry; defaults to {@link GITHUB_RETRY_DELAYS_MS}.
+ * @param sleep - Injected for tests.
+ */
+export async function RequestWithRetry<T>(
+    attempt: () => Promise<T>,
+    delaysMs: readonly number[] = GITHUB_RETRY_DELAYS_MS,
+    sleep: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+): Promise<T> {
+    for (let i = 0; ; i++) {
+        try {
+            return await attempt();
+        } catch (error: unknown) {
+            if (i >= delaysMs.length || !IsTransientGitHubError(error)) throw error;
+            await sleep(delaysMs[i]);
+        }
+    }
 }
 
 /**
@@ -170,6 +259,134 @@ function ThrowIfRateLimitedOrForbidden(error: unknown, context: string): void {
             `GitHub API returned ${status} (rate limit or access denied) while ${context}. ` +
             `This is NOT the same as "no versions found" — check your GitHub token and rate limit.`,
         );
+    }
+}
+
+/**
+ * What a repository-visibility probe concluded.
+ *
+ * Three states rather than two, deliberately: a probe that itself failed has NOT established that
+ * the repository is readable, and folding that into `Readable` would reintroduce, in a narrower
+ * corner, exactly the misattribution this type exists to prevent.
+ */
+type RepoVisibility =
+    | { State: 'Readable' }
+    | { State: 'NotReadable' }
+    | { State: 'Undetermined'; Reason: string };
+
+/**
+ * Asks GitHub whether the REPOSITORY itself is readable with the caller's credential.
+ *
+ * This is the only way to disambiguate a 404 on something inside a repo. GitHub returns 404 —
+ * never 403 — for a private repository the caller cannot see, so "this ref/file is absent" and
+ * "this repository is invisible to you" are indistinguishable on the inner call. Verified against
+ * the live API (#4505): with no credential, `GET /repos/MemberJunction/bizapps-ats` 404s while the
+ * same repo's existing tag `v6.0.0` also 404s; with a credential both return 200.
+ *
+ * Uses the SAME resolved credential as the call that failed — a probe made unauthenticated would
+ * 404 on every private repo and report a missing credential to a caller who supplied one.
+ */
+async function ProbeRepoVisibility(
+    repoUrl: string,
+    parsed: { Owner: string; Repo: string },
+    options: GitHubClientOptions
+): Promise<RepoVisibility> {
+    try {
+        await CreateOctokit(repoUrl, options).repos.get({ owner: parsed.Owner, repo: parsed.Repo });
+        return { State: 'Readable' };
+    }
+    catch (error: unknown) {
+        if (OctokitStatus(error) === 404) {
+            return { State: 'NotReadable' };
+        }
+        // Anything else (403/429 rate limit, network) leaves visibility genuinely unknown rather
+        // than readable: the probe failed for a reason unrelated to whether the repo exists, so
+        // treating that as confirmation would be a guess dressed up as a result.
+        return { State: 'Undetermined', Reason: error instanceof Error ? error.message : String(error) };
+    }
+}
+
+/**
+ * How to configure a GitHub credential, shared by every message that tells a caller to go set one.
+ * A single copy so the two messages that name it (the no-credential branch below, and
+ * `DescribeNotFound`'s `Undetermined` case) cannot drift apart again — they already had once: A2
+ * fixed this branch to also name the per-repo `openApps.github.tokens` map and left the other
+ * message naming only the two older options.
+ *
+ * Ordered by how fast a reader can act, NOT by precedence: `GITHUB_TOKEN` leads because exporting an
+ * env var is the fastest way to get unblocked. Within `mj.config.cjs`, `openApps.github.tokens` is
+ * named before `openApps.github.token` because `ResolveToken` (below) checks the per-repo map first.
+ *
+ * The EFFECTIVE precedence does not simply reverse this list: `GITHUB_TOKEN` is listed first for
+ * speed but resolves LAST, while the two `mj.config.cjs` options keep the same relative order in
+ * both the string and in resolution. `buildGitHubOptions`
+ * (packages/MJCLI/src/utils/open-app-context.ts) resolves `Token` as
+ * `config.openApps?.github?.token ?? process.env.GITHUB_TOKEN`, so a configured `token` already beats
+ * `GITHUB_TOKEN` before this module ever sees either one; `ResolveToken` then checks `TokenMap`
+ * before `Token`. Highest wins first: `openApps.github.tokens` → `openApps.github.token` →
+ * `GITHUB_TOKEN`. Don't "fix" the string above to match — its order is the right one for a remedy,
+ * not a precedence table.
+ */
+const CONFIGURE_CREDENTIAL_REMEDY =
+    'set GITHUB_TOKEN in the environment, or add the repo to openApps.github.tokens (or set openApps.github.token) in mj.config.cjs';
+
+/**
+ * The message for a repository GitHub will not show us. Names the remedy, and names the RIGHT one:
+ * telling a caller who already supplied a token to supply a token sends them to check the one thing
+ * they already did.
+ */
+function UnreadableRepoMessage(
+    repoUrl: string,
+    parsed: { Owner: string; Repo: string },
+    options: GitHubClientOptions
+): string {
+    const target = `${parsed.Owner}/${parsed.Repo}`;
+    return ResolveToken(repoUrl, options)
+        ? `Cannot read ${target}. The repository does not exist, or the GitHub credential supplied does not grant access to it — check the token is valid and carries 'repo' scope for ${target}.`
+        : `Cannot read ${target}. The repository is private or does not exist, and no GitHub credential was supplied — ${CONFIGURE_CREDENTIAL_REMEDY}, then retry.`;
+}
+
+/**
+ * Turns a 404 on something INSIDE a repository into the message that is actually true.
+ *
+ * Every caller reading a ref, a file or a directory gets a bare 404 for two very different reasons,
+ * and guessing wrong sends the reader somewhere useless: #4505 reported `mj app install` telling a
+ * maintainer a tag was missing — and pointing at the repo's /tags page — when the tag was there and
+ * the real cause was that no credential had been supplied. Opening /tags while signed in then
+ * *confirms* the wrong conclusion. Probing the repository is what separates the two cases, so it
+ * happens here, once, instead of being re-derived at every call site.
+ *
+ * Not cached: this runs only after a 404, so a successful fetch never pays for it. Most callers stop
+ * on that 404. The dependency walk does not when the dependency is already installed — it treats the
+ * failed manifest fetch as a leaf and continues — so such an install pays one extra request per
+ * unreadable installed dependency.
+ *
+ * @param describeMissingTarget - the message to use when the repository IS readable, i.e. when the
+ *                                addressed thing really is absent. Lazy, so it is built only then.
+ */
+async function DescribeNotFound(
+    repoUrl: string,
+    parsed: { Owner: string; Repo: string },
+    options: GitHubClientOptions,
+    describeMissingTarget: () => string
+): Promise<string> {
+    const visibility = await ProbeRepoVisibility(repoUrl, parsed, options);
+    switch (visibility.State) {
+        case 'Readable':
+            return describeMissingTarget();
+        case 'NotReadable':
+            return UnreadableRepoMessage(repoUrl, parsed, options);
+        case 'Undetermined':
+            // Lead with the doubt, not the missing-target message: Undetermined is likeliest a
+            // rate limit on an UNAUTHENTICATED call — i.e. exactly the caller whose repo probably
+            // is NOT readable. Leading with a confident "not found" (plus the /tags link some
+            // callers' describeMissingTarget includes) invites a signed-in maintainer to check,
+            // see the tag, and conclude the CLI was wrong — the misattribution #4505 reports. The
+            // final clause is marked conditional ("if it is readable") rather than stated flatly,
+            // since it is exactly the claim this branch could not verify.
+            return `Could not confirm ${parsed.Owner}/${parsed.Repo} is readable: ${visibility.Reason}. `
+                + `If it is private, a GitHub credential may be required — ${CONFIGURE_CREDENTIAL_REMEDY}. `
+                + `If it is readable, then: ${describeMissingTarget()}`;
     }
 }
 
@@ -219,8 +436,36 @@ async function ListDirectory(octokit: Octokit, owner: string, repo: string, path
  * own independent tag line (`CRM-HubSpot@1.2.0`). undefined for single-app repos (repo-wide `vX.Y.Z`).
  */
 function ScopedTagPrefix(subpath: string | undefined): string | undefined {
-    const s = subpath?.replace(/^\/+|\/+$/g, '');
+    const s = subpath === undefined ? undefined : trimSlashes(subpath);
     return s ? s.replace(/\//g, '-') : undefined;
+}
+
+/**
+ * Every tag prefix a subpath app might REALLY be tagged under.
+ *
+ * The directory an app lives in is not its identity, and deriving the tag name from the directory
+ * silently assumed it was. A monorepo that releases through changesets tags by PACKAGE name
+ * (`@memberjunction/connector-pheedloop@1.4.6`), not by folder (`Events-PheedLoop@1.4.6`) — so for
+ * every such app `GetLatestVersion` matched nothing, returned null, and `mj app upgrade` reported
+ * 'Could not determine target version'. Installs hid it because a version-less install resolves to
+ * HEAD and never consults a tag at all, which is why this only ever surfaced on the first upgrade.
+ *
+ * `appName` is the manifest's own `name` — the unscoped half of the published package — so the
+ * pattern below accepts an optional `@scope/` in front of it. The folder form is kept as a
+ * candidate so repos that genuinely tag that way are unaffected.
+ */
+function ScopedTagCandidates(subpath: string | undefined, appName?: string): string[] {
+    const out: string[] = [];
+    const folder = ScopedTagPrefix(subpath);
+    if (folder) out.push(folder);
+    const name = appName?.trim();
+    if (name && name !== folder) out.push(name);
+    return out;
+}
+
+/** Escapes a literal for embedding in a RegExp. */
+function EscapeForRegExp(v: string): string {
+    return v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
@@ -256,15 +501,21 @@ export async function FetchManifestFromGitHub(
     repoUrl: string,
     version: string | undefined,
     options: GitHubClientOptions,
-    subpath?: string
+    subpath?: string,
+    appName?: string
 ): Promise<ManifestFetchResult> {
     const parsed = ParseGitHubUrl(repoUrl);
     if (!parsed) {
         return { Success: false, ErrorMessage: `Invalid GitHub URL: ${repoUrl}` };
     }
 
-    const effectiveSubpath = (subpath ?? parsed.Subpath)?.replace(/^\/+|\/+$/g, '');
-    const ref = ResolveRef(version, effectiveSubpath);
+    const effectiveSubpath = SubpathOrUndefined(subpath ?? parsed.Subpath);
+    // Prefer the tag that EXISTS over one composed from the folder name; fall back to the composed
+    // form so single-app repos and repos that really do tag by folder are untouched.
+    const ref = version
+        ? (await FindVersionTagName(repoUrl, options, version, effectiveSubpath, appName))
+            ?? ResolveRef(version, effectiveSubpath)
+        : ResolveRef(version, effectiveSubpath);
     const manifestPath = ComposeRepoPath(effectiveSubpath, 'mj-app.json');
 
     try {
@@ -273,7 +524,14 @@ export async function FetchManifestFromGitHub(
     }
     catch (error: unknown) {
         if (OctokitStatus(error) === 404) {
-            return { Success: false, ErrorMessage: `${manifestPath} not found in ${parsed.Owner}/${parsed.Repo} at ref ${ref}` };
+            // The manifest may be absent, or the whole repo may be invisible to this credential —
+            // and with no --version this is the FIRST call an install makes, so it is where a
+            // private-repo install without a token actually lands.
+            return {
+                Success: false,
+                ErrorMessage: await DescribeNotFound(repoUrl, parsed, options, () =>
+                    `${manifestPath} not found in ${parsed.Owner}/${parsed.Repo} at ref ${ref}`),
+            };
         }
         const message = error instanceof Error ? error.message : String(error);
         return { Success: false, ErrorMessage: `Failed to fetch manifest: ${message}` };
@@ -372,21 +630,36 @@ async function listSqlFilesRecursive(
     return out;
 }
 
+/**
+ * Downloads an app's `.sql` migrations from the repo at the ref its version is tagged under.
+ *
+ * `appName` is the manifest's own `name`, for the same reason the manifest fetch needs it: a
+ * package-tagged monorepo publishes `@memberjunction/connector-pheedloop@1.4.6`, never the folder
+ * form `Events-PheedLoop@1.4.6`, and unlike the manifest fetch this call ALWAYS has a version
+ * (`manifest.version` is required by the manifest schema) — so it never falls back to HEAD and the
+ * composed folder ref 404s on every install, upgrade and teardown of such an app.
+ */
 export async function DownloadMigrations(
     repoUrl: string,
     version: string | undefined,
     migrationsPath: string,
     localDir: string,
     options: GitHubClientOptions,
-    subpath?: string
+    subpath?: string,
+    appName?: string
 ): Promise<MigrationDownloadResult> {
     const parsed = ParseGitHubUrl(repoUrl);
     if (!parsed) {
         return { Success: false, ErrorMessage: `Invalid GitHub URL: ${repoUrl}` };
     }
 
-    const effectiveSubpath = (subpath ?? parsed.Subpath)?.replace(/^\/+|\/+$/g, '');
-    const ref = ResolveRef(version, effectiveSubpath);
+    const effectiveSubpath = SubpathOrUndefined(subpath ?? parsed.Subpath);
+    // Prefer the tag that EXISTS over one composed from the folder name; fall back to the composed
+    // form so single-app repos and repos that really do tag by folder are untouched.
+    const ref = version
+        ? (await FindVersionTagName(repoUrl, options, version, effectiveSubpath, appName))
+            ?? ResolveRef(version, effectiveSubpath)
+        : ResolveRef(version, effectiveSubpath);
     const cleanPath = ComposeRepoPath(effectiveSubpath, migrationsPath);
     const octokit = CreateOctokit(repoUrl, options);
 
@@ -433,6 +706,32 @@ export async function DownloadMigrations(
 }
 
 /**
+ * The message for a repository whose latest version could not be resolved ({@link GetLatestVersion}
+ * returned null).
+ *
+ * The release and tag listings turn a 404 into an empty list, and GitHub answers 404 for a private
+ * repository the caller cannot see — so "no versions" and "cannot read this repository" look the
+ * same to GetLatestVersion. This tells them apart with the same probe {@link DescribeNotFound} uses.
+ *
+ * @param repoUrl - GitHub repository URL (an in-repo subpath is allowed)
+ * @param options - GitHub client options; the probe uses the same credential the listings used
+ * @param subpath - Optional in-repo app path, named in the message when the repository is readable
+ */
+export async function DescribeUnresolvedVersion(
+    repoUrl: string,
+    options: GitHubClientOptions,
+    subpath?: string
+): Promise<string> {
+    const parsed = ParseGitHubUrl(repoUrl);
+    if (!parsed) {
+        return `Invalid GitHub URL: ${repoUrl}`;
+    }
+    const where = subpath ? `${parsed.Owner}/${parsed.Repo} (${subpath})` : `${parsed.Owner}/${parsed.Repo}`;
+    return DescribeNotFound(repoUrl, parsed, options, () =>
+        `Could not determine target version: no version tags or releases found in ${where}`);
+}
+
+/**
  * Fetches the latest release version for a repository.
  * Falls back to listing tags if no GitHub Releases exist (common for repos
  * that only push semver tags without creating formal releases).
@@ -444,11 +743,12 @@ export async function DownloadMigrations(
 export async function GetLatestVersion(
     repoUrl: string,
     options: GitHubClientOptions,
-    subpath?: string
+    subpath?: string,
+    appName?: string
 ): Promise<string | null> {
     // For a multi-app (subpath) app, versions live in per-connector scoped tags, not repo-wide
     // releases — go straight to the scoped tag line.
-    if (!ScopedTagPrefix(subpath ?? ParseGitHubUrl(repoUrl)?.Subpath)) {
+    if (ScopedTagCandidates(subpath ?? ParseGitHubUrl(repoUrl)?.Subpath, appName).length === 0) {
         const releases = await ListGitHubReleases(repoUrl, options);
         // GitHub returns releases newest-CREATED first, which is not newest-VERSION first: a patch
         // backported to an older line after a major ships is the most recent release but the lower
@@ -484,7 +784,7 @@ export async function GetLatestVersion(
         }
     }
 
-    const tags = await ListGitHubTags(repoUrl, options, subpath);
+    const tags = await ListGitHubTags(repoUrl, options, subpath, appName);
     if (tags.length > 0) {
         // Same stable preference as the releases path above: never offer a prerelease as the version
         // an installed app should upgrade to, unless nothing stable is tagged at all.
@@ -516,26 +816,78 @@ export async function GetLatestVersion(
  * @param options - GitHub client options
  * @returns Sorted tag names (e.g., ['v1.0.7', 'v1.0.6', ...])
  */
+/**
+ * The tag name a given version is REALLY published under, or null if nothing matches.
+ *
+ * `ResolveRef` builds a ref by string-concatenation from the folder name, which is a guess. For a
+ * package-tagged monorepo that guess is wrong in the same way the version lookup was wrong, so
+ * fixing only the lookup would move the failure from "could not determine target version" to a 404
+ * on a ref that never existed. This asks the repo instead.
+ *
+ * Returns the FULL tag name (`@memberjunction/connector-pheedloop@1.4.6`), which is what the git
+ * ref actually is.
+ */
+export async function FindVersionTagName(
+    repoUrl: string,
+    options: GitHubClientOptions,
+    version: string,
+    subpath?: string,
+    appName?: string
+): Promise<string | null> {
+    const parsed = ParseGitHubUrl(repoUrl);
+    if (!parsed) return null;
+    const candidates = ScopedTagCandidates(subpath ?? parsed.Subpath, appName);
+    if (candidates.length === 0) return null;
+    const want = version.replace(/^v/, '');
+    const pattern = new RegExp(
+        `^(?:@[^/]+/)?(?:${candidates.map(EscapeForRegExp).join('|')})@(.+)$`
+    );
+    try {
+        for (const name of await FetchRepoTagNames(repoUrl, parsed, options)) {
+            const m = name.match(pattern);
+            if (m && m[1].replace(/^v/, '') === want) return name;
+        }
+        return null;
+    }
+    catch (error: unknown) {
+        // Same rule as the tag listing: a rate limit must not read as "no such tag".
+        ThrowIfRateLimitedOrForbidden(error, 'resolving version tag');
+        return null;
+    }
+}
+
 export async function ListGitHubTags(
     repoUrl: string,
     options: GitHubClientOptions,
-    subpath?: string
+    subpath?: string,
+    appName?: string
 ): Promise<string[]> {
     const parsed = ParseGitHubUrl(repoUrl);
     if (!parsed) {
         return [];
     }
 
-    const prefix = ScopedTagPrefix(subpath ?? parsed.Subpath);
+    const candidates = ScopedTagCandidates(subpath ?? parsed.Subpath, appName);
+    const prefix = candidates.length > 0 ? candidates[0] : undefined;
+    // A multi-app repo is one whose app lives in a folder; only there does a repo-wide `v` tag belong
+    // to nobody in particular. A single-app repo keeps its repo-wide `v<semver>` tags even when the
+    // caller passes the app's name (which makes `prefix` truthy) — otherwise it resolves zero versions.
+    const isMultiAppRepo = ScopedTagPrefix(subpath ?? parsed.Subpath) !== undefined;
     // Named to avoid shadowing the imported `semver` library below. Kept as a regex rather than
     // delegating to `semver.valid` because this also has to LOCATE the version inside a scoped tag
     // (`<prefix>@1.2.3`); `SemverCore` then normalizes whatever it captures.
     const SEMVER_PATTERN = '\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9]+(\\.[a-zA-Z0-9]+)*)?';
     // Multi-app repo: match this connector's scoped tags `<prefix>@<semver>` and return the versions.
     // Single-app repo: match repo-wide `v<semver>` tags as before.
-    const pattern = prefix
-        ? new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}@(${SEMVER_PATTERN})$`)
-        : new RegExp(`^(v?${SEMVER_PATTERN})$`);
+    // `(?:@[^/]+/)?` tolerates the npm scope the real tag carries
+    // (`@memberjunction/connector-pheedloop@1.4.6`) without the caller having to know it — the
+    // scope is a publishing detail, the app's own name is the identity.
+    const scopedPattern = prefix
+        ? new RegExp(`^(?:@[^/]+/)?(?:${candidates.map(EscapeForRegExp).join('|')})@(${SEMVER_PATTERN})$`)
+        : null;
+    const repoWidePattern = isMultiAppRepo ? null : new RegExp(`^(v?${SEMVER_PATTERN})$`);
+    const matchVersion = (name: string): string | undefined =>
+        (scopedPattern ? name.match(scopedPattern)?.[1] : undefined) ?? (repoWidePattern ? name.match(repoWidePattern)?.[1] : undefined);
 
     try {
         // Returns the matched TAG TEXT (`v1.0.7`), unchanged from before — callers and
@@ -544,7 +896,7 @@ export async function ListGitHubTags(
         // core will not parse are dropped rather than left to poison the sort, which is what the old
         // NaN-returning comparator did.
         return (await FetchRepoTagNames(repoUrl, parsed, options))
-            .map(name => name.match(pattern)?.[1])
+            .map(name => matchVersion(name))
             .filter((v): v is string => v != null)
             .map(tag => ({ Tag: tag, Core: SemverCore(tag) }))
             .filter((t): t is { Tag: string; Core: string } => t.Core !== null)
@@ -704,7 +1056,8 @@ export async function ValidateGitHubTag(
     repoUrl: string,
     version: string,
     options: GitHubClientOptions,
-    subpath?: string
+    subpath?: string,
+    appName?: string
 ): Promise<{ Exists: boolean; ErrorMessage?: string }> {
     const parsed = ParseGitHubUrl(repoUrl);
     if (!parsed) {
@@ -712,7 +1065,8 @@ export async function ValidateGitHubTag(
     }
 
     // Multi-app repo: scoped tag `<prefix>@<version>`; single-app repo: `v<version>`.
-    const tag = ResolveRef(version, subpath ?? parsed.Subpath);
+    const tag = (await FindVersionTagName(repoUrl, options, version, subpath ?? parsed.Subpath, appName))
+        ?? ResolveRef(version, subpath ?? parsed.Subpath);
 
     try {
         await CreateOctokit(repoUrl, options).git.getRef({ owner: parsed.Owner, repo: parsed.Repo, ref: `tags/${tag}` });
@@ -720,7 +1074,12 @@ export async function ValidateGitHubTag(
     }
     catch (error: unknown) {
         if (OctokitStatus(error) === 404) {
-            return { Exists: false, ErrorMessage: `Tag '${tag}' not found in ${parsed.Owner}/${parsed.Repo}. Available versions can be checked at ${repoUrl}/tags` };
+            // A 404 here may be the tag OR the whole repository — DescribeNotFound tells them apart.
+            return {
+                Exists: false,
+                ErrorMessage: await DescribeNotFound(repoUrl, parsed, options, () =>
+                    `Tag '${tag}' not found in ${parsed.Owner}/${parsed.Repo}. Available versions can be checked at https://github.com/${parsed.Owner}/${parsed.Repo}/tags`),
+            };
         }
         const message = error instanceof Error ? error.message : String(error);
         return { Exists: false, ErrorMessage: `Failed to validate tag '${tag}': ${message}` };

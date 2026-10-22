@@ -52,6 +52,7 @@ export const XAI_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     supportsMcpTools: false,
     supportsVoiceOutput: false,
     supportsLiveReconfigure: true,
+    supportsDynamicToolSet: true,
     unexpectedCloseMessage: 'xAI Grok Voice realtime connection closed unexpectedly',
     // server_vad is the only turn mode xAI documents on Grok Voice today. When xAI ships a
     // native full-duplex / smarter turn mode (the Grok Voice Think Fast family reasons while
@@ -142,7 +143,9 @@ export interface IxAIRealtimeConnection {
  * associated `MJ: AI Model` is typed with the `Realtime` `AIModelType`.
  */
 @RegisterClass(BaseRealtimeModel, 'GrokRealtime')
-export class xAIRealtime extends OpenAIRealtime {
+export class xAIRealtime extends OpenAIRealtime {  // case-violation-ok-legacy-back-compat: the vendor spells its own name "xAI"; this identifier is also the class-factory registration key
+    public static override readonly SupportsDynamicToolSet = XAI_REALTIME_PROFILE.supportsDynamicToolSet;
+
     /**
      * @param apiKey The xAI API key used to authenticate the Grok Voice realtime socket.
      */
@@ -179,7 +182,7 @@ export class xAIRealtime extends OpenAIRealtime {
  * logs identify xAI sessions, and so direct construction (`new xAIRealtimeSession(connection)`)
  * keeps working exactly as it did when this was a standalone clone.
  */
-export class xAIRealtimeSession extends OpenAIRealtimeSession {
+export class xAIRealtimeSession extends OpenAIRealtimeSession {  // case-violation-ok-legacy-back-compat: the vendor spells its own name "xAI"; this identifier is also the class-factory registration key
     /**
      * @param connection The injectable provider-connection seam (a real `OpenAIRealtimeWebSocket`
      * in production, a fake in tests).

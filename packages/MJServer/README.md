@@ -108,6 +108,7 @@ MJServer uses a layered configuration system with the following priority (highes
 | `MJ_REST_API_INCLUDE_ENTITIES` | Comma-separated entity include list | (optional) |
 | `MJ_REST_API_EXCLUDE_ENTITIES` | Comma-separated entity exclude list | (optional) |
 | `MJ_TELEMETRY_ENABLED` | Enable server telemetry | `true` |
+| `MJ_REALTIME_ENABLED` | Enable WebRTC SDP broker router (`/realtime/sdp-exchange`) | `true` |
 | `METADATA_CACHE_REFRESH_INTERVAL` | Metadata refresh interval (ms) | `180000` |
 | `MJ_LOG_GRAPHQL_VARIABLES` | Enable redacted verbose echo of GraphQL variables to stdout — see [Debugging GraphQL requests](#debugging-graphql-requests) | `false` |
 
@@ -181,6 +182,17 @@ module.exports = {
     level: 'standard',  // 'minimal' | 'standard' | 'verbose' | 'debug'
   },
 
+  // Template data that prompt runs store — see "Prompt run template data" below
+  aiPromptRuns: {
+    templateDataCapture: 'None',  // 'None' | 'Referenced' | 'Full'
+  },
+
+  // Realtime WebRTC SDP broker router (/realtime/sdp-exchange)
+  // Enabled by default; can be disabled via MJ_REALTIME_ENABLED=false or realtime.enabled: false
+  realtime: {
+    enabled: true,
+  },
+
   // Debugging — see "Debugging GraphQL requests" below
   loggingSettings: {
     graphql: {
@@ -189,6 +201,18 @@ module.exports = {
   },
 };
 ```
+
+### Prompt run template data (`aiPromptRuns`)
+
+`aiPromptRuns.templateDataCapture` is the server default for the template inputs that a prompt run stores in `AIPromptRun.Messages`:
+
+| Value | What a run stores |
+|---|---|
+| `'None'` (default) | Top-level key names and byte sizes only, no values |
+| `'Referenced'` | Only the keys that the prompt's templates read |
+| `'Full'` | All keys |
+
+A value on the prompt (`AIPrompt.TemplateDataCapture`) or on the call (`AIPromptParams.TemplateDataCapture`) overrides it. MJServer checks the value when it starts: any other value stops MJAPI with `Configuration validation failed`. For the full rules, see [Template data capture](../AI/Prompts/README.md#template-data-capture) in the AI Prompts README.
 
 ### Debugging GraphQL requests
 
@@ -248,6 +272,38 @@ export class MyInput {
   @Field(() => String) Description: string;
 }
 ```
+
+### Realtime WebRTC Broker Configuration
+
+MemberJunction provides a built-in WebRTC SDP broker router mounted at `/realtime/sdp-exchange`. This endpoint enables browser clients to negotiate full-duplex audio and data channels with realtime models (such as Gemini Live 3.8 and OpenAI Realtime) via proxy sessions.
+
+#### Why Realtime is Enabled by Default
+
+`realtime.enabled` defaults to `true`. This decision was made because:
+1. **Safe by Design**: The broker endpoint is protected by single-use ticket redemption via `RealtimeProxyRegistry`. Inbound requests cannot initiate or hijack sessions without an ephemeral ticket issued through an authenticated GraphQL session (`StartRealtimeClientSession`).
+2. **Zero-Friction Realtime UX**: Voice co-agents, live audio, and collaborative whiteboards work out of the box without requiring operators to discover and configure esoteric flags.
+
+#### Disabling Realtime
+
+Operators running an API server strictly as a headless GraphQL/REST backend without realtime media requirements can disable the broker route in either of two ways:
+
+1. **Environment Variable**:
+   ```bash
+   MJ_REALTIME_ENABLED=false
+   ```
+2. **`mj.config.cjs`**:
+   ```javascript
+   module.exports = {
+     // ...
+     realtime: {
+       enabled: false,
+     },
+   };
+   ```
+
+When disabled, the `/realtime/sdp-exchange` Express route is not mounted, and incoming requests to that path return standard 404 responses.
+
+
 
 ## Usage
 
@@ -573,6 +629,8 @@ All built-in resolvers extend `ResolverBase`, which provides:
 | `BeforeUpdate()` / `AfterUpdate()` | Lifecycle hooks for update |
 | `BeforeDelete()` / `AfterDelete()` | Lifecycle hooks for delete |
 
+`UpdateRecord()` supports both full-record and **delta-only** `Update<Type>Input` mutations (where `GraphQLDataProvider.Save()` sends only primary keys and dirty writable fields in `input` and `input.OldValues___`). When `hasCompleteOldValues()` detects a partial `OldValues___` delta, `MustLoadTruthFromDatabase()` ensures `InnerLoad` populates the full baseline row from the database before `TestAndSetClientOldValuesToDBValues()` checks dirty fields for concurrent modifications and applies `entityObject.SetMany(clientNewValues)`.
+
 ## REST API
 
 In addition to GraphQL, MJServer provides a REST API at `/api/v1/`. By default it is disabled and can be enabled via configuration.
@@ -868,6 +926,36 @@ connectionPool: {
 - Production: `max: 50, min: 5`
 - High load: `max: 100, min: 10`
 
+### The Read-Only Login
+
+Ad-hoc SQL (`ExecuteAdhocQuery`), `TestQuerySQL` and query specs run caller-supplied SQL as the read-only login (`dbReadOnlyUsername` / `dbReadOnlyPassword`). Without one, ad-hoc SQL is refused. Grant that login **`SELECT` on the entity base views and nothing else**:
+
+- no access to the base tables behind them;
+- no membership of PostgreSQL's `pg_read_server_files`, or any SQL Server permission to reach files or other servers.
+
+MJAPI checks what SQL reads in two ways. It refuses a table reference that isn't a readable entity view, and it refuses functions that run SQL given as a string or read files (`query_to_xml`, `ts_stat`, `pg_read_file`, `OPENROWSET`, …). The login's own grants are still the only limit that SQL can never get around. On PostgreSQL, MJAPI logs a warning at startup if the read-only login can read base tables in the core schema or server files.
+
+### Database Settings on PostgreSQL
+
+PostgreSQL reads the same `databaseSettings` as SQL Server, with the same defaults. There are no PostgreSQL-only settings.
+
+| Setting (default) | SQL Server | PostgreSQL |
+|---|---|---|
+| `requestTimeout` (30,000) | Driver request timeout: a client-side timer over the whole request | `statement_timeout` on every pooled connection |
+| `connectionPool.max` / `min` (50 / 5) | Pool size | Pool size. The read-only pool is capped at 10 and keeps no idle minimum |
+| `connectionPool.idleTimeoutMillis` (30,000) | Idle connection eviction | Idle connection eviction |
+| `connectionPool.acquireTimeoutMillis` (30,000) | Wait for a pooled connection | `connectionTimeoutMillis` (see below) |
+| `connectionTimeout` (45,000) | Time to open a connection | Not used |
+| `dbReadOnlyUsername` / `dbReadOnlyPassword` | Read-only pool | Read-only pool; falls back to `PG_READ_ONLY_USERNAME` / `PG_READ_ONLY_PASSWORD` |
+
+Where the two platforms cannot match:
+
+- **One connection timeout.** The `pg` pool has a single `connectionTimeoutMillis` covering both waiting for a free slot and opening a connection. It is fed from `acquireTimeoutMillis`; `connectionTimeout` is not used.
+- **The request timeout measures something different.** SQL Server's `requestTimeout` is a client-side timer over the whole request, including reading rows. PostgreSQL's `statement_timeout` is execution time on the server, per statement. A query that executes quickly but returns rows slowly is cut off on SQL Server and not on PostgreSQL.
+- **Idle transactions.** PostgreSQL also gets `idle_in_transaction_session_timeout`, set to twice `requestTimeout`, so a connection left inside an open transaction is closed. SQL Server has no counterpart, so there is no setting for it.
+- **Connection count.** MJAPI opens two PostgreSQL pools at up to `connectionPool.max` each (a raw compatibility pool and the provider pool), plus the read-only pool (up to 10) and, when `CODEGEN_DB_USERNAME` is set, a CodeGen pool of 10. With the default of 50, that can exceed PostgreSQL's default `max_connections` of 100. Size `max` with this in mind. SQL Server opens one pool.
+- **Encryption.** SQL Server uses `encrypt` with `DB_TRUST_SERVER_CERTIFICATE`. On PostgreSQL, connections the data provider opens itself use SSL when `NODE_ENV` is `production`; the pools MJAPI opens directly (the compatibility, read-only and CodeGen pools) do not set SSL.
+
 ### Metadata Caching
 
 Entity metadata is loaded once at startup and shared across all per-request provider instances. The cache refresh interval is configurable:
@@ -880,18 +968,54 @@ databaseSettings: {
 
 ### Authentication Token Caching
 
-Validated JWT tokens are cached using an LRU cache, avoiding repeated cryptographic verification for the same token within its lifetime.
+Validated JWT tokens are cached using an LRU cache (`AuthCache`), storing both the `UserPayload` and the decoded `jwt.JwtPayload` claims to avoid repeated cryptographic verification and base64 decoding for the same token within its lifetime.
+
+### Scalability & Cache Broadcast Architecture
+
+MJServer implements a 4-pillar horizontal and vertical scalability architecture. For full details, refer to the **[Server Scaling and Broadcast Architecture Guide](../../guides/SERVER_SCALING_AND_BROADCAST_ARCHITECTURE.md)**.
+
+#### 1. Pluggable Cache Invalidation Broadcast Providers (`CacheInvalidationBroadcastManager`)
+Every entity save/delete is assigned a monotonically increasing sequence number (`X-MJ-Cache-Seq` and `X-MJ-Server-ID` HTTP headers + `Sequence` field on `CacheInvalidationNotification`) and stored in a bounded ring buffer for deterministic client delta catch-up (`GetCacheInvalidationsSince(sinceSequence)`).
+
+Permission and RLS filtering is coalesced by **Role Fingerprint Bucket** ($O(\text{Roles})$ instead of $O(\text{Subscribers})$), and can be offloaded to managed cloud WebSocket planes registered via `@RegisterClass(BaseCacheInvalidationBroadcastProvider, ...)`:
+- **`SequencedRoleBucket`** (default): In-process + Redis Pub/Sub role-bucket memoization.
+- **`AzureWebPubSub`**: Offloads fan-out to Azure Web PubSub groups (`mj.role.<roleFingerprint>`).
+- **`AWSIoTCore`**: Offloads fan-out to AWS IoT Core MQTT topics (`mj/cache/role/<roleFingerprint>`).
+- **`GCPPubSub`**: Publishes role-bucketed messages to Google Cloud Pub/Sub topics with `roleFingerprint` attributes.
+
+#### 2. $O(1)$ Session-Scoped `PushStatusUpdates` Routing
+`PushStatusUpdates(sessionId)` routes status messages directly to per-session topics (`PUSH_STATUS_UPDATES:session:<sessionId>`) via `CreateSessionRoutingPubSub` and memoizes parsed JSON payloads via a `WeakMap` (`ParseStatusUpdateMessage`), eliminating $O(N \times M)$ cross-session filter scans and JSON re-parsing.
+
+#### 3. Zero-Copy Per-Request Context & Root-Only Middleware
+- **Root-Only `VariablesLoggingMiddleware`**: Applied exclusively to root `Query`, `Mutation`, and `Subscription` fields (`ApplyRootVariablesLoggingMiddleware`) rather than `globalMiddlewares`, avoiding per-field promise allocations on large result sets.
+- **Prototype-Delegated Metadata Shell**: Per-request providers reuse the global metadata graph via `Object.create(shared)` (`ProviderBase.CreateSharedMetadataShell`) and defer RxJS transaction subject allocation until `BeginTransaction()` is invoked.
+
+#### 4. Horizontal Scaling via `MJ_SERVER_ROLE`
+Split interactive GraphQL/REST traffic from background jobs across multi-replica deployments using `serverRole` (`MJ_SERVER_ROLE`):
+- **`all`** (default): Runs HTTP/GraphQL/WebSocket servers and all background workers (`ScheduledJobsService`, `KnowledgeHubIndexingBootstrap`, `ApplicationTrackRecordSyncBootstrap`).
+- **`api`**: Serves interactive HTTP/GraphQL/WebSocket traffic only; skips background cron and indexing workers.
+- **`worker`**: Runs background workers and a lightweight `/health` probe; skips interactive GraphQL/REST/MCP/A2A route mounting.
 
 ## Server Extensions
 
-MJServer supports a plugin architecture that enables auto-discovery and lifecycle management of extension modules. Extensions register Express routes, handle their own authentication, and participate in health checks and graceful shutdown — all without modifying MJServer source code.
+MJServer supports a plugin architecture that enables auto-discovery and lifecycle management of extension modules. Extensions register Express routes, WebSocket endpoints, or background workers, publish services, and participate in health checks and graceful shutdown — all without modifying MJServer source code.
+
+> **Important**: Server extensions are the **only sanctioned mechanism** for mounting custom HTTP endpoints and external service adapters into MJServer. Do not hardcode new `app.use()` or `app.post()` mounts directly inside `serve()`.
+
+For full architecture details, refer to the **[Server Extensions Guide](../../guides/SERVER_EXTENSIONS_GUIDE.md)**.
 
 ### How It Works
 
-1. Extensions implement `BaseServerExtension` from `@memberjunction/server-extensions-core`
-2. Extensions register via `@RegisterClass(BaseServerExtension, 'DriverClassName')`
-3. Open App server packages listed in `dynamicPackages.server[]` declare their extensions (`MJ_SERVER_EXTENSIONS` export or `package.json` `memberjunction.serverExtensions`). The host `mj.config.cjs` `serverExtensions[]` overlays those by `DriverClass` and is also where host-only extensions (Slack, Teams) live.
-4. MJServer's `ServerExtensionLoader` discovers and initializes all enabled extensions at startup
+1. Extensions implement `BaseServerExtension` from `@memberjunction/server-extensions-core` and register via `@RegisterClass(BaseServerExtension, 'DriverClassName')`.
+2. Extensions declare their lifecycle phase (`'pre-auth'` or `'post-auth'`) via `DefaultPhase`:
+   - **`pre-auth`**: Mounted before MJ authentication middleware. Ideal for external webhooks that carry provider signatures (Slack HMAC, Teams Bot Framework JWT, Twilio signatures).
+   - **`post-auth`**: Mounted after MJ authentication and context middleware (`mwPostAuth`). Guaranteed to run under authenticated `req.user` context.
+3. Extensions can declare services in their `Initialize()` return (`Service: myService`). These are auto-registered into `ServerExtensionServiceRegistry`.
+4. After all extensions across both phases are mounted, `ServerExtensionLoader` awaits `OnAllExtensionsMounted(context)` across all extensions for cross-extension service wiring.
+5. Core integrations (Twilio, Vonage, RingCentral, Teams meetings) register their management services directly into `loader.Services` under `'TwilioTelephonyService'`, `'VonageTelephonyService'`, `'RingCentralTelephonyService'`, and `'TeamsMeetingsService'`.
+6. Open App server packages listed in `dynamicPackages.server[]` declare their extensions (`MJ_SERVER_EXTENSIONS` export or `package.json` `memberjunction.serverExtensions`). The host `mj.config.cjs` `serverExtensions[]` overlays those by `DriverClass`.
+7. Core routes (`/graphql`, `/health`, `/auth`, `/media`, `/schema`, `/mcp`) are protected by a reserved roots registry; extensions attempting to claim a reserved root fail closed during bootstrap.
+8. MJServer's global CORS middleware runs before every extension. An extension with its own origin policy sets `OwnsCORS: true` in its config; global CORS then skips its `RootPath`, so its preflights reach the extension and no origin is reflected onto its responses. See the guide's "Owning CORS for Your RootPath" section. Express's `X-Powered-By` header is disabled app-wide.
 
 ### Configuration
 
@@ -900,21 +1024,27 @@ MJServer supports a plugin architecture that enables auto-discovery and lifecycl
 module.exports = {
     serverExtensions: [
         {
+            Name: 'SlackIntegration',
             Enabled: true,
             DriverClass: 'SlackMessagingExtension',
             RootPath: '/webhook/slack',
+            Phase: 'pre-auth',
             Settings: {
-                AgentID: 'your-agent-guid',
+                DefaultAgentName: 'Sage',
+                ContextUserEmail: 'bot@company.com',
                 BotToken: process.env.SLACK_BOT_TOKEN,
                 SigningSecret: process.env.SLACK_SIGNING_SECRET,
             }
         },
         {
+            Name: 'TeamsIntegration',
             Enabled: true,
             DriverClass: 'TeamsMessagingExtension',
             RootPath: '/webhook/teams',
+            Phase: 'pre-auth',
             Settings: {
-                AgentID: 'your-agent-guid',
+                DefaultAgentName: 'Sage',
+                ContextUserEmail: 'bot@company.com',
                 MicrosoftAppId: process.env.MICROSOFT_APP_ID,
                 MicrosoftAppPassword: process.env.MICROSOFT_APP_PASSWORD,
             }
@@ -936,12 +1066,12 @@ Returns `200` when all extensions are healthy, `503` when any extension reports 
 ### Available Extensions
 
 | Package | Extensions | Description |
-|---------|-----------|-------------|
+|---|---|---|
 | [`@memberjunction/messaging-adapters`](../MessagingAdapters/) | `SlackMessagingExtension`, `TeamsMessagingExtension` | Slack & Teams integration for MJ AI agents |
 
 ### Creating Custom Extensions
 
-See [`@memberjunction/server-extensions-core`](../ServerExtensionsCore/) for documentation on building custom extensions.
+See [`@memberjunction/server-extensions-core`](../ServerExtensionsCore/) and the **[Server Extensions Guide](../../guides/SERVER_EXTENSIONS_GUIDE.md)** for complete documentation on building custom extensions.
 
 ## Graceful Shutdown
 

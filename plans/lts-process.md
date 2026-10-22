@@ -241,7 +241,7 @@ R = does the work · A = accountable/sole approver · C = consulted · I = infor
 | Gate 3 execution (AI UX suite) | Caeleb | Craig (accepts results *and* approach) | Robert Kihm | — |
 | Gate 4 (fresh installs) | BC Labs crew — **names UNKNOWN** | Craig | — | — |
 | Gate 5 (stage upgrades) | Env owners — **CDP: UNKNOWN · Skip: UNKNOWN · Izzy: UNKNOWN · MJC: UNKNOWN** | Craig | Env teams | — |
-| Gate 6 (human hammering) | Craig + crew | Craig | Johanna Snider (baseline list) | — |
+| Gate 6 (human hammering) | Craig + crew | Craig | — | — |
 | Backport triage (weekly sweep + labels) | Craig (early cycles; then trained delegates) | Craig | Fix authors | — |
 | Line releases (`publish.yml`, LTS path) | Build engineer — **UNKNOWN** | Craig | — | Core team |
 | `release-lines.json` status changes | Craig | Craig | — | All (via PR) |

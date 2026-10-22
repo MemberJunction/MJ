@@ -25,7 +25,7 @@ export class TagsHelper {
    * @param tagsJson JSON string containing tags array
    * @returns Array of tag strings or TestTag objects
    */
-  static parseTags(tagsJson: string | null | undefined): string[] {
+  static ParseTags(tagsJson: string | null | undefined): string[] {
     if (!tagsJson) return [];
     try {
       const parsed = JSON.parse(tagsJson);
@@ -38,12 +38,17 @@ export class TagsHelper {
     }
   }
 
+  /** @deprecated Use {@link ParseTags}. */
+  static parseTags(tagsJson: string | null | undefined): string[] {
+    return this.ParseTags(tagsJson);
+  }
+
   /**
    * Parse tags as full TestTag objects
    * @param tagsJson JSON string containing tags array
    * @returns Array of TestTag objects
    */
-  static parseTagObjects(tagsJson: string | null | undefined): TestTag[] {
+  static ParseTagObjects(tagsJson: string | null | undefined): TestTag[] {
     if (!tagsJson) return [];
     try {
       const parsed = JSON.parse(tagsJson);
@@ -61,14 +66,24 @@ export class TagsHelper {
     }
   }
 
+  /** @deprecated Use {@link ParseTagObjects}. */
+  static parseTagObjects(tagsJson: string | null | undefined): TestTag[] {
+    return this.ParseTagObjects(tagsJson);
+  }
+
   /**
    * Convert tags array to JSON string for storage
    * @param tags Array of tag strings or TestTag objects
    * @returns JSON string
    */
-  static toJson(tags: (string | TestTag)[]): string {
+  static ToJson(tags: (string | TestTag)[]): string {
     const normalized = tags.map(tag => typeof tag === 'string' ? tag : tag.value);
     return JSON.stringify(normalized);
+  }
+
+  /** @deprecated Use {@link ToJson}. */
+  static toJson(tags: (string | TestTag)[]): string {
+    return this.ToJson(tags);
   }
 
   /**
@@ -77,12 +92,17 @@ export class TagsHelper {
    * @param newTag Tag to add
    * @returns Updated JSON string
    */
-  static addTag(tagsJson: string | null | undefined, newTag: string): string {
-    const tags = this.parseTags(tagsJson);
+  static AddTag(tagsJson: string | null | undefined, newTag: string): string {
+    const tags = this.ParseTags(tagsJson);
     if (!tags.includes(newTag)) {
       tags.push(newTag);
     }
     return JSON.stringify(tags);
+  }
+
+  /** @deprecated Use {@link AddTag}. */
+  static addTag(tagsJson: string | null | undefined, newTag: string): string {
+    return this.AddTag(tagsJson, newTag);
   }
 
   /**
@@ -91,9 +111,14 @@ export class TagsHelper {
    * @param tagToRemove Tag to remove
    * @returns Updated JSON string
    */
-  static removeTag(tagsJson: string | null | undefined, tagToRemove: string): string {
-    const tags = this.parseTags(tagsJson).filter(t => t !== tagToRemove);
+  static RemoveTag(tagsJson: string | null | undefined, tagToRemove: string): string {
+    const tags = this.ParseTags(tagsJson).filter(t => t !== tagToRemove);
     return JSON.stringify(tags);
+  }
+
+  /** @deprecated Use {@link RemoveTag}. */
+  static removeTag(tagsJson: string | null | undefined, tagToRemove: string): string {
+    return this.RemoveTag(tagsJson, tagToRemove);
   }
 
   /**
@@ -101,12 +126,17 @@ export class TagsHelper {
    * @param tagsJsonArray Array of tags JSON strings
    * @returns Unique sorted tags
    */
-  static getUniqueTags(tagsJsonArray: (string | null | undefined)[]): string[] {
+  static GetUniqueTags(tagsJsonArray: (string | null | undefined)[]): string[] {
     const allTags = new Set<string>();
     for (const tagsJson of tagsJsonArray) {
-      this.parseTags(tagsJson).forEach(tag => allTags.add(tag));
+      this.ParseTags(tagsJson).forEach(tag => allTags.add(tag));
     }
     return Array.from(allTags).sort();
+  }
+
+  /** @deprecated Use {@link GetUniqueTags}. */
+  static getUniqueTags(tagsJsonArray: (string | null | undefined)[]): string[] {
+    return this.GetUniqueTags(tagsJsonArray);
   }
 }
 

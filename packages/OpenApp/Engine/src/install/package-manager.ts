@@ -9,8 +9,8 @@
  * Version-agnostic: supports semver ranges, pnpm catalog:, and workspace:*.
  */
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
-import { resolve, dirname } from 'node:path';
+import { execFileSync, spawn } from 'node:child_process';
+import { resolve, dirname, basename, join } from 'node:path';
 import type { ManifestPackageEntry } from '../manifest/manifest-schema.js';
 import { ResolveServerPackagePath, ResolveClientPackagePath } from './workspace-paths.js';
 
@@ -50,7 +50,14 @@ export interface PackageManagerOptions {
   ServerPackages: ManifestPackageEntry[];
   /** Client packages to add/remove */
   ClientPackages: ManifestPackageEntry[];
-  /** Shared packages (added to both server and client) */
+  /**
+   * Shared packages — dependency DECLARATION is added to both server and client `package.json`,
+   * deliberately not platform-routed. Declaring a dependency is not the same as bundling it: a
+   * Node-only shared package may still need to be a declared client dependency for type-only
+   * imports even though it must never be BUNDLED into the client. `dynamicPackages.client`
+   * (see `GetClientPackagesFromManifest`) is what decides bundling, filtered by platform (#4428);
+   * this list is not.
+   */
   SharedPackages: ManifestPackageEntry[];
   /** Package version (used as the semver range for each package) */
   Version: string;
@@ -94,6 +101,10 @@ export interface PackageOperationResult {
   Removed: string[];
   /** Error message if the operation failed */
   ErrorMessage?: string;
+  /** Where `install` actually ran (RunPackageInstall only). */
+  InstallRoot?: string;
+  /** Set when the install ran at an `mj dev workspace` parent instead of the repo itself (RunPackageInstall only). */
+  DevWorkspaceParent?: string;
 }
 
 /**
@@ -102,7 +113,8 @@ export interface PackageOperationResult {
  * Distributes packages by role:
  * - Server packages -> server workspace(s)
  * - Client packages -> client workspace(s)
- * - Shared packages -> all workspaces
+ * - Shared packages -> all workspaces (dependency DECLARATION only — see `SharedPackages` on
+ *   {@link PackageManagerOptions}; this is intentional, not a missed platform-routing call site)
  *
  * @param options - Package manager configuration
  * @returns Operation result
@@ -167,17 +179,61 @@ export function RemoveAppPackages(options: PackageManagerOptions): PackageOperat
 /**
  * Detects which package manager is in use by checking for lockfiles.
  */
-export function detectPackageManager(repoRoot: string): PackageManagerType {
+export function DetectPackageManager(repoRoot: string): PackageManagerType {
   if (existsSync(resolve(repoRoot, 'pnpm-lock.yaml'))) return 'pnpm';
   if (existsSync(resolve(repoRoot, 'yarn.lock'))) return 'yarn';
   return 'npm';
+}
+
+/** @deprecated Use {@link DetectPackageManager}. */
+export function detectPackageManager(repoRoot: string): PackageManagerType {
+  return DetectPackageManager(repoRoot);
+}
+
+/** The sentinel `mj dev workspace` writes at the parent directory that joins sibling repos into one pnpm workspace. */
+export const DEV_WORKSPACE_SENTINEL = '.mj-dev-workspace.json';
+
+/** Where a package install must run, and with what. */
+export interface InstallRootResolution {
+  /** Directory to run `install` in. */
+  Root: string;
+  PackageManager: PackageManagerType;
+  /** Set when Root is an `mj dev workspace` parent the repo is a member of. */
+  DevWorkspaceParent?: string;
+}
+
+/**
+ * Decides where `install` runs. Normally the repo root, with its own package manager.
+ *
+ * When the repo is a MEMBER of an `mj dev workspace` — its parent directory carries the
+ * generator's sentinel naming this directory, next to the parent's `pnpm-workspace.yaml` —
+ * the install belongs to the parent: pnpm treats a member that has its own
+ * `pnpm-workspace.yaml` as a root, so an in-place install silently creates a second,
+ * standalone store beside the parent's links (split singletons, and the app's packages
+ * resolved from the registry instead of the sibling checkout the workspace links). Field
+ * `mj app install` inside the MJ member does exactly that.
+ */
+export function ResolveInstallRoot(repoRoot: string, packageManager?: PackageManagerType): InstallRootResolution {
+  const parent = dirname(repoRoot);
+  const sentinelPath = join(parent, DEV_WORKSPACE_SENTINEL);
+  if (parent !== repoRoot && existsSync(sentinelPath) && existsSync(join(parent, 'pnpm-workspace.yaml'))) {
+    try {
+      const sentinel = JSON.parse(readFileSync(sentinelPath, 'utf-8')) as { generatedBy?: unknown; members?: unknown };
+      if (sentinel.generatedBy === 'mj dev workspace' && Array.isArray(sentinel.members) && sentinel.members.includes(basename(repoRoot))) {
+        return { Root: parent, PackageManager: 'pnpm', DevWorkspaceParent: parent };
+      }
+    } catch {
+      // an unreadable sentinel is not a workspace claim — install in the repo itself
+    }
+  }
+  return { Root: repoRoot, PackageManager: packageManager ?? DetectPackageManager(repoRoot) };
 }
 
 /**
  * Checks if the pnpm-workspace.yaml has a catalog section.
  * Returns true if there's a `catalog:` or `catalogs:` key in the file.
  */
-export function hasPnpmCatalog(repoRoot: string): boolean {
+export function HasPnpmCatalog(repoRoot: string): boolean {
   const wsPath = resolve(repoRoot, 'pnpm-workspace.yaml');
   if (!existsSync(wsPath)) return false;
   try {
@@ -186,6 +242,11 @@ export function hasPnpmCatalog(repoRoot: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** @deprecated Use {@link HasPnpmCatalog}. */
+export function hasPnpmCatalog(repoRoot: string): boolean {
+  return HasPnpmCatalog(repoRoot);
 }
 
 /**
@@ -213,12 +274,104 @@ function ValidateRegistryUrl(url: string): { Valid: boolean; Reason?: string } {
 }
 
 /**
- * Runs package install from the monorepo root using the appropriate package manager.
+ * True when `url` points at the public npm registry itself. Compares the parsed host — a
+ * substring test would also accept `https://evil.example/registry.npmjs.org` and
+ * `https://registry.npmjs.org.evil.example`. An unparseable URL is not the default, so it goes
+ * on to {@link ValidateRegistryUrl}, which rejects it.
+ */
+export function IsDefaultNpmRegistry(url: string): boolean {
+  try {
+    return new URL(url).hostname.toLowerCase() === 'registry.npmjs.org';
+  } catch {
+    return false;
+  }
+}
+
+/** Default ceiling for one package install run by the app engine: 30 minutes. */
+export const DEFAULT_PACKAGE_INSTALL_TIMEOUT_MS = 30 * 60 * 1000;
+
+/**
+ * Environment variable that overrides {@link DEFAULT_PACKAGE_INSTALL_TIMEOUT_MS}, in milliseconds.
+ * A first install on a cold package store or a slow registry can legitimately take many minutes;
+ * an app whose packages were not installed is left Disabled, so a ceiling that is too low turns a
+ * slow-but-healthy install into a broken one.
+ */
+export const PACKAGE_INSTALL_TIMEOUT_ENV_VAR = 'MJ_APP_PACKAGE_INSTALL_TIMEOUT_MS';
+
+/** Resolves the package-install timeout: the env override when it is a positive number, else the default. */
+export function ResolvePackageInstallTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env[PACKAGE_INSTALL_TIMEOUT_ENV_VAR];
+  const parsed = raw ? Number(raw) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_PACKAGE_INSTALL_TIMEOUT_MS;
+}
+
+/** What one package install will run, worked out before anything is spawned. */
+interface PackageInstallPlan {
+  Target: ReturnType<typeof ResolveInstallRoot>;
+  Bin: string;
+  Argv: string[];
+}
+
+/**
+ * Builds the install command: resolves where it runs and with which package manager, and
+ * validates a custom registry. Returns an error message instead of a plan when the registry is bad.
+ */
+function BuildPackageInstallPlan(
+  repoRoot: string,
+  verbose: boolean | undefined,
+  registryUrl: string | undefined,
+  packageManager: PackageManagerType | undefined,
+): PackageInstallPlan | { ErrorMessage: string } {
+  const target = ResolveInstallRoot(repoRoot, packageManager);
+  const pm = target.PackageManager;
+
+  // Only pass --registry for non-default registries. The standard npm registry
+  // (https://registry.npmjs.org) is already the default, and passing it explicitly
+  // overrides scoped registry + auth token settings in .npmrc, breaking private packages.
+  const isCustomRegistry = !!registryUrl && !IsDefaultNpmRegistry(registryUrl);
+
+  // Defense-in-depth: validate the registry URL is a clean http(s) URL before using it. It is
+  // passed as a literal argv element (no shell), but a malformed URL / wrong protocol is
+  // still worth rejecting up front (B40).
+  if (isCustomRegistry) {
+    const validation = ValidateRegistryUrl(registryUrl!);
+    if (!validation.Valid) {
+      return { ErrorMessage: `Invalid custom registry URL: ${validation.Reason}` };
+    }
+  }
+
+  // The argv is an ARRAY run with no shell, so the registry URL — and every other argument —
+  // is a single literal element that a shell can never interpret (B40). On Windows the
+  // package-manager binaries are `.cmd` shims, which only resolve when the name carries the extension.
+  const argv: string[] = ['install'];
+  if (pm === 'npm' && !verbose) argv.push('--loglevel=warn');
+  if (isCustomRegistry) argv.push(`--registry=${registryUrl}`);
+  // All package managers natively read .npmrc / .pnpmrc / .yarnrc.yml for scoped registries,
+  // auth tokens, and other settings — running in the right `cwd` is all they need.
+  return { Target: target, Bin: process.platform === 'win32' ? `${pm}.cmd` : pm, Argv: argv };
+}
+
+function InstallSucceeded(target: PackageInstallPlan['Target']): PackageOperationResult {
+  return { Success: true, Added: [], Removed: [], InstallRoot: target.Root, DevWorkspaceParent: target.DevWorkspaceParent };
+}
+
+function InstallFailed(message: string, target?: PackageInstallPlan['Target']): PackageOperationResult {
+  return { Success: false, Added: [], Removed: [], ErrorMessage: message, InstallRoot: target?.Root, DevWorkspaceParent: target?.DevWorkspaceParent };
+}
+
+/**
+ * Runs package install from the monorepo root using the appropriate package manager —
+ * or, when the repo is a member of an `mj dev workspace`, from that workspace's parent
+ * with pnpm (see {@link ResolveInstallRoot}); the result says where it ran.
  *
  * Registry configuration is resolved in this order:
  * 1. Explicit `registryUrl` parameter (passed from manifest)
  * 2. Scoped registry from .npmrc / .pnpmrc (automatic — package managers read these natively)
  * 3. Default registry for the package manager
+ *
+ * Synchronous: it blocks the calling thread until the install finishes. Long-running hosts
+ * (the install orchestrator, anything holding database connections) should use
+ * {@link RunPackageInstallAsync}, which keeps the event loop free.
  *
  * @param repoRoot - Absolute path to the monorepo root
  * @param verbose - Enable verbose output
@@ -226,58 +379,98 @@ function ValidateRegistryUrl(url: string): { Valid: boolean; Reason?: string } {
  * @param packageManager - Package manager to use (auto-detected if not provided)
  */
 export function RunPackageInstall(repoRoot: string, verbose?: boolean, registryUrl?: string, packageManager?: PackageManagerType): PackageOperationResult {
-  const pm = packageManager ?? detectPackageManager(repoRoot);
-
-  // Only pass --registry for non-default registries. The standard npm registry
-  // (https://registry.npmjs.org) is already the default, and passing it explicitly
-  // overrides scoped registry + auth token settings in .npmrc, breaking private packages.
-  const isCustomRegistry = registryUrl && !registryUrl.includes('registry.npmjs.org');
-
-  // Defense-in-depth: validate the registry URL is a clean http(s) URL before using it. It is
-  // now passed as a literal argv element (no shell), but a malformed URL / wrong protocol is
-  // still worth rejecting up front (B40).
-  if (isCustomRegistry) {
-    const validation = ValidateRegistryUrl(registryUrl!);
-    if (!validation.Valid) {
-      return { Success: false, Added: [], Removed: [], ErrorMessage: `Invalid custom registry URL: ${validation.Reason}` };
-    }
-  }
-
+  const plan = BuildPackageInstallPlan(repoRoot, verbose, registryUrl, packageManager);
+  if ('ErrorMessage' in plan) return InstallFailed(plan.ErrorMessage);
   try {
-    // Build the argv as an ARRAY and run via execFileSync (no shell). The registry URL — and
-    // every other argument — is passed as a single literal argv element, so a hostile value can
-    // never be interpreted by a shell. This removes shell interpolation as a class of risk on
-    // top of ValidateRegistryUrl (B40). On Windows the package-manager binaries are `.cmd`
-    // shims, which execFileSync only resolves when the name carries the extension.
-    const argv: string[] = ['install'];
-    switch (pm) {
-      case 'pnpm':
-      case 'yarn': {
-        if (isCustomRegistry) argv.push(`--registry=${registryUrl}`);
-        break;
-      }
-      default: {
-        if (!verbose) argv.push('--loglevel=warn');
-        if (isCustomRegistry) argv.push(`--registry=${registryUrl}`);
-        break;
-      }
-    }
-    const bin = process.platform === 'win32' ? `${pm}.cmd` : pm;
-
-    // All package managers natively read .npmrc / .pnpmrc / .yarnrc.yml for
-    // scoped registries, auth tokens, and other settings. We don't need to
-    // parse these files — just ensure `cwd` is set correctly so they're found.
-    execFileSync(bin, argv, {
-      cwd: repoRoot,
+    execFileSync(plan.Bin, plan.Argv, {
+      cwd: plan.Target.Root,
       encoding: 'utf-8',
-      timeout: 300000,
+      timeout: ResolvePackageInstallTimeoutMs(),
       stdio: verbose ? 'inherit' : 'pipe',
     });
-    return { Success: true, Added: [], Removed: [] };
+    return InstallSucceeded(plan.Target);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    return { Success: false, Added: [], Removed: [], ErrorMessage: `${pm} install failed: ${message}` };
+    return InstallFailed(`${plan.Target.PackageManager} install failed: ${message}`, plan.Target);
   }
+}
+
+/** How much of the installer's stderr to keep for the error message. */
+const STDERR_TAIL_CHARS = 4000;
+
+/**
+ * Async form of {@link RunPackageInstall}: same command, same result, but the package manager
+ * runs as a child process the event loop keeps servicing.
+ *
+ * The synchronous form froze the whole host for the length of the install — every timer,
+ * socket and in-flight database request stalled with it. Inside `mj app install` a dependency
+ * chain runs one install per app, and a first install on a cold store can take many minutes.
+ *
+ * @param timeoutMs - Ceiling for the run; defaults to {@link ResolvePackageInstallTimeoutMs}.
+ */
+export async function RunPackageInstallAsync(
+  repoRoot: string,
+  verbose?: boolean,
+  registryUrl?: string,
+  packageManager?: PackageManagerType,
+  timeoutMs: number = ResolvePackageInstallTimeoutMs(),
+): Promise<PackageOperationResult> {
+  const plan = BuildPackageInstallPlan(repoRoot, verbose, registryUrl, packageManager);
+  if ('ErrorMessage' in plan) return InstallFailed(plan.ErrorMessage);
+  const outcome = await RunChildProcess(plan.Bin, plan.Argv, plan.Target.Root, verbose === true, timeoutMs);
+  if (outcome.Kind === 'ok') return InstallSucceeded(plan.Target);
+  const pm = plan.Target.PackageManager;
+  if (outcome.Kind === 'spawn-error') return InstallFailed(`${pm} install could not start: ${outcome.Message}`, plan.Target);
+  const detail = outcome.StderrTail ? `\n${outcome.StderrTail}` : '';
+  switch (outcome.Kind) {
+    case 'timeout':
+      return InstallFailed(
+        `${pm} install did not finish within ${Math.round(timeoutMs / 60000)} minute(s) and was stopped. ` +
+          `Run '${pm} install' in ${plan.Target.Root} to finish it, or raise ${PACKAGE_INSTALL_TIMEOUT_ENV_VAR}.${detail}`,
+        plan.Target,
+      );
+    default:
+      return InstallFailed(`${pm} install failed (exit code ${outcome.ExitCode ?? 'unknown'}).${detail}`, plan.Target);
+  }
+}
+
+type ChildProcessOutcome =
+  | { Kind: 'ok' }
+  | { Kind: 'exit'; ExitCode: number | null; StderrTail: string }
+  | { Kind: 'timeout'; StderrTail: string }
+  | { Kind: 'spawn-error'; Message: string };
+
+/**
+ * Spawns a command (no shell) and resolves when it exits, is stopped by the timeout, or fails
+ * to start. Output streams to the console when verbose; stderr's tail is kept either way.
+ */
+function RunChildProcess(bin: string, argv: string[], cwd: string, verbose: boolean, timeoutMs: number): Promise<ChildProcessOutcome> {
+  return new Promise((resolvePromise) => {
+    let stderrTail = '';
+    let timedOut = false;
+    let settled = false;
+    const finish = (outcome: ChildProcessOutcome): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolvePromise(outcome);
+    };
+    const child = spawn(bin, argv, { cwd, stdio: ['ignore', verbose ? 'inherit' : 'ignore', 'pipe'] });
+    child.stderr?.on('data', (chunk: Buffer) => {
+      if (verbose) process.stderr.write(chunk);
+      stderrTail = (stderrTail + chunk.toString('utf-8')).slice(-STDERR_TAIL_CHARS);
+    });
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill('SIGTERM');
+    }, timeoutMs);
+    child.on('error', (error: Error) => finish({ Kind: 'spawn-error', Message: error.message }));
+    child.on('close', (code: number | null) => {
+      if (timedOut) finish({ Kind: 'timeout', StderrTail: stderrTail.trim() });
+      else if (code === 0) finish({ Kind: 'ok' });
+      else finish({ Kind: 'exit', ExitCode: code, StderrTail: stderrTail.trim() });
+    });
+  });
 }
 
 /**
@@ -322,8 +515,8 @@ function resolveVersionString(options: PackageManagerOptions): string {
     case 'workspace':
       return 'workspace:*';
     case 'auto': {
-      const pm = options.PackageManager ?? detectPackageManager(options.RepoRoot);
-      if (pm === 'pnpm' && hasPnpmCatalog(options.RepoRoot)) {
+      const pm = options.PackageManager ?? DetectPackageManager(options.RepoRoot);
+      if (pm === 'pnpm' && HasPnpmCatalog(options.RepoRoot)) {
         return 'catalog:';
       }
       return `^${options.Version}`;

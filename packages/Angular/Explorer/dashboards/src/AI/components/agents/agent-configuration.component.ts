@@ -53,22 +53,103 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   private settingsLoaded = false;
 
   public isLoading = false;
-  public filterPanelVisible = true;
-  public viewMode: 'grid' | 'list' | 'tree' = 'grid';
-  public expandedAgentId: string | null = null;
+  public FilterPanelVisible = true;
 
-  public agents: MJAIAgentEntityExtended[] = [];
-  public filteredAgents: MJAIAgentEntityExtended[] = [];
+  /** @deprecated Use {@link FilterPanelVisible}. */
+  public get filterPanelVisible() {
+    return this.FilterPanelVisible;
+  }
+  /** @deprecated Use {@link FilterPanelVisible}. */
+  public set filterPanelVisible(value) {
+    this.FilterPanelVisible = value;
+  }
+  public ViewMode: 'grid' | 'list' | 'tree' = 'grid';
+
+  /** @deprecated Use {@link ViewMode}. */
+  public get viewMode(): 'grid' | 'list' | 'tree' {
+    return this.ViewMode;
+  }
+  /** @deprecated Use {@link ViewMode}. */
+  public set viewMode(value: 'grid' | 'list' | 'tree') {
+    this.ViewMode = value;
+  }
+  public ExpandedAgentId: string | null = null;
+
+  /** @deprecated Use {@link ExpandedAgentId}. */
+  public get expandedAgentId(): string | null {
+    return this.ExpandedAgentId;
+  }
+  /** @deprecated Use {@link ExpandedAgentId}. */
+  public set expandedAgentId(value: string | null) {
+    this.ExpandedAgentId = value;
+  }
+
+  public Agents: MJAIAgentEntityExtended[] = [];
+
+  /** @deprecated Use {@link Agents}. */
+  public get agents(): MJAIAgentEntityExtended[] {
+    return this.Agents;
+  }
+  /** @deprecated Use {@link Agents}. */
+  public set agents(value: MJAIAgentEntityExtended[]) {
+    this.Agents = value;
+  }
+  public FilteredAgents: MJAIAgentEntityExtended[] = [];
+
+  /** @deprecated Use {@link FilteredAgents}. */
+  public get filteredAgents(): MJAIAgentEntityExtended[] {
+    return this.FilteredAgents;
+  }
+  /** @deprecated Use {@link FilteredAgents}. */
+  public set filteredAgents(value: MJAIAgentEntityExtended[]) {
+    this.FilteredAgents = value;
+  }
 
   // Detail panel
-  public selectedAgent: MJAIAgentEntityExtended | null = null;
-  public detailPanelVisible = false;
+  public SelectedAgent: MJAIAgentEntityExtended | null = null;
+
+  /** @deprecated Use {@link SelectedAgent}. */
+  public get selectedAgent(): MJAIAgentEntityExtended | null {
+    return this.SelectedAgent;
+  }
+  /** @deprecated Use {@link SelectedAgent}. */
+  public set selectedAgent(value: MJAIAgentEntityExtended | null) {
+    this.SelectedAgent = value;
+  }
+  public DetailPanelVisible = false;
+
+  /** @deprecated Use {@link DetailPanelVisible}. */
+  public get detailPanelVisible() {
+    return this.DetailPanelVisible;
+  }
+  /** @deprecated Use {@link DetailPanelVisible}. */
+  public set detailPanelVisible(value) {
+    this.DetailPanelVisible = value;
+  }
 
   // Sorting state
-  public sortColumn: string = 'Name';
-  public sortDirection: 'asc' | 'desc' = 'asc';
+  public SortColumn: string = 'Name';
 
-  public currentFilters: AgentFilter = {
+  /** @deprecated Use {@link SortColumn}. */
+  public get sortColumn(): string {
+    return this.SortColumn;
+  }
+  /** @deprecated Use {@link SortColumn}. */
+  public set sortColumn(value: string) {
+    this.SortColumn = value;
+  }
+  public SortDirection: 'asc' | 'desc' = 'asc';
+
+  /** @deprecated Use {@link SortDirection}. */
+  public get sortDirection(): 'asc' | 'desc' {
+    return this.SortDirection;
+  }
+  /** @deprecated Use {@link SortDirection}. */
+  public set sortDirection(value: 'asc' | 'desc') {
+    this.SortDirection = value;
+  }
+
+  public CurrentFilters: AgentFilter = {
     searchTerm: '',
     agentType: 'all',
     parentAgent: 'all',
@@ -78,25 +159,49 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     categoryId: 'all'
   };
 
+  /** @deprecated Use {@link CurrentFilters}. */
+  public get currentFilters(): AgentFilter {
+    return this.CurrentFilters;
+  }
+  /** @deprecated Use {@link CurrentFilters}. */
+  public set currentFilters(value: AgentFilter) {
+    this.CurrentFilters = value;
+  }
+
   /** Static option arrays for the shared mj-filter-panel. */
-  public readonly statusOptions = [
+  public readonly StatusOptions = [
     { text: 'All Statuses', value: 'all' },
     { text: 'Active',       value: 'active' },
     { text: 'Inactive',     value: 'inactive' },
   ];
-  public readonly executionModeOptions = [
+
+  /** @deprecated Use {@link StatusOptions}. */
+  public get statusOptions() {
+    return this.StatusOptions;
+  }
+  public readonly ExecutionModeOptions = [
     { text: 'All Execution Modes', value: 'all' },
     { text: 'Sequential',          value: 'Sequential' },
     { text: 'Parallel',            value: 'Parallel' },
   ];
-  public readonly exposeAsActionOptions = [
+
+  /** @deprecated Use {@link ExecutionModeOptions}. */
+  public get executionModeOptions() {
+    return this.ExecutionModeOptions;
+  }
+  public readonly ExposeAsActionOptions = [
     { text: 'All Agents',       value: 'all' },
     { text: 'Exposed as Action', value: 'true' },
     { text: 'Not Exposed',       value: 'false' },
   ];
 
+  /** @deprecated Use {@link ExposeAsActionOptions}. */
+  public get exposeAsActionOptions() {
+    return this.ExposeAsActionOptions;
+  }
+
   /** Dynamic agent-type options built from AIEngineBase metadata. */
-  public get agentTypeOptions(): { text: string; value: string }[] {
+  public get AgentTypeOptions(): { text: string; value: string }[] {
     const aiEngine = AIEngineBase.Instance;
     const types = aiEngine?.AgentTypes ?? [];
     return [
@@ -105,33 +210,53 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     ];
   }
 
+  /** @deprecated Use {@link AgentTypeOptions}. */
+  public get agentTypeOptions(): { text: string; value: string }[] {
+    return this.AgentTypeOptions;
+  }
+
   /** Dynamic parent-agent options built from the loaded agents (top-level only). */
-  public get parentAgentOptions(): { text: string; value: string }[] {
+  public get ParentAgentOptions(): { text: string; value: string }[] {
     return [
       { text: 'All Agents', value: 'all' },
       { text: 'No Parent',  value: 'none' },
-      ...this.agents
+      ...this.Agents
         .filter(a => !a.ParentID)
         .map(a => ({ text: a.Name || 'Unnamed Agent', value: a.ID })),
     ];
   }
 
+  /** @deprecated Use {@link ParentAgentOptions}. */
+  public get parentAgentOptions(): { text: string; value: string }[] {
+    return this.ParentAgentOptions;
+  }
+
   /** View-mode options for the shared <mj-view-toggle>. */
-  public readonly agentViewOptions = [
+  public readonly AgentViewOptions = [
     { key: 'grid', icon: 'fa-solid fa-grip',        title: 'Grid View' },
     { key: 'list', icon: 'fa-solid fa-list',        title: 'List View' },
     { key: 'tree', icon: 'fa-solid fa-folder-tree', title: 'Category Tree View' },
   ];
 
+  /** @deprecated Use {@link AgentViewOptions}. */
+  public get agentViewOptions() {
+    return this.AgentViewOptions;
+  }
+
   /** Field config consumed by the centralized <mj-filter-panel>. */
-  public get agentFilterFields(): FilterFieldConfig[] {
+  public get AgentFilterFields(): FilterFieldConfig[] {
     return [
-      { key: 'agentType',      type: 'dropdown', label: 'Type',            icon: 'fa-solid fa-robot',     options: this.agentTypeOptions },
-      { key: 'parentAgent',    type: 'dropdown', label: 'Parent',          icon: 'fa-solid fa-sitemap',   options: this.parentAgentOptions, filterable: this.parentAgentOptions.length > 10 },
-      { key: 'status',         type: 'dropdown', label: 'Status',          icon: 'fa-solid fa-toggle-on', options: this.statusOptions },
-      { key: 'executionMode',  type: 'dropdown', label: 'Execution Mode',  icon: 'fa-solid fa-list-ol',   options: this.executionModeOptions },
-      { key: 'exposeAsAction', type: 'dropdown', label: 'Action Exposure', icon: 'fa-solid fa-share',     options: this.exposeAsActionOptions },
+      { key: 'agentType',      type: 'dropdown', label: 'Type',            icon: 'fa-solid fa-robot',     options: this.AgentTypeOptions },
+      { key: 'parentAgent',    type: 'dropdown', label: 'Parent',          icon: 'fa-solid fa-sitemap',   options: this.ParentAgentOptions, filterable: this.ParentAgentOptions.length > 10 },
+      { key: 'status',         type: 'dropdown', label: 'Status',          icon: 'fa-solid fa-toggle-on', options: this.StatusOptions },
+      { key: 'executionMode',  type: 'dropdown', label: 'Execution Mode',  icon: 'fa-solid fa-list-ol',   options: this.ExecutionModeOptions },
+      { key: 'exposeAsAction', type: 'dropdown', label: 'Action Exposure', icon: 'fa-solid fa-share',     options: this.ExposeAsActionOptions },
     ];
+  }
+
+  /** @deprecated Use {@link AgentFilterFields}. */
+  public get agentFilterFields(): FilterFieldConfig[] {
+    return this.AgentFilterFields;
   }
 
   /** Current category selection for the tree dropdown (Category is projected into mj-filter-panel as a custom widget). */
@@ -147,7 +272,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   private _lastCategorySetAt = 0;
 
   /** Handler for the projected mj-tree-dropdown — extracts the entity ID from the CompositeKey. */
-  public onCategoryChange(value: CompositeKey | CompositeKey[] | null): void {
+  public OnCategoryChange(value: CompositeKey | CompositeKey[] | null): void {
     // Duck-typed extraction — works whether tree-dropdown emits a real
     // CompositeKey instance or a plain object (it's currently the latter
     // when projected inside <mj-filter-panel>). Single-PK entities: take
@@ -166,8 +291,8 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     }
 
     const idValue = single?.KeyValuePairs?.[0]?.Value;
-    this.currentFilters = {
-      ...this.currentFilters,
+    this.CurrentFilters = {
+      ...this.CurrentFilters,
       categoryId: (idValue != null && idValue !== '') ? String(idValue) : 'all'
     };
     if (single != null) {
@@ -178,11 +303,16 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     this.saveUserPreferencesDebounced();
   }
 
+  /** @deprecated Use {@link OnCategoryChange}. */
+  public onCategoryChange(value: CompositeKey | CompositeKey[] | null): void {
+    return this.OnCategoryChange(value);
+  }
+
   /** Receive the updated values record from <mj-filter-panel> and apply it. */
-  public onFilterValuesChange(values: Record<string, unknown>): void {
+  public OnFilterValuesChange(values: Record<string, unknown>): void {
     // Preserve fields the panel doesn't own (searchTerm comes from toolbar, categoryId from tree-dropdown handler)
-    this.currentFilters = {
-      ...this.currentFilters,
+    this.CurrentFilters = {
+      ...this.CurrentFilters,
       agentType:      (values['agentType']      as string) ?? 'all',
       parentAgent:    (values['parentAgent']    as string) ?? 'all',
       status:         (values['status']         as string) ?? 'all',
@@ -193,9 +323,14 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     this.saveUserPreferencesDebounced();
   }
 
+  /** @deprecated Use {@link OnFilterValuesChange}. */
+  public onFilterValuesChange(values: Record<string, unknown>): void {
+    return this.OnFilterValuesChange(values);
+  }
+
   /** Number of currently-applied filter criteria inside the popover (excludes searchTerm — surfaced separately in the header). */
   public get ActiveFilterCount(): number {
-    const f = this.currentFilters;
+    const f = this.CurrentFilters;
     let n = 0;
     if (f.agentType && f.agentType !== 'all') n++;
     if (f.parentAgent && f.parentAgent !== 'all') n++;
@@ -206,7 +341,16 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     return n;
   }
 
-  public selectedAgentForTest: MJAIAgentEntityExtended | null = null;
+  public SelectedAgentForTest: MJAIAgentEntityExtended | null = null;
+
+  /** @deprecated Use {@link SelectedAgentForTest}. */
+  public get selectedAgentForTest(): MJAIAgentEntityExtended | null {
+    return this.SelectedAgentForTest;
+  }
+  /** @deprecated Use {@link SelectedAgentForTest}. */
+  public set selectedAgentForTest(value: MJAIAgentEntityExtended | null) {
+    this.SelectedAgentForTest = value;
+  }
 
   // mj-tree configuration for category tree view
   public CategoryBranchConfig: TreeBranchConfig = {
@@ -307,8 +451,13 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   /**
    * Clears the permission cache. Call this when user context changes or permissions are updated.
    */
-  public clearPermissionCache(): void {
+  public ClearPermissionCache(): void {
     this._permissionCache.clear();
+  }
+
+  /** @deprecated Use {@link ClearPermissionCache}. */
+  public clearPermissionCache(): void {
+    return this.ClearPermissionCache();
   }
 
   constructor(
@@ -382,19 +531,19 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
    */
   private applyUserPreferences(prefs: AgentConfigurationUserPreferences): void {
     if (prefs.filterPanelVisible !== undefined) {
-      this.filterPanelVisible = prefs.filterPanelVisible;
+      this.FilterPanelVisible = prefs.filterPanelVisible;
     }
     if (prefs.viewMode) {
-      this.viewMode = prefs.viewMode;
+      this.ViewMode = prefs.viewMode;
     }
     if (prefs.sortColumn) {
-      this.sortColumn = prefs.sortColumn;
+      this.SortColumn = prefs.sortColumn;
     }
     if (prefs.sortDirection) {
-      this.sortDirection = prefs.sortDirection;
+      this.SortDirection = prefs.sortDirection;
     }
     if (prefs.filters) {
-      this.currentFilters = {
+      this.CurrentFilters = {
         searchTerm: prefs.filters.searchTerm || '',
         agentType: prefs.filters.agentType || 'all',
         parentAgent: prefs.filters.parentAgent || 'all',
@@ -411,12 +560,12 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
    */
   private getCurrentPreferences(): AgentConfigurationUserPreferences {
     return {
-      filterPanelVisible: this.filterPanelVisible,
-      viewMode: this.viewMode,
-      sortColumn: this.sortColumn,
-      sortDirection: this.sortDirection,
+      filterPanelVisible: this.FilterPanelVisible,
+      viewMode: this.ViewMode,
+      sortColumn: this.SortColumn,
+      sortDirection: this.SortDirection,
       filters: {
-        ...this.currentFilters
+        ...this.CurrentFilters
       }
     };
   }
@@ -443,16 +592,16 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
 
   private applyInitialState(state: any): void {
     if (state.filterPanelVisible !== undefined) {
-      this.filterPanelVisible = state.filterPanelVisible;
+      this.FilterPanelVisible = state.filterPanelVisible;
     }
     if (state.viewMode) {
-      this.viewMode = state.viewMode;
+      this.ViewMode = state.viewMode;
     }
     if (state.expandedAgentId) {
-      this.expandedAgentId = state.expandedAgentId;
+      this.ExpandedAgentId = state.expandedAgentId;
     }
     if (state.currentFilters) {
-      this.currentFilters = { ...this.currentFilters, ...state.currentFilters };
+      this.CurrentFilters = { ...this.CurrentFilters, ...state.currentFilters };
     }
   }
 
@@ -464,8 +613,8 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
       await AIEngineBase.Instance.Config(false);
 
       // Get cached agents from AIEngineBase
-      this.agents = AIEngineBase.Instance.Agents;
-      this.filteredAgents = [...this.agents];
+      this.Agents = AIEngineBase.Instance.Agents;
+      this.FilteredAgents = [...this.Agents];
     } catch (error) {
       console.error('Error loading AI agents:', error);
     } finally {
@@ -473,20 +622,35 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     }
   }
 
-  public toggleFilterPanel(): void {
-    this.filterPanelVisible = !this.filterPanelVisible;
+  public ToggleFilterPanel(): void {
+    this.FilterPanelVisible = !this.FilterPanelVisible;
     this.emitStateChange();
     this.saveUserPreferencesDebounced();
   }
 
-  public onMainSplitterChange(_event: any): void {
+  /** @deprecated Use {@link ToggleFilterPanel}. */
+  public toggleFilterPanel(): void {
+    return this.ToggleFilterPanel();
+  }
+
+  public OnMainSplitterChange(_event: any): void {
     this.emitStateChange();
   }
 
-  public onFiltersChange(filters: AgentFilter): void {
-    this.currentFilters = { ...filters };
+  /** @deprecated Use {@link OnMainSplitterChange}. */
+  public onMainSplitterChange(_event: any): void {
+    return this.OnMainSplitterChange(_event);
+  }
+
+  public OnFiltersChange(filters: AgentFilter): void {
+    this.CurrentFilters = { ...filters };
     this.applyFilters();
     this.saveUserPreferencesDebounced();
+  }
+
+  /** @deprecated Use {@link OnFiltersChange}. */
+  public onFiltersChange(filters: AgentFilter): void {
+    return this.OnFiltersChange(filters);
   }
 
   public onFilterChange(): void {
@@ -494,14 +658,19 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   }
 
   /** Handler for the inline mj-page-search input in the page-header toolbar. */
-  public onSearchTermChange(value: string): void {
-    this.currentFilters = { ...this.currentFilters, searchTerm: value ?? '' };
+  public OnSearchTermChange(value: string): void {
+    this.CurrentFilters = { ...this.CurrentFilters, searchTerm: value ?? '' };
     this.applyFilters();
     this.saveUserPreferencesDebounced();
   }
 
-  public onResetFilters(): void {
-    this.currentFilters = {
+  /** @deprecated Use {@link OnSearchTermChange}. */
+  public onSearchTermChange(value: string): void {
+    return this.OnSearchTermChange(value);
+  }
+
+  public OnResetFilters(): void {
+    this.CurrentFilters = {
       searchTerm: '',
       agentType: 'all',
       parentAgent: 'all',
@@ -519,12 +688,17 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     this.saveUserPreferencesDebounced();
   }
 
+  /** @deprecated Use {@link OnResetFilters}. */
+  public onResetFilters(): void {
+    return this.OnResetFilters();
+  }
+
   private applyFilters(): void {
-    let filtered = [...this.agents];
+    let filtered = [...this.Agents];
 
     // Apply search filter (name contains)
-    if (this.currentFilters.searchTerm) {
-      const searchTerm = this.currentFilters.searchTerm.toLowerCase();
+    if (this.CurrentFilters.searchTerm) {
+      const searchTerm = this.CurrentFilters.searchTerm.toLowerCase();
       filtered = filtered.filter(agent =>
         (agent.Name || '').toLowerCase().includes(searchTerm) ||
         (agent.Description || '').toLowerCase().includes(searchTerm)
@@ -532,22 +706,22 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     }
 
     // Apply agent type filter
-    if (this.currentFilters.agentType !== 'all') {
-      filtered = filtered.filter(agent => UUIDsEqual(agent.TypeID, this.currentFilters.agentType));
+    if (this.CurrentFilters.agentType !== 'all') {
+      filtered = filtered.filter(agent => UUIDsEqual(agent.TypeID, this.CurrentFilters.agentType));
     }
 
     // Apply parent agent filter
-    if (this.currentFilters.parentAgent !== 'all') {
-      if (this.currentFilters.parentAgent === 'none') {
+    if (this.CurrentFilters.parentAgent !== 'all') {
+      if (this.CurrentFilters.parentAgent === 'none') {
         filtered = filtered.filter(agent => !agent.ParentID);
       } else {
-        filtered = filtered.filter(agent => UUIDsEqual(agent.ParentID, this.currentFilters.parentAgent));
+        filtered = filtered.filter(agent => UUIDsEqual(agent.ParentID, this.CurrentFilters.parentAgent));
       }
     }
 
     // Apply status filter
-    if (this.currentFilters.status !== 'all') {
-      const wantActive = this.currentFilters.status === 'active';
+    if (this.CurrentFilters.status !== 'all') {
+      const wantActive = this.CurrentFilters.status === 'active';
       if (wantActive) {
         filtered = filtered.filter(agent => agent.Status === 'Active');
       } else {
@@ -556,19 +730,19 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     }
 
     // Apply execution mode filter
-    if (this.currentFilters.executionMode !== 'all') {
-      filtered = filtered.filter(agent => agent.ExecutionMode === this.currentFilters.executionMode);
+    if (this.CurrentFilters.executionMode !== 'all') {
+      filtered = filtered.filter(agent => agent.ExecutionMode === this.CurrentFilters.executionMode);
     }
 
     // Apply expose as action filter
-    if (this.currentFilters.exposeAsAction !== 'all') {
-      const isExposed = this.currentFilters.exposeAsAction === 'true';
+    if (this.CurrentFilters.exposeAsAction !== 'all') {
+      const isExposed = this.CurrentFilters.exposeAsAction === 'true';
       filtered = filtered.filter(agent => agent.ExposeAsAction === isExposed);
     }
 
     // Apply category filter — match the selected category or any of its descendants
-    if (this.currentFilters.categoryId !== 'all') {
-      const matchingIds = this.getCategoryAndDescendantIds(this.currentFilters.categoryId);
+    if (this.CurrentFilters.categoryId !== 'all') {
+      const matchingIds = this.getCategoryAndDescendantIds(this.CurrentFilters.categoryId);
       filtered = filtered.filter(agent => {
         const agentCatId = agent.CategoryID;
         return agentCatId != null && matchingIds.some(id => UUIDsEqual(id, agentCatId));
@@ -578,23 +752,28 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     // Apply sorting
     filtered = this.applySorting(filtered);
 
-    this.filteredAgents = filtered;
+    this.FilteredAgents = filtered;
   }
 
   /**
    * Sort the agents by the specified column
    */
-  public sortBy(column: string): void {
-    if (this.sortColumn === column) {
+  public SortBy(column: string): void {
+    if (this.SortColumn === column) {
       // Toggle direction if same column
-      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+      this.SortDirection = this.SortDirection === 'asc' ? 'desc' : 'asc';
     } else {
       // New column, default to ascending
-      this.sortColumn = column;
-      this.sortDirection = 'asc';
+      this.SortColumn = column;
+      this.SortDirection = 'asc';
     }
     this.applyFilters();
     this.saveUserPreferencesDebounced();
+  }
+
+  /** @deprecated Use {@link SortBy}. */
+  public sortBy(column: string): void {
+    return this.SortBy(column);
   }
 
   /**
@@ -605,7 +784,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
       let valueA: string | boolean | null | undefined;
       let valueB: string | boolean | null | undefined;
 
-      switch (this.sortColumn) {
+      switch (this.SortColumn) {
         case 'Name':
           valueA = a.Name;
           valueB = b.Name;
@@ -628,7 +807,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
       const strB = (valueB ?? '').toString().toLowerCase();
 
       let comparison = strA.localeCompare(strB);
-      return this.sortDirection === 'desc' ? -comparison : comparison;
+      return this.SortDirection === 'desc' ? -comparison : comparison;
     });
   }
 
@@ -637,59 +816,89 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     // For now, just a placeholder for tracking state changes
   }
 
-  public setViewMode(mode: 'grid' | 'list' | 'tree'): void {
-    this.viewMode = mode;
+  public SetViewMode(mode: 'grid' | 'list' | 'tree'): void {
+    this.ViewMode = mode;
     this.emitStateChange();
     this.saveUserPreferencesDebounced();
   }
 
+  /** @deprecated Use {@link SetViewMode}. */
+  public setViewMode(mode: 'grid' | 'list' | 'tree'): void {
+    return this.SetViewMode(mode);
+  }
+
+  public ToggleAgentExpansion(agentId: string): void {
+    this.ExpandedAgentId = this.ExpandedAgentId === agentId ? null : agentId;
+  }
+
+  /** @deprecated Use {@link ToggleAgentExpansion}. */
   public toggleAgentExpansion(agentId: string): void {
-    this.expandedAgentId = this.expandedAgentId === agentId ? null : agentId;
+    return this.ToggleAgentExpansion(agentId);
   }
 
   /**
    * Show the detail panel for an agent
    */
-  public showAgentDetails(agent: MJAIAgentEntityExtended, event?: Event): void {
+  public ShowAgentDetails(agent: MJAIAgentEntityExtended, event?: Event): void {
     if (event) {
       event.stopPropagation();
     }
-    this.selectedAgent = agent;
-    this.detailPanelVisible = true;
+    this.SelectedAgent = agent;
+    this.DetailPanelVisible = true;
+  }
+
+  /** @deprecated Use {@link ShowAgentDetails}. */
+  public showAgentDetails(agent: MJAIAgentEntityExtended, event?: Event): void {
+    return this.ShowAgentDetails(agent, event);
   }
 
   /**
    * Close the detail panel
    */
-  public closeDetailPanel(): void {
-    this.detailPanelVisible = false;
+  public CloseDetailPanel(): void {
+    this.DetailPanelVisible = false;
     // Delay clearing selectedAgent for smoother animation
     setTimeout(() => {
-      if (!this.detailPanelVisible) {
-        this.selectedAgent = null;
+      if (!this.DetailPanelVisible) {
+        this.SelectedAgent = null;
       }
     }, 300);
+  }
+
+  /** @deprecated Use {@link CloseDetailPanel}. */
+  public closeDetailPanel(): void {
+    return this.CloseDetailPanel();
   }
 
   /**
    * Open the full entity record from the detail panel
    */
-  public openAgentFromPanel(): void {
-    if (this.selectedAgent) {
-      this.openAgentRecord(this.selectedAgent.ID);
+  public OpenAgentFromPanel(): void {
+    if (this.SelectedAgent) {
+      this.OpenAgentRecord(this.SelectedAgent.ID);
     }
     // Intent moved to the full record — a lingering panel paints over the
     // records view and greets the user with stale chrome on return.
-    this.closeDetailPanel();
+    this.CloseDetailPanel();
+  }
+
+  /** @deprecated Use {@link OpenAgentFromPanel}. */
+  public openAgentFromPanel(): void {
+    return this.OpenAgentFromPanel();
   }
 
   /**
    * Get the parent agent name if it exists
    */
-  public getParentAgentName(agent: MJAIAgentEntityExtended): string | null {
+  public GetParentAgentName(agent: MJAIAgentEntityExtended): string | null {
     if (!agent.ParentID) return null;
-    const parent = this.agents.find(a => UUIDsEqual(a.ID, agent.ParentID));
+    const parent = this.Agents.find(a => UUIDsEqual(a.ID, agent.ParentID));
     return parent?.Name || 'Unknown Parent';
+  }
+
+  /** @deprecated Use {@link GetParentAgentName}. */
+  public getParentAgentName(agent: MJAIAgentEntityExtended): string | null {
+    return this.GetParentAgentName(agent);
   }
 
   /**
@@ -699,15 +908,20 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     return agent.Type || 'Standard Agent';
   }
 
-  public openAgentRecord(agentId: string): void {
+  public OpenAgentRecord(agentId: string): void {
     this.navigationService.OpenEntityRecord('MJ: AI Agents', CompositeKey.FromID(agentId));
+  }
+
+  /** @deprecated Use {@link OpenAgentRecord}. */
+  public openAgentRecord(agentId: string): void {
+    return this.OpenAgentRecord(agentId);
   }
 
   /**
    * Opens the create agent slide-in panel. Upon successful creation,
    * saves the agent and navigates to the new record.
    */
-  public createNewAgent(): void {
+  public CreateNewAgent(): void {
     this.createAgentService.OpenSlideIn({
       Title: 'Create New Agent'
     }).pipe(takeUntil(this.destroy$)).subscribe({
@@ -725,6 +939,11 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
         );
       }
     });
+  }
+
+  /** @deprecated Use {@link CreateNewAgent}. */
+  public createNewAgent(): void {
+    return this.CreateNewAgent();
   }
 
   /**
@@ -786,30 +1005,50 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     }
   }
 
-  public runAgent(agent: MJAIAgentEntityExtended): void {
+  public RunAgent(agent: MJAIAgentEntityExtended): void {
     // Use the test harness service for window management features
     this.testHarnessService.openForAgent(agent.ID);
   }
 
-  public closeTestHarness(): void {
-    // No longer needed - window manages its own closure
-    this.selectedAgentForTest = null;
+  /** @deprecated Use {@link RunAgent}. */
+  public runAgent(agent: MJAIAgentEntityExtended): void {
+    return this.RunAgent(agent);
   }
 
-  public getAgentIconColor(agent: MJAIAgentEntityExtended): string {
+  public CloseTestHarness(): void {
+    // No longer needed - window manages its own closure
+    this.SelectedAgentForTest = null;
+  }
+
+  /** @deprecated Use {@link CloseTestHarness}. */
+  public closeTestHarness(): void {
+    return this.CloseTestHarness();
+  }
+
+  public GetAgentIconColor(agent: MJAIAgentEntityExtended): string {
     // Generate a consistent color based on agent properties
     const colors = ['#17a2b8', '#28a745', '#ffc107', '#dc3545', '#6c757d', '#007bff'];
     const index = (agent.Name?.charCodeAt(0) || 0) % colors.length;
     return colors[index];
   }
 
-  public onOpenRecord(entityName: string, recordId: string): void {
+  /** @deprecated Use {@link GetAgentIconColor}. */
+  public getAgentIconColor(agent: MJAIAgentEntityExtended): string {
+    return this.GetAgentIconColor(agent);
+  }
+
+  public OnOpenRecord(entityName: string, recordId: string): void {
     // Arbitrary entity: resolve the key against its metadata instead of assuming a column named ID
     const compositeKey = CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(entityName), recordId);
     this.navigationService.OpenEntityRecord(entityName, compositeKey);
   }
 
-  public getExecutionModeColor(mode: string): string {
+  /** @deprecated Use {@link OnOpenRecord}. */
+  public onOpenRecord(entityName: string, recordId: string): void {
+    return this.OnOpenRecord(entityName, recordId);
+  }
+
+  public GetExecutionModeColor(mode: string): string {
     switch (mode) {
       case 'Sequential': return 'info';
       case 'Parallel': return 'success';
@@ -817,7 +1056,12 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     }
   }
 
-  public getExecutionModeIcon(mode: string): string {
+  /** @deprecated Use {@link GetExecutionModeColor}. */
+  public getExecutionModeColor(mode: string): string {
+    return this.GetExecutionModeColor(mode);
+  }
+
+  public GetExecutionModeIcon(mode: string): string {
     switch (mode) {
       case 'Sequential': return 'fa-solid fa-list-ol';
       case 'Parallel': return 'fa-solid fa-layer-group';
@@ -825,11 +1069,16 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     }
   }
 
+  /** @deprecated Use {@link GetExecutionModeIcon}. */
+  public getExecutionModeIcon(mode: string): string {
+    return this.GetExecutionModeIcon(mode);
+  }
+
   /**
    * Gets the agent's display icon
    * Prioritizes LogoURL, falls back to IconClass, then default robot icon
    */
-  public getAgentIcon(agent: MJAIAgentEntityExtended): string {
+  public GetAgentIcon(agent: MJAIAgentEntityExtended): string {
     if (agent?.LogoURL) {
       // LogoURL is used in img tag, not here
       return '';
@@ -837,11 +1086,21 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     return agent?.IconClass || 'fa-solid fa-robot';
   }
 
+  /** @deprecated Use {@link GetAgentIcon}. */
+  public getAgentIcon(agent: MJAIAgentEntityExtended): string {
+    return this.GetAgentIcon(agent);
+  }
+
   /**
    * Checks if the agent has a logo URL (for image display)
    */
-  public hasLogoURL(agent: MJAIAgentEntityExtended): boolean {
+  public HasLogoURL(agent: MJAIAgentEntityExtended): boolean {
     return !!agent?.LogoURL;
+  }
+
+  /** @deprecated Use {@link HasLogoURL}. */
+  public hasLogoURL(agent: MJAIAgentEntityExtended): boolean {
+    return this.HasLogoURL(agent);
   }
 
   // ========================================
@@ -880,22 +1139,32 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   }
 
   /** Handle click on a tree node — open detail panel for agents */
-  public onTreeNodeClick(event: AfterNodeClickEventArgs): void {
+  public OnTreeNodeClick(event: AfterNodeClickEventArgs): void {
     const node = event.Node;
     if (node.Type === 'leaf') {
-      const agent = this.agents.find(a => UUIDsEqual(a.ID, node.ID));
+      const agent = this.Agents.find(a => UUIDsEqual(a.ID, node.ID));
       if (agent) {
-        this.showAgentDetails(agent);
+        this.ShowAgentDetails(agent);
       }
     }
   }
 
+  /** @deprecated Use {@link OnTreeNodeClick}. */
+  public onTreeNodeClick(event: AfterNodeClickEventArgs): void {
+    return this.OnTreeNodeClick(event);
+  }
+
   /** Handle double-click on a tree node — open full record for agents */
-  public onTreeNodeDoubleClick(event: AfterNodeDoubleClickEventArgs): void {
+  public OnTreeNodeDoubleClick(event: AfterNodeDoubleClickEventArgs): void {
     const node = event.Node;
     if (node.Type === 'leaf') {
-      this.openAgentRecord(node.ID);
+      this.OpenAgentRecord(node.ID);
     }
+  }
+
+  /** @deprecated Use {@link OnTreeNodeDoubleClick}. */
+  public onTreeNodeDoubleClick(event: AfterNodeDoubleClickEventArgs): void {
+    return this.OnTreeNodeDoubleClick(event);
   }
 
   // === BaseResourceComponent Required Methods ===

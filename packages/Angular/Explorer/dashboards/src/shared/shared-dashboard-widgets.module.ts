@@ -5,6 +5,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 // Shared widgets used across multiple feature modules
 import { KPICardComponent } from '../AI/components/widgets/kpi-card.component';
 import { TimeSeriesChartComponent } from '../AI/components/charts/time-series-chart.component';
+import { MJClickableDirective } from '@memberjunction/ng-ui-components';
 
 /**
  * SharedDashboardWidgetsModule - exports shared widget components used by
@@ -18,7 +19,8 @@ import { TimeSeriesChartComponent } from '../AI/components/charts/time-series-ch
   ],
   imports: [
     CommonModule,
-    SharedGenericModule
+    SharedGenericModule,
+    MJClickableDirective
   ],
   exports: [
     KPICardComponent,

@@ -116,7 +116,7 @@ export const DEFAULT_FONT_STACK =
  * @param palette - Palette configuration
  * @returns Resolved palette colors
  */
-export function getPalette(
+export function GetPalette(
     palette?: Palette
 ): {
     background: string;
@@ -138,6 +138,18 @@ export function getPalette(
     };
 }
 
+/** @deprecated Use {@link GetPalette}. */
+export function getPalette(
+    palette?: Palette
+): {
+    background: string;
+    foreground: string;
+    categorical: string[];
+    sequential: string[];
+} {
+    return GetPalette(palette);
+}
+
 /**
  * Gets a categorical color by index, cycling through the palette
  *
@@ -145,9 +157,14 @@ export function getPalette(
  * @param palette - Palette configuration
  * @returns Hex color string
  */
-export function getColorForIndex(index: number, palette?: Palette): string {
-    const colors = getPalette(palette).categorical;
+export function GetColorForIndex(index: number, palette?: Palette): string {
+    const colors = GetPalette(palette).categorical;
     return colors[index % colors.length];
+}
+
+/** @deprecated Use {@link GetColorForIndex}. */
+export function getColorForIndex(index: number, palette?: Palette): string {
+    return GetColorForIndex(index, palette);
 }
 
 /**
@@ -157,11 +174,16 @@ export function getColorForIndex(index: number, palette?: Palette): string {
  * @param palette - Palette configuration
  * @returns Hex color string
  */
-export function getSequentialColor(value: number, palette?: Palette): string {
-    const colors = getPalette(palette).sequential;
+export function GetSequentialColor(value: number, palette?: Palette): string {
+    const colors = GetPalette(palette).sequential;
     const clampedValue = Math.max(0, Math.min(1, value));
     const index = Math.floor(clampedValue * (colors.length - 1));
     return colors[index];
+}
+
+/** @deprecated Use {@link GetSequentialColor}. */
+export function getSequentialColor(value: number, palette?: Palette): string {
+    return GetSequentialColor(value, palette);
 }
 
 /**
@@ -170,9 +192,9 @@ export function getSequentialColor(value: number, palette?: Palette): string {
  * @param branding - Branding configuration
  * @returns CSS string for injection into <style> element
  */
-export function generateCSS(branding?: Branding): string {
-    const pal = getPalette(branding?.palette);
-    const font = getFontSpec(branding?.font);
+export function GenerateCSS(branding?: Branding): string {
+    const pal = GetPalette(branding?.palette);
+    const font = GetFontSpec(branding?.font);
 
     const css = `
         .bg-default { fill: ${pal.background}; }
@@ -224,13 +246,18 @@ export function generateCSS(branding?: Branding): string {
     return css;
 }
 
+/** @deprecated Use {@link GenerateCSS}. */
+export function generateCSS(branding?: Branding): string {
+    return GenerateCSS(branding);
+}
+
 /**
  * Gets font specification with defaults applied
  *
  * @param font - Optional font configuration
  * @returns Complete font specification
  */
-export function getFontSpec(font?: FontSpec): Required<FontSpec> {
+export function GetFontSpec(font?: FontSpec): Required<FontSpec> {
     return {
         family: font?.family || DEFAULT_FONT_STACK,
         size: font?.size || 14,
@@ -239,12 +266,22 @@ export function getFontSpec(font?: FontSpec): Required<FontSpec> {
     };
 }
 
+/** @deprecated Use {@link GetFontSpec}. */
+export function getFontSpec(font?: FontSpec): Required<FontSpec> {
+    return GetFontSpec(font);
+}
+
 /**
  * Gets font stack for CSS font-family property
  *
  * @param font - Optional font configuration
  * @returns Font family stack string
  */
-export function getFontStack(font?: FontSpec): string {
+export function GetFontStack(font?: FontSpec): string {
     return font?.family || DEFAULT_FONT_STACK;
+}
+
+/** @deprecated Use {@link GetFontStack}. */
+export function getFontStack(font?: FontSpec): string {
+    return GetFontStack(font);
 }

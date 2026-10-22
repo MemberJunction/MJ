@@ -5,11 +5,11 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
 import { ResourceData, UserInfoEngine, MJVersionLabelRestoreEntityType } from '@memberjunction/core-entities';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
-import { AgentToolResult, validateStringParam } from '../../shared/agent-tool-validation';
+import { AgentToolResult, ValidateStringParam } from '../../shared/agent-tool-validation';
 import {
-    buildVersionHistoryRestoreAgentContext,
-    isValidRestoreStatusFilter,
-    resolveRestore,
+    BuildVersionHistoryRestoreAgentContext,
+    IsValidRestoreStatusFilter,
+    ResolveRestore,
     RESTORE_STATUS_FILTERS,
     RESTORE_LIST_CAP,
     RestoreSnapshot,
@@ -100,7 +100,7 @@ export class VersionHistoryRestoreResourceComponent extends BaseResourceComponen
         const selected = this.ExpandedRestoreId
             ? this.Restores.find(r => UUIDsEqual(r.ID, this.ExpandedRestoreId))
             : undefined;
-        const context = buildVersionHistoryRestoreAgentContext({
+        const context = BuildVersionHistoryRestoreAgentContext({
             TotalRestores: this.TotalRestores,
             SuccessfulRestores: this.SuccessfulRestores,
             FailedRestores: this.FailedRestores,
@@ -178,11 +178,11 @@ export class VersionHistoryRestoreResourceComponent extends BaseResourceComponen
      * Never throws.
      */
     private toolSelectRestore(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
-        const parsed = validateStringParam(params['restore'], 'restore');
+        const parsed = ValidateStringParam(params['restore'], 'restore');
         if (!parsed.ok) {
             return parsed.result;
         }
-        const resolution = resolveRestore(parsed.value, this.restoreSnapshots());
+        const resolution = ResolveRestore(parsed.value, this.restoreSnapshots());
         if (!resolution.ok) {
             return { Success: false, ErrorMessage: resolution.error };
         }
@@ -201,16 +201,16 @@ export class VersionHistoryRestoreResourceComponent extends BaseResourceComponen
      * filter regardless of the current state).
      */
     private toolFilterRestoresByStatus(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
-        const parsed = validateStringParam(params['status'], 'status');
+        const parsed = ValidateStringParam(params['status'], 'status');
         if (!parsed.ok) {
             return parsed.result;
         }
-        if (!isValidRestoreStatusFilter(parsed.value)) {
+        if (!IsValidRestoreStatusFilter(parsed.value)) {
             const valid = RESTORE_STATUS_FILTERS.filter(s => s).join(', ');
             return { Success: false, ErrorMessage: `Invalid status "${parsed.value}". Expected one of: ${valid} (or an empty string to clear).` };
         }
         this.StatusFilter = parsed.value;
-        this.applyFilters();
+        this.ApplyFilters();
         this.persistPreferences();
         return { Success: true, Data: { StatusFilter: this.StatusFilter, FilteredRestoreCount: this.FilteredRestores.length } };
     }
@@ -239,7 +239,7 @@ export class VersionHistoryRestoreResourceComponent extends BaseResourceComponen
             if (result.Success) {
                 this.Restores = result.Results;
                 this.computeStats();
-                this.applyFilters();
+                this.ApplyFilters();
             }
         } catch (error) {
             console.error('Error loading restore history:', error);
@@ -258,7 +258,7 @@ export class VersionHistoryRestoreResourceComponent extends BaseResourceComponen
         this.PartialRestores = this.Restores.filter(r => r.Status === 'Partial').length;
     }
 
-    public applyFilters(): void {
+    public ApplyFilters(): void {
         this.FilteredRestores = this.Restores.filter(r => {
             if (this.StatusFilter && r.Status !== this.StatusFilter) return false;
             return true;
@@ -267,15 +267,20 @@ export class VersionHistoryRestoreResourceComponent extends BaseResourceComponen
         this.cdr.markForCheck();
     }
 
+    /** @deprecated Use {@link ApplyFilters}. */
+    public applyFilters(): void {
+      return this.ApplyFilters();
+    }
+
     public OnStatusFilterChange(status: string): void {
         this.StatusFilter = this.StatusFilter === status ? '' : status;
-        this.applyFilters();
+        this.ApplyFilters();
         this.persistPreferences();
     }
 
     // -- Concise chrome: Status lives behind the one Filter popover ------------
 
-    public get statusFilterFields(): FilterFieldConfig[] {
+    public get StatusFilterFields(): FilterFieldConfig[] {
         return [{
             key: 'status',
             type: 'chips',
@@ -289,24 +294,44 @@ export class VersionHistoryRestoreResourceComponent extends BaseResourceComponen
         }];
     }
 
-    public get statusFilterValues(): Record<string, unknown> {
+    /** @deprecated Use {@link StatusFilterFields}. */
+    public get statusFilterFields(): FilterFieldConfig[] {
+      return this.StatusFilterFields;
+    }
+
+    public get StatusFilterValues(): Record<string, unknown> {
         return { status: this.StatusFilter };
+    }
+
+    /** @deprecated Use {@link StatusFilterValues}. */
+    public get statusFilterValues(): Record<string, unknown> {
+      return this.StatusFilterValues;
     }
 
     public get ActiveFilterCount(): number {
         return this.StatusFilter ? 1 : 0;
     }
 
-    public onFilterValuesChange(values: Record<string, unknown>): void {
+    public OnFilterValuesChange(values: Record<string, unknown>): void {
         this.StatusFilter = (values['status'] as string) ?? '';
-        this.applyFilters();
+        this.ApplyFilters();
         this.persistPreferences();
     }
 
-    public resetStatusFilter(): void {
+    /** @deprecated Use {@link OnFilterValuesChange}. */
+    public onFilterValuesChange(values: Record<string, unknown>): void {
+      return this.OnFilterValuesChange(values);
+    }
+
+    public ResetStatusFilter(): void {
         this.StatusFilter = '';
-        this.applyFilters();
+        this.ApplyFilters();
         this.persistPreferences();
+    }
+
+    /** @deprecated Use {@link ResetStatusFilter}. */
+    public resetStatusFilter(): void {
+      return this.ResetStatusFilter();
     }
 
     private loadUserPreferences(): void {

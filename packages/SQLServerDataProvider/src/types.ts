@@ -23,11 +23,28 @@ export interface ExecuteSQLOptions {
   /** Simple SQL fallback for loggers with logRecordChangeMetadata=false (only for Save/Delete operations) */
   simpleSQLFallback?: string;
   /**
+   * The statement with its parameter values written in as literals. Set for saves and deletes,
+   * which run with typed parameters: logged in place of the query, and shown in error messages.
+   */
+  literalSQL?: string;
+  /**
    * Optional connection source to use instead of the default pool.
    * Used by IS-A chain orchestration to execute SPs on a shared transaction.
    * Should be a sql.Transaction or sql.ConnectionPool instance.
    */
   connectionSource?: sql.ConnectionPool | sql.Transaction;
+  /**
+   * Run on the pool even while an ambient transaction is open. For reads that are not part of any
+   * caller's unit of work — the metadata dataset a background refresh loads — so they never land on
+   * the transaction's connection beside its COMMIT. A pool read sees committed data only (#4514).
+   */
+  ignoreAmbientTransaction?: boolean;
+  /**
+   * The longest the statement may run, in milliseconds. When it is exceeded the request is
+   * cancelled on the server and the call rejects with `Query timeout exceeded`. Ignored inside a
+   * transaction.
+   */
+  timeoutMs?: number;
 }
 
 /**
@@ -35,11 +52,11 @@ export interface ExecuteSQLOptions {
  */
 export interface SQLExecutionContext {
   /** The connection pool to use for queries */
-  pool: sql.ConnectionPool;
+  pool: sql.ConnectionPool;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Optional transaction if one is active */
-  transaction?: sql.Transaction | null;
+  transaction?: sql.Transaction | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Function to log SQL statements */
-  logSqlStatement?: (
+  logSqlStatement?: (  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     query: string,
     parameters?: any,
     description?: string,
@@ -49,7 +66,7 @@ export interface SQLExecutionContext {
     contextUser?: UserInfo
   ) => Promise<void>;
   /** Function to clear transaction reference on EREQINPROG */
-  clearTransaction?: () => void;
+  clearTransaction?: () => void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -57,15 +74,19 @@ export interface SQLExecutionContext {
  */
 export interface InternalSQLOptions {
   /** Optional description for this SQL operation */
-  description?: string;
+  description?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** If true, this statement will not be logged */
-  ignoreLogging?: boolean;
+  ignoreLogging?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Whether this is a data mutation operation */
-  isMutation?: boolean;
+  isMutation?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Simple SQL fallback for loggers */
-  simpleSQLFallback?: string;
+  simpleSQLFallback?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** The statement with its parameter values written in; logged and shown in errors instead of the query */
+  literalSQL?: string;  // case-violation-ok-legacy-back-compat: sits beside simpleSQLFallback in the same lower-case options shape
   /** User context for logging */
-  contextUser?: UserInfo;
+  contextUser?: UserInfo;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** The longest the statement may run, in milliseconds, before it is cancelled on the server */
+  timeoutMs?: number;  // case-violation-ok-legacy-back-compat: matches the lower-case members of this options shape and of ExecuteSQLOptions, which it mirrors
 }
 
 /**

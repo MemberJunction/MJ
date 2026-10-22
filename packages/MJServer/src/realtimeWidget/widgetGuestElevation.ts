@@ -22,19 +22,19 @@ const WIDGET_ENTITY = 'MJ: Conversation Widget Instances';
 
 /**
  * Resolved elevation context for a widget-guest agent run. Returned only when the request is a
- * widget guest; the dispatch resolver runs the agent under {@link WidgetGuestRunContext.elevatedUser}
- * with {@link WidgetGuestRunContext.pinnedAgentId} (authoritative), keeping ownership checks under
+ * widget guest; the dispatch resolver runs the agent under {@link WidgetGuestRunContext.ElevatedUser}
+ * with {@link WidgetGuestRunContext.PinnedAgentId} (authoritative), keeping ownership checks under
  * the guest principal.
  */
 export interface WidgetGuestRunContext {
   /** The trusted server principal under which the agent run (and its run-entity writes) executes. */
-  elevatedUser: UserInfo;
+  ElevatedUser: UserInfo;
   /** The widget instance the guest session is bound to (authoritative config). */
-  widget: MJConversationWidgetInstanceEntity;
+  Widget: MJConversationWidgetInstanceEntity;
   /** The authoritative pinned support agent id — overrides any client-supplied agent id (D5). */
-  pinnedAgentId: string;
+  PinnedAgentId: string;
   /** The guest's per-session scope id (Conversation.ExternalID), used to validate conversation ownership. */
-  sessionScopeId?: string;
+  SessionScopeId?: string;
 }
 
 /**
@@ -47,7 +47,7 @@ export interface WidgetGuestRunContext {
  * Never throws: a resolution failure (no system user, widget not found, read error) returns `null`,
  * so the caller falls back to the normal (guest-principal) path rather than failing the request.
  */
-export async function resolveWidgetGuestRunContext(
+export async function ResolveWidgetGuestRunContext(
   userPayload: UserPayload,
   provider: DatabaseProviderBase,
 ): Promise<WidgetGuestRunContext | null> {
@@ -70,11 +70,19 @@ export async function resolveWidgetGuestRunContext(
   }
 
   return {
-    elevatedUser,
-    widget,
-    pinnedAgentId: widget.PinnedAgentID,
-    sessionScopeId: guest.MagicLinkScope?.ResourceID,
+    ElevatedUser: elevatedUser,
+    Widget: widget,
+    PinnedAgentId: widget.PinnedAgentID,
+    SessionScopeId: guest.MagicLinkScope?.ResourceID,
   };
+}
+
+/** @deprecated Use {@link ResolveWidgetGuestRunContext}. */
+export async function resolveWidgetGuestRunContext(
+  userPayload: UserPayload,
+  provider: DatabaseProviderBase,
+): Promise<WidgetGuestRunContext | null> {
+  return ResolveWidgetGuestRunContext(userPayload, provider);
 }
 
 /**
@@ -85,8 +93,10 @@ export async function resolveWidgetGuestRunContext(
  * A scoped anonymous session (`IsMagicLinkAnonymous` + `MagicLinkScope.ResourceID`) holds only the
  * narrow relay grants its invite's role carries — deliberately NOT the AI run entities, whose rows
  * leak the rendered system prompt. Unlike {@link resolveWidgetGuestRunContext} no widget instance is
- * required: on the realtime path the agent authority is already server-side (the session config's
- * `targetAgentID`, `CanRun`-gated at session start), so there is no client-supplied agent id to pin.
+ * required: the realtime target is the session config's `targetAgentID`, which the owner can edit, so
+ * the relay re-checks `CanRun` on it for the CALLER before this elevation. Direct actions are refused
+ * for these callers before elevation, so only the delegated agent run and the run-entity writes
+ * execute as the system user.
  *
  * PUBLIC WEB-WIDGET guests are deliberately EXCLUDED (returned unchanged): their seeded role writes
  * run rows under the guest principal, which the `Widget Guest: Own Agent Runs` RLS read filter
@@ -119,17 +129,52 @@ export function ResolveScopedAnonymousRunUser(contextUser: UserInfo): UserInfo {
 }
 
 /**
+ * The principal a client-direct call's consolidated RECORDING STORE runs as, once the caller has
+ * already passed the session-ownership and consent gates (#5195).
+ *
+ * The store writes `MJ: Files`, the file↔session link and the session's recording stamp — server
+ * plumbing attributed through the session link, never through the caller. A signed-in user whose only
+ * role is the stock UI role cannot create `MJ: Files`, so running the store as the caller lost every
+ * such user's recording (the object landed in storage, the row never did). It therefore runs as the
+ * system user for signed-in owners, and anonymous sessions keep exactly the
+ * {@link ResolveScopedAnonymousRunUser} behaviour (PUBLIC WEB-WIDGET guests stay on the caller for the
+ * same RLS reason documented there).
+ *
+ * Fails CLOSED: with no system user available the caller is returned, i.e. today's behaviour.
+ * Ownership/consent gates must NEVER use this.
+ */
+export function ResolveRecordingStoreUser(contextUser: UserInfo): UserInfo {
+  if (contextUser?.IsMagicLinkAnonymous || contextUser?.WidgetGuestContext?.WidgetID) {
+    return ResolveScopedAnonymousRunUser(contextUser);
+  }
+  const systemUser = UserCache.Instance.GetSystemUser();
+  if (!systemUser) {
+    LogError(
+      `[Realtime] Cannot elevate the recording store for user ${contextUser?.ID}: no system user available; ` +
+        'storing as the caller.',
+    );
+    return contextUser;
+  }
+  return systemUser;
+}
+
+/**
  * Builds an elevated {@link UserPayload} that runs subsequent agent work as `elevatedUser` while
  * preserving the guest's `sessionId` — so progress/streaming PubSub still routes to the guest's
  * live websocket, but all AI run-entity writes happen under the trusted server principal.
  */
-export function elevateUserPayload(userPayload: UserPayload, elevatedUser: UserInfo): UserPayload {
+export function ElevateUserPayload(userPayload: UserPayload, elevatedUser: UserInfo): UserPayload {
   return {
     ...userPayload,
     email: elevatedUser.Email,
     userRecord: elevatedUser,
     isSystemUser: true,
   };
+}
+
+/** @deprecated Use {@link ElevateUserPayload}. */
+export function elevateUserPayload(userPayload: UserPayload, elevatedUser: UserInfo): UserPayload {
+  return ElevateUserPayload(userPayload, elevatedUser);
 }
 
 /** Loads a single widget instance by id under the elevated principal (read-only). */

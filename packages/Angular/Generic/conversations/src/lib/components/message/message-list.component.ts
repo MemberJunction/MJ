@@ -20,6 +20,7 @@ import {
   TemplateRef
 } from '@angular/core';
 import { MJConversationDetailEntity, MJConversationEntity, RatingJSON } from '@memberjunction/core-entities';
+import { Subscription } from 'rxjs';
 import { UserInfo, CompositeKey } from '@memberjunction/core';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -27,10 +28,11 @@ import { MessageItemComponent, MessageAttachment, MessageArtifactRef, MessagePen
 import {
   BeforeResponseFormSubmittedEventArgs,
   AfterResponseFormSubmittedEventArgs,
+  BeforeStopClickedEventArgs,
 } from '../../events/chat-events';
 import { RealtimeSessionTimelineCardComponent } from '../realtime/realtime-session-timeline-card.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
-import { selectDistinctLatestArtifacts } from '../../utils/distinct-artifacts';
+import { SelectDistinctLatestArtifacts } from '../../utils/distinct-artifacts';
 import {
   BuildConversationTimeline,
   ConversationTimelineItem,
@@ -44,6 +46,7 @@ import {
     type DateJumpPeriod,
     type DateJumpOutcome
 } from '../../utils/date-jump';
+import { EMPTY_FORK_CHIPS, type ForkChipOpenRequest, type ForkViewLayout, type LatestTurn, type MessageForkChip } from '../../utils/conversation-forks';
 
 /** Context handed to the `messageRenderer` slot template per message. */
 interface MessageRendererContext {
@@ -67,15 +70,15 @@ interface MessageRendererContext {
  * Discriminated by the `kind` tag for ergonomic narrowing.
  */
 type RenderedMessageEntry =
-  | { kind: 'component'; ref: ComponentRef<MessageItemComponent> }
-  | { kind: 'embedded'; ref: EmbeddedViewRef<MessageRendererContext> }
-  | { kind: 'realtime-session'; ref: ComponentRef<RealtimeSessionTimelineCardComponent> }
+  | { kind: 'component'; ref: ComponentRef<MessageItemComponent>; subs?: Subscription[] }
+  | { kind: 'embedded'; ref: EmbeddedViewRef<MessageRendererContext>; subs?: Subscription[] }
+  | { kind: 'realtime-session'; ref: ComponentRef<RealtimeSessionTimelineCardComponent>; subs?: Subscription[] }
   /**
    * A timeline item that has been UNMOUNTED to keep the DOM bounded — replaced by a
    * fixed-height div so the scroll range is unchanged. Stored under the item's own
    * timeline key so it can be swapped back for the real view on scroll-back.
    */
-  | { kind: 'spacer'; ref: EmbeddedViewRef<SpacerContext> };
+  | { kind: 'spacer'; ref: EmbeddedViewRef<SpacerContext>; subs?: Subscription[] };
 
 /** Context for the spacer template — the height the unmounted item occupied. */
 interface SpacerContext {
@@ -108,21 +111,201 @@ function isDateJumpPeriod(value: string): value is DateJumpPeriod {
 })
 export class MessageListComponent extends BaseAngularComponent implements OnInit, OnDestroy, OnChanges, AfterViewInit, AfterViewChecked {
   @Input() public messages: MJConversationDetailEntity[] = [];
-  @Input() public conversation!: MJConversationEntity | null;
-  @Input() public currentUser!: UserInfo;
-  @Input() public isProcessing: boolean = false;
+  @Input() public Conversation!: MJConversationEntity | null;
+
+  /** @deprecated Use {@link Conversation}. */
+  @Input() public set conversation(value: MJConversationEntity | null) {
+    this.Conversation = value;
+  }
+  /** @deprecated Use {@link Conversation}. */
+  public get conversation(): MJConversationEntity | null {
+    return this.Conversation;
+  }
+
+  /** Fork chips per normalized detail id, from the chat area's fork summaries. A new map is pushed into the items on screen. */
+  @Input()
+  public set ForkChipMap(value: ReadonlyMap<string, readonly MessageForkChip[]>) {
+    this._forkChipMap = value ?? new Map();
+    this.applyForkChips();
+  }
+  public get ForkChipMap(): ReadonlyMap<string, readonly MessageForkChip[]> {
+    return this._forkChipMap ?? new Map();
+  }
+  private _forkChipMap: ReadonlyMap<string, readonly MessageForkChip[]> = new Map();
+
+  /** How a fork view draws its rows; null in Main. A new layout is pushed into the items on screen. */
+  @Input()
+  public set ForkLayout(value: ForkViewLayout | null) {
+    this._forkLayout = value ?? null;
+    this.applyForkLayout();
+  }
+  public get ForkLayout(): ForkViewLayout | null {
+    return this._forkLayout ?? null;
+  }
+  private _forkLayout: ForkViewLayout | null = null;
+
+  /** True when the person may start forks; a new value is pushed into the items on screen. False hides the fork actions. */
+  @Input()
+  public set CanFork(value: boolean) {
+    this._canFork = value !== false;
+    this.applyCanFork();
+  }
+  public get CanFork(): boolean {
+    return this._canFork !== false;
+  }
+  private _canFork = true;
+
+  /** The latest turn that in-place Edit and Regenerate may change; null when there is none. A new value is pushed into the items on screen. */
+  @Input()
+  public set InPlaceTurn(value: LatestTurn | null) {
+    this._inPlaceTurn = value ?? null;
+    this.applyInPlaceRoles();
+  }
+  public get InPlaceTurn(): LatestTurn | null {
+    return this._inPlaceTurn ?? null;
+  }
+  private _inPlaceTurn: LatestTurn | null = null;
+
+  @Input() public CurrentUser!: UserInfo;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() public set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  public get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
+  @Input() public IsProcessing: boolean = false;
+
+  /** @deprecated Use {@link IsProcessing}. */
+  @Input() public set isProcessing(value: boolean) {
+    this.IsProcessing = value;
+  }
+  /** @deprecated Use {@link IsProcessing}. */
+  public get isProcessing(): boolean {
+    return this.IsProcessing;
+  }
   /** Whether the built-in "No messages yet" filler renders for empty conversations. Hosts with their own empty-state chrome set false. */
-  @Input() public showEmptyFill: boolean = true;
+  @Input() public ShowEmptyFill: boolean = true;
+
+  /** @deprecated Use {@link ShowEmptyFill}. */
+  @Input() public set showEmptyFill(value: boolean) {
+    this.ShowEmptyFill = value;
+  }
+  /** @deprecated Use {@link ShowEmptyFill}. */
+  public get showEmptyFill(): boolean {
+    return this.ShowEmptyFill;
+  }
   /** Whether the sticky date header + jump-to-date dropdown render. */
-  @Input() public showDateNavigation: boolean = true;
+  @Input() public ShowDateNavigation: boolean = true;
+
+  /** @deprecated Use {@link ShowDateNavigation}. */
+  @Input() public set showDateNavigation(value: boolean) {
+    this.ShowDateNavigation = value;
+  }
+  /** @deprecated Use {@link ShowDateNavigation}. */
+  public get showDateNavigation(): boolean {
+    return this.ShowDateNavigation;
+  }
   // Per-message feature gates — forwarded onto each MessageItemComponent instance
   // (see applyMessageItemFeatureFlags). All default true.
-  @Input() public showAgentRunDetails: boolean = true;
-  @Input() public showReactions: boolean = true;
-  @Input() public showMessageRating: boolean = true;
-  @Input() public allowPinning: boolean = true;
-  @Input() public allowMessageEdit: boolean = true;
-  @Input() public allowMessageDelete: boolean = true;
+  @Input() public ShowAgentRunDetails: boolean = true;
+
+  /** @deprecated Use {@link ShowAgentRunDetails}. */
+  @Input() public set showAgentRunDetails(value: boolean) {
+    this.ShowAgentRunDetails = value;
+  }
+  /** @deprecated Use {@link ShowAgentRunDetails}. */
+  public get showAgentRunDetails(): boolean {
+    return this.ShowAgentRunDetails;
+  }
+  @Input() public ShowReactions: boolean = true;
+
+  /** @deprecated Use {@link ShowReactions}. */
+  @Input() public set showReactions(value: boolean) {
+    this.ShowReactions = value;
+  }
+  /** @deprecated Use {@link ShowReactions}. */
+  public get showReactions(): boolean {
+    return this.ShowReactions;
+  }
+  @Input() public ShowMessageRating: boolean = true;
+
+  /** @deprecated Use {@link ShowMessageRating}. */
+  @Input() public set showMessageRating(value: boolean) {
+    this.ShowMessageRating = value;
+  }
+  /** @deprecated Use {@link ShowMessageRating}. */
+  public get showMessageRating(): boolean {
+    return this.ShowMessageRating;
+  }
+  @Input() public AllowPinning: boolean = true;
+
+  /** @deprecated Use {@link AllowPinning}. */
+  @Input() public set allowPinning(value: boolean) {
+    this.AllowPinning = value;
+  }
+  /** @deprecated Use {@link AllowPinning}. */
+  public get allowPinning(): boolean {
+    return this.AllowPinning;
+  }
+  @Input() public AllowMessageEdit: boolean = true;
+
+  /** @deprecated Use {@link AllowMessageEdit}. */
+  @Input() public set allowMessageEdit(value: boolean) {
+    this.AllowMessageEdit = value;
+  }
+  /** @deprecated Use {@link AllowMessageEdit}. */
+  public get allowMessageEdit(): boolean {
+    return this.AllowMessageEdit;
+  }
+  @Input() public AllowMessageDelete: boolean = true;
+
+  /** @deprecated Use {@link AllowMessageDelete}. */
+  @Input() public set allowMessageDelete(value: boolean) {
+    this.AllowMessageDelete = value;
+  }
+  /** @deprecated Use {@link AllowMessageDelete}. */
+  public get allowMessageDelete(): boolean {
+    return this.AllowMessageDelete;
+  }
+  /**
+   * Hides response forms and actionable commands on each message.
+   * Restamped onto already-rendered items — they are created dynamically.
+   */
+  @Input()
+  public set ReadOnly(value: boolean) {
+    if (value === this._readOnly) {
+      return;
+    }
+    this._readOnly = value;
+    this.restampAssistantIdentity();
+  }
+  public get ReadOnly(): boolean {
+    return this._readOnly;
+  }
+  private _readOnly = false;
+
+  /** Whether message items offer Stop on an in-progress agent reply. Default true. */
+  @Input() public AllowStopRun = true;
+
+  /**
+   * How many agent replies are in flight in the open view; items offer their own Stop only above
+   * one. Changes mid-session as runs start and finish, so it is restamped onto rendered items.
+   */
+  @Input()
+  public set InFlightCount(value: number) {
+    if (value === this._inFlightCount) {
+      return;
+    }
+    this._inFlightCount = value;
+    this.restampAssistantIdentity();
+  }
+  public get InFlightCount(): number {
+    return this._inFlightCount;
+  }
+  private _inFlightCount = 0;
 
   // ── Windowed-transcript paging state ────────────────────────────────────────
   // The list renders only the LOADED window, not the whole conversation. These two
@@ -215,41 +398,113 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   //    until the next messages-array mutation. ──
   /** Display name shown on AI messages. Null = the engine-resolved agent name. */
   @Input()
-  public set assistantDisplayName(value: string | null) {
+  public set AssistantDisplayName(value: string | null) {
     if (value !== this._assistantDisplayName) {
       this._assistantDisplayName = value;
       this.restampAssistantIdentity();
     }
   }
-  public get assistantDisplayName(): string | null {
+  public get AssistantDisplayName(): string | null {
     return this._assistantDisplayName;
+  }
+
+  /** @deprecated Use {@link AssistantDisplayName}. */
+  public get assistantDisplayName(): string | null {
+    return this.AssistantDisplayName;
+  }
+  /** @deprecated Use {@link AssistantDisplayName}. */
+  @Input() public set assistantDisplayName(value: string | null) {
+    this.AssistantDisplayName = value;
   }
   private _assistantDisplayName: string | null = null;
 
   /** Image URL for the AI message avatar. Null = the agent's Font Awesome icon. */
   @Input()
-  public set assistantAvatarUrl(value: string | null) {
+  public set AssistantAvatarUrl(value: string | null) {
     if (value !== this._assistantAvatarUrl) {
       this._assistantAvatarUrl = value;
       this.restampAssistantIdentity();
     }
   }
-  public get assistantAvatarUrl(): string | null {
+  public get AssistantAvatarUrl(): string | null {
     return this._assistantAvatarUrl;
   }
+
+  /** @deprecated Use {@link AssistantAvatarUrl}. */
+  public get assistantAvatarUrl(): string | null {
+    return this.AssistantAvatarUrl;
+  }
+  /** @deprecated Use {@link AssistantAvatarUrl}. */
+  @Input() public set assistantAvatarUrl(value: string | null) {
+    this.AssistantAvatarUrl = value;
+  }
   private _assistantAvatarUrl: string | null = null;
-  @Input() public artifactMap: Map<string, LazyArtifactInfo[]> = new Map();
-  @Input() public agentRunMap: Map<string, MJAIAgentRunEntityExtended> = new Map();
-  @Input() public ratingsMap: Map<string, RatingJSON[]> = new Map();
-  @Input() public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
-  @Input() public attachmentsMap: Map<string, MessageAttachment[]> = new Map();
+  @Input() public ArtifactMap: Map<string, LazyArtifactInfo[]> = new Map();
+
+  /** @deprecated Use {@link ArtifactMap}. */
+  @Input() public set artifactMap(value: Map<string, LazyArtifactInfo[]>) {
+    this.ArtifactMap = value;
+  }
+  /** @deprecated Use {@link ArtifactMap}. */
+  public get artifactMap(): Map<string, LazyArtifactInfo[]> {
+    return this.ArtifactMap;
+  }
+  @Input() public AgentRunMap: Map<string, MJAIAgentRunEntityExtended> = new Map();
+
+  /** @deprecated Use {@link AgentRunMap}. */
+  @Input() public set agentRunMap(value: Map<string, MJAIAgentRunEntityExtended>) {
+    this.AgentRunMap = value;
+  }
+  /** @deprecated Use {@link AgentRunMap}. */
+  public get agentRunMap(): Map<string, MJAIAgentRunEntityExtended> {
+    return this.AgentRunMap;
+  }
+  @Input() public RatingsMap: Map<string, RatingJSON[]> = new Map();
+
+  /** @deprecated Use {@link RatingsMap}. */
+  @Input() public set ratingsMap(value: Map<string, RatingJSON[]>) {
+    this.RatingsMap = value;
+  }
+  /** @deprecated Use {@link RatingsMap}. */
+  public get ratingsMap(): Map<string, RatingJSON[]> {
+    return this.RatingsMap;
+  }
+  @Input() public UserAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
+
+  /** @deprecated Use {@link UserAvatarMap}. */
+  @Input() public set userAvatarMap(value: Map<string, {imageUrl: string | null; iconClass: string | null}>) {
+    this.UserAvatarMap = value;
+  }
+  /** @deprecated Use {@link UserAvatarMap}. */
+  public get userAvatarMap(): Map<string, {imageUrl: string | null; iconClass: string | null}> {
+    return this.UserAvatarMap;
+  }
+  @Input() public AttachmentsMap: Map<string, MessageAttachment[]> = new Map();
+
+  /** @deprecated Use {@link AttachmentsMap}. */
+  @Input() public set attachmentsMap(value: Map<string, MessageAttachment[]>) {
+    this.AttachmentsMap = value;
+  }
+  /** @deprecated Use {@link AttachmentsMap}. */
+  public get attachmentsMap(): Map<string, MessageAttachment[]> {
+    return this.AttachmentsMap;
+  }
   /**
    * Optional session-row enrichment for realtime SESSION BLOCKS, keyed by
    * `NormalizeUUID(sessionId)` (agent name / status / close reason). Details stamped
    * with an `AgentSessionID` collapse into one timeline card per session — see
    * `BuildConversationTimeline` — and this map dresses those cards up when present.
    */
-  @Input() public sessionMetaMap: Map<string, RealtimeSessionTimelineMeta> = new Map();
+  @Input() public SessionMetaMap: Map<string, RealtimeSessionTimelineMeta> = new Map();
+
+  /** @deprecated Use {@link SessionMetaMap}. */
+  @Input() public set sessionMetaMap(value: Map<string, RealtimeSessionTimelineMeta>) {
+    this.SessionMetaMap = value;
+  }
+  /** @deprecated Use {@link SessionMetaMap}. */
+  public get sessionMetaMap(): Map<string, RealtimeSessionTimelineMeta> {
+    return this.SessionMetaMap;
+  }
 
   /**
    * Optional per-iteration custom message renderer. When set, the list renders each
@@ -263,7 +518,16 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * etc. The minimal `MJChatMessageBubbleDefaultComponent` ships as a ready-to-use
    * bubble renderer.
    */
-  @Input() public messageRendererTemplate: TemplateRef<unknown> | null = null;
+  @Input() public MessageRendererTemplate: TemplateRef<unknown> | null = null;
+
+  /** @deprecated Use {@link MessageRendererTemplate}. */
+  @Input() public set messageRendererTemplate(value: TemplateRef<unknown> | null) {
+    this.MessageRendererTemplate = value;
+  }
+  /** @deprecated Use {@link MessageRendererTemplate}. */
+  public get messageRendererTemplate(): TemplateRef<unknown> | null {
+    return this.MessageRendererTemplate;
+  }
 
   /**
    * Optional per-message additive decoration template, projected INSIDE the default
@@ -271,28 +535,196 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * consumer projects `mjChatSlot="messageExtra"`. Ignored when
    * `messageRendererTemplate` is set (custom renderers own all per-message content).
    */
-  @Input() public messageExtraTemplate: TemplateRef<unknown> | null = null;
+  @Input() public MessageExtraTemplate: TemplateRef<unknown> | null = null;
 
-  @Output() public editMessage = new EventEmitter<MJConversationDetailEntity>();
-  @Output() public deleteMessage = new EventEmitter<MJConversationDetailEntity>();
-  @Output() public retryMessage = new EventEmitter<MJConversationDetailEntity>();
-  @Output() public testFeedbackMessage = new EventEmitter<MJConversationDetailEntity>();
-  @Output() public artifactClicked = new EventEmitter<{artifactId: string; versionId?: string}>();
-  @Output() public replyInThread = new EventEmitter<MJConversationDetailEntity>();
-  @Output() public viewThread = new EventEmitter<MJConversationDetailEntity>();
-  @Output() public messageEdited = new EventEmitter<MJConversationDetailEntity>();
-  @Output() public openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
-  @Output() public suggestedResponseSelected = new EventEmitter<{text: string; customInput?: string}>();
-  @Output() public attachmentClicked = new EventEmitter<MessageAttachment>();
-  @Output() public diagnosticRequested = new EventEmitter<string>(); // emits messageId
-  @Output() public messagePinToggled = new EventEmitter<MJConversationDetailEntity>();
+  /** @deprecated Use {@link MessageExtraTemplate}. */
+  @Input() public set messageExtraTemplate(value: TemplateRef<unknown> | null) {
+    this.MessageExtraTemplate = value;
+  }
+  /** @deprecated Use {@link MessageExtraTemplate}. */
+  public get messageExtraTemplate(): TemplateRef<unknown> | null {
+    return this.MessageExtraTemplate;
+  }
+
+  @Output() public EditMessage = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * @deprecated Use {@link EditMessage}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (editMessage) keeps working. Must stay AFTER EditMessage: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public editMessage = this.EditMessage;
+  @Output() public DeleteMessage = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * @deprecated Use {@link DeleteMessage}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (deleteMessage) keeps working. Must stay AFTER DeleteMessage: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public deleteMessage = this.DeleteMessage;
+  /** Forwarded from MessageItemComponent: the user asked for a new reply in place of an AI reply. */
+  @Output() public RegenerateRequested = new EventEmitter<MJConversationDetailEntity>();
+  /** @deprecated Use {@link RegenerateRequested}. Emits with it, for hosts that still bind the old name. */
+  @Output() public RetryMessage = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * @deprecated Use {@link RegenerateRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (retryMessage) keeps working. Must stay AFTER RetryMessage: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public retryMessage = this.RetryMessage;
+  /** Forwarded from MessageItemComponent: the user edited a message to save as a new fork. */
+  @Output() public EditResendRequested = new EventEmitter<{ Message: MJConversationDetailEntity; NewText: string }>();
+  /** A chip was clicked in one of the items: a fork to open, or the view and message of an original chip. */
+  @Output() public ForkOpenRequested = new EventEmitter<ForkChipOpenRequest>();
+  /** An item asked to fork the conversation at its message. */
+  @Output() public ForkRequested = new EventEmitter<MJConversationDetailEntity>();
+  /** Forwarded from MessageItemComponent: "Save and resend" saved a user message; the host reruns its turn. */
+  @Output() public ResendInPlaceRequested = new EventEmitter<MJConversationDetailEntity>();
+  @Output() public TestFeedbackMessage = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * @deprecated Use {@link TestFeedbackMessage}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (testFeedbackMessage) keeps working. Must stay AFTER TestFeedbackMessage: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public testFeedbackMessage = this.TestFeedbackMessage;
+  @Output() public ArtifactClicked = new EventEmitter<{artifactId: string; versionId?: string}>();
+
+  /**
+   * @deprecated Use {@link ArtifactClicked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (artifactClicked) keeps working. Must stay AFTER ArtifactClicked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public artifactClicked = this.ArtifactClicked;
+  @Output() public MessageEdited = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * @deprecated Use {@link MessageEdited}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (messageEdited) keeps working. Must stay AFTER MessageEdited: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public messageEdited = this.MessageEdited;
+  @Output() public OpenEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+
+  /**
+   * @deprecated Use {@link OpenEntityRecord}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (openEntityRecord) keeps working. Must stay AFTER OpenEntityRecord: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public openEntityRecord = this.OpenEntityRecord;
+  @Output() public SuggestedResponseSelected = new EventEmitter<{text: string; customInput?: string}>();
+
+  /**
+   * @deprecated Use {@link SuggestedResponseSelected}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (suggestedResponseSelected) keeps working. Must stay AFTER SuggestedResponseSelected: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public suggestedResponseSelected = this.SuggestedResponseSelected;
+  @Output() public AttachmentClicked = new EventEmitter<MessageAttachment>();
+
+  /**
+   * @deprecated Use {@link AttachmentClicked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (attachmentClicked) keeps working. Must stay AFTER AttachmentClicked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public attachmentClicked = this.AttachmentClicked;
+  @Output() public DiagnosticRequested = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link DiagnosticRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (diagnosticRequested) keeps working. Must stay AFTER DiagnosticRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public diagnosticRequested = this.DiagnosticRequested; // emits messageId
+
+  /**
+   * Relays a message item's `BeforeStopClicked`: fired before an in-progress run is stopped,
+   * cancelable by setting `event.Cancel = true`.
+   */
+  @Output() public BeforeStopClicked = new EventEmitter<BeforeStopClickedEventArgs>();
+
+  /** Relays a message item's uncanceled stop request: the host stops the run behind that AI reply. */
+  @Output() public StopMessage = new EventEmitter<MJConversationDetailEntity>();
+  @Output() public MessagePinToggled = new EventEmitter<MJConversationDetailEntity>();
+
+  /**
+   * @deprecated Use {@link MessagePinToggled}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (messagePinToggled) keeps working. Must stay AFTER MessagePinToggled: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public messagePinToggled = this.MessagePinToggled;
+
+  /** A message's run has gone quiet; the host should re-read durable state. Emits messageId. */
+  @Output() public LivenessCheckRequested = new EventEmitter<string>();
   /** Emitted with the `MJ: AI Agent Sessions.ID` when a realtime session block's Open affordance is clicked. */
-  @Output() public realtimeSessionOpenRequested = new EventEmitter<string>();
+  @Output() public RealtimeSessionOpenRequested = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link RealtimeSessionOpenRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (realtimeSessionOpenRequested) keeps working. Must stay AFTER RealtimeSessionOpenRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public realtimeSessionOpenRequested = this.RealtimeSessionOpenRequested;
 
   /** Forwarded from MessageItemComponent — see its docs. */
-  @Output() public beforeResponseFormSubmitted = new EventEmitter<BeforeResponseFormSubmittedEventArgs>();
+  @Output() public BeforeResponseFormSubmitted = new EventEmitter<BeforeResponseFormSubmittedEventArgs>();
+
+  /**
+   * @deprecated Use {@link BeforeResponseFormSubmitted}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (beforeResponseFormSubmitted) keeps working. Must stay AFTER BeforeResponseFormSubmitted: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public beforeResponseFormSubmitted = this.BeforeResponseFormSubmitted;
   /** Forwarded from MessageItemComponent — see its docs. */
-  @Output() public afterResponseFormSubmitted = new EventEmitter<AfterResponseFormSubmittedEventArgs>();
+  @Output() public AfterResponseFormSubmitted = new EventEmitter<AfterResponseFormSubmittedEventArgs>();
+
+  /**
+   * @deprecated Use {@link AfterResponseFormSubmitted}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (afterResponseFormSubmitted) keeps working. Must stay AFTER AfterResponseFormSubmitted: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public afterResponseFormSubmitted = this.AfterResponseFormSubmitted;
+  @Output() public TaskGraphPanelRequested = new EventEmitter<{
+    parentTaskId: string;
+    workflowTitle: string;
+    workflowName?: string;
+    isRunning?: boolean;
+  }>();
+  /** @deprecated Use {@link TaskGraphPanelRequested}. */
+  @Output() public taskGraphPanelRequested = this.TaskGraphPanelRequested;
+
+  @Output() public ScrollToMessageRequested = new EventEmitter<string>();
+  /** @deprecated Use {@link ScrollToMessageRequested}. */
+  @Output() public scrollToMessageRequested = this.ScrollToMessageRequested;
 
   /**
    * Asks the host to load the next older page. Fired when the "earlier messages"
@@ -307,10 +739,37 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    */
   @Output() public DateJumpRequested = new EventEmitter<DateJumpPeriod>();
 
-  @ViewChild('messageContainer', { read: ViewContainerRef }) messageContainerRef!: ViewContainerRef;
-  @ViewChild('scrollContainer') scrollContainer!: ElementRef;
+  @ViewChild('messageContainer', { read: ViewContainerRef }) MessageContainerRef!: ViewContainerRef;
+
+  /** @deprecated Use {@link MessageContainerRef}. */
+  get messageContainerRef(): ViewContainerRef {
+    return this.MessageContainerRef;
+  }
+  /** @deprecated Use {@link MessageContainerRef}. */
+  set messageContainerRef(value: ViewContainerRef) {
+    this.MessageContainerRef = value;
+  }
+  @ViewChild('scrollContainer') ScrollContainer!: ElementRef;
+
+  /** @deprecated Use {@link ScrollContainer}. */
+  get scrollContainer(): ElementRef {
+    return this.ScrollContainer;
+  }
+  /** @deprecated Use {@link ScrollContainer}. */
+  set scrollContainer(value: ElementRef) {
+    this.ScrollContainer = value;
+  }
   /** Only present while `HasMoreAbove` is true — the `@if` creates and destroys it. */
-  @ViewChild('olderSentinel') olderSentinel?: ElementRef<HTMLElement>;
+  @ViewChild('olderSentinel') OlderSentinel?: ElementRef<HTMLElement>;
+
+  /** @deprecated Use {@link OlderSentinel}. */
+  get olderSentinel(): ElementRef<HTMLElement> | undefined {
+    return this.OlderSentinel;
+  }
+  /** @deprecated Use {@link OlderSentinel}. */
+  set olderSentinel(value: ElementRef<HTMLElement> | undefined) {
+    this.OlderSentinel = value;
+  }
   /** Template rendered in place of an unmounted timeline item. */
   @ViewChild('spacerTemplate') private spacerTemplate?: TemplateRef<SpacerContext>;
 
@@ -394,16 +853,48 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    */
   private _previousFirstKey: string | null = null;
 
-  public currentDateDisplay: string = 'Today';
-  public showDateNav: boolean = false;
-  public shouldShowDateFilter: boolean = false;
+  public CurrentDateDisplay: string = 'Today';
+
+  /** @deprecated Use {@link CurrentDateDisplay}. */
+  public get currentDateDisplay(): string {
+    return this.CurrentDateDisplay;
+  }
+  /** @deprecated Use {@link CurrentDateDisplay}. */
+  public set currentDateDisplay(value: string) {
+    this.CurrentDateDisplay = value;
+  }
+  public ShowDateNav: boolean = false;
+
+  /** @deprecated Use {@link ShowDateNav}. */
+  public get showDateNav(): boolean {
+    return this.ShowDateNav;
+  }
+  /** @deprecated Use {@link ShowDateNav}. */
+  public set showDateNav(value: boolean) {
+    this.ShowDateNav = value;
+  }
+  public ShouldShowDateFilter: boolean = false;
+
+  /** @deprecated Use {@link ShouldShowDateFilter}. */
+  public get shouldShowDateFilter(): boolean {
+    return this.ShouldShowDateFilter;
+  }
+  /** @deprecated Use {@link ShouldShowDateFilter}. */
+  public set shouldShowDateFilter(value: boolean) {
+    this.ShouldShowDateFilter = value;
+  }
 
   constructor(private cdRef: ChangeDetectorRef, private hostRef: ElementRef<HTMLElement>) {
     super();
   }
 
+  public ToggleDateNav(): void {
+    this.ShowDateNav = !this.ShowDateNav;
+  }
+
+  /** @deprecated Use {@link ToggleDateNav}. */
   public toggleDateNav(): void {
-    this.showDateNav = !this.showDateNav;
+    return this.ToggleDateNav();
   }
 
   /**
@@ -414,13 +905,18 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * {@link ScrollToDateTarget}. The label updates immediately so the dropdown feels responsive
    * while paging runs.
    */
-  public jumpToDate(period: string): void {
-    this.showDateNav = false;
+  public JumpToDate(period: string): void {
+    this.ShowDateNav = false;
     if (!isDateJumpPeriod(period)) {
       return;
     }
-    this.currentDateDisplay = DATE_JUMP_LABELS[period];
+    this.CurrentDateDisplay = DATE_JUMP_LABELS[period];
     this.DateJumpRequested.emit(period);
+  }
+
+  /** @deprecated Use {@link JumpToDate}. */
+  public jumpToDate(period: string): void {
+    return this.JumpToDate(period);
   }
 
   /**
@@ -489,6 +985,46 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * (not just scroll to it) use this instead of a `[data-message-id]` query, which fails for
    * exactly the cases listed — see {@link scrollToTimelineEntry}.
    */
+  /**
+   * Refreshes one rendered message in place: the streaming path's alternative to replacing the
+   * whole `messages` array, which rebuilds the timeline and re-measures the mounted range on
+   * every delta. Marks the item as streaming so its stylesheet can lift the status-line cap.
+   *
+   * @returns false only when the message has no rendered entry at all, so the caller can fall
+   * back to the full path for that one update. A spacer or a session card standing in for the
+   * message is a no-op: the entity holds the text and a remount renders it.
+   */
+  public RefreshRenderedMessage(
+    message: MJConversationDetailEntity,
+    options?: { markStreaming?: boolean }
+  ): boolean {
+    const existing = this._renderedMessages.get(this.getMessageKey(message));
+    if (!existing) {
+      return false;
+    }
+    switch (existing.kind) {
+      case 'embedded':
+        existing.ref.context.$implicit = message;
+        existing.ref.context.message = message;
+        if (!existing.ref.destroyed) {
+          existing.ref.detectChanges();
+        }
+        return true;
+      case 'component':
+        existing.ref.instance.message = message;
+        existing.ref.instance.agentRun = this.AgentRunMap?.get(message.ID) || null;
+        if (options?.markStreaming !== false) {
+          existing.ref.instance.IsStreaming = true;
+        }
+        if (!this.isViewDestroyed(existing.ref.changeDetectorRef)) {
+          existing.ref.changeDetectorRef.detectChanges();
+        }
+        return true;
+      default:
+        return true;
+    }
+  }
+
   public FindTimelineElement(messageId: string): HTMLElement | null {
     const detail = this.messages?.find(m => UUIDsEqual(m.ID, messageId));
     if (!detail) {
@@ -541,7 +1077,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
 
   ngAfterViewInit() {
     // ViewContainerRef is now available - perform initial render if we have messages
-    if (this.messages && this.messages.length > 0 && this.messageContainerRef && !this._initialRenderComplete) {
+    if (this.messages && this.messages.length > 0 && this.MessageContainerRef && !this._initialRenderComplete) {
       this._initialRenderComplete = true;
       this.updateMessages(this.messages);
       this.updateDateFilterVisibility();
@@ -552,7 +1088,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     // React to messages array changes
     // Note: On initial load, messageContainerRef may not be available yet (ngOnChanges runs before ngAfterViewInit)
     // In that case, ngAfterViewInit will handle the initial render
-    if (changes['messages'] && this.messages && this.messageContainerRef) {
+    if (changes['messages'] && this.messages && this.MessageContainerRef) {
       this._initialRenderComplete = true;
       // Capture the pre-render height so a prepend can be corrected for. Must happen
       // BEFORE updateMessages — afterwards the new rows are already in the layout — and
@@ -566,23 +1102,159 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     // While artifacts are pre-loaded during initial peripheral data load,
     // new artifacts can be created mid-conversation (e.g., by agent runs)
     // This ensures artifact cards appear in messages immediately without requiring a refresh
-    if (changes['artifactMap'] && this.messages && this.messageContainerRef) {
+    if (changes['artifactMap'] && this.messages && this.MessageContainerRef) {
       this.updateMessages(this.messages);
     }
 
     // Watch for attachmentsMap changes to handle newly created attachments
     // This ensures media attachments (e.g., images generated by agents) appear
     // immediately without requiring a page refresh
-    if (changes['attachmentsMap'] && this.messages && this.messageContainerRef) {
+    if (changes['attachmentsMap'] && this.messages && this.MessageContainerRef) {
       this.updateMessages(this.messages);
     }
 
     // Watch for session-meta changes so realtime session blocks pick up their
     // agent name / status chip once the (async, batched) session lookup lands
-    if (changes['sessionMetaMap'] && this.messages && this.messageContainerRef) {
+    if (changes['sessionMetaMap'] && this.messages && this.MessageContainerRef) {
       this.updateMessages(this.messages);
     }
 
+    // Watch for agent-run changes so a run refreshed mid-flight reaches the rendered bubble.
+    // `agentRun` is stamped onto each item as static config at create/update time, so a replaced
+    // map alone never reaches an item already on screen — it keeps the object it was given.
+    //
+    // This became load-bearing with per-message liveness (MJ #4222): reconciliation re-reads the
+    // run over HTTP precisely when the socket is dead, and if the fresh `LastHeartbeatAt` cannot
+    // reach the bubble, the pill stays degraded while the client is in fact being told the run is
+    // healthy. Observed directly — the pill held 'checking…' for a full minute across successful
+    // reconciles.
+    // Keyed by whichever input name the host bound — the deprecated alias or the current one.
+    const agentRunMapChanged = changes['AgentRunMap'] ?? changes['agentRunMap'];
+    if (agentRunMapChanged && this.messages && this.MessageContainerRef) {
+      this.updateMessages(this.messages);
+    }
+
+  }
+
+  /** The fork marker shown on its own when the view has no rows (a draft fork with no earlier rows); null otherwise. */
+  public get EmptyViewMarkerText(): string | null {
+    const layout = this.ForkLayout;
+    return layout && !layout.MarkerDetailID ? layout.MarkerText : null;
+  }
+
+  /** The chips placed under a message. */
+  private chipsFor(detailId: string): readonly MessageForkChip[] {
+    return this.ForkChipMap.get(NormalizeUUID(detailId)) ?? EMPTY_FORK_CHIPS;
+  }
+
+  /** Pushes the current chips into every rendered message component. */
+  private applyForkChips(): void {
+    for (const [, rendered] of this._renderedMessages ?? new Map<string, RenderedMessageEntry>()) {
+      if (rendered.kind === 'component') {
+        const instance = rendered.ref.instance as MessageItemComponent;
+        instance.ForkChips = this.chipsFor(instance.message.ID);
+        rendered.ref.changeDetectorRef.markForCheck();
+      }
+    }
+  }
+
+  /** The rail of a row in the current layout. */
+  private railFor(detailId: string): 'Inherited' | 'Own' | null {
+    const layout = this.ForkLayout;
+    if (!layout) {
+      return null;
+    }
+    return layout.InheritedIDs.has(NormalizeUUID(detailId)) ? 'Inherited' : 'Own';
+  }
+
+  /** The fork marker under a row in the current layout. */
+  private markerFor(detailId: string): string | null {
+    const layout = this.ForkLayout;
+    return layout?.MarkerDetailID && UUIDsEqual(layout.MarkerDetailID, detailId) ? layout.MarkerText : null;
+  }
+
+  /** Pushes the current layout into every rendered message component. */
+  private applyForkLayout(): void {
+    for (const [, rendered] of this._renderedMessages ?? new Map<string, RenderedMessageEntry>()) {
+      if (rendered.kind === 'component') {
+        const instance = rendered.ref.instance as MessageItemComponent;
+        instance.ForkRail = this.railFor(instance.message.ID);
+        instance.ForkMarkerText = this.markerFor(instance.message.ID);
+        rendered.ref.changeDetectorRef.markForCheck();
+      }
+    }
+  }
+
+  /** The in-place role of a row in the current turn. */
+  private inPlaceRoleFor(detailId: string): 'User' | 'Answer' | null {
+    const turn = this.InPlaceTurn;
+    if (!turn) {
+      return null;
+    }
+    if (UUIDsEqual(turn.UserDetailID, detailId)) {
+      return 'User';
+    }
+    return turn.AnswerDetailID && UUIDsEqual(turn.AnswerDetailID, detailId) ? 'Answer' : null;
+  }
+
+  /** Pushes the in-place roles into every rendered message component. */
+  private applyInPlaceRoles(): void {
+    for (const [, rendered] of this._renderedMessages ?? new Map<string, RenderedMessageEntry>()) {
+      if (rendered.kind === 'component') {
+        const instance = rendered.ref.instance as MessageItemComponent;
+        instance.InPlaceRole = this.inPlaceRoleFor(instance.message.ID);
+        instance.PendingReplace = this.pendingReplaceFor(instance.message.ID);
+        rendered.ref.changeDetectorRef.markForCheck();
+      }
+    }
+  }
+
+  /** The message whose inline editor is open; null when none is. */
+  private editingDetailId: string | null = null;
+
+  /** True when a message other than `detailId` has its inline editor open. */
+  private editOpenElsewhere(detailId: string): boolean {
+    return this.editingDetailId != null && !UUIDsEqual(this.editingDetailId, detailId);
+  }
+
+  /** True for the latest turn's answer while its user message is edited with "Save and resend". */
+  private pendingReplaceFor(detailId: string): boolean {
+    const turn = this.InPlaceTurn;
+    return !!turn?.AnswerDetailID && this.editingDetailId != null
+      && UUIDsEqual(this.editingDetailId, turn.UserDetailID) && UUIDsEqual(turn.AnswerDetailID, detailId);
+  }
+
+  /** A row's inline editor opened or closed: records it and pushes the edit state into every rendered row. */
+  private onRowEditingChanged(detailId: string, open: boolean): void {
+    if (open) {
+      this.editingDetailId = detailId;
+    } else if (this.editingDetailId != null && UUIDsEqual(this.editingDetailId, detailId)) {
+      this.editingDetailId = null;
+    }
+    this.applyEditState();
+  }
+
+  /** Pushes the edit state (another row editing, answer pending replace) into every rendered message component. */
+  private applyEditState(): void {
+    for (const [, rendered] of this._renderedMessages ?? new Map<string, RenderedMessageEntry>()) {
+      if (rendered.kind === 'component') {
+        const instance = rendered.ref.instance as MessageItemComponent;
+        instance.EditOpenElsewhere = this.editOpenElsewhere(instance.message.ID);
+        instance.PendingReplace = this.pendingReplaceFor(instance.message.ID);
+        rendered.ref.changeDetectorRef.markForCheck();
+      }
+    }
+  }
+
+  /** Pushes {@link CanFork} into every rendered message component. */
+  private applyCanFork(): void {
+    for (const [, rendered] of this._renderedMessages ?? new Map<string, RenderedMessageEntry>()) {
+      if (rendered.kind === 'component') {
+        const instance = rendered.ref.instance as MessageItemComponent;
+        instance.CanFork = this.CanFork;
+        rendered.ref.changeDetectorRef.markForCheck();
+      }
+    }
   }
 
   /**
@@ -680,7 +1352,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
 
     const chain: Array<Record<string, unknown>> = [];
     let el: HTMLElement | null =
-      this.findSentinelElement() ?? this.scrollContainer?.nativeElement ?? null;
+      this.findSentinelElement() ?? this.ScrollContainer?.nativeElement ?? null;
     while (el && chain.length < 20) {
       const style = getComputedStyle(el);
       chain.push({
@@ -697,7 +1369,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       + 'older pages cannot auto-load. The host must give the transcript a scrollable container '
       + '(overflow-y: auto AND a bounded height, e.g. min-height: 0 on a flex child). '
       + 'Walked from '
-      + (this.olderSentinel ? 'the sentinel' : this.scrollContainer ? 'the list container' : 'NOTHING — both view children are undefined')
+      + (this.OlderSentinel ? 'the sentinel' : this.ScrollContainer ? 'the list container' : 'NOTHING — both view children are undefined')
       + ':',
       chain
     );
@@ -729,7 +1401,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     // resolves on Angular's own schedule and can still be undefined here, which would end
     // the walk before it began.
     let el: HTMLElement | null =
-      this.findSentinelElement() ?? this.scrollContainer?.nativeElement ?? null;
+      this.findSentinelElement() ?? this.ScrollContainer?.nativeElement ?? null;
     while (el) {
       const overflowY = getComputedStyle(el).overflowY;
       if ((overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight > el.clientHeight) {
@@ -848,6 +1520,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   }
 
   ngOnDestroy() {
+    this.detachScrollListener();
     this._olderObserver?.disconnect();
     this._olderObserver = undefined;
     this._spacerObserver?.disconnect();
@@ -860,14 +1533,28 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     // Clean up all dynamically created components AND embedded views (both have destroy()).
     this._renderedMessages.forEach((entry) => {
       if (entry) {
-        entry.ref.destroy();
+        this.destroyRenderedEntry(entry);
       }
     });
     this._renderedMessages.clear();
 
-    if (this.messageContainerRef) {
-      this.messageContainerRef.clear();
+    if (this.MessageContainerRef) {
+      this.MessageContainerRef.clear();
     }
+  }
+
+  /**
+   * Unsubscribes all dynamic `@Output()` EventEmitter subscriptions attached to a
+   * rendered timeline entry before destroying its underlying `ComponentRef` or `EmbeddedViewRef`.
+   */
+  private destroyRenderedEntry(entry: RenderedMessageEntry): void {
+    if (entry.subs) {
+      for (const sub of entry.subs) {
+        sub?.unsubscribe();
+      }
+      entry.subs.length = 0;
+    }
+    entry.ref.destroy();
   }
 
   /**
@@ -875,10 +1562,15 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * Efficiently updates the DOM without re-rendering everything
    */
   @Input()
-  set messagesUpdate(messages: MJConversationDetailEntity[]) {
-    if (messages && this.messageContainerRef) {
+  set MessagesUpdate(messages: MJConversationDetailEntity[]) {
+    if (messages && this.MessageContainerRef) {
       this.updateMessages(messages);
     }
+  }
+
+  /** @deprecated Use {@link MessagesUpdate}. */
+  @Input() set messagesUpdate(value: MJConversationDetailEntity[]) {
+    this.MessagesUpdate = value;
   }
 
   /**
@@ -903,12 +1595,19 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
 
       // Remove rendered items (messages AND session blocks) that no longer exist
       const currentKeys = new Set(timeline.map(item => this.getTimelineKey(item)));
+      const editingBefore = this.editingDetailId;
       this._renderedMessages.forEach((entry, key) => {
         if (!currentKeys.has(key)) {
-          entry.ref.destroy();
+          if (entry.kind === 'component' && this.editingDetailId != null && UUIDsEqual(entry.ref.instance.message?.ID, this.editingDetailId)) {
+            this.editingDetailId = null;
+          }
+          this.destroyRenderedEntry(entry);
           this._renderedMessages.delete(key);
         }
       });
+      if (editingBefore !== this.editingDetailId) {
+        this.applyEditState();
+      }
 
       // Add or update timeline items in chronological order. `renderMessageItem`
       // internally branches on the slot template (messageRenderer) vs the
@@ -922,6 +1621,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       // components. The tail and any in-progress message are always kept.
       const range = this.computeMountedRange(timeline);
       const lastMessageKey = this.findLastMessageKey(timeline);
+      const lastUserKey = this.findLastUserMessageKey(timeline);
       for (let i = 0; i < timeline.length; i++) {
         const item = timeline[i];
         const mounted = (i >= range.start && i <= range.end)
@@ -932,7 +1632,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
         } else if (item.Kind === 'session') {
           this.renderSessionBlock(item.Group, i);
         } else {
-          this.renderMessageItem(item.Detail, messages, this.getMessageKey(item.Detail) === lastMessageKey, i);
+          const key = this.getMessageKey(item.Detail);
+          this.renderMessageItem(item.Detail, messages, key === lastMessageKey, key === lastMessageKey || key === lastUserKey, i);
         }
       }
 
@@ -1130,11 +1831,11 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     }
     if (existing) {
       this.rememberHeight(key, existing);
-      existing.ref.destroy();
+      this.destroyRenderedEntry(existing);
       this._renderedMessages.delete(key);
     }
 
-    const viewRef = this.messageContainerRef.createEmbeddedView<SpacerContext>(
+    const viewRef = this.MessageContainerRef.createEmbeddedView<SpacerContext>(
       this.spacerTemplate,
       { height: this.heightFor(key, item) },
       { index: timelineIndex }
@@ -1269,6 +1970,17 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     return null;
   }
 
+  /** The render key of the last User message item in the timeline (the latest turn's user message), or null when none. */
+  private findLastUserMessageKey(timeline: ConversationTimelineItem<MJConversationDetailEntity>[]): string | null {
+    for (let i = timeline.length - 1; i >= 0; i--) {
+      const item = timeline[i];
+      if (item.Kind === 'message' && item.Detail.Role === 'User') {
+        return this.getMessageKey(item.Detail);
+      }
+    }
+    return null;
+  }
+
   /**
    * Creates or updates the ONE timeline card a realtime session collapses to.
    * Click/Open on the card bubbles up via {@link realtimeSessionOpenRequested} so the
@@ -1276,7 +1988,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    */
   private renderSessionBlock(group: RealtimeSessionTimelineGroup, timelineIndex: number): void {
     const key = this.getSessionKey(group.SessionID);
-    const meta = this.sessionMetaMap.get(NormalizeUUID(group.SessionID)) ?? null;
+    const meta = this.SessionMetaMap.get(NormalizeUUID(group.SessionID)) ?? null;
     const existing = this._renderedMessages.get(key);
 
     if (existing && existing.kind === 'realtime-session') {
@@ -1290,19 +2002,21 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
 
     // Different kind at this key (e.g. mode changed) — drop the old entry, fall through to create.
     if (existing) {
-      existing.ref.destroy();
+      this.destroyRenderedEntry(existing);
       this._renderedMessages.delete(key);
     }
 
-    const componentRef = this.messageContainerRef.createComponent(
+    const componentRef = this.MessageContainerRef.createComponent(
       RealtimeSessionTimelineCardComponent,
       { index: timelineIndex }
     );
     componentRef.instance.Group = group;
     componentRef.instance.Meta = meta;
-    componentRef.instance.UserName = this.currentUser?.Name || 'You';
-    componentRef.instance.OpenRequested.subscribe((sessionId: string) => this.realtimeSessionOpenRequested.emit(sessionId));
-    this._renderedMessages.set(key, { kind: 'realtime-session', ref: componentRef });
+    // The card says "You" on the viewer's own call and names the caller on anyone else's, which is
+    // why it takes the viewer's id rather than their name.
+    componentRef.instance.CurrentUserID = this.CurrentUser?.ID ?? null;
+    const openSub = componentRef.instance.OpenRequested.subscribe((sessionId: string) => this.RealtimeSessionOpenRequested.emit(sessionId));
+    this._renderedMessages.set(key, { kind: 'realtime-session', ref: componentRef, subs: [openSub] });
   }
 
   /**
@@ -1316,6 +2030,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     message: MJConversationDetailEntity,
     messages: MJConversationDetailEntity[],
     isLastMessage: boolean,
+    isLatestTurn: boolean,
     timelineIndex: number
   ): void {
     const key = this.getMessageKey(message);
@@ -1324,7 +2039,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     // boolean (last index when `isLastMessage` is true, else 0 — any non-last
     // index works since it just affects that one comparison).
     const index = isLastMessage ? messages.length - 1 : 0;
-    const useCustomRenderer = this.messageRendererTemplate !== null;
+    const useCustomRenderer = this.MessageRendererTemplate !== null;
     const existing = this._renderedMessages.get(key);
 
     if (existing && existing.kind === 'embedded' && useCustomRenderer) {
@@ -1336,17 +2051,17 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     }
     if (existing && existing.kind === 'component' && !useCustomRenderer) {
       // Update existing MessageItemComponent in place
-      this.updateMessageItemInstance(existing.ref, message, messages, index);
+      this.updateMessageItemInstance(existing.ref, message, messages, index, isLatestTurn);
       return;
     }
     if (existing) {
       // Rendering kind changed (e.g. component↔embedded, or a session block was
       // overwritten with a message). Destroy + recreate.
-      existing.ref.destroy();
+      this.destroyRenderedEntry(existing);
       this._renderedMessages.delete(key);
     }
 
-    this.createRenderedEntry(message, messages, index, key, useCustomRenderer, timelineIndex);
+    this.createRenderedEntry(message, messages, index, isLatestTurn, key, useCustomRenderer, timelineIndex);
   }
 
   /**
@@ -1358,32 +2073,54 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     ref: ComponentRef<MessageItemComponent>,
     message: MJConversationDetailEntity,
     messages: MJConversationDetailEntity[],
-    index: number
+    index: number,
+    isLatestTurn: boolean
   ): void {
     const instance = ref.instance;
     const previousMessage = instance.message;
 
     instance.message = message;
+    // Streaming ends with the message. It is deliberately NOT cleared on an in-progress full
+    // render (an artifact landing mid-stream): that would snap the status cap back on for a frame.
+    if (message.Status !== 'In-Progress') {
+      instance.IsStreaming = false;
+    }
     instance.allMessages = messages;
-    instance.isProcessing = this.isProcessing;
-    instance.userAvatarMap = this.userAvatarMap;
+    instance.isProcessing = this.IsProcessing;
+    instance.userAvatarMap = this.UserAvatarMap;
     instance.isLastMessage = (index === messages.length - 1);
-    instance.messageExtraTemplate = this.messageExtraTemplate;
+    instance.messageExtraTemplate = this.MessageExtraTemplate;
     this.applyMessageItemFeatureFlags(instance);
 
-    instance.agentRun = this.agentRunMap.get(message.ID) || null;
-    instance.ratings = this.ratingsMap.get(message.ID);
-    instance.attachments = this.attachmentsMap.get(message.ID) || [];
+    instance.agentRun = this.AgentRunMap.get(message.ID) || null;
+    instance.ratings = this.RatingsMap.get(message.ID);
+    instance.attachments = this.AttachmentsMap.get(message.ID) || [];
+    instance.ForkChips = this.chipsFor(message.ID);
+    instance.ForkRail = this.railFor(message.ID);
+    instance.ForkMarkerText = this.markerFor(message.ID);
+    instance.InPlaceRole = this.inPlaceRoleFor(message.ID);
+    this.applyRowTurnState(instance, isLatestTurn);
 
     // After the inputs above, for the same reason as the create path: this can force a
     // synchronous child pass, which would otherwise paint the previous refresh's agent run,
     // ratings and attachments.
     this.applyArtifactsToInstance(instance, message.ID, ref.changeDetectorRef);
 
-    // Status change requires explicit markForCheck on the OnPush dynamic child.
+    // Status or in-place entity mutations (e.g. message.Load() in handleMessageCompletion)
+    // require explicit detectChanges on the dynamically created MessageItemComponent child.
     if (previousMessage && previousMessage.Status !== message.Status) {
       ref.changeDetectorRef.markForCheck();
     }
+    if (!this.isViewDestroyed(ref.changeDetectorRef)) {
+      ref.changeDetectorRef.detectChanges();
+    }
+  }
+
+  /** Sets a row's latest-turn flag and its edit state. */
+  private applyRowTurnState(instance: MessageItemComponent, isLatestTurn: boolean): void {
+    instance.IsLatestTurn = isLatestTurn;
+    instance.EditOpenElsewhere = this.editOpenElsewhere(instance.message.ID);
+    instance.PendingReplace = this.pendingReplaceFor(instance.message.ID);
   }
 
   /**
@@ -1393,14 +2130,18 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * paths so a mid-session rebind stays consistent.
    */
   private applyMessageItemFeatureFlags(instance: MessageItemComponent): void {
-    instance.showAgentRunDetails = this.showAgentRunDetails;
-    instance.showReactions = this.showReactions;
-    instance.showMessageRating = this.showMessageRating;
-    instance.allowPinning = this.allowPinning;
-    instance.allowMessageEdit = this.allowMessageEdit;
-    instance.allowMessageDelete = this.allowMessageDelete;
-    instance.assistantDisplayName = this.assistantDisplayName;
-    instance.assistantAvatarUrl = this.assistantAvatarUrl;
+    instance.showAgentRunDetails = this.ShowAgentRunDetails;
+    instance.showReactions = this.ShowReactions;
+    instance.showMessageRating = this.ShowMessageRating;
+    instance.allowPinning = this.AllowPinning;
+    instance.allowMessageEdit = this.AllowMessageEdit;
+    instance.allowMessageDelete = this.AllowMessageDelete;
+    instance.ReadOnly = this.ReadOnly;
+    instance.AllowStopRun = this.AllowStopRun;
+    instance.InFlightCount = this.InFlightCount;
+    instance.CanFork = this.CanFork;
+    instance.assistantDisplayName = this.AssistantDisplayName;
+    instance.assistantAvatarUrl = this.AssistantAvatarUrl;
   }
 
   /**
@@ -1413,15 +2154,16 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     message: MJConversationDetailEntity,
     messages: MJConversationDetailEntity[],
     index: number,
+    isLatestTurn: boolean,
     key: string,
     useCustomRenderer: boolean,
     timelineIndex: number
   ): void {
-    if (useCustomRenderer && this.messageRendererTemplate) {
+    if (useCustomRenderer && this.MessageRendererTemplate) {
       // The slot directive carries TemplateRef<unknown>; assert the contract here
       // (consumers' `let-message` bindings consume the message context shape below).
-      const template = this.messageRendererTemplate as TemplateRef<MessageRendererContext>;
-      const viewRef = this.messageContainerRef.createEmbeddedView<MessageRendererContext>(
+      const template = this.MessageRendererTemplate as TemplateRef<MessageRendererContext>;
+      const viewRef = this.MessageContainerRef.createEmbeddedView<MessageRendererContext>(
         template,
         { $implicit: message, message },
         { index: timelineIndex }
@@ -1432,42 +2174,63 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       return;
     }
 
-    const componentRef = this.messageContainerRef.createComponent(MessageItemComponent, { index: timelineIndex });
+    const componentRef = this.MessageContainerRef.createComponent(MessageItemComponent, { index: timelineIndex });
     const instance = componentRef.instance;
 
     instance.message = message;
-    instance.conversation = this.conversation;
-    instance.currentUser = this.currentUser;
+    instance.conversation = this.Conversation;
+    instance.currentUser = this.CurrentUser;
     instance.allMessages = messages;
-    instance.isProcessing = this.isProcessing;
-    instance.userAvatarMap = this.userAvatarMap;
+    instance.isProcessing = this.IsProcessing;
+    instance.userAvatarMap = this.UserAvatarMap;
     instance.isLastMessage = (index === messages.length - 1);
-    instance.messageExtraTemplate = this.messageExtraTemplate;
+    instance.messageExtraTemplate = this.MessageExtraTemplate;
     this.applyMessageItemFeatureFlags(instance);
 
-    instance.agentRun = this.agentRunMap.get(message.ID) || null;
-    instance.ratings = this.ratingsMap.get(message.ID);
-    instance.attachments = this.attachmentsMap.get(message.ID) || [];
-
-    instance.editClicked.subscribe((msg: MJConversationDetailEntity) => this.editMessage.emit(msg));
-    instance.deleteClicked.subscribe((msg: MJConversationDetailEntity) => this.deleteMessage.emit(msg));
-    instance.retryClicked.subscribe((msg: MJConversationDetailEntity) => this.retryMessage.emit(msg));
-    instance.testFeedbackClicked.subscribe((msg: MJConversationDetailEntity) => this.testFeedbackMessage.emit(msg));
-    instance.artifactClicked.subscribe((data: {artifactId: string; versionId?: string}) => this.artifactClicked.emit(data));
-    instance.messageEdited.subscribe((msg: MJConversationDetailEntity) => this.messageEdited.emit(msg));
-    instance.openEntityRecord.subscribe((data: {entityName: string; compositeKey: CompositeKey}) => this.openEntityRecord.emit(data));
-    instance.suggestedResponseSelected.subscribe((data: {text: string; customInput?: string}) => this.suggestedResponseSelected.emit(data));
-    instance.attachmentClicked.subscribe((attachment: MessageAttachment) => this.attachmentClicked.emit(attachment));
-    instance.diagnosticRequested.subscribe((messageId: string) => this.diagnosticRequested.emit(messageId));
-    instance.messagePinToggled.subscribe((msg: MJConversationDetailEntity) => this.messagePinToggled.emit(msg));
-    instance.beforeResponseFormSubmitted.subscribe((e: BeforeResponseFormSubmittedEventArgs) => this.beforeResponseFormSubmitted.emit(e));
-    instance.afterResponseFormSubmitted.subscribe((e: AfterResponseFormSubmittedEventArgs) => this.afterResponseFormSubmitted.emit(e));
+    instance.agentRun = this.AgentRunMap.get(message.ID) || null;
+    instance.ratings = this.RatingsMap.get(message.ID);
+    instance.attachments = this.AttachmentsMap.get(message.ID) || [];
+    instance.ForkChips = this.chipsFor(message.ID);
+    instance.ForkRail = this.railFor(message.ID);
+    instance.ForkMarkerText = this.markerFor(message.ID);
+    instance.InPlaceRole = this.inPlaceRoleFor(message.ID);
+    this.applyRowTurnState(instance, isLatestTurn);
+    const subs: Subscription[] = [
+      instance.EditingChanged.subscribe((open: boolean) => this.onRowEditingChanged(instance.message.ID, open)),
+      instance.EditResendRequested.subscribe((e) => this.EditResendRequested.emit(e)),
+      instance.ForkOpenRequested.subscribe((e: ForkChipOpenRequest) => this.ForkOpenRequested.emit(e)),
+      instance.ForkRequested.subscribe((m: MJConversationDetailEntity) => this.ForkRequested.emit(m)),
+      instance.ResendInPlaceRequested.subscribe((m: MJConversationDetailEntity) => this.ResendInPlaceRequested.emit(m)),
+      instance.editClicked.subscribe((msg: MJConversationDetailEntity) => this.EditMessage.emit(msg)),
+      instance.deleteClicked.subscribe((msg: MJConversationDetailEntity) => this.DeleteMessage.emit(msg)),
+      instance.RegenerateRequested.subscribe((msg: MJConversationDetailEntity) => {
+        this.RegenerateRequested.emit(msg);
+        this.RetryMessage.emit(msg);
+      }),
+      instance.BeforeStopClicked.subscribe((e: BeforeStopClickedEventArgs) => this.BeforeStopClicked.emit(e)),
+      instance.StopRequested.subscribe((msg: MJConversationDetailEntity) => this.StopMessage.emit(msg)),
+      instance.testFeedbackClicked.subscribe((msg: MJConversationDetailEntity) => this.TestFeedbackMessage.emit(msg)),
+      instance.artifactClicked.subscribe((data: {artifactId: string; versionId?: string}) => this.ArtifactClicked.emit(data)),
+      instance.messageEdited.subscribe((msg: MJConversationDetailEntity) => this.MessageEdited.emit(msg)),
+      instance.openEntityRecord.subscribe((data: {entityName: string; compositeKey: CompositeKey}) => this.OpenEntityRecord.emit(data)),
+      instance.suggestedResponseSelected.subscribe((data: {text: string; customInput?: string}) => this.SuggestedResponseSelected.emit(data)),
+      instance.attachmentClicked.subscribe((attachment: MessageAttachment) => this.AttachmentClicked.emit(attachment)),
+      instance.diagnosticRequested.subscribe((messageId: string) => this.DiagnosticRequested.emit(messageId)),
+      instance.LivenessCheckRequested.subscribe((messageId: string) => this.LivenessCheckRequested.emit(messageId)),
+      instance.messagePinToggled.subscribe((msg: MJConversationDetailEntity) => this.MessagePinToggled.emit(msg)),
+      instance.beforeResponseFormSubmitted.subscribe((e: BeforeResponseFormSubmittedEventArgs) => this.BeforeResponseFormSubmitted.emit(e)),
+      instance.afterResponseFormSubmitted.subscribe((e: AfterResponseFormSubmittedEventArgs) => this.AfterResponseFormSubmitted.emit(e)),
+      instance.TaskGraphPanelRequested.subscribe((data: { parentTaskId: string; workflowTitle: string; workflowName?: string; isRunning?: boolean }) => this.TaskGraphPanelRequested.emit(data)),
+      instance.ScrollToMessageRequested.subscribe((messageId: string) => this.ScrollToMessageRequested.emit(messageId)),
+    ];
 
     if (instance.artifactActionPerformed) {
-      instance.artifactActionPerformed.subscribe((data: {action: string; artifactId: string}) => {
-        // Parent can handle artifact actions (save, fork, history, share)
-        console.log('Artifact action:', data);
-      });
+      subs.push(
+        instance.artifactActionPerformed.subscribe((data: {action: string; artifactId: string}) => {
+          // Parent can handle artifact actions (save, fork, history, share)
+          console.log('Artifact action:', data);
+        })
+      );
     }
 
     // LAST, deliberately. It publishes the pending-artifact list and forces the child's first
@@ -1477,7 +2240,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     // first paint showed the rating control on an already-rated message.
     this.applyArtifactsToInstance(instance, message.ID, componentRef.changeDetectorRef);
 
-    this._renderedMessages.set(key, { kind: 'component', ref: componentRef });
+    this._renderedMessages.set(key, { kind: 'component', ref: componentRef, subs });
     // Preserve the existing back-ref pattern from the skip-chat performance design.
     (message as unknown as { _componentRef?: ComponentRef<MessageItemComponent> })._componentRef = componentRef;
   }
@@ -1602,11 +2365,11 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * while genuinely distinct artifacts are all retained.
    */
   private resolveDistinctArtifacts(messageId: string): LazyArtifactInfo[] {
-    const list = this.artifactMap.get(messageId);
+    const list = this.ArtifactMap.get(messageId);
     if (!list || list.length === 0) {
       return [];
     }
-    return selectDistinctLatestArtifacts(list);
+    return SelectDistinctLatestArtifacts(list);
   }
 
   /**
@@ -1630,11 +2393,11 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     // the one case where it is most useful. `HasMoreAbove` is the only windowing-safe signal
     // that more conversation exists above, so it short-circuits the heuristic.
     if (this.HasMoreAbove) {
-      this.shouldShowDateFilter = true;
+      this.ShouldShowDateFilter = true;
       return;
     }
     if (!this.messages || this.messages.length < 20) {
-      this.shouldShowDateFilter = false;
+      this.ShouldShowDateFilter = false;
       return;
     }
 
@@ -1645,7 +2408,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       .map(d => new Date(d!).setHours(0, 0, 0, 0));
 
     if (dates.length === 0) {
-      this.shouldShowDateFilter = false;
+      this.ShouldShowDateFilter = false;
       return;
     }
 
@@ -1653,16 +2416,16 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     const daySpan = uniqueDates.size;
 
     // Show filter if conversation has 20+ messages and spans 3+ days
-    this.shouldShowDateFilter = daySpan >= 3;
+    this.ShouldShowDateFilter = daySpan >= 3;
   }
 
   /**
    * Scrolls the message list to the bottom
    */
   private scrollToBottom(): void {
-    if (this.scrollContainer && this.scrollContainer.nativeElement) {
+    if (this.ScrollContainer && this.ScrollContainer.nativeElement) {
       Promise.resolve().then(() => {
-        const element = this.scrollContainer.nativeElement;
+        const element = this.ScrollContainer.nativeElement;
         element.scrollTop = element.scrollHeight;
       });
     }
@@ -1672,12 +2435,17 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * Removes a message from the rendered list
    * Called externally when a message is deleted
    */
-  public removeMessage(message: MJConversationDetailEntity): void {
+  public RemoveMessage(message: MJConversationDetailEntity): void {
     const key = this.getMessageKey(message);
     const entry = this._renderedMessages.get(key);
     if (entry) {
-      entry.ref.destroy();
+      this.destroyRenderedEntry(entry);
       this._renderedMessages.delete(key);
     }
+  }
+
+  /** @deprecated Use {@link RemoveMessage}. */
+  public removeMessage(message: MJConversationDetailEntity): void {
+    return this.RemoveMessage(message);
   }
 }

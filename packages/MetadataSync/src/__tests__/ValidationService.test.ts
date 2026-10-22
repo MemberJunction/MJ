@@ -37,11 +37,12 @@ vi.mock('minimatch', () => ({
 }));
 
 vi.mock('../lib/provider-utils', () => ({
-  getSystemUser: vi.fn().mockReturnValue({ ID: 'system-user-id' }),
+  GetSystemUser: vi.fn().mockReturnValue({ ID: 'system-user-id' }),
+    get getSystemUser() { return this.GetSystemUser; },
 }));
 
 import { ValidationService } from '../services/ValidationService';
-import { parseMetadataReference } from '../lib/reference-parser';
+import { ParseMetadataReference } from '../lib/reference-parser';
 import { METADATA_KEYWORDS } from '../constants/metadata-keywords';
 import * as fs from 'fs';
 // Type-only imports: erased at runtime, so they bypass the vi.mock above and
@@ -155,34 +156,34 @@ describe('parseMetadataReference — the REAL production parser', () => {
 
   describe('@file: references', () => {
     it('parses simple file references', () => {
-      expect(parseMetadataReference('@file:template.md')).toEqual({
+      expect(ParseMetadataReference('@file:template.md')).toEqual({
         type: METADATA_KEYWORDS.FILE,
         value: 'template.md',
       });
     });
 
     it('parses file references with relative paths', () => {
-      expect(parseMetadataReference('@file:./shared/common-prompt.md')).toEqual({
+      expect(ParseMetadataReference('@file:./shared/common-prompt.md')).toEqual({
         type: METADATA_KEYWORDS.FILE,
         value: './shared/common-prompt.md',
       });
     });
 
     it('parses file references with parent directories', () => {
-      expect(parseMetadataReference('@file:../templates/standard-header.md')).toEqual({
+      expect(ParseMetadataReference('@file:../templates/standard-header.md')).toEqual({
         type: METADATA_KEYWORDS.FILE,
         value: '../templates/standard-header.md',
       });
     });
 
     it('returns null for a bare @file: with no path', () => {
-      expect(parseMetadataReference('@file:')).toBeNull();
+      expect(ParseMetadataReference('@file:')).toBeNull();
     });
   });
 
   describe('@lookup: references', () => {
     it('parses a single-field lookup into entity/field/value', () => {
-      const parsed = parseMetadataReference('@lookup:Users.Email=john@example.com');
+      const parsed = ParseMetadataReference('@lookup:Users.Email=john@example.com');
       expect(parsed).toEqual({
         type: METADATA_KEYWORDS.LOOKUP,
         entity: 'Users',
@@ -198,7 +199,7 @@ describe('parseMetadataReference — the REAL production parser', () => {
       // The retired tautological test asserted the raw remainder
       // 'Name=Examples?create'. The real parser goes further: it strips the
       // flag from the value and surfaces it as createIfMissing.
-      const parsed = parseMetadataReference('@lookup:Categories.Name=Examples?create');
+      const parsed = ParseMetadataReference('@lookup:Categories.Name=Examples?create');
       expect(parsed).toEqual({
         type: METADATA_KEYWORDS.LOOKUP,
         entity: 'Categories',
@@ -211,7 +212,7 @@ describe('parseMetadataReference — the REAL production parser', () => {
     });
 
     it('parses multi-field lookups into an ordered fields array with the first as primary', () => {
-      const parsed = parseMetadataReference('@lookup:Users.Email=john@example.com&Department=Sales');
+      const parsed = ParseMetadataReference('@lookup:Users.Email=john@example.com&Department=Sales');
       expect(parsed).not.toBeNull();
       expect(parsed!.entity).toBe('Users');
       expect(parsed!.fields).toEqual([
@@ -224,7 +225,7 @@ describe('parseMetadataReference — the REAL production parser', () => {
     });
 
     it('parses ?create with additional creation fields (URI-decoded)', () => {
-      const parsed = parseMetadataReference(
+      const parsed = ParseMetadataReference(
         '@lookup:Categories.Name=Examples?create&Description=Example%20prompts',
       );
       expect(parsed).not.toBeNull();
@@ -234,61 +235,72 @@ describe('parseMetadataReference — the REAL production parser', () => {
     });
 
     it('parses ?create with a literal-space additional field', () => {
-      const parsed = parseMetadataReference(
+      const parsed = ParseMetadataReference(
         '@lookup:Categories.Name=Examples?create&Description=Example prompts',
       );
       expect(parsed!.additionalFields).toEqual({ Description: 'Example prompts' });
     });
 
     it('reports createIfMissing=false when ?create is absent', () => {
-      const parsed = parseMetadataReference('@lookup:Roles.Name=Admin');
+      const parsed = ParseMetadataReference('@lookup:Roles.Name=Admin');
       expect(parsed!.createIfMissing).toBe(false);
       expect(parsed!.additionalFields).toEqual({});
     });
 
     it('trims whitespace around field names and values', () => {
-      const parsed = parseMetadataReference('@lookup:Users.Name = Jane Doe');
+      const parsed = ParseMetadataReference('@lookup:Users.Name = Jane Doe');
       expect(parsed!.fields).toEqual([{ field: 'Name', value: 'Jane Doe' }]);
     });
 
     it('supports spaces and colons in entity names (MJ: prefix)', () => {
-      const parsed = parseMetadataReference('@lookup:MJ: AI Prompt Types.Name=Chat');
+      const parsed = ParseMetadataReference('@lookup:MJ: AI Prompt Types.Name=Chat');
       expect(parsed!.entity).toBe('MJ: AI Prompt Types');
       expect(parsed!.fields).toEqual([{ field: 'Name', value: 'Chat' }]);
     });
 
     it('returns null for a lookup without an entity name', () => {
-      expect(parseMetadataReference('@lookup:.Name=Test')).toBeNull();
+      expect(ParseMetadataReference('@lookup:.Name=Test')).toBeNull();
     });
 
     it('parses criteria without "=" into an empty fields array (permissive; the sync engine rejects these at push time)', () => {
-      const parsed = parseMetadataReference('@lookup:Users.NoEqualsSign');
+      const parsed = ParseMetadataReference('@lookup:Users.NoEqualsSign');
       expect(parsed).not.toBeNull();
       expect(parsed!.fields).toEqual([]);
       expect(parsed!.field).toBe('');
       expect(parsed!.value).toBe('');
     });
 
-    it('documents the substring quirk: any "?create" occurrence in the value activates create mode', () => {
-      // Real behavior pinned on purpose: hasCreate is a substring test, so a
-      // value containing "?create..." (here "What?createdBy") trips it and the
-      // value is truncated at the first "?".
-      const parsed = parseMetadataReference('@lookup:Notes.Title=What?createdBy');
-      expect(parsed!.createIfMissing).toBe(true);
+    it('splits the criteria at the first "?" like push: "What?createdBy" holds a flag, not create', () => {
+      const parsed = ParseMetadataReference('@lookup:Notes.Title=What?createdBy');
+      expect(parsed!.createIfMissing).toBe(false);
       expect(parsed!.fields).toEqual([{ field: 'Title', value: 'What' }]);
+      expect(parsed!.UnknownFlags).toEqual(['createdby']);
+    });
+
+    it('splits the criteria at the first "?" without ?create', () => {
+      const parsed = ParseMetadataReference('@lookup:Notes.Title=Foo?allowDefer');
+      expect(parsed!.fields).toEqual([{ field: 'Title', value: 'Foo' }]);
+      expect(parsed!.createIfMissing).toBe(false);
+      expect(parsed!.UnknownFlags).toBeUndefined();
+    });
+
+    it('reports ?optional as an unknown flag', () => {
+      const parsed = ParseMetadataReference('@lookup:MJ: Users.Email=@env:E?optional');
+      expect(parsed!.fields).toEqual([{ field: 'Email', value: '@env:E' }]);
+      expect(parsed!.UnknownFlags).toEqual(['optional']);
     });
   });
 
   describe('@parent: references', () => {
     it('parses parent field references', () => {
-      expect(parseMetadataReference('@parent:ID')).toEqual({
+      expect(ParseMetadataReference('@parent:ID')).toEqual({
         type: METADATA_KEYWORDS.PARENT,
         value: 'ID',
       });
     });
 
     it('parses parent references with longer field names', () => {
-      expect(parseMetadataReference('@parent:CategoryID')).toEqual({
+      expect(ParseMetadataReference('@parent:CategoryID')).toEqual({
         type: METADATA_KEYWORDS.PARENT,
         value: 'CategoryID',
       });
@@ -297,14 +309,14 @@ describe('parseMetadataReference — the REAL production parser', () => {
 
   describe('@root: references', () => {
     it('parses root field references', () => {
-      expect(parseMetadataReference('@root:ID')).toEqual({
+      expect(ParseMetadataReference('@root:ID')).toEqual({
         type: METADATA_KEYWORDS.ROOT,
         value: 'ID',
       });
     });
 
     it('parses root references with named fields', () => {
-      expect(parseMetadataReference('@root:Name')).toEqual({
+      expect(ParseMetadataReference('@root:Name')).toEqual({
         type: METADATA_KEYWORDS.ROOT,
         value: 'Name',
       });
@@ -313,23 +325,34 @@ describe('parseMetadataReference — the REAL production parser', () => {
 
   describe('@env: references', () => {
     it('parses env references', () => {
-      expect(parseMetadataReference('@env:NODE_ENV')).toEqual({
+      expect(ParseMetadataReference('@env:NODE_ENV')).toEqual({
         type: METADATA_KEYWORDS.ENV,
         value: 'NODE_ENV',
       });
     });
 
     it('parses env references with underscores', () => {
-      expect(parseMetadataReference('@env:DATABASE_CONNECTION_STRING')).toEqual({
+      expect(ParseMetadataReference('@env:DATABASE_CONNECTION_STRING')).toEqual({
         type: METADATA_KEYWORDS.ENV,
         value: 'DATABASE_CONNECTION_STRING',
       });
+    });
+
+    it('parses an optional env reference to the bare variable name', () => {
+      expect(ParseMetadataReference('@env:API_KEY?optional')).toEqual({
+        type: METADATA_KEYWORDS.ENV,
+        value: 'API_KEY',
+      });
+    });
+
+    it('rejects an env reference with an unknown modifier', () => {
+      expect(ParseMetadataReference('@env:API_KEY?bogus')).toBeNull();
     });
   });
 
   describe('@template: references', () => {
     it('parses template references', () => {
-      expect(parseMetadataReference('@template:templates/standard-ai-models.json')).toEqual({
+      expect(ParseMetadataReference('@template:templates/standard-ai-models.json')).toEqual({
         type: METADATA_KEYWORDS.TEMPLATE,
         value: 'templates/standard-ai-models.json',
       });
@@ -338,16 +361,16 @@ describe('parseMetadataReference — the REAL production parser', () => {
 
   describe('non-references', () => {
     it('returns null for plain strings', () => {
-      expect(parseMetadataReference('regular string')).toBeNull();
+      expect(ParseMetadataReference('regular string')).toBeNull();
     });
 
     it('returns null for unknown @ prefixes (npm scopes, emails)', () => {
-      expect(parseMetadataReference('@mui/material')).toBeNull();
-      expect(parseMetadataReference('@unknown:value')).toBeNull();
+      expect(ParseMetadataReference('@mui/material')).toBeNull();
+      expect(ParseMetadataReference('@unknown:value')).toBeNull();
     });
 
     it('documents that the validation-side parser does NOT understand @url: (the sync engine does)', () => {
-      expect(parseMetadataReference('@url:https://example.com/prompt.md')).toBeNull();
+      expect(ParseMetadataReference('@url:https://example.com/prompt.md')).toBeNull();
     });
   });
 });
@@ -725,5 +748,97 @@ describe('ValidationService - Dependency Order Checking (real implementation)', 
     expect(svc['entityDependencies'].get('Categories')?.dependsOn.size).toBe(0);
     // ...so processing order can never violate it
     expect(svc['checkDependencyOrder'](['Categories'])).toHaveLength(0);
+  });
+});
+
+describe('ValidationService - @env:VAR?optional', () => {
+  function service(): ValidationService {
+    const svc = new ValidationService({ checkBestPractices: true });
+    svc['errors'] = [];
+    svc['warnings'] = [];
+    return svc;
+  }
+
+  it('reports ?optional in a primary key as an error', () => {
+    const svc = service();
+
+    svc['validatePrimaryKeyEnvReferences']({ ID: '@env:TAG_ID?optional' }, 'MJ: Tags', '/test/tags.json');
+
+    expect(svc['errors']).toHaveLength(1);
+    expect(svc['errors'][0].field).toBe('ID');
+    expect(svc['errors'][0].message).toContain('cannot use ?optional');
+  });
+
+  it('reports a bad modifier in a primary key as an invalid reference', () => {
+    const svc = service();
+
+    svc['validatePrimaryKeyEnvReferences']({ ID: '@env:TAG_ID?bogus' }, 'MJ: Tags', '/test/tags.json');
+
+    expect(svc['errors']).toHaveLength(1);
+    expect(svc['errors'][0].message).toContain('Invalid reference format');
+  });
+
+  it('accepts a plain @env: reference in a primary key', () => {
+    const svc = service();
+
+    svc['validatePrimaryKeyEnvReferences']({ ID: '@env:TAG_ID' }, 'MJ: Tags', '/test/tags.json');
+
+    expect(svc['errors']).toHaveLength(0);
+  });
+
+  it('does not warn about an unset optional variable in nested JSON', () => {
+    const svc = service();
+
+    svc['validateNestedEnvReference']('@env:MJ_VALIDATE_UNSET?optional', '/test/a.json', 'MJ: Tags', 'Key');
+
+    expect(svc['warnings']).toHaveLength(0);
+    expect(svc['errors']).toHaveLength(0);
+  });
+
+  it('warns about an unset required variable in nested JSON', () => {
+    const svc = service();
+
+    svc['validateNestedEnvReference']('@env:MJ_VALIDATE_UNSET', '/test/a.json', 'MJ: Tags', 'Key');
+
+    expect(svc['warnings']).toHaveLength(1);
+    expect(svc['warnings'][0].message).toContain('MJ_VALIDATE_UNSET');
+  });
+
+  it('reports a nested reference with an unknown modifier as an error', () => {
+    const svc = service();
+
+    svc['validateNestedEnvReference']('@env:X?bogus', '/test/a.json', 'MJ: Tags', 'Key');
+
+    expect(svc['errors']).toHaveLength(1);
+    expect(svc['errors'][0].message).toContain('Invalid reference format');
+  });
+});
+
+describe('ValidationService - ?optional inside @lookup:', () => {
+  function service(): ValidationService {
+    const svc = new ValidationService({ checkBestPractices: true });
+    svc['errors'] = [];
+    svc['warnings'] = [];
+    return svc;
+  }
+
+  it('reports ?optional in a lookup as an error', async () => {
+    const svc = service();
+    const parsed = ParseMetadataReference('@lookup:MJ: Users.Email=@env:E?optional');
+
+    await svc['validateLookupReference'](parsed!, '/test/a.json', 'MJ: Tags', 'UserID');
+
+    const errors = svc['errors'].filter((e) => e.message.includes('?optional is not supported in @lookup:'));
+    expect(errors).toHaveLength(1);
+    expect(errors[0].field).toBe('UserID');
+  });
+
+  it('does not report a lookup without ?optional', async () => {
+    const svc = service();
+    const parsed = ParseMetadataReference('@lookup:MJ: Users.Email=@env:E?create');
+
+    await svc['validateLookupReference'](parsed!, '/test/a.json', 'MJ: Tags', 'UserID');
+
+    expect(svc['errors'].filter((e) => e.message.includes('?optional'))).toEqual([]);
   });
 });

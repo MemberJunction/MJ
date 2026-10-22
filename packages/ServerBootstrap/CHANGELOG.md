@@ -1,5 +1,2306 @@
 # @memberjunction/server-bootstrap
 
+## 6.2.0-edge.5
+
+### Minor Changes
+
+- b14c72f: Add the personal Chief of Staff (`Chief of Staff`) AI agent, per-user narrowed governance (`MJ: AI Agent User Policies` + `AgentUserPolicyEngine`), 3-Tier Wake Gate on `MJ: User Routines` (`RoutineType = 'AgentWake'`), user-scoped calendar/email/availability actions (`EnterpriseMailboxSecurityGate`), and Communication Dashboard enterprise governance cards.
+- 1cb1d52: Login Studio: design the Explorer sign-in page on the default theme.
+  - **Schema:** `MJ: Themes` gains `LoginScreen` (published) and `LoginScreenDraft`. `MJThemeEntityExtended`
+    refuses a design the login screen cannot draw safely (`StoredLoginDesignProblems` in
+    `@memberjunction/theme-engine`, the same contract the editor checks).
+  - **App:** Login Studio (`LoginStudioResource`) edits blocks, layout, background and colors, saves a draft
+    and publishes it.
+  - **Public route:** `GET /auth/login-screen` serves the default Active theme's published design, logos and
+    seeds, sanitized (`SanitizePublicLoginScreen`) on the server and again in the browser. Drafts are never
+    served to anonymous visitors; signed-in users who can read themes can read them.
+  - **Login screen:** `<mj-explorer-app>` draws a published design through `<mj-login-region>` and wears the
+    default theme's brand colors before sign-in. A host's `mjLoginSlot` templates still win;
+    `UsePublishedLoginScreen = false` keeps the screen as the host's own inputs and CSS draw it.
+
+- 230cdad: Add two decision models, each with a driver for its vendor's own API. Both are unmeasured in MJ, and their probabilities are not calibrated.
+  - **SubQ Snap** (new vendor Subquadratic, PowerRank 43): `SubQDecision` in `@memberjunction/ai-systemone` speaks SubQ's System One API (`subq-snap-preview`, public preview). A 402 is `NoCredit`, and a 403 or 422 a `ModelError`.
+  - **Mercury Decide** (Inception Labs, PowerRank 44): `InceptionDecision` in `@memberjunction/ai-inception` speaks Inception's System One API (`mercury-decide`). A 402 is `NoCredit` and a 422 a `ModelError`. Also served through OpenRouter (`OpenRouterDecision`).
+
+  Shared in `@memberjunction/ai`:
+  - `BaseHostedSystemOneDecision`, the base of the fixed-endpoint System One drivers: endpoint precedence (constructor, credential, default), the vendor's error message, and the missing-key check.
+  - `ReadSystemOneErrorMessage` (the vendor's message from an error body), `RedactSecret`, and the protected `GetHTTPErrorType` hook (a status's error type, attached as a failover-eligible classification).
+
+  Changes to existing drivers:
+  - `SystemOneDecision` and `PerplexityDecision` error messages also read SubQ-style `detail` objects, and an empty `detail` falls through to `error`.
+  - Every `BaseSystemOneDecision` driver redacts the API key (for `CloudflareDecision`, also its token alone) from HTTP error messages, before any truncation and again after the vendor message is decoded; a key under 8 characters is left as is.
+  - `PerplexityDecision` now extends `BaseHostedSystemOneDecision`, with no change in behaviour.
+
+  **Default Decision.** Its bindings are unchanged, but every active Decision model joins its power-matched fallbacks, ordered by PowerRank distance from its target (57). Mercury Decide and SubQ Snap are the last. A fallback is tried only when one of its rows has a credential: an OpenRouter key (as for Jev), a credential bound to the Inception Labs or Subquadratic vendor, or a default `API Key` credential is enough. To keep a model out, set its row's `Status` to `Inactive`.
+
+- ce758af: Feature Pipelines: keyed, versioned Feature Values and honest runs (migration `V202610201100__v6.2.x__Feature_Value_Key_And_Versions.sql`).
+  - Feature Values upsert on a key (record, feature, pipeline version, prompt version, primary model, parameters, input); a value a person entered (`Source='Human'`) is never overwritten unless the run sets `overwriteHumanValues`. Child write-back can `reconcile` rows on a key.
+  - `MJ: Feature Pipeline Versions` registers each pipeline pin; a gated pipeline runs only under a version whose golden-set result meets its threshold. The `Steward Feature Pipeline Version` Action (`StewardFeaturePipelineVersionAction`) and `Feature Pipeline Version Steward` Record Process (`WorkType='Action'`, scheduled via `RecordProcessScheduledJobDriver`) evaluate and backfill changed versions; golden sets carry a label-quality record, `Required` and `ExpectAbstain` cases.
+  - New `@memberjunction/feature-pipelines-engine` package houses server-side Feature Pipeline execution (`InferProcessor`, `BaseFeaturePipelineDriver`, `LLMFeaturePipelineDriver`, `DecisionFeaturePipelineDriver`, `FeaturePipelineEscalation`, `FeaturePipelineHumanValueGuard`, `FeaturePipelineErrors`), golden-set testing (`FeaturePipelineGoldenSetDriver`, `golden-set-scoring`, `golden-label-quality`), and version stewardship (`FeaturePipelineVersionSteward`, `StewardFeaturePipelineVersionAction`, `RegisterInferRecordProcessor`), keeping `@memberjunction/record-set-processor-base`, `@memberjunction/record-set-processor`, `@memberjunction/scheduling-engine`, and `@memberjunction/testing-engine` free of Feature Pipeline dependencies.
+  - Outputs are checked against `lookup` constraints (per item with `ItemRef`); an output below its `MinConfidence` is withheld (`OnLowConfidence: 'null'`); `Context.RecordAsUserMessage` sends the record as a JSON user turn.
+  - Dry runs write nothing, preview only what the real write would change, cap at 25 records and report `WouldRefuse`; a Feature Pipeline run with a failed record ends `Failed` with a `FeaturePipelineRunResult` summary; the breaker counts attempted records.
+  - An output may omit its write target (builder target mode `Feature value only (no write-back)`): the answer is stored in `MJ: Feature Values` only, typed by its constraint (`numeric`/`money`, `boolean`, `date`), and no entity field is written. The Bulk Operations dry-run dialog shows each as a `<Feature> (feature value)` row with the previous and proposed value, and loads only the non-skipped details so a large scope counts every changed record.
+  - A Feature Values panel on every record form shows the latest answer per pipeline and feature (Source, Confidence, version, Computed, Reasoning) and expands to its history; a latest answer that withheld its value reads "no value". `@memberjunction/ng-base-forms` re-resolves the form chrome when a panel mounts after first render, so a late panel gets its left-nav entry.
+  - The Version Steward beats on a timer while its backfill runs, defers a backfill while a run is Running, marks only a clean run as backfilled, and ignores a Running Process Run not checkpointed for 30 minutes. A Feature Value insert that loses the race on its key to an equal value is `Unchanged`.
+  - Bedrock sends a configured temperature of 0 as 0 (F-FP-13).
+  - `AIPromptParams.templateAutoescape` (set by the Feature Pipeline drivers) renders a prompt template without HTML escaping; a Feature Pipeline run reads its prompt's template from the database at run start, so a template edit takes effect on the next run.
+  - API moves & PascalCase standardization: `WriteBackResult`, `TagWriteBackPreview`, `FieldRulesResultPayload`, and `MetadataProviderCapabilities` live in `@memberjunction/record-set-processor-base`; `FeaturePipelineRunResults` lives in `@memberjunction/feature-pipelines`; `RunRecordProcessOptions`, `RecordProcessorContext`, `RecordSetProcessOptions`, `ProcessRunSummary`, and `WriteBackValuePreview` use `PascalCase` properties across `@memberjunction/record-set-processor-base` and `@memberjunction/record-set-processor`.
+
+### Patch Changes
+
+- 0cc6b08: Storage permissions: close the gaps a review found around `StorageAccessEvaluator`. The rules, in one place:
+  - **Account gate everywhere.** Every path that acts on a storage account for a user asks `StorageAccessEvaluator` first — the GraphQL storage routes, and now the File Storage core actions (Get Download URL, Get Object, Get File Content, Get Metadata, List Objects, Search Storage Files, Object/Directory Exists need `Read`; Get Upload URL, Copy, Move, Delete Object, Create/Delete Directory need `Write`), `List Storage Accounts` (lists only accounts the caller may read) and `BaseFileHandlerAction` (`Write` on the account a save lands in; reads go through the file-ID gate). These actions are reachable by any user through `RunAction` and by any agent. An unknown account name and a refused account return the same `ACCESS_DENIED` result. Zero permission rows on an account still means open (the current product rule, unchanged).
+  - **File-ID routes gate the account the row resolves to.** `FileStorageEngine.ResolveFileObject` (new) resolves an `MJ: Files` row's provider to its account, requires the caller's access on it, and applies the tracked-file rule to the row's object. `DownloadUrl`, `GetFileContents`, `CreateMediaAccessToken`, `DeleteFile` and the `UpdateFile` rename (`Write`), `ArtifactFileDownloadUrl`, the conversation-attachment blob store, the agent file handler and `ReadRealtimeRecordingFile` use it, so a row whose `ProviderKey`/`Name` aliases another row's object is refused.
+  - **Tracked-file rule.** An object backing an `MJ: Files` row may be read, signed, listed, returned by search, overwritten, moved, copied or deleted only when the caller can read that row (the minimum for a write; `CanWrite` is still required). Applied to the Get Object / Get File Content / Get Metadata / Get Download URL / Get Upload URL / Copy / Move / Delete Object actions, `CreatePreAuthDownloadUrl`/`CreatePreAuthUploadUrl`, `DeleteStorageObject`, `MoveStorageObject` and `CopyStorageObject` (source and destination), `CopyObjectBetweenAccounts` (both ends), `UploadFile` (before `PutObject`), and as a filter on `ListStorageObjects`, `SearchAcrossAccounts`, the List Objects / Search Storage Files actions and `SearchEngine`'s storage hits.
+  - **Key canonicalization.** Client and stored keys go through one canonicalizer, `FileStorageBase.NormalizeObjectKey` (default: trim, collapse repeated `/`, strip leading/trailing `/`; S3 overrides it to strip its key prefix the way it addresses keys), and are compared case-insensitively (`LOWER(...)` in SQL). Keys with a `.`/`..` segment, a backslash, a percent-encoded `/`, `\`, `.` or control character, or a raw control character are refused outright.
+  - **One object-key rule.** `StorageObjectKeyOf` (new) resolves an `MJ: Files` row to `ProviderKey`, or `Name` when `ProviderKey` is null or empty; the tracked-file lookup, `ResolveFileObject`, the file resolver and the conversation-attachment blob store all use it, so a row stored with an empty `ProviderKey` is checked under the same key it is served from.
+  - **Cache refresh on a miss runs as the system user.** `FileStorageEngine.RefreshAfterMiss` (new) reloads the account cache as the MJ system user; `ResolveFileObject`, `GetDriver`, `UploadFile`, the file resolver and the realtime recording store use it instead of a forced `Config` as the caller, which emptied the shared cache for everyone when the caller could not read `MJ: File Storage Accounts`. `GetFileContents` reads a row with no `ProviderKey` from its `Name`, as the other file routes do.
+  - **No truncation.** Every evaluator read sets `IgnoreMaxRows`, so the entity row cap can no longer drop an account's rows (which read as "zero rows → open") or a tracked file's row; lookups are batched.
+  - **Azure pre-authenticated URLs** are blob-scoped service SAS tokens (`r` to download, `cw` to upload) instead of account-wide SAS tokens; expiry is unchanged (10 minutes).
+  - **`MJ: Files` storage location is server-owned on existing rows.** `MJFileEntityServer` refuses a save that changes `ProviderID` or `ProviderKey` on an existing row (including `ReplayOnly`) unless trusted server code sets `AllowStorageLocationChange` (registered in both server-bootstrap class manifests). A new row may still carry a client-chosen `ProviderKey` (Explorer's direct-upload path registers its upload that way); the routes' gate above is what makes such a row harmless.
+  - **Search details.** `SearchAcrossAccounts` reports accounts in request order and withholds `totalMatches`/`nextPageToken` once hits are dropped; under an `Audience` storage hits are dropped (re-checked for the caller only; per-reader storage checks are a follow-up). `ListStorageObjects` reads the typed `Configuration` property.
+
+  Also fixed: the `List Storage Providers` action could never run. Its class was registered as `List Storage Accounts`, which no metadata row names; it is now registered under the shipped action's `DriverClass`, `List Storage Providers`.
+
+- e38710c: Regenerate the server class-registration manifests to include `MJDataContextItemEntityServer`, which #5266 added without regenerating them. Until this lands, `next`'s Build job fails "Committed class-registration manifests are STALE".
+- Updated dependencies [3b0e8db]
+- Updated dependencies [0d81c53]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [fd780a9]
+- Updated dependencies [39b35f1]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [3080e83]
+- Updated dependencies [52b9fd5]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [8729a08]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [f75b7b4]
+- Updated dependencies [8443fd2]
+- Updated dependencies [2ed72d8]
+- Updated dependencies [832c63c]
+- Updated dependencies [d26183d]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [db50c6b]
+- Updated dependencies [afc1e0e]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [5465489]
+- Updated dependencies [a9344ad]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [1419678]
+- Updated dependencies [0ab85d7]
+- Updated dependencies [9d1eb6a]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [cd39c95]
+- Updated dependencies [55184f1]
+- Updated dependencies [e5675dc]
+- Updated dependencies [c6d1232]
+- Updated dependencies [2274f42]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [542795b]
+- Updated dependencies [db39145]
+- Updated dependencies [a0db1fb]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [fcc3f03]
+- Updated dependencies [230cdad]
+- Updated dependencies [7e72c86]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [a9614be]
+- Updated dependencies [cfb3aab]
+- Updated dependencies [fb7ac5d]
+- Updated dependencies [2a7a098]
+- Updated dependencies [8420f36]
+- Updated dependencies [72dd65c]
+- Updated dependencies [9c2a051]
+- Updated dependencies [1d29837]
+- Updated dependencies [006a5e7]
+- Updated dependencies [ba61c0b]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [2ca8690]
+- Updated dependencies [74d44e1]
+- Updated dependencies [c7d1170]
+- Updated dependencies [79d4f27]
+- Updated dependencies [a750fa5]
+- Updated dependencies [5f707d1]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [3cb20c0]
+- Updated dependencies [d1b1958]
+- Updated dependencies [e1f2583]
+- Updated dependencies [8389c99]
+- Updated dependencies [03c085c]
+- Updated dependencies [dc38250]
+- Updated dependencies [04fec10]
+  - @memberjunction/generic-database-provider@6.2.0-edge.5
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/ai-agents@6.2.0-edge.5
+  - @memberjunction/ai-prompts@6.2.0-edge.5
+  - @memberjunction/server@6.2.0-edge.5
+  - @memberjunction/testing-integration@6.2.0-edge.5
+  - @memberjunction/ai-core-plus@6.2.0-edge.5
+  - @memberjunction/actions-base@6.2.0-edge.5
+  - @memberjunction/actions@6.2.0-edge.5
+  - @memberjunction/core-actions@6.2.0-edge.5
+  - @memberjunction/ai-engine-base@6.2.0-edge.5
+  - @memberjunction/task-graph@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/server-extensions-core@6.2.0-edge.5
+  - @memberjunction/archiving-engine@6.2.0-edge.5
+  - @memberjunction/archiving-action@6.2.0-edge.5
+  - @memberjunction/communication-types@6.2.0-edge.5
+  - @memberjunction/communication-ms-graph@6.2.0-edge.5
+  - @memberjunction/core-entities-server@6.2.0-edge.5
+  - @memberjunction/scheduling-engine@6.2.0-edge.5
+  - @memberjunction/codegen-lib@6.2.0-edge.5
+  - @memberjunction/ai-agent-harness@6.2.0-edge.5
+  - @memberjunction/action-runtime-host@6.2.0-edge.5
+  - @memberjunction/record-set-processor@6.2.0-edge.5
+  - @memberjunction/storage@6.2.0-edge.5
+  - @memberjunction/search-engine@6.2.0-edge.5
+  - @memberjunction/ai-recommendations-rex@6.2.0-edge.5
+  - @memberjunction/content-autotagging@6.2.0-edge.5
+  - @memberjunction/ai-gemini@6.2.0-edge.5
+  - @memberjunction/ai-vertex@6.2.0-edge.5
+  - @memberjunction/messaging-adapters@6.2.0-edge.5
+  - @memberjunction/ai-ollama@6.2.0-edge.5
+  - @memberjunction/ai-systemone@6.2.0-edge.5
+  - @memberjunction/ai-inception@6.2.0-edge.5
+  - @memberjunction/ai-cloudflare@6.2.0-edge.5
+  - @memberjunction/ai-reranker@6.2.0-edge.5
+  - @memberjunction/ai-anthropic@6.2.0-edge.5
+  - @memberjunction/ai-azure@6.2.0-edge.5
+  - @memberjunction/ai-bedrock@6.2.0-edge.5
+  - @memberjunction/ai-betty@6.2.0-edge.5
+  - @memberjunction/ai-betty-bot@6.2.0-edge.5
+  - @memberjunction/ai-blackforestlabs@6.2.0-edge.5
+  - @memberjunction/ai-cerebras@6.2.0-edge.5
+  - @memberjunction/ai-cohere@6.2.0-edge.5
+  - @memberjunction/ai-elevenlabs@6.2.0-edge.5
+  - @memberjunction/ai-fireworks@6.2.0-edge.5
+  - @memberjunction/ai-groq@6.2.0-edge.5
+  - @memberjunction/ai-heygen@6.2.0-edge.5
+  - @memberjunction/ai-lmstudio@6.2.0-edge.5
+  - @memberjunction/ai-local-embeddings@6.2.0-edge.5
+  - @memberjunction/ai-mistral@6.2.0-edge.5
+  - @memberjunction/ai-openai@6.2.0-edge.5
+  - @memberjunction/templates@6.2.0-edge.5
+  - @memberjunction/feature-pipelines@6.2.0-edge.5
+  - @memberjunction/feature-pipelines-engine@6.2.0-edge.5
+  - @memberjunction/predictive-studio@6.2.0-edge.5
+  - @memberjunction/record-cloning@6.2.0-edge.5
+  - @memberjunction/react-linter@6.2.0-edge.5
+  - @memberjunction/integration-engine@6.2.0-edge.5
+  - @memberjunction/data-context-server@6.2.0-edge.5
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.5
+  - @memberjunction/ai-xai@6.2.0-edge.5
+  - @memberjunction/work-queue-engine@6.2.0-edge.5
+  - @memberjunction/work-queue-server@6.2.0-edge.5
+  - @memberjunction/ai-agent-manager@6.2.0-edge.5
+  - @memberjunction/database-designer-actions@6.2.0-edge.5
+  - @memberjunction/database-designer-core@6.2.0-edge.5
+  - @memberjunction/ai-form-builder@6.2.0-edge.5
+  - @memberjunction/tag-engine-base@6.2.0-edge.5
+  - @memberjunction/computer-use-engine@6.2.0-edge.5
+  - @memberjunction/ai-bridge-livekit@6.2.0-edge.5
+  - @memberjunction/ai-bridge-ringcentral@6.2.0-edge.5
+  - @memberjunction/ai-bridge-teams@6.2.0-edge.5
+  - @memberjunction/ai-bridge-twilio@6.2.0-edge.5
+  - @memberjunction/ai-bridge-vonage@6.2.0-edge.5
+  - @memberjunction/ai-bridge-server@6.2.0-edge.5
+  - @memberjunction/remote-browser-server@6.2.0-edge.5
+  - @memberjunction/ai-segmentation@6.2.0-edge.5
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.5
+  - @memberjunction/actions-apollo@6.2.0-edge.5
+  - @memberjunction/actions-bizapps-accounting@6.2.0-edge.5
+  - @memberjunction/actions-bizapps-crm@6.2.0-edge.5
+  - @memberjunction/actions-bizapps-formbuilders@6.2.0-edge.5
+  - @memberjunction/actions-bizapps-lms@6.2.0-edge.5
+  - @memberjunction/actions-bizapps-social@6.2.0-edge.5
+  - @memberjunction/actions-content-autotag@6.2.0-edge.5
+  - @memberjunction/actions-peopledatalabs@6.2.0-edge.5
+  - @memberjunction/entity-communications-base@6.2.0-edge.5
+  - @memberjunction/communication-sendgrid@6.2.0-edge.5
+  - @memberjunction/doc-utils@6.2.0-edge.5
+  - @memberjunction/encryption@6.2.0-edge.5
+  - @memberjunction/external-data-sources@6.2.0-edge.5
+  - @memberjunction/external-data-source-databricks@6.2.0-edge.5
+  - @memberjunction/external-data-source-mongodb@6.2.0-edge.5
+  - @memberjunction/external-data-source-mysql@6.2.0-edge.5
+  - @memberjunction/external-data-source-oracle@6.2.0-edge.5
+  - @memberjunction/external-data-source-postgres@6.2.0-edge.5
+  - @memberjunction/external-data-source-sqlserver@6.2.0-edge.5
+  - @memberjunction/external-data-source-snowflake@6.2.0-edge.5
+  - @memberjunction/integration-actions@6.2.0-edge.5
+  - @memberjunction/queue@6.2.0-edge.5
+  - @memberjunction/record-comparison@6.2.0-edge.5
+  - @memberjunction/rubrics@6.2.0-edge.5
+  - @memberjunction/scheduling-actions@6.2.0-edge.5
+  - @memberjunction/scheduling-engine-base@6.2.0-edge.5
+  - @memberjunction/testing-engine@6.2.0-edge.5
+  - @memberjunction/web-search-engine@6.2.0-edge.5
+  - @memberjunction/esignature@6.2.0-edge.5
+  - @memberjunction/geo-core@6.2.0-edge.5
+  - @memberjunction/ai-assemblyai@6.2.0-edge.5
+  - @memberjunction/ai-deepinfra@6.2.0-edge.5
+  - @memberjunction/ai-huggingface@6.2.0-edge.5
+  - @memberjunction/ai-inworld@6.2.0-edge.5
+  - @memberjunction/ai-llamacpp@6.2.0-edge.5
+  - @memberjunction/ai-minimax@6.2.0-edge.5
+  - @memberjunction/ai-openrouter@6.2.0-edge.5
+  - @memberjunction/ai-siliconflow@6.2.0-edge.5
+  - @memberjunction/ai-zhipu@6.2.0-edge.5
+  - @memberjunction/ai-vectors-pinecone@6.2.0-edge.5
+  - @memberjunction/remote-browser-selfhost@6.2.0-edge.5
+  - @memberjunction/ai-vectors-memory-server@6.2.0-edge.5
+  - @memberjunction/ai-vectors-qdrant@6.2.0-edge.5
+  - @memberjunction/ai-vectors-sqlserver@6.2.0-edge.5
+  - @memberjunction/ai-vectors-pgvector@6.2.0-edge.5
+  - @memberjunction/auth-providers@6.2.0-edge.5
+  - @memberjunction/record-cloning-base@6.2.0-edge.5
+  - @memberjunction/rubrics-base@6.2.0-edge.5
+  - @memberjunction/work-queue-samples@6.2.0-edge.5
+  - @memberjunction/esignature-docusign@6.2.0-edge.5
+  - @memberjunction/esignature-dropboxsign@6.2.0-edge.5
+  - @memberjunction/esignature-pandadoc@6.2.0-edge.5
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.5
+  - @memberjunction/dynamic-packages@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Minor Changes
+
+- 10c2311: Add the Clef and Kev decision models and two drivers to reach them. `CloudflareDecision`, in the new `@memberjunction/ai-cloudflare` package, calls Cloudflare's Clef and Clef-flash on Workers AI (`@cf/cloudflare/clef`, `@cf/cloudflare/clef-flash`); its account ID comes from a `<accountId>:<apiToken>` key, a credential's `accountId`, or `CLOUDFLARE_ACCOUNT_ID`, and `CLOUDFLARE_WORKERS_AI_BASE_URL` or a credential's `endpoint` routes it through an AI Gateway. `SystemOneDecision`, in the new `@memberjunction/ai-systemone` package, calls any server with a `/v1/systemone` route (Kev's own server, llama.cpp's `llama-server`, TypeSafe), with the endpoint from an `API Key with Endpoint` credential or `SYSTEMONE_BASE_URL` and an optional bearer token. The System One wire mapping that Jev, Kev and Clef share moves out of `OpenRouterDecision` into a new `BaseSystemOneDecision` in `@memberjunction/ai`; `OpenRouterDecision` keeps its behaviour, statics and constructor, except that a key resolved from an AI Credential binding now sends the credential's `apiKey` as the bearer token instead of the credential's JSON, and a key that starts with `{` but is not valid JSON now fails before any request instead of being sent whole as the token. Metadata adds the `Cloudflare` and `System One Endpoint` vendors, the `Clef` and `Clef-flash` models, and `Kev-0.8B`, `Kev-4B`, `Kev-9B` and `Kev-27B` (Kev-4B also on OpenRouter, as `jaredpalmer/kev-4b-20260924`), with their limits and prices. The `Default Decision` prompt's bindings are unchanged. The one change in default behaviour: as active `Decision` models, the new models join the power-matched fallback candidates of any Decision prompt that does not require specific models, after its bound models, and only when their credentials resolve. `Default Decision` fails over across models (its `FailoverStrategy` is the column default, `SameModelDifferentVendor`, which `AIDecisionRunner` treats as the whole candidate list), so a call reaches one of them when every credentialed candidate ahead of it (Jev, when its key is set, and `LLM Decision`) has failed with an error that allows failover. Kev-4B on OpenRouter resolves with the OpenRouter key Jev already uses. A missing account ID, token or endpoint, or an API key that starts with `{` but is not valid JSON (a legacy `AI_VENDOR_API_KEY__*` value or runtime `apiKeys` entry; bound AI Credentials always arrive as valid JSON), fails a call before any request with a `NoCredentials` error that allows failover, so a misconfigured fallback does not stop the failover loop and a malformed key's text is never sent as a token.
+
+  `BaseModelRunner` in `@memberjunction/ai-prompts` now finds a `ModelVendor` credential binding on any Active row of a model on a vendor, Inference Provider rows first, both when it checks whether a candidate has a credential and when it resolves one. It used to read only the first Active row, so for any model with both a Model Developer row and an Inference Provider row on one vendor (Clef and Clef-flash on Cloudflare, and many existing models, such as Claude 4.5 Opus on Anthropic, Grok 4 on x.ai, Gemini 3 Flash on Google and the OpenAI embedding models), a credential bound to the Inference Provider row was found only when that row happened to load first, which depends on the rows' keys. A binding on another model's row still does not apply. The fix applies to every runner built on `BaseModelRunner` (prompts and agents, embeddings, rerankers, image and media generation, and decisions), not only to decisions.
+
+- 7384dd6: Conversation forks: a conversation is Main (the messages with no branch) plus forks (`MJ: Conversation Branches`). A fork starts at a message and shows as a chip under it (kind icon, up to three avatars, message count, name, last activity); it opens as a full view where the inherited history sits faded behind a dashed rail, up to a fork marker, and the fork's own messages behind a solid rail. "Fork from here" on one of your own messages opens a new fork that replaces that message at once (it starts from the message before it, the composer starts with the message's text, the fork is created on the first send and named from that message, and leaving without sending creates nothing), Edit ("Save as fork"; the original message stays) and Regenerate (the first answer stays) each start a fork. A Forks button lists every fork, nested under its parent, with All and Mine filters. Everyone who can see a conversation sees its forks and who started each one. What a person is looking at is per person and in memory; nothing about the view is stored on the conversation, and changing the view ends an active voice session.
+  - New entity `MJ: Conversation Branches` with `Kind` (Fork, Edit, Regenerate; default Fork), `SourceDetailID` and `UserID`; new columns `ConversationDetail.BranchID` and `ConversationDetail.ReplacedAt` (migration, so `minor`).
+  - New authorization `Conversations: Fork`, granted to the UI role. The server refuses to create a fork for a person without it; deny it to a role to turn forking off for that role's members. Each person can also switch forking off in My Profile ("Fork when I edit or regenerate"; user setting `mj.conversations.forking.v1`).
+  - When forking is off for a person, Edit and Regenerate change the latest turn in place: Regenerate (latest answer) and "Save and resend" (latest user message) hide the current answer and run the agent again; earlier user messages can still be edited ("Save", shown as edited). A replaced answer keeps its row (`ReplacedAt` and `HiddenToUser` set) and is left out of the chat, export, pins, the mobile transcript, rubric subjects, the returning-visitor recap and every agent context read (`ConversationEngine.LiveRowsFilter` and `IsReplacedRow`). A turn a fork depends on is not changed in place.
+  - Every writer sets `BranchID` itself (null is Main): the composer and its agent turns, `AgentRunner`, the task-graph deliverer, an agent request resumed from the Agent Requests dashboard or API (the fork of the message that started the run) and realtime transcripts (a voice session's fork is fixed when it starts). The server no longer stamps it and refuses a `BranchID` that names a fork of another conversation.
+  - A fork that still has its own messages or child forks cannot be deleted on its own (its messages would move into Main); deleting the conversation deletes its forks and messages.
+  - `ConversationEngine` gains `CreateFork`, `ForkPointFrom`, `EditForkPoint`, `RegenerateForkPoint`, `SourceRowsFilter`, `BuildForkSummaries`, `LoadForkSummaries`, `ForkDisplayName`, `LiveRowsFilter` and `IsReplacedRow`.
+  - **Removed public Angular API** (the ParentID-based thread panel; a host app that binds any of these must drop the binding): `ConversationChatAreaComponent`'s `ThreadId` input and `ThreadOpened`/`ThreadClosed` outputs; the `ThreadPanelComponent` export; `ConversationWorkspaceComponent`'s `OpenThread`, `CloseThread` and `SelectedThreadId`; `ChatConversationsResource`'s `SelectedThreadId`, `OnThreadOpened` and `OnThreadClosed`; `MessageListComponent`'s `ReplyInThread` and `ViewThread` outputs. Their deprecated camelCase aliases (`threadId`, `threadOpened`, `threadClosed`, `openThread`, `closeThread`, `selectedThreadId`, `onThreadOpened`, `onThreadClosed`, `replyInThread`, `viewThread`) are removed with them.
+
+  Message-anchored scope: every reader of one conversation reads one path through `ConversationScope` (`LoadScope`, `TrunkScope`, `ScopeFilter`, `ScopeSubquery`, `IsInScope`, `FilterToScope`, `ArtifactVersionScopeFilter`): the open view in the chat (window, pins, artifacts, agent polling, export, voice start), and Main for the mobile app, the realtime widget, meeting transcripts, the conversation overview, rubric subjects and the returning-visitor recap. Artifact history is path-aware: the viewer takes a `Scope` input and lists only the versions a message on the path links (any direction) or that no message links, labels a gap as `v4 · from v2`, and falls back to the newest visible version with a notice. Search results carry the fork of each hit; opening one opens that fork, or Main. Skip requests carry `conversationBranchID` from the reply's fork, so Skip Brain keeps one mirror record per path.
+
+- c0ebd97: New package `@memberjunction/actions-peopledatalabs`: a table-agnostic People Data Labs client
+  (bulk person enrichment with education and employment history, person search, a size-1 count, and
+  the free school autocomplete and cleaner), a credentials resolver (a company's `People Data Labs`
+  Company Integration credential, else `PDL_API_KEY`), and the `People Data Labs - Enrich People`
+  action, which returns data and writes nothing. Adds the `People Data Labs` row to `MJ: Integrations`
+  (new `metadata/integrations/`) and registers the package in both server bootstrap manifests.
+- 7dc604e: Add Perplexity's `pplx-decider-v1-27b` as a Decision model. `PerplexityDecision`, in `@memberjunction/ai-systemone`, calls Perplexity's Decisions API (`POST https://api.perplexity.ai/v1/decisions`, the model's only managed host) with a Perplexity API key as the bearer token; the endpoint can be overridden by the constructor or a credential's `endpoint`, and a missing key fails before any request with a `NoCredentials` error that allows failover. Metadata adds the `Perplexity` vendor (credential type `API Key`) and the `Perplexity Decider v1 27B` model, with Perplexity's limits (128 questions, 255 options, 10 levels, 262,144 input tokens) and price ($0.04 per million input tokens, output free). The `Default Decision` prompt's bindings are unchanged; as an active Decision model the Decider joins its power-matched fallbacks, after Jev and `LLM Decision`, once its key resolves.
+
+### Patch Changes
+
+- 91be34f: Gemini Live on Gemini Enterprise (Vertex AI): a server driver and a browser driver. `GeminiEnterpriseRealtime` (`@memberjunction/ai-vertex`) reads `AI_VENDOR_API_KEY__GeminiEnterpriseRealtime` (or a run's key), a JSON string in the shapes `VertexLLM` takes: an inline service account, a key-file path (environment key only), or neither for Application Default Credentials. A client-direct session goes through MJAPI's realtime relay: the mint issues one relay session per call, whose policy writes the Live setup from the connect config and adds a `google-auth-library` bearer token (scope `cloud-platform`) on each upstream open, never at the mint. The browser gets the relay URL, with the ticket in its path, and a pact whose config holds only the response modalities and the avatar's name: no system prompt, no tools, no credential. The upstream is the Vertex AI `v1` Live socket on the location's host (`us` and `eu` on `aiplatform.<location>.rep.googleapis.com`); the mint warns when the location is not `us`, `eu` or `us-central1`. A bridged session uses `@google/genai` in Vertex mode, audio only. The constructor never throws; a key that cannot be read fails the session with a reason that quotes none of it. `GeminiEnterpriseRealtimeClient` (`'gemini-enterprise'`, `@memberjunction/ai-realtime-client`) runs the web SDK in Vertex mode against the relay URL with a placeholder API key that never leaves the page, always states its response modalities (VIDEO while it shows the avatar), and resumes on the same URL. Both Vertex drivers now read their key through shared helpers (`ParseVertexAICredentials`, `VertexKeySourceOf`, `CreateVertexAuthClient`, `VertexGenAIOptions`) and build the `google-auth-library` client themselves instead of passing the deprecated `keyFile` or `credentials` options to `GoogleAuth`: an inline service account becomes a `JWT` client with the `cloud-platform` scope, and a key without credentials still uses Application Default Credentials. **Change to run-key handling in `VertexLLM`: a key may name a key file (`keyFilePath`) only when it is the driver's environment key (`AI_VENDOR_API_KEY__VertexLLM`; `AI_VENDOR_API_KEY__GeminiEnterpriseRealtime` for the realtime driver), byte for byte. A run's key (`apiKeys`), an MJ Credential (the Google Cloud Platform credential type's Key File Path) or any other key that names a key file is refused when the client is created, with an error that does not quote the path; use an inline service account (`serviceAccountJson`) or Application Default Credentials instead.** Environment keys behave as before: MJ reads the key file and builds the client for its `type` (service account, authorized user, impersonated service account, external account, GDCH). The file is now read when the client is created rather than at the first request, and its errors no longer quote the path. `GeminiRealtime` gains the protected `SessionPactFor`. The realtime runtime keeps the new client from being tree-shaken, and the server and browser class-registration manifests register the two drivers. Integration checks RD13 (the avatar from the voiced agent's persona, through the session prep) and RD14 (every realtime vendor DriverClass resolves). Nothing selects the Enterprise driver until its vendor row ships.
+- Updated dependencies [96d6ec2]
+- Updated dependencies [a709bb6]
+- Updated dependencies [d17de94]
+- Updated dependencies [51c469d]
+- Updated dependencies [432cb73]
+- Updated dependencies [293c316]
+- Updated dependencies [eba8ade]
+- Updated dependencies [155aa45]
+- Updated dependencies [4412e85]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [822ed69]
+- Updated dependencies [1da00cb]
+- Updated dependencies [92ecdf9]
+- Updated dependencies [1aa4e00]
+- Updated dependencies [acf0f5b]
+- Updated dependencies [b73b878]
+- Updated dependencies [989f7fe]
+- Updated dependencies [b699a37]
+- Updated dependencies [bd0ee83]
+- Updated dependencies [fd2a410]
+- Updated dependencies [0dbd455]
+- Updated dependencies [dde482c]
+- Updated dependencies [49f26d9]
+- Updated dependencies [961d529]
+- Updated dependencies [10c2311]
+- Updated dependencies [a1e9d87]
+- Updated dependencies [1a091ac]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [bb3028a]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [1a95eaf]
+- Updated dependencies [0a7c255]
+- Updated dependencies [32fedd8]
+- Updated dependencies [fcf8e1c]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [ef182be]
+- Updated dependencies [af6f892]
+- Updated dependencies [59d47d5]
+- Updated dependencies [aaf74ca]
+- Updated dependencies [432fe69]
+- Updated dependencies [69e19c5]
+- Updated dependencies [7316ac3]
+- Updated dependencies [91be34f]
+- Updated dependencies [f5e317c]
+- Updated dependencies [6055792]
+- Updated dependencies [8ef5e86]
+- Updated dependencies [a1eaf42]
+- Updated dependencies [596855c]
+- Updated dependencies [fdf6669]
+- Updated dependencies [111a5f3]
+- Updated dependencies [4c682c1]
+- Updated dependencies [7e86ce0]
+- Updated dependencies [5123afa]
+- Updated dependencies [5e09eaf]
+- Updated dependencies [e533f99]
+- Updated dependencies [0c68021]
+- Updated dependencies [584fc44]
+- Updated dependencies [ad3f44f]
+- Updated dependencies [1c76559]
+- Updated dependencies [465c950]
+- Updated dependencies [c28e243]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [69bf67c]
+- Updated dependencies [95e5dd9]
+- Updated dependencies [0a27507]
+- Updated dependencies [ecc5658]
+- Updated dependencies [8bac4d6]
+- Updated dependencies [be3dae0]
+- Updated dependencies [c0ebd97]
+- Updated dependencies [7dc604e]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [35d3c95]
+- Updated dependencies [33bd959]
+- Updated dependencies [dbc3462]
+- Updated dependencies [21175fa]
+- Updated dependencies [5a3de97]
+- Updated dependencies [0d0ba18]
+- Updated dependencies [b6fcb30]
+- Updated dependencies [f73e192]
+- Updated dependencies [7177e09]
+- Updated dependencies [8704df6]
+- Updated dependencies [5345e3d]
+- Updated dependencies [1ea4085]
+- Updated dependencies [975948b]
+- Updated dependencies [22c9074]
+- Updated dependencies [88b85fc]
+- Updated dependencies [45359c6]
+- Updated dependencies [aee2d53]
+- Updated dependencies [5dc3752]
+- Updated dependencies [8ed4049]
+- Updated dependencies [36380f9]
+- Updated dependencies [b3db2aa]
+- Updated dependencies [6c8798b]
+- Updated dependencies [f0c78c3]
+- Updated dependencies [5e21f50]
+- Updated dependencies [35ed7b5]
+- Updated dependencies [d0df5a1]
+- Updated dependencies [d853bf8]
+- Updated dependencies [e293b68]
+- Updated dependencies [02bb563]
+- Updated dependencies [c26b355]
+- Updated dependencies [a66f4b0]
+- Updated dependencies [ed326fb]
+- Updated dependencies [afe9eb4]
+- Updated dependencies [90829e3]
+- Updated dependencies [ff58383]
+- Updated dependencies [31057d8]
+- Updated dependencies [57096ab]
+- Updated dependencies [1ef460d]
+- Updated dependencies [aac148b]
+- Updated dependencies [a7fd6e9]
+- Updated dependencies [f2f6f4b]
+- Updated dependencies [a28ce42]
+- Updated dependencies [9ce70b3]
+- Updated dependencies [bc0e36f]
+- Updated dependencies [e1942c7]
+- Updated dependencies [382b9aa]
+- Updated dependencies [d2cb42e]
+- Updated dependencies [cbddadb]
+- Updated dependencies [bdea87a]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [b653746]
+- Updated dependencies [d7acea0]
+- Updated dependencies [57fea6a]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [d2ccfef]
+- Updated dependencies [8a9d203]
+- Updated dependencies [6b487b8]
+  - @memberjunction/ai-agents@6.2.0-edge.4
+  - @memberjunction/ai-core-plus@6.2.0-edge.4
+  - @memberjunction/server@6.2.0-edge.4
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/ai-engine-base@6.2.0-edge.4
+  - @memberjunction/ai-gemini@6.2.0-edge.4
+  - @memberjunction/actions-apollo@6.2.0-edge.4
+  - @memberjunction/ai-vertex@6.2.0-edge.4
+  - @memberjunction/core-entities-server@6.2.0-edge.4
+  - @memberjunction/ai-bridge-livekit@6.2.0-edge.4
+  - @memberjunction/ai-bridge-server@6.2.0-edge.4
+  - @memberjunction/storage@6.2.0-edge.4
+  - @memberjunction/ai-bridge-teams@6.2.0-edge.4
+  - @memberjunction/generic-database-provider@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/ai-openrouter@6.2.0-edge.4
+  - @memberjunction/ai-prompts@6.2.0-edge.4
+  - @memberjunction/ai-cloudflare@6.2.0-edge.4
+  - @memberjunction/ai-systemone@6.2.0-edge.4
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.4
+  - @memberjunction/codegen-lib@6.2.0-edge.4
+  - @memberjunction/rubrics@6.2.0-edge.4
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.4
+  - @memberjunction/dynamic-packages@6.2.0-edge.4
+  - @memberjunction/encryption@6.2.0-edge.4
+  - @memberjunction/testing-integration@6.2.0-edge.4
+  - @memberjunction/scheduling-engine@6.2.0-edge.4
+  - @memberjunction/testing-engine@6.2.0-edge.4
+  - @memberjunction/ai-openai@6.2.0-edge.4
+  - @memberjunction/core-actions@6.2.0-edge.4
+  - @memberjunction/actions-peopledatalabs@6.2.0-edge.4
+  - @memberjunction/predictive-studio@6.2.0-edge.4
+  - @memberjunction/record-set-processor@6.2.0-edge.4
+  - @memberjunction/ai-assemblyai@6.2.0-edge.4
+  - @memberjunction/ai-elevenlabs@6.2.0-edge.4
+  - @memberjunction/ai-inworld@6.2.0-edge.4
+  - @memberjunction/ai-huggingface@6.2.0-edge.4
+  - @memberjunction/search-engine@6.2.0-edge.4
+  - @memberjunction/actions@6.2.0-edge.4
+  - @memberjunction/database-designer-actions@6.2.0-edge.4
+  - @memberjunction/templates@6.2.0-edge.4
+  - @memberjunction/record-cloning-base@6.2.0-edge.4
+  - @memberjunction/record-cloning@6.2.0-edge.4
+  - @memberjunction/scheduling-actions@6.2.0-edge.4
+  - @memberjunction/integration-engine@6.2.0-edge.4
+  - @memberjunction/ai-agent-harness@6.2.0-edge.4
+  - @memberjunction/ai-agent-manager@6.2.0-edge.4
+  - @memberjunction/database-designer-core@6.2.0-edge.4
+  - @memberjunction/ai-form-builder@6.2.0-edge.4
+  - @memberjunction/action-runtime-host@6.2.0-edge.4
+  - @memberjunction/messaging-adapters@6.2.0-edge.4
+  - @memberjunction/task-graph@6.2.0-edge.4
+  - @memberjunction/computer-use-engine@6.2.0-edge.4
+  - @memberjunction/ai-reranker@6.2.0-edge.4
+  - @memberjunction/ai-segmentation@6.2.0-edge.4
+  - @memberjunction/content-autotagging@6.2.0-edge.4
+  - @memberjunction/feature-pipelines@6.2.0-edge.4
+  - @memberjunction/tag-engine-base@6.2.0-edge.4
+  - @memberjunction/ai-recommendations-rex@6.2.0-edge.4
+  - @memberjunction/ai-bridge-ringcentral@6.2.0-edge.4
+  - @memberjunction/ai-bridge-twilio@6.2.0-edge.4
+  - @memberjunction/ai-bridge-vonage@6.2.0-edge.4
+  - @memberjunction/remote-browser-server@6.2.0-edge.4
+  - @memberjunction/actions-base@6.2.0-edge.4
+  - @memberjunction/actions-bizapps-accounting@6.2.0-edge.4
+  - @memberjunction/actions-bizapps-crm@6.2.0-edge.4
+  - @memberjunction/actions-bizapps-formbuilders@6.2.0-edge.4
+  - @memberjunction/actions-bizapps-lms@6.2.0-edge.4
+  - @memberjunction/actions-bizapps-social@6.2.0-edge.4
+  - @memberjunction/actions-content-autotag@6.2.0-edge.4
+  - @memberjunction/archiving-engine@6.2.0-edge.4
+  - @memberjunction/communication-types@6.2.0-edge.4
+  - @memberjunction/entity-communications-base@6.2.0-edge.4
+  - @memberjunction/communication-ms-graph@6.2.0-edge.4
+  - @memberjunction/communication-sendgrid@6.2.0-edge.4
+  - @memberjunction/doc-utils@6.2.0-edge.4
+  - @memberjunction/external-data-sources@6.2.0-edge.4
+  - @memberjunction/external-data-source-databricks@6.2.0-edge.4
+  - @memberjunction/external-data-source-mongodb@6.2.0-edge.4
+  - @memberjunction/external-data-source-mysql@6.2.0-edge.4
+  - @memberjunction/external-data-source-oracle@6.2.0-edge.4
+  - @memberjunction/external-data-source-postgres@6.2.0-edge.4
+  - @memberjunction/external-data-source-sqlserver@6.2.0-edge.4
+  - @memberjunction/external-data-source-snowflake@6.2.0-edge.4
+  - @memberjunction/integration-actions@6.2.0-edge.4
+  - @memberjunction/queue@6.2.0-edge.4
+  - @memberjunction/react-linter@6.2.0-edge.4
+  - @memberjunction/record-comparison@6.2.0-edge.4
+  - @memberjunction/scheduling-engine-base@6.2.0-edge.4
+  - @memberjunction/web-search-engine@6.2.0-edge.4
+  - @memberjunction/work-queue-engine@6.2.0-edge.4
+  - @memberjunction/esignature@6.2.0-edge.4
+  - @memberjunction/geo-core@6.2.0-edge.4
+  - @memberjunction/ai-vectors-pinecone@6.2.0-edge.4
+  - @memberjunction/ai-anthropic@6.2.0-edge.4
+  - @memberjunction/ai-azure@6.2.0-edge.4
+  - @memberjunction/ai-bedrock@6.2.0-edge.4
+  - @memberjunction/ai-betty@6.2.0-edge.4
+  - @memberjunction/ai-betty-bot@6.2.0-edge.4
+  - @memberjunction/ai-blackforestlabs@6.2.0-edge.4
+  - @memberjunction/ai-cerebras@6.2.0-edge.4
+  - @memberjunction/ai-cohere@6.2.0-edge.4
+  - @memberjunction/ai-deepinfra@6.2.0-edge.4
+  - @memberjunction/ai-fireworks@6.2.0-edge.4
+  - @memberjunction/ai-groq@6.2.0-edge.4
+  - @memberjunction/ai-heygen@6.2.0-edge.4
+  - @memberjunction/ai-inception@6.2.0-edge.4
+  - @memberjunction/ai-lmstudio@6.2.0-edge.4
+  - @memberjunction/ai-llamacpp@6.2.0-edge.4
+  - @memberjunction/ai-local-embeddings@6.2.0-edge.4
+  - @memberjunction/ai-minimax@6.2.0-edge.4
+  - @memberjunction/ai-mistral@6.2.0-edge.4
+  - @memberjunction/ai-ollama@6.2.0-edge.4
+  - @memberjunction/ai-siliconflow@6.2.0-edge.4
+  - @memberjunction/ai-zhipu@6.2.0-edge.4
+  - @memberjunction/ai-xai@6.2.0-edge.4
+  - @memberjunction/work-queue-server@6.2.0-edge.4
+  - @memberjunction/remote-browser-selfhost@6.2.0-edge.4
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.4
+  - @memberjunction/ai-vectors-memory-server@6.2.0-edge.4
+  - @memberjunction/ai-vectors-qdrant@6.2.0-edge.4
+  - @memberjunction/ai-vectors-sqlserver@6.2.0-edge.4
+  - @memberjunction/ai-vectors-pgvector@6.2.0-edge.4
+  - @memberjunction/archiving-action@6.2.0-edge.4
+  - @memberjunction/auth-providers@6.2.0-edge.4
+  - @memberjunction/data-context-server@6.2.0-edge.4
+  - @memberjunction/rubrics-base@6.2.0-edge.4
+  - @memberjunction/server-extensions-core@6.2.0-edge.4
+  - @memberjunction/work-queue-samples@6.2.0-edge.4
+  - @memberjunction/esignature-docusign@6.2.0-edge.4
+  - @memberjunction/esignature-dropboxsign@6.2.0-edge.4
+  - @memberjunction/esignature-pandadoc@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Minor Changes
+
+- 60bd774: Form contributions can be metadata rows, not only compiled panels, and users can place, share, hide and remove them from the form itself.
+
+  **Contributions from metadata.** A `MJ: Entity Form Contributions` row (migration `V202610051244__v6.2.x__Entity_Form_Contributions`) mounts a `MJ: Components` row (`Type='Widget'`, spec `componentRole: 'form-panel'`) on an entity's form. It carries the same registration bag as `@RegisterClassEx` plus `Presentation`, `Title`, `Icon`, `Configuration`, `Precedence` and User/Role/Global scope. `CollectFormContributionRegistrations` merges rows with class registrations, and the form collapses the list once per resolve (`ResolveFormContributionWinners`): one winner per `ContributionKey`, the higher rank wins, a compiled panel wins a tie against any row, and between rows `User` beats `Role` beats `Global` (`FormContributionOutranks`). `CollectFormPanelRegistrations` stays as a deprecated wrapper that returns compiled registrations only. Wildcard (`'*'`) registrations take part on every form, but their place claims are ignored: one that claims a grid, a section or a tab replaces nothing, and one that names a section to draw in draws at its slot. `InteractiveFormsEngine` caches the rows and the full custom forms (in the browser, the shared ones and the signed-in user's own) and fetches each panel component by ID once (`GetComponentByID`); `InteractiveFormPanelComponent` renders them, and a panel can change only the fields it claims, in edit mode. On the 11 identity, permission and form-metadata entities in `RESTRICTED_FORM_ENTITIES`, only `User` rows and full custom forms render.
+
+  **One rule set, shared by the browser and the server.** The contribution key is derived once (`ResolveContributionWriteKey` in `@memberjunction/interactive-component-types/forms`). `@memberjunction/core-entities` `custom/FormScope/` holds the spec-to-row mapper (`ApplyContributionSpecToRow`), the claim validator (`ContributionClaimRefusal`), the scope rules (`FormScopeWriteRefusal`, which normalizes Scope and fails closed, `ComponentWriteRefusal`, `FormRowComponentRefusal`, `ComponentNameCollisionRefusal`, `IsCallersOwnComponent`, `IsCanonicalFormScope`, `ContributionScopeRank`, `FormContributionOutranks`, `IsSelectableFormOverride`, `FormScopeAllowedOnEntity`, `UserCanManageFormDefaults`), the hide-setting key helpers, and the retire rule (`ActiveContributionSiblings`, which compares keys ignoring case as the SQL Server unique index does).
+
+  **What a panel can stand in for.** One claim per row, enforced by the database: a related grid, one or several field sections (`ReplacesSectionKey`, `ReplacesSectionKeys`), a group of fields (`ReplacesFieldNames`, rendered once inside that section), or a place inside a section (`InSectionKey` + `SectionPosition`). A compiled panel renders at the slot it registered for, and a panel standing in for something takes its place. The `top-area` slot is accepted by the CHECK constraint but no form emits it, so the placement dialog does not offer it.
+
+  **Authoring.** New actions `Create Form Contribution`, `Modify Form Contribution`, `Activate Form Contribution Version`, `Get Form Contributions For Entity` and `Get Form Composition For Entity`. The write actions, and the existing Modify / Activate / Revert Interactive Form actions, change only the caller's own `User` rows; a `Role` or `Global` row returns `FORBIDDEN` for every caller. A spec with more than one claim returns `INVALID_CLAIM` before any write. The contribution actions write the Component and the row in one transaction, and so do the Modify and Activate Interactive Form paths for a full form's Component and override; Create and Revert Interactive Form do not. Modify and Activate Interactive Form set the prior version aside after that transaction, and Activate returns `PERSIST_FAILED`, with the new form already Active, when it cannot. Activating a target that is already Active also sets aside the caller's other Active personal forms for that entity. `Modify Form Contribution` accepts an optional `Precedence`. `Get Form Composition For Entity` answers for the form the user sees as far as metadata can tell (hidden panels, restricted entities, the same collapse; no compiled panels, and no rows while the kill switch is off) and returns `QUERY_FAILED` when a query fails. The artifact viewer previews a form-panel spec and offers **Add to my form**, which opens a placement dialog: the entity's real form, read-only and scaled, with the panel drawn where it will go, the positions the form actually has, order within a position, what it replaces, and draft or active. The dialog starts from the claims the panel proposes that it offers on the open form, and on a full custom form the panel starts as a draft. New `mj-icon-picker` (`@memberjunction/ng-ui-components`) chooses a Font Awesome solid or regular icon by looking at it.
+
+  **Managing a form.** A "Manage this form" drawer lists the form choice and every panel; Escape closes it and focus stays inside it. Any user can hide a panel shared with them and remove their own. Hide and Show change the open form at once: its slot-mounted panels remount, and a stock grid comes back when the panel that took it over is hidden. Publishing a panel or a full custom form to a role or everyone needs the new `Manage Form Defaults` authorization (Developer and Integration; owners count). `MJEntityFormContributionEntityServer` and `MJEntityFormOverrideEntityServer` enforce it on every save, replayed save and delete. Turning a panel on, or publishing it, retires the Active sibling for the same audience and key in the same transaction and sets the panel component's status. The stock UI role can create and update `MJ: Components` (not delete), so any user can create or change their own panel through the actions and turn it on, off or to a draft in the drawer. Without `Manage Form Defaults` the server requires the component to be the caller's own (`IsCallersOwnComponent`): used only by their own personal rows, or used by no row and created by them, as its Internal `Create` record in `MJ: Record Changes` shows. That applies to any update or delete of the component, whatever columns it changes (`MJComponentEntityServer`, `ComponentWriteRefusal`), to a contribution or override row created or re-pointed at it (`FormRowComponentRefusal`), and to reusing its name (`ComponentNameCollisionRefusal`, names compared trimmed and lower-cased, in any namespace, and sent as a Unicode literal on SQL Server); a form can also load a component by name, so a component no row uses still matters. With the grant, a delete or a change to a component's specification, status, name, namespace or type, and pointing a row at it, are refused only when another user's personal row uses the component. The reads run as the caller in one batch, the changed columns come from the stored row, and a failed read refuses the write. Publishing a draft, an off panel or a set-aside form turns it on, and the chooser says so. A set-aside (`Inactive`) shared form is retracted; a set-aside personal form stays in its owner's picker. The placement preview never saves form state.
+
+  **Form context.** The record container publishes its full composition snapshot to `FormCompositionRegistry` (`@memberjunction/ng-base-forms`), where the apply path reads it. Agents get a compact `FormAgentContext` in `AdditionalContext.Form` (entity, record key, form choice, and each section's key, title, variant, hidden flag and holding contribution), published by the record tab while it is the tab on screen. `RecordPrimaryKey` is a `CompositeKey.ToURLSegment()` string, or null for an unsaved record. The `SkipFormContext` mirror in `@askskip/types` must follow this shape.
+
+  **Kill switch.** On a Node host, `MJ_FORMS_METADATA_CONTRIBUTIONS=false` makes the engine on that process load no row. In Explorer, the `MJ: Instance Configurations` key `Forms.MetadataContributions.Enabled` set to `false` turns rows off on every form; the shell applies it after `InstanceConfigEngine.Config()` and before any form opens, it can only turn the source off, and the source stays on when Instance Config fails to load. `Get Form Contributions For Entity` and `Get Form Composition For Entity` list no row when either setting is off and report `MetadataContributionsEnabled`. The write actions still write rows. The seed row reaches a database through `mj sync push`.
+
+  **Section counts and empty sections.** A saved record fetches every related-section count and the tag, attachment and version badges in one `RunViews` call; an all-`count_only` batch runs as one `UNION ALL` statement in `GenericDatabaseProvider`, with each view's security path intact. New `whenEmpty` (`'show'` default | `'hide'` | `'more'`) and `showCount` on `EntityRelationship.Configuration.UI` and on contributions, with entity defaults `UI.Form.RelatedWhenEmpty` and `UI.Form.ShowRelatedCounts`.
+
+  **Fixes.** Eleven compiled panel registrations named their entity without the `MJ: ` prefix: the five overview cards and the realtime panel mounted only through the slot host's loose name match, which the rail did not apply, and the five header panels also used `slot: 'header'`, which is not a `FormPanelSlot`, so they never rendered. All eleven now use `MJ: ` names and the slot host matches names exactly, so the hero headers render above the overview cards on `MJ: Users`, `MJ: Companies`, `MJ: Employees`, `MJ: Conversations` and `MJ: AI Agent Categories`. The overview cards query `MJ: ` entity names (four of them queried unprefixed names and showed empty states), the overview cards and the realtime panel show a load error instead of an empty state when a query fails, and conversation turn pills and counts use the stored `User`/`AI` roles. CodeGen no longer corrupts generated validators that contain escapes, and a table-level validator's metadata guard includes the validator's `Name`.
+
+  **Behaviour changes to know about.** `BaseFormPanel.Validate()` now runs on Save (through `BaseFormComponent.ValidateAsync()`) and may return a Promise. A React panel whose `Validate` throws does not block the save and shows the failure in the panel, as it does an error from `<mj-react-component>`; a field edit from a panel that the record refuses is logged and dropped. After upgrade, editing or deleting an existing `Role` or `Global` full custom form needs `Manage Form Defaults`, and an `mj sync push` of `Global` rows needs a sync user who holds it or is an Owner. The UI role gains Create and Update on `MJ: Components`. Without `Manage Form Defaults`, whatever role grants component rights, a caller can change or delete a component, on any column, only when it is their own (used only by their own personal rows, or used by none and created by them), and two such users cannot give components the same name. With the grant, a delete or a change to one of the five guarded columns (specification, status, name, namespace or type) is refused only when another user's personal row uses the component, and a change to any other column passes. `MJRecordChangeEntityServer` refuses a caller creating a record change whose `Source` is `Internal` and `Type` is `Create` through the API; other record changes, such as version-label snapshots, are unchanged. `mj sync push` runs as the `System` user, which must hold the Developer role and so holds the grant by default; a sync user that is neither an Owner nor a holder of the grant can push changes only to components of its own. Every `mj-form-field` carries `data-field-name` and `data-field-label`. Collapsible-panel move up/down follows the visual order. New user setting `mj.formPanels.hidden.<entity>`; the existing `mj.formVariant.<entity>` is also read by `Get Form Composition For Entity`. `ng-conversations` gains a type-only dependency on `ng-base-forms`. `Get Active Form For Entity` applies the restricted-entity rule, so a Role or Global form on one of those entities is neither active nor listed. A `form-panel` spec must set `entityName`; the artifact viewer no longer falls back to `dataRequirements` for a panel.
+
+  **PostgreSQL.** `UQ_EntityFormContribution_Key` and `UQ_EntityFormContribution_RelatedClaim` include nullable columns (`UserID`, `RoleID`, `RelatedJoinField`). SQL Server treats NULLs as equal in a unique index; PostgreSQL does not, so the converted indexes need `NULLS NOT DISTINCT` (PostgreSQL 15+) or a `COALESCE` expression index to refuse the same duplicates. PostgreSQL also compares the key case-sensitively, so there the case-insensitive retire rule is stricter than the index.
+
+  **Deploy order:** deploy the server code before pushing the metadata. The UI role's grants ship as metadata only: write access to `MJ: Entity Form Contributions` and `MJ: Entity Form Overrides`, and Create and Update on `MJ: Components`. Only the new server subclasses keep that access to the user's own rows and components, so the component guard must be live before the UI role gains Update: apply the release build's consolidated metadata-sync migration together with the server deploy, never before it. A development database that already ran an earlier copy of the migration needs a Flyway repair or a rebuild.
+
+- 49e0bd8: Add the MemberJunction Durable Work Queue and Messaging Framework:
+  - **Core & Data Layer**: Transport-neutral queue contracts, database schema and entities for transports, topics, subscriptions, messages, deliveries, and deduplication ledger, backed by guarded-write stored procedures (`spWorkQueue*`) with SQL Server and PostgreSQL support.
+  - **Transports**: Native Database transport driver, consumer, and operator; AWS transport (`@memberjunction/work-queue-aws` with SNS topic publishing, SQS FIFO consumer, visibility-timeout leases, dead-letter redrive, binding validation, and LocalStack conformance); and in-memory reference transport.
+  - **Runtime & Host**: Competing-consumer `WorkQueueHost` (supporting continuous daemon and one-shot `RunOnce` container modes), `WorkQueueSweeper` (handling lease expiry and retention purging under a distributed sweep lock), REST publish endpoint (`POST /work-queue/topics/{topic}/messages` with API-key and scope authorization), and seven Remote Operations for operator control (`WorkQueue.GetSubscriptionStats`, `ReplayDeadLetter`, `DiscardDelivery`, `ValidateBindings`, etc.).
+  - **Operator Surface**: Explorer `WorkQueueDashboard` with Overview, Dead Letters (envelope/payload inspection and replay/discard), Partitions (blocked, in-flight, and idle keys), and Bindings validation tabs, plus a new "Work Queue" application record.
+  - **Tooling & Samples**: `mj queue` CLI commands (stats, dead-letters, partitions, replay, discard, backlog, work, export-topology, import-bindings, validate-bindings) and `@memberjunction/work-queue-samples` (`HelloWorldHandler` with sample topologies).
+
+### Patch Changes
+
+- 28df136: In-memory vector search is faster, keeps its index current incrementally, and on a server no longer blocks the event loop.
+
+  **`@memberjunction/ai-vectors-memory`** (browser-safe; same public API)
+  - **Packed storage.** Vectors are stored in one contiguous typed array with cached norms, not a `Map` of number arrays. `float64` (the default) gives results bit-identical to before. `new SimpleVectorService({ Precision: 'float32' })` halves the memory for embeddings. Results are re-scored with the same kernels, so `FindNearest`, `FindSimilar`, `FindAboveThreshold`, K-Means and DBSCAN return exactly what they did before.
+  - **Faster kernels.** Cosine, euclidean and dot product scans are specialised per precision and reuse cached norms. In JavaScript alone, a top-10 cosine search over 20,000 × 1,536 vectors drops from 80 ms to 65 ms. With a metadata filter it drops from 12 ms to 9 ms.
+  - **Async variants.** `FindNearestAsync`, `KMeansClusterAsync` and `DBSCANClusterAsync` let a registered `BaseVectorAccelerator` run the work elsewhere. Without one they run in-process.
+  - **Incremental index cache.** `SimpleVectorServiceProvider` applies entity saves and deletes to a loaded index in place instead of discarding it. Patching one row takes about 0.2 ms; the old rebuild re-read and re-parsed every row, about 4.4 s of parsing alone for 20,000 vectors. A remote invalidate without record data is re-read in one batched query, once per user an index was loaded as. A stale index keeps serving while it reloads. `InvalidateIndex` now also supersedes a load already in flight, so the next query cannot be answered from rows read before the invalidate.
+  - **`SimpleVectorDatabase` no longer serves one user's cached rows to another.** Rows are read as the calling user, but the parsed index was reused whenever the row count matched. A user who could see a different set of rows of the same size got the first user's rows. The cache is now reused only when the rows' keys, `__mj_UpdatedAt` values and vector presence, and the index config, all match. A row whose vector size differs from the rest is now skipped, with one log line, instead of failing every query. An empty query vector now returns a failure response instead of throwing.
+  - **`SimpleVectorDatabase` applies metadata filters.** `QueryIndex` used to ignore `filter`, so a search scope's `MetadataFilter` — including a tenant push-down — had no effect on this driver. It is now evaluated in memory (`$eq $ne $gt $gte $lt $lte $in $nin $exists $and $or`), and a filter it cannot apply fails the query instead of running unfiltered. The evaluator is exported as `CompileMetadataFilter`. The driver now also reports `IsReadOnly = true` and `RequiresAPIKey = false`, and `ListVectorIDs` returns the contract's `NextPaginationToken` (it returned `NextCursor`); `SimpleVectorServiceProvider.ListVectorIDs` had the same bug.
+  - **Fixes.** A query whose dimensions differ from the index, or an unknown metric, is logged once rather than once per row. `GetVector` and `ExportVectors` return copies, never live storage.
+
+  **`@memberjunction/ai-vectors-memory-server`** (new, server-only)
+
+  Registers a `WorkerPoolVectorAccelerator`. Under 32 concurrent searches the longest event-loop stall drops from 2.5 s to 13 ms. Stores are allocated in `SharedArrayBuffer`, so large searches and clustering run on a worker-thread pool without copying. Exact searches use the optional `usearch` native SIMD backend, but only when its candidate set can be proven complete. Otherwise they fall back to JavaScript. Opt-in HNSW approximate search (`MJ_VECTOR_ANN=1`) is available for very large cosine indexes. Every failure degrades to in-process work. The browser-manifest leakage gate denies the package.
+
+  **`@memberjunction/core-entities-server`.** When the embedder returns an empty vector or throws, `MJQueryEntityServer` now clears the stored vector (both columns and the model ID) and logs the error, as `MJTagEntityServer` already did, instead of keeping a vector computed from the previous text. The save still succeeds.
+
+  **Consumers.** `AIEngine` (notes, examples), `TagEngine` and `QueryEngineServer` use `float32` storage and `FindNearestAsync`. `ClusteringEngine` uses the async clustering methods. `@memberjunction/server-bootstrap` loads the server accelerator, so a standard MJAPI gets it with no configuration.
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies
+- Updated dependencies [49e0bd8]
+- Updated dependencies [3023468]
+- Updated dependencies [131f3c4]
+- Updated dependencies [0f04590]
+- Updated dependencies [54f4bc1]
+- Updated dependencies [0a75bb2]
+- Updated dependencies [fe39606]
+- Updated dependencies [41c2c08]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [b545842]
+- Updated dependencies [24ddecc]
+- Updated dependencies [279b93e]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [801036d]
+- Updated dependencies [bea2386]
+- Updated dependencies [d046715]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [72e082b]
+- Updated dependencies [28c92e0]
+- Updated dependencies [997fe44]
+- Updated dependencies [3204a32]
+- Updated dependencies [a8e162d]
+- Updated dependencies [1595b7d]
+- Updated dependencies [d0a8dbf]
+- Updated dependencies [fbad999]
+- Updated dependencies [4840fff]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [8db8973]
+- Updated dependencies [b1b6d3d]
+- Updated dependencies [eeee8d4]
+- Updated dependencies [28df136]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/core-entities@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/core-entities-server@6.2.0-edge.3
+  - @memberjunction/generic-database-provider@6.2.0-edge.3
+  - @memberjunction/server@6.2.0-edge.3
+  - @memberjunction/codegen-lib@6.2.0-edge.3
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.3
+  - @memberjunction/ai-engine-base@6.2.0-edge.3
+  - @memberjunction/tag-engine-base@6.2.0-edge.3
+  - @memberjunction/core-actions@6.2.0-edge.3
+  - @memberjunction/ai-agents@6.2.0-edge.3
+  - @memberjunction/computer-use-engine@6.2.0-edge.3
+  - @memberjunction/ai-bridge-livekit@6.2.0-edge.3
+  - @memberjunction/ai-prompts@6.2.0-edge.3
+  - @memberjunction/testing-engine@6.2.0-edge.3
+  - @memberjunction/testing-integration@6.2.0-edge.3
+  - @memberjunction/ai-gemini@6.2.0-edge.3
+  - @memberjunction/ai-vertex@6.2.0-edge.3
+  - @memberjunction/ai-anthropic@6.2.0-edge.3
+  - @memberjunction/rubrics@6.2.0-edge.3
+  - @memberjunction/ai-openai@6.2.0-edge.3
+  - @memberjunction/ai-bridge-server@6.2.0-edge.3
+  - @memberjunction/ai-core-plus@6.2.0-edge.3
+  - @memberjunction/actions-base@6.2.0-edge.3
+  - @memberjunction/task-graph@6.2.0-edge.3
+  - @memberjunction/ai-bridge-twilio@6.2.0-edge.3
+  - @memberjunction/ai-bridge-vonage@6.2.0-edge.3
+  - @memberjunction/ai-bridge-ringcentral@6.2.0-edge.3
+  - @memberjunction/ai-vectors-memory-server@6.2.0-edge.3
+  - @memberjunction/work-queue-engine@6.2.0-edge.3
+  - @memberjunction/work-queue-server@6.2.0-edge.3
+  - @memberjunction/work-queue-samples@6.2.0-edge.3
+  - @memberjunction/ai-agent-harness@6.2.0-edge.3
+  - @memberjunction/predictive-studio@6.2.0-edge.3
+  - @memberjunction/ai-assemblyai@6.2.0-edge.3
+  - @memberjunction/ai-azure@6.2.0-edge.3
+  - @memberjunction/ai-bedrock@6.2.0-edge.3
+  - @memberjunction/ai-betty@6.2.0-edge.3
+  - @memberjunction/ai-betty-bot@6.2.0-edge.3
+  - @memberjunction/ai-blackforestlabs@6.2.0-edge.3
+  - @memberjunction/ai-cerebras@6.2.0-edge.3
+  - @memberjunction/ai-cohere@6.2.0-edge.3
+  - @memberjunction/ai-deepinfra@6.2.0-edge.3
+  - @memberjunction/ai-elevenlabs@6.2.0-edge.3
+  - @memberjunction/ai-fireworks@6.2.0-edge.3
+  - @memberjunction/ai-groq@6.2.0-edge.3
+  - @memberjunction/ai-heygen@6.2.0-edge.3
+  - @memberjunction/ai-huggingface@6.2.0-edge.3
+  - @memberjunction/ai-inception@6.2.0-edge.3
+  - @memberjunction/ai-inworld@6.2.0-edge.3
+  - @memberjunction/ai-lmstudio@6.2.0-edge.3
+  - @memberjunction/ai-llamacpp@6.2.0-edge.3
+  - @memberjunction/ai-local-embeddings@6.2.0-edge.3
+  - @memberjunction/ai-minimax@6.2.0-edge.3
+  - @memberjunction/ai-mistral@6.2.0-edge.3
+  - @memberjunction/ai-ollama@6.2.0-edge.3
+  - @memberjunction/ai-openrouter@6.2.0-edge.3
+  - @memberjunction/ai-recommendations-rex@6.2.0-edge.3
+  - @memberjunction/ai-siliconflow@6.2.0-edge.3
+  - @memberjunction/ai-zhipu@6.2.0-edge.3
+  - @memberjunction/ai-xai@6.2.0-edge.3
+  - @memberjunction/remote-browser-server@6.2.0-edge.3
+  - @memberjunction/ai-reranker@6.2.0-edge.3
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.3
+  - @memberjunction/actions@6.2.0-edge.3
+  - @memberjunction/action-runtime-host@6.2.0-edge.3
+  - @memberjunction/communication-ms-graph@6.2.0-edge.3
+  - @memberjunction/content-autotagging@6.2.0-edge.3
+  - @memberjunction/queue@6.2.0-edge.3
+  - @memberjunction/messaging-adapters@6.2.0-edge.3
+  - @memberjunction/record-set-processor@6.2.0-edge.3
+  - @memberjunction/search-engine@6.2.0-edge.3
+  - @memberjunction/templates@6.2.0-edge.3
+  - @memberjunction/ai-agent-manager@6.2.0-edge.3
+  - @memberjunction/ai-form-builder@6.2.0-edge.3
+  - @memberjunction/ai-segmentation@6.2.0-edge.3
+  - @memberjunction/ai-vectors-pinecone@6.2.0-edge.3
+  - @memberjunction/database-designer-actions@6.2.0-edge.3
+  - @memberjunction/database-designer-core@6.2.0-edge.3
+  - @memberjunction/feature-pipelines@6.2.0-edge.3
+  - @memberjunction/ai-bridge-teams@6.2.0-edge.3
+  - @memberjunction/actions-apollo@6.2.0-edge.3
+  - @memberjunction/actions-bizapps-accounting@6.2.0-edge.3
+  - @memberjunction/actions-bizapps-crm@6.2.0-edge.3
+  - @memberjunction/actions-bizapps-formbuilders@6.2.0-edge.3
+  - @memberjunction/actions-bizapps-lms@6.2.0-edge.3
+  - @memberjunction/actions-bizapps-social@6.2.0-edge.3
+  - @memberjunction/actions-content-autotag@6.2.0-edge.3
+  - @memberjunction/archiving-engine@6.2.0-edge.3
+  - @memberjunction/communication-types@6.2.0-edge.3
+  - @memberjunction/entity-communications-base@6.2.0-edge.3
+  - @memberjunction/communication-sendgrid@6.2.0-edge.3
+  - @memberjunction/doc-utils@6.2.0-edge.3
+  - @memberjunction/encryption@6.2.0-edge.3
+  - @memberjunction/external-data-sources@6.2.0-edge.3
+  - @memberjunction/external-data-source-databricks@6.2.0-edge.3
+  - @memberjunction/external-data-source-mongodb@6.2.0-edge.3
+  - @memberjunction/external-data-source-mysql@6.2.0-edge.3
+  - @memberjunction/external-data-source-oracle@6.2.0-edge.3
+  - @memberjunction/external-data-source-postgres@6.2.0-edge.3
+  - @memberjunction/external-data-source-sqlserver@6.2.0-edge.3
+  - @memberjunction/external-data-source-snowflake@6.2.0-edge.3
+  - @memberjunction/integration-actions@6.2.0-edge.3
+  - @memberjunction/integration-engine@6.2.0-edge.3
+  - @memberjunction/storage@6.2.0-edge.3
+  - @memberjunction/react-linter@6.2.0-edge.3
+  - @memberjunction/record-cloning@6.2.0-edge.3
+  - @memberjunction/record-comparison@6.2.0-edge.3
+  - @memberjunction/scheduling-actions@6.2.0-edge.3
+  - @memberjunction/scheduling-engine-base@6.2.0-edge.3
+  - @memberjunction/scheduling-engine@6.2.0-edge.3
+  - @memberjunction/web-search-engine@6.2.0-edge.3
+  - @memberjunction/esignature@6.2.0-edge.3
+  - @memberjunction/geo-core@6.2.0-edge.3
+  - @memberjunction/remote-browser-selfhost@6.2.0-edge.3
+  - @memberjunction/ai-vectors-qdrant@6.2.0-edge.3
+  - @memberjunction/ai-vectors-sqlserver@6.2.0-edge.3
+  - @memberjunction/ai-vectors-pgvector@6.2.0-edge.3
+  - @memberjunction/archiving-action@6.2.0-edge.3
+  - @memberjunction/auth-providers@6.2.0-edge.3
+  - @memberjunction/data-context-server@6.2.0-edge.3
+  - @memberjunction/record-cloning-base@6.2.0-edge.3
+  - @memberjunction/rubrics-base@6.2.0-edge.3
+  - @memberjunction/server-extensions-core@6.2.0-edge.3
+  - @memberjunction/esignature-docusign@6.2.0-edge.3
+  - @memberjunction/esignature-dropboxsign@6.2.0-edge.3
+  - @memberjunction/esignature-pandadoc@6.2.0-edge.3
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.3
+  - @memberjunction/dynamic-packages@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 4d647e6: Add Rubrics, a core way to score any record against a published set of weighted criteria.
+
+  What ships:
+  - Schema for rubrics, versions, criteria, scales, anchors, bands, evaluations, and score rows, plus layered consensus views. Published versions are frozen. Raw writes to a frozen row throw 51101–51110. A draft version delete is an `INSTEAD OF DELETE` trigger. `MJ: Test Rubrics` is deprecated in metadata.
+  - `RubricScoring` and `RubricVersionDiff` in `@memberjunction/rubrics-base`. The outcome ladder is Incomplete, NotApplicableFailure, GateFailed, Passed or BelowThreshold, then Scored. The publish base is the highest Published or Retired version.
+  - `@memberjunction/rubrics`: LLM, agent, deterministic, and human evaluators. Actions are Evaluate Record Against Rubric, Get Rubric, Get Rubric Subject, Get Rubric Consensus, Create Rubric Draft, and Submit Human Rubric. Create Rubric Draft and the architect import do not publish. The evaluation agent does not call Get Rubric Consensus.
+  - Presentational widgets in `@memberjunction/ng-rubrics`, Explorer forms, and a Rubrics application. The agent form has a Rubrics tab.
+  - Six guide-example rubrics stay Draft. Seven agent rubrics publish at 1.0.0 and bind to their agents. Marketing Agent is not bound. Shipped self-check links and the sampling job stay Disabled. A test that already has an `llm-judge` oracle keeps it.
+  - Testing: rubric resolution, a `rubric` oracle, judge calibration, per-criterion spread on `--flaky-check`, `mj rubric`, and `mj test promote-criteria`. `Test.RubricID` and `TestSuite.RubricID` select a rubric. `TestSuiteRun.Score` is stored.
+  - The deterministic integration bundle is IT98 at sequence 49.
+
+  `GeneratePluralName` keeps the head of a name verbatim and pluralizes only the tail, preserving that tail's case. A linear scan finds the tail, so `user_profile` and `userProfile` no longer produce the same view name, a leading character such as Ä stays on the head, and `Contact Person` pluralizes to `Contact People`. The base view for a criterion is `vwRubricCriteria`.
+
+### Patch Changes
+
+- 513e608: Add pipeline type picker, capability-aware output filtering and validation, Decision-specific constraint editors, and type badges for Feature Pipelines. What each pipeline type can produce is now one rule set, shared by the server, the builder and the save check. A Decision pipeline reads enum values and descriptions from its own entity's fields only; before, it read them from any entity with a field of the same name. An enum reads field metadata only when it sets FromFieldMetadata or lists no values, and only a type that needs listed values (Decision) requires them.
+
+  A Record Process now refuses at save an Infer pipeline its type cannot run, on both tiers and every save path, through the shared MJRecordProcessEntityExtended; the Record Process form also refuses while the builder reports errors. The builder loads and edits CaptureReasoning, and keeps Watermark. Its pickers now show the saved pipeline type, prompt, entity document, target and constraint, not the first option, and a placeholder when the saved value is not offered.
+
+- 2ceedb4: Register the record-cloning classes at startup: the server bootstraps depend on `@memberjunction/record-cloning` and load its `RecordClone.*` remote operations (and, through them, the `Clone` record-process work type). All three register the new `MJ: Record Clone Logs` and `MJ: Record Clone Log Items` entity classes.
+- Updated dependencies [7b4142e]
+- Updated dependencies [ca853fc]
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [3fbda62]
+- Updated dependencies [eaa9455]
+- Updated dependencies [ff00d60]
+- Updated dependencies [2552b1e]
+- Updated dependencies [4b680f9]
+- Updated dependencies [660ef45]
+- Updated dependencies [8fd1c46]
+- Updated dependencies [1580f34]
+- Updated dependencies [ed77dd7]
+- Updated dependencies [21f9e15]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [72d8a40]
+- Updated dependencies [664baea]
+- Updated dependencies [672b4c6]
+- Updated dependencies [f3c6161]
+- Updated dependencies [0e5ad68]
+- Updated dependencies [35ffb95]
+- Updated dependencies [5148534]
+- Updated dependencies [50ba290]
+- Updated dependencies [ffb3c0f]
+- Updated dependencies [cf97480]
+- Updated dependencies [0adaf76]
+- Updated dependencies [5ee02db]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [513e608]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [1d38a22]
+- Updated dependencies [b03a928]
+- Updated dependencies [ea4080e]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [0d61b53]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [7e57b48]
+- Updated dependencies [861cbf0]
+- Updated dependencies [9096523]
+- Updated dependencies [705ab4e]
+- Updated dependencies [e51ce8a]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [f3fa01e]
+- Updated dependencies [3276daa]
+- Updated dependencies [d6fd68d]
+- Updated dependencies [d0cea53]
+- Updated dependencies [d4e30c3]
+- Updated dependencies [e9ab27b]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [e78341e]
+- Updated dependencies [55c1c58]
+- Updated dependencies [7e57b48]
+- Updated dependencies [14e2a3a]
+- Updated dependencies [5986939]
+- Updated dependencies [200e634]
+- Updated dependencies [7408dbb]
+- Updated dependencies [4d647e6]
+- Updated dependencies [7bcba8c]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [808c8c8]
+- Updated dependencies [bb33c77]
+- Updated dependencies [7e57b48]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+- Updated dependencies [74b3e69]
+  - @memberjunction/actions-bizapps-accounting@6.2.0-edge.2
+  - @memberjunction/ai-agents@6.2.0-edge.2
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/messaging-adapters@6.2.0-edge.2
+  - @memberjunction/ai-agent-manager@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/computer-use-engine@6.2.0-edge.2
+  - @memberjunction/ai-prompts@6.2.0-edge.2
+  - @memberjunction/ai-openai@6.2.0-edge.2
+  - @memberjunction/ai-elevenlabs@6.2.0-edge.2
+  - @memberjunction/ai-groq@6.2.0-edge.2
+  - @memberjunction/ai-heygen@6.2.0-edge.2
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.2
+  - @memberjunction/content-autotagging@6.2.0-edge.2
+  - @memberjunction/search-engine@6.2.0-edge.2
+  - @memberjunction/core-actions@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/ai-reranker@6.2.0-edge.2
+  - @memberjunction/server@6.2.0-edge.2
+  - @memberjunction/codegen-lib@6.2.0-edge.2
+  - @memberjunction/ai-cohere@6.2.0-edge.2
+  - @memberjunction/testing-engine@6.2.0-edge.2
+  - @memberjunction/feature-pipelines@6.2.0-edge.2
+  - @memberjunction/record-set-processor@6.2.0-edge.2
+  - @memberjunction/ai-local-embeddings@6.2.0-edge.2
+  - @memberjunction/ai-ollama@6.2.0-edge.2
+  - @memberjunction/core-entities-server@6.2.0-edge.2
+  - @memberjunction/actions-content-autotag@6.2.0-edge.2
+  - @memberjunction/task-graph@6.2.0-edge.2
+  - @memberjunction/ai-openrouter@6.2.0-edge.2
+  - @memberjunction/generic-database-provider@6.2.0-edge.2
+  - @memberjunction/record-cloning-base@6.2.0-edge.2
+  - @memberjunction/record-cloning@6.2.0-edge.2
+  - @memberjunction/testing-integration@6.2.0-edge.2
+  - @memberjunction/actions@6.2.0-edge.2
+  - @memberjunction/ai-agent-harness@6.2.0-edge.2
+  - @memberjunction/rubrics@6.2.0-edge.2
+  - @memberjunction/rubrics-base@6.2.0-edge.2
+  - @memberjunction/scheduling-engine@6.2.0-edge.2
+  - @memberjunction/ai-engine-base@6.2.0-edge.2
+  - @memberjunction/database-designer-core@6.2.0-edge.2
+  - @memberjunction/ai-form-builder@6.2.0-edge.2
+  - @memberjunction/predictive-studio@6.2.0-edge.2
+  - @memberjunction/action-runtime-host@6.2.0-edge.2
+  - @memberjunction/ai-segmentation@6.2.0-edge.2
+  - @memberjunction/templates@6.2.0-edge.2
+  - @memberjunction/database-designer-actions@6.2.0-edge.2
+  - @memberjunction/tag-engine-base@6.2.0-edge.2
+  - @memberjunction/ai-recommendations-rex@6.2.0-edge.2
+  - @memberjunction/ai-bridge-livekit@6.2.0-edge.2
+  - @memberjunction/ai-bridge-ringcentral@6.2.0-edge.2
+  - @memberjunction/ai-bridge-teams@6.2.0-edge.2
+  - @memberjunction/ai-bridge-twilio@6.2.0-edge.2
+  - @memberjunction/ai-bridge-vonage@6.2.0-edge.2
+  - @memberjunction/ai-bridge-server@6.2.0-edge.2
+  - @memberjunction/remote-browser-selfhost@6.2.0-edge.2
+  - @memberjunction/remote-browser-server@6.2.0-edge.2
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.2
+  - @memberjunction/ai-vectors-pinecone@6.2.0-edge.2
+  - @memberjunction/ai-vectors-qdrant@6.2.0-edge.2
+  - @memberjunction/ai-vectors-sqlserver@6.2.0-edge.2
+  - @memberjunction/ai-vectors-pgvector@6.2.0-edge.2
+  - @memberjunction/actions-apollo@6.2.0-edge.2
+  - @memberjunction/actions-base@6.2.0-edge.2
+  - @memberjunction/actions-bizapps-crm@6.2.0-edge.2
+  - @memberjunction/actions-bizapps-formbuilders@6.2.0-edge.2
+  - @memberjunction/actions-bizapps-lms@6.2.0-edge.2
+  - @memberjunction/actions-bizapps-social@6.2.0-edge.2
+  - @memberjunction/archiving-action@6.2.0-edge.2
+  - @memberjunction/archiving-engine@6.2.0-edge.2
+  - @memberjunction/auth-providers@6.2.0-edge.2
+  - @memberjunction/communication-types@6.2.0-edge.2
+  - @memberjunction/entity-communications-base@6.2.0-edge.2
+  - @memberjunction/communication-ms-graph@6.2.0-edge.2
+  - @memberjunction/communication-sendgrid@6.2.0-edge.2
+  - @memberjunction/doc-utils@6.2.0-edge.2
+  - @memberjunction/encryption@6.2.0-edge.2
+  - @memberjunction/external-data-sources@6.2.0-edge.2
+  - @memberjunction/external-data-source-databricks@6.2.0-edge.2
+  - @memberjunction/external-data-source-mongodb@6.2.0-edge.2
+  - @memberjunction/external-data-source-mysql@6.2.0-edge.2
+  - @memberjunction/external-data-source-oracle@6.2.0-edge.2
+  - @memberjunction/external-data-source-postgres@6.2.0-edge.2
+  - @memberjunction/external-data-source-sqlserver@6.2.0-edge.2
+  - @memberjunction/external-data-source-snowflake@6.2.0-edge.2
+  - @memberjunction/integration-actions@6.2.0-edge.2
+  - @memberjunction/integration-engine@6.2.0-edge.2
+  - @memberjunction/data-context-server@6.2.0-edge.2
+  - @memberjunction/queue@6.2.0-edge.2
+  - @memberjunction/storage@6.2.0-edge.2
+  - @memberjunction/react-linter@6.2.0-edge.2
+  - @memberjunction/record-comparison@6.2.0-edge.2
+  - @memberjunction/scheduling-actions@6.2.0-edge.2
+  - @memberjunction/scheduling-engine-base@6.2.0-edge.2
+  - @memberjunction/server-extensions-core@6.2.0-edge.2
+  - @memberjunction/web-search-engine@6.2.0-edge.2
+  - @memberjunction/esignature@6.2.0-edge.2
+  - @memberjunction/geo-core@6.2.0-edge.2
+  - @memberjunction/ai-anthropic@6.2.0-edge.2
+  - @memberjunction/ai-assemblyai@6.2.0-edge.2
+  - @memberjunction/ai-azure@6.2.0-edge.2
+  - @memberjunction/ai-bedrock@6.2.0-edge.2
+  - @memberjunction/ai-betty@6.2.0-edge.2
+  - @memberjunction/ai-betty-bot@6.2.0-edge.2
+  - @memberjunction/ai-blackforestlabs@6.2.0-edge.2
+  - @memberjunction/ai-cerebras@6.2.0-edge.2
+  - @memberjunction/ai-deepinfra@6.2.0-edge.2
+  - @memberjunction/ai-fireworks@6.2.0-edge.2
+  - @memberjunction/ai-gemini@6.2.0-edge.2
+  - @memberjunction/ai-huggingface@6.2.0-edge.2
+  - @memberjunction/ai-inception@6.2.0-edge.2
+  - @memberjunction/ai-inworld@6.2.0-edge.2
+  - @memberjunction/ai-lmstudio@6.2.0-edge.2
+  - @memberjunction/ai-llamacpp@6.2.0-edge.2
+  - @memberjunction/ai-minimax@6.2.0-edge.2
+  - @memberjunction/ai-mistral@6.2.0-edge.2
+  - @memberjunction/ai-siliconflow@6.2.0-edge.2
+  - @memberjunction/ai-vertex@6.2.0-edge.2
+  - @memberjunction/ai-zhipu@6.2.0-edge.2
+  - @memberjunction/ai-xai@6.2.0-edge.2
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.2
+  - @memberjunction/esignature-docusign@6.2.0-edge.2
+  - @memberjunction/esignature-dropboxsign@6.2.0-edge.2
+  - @memberjunction/esignature-pandadoc@6.2.0-edge.2
+  - @memberjunction/dynamic-packages@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 48f77ea: Add `@memberjunction/ai-betty` — a `BaseLLM` provider for **Betty**, the MJ-native
+  organization-scoped assistant, registered as `BettyLLM`.
+
+  This sits **alongside** `@memberjunction/ai-betty-bot` rather than replacing it. The two target
+  different services with different wire protocols: `BettyBotLLM` exchanges its key for a JWT at
+  `POST /settings` and posts `{ input }` to `POST /response`; `BettyLLM` uses the API key directly as
+  a bearer and posts `{ message, conversationId }` to `POST /messages`.
+
+  **No breaking change.** `@memberjunction/ai-betty-bot` is untouched, so no existing deployment has
+  to move and nobody needs to be contacted or given a deadline. Both can run in one instance;
+  migrating a deployment is repointing one `AIModelVendor.DriverClass` from `BettyBotLLM` to
+  `BettyLLM`, and rolling back is repointing it back.
+
+  A separate driver class rather than a configuration mode on the existing one, because
+  `GetAIAPIKey()` is keyed by driver class — one class serving both protocols would read a single
+  `AI_VENDOR_API_KEY__BETTYBOTLLM` for two unrelated services, and a misconfiguration would silently
+  send a customer's key to the wrong host.
+
+  Configuration: `BETTY_API_BASE_URL` (required, no default — Betty is deployed per customer, so a
+  default risks answering from the wrong tenant) and `AI_VENDOR_API_KEY__BETTYLLM`.
+
+  Notes:
+  - Citations keep the legacy response shape (`choices[1]` formatted, `choices[2]` raw JSON with
+    `finish_reason: 'references_json'`), so anything already parsing `BettyBotLLM` output survives a
+    `DriverClass` repoint.
+  - Multi-turn is handled correctly. The legacy provider uses `messages.find(m => m.role === user)`,
+    which returns the _first_ match and silently discards follow-ups; this provider sends the latest
+    user turn and passes the earlier ones as advisory, non-authorizing `context.text`.
+  - Streaming is not implemented yet (`SupportsStreaming` is `false`). The API does support SSE via
+    `Accept: text/event-stream`, so this is a follow-up rather than a dead end.
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [ddcd666]
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [48f77ea]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [5da3ad2]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [bde8832]
+- Updated dependencies [520bd09]
+- Updated dependencies [520bd09]
+- Updated dependencies [307da67]
+- Updated dependencies [7110019]
+- Updated dependencies [9d4a28a]
+- Updated dependencies [a7da50b]
+- Updated dependencies [1d43161]
+- Updated dependencies [52633b4]
+- Updated dependencies [519d6b2]
+- Updated dependencies [7110019]
+- Updated dependencies [f2a4171]
+- Updated dependencies [e482249]
+- Updated dependencies [37e2f6b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [351ba9f]
+- Updated dependencies [c4993f3]
+  - @memberjunction/ai-elevenlabs@6.2.0-edge.1
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/ai-deepinfra@6.2.0-edge.1
+  - @memberjunction/ai-siliconflow@6.2.0-edge.1
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.1
+  - @memberjunction/ai-agent-harness@6.2.0-edge.1
+  - @memberjunction/ai-agents@6.2.0-edge.1
+  - @memberjunction/ai-core-plus@6.2.0-edge.1
+  - @memberjunction/ai-prompts@6.2.0-edge.1
+  - @memberjunction/core-entities-server@6.2.0-edge.1
+  - @memberjunction/server@6.2.0-edge.1
+  - @memberjunction/ai-betty@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/actions-base@6.2.0-edge.1
+  - @memberjunction/actions@6.2.0-edge.1
+  - @memberjunction/task-graph@6.2.0-edge.1
+  - @memberjunction/storage@6.2.0-edge.1
+  - @memberjunction/auth-providers@6.2.0-edge.1
+  - @memberjunction/ai-anthropic@6.2.0-edge.1
+  - @memberjunction/codegen-lib@6.2.0-edge.1
+  - @memberjunction/action-runtime-host@6.2.0-edge.1
+  - @memberjunction/actions-apollo@6.2.0-edge.1
+  - @memberjunction/actions-bizapps-accounting@6.2.0-edge.1
+  - @memberjunction/actions-bizapps-formbuilders@6.2.0-edge.1
+  - @memberjunction/ai-agent-manager@6.2.0-edge.1
+  - @memberjunction/ai-blackforestlabs@6.2.0-edge.1
+  - @memberjunction/ai-bridge-livekit@6.2.0-edge.1
+  - @memberjunction/ai-bridge-ringcentral@6.2.0-edge.1
+  - @memberjunction/ai-bridge-server@6.2.0-edge.1
+  - @memberjunction/ai-bridge-teams@6.2.0-edge.1
+  - @memberjunction/ai-bridge-twilio@6.2.0-edge.1
+  - @memberjunction/ai-bridge-vonage@6.2.0-edge.1
+  - @memberjunction/ai-cerebras@6.2.0-edge.1
+  - @memberjunction/ai-cohere@6.2.0-edge.1
+  - @memberjunction/ai-groq@6.2.0-edge.1
+  - @memberjunction/ai-lmstudio@6.2.0-edge.1
+  - @memberjunction/ai-local-embeddings@6.2.0-edge.1
+  - @memberjunction/ai-ollama@6.2.0-edge.1
+  - @memberjunction/ai-reranker@6.2.0-edge.1
+  - @memberjunction/ai-vectors-pinecone@6.2.0-edge.1
+  - @memberjunction/communication-ms-graph@6.2.0-edge.1
+  - @memberjunction/communication-types@6.2.0-edge.1
+  - @memberjunction/computer-use-engine@6.2.0-edge.1
+  - @memberjunction/content-autotagging@6.2.0-edge.1
+  - @memberjunction/core-actions@6.2.0-edge.1
+  - @memberjunction/database-designer-core@6.2.0-edge.1
+  - @memberjunction/dynamic-packages@6.2.0-edge.1
+  - @memberjunction/esignature@6.2.0-edge.1
+  - @memberjunction/esignature-docusign@6.2.0-edge.1
+  - @memberjunction/esignature-dropboxsign@6.2.0-edge.1
+  - @memberjunction/esignature-pandadoc@6.2.0-edge.1
+  - @memberjunction/external-data-source-mongodb@6.2.0-edge.1
+  - @memberjunction/external-data-sources@6.2.0-edge.1
+  - @memberjunction/generic-database-provider@6.2.0-edge.1
+  - @memberjunction/integration-engine@6.2.0-edge.1
+  - @memberjunction/messaging-adapters@6.2.0-edge.1
+  - @memberjunction/predictive-studio@6.2.0-edge.1
+  - @memberjunction/react-linter@6.2.0-edge.1
+  - @memberjunction/record-set-processor@6.2.0-edge.1
+  - @memberjunction/remote-browser-server@6.2.0-edge.1
+  - @memberjunction/search-engine@6.2.0-edge.1
+  - @memberjunction/server-extensions-core@6.2.0-edge.1
+  - @memberjunction/tag-engine-base@6.2.0-edge.1
+  - @memberjunction/templates@6.2.0-edge.1
+  - @memberjunction/testing-engine@6.2.0-edge.1
+  - @memberjunction/testing-integration@6.2.0-edge.1
+  - @memberjunction/web-search-engine@6.2.0-edge.1
+  - @memberjunction/ai-form-builder@6.2.0-edge.1
+  - @memberjunction/ai-segmentation@6.2.0-edge.1
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.1
+  - @memberjunction/queue@6.2.0-edge.1
+  - @memberjunction/ai-engine-base@6.2.0-edge.1
+  - @memberjunction/ai-assemblyai@6.2.0-edge.1
+  - @memberjunction/ai-azure@6.2.0-edge.1
+  - @memberjunction/ai-bedrock@6.2.0-edge.1
+  - @memberjunction/ai-betty-bot@6.2.0-edge.1
+  - @memberjunction/ai-fireworks@6.2.0-edge.1
+  - @memberjunction/ai-gemini@6.2.0-edge.1
+  - @memberjunction/ai-heygen@6.2.0-edge.1
+  - @memberjunction/ai-huggingface@6.2.0-edge.1
+  - @memberjunction/ai-inception@6.2.0-edge.1
+  - @memberjunction/ai-inworld@6.2.0-edge.1
+  - @memberjunction/ai-llamacpp@6.2.0-edge.1
+  - @memberjunction/ai-minimax@6.2.0-edge.1
+  - @memberjunction/ai-mistral@6.2.0-edge.1
+  - @memberjunction/ai-openai@6.2.0-edge.1
+  - @memberjunction/ai-openrouter@6.2.0-edge.1
+  - @memberjunction/ai-recommendations-rex@6.2.0-edge.1
+  - @memberjunction/ai-vertex@6.2.0-edge.1
+  - @memberjunction/ai-zhipu@6.2.0-edge.1
+  - @memberjunction/ai-xai@6.2.0-edge.1
+  - @memberjunction/database-designer-actions@6.2.0-edge.1
+  - @memberjunction/actions-bizapps-crm@6.2.0-edge.1
+  - @memberjunction/actions-bizapps-lms@6.2.0-edge.1
+  - @memberjunction/actions-bizapps-social@6.2.0-edge.1
+  - @memberjunction/actions-content-autotag@6.2.0-edge.1
+  - @memberjunction/archiving-engine@6.2.0-edge.1
+  - @memberjunction/entity-communications-base@6.2.0-edge.1
+  - @memberjunction/communication-sendgrid@6.2.0-edge.1
+  - @memberjunction/doc-utils@6.2.0-edge.1
+  - @memberjunction/encryption@6.2.0-edge.1
+  - @memberjunction/external-data-source-databricks@6.2.0-edge.1
+  - @memberjunction/external-data-source-mysql@6.2.0-edge.1
+  - @memberjunction/external-data-source-oracle@6.2.0-edge.1
+  - @memberjunction/external-data-source-postgres@6.2.0-edge.1
+  - @memberjunction/external-data-source-sqlserver@6.2.0-edge.1
+  - @memberjunction/external-data-source-snowflake@6.2.0-edge.1
+  - @memberjunction/integration-actions@6.2.0-edge.1
+  - @memberjunction/record-comparison@6.2.0-edge.1
+  - @memberjunction/scheduling-actions@6.2.0-edge.1
+  - @memberjunction/scheduling-engine-base@6.2.0-edge.1
+  - @memberjunction/scheduling-engine@6.2.0-edge.1
+  - @memberjunction/geo-core@6.2.0-edge.1
+  - @memberjunction/remote-browser-selfhost@6.2.0-edge.1
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.1
+  - @memberjunction/ai-vectors-qdrant@6.2.0-edge.1
+  - @memberjunction/ai-vectors-sqlserver@6.2.0-edge.1
+  - @memberjunction/ai-vectors-pgvector@6.2.0-edge.1
+  - @memberjunction/archiving-action@6.2.0-edge.1
+  - @memberjunction/data-context-server@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [abf8778]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [b518dfa]
+- Updated dependencies [37891d3]
+- Updated dependencies [6ad6434]
+- Updated dependencies [666c4e6]
+- Updated dependencies [ee5c033]
+- Updated dependencies [ce55864]
+- Updated dependencies [662d47e]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [42d701e]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [e3db74f]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [d665a6e]
+- Updated dependencies [6fd16d2]
+- Updated dependencies [5df9486]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [7658d68]
+- Updated dependencies [44faf83]
+- Updated dependencies [58faa68]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [575bfae]
+- Updated dependencies [e6c8f53]
+- Updated dependencies [a17a228]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [2cd8411]
+- Updated dependencies [d61b425]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [7fe994a]
+- Updated dependencies [8d1a373]
+- Updated dependencies [b2a9ba1]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [3d633ed]
+- Updated dependencies [e7a0efe]
+- Updated dependencies [e962151]
+- Updated dependencies [af57e8d]
+- Updated dependencies [2c590b0]
+- Updated dependencies [666c4e6]
+- Updated dependencies [fc3da91]
+  - @memberjunction/ai-agents@6.2.0-edge.0
+  - @memberjunction/core-actions@6.2.0-edge.0
+  - @memberjunction/actions-base@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/ai-prompts@6.2.0-edge.0
+  - @memberjunction/ai-core-plus@6.2.0-edge.0
+  - @memberjunction/server@6.2.0-edge.0
+  - @memberjunction/codegen-lib@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/generic-database-provider@6.2.0-edge.0
+  - @memberjunction/computer-use-engine@6.2.0-edge.0
+  - @memberjunction/testing-engine@6.2.0-edge.0
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.0
+  - @memberjunction/content-autotagging@6.2.0-edge.0
+  - @memberjunction/record-set-processor@6.2.0-edge.0
+  - @memberjunction/ai-gemini@6.2.0-edge.0
+  - @memberjunction/remote-browser-server@6.2.0-edge.0
+  - @memberjunction/ai-openai@6.2.0-edge.0
+  - @memberjunction/predictive-studio@6.2.0-edge.0
+  - @memberjunction/actions@6.2.0-edge.0
+  - @memberjunction/messaging-adapters@6.2.0-edge.0
+  - @memberjunction/ai-engine-base@6.2.0-edge.0
+  - @memberjunction/search-engine@6.2.0-edge.0
+  - @memberjunction/task-graph@6.2.0-edge.0
+  - @memberjunction/web-search-engine@6.2.0-edge.0
+  - @memberjunction/ai-agent-harness@6.2.0-edge.0
+  - @memberjunction/ai-agent-manager@6.2.0-edge.0
+  - @memberjunction/database-designer-core@6.2.0-edge.0
+  - @memberjunction/ai-form-builder@6.2.0-edge.0
+  - @memberjunction/action-runtime-host@6.2.0-edge.0
+  - @memberjunction/scheduling-engine@6.2.0-edge.0
+  - @memberjunction/actions-content-autotag@6.2.0-edge.0
+  - @memberjunction/database-designer-actions@6.2.0-edge.0
+  - @memberjunction/actions-apollo@6.2.0-edge.0
+  - @memberjunction/actions-bizapps-accounting@6.2.0-edge.0
+  - @memberjunction/actions-bizapps-crm@6.2.0-edge.0
+  - @memberjunction/actions-bizapps-formbuilders@6.2.0-edge.0
+  - @memberjunction/actions-bizapps-lms@6.2.0-edge.0
+  - @memberjunction/actions-bizapps-social@6.2.0-edge.0
+  - @memberjunction/archiving-action@6.2.0-edge.0
+  - @memberjunction/encryption@6.2.0-edge.0
+  - @memberjunction/integration-actions@6.2.0-edge.0
+  - @memberjunction/core-entities-server@6.2.0-edge.0
+  - @memberjunction/scheduling-actions@6.2.0-edge.0
+  - @memberjunction/ai-anthropic@6.2.0-edge.0
+  - @memberjunction/ai-assemblyai@6.2.0-edge.0
+  - @memberjunction/ai-azure@6.2.0-edge.0
+  - @memberjunction/ai-bedrock@6.2.0-edge.0
+  - @memberjunction/ai-betty-bot@6.2.0-edge.0
+  - @memberjunction/ai-blackforestlabs@6.2.0-edge.0
+  - @memberjunction/ai-cerebras@6.2.0-edge.0
+  - @memberjunction/ai-cohere@6.2.0-edge.0
+  - @memberjunction/ai-elevenlabs@6.2.0-edge.0
+  - @memberjunction/ai-fireworks@6.2.0-edge.0
+  - @memberjunction/ai-groq@6.2.0-edge.0
+  - @memberjunction/ai-heygen@6.2.0-edge.0
+  - @memberjunction/ai-huggingface@6.2.0-edge.0
+  - @memberjunction/ai-inception@6.2.0-edge.0
+  - @memberjunction/ai-inworld@6.2.0-edge.0
+  - @memberjunction/ai-lmstudio@6.2.0-edge.0
+  - @memberjunction/ai-llamacpp@6.2.0-edge.0
+  - @memberjunction/ai-local-embeddings@6.2.0-edge.0
+  - @memberjunction/ai-minimax@6.2.0-edge.0
+  - @memberjunction/ai-mistral@6.2.0-edge.0
+  - @memberjunction/ai-ollama@6.2.0-edge.0
+  - @memberjunction/ai-openrouter@6.2.0-edge.0
+  - @memberjunction/ai-recommendations-rex@6.2.0-edge.0
+  - @memberjunction/ai-vertex@6.2.0-edge.0
+  - @memberjunction/ai-zhipu@6.2.0-edge.0
+  - @memberjunction/ai-xai@6.2.0-edge.0
+  - @memberjunction/ai-bridge-server@6.2.0-edge.0
+  - @memberjunction/ai-reranker@6.2.0-edge.0
+  - @memberjunction/communication-ms-graph@6.2.0-edge.0
+  - @memberjunction/queue@6.2.0-edge.0
+  - @memberjunction/templates@6.2.0-edge.0
+  - @memberjunction/ai-segmentation@6.2.0-edge.0
+  - @memberjunction/ai-vectors-pinecone@6.2.0-edge.0
+  - @memberjunction/tag-engine-base@6.2.0-edge.0
+  - @memberjunction/ai-bridge-livekit@6.2.0-edge.0
+  - @memberjunction/ai-bridge-ringcentral@6.2.0-edge.0
+  - @memberjunction/ai-bridge-teams@6.2.0-edge.0
+  - @memberjunction/ai-bridge-twilio@6.2.0-edge.0
+  - @memberjunction/ai-bridge-vonage@6.2.0-edge.0
+  - @memberjunction/archiving-engine@6.2.0-edge.0
+  - @memberjunction/communication-types@6.2.0-edge.0
+  - @memberjunction/entity-communications-base@6.2.0-edge.0
+  - @memberjunction/communication-sendgrid@6.2.0-edge.0
+  - @memberjunction/doc-utils@6.2.0-edge.0
+  - @memberjunction/external-data-sources@6.2.0-edge.0
+  - @memberjunction/external-data-source-databricks@6.2.0-edge.0
+  - @memberjunction/external-data-source-mongodb@6.2.0-edge.0
+  - @memberjunction/external-data-source-mysql@6.2.0-edge.0
+  - @memberjunction/external-data-source-oracle@6.2.0-edge.0
+  - @memberjunction/external-data-source-postgres@6.2.0-edge.0
+  - @memberjunction/external-data-source-sqlserver@6.2.0-edge.0
+  - @memberjunction/external-data-source-snowflake@6.2.0-edge.0
+  - @memberjunction/integration-engine@6.2.0-edge.0
+  - @memberjunction/storage@6.2.0-edge.0
+  - @memberjunction/react-linter@6.2.0-edge.0
+  - @memberjunction/record-comparison@6.2.0-edge.0
+  - @memberjunction/scheduling-engine-base@6.2.0-edge.0
+  - @memberjunction/testing-integration@6.2.0-edge.0
+  - @memberjunction/esignature@6.2.0-edge.0
+  - @memberjunction/geo-core@6.2.0-edge.0
+  - @memberjunction/remote-browser-selfhost@6.2.0-edge.0
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.0
+  - @memberjunction/ai-vectors-qdrant@6.2.0-edge.0
+  - @memberjunction/ai-vectors-sqlserver@6.2.0-edge.0
+  - @memberjunction/ai-vectors-pgvector@6.2.0-edge.0
+  - @memberjunction/auth-providers@6.2.0-edge.0
+  - @memberjunction/data-context-server@6.2.0-edge.0
+  - @memberjunction/server-extensions-core@6.2.0-edge.0
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.0
+  - @memberjunction/esignature-docusign@6.2.0-edge.0
+  - @memberjunction/esignature-dropboxsign@6.2.0-edge.0
+  - @memberjunction/esignature-pandadoc@6.2.0-edge.0
+  - @memberjunction/dynamic-packages@6.2.0-edge.0
+
+## 6.1.0
+
+### Minor Changes
+
+- ee15cf7: Add AI Persona foundation schema (`AIPersona`, `AIPersonaVendor`, `AIModelPersona`, `AIAgentPersona`) and strongly typed JSONType interfaces (`IAIPersonaStyleDescriptors`, `IAIPersonaVendorSettings`, `IAIAgentPersonaStyleOverride`).
+  - Introduce `AIPersona` catalog table with deterministic global name uniqueness for cross-modality catalog curation.
+  - Introduce `AIPersonaVendor` for concrete vendor and modality bindings with typed `VendorSettingsObject` (`IAIPersonaVendorSettings` with native ElevenLabs settings).
+  - Introduce `AIModelPersona` for model availability and priority sequences.
+  - Introduce `AIAgentPersona` for agent persona assignments with filtered unique index `UQ_AIAgentPersona_OneDefaultPerAgent` and typed `StyleOverrideObject` (`IAIAgentPersonaStyleOverride`).
+  - Add strongly-typed `<Field>Object` accessors in `MJAIPersonaEntity`, `MJAIPersonaVendorEntity`, and `MJAIAgentPersonaEntity`.
+  - Scope CodeGen remote operations emission to `includeSchemas` and partition core vs non-core operations.
+
+- 00a2483: Introduces Identity Claims infrastructure in MemberJunction core for guest record claiming, account linking, and invite verification workflows (#4012).
+  - Schema & Entities: Adds `IdentityClaimType` and `IdentityClaim` entities with lifecycle state transitions (`Pending`, `Claimed`, `Expired`, `Revoked`).
+  - Pluggable Driver Substrate: Supports custom claim handler implementations via `BaseIdentityClaimDriver` and `@RegisterClass`.
+  - Server Engine: `IdentityClaimEngineServer` handles cryptographic claim creation, SHA-256 token hashing at rest, timing-safe token verification, email notifications via MJ Communications framework with HTML escaping, configurable email providers, polymorphic entity resolution, and atomic claim redemption.
+
+- a16f0db: <!-- Bump type is `minor`, not `major`, even though this IS a breaking change. The repo sits
+       at an unpublished 6.0.0 (nothing above 5.51.0 is on npm) and 6.0.0 is itself the era open
+       that carries the 6.x breaking changes — so this ships *inside* it. Under the fixed group
+       and changesets pre-mode, a `major` here resolves to 7.0.0-edge.0 and burns the entire 6.x
+       era in one release; verified by running `changeset version`. publish.yml's era gate only
+       hard-fails *unsuffixed* versions, so `7.0.0-edge.0` would sail through it. Use `major`
+       only once 6.x has actually shipped and you mean to open 7. -->
+
+  **BREAKING (6.x): remove the 36 vendor connectors from `@memberjunction/integration-connectors`.**
+
+  Every one of them was a duplicate — the same class shipped from both this monorepo and the
+  [MemberJunction/Integrations](https://github.com/MemberJunction/Integrations) repo, where each connector
+  is a self-contained Open App (`@memberjunction/connector-<vendor>`) with its own versioning, changesets,
+  metadata, CI gates and seed migrations for SQL Server **and** PostgreSQL. The Integrations copy is the
+  one that ships to customers; keeping a second copy here meant fixing everything twice and letting the
+  two drift. The Integrations repo is now the single source of truth, and connectors version independently
+  of the MJ core release train.
+
+  Removed: Aptify, Blackbaud, ConstantContact, Cvent, DynamicsDataverse, FileFeed, Fonteva, GrowthZone,
+  Hivebrite, HubSpot, iMIS, MJToMJ, MagnetMail, Mailchimp, MemberSuite, NeonCRM, NetForum, NetSuite,
+  NimbleAMS, Novi, ORCID, OpenWater, PathLMS, PheedLoop, PropFuel, QuickBooks, Rasa, Reach360,
+  RelationalDB, Rhythm, SageIntacct, Salesforce, SharePoint, Wicket, WildApricot, YourMembership — plus
+  their unit tests, fixtures and the `generate-integration-actions.ts` CLI that existed only to instantiate
+  them.
+
+  **What remains** is the three External Data Source connector base classes —
+  `BaseExternalDataSourceConnector`, `BaseSqlExternalDataSourceConnector` and
+  `BaseDocumentDataSourceConnector`. These are _not_ duplicated: six shipped Open Apps (SQL Server,
+  PostgreSQL, MySQL, Oracle, Snowflake, MongoDB) import them from this package rather than carrying their
+  own copy, so the package stays — reduced to that shared layer.
+
+  **Migration.** Install the Open App for each connector you use. Its seed migration writes the _same_
+  `__mj.Integration` row (same hardcoded ID as the original monorepo seed) with `ClassName` and
+  `ImportPath` re-pointed to the connector's npm package, so existing `CompanyIntegration` records keep
+  working. Direct imports change from `@memberjunction/integration-connectors` to
+  `@memberjunction/connector-<vendor>`. **A deployment that upgrades to 6.x without installing the
+  corresponding Open App will have catalog rows pointing at a package that no longer contains those
+  classes, and those integrations will fail to resolve.** Applied migrations under `migrations/v5/**` are
+  untouched — the re-point happens forward, through each Open App's own migration.
+
+  **The same-ID re-point holds for 16 of the 24 monorepo-seeded integrations, but NOT for seven of them.**
+  Comparing every `spCreateIntegration` seed in `migrations/v5/**` against every Open App seed in the
+  Integrations repo, these seven do not re-point an existing row and need a manual step before or during a
+  6.x upgrade:
+
+  | Integration      | monorepo seed                   | Open App seed                   | what happens on install                                  |
+  | ---------------- | ------------------------------- | ------------------------------- | -------------------------------------------------------- |
+  | Mailchimp        | `987FA1B5-…` `Mailchimp`        | `D9C7F5B4-…` `mailchimp`        | **install fails** — `UQ_Integration_Name` violation      |
+  | Blackbaud        | `2BBF275A-…` `Blackbaud`        | `0159550E-…` `blackbaud`        | **install fails** — same, collation is `CI`              |
+  | HubSpot          | `3DD4C246-…` `HubSpot`          | `71EC4CCB-…` `HubSpot`          | **install fails** — same                                 |
+  | MagnetMail       | `7F9BD70C-…` `MagnetMail`       | `98A49146-…` `magnetmail`       | **install fails** — same                                 |
+  | Wild Apricot     | `4FB2B6BF-…` `Wild Apricot`     | `FE1334F6-…` `Wild Apricot`     | **install fails** — same                                 |
+  | Constant Contact | `16B66076-…` `Constant Contact` | `65BB124A-…` `constant-contact` | installs a **second** row; the original silently dangles |
+  | File Feed        | `D26F22CE-…` `File Feed`        | _(no seed migration at all)_    | nothing re-points it; the row dangles                    |
+
+  For the five collision cases the Open App migration aborts on `UQ_Integration_Name`, so the connector
+  cannot be installed at all until the pre-existing row is renamed or removed; for the last two the install
+  succeeds but leaves the original row pointing at the emptied package. Repointing those seven rows —
+  either by aligning the Open App seed IDs or by a forward re-point migration — is a prerequisite for the
+  6.x cut, not an upgrade footnote.
+
+  Also in this change:
+  - `@memberjunction/server-bootstrap` drops its `@memberjunction/integration-connectors` dependency and
+    the 35 corresponding entries from its generated class-registration manifest. That dependency existed
+    solely to statically pin `@RegisterClass` classes against tree-shaking; the remaining base classes are
+    abstract and register nothing, so it no longer served a purpose.
+  - `@memberjunction/integration-connectors` drops `jsonwebtoken`, `mssql`, `zod` and
+    `@memberjunction/global`, none of which the remaining source imports.
+  - `packages/Integration/docs/connector-development.md` and `INTEGRATION_ACTIONS.md` now direct new
+    connector work to the Integrations repo, with a table mapping each monorepo convention to its Open App
+    equivalent (including the registration-key change from the bare class symbol to the npm package name).
+
+- 394d276: Phase 0 of the unified workflow DAG engine program (plan: PR #3456) — retires three dead or superseded subsystems so the **Workflow** name is freed for the program's user-facing vocabulary, and so the task-graph engine isn't built alongside a parallel, non-functioning orchestration model.
+
+  **Eleven tables dropped** — the Skip v1-era workflow schema (`Workflow`, `WorkflowRun`, `WorkflowEngine`), the Skip v1-era report artifact (`Report`, `ReportCategory`, `ReportSnapshot`, `ReportUserState`, `ReportVersion`), the legacy `ScheduledAction` / `ScheduledActionParam` pair, and the report-era `OutputTriggerType`. All were verified dead or superseded: nothing outside generated code read the workflow tables, the `Reports` resource type named a `DriverClass` (`ReportResource`) that exists nowhere in the repo, and the legacy scheduled-action cron due-check is mathematically always-false so authored schedules could never fire.
+
+  **Breaking — the report execution surface is gone.** `RunReport` was already marked `@deprecated` ("Reports are no longer supported... Interactive Components and Artifacts are replacements") and read `vwReports`, which this migration drops. Removed: `IRunReportProvider`, the `RunReport` class, `RunReportParams` / `RunReportResult`, `BaseEntity.RunReportProviderToUse`, `BaseAngularComponent.RunReportToUse`, `GraphQLDataProvider.GetReportData`, the `GetReportData` GraphQL query and `CreateReportFromConversationDetailID` mutation, and the `GET /reports/:reportId` REST endpoint. Accepted deliberately in the open v6 breaking-change window. Consumers should use Interactive Components and Artifacts.
+
+  **Scheduled Actions are superseded by Scheduled Jobs, and the UI moved with them.** Contrary to the original plan's read, the entities were live authoring surface: four Knowledge Hub / AI dashboards created and read them. Those surfaces now author a `MJ: Scheduled Jobs` row of type **Action** — the same work, executed by `ActionScheduledJobDriver`, with the action and its parameters carried in the job's `Configuration` JSON rather than in child parameter rows. `ContentSource.ScheduledActionID` becomes `ContentSource.ScheduledJobID`. A shared `action-scheduled-job` helper in `ng-dashboards` owns the mapping so it isn't triplicated across surfaces.
+
+  **Also removed:** the `@memberjunction/scheduled-actions` and `@memberjunction/scheduled-actions-server` packages (nothing depended on either), the `MJScheduledActionEntityExtended` subclass, the "coming soon" Scheduled Actions placeholder dashboard, and the Explorer report wiring (route, `TabService.OpenReport`, `NavigationService.OpenReport`, resource-type map entry, home-pin matcher, and the dashboard add-item Reports branch).
+
+- ac96bb6: Empty turbo's global hash, and make every in-repo `mj` invocation resolve.
+
+  `hashOfInternalDependencies` — a hash over every non-gitignored file in the root manifest's
+  workspace-dependency closure — is an input to _every_ task hash in the repo. The root
+  `package.json` declared three `workspace:*` devDependencies (`cli`,
+  `integration-test-suite`, `server-bootstrap-lite`) whose combined closure was 154 of 310
+  packages, so editing any file in any of them invalidated all 310, builds and tests alike.
+  Task-level `inputs` cannot reach this; it is upstream of them. Removing the three drops a
+  one-file edit from 310/310 to 37/310 (`AI/Agents`) and 8/310 (Explorer dashboards).
+
+  Removing them also removes the workspace-root `node_modules/.bin/mj` that a number of things
+  quietly resolved through. Every consumer is repaired:
+  - The 15 root scripts, plus `check:ui-layers`, `check:standards` and `test:integration`, now
+    call `node packages/MJCLI/bin/run.js` directly.
+  - `mj.config.cjs`'s `checkModules` used a bare specifier that only worked via the symlink the
+    devDependency created. `check-module-loader.ts` _collects_ load failures rather than
+    throwing, so this would have silently degraded `mj test` to "Unknown integration check
+    bundle". Now an absolute `__dirname`-based path, asserted by `sibling-parity.test.ts`.
+  - Seven `prebuild`/`postbuild` hooks across `ng-bootstrap`, `ng-bootstrap-lite`,
+    `ng-explorer-core`, `server-bootstrap` and `server-bootstrap-lite` ran bare `mj codegen
+manifest` behind `|| echo 'Warning: …'`, so a lost CLI exits 0 and the build proceeds
+    against a stale class-registration manifest — a new `@RegisterClass` class never reaches it
+    and tree-shaking then drops it from bundled apps. Each now calls the workspace entry point
+    by path. Deliberately not a `@memberjunction/cli` devDependency: `ng-explorer-core` has six
+    dependents and `ng-bootstrap` two, so a devDep there would take a CLI edit from 6/310 to
+    12/310 invalidated packages, and `cli` itself depends on `server-bootstrap-lite`, where it
+    would be a build-graph cycle. A path call adds no graph edge.
+  - `a2aserver`, `ai-mcp-server` and `mj_codegen_api` ran bare `mj` in a fallback-less
+    `prestart`, exiting 127 where no global CLI existed and silently resolving a version-skewed
+    one where it did. Each now declares `@memberjunction/cli` — leaf packages only, so
+    `hashOfInternalDependencies` stays `""`.
+  - `pg-migrations.yml` invoked `npx mj` at four sites. With no root bin `npx` falls through to
+    the npm registry, where the package named `mj` is unrelated mongodb-js tooling — in a job
+    holding database credentials, in a workflow that does not trigger on `package.json`, so it
+    would have stayed silent until the next release-time PG run.
+
+  A new `check-mj-cli-resolution.mjs` gate in the `guards` job permits only the two forms that
+  actually resolve, so this cannot regress silently again.
+
+  `@memberjunction/testing-cli` carries a comment-only change to `check-module-loader.ts`
+  documenting why MJ's own root config cannot use a bare specifier while an adopter's can.
+
+  ***
+
+  **On the level:** this is `minor` to satisfy `check:changeset`, not because anything touches
+  the database. The branch adds no migration and edits no declarative metadata. The only file
+  it changes under `metadata/` is `metadata/CLAUDE.md` — an instruction document, part of the
+  repo-wide `npx mj` → `pnpm mj` rewrite — and the gate's trigger is `/^metadata\/.+/`, which
+  matches any path under that directory including Markdown. The rule's own justification for
+  metadata-⇒-minor is that "metadata counts as a migration because it becomes one" via the
+  release-time `mj sync push`; a `CLAUDE.md` never becomes one. Under permanent pre mode a
+  stray `minor` moves no version, so the cost is meaning rather than digits — hence this note,
+  so the next reader does not take it as precedent. Narrowing that pattern to exclude
+  Markdown belongs in its own PR against the gate.
+
+### Patch Changes
+
+- 41b0d28: Load Open App server packages in every MJ process, not only MJAPI (#4199).
+
+  `mj sync push` (and `mj app …`, `mj test`, the MCP/A2A servers, the integration-test bootstrap)
+  never imported an installed app's server package, so `Metadata.GetEntityObject` handed back a
+  generic `BaseEntity` for the app's entities and every custom `Save()`, validation rule and
+  lifecycle hook was silently skipped — while MJ core's own server subclasses, loaded through the
+  lite manifest, did run. New `@memberjunction/dynamic-packages` extracts the loader (and the
+  host-anchored import) out of `server-bootstrap` into a package with no MJ runtime dependencies,
+  and each host is now one `LoadDynamicPackages({ processId })` call. ServerBootstrap consumes it
+  with two deliberate behaviour changes: it no longer attempts to import the Angular forms package
+  into Node, and when an `mj-app.json` sits beside its `mj.config.cjs` (an Open App repo running its
+  own dev host) it now loads that app's server packages and resolver paths too.
+
+  `dynamicPackages.server[]` stays the single list `mj app install` writes; when both it and an
+  `mj-app.json` name a package, the config entry decides `Enabled` and scoping while the manifest's
+  on-disk location remains the resolution fallback. Entries gain optional
+  `Processes` / `ExcludeProcesses` (process IDs or prefixes: `cli`, `cli:sync`, `cli:sync:push`,
+  `mjapi`, `mcp`, …) and the section gains an optional `policy` map, so a package can be scoped to
+  just `mj sync` or switched off for `mj migrate`. `MJ_DYNAMIC_PACKAGES=none` and the global CLI
+  flag `--no-app-packages` (declared in `--help`) disable loading for one run — for app packages AND the
+  host's own generated packages; MJ core's classes still load from the manifest. The `mj` prerun hook
+  publishes its process id through `MJ_DYNAMIC_PACKAGES_PROCESS` so the nested `ai-cli` /
+  `testing-cli` bootstraps apply the same scoping and policy. A package already loaded in the process
+  is handed back from cache without re-running its startup export. New guide:
+  `guides/DYNAMIC_PACKAGE_LOADING_GUIDE.md`. `mj sync push` now warns, once per entity,
+  when it is about to write with a `BaseEntity` because no subclass is registered.
+
+- 6bb2e1f: Fix Open App registration and migrations under pnpm (#3677). server-bootstrap now resolves runtime-configured packages (`dynamicPackages.server[]`, `codeGeneration.packages`) from the host application when a bare import cannot — pnpm's strict layout resolves bare specifiers from the importing package, which cannot declare runtime-known names. open-app-engine now declares the skyway packages as optionalDependencies so app migrations resolve them in every topology; a resolved provider's own load/constructor errors are no longer misreported as "provider not found".
+- 394d276: Register the external agent harness adapters in the server bootstraps
+
+  Without this, an agent of type `Harness` **silently runs as an ordinary prompt agent** in MJAPI.
+
+  `@memberjunction/ai-agent-harness` was not a dependency of either server bootstrap, so its
+  `@RegisterClass` decorators never executed in the server process. `AgentRunner` resolves the agent
+  type's `DriverClass` against the `BaseAgent` registry and falls back to plain `BaseAgent` when it
+  finds nothing — which does not error. The agent runs, reports success, and has no harness, no
+  sandbox and no credentials.
+
+  Adds the dependency to both bootstraps and regenerates the manifests, so `HarnessAgentType`,
+  `HarnessAgentBase` and all six adapters are registered where the server actually runs.
+
+- be0bdb2: Follow-up hardening for Query & Entity Materialization (#3735). Each item below fails toward doing the
+  wrong thing rather than doing nothing, so none of them surface as an error in normal operation.
+
+  **Row-restriction gates read both fence layers.** MJ enforces row restrictions in two AND-composed
+  layers — role RLS and API-key row filters — and the mint, drift and runtime Leak-1 gates each re-derived
+  a role-only predicate inline. An entity fenced _only_ by an API-key row filter therefore read as
+  unrestricted; because the mint gives the materialized entity a NEW EntityID, the key's EntityID-keyed
+  binding stops matching it, and the principal is served a full unscoped snapshot of rows it cannot read
+  live. All gates now compose both layers, and an unproven layer counts as restricted.
+
+  **Lost provenance is now drift.** Deleting a source query cascade-deletes the `MaterializedResultQuery`
+  join row while the snapshot, the minted entity and its read grants all survive — which silently disarmed
+  both the RLS re-check and the read-grant re-narrow, leaving the unscoped snapshot serving indefinitely.
+  It now revokes read and holds.
+
+  **A zero-row external query no longer destroys the snapshot.** Columns are derived from the returned
+  rows, so an empty result built a surrogate-only shadow, dropped the canonical table and renamed that
+  shell into its place — every subsequent read failing on a missing column while the refresh reported
+  success. An empty result now refuses the rebuild and leaves the existing snapshot serving.
+
+  **The refresher snapshots the statement the read path executes.** Reads resolve SQL through
+  `GetPlatformSQL(PlatformKey)`; the refresher snapshotted the base `SQL`, so a query carrying a
+  per-platform variant was materialized from a different statement than live serves.
+
+  **`XACT_ABORT` no longer escapes onto the pooled connection.** The swap, recompute and dirty-group
+  batches each set it ON and never restored it. SET options persist for the session, so unrelated requests
+  handed the same physical connection inherited it — turning their recoverable statement-level errors into
+  full transaction aborts, far from anything to do with materialization.
+
+  **The DDL identifier guard no longer opens on its own failure.** `assertSafeObjectNames` throws on a
+  tampered `SchemaName`, but the failure path then passed that same rejected name to the best-effort shadow
+  cleanup, which interpolated it raw into `DROP TABLE`/`OBJECT_ID`. The cleanup now re-checks and declines.
+
+  **Two analyzers that produced silently wrong rows.** A `UNION`/`EXCEPT`/`INTERSECT` parses to a single
+  `select` root whose `groupby` and `columns` describe only the first branch, so a set operation yielded an
+  aggregation key covering one branch and the incremental MERGE collided both branches on the same hash.
+  And a row-filter predicate was bound to an output column by bare name, which cannot tell `o.Status` from
+  `c.Status` across a join, nor an alias from the column it rebinds.
+
+  **Missing manifest registrations.** Neither new `@RegisterClass` class was in the pre-built manifests, so
+  a bundled MJAPI tree-shook both away: the refresh driver never resolved, nothing was ever refreshed, and
+  `Status` stayed `Active` while the read paths served mint-time data forever.
+
+  **Read-routing distinguishes a failed lookup from "not materialized".** Only three roles hold `CanRead`
+  on `MJ: Materialized Results`, so a restricted user silently got live data for every materialized request
+  while an admin got the snapshot. The live fallback is correct and unchanged; the silence was the defect.
+
+  **Note on coverage.** The predicate-binding proof and the join-qualifier requirement are deliberately
+  conservative and will refuse shapes that previously qualified: a row-filter query whose predicate or
+  projection is unqualified across a join now stays live-only, and an aggregation over a join with an
+  unqualified `GROUP BY` loses its incremental key and falls back to `FullRebuild`. Both refusals are
+  logged with the specific reason. Falling back to live is always correct — but a query that silently gets
+  slower is easier to diagnose knowing this changed.
+
+- d0568e6: Auto-load Open App `serverExtensions` from packages listed in host `dynamicPackages.server[]`. Packages declare them via the `MJ_SERVER_EXTENSIONS` export or `package.json` `memberjunction.serverExtensions`; `serve()` overlays host `mj.config.cjs` `serverExtensions[]` by DriverClass so operators no longer copy Open App extension blocks into the host config.
+- 8b78695: Regenerate the class-registration manifests so every one of them is on the chunked format.
+
+  The chunked manifest format (`CLASS_REGISTRATIONS_0`, `CLASS_REGISTRATIONS_1`, …) was introduced to keep
+  TypeScript from hitting TS2590 on a single union that had grown too large. Only `server-bootstrap` and
+  `server-bootstrap-lite` were regenerated at the time, so the remaining manifests stayed on the old
+  single-array shape and the `Build` job's manifest gate has been failing on `next` ever since.
+
+  This regenerates all of them from a fully-built workspace. Alongside the format change the sweep picks up
+  registrations that had drifted out: `MJAIUsageTypeEntity` and the `LinearPriceUnitType` /
+  `PerImagePriceUnitType` / `TimePerHourPriceUnitType` / `TimePerMinutePriceUnitType` pricing unit types in the
+  Angular bootstraps, and `MJEntityPermissionEntityServer` / `MJTenantFilterMiddleware` / `RateLimitMiddleware`
+  from `@memberjunction/server` in the server bootstrap.
+
+  Generated output only; no hand edits, no runtime behaviour change.
+
+  One thing worth knowing for anyone regenerating these in future: **the manifest generator is sensitive to
+  build state.** `resolveSubpathExportsDetailed()` resolves a package's lazy-loading subpaths by reading the
+  `.d.ts` each `exports` entry points at, and it `continue`s past any that is missing. Run `mj codegen manifest`
+  against a workspace whose `dist/` folders are absent and the subpaths silently resolve to nothing — the
+  package falls through to the whole-package branch and `lazy-feature-config.ts` collapses its twelve
+  per-dashboard chunks into one eager import, with no warning. Build the workspace first.
+
+- cdd25c0: Regenerate the class-registration manifests for `AuthorizationCheckServerOperation`.
+
+  #4185 added `AuthorizationCheckServerOperation` in `@memberjunction/core-entities`, decorated `@RegisterClass(BaseRemotableOperation, 'Authorization.Check')`, without regenerating the committed class-registration manifests. Every push to `next` since has failed the Build job's manifest freshness gate. The four bootstrap manifests now import and register the class (one more registration each), which is what `pnpm run mj:manifest` produces. Without the entry, tree-shaking can drop the operation from bundled apps and the remotable `Authorization.Check` operation silently never registers.
+
+- 512bb53: Security: close the role-elevation path on `MJ: Roles` and `MJ: User Roles` (issue #4282).
+
+  Issue #4260 closed the `User.Type` route to elevated capability. Role assignment is the platform's other authority mechanism and was unguarded: no server-side entity subclass existed for either entity, so `ClassFactory` resolved the generated classes, whose `Validate()` knows nothing about who is calling. On a baseline seed — and verified against a live database — the `Developer` and `Integration` roles hold unfiltered `CanCreate`/`CanUpdate`/`CanDelete` on both entities. Reproduced end to end on the real stack before the fix: a caller whose `Type` is `'User'`, holding only `Developer` and `UI`, inserted a row granting itself `Integration` (`Validate()` passed, `Save()` returned `true`), and separately created a brand-new role.
+
+  **`MJUserRoleEntityServer`** — a non-Owner may only grant, move or revoke a role they themselves hold. That subset rule is a ceiling: whatever a non-Owner does through this entity, the authority they hand out is authority they already had, so no sequence of calls lets a caller exceed their own grant. Delegated administration, IdP/group sync and onboarding automation — the legitimate non-Owner uses `User.Type` does not have — all keep working. On an update the pre-save `RoleID` is checked as well as the new one, so an assignment cannot be repointed to strip someone of a role the caller does not hold. `UserID` is deliberately not frozen: moving a grant between users stays inside the same ceiling. One consequence of that is chosen knowingly rather than incidental — because revocation shares the granting ceiling, a non-Owner may repoint or delete **any** user's assignment of a role the caller also holds, including an Owner's. That is not escalation: Owner authority lives in `User.Type`, which #4260 froze, and not in a role. It does let one non-Owner strip peers of a role they share, which is deprivation rather than elevation — reversible by an Owner and recorded in Record Changes. Narrowing revocation to the caller's own row would close it only by breaking delegated administration, the legitimate non-Owner use this rule exists to preserve.
+
+  **`MJRoleEntityServer`** — a non-Owner may not create, change or delete a role. Every field on this entity is authority-bearing: `Name` is what user/role synchronization matches on, `DirectoryID` maps an external directory group to the role, and `SQLName` decides which database role CodeGen grants object rights to.
+
+  Both guards override `Save()` and `Delete()` alongside `Validate()`, so the rules hold on every write path — GraphQL resolvers, Remote Operations, the Create/Update/Delete Record actions, metadata sync, one-off scripts — and cannot be switched off by the `ReplayOnly` save option, which skips `Validate()` while still performing the write. Both are pure: they read only the record's own field state and the caller's already-cached roles, so they cost nothing per save and are unit-testable without a database.
+
+  **Upgrade notes.**
+  - **Explorer's role-management screen stops working for non-Owner administrators.** It has no Owner gate of its own today, so a Developer-role non-Owner reaches it in practice; creating, renaming and deleting roles from it are now refused with a message naming the rule. This is the same trade-off #4260 accepted for the user-management screen.
+  - **Explorer's bulk role assignment now checks each `Save()` return.** `executeBulkRoleAssign` enrols each row in a transaction group, where `Save()` reports only _enrolment_ — the provider queues the item locally and returns `true` without a round trip. A row refused **client-side** (a `CheckPermissions` denial or a field-rule failure) does return `false` and is never enrolled; that return was ignored, so an all-refused batch left the group empty, and an empty group's `Submit()` returns `true` for having nothing to do — the screen reported success having assigned nothing. It now collects each such refusal with the user it applies to and surfaces them.
+
+    To be precise about what this does **not** cover: the role-elevation guard added here is server-side only (`@memberjunction/core-entities-server` is not a browser dependency), so it refuses during `Submit()`, not during `Save()` — and that refusal currently reaches the user nowhere at all. `ExecuteTransactionGroup` on the server discards its own `Save()`/`Delete()` return values, so a refused row never enrols in the server's group either; an all-refused batch submits an empty group, whose `Submit()` returns `true` for having nothing to do, and the screen closes with no message. Verified end to end against a live server: a non-Owner assigning a role they do not hold is correctly **refused** — no row is written, the guard works — but is **reported as success**. This is a pre-existing gap in that resolver (it predates this PR and equally affects `MJ: Users` via issue #4260), tracked as issue #4309 and deliberately not closed here.
+
+  - **`AssignUserRolesAction` now fails the whole batch when the caller does not hold the role.** The core action (`CoreActions/src/custom/user-management/assign-user-roles.action.ts`) builds its `MJ: User Roles` object with `params.ContextUser` and assigns atomically, so a refused `Save()` rolls the transaction back and the action returns `Success: false` with `ResultCode: 'FAILED'` carrying the guard's message. Nothing is partially assigned and nothing is swallowed — unlike the transaction-group paths above, this one already reports its refusal. The "onboarding automation" the subset rule preserves is therefore preserved exactly where the automation's context user holds the role being granted: an automation running as a non-Owner that grants roles its own context user does not hold must be given those roles, or an Owner context user.
+  - **`SyncRoles` / `SyncUsers` / `SyncRolesAndUsers` are unaffected on a default install** — all three carry `@RequireSystemUser()`, and `getSystemUser()` resolves the seeded `Type='Owner'` system user. A deployment whose system user is **not** an Owner will see those sync paths fail closed at the save, loudly rather than silently, for the same reason #4260 documented.
+  - **Not closed by this change:** `MJ: Entity Permissions` carries the same unfiltered `Developer`/`Integration` grant, so a holder of either role can still widen a role's permissions directly. That is an independent route with its own decision to make about the invariant, so it is deliberately out of scope here rather than fixed in passing; this changeset does not claim to close it.
+
+  New unit coverage in MJCoreEntitiesServer (41 tests across both guards, including the pre-fix reproduction) and a new deterministic integration bundle, **IT89 — Role Privilege Elevation Guard** (`role-elevation`, RE1–RE6), which proves the ClassFactory wiring and both guards against a real provider the way IT88 does for `MJ: Users`.
+
+- Updated dependencies [6dbe524]
+- Updated dependencies [394d276]
+- Updated dependencies [323df0f]
+- Updated dependencies [634aa8c]
+- Updated dependencies [834f8d7]
+- Updated dependencies [a987913]
+- Updated dependencies [e533ce5]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [2c826f7]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [10010b2]
+- Updated dependencies [f5e91a7]
+- Updated dependencies [405c035]
+- Updated dependencies [b7819d2]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [b9a8324]
+- Updated dependencies [ff1b875]
+- Updated dependencies [79483bf]
+- Updated dependencies [6fd0a73]
+- Updated dependencies [2a14c26]
+- Updated dependencies [d735407]
+- Updated dependencies [6242df1]
+- Updated dependencies [22ec804]
+- Updated dependencies [d430fa5]
+- Updated dependencies [319a7ed]
+- Updated dependencies [2f305df]
+- Updated dependencies [197fdf8]
+- Updated dependencies [099b4d9]
+- Updated dependencies [cd520e2]
+- Updated dependencies [5ef97ff]
+- Updated dependencies [62e0707]
+- Updated dependencies [6673f51]
+- Updated dependencies [c49a34a]
+- Updated dependencies [d1d74c2]
+- Updated dependencies [0312b22]
+- Updated dependencies [4d33bc5]
+- Updated dependencies [f6a4341]
+- Updated dependencies [d4a5b4c]
+- Updated dependencies [b8c2e33]
+- Updated dependencies [d38845a]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [8206993]
+- Updated dependencies [71817db]
+- Updated dependencies [2003cd3]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [0d3094c]
+- Updated dependencies [e63ac04]
+- Updated dependencies [b08d696]
+- Updated dependencies [255d506]
+- Updated dependencies [0ec1980]
+- Updated dependencies [394d276]
+- Updated dependencies [199eb2b]
+- Updated dependencies [f80bdb7]
+- Updated dependencies [407f2f7]
+- Updated dependencies [1940a4d]
+- Updated dependencies [489aecd]
+- Updated dependencies [bb79505]
+- Updated dependencies [d40251e]
+- Updated dependencies [653c51d]
+- Updated dependencies [52490a7]
+- Updated dependencies [a59e52d]
+- Updated dependencies [716b930]
+- Updated dependencies [fa616d3]
+- Updated dependencies [e7f1f88]
+- Updated dependencies [07cb22e]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [711c208]
+- Updated dependencies [41b0d28]
+- Updated dependencies [fd0a019]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [9fe3019]
+- Updated dependencies [24b22c9]
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [eac9819]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [59def38]
+- Updated dependencies [2412415]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [047a80f]
+- Updated dependencies [9699d0e]
+- Updated dependencies [887ba9c]
+- Updated dependencies [394d276]
+- Updated dependencies [43f9133]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [ddf8621]
+- Updated dependencies
+- Updated dependencies [29187f8]
+- Updated dependencies [2d14c62]
+- Updated dependencies [394d276]
+- Updated dependencies [c996a56]
+- Updated dependencies [de6eb14]
+- Updated dependencies [b9de989]
+- Updated dependencies [38d4482]
+- Updated dependencies [78e2667]
+- Updated dependencies [052b4c7]
+- Updated dependencies [fe7bd9d]
+- Updated dependencies [ada8784]
+- Updated dependencies [8ec1515]
+- Updated dependencies [9a905e8]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [b832d75]
+- Updated dependencies [50987c4]
+- Updated dependencies [c996a56]
+- Updated dependencies [d907a1b]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [102a692]
+- Updated dependencies [8d880cc]
+- Updated dependencies [a2c528f]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [806e7f2]
+- Updated dependencies [55d6299]
+- Updated dependencies [11de1a3]
+- Updated dependencies [cefc302]
+- Updated dependencies [841e6ea]
+- Updated dependencies [8f63b57]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [f2fa6b3]
+- Updated dependencies [8c9ed6f]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [516f4fb]
+- Updated dependencies [5b30129]
+- Updated dependencies [e7b4833]
+- Updated dependencies [9cd81ca]
+- Updated dependencies [2875f6f]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [d66a26a]
+- Updated dependencies [c643ba3]
+- Updated dependencies [9cce262]
+- Updated dependencies [e9e9873]
+- Updated dependencies [5e987a7]
+- Updated dependencies [1d88e00]
+- Updated dependencies [647bd71]
+- Updated dependencies [e68d90d]
+- Updated dependencies [8288711]
+- Updated dependencies [b42c125]
+- Updated dependencies [f4fedab]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [c679e8d]
+- Updated dependencies [a723521]
+- Updated dependencies [5f33ca8]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [48ff99f]
+- Updated dependencies [770cfca]
+- Updated dependencies [ee85060]
+- Updated dependencies [79afbff]
+- Updated dependencies [076fa5d]
+- Updated dependencies [9f73528]
+- Updated dependencies [7857d8e]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [d0eab88]
+- Updated dependencies [d29d6b9]
+- Updated dependencies [e3a1425]
+- Updated dependencies [27e4d09]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [d0568e6]
+- Updated dependencies [23c2521]
+- Updated dependencies [427fa8b]
+- Updated dependencies [8e469c3]
+- Updated dependencies [d10f112]
+- Updated dependencies [3b6be0b]
+- Updated dependencies [1fdd5d0]
+- Updated dependencies [aa4fbe9]
+- Updated dependencies [44fca09]
+- Updated dependencies [2741d46]
+- Updated dependencies [be99b35]
+- Updated dependencies [048c5ce]
+- Updated dependencies [0acf96e]
+- Updated dependencies [8d0d45a]
+- Updated dependencies [394d276]
+- Updated dependencies [63bc733]
+- Updated dependencies [f52be10]
+- Updated dependencies [4f7f929]
+- Updated dependencies [87aa62a]
+- Updated dependencies [595c945]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [ebbc4e7]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [98841bb]
+- Updated dependencies [53c341c]
+- Updated dependencies [2e2879e]
+- Updated dependencies [6b971ab]
+- Updated dependencies [9cbe17f]
+- Updated dependencies [80fcb61]
+- Updated dependencies [0aa2b91]
+- Updated dependencies [9fc0e2d]
+- Updated dependencies [c3557f8]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [74e161d]
+- Updated dependencies [b46330e]
+- Updated dependencies [92af88b]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [0d1f748]
+- Updated dependencies [6a06c80]
+- Updated dependencies [e1ebab9]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [53d256f]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [a04d5c9]
+- Updated dependencies [9a29da4]
+- Updated dependencies [cf2484c]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [512bb53]
+- Updated dependencies [6d130a5]
+- Updated dependencies [3014248]
+- Updated dependencies [af4bd79]
+- Updated dependencies [f315e44]
+- Updated dependencies [e26c866]
+- Updated dependencies [0967ba7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [7a630ba]
+- Updated dependencies [64915b9]
+- Updated dependencies [de343b5]
+- Updated dependencies [2741d46]
+- Updated dependencies [ac7a79a]
+- Updated dependencies [5fc861f]
+- Updated dependencies [a09bfb5]
+- Updated dependencies [c11f8c6]
+- Updated dependencies [88d751d]
+- Updated dependencies [1748491]
+- Updated dependencies [1100077]
+- Updated dependencies [b6416f4]
+- Updated dependencies [45ca475]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [35ace7c]
+- Updated dependencies [0db6105]
+- Updated dependencies [d7feeae]
+- Updated dependencies [7fefca2]
+- Updated dependencies [bae672c]
+- Updated dependencies [cda0187]
+- Updated dependencies [f2f1491]
+- Updated dependencies [faac5b5]
+- Updated dependencies [5c1d762]
+- Updated dependencies [19ca0b4]
+- Updated dependencies [a1a8989]
+- Updated dependencies [bc45ded]
+- Updated dependencies [28cd302]
+- Updated dependencies [29c3dc8]
+- Updated dependencies [e76b195]
+- Updated dependencies [b00a985]
+- Updated dependencies [d31cba4]
+- Updated dependencies [041865c]
+- Updated dependencies [905820a]
+- Updated dependencies [cc474d5]
+- Updated dependencies [2c8fbc7]
+- Updated dependencies [ca3657d]
+- Updated dependencies [2262b40]
+- Updated dependencies [82a8585]
+- Updated dependencies [394d276]
+- Updated dependencies [1bd9674]
+- Updated dependencies [394d276]
+- Updated dependencies [9f6a53b]
+- Updated dependencies [6d7d3da]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [6d4182d]
+- Updated dependencies [4f20e10]
+- Updated dependencies [d8adda1]
+- Updated dependencies [d0eab88]
+- Updated dependencies [88f8898]
+- Updated dependencies [d078c54]
+- Updated dependencies [7fcdc2d]
+- Updated dependencies [15319b4]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [ae2baef]
+- Updated dependencies [394d276]
+- Updated dependencies [ec71199]
+- Updated dependencies [1f66f31]
+- Updated dependencies [4b1257f]
+- Updated dependencies [c4e98ce]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [6cd337d]
+- Updated dependencies [394d276]
+- Updated dependencies [1c0d586]
+  - @memberjunction/actions-bizapps-accounting@6.1.0
+  - @memberjunction/actions@6.1.0
+  - @memberjunction/integration-engine@6.1.0
+  - @memberjunction/ai-core-plus@6.1.0
+  - @memberjunction/ai-agents@6.1.0
+  - @memberjunction/core@6.1.0
+  - @memberjunction/core-entities@6.1.0
+  - @memberjunction/scheduling-engine@6.1.0
+  - @memberjunction/scheduling-engine-base@6.1.0
+  - @memberjunction/ai-engine-base@6.1.0
+  - @memberjunction/server@6.1.0
+  - @memberjunction/codegen-lib@6.1.0
+  - @memberjunction/actions-apollo@6.1.0
+  - @memberjunction/storage@6.1.0
+  - @memberjunction/generic-database-provider@6.1.0
+  - @memberjunction/actions-bizapps-social@6.1.0
+  - @memberjunction/ai-cerebras@6.1.0
+  - @memberjunction/content-autotagging@6.1.0
+  - @memberjunction/core-entities-server@6.1.0
+  - @memberjunction/communication-types@6.1.0
+  - @memberjunction/communication-ms-graph@6.1.0
+  - @memberjunction/search-engine@6.1.0
+  - @memberjunction/ai-azure@6.1.0
+  - @memberjunction/ai-groq@6.1.0
+  - @memberjunction/ai-minimax@6.1.0
+  - @memberjunction/ai-mistral@6.1.0
+  - @memberjunction/ai-ollama@6.1.0
+  - @memberjunction/ai-openrouter@6.1.0
+  - @memberjunction/ai-zhipu@6.1.0
+  - @memberjunction/ai-openai@6.1.0
+  - @memberjunction/core-actions@6.1.0
+  - @memberjunction/external-data-source-databricks@6.1.0
+  - @memberjunction/task-graph@6.1.0
+  - @memberjunction/ai-prompts@6.1.0
+  - @memberjunction/testing-engine@6.1.0
+  - @memberjunction/react-linter@6.1.0
+  - @memberjunction/dynamic-packages@6.1.0
+  - @memberjunction/testing-integration@6.1.0
+  - @memberjunction/ai-elevenlabs@6.1.0
+  - @memberjunction/ai-assemblyai@6.1.0
+  - @memberjunction/ai-gemini@6.1.0
+  - @memberjunction/ai-inworld@6.1.0
+  - @memberjunction/actions-base@6.1.0
+  - @memberjunction/ai-agent-harness@6.1.0
+  - @memberjunction/geo-core@6.1.0
+  - @memberjunction/auth-providers@6.1.0
+  - @memberjunction/messaging-adapters@6.1.0
+  - @memberjunction/ai-xai@6.1.0
+  - @memberjunction/ai-huggingface@6.1.0
+  - @memberjunction/ai-anthropic@6.1.0
+  - @memberjunction/ai-lmstudio@6.1.0
+  - @memberjunction/ai-inception@6.1.0
+  - @memberjunction/actions-bizapps-formbuilders@6.1.0
+  - @memberjunction/doc-utils@6.1.0
+  - @memberjunction/ai-betty-bot@6.1.0
+  - @memberjunction/ai-heygen@6.1.0
+  - @memberjunction/ai-recommendations-rex@6.1.0
+  - @memberjunction/server-extensions-core@6.1.0
+  - @memberjunction/ai-vector-dupe@6.1.0
+  - @memberjunction/archiving-engine@6.1.0
+  - @memberjunction/record-set-processor@6.1.0
+  - @memberjunction/predictive-studio@6.1.0
+  - @memberjunction/queue@6.1.0
+  - @memberjunction/actions-bizapps-lms@6.1.0
+  - @memberjunction/communication-sendgrid@6.1.0
+  - @memberjunction/ai-blackforestlabs@6.1.0
+  - @memberjunction/remote-browser-server@6.1.0
+  - @memberjunction/ai-agent-manager@6.1.0
+  - @memberjunction/ai-vectors-memory@6.1.0
+  - @memberjunction/scheduling-actions@6.1.0
+  - @memberjunction/ai-vectors-pinecone@6.1.0
+  - @memberjunction/actions-content-autotag@6.1.0
+  - @memberjunction/database-designer-actions@6.1.0
+  - @memberjunction/ai-form-builder@6.1.0
+  - @memberjunction/computer-use-engine@6.1.0
+  - @memberjunction/actions-bizapps-crm@6.1.0
+  - @memberjunction/action-runtime-host@6.1.0
+  - @memberjunction/archiving-action@6.1.0
+  - @memberjunction/integration-actions@6.1.0
+  - @memberjunction/database-designer-core@6.1.0
+  - @memberjunction/ai-reranker@6.1.0
+  - @memberjunction/ai-segmentation@6.1.0
+  - @memberjunction/templates@6.1.0
+  - @memberjunction/tag-engine-base@6.1.0
+  - @memberjunction/ai-bedrock@6.1.0
+  - @memberjunction/ai-cohere@6.1.0
+  - @memberjunction/ai-fireworks@6.1.0
+  - @memberjunction/ai-llamacpp@6.1.0
+  - @memberjunction/ai-local-embeddings@6.1.0
+  - @memberjunction/ai-vertex@6.1.0
+  - @memberjunction/ai-bridge-livekit@6.1.0
+  - @memberjunction/ai-bridge-ringcentral@6.1.0
+  - @memberjunction/ai-bridge-teams@6.1.0
+  - @memberjunction/ai-bridge-twilio@6.1.0
+  - @memberjunction/ai-bridge-vonage@6.1.0
+  - @memberjunction/ai-bridge-server@6.1.0
+  - @memberjunction/remote-browser-selfhost@6.1.0
+  - @memberjunction/ai-vectors-qdrant@6.1.0
+  - @memberjunction/ai-vectors-sqlserver@6.1.0
+  - @memberjunction/ai-vectors-pgvector@6.1.0
+  - @memberjunction/entity-communications-base@6.1.0
+  - @memberjunction/encryption@6.1.0
+  - @memberjunction/external-data-sources@6.1.0
+  - @memberjunction/external-data-source-mongodb@6.1.0
+  - @memberjunction/external-data-source-mysql@6.1.0
+  - @memberjunction/external-data-source-oracle@6.1.0
+  - @memberjunction/external-data-source-postgres@6.1.0
+  - @memberjunction/external-data-source-sqlserver@6.1.0
+  - @memberjunction/external-data-source-snowflake@6.1.0
+  - @memberjunction/data-context-server@6.1.0
+  - @memberjunction/record-comparison@6.1.0
+  - @memberjunction/esignature@6.1.0
+  - @memberjunction/esignature-docusign@6.1.0
+  - @memberjunction/esignature-dropboxsign@6.1.0
+  - @memberjunction/esignature-pandadoc@6.1.0
+  - @memberjunction/ai-provider-bundle@6.1.0
+
+## 6.1.0-edge.7
+
+### Minor Changes
+
+- ee15cf7: Add AI Persona foundation schema (`AIPersona`, `AIPersonaVendor`, `AIModelPersona`, `AIAgentPersona`) and strongly typed JSONType interfaces (`IAIPersonaStyleDescriptors`, `IAIPersonaVendorSettings`, `IAIAgentPersonaStyleOverride`).
+  - Introduce `AIPersona` catalog table with deterministic global name uniqueness for cross-modality catalog curation.
+  - Introduce `AIPersonaVendor` for concrete vendor and modality bindings with typed `VendorSettingsObject` (`IAIPersonaVendorSettings` with native ElevenLabs settings).
+  - Introduce `AIModelPersona` for model availability and priority sequences.
+  - Introduce `AIAgentPersona` for agent persona assignments with filtered unique index `UQ_AIAgentPersona_OneDefaultPerAgent` and typed `StyleOverrideObject` (`IAIAgentPersonaStyleOverride`).
+  - Add strongly-typed `<Field>Object` accessors in `MJAIPersonaEntity`, `MJAIPersonaVendorEntity`, and `MJAIAgentPersonaEntity`.
+  - Scope CodeGen remote operations emission to `includeSchemas` and partition core vs non-core operations.
+
+### Patch Changes
+
+- Updated dependencies [a987913]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [099b4d9]
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [8f63b57]
+- Updated dependencies [5e987a7]
+- Updated dependencies [076fa5d]
+- Updated dependencies [44fca09]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [45ca475]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [35ace7c]
+- Updated dependencies [88f8898]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core-entities@6.1.0-edge.7
+  - @memberjunction/ai-engine-base@6.1.0-edge.7
+  - @memberjunction/ai-agents@6.1.0-edge.7
+  - @memberjunction/server@6.1.0-edge.7
+  - @memberjunction/codegen-lib@6.1.0-edge.7
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/generic-database-provider@6.1.0-edge.7
+  - @memberjunction/core-entities-server@6.1.0-edge.7
+  - @memberjunction/testing-integration@6.1.0-edge.7
+  - @memberjunction/storage@6.1.0-edge.7
+  - @memberjunction/content-autotagging@6.1.0-edge.7
+  - @memberjunction/search-engine@6.1.0-edge.7
+  - @memberjunction/ai-anthropic@6.1.0-edge.7
+  - @memberjunction/ai-openai@6.1.0-edge.7
+  - @memberjunction/ai-gemini@6.1.0-edge.7
+  - @memberjunction/ai-cerebras@6.1.0-edge.7
+  - @memberjunction/ai-groq@6.1.0-edge.7
+  - @memberjunction/ai-lmstudio@6.1.0-edge.7
+  - @memberjunction/ai-inception@6.1.0-edge.7
+  - @memberjunction/testing-engine@6.1.0-edge.7
+  - @memberjunction/ai-prompts@6.1.0-edge.7
+  - @memberjunction/ai-core-plus@6.1.0-edge.7
+  - @memberjunction/server-extensions-core@6.1.0-edge.7
+  - @memberjunction/messaging-adapters@6.1.0-edge.7
+  - @memberjunction/ai-agent-harness@6.1.0-edge.7
+  - @memberjunction/ai-agent-manager@6.1.0-edge.7
+  - @memberjunction/database-designer-actions@6.1.0-edge.7
+  - @memberjunction/database-designer-core@6.1.0-edge.7
+  - @memberjunction/ai-form-builder@6.1.0-edge.7
+  - @memberjunction/tag-engine-base@6.1.0-edge.7
+  - @memberjunction/computer-use-engine@6.1.0-edge.7
+  - @memberjunction/predictive-studio@6.1.0-edge.7
+  - @memberjunction/ai-recommendations-rex@6.1.0-edge.7
+  - @memberjunction/ai-bridge-livekit@6.1.0-edge.7
+  - @memberjunction/ai-bridge-ringcentral@6.1.0-edge.7
+  - @memberjunction/ai-bridge-teams@6.1.0-edge.7
+  - @memberjunction/ai-bridge-twilio@6.1.0-edge.7
+  - @memberjunction/ai-bridge-vonage@6.1.0-edge.7
+  - @memberjunction/ai-bridge-server@6.1.0-edge.7
+  - @memberjunction/remote-browser-server@6.1.0-edge.7
+  - @memberjunction/ai-reranker@6.1.0-edge.7
+  - @memberjunction/ai-segmentation@6.1.0-edge.7
+  - @memberjunction/ai-vector-dupe@6.1.0-edge.7
+  - @memberjunction/actions-apollo@6.1.0-edge.7
+  - @memberjunction/actions-base@6.1.0-edge.7
+  - @memberjunction/actions-bizapps-accounting@6.1.0-edge.7
+  - @memberjunction/actions-bizapps-crm@6.1.0-edge.7
+  - @memberjunction/actions-bizapps-formbuilders@6.1.0-edge.7
+  - @memberjunction/actions-bizapps-lms@6.1.0-edge.7
+  - @memberjunction/actions-bizapps-social@6.1.0-edge.7
+  - @memberjunction/actions-content-autotag@6.1.0-edge.7
+  - @memberjunction/core-actions@6.1.0-edge.7
+  - @memberjunction/actions@6.1.0-edge.7
+  - @memberjunction/action-runtime-host@6.1.0-edge.7
+  - @memberjunction/archiving-engine@6.1.0-edge.7
+  - @memberjunction/communication-types@6.1.0-edge.7
+  - @memberjunction/entity-communications-base@6.1.0-edge.7
+  - @memberjunction/communication-ms-graph@6.1.0-edge.7
+  - @memberjunction/communication-sendgrid@6.1.0-edge.7
+  - @memberjunction/doc-utils@6.1.0-edge.7
+  - @memberjunction/encryption@6.1.0-edge.7
+  - @memberjunction/external-data-sources@6.1.0-edge.7
+  - @memberjunction/external-data-source-databricks@6.1.0-edge.7
+  - @memberjunction/external-data-source-mongodb@6.1.0-edge.7
+  - @memberjunction/external-data-source-mysql@6.1.0-edge.7
+  - @memberjunction/external-data-source-oracle@6.1.0-edge.7
+  - @memberjunction/external-data-source-postgres@6.1.0-edge.7
+  - @memberjunction/external-data-source-sqlserver@6.1.0-edge.7
+  - @memberjunction/external-data-source-snowflake@6.1.0-edge.7
+  - @memberjunction/integration-actions@6.1.0-edge.7
+  - @memberjunction/integration-engine@6.1.0-edge.7
+  - @memberjunction/queue@6.1.0-edge.7
+  - @memberjunction/react-linter@6.1.0-edge.7
+  - @memberjunction/record-comparison@6.1.0-edge.7
+  - @memberjunction/record-set-processor@6.1.0-edge.7
+  - @memberjunction/scheduling-actions@6.1.0-edge.7
+  - @memberjunction/scheduling-engine-base@6.1.0-edge.7
+  - @memberjunction/scheduling-engine@6.1.0-edge.7
+  - @memberjunction/task-graph@6.1.0-edge.7
+  - @memberjunction/templates@6.1.0-edge.7
+  - @memberjunction/esignature@6.1.0-edge.7
+  - @memberjunction/geo-core@6.1.0-edge.7
+  - @memberjunction/ai-vectors-pinecone@6.1.0-edge.7
+  - @memberjunction/ai-assemblyai@6.1.0-edge.7
+  - @memberjunction/ai-azure@6.1.0-edge.7
+  - @memberjunction/ai-bedrock@6.1.0-edge.7
+  - @memberjunction/ai-betty-bot@6.1.0-edge.7
+  - @memberjunction/ai-blackforestlabs@6.1.0-edge.7
+  - @memberjunction/ai-cohere@6.1.0-edge.7
+  - @memberjunction/ai-elevenlabs@6.1.0-edge.7
+  - @memberjunction/ai-fireworks@6.1.0-edge.7
+  - @memberjunction/ai-heygen@6.1.0-edge.7
+  - @memberjunction/ai-huggingface@6.1.0-edge.7
+  - @memberjunction/ai-inworld@6.1.0-edge.7
+  - @memberjunction/ai-llamacpp@6.1.0-edge.7
+  - @memberjunction/ai-local-embeddings@6.1.0-edge.7
+  - @memberjunction/ai-minimax@6.1.0-edge.7
+  - @memberjunction/ai-mistral@6.1.0-edge.7
+  - @memberjunction/ai-ollama@6.1.0-edge.7
+  - @memberjunction/ai-openrouter@6.1.0-edge.7
+  - @memberjunction/ai-vertex@6.1.0-edge.7
+  - @memberjunction/ai-zhipu@6.1.0-edge.7
+  - @memberjunction/ai-xai@6.1.0-edge.7
+  - @memberjunction/remote-browser-selfhost@6.1.0-edge.7
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.7
+  - @memberjunction/ai-vectors-qdrant@6.1.0-edge.7
+  - @memberjunction/ai-vectors-sqlserver@6.1.0-edge.7
+  - @memberjunction/ai-vectors-pgvector@6.1.0-edge.7
+  - @memberjunction/archiving-action@6.1.0-edge.7
+  - @memberjunction/auth-providers@6.1.0-edge.7
+  - @memberjunction/data-context-server@6.1.0-edge.7
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.7
+  - @memberjunction/esignature-docusign@6.1.0-edge.7
+  - @memberjunction/esignature-dropboxsign@6.1.0-edge.7
+  - @memberjunction/esignature-pandadoc@6.1.0-edge.7
+  - @memberjunction/dynamic-packages@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Minor Changes

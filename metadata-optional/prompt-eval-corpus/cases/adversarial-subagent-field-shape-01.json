@@ -1,0 +1,29 @@
+{
+  "id": "adversarial-subagent-field-shape-01",
+  "agent": "Marketing Agent",
+  "tags": [
+    "adversarial-exemplar",
+    "sub-agent-dispatch",
+    "prompt-fragility"
+  ],
+  "description": "Detects the subAgent.payload defect: a shipped Agent Manager exemplar carried a payload block the runtime silently drops. A dispatch is only correct if it names the sub-agent through the fields the runtime actually maps.",
+  "input": {
+    "payload": {
+      "brief": {
+        "product": "Analytics Dashboard"
+      }
+    },
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Get the SEO specialist to review our positioning for this launch."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "subAgent",
+    "subAgents": [
+      "SEO AIEO Specialist Agent"
+    ]
+  }
+}

@@ -17,7 +17,7 @@ import {
     Branding,
 } from './shared/svg-types';
 import { SVGUtils } from './shared/svg-utils';
-import { getPalette, generateCSS, getFontSpec } from './shared/svg-theming';
+import { GetPalette, GenerateCSS, GetFontSpec } from './shared/svg-theming';
 
 /**
  * Action that generates SVG diagrams including flowcharts, org charts, and ER diagrams.
@@ -225,11 +225,11 @@ export class CreateSVGDiagramAction extends BaseAction {
         }
 
         // Add styles
-        const css = generateCSS(branding);
+        const css = GenerateCSS(branding);
         SVGUtils.addStyles(svg, css);
 
         // Get palette for colors
-        const palette = getPalette(branding.palette);
+        const palette = GetPalette(branding.palette);
 
         // Render nodes
         for (const nodeId of g.nodes()) {
@@ -245,7 +245,7 @@ export class CreateSVGDiagramAction extends BaseAction {
 
         // Add title if present
         if (title) {
-            this.addTitle(doc, svg, title, vb.width, getFontSpec(branding.font));
+            this.addTitle(doc, svg, title, vb.width, GetFontSpec(branding.font));
         }
 
         // Sanitize and return
@@ -464,11 +464,11 @@ export class CreateSVGDiagramAction extends BaseAction {
         }
 
         // Add styles
-        const css = generateCSS(branding);
+        const css = GenerateCSS(branding);
         SVGUtils.addStyles(svg, css);
 
         // Get palette
-        const palette = getPalette(branding.palette);
+        const palette = GetPalette(branding.palette);
 
         // Create container group with offset for padding
         const container = doc.createElementNS(svg.namespaceURI!, 'g');
@@ -487,7 +487,7 @@ export class CreateSVGDiagramAction extends BaseAction {
 
         // Add title if present
         if (title) {
-            this.addTitle(doc, svg, title, vb.width, getFontSpec(branding.font));
+            this.addTitle(doc, svg, title, vb.width, GetFontSpec(branding.font));
         }
 
         // Sanitize and return
@@ -662,11 +662,11 @@ export class CreateSVGDiagramAction extends BaseAction {
         }
 
         // Add styles
-        const css = generateCSS(branding);
+        const css = GenerateCSS(branding);
         SVGUtils.addStyles(svg, css);
 
         // Get palette
-        const palette = getPalette(branding.palette);
+        const palette = GetPalette(branding.palette);
 
         // Render tables
         for (const tableId of g.nodes()) {
@@ -682,7 +682,7 @@ export class CreateSVGDiagramAction extends BaseAction {
 
         // Add title if present
         if (title) {
-            this.addTitle(doc, svg, title, vb.width, getFontSpec(branding.font));
+            this.addTitle(doc, svg, title, vb.width, GetFontSpec(branding.font));
         }
 
         // Sanitize and return

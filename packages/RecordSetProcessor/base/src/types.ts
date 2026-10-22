@@ -5,6 +5,8 @@
  * @module @memberjunction/record-set-processor-base
  */
 
+import type { FieldChange } from '@memberjunction/global';
+
 /** A reference to a single record to be processed. */
 export interface RecordRef {
     /** ID of the entity this record belongs to. */
@@ -50,6 +52,12 @@ export type TriggeredByValue = 'OnChange' | 'Schedule' | 'OnDemand' | 'Manual';
 /** The kind of record-set source. Mirrors the `MJ: Process Runs.SourceType` value list. */
 export type SourceTypeValue = 'View' | 'List' | 'Filter' | 'Array' | 'Keyset' | 'SingleRecord';
 
+/** Whether a record write changed anything. */
+export type RecordWriteOutcome = 'Upserted' | 'Unchanged';
+
+/** Why a record failed, when the run counts it apart: an output broke its value constraint. */
+export type RecordFailureKind = 'RejectedInvalid';
+
 /** The outcome of processing a single record, returned by an {@link IRecordProcessor}. */
 export interface RecordResult {
     /** Whether the record succeeded, failed, or was skipped. */
@@ -58,6 +66,12 @@ export interface RecordResult {
     ResultPayload?: unknown;
     /** Error detail when `Status` is `Failed`. */
     ErrorMessage?: string;
+    /** Set when the answer was rejected (see {@link RecordFailureKind}): the run counts it apart from other failures. */
+    FailureKind?: RecordFailureKind;
+    /** The outputs answered below their confidence floor and withheld. */
+    BelowConfidenceOutputs?: string[];
+    /** Non-fatal problems with this record's processing (e.g. its cache entry could not be stored). */
+    Warnings?: string[];
     /** Processing duration in milliseconds (the engine fills this in if the processor does not). */
     DurationMs?: number;
     /** Number of attempts made for this record. */
@@ -68,6 +82,23 @@ export interface RecordResult {
     AIAgentRunID?: string;
     /** Deep-trace link to an AI Prompt Run, when the work was an Infer-and-Write-Back. */
     AIPromptRunID?: string;
+    /**
+     * The `MJ: AI Prompts` row behind `AIPromptRunID` and `PromptVersionHash`, when it is not the Record
+     * Process's own prompt (an escalated record is answered by its target prompt).
+     * Absent means the process's own prompt.
+     */
+    PromptID?: string;
+    /** Content hash of the prompt version / instructions used to compute this record's result. */
+    PromptVersionHash?: string;
+    /** Reference to the FeatureValueCache entry when served from or saved to the cache. */
+    FeatureValueCacheID?: string;
+    /** Per-output confidence scores keyed by output Name: the driver's own, else the answer's at each ConfidenceRef. */
+    Confidence?: Record<string, number>;
+    /** Whether this record's values and write-back changed anything. Absent on a dry run. */
+    Outcome?: RecordWriteOutcome;
+    /** True when a dry run computed the record (nothing written, no `Outcome`). */
+    DryRun?: boolean;
+    HumanValuesPreserved?: number;
 }
 
 /** Running tallies for a process run. */
@@ -82,7 +113,7 @@ export interface RunCounts {
     Skipped: number;
 }
 
-/** Progress snapshot emitted to a run's `onProgress` callback. */
+/** Progress snapshot emitted to a run's `OnProgress` callback. */
 export interface ProgressInfo extends RunCounts {
     /** Known total record count, or null when the total is not known up-front. */
     Total: number | null;
@@ -102,10 +133,89 @@ export interface ProcessRunSummary extends RunCounts {
     EndTime?: Date;
     /** Run-level error message when `Status` is `Failed`. */
     ErrorMessage?: string;
+    /** Optional processor-specific run summary persisted as JSON in `MJ: Process Runs.ResultSummary`. */
+    ResultSummary?: unknown;
+    /** On a dry run, why a real run would be refused (e.g. a prerequisite or version gate is not met). */
+    WouldRefuse?: string;
 }
 
 /** Result returned by `RecordSetProcessor.Process()` — a run summary plus the persisted run ID. */
 export interface ProcessRunResult extends ProcessRunSummary {
     /** ID of the persisted `MJ: Process Runs` row, when a persisting tracker was used. */
     ProcessRunID?: string;
+}
+
+/** Preview outcome for a single resolved tag. */
+export interface TagWriteBackPreview {
+    tagText: string;
+    resolvedTagID?: string;
+    resolvedTagName?: string;
+    matched: boolean;
+    created: boolean;
+    rootTagID: string;
+    depth?: number;
+    error?: string;
+}
+
+/** Outcome of the engine's `ApplyOutputMapping`. */
+export interface WriteBackResult {
+    /** True if the processed record's fields were actually updated (false on a dry-run, and when every mapped field already held its value). */
+    updatedRecord: boolean;
+    /** True when anything was written (record field, child insert/update/delete, tag). False for an identical re-run. */
+    changed: boolean;
+    /** ID of the created child record, when a single child mapping was applied (absent on a dry-run). */
+    createdChildID?: string;
+    /** IDs of created child records when childRecords (or fan-out) was applied (absent on a dry-run). */
+    createdChildIDs?: string[];
+    updatedChildIDs?: string[];
+    deletedChildIDs?: string[];
+    unchangedChildIDs?: string[];
+    /** IDs of human-owned child rows the result also proposed and that were left untouched. */
+    preservedHumanChildIDs?: string[];
+    preservedHumanFields?: string[];
+    /** Fields whose Human value a run that overwrites human values retired (the field is the processor's again). */
+    retiredHumanFields?: string[];
+    /** Mapped fields whose answer was withheld below its confidence floor: cleared where the processor wrote the value. */
+    withheldFields?: string[];
+    withheldKeptFields?: string[];
+    withheldChildEntities?: string[];
+    /** IDs of created tagged item records (absent on a dry-run). */
+    createdTaggedItemIDs?: string[];
+    /** True when this was a dry-run: values were computed (and field names validated) but NOTHING was saved. */
+    dryRun?: boolean;
+    /** On a dry-run, the fields the real write WOULD change on the processed record, with their new values. */
+    previewFields?: Record<string, unknown>;
+    /** On a dry-run with a single child mapping, the child values the real write WOULD store. */
+    previewChild?: Record<string, unknown>;
+    /** On a dry-run with child mappings, the child values the real write WOULD store (an insert's, or an update's differing ones). */
+    previewChildren?: Array<Record<string, unknown>>;
+    /** On a dry-run with tag mappings, the resolved tag previews. */
+    previewTags?: TagWriteBackPreview[];
+    /** On a dry run: what the real write would fail on. Absent when the real write would go through. */
+    previewErrors?: string[];
+    /** On a dry run: processor-deferred record values (e.g. unmapped outputs) that would be stored. Absent when none would change. */
+    previewValues?: WriteBackValuePreview[];
+}
+
+/** On a dry run, a processor-deferred value that would be stored: its name/label, previous stored value, and proposed value. */
+export interface WriteBackValuePreview {
+    Name: string;
+    Label?: string;
+    Previous: unknown;
+    Proposed: unknown;
+}
+
+/** The `MJ: Process Run Details.ResultPayload` of a record a write-back work type (Infer, Action, Agent) processed. */
+export interface WriteBackRunPayload {
+    /** The work's output, before the output mapping was applied. `unknown`: its shape belongs to whichever work type ran. */
+    output?: unknown;
+    /** What the output mapping wrote, or on a dry run would write. */
+    writeBack?: WriteBackResult;
+}
+
+/** The structured payload recorded on each Process Run Detail of a FieldRules run (the per-record diff). */
+export interface FieldRulesResultPayload {
+    DryRun: boolean;
+    Changes: FieldChange[];
+    ChangedFields: string[];
 }

@@ -4,6 +4,7 @@ import { ElevenLabs, ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 // MemberJunction AI core contract
 import {
     BaseRealtimeModel,
+    RealtimeDroppedInputReporter,
     type ClientRealtimeSessionConfig,
     type IRealtimeSession,
     type RealtimeSessionParams,
@@ -15,6 +16,8 @@ import {
     type JSONObject,
     type JSONValue,
     type RealtimeTurnDetectionSettings,
+    type RealtimeVoiceOption,
+    type RealtimeInputFrame,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 
@@ -438,6 +441,23 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
     }
 
     /**
+     * The built-in default voices available in ElevenLabs — used to populate the voice picker.
+     */
+    public override get SupportedVoices(): RealtimeVoiceOption[] {
+        return [
+            { ID: '21m00Tcm4TlvDq8ikWAM', Name: 'Rachel' },
+            { ID: 'pNInz6obpgDQGcFmaJgB', Name: 'Adam' },
+            { ID: 'AZnzlk1XvdvUeBnXmlld', Name: 'Domi' },
+            { ID: 'EXAVITQu4vr4xnSDxMaL', Name: 'Bella' },
+            { ID: 'ErXwobaYiN019PkySvjV', Name: 'Antoni' },
+            { ID: 'MF3mGyEYCl7XYWbV9V6O', Name: 'Elli' },
+            { ID: 'TxGEqnHWrfWFTfGW9XjX', Name: 'Josh' },
+            { ID: 'VR6AewLTigWG4xSOukaG', Name: 'Arnold' },
+            { ID: 'yoZ06aMxZJJ28mfd3POQ', Name: 'Sam' },
+        ];
+    }
+
+    /**
      * ElevenLabs supports the client-direct topology natively: the signed websocket URL is a
      * short-lived, agent-scoped credential the browser can open directly.
      */
@@ -456,9 +476,15 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
     public override async CreateClientSession(params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
         const agentId = await this.ensureAgent(params);
         const signedUrl = await this.mintSignedUrl(agentId);
+        const reasoning = (params.Config as Record<string, unknown> | undefined)?.Reasoning as
+            | { Remote?: { Ref?: string } }
+            | undefined;
+        const resolvedModel = (reasoning?.Remote?.Ref && reasoning.Remote.Ref.length > 0)
+            ? reasoning.Remote.Ref
+            : (params.Model && params.Model.length > 0 ? params.Model : 'MJ Realtime Co-Agent');
         return {
             Provider: 'elevenlabs',
-            Model: params.Model,
+            Model: resolvedModel,
             EphemeralToken: signedUrl,
             ExpiresAt: new Date(Date.now() + ELEVENLABS_SIGNED_URL_TTL_MS).toISOString(),
             SessionConfig: {
@@ -565,7 +591,12 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
      *   deliberately NOT per voice, which is a per-session override rather than agent state.
      */
     protected async ensureAgent(params: RealtimeSessionParams): Promise<string> {
-        const model = params.Model;
+        const reasoning = (params.Config as Record<string, unknown> | undefined)?.Reasoning as
+            | { Remote?: { Ref?: string } }
+            | undefined;
+        const model = (reasoning?.Remote?.Ref && reasoning.Remote.Ref.length > 0)
+            ? reasoning.Remote.Ref
+            : (params.Model && params.Model.length > 0 ? params.Model : 'MJ Realtime Co-Agent');
         if (model.startsWith(ELEVENLABS_AGENT_ID_PREFIX)) {
             return model;
         }
@@ -1032,6 +1063,9 @@ export class ElevenLabsRealtimeSession implements IRealtimeSession {
      */
     private connectTimeToolsFingerprint = ElevenLabsRealtime.ToolSetFingerprint([]);
 
+    /** Reports the frames {@link SendInput} drops, once per kind and type. */
+    private readonly droppedInput = new RealtimeDroppedInputReporter('ElevenLabsRealtime', 'this session sends audio only');
+
     constructor() {
         this.metadataPromise = new Promise<void>((resolve, reject) => {
             this.resolveMetadata = resolve;
@@ -1080,9 +1114,18 @@ export class ElevenLabsRealtimeSession implements IRealtimeSession {
         return this.metadataPromise;
     }
 
-    /** @inheritdoc — streams one PCM16 mic frame as a base64 `user_audio_chunk`. */
-    public SendInput(chunk: ArrayBuffer): void {
-        this.sendFrame({ user_audio_chunk: Buffer.from(new Uint8Array(chunk)).toString('base64') });
+    /**
+     * @inheritdoc
+     *
+     * Streams one PCM16 audio frame as a base64 `user_audio_chunk`. The session sends audio only, so a frame of another
+     * kind (a camera or screen frame) is dropped, never sent as audio, and reported once per kind and type.
+     */
+    public SendInput(frame: RealtimeInputFrame): void {
+        if (frame.Kind !== 'audio') {
+            this.droppedInput.Report(frame);
+            return;
+        }
+        this.sendFrame({ user_audio_chunk: Buffer.from(new Uint8Array(frame.Data)).toString('base64') });
     }
 
     /**
@@ -1286,7 +1329,7 @@ export class ElevenLabsRealtimeSession implements IRealtimeSession {
             return;
         }
         this.responseActive = true;
-        this.outputHandler?.(ElevenLabsRealtimeSession.Base64ToArrayBuffer(audioBase64));
+        this.outputHandler?.(ElevenLabsRealtimeSession.base64ToArrayBuffer(audioBase64));
     }
 
     /**
@@ -1375,7 +1418,7 @@ export class ElevenLabsRealtimeSession implements IRealtimeSession {
     }
 
     /** Decodes a base64 audio payload into a freshly-allocated `ArrayBuffer`. */
-    private static Base64ToArrayBuffer(base64: string): ArrayBuffer {
+    private static base64ToArrayBuffer(base64: string): ArrayBuffer {
         const bytes = Buffer.from(base64, 'base64');
         const out = new ArrayBuffer(bytes.byteLength);
         new Uint8Array(out).set(bytes);

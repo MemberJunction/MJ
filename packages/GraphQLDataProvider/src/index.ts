@@ -1,11 +1,12 @@
 export { gql } from 'graphql-request';
-export { setupGraphQLClient } from './config';
+export { SetupGraphQLClient, setupGraphQLClient, ConnectGraphQLClient } from './config';
 export { PACKAGE_VERSION } from './version.generated';
 export { GraphQLDataProvider, GraphQLProviderConfigData } from './graphQLDataProvider';
-export type { AuthenticationErrorCallback, SocketConnectionState, TaskGraphFrameEvent } from './graphQLDataProvider';
+export type { AuthenticationErrorCallback, ExecuteGQLOptions, SocketConnectionState, TaskGraphFrameEvent } from './graphQLDataProvider';
 export * from './graphQLTransactionGroup';
 export { FieldMapper } from './FieldMapper';
 export { SanitizeGraphQLError, ToSafeGraphQLError, SafeGraphQLError } from './sanitizeGraphQLError';
+export { IsGraphQLMutation } from './graphQLOperationKind';
 export type { SanitizedGraphQLError, SanitizedGraphQLErrorDetail, VariableShape } from './sanitizeGraphQLError';
 export * from './rolesAndUsersType';
 export * from './graphQLSystemUserClient';
@@ -17,6 +18,8 @@ export { GraphQLAIClient } from './graphQLAIClient';
 export type {
     RunAIPromptParams,
     RunAIPromptResult,
+    RunDecisionParams,
+    RunDecisionResult,
     ExecuteSimplePromptParams,
     SimplePromptResult,
     EmbedTextParams,
@@ -24,7 +27,11 @@ export type {
     RunAIAgentFromConversationDetailParams,
     AutotagPipelineResult,
     VectorizeEntityParams,
-    VectorizeEntityResult
+    VectorizeEntityResult,
+    DuplicateEntryCheckParams,
+    DuplicateEntryCheckStatus,
+    DuplicateEntryCandidate,
+    DuplicateEntryCheckResult
 } from './graphQLAIClient';
 export { GraphQLClusterClient } from './graphQLClusterClient';
 export type {
@@ -41,9 +48,23 @@ export type {
     StartLiveKitAgentRoomSessionInput,
     LiveKitAgentRoomSessionResult,
     LiveKitRecordingResult,
+    LiveKitAgentVisionResult,
+    LiveKitRoomTurnState,
+    LiveKitRoomTurnStateResult,
+    LiveKitRoomTurnAgent,
+    LiveKitRoomTurnEvent,
+    LiveKitTurnEventType,
     RealtimeModelVoices,
     RealtimeVoiceOption
 } from './graphQLLiveKitClient';
+export { GraphQLHandoffClient } from './graphQLHandoffClient';
+export type {
+    HandoffOfferInfo,
+    HandoffOfferStatus,
+    HandoffOfferChange,
+    AcceptHandoffOfferResult,
+    DeclineHandoffOfferResult
+} from './graphQLHandoffClient';
 export { GraphQLClassifyClient } from './graphQLClassifyClient';
 export type {
     GenerateSeedTaxonomyInput,
@@ -88,7 +109,8 @@ export type {
     SearchClientFilters,
     SearchClientProviderInfo,
     SearchSourceCounts,
-    SearchScoreBreakdown
+    SearchScoreBreakdown,
+    SearchStreamClientEvent
 } from './graphQLSearchClient';
 
 export { GraphQLIntegrationClient } from './graphQLIntegrationClient';
@@ -110,3 +132,27 @@ export type {
     SourceObjectListItem,
     SourceObjectSelectionInput
 } from './graphQLIntegrationClient';
+export { GraphQLConversationClient } from './graphQLConversationClient';
+export type { ConversationRunEvent, ConversationTailResult } from './graphQLConversationClient';
+export { GraphQLRealtimeSessionClient, IsKnownRealtimeSessionVerificationErrorCode } from './graphQLRealtimeSessionClient';
+export type {
+    RealtimeSessionVerificationState,
+    RealtimeSessionVerificationErrorCode,
+    RealtimeSessionVerificationResult,
+    RealtimeSessionClientEvent,
+    RequestRealtimeSessionVerificationInput,
+    SubmitRealtimeSessionVerificationCodeInput,
+} from './graphQLRealtimeSessionClient';
+
+export { GraphQLMeetingClient } from './graphQLMeetingClient';
+export type {
+  MeetingInfo,
+  MeetingParticipantInfo,
+  DialInPhoneNumberInfo,
+  MeetingParticipantInput,
+  CreateMeetingInput,
+  UpdateMeetingInput,
+  RSVPMeetingInput,
+  MeetingResult,
+  StartMeetingResult,
+} from './graphQLMeetingClient';

@@ -19,13 +19,13 @@ import { MJLruCache, UUIDsEqual } from '@memberjunction/global';
 import type { MJConversationWidgetInstanceEntity, MJConversationEntity } from '@memberjunction/core-entities';
 import { ResolveConfiguredPrincipal } from '../auth/principals.js';
 import { MagicLinkKeyManager } from '../auth/magicLink/MagicLinkKeys.js';
-import { generateSessionId } from '../auth/magicLink/magicLinkCore.js';
+import { GenerateSessionId } from '../auth/magicLink/magicLinkCore.js';
 import { MagicLinkService } from '../auth/magicLink/MagicLinkService.js';
 import { configInfo, type WidgetConfig } from '../config.js';
-import { buildWidgetGuestClaims, evaluateWidgetMint, parseEnabledChannels, type WidgetMintErrorCode } from './widgetCore.js';
-import { verifyHostAssertion, type HostAssertedIdentity } from './host-identity.js';
-import { writeReturningVisitorRecap } from '../agentSessions/ReturningVisitorRecap.js';
-import { resolveIdentityByEmail, mergeVisitorIdentity, forgetVisitor, type ResolvedVisitorIdentity } from './visitorIdentity.js';
+import { BuildWidgetGuestClaims, EvaluateWidgetMint, ParseEnabledChannels, type WidgetMintErrorCode } from './widgetCore.js';
+import { VerifyHostAssertion, type HostAssertedIdentity } from './host-identity.js';
+import { WriteReturningVisitorRecap } from '../agentSessions/ReturningVisitorRecap.js';
+import { ResolveIdentityByEmail, MergeVisitorIdentity, ForgetVisitor, type ResolvedVisitorIdentity } from './visitorIdentity.js';
 
 const WIDGET_ENTITY = 'MJ: Conversation Widget Instances';
 const CONVERSATIONS_ENTITY = 'MJ: Conversations';
@@ -43,115 +43,115 @@ interface ReturningVisitorResolution {
 
 /** Per-request forensic context captured for audit (sourced from the HTTP request). */
 export interface WidgetMintAuditContext {
-  ipAddress?: string;
-  userAgent?: string;
-  origin?: string;
+  ipAddress?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  userAgent?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  origin?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /** Input to mint a guest session. */
 export interface MintGuestSessionInput {
   /** The widget's public embed key (pk_live_…). */
-  widgetKey: string;
+  widgetKey: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /** The request's Origin header — enforced against the instance allowlist. */
-  origin?: string;
+  origin?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
   /**
    * A host-signed RS256 identity assertion (D1 `host-identity` strategy). Required when the
    * resolved widget's AuthStrategy is `HostIdentity`; ignored otherwise. Verified against the
    * host's registered public key; its identity is carried as informational claims only.
    */
-  hostAssertion?: string;
+  hostAssertion?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
   /**
    * The durable returning-visitor anchor (RV1) the client presents from its first-party cookie.
    * Honored only when the widget's `RememberReturningVisitors` toggle is on: a valid presented key
    * chains this visit to the visitor's prior conversation; absent/invalid on a first visit, the
    * server mints a fresh one. Ignored entirely when remembering is off.
    */
-  visitorKey?: string;
-  audit?: WidgetMintAuditContext;
+  visitorKey?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  audit?: WidgetMintAuditContext;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /** Result of a guest-session mint. */
 export interface MintGuestSessionResult {
-  success: boolean;
+  success: boolean;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** The minted session JWT (RS256), held by the widget in memory and refreshed before expiry. */
-  token?: string;
+  token?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** ISO expiry of the session token. */
-  expiresAt?: string;
+  expiresAt?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** The widget instance id (also carried as the `mj_widget_id` claim). */
-  widgetId?: string;
+  widgetId?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** The Application the session is scoped to. */
-  applicationId?: string;
+  applicationId?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** The pinned support agent the widget passes as explicitAgentId for every turn (D5). */
-  pinnedAgentId?: string;
+  pinnedAgentId?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** Which modalities this widget exposes (drives the widget UI). */
-  modality?: string;
+  modality?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /**
    * The opaque per-session id (also the signed scope resourceId). The widget stamps
    * Conversation.ExternalID with this so the Widget Guest RLS filters isolate this guest's rows.
    */
-  sessionId?: string;
+  sessionId?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /**
    * Optional hard ceiling (minutes) on a voice session for this widget. Surfaced so the client
    * voice-abuse guard uses the deployment-configured limit; also enforced server-side at mint.
    */
-  voiceMaxSessionMinutes?: number;
+  voiceMaxSessionMinutes?: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** Whether returning-visitor memory is enabled for this widget (gates the cookie + chaining). */
-  rememberReturningVisitors?: boolean;
+  rememberReturningVisitors?: boolean;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /**
    * The durable visitor anchor to persist as a cookie (RV1). Set only when remembering is on:
    * the validated key the client presented, or a freshly minted one on a first visit.
    */
-  visitorKey?: string;
+  visitorKey?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** The visitor's prior conversation for this anchor (RV2 chain); set only on a returning visit. */
-  lastConversationId?: string;
+  lastConversationId?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /**
    * The resolved polymorphic identity entity id (RV4), set only when a host-identity widget asserted a
    * resolvable identity at mint. The client stamps it (with {@link MintGuestSessionResult.linkedRecordId})
    * onto the new conversation so memory injection (RV3) keys off the resolved record, not the cookie.
    */
-  linkedEntityId?: string;
+  linkedEntityId?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** The resolved polymorphic identity record id (RV4); paired with {@link MintGuestSessionResult.linkedEntityId}. */
-  linkedRecordId?: string;
+  linkedRecordId?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /**
    * Interactive channels (by name, e.g. `["Whiteboard"]`) this widget may attach when voice is active
    * (Phase 2). Mirrors the widget instance's `EnabledChannels`; empty (the default) = no channels.
    */
-  enabledChannels?: string[];
-  error?: string;
-  errorCode?: WidgetMintErrorCode;
+  enabledChannels?: string[];  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  error?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  errorCode?: WidgetMintErrorCode;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 }
 
 /** Input to resolve a returning visitor's identity after they verify (RV4, magic-link upgrade path). */
 export interface ResolveVisitorIdentityInput {
   /** The widget's public embed key. */
-  widgetKey: string;
+  WidgetKey: string;
   /** The durable returning-visitor anchor whose trail should be promoted to the verified identity. */
-  visitorKey: string;
+  VisitorKey: string;
   /** The verified visitor's email (from the authenticated session) — resolved to a record via config. */
-  verifiedEmail: string;
+  VerifiedEmail: string;
   /** The request's Origin header — enforced against the instance allowlist. */
-  origin?: string;
+  origin?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /** Result of an RV4 identity resolve+merge. */
 export interface ResolveVisitorIdentityResult {
-  success: boolean;
+  success: boolean;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** The resolved polymorphic pair, when a record matched the verified email. */
-  resolved?: ResolvedVisitorIdentity;
+  resolved?: ResolvedVisitorIdentity;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** How many conversations were stamped with the resolved identity. */
-  mergedConversations?: number;
-  error?: string;
-  errorCode?: WidgetMintErrorCode;
+  mergedConversations?: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  error?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  errorCode?: WidgetMintErrorCode;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 }
 
 /** Input to a "forget me" request (RV5). */
 export interface ForgetVisitorInput {
   /** The widget's public embed key. */
-  widgetKey: string;
+  WidgetKey: string;
   /** The durable returning-visitor anchor to forget. */
-  visitorKey: string;
+  VisitorKey: string;
   /** The request's Origin header — enforced against the instance allowlist. */
-  origin?: string;
+  origin?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /**
@@ -169,32 +169,32 @@ interface VisitorPrivacyGateResult {
 
 /** Result of a "forget me" request (RV5). */
 export interface ForgetVisitorResult {
-  success: boolean;
+  success: boolean;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** Count of memory notes archived. */
-  notesArchived?: number;
+  notesArchived?: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** Count of conversations whose VisitorKey linkage was cleared. */
-  conversationsCleared?: number;
-  error?: string;
-  errorCode?: WidgetMintErrorCode;
+  conversationsCleared?: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  error?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  errorCode?: WidgetMintErrorCode;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 }
 
 /** Input to request a magic-link identity upgrade for a live guest session (W5). */
 export interface UpgradeGuestSessionInput {
   /** The widget's public embed key. */
-  widgetKey: string;
+  WidgetKey: string;
   /** The email to send the verification link to (becomes the provisioned user's email). */
-  email: string;
+  email: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /** The request's Origin header — enforced against the instance allowlist. */
-  origin?: string;
+  origin?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /** Result of a magic-link upgrade request. Never carries the token (delivered by email, out-of-band). */
 export interface UpgradeGuestSessionResult {
-  success: boolean;
+  success: boolean;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** Whether the verification email was dispatched (false when no comms provider is configured). */
-  emailSent?: boolean;
-  error?: string;
-  errorCode?: WidgetMintErrorCode;
+  emailSent?: boolean;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  error?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  errorCode?: WidgetMintErrorCode;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 }
 
 /** Minimal email sanity check (presence + single `@` with a dotted domain) — not full RFC validation. */
@@ -229,7 +229,7 @@ export class WidgetSessionService {
         return this.audited({ success: false, errorCode: 'not_found', error: 'Unknown widget key.' }, input, undefined);
       }
 
-      const eligibility = evaluateWidgetMint(
+      const eligibility = EvaluateWidgetMint(
         { Status: widget.Status, AllowedOrigins: widget.AllowedOrigins, Modality: widget.Modality },
         input.origin,
       );
@@ -357,11 +357,11 @@ export class WidgetSessionService {
       if (!contextUser) {
         return { success: false, errorCode: 'server_error', error: 'Server not configured for widget sessions.' };
       }
-      const widget = await this.loadWidgetByKey(input.widgetKey, contextUser);
+      const widget = await this.loadWidgetByKey(input.WidgetKey, contextUser);
       if (!widget) {
         return { success: false, errorCode: 'not_found', error: 'Unknown widget key.' };
       }
-      const eligibility = evaluateWidgetMint({ Status: widget.Status, AllowedOrigins: widget.AllowedOrigins, Modality: widget.Modality }, input.origin);
+      const eligibility = EvaluateWidgetMint({ Status: widget.Status, AllowedOrigins: widget.AllowedOrigins, Modality: widget.Modality }, input.origin);
       if (!eligibility.ok) {
         return { success: false, errorCode: eligibility.errorCode, error: 'Widget upgrade rejected.' };
       }
@@ -374,7 +374,7 @@ export class WidgetSessionService {
         return { success: false, errorCode: 'server_error', error: 'Identity verification is not configured.' };
       }
       const service = new MagicLinkService(this.publicUrl, magicLinkConfig);
-      const result = await service.CreateInvite({ email, applicationId: widget.ApplicationID }, contextUser);
+      const result = await service.CreateInvite({ email, ApplicationId: widget.ApplicationID }, contextUser);
       if (!result.success) {
         LogError(`[Widget] Upgrade invite failed for widget ${widget.ID}: ${result.error ?? result.errorCode ?? 'unknown'}`);
         return { success: false, errorCode: 'server_error', error: 'Could not start identity verification.' };
@@ -397,9 +397,9 @@ export class WidgetSessionService {
     // Prefer the per-instance HostPublicKey column (Phase 3 — no config-resident keys); fall back to the
     // interim config map (keyed by PublicKey) for deployments that haven't migrated their key yet.
     const hostKey = widget.HostPublicKey ?? this.config.hostPublicKeys?.[widget.PublicKey];
-    const result = verifyHostAssertion(assertion, hostKey, widget.PublicKey);
-    if (result.ok && result.identity) {
-      return result.identity;
+    const result = VerifyHostAssertion(assertion, hostKey, widget.PublicKey);
+    if (result.ok && result.Identity) {
+      return result.Identity;
     }
     LogError(`[Widget] Host assertion rejected for widget ${widget.ID}: ${result.errorCode ?? 'unknown'}`);
     return null;
@@ -417,8 +417,8 @@ export class WidgetSessionService {
     const ttlMinutes = widget.SessionTTLMinutes || this.config.defaultSessionTtlMinutes;
     // Generated once and returned to the client: the widget stamps Conversation.ExternalID with
     // this id so the Widget Guest RLS filters ({{ScopeResourceID}}) isolate this guest's rows.
-    const sessionId = generateSessionId();
-    const claims = buildWidgetGuestClaims({
+    const sessionId = GenerateSessionId();
+    const claims = BuildWidgetGuestClaims({
       issuer: this.publicUrl,
       audience: this.config.audience,
       widgetId: widget.ID,
@@ -452,7 +452,7 @@ export class WidgetSessionService {
       sessionId,
       // Phase 2: which interactive channels this widget may attach during a voice session. Read from the
       // per-instance EnabledChannels column (added by the Widget_Public_Hardening migration + CodeGen).
-      enabledChannels: parseEnabledChannels(widget.EnabledChannels),
+      enabledChannels: ParseEnabledChannels(widget.EnabledChannels),
       voiceMaxSessionMinutes: widget.VoiceMaxSessionMinutes ?? undefined,
       rememberReturningVisitors: !!returningVisitor,
       visitorKey: returningVisitor?.visitorKey,
@@ -477,11 +477,11 @@ export class WidgetSessionService {
     if (!widget.RememberReturningVisitors || !hostIdentity?.email || !returningVisitor?.visitorKey) {
       return undefined;
     }
-    const identity = await resolveIdentityByEmail(hostIdentity.email, contextUser, Metadata.Provider, this.config.identityResolution); // global-provider-ok: server-side mint under the single default provider
+    const identity = await ResolveIdentityByEmail(hostIdentity.email, contextUser, Metadata.Provider, this.config.identityResolution); // global-provider-ok: server-side mint under the single default provider
     if (!identity) {
       return undefined;
     }
-    await mergeVisitorIdentity({
+    await MergeVisitorIdentity({
       visitorKey: returningVisitor.visitorKey,
       applicationId: widget.ApplicationID,
       identity,
@@ -499,17 +499,17 @@ export class WidgetSessionService {
    */
   public async ResolveVisitorIdentity(input: ResolveVisitorIdentityInput): Promise<ResolveVisitorIdentityResult> {
     try {
-      const gate = await this.gateVisitorPrivacyRequest(input.widgetKey, input.visitorKey, input.origin);
+      const gate = await this.gateVisitorPrivacyRequest(input.WidgetKey, input.VisitorKey, input.origin);
       if (!gate.ok) {
         return { success: false, errorCode: gate.errorCode, error: gate.error };
       }
-      const identity = await resolveIdentityByEmail(input.verifiedEmail, gate.contextUser, Metadata.Provider, this.config.identityResolution); // global-provider-ok: server-side mint under the single default provider
+      const identity = await ResolveIdentityByEmail(input.VerifiedEmail, gate.contextUser, Metadata.Provider, this.config.identityResolution); // global-provider-ok: server-side mint under the single default provider
       if (!identity) {
         // Verified, but no record matches the email under the configured target — nothing to merge.
         return { success: true, mergedConversations: 0 };
       }
-      const mergedConversations = await mergeVisitorIdentity({
-        visitorKey: input.visitorKey,
+      const mergedConversations = await MergeVisitorIdentity({
+        visitorKey: input.VisitorKey,
         applicationId: gate.widget.ApplicationID,
         identity,
         contextUser: gate.contextUser,
@@ -529,12 +529,12 @@ export class WidgetSessionService {
    */
   public async ForgetVisitor(input: ForgetVisitorInput): Promise<ForgetVisitorResult> {
     try {
-      const gate = await this.gateVisitorPrivacyRequest(input.widgetKey, input.visitorKey, input.origin);
+      const gate = await this.gateVisitorPrivacyRequest(input.WidgetKey, input.VisitorKey, input.origin);
       if (!gate.ok) {
         return { success: false, errorCode: gate.errorCode, error: gate.error };
       }
-      const { notesArchived, conversationsCleared } = await forgetVisitor({
-        visitorKey: input.visitorKey,
+      const { notesArchived, conversationsCleared } = await ForgetVisitor({
+        visitorKey: input.VisitorKey,
         applicationId: gate.widget.ApplicationID,
         contextUser: gate.contextUser,
         provider: Metadata.Provider, // global-provider-ok: server-side mint under the single default provider
@@ -564,7 +564,7 @@ export class WidgetSessionService {
     if (!widget) {
       return { ok: false, errorCode: 'not_found', error: 'Unknown widget key.' };
     }
-    const eligibility = evaluateWidgetMint(
+    const eligibility = EvaluateWidgetMint(
       { Status: widget.Status, AllowedOrigins: widget.AllowedOrigins, Modality: widget.Modality },
       origin,
     );
@@ -597,7 +597,7 @@ export class WidgetSessionService {
     }
     const presented = (presentedKey ?? '').trim();
     const isReturning = VISITOR_KEY_PATTERN.test(presented);
-    const visitorKey = isReturning ? presented : generateSessionId();
+    const visitorKey = isReturning ? presented : GenerateSessionId();
     const lastConversationId = isReturning
       ? await this.findPreviousConversationByVisitorKey(visitorKey, widget.ApplicationID, contextUser)
       : undefined;
@@ -622,7 +622,7 @@ export class WidgetSessionService {
       return;
     }
     // global-provider-ok: server-side mint under the single default provider (same rationale as resolveGuestRoleName).
-    await writeReturningVisitorRecap(
+    await WriteReturningVisitorRecap(
       priorConversationId,
       widget.PinnedAgentID,
       contextUser,

@@ -62,8 +62,13 @@ export const COMMUNICATION_CONTEXT_LIST_CAP = 25;
  * @param items - the full list (caller owns ordering / de-duplication)
  * @returns the first N entries, where N is the cap
  */
-export function capCommunicationList<T>(items: readonly T[]): T[] {
+export function CapCommunicationList<T>(items: readonly T[]): T[] {
     return items.slice(0, COMMUNICATION_CONTEXT_LIST_CAP);
+}
+
+/** @deprecated Use {@link CapCommunicationList}. */
+export function capCommunicationList<T>(items: readonly T[]): T[] {
+    return CapCommunicationList(items);
 }
 
 /**
@@ -71,13 +76,23 @@ export function capCommunicationList<T>(items: readonly T[]): T[] {
  * `SwitchCommunicationTab` client tool tolerant of arbitrary agent input — only the
  * six known tab ids are accepted.
  */
-export function isValidCommunicationTab(tab: unknown): tab is CommunicationTab {
+export function IsValidCommunicationTab(tab: unknown): tab is CommunicationTab {
     return typeof tab === 'string' && (COMMUNICATION_TABS as readonly string[]).includes(tab);
 }
 
+/** @deprecated Use {@link IsValidCommunicationTab}. */
+export function isValidCommunicationTab(tab: unknown): tab is CommunicationTab {
+    return IsValidCommunicationTab(tab);
+}
+
 /** Resolve a tab id to its human-readable label, falling back to a default. */
+export function CommunicationTabLabel(tab: string): string {
+    return IsValidCommunicationTab(tab) ? COMMUNICATION_TAB_LABELS[tab] : 'Communication Management';
+}
+
+/** @deprecated Use {@link CommunicationTabLabel}. */
 export function communicationTabLabel(tab: string): string {
-    return isValidCommunicationTab(tab) ? COMMUNICATION_TAB_LABELS[tab] : 'Communication Management';
+    return CommunicationTabLabel(tab);
 }
 
 /**
@@ -104,7 +119,7 @@ export interface CommunicationItemCandidate {
  * @param input - whatever the agent passed (an id or the on-screen name)
  * @param candidates - the items currently visible on the surface
  */
-export function resolveCommunicationItem<T extends CommunicationItemCandidate>(
+export function ResolveCommunicationItem<T extends CommunicationItemCandidate>(
     input: string,
     candidates: readonly T[],
 ): T | null {
@@ -122,6 +137,14 @@ export function resolveCommunicationItem<T extends CommunicationItemCandidate>(
     }
     const byContains = candidates.find(c => c.Name.toLowerCase().includes(needle));
     return byContains ?? null;
+}
+
+/** @deprecated Use {@link ResolveCommunicationItem}. */
+export function resolveCommunicationItem<T extends CommunicationItemCandidate>(
+    input: string,
+    candidates: readonly T[],
+): T | null {
+    return ResolveCommunicationItem(input, candidates);
 }
 
 /**
@@ -177,7 +200,7 @@ export interface CommunicationLogsContext extends CommunicationSelectedItem {
     VisibleLogSummaries: string[];
 }
 
-/** Providers surface: the configured messaging-provider cards. */
+/** Providers surface: the configured messaging-provider cards + enterprise mailbox governance + agent utility mailboxes. */
 export interface CommunicationProvidersContext extends CommunicationSelectedItem {
     Surface: 'providers';
     /** Total provider cards. */
@@ -186,6 +209,16 @@ export interface CommunicationProvidersContext extends CommunicationSelectedItem
     ActiveProviderCount: number;
     /** Provider display names (bounded). */
     ProviderNames: string[];
+    /** Names of providers with SupportsCalendar = true (bounded). */
+    CalendarCapableProviderNames?: string[];
+    /** Names of providers with SupportsFreeBusy = true (bounded). */
+    FreeBusyCapableProviderNames?: string[];
+    /** Per-provider EnterpriseScopeMode & AllowedEmailDomains summaries (bounded). */
+    EnterpriseScopeSummaries?: string[];
+    /** Total registered Agent Utility Mailboxes (MJ: AI Bridge Agent Identities with IdentityType='Email'). */
+    AgentUtilityMailboxCount?: number;
+    /** Bounded summary list of Agent Utility Mailboxes ("<email> · <agent> · <user|shared>"). */
+    AgentUtilityMailboxSummaries?: string[];
 }
 
 /** Templates surface: reusable message templates with a category filter + search. */
@@ -267,7 +300,7 @@ function appendBoundedList(
     if (items.length === 0) {
         return;
     }
-    context[listKey] = capCommunicationList(items);
+    context[listKey] = CapCommunicationList(items);
     if (items.length > COMMUNICATION_CONTEXT_LIST_CAP) {
         context[countKey] = items.length;
     }
@@ -303,6 +336,21 @@ function buildProvidersContext(s: CommunicationProvidersContext, context: Record
     context['SelectedProviderId'] = s.SelectedItemId;
     context['SelectedProviderName'] = s.SelectedItemName;
     appendBoundedList(context, 'ProviderNames', 'ProviderNameCount', s.ProviderNames);
+    if (s.CalendarCapableProviderNames) {
+        appendBoundedList(context, 'CalendarCapableProviders', 'CalendarCapableProviderCount', s.CalendarCapableProviderNames);
+    }
+    if (s.FreeBusyCapableProviderNames) {
+        appendBoundedList(context, 'FreeBusyCapableProviders', 'FreeBusyCapableProviderCount', s.FreeBusyCapableProviderNames);
+    }
+    if (s.EnterpriseScopeSummaries) {
+        appendBoundedList(context, 'EnterpriseScopeSummaries', 'EnterpriseScopeSummaryCount', s.EnterpriseScopeSummaries);
+    }
+    if (typeof s.AgentUtilityMailboxCount === 'number') {
+        context['AgentUtilityMailboxCount'] = s.AgentUtilityMailboxCount;
+    }
+    if (s.AgentUtilityMailboxSummaries) {
+        appendBoundedList(context, 'AgentUtilityMailboxes', 'AgentUtilityMailboxTotalCount', s.AgentUtilityMailboxSummaries);
+    }
 }
 
 /** Shape the templates surface slice. */
@@ -343,7 +391,7 @@ function buildRunsContext(s: CommunicationRunsContext, context: Record<string, u
  * @param input - the component's current state snapshot
  * @returns a flat key-value object suitable for `SetAgentContext`
  */
-export function buildCommunicationAgentContext(input: CommunicationAgentContextInput): Record<string, unknown> {
+export function BuildCommunicationAgentContext(input: CommunicationAgentContextInput): Record<string, unknown> {
     const context: Record<string, unknown> = {
         ActiveTab: input.ActiveTab,
         ActiveTabLabel: input.ActiveTabLabel,
@@ -372,4 +420,9 @@ export function buildCommunicationAgentContext(input: CommunicationAgentContextI
     }
 
     return context;
+}
+
+/** @deprecated Use {@link BuildCommunicationAgentContext}. */
+export function buildCommunicationAgentContext(input: CommunicationAgentContextInput): Record<string, unknown> {
+    return BuildCommunicationAgentContext(input);
 }

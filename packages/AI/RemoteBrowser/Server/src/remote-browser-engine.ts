@@ -173,7 +173,7 @@ export interface AchieveGoalParams {
  * @param opts The goal options (strategy preference, start url, step cap, progress, signal, …).
  * @returns The goal outcome, normalized to {@link RemoteBrowserGoalResult}.
  */
-export async function dispatchRemoteBrowserGoal(
+export async function DispatchRemoteBrowserGoal(
   session: IRemoteBrowserSession,
   features: IRemoteBrowserProviderFeatures,
   goal: string,
@@ -202,6 +202,16 @@ export async function dispatchRemoteBrowserGoal(
     AgentRunID: opts.AgentRunID,
     AgentRunStepID: opts.AgentRunStepID,
   });
+}
+
+/** @deprecated Use {@link DispatchRemoteBrowserGoal}. */
+export async function dispatchRemoteBrowserGoal(
+  session: IRemoteBrowserSession,
+  features: IRemoteBrowserProviderFeatures,
+  goal: string,
+  opts: AchieveGoalParams = {},
+): Promise<RemoteBrowserGoalResult> {
+  return DispatchRemoteBrowserGoal(session, features, goal, opts);
 }
 
 /**
@@ -537,7 +547,7 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
     }
     this.activeGoalAborts.set(key, controller);
     try {
-      return await dispatchRemoteBrowserGoal(handle.Session, handle.Features, goal, { ...opts, Signal: controller.signal });
+      return await DispatchRemoteBrowserGoal(handle.Session, handle.Features, goal, { ...opts, Signal: controller.signal });
     } finally {
       if (this.activeGoalAborts.get(key) === controller) {
         this.activeGoalAborts.delete(key);

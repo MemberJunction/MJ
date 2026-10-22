@@ -3,10 +3,10 @@ import ora from 'ora-classic';
 import sql from 'mssql';
 import { ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { ResolveStartupMode, RunView, LogStatus, SetProductionStatus } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID, UUIDsEqual } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { getValidatedConfig } from '../../config';
+import { GetValidatedConfig } from '../../config';
 
 interface ReclassifyTarget {
     artifactVersionId: string;
@@ -45,7 +45,7 @@ export default class ArtifactsReclassify extends Command {
         SetProductionStatus(false);
 
         const spinner = ora('Connecting to database...').start();
-        const config = getValidatedConfig();
+        const config = GetValidatedConfig();
         const pool = new sql.ConnectionPool({
             server: config.dbHost,
             port: config.dbPort,
@@ -157,6 +157,7 @@ export default class ArtifactsReclassify extends Command {
         if (!artifactsResult.Success || artifactsResult.Results.length === 0) return [];
 
         const artifactIds = artifactsResult.Results.map(a => `'${a.ID}'`).join(',');
+        // conversation-scope: artifact-wide read, no conversation path applies
         const versionsResult = await rv.RunView<{
             ID: string;
             ArtifactID: string;
@@ -175,9 +176,10 @@ export default class ArtifactsReclassify extends Command {
         const genericText = ArtifactMetadataEngine.Instance.ArtifactTypes.find(t => t.Name === 'Generic Text');
         const genericBinary = ArtifactMetadataEngine.Instance.ArtifactTypes.find(t => t.Name === 'Generic Binary');
 
+        const artifactsByID = IndexByUUID(artifactsResult.Results);
         const targets: ReclassifyTarget[] = [];
         for (const v of versionsResult.Results) {
-            const artifact = artifactsResult.Results.find(a => UUIDsEqual(a.ID, v.ArtifactID))!;
+            const artifact = artifactsByID.Get(v.ArtifactID)!;
 
             let proposedTypeID: string | null = null;
             let proposedTypeName: string | null = null;

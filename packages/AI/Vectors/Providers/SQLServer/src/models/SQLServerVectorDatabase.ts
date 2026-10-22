@@ -124,7 +124,7 @@ export class SQLServerVectorDatabase extends VectorDBBase {
     //  Host connection access
     // ----------------------------------------------------------------
 
-    private get Host(): IColocatedVectorHost {
+    private get host(): IColocatedVectorHost {
         if (!this.ColocatedHost) {
             throw new Error(
                 'SQLServerVectorDatabase requires a host connection. Call TryWireColocatedHost()/SetColocatedHost() with the active data provider before use.'
@@ -133,24 +133,24 @@ export class SQLServerVectorDatabase extends VectorDBBase {
         return this.ColocatedHost;
     }
 
-    private get Schema(): string {
-        return this.Host.ColocatedSchema;
+    private get schema(): string {
+        return this.host.ColocatedSchema;
     }
 
-    private Qualify(tableName: string): string {
-        return `[${ValidateSqlIdentifier(this.Schema, 'schema')}].[${ValidateSqlIdentifier(tableName, 'table')}]`;
+    private qualify(tableName: string): string {
+        return `[${ValidateSqlIdentifier(this.schema, 'schema')}].[${ValidateSqlIdentifier(tableName, 'table')}]`;
     }
 
-    private Run<T = Record<string, unknown>>(sql: string, params?: ReadonlyArray<unknown>): Promise<T[]> {
-        return this.Host.RunColocatedSQL<T>(sql, params);
+    private run<T = Record<string, unknown>>(sql: string, params?: ReadonlyArray<unknown>): Promise<T[]> {
+        return this.host.RunColocatedSQL<T>(sql, params);
     }
 
     // ----------------------------------------------------------------
     //  Capability detection (fail loud)
     // ----------------------------------------------------------------
 
-    private async AssertVectorCapable(): Promise<void> {
-        const rows = await this.Run<{ v: number }>(`SELECT CAST(SERVERPROPERTY('ProductMajorVersion') AS INT) AS v`);
+    private async assertVectorCapable(): Promise<void> {
+        const rows = await this.run<{ v: number }>(`SELECT CAST(SERVERPROPERTY('ProductMajorVersion') AS INT) AS v`);
         const major = rows[0]?.v != null ? Number(rows[0].v) : 0;
         if (!(major >= SQLSERVER_2025_MAJOR_VERSION)) {
             throw new Error(
@@ -161,11 +161,11 @@ export class SQLServerVectorDatabase extends VectorDBBase {
         }
     }
 
-    private async EnsureInfrastructure(): Promise<void> {
-        await this.AssertVectorCapable();
-        await this.Run(
-            `IF OBJECT_ID('${this.Schema}.${INDEX_REGISTRY_TABLE}') IS NULL
-             CREATE TABLE ${this.Qualify(INDEX_REGISTRY_TABLE)} (
+    private async ensureInfrastructure(): Promise<void> {
+        await this.assertVectorCapable();
+        await this.run(
+            `IF OBJECT_ID('${this.schema}.${INDEX_REGISTRY_TABLE}') IS NULL
+             CREATE TABLE ${this.qualify(INDEX_REGISTRY_TABLE)} (
                 name NVARCHAR(450) NOT NULL PRIMARY KEY,
                 dimension INT NOT NULL,
                 metric NVARCHAR(50) NOT NULL CONSTRAINT DF_${INDEX_REGISTRY_TABLE}_metric DEFAULT 'cosine',
@@ -185,15 +185,15 @@ export class SQLServerVectorDatabase extends VectorDBBase {
     //  Registry resolution
     // ----------------------------------------------------------------
 
-    private async GetResolvedIndex(indexName: string): Promise<ResolvedIndex | null> {
-        const rows = await this.Run<{
+    private async getResolvedIndex(indexName: string): Promise<ResolvedIndex | null> {
+        const rows = await this.run<{
             dimension: number; metric: string; storage_mode: string; source_table: string | null;
             vector_column: string; key_column: string; entity_name: string | null;
             select_columns: string | null; iterative_threshold: number | null;
         }>(
             `SELECT dimension, metric, storage_mode, source_table, vector_column, key_column,
                     entity_name, select_columns, iterative_threshold
-             FROM ${this.Qualify(INDEX_REGISTRY_TABLE)} WHERE name = @p0`,
+             FROM ${this.qualify(INDEX_REGISTRY_TABLE)} WHERE name = @p0`,
             [indexName]
         );
         if (rows.length === 0) {
@@ -201,10 +201,10 @@ export class SQLServerVectorDatabase extends VectorDBBase {
         }
         const row = rows[0];
         const storageMode: SqlServerStorageMode = row.storage_mode === 'entityColumn' ? 'entityColumn' : 'sibling';
-        const selectColumns = this.ParseSelectColumns(row.select_columns, storageMode);
+        const selectColumns = this.parseSelectColumns(row.select_columns, storageMode);
         const qualifiedTable = row.source_table && row.source_table.trim().length > 0
             ? row.source_table
-            : this.Qualify(indexName);
+            : this.qualify(indexName);
         return {
             dimension: Number(row.dimension),
             metric: row.metric,
@@ -224,7 +224,7 @@ export class SQLServerVectorDatabase extends VectorDBBase {
 
     /** Validate & narrow the untyped `CreateIndexParams.additionalParams` bag into a typed config,
      *  throwing on malformed shapes rather than asserting (`as`) a shape that may not hold. */
-    private NormalizeIndexConfig(raw: unknown): SQLServerIndexConfig {
+    private normalizeIndexConfig(raw: unknown): SQLServerIndexConfig {
         const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
         const cfg: SQLServerIndexConfig = {};
         if (obj['storageMode'] === 'entityColumn' || obj['storageMode'] === 'sibling') {
@@ -247,7 +247,7 @@ export class SQLServerVectorDatabase extends VectorDBBase {
         return cfg;
     }
 
-    private ParseSelectColumns(raw: string | null, storageMode: SqlServerStorageMode): string[] {
+    private parseSelectColumns(raw: string | null, storageMode: SqlServerStorageMode): string[] {
         if (storageMode === 'sibling') {
             return ['metadata'];
         }
@@ -264,9 +264,9 @@ export class SQLServerVectorDatabase extends VectorDBBase {
 
     /** Resolve the schema-qualified table string for an entityColumn source spec, validating each
      *  identifier segment (accepts `[schema].[table]`, `schema.table`, or bare `table`). */
-    private QualifyEntityTable(cfg: SQLServerIndexConfig): string {
+    private qualifyEntityTable(cfg: SQLServerIndexConfig): string {
         const raw = (cfg.sourceTable ?? '').trim().replace(/[[\]]/g, '');
-        const parts = raw.includes('.') ? raw.split('.') : [cfg.schema ?? this.Schema, raw];
+        const parts = raw.includes('.') ? raw.split('.') : [cfg.schema ?? this.schema, raw];
         if (parts.length !== 2 || !parts[0] || !parts[1]) {
             throw new Error(`Invalid sourceTable ${JSON.stringify(cfg.sourceTable)} — expected "schema.table" or "table".`);
         }
@@ -279,15 +279,15 @@ export class SQLServerVectorDatabase extends VectorDBBase {
 
     public async ListIndexes(): Promise<IndexList> {
         try {
-            await this.EnsureInfrastructure();
-            const rows = await this.Run<{ name: string; dimension: number; metric: string }>(
-                `SELECT name, dimension, metric FROM ${this.Qualify(INDEX_REGISTRY_TABLE)} ORDER BY name`
+            await this.ensureInfrastructure();
+            const rows = await this.run<{ name: string; dimension: number; metric: string }>(
+                `SELECT name, dimension, metric FROM ${this.qualify(INDEX_REGISTRY_TABLE)} ORDER BY name`
             );
             const indexes: IndexDescription[] = rows.map(row => ({
                 name: row.name,
                 dimension: Number(row.dimension),
                 metric: row.metric as IndexModelMetricEnum,
-                host: this.Schema,
+                host: this.schema,
             }));
             return { indexes };
         } catch (ex) {
@@ -298,47 +298,47 @@ export class SQLServerVectorDatabase extends VectorDBBase {
 
     public async GetIndex(params: BaseRequestParams): Promise<BaseResponse> {
         try {
-            await this.EnsureInfrastructure();
-            const resolved = await this.GetResolvedIndex(params.id);
+            await this.ensureInfrastructure();
+            const resolved = await this.getResolvedIndex(params.id);
             if (!resolved) {
-                return this.Failure(`Index "${params.id}" not found`);
+                return this.failure(`Index "${params.id}" not found`);
             }
             const desc: IndexDescription = {
                 name: params.id,
                 dimension: resolved.dimension,
                 metric: resolved.metric as IndexModelMetricEnum,
-                host: this.Schema,
+                host: this.schema,
             };
-            return this.Success(desc);
+            return this.success(desc);
         } catch (ex) {
             LogError('SQLServerVectorDatabase.GetIndex error', undefined, ex);
-            return this.Failure('Error getting index');
+            return this.failure('Error getting index');
         }
     }
 
     public async CreateIndex(params: CreateIndexParams): Promise<BaseResponse> {
         try {
-            await this.EnsureInfrastructure();
+            await this.ensureInfrastructure();
             ValidateSqlIdentifier(params.id, 'index name');
-            const cfg = this.NormalizeIndexConfig(params.additionalParams);
+            const cfg = this.normalizeIndexConfig(params.additionalParams);
             const storageMode: SqlServerStorageMode = cfg.storageMode === 'entityColumn' ? 'entityColumn' : 'sibling';
             const dimension = params.dimension;
             const metric = params.metric || 'cosine';
 
             if (storageMode === 'entityColumn') {
-                return await this.RegisterEntityColumnIndex(params.id, dimension, metric, cfg);
+                return await this.registerEntityColumnIndex(params.id, dimension, metric, cfg);
             }
-            return await this.CreateSiblingIndex(params.id, dimension, metric, cfg);
+            return await this.createSiblingIndex(params.id, dimension, metric, cfg);
         } catch (ex) {
             LogError('SQLServerVectorDatabase.CreateIndex error', undefined, ex);
-            return this.Failure(ex instanceof Error ? ex.message : 'Error creating index');
+            return this.failure(ex instanceof Error ? ex.message : 'Error creating index');
         }
     }
 
-    private async CreateSiblingIndex(name: string, dimension: number, metric: string, cfg: SQLServerIndexConfig): Promise<BaseResponse> {
-        await this.Run(
-            `IF OBJECT_ID('${this.Schema}.${name}') IS NULL
-             CREATE TABLE ${this.Qualify(name)} (
+    private async createSiblingIndex(name: string, dimension: number, metric: string, cfg: SQLServerIndexConfig): Promise<BaseResponse> {
+        await this.run(
+            `IF OBJECT_ID('${this.schema}.${name}') IS NULL
+             CREATE TABLE ${this.qualify(name)} (
                 id NVARCHAR(450) NOT NULL PRIMARY KEY,
                 embedding VECTOR(${dimension}) NULL,
                 metadata NVARCHAR(MAX) NULL,
@@ -346,41 +346,41 @@ export class SQLServerVectorDatabase extends VectorDBBase {
              )`
         );
         if (cfg.createVectorIndex !== false) {
-            await this.TryCreateVectorIndex(name, this.Qualify(name), 'embedding', metric);
+            await this.tryCreateVectorIndex(name, this.qualify(name), 'embedding', metric);
         }
-        await this.UpsertRegistry(name, {
+        await this.upsertRegistry(name, {
             dimension, metric, storageMode: 'sibling',
-            sourceTable: this.Qualify(name), vectorColumn: 'embedding', keyColumn: 'id',
+            sourceTable: this.qualify(name), vectorColumn: 'embedding', keyColumn: 'id',
             entityName: null, selectColumns: ['metadata'], threshold: cfg.iterativeFilterThreshold ?? null,
         });
         LogStatus(`SQLServerVectorDatabase: Created sibling index "${name}" (dim=${dimension}, metric=${metric})`);
-        return this.Success({ name, dimension, metric, storageMode: 'sibling' });
+        return this.success({ name, dimension, metric, storageMode: 'sibling' });
     }
 
-    private async RegisterEntityColumnIndex(name: string, dimension: number, metric: string, cfg: SQLServerIndexConfig): Promise<BaseResponse> {
+    private async registerEntityColumnIndex(name: string, dimension: number, metric: string, cfg: SQLServerIndexConfig): Promise<BaseResponse> {
         if (!cfg.sourceTable) {
-            return this.Failure('entityColumn storage mode requires additionalParams.sourceTable');
+            return this.failure('entityColumn storage mode requires additionalParams.sourceTable');
         }
-        const qualified = this.QualifyEntityTable(cfg);
+        const qualified = this.qualifyEntityTable(cfg);
         const vectorColumn = ValidateSqlIdentifier(cfg.vectorColumn ?? 'Embedding', 'vectorColumn');
         const keyColumn = ValidateSqlIdentifier(cfg.keyColumn ?? 'ID', 'keyColumn');
         if (cfg.createVectorIndex !== false) {
-            await this.TryCreateVectorIndex(name, qualified, vectorColumn, metric);
+            await this.tryCreateVectorIndex(name, qualified, vectorColumn, metric);
         }
-        await this.UpsertRegistry(name, {
+        await this.upsertRegistry(name, {
             dimension, metric, storageMode: 'entityColumn',
             sourceTable: qualified, vectorColumn, keyColumn,
             entityName: cfg.entityName ?? null, selectColumns: cfg.selectColumns ?? [],
             threshold: cfg.iterativeFilterThreshold ?? null,
         });
         LogStatus(`SQLServerVectorDatabase: Registered entityColumn index "${name}" → ${qualified}.${vectorColumn} (key=${keyColumn})`);
-        return this.Success({ name, dimension, metric, storageMode: 'entityColumn', sourceTable: qualified });
+        return this.success({ name, dimension, metric, storageMode: 'entityColumn', sourceTable: qualified });
     }
 
     /** Attempt to create a DiskANN vector index; tolerate failure (preview surface / pre-existing). */
-    private async TryCreateVectorIndex(indexName: string, qualifiedTable: string, vectorColumn: string, metric: string): Promise<void> {
+    private async tryCreateVectorIndex(indexName: string, qualifiedTable: string, vectorColumn: string, metric: string): Promise<void> {
         try {
-            await this.Run(
+            await this.run(
                 `CREATE VECTOR INDEX [VIX_${indexName}_embedding] ON ${qualifiedTable}([${vectorColumn}])
                  WITH (METRIC = '${metric}', TYPE = 'DiskANN')`
             );
@@ -389,12 +389,12 @@ export class SQLServerVectorDatabase extends VectorDBBase {
         }
     }
 
-    private async UpsertRegistry(name: string, r: {
+    private async upsertRegistry(name: string, r: {
         dimension: number; metric: string; storageMode: SqlServerStorageMode; sourceTable: string;
         vectorColumn: string; keyColumn: string; entityName: string | null; selectColumns: string[]; threshold: number | null;
     }): Promise<void> {
-        await this.Run(
-            `MERGE ${this.Qualify(INDEX_REGISTRY_TABLE)} AS t
+        await this.run(
+            `MERGE ${this.qualify(INDEX_REGISTRY_TABLE)} AS t
              USING (SELECT @p0 AS name) AS s ON t.name = s.name
              WHEN MATCHED THEN UPDATE SET dimension=@p1, metric=@p2, storage_mode=@p3, source_table=@p4,
                 vector_column=@p5, key_column=@p6, entity_name=@p7, select_columns=@p8, iterative_threshold=@p9
@@ -407,22 +407,22 @@ export class SQLServerVectorDatabase extends VectorDBBase {
 
     public async DeleteIndex(params: BaseRequestParams): Promise<BaseResponse> {
         try {
-            await this.EnsureInfrastructure();
-            const resolved = await this.GetResolvedIndex(params.id);
+            await this.ensureInfrastructure();
+            const resolved = await this.getResolvedIndex(params.id);
             // Only drop a table we own (sibling mode). entityColumn tables belong to the app.
             if (resolved?.storageMode === 'sibling') {
-                await this.Run(`IF OBJECT_ID('${this.Schema}.${params.id}') IS NOT NULL DROP TABLE ${this.Qualify(params.id)}`);
+                await this.run(`IF OBJECT_ID('${this.schema}.${params.id}') IS NOT NULL DROP TABLE ${this.qualify(params.id)}`);
             }
-            await this.Run(`DELETE FROM ${this.Qualify(INDEX_REGISTRY_TABLE)} WHERE name = @p0`, [params.id]);
-            return this.Success(null);
+            await this.run(`DELETE FROM ${this.qualify(INDEX_REGISTRY_TABLE)} WHERE name = @p0`, [params.id]);
+            return this.success(null);
         } catch (ex) {
             LogError('SQLServerVectorDatabase.DeleteIndex error', undefined, ex);
-            return this.Failure('Error deleting index');
+            return this.failure('Error deleting index');
         }
     }
 
     public async EditIndex(_params: EditIndexParams): Promise<BaseResponse> {
-        return this.Failure('EditIndex is not currently supported for colocated SQL Server vectors');
+        return this.failure('EditIndex is not currently supported for colocated SQL Server vectors');
     }
 
     // ----------------------------------------------------------------
@@ -439,10 +439,10 @@ export class SQLServerVectorDatabase extends VectorDBBase {
      * Servers (parallel client-to-many-servers, or mixed 2022/2025 backends), and capability differs
      * per server — a process-global flag would let one server's probe poison another's path.
      */
-    private static ApproximateSearchSupportedByHost = new WeakMap<IColocatedVectorHost, boolean>();
+    private static approximateSearchSupportedByHost = new WeakMap<IColocatedVectorHost, boolean>();
 
     public override async ColocatedQuery(params: ColocatedQueryOptions, _contextUser?: UserInfo): Promise<ColocatedQueryResult> {
-        const resolved = await this.GetResolvedIndex(params.indexName);
+        const resolved = await this.getResolvedIndex(params.indexName);
         if (!resolved) {
             throw new Error(`SQLServerVectorDatabase: index "${params.indexName}" is not registered`);
         }
@@ -459,9 +459,9 @@ export class SQLServerVectorDatabase extends VectorDBBase {
             filter: params.filter,
         };
 
-        const rows = await this.RunVectorQuery(build, resolved, !!params.filter);
+        const rows = await this.runVectorQuery(build, resolved, !!params.filter);
         const includeMetadata = params.includeMetadata !== false;
-        return { matches: rows.map(row => this.RowToMatch(row, resolved, includeMetadata)) };
+        return { matches: rows.map(row => this.rowToMatch(row, resolved, includeMetadata)) };
     }
 
     /**
@@ -475,39 +475,39 @@ export class SQLServerVectorDatabase extends VectorDBBase {
      *  - Else attempt approximate; if it errors with a "feature not supported" signature, cache that
      *    fact and retry exact.
      */
-    private async RunVectorQuery(
+    private async runVectorQuery(
         build: { target: SqlServerIndexTarget; dimension: number; metric: string; vector: ReadonlyArray<number>; topK: number; filter?: object },
         resolved: ResolvedIndex,
         hasFilter: boolean
     ): Promise<Record<string, unknown>[]> {
-        const cache = SQLServerVectorDatabase.ApproximateSearchSupportedByHost;
-        let useExact = cache.get(this.Host) === false;
+        const cache = SQLServerVectorDatabase.approximateSearchSupportedByHost;
+        let useExact = cache.get(this.host) === false;
 
         if (!useExact && hasFilter) {
             const countQ = BuildFilterCountQuery(resolved.target, build.filter);
-            const countRows = await this.Run<{ n: number }>(countQ.sql, countQ.params);
+            const countRows = await this.run<{ n: number }>(countQ.sql, countQ.params);
             const n = countRows[0]?.n != null ? Number(countRows[0].n) : Number.MAX_SAFE_INTEGER;
             useExact = n <= resolved.threshold;
         }
 
         if (useExact) {
             const exact = BuildExactVectorQuery(build);
-            return this.Run<Record<string, unknown>>(exact.sql, exact.params);
+            return this.run<Record<string, unknown>>(exact.sql, exact.params);
         }
 
         const approx = BuildApproximateVectorQuery(build);
         try {
-            const rows = await this.Run<Record<string, unknown>>(approx.sql, approx.params);
-            cache.set(this.Host, true);
+            const rows = await this.run<Record<string, unknown>>(approx.sql, approx.params);
+            cache.set(this.host, true);
             return rows;
         } catch (ex) {
-            if (!this.IsApproximateUnsupportedError(ex)) {
+            if (!this.isApproximateUnsupportedError(ex)) {
                 throw ex;
             }
-            cache.set(this.Host, false);
+            cache.set(this.host, false);
             LogStatus('SQLServerVectorDatabase: VECTOR_SEARCH/WITH APPROXIMATE is unavailable on this server; falling back to exact VECTOR_DISTANCE search.');
             const exact = BuildExactVectorQuery(build);
-            return this.Run<Record<string, unknown>>(exact.sql, exact.params);
+            return this.run<Record<string, unknown>>(exact.sql, exact.params);
         }
     }
 
@@ -515,20 +515,20 @@ export class SQLServerVectorDatabase extends VectorDBBase {
      *  this server? Matches on message text (brittle across CUs/locales), but only gates a fallback to
      *  an equally-correct exact query, so a false negative just rethrows and a false positive is slow,
      *  not wrong. */
-    private IsApproximateUnsupportedError(ex: unknown): boolean {
+    private isApproximateUnsupportedError(ex: unknown): boolean {
         const msg = ex instanceof Error ? ex.message : String(ex);
         return /APPROXIMATE|VECTOR_SEARCH|Unknown object type 'VECTOR'/i.test(msg);
     }
 
     /** Map a query result row to a ColocatedMatch, synthesizing metadata per storage mode. */
-    private RowToMatch(row: Record<string, unknown>, resolved: ResolvedIndex, includeMetadata: boolean): ColocatedMatch {
+    private rowToMatch(row: Record<string, unknown>, resolved: ResolvedIndex, includeMetadata: boolean): ColocatedMatch {
         const distance = Number(row['distance'] ?? 0);
         const score = DistanceToScore(distance, resolved.metric);
 
         if (resolved.storageMode === 'sibling') {
             const match: ColocatedMatch = { id: String(row['id']), score };
             if (includeMetadata && row['metadata']) {
-                match.metadata = this.ParseMetadata(row['metadata']);
+                match.metadata = this.parseMetadata(row['metadata']);
             }
             return match;
         }
@@ -548,7 +548,7 @@ export class SQLServerVectorDatabase extends VectorDBBase {
             for (const col of resolved.target.selectColumns) {
                 const value = row[col];
                 if (value != null) {
-                    metadata[col] = this.ToMetadataValue(value);
+                    metadata[col] = this.toMetadataValue(value);
                 }
             }
             match.metadata = metadata;
@@ -556,7 +556,7 @@ export class SQLServerVectorDatabase extends VectorDBBase {
         return match;
     }
 
-    private ToMetadataValue(value: unknown): string | number | boolean | string[] {
+    private toMetadataValue(value: unknown): string | number | boolean | string[] {
         if (typeof value === 'number' || typeof value === 'boolean') {
             return value;
         }
@@ -571,10 +571,10 @@ export class SQLServerVectorDatabase extends VectorDBBase {
             const vector = 'vector' in params ? params.vector : undefined;
             const indexName = 'id' in params ? (params as { id: string }).id : undefined;
             if (!vector) {
-                return this.Failure('QueryIndex requires a vector in the params');
+                return this.failure('QueryIndex requires a vector in the params');
             }
             if (!indexName) {
-                return this.Failure('QueryIndex requires an index name (params.id)');
+                return this.failure('QueryIndex requires an index name (params.id)');
             }
             const result = await this.ColocatedQuery({
                 indexName,
@@ -590,11 +590,11 @@ export class SQLServerVectorDatabase extends VectorDBBase {
                 score: m.score,
                 ...(m.metadata ? { metadata: m.metadata } : {}),
             }));
-            const response: QueryResponse = { matches, namespace: this.Schema };
-            return this.Success(response);
+            const response: QueryResponse = { matches, namespace: this.schema };
+            return this.success(response);
         } catch (ex) {
             LogError('SQLServerVectorDatabase.QueryIndex error', undefined, ex);
-            return this.Failure('Error querying index');
+            return this.failure('Error querying index');
         }
     }
 
@@ -604,30 +604,30 @@ export class SQLServerVectorDatabase extends VectorDBBase {
 
     public async CreateRecord(record: VectorRecord, indexName?: string): Promise<BaseResponse> {
         if (!indexName) {
-            return this.Failure('indexName is required for CreateRecord');
+            return this.failure('indexName is required for CreateRecord');
         }
-        return this.UpsertRecords([record], indexName);
+        return this.upsertRecords([record], indexName);
     }
 
     public async CreateRecords(records: VectorRecord[], indexName?: string): Promise<BaseResponse> {
         if (!indexName) {
-            return this.Failure('indexName is required for CreateRecords');
+            return this.failure('indexName is required for CreateRecords');
         }
-        return this.UpsertRecords(records, indexName);
+        return this.upsertRecords(records, indexName);
     }
 
-    private async UpsertRecords(records: VectorRecord[], indexName: string): Promise<BaseResponse> {
+    private async upsertRecords(records: VectorRecord[], indexName: string): Promise<BaseResponse> {
         try {
-            const resolved = await this.GetResolvedIndex(indexName);
+            const resolved = await this.getResolvedIndex(indexName);
             if (!resolved) {
-                return this.Failure(`index "${indexName}" is not registered`);
+                return this.failure(`index "${indexName}" is not registered`);
             }
             for (const record of records) {
                 const dim = resolved.dimension || record.values.length;
                 if (resolved.storageMode === 'entityColumn') {
                     // The entity row already exists and is app-owned; only set its vector column.
-                    const keyValue = this.ExtractKeyValue(record.id);
-                    await this.Run(
+                    const keyValue = this.extractKeyValue(record.id);
+                    await this.run(
                         `UPDATE ${resolved.target.qualifiedTable}
                          SET [${resolved.target.vectorColumn}] = CAST(@p1 AS VECTOR(${dim}))
                          WHERE [${resolved.keyColumn}] = @p0`,
@@ -635,8 +635,8 @@ export class SQLServerVectorDatabase extends VectorDBBase {
                     );
                 } else {
                     const content = DeriveContent(record.metadata);
-                    await this.Run(
-                        `MERGE ${this.Qualify(indexName)} AS t
+                    await this.run(
+                        `MERGE ${this.qualify(indexName)} AS t
                          USING (SELECT @p0 AS id) AS s ON t.id = s.id
                          WHEN MATCHED THEN UPDATE SET embedding = CAST(@p1 AS VECTOR(${dim})), metadata = @p2, content = @p3
                          WHEN NOT MATCHED THEN INSERT (id, embedding, metadata, content)
@@ -645,15 +645,15 @@ export class SQLServerVectorDatabase extends VectorDBBase {
                     );
                 }
             }
-            return this.Success({ upsertedCount: records.length });
+            return this.success({ upsertedCount: records.length });
         } catch (ex) {
             LogError('SQLServerVectorDatabase.UpsertRecords error', undefined, ex);
-            return this.Failure('Error upserting records');
+            return this.failure('Error upserting records');
         }
     }
 
     /** Extract the scalar key value from a vector record id (CompositeKey URL `Field|Value`). */
-    private ExtractKeyValue(recordId: string): string {
+    private extractKeyValue(recordId: string): string {
         const parts = recordId.split('|');
         return parts.length >= 2 ? parts[1] : recordId;
     }
@@ -661,12 +661,12 @@ export class SQLServerVectorDatabase extends VectorDBBase {
     public async UpdateRecord(record: UpdateOptions): Promise<BaseResponse> {
         const indexName = (record as Record<string, unknown>)['indexName'] as string;
         if (!indexName) {
-            return this.Failure('indexName property is required on the UpdateOptions object');
+            return this.failure('indexName property is required on the UpdateOptions object');
         }
         if (!record.values) {
-            return this.Success(null);
+            return this.success(null);
         }
-        return this.UpsertRecords([{ id: record.id, values: record.values, metadata: record.metadata }], indexName);
+        return this.upsertRecords([{ id: record.id, values: record.values, metadata: record.metadata }], indexName);
     }
 
     public async UpdateRecords(records: UpdateOptions): Promise<BaseResponse> {
@@ -679,54 +679,54 @@ export class SQLServerVectorDatabase extends VectorDBBase {
 
     public async DeleteRecord(record: VectorRecord, indexName?: string): Promise<BaseResponse> {
         if (!indexName) {
-            return this.Failure('indexName is required for DeleteRecord');
+            return this.failure('indexName is required for DeleteRecord');
         }
-        return this.DeleteByKeys([record.id], indexName);
+        return this.deleteByKeys([record.id], indexName);
     }
 
     public async DeleteRecords(records: VectorRecord[], indexName?: string): Promise<BaseResponse> {
         if (!indexName) {
-            return this.Failure('indexName is required for DeleteRecords');
+            return this.failure('indexName is required for DeleteRecords');
         }
-        return this.DeleteByKeys(records.map(r => r.id), indexName);
+        return this.deleteByKeys(records.map(r => r.id), indexName);
     }
 
-    private async DeleteByKeys(ids: string[], indexName: string): Promise<BaseResponse> {
+    private async deleteByKeys(ids: string[], indexName: string): Promise<BaseResponse> {
         try {
-            const resolved = await this.GetResolvedIndex(indexName);
+            const resolved = await this.getResolvedIndex(indexName);
             if (!resolved) {
-                return this.Failure(`index "${indexName}" is not registered`);
+                return this.failure(`index "${indexName}" is not registered`);
             }
             for (const id of ids) {
                 if (resolved.storageMode === 'entityColumn') {
                     // Don't delete app-owned rows — null out the vector instead.
-                    await this.Run(
+                    await this.run(
                         `UPDATE ${resolved.target.qualifiedTable} SET [${resolved.target.vectorColumn}] = NULL WHERE [${resolved.keyColumn}] = @p0`,
-                        [this.ExtractKeyValue(id)]
+                        [this.extractKeyValue(id)]
                     );
                 } else {
-                    await this.Run(`DELETE FROM ${this.Qualify(indexName)} WHERE id = @p0`, [id]);
+                    await this.run(`DELETE FROM ${this.qualify(indexName)} WHERE id = @p0`, [id]);
                 }
             }
-            return this.Success(null);
+            return this.success(null);
         } catch (ex) {
             LogError('SQLServerVectorDatabase.DeleteByKeys error', undefined, ex);
-            return this.Failure('Error deleting records');
+            return this.failure('Error deleting records');
         }
     }
 
     public async DeleteAllRecords(indexName: string, _namespace?: string): Promise<BaseResponse> {
         try {
-            const resolved = await this.GetResolvedIndex(indexName);
+            const resolved = await this.getResolvedIndex(indexName);
             if (resolved?.storageMode === 'entityColumn') {
-                await this.Run(`UPDATE ${resolved.target.qualifiedTable} SET [${resolved.target.vectorColumn}] = NULL`);
+                await this.run(`UPDATE ${resolved.target.qualifiedTable} SET [${resolved.target.vectorColumn}] = NULL`);
             } else {
-                await this.Run(`DELETE FROM ${this.Qualify(indexName)}`);
+                await this.run(`DELETE FROM ${this.qualify(indexName)}`);
             }
-            return this.Success(null);
+            return this.success(null);
         } catch (ex) {
             LogError('SQLServerVectorDatabase.DeleteAllRecords error', undefined, ex);
-            return this.Failure('Error deleting all records');
+            return this.failure('Error deleting all records');
         }
     }
 
@@ -738,25 +738,25 @@ export class SQLServerVectorDatabase extends VectorDBBase {
         try {
             const indexName = typeof params.data?.indexName === 'string' ? params.data.indexName : undefined;
             if (!indexName) {
-                return this.Failure('params.data.indexName is required');
+                return this.failure('params.data.indexName is required');
             }
-            const resolved = await this.GetResolvedIndex(indexName);
+            const resolved = await this.getResolvedIndex(indexName);
             if (!resolved) {
-                return this.Failure(`index "${indexName}" is not registered`);
+                return this.failure(`index "${indexName}" is not registered`);
             }
             const t = resolved.target;
-            const rows = await this.Run<{ id: string; embedding_text: string }>(
+            const rows = await this.run<{ id: string; embedding_text: string }>(
                 `SELECT c.[${t.keyColumn}] AS id, CAST(c.[${t.vectorColumn}] AS NVARCHAR(MAX)) AS embedding_text
                  FROM ${t.qualifiedTable} c WHERE c.[${t.keyColumn}] = @p0`,
-                [this.ExtractKeyValue(params.id)]
+                [this.extractKeyValue(params.id)]
             );
             if (rows.length === 0) {
-                return this.Failure(`Record "${params.id}" not found`);
+                return this.failure(`Record "${params.id}" not found`);
             }
-            return this.Success({ id: String(rows[0].id), values: ParseVectorJson(rows[0].embedding_text) });
+            return this.success({ id: String(rows[0].id), values: ParseVectorJson(rows[0].embedding_text) });
         } catch (ex) {
             LogError('SQLServerVectorDatabase.GetRecord error', undefined, ex);
-            return this.Failure('Error getting record');
+            return this.failure('Error getting record');
         }
     }
 
@@ -765,40 +765,40 @@ export class SQLServerVectorDatabase extends VectorDBBase {
             const indexName = typeof params.data?.indexName === 'string' ? params.data.indexName : undefined;
             const ids = Array.isArray(params.data?.ids) ? (params.data.ids as string[]) : undefined;
             if (!indexName) {
-                return this.Failure('params.data.indexName is required');
+                return this.failure('params.data.indexName is required');
             }
             if (!ids || ids.length === 0) {
-                return this.Failure('params.data.ids is required');
+                return this.failure('params.data.ids is required');
             }
-            const resolved = await this.GetResolvedIndex(indexName);
+            const resolved = await this.getResolvedIndex(indexName);
             if (!resolved) {
-                return this.Failure(`index "${indexName}" is not registered`);
+                return this.failure(`index "${indexName}" is not registered`);
             }
             const t = resolved.target;
-            const keyValues = ids.map(id => this.ExtractKeyValue(id));
+            const keyValues = ids.map(id => this.extractKeyValue(id));
             const placeholders = keyValues.map((_v, i) => `@p${i}`).join(', ');
-            const rows = await this.Run<{ id: string; embedding_text: string }>(
+            const rows = await this.run<{ id: string; embedding_text: string }>(
                 `SELECT c.[${t.keyColumn}] AS id, CAST(c.[${t.vectorColumn}] AS NVARCHAR(MAX)) AS embedding_text
                  FROM ${t.qualifiedTable} c WHERE c.[${t.keyColumn}] IN (${placeholders})`,
                 keyValues
             );
-            return this.Success(rows.map(r => ({ id: String(r.id), values: ParseVectorJson(r.embedding_text) })));
+            return this.success(rows.map(r => ({ id: String(r.id), values: ParseVectorJson(r.embedding_text) })));
         } catch (ex) {
             LogError('SQLServerVectorDatabase.GetRecords error', undefined, ex);
-            return this.Failure('Error getting records');
+            return this.failure('Error getting records');
         }
     }
 
     public async ListVectorIDs(params: ListVectorIDsParams): Promise<ListVectorIDsResult> {
         try {
-            const resolved = await this.GetResolvedIndex(params.IndexName);
+            const resolved = await this.getResolvedIndex(params.IndexName);
             if (!resolved) {
                 return { IDs: [] };
             }
             const t = resolved.target;
             const limit = params.Limit ?? 100;
             const offset = params.PaginationToken ? parseInt(params.PaginationToken, 10) : 0;
-            const rows = await this.Run<{ id: string }>(
+            const rows = await this.run<{ id: string }>(
                 `SELECT c.[${t.keyColumn}] AS id FROM ${t.qualifiedTable} c
                  ORDER BY c.[${t.keyColumn}] OFFSET @p0 ROWS FETCH NEXT @p1 ROWS ONLY`,
                 [offset, limit]
@@ -821,7 +821,7 @@ export class SQLServerVectorDatabase extends VectorDBBase {
     //  Helpers
     // ----------------------------------------------------------------
 
-    private ParseMetadata(raw: unknown): Record<string, string | number | boolean | string[]> {
+    private parseMetadata(raw: unknown): Record<string, string | number | boolean | string[]> {
         if (raw == null) {
             return {};
         }
@@ -835,11 +835,11 @@ export class SQLServerVectorDatabase extends VectorDBBase {
         }
     }
 
-    private Success(data: unknown): BaseResponse {
+    private success(data: unknown): BaseResponse {
         return { success: true, message: '', data };
     }
 
-    private Failure(message?: string): BaseResponse {
+    private failure(message?: string): BaseResponse {
         return { success: false, message: message || 'An error occurred', data: null };
     }
 }

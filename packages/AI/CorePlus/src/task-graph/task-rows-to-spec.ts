@@ -20,7 +20,7 @@
 import type { MJTaskEntity } from '@memberjunction/core-entities';
 import { TaskNode, type TaskGraphSpec, type TaskGraphSpecNode, type TaskNodeBase } from './task-graph-spec';
 import type { GraphNodePosition } from './graph-layout';
-import type { TaskGraphNodeKind } from './task-graph-spec';
+import type { TaskGraphNodeConfigMap, TaskGraphNodeKind } from './task-graph-spec';
 
 /**
  * The Task columns a run view reads.
@@ -39,7 +39,11 @@ export type TaskRunRow = {
     Configuration?: string | null;
     AgentRunID?: string | null;
     ActionID?: string | null;
+    Action?: string | null;
     AgentID?: string | null;
+    Agent?: string | null;
+    PromptID?: string | null;
+    Prompt?: string | null;
     UserID?: string | null;
     ErrorMessage?: string | null;
     OutputPayload?: string | null;
@@ -106,6 +110,8 @@ export function ProjectTaskRowsToSpec(
             name: row.Name,
             description: row.Description ?? '',
             dependsOn: dependsOnByTask.get(row.ID) ?? [],
+            ...(config?.layout ? { layout: config.layout } : {}),
+            ...(config?.policy ? { policy: config.policy } : {}),
         };
 
         const layout = config?.layout;
@@ -136,21 +142,32 @@ function nodeFor(
 ): TaskGraphSpecNode {
     switch (row.StepType as TaskGraphNodeKind | null | undefined) {
         case 'Agent':
-            return TaskNode.Agent(base, { agentName: row.Name, message: config?.agent?.message });
+            return TaskNode.Agent(base, {
+                agentName: row.Agent?.trim() || row.AgentID?.trim() || row.Name,
+                message: config?.agent?.message,
+            });
         case 'Action':
             return TaskNode.Action(base, {
-                actionName: row.Name,
+                actionName: row.Action?.trim() || row.ActionID?.trim() || row.Name,
                 inputMapping: config?.inputMapping,
                 outputMapping: config?.outputMapping,
             });
         case 'Prompt':
-            return TaskNode.Prompt(base, { promptName: row.Name });
+            return TaskNode.Prompt(base, {
+                promptName: row.Prompt?.trim() || row.PromptID?.trim() || row.Name,
+            });
         case 'ForEach':
             return TaskNode.ForEach(base, config?.forEach ?? { collectionPath: '' });
         case 'While':
             return TaskNode.While(base, config?.while ?? { condition: '' });
         case 'External':
             return TaskNode.External(base, config?.external ?? { domain: 'external' });
+        case 'Decision':
+            return TaskNode.Decision(base, {
+                promptName: config?.decision?.promptName,
+                state: config?.decision?.state,
+                questions: config?.decision?.questions ?? {},
+            });
         case 'Human':
         default:
             return TaskNode.Human(base, {
@@ -167,9 +184,11 @@ type StoredConfiguration = {
     forEach?: { collectionPath: string };
     while?: { condition: string };
     external?: { domain: string; ref?: string };
+    decision?: Partial<TaskGraphNodeConfigMap['Decision']>;
     inputMapping?: string;
     outputMapping?: string;
     layout?: { x?: number; y?: number; width?: number; height?: number };
+    policy?: TaskNodeBase['policy'];
 };
 
 /**

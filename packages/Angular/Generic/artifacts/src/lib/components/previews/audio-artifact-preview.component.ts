@@ -65,7 +65,16 @@ export class AudioArtifactPreviewComponent extends BaseArtifactPreviewComponent 
     private readonly cdr = inject(ChangeDetectorRef);
 
     /** Resolved URL — data URI (inline) or pre-auth URL (file). Funneled through {@link setAudioUrl}. */
-    public audioUrl = '';
+    public AudioUrl = '';
+
+    /** @deprecated Use {@link AudioUrl}. */
+    public get audioUrl() {
+        return this.AudioUrl;
+    }
+    /** @deprecated Use {@link AudioUrl}. */
+    public set audioUrl(value) {
+        this.AudioUrl = value;
+    }
 
 
     /** Non-empty hides the player and shows a compact error line. */
@@ -79,7 +88,7 @@ export class AudioArtifactPreviewComponent extends BaseArtifactPreviewComponent 
 
     /** Set the resolved URL and recompute the single-element {@link MediaTracks} array in lockstep. */
     private setAudioUrl(url: string): void {
-        this.audioUrl = url;
+        this.AudioUrl = url;
         this.MediaTracks = url
             ? [
                   {
@@ -106,14 +115,24 @@ export class AudioArtifactPreviewComponent extends BaseArtifactPreviewComponent 
         this.cdr.markForCheck();
     }
 
-    public onMediaError(): void {
+    public OnMediaError(): void {
         this.errorMessage = 'Audio could not be played.';
         this.setAudioUrl('');
         this.cdr.markForCheck();
     }
 
+    /** @deprecated Use {@link OnMediaError}. */
+    public onMediaError(): void {
+        return this.OnMediaError();
+    }
+
     /** Fired when the generic player reaches the end of the track. No-op affordance hook. */
-    public onMediaEnded(): void {
+    public OnMediaEnded(): void {
         // Playback finished — nothing to persist for an inline preview.
+    }
+
+    /** @deprecated Use {@link OnMediaEnded}. */
+    public onMediaEnded(): void {
+        return this.OnMediaEnded();
     }
 }

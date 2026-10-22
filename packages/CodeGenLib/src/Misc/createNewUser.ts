@@ -10,7 +10,7 @@ import { GetDialect } from "@memberjunction/sql-dialect";
  * Base class for creating a new user in the system, you can sub-class this class to create your own user creation logic
  */
 export class CreateNewUserBase {
-    public async createNewUser(newUserSetup: NewUserSetup): Promise<{Success: boolean, Message: string, Severity: 'warning' | 'error' | undefined}> {
+    public async CreateNewUser(newUserSetup: NewUserSetup): Promise<{Success: boolean, Message: string, Severity: 'warning' | 'error' | undefined}> {
         try {   
             const matches: UserInfo = UserCache.Users.find(u => u?.Type?.trim().toLowerCase() ==='owner')!;
             const currentUser = matches ? matches : UserCache.Users[0]; // if we don't find an Owner, use the first user in the cache
@@ -174,5 +174,10 @@ export class CreateNewUserBase {
                 Severity: 'error'
             }
         }
+    }
+
+    /** @deprecated Use {@link CreateNewUser}. */
+    public async createNewUser(newUserSetup: NewUserSetup): Promise<{Success: boolean, Message: string, Severity: 'warning' | 'error' | undefined}> {
+        return this.CreateNewUser(newUserSetup);
     }
 }

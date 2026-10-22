@@ -9,9 +9,9 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { UserInfo, LogStatus } from '@memberjunction/core';
 import { QueryGenConfig } from '../cli/config';
-import { extractErrorMessage } from '../utils/error-handlers';
-import { formatEntityGroupForPrompt } from '../utils/entity-helpers';
-import { executePromptWithOverrides } from '../utils/prompt-helpers';
+import { ExtractErrorMessage } from '../utils/error-handlers';
+import { FormatEntityGroupForPrompt } from '../utils/entity-helpers';
+import { ExecutePromptWithOverrides } from '../utils/prompt-helpers';
 import { EntityGroup, BusinessQuestion } from '../data/schema';
 import { PROMPT_BUSINESS_QUESTION_GENERATOR } from '../prompts/PromptNames';
 
@@ -39,7 +39,7 @@ export class QuestionGenerator {
    * @param entityGroup - Entity group to generate questions for
    * @returns Array of validated business questions
    */
-  async generateQuestions(entityGroup: EntityGroup): Promise<BusinessQuestion[]> {
+  async GenerateQuestions(entityGroup: EntityGroup): Promise<BusinessQuestion[]> {
     try {
       // Ensure AIEngine is configured
       const aiEngine = AIEngine.Instance;
@@ -49,7 +49,7 @@ export class QuestionGenerator {
       const prompt = this.findPromptByName(aiEngine, PROMPT_BUSINESS_QUESTION_GENERATOR);
 
       // Format entity group for prompt
-      const entityMetadata = formatEntityGroupForPrompt(entityGroup);
+      const entityMetadata = FormatEntityGroupForPrompt(entityGroup);
 
       // Execute AI prompt
       const result = await this.executePrompt(prompt, entityMetadata);
@@ -75,9 +75,14 @@ export class QuestionGenerator {
       return validQuestions;
     } catch (error: unknown) {
       throw new Error(
-        extractErrorMessage(error, 'QuestionGenerator.generateQuestions')
+        ExtractErrorMessage(error, 'QuestionGenerator.generateQuestions')
       );
     }
+  }
+
+  /** @deprecated Use {@link GenerateQuestions}. */
+  async generateQuestions(entityGroup: EntityGroup): Promise<BusinessQuestion[]> {
+    return this.GenerateQuestions(entityGroup);
   }
 
   /**
@@ -103,7 +108,7 @@ export class QuestionGenerator {
     prompt: MJAIPromptEntityExtended,
     entityMetadata: unknown
   ): Promise<QuestionGeneratorResult> {
-    const result = await executePromptWithOverrides<QuestionGeneratorResult>(
+    const result = await ExecutePromptWithOverrides<QuestionGeneratorResult>(
       prompt,
       { entityGroupMetadata: entityMetadata },
       this.contextUser,

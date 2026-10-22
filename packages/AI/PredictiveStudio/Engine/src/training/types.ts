@@ -39,7 +39,7 @@ export interface IEntityFactory {
    * @param entityName MJ entity name (e.g. `MJ: ML Models`)
    * @param contextUser request user — required on the server for isolation/audit
    */
-  getEntityObject<T extends BaseEntity>(entityName: string, contextUser?: UserInfo): Promise<T>;
+  getEntityObject<T extends BaseEntity>(entityName: string, contextUser?: UserInfo): Promise<T>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -56,7 +56,7 @@ export interface IRecordLoader {
    * @param contextUser request user
    * @param provider optional provider for multi-provider correctness
    */
-  loadPipeline(pipelineId: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<MJMLTrainingPipelineEntity | null>;
+  loadPipeline(pipelineId: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<MJMLTrainingPipelineEntity | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Compute the next monotonic model version under a pipeline — `max(Version)+1`,
@@ -67,7 +67,7 @@ export interface IRecordLoader {
    * @param contextUser request user
    * @param provider optional provider for multi-provider correctness
    */
-  nextModelVersion(pipelineId: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<number>;
+  nextModelVersion(pipelineId: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<number>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Resolve the sidecar **driver key** for an algorithm from its
@@ -87,7 +87,7 @@ export interface IRecordLoader {
    * @param provider optional provider for multi-provider correctness
    * @returns the `DriverClass` driver key, or `null` when not found
    */
-  resolveAlgorithmDriverKey?(algorithmId: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<string | null>;
+  resolveAlgorithmDriverKey?(algorithmId: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<string | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -113,7 +113,7 @@ export interface ISidecarTrainer {
    * @param req the fully-built train request (training matrix + schema + preprocessing + validation)
    * @param lockedHoldout the carved-off holdout matrix to score exactly once (optional)
    */
-  train(req: TrainRequest, lockedHoldout?: MatrixData): Promise<TrainResponse>;
+  train(req: TrainRequest, lockedHoldout?: MatrixData): Promise<TrainResponse>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -132,7 +132,7 @@ export interface IArtifactStore {
    * @param contextUser request user — required on the server for isolation/audit
    * @returns the file id to store in `MLModel.ArtifactFileID`
    */
-  save(bytes: Uint8Array, name: string, contextUser?: UserInfo): Promise<string>;
+  save(bytes: Uint8Array, name: string, contextUser?: UserInfo): Promise<string>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

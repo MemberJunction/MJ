@@ -1,5 +1,253 @@
 # Change Log - @memberjunction/ai-vectordb
 
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- 03c085c: A vector index records whether it was provisioned, vectorizing refuses embeddings the index cannot hold, and the embedding model is chosen deterministically.
+
+  `MJVectorIndexEntityServer` still provisions in the background, so the save that creates the row returns at once. But the outcome of that background call used to reach only the server log, and a row whose provider refused, threw or never answered looked identical to one with an index behind it. The outcome is now written onto the row's `ProviderConfig` as `provisionState`, `provisionMessage` and `provisionCheckedAt`: `provisioned`, `failed` (with the provider's message), `timed-out` (the provider did not answer within `CREATE_INDEX_TIMEOUT_MS` and may still finish, so this is not recorded as a failure), `not-applicable` (the driver owns no index objects) or `unprovisioned` (no driver instance in this process). `Save()` never throws over provisioning. `Dimensions` and `Metric` are written back from the provider's response when it reports them, and `Metric` is requested from the row instead of hardcoded to `cosine`.
+
+  `VectorDBBase.ManagesIndexes` (default `true`, `false` on both Memory drivers) separates "this driver owns no index objects" from `IsReadOnly`, which is about record ingestion. MJ ships a Vector Index row for `SimpleVectorServiceProvider`, whose `CreateIndex` correctly answers `success: false`; that is now recorded as `not-applicable`, not as a failure, and its delete no longer asks the driver to remove an index it never had.
+
+  Vectorizing now refuses an index whose width disagrees with the embeddings it was handed, naming both widths, the index and the model. The width is the index's `Dimensions`, which is set at create time from the embedding-model probe. For rows whose `Dimensions` is still null, such as indexes created before that probe existed, the width is backfilled from `ListIndexes()` (matched on `ExternalID`, then `Name`), and a reported `dimension: 0` is treated as unknown rather than zero.
+
+  Embedding-model selection is no longer whichever row the view happened to return first. `GetAIModel`'s no-id branch orders active models ahead of inactive ones, then by `PowerRank`, then by name, and logs that nobody asked for the model it picked. The model-type comparison is normalised, so a type row spelled `embeddings` no longer hides every embedding model. Vectorizing takes the model from `VectorIndex.EmbeddingModelID`, which is NOT NULL, rather than the nullable `EntityDocument.AIModelID`, and logs a disagreement between the two without failing the run.
+
+  `EntityDocumentCache` no longer needs a process restart to see a new or edited entity document. Its `_loaded` flag was a one-way latch, and every production caller passes `refresh: false`. The cache now has a staleness window (`StaleAfterMs`, default 60s) plus an `Invalidate()` hook, and within the window a vectorize run over many entities still does not re-read metadata per entity.
+
+- Updated dependencies [39b35f1]
+- Updated dependencies [c159e2f]
+- Updated dependencies [db39145]
+- Updated dependencies [5e4205c]
+- Updated dependencies [81aea34]
+- Updated dependencies [5465489]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [2274f42]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [7e72c86]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [c7d1170]
+- Updated dependencies [5f707d1]
+- Updated dependencies [dc38250]
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/sql-dialect@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [49f26d9]
+- Updated dependencies [88e6902]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [20650af]
+- Updated dependencies [25f7b82]
+- Updated dependencies [90829e3]
+- Updated dependencies [e1942c7]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/sql-dialect@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [dfe40a4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/sql-dialect@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [e97d95c]
+- Updated dependencies [21f9e15]
+- Updated dependencies [4248fb3]
+- Updated dependencies [0adaf76]
+- Updated dependencies [705ab4e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [369e229]
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/sql-dialect@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [a7da50b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/sql-dialect@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [2c590b0]
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+  - @memberjunction/sql-dialect@6.2.0-edge.0
+
+## 6.1.0
+
+### Patch Changes
+
+- 394d276: Content vectorization: generic field-path resolution for provider directives, Pinecone namespace hardening, and autotag action flag coercion
+  - **New `VectorDBBase.GetSourceRecordFieldPaths(providerConfig)`** — a vector-DB driver declares which source-record field paths (plain or single-hop dotted, e.g. `'ContentSourceID.OrganizationID'`) its `ProviderConfig` needs. Default: none. Calling pipelines resolve the declared paths and hand `BuildProviderDirectives` an enriched record; what a path's value MEANS (a namespace, a shard key, a routing region...) is entirely the driver's business — the framework stays generic.
+  - **New `FieldPathResolver`** (`@memberjunction/content-autotagging`) — resolves those declared paths for a batch of `BaseEntity` records. A single-hop path's first segment is validated as a foreign key on the root entity via `EntityInfo` metadata; the related record is loaded and, when the related entity is an IS-A parent type, its child-type row (shared PK) is loaded and merged over it — so a field that physically lives on an IS-A extension entity resolves without any config ever naming that entity. Batched (one `IN (...)` load per entity per pass, not per record) and per-pass cached; consults `BaseEngineRegistry.TryGetCachedRecords` first, so a hop through an already-cached entity (e.g. `ContentSource` via `KnowledgeHubMetadataEngine`) costs zero queries.
+  - **`BuildProviderDirectives` may now throw to reject a record.** `AutotagBaseEngine` converts a throw into a per-record failure — the item/chunk is marked `Failed` (purge: left `Pending`) and the rest of the batch proceeds — across all three call sites: live vectorization, the `EmbedPendingChunks` backfill, and `PurgeDeletedChunks`.
+  - **Pinecone now fails closed on an unresolvable configured namespace.** `PineconeDatabase.BuildProviderDirectives` throws when `namespaceField` is configured but the record has no usable value, instead of returning `{}` — which previously routed the vector into the index's default namespace, silently breaching the tenant wall namespacing exists to build.
+  - **Fix: Pinecone deletes are now namespace-aware.** `DeleteRecord` / `DeleteRecords` route through the per-record `providerTemporaryDirectives.namespace` (grouped, mirroring `CreateRecords`) instead of always deleting from the default namespace — previously a namespaced vector's delete silently no-opped (Pinecone reports success deleting IDs that don't exist in a given namespace). Also fixes both methods calling `index.deleteOne` / `deleteMany` without `await`, so a failed delete could report success.
+  - **Fix: `AutotagAndVectorizeContentAction` flag params accept string values.** `Autotag` / `Vectorize` / `ForceReprocess` / `Purge` / `EmbedPendingChunks` now accept `"1"` / `"true"` / `"yes"` via a new `flagIsSet()` helper — the generic `RunAction` GraphQL mutation types every param as a string, so a caller passing `Value: "1"` previously failed the action's strict `=== 1` check and the phase silently no-op'd with no error.
+
+  Note: if a `VectorIndex.ProviderConfig` already has `namespaceField` set, any content item whose namespace value was previously unresolvable was silently landing in the default Pinecone namespace. After this change those records fail closed (marked `Failed` / left `Pending`) instead of writing there. Worth checking for any such records once this ships.
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [394d276]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [4586215]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0ec1980]
+- Updated dependencies [1940a4d]
+- Updated dependencies [07cb22e]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [9699d0e]
+- Updated dependencies [394d276]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [2d14c62]
+- Updated dependencies [c996a56]
+- Updated dependencies [38d4482]
+- Updated dependencies [052b4c7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [c996a56]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [8d880cc]
+- Updated dependencies [cefc302]
+- Updated dependencies [841e6ea]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [080f4cd]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [d66a26a]
+- Updated dependencies [1d88e00]
+- Updated dependencies [647bd71]
+- Updated dependencies [8288711]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [48ff99f]
+- Updated dependencies [9f73528]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [27e4d09]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [23c2521]
+- Updated dependencies [1fdd5d0]
+- Updated dependencies [44fca09]
+- Updated dependencies [2741d46]
+- Updated dependencies [4eb87c5]
+- Updated dependencies [048c5ce]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [98841bb]
+- Updated dependencies [53c341c]
+- Updated dependencies [b46330e]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [2be2960]
+- Updated dependencies [cf2484c]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [0967ba7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [de343b5]
+- Updated dependencies [5fc861f]
+- Updated dependencies [1748491]
+- Updated dependencies [a1a8989]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [905820a]
+- Updated dependencies [1bd9674]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [7fcdc2d]
+- Updated dependencies [15319b4]
+- Updated dependencies [d0a2a55]
+  - @memberjunction/global@6.1.0
+  - @memberjunction/core@6.1.0
+  - @memberjunction/sql-dialect@6.1.0
+
+## 6.1.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [44fca09]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/sql-dialect@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Patch Changes

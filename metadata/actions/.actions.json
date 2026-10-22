@@ -435,14 +435,17 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Latitude coordinate for weather lookup. Must be used with Longitude parameter",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "number"
+            }
           },
           "primaryKey": {
             "ID": "97291346-9DA1-46B9-9970-ACCAF7731800"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:47.845Z",
-            "checksum": "2857ceb4ea2667b138e18ef394db8ebd59d30335e1efed8c33814874e184e773"
+            "lastModified": "2026-10-20T23:18:46.214Z",
+            "checksum": "1be440f2c273c0148aadb37754d0a09377e943bc53f01744ea6fa458bdda9858"
           }
         },
         {
@@ -453,14 +456,17 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Longitude coordinate for weather lookup. Must be used with Latitude parameter",
-            "IsRequired": false
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "number"
+            }
           },
           "primaryKey": {
             "ID": "499AD8DE-7AFB-4295-B6AD-584C0EAF4535"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:47.847Z",
-            "checksum": "304406d5e3b9d14741debd1d452dd62bb12564296a9d65f69c97797daf23fb52"
+            "lastModified": "2026-10-20T23:18:46.220Z",
+            "checksum": "5d2c8d4b31e611fe31f960026a5a44f8331f633440a9ddbb997d846645a48d2e"
           }
         },
         {
@@ -947,14 +953,17 @@
             "IsArray": false,
             "Description": "Boolean flag to include word frequency analysis in results",
             "IsRequired": false,
-            "DefaultValue": "false"
+            "DefaultValue": "false",
+            "ValueSchema": {
+              "type": "boolean"
+            }
           },
           "primaryKey": {
             "ID": "C83B1A2C-3F19-419A-AD09-42DDD77A2E5C"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:48.123Z",
-            "checksum": "7798b7f0a35ba5516794020f9c8ee015e52b602442d6d25834ca7bcb416ca48b"
+            "lastModified": "2026-10-20T23:18:46.230Z",
+            "checksum": "6d41163772b2ecc8aed9f2a9718055ab133d7308f5b79ad172d6602aafdd4f34"
           }
         }
       ],
@@ -1696,7 +1705,7 @@
   {
     "fields": {
       "Name": "Web Search",
-      "Description": "Searches the open web via DuckDuckGo and returns a ranked list of result URLs with titles and snippets. Use when you need to discover relevant pages but do not yet know specific URLs. To fetch the actual content of a known URL, use Web Page Content. Rate-limited; supports queueing.",
+      "Description": "Searches the open web through whichever provider the administrator has configured, and returns ranked results with titles, URLs and snippets. This is the provider-neutral entry point: which vendor serves the request (Brave, Tavily, Perplexity, or a fallback when the first choice is rate-limited) is decided by the MJ: Web Search Providers records and their Priority, not by the caller. Use this for any question needing current information from outside this MemberJunction instance. For content MJ holds, use Search instead.",
       "DriverClass": "__WebSearch",
       "Type": "Custom",
       "Status": "Active",
@@ -1712,15 +1721,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Keywords to search for",
-            "IsRequired": true
+            "Description": "Search query text. Required. (Accepted as either SearchTerms or Query; Query is the preferred name.)",
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "2114C5EC-058A-4B5A-9F5D-A3D16A7FA00C"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:48.701Z",
-            "checksum": "79e6fb5330f1f8401dca90667b019566b82f53fdd7852c7930c289dc4c34ef65"
+            "lastModified": "2026-09-21T02:45:25.482Z",
+            "checksum": "2f7adfa83d1197bac1774018f6ae48f768a223a1affd460911663888319ca825"
           }
         },
         {
@@ -1730,35 +1739,19 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Maximum number of results to return (default: 10, max: 30)",
+            "Description": "Desired number of results. Clamped to the serving provider's own cap, not rejected. Default: 10.",
             "IsRequired": false,
-            "DefaultValue": "10"
+            "DefaultValue": "10",
+            "ValueSchema": {
+              "type": "integer"
+            }
           },
           "primaryKey": {
             "ID": "DC71F183-DE01-4187-8735-7A5DF3898B61"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:48.703Z",
-            "checksum": "a0cea1df4575c9af633e22112e88cd61a09b38e743b4a9b115141cd4ad3d4fc2"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Region",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Regional search preference (default: 'us-en')",
-            "IsRequired": false,
-            "DefaultValue": "us-en"
-          },
-          "primaryKey": {
-            "ID": "46B4466B-7E1F-4DDE-81F9-AFAAAB263BE3"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:48.704Z",
-            "checksum": "5fb16a8e243ad30e21f01d042d9fcb614e5d2d3d71a9ac9c7d7fdfa4dad41984"
+            "lastModified": "2026-10-20T23:18:46.246Z",
+            "checksum": "7cff7e66d05aeb00056d0b9535aeef8ec25a16dd54f317f9820fbd6a8653c0c0"
           }
         },
         {
@@ -1768,16 +1761,359 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Safe search level - 'strict', 'moderate', 'off' (default: 'moderate')",
+            "Description": "Adult-content filter: 'off', 'moderate' or 'strict'. Default: moderate.",
             "IsRequired": false,
-            "DefaultValue": "moderate"
+            "DefaultValue": "moderate",
+            "ValueSchema": {
+              "type": "string",
+              "enum": [
+                "off",
+                "moderate",
+                "strict"
+              ]
+            }
           },
           "primaryKey": {
             "ID": "9015D7B9-14C4-466D-BB77-B0A96E2187C9"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:48.707Z",
-            "checksum": "8667fed27844adc4b32e382bf00d2d3265b48189df57716e2e07ceace7fda75b"
+            "lastModified": "2026-10-20T23:18:46.252Z",
+            "checksum": "19b2ac1dff8d4de3e260d2f36b8266a05a8f800dfe16020694c400a91ca90c5b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchResultDetails",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "Description": "The complete response envelope: query, results, provider used, and the full attempt list.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5ED4B06C-78D3-4F23-B13E-E168A9014864"
+          },
+          "sync": {
+            "lastModified": "2026-09-21T02:45:25.540Z",
+            "checksum": "c022089bf83b6609c5a6a7fd0e337e1a2832f09598d9efd90d6a7ab034bee03d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Query",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Search query text. Required.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "70254E54-C93D-4A25-96EC-97D1C4658648"
+          },
+          "sync": {
+            "lastModified": "2026-09-21T02:45:25.569Z",
+            "checksum": "cb0c7448ff24ab133e3df6d5003f851281b5d4393cd75aa7e222003b3f68013d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Provider",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Pin the search to one provider by Name (e.g. 'Brave') or DriverClass. When set there is NO failover: if that provider is missing, inactive, unavailable or incapable of what was asked, the action fails rather than quietly using a different vendor. Omit to use the administrator's priority order.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C9C3C542-0200-4108-BAAB-BC07C5307A0D"
+          },
+          "sync": {
+            "lastModified": "2026-09-21T02:45:25.590Z",
+            "checksum": "b0227cc62ecf79d48cc63b933b422f74f84f2ba2057f5d00c2393b55e6a9ca34"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeDomains",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Restrict results to these domains, where the serving provider supports it. Array or comma-separated.",
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "string"
+            }
+          },
+          "primaryKey": {
+            "ID": "F8D31EEA-5AC9-468D-A9AC-E1AD54A3341C"
+          },
+          "sync": {
+            "lastModified": "2026-10-20T23:18:46.257Z",
+            "checksum": "d03cf3af7ac78de76ce0a54066a02a43b27675c5dd6f13ab9e66ee945c1e5c6f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExcludeDomains",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Exclude these domains, where the serving provider supports it. Array or comma-separated.",
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "string"
+            }
+          },
+          "primaryKey": {
+            "ID": "05712275-D554-4640-9EE1-37F7DBADD7BD"
+          },
+          "sync": {
+            "lastModified": "2026-10-20T23:18:46.262Z",
+            "checksum": "d81c3fdb3966cd89a9370d2590f2e74d480f35923cbf34850876d39ba72a9bec"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Freshness",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Restrict by recency: 'day', 'week', 'month' or 'year'. Omit for no recency constraint.",
+            "IsRequired": false,
+            "ValueSchema": {
+              "type": "string",
+              "enum": [
+                "day",
+                "week",
+                "month",
+                "year"
+              ]
+            }
+          },
+          "primaryKey": {
+            "ID": "D3973928-157C-40A4-AC5A-0D585D68ED30"
+          },
+          "sync": {
+            "lastModified": "2026-10-20T23:18:46.267Z",
+            "checksum": "71320efb2bb6b41c05c1665cc8306fb6066d5e6c7e147c878da9b479fd86cd79"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Country",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Two-letter country code for result localisation, e.g. 'US', 'GB'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BEC429D2-8A54-44FB-B3B5-ACFD96D0012F"
+          },
+          "sync": {
+            "lastModified": "2026-09-21T02:45:25.677Z",
+            "checksum": "3b80cf5c02526d94e591f2a51f793026fcc61416259037d96f9c949258529703"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Language",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Language code for results, e.g. 'en'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D3654D8B-6F57-4D3F-AAA9-C5D1350925E5"
+          },
+          "sync": {
+            "lastModified": "2026-09-21T02:45:25.699Z",
+            "checksum": "c82fa1aa1e079456d3e3bbcf4f12b09476819b80b2aeabef926bf5c2a815819a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeAnswer",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Also return a synthesized answer. This restricts selection to providers that can produce one, so it changes which provider serves the request. Default: false.",
+            "IsRequired": false,
+            "DefaultValue": "false",
+            "ValueSchema": {
+              "type": "boolean"
+            }
+          },
+          "primaryKey": {
+            "ID": "42F35BCA-4E9F-4A18-802B-4D8DF918E1CC"
+          },
+          "sync": {
+            "lastModified": "2026-10-20T23:18:46.273Z",
+            "checksum": "9a659c2575405440a93787e6f20ba53ab2a1022d41c09985ee67d7edde5447bd"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Results",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Ranked results, each with Title, URL, Snippet and (when the provider supplies them) DisplayURL, PublishedAt and Score.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "ED09255B-EF07-4E58-9D9B-B2FF6D028972"
+          },
+          "sync": {
+            "lastModified": "2026-09-21T02:45:25.740Z",
+            "checksum": "4cb5b36905341f5b1242efdd8a431d33a2de4b9e28ece1f9d7780bba3d836010"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResultCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of results returned. Zero is a valid answer to a narrow query.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "CEE321CD-2174-4E5A-8770-91948E45569D"
+          },
+          "sync": {
+            "lastModified": "2026-09-21T02:45:25.762Z",
+            "checksum": "43d34bbe449796c3b1531e6d7c0ffcf7de366b1bb65cbb150f56e72963f29ce6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ProviderUsed",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the provider that actually served this result.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "238B57A3-D8EC-4D3B-ADA0-7F28B5F29377"
+          },
+          "sync": {
+            "lastModified": "2026-09-21T02:45:25.784Z",
+            "checksum": "5c8270cb150fee5b4036bd90def18ae231e50f66c424b307ae045307e90203ad"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Answer",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Synthesized answer, present only when IncludeAnswer was requested and produced.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "CCAA7858-9EDB-49CC-AB73-EFFC4D1B37A1"
+          },
+          "sync": {
+            "lastModified": "2026-09-21T02:45:25.805Z",
+            "checksum": "d9f9014d7a3db8e638902e404fa61950ab976e54854fe19324b78552b980e57a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Attempts",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Every provider tried, in order, with outcome and duration — including on success. This is what reveals a primary provider failing over to a secondary on every call.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "FBC94552-BF83-4CF5-9A38-4032661501E2"
+          },
+          "sync": {
+            "lastModified": "2026-09-21T02:45:25.835Z",
+            "checksum": "a033fea272dda3577492e10cd337e814844d03ccff1168eff3250e5c9a21eae7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FirstSearchResult",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "Description": "Details of the first search result"
+          },
+          "primaryKey": {
+            "ID": "b2576969-fc51-4a03-80b1-7a17fa8b9815"
+          },
+          "deleteRecord": {
+            "delete": true,
+            "deletedAt": "2026-09-22T18:53:11.282Z"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchResults",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of search result objects containing title, URL, and snippet"
+          },
+          "primaryKey": {
+            "ID": "bfa9fc38-fc0d-4826-88f4-5fd2c69c8aa7"
+          },
+          "deleteRecord": {
+            "delete": true,
+            "deletedAt": "2026-09-22T18:53:11.328Z"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchResultsCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "Description": "Total number of search results found"
+          },
+          "primaryKey": {
+            "ID": "263f09be-9f27-49c3-bc7d-75f4fb31b091"
+          },
+          "deleteRecord": {
+            "delete": true,
+            "deletedAt": "2026-09-22T18:53:11.377Z"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchUrl",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "Description": "URL of the search results page"
+          },
+          "primaryKey": {
+            "ID": "ae5c7c67-4c0c-44e5-97ae-aa7ddb1311e2"
+          },
+          "deleteRecord": {
+            "delete": true,
+            "deletedAt": "2026-09-22T18:53:11.424Z"
           }
         },
         {
@@ -1792,92 +2128,30 @@
             "DefaultValue": "false"
           },
           "primaryKey": {
-            "ID": "476061FF-D1AD-480A-9775-C6D3409A41BF"
+            "ID": "476061ff-d1ad-480a-9775-c6d3409a41bf"
           },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:48.839Z",
-            "checksum": "be699ab9a1504af0471bbb9c9611793e38c23be4f77ed2e574b0b25235866a73"
+          "deleteRecord": {
+            "delete": true,
+            "deletedAt": "2026-09-22T18:53:11.469Z"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "SearchResultDetails",
-            "Type": "Output",
-            "ValueType": "Simple Object",
-            "Description": "Comprehensive JSON object with search result details"
-          },
-          "primaryKey": {
-            "ID": "5ED4B06C-78D3-4F23-B13E-E168A9014864"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:48.840Z",
-            "checksum": "9381fbbf694ebeee7c8a604565f86245d07a8a8ab62e3fbbc3f3fe6985fa781b"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "SearchUrl",
-            "Type": "Output",
+            "Name": "Region",
+            "Type": "Input",
             "ValueType": "Scalar",
-            "Description": "URL of the search results page"
+            "IsArray": false,
+            "Description": "Regional search preference (default: 'us-en')",
+            "IsRequired": false,
+            "DefaultValue": "us-en"
           },
           "primaryKey": {
-            "ID": "AE5C7C67-4C0C-44E5-97AE-AA7DDB1311E2"
+            "ID": "46b4466b-7e1f-4dde-81f9-afaaab263be3"
           },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:48.842Z",
-            "checksum": "4a50634fa6886779a85894f3f0b46663ac7bf7038d420973ffa34ccd52f3cafe"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "SearchResults",
-            "Type": "Output",
-            "ValueType": "Simple Object",
-            "IsArray": true,
-            "Description": "Array of search result objects containing title, URL, and snippet"
-          },
-          "primaryKey": {
-            "ID": "BFA9FC38-FC0D-4826-88F4-5FD2C69C8AA7"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:48.843Z",
-            "checksum": "b462dc9c5471f697ccbe85282569425175c08bce78d9760e3c2a12c99f2226d7"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "SearchResultsCount",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "Description": "Total number of search results found"
-          },
-          "primaryKey": {
-            "ID": "263F09BE-9F27-49C3-BC7D-75F4FB31B091"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:48.845Z",
-            "checksum": "f7e9b536f4412cfdcf3a95a11d4e7a549ba3f1b9fa2e088a9bacc496f076f63b"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "FirstSearchResult",
-            "Type": "Output",
-            "ValueType": "Simple Object",
-            "Description": "Details of the first search result"
-          },
-          "primaryKey": {
-            "ID": "B2576969-FC51-4A03-80B1-7A17FA8B9815"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:48.846Z",
-            "checksum": "ede646addcf968af818ab731a209cc70e9ee149c3187b0fe08e34798dd8c1c30"
+          "deleteRecord": {
+            "delete": true,
+            "deletedAt": "2026-09-22T18:53:11.511Z"
           }
         }
       ],
@@ -1978,8 +2252,8 @@
       "ID": "82169F64-8566-4AE7-9C87-190A885C98A9"
     },
     "sync": {
-      "lastModified": "2026-05-24T13:05:30.065Z",
-      "checksum": "57890264ac318862177ec6f2005859e2c250edc8f0852cd745c829dea3cdfd1a"
+      "lastModified": "2026-09-21T02:45:25.445Z",
+      "checksum": "9ebacaed56c3d8cdf18d5a09980cd137c354154db312681c574c486ea5d7f007"
     }
   },
   {
@@ -2021,14 +2295,24 @@
             "IsArray": false,
             "Description": "Output format - 'auto' (intelligent detection), 'text', 'html', 'markdown', 'json'. Auto-detects and processes JSON, PDF, DOCX, XML, CSV, HTML, images and more (default: 'auto')",
             "IsRequired": false,
-            "DefaultValue": "auto"
+            "DefaultValue": "auto",
+            "ValueSchema": {
+              "type": "string",
+              "enum": [
+                "auto",
+                "text",
+                "html",
+                "markdown",
+                "json"
+              ]
+            }
           },
           "primaryKey": {
             "ID": "E013D3BF-E9B1-4B65-BB46-B2F293651FB0"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:48.983Z",
-            "checksum": "b2cc6fcb320c05c8001098f8cc3a272aa4f9f69947e7edf8dd31bff008853678"
+            "lastModified": "2026-10-20T23:18:46.281Z",
+            "checksum": "59bc1a76aaed5c5eb9c97bbf222f38398eba0d5041315bfd82e5e06a302f1acb"
           }
         },
         {
@@ -2040,14 +2324,17 @@
             "IsArray": false,
             "Description": "Extract only main content vs full page (default: false)",
             "IsRequired": false,
-            "DefaultValue": "false"
+            "DefaultValue": "false",
+            "ValueSchema": {
+              "type": "boolean"
+            }
           },
           "primaryKey": {
             "ID": "14672B44-03C2-4D1A-A977-6D9F852F7BED"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:48.985Z",
-            "checksum": "a36a77931d531f7796212aa930e305027d276cd94b2698e7df8d9f0c5cfc4a17"
+            "lastModified": "2026-10-20T23:18:46.288Z",
+            "checksum": "396b0f2cef6cb505501cc97d3077240f52e4047e87b1161544455481a330f71f"
           }
         },
         {
@@ -2059,14 +2346,17 @@
             "IsArray": false,
             "Description": "Include page metadata in response (default: true)",
             "IsRequired": false,
-            "DefaultValue": "true"
+            "DefaultValue": "true",
+            "ValueSchema": {
+              "type": "boolean"
+            }
           },
           "primaryKey": {
             "ID": "3FC11C9A-B034-4684-81CA-F443003363CC"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:48.987Z",
-            "checksum": "a26b2f0f6640e06cbccbe09a8803a012b69d6bf6546023be4794f90af2b9271a"
+            "lastModified": "2026-10-20T23:18:46.293Z",
+            "checksum": "b9b89f2179dbd3d374875aec524f66ef0ee0c1e96793464bb24d4c71a04a9dee"
           }
         },
         {
@@ -2078,14 +2368,17 @@
             "IsArray": false,
             "Description": "Maximum content length to return (default: 100000 chars)",
             "IsRequired": false,
-            "DefaultValue": "100000"
+            "DefaultValue": "100000",
+            "ValueSchema": {
+              "type": "integer"
+            }
           },
           "primaryKey": {
             "ID": "2749E985-DC09-4DD3-902B-BDB7C7E6B036"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:48.988Z",
-            "checksum": "8e538e86d8b1f175097c8cdc14328add488065ad1978540f1177cd4777ff8707"
+            "lastModified": "2026-10-20T23:18:46.299Z",
+            "checksum": "04a603fe6c0e9482dc0405206c9bedbb74189814fe2ebbb8d3621bfdc058bc90"
           }
         }
       ],
@@ -3664,7 +3957,7 @@
     "fields": {
       "CategoryID": "@lookup:MJ: Action Categories.Name=Data Enrichment",
       "Name": "Apollo Enrichment - Contacts",
-      "Description": "Enriches contact records with verified email addresses, employment history, and education details using Apollo.io API. Matches contacts by name and email combinations and provides comprehensive contact enrichment.",
+      "Description": "Enriches contact records with verified email addresses, employment history, and education details using the Apollo.io people/bulk_match API (one credit per matched person; misses are free). Every record sent is stamped with EnrichedAtField, matched or not, so a filter on that stamp never re-sends the same miss.",
       "Type": "Custom",
       "CodeApprovalStatus": "Pending",
       "CodeLocked": false,
@@ -3771,15 +4064,15 @@
             "Type": "Input",
             "ValueType": "Simple Object",
             "IsArray": false,
-            "Description": "JSON mapping for education history fields including EntityName, ContactIDFieldName, InstitutionFieldName, DegreeFieldName (optional)",
+            "Description": "JSON mapping for the education history entity: EntityName, ContactIDFieldName, InstitutionFieldName, DegreeFieldName (all required for education rows to be written), plus optional GradeLevelFieldName, StartDateFieldName, EndDateFieldName. Only named columns are written.",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "37290D24-A8D1-415A-A4AE-48207ECFFDA3"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:50.276Z",
-            "checksum": "76ad0a27bccab20feac11176c02de8f5d969e85b40a5e5ea4d887179c5940da4"
+            "lastModified": "2026-10-13T19:00:03.328Z",
+            "checksum": "1e0e601c353e4287d383e04ae060b310a3207a473a654dbcb7645ad262a20de6"
           }
         },
         {
@@ -3825,15 +4118,15 @@
             "Type": "Input",
             "ValueType": "Simple Object",
             "IsArray": false,
-            "Description": "JSON mapping for employment history fields including EntityName, ContactIDFieldName, OrganizationFieldName, TitleFieldName (optional)",
+            "Description": "JSON mapping for the employment history entity: EntityName, ContactIDFieldName, OrganizationFieldName, TitleFieldName (all required for employment rows to be written), plus optional StartDateFieldName, EndDateFieldName, IsCurrentFieldName. Only named columns are written.",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "75B1D375-30BD-4297-88D2-AD89351AF27B"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:50.424Z",
-            "checksum": "a2187003e6628a0f175784f8158408c03b041de17b9d0167ea1606fda5cc7940"
+            "lastModified": "2026-10-13T19:00:03.339Z",
+            "checksum": "67d451159d40345c9794e96d86ac2f281a6aaa0c337129a791073be4d49df7d5"
           }
         },
         {
@@ -3942,6 +4235,24 @@
           "sync": {
             "lastModified": "2025-12-30T23:06:50.434Z",
             "checksum": "c7c77b342709757c38a3c37ecd459f2b878e2bc65650d0c097b555054e65a6f6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Resolve the Apollo key from this company's Apollo credential instead of the environment. Optional — falls back to the APOLLO_API_KEY environment key.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "DD76FC35-6BAF-4BBC-8E0C-5C549B274FD8"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:03.369Z",
+            "checksum": "a14fd485b54dffc0951f480c29e8ab36f86b563280f56f73df899e41ffa09198"
           }
         }
       ],
@@ -4095,6 +4406,36 @@
             "lastModified": "2025-12-30T23:06:50.566Z",
             "checksum": "4af3db035cd20bbf874e17bae31f0dc96a545e930f3fa37e5a29cc423830f553"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "A required parameter is missing or malformed"
+          },
+          "primaryKey": {
+            "ID": "AF817C76-BC44-4147-8680-A9B611723163"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:03.390Z",
+            "checksum": "ecc09f7305824d890c722ebd46f50572526a2e9505fac6f65c3d5b2232704bf0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CONFIGURATION_ERROR",
+            "IsSuccess": false,
+            "Description": "No Apollo.io API key was found (no company credential and no APOLLO_API_KEY), or the key was rejected"
+          },
+          "primaryKey": {
+            "ID": "C04EAA6C-8A27-4B78-9837-3223C494EF96"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:03.404Z",
+            "checksum": "06105f4fcbed387b4637b2936f13b0fed92cf85aa81f835e4d0b09eaf2986d58"
+          }
         }
       ]
     },
@@ -4102,15 +4443,15 @@
       "ID": "BE9B9B7F-791B-4E97-AC17-7E93B52B237C"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:34.613Z",
-      "checksum": "6be95de38efd013077a3cf1c0ec2d31deff1401677c7d01e377eb2bb9c7005b2"
+      "lastModified": "2026-10-13T19:00:03.272Z",
+      "checksum": "0a63595e1613caee9ab0f630443740d96582c9a172c5d5c3582887dd06d65ffb"
     }
   },
   {
     "fields": {
       "CategoryID": "@lookup:MJ: Action Categories.Name=Data Enrichment",
       "Name": "Apollo Enrichment - Accounts",
-      "Description": "Enriches account/organization records with company information, technologies used, and associated contacts using Apollo.io API. Processes accounts by domain name and automatically discovers contacts within each organization.",
+      "Description": "Enriches account/organization records with company information, technologies used, and associated contacts using Apollo.io API. Processes accounts by domain name and discovers contacts within each organization: a free prospecting search for the people at the domain, then a paid people/bulk_match by id (one Apollo credit per matched person, up to 500 per organization).",
       "Type": "Custom",
       "CodeApprovalStatus": "Pending",
       "CodeLocked": false,
@@ -4209,6 +4550,24 @@
             "lastModified": "2025-12-30T23:06:50.686Z",
             "checksum": "9460d0fb168382d7cf8bb74e99f27c42af40c8c75df683be8a4c4e2fe19eb1d8"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Resolve the Apollo key from this company's Apollo credential instead of the environment. Optional — falls back to the APOLLO_API_KEY environment key.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "95EE62B8-8F28-4BAB-838F-A3EEF1ED9F85"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:03.422Z",
+            "checksum": "a14fd485b54dffc0951f480c29e8ab36f86b563280f56f73df899e41ffa09198"
+          }
         }
       ],
       "MJ: Action Result Codes": [
@@ -4301,6 +4660,36 @@
             "lastModified": "2025-12-30T23:06:50.695Z",
             "checksum": "7671a35381deb8bfd1eee45f3e38fef6389bd677d98023ea66db0c0ecab836c8"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "A required parameter is missing or malformed"
+          },
+          "primaryKey": {
+            "ID": "DD3D2BE4-02E0-4745-9623-DCBBE999AF6C"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:03.436Z",
+            "checksum": "ecc09f7305824d890c722ebd46f50572526a2e9505fac6f65c3d5b2232704bf0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CONFIGURATION_ERROR",
+            "IsSuccess": false,
+            "Description": "No Apollo.io API key was found (no company credential and no APOLLO_API_KEY), or the key was rejected"
+          },
+          "primaryKey": {
+            "ID": "B9FD85EE-16BE-4035-8A08-43BFECB485CF"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:03.449Z",
+            "checksum": "06105f4fcbed387b4637b2936f13b0fed92cf85aa81f835e4d0b09eaf2986d58"
+          }
         }
       ]
     },
@@ -4308,8 +4697,8 @@
       "ID": "E57641A1-B7C2-4EAB-BB17-8C9631E89095"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:34.614Z",
-      "checksum": "fa9b93a3efaca316c5d4a7b058a47b2dc22de919922c7626980cc14366a5bc8f"
+      "lastModified": "2026-10-13T19:00:03.287Z",
+      "checksum": "52365fb7b52b7dfbce9bb6d1b3f6ba5d1984fdbfddaaf53b880041fc24278a37"
     }
   }
 ]

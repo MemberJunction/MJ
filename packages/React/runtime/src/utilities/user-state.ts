@@ -35,7 +35,7 @@ export const USER_STATE_KEY_PREFIX = 'InteractiveComponents_UserState_Root/';
  * @returns the resolved scope, or `null` when no stable scope can be derived
  *          (e.g. an unnamed component) — signaling the caller to skip persistence.
  */
-export function resolveUserStateScope(
+export function ResolveUserStateScope(
   explicitScope: string | undefined | null,
   namespace: string | undefined | null,
   name: string | undefined | null
@@ -53,12 +53,26 @@ export function resolveUserStateScope(
   return scope.toLowerCase();
 }
 
+/** @deprecated Use {@link ResolveUserStateScope}. */
+export function resolveUserStateScope(
+  explicitScope: string | undefined | null,
+  namespace: string | undefined | null,
+  name: string | undefined | null
+): string | null {
+  return ResolveUserStateScope(explicitScope, namespace, name);
+}
+
 /**
  * Build the full storage key for a resolved scope, or `null` when the scope is
  * `null` (persistence should be skipped).
  */
-export function userStateStorageKey(scope: string | null): string | null {
+export function UserStateStorageKey(scope: string | null): string | null {
   return scope ? `${USER_STATE_KEY_PREFIX}${scope}` : null;
+}
+
+/** @deprecated Use {@link UserStateStorageKey}. */
+export function userStateStorageKey(scope: string | null): string | null {
+  return UserStateStorageKey(scope);
 }
 
 /**
@@ -66,7 +80,7 @@ export function userStateStorageKey(scope: string | null): string | null {
  * null/empty input, invalid JSON, or any non-object JSON (arrays, primitives) —
  * persisted user settings are always a flat key/value object.
  */
-export function parseStoredUserSettings(raw: string | undefined | null): Record<string, unknown> {
+export function ParseStoredUserSettings(raw: string | undefined | null): Record<string, unknown> {
   if (!raw) {
     return {};
   }
@@ -81,16 +95,29 @@ export function parseStoredUserSettings(raw: string | undefined | null): Record<
   }
 }
 
+/** @deprecated Use {@link ParseStoredUserSettings}. */
+export function parseStoredUserSettings(raw: string | undefined | null): Record<string, unknown> {
+  return ParseStoredUserSettings(raw);
+}
+
 /**
  * Merge host-provided defaults with the stored per-user settings. Stored values
  * win, so a returning user sees their saved preferences while a host can still
  * seed sensible first-run defaults that fill any gaps.
  */
-export function mergeUserSettings(
+export function MergeUserSettings(
   hostDefaults: Record<string, unknown> | undefined | null,
   stored: Record<string, unknown> | undefined | null
 ): Record<string, unknown> {
   return { ...(hostDefaults ?? {}), ...(stored ?? {}) };
+}
+
+/** @deprecated Use {@link MergeUserSettings}. */
+export function mergeUserSettings(
+  hostDefaults: Record<string, unknown> | undefined | null,
+  stored: Record<string, unknown> | undefined | null
+): Record<string, unknown> {
+  return MergeUserSettings(hostDefaults, stored);
 }
 
 /**
@@ -113,7 +140,7 @@ export function mergeUserSettings(
  *
  * @returns a new object — neither input is mutated.
  */
-export function applyUserSettingsUpdate(
+export function ApplyUserSettingsUpdate(
   current: Record<string, unknown> | undefined | null,
   incoming: Record<string, unknown> | undefined | null
 ): Record<string, unknown> {
@@ -126,4 +153,12 @@ export function applyUserSettingsUpdate(
     }
   }
   return next;
+}
+
+/** @deprecated Use {@link ApplyUserSettingsUpdate}. */
+export function applyUserSettingsUpdate(
+  current: Record<string, unknown> | undefined | null,
+  incoming: Record<string, unknown> | undefined | null
+): Record<string, unknown> {
+  return ApplyUserSettingsUpdate(current, incoming);
 }

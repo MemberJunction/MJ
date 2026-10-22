@@ -12,20 +12,20 @@ import type { FlowModel, FlowNode } from './agent-run-flow.model';
 
 function node(over: Partial<FlowNode>): FlowNode {
   return {
-    id: 0, name: 'Node', type: 'other', status: 'Completed', model: null, realDur: 1,
-    t0: 0, t1: 1, tmid: 0.5, r0: 0, r1: 1, depth: 0, heat: 0,
-    parent: null, children: [], raw: null, iconClass: 'fa-circle', logoUrl: null, ...over,
+    Id: 0, Name: 'Node', Type: 'other', Status: 'Completed', Model: null, RealDur: 1,
+    T0: 0, T1: 1, Tmid: 0.5, R0: 0, R1: 1, Depth: 0, Heat: 0,
+    Parent: null, Children: [], Raw: null, IconClass: 'fa-circle', LogoUrl: null, ...over,
   };
 }
 
 /** root agent (0..1) → prompt leaf (0..0.5) + action leaf (0.5..1). */
 function sampleModel(): FlowModel {
-  const root = node({ id: 0, name: 'Support Agent', type: 'agent', depth: 0, t0: 0, t1: 1 });
-  const prompt = node({ id: 1, name: 'Execute Agent Prompt', type: 'prompt', depth: 1, t0: 0, t1: 0.5, parent: root });
-  const action = node({ id: 2, name: 'Execute Action: Search', type: 'action', depth: 1, t0: 0.5, t1: 1, parent: root });
-  root.children = [prompt, action];
+  const root = node({ Id: 0, Name: 'Support Agent', Type: 'agent', Depth: 0, T0: 0, T1: 1 });
+  const prompt = node({ Id: 1, Name: 'Execute Agent Prompt', Type: 'prompt', Depth: 1, T0: 0, T1: 0.5, Parent: root });
+  const action = node({ Id: 2, Name: 'Execute Action: Search', Type: 'action', Depth: 1, T0: 0.5, T1: 1, Parent: root });
+  root.Children = [prompt, action];
   const nodes = [root, prompt, action];
-  return { root, nodes, leaves: [prompt, action], total: 2, maxDepth: 1, maxLeafDur: 1 };
+  return { Root: root, Nodes: nodes, Leaves: [prompt, action], Total: 2, MaxDepth: 1, MaxLeafDur: 1 };
 }
 
 const render = (model: FlowModel | null) => {

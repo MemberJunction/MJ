@@ -1,14 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { IMetadataProvider } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig, RealtimeToolDefinition } from '@memberjunction/ai';
+import { CHANNEL_INBOUND_VIDEO_TRACK, ClientRealtimeSessionConfig, RealtimeToolDefinition } from '@memberjunction/ai';
 import { BaseRealtimeClient } from '@memberjunction/ai-realtime-client';
-import {
-  RealtimeSessionService,
-  RealtimeConnectionState,
-  StartRealtimeClientSessionResult
-} from '../lib/services/realtime-session.service';
-import { BaseRealtimeChannelClient } from '../lib/components/realtime/channels/base-realtime-channel-client';
+import { RealtimeConnectionState, StartRealtimeClientSessionResult } from '@memberjunction/realtime-runtime';
+import { RealtimeSessionService } from '../lib/services/realtime-session.service';
+import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 
 /**
  * The MINT / RUN split of a session start (issue #3853): `StartRealtimeSession` is now
@@ -22,10 +19,32 @@ import { BaseRealtimeChannelClient } from '../lib/components/realtime/channels/b
  *
  * Node preset. The run half touches three browser-only seams, all faked here the same narrow way
  * the sibling voice-session suites do: the ClassFactory-resolved provider driver (a registered
- * fake `BaseRealtimeClient`), `navigator.mediaDevices.getUserMedia` (stubbed via `vi.stubGlobal` —
- * node has no media stack), and the GraphQL provider (a fake with `ExecuteGQL` + the
+ * fake `BaseRealtimeClient`), `navigator.mediaDevices` (stubbed via `vi.stubGlobal` — node has no
+ * media stack; see {@link stubBrowserMicrophone}), and the GraphQL provider (a fake with `ExecuteGQL` + the
  * push-status seam `subscribeDelegationProgress` needs).
  */
+
+/**
+ * Stubs the browser's microphone: a `MediaDevices` that is an `EventTarget`, as in every browser, whose
+ * `getUserMedia` returns one live audio track. The run half opens it through the host's
+ * `LocalMediaController`, which follows device changes and reads the track's settings.
+ */
+function stubBrowserMicrophone(): void {
+  const track = Object.assign(new EventTarget(), {
+    kind: 'audio',
+    enabled: true,
+    label: 'Test microphone',
+    stop: () => undefined,
+    getSettings: () => ({ deviceId: 'default' })
+  });
+  const stream = { getTracks: () => [track], getAudioTracks: () => [track], addTrack: () => undefined, removeTrack: () => undefined };
+  vi.stubGlobal('navigator', {
+    mediaDevices: Object.assign(new EventTarget(), {
+      getUserMedia: vi.fn(async () => stream),
+      enumerateDevices: vi.fn(async () => [])
+    })
+  });
+}
 
 /** Provider key of the fake driver — never collides with a real registered provider. */
 const FAKE_PROVIDER = 'test-realtime-provider';
@@ -162,11 +181,7 @@ describe('RealtimeSessionService — mint/run split (StartRealtimeSessionFromRes
       PushStatusUpdates: () => ({ subscribe: () => ({ unsubscribe: () => undefined }) })
     } as unknown as IMetadataProvider;
     // Node has no media stack — the run half acquires the mic before Connect().
-    vi.stubGlobal('navigator', {
-      mediaDevices: {
-        getUserMedia: vi.fn(async () => ({ getTracks: () => [], getAudioTracks: () => [] }))
-      }
-    });
+    stubBrowserMicrophone();
   });
 
   afterEach(async () => {
@@ -284,11 +299,7 @@ describe('RealtimeSessionService — StartRealtimeSession after the mint/run spl
       sessionId: 'transport-1',
       PushStatusUpdates: () => ({ subscribe: () => ({ unsubscribe: () => undefined }) })
     } as unknown as IMetadataProvider;
-    vi.stubGlobal('navigator', {
-      mediaDevices: {
-        getUserMedia: vi.fn(async () => ({ getTracks: () => [], getAudioTracks: () => [] }))
-      }
-    });
+    stubBrowserMicrophone();
   });
 
   afterEach(() => {
@@ -341,7 +352,10 @@ describe('RealtimeSessionService — StartRealtimeSession after the mint/run spl
 
   it('still lands a MINT failure in the error state (never a half-open session)', async () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    executeGQL.mockImplementationOnce(async () => ({ StartRealtimeClientSession: null }));
+    // Keyed on the MINT document, not on call order: a connect-only provider reads the channel
+    // registry over GraphQL before the mint, so "the first call" is no longer the mint.
+    executeGQL.mockImplementation(async (query: string) =>
+      query.includes('StartRealtimeClientSession') ? { StartRealtimeClientSession: null } : MINT_REPLY);
 
     await service.StartRealtimeSession('agent-1');
 
@@ -360,5 +374,38 @@ describe('RealtimeSessionService — StartRealtimeSession after the mint/run spl
     expect(variables['recordingConsent']).toBe(false);
     expect(variables['recordingStartedAt']).toBeNull();
     expect(service.SessionCreatedConversationId).toBeNull(); // joined an existing conversation
+  });
+
+  it('aggregates channel-sourced tracks into sessionConfig requestedTracks', async () => {
+    const channel = new RestoringChannel();
+    // The REAL descriptor the channels source, not a hand-written stand-in: `Required` is not a
+    // field on RealtimeTrackDescriptor, and asserting it only passed while descriptors were stored
+    // by reference. `requestedTracks` crosses a JSON boundary, so the assertion below is the
+    // descriptor's JSON form — which also proves the mapper carries every declared field.
+    vi.spyOn(channel, 'GetSourcedTracks').mockReturnValue([CHANNEL_INBOUND_VIDEO_TRACK]);
+    internals(service)._activeChannels$.next([channel]);
+
+    await service.StartRealtimeSessionFromResult(
+      mintedResult({ SessionConfigJson: '{"instructions":"be an interviewer"}' })
+    );
+
+    expect(FakeRealtimeDriver.Connects).toHaveLength(1);
+    const config = FakeRealtimeDriver.Connects[0];
+    const tracks = config.SessionConfig['requestedTracks'] as unknown[];
+    expect(tracks).toHaveLength(3);
+    expect(tracks).toEqual(
+      expect.arrayContaining([
+        { Modality: 'audio', Direction: 'inbound' },
+        { Modality: 'audio', Direction: 'outbound' },
+        {
+          Modality: 'video',
+          Direction: 'inbound',
+          Encoding: 'image/jpeg',
+          Rate: 1,
+          UsageBasis: ['tokens', 'frames'],
+          RequiresConsent: false
+        }
+      ])
+    );
   });
 });

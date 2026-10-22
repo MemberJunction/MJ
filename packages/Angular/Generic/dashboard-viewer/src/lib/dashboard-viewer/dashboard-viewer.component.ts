@@ -31,12 +31,13 @@ import {
     DashboardConfigChangedEvent,
     LayoutChangedEvent,
     DashboardNavRequestEvent,
-    createDefaultDashboardConfig,
-    generatePanelId,
-    extractPanelsFromLayout,
-    findPanelInLayout
+    CreateDefaultDashboardConfig,
+    GeneratePanelId,
+    ExtractPanelsFromLayout,
+    FindPanelInLayout
 } from '../models/dashboard-types';
-import { GoldenLayoutWrapperService, LayoutLocation } from '../services/golden-layout-wrapper.service';
+import { GoldenLayoutWrapperService, StackActionEvent } from '../services/golden-layout-wrapper.service';
+import { InsertPanel, FindPanelPath, DescribePath, type PanelPosition } from '../models/dashboard-layout-editor';
 import { BaseDashboardPart } from '../parts/base-dashboard-part';
 
 export type DashboardLayoutReadyState =
@@ -55,6 +56,8 @@ export interface DashboardLayoutLifecycleEvent {
 }
 
 const LAYOUT_CONTAINER_SIZE_TIMEOUT_MS = 10_000;
+/** Time a layout build waits after its parts are created, before its final size update. */
+const LAYOUT_SETTLE_DELAY_MS = 100;
 
 /**
  * Main dashboard viewer component.
@@ -80,77 +83,154 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
 
     /** The dashboard entity to display */
     @Input()
-    set dashboard(value: MJDashboardEntity | null) {
+    set Dashboard(value: MJDashboardEntity | null) {
         const previous = this._dashboard;
         this._dashboard = value;
         if (value && value !== previous) {
             this.onDashboardChanged();
         }
     }
-    get dashboard(): MJDashboardEntity | null {
+    get Dashboard(): MJDashboardEntity | null {
         return this._dashboard;
+    }
+
+    /** @deprecated Use {@link Dashboard}. */
+    get dashboard(): MJDashboardEntity | null {
+      return this.Dashboard;
+    }
+    /** @deprecated Use {@link Dashboard}. */
+    @Input() set dashboard(value: MJDashboardEntity | null) {
+      this.Dashboard = value;
     }
 
     /** Alternative: Load dashboard by ID */
     @Input()
-    set dashboardId(value: string | null) {
+    set DashboardId(value: string | null) {
         const previous = this._dashboardId;
         this._dashboardId = value;
         if (value && value !== previous) {
             this.loadDashboardById(value);
         }
     }
-    get dashboardId(): string | null {
+    get DashboardId(): string | null {
         return this._dashboardId;
+    }
+
+    /** @deprecated Use {@link DashboardId}. */
+    get dashboardId(): string | null {
+      return this.DashboardId;
+    }
+    /** @deprecated Use {@link DashboardId}. */
+    @Input() set dashboardId(value: string | null) {
+      this.DashboardId = value;
     }
 
     /** Whether the dashboard is in edit mode */
     private _isEditing = false;
 
     @Input()
-    set isEditing(value: boolean) {
+    set IsEditing(value: boolean) {
         const previous = this._isEditing;
         this._isEditing = value;
         // When isEditing changes (and layout exists), reinitialize to apply GL settings
         if (value !== previous && this._glService) {
-            console.log('[DashboardViewer] isEditing changed from', previous, 'to', value);
             this.updatePanelEditModes();
         }
     }
-    get isEditing(): boolean {
+    get IsEditing(): boolean {
         return this._isEditing;
     }
+
+    /** @deprecated Use {@link IsEditing}. */
+    get isEditing(): boolean {
+      return this.IsEditing;
+    }
+    /** @deprecated Use {@link IsEditing}. */
+    @Input() set isEditing(value: boolean) {
+      this.IsEditing = value;
+    }
+
+    /**
+     * Whether the user may edit this dashboard. An empty dashboard then offers Add part in view mode
+     * too; the host decides how to get into edit mode.
+     */
+    @Input() CanEdit = false;
 
     /** Whether to show the toolbar */
     private _showToolbar = true;
 
     @Input()
-    set showToolbar(value: boolean) {
+    set ShowToolbar(value: boolean) {
         this._showToolbar = value;
     }
-    get showToolbar(): boolean {
+    get ShowToolbar(): boolean {
         return this._showToolbar;
+    }
+
+    /** @deprecated Use {@link ShowToolbar}. */
+    get showToolbar(): boolean {
+      return this.ShowToolbar;
+    }
+    /** @deprecated Use {@link ShowToolbar}. */
+    @Input() set showToolbar(value: boolean) {
+      this.ShowToolbar = value;
     }
 
     /** Whether to auto-save layout changes */
     private _autoSave = false;
 
     @Input()
-    set autoSave(value: boolean) {
+    set AutoSave(value: boolean) {
         this._autoSave = value;
     }
-    get autoSave(): boolean {
+    get AutoSave(): boolean {
         return this._autoSave;
     }
 
+    /** @deprecated Use {@link AutoSave}. */
+    get autoSave(): boolean {
+      return this.AutoSave;
+    }
+    /** @deprecated Use {@link AutoSave}. */
+    @Input() set autoSave(value: boolean) {
+      this.AutoSave = value;
+    }
+
     /** Whether to show the breadcrumb navigation */
-    @Input() showBreadcrumb = true;
+    @Input() ShowBreadcrumb = true;
+
+    /** @deprecated Use {@link ShowBreadcrumb}. */
+    @Input() set showBreadcrumb(value: DashboardViewerComponent['ShowBreadcrumb']) {
+      this.ShowBreadcrumb = value;
+    }
+    /** @deprecated Use {@link ShowBreadcrumb}. */
+    get showBreadcrumb(): DashboardViewerComponent['ShowBreadcrumb'] {
+      return this.ShowBreadcrumb;
+    }
 
     /** Whether to show the "Open in Tab" button (for embedded dashboards) */
-    @Input() showOpenInTabButton = false;
+    @Input() ShowOpenInTabButton = false;
+
+    /** @deprecated Use {@link ShowOpenInTabButton}. */
+    @Input() set showOpenInTabButton(value: DashboardViewerComponent['ShowOpenInTabButton']) {
+      this.ShowOpenInTabButton = value;
+    }
+    /** @deprecated Use {@link ShowOpenInTabButton}. */
+    get showOpenInTabButton(): DashboardViewerComponent['ShowOpenInTabButton'] {
+      return this.ShowOpenInTabButton;
+    }
 
     /** Whether to show the Edit button */
-    @Input() showEditButton = true;
+    @Input() ShowEditButton = true;
+
+    /** @deprecated Use {@link ShowEditButton}. */
+    @Input() set showEditButton(value: DashboardViewerComponent['ShowEditButton']) {
+      this.ShowEditButton = value;
+    }
+    /** @deprecated Use {@link ShowEditButton}. */
+    get showEditButton(): DashboardViewerComponent['ShowEditButton'] {
+      return this.ShowEditButton;
+    }
 
     /** All categories for breadcrumb path resolution */
     @Input() Categories: MJDashboardCategoryEntity[] = [];
@@ -159,12 +239,17 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
      * Computed: Should the toolbar be visible?
      * Auto-hides when showToolbar=false OR when all toolbar elements are disabled
      */
-    public get shouldShowToolbar(): boolean {
+    public get ShouldShowToolbar(): boolean {
         if (!this._showToolbar) {
             return false;
         }
         // If all elements are hidden, hide the toolbar entirely
-        return this.showBreadcrumb || this.showOpenInTabButton || this.showEditButton;
+        return this.ShowBreadcrumb || this.ShowOpenInTabButton || this.ShowEditButton;
+    }
+
+    /** @deprecated Use {@link ShouldShowToolbar}. */
+    public get shouldShowToolbar(): boolean {
+      return this.ShouldShowToolbar;
     }
 
     // ========================================
@@ -175,40 +260,130 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     @Output() configChanged = new EventEmitter<DashboardConfigChangedEvent>();
 
     /** Emitted when a panel requests navigation to another resource */
-    @Output() navigationRequested = new EventEmitter<DashboardNavRequestEvent>();
+    @Output() NavigationRequested = new EventEmitter<DashboardNavRequestEvent>();
+
+    /**
+     * @deprecated Use {@link NavigationRequested}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (navigationRequested) keeps working. Must stay AFTER NavigationRequested: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() navigationRequested = this.NavigationRequested;
 
     /** Emitted when a panel interaction occurs */
-    @Output() panelInteraction = new EventEmitter<PanelInteractionEvent>();
+    @Output() PanelInteraction = new EventEmitter<PanelInteractionEvent>();
+
+    /**
+     * @deprecated Use {@link PanelInteraction}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (panelInteraction) keeps working. Must stay AFTER PanelInteraction: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() panelInteraction = this.PanelInteraction;
 
     /** Emitted when the dashboard is saved */
-    @Output() dashboardSaved = new EventEmitter<MJDashboardEntity>();
+    @Output() DashboardSaved = new EventEmitter<MJDashboardEntity>();
+
+    /**
+     * @deprecated Use {@link DashboardSaved}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (dashboardSaved) keeps working. Must stay AFTER DashboardSaved: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() dashboardSaved = this.DashboardSaved;
 
     /** Emitted when an error occurs */
     @Output() error = new EventEmitter<{ message: string; error?: Error }>();
 
     /** Emitted when edit mode changes */
-    @Output() editModeChanged = new EventEmitter<boolean>();
+    @Output() EditModeChanged = new EventEmitter<boolean>();
+
+    /**
+     * @deprecated Use {@link EditModeChanged}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (editModeChanged) keeps working. Must stay AFTER EditModeChanged: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() editModeChanged = this.EditModeChanged;
 
     /** Emitted when user navigates via breadcrumb */
-    @Output() breadcrumbNavigate = new EventEmitter<BreadcrumbNavigateEvent>();
+    @Output() BreadcrumbNavigate = new EventEmitter<BreadcrumbNavigateEvent>();
+
+    /**
+     * @deprecated Use {@link BreadcrumbNavigate}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (breadcrumbNavigate) keeps working. Must stay AFTER BreadcrumbNavigate: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() breadcrumbNavigate = this.BreadcrumbNavigate;
 
     /** Emitted when user clicks "Open in Tab" button */
-    @Output() openInTab = new EventEmitter<{ dashboardId: string; dashboardName: string }>();
+    @Output() OpenInTab = new EventEmitter<{ dashboardId: string; dashboardName: string }>();
+
+    /**
+     * @deprecated Use {@link OpenInTab}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (openInTab) keeps working. Must stay AFTER OpenInTab: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() openInTab = this.OpenInTab;
 
     /** Emitted as the Golden Layout viewer moves through dashboard/layout readiness states. */
-    @Output() layoutLifecycle = new EventEmitter<DashboardLayoutLifecycleEvent>();
+    @Output() LayoutLifecycle = new EventEmitter<DashboardLayoutLifecycleEvent>();
+
+    /**
+     * @deprecated Use {@link LayoutLifecycle}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (layoutLifecycle) keeps working. Must stay AFTER LayoutLifecycle: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() layoutLifecycle = this.LayoutLifecycle;
 
     /** Emitted once Golden Layout has initialized with a non-zero container and updated its size. */
-    @Output() layoutReady = new EventEmitter<void>();
+    @Output() LayoutReady = new EventEmitter<void>();
+
+    /**
+     * @deprecated Use {@link LayoutReady}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (layoutReady) keeps working. Must stay AFTER LayoutReady: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() layoutReady = this.LayoutReady;
 
     /** Emitted when layout initialization is deferred because the container cannot be initialized yet. */
-    @Output() layoutDeferred = new EventEmitter<{ reason: string }>();
+    @Output() LayoutDeferred = new EventEmitter<{ reason: string }>();
+
+    /**
+     * @deprecated Use {@link LayoutDeferred}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (layoutDeferred) keeps working. Must stay AFTER LayoutDeferred: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() layoutDeferred = this.LayoutDeferred;
 
     // ========================================
     // View Children
     // ========================================
 
-    @ViewChild('layoutContainer', { static: true }) layoutContainer!: ElementRef<HTMLElement>;
+    @ViewChild('layoutContainer', { static: true }) LayoutContainer!: ElementRef<HTMLElement>;
+
+    /** @deprecated Use {@link LayoutContainer}. */
+    get layoutContainer(): ElementRef<HTMLElement> {
+      return this.LayoutContainer;
+    }
+    /** @deprecated Use {@link LayoutContainer}. */
+    set layoutContainer(value: ElementRef<HTMLElement>) {
+      this.LayoutContainer = value;
+    }
 
     // ========================================
     // State
@@ -216,15 +391,41 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
 
     public isLoading = false;
     public config: DashboardConfig | null = null;
-    public partTypes: MJDashboardPartTypeEntity[] = [];
-    public hasUnsavedChanges = false;
+    public PartTypes: MJDashboardPartTypeEntity[] = [];
+
+    /** @deprecated Use {@link PartTypes}. */
+    public get partTypes(): MJDashboardPartTypeEntity[] {
+      return this.PartTypes;
+    }
+    /** @deprecated Use {@link PartTypes}. */
+    public set partTypes(value: MJDashboardPartTypeEntity[]) {
+      this.PartTypes = value;
+    }
+    public HasUnsavedChanges = false;
+
+    /** @deprecated Use {@link HasUnsavedChanges}. */
+    public get hasUnsavedChanges() {
+      return this.HasUnsavedChanges;
+    }
+    /** @deprecated Use {@link HasUnsavedChanges}. */
+    public set hasUnsavedChanges(value) {
+      this.HasUnsavedChanges = value;
+    }
+
+    /** The saved configuration (UIConfigDetails) the layout was loaded from or last saved as. */
+    private _loadedConfigDetails: string | null = null;
 
     /**
      * Helper to check if layout has any panels (for template use).
      * Panels are stored in componentState within the layout tree.
      */
+    public get HasPanels(): boolean {
+        return ExtractPanelsFromLayout(this.config?.layout ?? null).length > 0;
+    }
+
+    /** @deprecated Use {@link HasPanels}. */
     public get hasPanels(): boolean {
-        return extractPanelsFromLayout(this.config?.layout ?? null).length > 0;
+      return this.HasPanels;
     }
 
     private readonly _destroy$ = new Subject<void>();
@@ -237,7 +438,8 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     private _resolveLayoutReady: (() => void) | null = null;
     private _rejectLayoutReady: ((error: Error) => void) | null = null;
     private _layoutInitGeneration = 0;
-    private _layoutReadyTimer: ReturnType<typeof setTimeout> | null = null;
+    /** Number of the latest layout build. A build that is no longer the latest stops at its next step. */
+    private _layoutBuild = 0;
     private _resolveDeferredLayoutInit: (() => void) | null = null;
     private _rejectDeferredLayoutInit: ((error: Error) => void) | null = null;
     private _deferredLayoutInitTimer: ReturnType<typeof setTimeout> | null = null;
@@ -267,7 +469,6 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         const generation = this._layoutInitGeneration;
         this.resolveLayoutReady(generation);
         this._layoutInitGeneration++;
-        this.clearLayoutReadyTimer();
         this.cancelDeferredLayoutInit();
         this.destroyLayout();
     }
@@ -279,59 +480,82 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     /**
      * Toggle edit mode
      */
-    public toggleEditMode(): void {
-        this.isEditing = !this.isEditing;
-        this.editModeChanged.emit(this.isEditing);
+    public ToggleEditMode(): void {
+        this.IsEditing = !this.IsEditing;
+        this.EditModeChanged.emit(this.IsEditing);
         this.updatePanelEditModes();
     }
 
+    /** @deprecated Use {@link ToggleEditMode}. */
+    public toggleEditMode(): void {
+      return this.ToggleEditMode();
+    }
+
     /**
-     * Add a new panel to the dashboard.
-     * The panel is stored in GL's componentState - no separate panels array.
+     * Adds a panel and returns its id, or null when nothing was added (no layout yet, or an unknown
+     * part type). With a location, the layout editor places the panel there and the layout is
+     * rebuilt; without one, Golden Layout adds the panel to its first stack.
+     * @throws LayoutEditError when the location is not valid or names a panel that is not in the layout.
      */
-    public async addPanel(
+    public async AddPanel(
         partTypeId: string,
         panelConfig: PanelConfig,
         title: string,
         icon?: string,
-        location?: LayoutLocation
-    ): Promise<void> {
+        location?: PanelPosition
+    ): Promise<string | null> {
         if (!this.config || !this._glService) {
-            return;
+            return null;
         }
 
-        const partType = this.partTypes.find(pt => UUIDsEqual(pt.ID, partTypeId));
+        const partType = this.PartTypes.find(pt => UUIDsEqual(pt.ID, partTypeId));
         if (!partType) {
             this.error.emit({ message: `Unknown panel type: ${partTypeId}` });
-            return;
+            return null;
         }
 
         const panel: DashboardPanel = {
-            id: generatePanelId(),
+            id: GeneratePanelId(),
             partTypeId,
             title,
             icon: icon || partType.Icon || 'fa-solid fa-window-maximize',
             config: panelConfig
         };
 
+        if (location) {
+            await this.ApplyLayout(InsertPanel(this._glService.getLayoutConfig() ?? this.config.layout, panel, location));
+            return panel.id;
+        }
+
         // Add to Golden Layout - panel data stored in componentState
-        this._glService.addPanel(panel, location);
+        this._glService.addPanel(panel);
 
         // Sync the layout config from Golden Layout to capture the new panel
-        // The layout IS the source of truth - it contains the panel in componentState
         const currentLayout = this._glService.getLayoutConfig();
         if (currentLayout) {
             this.config.layout = currentLayout;
         }
 
         this.markDirty();
+        return panel.id;
+    }
+
+    /** @deprecated Use {@link AddPanel}. */
+    public async addPanel(
+        partTypeId: string,
+        panelConfig: PanelConfig,
+        title: string,
+        icon?: string,
+        location?: PanelPosition
+    ): Promise<string | null> {
+      return this.AddPanel(partTypeId, panelConfig, title, icon, location);
     }
 
     /**
      * Remove a panel from the dashboard.
      * Panels live in GL's componentState, so removing from GL removes the panel.
      */
-    public removePanel(panelId: string): void {
+    public RemovePanel(panelId: string): void {
         if (!this.config || !this._glService) return;
 
         // Remove from layout (panel data is in componentState)
@@ -347,6 +571,11 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         this.destroyPanelComponent(panelId);
 
         this.markDirty();
+    }
+
+    /** @deprecated Use {@link RemovePanel}. */
+    public removePanel(panelId: string): void {
+      return this.RemovePanel(panelId);
     }
 
     /**
@@ -372,8 +601,9 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
             const saved = await this._dashboard.Save();
 
             if (saved) {
-                this.hasUnsavedChanges = false;
-                this.dashboardSaved.emit(this._dashboard);
+                this.HasUnsavedChanges = false;
+                this._loadedConfigDetails = this._dashboard.UIConfigDetails ?? null;
+                this.DashboardSaved.emit(this._dashboard);
             }
 
             return saved;
@@ -390,19 +620,94 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     /**
      * Refresh all panels
      */
-    public async refreshAllPanels(): Promise<void> {
+    public async RefreshAllPanels(): Promise<void> {
         // For placeholder implementation, reinitialize the layout
         if (this._glService) {
             await this.initializeLayout();
         }
     }
 
+    /** @deprecated Use {@link RefreshAllPanels}. */
+    public async refreshAllPanels(): Promise<void> {
+      return this.RefreshAllPanels();
+    }
+
+    /**
+     * Shows `layout`: stores it as the dashboard's layout, rebuilds the panels, marks the dashboard
+     * changed and emits a `layout` config change. Build the layout with the layout editor functions.
+     * Rejects when the rebuild fails, for example when the container stays at zero size.
+     */
+    public async ApplyLayout(layout: ResolvedLayoutConfig): Promise<void> {
+        if (!this.config) return;
+        this.config.layout = layout;
+        try {
+            if (this._glService) {
+                await this.initializeLayout();
+            }
+        } finally {
+            // After the rebuild, so an auto-save reads the new layout back from Golden Layout.
+            // The layout has changed even when the rebuild fails.
+            this.markDirty();
+        }
+        this.configChanged.emit({ config: this.config, changeType: 'layout' });
+    }
+
+    /** The panel's address in the layout, for example `row/1 › tab 0`, or null when it is not in the layout. */
+    public GetPanelPath(panelId: string): string | null {
+        const path = FindPanelPath(this.config?.layout ?? null, panelId);
+        return path ? DescribePath(path) : null;
+    }
+
     /**
      * Resolves when the current dashboard's Golden Layout instance has initialized
      * against a non-zero container and completed its first size update.
      */
-    public waitForLayoutReady(): Promise<void> {
+    public WaitForLayoutReady(): Promise<void> {
         return this._layoutReadyPromise;
+    }
+
+    /** @deprecated Use {@link WaitForLayoutReady}. */
+    public waitForLayoutReady(): Promise<void> {
+      return this.WaitForLayoutReady();
+    }
+
+    /**
+     * True when the dashboard's saved layout differs from the one this viewer last loaded or saved,
+     * for example after another tab saved the dashboard.
+     * @param dashboard A saved copy of the shown dashboard. Defaults to the shown dashboard.
+     */
+    public HasNewerSavedLayout(dashboard: MJDashboardEntity | null = this._dashboard): boolean {
+        return !!dashboard && (dashboard.UIConfigDetails ?? null) !== this._loadedConfigDetails;
+    }
+
+    /**
+     * Shows the dashboard's saved layout again and drops unsaved layout changes. The current layout
+     * is removed at once, so an edit-mode change made right after the call applies to the new
+     * layout. A hidden viewer builds the layout when its container gets a size, with no time limit.
+     * @param dashboard A saved copy of the shown dashboard to show instead. Defaults to the shown dashboard.
+     */
+    public ReloadFromSaved(dashboard: MJDashboardEntity | null = this._dashboard): Promise<void> {
+        if (!dashboard) {
+            return Promise.resolve();
+        }
+        this._dashboard = dashboard;
+        this.HasUnsavedChanges = false;
+        this.destroyLayout();
+        return this.onDashboardChanged(false);
+    }
+
+    /**
+     * Takes another copy of the shown dashboard without rebuilding the layout, for example after
+     * DashboardEngine reloaded its dashboards. Later saves write that copy. Returns false, and changes
+     * nothing, when the copy is of another dashboard or its saved layout differs from the one this
+     * viewer last loaded or saved (use ReloadFromSaved then).
+     */
+    public UseSavedCopy(dashboard: MJDashboardEntity): boolean {
+        if (!this._dashboard || !UUIDsEqual(dashboard.ID, this._dashboard.ID) || this.HasNewerSavedLayout(dashboard)) {
+            return false;
+        }
+        this._dashboard = dashboard;
+        return true;
     }
 
     /**
@@ -415,33 +720,49 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     /**
      * Get available part types
      */
+    public GetPartTypes(): MJDashboardPartTypeEntity[] {
+        return this.PartTypes;
+    }
+
+    /** @deprecated Use {@link GetPartTypes}. */
     public getPartTypes(): MJDashboardPartTypeEntity[] {
-        return this.partTypes;
+      return this.GetPartTypes();
     }
 
     /**
      * Get a panel by ID.
      * Extracts panel from the layout's componentState (single source of truth).
      */
+    public GetPanel(panelId: string): DashboardPanel | null {
+        return FindPanelInLayout(this.config?.layout ?? null, panelId);
+    }
+
+    /** @deprecated Use {@link GetPanel}. */
     public getPanel(panelId: string): DashboardPanel | null {
-        return findPanelInLayout(this.config?.layout ?? null, panelId);
+      return this.GetPanel(panelId);
     }
 
     /**
      * Get the part type for a panel
      */
-    public getPartTypeForPanel(panelId: string): MJDashboardPartTypeEntity | null {
-        const panel = this.getPanel(panelId);
+    public GetPartTypeForPanel(panelId: string): MJDashboardPartTypeEntity | null {
+        const panel = this.GetPanel(panelId);
         if (!panel) return null;
-        return this.partTypes.find(pt => UUIDsEqual(pt.ID, panel.partTypeId)) ?? null;
+        return this.PartTypes.find(pt => UUIDsEqual(pt.ID, panel.partTypeId)) ?? null;
+    }
+
+    /** @deprecated Use {@link GetPartTypeForPanel}. */
+    public getPartTypeForPanel(panelId: string): MJDashboardPartTypeEntity | null {
+      return this.GetPartTypeForPanel(panelId);
     }
 
     /**
      * Update a panel's configuration.
      * Since panels live in componentState within the layout, we need to
      * update the layout tree directly or reinitialize with updated data.
+     * Resolves once the layout is rebuilt with the updated panel; rejects when the rebuild fails.
      */
-    public updatePanelConfig(panelId: string, newConfig: PanelConfig, title?: string, icon?: string): void {
+    public async UpdatePanelConfig(panelId: string, newConfig: PanelConfig, title?: string, icon?: string): Promise<void> {
         if (!this.config || !this._glService) return;
 
         // Get current layout which contains all panel data
@@ -455,7 +776,12 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         this.markDirty();
 
         // Reinitialize layout to reflect the updated panel
-        this.initializeLayout();
+        await this.initializeLayout();
+    }
+
+    /** @deprecated Use {@link UpdatePanelConfig}. */
+    public updatePanelConfig(panelId: string, newConfig: PanelConfig, title?: string, icon?: string): Promise<void> {
+      return this.UpdatePanelConfig(panelId, newConfig, title, icon);
     }
 
     /**
@@ -501,33 +827,48 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     /**
      * Handle add panel button click - emits event for parent to show dialog
      */
-    public onAddPanelClick(): void {
+    public OnAddPanelClick(): void {
         // Emit interaction event for parent to handle
         // Parent should show AddPanelDialog and call addPanel() with result
-        this.panelInteraction.emit({
+        this.PanelInteraction.emit({
             panelId: '',
             interactionType: 'custom',
-            payload: { action: 'add-panel-requested', partTypes: this.partTypes }
+            payload: { action: 'add-panel-requested', partTypes: this.PartTypes }
         });
     }
 
+    /** @deprecated Use {@link OnAddPanelClick}. */
+    public onAddPanelClick(): void {
+      return this.OnAddPanelClick();
+    }
+
     /**
-     * Handle "Open in Tab" button click - emits event for parent to open dashboard in its own tab
+     * Handle "Open in Tab" button click - emits event for the parent to open the dashboard in a dashboard tab
      */
-    public onOpenInTabClick(): void {
+    public OnOpenInTabClick(): void {
         if (this._dashboard) {
-            this.openInTab.emit({
+            this.OpenInTab.emit({
                 dashboardId: this._dashboard.ID,
                 dashboardName: this._dashboard.Name
             });
         }
     }
 
+    /** @deprecated Use {@link OnOpenInTabClick}. */
+    public onOpenInTabClick(): void {
+      return this.OnOpenInTabClick();
+    }
+
     /**
      * Handle breadcrumb navigation
      */
+    public OnBreadcrumbNavigate(event: BreadcrumbNavigateEvent): void {
+        this.BreadcrumbNavigate.emit(event);
+    }
+
+    /** @deprecated Use {@link OnBreadcrumbNavigate}. */
     public onBreadcrumbNavigate(event: BreadcrumbNavigateEvent): void {
-        this.breadcrumbNavigate.emit(event);
+      return this.OnBreadcrumbNavigate(event);
     }
 
     // ========================================
@@ -537,7 +878,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     private async loadPartTypes(): Promise<void> {
         try {
             await DashboardEngine.Instance.Config(false);
-            this.partTypes = DashboardEngine.Instance.DashboardPartTypes;
+            this.PartTypes = DashboardEngine.Instance.DashboardPartTypes;
         } catch (err) {
             console.error('Failed to load dashboard part types:', err);
         }
@@ -567,7 +908,12 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         }
     }
 
-    private async onDashboardChanged(): Promise<void> {
+    /**
+     * Builds the layout from the dashboard's saved configuration.
+     * @param limitSizeWait When true, a container that stays at zero size fails the build after
+     * LAYOUT_CONTAINER_SIZE_TIMEOUT_MS. When false, the build waits until the container gets a size.
+     */
+    private async onDashboardChanged(limitSizeWait = true): Promise<void> {
         if (!this._dashboard) return;
 
         const generation = this.startLayoutReadyCycle();
@@ -575,6 +921,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         try {
             // Parse or create config
             this.config = this.parseOrCreateConfig();
+            this._loadedConfigDetails = this._dashboard.UIConfigDetails ?? null;
 
             // Wait for part types to be loaded before initializing layout
             // This ensures partTypes array is populated when createPanelComponent is called
@@ -588,7 +935,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
             }
 
             // Initialize layout
-            await this.initializeLayout(generation);
+            await this.initializeLayout(generation, limitSizeWait);
         } catch (err) {
             const error = err instanceof Error ? err : new Error(String(err));
             this.emitLayoutLifecycle('error', undefined, error);
@@ -599,7 +946,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
 
     private parseOrCreateConfig(): DashboardConfig {
         if (!this._dashboard?.UIConfigDetails) {
-            return createDefaultDashboardConfig();
+            return CreateDefaultDashboardConfig();
         }
 
         try {
@@ -612,9 +959,9 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
 
             // Invalid format, return default
             console.warn('[DashboardViewer] Invalid config format, using default');
-            return createDefaultDashboardConfig();
+            return CreateDefaultDashboardConfig();
         } catch {
-            return createDefaultDashboardConfig();
+            return CreateDefaultDashboardConfig();
         }
     }
 
@@ -622,12 +969,13 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     // Private Methods - Layout
     // ========================================
 
-    private async initializeLayout(generation = this._layoutInitGeneration): Promise<void> {
-        if (!this.config || !this.layoutContainer?.nativeElement) {
+    private async initializeLayout(generation = this._layoutInitGeneration, limitSizeWait = true): Promise<void> {
+        if (!this.config || !this.LayoutContainer?.nativeElement) {
             return;
         }
 
-        const el = this.layoutContainer.nativeElement;
+        const build = ++this._layoutBuild;
+        const el = this.LayoutContainer.nativeElement;
         const rect = el.getBoundingClientRect();
         if (rect.width === 0 || rect.height === 0) {
             // The container has no size yet — typically because Explorer is reattaching
@@ -638,9 +986,9 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
             // Defer init until the container actually has a size, then build the layout.
             const reason = 'layout container has zero size';
             this.emitLayoutLifecycle('waiting-for-size', reason);
-            this.layoutDeferred.emit({ reason });
-            await this.waitForLayoutContainerSize(el, generation);
-            if (generation !== this._layoutInitGeneration) {
+            this.LayoutDeferred.emit({ reason });
+            await this.waitForLayoutContainerSize(el, generation, limitSizeWait);
+            if (!this.isCurrentLayoutBuild(build, generation)) {
                 return;
             }
         }
@@ -653,7 +1001,8 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         this.destroyLayout();
 
         // Create new Golden Layout service
-        this._glService = new GoldenLayoutWrapperService();
+        const glService = new GoldenLayoutWrapperService();
+        this._glService = glService;
 
         // Subscribe to layout events
         this.subscribeToLayoutEvents();
@@ -663,7 +1012,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         // Panel factory - called by GL when it binds a component
         // The panel comes directly from GL's componentState (single source of truth)
         const panelFactory = (panel: DashboardPanel, container: HTMLElement) => {
-            const creation = this.createPanelComponent(panel, container);
+            const creation = this.createPanelComponent(panel, container, glService);
             pendingPanelCreations.push(
                 creation.catch(error => {
                     console.error('[DashboardViewer] Failed to create panel component:', error);
@@ -675,10 +1024,10 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         // Golden Layout's native ResolvedLayoutConfig is the source of truth
         // Panel data is embedded in each component's componentState
         this._glService.initialize(
-            this.layoutContainer.nativeElement,
+            this.LayoutContainer.nativeElement,
             this.config.layout,
             panelFactory,
-            this.isEditing
+            this.IsEditing
         );
 
         if (pendingPanelCreations.length > 0) {
@@ -690,22 +1039,16 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         // However, Angular needs time to complete change detection and render
         // the dynamic components. A single delayed updateSize() ensures GL
         // recalculates dimensions after Angular has finished rendering.
-        await new Promise<void>(resolve => {
-            this.clearLayoutReadyTimer();
-            this._layoutReadyTimer = setTimeout(() => {
-                this._layoutReadyTimer = null;
-                resolve();
-            }, 100);
-        });
+        await this.waitForLayoutToSettle();
 
-        if (generation !== this._layoutInitGeneration) {
+        if (!this.isCurrentLayoutBuild(build, generation)) {
             return;
         }
 
         this._glService?.updateSize();
         this.cdr.detectChanges();
         this.emitLayoutLifecycle('ready');
-        this.layoutReady.emit();
+        this.LayoutReady.emit();
         this.resolveLayoutReady(generation);
     }
 
@@ -717,8 +1060,9 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
      * (re)initialize. Used when initializeLayout() is called while the container is
      * still 0×0 — e.g. during a cached-component reattach on browser back/forward —
      * where GoldenLayout would otherwise bind panels that never receive a 'show' event.
+     * With `limitSizeWait`, the wait fails after LAYOUT_CONTAINER_SIZE_TIMEOUT_MS.
      */
-    private waitForLayoutContainerSize(el: HTMLElement, generation: number): Promise<void> {
+    private waitForLayoutContainerSize(el: HTMLElement, generation: number, limitSizeWait = true): Promise<void> {
         this.cancelDeferredLayoutInit();
 
         return new Promise<void>((resolve, reject) => {
@@ -744,12 +1088,14 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
                 return;
             }
 
-            this._deferredLayoutInitTimer = setTimeout(() => {
-                const error = new Error(
-                    `Dashboard layout container stayed at zero size for ${LAYOUT_CONTAINER_SIZE_TIMEOUT_MS}ms`
-                );
-                this.failDeferredLayoutInit(error);
-            }, LAYOUT_CONTAINER_SIZE_TIMEOUT_MS);
+            if (limitSizeWait) {
+                this._deferredLayoutInitTimer = setTimeout(() => {
+                    const error = new Error(
+                        `Dashboard layout container stayed at zero size for ${LAYOUT_CONTAINER_SIZE_TIMEOUT_MS}ms`
+                    );
+                    this.failDeferredLayoutInit(error);
+                }, LAYOUT_CONTAINER_SIZE_TIMEOUT_MS);
+            }
             ro.observe(el);
             this._layoutSizeObserver = ro;
         });
@@ -788,9 +1134,21 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         }
     }
 
+    /** True while the build is the latest layout build and its layout cycle is still current. */
+    private isCurrentLayoutBuild(build: number, generation: number): boolean {
+        return build === this._layoutBuild && generation === this._layoutInitGeneration;
+    }
+
+    /**
+     * Resolves after LAYOUT_SETTLE_DELAY_MS. Each build waits on its own timer; a build that a newer
+     * build replaced stops after the wait.
+     */
+    private waitForLayoutToSettle(): Promise<void> {
+        return new Promise<void>(resolve => setTimeout(resolve, LAYOUT_SETTLE_DELAY_MS));
+    }
+
     private startLayoutReadyCycle(): number {
         const generation = ++this._layoutInitGeneration;
-        this.clearLayoutReadyTimer();
         this.cancelDeferredLayoutInit();
         this._resolveLayoutReady?.();
 
@@ -824,15 +1182,8 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         this._rejectLayoutReady = null;
     }
 
-    private clearLayoutReadyTimer(): void {
-        if (this._layoutReadyTimer) {
-            clearTimeout(this._layoutReadyTimer);
-            this._layoutReadyTimer = null;
-        }
-    }
-
     private emitLayoutLifecycle(state: DashboardLayoutReadyState, reason?: string, error?: Error): void {
-        this.layoutLifecycle.emit({
+        this.LayoutLifecycle.emit({
             state,
             dashboardId: this._dashboard?.ID,
             reason,
@@ -882,6 +1233,22 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
             .subscribe((panelId: string) => {
                 this.onPanelSelected(panelId);
             });
+
+        this._glService.OnStackAction
+            .pipe(takeUntil(this._destroy$))
+            .subscribe((event: StackActionEvent) => this.onStackAction(event));
+    }
+
+    /** Asks the host to edit or remove the part a stack header button acts on. */
+    private onStackAction(event: StackActionEvent): void {
+        switch (event.Action) {
+            case 'edit':
+                this.onConfigurePart(event.PanelId);
+                break;
+            case 'remove':
+                this.onRemovePart(event.PanelId);
+                break;
+        }
     }
 
     private onLayoutChanged(event: LayoutChangedEvent): void {
@@ -928,20 +1295,16 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     /**
      * Create a panel component from the DashboardPanel data.
      * Panel comes directly from GL's componentState - no lookup needed.
+     * @param glService The layout that asks for the part. When it is no longer the viewer's layout
+     * once the part is created (a newer build replaced it, or it was removed), the part is destroyed.
      */
-    private async createPanelComponent(panel: DashboardPanel, container: HTMLElement): Promise<void> {
-        const partType = this.partTypes.find(pt => UUIDsEqual(pt.ID, panel.partTypeId));
+    private async createPanelComponent(panel: DashboardPanel, container: HTMLElement, glService: GoldenLayoutWrapperService): Promise<void> {
+        const partType = this.PartTypes.find(pt => UUIDsEqual(pt.ID, panel.partTypeId));
 
-        // Create the panel wrapper with header and content
+        // Create the panel wrapper; the Golden Layout tab shows the part's title
         const wrapper = document.createElement('div');
         wrapper.className = 'dashboard-part-wrapper';
         wrapper.style.cssText = 'display: flex; flex-direction: column; height: 100%; background: var(--mj-bg-surface);';
-
-        // Only show header in edit mode - GL tabs already display the title in view mode
-        if (this.isEditing) {
-            const header = this.createPartHeader(panel, panel.id);
-            wrapper.appendChild(header);
-        }
 
         // Create content area
         const content = document.createElement('div');
@@ -950,6 +1313,13 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
 
         // Try to create dynamic component via ClassFactory
         const componentRef = await this.createDynamicPartComponent(panel, partType, content);
+
+        if (glService !== this._glService) {
+            if (componentRef) {
+                this.releasePartComponent(componentRef);
+            }
+            return;
+        }
 
         if (!componentRef) {
             // Fallback to static rendering if no DriverClass or component creation failed
@@ -1000,7 +1370,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
             const instance = componentRef.instance;
             instance.Panel = panel;
             instance.PartType = partType;
-            instance.IsEditing = this.isEditing;
+            instance.IsEditing = this.IsEditing;
 
             // Subscribe to events
             instance.ConfigureRequested.subscribe(() => {
@@ -1010,7 +1380,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
                 this.onRemovePart(panel.id);
             });
             instance.NavigationRequested.subscribe((event: DashboardNavRequestEvent) => {
-                this.navigationRequested.emit(event);
+                this.NavigationRequested.emit(event);
             });
 
             // Attach component to DOM
@@ -1024,97 +1394,6 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
             console.error('[DashboardViewer] Failed to create dynamic component:', error);
             return null;
         }
-    }
-
-    private createPartHeader(panel: DashboardPanel, panelId: string): HTMLElement {
-        const header = document.createElement('div');
-        header.className = 'dashboard-part-header';
-        header.style.cssText = `
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 12px;
-            background: var(--mj-bg-surface-card);
-            border-bottom: 1px solid var(--mj-border-default);
-            min-height: 40px;
-        `;
-
-        // Icon and title
-        const titleSection = document.createElement('div');
-        titleSection.style.cssText = 'display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;';
-        titleSection.innerHTML = `
-            <i class="${EscapeHTML(panel.icon || 'fa-solid fa-puzzle-piece')}" style="color: var(--mj-brand-primary); font-size: 14px;"></i>
-            <span style="font-weight: 500; font-size: 14px; color: var(--mj-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${EscapeHTML(panel.title)}</span>
-        `;
-        header.appendChild(titleSection);
-
-        // Action buttons (only in edit mode)
-        if (this.isEditing) {
-            const actions = document.createElement('div');
-            actions.style.cssText = 'display: flex; gap: 4px;';
-
-            // Configure button
-            const configBtn = document.createElement('button');
-            configBtn.className = 'part-action-btn';
-            configBtn.title = 'Configure';
-            configBtn.style.cssText = `
-                width: 28px;
-                height: 28px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                border: none;
-                border-radius: 4px;
-                background: transparent;
-                color: var(--mj-text-secondary);
-                cursor: pointer;
-                transition: all 0.15s;
-            `;
-            configBtn.innerHTML = '<i class="fa-solid fa-cog" style="font-size: 12px;"></i>';
-            configBtn.addEventListener('click', () => this.onConfigurePart(panelId));
-            configBtn.addEventListener('mouseenter', () => {
-                configBtn.style.background = 'var(--mj-border-default)';
-                configBtn.style.color = 'var(--mj-text-primary)';
-            });
-            configBtn.addEventListener('mouseleave', () => {
-                configBtn.style.background = 'transparent';
-                configBtn.style.color = 'var(--mj-text-secondary)';
-            });
-
-            // Remove button
-            const removeBtn = document.createElement('button');
-            removeBtn.className = 'part-action-btn';
-            removeBtn.title = 'Remove';
-            removeBtn.style.cssText = `
-                width: 28px;
-                height: 28px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                border: none;
-                border-radius: 4px;
-                background: transparent;
-                color: var(--mj-text-secondary);
-                cursor: pointer;
-                transition: all 0.15s;
-            `;
-            removeBtn.innerHTML = '<i class="fa-solid fa-times" style="font-size: 12px;"></i>';
-            removeBtn.addEventListener('click', () => this.onRemovePart(panelId));
-            removeBtn.addEventListener('mouseenter', () => {
-                removeBtn.style.background = 'color-mix(in srgb, var(--mj-status-error) 10%, transparent)';
-                removeBtn.style.color = 'var(--mj-status-error)';
-            });
-            removeBtn.addEventListener('mouseleave', () => {
-                removeBtn.style.background = 'transparent';
-                removeBtn.style.color = 'var(--mj-text-secondary)';
-            });
-
-            actions.appendChild(configBtn);
-            actions.appendChild(removeBtn);
-            header.appendChild(actions);
-        }
-
-        return header;
     }
 
     private renderPartContent(panel: DashboardPanel, container: HTMLElement, partType: MJDashboardPartTypeEntity | undefined): void {
@@ -1145,7 +1424,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
                 <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--mj-text-secondary); text-align: center; padding: 24px;">
                     <i class="fa-solid fa-globe" style="font-size: 48px; color: var(--mj-text-muted); margin-bottom: 16px;"></i>
                     <h4 style="margin: 0 0 8px 0; color: var(--mj-text-primary);">No URL Configured</h4>
-                    <p style="margin: 0; font-size: 13px;">Click the configure button to set a URL for this part.</p>
+                    <p style="margin: 0; font-size: 13px;">Use Edit part to set a URL.</p>
                 </div>
             `;
             return;
@@ -1180,7 +1459,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
                 <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--mj-text-secondary); text-align: center; padding: 24px;">
                     <i class="fa-solid fa-table" style="font-size: 48px; color: var(--mj-text-muted); margin-bottom: 16px;"></i>
                     <h4 style="margin: 0 0 8px 0; color: var(--mj-text-primary);">No View Selected</h4>
-                    <p style="margin: 0; font-size: 13px;">Click configure to select a view for this part.</p>
+                    <p style="margin: 0; font-size: 13px;">Use Edit part to choose a view.</p>
                 </div>
             `;
             return;
@@ -1218,7 +1497,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
                 <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--mj-text-secondary); text-align: center; padding: 24px;">
                     <i class="fa-solid fa-database" style="font-size: 48px; color: var(--mj-text-muted); margin-bottom: 16px;"></i>
                     <h4 style="margin: 0 0 8px 0; color: var(--mj-text-primary);">No Query Selected</h4>
-                    <p style="margin: 0; font-size: 13px;">Click configure to select a query for this part.</p>
+                    <p style="margin: 0; font-size: 13px;">Use Edit part to choose a query.</p>
                 </div>
             `;
             return;
@@ -1254,7 +1533,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
                 <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--mj-text-secondary); text-align: center; padding: 24px;">
                     <i class="fa-solid fa-cube" style="font-size: 48px; color: var(--mj-text-muted); margin-bottom: 16px;"></i>
                     <h4 style="margin: 0 0 8px 0; color: var(--mj-text-primary);">No Artifact Selected</h4>
-                    <p style="margin: 0; font-size: 13px;">Click configure to select an artifact for this part.</p>
+                    <p style="margin: 0; font-size: 13px;">Use Edit part to choose an artifact.</p>
                 </div>
             `;
             return;
@@ -1297,7 +1576,7 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
 
     private onConfigurePart(panelId: string): void {
         // Emit event for parent to handle configuration
-        this.panelInteraction.emit({
+        this.PanelInteraction.emit({
             panelId,
             interactionType: 'custom',
             payload: { action: 'configure-part-requested' }
@@ -1305,14 +1584,15 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     }
 
     private onRemovePart(panelId: string): void {
-        // Emit event for parent to show confirmation dialog
-        const panel = findPanelInLayout(this.config?.layout ?? null, panelId);
-        this.panelInteraction.emit({
+        // Emit event for parent to show confirmation dialog, with the part's title and part type name
+        const panel = FindPanelInLayout(this.config?.layout ?? null, panelId);
+        this.PanelInteraction.emit({
             panelId,
             interactionType: 'custom',
             payload: {
                 action: 'remove-part-requested',
-                panelTitle: panel?.title || 'this part'
+                panelTitle: panel?.title || 'this part',
+                partTypeName: this.GetPartTypeForPanel(panelId)?.Name ?? null
             }
         });
     }
@@ -1320,8 +1600,13 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     /**
      * Confirm removal of a panel (called by parent after confirmation dialog)
      */
+    public ConfirmRemovePanel(panelId: string): void {
+        this.RemovePanel(panelId);
+    }
+
+    /** @deprecated Use {@link ConfirmRemovePanel}. */
     public confirmRemovePanel(panelId: string): void {
-        this.removePanel(panelId);
+      return this.ConfirmRemovePanel(panelId);
     }
 
     private destroyPanelComponent(panelId: string): void {
@@ -1329,18 +1614,23 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
         if (entry) {
             // Destroy the Angular component if present
             if (entry.componentRef) {
-                this.appRef.detachView(entry.componentRef.hostView);
-                entry.componentRef.destroy();
+                this.releasePartComponent(entry.componentRef);
             }
             this._panelComponents.delete(panelId);
         }
+    }
+
+    /** Detaches a part component from change detection and destroys it. */
+    private releasePartComponent(componentRef: ComponentRef<BaseDashboardPart>): void {
+        this.appRef.detachView(componentRef.hostView);
+        componentRef.destroy();
     }
 
     private updatePanelEditModes(): void {
         // Update IsEditing on all dynamic components
         this._panelComponents.forEach((entry) => {
             if (entry.componentRef) {
-                entry.componentRef.instance.IsEditing = this.isEditing;
+                entry.componentRef.instance.IsEditing = this.IsEditing;
             }
         });
 
@@ -1363,9 +1653,9 @@ export class DashboardViewerComponent extends BaseAngularComponent implements On
     // ========================================
 
     private markDirty(): void {
-        this.hasUnsavedChanges = true;
+        this.HasUnsavedChanges = true;
 
-        if (this.autoSave && this.config) {
+        if (this.AutoSave && this.config) {
             this.save();
         }
     }

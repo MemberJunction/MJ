@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { AdditionalSchemaInfoGenerator } from '../generators/AdditionalSchemaInfoGenerator.js';
-import { DatabaseDocumentation, SchemaDefinition, TableDefinition, ColumnDefinition, ForeignKeyReference } from '../types/state.js';
+import { DatabaseDocumentation, SchemaDefinition, TableDefinition, ColumnDefinition, ColumnStatistics, ForeignKeyReference } from '../types/state.js';
 import { PKCandidate, FKCandidate, RelationshipDiscoveryPhase } from '../types/discovery.js';
 
 /**
@@ -36,6 +36,19 @@ function createColumn(overrides: Partial<ColumnDefinition> & { name: string; dat
     isForeignKey: false,
     descriptionIterations: [],
     ...overrides
+  };
+}
+
+/** Column statistics that observed exactly these values in a 100-row table: what the enum candidate gate reads. */
+function observed(values: string[]): ColumnStatistics {
+  return {
+    totalRows: 100,
+    distinctCount: values.length,
+    uniquenessRatio: values.length / 100,
+    nullCount: 0,
+    nullPercentage: 0,
+    sampleValues: values,
+    valueDistribution: values.map(value => ({ value, frequency: Math.floor(100 / values.length) })),
   };
 }
 
@@ -452,11 +465,11 @@ describe('AdditionalSchemaInfoGenerator', () => {
       });
 
       // With threshold below candidate confidence — should include
-      const low = JSON.parse(generator.generate(state, { confidenceThreshold: 30 }));
+      const low = JSON.parse(generator.generate(state, { ConfidenceThreshold: 30 }));
       expect(low.dbo[0].ForeignKeys).toHaveLength(1);
 
       // With threshold above candidate confidence — should exclude (only Schemas remains)
-      const high = JSON.parse(generator.generate(state, { confidenceThreshold: 50 }));
+      const high = JSON.parse(generator.generate(state, { ConfidenceThreshold: 50 }));
       expect(high.dbo).toBeUndefined();
       expect(high.Schemas).toBeDefined();
     });
@@ -583,10 +596,10 @@ describe('AdditionalSchemaInfoGenerator', () => {
         }
       });
 
-      const all = JSON.parse(generator.generate(state, { confirmedOnly: false }));
+      const all = JSON.parse(generator.generate(state, { ConfirmedOnly: false }));
       expect(all.dbo[0].ForeignKeys).toHaveLength(2);
 
-      const confirmed = JSON.parse(generator.generate(state, { confirmedOnly: true }));
+      const confirmed = JSON.parse(generator.generate(state, { ConfirmedOnly: true }));
       expect(confirmed.dbo[0].ForeignKeys).toHaveLength(1);
       expect(confirmed.dbo[0].ForeignKeys[0].RelatedTable).toBe('Customers');
     });
@@ -620,7 +633,7 @@ describe('AdditionalSchemaInfoGenerator', () => {
       expect(withIntrospected.dbo[0].ForeignKeys).toHaveLength(1);
 
       // discoveredOnly: excludes introspected (no discoveries → only Schemas key)
-      const discovered = JSON.parse(generator.generate(state, { discoveredOnly: true }));
+      const discovered = JSON.parse(generator.generate(state, { DiscoveredOnly: true }));
       expect(discovered.dbo).toBeUndefined();
       expect(discovered.Schemas).toBeDefined();
     });
@@ -677,7 +690,7 @@ describe('AdditionalSchemaInfoGenerator', () => {
         }
       });
 
-      const result = JSON.parse(generator.generate(state, { discoveredOnly: true }));
+      const result = JSON.parse(generator.generate(state, { DiscoveredOnly: true }));
 
       // Should NOT include the hard PK (ID)
       expect(result.dbo[0].PrimaryKey).toBeUndefined();
@@ -704,7 +717,7 @@ describe('AdditionalSchemaInfoGenerator', () => {
         ])]
       });
 
-      const result = JSON.parse(generator.generate(state, { approvedOnly: true }));
+      const result = JSON.parse(generator.generate(state, { ApprovedOnly: true }));
       expect(result.dbo).toHaveLength(1);
       expect(result.dbo[0].TableName).toBe('Users');
     });
@@ -923,6 +936,7 @@ describe('AdditionalSchemaInfoGenerator', () => {
               createColumn({
                 name: 'Status',
                 dataType: 'varchar(20)',
+                statistics: observed(['Pending', 'Active', 'Cancelled']),
                 valueListVerdict: {
                   isEnum: true,
                   type: 'List',
@@ -943,7 +957,8 @@ describe('AdditionalSchemaInfoGenerator', () => {
       expect(result.dbo).toHaveLength(1);
       expect(result.dbo[0].Fields).toHaveLength(1);
       expect(result.dbo[0].Fields[0].FieldName).toBe('Status');
-      expect(result.dbo[0].Fields[0].ValueListType).toBe('List');
+      // No CHECK constraint backs the list, so it is not emitted as closed
+      expect(result.dbo[0].Fields[0].ValueListType).toBe('ListOrUserEntry');
       // Values should be sorted alphabetically
       expect(result.dbo[0].Fields[0].PossibleValues).toEqual(['Active', 'Cancelled', 'Pending']);
       expect(result.dbo[0].Fields[0].Confidence).toBe(92);
@@ -987,6 +1002,7 @@ describe('AdditionalSchemaInfoGenerator', () => {
               createColumn({
                 name: 'Category',
                 dataType: 'varchar(20)',
+                statistics: observed(['Electronics', 'Books']),
                 valueListVerdict: {
                   isEnum: true,
                   type: 'ListOrUserEntry',
@@ -1003,7 +1019,7 @@ describe('AdditionalSchemaInfoGenerator', () => {
       });
 
       // Lower threshold to 60%
-      const result = JSON.parse(generator.generate(state, { valueListConfidenceThreshold: 60 }));
+      const result = JSON.parse(generator.generate(state, { ValueListConfidenceThreshold: 60 }));
       expect(result.dbo).toHaveLength(1);
       expect(result.dbo[0].Fields).toHaveLength(1);
       expect(result.dbo[0].Fields[0].ValueListType).toBe('ListOrUserEntry');
@@ -1061,7 +1077,7 @@ describe('AdditionalSchemaInfoGenerator', () => {
         ])],
       });
 
-      const result = JSON.parse(generator.generate(state, { excludeValueLists: true }));
+      const result = JSON.parse(generator.generate(state, { ExcludeValueLists: true }));
       // No PK/FK and Fields excluded → table not emitted
       expect(result.dbo).toBeUndefined();
     });
@@ -1077,6 +1093,7 @@ describe('AdditionalSchemaInfoGenerator', () => {
                 name: 'Category',
                 dataType: 'varchar(30)',
                 description: 'Product category',
+                statistics: observed(['Hardware', 'Software', 'Services']),
                 valueListVerdict: {
                   isEnum: true,
                   type: 'List',
@@ -1138,7 +1155,7 @@ describe('AdditionalSchemaInfoGenerator', () => {
       });
 
       // confirmedOnly: only user-approved columns should emit Fields
-      const result = JSON.parse(generator.generate(state, { confirmedOnly: true }));
+      const result = JSON.parse(generator.generate(state, { ConfirmedOnly: true }));
       expect(result.dbo[0].Fields).toHaveLength(1);
       expect(result.dbo[0].Fields[0].FieldName).toBe('Status');
     });
@@ -1153,6 +1170,7 @@ describe('AdditionalSchemaInfoGenerator', () => {
               createColumn({
                 name: 'Department',
                 dataType: 'varchar(30)',
+                statistics: observed(['Engineering', 'Marketing', 'Sales']),
                 valueListVerdict: {
                   isEnum: true,
                   type: 'List',
@@ -1166,6 +1184,7 @@ describe('AdditionalSchemaInfoGenerator', () => {
               createColumn({
                 name: 'Level',
                 dataType: 'varchar(10)',
+                statistics: observed(['Junior', 'Mid', 'Senior', 'Lead']),
                 valueListVerdict: {
                   isEnum: true,
                   type: 'ListOrUserEntry',

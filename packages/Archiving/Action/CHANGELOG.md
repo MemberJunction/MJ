@@ -1,5 +1,276 @@
 # @memberjunction/archiving-action
 
+## 6.2.0-edge.5
+
+### Minor Changes
+
+- 29129bd: Archive configurations have a new `StorageMode` setting. `Store` (the default) works as before: each record's archive document is written to storage, then the mode changes the source row. `Purge` applies the mode (StripFields or HardDelete) without writing a copy, so no storage account is needed and cleared data cannot be restored. A Purge run writes an Archive Run Detail row only for records that fail. Before it starts, it refuses the whole run if any entity cannot be purged safely: entities in ArchiveOnly mode, entities missing from metadata, entities that track Record Changes, entities whose driver is not registered or does not support purge, and HardDelete entities that use soft delete or whose delete cascade reaches an entity that tracks Record Changes or uses soft delete. Each Archive Run records the `StorageMode` it ran with. Custom drivers opt in to purge by overriding `BaseArchiveDriver.SupportsPurge`; subclasses of `DefaultArchiveDriver` inherit purge support unless they override `SupportsPurge`. `ArchiveRecordContext.StorageDriver` is now `null` on a Purge run, and `ArchiveRecordContext` has a new required `StorageMode` field.
+
+  `ResolveArchiveDriver` returns `null` for an unregistered driver name, and a Store run with an unregistered `DriverClass` now fails at the start of that entity with a clear error.
+
+  Fix: when an archive entity's `RetentionDays` is NULL, the run now uses the configuration's `DefaultRetentionDays`. Before, it applied no age filter and selected every row. An entity with no `DateField` is now refused instead of selecting every row.
+
+  Two CHECK constraints refuse a negative retention period: `ArchiveConfiguration.DefaultRetentionDays >= 0` and `ArchiveConfigurationEntity.RetentionDays >= 0`. The engine also refuses to select records for an entity whose resolved retention period is negative.
+
+  When a run throws after its Archive Run row exists (for example a bad FieldConfiguration or a storage initialization failure), the run is saved as `Failed` with a `CompletedAt` time, the error message in `ErrorLog`, and the counts of the entities that finished before the error, and the result carries the run's ID.
+
+  `ArchiveRunResult` has a new optional `StorageMode` field, set once the configuration loads. The Archive Data and Run All Active Archives actions say "Purged" instead of "Archived" for Purge runs, and the run viewer shows "purged" on Purge run cards and a "Purged" label in the run drawer.
+
+  `ArchiveProcessor.ProcessEntity` now takes the generated `MJArchiveConfigurationEntityEntity`, `MJArchiveConfigurationEntity` and `MJArchiveRunEntity` classes and a nullable `ArchiveStorageManager`, and the engine reads those records through their typed properties instead of `.Get()`.
+
+  With Archive Runs now named by their configuration, `MJ: Archive Run Details.ArchiveRun` holds the configuration name instead of the run's start time. Its display name changes from "Archive Run Timestamp" to "Archive Run" (through metadata, with `AutoUpdateDisplayName` turned off so CodeGen keeps it).
+
+  The PostgreSQL counterpart of the migration is generated at release time.
+
+### Patch Changes
+
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [39b35f1]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [5e4205c]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [81aea34]
+- Updated dependencies [5465489]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [0ab85d7]
+- Updated dependencies [2274f42]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [7e72c86]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [5f707d1]
+- Updated dependencies [dc38250]
+  - @memberjunction/actions-base@6.2.0-edge.5
+  - @memberjunction/actions@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/archiving-engine@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [49f26d9]
+- Updated dependencies [88e6902]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [25f7b82]
+- Updated dependencies [90829e3]
+- Updated dependencies [a28ce42]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/actions@6.2.0-edge.4
+  - @memberjunction/actions-base@6.2.0-edge.4
+  - @memberjunction/archiving-engine@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [dfe40a4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [bea2386]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/actions-base@6.2.0-edge.3
+  - @memberjunction/actions@6.2.0-edge.3
+  - @memberjunction/archiving-engine@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [e97d95c]
+- Updated dependencies [21f9e15]
+- Updated dependencies [4248fb3]
+- Updated dependencies [0adaf76]
+- Updated dependencies [705ab4e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [200e634]
+- Updated dependencies [4d647e6]
+- Updated dependencies [369e229]
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/actions@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/actions-base@6.2.0-edge.2
+  - @memberjunction/archiving-engine@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [520bd09]
+- Updated dependencies [520bd09]
+- Updated dependencies [a7da50b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/actions-base@6.2.0-edge.1
+  - @memberjunction/actions@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/archiving-engine@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [abf8778]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [2c590b0]
+  - @memberjunction/actions-base@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/actions@6.2.0-edge.0
+  - @memberjunction/archiving-engine@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
+## 6.1.0
+
+### Patch Changes
+
+- Updated dependencies [394d276]
+- Updated dependencies [834f8d7]
+- Updated dependencies [394d276]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [4586215]
+- Updated dependencies [197fdf8]
+- Updated dependencies [f6a4341]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0ec1980]
+- Updated dependencies [1940a4d]
+- Updated dependencies [07cb22e]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [59def38]
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [394d276]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [2d14c62]
+- Updated dependencies [c996a56]
+- Updated dependencies [38d4482]
+- Updated dependencies [052b4c7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [c996a56]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [8d880cc]
+- Updated dependencies [cefc302]
+- Updated dependencies [841e6ea]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [080f4cd]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [d66a26a]
+- Updated dependencies [1d88e00]
+- Updated dependencies [647bd71]
+- Updated dependencies [8288711]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [48ff99f]
+- Updated dependencies [9f73528]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [27e4d09]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [23c2521]
+- Updated dependencies [048c5ce]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [98841bb]
+- Updated dependencies [53c341c]
+- Updated dependencies [b46330e]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [2be2960]
+- Updated dependencies [cf2484c]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [0967ba7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [de343b5]
+- Updated dependencies [5fc861f]
+- Updated dependencies [1748491]
+- Updated dependencies [a1a8989]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [905820a]
+- Updated dependencies [1bd9674]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [d8adda1]
+- Updated dependencies [7fcdc2d]
+- Updated dependencies [15319b4]
+- Updated dependencies [d0a2a55]
+  - @memberjunction/actions@6.1.0
+  - @memberjunction/global@6.1.0
+  - @memberjunction/core@6.1.0
+  - @memberjunction/actions-base@6.1.0
+  - @memberjunction/archiving-engine@6.1.0
+
+## 6.1.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+  - @memberjunction/actions-base@6.1.0-edge.7
+  - @memberjunction/actions@6.1.0-edge.7
+  - @memberjunction/archiving-engine@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Patch Changes

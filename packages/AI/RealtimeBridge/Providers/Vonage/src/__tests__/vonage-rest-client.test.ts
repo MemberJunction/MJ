@@ -77,6 +77,24 @@ describe('RealVonageVoiceClient', () => {
             expect(createSpy.mock.calls[0][0]).not.toHaveProperty('event_url');
         });
 
+        it('maps MachineDetection onto machine_detection', async () => {
+            const { loader, createSpy } = makeFakeVonage();
+            const rest = new RealVonageVoiceClient({ ApplicationId: 'app1', PrivateKey: 'pk' }, loader);
+
+            await rest.CreateCall({ To: '+1', From: '+2', Ncco: CONNECT_NCCO, MachineDetection: 'hangup' });
+
+            expect(createSpy.mock.calls[0][0]).toMatchObject({ machine_detection: 'hangup' });
+        });
+
+        it('omits machine_detection when not requested', async () => {
+            const { loader, createSpy } = makeFakeVonage();
+            const rest = new RealVonageVoiceClient({ ApplicationId: 'app1', PrivateKey: 'pk' }, loader);
+
+            await rest.CreateCall({ To: '+1', From: '+2', Ncco: CONNECT_NCCO });
+
+            expect(createSpy.mock.calls[0][0]).not.toHaveProperty('machine_detection');
+        });
+
         it('throws when the SDK returns no UUID', async () => {
             const { loader, createSpy } = makeFakeVonage('');
             createSpy.mockResolvedValueOnce({ uuid: '' });

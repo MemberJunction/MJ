@@ -1,0 +1,50 @@
+{
+  "id": "codesmith-execute-code-01",
+  "agent": "Codesmith Agent",
+  "description": "A calculation the agent must do by writing code, not by inference. One action, one required param.",
+  "tags": [
+    "first-step-action",
+    "single-action"
+  ],
+  "input": {
+    "payload": {
+      "task": "Compute the mean and median of the provided values",
+      "inputData": {
+        "values": [
+          4,
+          8,
+          15,
+          16,
+          23,
+          42
+        ]
+      }
+    },
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Compute the mean and median of input.values."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "action",
+    "actions": [
+      {
+        "name": "Execute Code",
+        "params": {
+          "code": {
+            "matcher": "nonEmpty"
+          },
+          "language": {
+            "matcher": "oneOf",
+            "values": [
+              "javascript"
+            ],
+            "optional": true
+          }
+        }
+      }
+    ]
+  }
+}

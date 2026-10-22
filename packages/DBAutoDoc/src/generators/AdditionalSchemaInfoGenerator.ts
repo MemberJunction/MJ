@@ -1,4 +1,45 @@
 /**
+ * Describe a discovered FK, including what the probe measured.
+ *
+ * The confidence number alone is the LLM's self-report; the containment counts are the
+ * only part of this sentence grounded in the data.
+ */
+function describeDiscoveredFK(fk: FKCandidate): string {
+  const base = `AI-discovered relationship (confidence: ${fk.confidence}%)`;
+  const v = fk.verification;
+  if (!v) return base;
+  if (v.Verification === 'Verified' && v.MatchedRows !== null && v.SampledRows !== null) {
+    return `${base} — join verified, ${v.MatchedRows}/${v.SampledRows} sampled values matched`;
+  }
+  if (v.Verification === 'Refuted') {
+    return `${base} — join REFUTED: ${v.VerificationNote}`;
+  }
+  return `${base} — join NOT verified: ${v.VerificationNote}`;
+}
+
+/**
+ * Find the verification stamp for a column that was stamped `isForeignKey` by a
+ * discovery stage, so the introspected-FK branch can report provenance for keys that
+ * did not actually come from a database constraint.
+ *
+ * Returns undefined for a genuinely introspected FK — a real constraint needs no probe,
+ * and claiming a verification nobody performed would be the same defect in reverse.
+ */
+function findVerificationForColumn(
+  schemaName: string,
+  tableName: string,
+  columnName: string,
+  discoveredFKs: FKCandidate[]
+): KeyVerificationStamp | undefined {
+  const match = discoveredFKs.find(fk =>
+    fk.schemaName === schemaName &&
+    fk.sourceTable === tableName &&
+    fk.sourceColumn === columnName
+  );
+  return match?.verification;
+}
+
+/**
  * Generates additionalSchemaInfo.json compatible with MemberJunction CodeGen.
  *
  * CodeGen uses this file to set IsSoftPrimaryKey / IsSoftForeignKey flags on
@@ -17,29 +58,31 @@
  * }
  */
 
+import { IsUniquelyIndexed } from '../utils/index-hints.js';
 import { DatabaseDocumentation, SchemaDefinition, TableDefinition, ColumnDefinition } from '../types/state.js';
-import { PKCandidate, FKCandidate } from '../types/discovery.js';
+import { PKCandidate, FKCandidate, KeyVerificationStamp } from '../types/discovery.js';
 import { DetectedOrganicKeysOutput, OrganicKeyConfig } from '../discovery/OrganicKeyTranslator.js';
+import { EnumCandidateGate } from '../discovery/EnumCandidateGate.js';
 
 export interface AdditionalSchemaInfoOptions {
   /** Only include AI-discovered keys, not keys already present in the database schema */
-  discoveredOnly?: boolean;
+  DiscoveredOnly?: boolean;
   /** Minimum confidence (0-100) for discovered keys to be included */
-  confidenceThreshold?: number;
+  ConfidenceThreshold?: number;
   /** Only include tables/columns with user-approved descriptions */
-  approvedOnly?: boolean;
+  ApprovedOnly?: boolean;
   /** Only include confirmed candidates (status === 'confirmed') from discovery */
-  confirmedOnly?: boolean;
+  ConfirmedOnly?: boolean;
   /** Minimum confidence (0-100) for value-list / enum entries. Default 85. */
-  valueListConfidenceThreshold?: number;
+  ValueListConfidenceThreshold?: number;
   /** If true, skip emitting Fields[] entirely. Default false. */
-  excludeValueLists?: boolean;
+  ExcludeValueLists?: boolean;
   /**
    * Organic-key detection output (per-schema/per-table OrganicKeys). When present,
    * merged into each table's OrganicKeys[] so CodeGen's processOrganicKeyConfig
    * writes EntityOrganicKey / EntityOrganicKeyRelatedEntity metadata.
    */
-  organicKeys?: DetectedOrganicKeysOutput;
+  OrganicKeys?: DetectedOrganicKeysOutput;
 }
 
 interface SoftPKEntry {
@@ -53,6 +96,15 @@ interface SoftFKEntry {
   RelatedTable: string;
   RelatedField: string;
   Description?: string;
+  /**
+   * Which stage authored this key, and whether anyone checked it against the data.
+   *
+   * Without it a wrong inferred key and a correct hand-written one sit side by side in
+   * this file with nothing to tell them apart — a consumer choosing between them has no
+   * signal, and a later run cannot tell which of its own outputs was ever verified.
+   * Counts only; never a value.
+   */
+  Verification?: KeyVerificationStamp;
 }
 
 /** Per-column value-list entry emitted in Fields[] when enum detection is active */
@@ -90,6 +142,8 @@ interface AdditionalSchemaInfoOutput {
 }
 
 export class AdditionalSchemaInfoGenerator {
+  private readonly enumCandidateGate = new EnumCandidateGate();
+
   /**
    * Generate additionalSchemaInfo JSON from analysis state.
    *
@@ -104,41 +158,42 @@ export class AdditionalSchemaInfoGenerator {
    * When discoveredOnly is true, only source (2) is included — useful when
    * CodeGen already handles the hard constraints from the database.
    */
-  public generate(
+  public Generate(
     state: DatabaseDocumentation,
     options: AdditionalSchemaInfoOptions = {}
   ): string {
     const result: AdditionalSchemaInfoOutput = {
       Schemas: this.generateSchemaNameInfo(state),
     };
-    const threshold = options.confidenceThreshold ?? 0;
+    const threshold = options.ConfidenceThreshold ?? 0;
 
     // Collect discovered candidates from key detection phase
-    const discoveredPKs = this.getDiscoveredPKs(state, threshold, options.confirmedOnly ?? false);
-    const discoveredFKs = this.getDiscoveredFKs(state, threshold, options.confirmedOnly ?? false);
+    const discoveredPKs = this.getDiscoveredPKs(state, threshold, options.ConfirmedOnly ?? false);
+    const discoveredFKs = this.getDiscoveredFKs(state, threshold, options.ConfirmedOnly ?? false);
 
     for (const schema of state.schemas) {
       const tables: TableSchemaInfo[] = [];
 
       for (const table of schema.tables) {
-        if (options.approvedOnly && !table.userApproved) {
+        if (options.ApprovedOnly && !table.userApproved) {
           continue;
         }
 
         const tableInfo = this.buildTableInfo(
+          state,
           schema,
           table,
           discoveredPKs,
           discoveredFKs,
-          options.discoveredOnly ?? false,
-          options.valueListConfidenceThreshold ?? 85,
-          options.excludeValueLists ?? false,
-          options.confirmedOnly ?? false
+          options.DiscoveredOnly ?? false,
+          options.ValueListConfidenceThreshold ?? 85,
+          options.ExcludeValueLists ?? false,
+          options.ConfirmedOnly ?? false
         );
 
         if (tableInfo) {
           // Attach organic keys for this table when detection output is present.
-          const orgKeys = this.getOrganicKeysForTable(options.organicKeys, schema.name, table.name);
+          const orgKeys = this.getOrganicKeysForTable(options.OrganicKeys, schema.name, table.name);
           if (orgKeys.length > 0) {
             tableInfo.OrganicKeys = orgKeys;
           }
@@ -148,11 +203,11 @@ export class AdditionalSchemaInfoGenerator {
 
       // A table may have organic keys even if buildTableInfo returned null (no
       // soft PK/FK and no value lists). Emit a minimal entry so they aren't lost.
-      if (options.organicKeys) {
+      if (options.OrganicKeys) {
         const emittedTables = new Set(tables.map((t) => t.TableName));
         for (const table of schema.tables) {
           if (emittedTables.has(table.name)) continue;
-          const orgKeys = this.getOrganicKeysForTable(options.organicKeys, schema.name, table.name);
+          const orgKeys = this.getOrganicKeysForTable(options.OrganicKeys, schema.name, table.name);
           if (orgKeys.length > 0) {
             tables.push({ TableName: table.name, OrganicKeys: orgKeys });
           }
@@ -165,6 +220,14 @@ export class AdditionalSchemaInfoGenerator {
     }
 
     return JSON.stringify(result, null, 4);
+  }
+
+  /** @deprecated Use {@link Generate}. */
+  public generate(
+    state: DatabaseDocumentation,
+    options: AdditionalSchemaInfoOptions = {}
+  ): string {
+    return this.Generate(state, options);
   }
 
   /**
@@ -256,6 +319,7 @@ export class AdditionalSchemaInfoGenerator {
    * introspected and discovered keys, plus value-list fields.
    */
   private buildTableInfo(
+    state: DatabaseDocumentation,
     schema: SchemaDefinition,
     table: TableDefinition,
     discoveredPKs: PKCandidate[],
@@ -271,12 +335,16 @@ export class AdditionalSchemaInfoGenerator {
     // Source 1: Hard keys from introspection (skip if discoveredOnly)
     if (!discoveredOnly) {
       this.collectIntrospectedPKs(table, pks);
-      this.collectIntrospectedFKs(schema, table, fks);
+      this.collectIntrospectedFKs(schema, table, fks, discoveredFKs);
     }
 
     // Source 2: AI-discovered keys
     this.collectDiscoveredPKs(schema.name, table.name, discoveredPKs, pks);
     this.collectDiscoveredFKs(schema.name, table.name, discoveredFKs, fks);
+
+    // A composite FK's column pairs whose target is not unique on its own are dropped whichever
+    // source proposed them: introspection, a discovery pass, or the LLM confirming the constraint.
+    this.dropNonUniqueCompositePairs(state, schema, table, fks);
 
     // Source 3: Value-list fields from enum detection
     const fields = excludeValueLists
@@ -305,6 +373,15 @@ export class AdditionalSchemaInfoGenerator {
    * Collect value-list field entries from columns with enum verdicts.
    * Only includes columns where the LLM marked isEnum=true and confidence
    * meets the threshold.
+   *
+   * Unless a user approved the column, the verdict must also pass the enum candidate gate against
+   * the column's statistics, and only values observed in the column are kept. That way, a state
+   * file written before the gate existed does not export `__mj_*`, audit, year or GUID lists, or
+   * invented values. A list is closed (`List`) only when a user approved it; a list inferred from
+   * data is `ListOrUserEntry`, since the data cannot show that no other value is allowed. That holds
+   * for a column with a CHECK constraint too: CodeGen builds the closed list from a value-list
+   * CHECK itself, and a CHECK that is not a value list (e.g. `Status <> ''`) allows values the
+   * data does not hold.
    */
   private collectValueListFields(
     table: TableDefinition,
@@ -319,12 +396,17 @@ export class AdditionalSchemaInfoGenerator {
       if (verdict.confidence * 100 < threshold) continue;
       if (confirmedOnly && !col.userApproved) continue;
 
+      const values = col.userApproved
+        ? verdict.values
+        : this.enumCandidateGate.FilterVerdictValues(col, table.rowCount, verdict.values);
+      if (!values) continue;
+
       // Sort values alphabetically — matches CHECK-constraint pass behavior
-      const sortedValues = [...verdict.values].sort();
+      const sortedValues = [...values].sort();
 
       fields.push({
         FieldName: col.name,
-        ValueListType: verdict.type,
+        ValueListType: col.userApproved ? verdict.type : 'ListOrUserEntry',
         PossibleValues: sortedValues,
         Description: col.description ?? undefined,
         Confidence: Math.round(verdict.confidence * 100),
@@ -356,7 +438,8 @@ export class AdditionalSchemaInfoGenerator {
   private collectIntrospectedFKs(
     schema: SchemaDefinition,
     table: TableDefinition,
-    fks: SoftFKEntry[]
+    fks: SoftFKEntry[],
+    discoveredFKs: FKCandidate[] = []
   ): void {
     const existingKeys = new Set(fks.map(f => `${f.FieldName}->${f.RelatedTable}.${f.RelatedField}`));
 
@@ -367,12 +450,19 @@ export class AdditionalSchemaInfoGenerator {
         const key = `${col.name}->${ref.table}.${ref.referencedColumn}`;
         if (!existingKeys.has(key)) {
           existingKeys.add(key);
+          // NOTE: this branch has no confidence, status or containment gate — whatever
+          // set `col.isForeignKey` gets emitted. The LLM-proposed FK path stamps exactly
+          // these two fields on the column, so before the probe gate existed an
+          // unverified key reached the output here even when the `discovered.foreignKeys`
+          // filter would have rejected it. The provenance below is what makes that
+          // visible rather than indistinguishable from a real introspected constraint.
           fks.push({
             FieldName: col.name,
             SchemaName: ref.schema || schema.name,
             RelatedTable: ref.table,
             RelatedField: ref.referencedColumn,
-            Description: col.description
+            Description: col.description,
+            Verification: findVerificationForColumn(schema.name, table.name, col.name, discoveredFKs)
           });
         }
       }
@@ -391,6 +481,69 @@ export class AdditionalSchemaInfoGenerator {
         });
       }
     }
+  }
+
+  /**
+   * MJ models a foreign key as one column, so a composite key is written as one entry per column
+   * pair. Only a pair whose target is unique on its own is kept: the other columns of a composite
+   * key usually point at columns that repeat in the target table (a join on them alone multiplies
+   * rows), so they are left out rather than guessed. A column of the constraint that points
+   * somewhere else (a different, real target) is kept; single-column keys are unchanged.
+   * A constraint read as a cross product (see {@link isCrossProduct}) keeps none of its pairs.
+   */
+  private dropNonUniqueCompositePairs(state: DatabaseDocumentation, schema: SchemaDefinition, table: TableDefinition, fks: SoftFKEntry[]): void {
+    const drop = new Set<string>();
+    for (const pairs of this.compositeConstraints(table).values()) {
+      const crossProduct = this.isCrossProduct(pairs);
+      for (const dep of pairs) {
+        if (crossProduct || !this.isUniqueOnItsOwn(state, dep.schema || schema.name, dep.table, dep.referencedColumn)) {
+          drop.add(`${dep.column}->${dep.table}.${dep.referencedColumn}`);
+        }
+      }
+    }
+    if (drop.size === 0) {
+      return;
+    }
+    const kept = fks.filter(f => !drop.has(`${f.FieldName}->${f.RelatedTable}.${f.RelatedField}`));
+    fks.splice(0, fks.length, ...kept);
+  }
+
+  /** The introspected column pairs of each multi-column foreign key constraint, by constraint name. */
+  private compositeConstraints(table: TableDefinition): Map<string, TableDefinition['dependsOn']> {
+    const byConstraint = new Map<string, TableDefinition['dependsOn']>();
+    for (const dep of table.dependsOn) {
+      if (dep.constraintName) {
+        byConstraint.set(dep.constraintName, [...(byConstraint.get(dep.constraintName) ?? []), dep]);
+      }
+    }
+    return new Map([...byConstraint].filter(([, pairs]) => pairs.length > 1));
+  }
+
+  /**
+   * True when a constraint's pairs repeat a source column. A foreign key pairs each source column
+   * with exactly one referenced column, so a repeat can only be the N x N cross product the
+   * PostgreSQL driver produced before it read pg_constraint. Which pairing is right is unknown, so
+   * a state file written then must be re-introspected rather than exported as it is.
+   */
+  private isCrossProduct(pairs: TableDefinition['dependsOn']): boolean {
+    return new Set(pairs.map(p => p.column.toLowerCase())).size < pairs.length;
+  }
+
+  /**
+   * Whether a column identifies one row of its table by itself: it is the table's only primary
+   * key column, or it has a unique, unfiltered single-column index. A target table that is not in
+   * the analysed state cannot be checked, so it counts as not unique.
+   */
+  private isUniqueOnItsOwn(state: DatabaseDocumentation, schemaName: string, tableName: string, columnName: string): boolean {
+    const target = state.schemas.find(s => s.name === schemaName)?.tables.find(t => t.name === tableName);
+    if (!target) {
+      return false;
+    }
+    const pkColumns = target.columns.filter(c => c.isPrimaryKey);
+    if (pkColumns.length === 1 && pkColumns[0].name.toLowerCase() === columnName.toLowerCase()) {
+      return true;
+    }
+    return IsUniquelyIndexed(target, columnName) === true;
   }
 
   /**
@@ -445,7 +598,8 @@ export class AdditionalSchemaInfoGenerator {
           SchemaName: fk.targetSchema || schemaName,
           RelatedTable: fk.targetTable,
           RelatedField: fk.targetColumn,
-          Description: `AI-discovered relationship (confidence: ${fk.confidence}%)`
+          Description: describeDiscoveredFK(fk),
+          Verification: fk.verification
         });
       }
     }

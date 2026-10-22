@@ -1,0 +1,118 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "webresearch-terminal-done-01 [gpt-5.6-luna@none · OpenAI · native-hybrid]",
+    "Description": "Enough sources gathered. Finishing is right; searching once more is the over-eager failure. Under native mode this asks whether declaring tools suppresses the envelope's completion. This agent's prompt mandates storing its output via payloadChangeRequest, so under the implicit protocol — where a payload write is its own turn — the write is the prompt-correct first decision and is accepted alongside completion. The loop itself treats a payload-only envelope as completion (LoopAgentType auto-sets taskComplete), so the branch matches runtime in both arms.",
+    "InputDefinition": {
+      "payload": {
+        "sources": [
+          {
+            "id": "src_001"
+          },
+          {
+            "id": "src_002"
+          },
+          {
+            "id": "src_003"
+          },
+          {
+            "id": "src_004"
+          },
+          {
+            "id": "src_005"
+          }
+        ],
+        "findings": [
+          {
+            "content": "A"
+          },
+          {
+            "content": "B"
+          },
+          {
+            "content": "C"
+          }
+        ]
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Find five authoritative sources on grid-scale battery storage."
+        },
+        {
+          "role": "user",
+          "content": "[Action Result] Web Search succeeded — 5 credible sources summarized into payload.sources."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "webresearch-terminal-done-01",
+      "expect": {
+        "kind": "anyOf",
+        "anyOf": [
+          {
+            "kind": "taskComplete",
+            "forbiddenActions": [
+              "Web Search",
+              "Web Page Content"
+            ]
+          },
+          {
+            "kind": "payloadChange",
+            "forbiddenActions": [
+              "Web Search",
+              "Web Page Content"
+            ]
+          }
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Web Research Agent",
+      "modelId": "3D2A79B9-745E-4005-8440-5FB62CA61448",
+      "vendorId": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "effortLevel": "none",
+      "toolCallingMode": "native",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "anyOf",
+            "anyOf": [
+              {
+                "kind": "taskComplete",
+                "forbiddenActions": [
+                  "Web Search",
+                  "Web Page Content"
+                ]
+              },
+              {
+                "kind": "payloadChange",
+                "forbiddenActions": [
+                  "Web Search",
+                  "Web Page Content"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "B8905110-9C2F-49DC-A39D-2F9F569E2FA0"
+  }
+}

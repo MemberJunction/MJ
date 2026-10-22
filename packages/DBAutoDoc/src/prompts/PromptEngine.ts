@@ -7,10 +7,11 @@ import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
 import { PromptFileLoader } from './PromptFileLoader.js';
 import { AIConfig, RetryConfig } from '../types/config.js';
 import { PromptExecutionResult } from '../types/prompts.js';
-import { createLLMInstance } from '../utils/llm-factory.js';
+import { CreateLLMInstance } from '../utils/llm-factory.js';
+import { ResolveCallTimeoutMs, WithCallDeadline } from '../utils/call-deadline.js';
 import { CleanAndParseJSON } from '@memberjunction/global';
 
-export type GuardrailCheckFn = () => { canContinue: boolean; reason?: string };
+export type GuardrailCheckFn = () => { canContinue: boolean; reason?: string };  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
 export class PromptEngine {
   private nunjucksEnv: nunjucks.Environment;
@@ -39,19 +40,29 @@ export class PromptEngine {
    * Set guardrail checking callback
    * This will be called before every LLM execution to check if we should continue
    */
-  public setGuardrailCheck(checkFn: GuardrailCheckFn): void {
+  public SetGuardrailCheck(checkFn: GuardrailCheckFn): void {
     this.guardrailCheck = checkFn;
+  }
+
+  /** @deprecated Use {@link SetGuardrailCheck}. */
+  public setGuardrailCheck(checkFn: GuardrailCheckFn): void {
+    return this.SetGuardrailCheck(checkFn);
   }
 
   /**
    * Initialize the prompt loader
    */
-  public async initialize(): Promise<void> {
+  public async Initialize(): Promise<void> {
     const env = this.nunjucksEnv as { loaders?: PromptFileLoader[] };
     const loader = env.loaders?.[0];
     if (loader) {
       await loader.loadAll();
     }
+  }
+
+  /** @deprecated Use {@link Initialize}. */
+  public async initialize(): Promise<void> {
+    return this.Initialize();
   }
 
   /**
@@ -60,7 +71,7 @@ export class PromptEngine {
    */
   private createLLM(): BaseLLM {
     // Use shared factory (DRY principle)
-    return createLLMInstance(this.config.provider, this.config.apiKey);
+    return CreateLLMInstance(this.config.provider, this.config.apiKey);
   }
 
   /**
@@ -124,7 +135,7 @@ export class PromptEngine {
    * Execute a prompt with AI/Core
    * Main entry point for DBAutoDoc analysis
    */
-  public async executePrompt<T>(
+  public async ExecutePrompt<T>(
     promptName: string,
     context: any,
     options?: {
@@ -240,11 +251,29 @@ export class PromptEngine {
     }
   }
 
+  /** @deprecated Use {@link ExecutePrompt}. */
+  public async executePrompt<T>(
+    promptName: string,
+    context: any,
+    options?: {
+      systemPrompt?: string;
+      temperature?: number;
+      maxTokens?: number;
+      responseFormat?: 'JSON' | 'Text';
+      /** Override the model for this specific call (e.g., use a stronger model for FK pruning) */
+      modelOverride?: string;
+      /** Override effort level for this specific call */
+      effortLevelOverride?: number;
+    }
+  ): Promise<PromptExecutionResult<T>> {
+    return this.ExecutePrompt(promptName, context, options);
+  }
+
   /**
    * Execute multiple prompts in parallel
    * Uses AI/Core's ChatCompletions for efficiency
    */
-  public async executePromptsParallel<T>(
+  public async ExecutePromptsParallel<T>(
     requests: Array<{
       promptName: string;
       context: any;
@@ -329,6 +358,22 @@ export class PromptEngine {
     }
   }
 
+  /** @deprecated Use {@link ExecutePromptsParallel}. */
+  public async executePromptsParallel<T>(
+    requests: Array<{
+      promptName: string;
+      context: any;
+      options?: {
+        systemPrompt?: string;
+        temperature?: number;
+        maxTokens?: number;
+        responseFormat?: 'JSON' | 'Text';
+      };
+    }>
+  ): Promise<Array<PromptExecutionResult<T>>> {
+    return this.ExecutePromptsParallel(requests);
+  }
+
   /**
    * Execute an LLM call with retry and exponential backoff for transient failures.
    * Retries on 429 (rate limit), network errors, and other transient failures.
@@ -348,7 +393,14 @@ export class PromptEngine {
       const llmStartTime = Date.now();
 
       try {
-        lastResult = await this.llm.ChatCompletion(params);
+        // Bounded: a stalled provider becomes a normal failure this retry loop can act on. Without
+        // the deadline the loop is unreachable — it only runs once the promise settles, and a
+        // provider that accepts the socket and stops sending never settles one.
+        lastResult = await WithCallDeadline(
+          ResolveCallTimeoutMs(this.config.callTimeoutMs),
+          `prompt for model ${params.model}`,
+          signal => this.llm.ChatCompletion({ ...params, cancellationToken: signal })
+        );
       } catch (error) {
         // Network-level failure (fetch failed, timeout, etc.)
         const errMsg = (error as Error).message || '';
@@ -400,6 +452,10 @@ export class PromptEngine {
     if (lower.includes('429') || lower.includes('too many requests') || lower.includes('rate limit') || lower.includes('resource exhausted')) return true;
     // Network errors
     if (lower.includes('fetch failed') || lower.includes('econnreset') || lower.includes('etimedout') || lower.includes('socket hang up')) return true;
+    // A call we aborted ourselves for exceeding its wall-clock ceiling. Retriable, and safe to
+    // retry: the deadline aborts the request before rejecting, so the previous attempt is not
+    // still in flight competing with this one.
+    if (lower.includes('call timeout')) return true;
     // Server errors (500, 502, 503, 504)
     if (lower.includes('500') || lower.includes('502') || lower.includes('503') || lower.includes('504') || lower.includes('internal server error') || lower.includes('bad gateway') || lower.includes('service unavailable')) return true;
     // Not retryable: 400 bad request, 401 auth, 403 forbidden, JSON parse errors

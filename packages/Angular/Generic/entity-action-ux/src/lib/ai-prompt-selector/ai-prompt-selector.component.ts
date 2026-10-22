@@ -20,7 +20,7 @@ import {
 import { RunView, type IMetadataProvider } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
-import { filterPromptGroups, groupPromptsByCategory, type PromptGroup, type PromptOption } from '../prompt-grouping';
+import { FilterPromptGroups, GroupPromptsByCategory, type PromptGroup, type PromptOption } from '../prompt-grouping';
 
 @Component({
     selector: 'mj-ai-prompt-selector',
@@ -130,7 +130,7 @@ export class AIPromptSelectorComponent extends BaseAngularComponent implements O
     }
 
     get FilteredGroups(): PromptGroup[] {
-        return filterPromptGroups(this.Groups, this.Filter);
+        return FilterPromptGroups(this.Groups, this.Filter);
     }
 
     Toggle(): void {
@@ -170,7 +170,7 @@ export class AIPromptSelectorComponent extends BaseAngularComponent implements O
             ResultType: 'simple',
         });
         this.allPrompts = rv.Success ? (rv.Results ?? []) : [];
-        this.Groups = groupPromptsByCategory(this.allPrompts);
+        this.Groups = GroupPromptsByCategory(this.allPrompts);
         this.Loading = false;
         this.cdr.detectChanges();
     }

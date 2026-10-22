@@ -32,7 +32,7 @@ import '@memberjunction/server-bootstrap-lite/mj-class-registrations';
 // Import supplemental manifest for user-defined classes (generated at prestart with --exclude-packages @memberjunction)
 import './generated/class-registrations-manifest.js';
 
-import { initializeServer, listAvailableTools, ToolFilterOptions } from './Server.js';
+import { InitializeServer, ListAvailableTools, ToolFilterOptions } from './Server.js';
 
 /** CLI argument types */
 interface CLIArguments {
@@ -125,12 +125,12 @@ async function main(): Promise<void> {
 
     // Handle --list-tools option
     if (argv.listTools) {
-        await listAvailableTools(filterOptions);
+        await ListAvailableTools(filterOptions);
         process.exit(0);
     }
 
     // Start the server with filter options
-    await initializeServer(filterOptions);
+    await InitializeServer(filterOptions);
 }
 
 main().catch(error => {

@@ -23,10 +23,10 @@ export class AgentRecordProcessor implements IRecordProcessor {
      * @param inputMapping - Optional mapping config resolved against `{ record, recordId, entityId }`
      *   to build the agent's `data`. When omitted, the whole record is passed as `data`.
      */
-    constructor(private readonly agentID: string, private readonly inputMapping?: unknown) {}
+    constructor(private readonly agentID: string, private readonly inputMapping?: Record<string, string>) {}
 
     /** Builds the agent `data` payload from the record + optional input mapping. */
-    public static buildData(inputMapping: unknown, record: RecordRef): Record<string, unknown> {
+    public static BuildData(inputMapping: Record<string, string> | undefined, record: RecordRef): Record<string, unknown> {
         if (!inputMapping) {
             return { record: record.Record ?? {}, recordId: record.RecordID, entityId: record.EntityID };
         }
@@ -34,8 +34,13 @@ export class AgentRecordProcessor implements IRecordProcessor {
         return resolveValueMapping<Record<string, unknown>>(inputMapping, sources);
     }
 
+    /** @deprecated Use {@link BuildData}. */
+    public static buildData(inputMapping: Record<string, string> | undefined, record: RecordRef): Record<string, unknown> {
+        return this.BuildData(inputMapping, record);
+    }
+
     public async ProcessRecord(record: RecordRef, context: RecordProcessorContext): Promise<RecordResult> {
-        await AIEngine.Instance.Config(false, context.contextUser);
+        await AIEngine.Instance.Config(false, context.ContextUser);
         const agent = AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, this.agentID));
         if (!agent) {
             return { Status: 'Failed', ErrorMessage: `Agent '${this.agentID}' not found` };
@@ -45,8 +50,11 @@ export class AgentRecordProcessor implements IRecordProcessor {
         const result = await runner.RunAgent({
             agent,
             conversationMessages: [],
-            contextUser: context.contextUser,
+            contextUser: context.ContextUser,
             data: AgentRecordProcessor.buildData(this.inputMapping, record),
+            // `data` is built on the server from the Record Process's admin-configured input mapping, so its reserved
+            // keys (a per-record tenant mapped into PrimaryScopeRecordID, say) are honoured rather than stripped.
+            TrustReservedRunData: true,
         });
 
         return {

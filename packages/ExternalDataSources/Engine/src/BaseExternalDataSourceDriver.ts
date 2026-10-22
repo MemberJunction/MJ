@@ -381,7 +381,7 @@ export abstract class BaseExternalDataSourceDriver<TConnection = unknown> {
    */
   protected isAuthError(e: unknown): boolean {
     const code = this.extractErrorCode(e);
-    if (code && BaseExternalDataSourceDriver.AuthErrorCodes.has(code)) {
+    if (code && BaseExternalDataSourceDriver.authErrorCodes.has(code)) {
       return true;
     }
     const msg = (e instanceof Error ? e.message : String(e)).toLowerCase();
@@ -401,7 +401,7 @@ export abstract class BaseExternalDataSourceDriver<TConnection = unknown> {
    * PostgreSQL 28P01/28000; MySQL 1044/1045/1698; SQL Server 4060/18452/18456/18470;
    * Oracle 1017/1031/28000. Used by {@link isAuthError} as the primary (locale-independent) signal.
    */
-  private static readonly AuthErrorCodes = new Set<string>([
+  private static readonly authErrorCodes = new Set<string>([
     '28P01', '28000', '1044', '1045', '1698', '4060', '18452', '18456', '18470', '1017', '1031',
   ]);
 

@@ -15,6 +15,9 @@ import { ValidationErrorInfo } from '@memberjunction/global';
  *   performing a non-atomic cascade.
  * - **`OnRemove` policy is honoured on the delete path**, so an aggregation relationship does not
  *   quietly cascade-delete records that outlive their parent.
+ * - **A deleted record matches the database.** Inside a transaction it is reset only once the graph
+ *   commits, so a rollback leaves it as it was; with no transaction its delete stands, so a later
+ *   failure leaves it reset.
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
@@ -36,6 +39,8 @@ let supportsTransactions = true;
 let routeOperationResult: unknown = null;
 /** What the client actually sent to the remote operation. */
 let routedInput: unknown = null;
+/** Runs as the outermost transaction commits, while the records still hold what the graph did. */
+let duringCommit: (() => void) | null = null;
 
 /**
  * Stable labels for records, assigned at creation.
@@ -81,6 +86,7 @@ function makeProvider() {
                     if (settled) return;
                     settled = true;
                     txnLog.push(`commit:${depth}`);
+                    if (depth === 1) duringCommit?.();
                     depth--;
                 },
                 async Rollback() {
@@ -157,6 +163,7 @@ beforeEach(() => {
     supportsTransactions = true;
     routeOperationResult = null;
     routedInput = null;
+    duringCommit = null;
 });
 
 /** Builds a saved parent with `count` persisted related records attached. */
@@ -232,6 +239,66 @@ describe('delete graph', () => {
         expect(opLog).not.toContain('delete:Parent');
         expect(parent.LatestResult?.Success).toBe(false);
         expect(parent.LatestResult?.Type).toBe('delete');
+    });
+
+    it('puts back a related record it deleted before the failure, so a retry can delete it', async () => {
+        const { parent, provider, collection } = await makeSavedParent(2);
+        const keys = new Map(collection.Items.map(child => [child, child.Get('ID')]));
+        let deletes = 0;
+        provider.Delete = async (entity: BaseEntity) => {
+            opLog.push(`delete:${labelOf(entity)}`);
+            return ++deletes < 2;
+        };
+
+        expect(await parent.Delete()).toBe(false);
+
+        // The first delete returned and reset its record with NewRecord(); the second failed and
+        // the graph rolled back, so the first record's row is still there.
+        const deleted = collection.Items.find(child => opLog[0] === `delete:${labelOf(child)}`);
+        expect(deleted, 'a related record was deleted before the failure').toBeDefined();
+        expect(deleted!.IsSaved).toBe(true);
+        expect(deleted!.Get('ID')).toBe(keys.get(deleted!));
+
+        provider.Delete = async (entity: BaseEntity) => {
+            opLog.push(`delete:${labelOf(entity)}`);
+            return true;
+        };
+        expect(await parent.Delete()).toBe(true);
+    });
+
+    it('resets the records it deleted only once the graph commits', async () => {
+        const { parent, collection } = await makeSavedParent(2);
+        const records: BaseEntity[] = [...collection.Items, parent];
+        let savedAtCommit: boolean[] = [];
+        duringCommit = () => {
+            savedAtCommit = records.map(record => record.IsSaved);
+        };
+
+        expect(await parent.Delete()).toBe(true);
+
+        expect(txnLog).toEqual(['begin:1', 'commit:1']);
+        expect(savedAtCommit, 'none is reset before the commit, which could still fail').toEqual([true, true, true]);
+        expect(records.map(record => record.IsSaved)).toEqual([false, false, false]);
+    });
+
+    it('leaves a record it deleted reset when there is no transaction to roll the delete back', async () => {
+        // A client provider has no transaction of its own, so the graph's deletes run one by one
+        // (see deleteGraph) and the first stands when the second fails: its row is gone.
+        const { parent, provider, collection } = await makeSavedParent(2);
+        supportsTransactions = false;
+        let deletes = 0;
+        provider.Delete = async (entity: BaseEntity) => {
+            opLog.push(`delete:${labelOf(entity)}`);
+            return ++deletes < 2;
+        };
+
+        expect(await parent.Delete()).toBe(false);
+
+        expect(txnLog).toEqual([]);
+        const [deleted, refused] = opLog.map(op => collection.Items.find(child => op === `delete:${labelOf(child)}`));
+        expect(deleted!.IsSaved, 'its row was deleted, and nothing rolled that back').toBe(false);
+        expect(refused!.IsSaved).toBe(true);
+        expect(parent.IsSaved).toBe(true);
     });
 });
 

@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
-  distinctSchemaNames,
-  entitiesInSchemas,
-  groupEntitiesBySchema,
-  summarizeEntitiesForContext,
+  DistinctSchemaNames,
+  EntitiesInSchemas,
+  GroupEntitiesBySchema,
+  SummarizeEntitiesForContext,
 } from '../generic/schemaHydration';
 import { EntityInfo } from '../generic/entityInfo';
 
@@ -26,19 +26,19 @@ describe('schemaHydration', () => {
   ];
 
   it('groups by schema and lists distinct names in first-seen order', () => {
-    const grouped = groupEntitiesBySchema(catalog);
+    const grouped = GroupEntitiesBySchema(catalog);
     expect([...grouped.keys()]).toEqual(['crm', 'billing']);
-    expect(distinctSchemaNames(catalog)).toEqual(['crm', 'billing']);
+    expect(DistinctSchemaNames(catalog)).toEqual(['crm', 'billing']);
   });
 
   it('filters the catalog to the named schemas without mutating it', () => {
-    const billing = entitiesInSchemas(catalog, ['BILLING']);
+    const billing = EntitiesInSchemas(catalog, ['BILLING']);
     expect(billing.map((e) => e.Name)).toEqual(['Invoices', 'Invoice Lines']);
     expect(catalog).toHaveLength(3);
   });
 
   it('summarizes for agent context and honors maxEntities + includeFields', () => {
-    const summary = summarizeEntitiesForContext(catalog, {
+    const summary = SummarizeEntitiesForContext(catalog, {
       schemas: ['crm'],
       includeFields: true,
       maxEntities: 10,
@@ -54,20 +54,20 @@ describe('schemaHydration', () => {
         Fields: [{ Name: 'ID', Type: 'uniqueidentifier' }],
       },
     ]);
-    const capped = summarizeEntitiesForContext(catalog, { maxEntities: 1 });
+    const capped = SummarizeEntitiesForContext(catalog, { maxEntities: 1 });
     expect(capped).toHaveLength(1);
     expect(capped[0].Fields).toBeUndefined();
   });
 
   it('returns an empty projection for unknown schemas or an empty include list', () => {
-    expect(entitiesInSchemas(catalog, ['does-not-exist'])).toEqual([]);
-    expect(entitiesInSchemas(catalog, [])).toEqual([]);
-    expect(summarizeEntitiesForContext(catalog, { schemas: ['nope'] })).toEqual([]);
+    expect(EntitiesInSchemas(catalog, ['does-not-exist'])).toEqual([]);
+    expect(EntitiesInSchemas(catalog, [])).toEqual([]);
+    expect(SummarizeEntitiesForContext(catalog, { schemas: ['nope'] })).toEqual([]);
   });
 
   it('does not mutate the input catalog when grouping', () => {
     const copy = [...catalog];
-    groupEntitiesBySchema(catalog);
+    GroupEntitiesBySchema(catalog);
     expect(catalog).toEqual(copy);
   });
 });

@@ -49,6 +49,11 @@ export interface IEnvironmentConfigurableProvider {
 /**
  * Narrows an unknown provider class to one that offers env-var configuration.
  */
-export function isEnvironmentConfigurable(subject: unknown): subject is IEnvironmentConfigurableProvider {
+export function IsEnvironmentConfigurable(subject: unknown): subject is IEnvironmentConfigurableProvider {
   return typeof (subject as IEnvironmentConfigurableProvider | undefined)?.ConfigFromEnvironment === 'function';
+}
+
+/** @deprecated Use {@link IsEnvironmentConfigurable}. */
+export function isEnvironmentConfigurable(subject: unknown): subject is IEnvironmentConfigurableProvider {
+  return IsEnvironmentConfigurable(subject);
 }

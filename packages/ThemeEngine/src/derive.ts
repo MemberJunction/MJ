@@ -13,18 +13,18 @@
  * @module @memberjunction/theme-engine
  */
 
-import { mixHex, parseHex } from './color.js';
-import { buildContrastReport, ContrastReport } from './contrast.js';
+import { MixHex, ParseHex } from './color.js';
+import { BuildContrastReport, ContrastReport } from './contrast.js';
 import {
   ACCENT_SHAPE,
   BRAND_SHAPE,
   FAMILY_ANCHOR,
-  generateBrandRamp,
-  generateNeutralRamp,
+  GenerateBrandRamp,
+  GenerateNeutralRamp,
   TERTIARY_SHAPE,
 } from './ramps.js';
-import { hexToOKLCH, oklchToHex } from './color.js';
-import { MJ_DEFAULT_SEEDS, ResolvedSeeds, resolveSeeds, ThemeSeeds } from './seeds.js';
+import { HexToOKLCH, OklchToHex } from './color.js';
+import { MJ_DEFAULT_SEEDS, ResolvedSeeds, ResolveSeeds, ThemeSeeds } from './seeds.js';
 
 /** Fully derived theme: ramps, resolved per-mode maps, overlay vars, and a11y report. */
 export interface DerivedTheme {
@@ -38,12 +38,16 @@ export interface DerivedTheme {
   contrast: ContrastReport;
 }
 
-/** Fixed (non-brand-derived) status ramp steps referenced by the semantic maps. */
+/**
+ * Fixed (non-brand-derived) status ramp steps referenced by the semantic maps.
+ * Dark `-text` uses the 300 step to match `[data-theme="dark"]` in `_tokens.scss` (MJ#4564).
+ * Keep the two in lockstep or ThemeStudio previews drift from the running app.
+ */
 const STATUS = {
-  successBg: '#f0fdf4', success: '#22c55e', successText: '#15803d', successText100: '#dcfce7',
-  warningBg: '#fffbeb', warning: '#f59e0b', warningText: '#b45309', warningText100: '#fef3c7',
-  errorBg: '#fef2f2', error: '#ef4444', errorText: '#b91c1c', errorText100: '#fee2e2', error400: '#f87171',
-  infoBg: '#eff6ff', info: '#3b82f6', infoText: '#1d4ed8', infoText100: '#dbeafe',
+  successBg: '#f0fdf4', success: '#22c55e', successText: '#15803d', successText300: '#86efac',
+  warningBg: '#fffbeb', warning: '#f59e0b', warningText: '#b45309', warningText300: '#fcd34d',
+  errorBg: '#fef2f2', error: '#ef4444', errorText: '#b91c1c', errorText300: '#fca5a5', error400: '#f87171',
+  infoBg: '#eff6ff', info: '#3b82f6', infoText: '#1d4ed8', infoText300: '#93c5fd',
 };
 
 /** Build the resolved semantic map for one mode from the generated primitive ramps. */
@@ -82,7 +86,7 @@ function resolveSemantics(
     // so MJ's default neutrals reproduce the historical #253347 (ΔE ≈ 0.011); the base
     // stylesheet's dark block uses the equivalent color-mix(in srgb-linear, 800 68%, 700)
     // so preview and runtime stay in exact lockstep under a brand overlay.
-    '--mj-bg-surface-card': mixHex(neutral[800], neutral[700], 0.32), '--mj-bg-surface-sunken': neutral[950],
+    '--mj-bg-surface-card': MixHex(neutral[800], neutral[700], 0.32), '--mj-bg-surface-sunken': neutral[950],
     '--mj-bg-surface-hover': neutral[600], '--mj-bg-surface-active': neutral[500],
     '--mj-text-primary': neutral[100], '--mj-text-secondary': neutral[300], '--mj-text-muted': neutral[400],
     '--mj-text-disabled': neutral[600], '--mj-text-inverse': neutral[900],
@@ -95,10 +99,10 @@ function resolveSemantics(
     '--mj-brand-accent-subtle': `color-mix(in srgb, ${accent[400]} 15%, transparent)`, '--mj-brand-on-accent': neutral[900],
     '--mj-brand-tertiary': tertiary[400], '--mj-brand-tertiary-hover': tertiary[300], '--mj-brand-tertiary-active': tertiary[200],
     '--mj-brand-tertiary-subtle': `color-mix(in srgb, ${tertiary[500]} 15%, transparent)`, '--mj-brand-on-tertiary': neutral[0],
-    '--mj-status-success': STATUS.success, '--mj-status-success-bg': `rgba(${rgbTriplet(STATUS.success)}, 0.15)`, '--mj-status-success-text': STATUS.successText100,
-    '--mj-status-warning': STATUS.warning, '--mj-status-warning-bg': `rgba(${rgbTriplet(STATUS.warning)}, 0.15)`, '--mj-status-warning-text': STATUS.warningText100,
-    '--mj-status-error': STATUS.error, '--mj-status-error-bg': `rgba(${rgbTriplet(STATUS.error)}, 0.15)`, '--mj-status-error-text': STATUS.errorText100,
-    '--mj-status-info': STATUS.info, '--mj-status-info-bg': `rgba(${rgbTriplet(STATUS.info)}, 0.15)`, '--mj-status-info-text': STATUS.infoText100,
+    '--mj-status-success': STATUS.success, '--mj-status-success-bg': `rgba(${rgbTriplet(STATUS.success)}, 0.15)`, '--mj-status-success-text': STATUS.successText300,
+    '--mj-status-warning': STATUS.warning, '--mj-status-warning-bg': `rgba(${rgbTriplet(STATUS.warning)}, 0.15)`, '--mj-status-warning-text': STATUS.warningText300,
+    '--mj-status-error': STATUS.error, '--mj-status-error-bg': `rgba(${rgbTriplet(STATUS.error)}, 0.15)`, '--mj-status-error-text': STATUS.errorText300,
+    '--mj-status-info': STATUS.info, '--mj-status-info-bg': `rgba(${rgbTriplet(STATUS.info)}, 0.15)`, '--mj-status-info-text': STATUS.infoText300,
   };
 }
 
@@ -111,13 +115,13 @@ function deriveVizPalette(brandHueDeg: number, override?: string[]): string[] {
   }
   // Ten evenly-spaced hues at a categorical-friendly lightness/chroma, anchored at brand.
   return Array.from({ length: 10 }, (_, i) =>
-    oklchToHex({ l: 0.63, c: 0.15, h: (brandHueDeg + i * 36) % 360 }),
+    OklchToHex({ l: 0.63, c: 0.15, h: (brandHueDeg + i * 36) % 360 }),
   );
 }
 
 /** `#rrggbb` -> `r, g, b` for rgba() shadow emission. */
 function rgbTriplet(hex: string): string {
-  const { r, g, b } = parseHex(hex);
+  const { r, g, b } = ParseHex(hex);
   return `${r}, ${g}, ${b}`;
 }
 
@@ -128,14 +132,14 @@ const px = (n: number): string => `${Math.round(n)}px`;
  * Derive the full theme from brand seeds. Feeding {@link MJ_DEFAULT_SEEDS} reproduces
  * MJ's default _tokens.scss within perceptual tolerance.
  */
-export function derive(seeds: ThemeSeeds = MJ_DEFAULT_SEEDS): DerivedTheme {
-  const s = resolveSeeds(seeds);
-  const brandHue = hexToOKLCH(s.primary).h;
+export function Derive(seeds: ThemeSeeds = MJ_DEFAULT_SEEDS): DerivedTheme {
+  const s = ResolveSeeds(seeds);
+  const brandHue = HexToOKLCH(s.primary).h;
 
-  const brand = generateBrandRamp(BRAND_SHAPE, FAMILY_ANCHOR.brand, s.primary, s.vibrancy);
-  const accent = generateBrandRamp(ACCENT_SHAPE, FAMILY_ANCHOR.accent, s.accent, s.vibrancy);
-  const tertiary = generateBrandRamp(TERTIARY_SHAPE, FAMILY_ANCHOR.tertiary, s.tertiary, s.vibrancy);
-  const neutral = generateNeutralRamp(brandHue, s.neutralChroma);
+  const brand = GenerateBrandRamp(BRAND_SHAPE, FAMILY_ANCHOR.brand, s.primary, s.vibrancy);
+  const accent = GenerateBrandRamp(ACCENT_SHAPE, FAMILY_ANCHOR.accent, s.accent, s.vibrancy);
+  const tertiary = GenerateBrandRamp(TERTIARY_SHAPE, FAMILY_ANCHOR.tertiary, s.tertiary, s.vibrancy);
+  const neutral = GenerateNeutralRamp(brandHue, s.neutralChroma);
 
   const primitives: Record<string, string> = {};
   const addRamp = (name: string, ramp: Record<number, string>) => {
@@ -186,8 +190,13 @@ export function derive(seeds: ThemeSeeds = MJ_DEFAULT_SEEDS): DerivedTheme {
     primitives,
     tokens: { light, dark },
     overlayVars,
-    contrast: buildContrastReport(light, dark),
+    contrast: BuildContrastReport(light, dark),
   };
+}
+
+/** @deprecated Use {@link Derive}. */
+export function derive(seeds: ThemeSeeds = MJ_DEFAULT_SEEDS): DerivedTheme {
+  return Derive(seeds);
 }
 
 /** Optional advanced-customization layer applied on top of the seed-derived tokens. */
@@ -209,7 +218,7 @@ export interface OverlayOptions {
  * last: `overrides` merge over the derived vars; `customCss` is appended, wrapped in the
  * overlay selector so raw rules stay scoped to this theme.
  */
-export function emitOverlayCss(themeId: string, derived: DerivedTheme, options: OverlayOptions = {}): string {
+export function EmitOverlayCss(themeId: string, derived: DerivedTheme, options: OverlayOptions = {}): string {
   const vars = { ...derived.overlayVars, ...(options.overrides ?? {}) };
   const body = Object.entries(vars)
     .map(([k, v]) => `  ${k}: ${v};`)
@@ -217,9 +226,14 @@ export function emitOverlayCss(themeId: string, derived: DerivedTheme, options: 
   let css = `[data-theme-overlay="${themeId}"] {\n${body}\n}\n`;
   const custom = (options.customCss ?? '').trim();
   if (custom) {
-    css += '\n' + emitScopedCustomCss(`[data-theme-overlay="${themeId}"]`, custom);
+    css += '\n' + EmitScopedCustomCss(`[data-theme-overlay="${themeId}"]`, custom);
   }
   return css;
+}
+
+/** @deprecated Use {@link EmitOverlayCss}. */
+export function emitOverlayCss(themeId: string, derived: DerivedTheme, options: OverlayOptions = {}): string {
+  return EmitOverlayCss(themeId, derived, options);
 }
 
 /**
@@ -234,7 +248,7 @@ export function emitOverlayCss(themeId: string, derived: DerivedTheme, options: 
  * and a hoisted `@import` would be dead anyway — CSS ignores `@import` after any
  * other rule, and the overlay Blob always begins with the token block.
  */
-export function emitScopedCustomCss(selector: string, css: string): string {
+export function EmitScopedCustomCss(selector: string, css: string): string {
   const trimmed = css.trim();
   if (!trimmed) return '';
   const { hoisted, scoped } = splitHoistedAtRules(trimmed);
@@ -242,6 +256,11 @@ export function emitScopedCustomCss(selector: string, css: string): string {
   if (hoisted.trim()) out += `${hoisted.trim()}\n`;
   if (scoped.trim()) out += `${selector} {\n${scoped.trim()}\n}\n`;
   return out;
+}
+
+/** @deprecated Use {@link EmitScopedCustomCss}. */
+export function emitScopedCustomCss(selector: string, css: string): string {
+  return EmitScopedCustomCss(selector, css);
 }
 
 const HOIST_AT_RULE = /^@(?:-webkit-|-moz-|-o-)?(?:keyframes|font-face|property)\b/i;

@@ -50,6 +50,24 @@ export interface PersistSchemaOptions {
    * are preserved, and the CustomColumnPromoter reactivates them if the object reappears.
    */
   DeactivateAbsent?: boolean;
+  /**
+   * The OBJECT half of {@link DeactivateAbsent}, separately gateable. Defaults to `DeactivateAbsent`.
+   *
+   * A streaming discovery persists one object at a time and then the complete set of object NAMES,
+   * and the two retirements belong to opposite moments: per object, the object's own field list is
+   * complete but every OTHER object looks absent, so objects must not retire there; in the final
+   * name pass the whole name set is known, so absent objects may retire. Still gated on an
+   * authoritative source, exactly as `DeactivateAbsent` is.
+   */
+  DeactivateAbsentObjects?: boolean;
+  /**
+   * The FIELD half of {@link DeactivateAbsent}, separately gateable. Defaults to `DeactivateAbsent`.
+   *
+   * Per object the field list is complete, so absent fields may retire there; the final name pass
+   * carries name stubs with no fields, so retiring fields there would disable every column of
+   * every object. Still gated on an authoritative source, exactly as `DeactivateAbsent` is.
+   */
+  DeactivateAbsentFields?: boolean;
 }
 
 /** Per-field provenance recording which source decided each attribute during the merge. */
@@ -96,7 +114,7 @@ export interface FieldMergeLog {
  * (HubSpot, Salesforce) whose property-list APIs don't return an
  * `IsPrimaryKey` field at all. See `IntegrationSchemaSync.test.ts`.
  */
-export function decideBooleanOverlay(
+export function DecideBooleanOverlay(
   declared: boolean | undefined,
   discovered: boolean | undefined,
 ): { value: boolean | undefined; winner: 'Declared' | 'Discovered' } {
@@ -107,6 +125,14 @@ export function decideBooleanOverlay(
     return { value: declared, winner: 'Declared' };
   }
   return { value: discovered, winner: 'Discovered' };
+}
+
+/** @deprecated Use {@link DecideBooleanOverlay}. */
+export function decideBooleanOverlay(
+  declared: boolean | undefined,
+  discovered: boolean | undefined,
+): { value: boolean | undefined; winner: 'Declared' | 'Discovered' } {
+  return DecideBooleanOverlay(declared, discovered);
 }
 
 /**
@@ -124,7 +150,7 @@ export function decideBooleanOverlay(
  *    non-PK (blocking a new composite AND demoting an already-persisted one); a declared/custom field
  *    keeps its own declared `IsPrimaryKey` and discovery may not flip it.
  */
-export function decidePKPromotion(args: {
+export function DecidePKPromotion(args: {
   objectHasDeclaredPK: boolean;
   fieldIsDiscovered: boolean;
   existingIsPrimaryKey: boolean;
@@ -137,6 +163,16 @@ export function decidePKPromotion(args: {
   }
   if (fieldIsDiscovered) return { value: false, winner: 'Declared' };
   return { value: existingIsPrimaryKey, winner: 'Declared' };
+}
+
+/** @deprecated Use {@link DecidePKPromotion}. */
+export function decidePKPromotion(args: {
+  objectHasDeclaredPK: boolean;
+  fieldIsDiscovered: boolean;
+  existingIsPrimaryKey: boolean;
+  discoveredIsPrimaryKey: boolean | undefined;
+}): { value: boolean; winner: 'Declared' | 'Discovered' } {
+  return DecidePKPromotion(args);
 }
 
 /**
@@ -152,7 +188,7 @@ export function decidePKPromotion(args: {
  * string from a describe is treated as silence, never as an instruction to blank a curated
  * value.
  */
-export function decideSemanticOverlay(
+export function DecideSemanticOverlay(
   declared: string | null | undefined,
   discovered: string | null | undefined,
 ): { value: string | null | undefined; changed: boolean; winner: 'Declared' | 'Discovered' } {
@@ -166,6 +202,14 @@ export function decideSemanticOverlay(
   return { value: discovered, changed: true, winner: 'Discovered' };
 }
 
+/** @deprecated Use {@link DecideSemanticOverlay}. */
+export function decideSemanticOverlay(
+  declared: string | null | undefined,
+  discovered: string | null | undefined,
+): { value: string | null | undefined; changed: boolean; winner: 'Declared' | 'Discovered' } {
+  return DecideSemanticOverlay(declared, discovered);
+}
+
 /**
  * U2 — PURE width overlay: a rediscovery's measured width should only ever GROW the persisted catalog
  * `Length`, never shrink it. RSU widens the physical column but never shrinks it, so shrinking the
@@ -175,7 +219,7 @@ export function decideSemanticOverlay(
  * length + whether it changed. A null/undefined `srcMaxLength` is "no opinion" → keep the persisted
  * value (never clears a width to MAX). Large-text types carry their MAX in the Type, not here.
  */
-export function decideLengthOverlay(
+export function DecideLengthOverlay(
   existingLength: number | null | undefined,
   srcMaxLength: number | null | undefined,
 ): { Length: number | null | undefined; changed: boolean } {
@@ -194,6 +238,14 @@ export function decideLengthOverlay(
     return { Length: srcMaxLength, changed: existingLength !== srcMaxLength };
   }
   return { Length: existingLength, changed: false };   // never shrink
+}
+
+/** @deprecated Use {@link DecideLengthOverlay}. */
+export function decideLengthOverlay(
+  existingLength: number | null | undefined,
+  srcMaxLength: number | null | undefined,
+): { Length: number | null | undefined; changed: boolean } {
+  return DecideLengthOverlay(existingLength, srcMaxLength);
 }
 
 /** §7 — input for {@link decideAbsentDeactivations}. */
@@ -239,7 +291,7 @@ export interface AbsentDeactivationInput {
  * The inverse — reactivate-on-rediscover (Disabled → Active when it reappears) — is handled in the
  * upserts, not here. Pure ⇒ unit-testable without mocking the engine or provider.
  */
-export function decideAbsentDeactivations(input: AbsentDeactivationInput): {
+export function DecideAbsentDeactivations(input: AbsentDeactivationInput): {
   ObjectIDsToDeactivate: string[];
   FieldIDsToDeactivate: string[];
 } {
@@ -265,6 +317,14 @@ export function decideAbsentDeactivations(input: AbsentDeactivationInput): {
   return { ObjectIDsToDeactivate, FieldIDsToDeactivate };
 }
 
+/** @deprecated Use {@link DecideAbsentDeactivations}. */
+export function decideAbsentDeactivations(input: AbsentDeactivationInput): {
+  ObjectIDsToDeactivate: string[];
+  FieldIDsToDeactivate: string[];
+} {
+  return DecideAbsentDeactivations(input);
+}
+
 /** §B — input for {@link decideSchemaLimitViolations}: the selected table/column counts + the operator caps. */
 export interface SchemaLimitInput {
   /** Number of tables the user selected to materialize. */
@@ -284,7 +344,7 @@ export interface SchemaLimitInput {
  * `null` caps mean unbounded (the default), so the common case returns []. Pure ⇒ unit-testable without the
  * resolver/DB; the resolver builds the input from the selection and throws if this returns any violation.
  */
-export function decideSchemaLimitViolations(input: SchemaLimitInput): string[] {
+export function DecideSchemaLimitViolations(input: SchemaLimitInput): string[] {
   const violations: string[] = [];
   if (input.MaxTables !== null && input.TableCount > input.MaxTables) {
     violations.push(
@@ -306,6 +366,11 @@ export function decideSchemaLimitViolations(input: SchemaLimitInput): string[] {
   return violations;
 }
 
+/** @deprecated Use {@link DecideSchemaLimitViolations}. */
+export function decideSchemaLimitViolations(input: SchemaLimitInput): string[] {
+  return DecideSchemaLimitViolations(input);
+}
+
 /** Per-object provenance summary. */
 export interface ObjectMergeLog {
   ObjectName: string;
@@ -314,6 +379,61 @@ export interface ObjectMergeLog {
   Created: boolean;
   /** Whether any attribute changed from prior value. */
   Updated: boolean;
+  /**
+   * MJ-RUN-37 — WHICH attributes the overlay rewrote on an existing row, by IntegrationObject
+   * column name (`'Description'`, `'DisplayName'`, `'IncrementalWatermarkField'`,
+   * `'Status:reactivated'`). Empty for a created row and for an unchanged one.
+   *
+   * `Updated` alone says only THAT something moved. The schema evolution has to know WHAT, because
+   * some overlay changes invalidate state that lives outside this table — a watermark-field swap
+   * changes the meaning of every stored Pull cursor without adding a column, so a DDL diff cannot
+   * see it. UpsertObject already computed this list to log it; it is returned so the evolution can
+   * act on it rather than re-derive it from a diff that structurally cannot contain it.
+   */
+  ChangedAttributes: string[];
+}
+
+/**
+ * MJ-RUN-37 — the overlay attributes whose change makes an object's stored Pull watermark
+ * MEANINGLESS rather than merely stale.
+ *
+ * `IncrementalWatermarkField` names the source column the incremental filter is built from. Swap it
+ * and the stored cursor value — captured from the OLD column — is applied as a lower bound on the
+ * NEW one. Where the new column sorts later, every row below that value is filtered out at the
+ * source and never fetched again. Nothing reports it: the run's fetch-integrity check compares what
+ * arrived against what the source said matched the filter it was given, and those agree exactly.
+ * The result is silent, permanent absence with no artifact to find it in.
+ */
+export const WATERMARK_INVALIDATING_ATTRIBUTES: readonly string[] = ['IncrementalWatermarkField'];
+
+/**
+ * Names of the objects whose persist-time overlay invalidated their Pull watermark.
+ *
+ * Pure, so the decision that matters — persist DETECTED it, evolution must ACT on it, and on
+ * nothing else — is pinnable without a database.
+ *
+ * Two exclusions, both guarding against OVER-firing. Resetting a watermark costs a full re-fetch of
+ * the object, so a rule that fires when nothing relevant changed quietly turns every refresh into a
+ * fleet-wide full sync:
+ *
+ *  - a CREATED row is never a change. A brand-new object has no watermark to invalidate.
+ *  - `restrictTo`, when given, limits the answer to that set (the evolution passes its CONTINUING
+ *    entity maps). An object with no continuing map has no Pull watermark this run can reset, so
+ *    reporting it would inflate the change set — and `HasChanges` — with a name nothing acts on.
+ *    Matched case-insensitively, as every catalog-to-map reconciliation in this codebase is.
+ *    Returned names keep the CATALOG's casing, which is what the source object is called.
+ */
+export function ObjectsWithWatermarkFieldChange(log: readonly ObjectMergeLog[], restrictTo?: readonly string[]): string[] {
+  const allowed = restrictTo === undefined ? undefined : new Set(restrictTo.map((n) => n.toLowerCase()));
+  const out: string[] = [];
+  for (const entry of log) {
+    if (entry.Created) continue;
+    const changed = entry.ChangedAttributes ?? [];
+    if (!changed.some((a) => WATERMARK_INVALIDATING_ATTRIBUTES.includes(a))) continue;
+    if (allowed && !allowed.has(entry.ObjectName.toLowerCase())) continue;
+    out.push(entry.ObjectName);
+  }
+  return out;
 }
 
 export interface PersistSchemaResult {
@@ -363,7 +483,7 @@ function SourceStatedAType(sourceType: string | null | undefined): boolean {
  * A declaration that states nothing still takes the mapped value, fallback included: something has
  * to be written, and there is no curated value to protect.
  */
-export function decideTypeOverlay(
+export function DecideTypeOverlay(
   declaredType: string | null | undefined,
   sourceType: string | null | undefined,
 ): { value: string; winner: 'Declared' | 'Discovered' } {
@@ -380,6 +500,14 @@ export function decideTypeOverlay(
   return { value: mapped, winner: 'Discovered' };
 }
 
+/** @deprecated Use {@link DecideTypeOverlay}. */
+export function decideTypeOverlay(
+  declaredType: string | null | undefined,
+  sourceType: string | null | undefined,
+): { value: string; winner: 'Declared' | 'Discovered' } {
+  return DecideTypeOverlay(declaredType, sourceType);
+}
+
 /**
  * Nullability overlay, silence-respecting.
  *
@@ -390,7 +518,7 @@ export function decideTypeOverlay(
  * The derivation from `IsRequired` is kept: a source that says a column is required HAS stated its
  * nullability, just indirectly. Only the both-silent case defers to the declaration.
  */
-export function decideNullabilityOverlay(
+export function DecideNullabilityOverlay(
   declaredAllowsNull: boolean | null | undefined,
   sourceAllowsNull: boolean | undefined,
   sourceIsRequired: boolean | undefined,
@@ -404,6 +532,15 @@ export function decideNullabilityOverlay(
     value: described,
     winner: declaredAllowsNull === described ? 'Declared' : 'Discovered',
   };
+}
+
+/** @deprecated Use {@link DecideNullabilityOverlay}. */
+export function decideNullabilityOverlay(
+  declaredAllowsNull: boolean | null | undefined,
+  sourceAllowsNull: boolean | undefined,
+  sourceIsRequired: boolean | undefined,
+): { value: boolean; winner: 'Declared' | 'Discovered' } {
+  return DecideNullabilityOverlay(declaredAllowsNull, sourceAllowsNull, sourceIsRequired);
 }
 
 /**
@@ -478,7 +615,7 @@ export class IntegrationSchemaSync {
     // (fields need ObjectID). Within this phase, upserts are independent so we
     // batch-execute via Promise.all (concurrency cap to avoid hammering the DB).
     const objectUpserts = SourceSchema.Objects.map((srcObj) => async () => {
-      const objResult = await IntegrationSchemaSync.UpsertObject(md, IntegrationID, srcObj, existingObjects, ContextUser);
+      const objResult = await IntegrationSchemaSync.upsertObject(md, IntegrationID, srcObj, existingObjects, ContextUser);
       return { srcObj, ...objResult };
     });
     const objectResults = useBatch ? await IntegrationSchemaSync.batchExec(objectUpserts, 8) : await IntegrationSchemaSync.serialExec(objectUpserts);
@@ -491,6 +628,7 @@ export class IntegrationSchemaSync {
         EffectiveSource: r.EffectiveSource,
         Created: r.Created,
         Updated: r.Updated,
+        ChangedAttributes: r.ChangedAttributes,
       });
     }
 
@@ -523,7 +661,7 @@ export class IntegrationSchemaSync {
         const perObjectLogs: FieldMergeLog[] = [];
         const perObjectStats = { created: 0, updated: 0 };
         for (const srcField of r.srcObj.Fields) {
-          const fr = await IntegrationSchemaSync.UpsertField(md, r.ObjectID!, srcField, existingFields, ContextUser, siblingNameToID, objectHasDeclaredPK);
+          const fr = await IntegrationSchemaSync.upsertField(md, r.ObjectID!, srcField, existingFields, ContextUser, siblingNameToID, objectHasDeclaredPK);
           if (fr.Created) perObjectStats.created++;
           if (fr.Updated) perObjectStats.updated++;
           perObjectLogs.push({
@@ -562,7 +700,17 @@ export class IntegrationSchemaSync {
     // enumerated the FULL gamut the credentials expose (SourceSchema.IsAuthoritative). A stubbed/empty or
     // cache-driven discovery has IsAuthoritative=false, so absence proves NOTHING and nothing is disabled
     // (else it would wrongly wipe the Declared metadata that is the only source). Deactivate, never delete.
-    if (opts.DeactivateAbsent && SourceSchema.IsAuthoritative) {
+    //
+    // Object-level and field-level retirement are separately gateable (DeactivateAbsentObjects /
+    // DeactivateAbsentFields), because a STREAMING discovery needs them at different moments with
+    // opposite scopes: a per-object persist holds that object's FULL field list but sees only one
+    // object, and the final name pass sees every object but no fields. Both default to
+    // DeactivateAbsent, so every caller that sets neither behaves exactly as before. The PURE decider
+    // still decides both from one flag — its tests stay the cheapest correctness evidence here — and
+    // its OUTPUT is filtered instead of forking its logic.
+    const retireObjects = opts.DeactivateAbsentObjects ?? opts.DeactivateAbsent ?? false;
+    const retireFields = opts.DeactivateAbsentFields ?? opts.DeactivateAbsent ?? false;
+    if ((retireObjects || retireFields) && SourceSchema.IsAuthoritative) {
       // Gather the active set + per-discovered-object fields, then let the PURE decision
       // (decideAbsentDeactivations — unit-tested) choose what to Disable. The EFFECT (load + Save) is
       // applied here; the CHOICE lives in the pure function so it is testable without mocking the engine.
@@ -586,7 +734,7 @@ export class IntegrationSchemaSync {
           .filter((iof) => iof.Status === 'Active')
           .map((iof) => ({ ID: iof.ID, Name: iof.Name }));
       }
-      const decision = decideAbsentDeactivations({
+      const decision = DecideAbsentDeactivations({
         DeactivateAbsent: true,
         // The CONNECTOR's claim, not a constant. This was hardcoded true, which silently overrode
         // every connector that declares it cannot prove absence: a refresh that did not return an
@@ -602,7 +750,7 @@ export class IntegrationSchemaSync {
         ObjectIDByName: objectIDByName,
       });
       let deactivated = 0;
-      for (const id of decision.ObjectIDsToDeactivate) {
+      for (const id of retireObjects ? decision.ObjectIDsToDeactivate : []) {
         const obj = await md.GetEntityObject<MJIntegrationObjectEntity>('MJ: Integration Objects', ContextUser);
         if (await obj.InnerLoad(CompositeKey.FromID(id))) {
           obj.Status = 'Disabled'; // deactivate (Active|Deprecated|Disabled enum); never delete
@@ -611,7 +759,7 @@ export class IntegrationSchemaSync {
         }
       }
       let fieldsDeactivated = 0;
-      for (const id of decision.FieldIDsToDeactivate) {
+      for (const id of retireFields ? decision.FieldIDsToDeactivate : []) {
         const f = await md.GetEntityObject<MJIntegrationObjectFieldEntity>('MJ: Integration Object Fields', ContextUser);
         if (await f.InnerLoad(CompositeKey.FromID(id))) {
           f.Status = 'Disabled'; // deactivate, never delete
@@ -665,13 +813,20 @@ export class IntegrationSchemaSync {
 
   // ── Object upsert ────────────────────────────────────────────────
 
-  private static async UpsertObject(
+  private static async upsertObject(
     md: IMetadataProvider,
     integrationID: string,
     srcObj: SourceObjectInfo,
     existingObjects: MJIntegrationObjectEntity[],
     contextUser: UserInfo,
-  ): Promise<{ ObjectID: string | null; Created: boolean; Updated: boolean; EffectiveSource: 'Declared' | 'Discovered' | 'Custom' }> {
+  ): Promise<{
+    ObjectID: string | null;
+    Created: boolean;
+    Updated: boolean;
+    EffectiveSource: 'Declared' | 'Discovered' | 'Custom';
+    /** Overlay attributes rewritten on an EXISTING row — see {@link ObjectMergeLog.ChangedAttributes}. */
+    ChangedAttributes: string[];
+  }> {
     const existing = existingObjects.find((o) => o.Name.toLowerCase() === srcObj.ExternalName.toLowerCase());
 
     if (existing) {
@@ -684,13 +839,13 @@ export class IntegrationSchemaSync {
       // never overwritten; the spec inverts that precedence.)
       let dirty = false;
       const changes: string[] = [];
-      const descOverlay = decideSemanticOverlay(existing.Description, srcObj.Description);
+      const descOverlay = DecideSemanticOverlay(existing.Description, srcObj.Description);
       if (descOverlay.changed) {
         existing.Description = descOverlay.value ?? null;
         dirty = true;
         changes.push('Description');
       }
-      const labelOverlay = decideSemanticOverlay(existing.DisplayName, srcObj.ExternalLabel);
+      const labelOverlay = DecideSemanticOverlay(existing.DisplayName, srcObj.ExternalLabel);
       if (labelOverlay.changed) {
         existing.DisplayName = labelOverlay.value ?? null;
         dirty = true;
@@ -700,7 +855,7 @@ export class IntegrationSchemaSync {
       // field: a discovery that REPORTS one overrides the stored value ("prefer new over old
       // always for the same existing columns"); a silent discovery leaves the
       // curated choice untouched.
-      const wmOverlay = decideSemanticOverlay(existing.IncrementalWatermarkField, srcObj.IncrementalWatermarkField);
+      const wmOverlay = DecideSemanticOverlay(existing.IncrementalWatermarkField, srcObj.IncrementalWatermarkField);
       if (wmOverlay.changed) {
         existing.IncrementalWatermarkField = wmOverlay.value ?? null;
         dirty = true;
@@ -731,7 +886,7 @@ export class IntegrationSchemaSync {
             fieldsTouched: changes,
           }),
         );
-        return { ObjectID: existing.ID, Created: false, Updated: true, EffectiveSource: 'Declared' };
+        return { ObjectID: existing.ID, Created: false, Updated: true, EffectiveSource: 'Declared', ChangedAttributes: changes };
       }
       console.log(
         JSON.stringify({
@@ -743,7 +898,7 @@ export class IntegrationSchemaSync {
           reason: 'no-overlay-deltas',
         }),
       );
-      return { ObjectID: existing.ID, Created: false, Updated: false, EffectiveSource: 'Declared' };
+      return { ObjectID: existing.ID, Created: false, Updated: false, EffectiveSource: 'Declared', ChangedAttributes: [] };
     }
 
     // New row — mark as 'Discovered' by default. Vendor-signaled custom objects
@@ -781,7 +936,7 @@ export class IntegrationSchemaSync {
             metadataSource: 'Discovered',
           }),
         );
-        return { ObjectID: obj.ID, Created: true, Updated: false, EffectiveSource: 'Discovered' };
+        return { ObjectID: obj.ID, Created: true, Updated: false, EffectiveSource: 'Discovered', ChangedAttributes: [] };
       }
       // Save() returned false (validation/constraint failure) WITHOUT throwing — SURFACE it.
       // A silent false here is exactly how discovered objects vanished with zero signal.
@@ -791,12 +946,12 @@ export class IntegrationSchemaSync {
     } catch (err) {
       console.warn(`[IntegrationSchemaSync] Failed to create IntegrationObject '${srcObj.ExternalName}': ${err instanceof Error ? err.message : err}`);
     }
-    return { ObjectID: null, Created: false, Updated: false, EffectiveSource: 'Discovered' };
+    return { ObjectID: null, Created: false, Updated: false, EffectiveSource: 'Discovered', ChangedAttributes: [] };
   }
 
   // ── Field upsert ─────────────────────────────────────────────────
 
-  private static async UpsertField(
+  private static async upsertField(
     md: IMetadataProvider,
     objectID: string,
     srcField: SourceFieldInfo,
@@ -850,8 +1005,8 @@ export class IntegrationSchemaSync {
           dirty = true;
         }
       }
-      const typeOverlay = decideTypeOverlay(existing.Type, srcField.SourceType);
-      const nullabilityOverlay = decideNullabilityOverlay(
+      const typeOverlay = DecideTypeOverlay(existing.Type, srcField.SourceType);
+      const nullabilityOverlay = DecideNullabilityOverlay(
         existing.AllowsNull, srcField.AllowsNull, srcField.IsRequired);
       const describedAllowsNull = nullabilityOverlay.value;
 
@@ -864,7 +1019,7 @@ export class IntegrationSchemaSync {
       // nvarchar(N) instead of defaulting to NVARCHAR(MAX) downstream. (Large-text types carry
       // their MAX in the Type itself — 'nvarchar(MAX)' — via MapSourceType, so no length here.)
       // U2 — describe wins only to GROW the persisted width, never to shrink it (see decideLengthOverlay).
-      const lengthOverlay = decideLengthOverlay(existing.Length, srcField.MaxLength);
+      const lengthOverlay = DecideLengthOverlay(existing.Length, srcField.MaxLength);
       if (lengthOverlay.changed) {
         existing.Length = lengthOverlay.Length;
         dirty = true;
@@ -881,7 +1036,7 @@ export class IntegrationSchemaSync {
       // v5.39.x this branch treated undefined as `false` and silently
       // wiped every declared PK on HubSpot/SF the moment live discovery
       // ran.  See IntegrationSchemaSync.test.ts for the regression pin.
-      const reqOverlay = decideBooleanOverlay(existing.IsRequired, srcField.IsRequired);
+      const reqOverlay = DecideBooleanOverlay(existing.IsRequired, srcField.IsRequired);
       if (reqOverlay.winner === 'Discovered' && reqOverlay.value !== undefined) {
         existing.IsRequired = reqOverlay.value;
         dirty = true;
@@ -892,7 +1047,7 @@ export class IntegrationSchemaSync {
       // add a *different* field as PK (fabricated composite → nullable component breaks the spCreate
       // read-back); and a Discovered field that was previously wrongly promoted is DEMOTED here (its
       // uniqueness survives via the IsUniqueKey overlay below). With no declared PK, the stream picker wins.
-      const pkDecision = decidePKPromotion({
+      const pkDecision = DecidePKPromotion({
         objectHasDeclaredPK,
         fieldIsDiscovered: existing.MetadataSource === 'Discovered',
         existingIsPrimaryKey: existing.IsPrimaryKey === true,
@@ -904,14 +1059,14 @@ export class IntegrationSchemaSync {
       }
       winners.IsPrimaryKey = pkDecision.winner;
 
-      const uqOverlay = decideBooleanOverlay(existing.IsUniqueKey, srcField.IsUniqueKey);
+      const uqOverlay = DecideBooleanOverlay(existing.IsUniqueKey, srcField.IsUniqueKey);
       if (uqOverlay.winner === 'Discovered' && uqOverlay.value !== undefined) {
         existing.IsUniqueKey = uqOverlay.value;
         dirty = true;
       }
       winners.IsUniqueKey = uqOverlay.winner;
 
-      const roOverlay = decideBooleanOverlay(existing.IsReadOnly, srcField.IsReadOnly);
+      const roOverlay = DecideBooleanOverlay(existing.IsReadOnly, srcField.IsReadOnly);
       if (roOverlay.winner === 'Discovered' && roOverlay.value !== undefined) {
         existing.IsReadOnly = roOverlay.value;
         dirty = true;
@@ -919,7 +1074,7 @@ export class IntegrationSchemaSync {
       winners.IsReadOnly = roOverlay.winner;
       // Description / DisplayName — external-wins-when-present: a source that
       // returns a value overrides the curated one; a silent source keeps the curated value.
-      const fieldDescOverlay = decideSemanticOverlay(existing.Description, srcField.Description);
+      const fieldDescOverlay = DecideSemanticOverlay(existing.Description, srcField.Description);
       if (fieldDescOverlay.changed) {
         existing.Description = fieldDescOverlay.value ?? null;
         dirty = true;
@@ -927,7 +1082,7 @@ export class IntegrationSchemaSync {
       } else if (existing.Description) {
         winners.Description = 'Declared';
       }
-      const fieldLabelOverlay = decideSemanticOverlay(existing.DisplayName, srcField.Label);
+      const fieldLabelOverlay = DecideSemanticOverlay(existing.DisplayName, srcField.Label);
       if (fieldLabelOverlay.changed) {
         existing.DisplayName = fieldLabelOverlay.value ?? null;
         dirty = true;
@@ -981,7 +1136,7 @@ export class IntegrationSchemaSync {
       // U1 / rsuplan line 29 — a newly-discovered field may BE the PK only when the object has NO
       // declared PK (either/or). With a declared PK present a streamed field never becomes a PK
       // component (its uniqueness rides IsUniqueKey below). Same pure rule as the overlay path.
-      field.IsPrimaryKey = decidePKPromotion({
+      field.IsPrimaryKey = DecidePKPromotion({
         objectHasDeclaredPK,
         fieldIsDiscovered: true,
         existingIsPrimaryKey: false,
@@ -1057,7 +1212,7 @@ export class IntegrationSchemaSync {
     let created = 0;
 
     // Ensure category exists
-    const categoryID = await IntegrationSchemaSync.ResolveOrCreateCategory(md, IntegrationName, result.CategoryRecords, ContextUser);
+    const categoryID = await IntegrationSchemaSync.resolveOrCreateCategory(md, IntegrationName, result.CategoryRecords, ContextUser);
 
     for (const actionRecord of result.ActionRecords) {
       const actionName = actionRecord.fields['Name'] as string;
@@ -1077,7 +1232,7 @@ export class IntegrationSchemaSync {
       if (existing.Success && existing.Results.length > 0) continue;
 
       try {
-        const actionID = await IntegrationSchemaSync.PersistActionRecord(md, actionRecord, categoryID, ContextUser);
+        const actionID = await IntegrationSchemaSync.persistActionRecord(md, actionRecord, categoryID, ContextUser);
         if (actionID) created++;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -1091,7 +1246,7 @@ export class IntegrationSchemaSync {
     return { ActionsCreated: created };
   }
 
-  private static async PersistActionRecord(
+  private static async persistActionRecord(
     md: IMetadataProvider,
     record: { fields: Record<string, unknown>; relatedEntities: Record<string, Array<{ fields: Record<string, unknown> }>> },
     categoryID: string | null,
@@ -1143,7 +1298,7 @@ export class IntegrationSchemaSync {
     return action.ID;
   }
 
-  private static async ResolveOrCreateCategory(
+  private static async resolveOrCreateCategory(
     md: IMetadataProvider,
     integrationName: string,
     categoryRecords: Array<{ fields: Record<string, unknown> }>,

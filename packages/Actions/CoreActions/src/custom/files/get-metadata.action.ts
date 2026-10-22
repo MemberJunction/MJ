@@ -46,7 +46,7 @@ export class GetMetadataAction extends BaseFileStorageAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             // Get and initialize storage driver
-            const { driver, error } = await this.getDriverFromParams(params);
+            const { driver, account, error } = await this.getDriverFromParams(params);
             if (error) return error;
 
             // Get identifier (prefer ObjectID if provided for performance)
@@ -59,6 +59,10 @@ export class GetMetadataAction extends BaseFileStorageAction {
                     "MISSING_IDENTIFIER"
                 );
             }
+
+            // Tracked-file rule: an object behind an MJ: Files row the caller cannot read is not described either
+            const refused = await this.CheckObjectsReadable(account!, driver!, [objectName, objectId], params.ContextUser);
+            if (refused) return refused;
 
             // Execute the get metadata operation with new params structure
             const metadata: StorageObjectMetadata = await driver!.GetObjectMetadata({

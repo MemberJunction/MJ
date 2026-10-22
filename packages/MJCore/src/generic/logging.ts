@@ -124,6 +124,24 @@ export function LogErrorEx(options: LogErrorOptions | string): void {
     }
 }
 
+/**
+ * Logs a warning that must stay visible in production.
+ *
+ * `LogStatus` output is dropped when production status is set (see {@link GetProductionStatus}),
+ * which hides exactly the degradations an operator needs to see: a cache payload that could not
+ * be applied, a config loaded empty because of a permission answer, a stale cache slot. This
+ * writes through the error channel with a `[WARNING]` prefix, so it is always emitted.
+ *
+ * Use it for conditions that are handled but worth knowing about, not for routine events that
+ * fire on every request.
+ *
+ * @param message - What happened and what the system did about it
+ * @param category - Optional tag for filtering, e.g. `'Cache'`
+ */
+export function LogWarning(message: string, category?: string): void {
+    LogErrorEx({ message, severity: 'warning', category });
+}
+
 export function LogError(message: any, logToFileName: string | null = null, ...args: any[]) {
     // Use LogErrorEx internally
     LogErrorEx({
@@ -207,7 +225,13 @@ export function LogStatusEx(options: LogStatusOptions | string): void {
     if (options.verboseOnly) {
         const checkVerbose = options.isVerboseEnabled || IsVerboseLoggingEnabled;
         if (!checkVerbose()) {
-            return; // Skip verbose messages when verbose mode is off
+            // In a real browser (non-Node) dev session, emit verbose-only messages via
+            // console.debug so Chrome DevTools' native "Verbose" log level filter controls
+            // their visibility while keeping the default "Info" console clean.
+            if (!options.isVerboseEnabled && !runningOnNode() && runningInBrowser() && !GetProductionStatus() && (options.logToFileName === null || options.logToFileName === undefined)) {
+                console.debug(options.message, ...(options.additionalArgs || []));
+            }
+            return; // Skip standard console.log when verbose mode is off
         }
     }
     
@@ -368,7 +392,7 @@ export function FormatConsoleMessage(message: string, serverity: SeverityType): 
 }
 
 function FormatConsoleMessageInternal(color: ConsoleColor, message: string) {
-    return `\r\x1b[${getAnsiColorCode(ConsoleColor.white)}m${message}\x1b[0m`;
+    return `\r\x1b[${GetAnsiColorCode(ConsoleColor.white)}m${message}\x1b[0m`;
 }
 
 export function FormatFileMessage(message: string, serverity: SeverityType): string {
@@ -420,7 +444,7 @@ type ConsoleColor = typeof ConsoleColor[keyof typeof ConsoleColor];
  * Helper function to get the ANSI color code for the given console color.
  * @param color
  */
-export function getAnsiColorCode(color: ConsoleColor): number {
+export function GetAnsiColorCode(color: ConsoleColor): number {
     switch (color) {
         case ConsoleColor.black: return 30;
         case ConsoleColor.red: return 31;
@@ -436,6 +460,11 @@ export function getAnsiColorCode(color: ConsoleColor): number {
     }
 }
 
+/** @deprecated Use {@link GetAnsiColorCode}. */
+export function getAnsiColorCode(color: ConsoleColor): number {
+  return GetAnsiColorCode(color);
+}
+
 /**
  * Utility function that udpates the current console line with the provided message and color.
  * @param message
@@ -447,7 +476,7 @@ export function UpdateCurrentConsoleLine(message: string, color: ConsoleColor = 
         //console.log(`\r\x1b[${getAnsiColorCode(color)}m${message}\x1b[0m`);
         //process.stdout.write(`\r\x1b[${getAnsiColorCode(color)}m${message}\x1b[0m`);
 //        console.log(`\x1b[2K\r\x1b[${getAnsiColorCode(color)}m${message}\x1b[0m`);
-        console.log(`\x1b[${getAnsiColorCode(color)}m${message}\x1b[0m`);
+        console.log(`\x1b[${GetAnsiColorCode(color)}m${message}\x1b[0m`);
     }
     else {
         // Running in browser environment

@@ -16,6 +16,7 @@
  * Used by the CLI to parse and validate app manifests before installation.
  */
 import { z } from 'zod';
+import { ResolvePackagePlatform } from './package-platform.js';
 
 // ── Identity ──────────────────────────────────────────────
 
@@ -64,10 +65,17 @@ const packageRoleSchema = z.enum([
     'bootstrap', 'actions', 'engine', 'provider', 'module', 'components', 'library'
 ]);
 
+/**
+ * Where the package may RUN. Absent, it is derived from `role` — see
+ * {@link ResolvePackagePlatform} in ./package-platform.ts, which is the canonical rule.
+ */
+const packagePlatformSchema = z.enum(['node', 'browser', 'both']);
+
 const packageEntrySchema = z.object({
     name: z.string().max(214).regex(npmPackageNameRegex, 'Package name must be a valid npm package name (lowercase, URL-safe characters, optional @scope/)'),
     role: packageRoleSchema,
     startupExport: z.string().regex(jsIdentifierRegex, 'startupExport must be a single JavaScript identifier').optional(),
+    platform: packagePlatformSchema.optional(),
 }).refine(
     (pkg) => pkg.role !== 'bootstrap' || (pkg.startupExport != null && pkg.startupExport.length > 0),
     { message: 'startupExport is required for packages with the "bootstrap" role', path: ['startupExport'] }
@@ -85,7 +93,32 @@ const packagesSchema = z.object({
     server: z.array(packageEntrySchema).optional(),
     client: z.array(packageEntrySchema).optional(),
     shared: z.array(packageEntrySchema).optional(),
-});
+})
+    // A package whose EFFECTIVE platform contradicts the array it sits in is a self-contradictory
+    // manifest — whether that platform was declared explicitly or is only the role-implied default
+    // (e.g. role:'actions' with no `platform` resolves to 'node'). Testing `pkg.platform` alone
+    // would only catch the explicit case and let the role-implied one through: a `client[]` entry
+    // with role:'actions' and no `platform` is Node-only just as surely as one that writes
+    // `platform: "node"`, so we resolve through `ResolvePackagePlatform` (the canonical rule) to
+    // catch both. Routing would silently drop the package from the only tier that asked for it —
+    // the class of silent-wrong-config failure that produces a green install and a broken host.
+    .superRefine((packages, ctx) => {
+        for (const [array, forbidden] of [['client', 'node'], ['server', 'browser']] as const) {
+            for (const [index, pkg] of (packages[array] ?? []).entries()) {
+                if (ResolvePackagePlatform(pkg) !== forbidden) {
+                    continue;
+                }
+                const message = pkg.platform
+                    ? `"${pkg.name}" is declared in packages.${array} but sets platform "${forbidden}". Move it to packages.${forbidden === 'node' ? 'server' : 'client'}, or declare platform "both".`
+                    : `"${pkg.name}" sits in packages.${array} but role "${pkg.role}" makes it ${forbidden === 'node' ? 'Node-only' : 'browser-only'} — declare platform "${forbidden === 'node' ? 'browser' : 'node'}" or "both", or move it to packages.${forbidden === 'node' ? 'server' : 'client'}.`;
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    path: [array, index, 'platform'],
+                    message,
+                });
+            }
+        }
+    });
 
 // ── Database Schema ───────────────────────────────────────
 
@@ -160,13 +193,32 @@ const hooksSchema = z.object({
     preRemoveModule: z.string().optional(),
 });
 
+// ── Template User ─────────────────────────────────────────
+
+/**
+ * A template user the app ships (`User.IsTemplate`, seeded by the app's migrations): a configured
+ * account (pinned apps, views, dashboards, conversations) meant to be copied. After install the
+ * engine offers to create the installer's own user as a copy of it, and to make it the template for
+ * everyone who signs in later (`userHandling.newUserTemplate` in mj.config.cjs).
+ */
+const templateUserSchema = z.object({
+    /** Email of the template user the app's migrations create. */
+    email: z.string().email(),
+    /** What a copy gets, shown when the engine offers it (e.g. "the demo dashboards and conversations"). */
+    description: z.string().max(300).optional(),
+    /** MJ: Users clone preset to copy with. Default `template`. */
+    preset: z.string().optional(),
+    /** Make it the template for later sign-ins: ask (`offer`, default), do it unasked (`always`), or don't (`never`). */
+    newUsers: z.enum(['offer', 'always', 'never']).optional(),
+});
+
 // ── Full Manifest ─────────────────────────────────────────
 
 /**
  * Complete Zod schema for the mj-app.json manifest.
  * All validation rules match the MJ Open App specification.
  */
-export const mjAppManifestSchema = z.object({
+export const MjAppManifestSchema = z.object({
     // Identity
     $schema: z.string().optional(),
     manifestVersion: z.literal(1),
@@ -243,16 +295,22 @@ export const mjAppManifestSchema = z.object({
     // Lifecycle Hooks
     hooks: hooksSchema.optional(),
 
+    // Template user the app ships, offered to the installer after install
+    templateUser: templateUserSchema.optional(),
+
     // Discovery (MJ Central)
     categories: z.array(z.string()).max(5).optional(),
     tags: z.array(z.string().regex(tagRegex, 'Tags must be lowercase alphanumeric + hyphens, max 50 chars')).max(20).optional(),
 });
 
+/** @deprecated Use {@link MjAppManifestSchema}. */
+export const mjAppManifestSchema = MjAppManifestSchema;
+
 /**
  * TypeScript type inferred from the manifest schema.
  * Use this for strongly-typed manifest handling throughout the engine.
  */
-export type MJAppManifest = z.infer<typeof mjAppManifestSchema>;
+export type MJAppManifest = z.infer<typeof MjAppManifestSchema>;
 
 /**
  * Type for a single package entry within the manifest.

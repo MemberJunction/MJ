@@ -197,10 +197,15 @@ const codegenConfig = {
       when: 'after',
     },
     {
+      // Boot check: start the API, give it 30s to come up, then kill it.
+      // isDaemon makes reaching that timeout the pass — MJAPI is a server and
+      // never exits on its own, so without it this step always failed and
+      // reported a working install as a failed one (#4562).
       workingDirectory: './packages/MJAPI',
       command: 'npm',
       args: ['start'],
       timeout: 30000,
+      isDaemon: true,
       when: 'after',
     },
   ],

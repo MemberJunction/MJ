@@ -1,0 +1,101 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "querystrategist-recover-timeout-01 [claude-haiku-4-5-20251001 · Anthropic · native-hybrid-results]",
+    "Description": "The query timed out. The correction should bound the result set rather than resubmitting the same unbounded query.",
+    "InputDefinition": {
+      "payload": {},
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Show me all conversation messages."
+        },
+        {
+          "role": "user",
+          "content": "[Action Result] Run Ad-hoc Query FAILED: Query timeout after 30s. The table has ~4.2M rows. Consider limiting the result set."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "querystrategist-recover-timeout-01",
+      "expect": {
+        "kind": "anyOf",
+        "anyOf": [
+          {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Run Ad-hoc Query",
+                "params": {
+                  "Query": {
+                    "matcher": "nonEmpty"
+                  }
+                }
+              }
+            ],
+            "allowAdditionalActions": true
+          },
+          {
+            "kind": "chat",
+            "message": {
+              "matcher": "nonEmpty"
+            }
+          }
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Query Strategist",
+      "modelId": "4FD92457-0BA8-486F-978A-E5947154F4F4",
+      "vendorId": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "native",
+      "nativeToolResults": true,
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "anyOf",
+            "anyOf": [
+              {
+                "kind": "action",
+                "actions": [
+                  {
+                    "name": "Run Ad-hoc Query",
+                    "params": {
+                      "Query": {
+                        "matcher": "nonEmpty"
+                      }
+                    }
+                  }
+                ],
+                "allowAdditionalActions": true
+              },
+              {
+                "kind": "chat",
+                "message": {
+                  "matcher": "nonEmpty"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "FFD50849-065C-40C7-AE07-5C0E11085C0F"
+  }
+}

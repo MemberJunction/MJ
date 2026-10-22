@@ -23,10 +23,15 @@ export interface ParsedParam<T> {
 }
 
 /** Look up a param's raw value, unconverted. */
-export function getParamRaw(params: RunActionParams, name: string): unknown {
+export function GetParamRaw(params: RunActionParams, name: string): unknown {
     const lowered = name.trim().toLowerCase();
     const found = params.Params?.find((p: ActionParam) => p.Name?.trim().toLowerCase() === lowered);
     return found?.Value;
+}
+
+/** @deprecated Use {@link GetParamRaw}. */
+export function getParamRaw(params: RunActionParams, name: string): unknown {
+    return GetParamRaw(params, name);
 }
 
 /**
@@ -36,12 +41,17 @@ export function getParamRaw(params: RunActionParams, name: string): unknown {
  * treats `'   '` the way the caller meant it rather than passing a blank list
  * name into a label lookup.
  */
-export function getParam(params: RunActionParams, name: string): string | null {
-    const raw = getParamRaw(params, name);
+export function GetParam(params: RunActionParams, name: string): string | null {
+    const raw = GetParamRaw(params, name);
     if (typeof raw !== 'string') {
         return raw === null || raw === undefined ? null : String(raw).trim() || null;
     }
     return raw.trim() || null;
+}
+
+/** @deprecated Use {@link GetParam}. */
+export function getParam(params: RunActionParams, name: string): string | null {
+    return GetParam(params, name);
 }
 
 /**
@@ -50,7 +60,7 @@ export function getParam(params: RunActionParams, name: string): string | null {
  * `undefined` with no error — "not supplied" is a valid state for every filter
  * that uses this.
  */
-export function parseStringArrayParam(raw: unknown, name: string): ParsedParam<string[]> {
+export function ParseStringArrayParam(raw: unknown, name: string): ParsedParam<string[]> {
     if (raw === null || raw === undefined || raw === '') {
         return { value: undefined, error: null };
     }
@@ -76,12 +86,17 @@ export function parseStringArrayParam(raw: unknown, name: string): ParsedParam<s
     return { value: cleaned.length > 0 ? cleaned : undefined, error: null };
 }
 
+/** @deprecated Use {@link ParseStringArrayParam}. */
+export function parseStringArrayParam(raw: unknown, name: string): ParsedParam<string[]> {
+    return ParseStringArrayParam(raw, name);
+}
+
 /**
  * Normalize an optional integer param. Accepts a number or a numeric string.
  * Rejects non-integers rather than rounding: a page of 1.5 is a caller mistake,
  * and silently reading page 1 would return plausible wrong data.
  */
-export function parseOptionalIntegerParam(
+export function ParseOptionalIntegerParam(
     raw: unknown,
     name: string,
     options?: { min?: number; max?: number },
@@ -111,13 +126,22 @@ export function parseOptionalIntegerParam(
     return { value, error: null };
 }
 
+/** @deprecated Use {@link ParseOptionalIntegerParam}. */
+export function parseOptionalIntegerParam(
+    raw: unknown,
+    name: string,
+    options?: { min?: number; max?: number },
+): ParsedParam<number> {
+    return ParseOptionalIntegerParam(raw, name, options);
+}
+
 /**
  * Normalize an optional boolean param. Accepts a real boolean or the strings
  * 'true'/'false', case-insensitive. Anything else is an error rather than a
  * truthiness coercion — `'false'` is truthy in JavaScript, and treating it as
  * `true` on a verify flag would be a silent, expensive surprise.
  */
-export function parseOptionalBooleanParam(raw: unknown, name: string): ParsedParam<boolean> {
+export function ParseOptionalBooleanParam(raw: unknown, name: string): ParsedParam<boolean> {
     if (raw === null || raw === undefined || raw === '') {
         return { value: undefined, error: null };
     }
@@ -130,6 +154,11 @@ export function parseOptionalBooleanParam(raw: unknown, name: string): ParsedPar
         if (lowered === 'false') return { value: false, error: null };
     }
     return { value: undefined, error: `${name} must be a boolean (true or false) — got '${String(raw)}'` };
+}
+
+/** @deprecated Use {@link ParseOptionalBooleanParam}. */
+export function parseOptionalBooleanParam(raw: unknown, name: string): ParsedParam<boolean> {
+    return ParseOptionalBooleanParam(raw, name);
 }
 
 /**

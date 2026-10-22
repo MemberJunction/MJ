@@ -1,0 +1,103 @@
+<div class="wq-panel">
+  <div class="wq-picker-row">
+    <label class="wq-label" for="wq-dl-subscription">Subscription</label>
+    <select id="wq-dl-subscription" class="wq-select" [ngModel]="SelectedSubscription ?? ''" (ngModelChange)="OnSubscriptionChange($event)">
+      <option value="">Choose a subscription…</option>
+      @for (s of Subscriptions; track s.ID) {
+        <option [value]="s.Name">{{ s.Name }} — {{ s.Topic }} ({{ s.PartitionMode }}, {{ s.Transport }})</option>
+      }
+    </select>
+    @if (IsBestEffort && Supported) {
+      <span class="wq-hint"><i class="fa-solid fa-circle-info"></i> Best-effort scan on {{ Current?.DriverClass }}: up to 100 dead letters, no paging.</span>
+    }
+  </div>
+
+  @if (Outcomes.length > 0) {
+    <div class="wq-outcomes">
+      @for (o of Outcomes; track o.DeliveryID) {
+        <div class="wq-outcome" [class.wq-outcome-ok]="o.Ok" [class.wq-outcome-error]="!o.Ok">
+          <i class="fa-solid" [class.fa-circle-check]="o.Ok" [class.fa-circle-xmark]="!o.Ok"></i>
+          <code>{{ o.DeliveryID }}</code> {{ o.Message }}
+        </div>
+      }
+    </div>
+  }
+
+  @if (!SelectedSubscription) {
+    <mj-empty-state Icon="fa-solid fa-envelope-open-text" Title="Pick a subscription" Message="Dead letters are listed per subscription." />
+  } @else if (IsLoading) {
+    <div class="wq-loading"><mj-loading text="Scanning dead letters..." size="medium"></mj-loading></div>
+  } @else if (LoadError) {
+    <mj-alert Variant="error" Title="Could not list dead letters" [Message]="LoadError"></mj-alert>
+  } @else if (!Supported) {
+    <mj-alert Variant="info" Title="Not supported" Message="This transport does not expose its dead letters to MemberJunction."></mj-alert>
+  } @else if (Items.length === 0) {
+    <mj-empty-state Variant="empty" Icon="fa-solid fa-circle-check" Title="No dead letters" Message="Every delivery on this subscription completed, is pending, or is in flight." />
+  } @else {
+    <table class="wq-table">
+      <thead>
+        <tr>
+          <th class="wq-check"><input type="checkbox" [checked]="AllSelected" (change)="ToggleAll()" title="Select all" /></th>
+          <th>Reason</th>
+          <th>Message</th>
+          <th>Key</th>
+          <th class="wq-num">Attempts</th>
+          <th>Dead-lettered</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (item of Items; track item.DeliveryID) {
+          <tr class="wq-row" (click)="ToggleExpanded(item.DeliveryID)">
+            <td class="wq-check"><input type="checkbox" [checked]="Selected.has(item.DeliveryID)" (click)="ToggleSelected(item.DeliveryID, $event)" /></td>
+            <td>
+              <span class="wq-reason">{{ item.Reason }}</span>
+              @if (item.BlocksKey) { <span class="wq-chip wq-chip-warning">blocks key</span> }
+            </td>
+            <td><code class="wq-id">{{ item.Message.MessageID }}</code></td>
+            <td>{{ item.PartitionKey ?? '—' }}</td>
+            <td class="wq-num">{{ item.Attempts }}</td>
+            <td>{{ item.DeadLetteredAt ? (item.DeadLetteredAt | date:'medium') : '—' }}</td>
+            <td class="wq-num"><i class="fa-solid" [class.fa-chevron-down]="ExpandedID !== item.DeliveryID" [class.fa-chevron-up]="ExpandedID === item.DeliveryID"></i></td>
+          </tr>
+          @if (ExpandedID === item.DeliveryID) {
+            <tr class="wq-detail-row">
+              <td colspan="7">
+                <div class="wq-detail">
+                  <div class="wq-detail-col">
+                    <h4>Delivery</h4>
+                    <dl>
+                      <dt>Delivery ID</dt><dd><code>{{ item.DeliveryID }}</code></dd>
+                      <dt>Topic</dt><dd>{{ item.Message.Topic }}</dd>
+                      <dt>Published</dt><dd>{{ item.Message.PublishedAt | date:'medium' }}</dd>
+                      @if (item.Message.CorrelationID) { <dt>Correlation</dt><dd>{{ item.Message.CorrelationID }}</dd> }
+                      @if (item.LastError) { <dt>Last error</dt><dd><pre class="wq-pre wq-pre-error">{{ item.LastError }}</pre></dd> }
+                    </dl>
+                    <h4>Attributes</h4>
+                    @if (AttributeEntries(item).length === 0) { <p class="wq-muted">none</p> } @else {
+                      <dl>
+                        @for (a of AttributeEntries(item); track a.Key) { <dt>{{ a.Key }}</dt><dd>{{ a.Value }}</dd> }
+                      </dl>
+                    }
+                  </div>
+                  <div class="wq-detail-col">
+                    <h4>Payload</h4>
+                    <pre class="wq-pre">{{ PrettyPayload(item) }}</pre>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  }
+</div>
+
+<mj-confirm-dialog [Visible]="ConfirmReplayVisible" Title="Replay dead letters" Type="warning" ConfirmText="Replay" Icon="fa-solid fa-rotate-left"
+  [Message]="SelectedCount + ' dead letter' + (SelectedCount === 1 ? '' : 's') + ' will be queued again on this subscription.'"
+  DetailMessage="A replayed delivery keeps its message and runs as a fresh attempt; an Ordered head resumes its key in order."
+  (Confirmed)="ReplaySelected()" (Cancelled)="ConfirmReplayVisible = false"></mj-confirm-dialog>
+
+<mj-work-queue-discard-dialog [Visible]="DiscardVisible" Title="Discard dead letters" [Message]="DiscardMessage" [Busy]="ActionInProgress"
+  (VisibleChange)="DiscardVisible = $event" (Confirmed)="DiscardSelected($event)"></mj-work-queue-discard-dialog>

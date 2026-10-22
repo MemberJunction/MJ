@@ -79,15 +79,29 @@ import { Component, Input } from '@angular/core';
     `]
 })
 export class JsonViewerWindowComponent {
-    @Input() jsonContent: string = '';
+    @Input() JsonContent: string = '';
 
-    copyJsonContent() {
-        if (this.jsonContent) {
-            navigator.clipboard.writeText(this.jsonContent).then(() => {
+    /** @deprecated Use {@link JsonContent}. */
+    @Input() set jsonContent(value: string) {
+      this.JsonContent = value;
+    }
+    /** @deprecated Use {@link JsonContent}. */
+    get jsonContent(): string {
+      return this.JsonContent;
+    }
+
+    CopyJsonContent() {
+        if (this.JsonContent) {
+            navigator.clipboard.writeText(this.JsonContent).then(() => {
                 // Success - JSON copied
             }).catch((err) => {
                 // Error copying
             });
         }
+    }
+
+    /** @deprecated Use {@link CopyJsonContent}. */
+    copyJsonContent() {
+      return this.CopyJsonContent();
     }
 }

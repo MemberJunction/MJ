@@ -2,11 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { INTERACTIVE_ENV } from '@memberjunction/cli-core';
 import {
   NonInteractiveError,
-  isInteractiveRun,
+  IsInteractiveRun,
   resolveOrPrompt,
   requireInteractive,
-  failOnNonInteractive,
-  withNonInteractiveHandling,
+  FailOnNonInteractive,
+  WithNonInteractiveHandling,
 } from '../lib/interactive-guard';
 
 /**
@@ -62,18 +62,18 @@ describe('isInteractiveRun', () => {
   it('reads the real process state when given no overrides', () => {
     // vitest runs without a terminal, which is exactly the automation case.
     setTTY(false);
-    expect(isInteractiveRun({ env: {} })).toBe(false);
+    expect(IsInteractiveRun({ env: {} })).toBe(false);
   });
 
   it('honors the env var the prerun hook sets from --no-interactive', () => {
     setTTY(true);
     process.env[INTERACTIVE_ENV] = '0';
-    expect(isInteractiveRun()).toBe(false);
+    expect(IsInteractiveRun()).toBe(false);
   });
 
   it('accepts injected state so a caller can reason without touching the real process', () => {
-    expect(isInteractiveRun(terminal)).toBe(true);
-    expect(isInteractiveRun(piped)).toBe(false);
+    expect(IsInteractiveRun(terminal)).toBe(true);
+    expect(IsInteractiveRun(piped)).toBe(false);
   });
 });
 
@@ -82,7 +82,7 @@ describe('failOnNonInteractive', () => {
     const { command, calls } = fakeCommand();
     const error = new NonInteractiveError('An entity name', 'Pass --entity "MJ: AI Models".', 'no-tty');
 
-    expect(() => failOnNonInteractive(command, error)).toThrow('__oclif_error__');
+    expect(() => FailOnNonInteractive(command, error)).toThrow('__oclif_error__');
     expect(calls).toHaveLength(1);
     expect(calls[0].exit).toBe(1);
     // The suggestion must be machine-visible, not only buried in prose.
@@ -94,7 +94,7 @@ describe('failOnNonInteractive', () => {
     const { command, calls } = fakeCommand();
     const boom = new Error('database unreachable');
 
-    expect(() => failOnNonInteractive(command, boom)).toThrow('database unreachable');
+    expect(() => FailOnNonInteractive(command, boom)).toThrow('database unreachable');
     expect(calls).toHaveLength(0);
   });
 });
@@ -102,7 +102,7 @@ describe('failOnNonInteractive', () => {
 describe('withNonInteractiveHandling', () => {
   it('passes a successful result straight through', async () => {
     const { command } = fakeCommand();
-    await expect(withNonInteractiveHandling(command, async () => 'done')).resolves.toBe('done');
+    await expect(WithNonInteractiveHandling(command, async () => 'done')).resolves.toBe('done');
   });
 
   it('catches a NonInteractiveError raised deep inside the body', async () => {
@@ -118,14 +118,14 @@ describe('withNonInteractiveHandling', () => {
       });
     };
 
-    await expect(withNonInteractiveHandling(command, deeplyNested)).rejects.toThrow('__oclif_error__');
+    await expect(WithNonInteractiveHandling(command, deeplyNested)).rejects.toThrow('__oclif_error__');
     expect(calls[0].suggestions).toEqual(['Pass --sections=primaryKey,sync or --all.']);
   });
 
   it('lets an unrelated error propagate with its own message intact', async () => {
     const { command, calls } = fakeCommand();
     await expect(
-      withNonInteractiveHandling(command, async () => {
+      WithNonInteractiveHandling(command, async () => {
         throw new Error('migration failed');
       })
     ).rejects.toThrow('migration failed');

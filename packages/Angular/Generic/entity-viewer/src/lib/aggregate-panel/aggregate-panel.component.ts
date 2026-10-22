@@ -10,7 +10,8 @@ import {
   MJUserViewEntity_IAggregateValueFormat as AggregateValueFormat,
   MJUserViewEntity_IAggregateConditionalStyle as AggregateConditionalStyle
 } from '@memberjunction/core-entities';
-import { AggregateValue } from '@memberjunction/core';
+import { AggregateValue, EntityFieldTSType, EntityInfo, FormatDateOnly, IsDateOnlySQLType } from '@memberjunction/core';
+import { AggregateField } from '../utils/aggregate-field.util';
 
 /**
  * AggregatePanelComponent displays aggregate values in a card-based panel.
@@ -34,6 +35,14 @@ export class AggregatePanelComponent implements OnInit {
    * Array of aggregate configurations to display
    */
   @Input() Aggregates: ViewGridAggregate[] = [];
+
+  /**
+   * The entity the aggregates are computed over. Optional: with it, the panel can read the SQL
+   * type of the column an aggregate summarises (`MIN(IntakeDate)`), so a `date` column renders as
+   * its stored calendar day and a timestamp in the reader's local time (MJ#4210). Without it, a
+   * date aggregate prints exactly as it arrives, which over GraphQL is an ISO string.
+   */
+  @Input() Entity: EntityInfo | null = null;
 
   /**
    * Map of aggregate values, keyed by expression or id
@@ -132,7 +141,28 @@ export class AggregatePanelComponent implements OnInit {
     if (value == null) return '—';
 
     const format = agg.format || {};
+    // Only a value that is itself a date takes the date path. `COUNT(IntakeDate)` also resolves
+    // to the date column, but its value is the count — a number — and must format as one.
+    const field = AggregateField(agg, this.Entity);
+    if (field?.TSType === EntityFieldTSType.Date && (value instanceof Date || typeof value === 'string')) {
+      return this.formatDateField(value, field.Type, format);
+    }
     return this.formatByType(value, format);
+  }
+
+  /**
+   * A date-family aggregate whose column type is known. The value may be a Date or, over
+   * GraphQL, the ISO string the server serialised it to. A `date` column is a calendar day at UTC
+   * midnight and is rendered in UTC so the day does not shift west of Greenwich; a timestamp is an
+   * instant and is rendered in local time.
+   */
+  private formatDateField(value: string | Date, sqlType: string, format: AggregateValueFormat): string {
+    const date = value instanceof Date ? value : new Date(value);
+    if (isNaN(date.getTime())) return String(value);
+    if (IsDateOnlySQLType(sqlType)) {
+      return FormatDateOnly(date, this.dateOptions(format.dateFormat), 'en-US');
+    }
+    return this.formatDate(date, format.dateFormat);
   }
 
   /**
@@ -247,26 +277,22 @@ export class AggregatePanelComponent implements OnInit {
    */
   private formatDate(value: Date, dateFormat?: string): string {
     try {
-      // Simple format presets
-      const options: Intl.DateTimeFormatOptions = {};
-
-      switch (dateFormat) {
-        case 'short':
-          options.dateStyle = 'short';
-          break;
-        case 'medium':
-          options.dateStyle = 'medium';
-          break;
-        case 'long':
-          options.dateStyle = 'long';
-          break;
-        default:
-          options.dateStyle = 'medium';
-      }
-
-      return new Intl.DateTimeFormat('en-US', options).format(value);
+      return new Intl.DateTimeFormat('en-US', this.dateOptions(dateFormat)).format(value);
     } catch {
       return String(value);
+    }
+  }
+
+  /** The Intl options for a simple date format preset. */
+  private dateOptions(dateFormat?: string): Intl.DateTimeFormatOptions {
+    switch (dateFormat) {
+      case 'short':
+        return { dateStyle: 'short' };
+      case 'long':
+        return { dateStyle: 'long' };
+      case 'medium':
+      default:
+        return { dateStyle: 'medium' };
     }
   }
 

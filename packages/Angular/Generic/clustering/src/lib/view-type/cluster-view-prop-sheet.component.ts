@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, ViewEncapsulation } from '@angular/core';
 import { EntityInfo } from '@memberjunction/core';
 import { IViewPropSheet } from '@memberjunction/ng-entity-viewer';
-import { ClusterViewConfig, toClusterViewConfig } from './cluster-view.types';
+import { ClusterViewConfig, ToClusterViewConfig } from './cluster-view.types';
 
 /**
  * ClusterViewPropSheetComponent
@@ -75,7 +75,7 @@ export class ClusterViewPropSheetComponent implements IViewPropSheet<Record<stri
   @Input()
   set config(value: Record<string, unknown>) {
     this._config = value ?? {};
-    this.cfg = toClusterViewConfig(this._config);
+    this.Cfg = ToClusterViewConfig(this._config);
   }
   get config(): Record<string, unknown> {
     return this._config;
@@ -84,26 +84,60 @@ export class ClusterViewPropSheetComponent implements IViewPropSheet<Record<stri
   @Output() configChange = new EventEmitter<Record<string, unknown>>();
 
   /** The current parsed config (defaults applied) bound by the template. */
-  public cfg: ClusterViewConfig = toClusterViewConfig({});
+  public Cfg: ClusterViewConfig = ToClusterViewConfig({});
+
+  /** @deprecated Use {@link Cfg}. */
+  public get cfg(): ClusterViewConfig {
+    return this.Cfg;
+  }
+  /** @deprecated Use {@link Cfg}. */
+  public set cfg(value: ClusterViewConfig) {
+    this.Cfg = value;
+  }
 
   /** Apply a partial change, re-emit the full config map to the host. */
-  patch(change: Partial<ClusterViewConfig>): void {
-    this.cfg = { ...this.cfg, ...change };
-    this._config = { ...this.cfg } as unknown as Record<string, unknown>;
+  Patch(change: Partial<ClusterViewConfig>): void {
+    this.Cfg = { ...this.Cfg, ...change };
+    this._config = { ...this.Cfg } as unknown as Record<string, unknown>;
     this.configChange.emit(this._config);
   }
 
-  asAlgorithm(v: string): 'kmeans' | 'dbscan' {
+  /** @deprecated Use {@link Patch}. */
+  patch(change: Partial<ClusterViewConfig>): void {
+    return this.Patch(change);
+  }
+
+  AsAlgorithm(v: string): 'kmeans' | 'dbscan' {
     return v === 'dbscan' ? 'dbscan' : 'kmeans';
   }
-  asDimensions(v: string): 2 | 3 {
+
+  /** @deprecated Use {@link AsAlgorithm}. */
+  asAlgorithm(v: string): 'kmeans' | 'dbscan' {
+    return this.AsAlgorithm(v);
+  }
+  AsDimensions(v: string): 2 | 3 {
     return String(v) === '3' ? 3 : 2;
   }
-  asColorBy(v: string): 'cluster' | 'entity' {
+
+  /** @deprecated Use {@link AsDimensions}. */
+  asDimensions(v: string): 2 | 3 {
+    return this.AsDimensions(v);
+  }
+  AsColorBy(v: string): 'cluster' | 'entity' {
     return v === 'entity' ? 'entity' : 'cluster';
   }
-  asInt(v: string, fallback: number): number {
+
+  /** @deprecated Use {@link AsColorBy}. */
+  asColorBy(v: string): 'cluster' | 'entity' {
+    return this.AsColorBy(v);
+  }
+  AsInt(v: string, fallback: number): number {
     const n = parseInt(v, 10);
     return Number.isNaN(n) ? fallback : n;
+  }
+
+  /** @deprecated Use {@link AsInt}. */
+  asInt(v: string, fallback: number): number {
+    return this.AsInt(v, fallback);
   }
 }

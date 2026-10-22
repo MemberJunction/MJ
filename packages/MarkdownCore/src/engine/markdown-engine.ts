@@ -10,10 +10,11 @@ import {
   HeadingInfo,
   HighlightFunction
 } from '../types/markdown.types.js';
-import { createCollapsibleHeadingsExtension } from '../extensions/collapsible-headings.extension.js';
-import { createSvgRendererExtension } from '../extensions/svg-renderer.extension.js';
-import { createHtmlBlockRepairExtension } from '../extensions/html-block-repair.extension.js';
-import { escapeHtml } from '../helpers/escape.js';
+import { CreateCollapsibleHeadingsExtension } from '../extensions/collapsible-headings.extension.js';
+import { CreateSvgRendererExtension } from '../extensions/svg-renderer.extension.js';
+import { CreateHtmlBlockRepairExtension } from '../extensions/html-block-repair.extension.js';
+import { CreateMathExtension } from '../extensions/math.extension.js';
+import { EscapeHtml } from '../helpers/escape.js';
 
 /**
  * Options that tune a single {@link MarkdownEngine.configureMarked} call.
@@ -31,7 +32,7 @@ export interface ConfigureMarkedOptions {
  * Framework-agnostic markdown engine.
  *
  * Owns the `marked` configuration and the MemberJunction custom extensions
- * (SVG code blocks, collapsible headings, GitHub alerts, heading ids,
+ * (SVG code blocks, TeX math, collapsible headings, GitHub alerts, heading ids,
  * smartypants). It produces either:
  *
  * - an **HTML string** via {@link parseToHtml} — consumed by the Angular
@@ -50,14 +51,14 @@ export class MarkdownEngine {
 
   constructor() {
     this.marked = new Marked();
-    this.configureMarked(this.currentConfig);
+    this.ConfigureMarked(this.currentConfig);
   }
 
   /**
    * (Re)build the internal marked instance from the given configuration.
    *
    * Each call constructs a **fresh** `Marked` instance and re-applies the full
-   * extension chain in a fixed order (html-block-repair → svg → highlight →
+   * extension chain in a fixed order (html-block-repair → math → svg → highlight →
    * heading ids → alerts → collapsible headings → smartypants). Ordering matters:
    * the SVG renderer must run before the highlighter so `svg` fences are not
    * highlighted as code.
@@ -70,7 +71,7 @@ export class MarkdownEngine {
    * @param config Markdown configuration; merged over {@link DEFAULT_MARKDOWN_CONFIG}.
    * @param options Engine options, e.g. an injected {@link HighlightFunction}.
    */
-  public configureMarked(config: MarkdownConfig, options?: ConfigureMarkedOptions): void {
+  public ConfigureMarked(config: MarkdownConfig, options?: ConfigureMarkedOptions): void {
     this.currentConfig = { ...DEFAULT_MARKDOWN_CONFIG, ...config };
     if (options && 'highlightFn' in options) {
       this.highlightFn = options.highlightFn;
@@ -90,12 +91,18 @@ export class MarkdownEngine {
     // Repair HTML blocks split by a blank line (e.g. PRD mockups) so embedded
     // raw HTML renders instead of showing as an escaped code block. Always on -
     // precisely scoped to misparsed HTML, leaves prose and fenced code untouched.
-    extensions.push(createHtmlBlockRepairExtension());
+    extensions.push(CreateHtmlBlockRepairExtension());
+
+    // TeX math. Tokenized before everything else inline, so `_` and `*` inside a formula
+    // never become emphasis.
+    if (this.currentConfig.enableMath) {
+      extensions.push(CreateMathExtension());
+    }
 
     // SVG code block renderer - MUST be before syntax highlighting
     // so it can intercept svg blocks before the highlighter processes them.
     if (this.currentConfig.enableSvgRenderer) {
-      extensions.push(createSvgRendererExtension());
+      extensions.push(CreateSvgRendererExtension());
     }
 
     // Syntax highlighting via an injected highlight function (e.g. Prism on web).
@@ -133,7 +140,7 @@ export class MarkdownEngine {
     // Collapsible headings (custom extension, HTML output path)
     if (this.currentConfig.enableCollapsibleHeadings) {
       extensions.push(
-        createCollapsibleHeadingsExtension({
+        CreateCollapsibleHeadingsExtension({
           startLevel: this.currentConfig.collapsibleHeadingLevel,
           defaultExpanded: this.currentConfig.collapsibleDefaultExpanded,
           autoExpandLevels: this.currentConfig.autoExpandLevels
@@ -152,6 +159,11 @@ export class MarkdownEngine {
     }
   }
 
+  /** @deprecated Use {@link ConfigureMarked}. */
+  public configureMarked(config: MarkdownConfig, options?: ConfigureMarkedOptions): void {
+    return this.ConfigureMarked(config, options);
+  }
+
   /**
    * Parse markdown to an HTML string.
    *
@@ -163,11 +175,11 @@ export class MarkdownEngine {
    * @param config Optional config overrides for this parse operation
    * @returns The rendered HTML string
    */
-  public parseToHtml(markdown: string, config?: Partial<MarkdownConfig>): string {
+  public ParseToHtml(markdown: string, config?: Partial<MarkdownConfig>): string {
     if (!markdown) return '';
 
     if (config) {
-      this.configureMarked({ ...this.currentConfig, ...config });
+      this.ConfigureMarked({ ...this.currentConfig, ...config });
     }
 
     try {
@@ -188,8 +200,13 @@ export class MarkdownEngine {
       return html;
     } catch (error) {
       console.error('Markdown parsing error:', error);
-      return `<pre class="markdown-error">${escapeHtml(markdown)}</pre>`;
+      return `<pre class="markdown-error">${EscapeHtml(markdown)}</pre>`;
     }
+  }
+
+  /** @deprecated Use {@link ParseToHtml}. */
+  public parseToHtml(markdown: string, config?: Partial<MarkdownConfig>): string {
+    return this.ParseToHtml(markdown, config);
   }
 
   /**
@@ -204,9 +221,9 @@ export class MarkdownEngine {
    * @param config Optional config overrides for this parse operation
    * @returns The marked token list
    */
-  public parseToTokens(markdown: string, config?: Partial<MarkdownConfig>): TokensList {
+  public ParseToTokens(markdown: string, config?: Partial<MarkdownConfig>): TokensList {
     if (config) {
-      this.configureMarked({ ...this.currentConfig, ...config });
+      this.ConfigureMarked({ ...this.currentConfig, ...config });
     }
 
     if (!markdown) {
@@ -221,26 +238,46 @@ export class MarkdownEngine {
     return this.marked.lexer(processedMarkdown);
   }
 
+  /** @deprecated Use {@link ParseToTokens}. */
+  public parseToTokens(markdown: string, config?: Partial<MarkdownConfig>): TokensList {
+    return this.ParseToTokens(markdown, config);
+  }
+
   /**
    * Get the list of headings from the last HTML parse.
    * Useful for building a table of contents.
    */
-  public getHeadingList(): HeadingInfo[] {
+  public GetHeadingList(): HeadingInfo[] {
     return this.headingList;
+  }
+
+  /** @deprecated Use {@link GetHeadingList}. */
+  public getHeadingList(): HeadingInfo[] {
+    return this.GetHeadingList();
   }
 
   /**
    * Get the current resolved configuration.
    */
-  public getConfig(): ResolvedMarkdownConfig {
+  public GetConfig(): ResolvedMarkdownConfig {
     return { ...this.currentConfig };
+  }
+
+  /** @deprecated Use {@link GetConfig}. */
+  public getConfig(): ResolvedMarkdownConfig {
+    return this.GetConfig();
   }
 
   /**
    * Reset configuration to defaults (keeps any injected highlight function).
    */
+  public ResetConfig(): void {
+    this.ConfigureMarked(DEFAULT_MARKDOWN_CONFIG);
+  }
+
+  /** @deprecated Use {@link ResetConfig}. */
   public resetConfig(): void {
-    this.configureMarked(DEFAULT_MARKDOWN_CONFIG);
+    return this.ResetConfig();
   }
 
   /**

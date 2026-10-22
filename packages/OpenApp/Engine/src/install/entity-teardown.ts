@@ -69,7 +69,7 @@ export interface TeardownPlan {
  * @param mjSchema the MJ core schema name (e.g. `__mj`)
  * @param rootDoomedPredicate the predicate selecting the doomed `Entity` rows (already dialect-quoted)
  */
-export function buildEntityTeardownPlan(
+export function BuildEntityTeardownPlan(
   fkEdges: FkEdge[],
   dialect: SQLDialect,
   mjSchema: string,
@@ -124,12 +124,22 @@ export function buildEntityTeardownPlan(
   return { statements, plan, warnings };
 }
 
+/** @deprecated Use {@link BuildEntityTeardownPlan}. */
+export function buildEntityTeardownPlan(
+  fkEdges: FkEdge[],
+  dialect: SQLDialect,
+  mjSchema: string,
+  rootDoomedPredicate: string,
+): TeardownPlan {
+  return BuildEntityTeardownPlan(fkEdges, dialect, mjSchema, rootDoomedPredicate);
+}
+
 /**
  * Builds the dialect-quoted predicate that selects the doomed `Entity` rows for `appSchema`
  * (`SchemaName = '<appSchema>'`). Shared by the caller (to seed the walk root) and used verbatim
  * as `rootDoomedPredicate`. Kept here so the quoting stays owned by this module + the dialect.
  */
-export function buildRootDoomedPredicate(dialect: SQLDialect, appSchema: string): string {
+export function BuildRootDoomedPredicate(dialect: SQLDialect, appSchema: string): string {
   // Case-INSENSITIVE match. PostgreSQL folds unquoted identifiers, so an app whose manifest declares
   // schema `__mj_BizAppsTasks` is created + registered on the `Entity` rows as `__mj_bizappstasks`,
   // while the `OpenApp` install record keeps the manifest's mixed casing — a case-sensitive `=` on PG
@@ -137,6 +147,11 @@ export function buildRootDoomedPredicate(dialect: SQLDialect, appSchema: string)
   // compares case-insensitively by default. `LOWER()` on both sides matches regardless of how the
   // dialect folded the identifier (and never over-matches — app schema names don't collide by case).
   return `LOWER(${dialect.QuoteIdentifier('SchemaName')}) = LOWER(${dialect.QuoteStringLiteral(appSchema)})`;
+}
+
+/** @deprecated Use {@link BuildRootDoomedPredicate}. */
+export function buildRootDoomedPredicate(dialect: SQLDialect, appSchema: string): string {
+  return BuildRootDoomedPredicate(dialect, appSchema);
 }
 
 /**
@@ -227,8 +242,13 @@ export async function ReportTeardownPlan(
  * + `BEGIN/COMMIT TRANSACTION`; PostgreSQL emits plain `BEGIN … COMMIT`. This thin wrapper stays for
  * the pure-function test seam. Returns an empty string for an empty statement list.
  */
-export function buildTeardownBatchScript(dialect: SQLDialect, statements: string[]): string {
+export function BuildTeardownBatchScript(dialect: SQLDialect, statements: string[]): string {
   return dialect.AtomicBatchScript(statements);
+}
+
+/** @deprecated Use {@link BuildTeardownBatchScript}. */
+export function buildTeardownBatchScript(dialect: SQLDialect, statements: string[]): string {
+  return BuildTeardownBatchScript(dialect, statements);
 }
 
 /**
@@ -240,7 +260,7 @@ export async function ExecTeardownBatch(
   dialect: SQLDialect,
   statements: string[],
 ): Promise<void> {
-  const script = buildTeardownBatchScript(dialect, statements);
+  const script = BuildTeardownBatchScript(dialect, statements);
   if (!script) return;
   await dbProvider.ExecuteSQL<Record<string, unknown>>(script);
 }
@@ -265,7 +285,7 @@ export async function RunFkGraphTeardown(
 ): Promise<void> {
   const dialect = dbProvider.Dialect;
   const fkEdges = await EnumerateMjEntityFkGraph(dbProvider, mjSchema, callbacks);
-  const planned = buildEntityTeardownPlan(fkEdges, dialect, mjSchema, rootDoomedPredicate);
+  const planned = BuildEntityTeardownPlan(fkEdges, dialect, mjSchema, rootDoomedPredicate);
   for (const w of planned.warnings) callbacks?.OnWarn?.('Metadata', `Teardown: ${w}`);
   await ReportTeardownPlan(dbProvider, dialect, mjSchema, planned.plan, callbacks);
   await ExecTeardownBatch(dbProvider, dialect, planned.statements);

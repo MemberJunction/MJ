@@ -11,7 +11,7 @@ export class EntityCRUDHandler {
     /**
      * Create a new entity
      */
-    static async createEntity(entityName: string, data: any, user: UserInfo): Promise<{ success: boolean, entity?: any, error?: string, details?: any, validationErrors?: any[] }> {
+    static async CreateEntity(entityName: string, data: any, user: UserInfo): Promise<{ success: boolean, entity?: any, error?: string, details?: any, validationErrors?: any[] }> {
         try {
             // Get entity object
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
@@ -77,11 +77,16 @@ export class EntityCRUDHandler {
             return { success: false, error: error?.message || 'Unknown error' };
         }
     }
+
+    /** @deprecated Use {@link CreateEntity}. */
+    static async createEntity(entityName: string, data: any, user: UserInfo): Promise<{ success: boolean, entity?: any, error?: string, details?: any, validationErrors?: any[] }> {
+        return this.CreateEntity(entityName, data, user);
+    }
     
     /**
      * Read an entity by ID
      */
-    static async getEntity(entityName: string, id: string | number, relatedEntities: string[] = null, user: UserInfo): Promise<{ success: boolean, entity?: any, error?: string }> {
+    static async GetEntity(entityName: string, id: string | number, relatedEntities: string[] = null, user: UserInfo): Promise<{ success: boolean, entity?: any, error?: string }> {
         try {
             // Get entity object
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
@@ -116,11 +121,16 @@ export class EntityCRUDHandler {
             return { success: false, error: error?.message || 'Unknown error' };
         }
     }
+
+    /** @deprecated Use {@link GetEntity}. */
+    static async getEntity(entityName: string, id: string | number, relatedEntities: string[] = null, user: UserInfo): Promise<{ success: boolean, entity?: any, error?: string }> {
+        return this.GetEntity(entityName, id, relatedEntities, user);
+    }
     
     /**
      * Update an existing entity
      */
-    static async updateEntity(entityName: string, id: string | number, data: any, user: UserInfo): Promise<{ success: boolean, entity?: any, error?: string, details?: any, validationErrors?: any[] }> {
+    static async UpdateEntity(entityName: string, id: string | number, data: any, user: UserInfo): Promise<{ success: boolean, entity?: any, error?: string, details?: any, validationErrors?: any[] }> {
         try {
             // Get entity object
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
@@ -203,11 +213,16 @@ export class EntityCRUDHandler {
             return { success: false, error: error?.message || 'Unknown error' };
         }
     }
+
+    /** @deprecated Use {@link UpdateEntity}. */
+    static async updateEntity(entityName: string, id: string | number, data: any, user: UserInfo): Promise<{ success: boolean, entity?: any, error?: string, details?: any, validationErrors?: any[] }> {
+        return this.UpdateEntity(entityName, id, data, user);
+    }
     
     /**
      * Delete an entity
      */
-    static async deleteEntity(entityName: string, id: string | number, options: EntityDeleteOptions, user: UserInfo): Promise<{ success: boolean, error?: string, details?: any }> {
+    static async DeleteEntity(entityName: string, id: string | number, options: EntityDeleteOptions, user: UserInfo): Promise<{ success: boolean, error?: string, details?: any }> {
         try {
             // Get entity object
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
@@ -251,6 +266,11 @@ export class EntityCRUDHandler {
             LogError(error);
             return { success: false, error: error?.message || 'Unknown error' };
         }
+    }
+
+    /** @deprecated Use {@link DeleteEntity}. */
+    static async deleteEntity(entityName: string, id: string | number, options: EntityDeleteOptions, user: UserInfo): Promise<{ success: boolean, error?: string, details?: any }> {
+        return this.DeleteEntity(entityName, id, options, user);
     }
     
     /**

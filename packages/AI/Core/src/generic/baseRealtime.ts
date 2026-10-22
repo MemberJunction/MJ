@@ -1,4 +1,7 @@
 import { BaseModel } from "./baseModel";
+import type { RealtimeReasoningPlane } from "./modelConfiguration";
+import type { RealtimeTrackDescriptor, RealtimeTrackUsageBasis } from "./realtimeTracks";
+import type { RealtimeVideoFrame } from "./realtimeVideoOutput";
 
 /**
  * A JSON-serializable value. Used to type open configuration bags and JSON-schema
@@ -64,7 +67,10 @@ export type JSONObject = { [key: string]: JSONValue };
  *    {@link IRealtimeSession.SendToolResult} must EVENTUALLY be voiced/processed by the
  *    model and must never be dropped. If the provider rejects overlapping generation
  *    triggers, the driver queues the result's trigger behind the in-flight response and
- *    flushes it at the next turn boundary.
+ *    flushes it at the next turn boundary. The result must also trigger generation where
+ *    the provider holds it: Gemini continues after a tool result on its own, unless a
+ *    context note's client content (`turnComplete: false`) left the turn open; then the
+ *    driver closes the turn after the result, or the model stays silent.
  * 6. **Token/credential expiry surfaces as a FATAL error.** When the session's credential
  *    dies (ephemeral token expiry, auth revocation), the driver must surface it through
  *    {@link IRealtimeSession.OnError} with `Fatal: true` so the consumer finalizes cleanly
@@ -93,14 +99,32 @@ export type JSONObject = { [key: string]: JSONValue };
  * @param message The diagnostic message, already prefixed by the caller (e.g. `[GeminiRealtime][diag] …`).
  */
 export function RealtimeDiagLog(message: string): void {
+    // Browser client drivers (e.g. GeminiRealtimeClient's transport handlers) call this too, and a
+    // browser has no `process`: an unguarded read throws and aborts the caller before it can surface
+    // the provider's close/error. No `process` means no MJ_VERBOSE, so diagnostics stay dark.
+    if (typeof process === 'undefined' || !process.env) {
+        return;
+    }
     const v = (process.env.MJ_VERBOSE ?? '').toLowerCase();
     if (v === 'true' || v === '1' || v === 'yes') {
+        // Strip all control characters (C0/C1, incl. CR/LF/VT/FF/ESC/NEL) plus Unicode
+        // line/paragraph separators, to prevent log injection (CWE-117).
+        const sanitized = message.replace(/[\r\n\p{Cc}\p{Zl}\p{Zp}]/gu, ' ');
         // eslint-disable-next-line no-console
-        console.log(message);
+        console.log(sanitized);
     }
 }
 
 export abstract class BaseRealtimeModel extends BaseModel {
+    /**
+     * Whether this driver subclass supports dynamic, multi-tool sets projected into the realtime
+     * session (e.g. direct action invocation on realtime co-agents).
+     *
+     * Static capability descriptor read before a session instance exists.
+     * Default: absent / false. Subclasses that support dynamic toolsets declare `public static readonly SupportsDynamicToolSet = true;`.
+     */
+    public static readonly SupportsDynamicToolSet?: boolean = false;
+
     /**
      * Opens a stateful duplex session with the provider.
      *
@@ -154,37 +178,60 @@ export abstract class BaseRealtimeModel extends BaseModel {
     }
 
     /**
-     * Whether this driver's sessions carry a **video** track in addition to audio — i.e. the model
-     * accepts video input (it can "see" the user's camera) and/or emits video output (a talking-head
-     * avatar / generated video), in sync with audio.
+     * Whether this driver's sessions carry a **video** track in addition to audio.
      *
-     * Defaults to `false` (audio-only — today's realtime models). Video-capable drivers (a native
-     * multimodal realtime model, or an avatar provider) override this to `true`. The session's media
-     * plane is media-tagged ({@link IRealtimeSession.SendInput} takes a {@link RealtimeMediaKind};
-     * {@link IRealtimeSession.OnVideoOutput} delivers video-out), so a video session reuses the entire
-     * realtime contract — only the media frames gain a `video` kind. Resolution prefers a video-capable
-     * model when an agent requests video, and degrades to audio-only otherwise.
+     * @deprecated Nothing reads it, and no driver overrides it: it is `false` for Gemini Live, which takes camera video
+     * and renders avatars. What a session does with video is declared on its {@link IRealtimeSession.Capabilities}:
+     * {@link RealtimeSessionCapabilities.SupportedInboundTracks} for video in and
+     * {@link RealtimeSessionCapabilities.SupportedOutboundTracks} for video out, each track with its encoding. Whether a
+     * model renders a live avatar is {@link SupportsAvatarOutput}. A driver declares video there, not here.
      *
-     * @returns `true` if sessions can carry video; `false` (audio-only) otherwise.
+     * @returns `false` in every MJ driver.
      */
     public get SupportsVideo(): boolean {
         return false;
     }
 
     /**
-     * The provider-native voice ids this model can speak with (e.g. OpenAI `alloy`/`echo`/`shimmer`). The
-     * model/driver is the authoritative owner of "what voices do I support", so each driver declares its
-     * own — used to populate the dev voice picker. Default empty (a driver that hasn't declared voices
-     * yields no picker options, falling back to the configured/default voice).
+     * Whether this driver's sessions can render a live avatar for the model, on the endpoint the driver serves.
      *
-     * NOTE: this is the near-term, driver-owned source of truth. Long term this should move to metadata so
-     * providers that let users add their OWN voices (e.g. ElevenLabs) can be enumerated dynamically.
+     * Defaults to `false`: a driver whose models render no avatar says nothing more, and may ignore an avatar request. A
+     * driver that renders one for some models (Gemini Enterprise) overrides it. The client-session service reads it to
+     * tell a call or a meeting that asked for an avatar "this voice model can't show an avatar"
+     * ({@link RealtimeAvatarUnavailableReason} `'endpoint'`), whichever driver serves it.
+     *
+     * @param _model The provider's API name for the model.
+     * @returns `true` when sessions on this model can render a live avatar; `false` otherwise.
+     */
+    public SupportsAvatarOutput(_model: string): boolean {
+        return false;
+    }
+
+    /**
+     * Static fallback list of provider-native voices supported by this driver when metadata personas
+     * are not present or sparse.
+     *
+     * NOTE: Database metadata (`MJ: AI Personas` + `AI Model Personas`) is authoritative where configured.
+     * At runtime, `GetRealtimeModelVoices` unions metadata personas with this driver fallback list so that
+     * newly uncatalogued provider voices remain selectable while catalogued personas carry curated names/descriptions.
      *
      * @returns The supported voice ids (id + human label), or `[]` when none are declared.
      */
     public get SupportedVoices(): RealtimeVoiceOption[] {
         return [];
     }
+
+    /**
+     * Optional WebRTC SDP exchange seam for drivers that support server-brokered WebRTC topologies.
+     *
+     * @param _offerSdp The local SDP offer generated by the browser.
+     * @param _sessionConfig The session configuration to initialize the session with.
+     * @returns The answer SDP, provider session ID, and any prebill accounting.
+     */
+    public async ExchangeWebRtcSdp?(
+        _offerSdp: string,
+        _sessionConfig?: Record<string, unknown>
+    ): Promise<{ answerSdp: string; sessionId: string; prebillSeconds: number }>;
 }
 
 /**
@@ -202,6 +249,10 @@ export abstract class BaseRealtimeModel extends BaseModel {
  * and tools with it. So any key added to the neutral vocabulary belongs in this list at the same
  * time, and the OpenAI family's own scrub in `ExtractRealtimeFeatures` must delete it too — that
  * function enumerates its deletes explicitly and does NOT read this list.
+ *
+ * A setting only one driver reads belongs here too: a co-agent's `realtime.voice.providers.<key>`
+ * bag is matched to drivers by class-name prefix, so a bag keyed `openai` that sets OpenAI Live's
+ * `brokerBaseUrl` (its SDP broker origin) also reaches OpenAI Realtime.
  */
 export const REALTIME_SHARED_CONFIG_KEYS: readonly string[] = [
     'effortLevel',
@@ -209,13 +260,18 @@ export const REALTIME_SHARED_CONFIG_KEYS: readonly string[] = [
     'parallelToolCalls',
     'mcpTools',
     'inputTranscriptionModel',
+    'transcriptionLanguages',
     'voice',
     'firstMessage',
     'disableAutoResponse',
     'turnDetection',
+    'reasoning',
     'endpoint',
     'sampleRate',
     'proxyBaseUrl',
+    'brokerBaseUrl',
+    'tooling',
+    'toolBehavior',
 ] as const;
 
 /** A selectable provider-native voice — `ID` is sent to the provider, `Name` is the human label. */
@@ -234,18 +290,58 @@ export interface RealtimeVoiceOption {
 export type RealtimeMediaKind = 'audio' | 'video';
 
 /**
+ * One frame of media a host streams into a realtime session through {@link IRealtimeSession.SendInput}.
+ */
+export interface RealtimeInputFrame {
+    /** The frame's bytes: raw audio samples, or one encoded video frame (for example a JPEG image). */
+    Data: ArrayBuffer;
+    /** The media plane the frame belongs to. */
+    Kind: RealtimeMediaKind;
+    /**
+     * The frame's format, for example `'audio/pcm;rate=16000'` or `'image/jpeg'`. When absent, an
+     * audio frame is in the session's declared input format ({@link IRealtimeSession.AudioFormat}); a
+     * video frame with no type cannot be sent by a driver that needs one, and is dropped.
+     */
+    MimeType?: string;
+    /** Epoch-millisecond capture time, when the host knows it. */
+    TimestampMs?: number;
+}
+
+/**
+ * How a client-direct session's browser reaches the provider ({@link ClientRealtimeSessionConfig.Transport}):
+ * - `'direct'`: the browser opens the provider's socket itself, authenticated with
+ *   {@link ClientRealtimeSessionConfig.EphemeralToken};
+ * - `'relay'`: the browser connects to MJAPI's realtime relay at {@link ClientRealtimeSessionConfig.RelayUrl}, and
+ *   MJAPI holds the provider credential and opens the provider's socket.
+ */
+export type RealtimeClientTransport = 'direct' | 'relay';
+
+/**
+ * Reads a {@link RealtimeClientTransport} from untyped data, such as the mint result's `Transport` field.
+ *
+ * @param value The value to read.
+ * @returns The transport, or `undefined` when the value is absent or not a known transport (read as direct).
+ */
+export function ParseRealtimeClientTransport(value: unknown): RealtimeClientTransport | undefined {
+    return value === 'direct' || value === 'relay' ? value : undefined;
+}
+
+/**
  * The server-minted configuration a browser needs to open a **client-direct** realtime session.
  *
  * Returned by {@link BaseRealtimeModel.CreateClientSession}. The browser authenticates to the
- * provider with {@link ClientRealtimeSessionConfig.EphemeralToken} and hands
- * {@link ClientRealtimeSessionConfig.SessionConfig} to the matching client driver — so the server
- * retains control of the prompt and tool set even though the browser owns the socket.
+ * provider with {@link ClientRealtimeSessionConfig.EphemeralToken} (or, on a relay session, connects to
+ * {@link ClientRealtimeSessionConfig.RelayUrl}) and hands {@link ClientRealtimeSessionConfig.SessionConfig}
+ * to the matching client driver — so the server retains control of the prompt and tool set even though the
+ * browser owns the socket.
  *
  * **`SessionConfig` is a private pact between same-keyed driver halves.** The server driver that
  * minted it (selected by {@link ClientRealtimeSessionConfig.Provider}) and the client driver
  * registered under the same key are the ONLY parties that understand its shape. Hosts and any
  * transport in between must treat it as an opaque, serializable blob — never inspect, edit, or
- * depend on its fields.
+ * depend on its fields. {@link ClientRealtimeSessionConfig.Transport} and
+ * {@link ClientRealtimeSessionConfig.RelayUrl} are not part of the pact: hosts carry them to the client
+ * driver as they are.
  */
 export interface ClientRealtimeSessionConfig {
     /**
@@ -262,13 +358,29 @@ export interface ClientRealtimeSessionConfig {
     /**
      * The short-lived client secret the browser presents to the provider to authenticate its
      * direct session. Server-scoped and expiring (see {@link ClientRealtimeSessionConfig.ExpiresAt}).
+     * Empty on a relay session ({@link ClientRealtimeSessionConfig.Transport} `'relay'`): the browser
+     * holds no provider credential, and {@link ClientRealtimeSessionConfig.RelayUrl} carries the relay's ticket.
      */
     EphemeralToken: string;
 
     /**
-     * ISO-8601 timestamp at which {@link ClientRealtimeSessionConfig.EphemeralToken} expires.
+     * ISO-8601 timestamp at which {@link ClientRealtimeSessionConfig.EphemeralToken} (or a relay
+     * session's ticket) expires.
      */
     ExpiresAt: string;
+
+    /**
+     * How the browser reaches the provider (see {@link RealtimeClientTransport}). Absent means `'direct'`,
+     * as for every session minted before this field existed.
+     */
+    Transport?: RealtimeClientTransport;
+
+    /**
+     * Where a relay session's browser connects: MJAPI's realtime relay, `wss://<mjapi>/realtime/relay/<ticket>`.
+     * Present only when {@link ClientRealtimeSessionConfig.Transport} is `'relay'`. The URL carries the
+     * session's ticket, so it is a credential: never log it or put it in an error message.
+     */
+    RelayUrl?: string;
 
     /**
      * The provider-native session config the matching client driver applies when it opens its
@@ -279,6 +391,13 @@ export interface ClientRealtimeSessionConfig {
      * opaquely and never read or rewrite its fields.
      */
     SessionConfig: JSONObject;
+
+    /**
+     * The driver's decision at mint about the live avatar the session asked for: granted, or audio only and why. Unlike
+     * {@link SessionConfig} it is not part of the driver pact, so the server can merge it with its own reasons and hand
+     * it to the call. Absent when the session asked for no avatar, and from drivers that render none.
+     */
+    AvatarStatus?: RealtimeAvatarStatus;
 }
 
 /**
@@ -293,6 +412,138 @@ export interface RealtimeSessionCapabilities {
      * session config (OpenAI `session.update`); `false` where it's fixed at connect (Gemini Live).
      */
     CanReconfigureTurnMode: boolean;
+
+    /**
+     * Which reasoning planes this driver supports (e.g. `['local']`, `['remote']`, or `['local', 'remote']`).
+     */
+    SupportedReasoningPlanes?: readonly RealtimeReasoningPlane[];
+
+    /**
+     * Whether delegation mode can be reconfigured mid-session.
+     */
+    CanReconfigureDelegationMode?: boolean;
+
+    /**
+     * Whether the model is **full-duplex**: it keeps listening while it speaks, can emit short
+     * backchannel acknowledgements, and judges for itself whether speech was directed at it. A bridge uses
+     * this to prefer the model's own addressing judgement over a name-pattern match and to treat the room's
+     * floor coordinator as a safety net rather than the primary gate. Absent/`false` = turn-based.
+     */
+    FullDuplex?: boolean;
+
+    /**
+     * Whether the provider emits a discrete user-interruption signal when user barge-in occurs.
+     */
+    EmitsUserInterruptionSignal?: boolean;
+
+    /**
+     * Whether the provider emits a discrete signal when model generation is cut off.
+     */
+    EmitsProviderCutoffSignal?: boolean;
+
+    /**
+     * Whether the provider emits a response-complete signal when a turn ends.
+     */
+    EmitsResponseComplete?: boolean;
+
+    /**
+     * The units this provider uses to measure and bill usage.
+     *
+     * A LIST rather than an enum because a provider can meter in more than one basis at once —
+     * GPT-Live reports voice seconds and delegated reasoning tokens from different places, so an
+     * exclusive enum would force us to drop one. Shares
+     * {@link import('./realtimeTracks').RealtimeTrackUsageBasis} with the media plane so cost has one
+     * vocabulary; `'frames'` and `'bytes'` exist for non-audio tracks.
+     */
+    UsageBases?: readonly RealtimeTrackUsageBasis[];
+
+    /**
+     * Whether this driver provides speech-to-text transcript events for user audio input.
+     */
+    ProvidesInputTranscription?: boolean;
+
+    /**
+     * Whether this driver provides text transcript events for model audio output.
+     */
+    ProvidesOutputTranscription?: boolean;
+
+    /**
+     * Whether this driver surfaces model-authored summaries of the model's own reasoning
+     * (Gemini `thinkingConfig.includeThoughts`).
+     *
+     * Sibling of {@link ProvidesInputTranscription} / {@link ProvidesOutputTranscription}: it
+     * declares a transcript STREAM the driver can produce. Thought summaries are narration, not
+     * spoken response — a host rendering them as assistant speech would attribute the model's
+     * scratch reasoning to it as an answer.
+     */
+    ProvidesThoughtSummaries?: boolean;
+
+    /**
+     * Whether this driver correctly handles a session whose reasoning outlives its turn — i.e.
+     * where a turn-terminal frame does NOT mean the server is idle, and further tool calls or
+     * audio may still arrive.
+     *
+     * This is a statement about the DRIVER, not the model: a driver that keys "work finished" off
+     * the turn-terminal frame must declare `false`, because on such a model it would flush deferred
+     * work early and report itself not-busy while the server is still going. Which signal a given
+     * model actually uses is model metadata
+     * (`ModelConfiguration.Realtime.IdleSignal`), not a driver capability.
+     */
+    SupportsAsynchronousReasoning?: boolean;
+
+    /**
+     * Whether the provider supports receiving multiple parallel tool calls and batched results (gpt-live-1.md §4.2).
+     */
+    SupportsParallelToolCalls?: boolean;
+
+    /**
+     * Whether this driver supports dynamic, multi-tool sets projected into the realtime session
+     * (e.g. direct action invocation on realtime co-agents).
+     *
+     * When `true`, allowed target agent actions can be registered as direct tools on the realtime model.
+     * When absent or `false`, only single/co-agent delegation tools (`invoke-target-agent`) are registered.
+     */
+    SupportsDynamicToolSet?: boolean;
+
+    /**
+     * Maximum number of concurrent delegations supported by the provider, or undefined if unbounded.
+     */
+    MaxConcurrentDelegations?: number;
+
+    /**
+     * Media tracks this model can RECEIVE (user -> model).
+     *
+     * Absent or empty is read as "inbound audio only", which is every model MJ spoke to before
+     * Gemini 3.8 Live — so an existing driver that declares nothing keeps working unchanged.
+     *
+     * This is the supply side of track negotiation: the caller requests
+     * (`ModelConfiguration.Realtime.RequestedTracks`), this declares, and
+     * {@link import('./realtimeTracks').ResolveRequestedTracks} intersects them. A requested track
+     * absent here resolves to `'unsupported'` rather than being dropped, so a host can fall back
+     * deliberately instead of wondering why no samples arrive.
+     */
+    SupportedInboundTracks?: readonly RealtimeTrackDescriptor[];
+
+    /**
+     * How many concurrent inbound VIDEO streams this model accepts: `0` when it accepts none, `1` for every
+     * model shipped so far, more for a future model that can look at several things at once. Absent
+     * means "derive it from {@link SupportedInboundTracks}" — one when an inbound video track is
+     * declared, none otherwise (see `ResolveMaxInboundVideoStreams`).
+     *
+     * A source arbiter maps however many live video sources exist onto this many streams: with `1` it
+     * picks one and tells the model when it switches; with enough streams for every source it passes
+     * them through untouched.
+     */
+    MaxInboundVideoStreams?: number;
+
+    /**
+     * Media tracks this model can EMIT (model -> user). Absent or empty is read as "outbound audio
+     * only". Non-audio outbound tracks (avatar video, haptics) are admitted by the contract because
+     * direction is a property of a track rather than part of its type. A session that emits video
+     * through {@link IRealtimeSession.OnVideoFrame} declares an outbound video track whose `Encoding`
+     * names its frames' type, such as `'video/mp4; codecs="avc1.42c01f, mp4a.40.2"'` for a Gemini avatar.
+     */
+    SupportedOutboundTracks?: readonly RealtimeTrackDescriptor[];
 }
 
 /** Parameters for {@link IRealtimeSession.Reconfigure} — a live turn-taking change. */
@@ -325,18 +576,23 @@ export interface IRealtimeSession {
     OutputSampleRate?: number;
 
     /**
+     * Audio encoding and sample rate format supported or negotiated for this session.
+     */
+    AudioFormat?: { Codec: 'pcm16' | 'g711_ulaw' | 'g711_alaw'; SampleRate: number } | 'negotiated';
+
+    /**
      * Sends a client media frame to the model.
      *
-     * Fire-and-forget: frames are streamed straight to the provider with no JSON intermediation. The
-     * optional `kind` tags the media plane — `'audio'` (default, back-compatible: existing callers and
-     * audio-only drivers need not pass or read it) or `'video'` for a camera frame to a video-capable
-     * model (one that {@link BaseRealtimeModel.SupportsVideo}). Audio-only drivers ignore `'video'`
-     * frames.
+     * Fire-and-forget: frames are streamed straight to the provider with no JSON intermediation.
+     * {@link RealtimeInputFrame.Kind} tags the media plane: `'audio'`, or `'video'` for a camera or
+     * screen frame to a model that takes video (its session declares an inbound video track in
+     * {@link RealtimeSessionCapabilities.SupportedInboundTracks}).
+     * {@link RealtimeInputFrame.MimeType} says what format the frame is in. A driver drops a frame
+     * it cannot send rather than sending it as something else.
      *
-     * @param chunk A raw media frame as an `ArrayBuffer`.
-     * @param kind The media plane the frame belongs to. Defaults to `'audio'`.
+     * @param frame The media frame, with its kind and (when known) its format.
      */
-    SendInput(chunk: ArrayBuffer, kind?: RealtimeMediaKind): void;
+    SendInput(frame: RealtimeInputFrame): void;
 
     /**
      * Registers the set of tools the model may call, translating them into the provider's
@@ -372,17 +628,44 @@ export interface IRealtimeSession {
     OnOutput(handler: (chunk: ArrayBuffer) => void): void;
 
     /**
-     * Registers a handler for model **video** output frames — the talking-head avatar / generated
-     * video a video-capable model emits, in sync with {@link IRealtimeSession.OnOutput}'s audio.
+     * Registers a handler for the model's **video** output as typed frames ({@link RealtimeVideoFrame}): pieces of
+     * fragmented MP4, encoded chunks or images, in the order the model sent them. A driver that emits them declares an
+     * outbound video track in {@link RealtimeSessionCapabilities.SupportedOutboundTracks} whose `Encoding` names the
+     * frames' type. A Gemini Live session whose avatar was granted for a host that publishes it
+     * ({@link RealtimeAvatarSettings.Delivery} `'room'`) sends the avatar's MP4 pieces here.
      *
-     * Optional: audio-only drivers (the default) don't implement it, and consumers must call it
-     * null-safely (`session.OnVideoOutput?.(...)`). A video-capable driver
-     * ({@link BaseRealtimeModel.SupportsVideo}) implements it; the consumer (bridge / client) maps these
-     * frames onto its `video-out` track exactly as it maps audio.
+     * An fMP4 piece may carry the voice on its audio track; while it does, the voice does not also come through
+     * {@link OnOutput}. A driver that can tell the model's answer from the video it streams between answers marks the
+     * latter `Idle` (see {@link RealtimeVideoFrame}): the host plays it, but never counts it as the agent speaking.
+     * After {@link OnInterruption} the host drops video not yet shown, and the driver drops the interrupted turn's late
+     * frames. The seconds of video the model generated reach {@link OnUsage} (`OutputTokenDetails.VideoSeconds`).
      *
-     * @param handler Invoked with each output video frame as an `ArrayBuffer`.
+     * Optional: audio-only drivers don't implement it; call it null-safely (`session.OnVideoFrame?.(...)`).
+     *
+     * @param handler Invoked with each frame, in the order the model sent them.
+     */
+    OnVideoFrame?(handler: (frame: RealtimeVideoFrame) => void): void;
+
+    /**
+     * Registers a handler for the model's video output as untyped bytes. A driver implements this or
+     * {@link OnVideoFrame}, not both.
+     *
+     * @deprecated Use {@link OnVideoFrame}, whose frames say what they are: a host can't tell an MP4 piece from an encoded
+     * chunk or an image by its bytes. Hosts still forward it. Removed in the next major version.
+     *
+     * @param handler Invoked with each output video chunk as an `ArrayBuffer`.
      */
     OnVideoOutput?(handler: (chunk: ArrayBuffer) => void): void;
+
+    /**
+     * What became of the session's avatar request, as decided when the session opened. Its driver decides, except when
+     * the driver has nothing to report: the session prep asked it for no avatar, or it renders no avatar and ignored the
+     * request. The agent runtime then says why: a phone call (`'phone'`), no face for the model's vendor
+     * (`'no-binding'`), an unknown avatar (`'unknown-avatar'`), a model that shows none (`'endpoint'`), or a host that
+     * publishes no avatar into a room (`'bridged'`). Absent when the session asked for no avatar (the voiced agent's video
+     * setting is off), or its driver reported nothing about one on a model that shows avatars.
+     */
+    AvatarStatus?: RealtimeAvatarStatus;
 
     /**
      * Registers a handler for transcript events (the text stream).
@@ -411,9 +694,20 @@ export interface IRealtimeSession {
      *
      * @param callID The `CallID` from the originating {@link RealtimeToolCall}, used to correlate the result.
      * @param output The tool's result as a JSON-stringified string.
+     * @param taskRevision Optional task revision counter from the tool call. If supplied and mismatched, stale results are discarded.
      * @returns A promise that resolves once the result has been sent to the provider.
      */
-    SendToolResult(callID: string, output: string): Promise<void>;
+    SendToolResult(callID: string, output: string, taskRevision?: number): Promise<void>;
+
+    /**
+     * Current task revision counter for cancellation and supersede-and-discard.
+     */
+    CurrentTaskRevision?: number;
+
+    /**
+     * Advances the task revision counter, causing in-flight tool results from prior revisions to be discarded.
+     */
+    BumpTaskRevision?(): number;
 
     /**
      * **Optional capability** — injects background context (e.g. delegated-run progress, freshly
@@ -459,6 +753,13 @@ export interface IRealtimeSession {
      *   `void`/`undefined` from legacy drivers is treated as "triggered" for backward compatibility.
      */
     RequestSpokenUpdate?(instructions: string): boolean | void;
+
+    /**
+     * Mid-session instruction update (e.g. OpenAI `session.instructions.append`).
+     *
+     * @param instructions New or appended instructions for the ongoing session.
+     */
+    SendInstructions?(instructions: string): Promise<void>;
 
     /**
      * **Capability introspection.** A small, static description of what THIS live session can do, so the
@@ -596,6 +897,112 @@ export interface RealtimeSessionParams {
      * cleanup). This is the default for authenticated/internal sessions, which don't need an abuse cap.
      */
     MaxSessionSeconds?: number;
+
+    /**
+     * Optional ID of the user requesting or owning the realtime session.
+     * Used for auditing, rate limiting, and proxy ticket attribution.
+     */
+    UserID?: string;
+
+    /**
+     * Optional boolean indicating that the SystemPrompt already provides its own tool framing
+     * (e.g. from BuildRealtimeAgentFraming in co-agent sessions). When true, drivers MUST NOT
+     * append their own standalone delegation policy. When false or omitted, drivers may fall back
+     * to heuristic substring sniffing or default policy compilation.
+     */
+    HasToolFraming?: boolean;
+
+    /**
+     * Whether the session model is served under zero data retention: its effective catalog
+     * configuration declares `Privacy.ZeroDataRetention: true`. Drivers must not turn on provider
+     * features that store session content when this is `true`. Gemini Live session resumption keeps
+     * resumable session state on Google's side, so the Gemini driver leaves it off and such a
+     * session ends at the provider's connection limit instead. Absent or `false` means "not declared".
+     */
+    ZeroDataRetention?: boolean;
+
+    /**
+     * A live avatar the session asks the model to render. A driver renders it only where its model and endpoint can;
+     * anywhere else the session runs audio-only and the driver logs why ({@link RealtimeAvatarUnavailableReason}). Absent
+     * means no avatar.
+     */
+    Avatar?: RealtimeAvatarSettings;
+}
+
+/**
+ * A live avatar a session asks for. The tuning members carry the same names as a persona's avatar settings
+ * (`IAIPersonaVendorSettings.Avatar`), which is where a request usually comes from.
+ */
+export interface RealtimeAvatarSettings {
+    /** The vendor's avatar id: a preset name (for example Gemini's "Ben"), or a custom avatar's id. */
+    AvatarID: string;
+    /** `'preset'` (default): an avatar from the vendor's catalog. `'custom'`: one made from a reference image. */
+    Kind?: 'preset' | 'custom';
+    /** The MJ Storage file id of the reference image, when {@link Kind} is `'custom'`. */
+    ReferenceImageFileID?: string;
+    /** The preferred video resolution; a driver uses the nearest its vendor offers. */
+    Resolution?: 'low' | 'standard' | 'high';
+    /** What shows behind the avatar, when the vendor can change it: a named treatment, or an image from MJ Storage. */
+    Background?: 'default' | 'transparent' | 'blur' | { ImageFileID: string };
+    /** The persona the avatar belongs to, for logs. */
+    PersonaName?: string;
+    /** Where the request came from: the voiced agent's persona, or an explicit override. */
+    Source?: 'persona' | 'override';
+    /**
+     * Who shows the avatar's video. `'room'`: a server-side session whose host publishes it into a meeting room (the
+     * meeting bot decodes it and publishes a camera track), so the driver may render it there. `'client'` or absent: the
+     * browser that opened the session shows it; a server-side session without `'room'` stays audio only (reason
+     * `'bridged'`). A phone call never carries a request (reason `'phone'`).
+     */
+    Delivery?: 'client' | 'room';
+}
+
+/**
+ * Why a session that asked for an avatar runs audio-only:
+ * - `'endpoint'`: the model, on the endpoint serving it, renders no avatar;
+ * - `'bridged'`: the session runs on the server (a meeting bot) and its host can't publish video into the room;
+ * - `'phone'`: the session is a phone call (a carrier call, or one that reaches a meeting room through SIP): the caller
+ *   hears the agent and sees no video, so the session asks the model for no avatar;
+ * - `'custom-disabled'`: custom avatars are not enabled;
+ * - `'unknown-avatar'`: the request names no avatar the vendor knows;
+ * - `'no-binding'`: the persona has no avatar on this vendor;
+ * - `'host'`: the app showing the call shows no agent video: it told the mint so (the embeddable widgets and the mobile
+ *   app have no channel that shows it), so the session asked the model for none, or the avatar was granted and the app
+ *   asked for no agent video when it connected;
+ * - `'browser'`: the avatar was granted and the app asked for it, but the browser could not play it;
+ * - `'decoder-missing'`: the meeting host has no usable decoder (no ffmpeg, one too old, or one without the H.264 and
+ *   AAC decoders), so the meeting session asked for audio;
+ * - `'decoder-failed'`: the meeting bot's decoders kept failing, so the avatar was taken down mid-meeting;
+ * - `'publish-failed'`: the meeting room refused the bot's video track;
+ * - `'video-off'`: the call picked an avatar (a voice that comes with one), and the voiced agent's own video setting is
+ *   off, so the session asked the model for none.
+ */
+export type RealtimeAvatarUnavailableReason =
+    | 'endpoint'
+    | 'bridged'
+    | 'phone'
+    | 'custom-disabled'
+    | 'unknown-avatar'
+    | 'no-binding'
+    | 'host'
+    | 'browser'
+    | 'decoder-missing'
+    | 'decoder-failed'
+    | 'publish-failed'
+    | 'video-off';
+
+/**
+ * Whether a session asked for a live avatar and got one, and why not when it didn't. The mint returns it
+ * ({@link ClientRealtimeSessionConfig.AvatarStatus}) and a server-side session reports it
+ * ({@link IRealtimeSession.AvatarStatus}), so a call or a meeting that shows no avatar can say why.
+ */
+export interface RealtimeAvatarStatus {
+    /** Whether the session asked for an avatar: the voiced agent's video setting is on, or the call picked one. */
+    Requested: boolean;
+    /** Whether the model renders the avatar in this session. */
+    Granted: boolean;
+    /** Why the session runs audio-only, when it asked for an avatar and was not granted one. */
+    Reason?: RealtimeAvatarUnavailableReason;
 }
 
 /**
@@ -627,6 +1034,18 @@ export interface RealtimeTranscript {
      * instead of a stack of growing duplicates. Absent/false: a normal, append-worthy final.
      */
     ReplacesPrevious?: boolean;
+
+    /**
+     * `'normal'` for a regular conversation turn; `'narration'` for an ephemeral
+     * spoken-progress update or model-authored reasoning thought. Absent/undefined defaults to `'normal'`.
+     */
+    Kind?: 'normal' | 'narration';
+
+    /**
+     * `true` when this transcript represents model-authored reasoning / thoughts rather than
+     * spoken audio.
+     */
+    IsThought?: boolean;
 }
 
 /**
@@ -666,6 +1085,11 @@ export interface RealtimeToolCall {
      * Consumers parse this into the tool's expected parameter shape.
      */
     Arguments: string;
+
+    /**
+     * Optional task revision at the time the tool call was emitted. Used to detect stale/superseded results.
+     */
+    TaskRevision?: number;
 }
 
 /**
@@ -688,6 +1112,11 @@ export interface RealtimeUsage {
     OutputTokens: number;
 
     /**
+     * Number of voice-duration seconds reported in this usage update (cumulative snapshot).
+     */
+    DurationSeconds?: number;
+
+    /**
      * Per-modality breakdown of the input tokens, when the provider reports one. Realtime models
      * bill audio and text tokens at very different rates (e.g. GPT Realtime 2.1: $32/M audio in
      * vs $4/M text in), so cost attribution REQUIRES this split — the totals alone force a wrong
@@ -696,25 +1125,56 @@ export interface RealtimeUsage {
     InputTokenDetails?: RealtimeUsageModalityDetail;
 
     /**
-     * Per-modality breakdown of the output tokens, when the provider reports one.
-     * See {@link RealtimeUsage.InputTokenDetails}.
+     * Per-modality breakdown of the output tokens, when the provider reports one, and the seconds of
+     * avatar video generated since the last update (`VideoSeconds`). An update may carry only those
+     * seconds, with both token totals 0. See {@link RealtimeUsage.InputTokenDetails}.
      */
     OutputTokenDetails?: RealtimeUsageModalityDetail;
 }
 
 /**
  * Per-modality token counts inside a {@link RealtimeUsage} update. All fields optional — providers
- * report different subsets (OpenAI GA: text/audio/cached on input, text/audio on output).
+ * report different subsets (OpenAI GA: text/audio/cached on input, text/audio on output; Gemini Live:
+ * text/audio/image on input, text/audio/video on output).
+ *
+ * Every token field is an amount for this update, like the totals. The video fields differ by
+ * direction: inbound they are the session's running totals (snapshots), outbound `VideoSeconds` is
+ * an amount for this update.
  */
 export interface RealtimeUsageModalityDetail {
     /** Text-modality tokens. */
     TextTokens?: number;
     /** Audio-modality tokens. */
     AudioTokens?: number;
-    /** Image-modality tokens (input only on current providers). */
+    /**
+     * Image-modality tokens (input only on current providers).
+     * Authoritative financial billing basis reported by inference providers (e.g. Gemini Live reports
+     * inbound video frames under promptTokensDetails.IMAGE).
+     */
     ImageTokens?: number;
+    /**
+     * Video-modality tokens, as the provider reports them (Gemini Live: `responseTokensDetails` VIDEO for
+     * a generated avatar's video). Part of the update's output total when the provider counts them there.
+     */
+    VideoTokens?: number;
     /** Tokens served from the provider's prompt cache (billed at the cached rate). */
     CachedTokens?: number;
+    /**
+     * Inbound only: the video frames sent so far on the session's video tracks (usage basis 'frames'),
+     * a running total rather than an amount for this update. Client-side telemetry; comparing it
+     * against ImageTokens surfaces dropped frames.
+     */
+    VideoFrames?: number;
+    /**
+     * Seconds of video (usage basis 'seconds'). The two directions mean different things:
+     * - **Inbound** (`InputTokenDetails`): the wall-clock span between the first and last frame sent so
+     *   far (span-not-sum), a running total for telemetry. Provider-reported ImageTokens remain the
+     *   billing basis.
+     * - **Outbound** (`OutputTokenDetails`): the seconds of video the model generated since the last
+     *   update (an avatar's video, from its fragment durations), an amount like the token fields.
+     *   Consumers add the updates up.
+     */
+    VideoSeconds?: number;
 }
 
 /**
@@ -743,4 +1203,65 @@ export interface RealtimeToolDefinition {
      * provider's native function-parameter schema.
      */
     ParametersSchema: JSONObject;
+}
+
+/**
+ * Normalized representation of a realtime tool execution scheduling hint.
+ *
+ * Directs how the model should schedule its generation following a tool result:
+ * - `'silent'`: Execute without model speaking response.
+ * - `'whenIdle'`: Deliver tool output to model when conversational turn goes idle.
+ * - `'interrupt'`: Immediately interrupt active generation to deliver tool output.
+ */
+export type RealtimeToolSchedulingHint = 'silent' | 'whenIdle' | 'interrupt';
+
+/**
+ * Extracts and normalizes scheduling hints (`__mj_scheduling` or legacy `scheduling`)
+ * from a tool's parsed return dictionary.
+ *
+ * Strips both keys from `parsed` in-place so neither key leaks into the model's response payload.
+ * Validates the value case-insensitively, accepting:
+ * - 'SILENT' -> 'silent'
+ * - 'WHEN_IDLE' -> 'whenIdle'
+ * - 'INTERRUPT' | 'INTERRUPTED' -> 'interrupt'
+ *
+ * Warns on unrecognized values with `loggerTag` and returns `undefined`.
+ *
+ * @param parsed The tool output dictionary (mutated in-place to strip scheduling keys).
+ * @param toolName The name of the tool being executed, for logging context.
+ * @param loggerTag Optional logging tag prefix (defaults to 'Realtime').
+ * @returns The normalized scheduling hint, or `undefined` if absent or unrecognized.
+ */
+export function ExtractToolSchedulingHint(
+    parsed: Record<string, unknown>,
+    toolName: string,
+    loggerTag: string = 'Realtime'
+): RealtimeToolSchedulingHint | undefined {
+    const raw = parsed['__mj_scheduling'] ?? parsed['scheduling'];
+    if ('__mj_scheduling' in parsed) {
+        delete parsed['__mj_scheduling'];
+    }
+    if ('scheduling' in parsed) {
+        delete parsed['scheduling'];
+    }
+
+    if (typeof raw !== 'string') {
+        return undefined;
+    }
+
+    const schedStr = raw.trim().toUpperCase();
+    if (schedStr.length === 0) {
+        return undefined;
+    }
+
+    if (schedStr === 'SILENT') {
+        return 'silent';
+    } else if (schedStr === 'WHEN_IDLE') {
+        return 'whenIdle';
+    } else if (schedStr === 'INTERRUPT' || schedStr === 'INTERRUPTED') {
+        return 'interrupt';
+    } else {
+        console.warn(`[${loggerTag}] Unrecognized function scheduling value "${raw}" for tool "${toolName}".`);
+        return undefined;
+    }
 }

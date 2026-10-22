@@ -18,7 +18,7 @@ export class CSVGenerator {
   /**
    * Generate CSV exports (returns both tables and columns CSV)
    */
-  public generate(
+  public Generate(
     state: DatabaseDocumentation,
     options: CSVGeneratorOptions = {}
   ): CSVExport {
@@ -26,6 +26,14 @@ export class CSVGenerator {
       tables: this.generateTablesCsv(state, options),
       columns: this.generateColumnsCsv(state, options)
     };
+  }
+
+  /** @deprecated Use {@link Generate}. */
+  public generate(
+    state: DatabaseDocumentation,
+    options: CSVGeneratorOptions = {}
+  ): CSVExport {
+    return this.Generate(state, options);
   }
 
   /**

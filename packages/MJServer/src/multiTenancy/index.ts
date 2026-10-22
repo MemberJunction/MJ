@@ -9,7 +9,9 @@
 
 import type { RequestHandler } from 'express';
 import type { PreRunViewHook, PreSaveHook } from '@memberjunction/core';
-import { Metadata, type UserInfo, type TenantContext } from '@memberjunction/core';
+import { DatabaseProviderBase, Metadata, type UserInfo, type TenantContext } from '@memberjunction/core';
+import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
+import { IsBalancedSQLFragment } from '@memberjunction/sql-parser';
 import type { MultiTenancyConfig } from '../config.js';
 import type { UserPayload } from '../types.js';
 import { CloneUserForSessionContext } from '../auth/sessionUserClone.js';
@@ -48,7 +50,7 @@ export type TenantContextExtractor = (
  * By the time GraphQL resolvers or REST handlers run, the contextUser already
  * has TenantContext set — no deferred pickup via `req['__mj_tenantId']` needed.
  */
-export function createTenantMiddleware(config: MultiTenancyConfig): RequestHandler {
+export function CreateTenantMiddleware(config: MultiTenancyConfig): RequestHandler {
   return (req, res, next) => {
     const userPayload = (req as { userPayload?: UserPayload }).userPayload;
     if (!userPayload?.userRecord) {
@@ -79,12 +81,17 @@ export function createTenantMiddleware(config: MultiTenancyConfig): RequestHandl
         // instance, and stamping it in place races concurrent requests for the
         // same user (one request's tenant becomes another's, same-instant).
         const sessionUser = CloneUserForSessionContext(userPayload.userRecord as UserInfo);
-        attachTenantContext(sessionUser, tenantId, 'header');
+        AttachTenantContext(sessionUser, tenantId, 'header');
         userPayload.userRecord = sessionUser;
       }
     }
     next();
   };
+}
+
+/** @deprecated Use {@link CreateTenantMiddleware}. */
+export function createTenantMiddleware(config: MultiTenancyConfig): RequestHandler {
+  return CreateTenantMiddleware(config);
 }
 
 /**
@@ -98,7 +105,7 @@ export function createTenantMiddleware(config: MultiTenancyConfig): RequestHandl
  * so a future caller from a different source ('linkedEntity', 'custom') cannot
  * reintroduce the injection path.
  */
-export function attachTenantContext(
+export function AttachTenantContext(
   user: UserInfo,
   tenantId: string,
   source: TenantContext['Source']
@@ -107,6 +114,15 @@ export function attachTenantContext(
     throw new Error(`Invalid tenant identifier (must match ${TENANT_ID_PATTERN})`);
   }
   user.TenantContext = { TenantID: tenantId, Source: source };
+}
+
+/** @deprecated Use {@link AttachTenantContext}. */
+export function attachTenantContext(
+  user: UserInfo,
+  tenantId: string,
+  source: TenantContext['Source']
+): void {
+  return AttachTenantContext(user, tenantId, source);
 }
 
 /**
@@ -147,11 +163,30 @@ function isAdminUser(user: UserInfo, adminRoles: string[]): boolean {
   );
 }
 
+/** Dialects to read an ExtraFilter with when the active provider's dialect cannot be resolved. */
+const ALL_FILTER_DIALECTS: SQLParserDialect[] = [new SQLServerDialect(), new PostgreSQLDialect()];
+
+/**
+ * Throws unless the caller's ExtraFilter stays inside the parentheses the tenant predicate is
+ * ANDed after. A filter such as `1=1) OR (1=1` would close them early and leave the tenant
+ * predicate on one side of an OR the caller controls.
+ */
+function assertExtraFilterBalanced(extraFilter: string): void {
+  const provider = Metadata.Provider; // global-provider-ok: same rationale as isEntityScoped above — hooks carry no per-request provider
+  const dialects = provider instanceof DatabaseProviderBase ? [provider.Dialect] : ALL_FILTER_DIALECTS;
+  for (const dialect of dialects) {
+    const check = IsBalancedSQLFragment(extraFilter, dialect);
+    if (!check.IsBalanced) {
+      throw new Error(`[MultiTenancy] Invalid ExtraFilter: ${check.Reason}`);
+    }
+  }
+}
+
 /**
  * Creates a PreRunViewHook that auto-injects tenant WHERE clauses
  * into RunView queries for scoped entities.
  */
-export function createTenantPreRunViewHook(config: MultiTenancyConfig): PreRunViewHook {
+export function CreateTenantPreRunViewHook(config: MultiTenancyConfig): PreRunViewHook {
   return (params, contextUser) => {
     // No tenant context → no filtering
     if (!contextUser?.TenantContext) return params;
@@ -192,13 +227,19 @@ export function createTenantPreRunViewHook(config: MultiTenancyConfig): PreRunVi
 
     // Inject the tenant filter
     if (params.ExtraFilter && typeof params.ExtraFilter === 'string' && params.ExtraFilter.trim().length > 0) {
-      params.ExtraFilter = `(${params.ExtraFilter}) AND ${tenantFilter}`;
+      assertExtraFilterBalanced(params.ExtraFilter);
+      params.ExtraFilter = `(${params.ExtraFilter}) AND (${tenantFilter})`;
     } else {
       params.ExtraFilter = tenantFilter;
     }
 
     return params;
   };
+}
+
+/** @deprecated Use {@link CreateTenantPreRunViewHook}. */
+export function createTenantPreRunViewHook(config: MultiTenancyConfig): PreRunViewHook {
+  return CreateTenantPreRunViewHook(config);
 }
 
 /**
@@ -227,7 +268,7 @@ export function QuoteFilterIdentifier(name: string): string {
  * match the user's TenantContext. In 'log' mode, warns but allows. In
  * 'off' mode, this hook is a no-op.
  */
-export function createTenantPreSaveHook(config: MultiTenancyConfig): PreSaveHook {
+export function CreateTenantPreSaveHook(config: MultiTenancyConfig): PreSaveHook {
   return (entity, contextUser) => {
     // No validation needed if write protection is off
     if (config.writeProtection === 'off') return true;
@@ -267,4 +308,9 @@ export function createTenantPreSaveHook(config: MultiTenancyConfig): PreSaveHook
 
     return true;
   };
+}
+
+/** @deprecated Use {@link CreateTenantPreSaveHook}. */
+export function createTenantPreSaveHook(config: MultiTenancyConfig): PreSaveHook {
+  return CreateTenantPreSaveHook(config);
 }

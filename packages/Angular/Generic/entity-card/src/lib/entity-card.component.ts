@@ -2,7 +2,7 @@ import {
     Component, Input, Output, EventEmitter,
     OnChanges, SimpleChanges, ChangeDetectionStrategy, ChangeDetectorRef, inject
 } from '@angular/core';
-import { EntityInfo } from '@memberjunction/core';
+import { EntityInfo, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import {
     EntityCardVariant, CardTemplate, CardDisplayField,
@@ -193,7 +193,7 @@ export class MJEntityCardComponent extends BaseAngularComponent implements OnCha
 
     /** @internal Handle card click with cancelable before/after pattern */
     public OnCardClick(): void {
-        const payload = this.BuildEventPayload();
+        const payload = this.buildEventPayload();
         const cancelable: CancelableCardEvent<CardRecordEvent> = { Data: payload, Cancel: false };
         this.BeforeCardClick.emit(cancelable);
         if (!cancelable.Cancel) {
@@ -204,7 +204,7 @@ export class MJEntityCardComponent extends BaseAngularComponent implements OnCha
     /** @internal Handle open button click with cancelable before/after pattern */
     public OnOpenClick(event: MouseEvent): void {
         event.stopPropagation();
-        const payload = this.BuildEventPayload();
+        const payload = this.buildEventPayload();
         const cancelable: CancelableCardEvent<CardRecordEvent> = { Data: payload, Cancel: false };
         this.BeforeOpen.emit(cancelable);
         if (!cancelable.Cancel) {
@@ -219,7 +219,7 @@ export class MJEntityCardComponent extends BaseAngularComponent implements OnCha
     /** Get the resolved display fields, respecting maxFields for variant */
     public get DisplayFields(): CardDisplayField[] {
         if (!this.EffectiveTemplate) return [];
-        const max = this.ResolvedMaxFields;
+        const max = this.resolvedMaxFields;
         return this.EffectiveTemplate.DisplayFields.slice(0, max);
     }
 
@@ -239,7 +239,7 @@ export class MJEntityCardComponent extends BaseAngularComponent implements OnCha
     public GetFieldValue(field: CardDisplayField): string {
         const value = this.Record[field.Name];
         if (value == null || String(value).trim() === '') return '';
-        return this.FormatValue(value, field);
+        return this.formatValue(value, field);
     }
 
     /** Get the label for a field */
@@ -320,7 +320,7 @@ export class MJEntityCardComponent extends BaseAngularComponent implements OnCha
     // Private Methods
     // ================================================================
 
-    private get ResolvedMaxFields(): number {
+    private get resolvedMaxFields(): number {
         if (this.MaxDisplayFields != null) return this.MaxDisplayFields;
         switch (this.Variant) {
             case 'compact': return 3;
@@ -356,7 +356,7 @@ export class MJEntityCardComponent extends BaseAngularComponent implements OnCha
 
         const metadataKeys = Object.keys(this.Record);
         if (this.ResolvedEntity) {
-            const full = GenerateCardTemplate(this.ResolvedEntity, this.ResolvedMaxFields);
+            const full = GenerateCardTemplate(this.ResolvedEntity, this.resolvedMaxFields);
             // Filter to fields present in the record
             const keySet = new Set(metadataKeys);
             return {
@@ -370,7 +370,7 @@ export class MJEntityCardComponent extends BaseAngularComponent implements OnCha
             };
         }
 
-        return GenerateCardTemplateFromMetadata(entityName, metadataKeys, this.ResolvedMaxFields, this.ProviderToUse);
+        return GenerateCardTemplateFromMetadata(entityName, metadataKeys, this.resolvedMaxFields, this.ProviderToUse);
     }
 
     private resolveTitle(): string {
@@ -395,7 +395,7 @@ export class MJEntityCardComponent extends BaseAngularComponent implements OnCha
         return this.ResolvedEntity?.Name ?? this.EntityName ?? '';
     }
 
-    private FormatValue(value: unknown, field: CardDisplayField): string {
+    private formatValue(value: unknown, field: CardDisplayField): string {
         switch (field.Type) {
             case 'number': {
                 const num = Number(value);
@@ -414,7 +414,12 @@ export class MJEntityCardComponent extends BaseAngularComponent implements OnCha
                 try {
                     const d = value instanceof Date ? value : new Date(value as string | number);
                     if (isNaN(d.getTime())) return String(value);
-                    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+                    const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+                    // A `date` column is a calendar day that arrives as UTC midnight; a local-zone
+                    // formatter would land on the previous day for every reader west of Greenwich
+                    // (MJ#4210). A timestamp names an instant and stays in local time.
+                    if (this.isDateOnlyField(field.Name)) return FormatDateOnly(d, options);
+                    return d.toLocaleDateString(undefined, options);
                 } catch {
                     return String(value);
                 }
@@ -426,7 +431,11 @@ export class MJEntityCardComponent extends BaseAngularComponent implements OnCha
         }
     }
 
-    private BuildEventPayload(): CardRecordEvent {
+    private isDateOnlyField(fieldName: string): boolean {
+        return IsDateOnlySQLType(this.ResolvedEntity?.Fields?.find(f => f.Name === fieldName)?.Type);
+    }
+
+    private buildEventPayload(): CardRecordEvent {
         return {
             EntityName: this.EntityDisplayName,
             Record: this.Record,

@@ -1,0 +1,30 @@
+{
+  "_comment": [
+    "Three tool-capable drivers, one per wire family MJ actually reaches.",
+    "",
+    "Gemini 3.7 Flash — the current Google Flash and the cheapest of the family ($0.75/$3.75,",
+    "   against $1.50/$9.00 for 3.5 Flash). Google is the only developer measured",
+    "   so far, so it carries the continuity with the recorded Google sweep.",
+    "GPT 4.1-mini    — a non-Google control on the canonical OpenAI wire shape. Pre-reasoning",
+    "   generation deliberately: the audit's tool-calling quirks cluster in the reasoning models,",
+    "   so a pre-reasoning row is the baseline those are read against.",
+    "GPT-OSS-120B    — the deployed workhorse (all 15 corpus agents list it) on Cerebras, and the",
+    "   first live exercise of the CerebrasLLM tool mapping. Note this model DOES support tool",
+    "   calling — envelope-vs-native is a mode axis, not a property of the model.",
+    "",
+    "Anthropic is absent: its key currently 401s. Groq is absent: no key is configured at all.",
+    "Run with: rigs/native-tool-matrix.ts --matrix rigs/matrices/tool-capable.json --live"
+  ],
+  "models": [
+    { "label": "Gemini 3.7 Flash", "developer": "Google", "generation": "current Flash",
+      "driverClass": "GeminiLLM", "apiName": "gemini-3.7-flash" },
+    { "label": "GPT 4.1-mini", "developer": "OpenAI", "generation": "pre-reasoning",
+      "driverClass": "OpenAILLM", "apiName": "gpt-4.1-mini" },
+    { "label": "GPT-OSS-120B", "developer": "Cerebras", "generation": "deployed workhorse",
+      "driverClass": "CerebrasLLM", "apiName": "gpt-oss-120b" }
+  ],
+  "scenarioIds": ["single-call", "parallel-call", "no-call-needed", "envelope"],
+  "toolModes": ["no-tools", "auto", "none", "required", "named"],
+  "responseFormats": ["Any", "JSON"],
+  "reps": 3
+}

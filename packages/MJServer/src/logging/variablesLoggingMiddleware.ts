@@ -1,11 +1,11 @@
-import type { MiddlewareFn } from 'type-graphql';
+import type { MiddlewareFn, ResolverData } from 'type-graphql';
 import { getMetadataStorage } from 'type-graphql';
-import { getNamedType } from 'graphql';
-import type { GraphQLArgument } from 'graphql';
+import { defaultFieldResolver, getNamedType } from 'graphql';
+import type { GraphQLArgument, GraphQLField, GraphQLObjectType, GraphQLSchema } from 'graphql';
 import { configInfo } from '../config.js';
 import type { AppContext } from '../types.js';
-import { redactArg } from './secretRedactor.js';
-import { hasNoLogParameter, getNoLogFields } from './NoLog.js';
+import { RedactArg } from './secretRedactor.js';
+import { HasNoLogParameter, GetNoLogFields } from './NoLog.js';
 import { StartupLogger } from './StartupLogger.js';
 
 /**
@@ -112,7 +112,7 @@ const warnedResolverSignatures = new Set<string>();
  * differ from the always-on log line (`operationName` vs `operation`, `variables` vs `args`)
  * — operators with log-grep automation should update their patterns.
  */
-export const variablesLoggingMiddleware: MiddlewareFn<AppContext> = async (action, next) => {
+export const VariablesLoggingMiddleware: MiddlewareFn<AppContext> = async (action, next) => {
   // Field resolvers (info.path.prev !== undefined) are skipped — only root @Query/@Mutation/@Subscription.
   if (action.info.path.prev !== undefined) {
     return next();
@@ -144,13 +144,13 @@ export const variablesLoggingMiddleware: MiddlewareFn<AppContext> = async (actio
 
     const paramMeta = argParams.find((p) => p.name === argDef.name);
     const noLogParameter = paramMeta && resolverEntry
-      ? hasNoLogParameter(resolverEntry.target, resolverEntry.methodName, paramMeta.index)
+      ? HasNoLogParameter(resolverEntry.target, resolverEntry.methodName, paramMeta.index)
       : false;
 
     const inputClass = findInputClass(inputTypeName);
-    const noLogFields = inputClass ? getNoLogFields(inputClass) : new Set<string>();
+    const noLogFields = inputClass ? GetNoLogFields(inputClass) : new Set<string>();
 
-    redactedArgs[argDef.name] = redactArg({
+    redactedArgs[argDef.name] = RedactArg({
       inputTypeName,
       rawValue,
       provider,
@@ -187,6 +187,65 @@ export const variablesLoggingMiddleware: MiddlewareFn<AppContext> = async (actio
 
   return next();
 };
+
+/** @deprecated Use {@link VariablesLoggingMiddleware}. */
+export const variablesLoggingMiddleware: MiddlewareFn<AppContext> = VariablesLoggingMiddleware;
+
+/**
+ * Attaches {@link VariablesLoggingMiddleware} ONLY to root `Query`, `Mutation`, and `Subscription`
+ * fields on the compiled GraphQLSchema instead of registering it via TypeGraphQL `globalMiddlewares`.
+ *
+ * Registering a global middleware in TypeGraphQL wraps every scalar and child field resolver across
+ * all 300+ `@ObjectType` entities in an async middleware chain, allocating $O(\text{Rows} \times \text{Fields})$
+ * Promises per query even when `logVariables` is false or `info.path.prev !== undefined`.
+ * Wrapping only the root operation fields reduces middleware invocations from ~15,000 per 500-row
+ * `RunView` response down to 1.
+ */
+export function ApplyRootVariablesLoggingMiddleware(
+  schema: GraphQLSchema,
+  middleware: MiddlewareFn<AppContext> = VariablesLoggingMiddleware
+): GraphQLSchema {
+  const rootTypes: Array<GraphQLObjectType | null | undefined> = [
+    schema.getQueryType(),
+    schema.getMutationType(),
+    schema.getSubscriptionType(),
+  ];
+
+  for (const rootType of rootTypes) {
+    if (!rootType) continue;
+    const fields = rootType.getFields();
+    for (const field of Object.values(fields) as Array<GraphQLField<unknown, AppContext>>) {
+      if (field.resolve) {
+        const originalResolve = field.resolve;
+        field.resolve = (root, args, context, info) => {
+          const action: ResolverData<AppContext> = {
+            root,
+            args: args as Record<string, unknown>,
+            context,
+            info,
+          };
+          return middleware(action, async () => originalResolve(root, args, context, info));
+        };
+      }
+      if (field.subscribe) {
+        const originalSubscribe = field.subscribe;
+        field.subscribe = (root, args, context, info) => {
+          const action: ResolverData<AppContext> = {
+            root,
+            args: args as Record<string, unknown>,
+            context,
+            info,
+          };
+          return middleware(action, async () =>
+            originalSubscribe ? originalSubscribe(root, args, context, info) : defaultFieldResolver(root, args, context, info)
+          );
+        };
+      }
+    }
+  }
+
+  return schema;
+}
 
 /**
  * Heuristic: an arg is "custom" (i.e. needs `@NoLog` discipline because metadata can't redact it)

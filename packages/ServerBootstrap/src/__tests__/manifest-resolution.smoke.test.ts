@@ -20,7 +20,14 @@
  * class-resolution bundle (CR1–CR5), which covers the DB-driven half of the same seam.
  */
 import { describe, it, expect } from 'vitest';
+import * as fs from 'fs';
+import * as path from 'path';
 import { MJGlobal } from '@memberjunction/global';
+import { ElevenLabsRealtime } from '@memberjunction/ai-elevenlabs';
+import { GeminiRealtime } from '@memberjunction/ai-gemini';
+import { InworldRealtime } from '@memberjunction/ai-inworld';
+import { AssemblyAIRealtime } from '@memberjunction/ai-assemblyai';
+import { HuggingFaceRealtime } from '@memberjunction/ai-huggingface';
 import { CLASS_REGISTRATIONS } from '../generated/mj-class-registrations';
 
 describe('class-registration manifest (real generated module)', () => {
@@ -59,4 +66,26 @@ describe('class-registration manifest (real generated module)', () => {
             `Manifest entries with NO live ClassFactory registration (decorator lost?): ${missing.join(', ')}`
         ).toEqual([]);
     });
+
+    it('SupportsDynamicToolSet is true for Gemini and falsy for static/fixed-tool drivers', () => {
+        expect(GeminiRealtime.SupportsDynamicToolSet).toBe(true);
+        expect(ElevenLabsRealtime.SupportsDynamicToolSet).toBeFalsy();
+        expect(InworldRealtime.SupportsDynamicToolSet).toBeFalsy();
+        expect(AssemblyAIRealtime.SupportsDynamicToolSet).toBeFalsy();
+        expect(HuggingFaceRealtime.SupportsDynamicToolSet).toBeFalsy();
+    });
+
+    it('does not include test/spec/mock files or test-suite classes (e.g. GraphTestListEntity)', () => {
+        const classNames = CLASS_REGISTRATIONS.map(cls => (cls as { name?: string }).name ?? '');
+        expect(classNames).not.toContain('GraphTestListEntity');
+
+        const manifestSource = fs.readFileSync(
+            path.resolve(__dirname, '../generated/mj-class-registrations.ts'),
+            'utf-8'
+        );
+        expect(manifestSource).not.toContain('GraphTestListEntity');
+        expect(manifestSource).not.toContain('@memberjunction/integration-test-suite');
+        expect(manifestSource).not.toMatch(/__tests__|__mocks__|\.(?:test|spec)\b/);
+    });
 });
+

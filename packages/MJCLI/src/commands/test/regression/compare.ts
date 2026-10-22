@@ -1,5 +1,5 @@
 import { Command, Flags } from '@oclif/core';
-import { isInsideMonorepo, spawnInherit } from '../../../lib/regression/docker-helpers.js';
+import { IsInsideMonorepo, SpawnInherit } from '../../../lib/regression/docker-helpers.js';
 import { TEST_FORMAT_FLAG } from '../../../lib/format-compat.js';
 
 const REGRESSION_RESULTS_DIR = 'docker/regression/test-results';
@@ -44,7 +44,7 @@ export default class TestRegressionCompare extends Command {
 
     // Results live under docker/regression/test-results in the monorepo, or
     // ./test-results when running externally (where remote/up wrote them).
-    const resultsDir = isInsideMonorepo() ? REGRESSION_RESULTS_DIR : EXTERNAL_RESULTS_DIR;
+    const resultsDir = IsInsideMonorepo() ? REGRESSION_RESULTS_DIR : EXTERNAL_RESULTS_DIR;
 
     // --tag flips us to DB mode (results.json doesn't carry Tags), so drop
     // --from-json when the user asks for tag filtering.
@@ -62,7 +62,7 @@ export default class TestRegressionCompare extends Command {
 
     // Re-invoke the same `mj` binary. argv[1] is the entry script path.
     const mjBin = process.argv[1] ?? 'mj';
-    const code = await spawnInherit(process.execPath, [mjBin, ...args]);
+    const code = await SpawnInherit(process.execPath, [mjBin, ...args]);
     if (code !== 0) this.exit(code);
   }
 }

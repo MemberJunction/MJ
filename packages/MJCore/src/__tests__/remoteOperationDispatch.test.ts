@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseRemotableOperation, RemoteOpServerContext } from '../generic/baseRemotableOperation';
-import { dispatchRemoteOperationInProcess } from '../generic/remoteOperationDispatch';
+import { DispatchRemoteOperationInProcess } from '../generic/remoteOperationDispatch';
 import { IMetadataProvider, RemoteOpProgress } from '../generic/interfaces';
 import { UserInfo } from '../generic/securityInfo';
 
@@ -41,7 +41,7 @@ const USER = {} as UserInfo;
 
 describe('dispatchRemoteOperationInProcess', () => {
     it('resolves a registered operation by key and runs it server-side', async () => {
-        const result = await dispatchRemoteOperationInProcess<EchoInput, EchoOutput>(
+        const result = await DispatchRemoteOperationInProcess<EchoInput, EchoOutput>(
             'Test.DispatchEcho',
             { value: 21 },
             { user: USER },
@@ -53,19 +53,19 @@ describe('dispatchRemoteOperationInProcess', () => {
     });
 
     it('returns UNKNOWN_OPERATION for an unregistered key', async () => {
-        const result = await dispatchRemoteOperationInProcess('Test.NotRegistered', {}, { user: USER }, PROVIDER);
+        const result = await DispatchRemoteOperationInProcess('Test.NotRegistered', {}, { user: USER }, PROVIDER);
         expect(result.Success).toBe(false);
         expect(result.ResultCode).toBe('UNKNOWN_OPERATION');
     });
 
     it('returns NO_USER when no acting user is available', async () => {
-        const result = await dispatchRemoteOperationInProcess('Test.DispatchEcho', { value: 1 }, {}, PROVIDER);
+        const result = await DispatchRemoteOperationInProcess('Test.DispatchEcho', { value: 1 }, {}, PROVIDER);
         expect(result.Success).toBe(false);
         expect(result.ResultCode).toBe('NO_USER');
     });
 
     it('falls back to the provided fallback user when options.user is absent', async () => {
-        const result = await dispatchRemoteOperationInProcess<EchoInput, EchoOutput>(
+        const result = await DispatchRemoteOperationInProcess<EchoInput, EchoOutput>(
             'Test.DispatchEcho',
             { value: 5 },
             {},
@@ -78,7 +78,7 @@ describe('dispatchRemoteOperationInProcess', () => {
 
     it('forwards each context.emitProgress to options.onProgress (attached in-process)', async () => {
         const events: RemoteOpProgress[] = [];
-        const result = await dispatchRemoteOperationInProcess<EchoInput, EchoOutput>(
+        const result = await DispatchRemoteOperationInProcess<EchoInput, EchoOutput>(
             'Test.DispatchProgress',
             { value: 3 },
             { user: USER, onProgress: (p) => events.push(p) },
@@ -92,7 +92,7 @@ describe('dispatchRemoteOperationInProcess', () => {
     });
 
     it('runs without error when no onProgress is supplied (emitProgress is a safe no-op)', async () => {
-        const result = await dispatchRemoteOperationInProcess('Test.DispatchProgress', { value: 4 }, { user: USER }, PROVIDER);
+        const result = await DispatchRemoteOperationInProcess('Test.DispatchProgress', { value: 4 }, { user: USER }, PROVIDER);
         expect(result.Success).toBe(true);
         expect(result.Output).toEqual({ doubled: 8 });
     });

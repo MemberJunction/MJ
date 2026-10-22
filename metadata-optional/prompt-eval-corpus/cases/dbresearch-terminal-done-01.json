@@ -1,0 +1,53 @@
+{
+  "id": "dbresearch-terminal-done-01",
+  "agent": "Database Research Agent",
+  "tags": [
+    "terminal-synthesis",
+    "coherence-gate",
+    "implicit-payload-first"
+  ],
+  "description": "The query returned the answer. Returning it is the decision; running another query is churn. This agent's prompt mandates storing its output via payloadChangeRequest, so under the implicit protocol — where a payload write is its own turn — the write is the prompt-correct first decision and is accepted alongside completion. The loop itself treats a payload-only envelope as completion (LoopAgentType auto-sets taskComplete), so the branch matches runtime in both arms.",
+  "input": {
+    "payload": {
+      "queries": [
+        {
+          "sql": "SELECT COUNT(*) FROM vwAIAgents WHERE Status='Active'",
+          "rows": [
+            {
+              "n": 64
+            }
+          ]
+        }
+      ]
+    },
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "How many active AI agents are there?"
+      },
+      {
+        "role": "user",
+        "content": "[Action Result] Run Ad-hoc Query succeeded. 1 row: { n: 64 }"
+      }
+    ]
+  },
+  "expect": {
+    "kind": "anyOf",
+    "anyOf": [
+      {
+        "kind": "taskComplete",
+        "forbiddenActions": [
+          "Run Ad-hoc Query",
+          "Get Entity Details"
+        ]
+      },
+      {
+        "kind": "payloadChange",
+        "forbiddenActions": [
+          "Run Ad-hoc Query",
+          "Get Entity Details"
+        ]
+      }
+    ]
+  }
+}

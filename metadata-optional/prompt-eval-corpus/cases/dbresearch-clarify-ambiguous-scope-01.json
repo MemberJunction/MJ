@@ -1,0 +1,38 @@
+{
+  "id": "dbresearch-clarify-ambiguous-scope-01",
+  "agent": "Database Research Agent",
+  "tags": [
+    "clarify",
+    "over-eager-detection"
+  ],
+  "description": "'Recent' has no defined window and the table is large. Clarifying beats guessing a range and returning something plausible but wrong.",
+  "input": {
+    "payload": {},
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Pull the recent activity."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "anyOf",
+    "anyOf": [
+      {
+        "kind": "chat",
+        "message": {
+          "matcher": "nonEmpty"
+        }
+      },
+      {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Get Entity Details"
+          }
+        ],
+        "allowAdditionalActions": true
+      }
+    ]
+  }
+}

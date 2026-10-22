@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import { attemptDeleteFile } from './util';
-import { dbPlatform } from '../Config/config';
+import { AttemptDeleteFile } from './util';
+import { DbPlatform } from '../Config/config';
 
 /**
  * Utility class for managing temporary batch SQL files during CodeGen execution.
@@ -15,8 +15,8 @@ export class TempBatchFile {
     /**
      * Initialize temp batch files for each schema in this CodeGen run
      */
-    public static initialize(outputDirectory: string, schemas: string[]): void {
-        this.cleanup(); // Clean up any previous files
+    public static Initialize(outputDirectory: string, schemas: string[]): void {
+        this.Cleanup(); // Clean up any previous files
 
         const timestamp = Date.now();
 
@@ -38,38 +38,58 @@ export class TempBatchFile {
         this.isInitialized = true;
     }
 
+    /** @deprecated Use {@link Initialize}. */
+    public static initialize(outputDirectory: string, schemas: string[]): void {
+        return this.Initialize(outputDirectory, schemas);
+    }
+
     /**
      * Append SQL to the temp batch file for the given schema
      */
-    public static appendToTempBatchFile(sql: string, schema: string): void {
+    public static AppendToTempBatchFile(sql: string, schema: string): void {
         if (!this.isInitialized) return;
 
         const filePath = this.tempFilePaths.get(schema);
         if (!filePath) return;
 
         // SQL Server uses GO as a batch separator; PostgreSQL doesn't need it
-        const separator = dbPlatform() === 'postgresql' ? '\n\n' : '\nGO\n\n';
+        const separator = DbPlatform() === 'postgresql' ? '\n\n' : '\nGO\n\n';
         fs.appendFileSync(filePath, sql + separator);
+    }
+
+    /** @deprecated Use {@link AppendToTempBatchFile}. */
+    public static appendToTempBatchFile(sql: string, schema: string): void {
+        return this.AppendToTempBatchFile(sql, schema);
     }
 
     /**
      * Get all temp file paths for execution
      */
-    public static getTempFilePaths(): string[] {
+    public static GetTempFilePaths(): string[] {
         return Array.from(this.tempFilePaths.values());
+    }
+
+    /** @deprecated Use {@link GetTempFilePaths}. */
+    public static getTempFilePaths(): string[] {
+        return this.GetTempFilePaths();
     }
 
     /**
      * Get temp file path for a specific schema
      */
-    public static getTempFilePathForSchema(schema: string): string | undefined {
+    public static GetTempFilePathForSchema(schema: string): string | undefined {
         return this.tempFilePaths.get(schema);
+    }
+
+    /** @deprecated Use {@link GetTempFilePathForSchema}. */
+    public static getTempFilePathForSchema(schema: string): string | undefined {
+        return this.GetTempFilePathForSchema(schema);
     }
 
     /**
      * Check if temp files have been initialized and have content
      */
-    public static hasContent(): boolean {
+    public static HasContent(): boolean {
         if (!this.isInitialized || this.tempFilePaths.size === 0) return false;
 
         // Check if at least one file has content
@@ -82,17 +102,27 @@ export class TempBatchFile {
         return false;
     }
 
+    /** @deprecated Use {@link HasContent}. */
+    public static hasContent(): boolean {
+        return this.HasContent();
+    }
+
     /**
      * Clean up temp files and reset state
      */
-    public static cleanup(): void {
+    public static Cleanup(): void {
         for (const filePath of this.tempFilePaths.values()) {
             if (fs.existsSync(filePath)) {
-                attemptDeleteFile(filePath, 3, 1000);
+                AttemptDeleteFile(filePath, 3, 1000);
             }
         }
 
         this.tempFilePaths.clear();
         this.isInitialized = false;
+    }
+
+    /** @deprecated Use {@link Cleanup}. */
+    public static cleanup(): void {
+        return this.Cleanup();
     }
 }

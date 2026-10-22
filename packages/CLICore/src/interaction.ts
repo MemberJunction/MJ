@@ -193,7 +193,7 @@ export class NonInteractiveError extends Error {
   /** The concrete remedy, e.g. `Pass --entity "MJ: AI Prompts".` */
   public readonly suggestion: string;
   /** Why prompting was refused — from {@link InteractivityDecision.reason}. */
-  public readonly reason: InteractivityReason;
+  public readonly reason: InteractivityReason;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
   constructor(what: string, suggestion: string, reason: InteractivityReason) {
     super(`${what} is required and ${describeReason(reason)}. ${suggestion}${describeRemedy(reason)}`);

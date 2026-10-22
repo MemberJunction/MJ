@@ -66,36 +66,158 @@ export type PSConfirmVariant = 'info' | 'warn' | 'danger';
 })
 export class PSConfirmModalComponent {
   /** Modal heading. */
-  @Input() title = 'Confirm';
+  @Input() Title = 'Confirm';
+
+  /** @deprecated Use {@link Title}. */
+  @Input() set title(value: PSConfirmModalComponent['Title']) {
+    this.Title = value;
+  }
+  /** @deprecated Use {@link Title}. */
+  get title(): PSConfirmModalComponent['Title'] {
+    return this.Title;
+  }
   /** Header icon-tile Font Awesome class. */
-  @Input() icon = 'fa-solid fa-circle-question';
+  @Input() Icon = 'fa-solid fa-circle-question';
+
+  /** @deprecated Use {@link Icon}. */
+  @Input() set icon(value: PSConfirmModalComponent['Icon']) {
+    this.Icon = value;
+  }
+  /** @deprecated Use {@link Icon}. */
+  get icon(): PSConfirmModalComponent['Icon'] {
+    return this.Icon;
+  }
   /** Confirm-button Font Awesome class (shown when not busy). */
-  @Input() confirmIcon = 'fa-solid fa-check';
+  @Input() ConfirmIcon = 'fa-solid fa-check';
+
+  /** @deprecated Use {@link ConfirmIcon}. */
+  @Input() set confirmIcon(value: PSConfirmModalComponent['ConfirmIcon']) {
+    this.ConfirmIcon = value;
+  }
+  /** @deprecated Use {@link ConfirmIcon}. */
+  get confirmIcon(): PSConfirmModalComponent['ConfirmIcon'] {
+    return this.ConfirmIcon;
+  }
   /** Confirm-button label. */
-  @Input() confirmLabel = 'Confirm';
+  @Input() ConfirmLabel = 'Confirm';
+
+  /** @deprecated Use {@link ConfirmLabel}. */
+  @Input() set confirmLabel(value: PSConfirmModalComponent['ConfirmLabel']) {
+    this.ConfirmLabel = value;
+  }
+  /** @deprecated Use {@link ConfirmLabel}. */
+  get confirmLabel(): PSConfirmModalComponent['ConfirmLabel'] {
+    return this.ConfirmLabel;
+  }
   /** Visual variant (info / warn / danger). */
-  @Input() variant: PSConfirmVariant = 'info';
+  @Input() Variant: PSConfirmVariant = 'info';
+
+  /** @deprecated Use {@link Variant}. */
+  @Input() set variant(value: PSConfirmVariant) {
+    this.Variant = value;
+  }
+  /** @deprecated Use {@link Variant}. */
+  get variant(): PSConfirmVariant {
+    return this.Variant;
+  }
   /** When true, render the reason textarea. */
-  @Input() showReason = false;
+  @Input() ShowReason = false;
+
+  /** @deprecated Use {@link ShowReason}. */
+  @Input() set showReason(value: PSConfirmModalComponent['ShowReason']) {
+    this.ShowReason = value;
+  }
+  /** @deprecated Use {@link ShowReason}. */
+  get showReason(): PSConfirmModalComponent['ShowReason'] {
+    return this.ShowReason;
+  }
   /** When true, the confirm button stays disabled until a non-empty reason is entered. */
-  @Input() reasonRequired = false;
+  @Input() ReasonRequired = false;
+
+  /** @deprecated Use {@link ReasonRequired}. */
+  @Input() set reasonRequired(value: PSConfirmModalComponent['ReasonRequired']) {
+    this.ReasonRequired = value;
+  }
+  /** @deprecated Use {@link ReasonRequired}. */
+  get reasonRequired(): PSConfirmModalComponent['ReasonRequired'] {
+    return this.ReasonRequired;
+  }
   /** Reason field label. */
-  @Input() reasonLabel = 'Reason';
+  @Input() ReasonLabel = 'Reason';
+
+  /** @deprecated Use {@link ReasonLabel}. */
+  @Input() set reasonLabel(value: PSConfirmModalComponent['ReasonLabel']) {
+    this.ReasonLabel = value;
+  }
+  /** @deprecated Use {@link ReasonLabel}. */
+  get reasonLabel(): PSConfirmModalComponent['ReasonLabel'] {
+    return this.ReasonLabel;
+  }
   /** Reason field placeholder. */
-  @Input() reasonPlaceholder = 'Add an optional note…';
+  @Input() ReasonPlaceholder = 'Add an optional note…';
+
+  /** @deprecated Use {@link ReasonPlaceholder}. */
+  @Input() set reasonPlaceholder(value: PSConfirmModalComponent['ReasonPlaceholder']) {
+    this.ReasonPlaceholder = value;
+  }
+  /** @deprecated Use {@link ReasonPlaceholder}. */
+  get reasonPlaceholder(): PSConfirmModalComponent['ReasonPlaceholder'] {
+    return this.ReasonPlaceholder;
+  }
   /** In-flight flag — disables the buttons + shows the confirm spinner. */
-  @Input() busy = false;
+  @Input() Busy = false;
+
+  /** @deprecated Use {@link Busy}. */
+  @Input() set busy(value: PSConfirmModalComponent['Busy']) {
+    this.Busy = value;
+  }
+  /** @deprecated Use {@link Busy}. */
+  get busy(): PSConfirmModalComponent['Busy'] {
+    return this.Busy;
+  }
 
   /** The captured reason (two-way via the textarea). */
-  public reason = '';
+  public Reason = '';
+
+  /** @deprecated Use {@link Reason}. */
+  public get reason() {
+    return this.Reason;
+  }
+  /** @deprecated Use {@link Reason}. */
+  public set reason(value) {
+    this.Reason = value;
+  }
 
   /** Emitted with the trimmed reason when the user confirms. */
-  @Output() confirmed = new EventEmitter<string>();
+  @Output() Confirmed = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link Confirmed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (confirmed) keeps working. Must stay AFTER Confirmed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() confirmed = this.Confirmed;
   /** Emitted when the user cancels (button or backdrop). */
-  @Output() cancelled = new EventEmitter<void>();
+  @Output() Cancelled = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link Cancelled}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (cancelled) keeps working. Must stay AFTER Cancelled: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() cancelled = this.Cancelled;
 
   /** Backdrop click cancels — unless an operation is in flight. */
+  public OnBackdrop(): void {
+    if (!this.Busy) this.Cancelled.emit();
+  }
+
+  /** @deprecated Use {@link OnBackdrop}. */
   public onBackdrop(): void {
-    if (!this.busy) this.cancelled.emit();
+    return this.OnBackdrop();
   }
 }

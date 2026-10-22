@@ -1,5 +1,1142 @@
 # @memberjunction/ng-bootstrap
 
+## 6.2.0-edge.5
+
+### Minor Changes
+
+- 223669e: Fresh installs migrate again. The `V202610171900` migration (AI Agent User Policies and User Routine wake) refreshed entity field metadata for the whole core schema, which collided on `UQ_EntityField_EntityID_Sequence` on any new database; the refresh is now limited to the entities that migration changes. Generated code is regenerated to match a clean database: deprecated fields (AI Agent Run `AgentState`; Conversation Detail `SuggestedResponses`, `ArtifactID`, `ArtifactVersionID`) no longer appear on their generated forms, and AI Agent User Policy's `CalendarChannelMode` moves to its column position. The Angular class-registration manifests now include `MJAIAgentUserPolicyEntity`.
+- 1cb1d52: Login Studio: design the Explorer sign-in page on the default theme.
+  - **Schema:** `MJ: Themes` gains `LoginScreen` (published) and `LoginScreenDraft`. `MJThemeEntityExtended`
+    refuses a design the login screen cannot draw safely (`StoredLoginDesignProblems` in
+    `@memberjunction/theme-engine`, the same contract the editor checks).
+  - **App:** Login Studio (`LoginStudioResource`) edits blocks, layout, background and colors, saves a draft
+    and publishes it.
+  - **Public route:** `GET /auth/login-screen` serves the default Active theme's published design, logos and
+    seeds, sanitized (`SanitizePublicLoginScreen`) on the server and again in the browser. Drafts are never
+    served to anonymous visitors; signed-in users who can read themes can read them.
+  - **Login screen:** `<mj-explorer-app>` draws a published design through `<mj-login-region>` and wears the
+    default theme's brand colors before sign-in. A host's `mjLoginSlot` templates still win;
+    `UsePublishedLoginScreen = false` keeps the screen as the host's own inputs and CSS draw it.
+
+- ce758af: Feature Pipelines: keyed, versioned Feature Values and honest runs (migration `V202610201100__v6.2.x__Feature_Value_Key_And_Versions.sql`).
+  - Feature Values upsert on a key (record, feature, pipeline version, prompt version, primary model, parameters, input); a value a person entered (`Source='Human'`) is never overwritten unless the run sets `overwriteHumanValues`. Child write-back can `reconcile` rows on a key.
+  - `MJ: Feature Pipeline Versions` registers each pipeline pin; a gated pipeline runs only under a version whose golden-set result meets its threshold. The `Steward Feature Pipeline Version` Action (`StewardFeaturePipelineVersionAction`) and `Feature Pipeline Version Steward` Record Process (`WorkType='Action'`, scheduled via `RecordProcessScheduledJobDriver`) evaluate and backfill changed versions; golden sets carry a label-quality record, `Required` and `ExpectAbstain` cases.
+  - New `@memberjunction/feature-pipelines-engine` package houses server-side Feature Pipeline execution (`InferProcessor`, `BaseFeaturePipelineDriver`, `LLMFeaturePipelineDriver`, `DecisionFeaturePipelineDriver`, `FeaturePipelineEscalation`, `FeaturePipelineHumanValueGuard`, `FeaturePipelineErrors`), golden-set testing (`FeaturePipelineGoldenSetDriver`, `golden-set-scoring`, `golden-label-quality`), and version stewardship (`FeaturePipelineVersionSteward`, `StewardFeaturePipelineVersionAction`, `RegisterInferRecordProcessor`), keeping `@memberjunction/record-set-processor-base`, `@memberjunction/record-set-processor`, `@memberjunction/scheduling-engine`, and `@memberjunction/testing-engine` free of Feature Pipeline dependencies.
+  - Outputs are checked against `lookup` constraints (per item with `ItemRef`); an output below its `MinConfidence` is withheld (`OnLowConfidence: 'null'`); `Context.RecordAsUserMessage` sends the record as a JSON user turn.
+  - Dry runs write nothing, preview only what the real write would change, cap at 25 records and report `WouldRefuse`; a Feature Pipeline run with a failed record ends `Failed` with a `FeaturePipelineRunResult` summary; the breaker counts attempted records.
+  - An output may omit its write target (builder target mode `Feature value only (no write-back)`): the answer is stored in `MJ: Feature Values` only, typed by its constraint (`numeric`/`money`, `boolean`, `date`), and no entity field is written. The Bulk Operations dry-run dialog shows each as a `<Feature> (feature value)` row with the previous and proposed value, and loads only the non-skipped details so a large scope counts every changed record.
+  - A Feature Values panel on every record form shows the latest answer per pipeline and feature (Source, Confidence, version, Computed, Reasoning) and expands to its history; a latest answer that withheld its value reads "no value". `@memberjunction/ng-base-forms` re-resolves the form chrome when a panel mounts after first render, so a late panel gets its left-nav entry.
+  - The Version Steward beats on a timer while its backfill runs, defers a backfill while a run is Running, marks only a clean run as backfilled, and ignores a Running Process Run not checkpointed for 30 minutes. A Feature Value insert that loses the race on its key to an equal value is `Unchanged`.
+  - Bedrock sends a configured temperature of 0 as 0 (F-FP-13).
+  - `AIPromptParams.templateAutoescape` (set by the Feature Pipeline drivers) renders a prompt template without HTML escaping; a Feature Pipeline run reads its prompt's template from the database at run start, so a template edit takes effect on the next run.
+  - API moves & PascalCase standardization: `WriteBackResult`, `TagWriteBackPreview`, `FieldRulesResultPayload`, and `MetadataProviderCapabilities` live in `@memberjunction/record-set-processor-base`; `FeaturePipelineRunResults` lives in `@memberjunction/feature-pipelines`; `RunRecordProcessOptions`, `RecordProcessorContext`, `RecordSetProcessOptions`, `ProcessRunSummary`, and `WriteBackValuePreview` use `PascalCase` properties across `@memberjunction/record-set-processor-base` and `@memberjunction/record-set-processor`.
+
+### Patch Changes
+
+- c159e2f: MJAPI can now live under a path prefix without per-route CDN patches (#5674). A new setting, `MJAPI_BASE_PATH` (default `/`), is the prefix MJAPI mounts every route under. `GRAPHQL_ROOT_PATH` stays only where Apollo listens, and `MJAPI_PUBLIC_URL` stays where the world reaches MJAPI.
+  - **`ApiRoute(subpath, { absolute? })`** (new, `@memberjunction/server`): the mount path under `MJAPI_BASE_PATH`, or with `absolute` the public URL (`MJAPI_PUBLIC_URL` + subpath). Also exports `ApiRootPath()`, `ConfiguredPublicUrl()`, `JoinApiRoute()` and `NormalizeApiRootPath()`.
+  - **Core mounts** (`/healthcheck`, `/oauth`, `/esignature`, `/media`, `/realtime/sdp-exchange`, `/magic-link`, `/widget`, `/realtime/verify`, `/health/extensions`, `/auth`) are composed under the base path, as are the magic-link and realtime-verify form actions, `CreateMediaAccessToken`'s URL and `CreateUploadStageToken`'s `Url`.
+  - **Server extensions:** every `RootPath` is relative to the base path. `PrepareServerExtensionConfigs({ apiRootPath })` composes the mount path (new `ComposeServerExtensionMountPath`), and `ServerExtensionInitContext.apiRootPath` carries it. `graphqlRootPath` is no longer a reserved root, and `CoreReservedServerExtensionRoots()` no longer takes it.
+  - **Explorer is told where MJAPI is.** New optional `MJAPI_URI` environment value (`MJEnvironmentConfig`, `WorkspaceEnvironment`, `GraphQLProviderConfigData.MJAPIURL`) and `ResolveMJAPIURL(mjapiUrl)` in `@memberjunction/core`. When set, the auth-provider catalog, the Login Studio sign-in page, the healthcheck poll, the OAuth code exchange and the upload-stage POST use it as given. When unset, each keeps exactly its previous behaviour.
+  - Default config changes nothing: with `MJAPI_BASE_PATH` and `MJAPI_URI` unset, every mount path, emitted URL and Explorer request is unchanged, whatever `GRAPHQL_ROOT_PATH` is. REST stays at the origin-absolute `/api/v1`.
+
+  **Opting in (`MJAPI_BASE_PATH=/api`, e.g. behind MJ Central's CloudFront, which forwards `/api/*` unstripped).** Every route moves under the prefix, and nothing on the MJ side reports a caller still using the old address. In the same change:
+  - Set `MJAPI_PUBLIC_URL` to the prefixed address (`https://host/api`) so links MJAPI hands out carry it, and set Explorer's `MJAPI_URI` to the same. Server and Explorer switch together: either one alone leaves the login-provider catalog and the healthcheck pointing at the wrong place.
+  - Re-register every URL an outside party holds, or keep a temporary edge redirect from the old path: provider webhooks (Open App extensions such as Orders' `/webhooks/payments` and `/webhooks/billcom`, telephony `/telephony/*` and `/meetings/teams`, Slack/Teams messaging, core `/esignature/webhook/:driverKey`), OAuth redirect URIs (`/oauth/callback`), and links already emailed (magic-link invites, realtime-verify links). Carrier URLs MJ registers itself (`BuildCallbackUrl`) follow automatically.
+  - Remove CDN behaviors added per route for the old root paths once nothing calls them.
+  - **Update your own MJExplorer app.** `packages/MJExplorer` is a starter template, not a published package, so this release does not change your copy. Its `src/main.ts` preloads the sign-in data before Angular starts and must pass `MJAPI_URI` through itself. Add `MJAPI_URI` to your `environment.ts` files, then change the two preload calls:
+
+    ```ts
+    AuthProviderCatalog.Preload(environment.GRAPHQL_URI, undefined, environment.MJAPI_URI),
+    LoginScreenLoader.Load(environment.GRAPHQL_URI, undefined, environment.MJAPI_URI),
+    ```
+
+    If your `environment.ts` is a plain object literal without `MJAPI_URI`, type it as `MJEnvironmentConfig` from `@memberjunction/ng-bootstrap` so the property exists. Everything after bootstrap (healthcheck, OAuth exchange, uploads, the login screen) reads `MJAPI_URI` from the environment you already pass to `MJExplorerAppModule.forRoot()`; no other change is needed. Skipping this step does not break sign-in. The provider list and the Login Studio design just fall back to the compiled defaults.
+
+  Telephony media WebSocket URLs (`/telephony/*/media`) and `/realtime-proxy` do not move.
+
+- b1e628e: Removes the legacy pre-`mjButton` button system from the Explorer global stylesheet (`_common.scss`): `.mj-btn-primary`, `.mj-btn-secondary`, `.mj-btn-ghost`, `.mj-btn-icon-only`, `.mj-btn-sm`, `.mj-btn-lg`, and the `.mj-btn-icon` child rule, plus two viewport overrides of `.mj-btn`. Buttons use `mjButton` with `variant`/`size` inputs, or the BEM classes `mj-btn mj-btn--<variant> mj-btn--<size>` where a directive cannot be applied. Class-for-class: `mj-btn-primary` → `mj-btn--primary`; `mj-btn-secondary` (transparent, brand border) → `mj-btn--outline`; `mj-btn-ghost` → `mj-btn--flat`; `mj-btn-icon-only` → `mj-btn--icon`; `mj-btn-sm` → `mj-btn--sm`; `mj-btn-lg` → `mj-btn--lg`. Also removes the dead Kendo-era icon-card and skip-icon rule sets (`.mj-icon-card*`, `.mj-card-icon*`, `.mj-card-actions`, `.skip-icon*`, every `.k-*` selector) and tokenizes the stylesheet's remaining hardcoded colors; the modal backdrop now uses `--mj-bg-overlay`. The Files grid's row action buttons now use `mj-btn--flat mj-btn--sm` instead of the undefined `mj-btn-flat mj-btn-sm`. Apps that consume `@memberjunction/ng-explorer-app/dist/styles.scss` and still write any removed class in a template should migrate to `mjButton`. Follow-ups landed in the same change: the parallel single-dash `.mj-btn-*` selectors in `_shared-patterns.scss` and explorer-settings are gone (explorer-settings' unused `_md3-shared.css` is deleted outright); the consumer-less `.mj-modal-overlay` / `.mj-modal` / `.mj-modal-sm..xl` / `.mj-modal-close` / `.mj-modal-confirm*` / `.mj-modal-loading*` rules are removed while `.mj-modal-header/-body/-footer` stay; the Files grid drops its unreachable `.grid-action-btn` / `.action-buttons` component CSS; and the two leftover Kendo drawer `querySelector` calls in the Explorer shell and `MJInitializationService.NavigateToInitialRoute` are removed (a bare `/` initial path is left to the router's default route, which is what already happened).
+- Updated dependencies [0d81c53]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [95c7682]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [b4e2ceb]
+- Updated dependencies [9898079]
+- Updated dependencies [189b702]
+- Updated dependencies [5465489]
+- Updated dependencies [83486cf]
+- Updated dependencies [c6b4b85]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [c30593a]
+- Updated dependencies [c7418dc]
+- Updated dependencies [0ab85d7]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [2274f42]
+- Updated dependencies [35ed364]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [542795b]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [fcc3f03]
+- Updated dependencies [1214eca]
+- Updated dependencies [7e72c86]
+- Updated dependencies [130cc7e]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [2a7a098]
+- Updated dependencies [8420f36]
+- Updated dependencies [72dd65c]
+- Updated dependencies [7fb8598]
+- Updated dependencies [b1e628e]
+- Updated dependencies [1d29837]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [c7d1170]
+- Updated dependencies [a750fa5]
+- Updated dependencies [5f707d1]
+- Updated dependencies [d1b1958]
+- Updated dependencies [e1f2583]
+- Updated dependencies [03c085c]
+- Updated dependencies [0bee327]
+- Updated dependencies [dc38250]
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/ng-core-entity-forms@6.2.0-edge.5
+  - @memberjunction/ai-core-plus@6.2.0-edge.5
+  - @memberjunction/actions-base@6.2.0-edge.5
+  - @memberjunction/ai-engine-base@6.2.0-edge.5
+  - @memberjunction/ng-conversations@6.2.0-edge.5
+  - @memberjunction/ng-explorer-core@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.5
+  - @memberjunction/ng-auth-services@6.2.0-edge.5
+  - @memberjunction/ng-file-storage@6.2.0-edge.5
+  - @memberjunction/ng-dashboards@6.2.0-edge.5
+  - @memberjunction/communication-types@6.2.0-edge.5
+  - @memberjunction/ng-shared@6.2.0-edge.5
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.5
+  - @memberjunction/feature-pipelines@6.2.0-edge.5
+  - @memberjunction/ng-entity-action-ux@6.2.0-edge.5
+  - @memberjunction/ai-realtime-client@6.2.0-edge.5
+  - @memberjunction/ng-explorer-settings@6.2.0-edge.5
+  - @memberjunction/ng-dashboard-viewer@6.2.0-edge.5
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.5
+  - @memberjunction/tag-engine-base@6.2.0-edge.5
+  - @memberjunction/ng-artifacts@6.2.0-edge.5
+  - @memberjunction/ng-clustering@6.2.0-edge.5
+  - @memberjunction/entity-communications-base@6.2.0-edge.5
+  - @memberjunction/rubrics-base@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Minor Changes
+
+- 7384dd6: Conversation forks: a conversation is Main (the messages with no branch) plus forks (`MJ: Conversation Branches`). A fork starts at a message and shows as a chip under it (kind icon, up to three avatars, message count, name, last activity); it opens as a full view where the inherited history sits faded behind a dashed rail, up to a fork marker, and the fork's own messages behind a solid rail. "Fork from here" on one of your own messages opens a new fork that replaces that message at once (it starts from the message before it, the composer starts with the message's text, the fork is created on the first send and named from that message, and leaving without sending creates nothing), Edit ("Save as fork"; the original message stays) and Regenerate (the first answer stays) each start a fork. A Forks button lists every fork, nested under its parent, with All and Mine filters. Everyone who can see a conversation sees its forks and who started each one. What a person is looking at is per person and in memory; nothing about the view is stored on the conversation, and changing the view ends an active voice session.
+  - New entity `MJ: Conversation Branches` with `Kind` (Fork, Edit, Regenerate; default Fork), `SourceDetailID` and `UserID`; new columns `ConversationDetail.BranchID` and `ConversationDetail.ReplacedAt` (migration, so `minor`).
+  - New authorization `Conversations: Fork`, granted to the UI role. The server refuses to create a fork for a person without it; deny it to a role to turn forking off for that role's members. Each person can also switch forking off in My Profile ("Fork when I edit or regenerate"; user setting `mj.conversations.forking.v1`).
+  - When forking is off for a person, Edit and Regenerate change the latest turn in place: Regenerate (latest answer) and "Save and resend" (latest user message) hide the current answer and run the agent again; earlier user messages can still be edited ("Save", shown as edited). A replaced answer keeps its row (`ReplacedAt` and `HiddenToUser` set) and is left out of the chat, export, pins, the mobile transcript, rubric subjects, the returning-visitor recap and every agent context read (`ConversationEngine.LiveRowsFilter` and `IsReplacedRow`). A turn a fork depends on is not changed in place.
+  - Every writer sets `BranchID` itself (null is Main): the composer and its agent turns, `AgentRunner`, the task-graph deliverer, an agent request resumed from the Agent Requests dashboard or API (the fork of the message that started the run) and realtime transcripts (a voice session's fork is fixed when it starts). The server no longer stamps it and refuses a `BranchID` that names a fork of another conversation.
+  - A fork that still has its own messages or child forks cannot be deleted on its own (its messages would move into Main); deleting the conversation deletes its forks and messages.
+  - `ConversationEngine` gains `CreateFork`, `ForkPointFrom`, `EditForkPoint`, `RegenerateForkPoint`, `SourceRowsFilter`, `BuildForkSummaries`, `LoadForkSummaries`, `ForkDisplayName`, `LiveRowsFilter` and `IsReplacedRow`.
+  - **Removed public Angular API** (the ParentID-based thread panel; a host app that binds any of these must drop the binding): `ConversationChatAreaComponent`'s `ThreadId` input and `ThreadOpened`/`ThreadClosed` outputs; the `ThreadPanelComponent` export; `ConversationWorkspaceComponent`'s `OpenThread`, `CloseThread` and `SelectedThreadId`; `ChatConversationsResource`'s `SelectedThreadId`, `OnThreadOpened` and `OnThreadClosed`; `MessageListComponent`'s `ReplyInThread` and `ViewThread` outputs. Their deprecated camelCase aliases (`threadId`, `threadOpened`, `threadClosed`, `openThread`, `closeThread`, `selectedThreadId`, `onThreadOpened`, `onThreadClosed`, `replyInThread`, `viewThread`) are removed with them.
+
+  Message-anchored scope: every reader of one conversation reads one path through `ConversationScope` (`LoadScope`, `TrunkScope`, `ScopeFilter`, `ScopeSubquery`, `IsInScope`, `FilterToScope`, `ArtifactVersionScopeFilter`): the open view in the chat (window, pins, artifacts, agent polling, export, voice start), and Main for the mobile app, the realtime widget, meeting transcripts, the conversation overview, rubric subjects and the returning-visitor recap. Artifact history is path-aware: the viewer takes a `Scope` input and lists only the versions a message on the path links (any direction) or that no message links, labels a gap as `v4 · from v2`, and falls back to the newest visible version with a notice. Search results carry the fork of each hit; opening one opens that fork, or Main. Skip requests carry `conversationBranchID` from the reply's fork, so Skip Brain keeps one mirror record per path.
+
+- 6dc3aa9: feat(explorer): Dashboards is its own application
+
+  Dashboards move out of Data Explorer into a first-class Dashboards app, and Home, the command palette and recents reach them directly. There is no schema change: the new application is metadata, shipped in the release's metadata sync.
+  - **Dashboards app** (`metadata/applications/.dashboards-application.json`: App Switcher navigation, default for new users) with two pages. **Library**, the default page, lists every dashboard the user can see in one flat list: favorites first, then the dashboards the user opened last, then the rest by last update. Its rail has the Library filters (All dashboards, My dashboards, Shared with me, Favorites, Recently opened) and the category tree with an Uncategorized list; a category shows as a folder. A card shows the dashboard's screenshot (else a miniature of its layout, and "Not set up yet" for a dashboard with no parts), its owner ("You", else the owner's name), a Shared marker, its category and its last update, and a star that adds or removes a favorite. **Categories** shows the category tree with counts, creates categories, and deletes empty ones that the user owns after a confirm. New dashboard asks for a name first, and Cancel creates nothing. Existing users get the app once, automatically, the next time Home loads; a user who later removes it keeps it removed. `@memberjunction/ng-bootstrap` registers the new Categories page class.
+  - **Data Explorer** keeps Data and Queries. A dismissible banner on the Data tab points to the Dashboards app (`DataExplorerDashboardComponent` adds `ShowDashboardsMovedBanner`, `DismissDashboardsMovedBanner()` and `OpenDashboardsApp()`). For a user who has the Dashboards app, a link to Data Explorer's old Dashboards page (`/app/data-explorer/Dashboards`, query params kept) and an old Home pin to that page open the Library, and a saved workspace tab of that page becomes a Library tab (or gives way to an open Library tab) when the workspace loads or the user's apps change.
+  - **A dashboard opens in a workspace tab**, titled with the dashboard's name. Like any link, it replaces the current preview tab, so Back returns to the page it replaced (for example Home, a Dashboards app page or another dashboard) and Forward shows the dashboard again; Shift-click opens it in a separate tab, and so does a Ctrl or Cmd click on the Library list. A dashboard opened from a Dashboards app page is a tab of that app, so the app's header and pages stay in view; one opened from anywhere else (the command palette, recents, Home's Quick Access, a pinned Code dashboard) is a tab of Home. A new dashboard, and a card's Edit action, open the dashboard in edit mode.
+  - **Viewing and editing a dashboard.** The dashboard tab and Home show a Config dashboard in one editor. Its header shows the name and description, a Shared marker and the Favorite star; in the tab it also has the AI assistant toggle, a Share button and an Add to menu (Pin card, Share). Edit enters edit mode: name and description fields, an Editing badge, and Add part, Save and Cancel. Parts are MJ-styled tabs in tab groups, with a menu for the tabs that do not fit. In edit mode each tab group's header has Edit part and Remove for its active part, and a tab can be dragged to an edge to put parts side by side; in view mode tabs do not move. Add part and Edit part open one part dialog: the part type tiles, the type's source settings, a title that defaults to the source's name, and for a query its parameter controls and a refresh interval of 30, 60, 300 or 600 seconds; Edit part cannot change a part's type. Remove asks first and says that the view, query, artifact or page itself is kept. An empty dashboard offers Add part, also in view mode, to a user who can edit it. Save stores the changes and Cancel discards them. A dashboard that is not being edited reloads when it is saved elsewhere, Edit starts from the latest saved layout, and Save asks first when the dashboard was saved elsewhere after the edit began. Each Save also stores a small screenshot of the dashboard in `MJ: Dashboards.Thumbnail`, for the dashboard cards.
+  - **Home** stays a launcher: a greeting, Pinned and My applications. The Pinned header has Add Pin, a **Dashboards** switcher (`mj-home-dashboard-switcher`, internal to `CoreDashboardsModule`) and Edit. The switcher filters the pinned Config dashboards and offers Home, New dashboard and Manage pins; its `HeadingLevel` input (`1`, `2` or `null`) puts the trigger of its title look, not its menu, in an `h1` or `h2`, and Home's dashboard view uses `1`. A pinned Config dashboard opens full size inside Home (`?dashboard=<id>`, so links, Back and Forward work) in the same editor, with a breadcrumb and the switcher as its title: the user edits it in place, Open in Dashboards opens it in the Dashboards app, and leaving it with unsaved changes asks first. Quick Access is hidden while a dashboard shows. New dashboard asks for a name, pins the new dashboard and opens it in Home in edit mode. A dashboard pin shows its dashboard's name, and renaming the pin renames the dashboard for a user who can edit it; other pins keep their own names. Pin cards show an icon tile for every pin except Action pins, app cards drop their nav chips, and the pin options menu works from the keyboard. The Pinned section collapses, and Home remembers the choice for each user (`HomeApp.PinnedCollapsed`).
+  - **`mj-accordion-panel`** (`@memberjunction/ng-ui-components`): `Bare` now also drops the body fill and the row hover fill; on a device that can hover, pointing at the title or chevron gives both the brand color. A new `HeadingLevel` input wraps the toggle in a heading. Fix: the toggle's keyboard focus ring is drawn inside the header, so the panel no longer clips it; on a brand-colored header (the `primary` Variant, and the open sections of the Queries and Templates forms in `@memberjunction/ng-core-entity-forms`) the ring uses the inverse text color.
+  - **The command palette** lists matching dashboards (by name, description or category) in a Dashboards group; Enter opens the dashboard in place of the preview tab (Shift-click on a row opens a separate tab). `OmnibarNavPayload` (`@memberjunction/ng-explorer-core`) gains a `dashboard` kind.
+  - **Recents include dashboards.** Opening one logs `MJ: Dashboards` access, and `RecentAccessService` maps prefixed entity names with the new `ResourceTypeForEntity` and its `RecentResourceType` type (`@memberjunction/ng-shared-generic`).
+  - **`mj-dashboard-browser`** (`@memberjunction/ng-dashboard-viewer`) gains `[FlatMode]`: one flat list of every dashboard it is given, with no folder scoping. Outside selection mode, a Shift, Ctrl or Cmd click on a dashboard now opens it with `OpenInNewTab: true` instead of selecting it; in selection mode those clicks still select, and a Shift range starts from the last dashboard clicked in selection mode. Its cards are the new `mj-dashboard-card`, filled by the new inputs `FavoriteIds`, `ShowFavorites` and `OwnerLabels`; `FlatEmptyIcon`, `FlatEmptyTitle`, `FlatEmptyMessage` and `FlatEmptyWelcome` set the empty state of a flat list, and the new `DashboardFavoriteToggle` output (`DashboardFavoriteToggleEvent`) reports a star click. Its template uses the new public members `IsFavorite()`, `OnToggleFavorite()`, `OwnerLabel()`, `CardCategoryPath()` and `ShowWelcome`. Delete, from a card, a list row or the selection toolbar, asks first through the shared `MJConfirmService` and then emits `DashboardDelete`, so the host does not ask again. `OnDeleteDashboard()` and `OnDeleteSelected()` return a `Promise`, `OnEditDashboard()` and `OnDeleteDashboard()` take the click event as an optional argument, and `ShowDeleteConfirm`, `DashboardsPendingDelete`, `ConfirmDelete()` and `CloseDeleteConfirm()` are removed. The constructor takes `MJConfirmService` (root-provided), so a subclass or a direct `new` must pass it.
+  - **`mj-dashboard-card`** (`DashboardCardComponent`, `@memberjunction/ng-dashboard-viewer`) is one dashboard as a presentational card, with `DashboardCardClickEvent` and the helpers `IsDashboardNotSetUp()`, `FormatDashboardDate()` and `DashboardCategoryPath()`. The package also adds `mj-dashboard-layout-preview`, a miniature of a dashboard's saved panel layout: `DashboardLayoutPreviewComponent`, `DashboardLayoutPreviewNodeComponent`, and `BuildDashboardLayoutPreview()` with its types `DashboardLayoutPreviewNode`, `DashboardLayoutPreviewGroup` and `DashboardLayoutPreviewPanel`.
+  - **`mj-dashboard-viewer`** (`@memberjunction/ng-dashboard-viewer`) gains `HasNewerSavedLayout()`, `ReloadFromSaved()` and `UseSavedCopy()`: they compare with and show the dashboard's saved layout, and take a new copy of the dashboard without rebuilding. A new `CanEdit` input offers Add part on an empty dashboard in view mode. In edit mode, the Edit part and Remove buttons of each tab group ask the host through `PanelInteraction` (`configure-part-requested`, `remove-part-requested`), and the remove request carries `partTypeName`; edit mode draws no title bar above each part. `RemovePartConfirmOptions()` builds the Remove part confirm for `MJConfirmService.ConfirmDelete`. `GoldenLayoutWrapperService.OnStackAction` emits a `StackActionEvent` (a `StackAction`, `'edit'` or `'remove'`, and the active part's `PanelId`) in edit mode. The wrapper writes `DASHBOARD_STACK_HEADER_HEIGHT` (44) and `DASHBOARD_TAB_CONTROL_OFFSET` (78) into every layout it loads, so the layouts it saves carry them. Tabs can be dragged only in edit mode, and the keyboard reaches each tab (a tab list with `aria-selected`).
+  - **Part and name dialogs** (`@memberjunction/ng-dashboard-viewer`): `DashboardPartDialogComponent` (`mj-dashboard-part-dialog`, with `DashboardPartDialogMode`, `DashboardPartDialogResult` and `QUERY_REFRESH_SECONDS`) adds or edits a part in one `mj-dialog`, and the new `BaseConfigPanel.ShowCommonFields` input (default `true`) lets it hide a settings panel's own title and query fields. The standalone `DashboardNameDialogComponent` (`mj-dashboard-name-dialog`, with `DASHBOARD_NAME_MAX_LENGTH`) asks for a new dashboard's name and stays open while the host creates it.
+  - **Deprecated in `@memberjunction/ng-dashboard-viewer`** (still exported and working): `AddPanelDialogComponent` and `EditPartDialogComponent` (use `DashboardPartDialogComponent`); `AddPanelResult`, now a type alias of `DashboardPartDialogResult`, and `EditPartDialogResult`, now `DashboardPartDialogResult` without `PartType`; and `ConfirmDialogComponent` and `ConfirmDialogType` (use `MJConfirmService`, `MJConfirmDialogComponent` and `MJConfirmDialogType` from `@memberjunction/ng-ui-components`). The dashboard tab's two Dashboard Studio confirms still render `ConfirmDialogComponent`.
+  - **`mj-dashboard-editor`** (`DashboardEditorComponent`, `@memberjunction/ng-dashboards`, declared and exported by `CoreDashboardsModule`) is that editor. A host sets `DashboardId` (and optionally `TitleTemplate`, `ShowOpenInDashboards`, `ShowFavorite`, `BodyStyle` and `StartInEditMode`, two-way with `StartInEditModeChange`), puts its own buttons in the `[headerTools]` and `[viewActions]` slots, and handles `Loaded`, `LoadFailed`, `EditingChange`, `Saved`, `NameChanged`, `ConfigChanged`, `ReloadedFromSaved`, `FavoriteChange`, `NavigationRequested` and `OpenInDashboardsRequested`. A host can read the state `Dashboard`, `Viewer`, `BodyElement`, `IsEditing`, `IsSaving`, `EditingName`, `EditingDescription`, `Permissions`, `CanEdit`, `PartTypes`, `IsSharedWithUser`, `IsFavorite`, `HasUnsavedChanges`, `PartDialogMode`, `EditPartPanel` and `IsFill`, and call `EnterEditMode()`, `ToggleEditMode()`, `CancelEdit()`, `SaveDashboard()`, `Save()`, `ToggleFavorite()`, `RefreshPermissions()`, `OpenAddPartDialog()`, `OnPartDialogSaved()`, `ClosePartDialog()` and `OnNameBlur()`. The package also exports `DashboardViewerFactory` (`Create()`), `DashboardEditorBodyStyle`, `DashboardEditorLoadError`, `DashboardSaveOverrides`, `DashboardEditorTitleContext` and `DASHBOARD_SAVE_IN_PROGRESS`.
+  - **More in `@memberjunction/ng-dashboards`:** `DashboardsCategoriesResourceComponent` (the Categories page, with `LoadDashboardsCategoriesResource()`) and the Dashboards app helpers `DASHBOARDS_APP_NAME`, `DASHBOARDS_LIBRARY_NAV_ITEM`, `FindDashboardsApp()`, `DashboardsAppOpenOptions()`, `DashboardNameMaxLength()`, `CreateBlankDashboard(md, name, categoryId?)`, `AutoInstallDashboardsApp()` and `EnsureDashboardsApp()`.
+  - **`DashboardBrowserResourceComponent`** (`@memberjunction/ng-dashboards`) is the Library page; its tab is titled Library. It adds `LibraryFilter`, `LibraryCounts`, `VisibleDashboards`, `IsFlatView`, `EmptyState`, `FavoriteIds`, `OwnerLabels` and `OnDashboardFavoriteToggle()`; the rail's `RailSections`, `RailActiveId`, `RailCollapsed`, `RailExpandedIds`, `OnRailItemClicked()`, `OnRailItemToggled()` and `OnRailCollapsedChange()`; and the name dialog's `ShowNewDashboardDialog`, `IsCreatingDashboard`, `NewDashboardNameMaxLength`, `OpenNewDashboardDialog()`, `OnNewDashboardNamed()` and `OnNewDashboardCancelled()`. `CreateDashboard()` and `createDashboard()` are deprecated: they open the name dialog and no longer create a dashboard themselves. The Library no longer shows or edits a dashboard itself (a click opens the dashboard's tab), so these members and their camelCase aliases are removed: the in-page viewer (`Mode`, `SelectedDashboard`, `DashboardViewer`, `SelectedDashboardPermissions`, `OpenDashboard()`, `EditDashboard()`, `BackToList()`, `OnNavigationRequested()`, `OnPanelInteraction()`, `OnBreadcrumbNavigate()`), edit mode (`ToggleEditMode()`, `SaveDashboard()`, `CancelEdit()`, `EditingName`, `EditingDescription`, `OnNameBlur()`), the add part dialog (`OpenAddPartDialog()`, `ShowAddPanelDialog`, `OnPanelAdded()`, `OnAddPanelCancelled()`), the part settings dialog (`ShowConfigDialog`, `ConfigDialogPanel`, `ConfigDialogPartType`, `ConfigDialogClass`, `OpenConfigDialog()`, `OnConfigDialogSaved()`, `OnConfigDialogCancelled()`), the remove confirm (`ShowConfirmDialog`, `ConfirmPanelId`, `ConfirmPanelTitle`, `OpenRemoveConfirmDialog()`, `OnRemoveConfirmed()`, `OnRemoveCancelled()`) and the share dialog (`ShowShareDialog`, `OpenShareDialog()`, `CloseShareDialog()`, `OnShareDialogResult()`). `openInNewTab()` is removed too.
+  - **`HomeDashboardComponent`** (`@memberjunction/ng-dashboards`) adds the methods `OpenDashboardInHome()`, `GoHome()`, `OnSwitcherPick()`, `ManagePins()`, `OpenNewDashboardDialog()`, `OnNewDashboardNamed()`, `OnNewDashboardCancelled()`, `OpenDashboardInDashboardsApp()`, `PinName()`, `OnPinNameEnter()`, `OnPinMenuKeydown()`, `OnPinnedExpandedChange()`, `OnDashboardNavigationRequested()`, `OnDashboardEditingChange()`, `OnDashboardSaved()`, `OnDashboardViewLoaded()` and `OnDashboardViewLoadFailed()`, and the state `CurrentDashboard`, `CurrentDashboardId`, `CurrentDashboardName`, `DashboardStartsInEditMode`, `IsDashboardEditing`, `PinnedDashboards`, `PinnedExpanded`, `ShowOverview` (false while a dashboard shows), `ShowDashboardView`, `ShowQuickAccess`, `ShowNewDashboardDialog`, `IsCreatingDashboard`, `NewDashboardNameMaxLength`, `PinSections`, `GreetingName`, `PinMenuGroupLabelId` and `PinMenuMaxHeight`. Its `IsEditing()` is true while that dashboard is being edited, and `CurrentUser` has an optional `FirstName`.
+  - **`DashboardResource`** (`@memberjunction/ng-explorer-core`, the dashboard tab) shows a Config dashboard in `mj-dashboard-editor`. It adds `ConfigDashboardId`, `CanShare`, `IsPinnedToHome` and `PinToHome()`, and the editor event handlers `OnEditorLoaded()`, `OnEditorLoadFailed()`, `OnEditorEditingChange()`, `OnEditorNameChanged()`, `OnEditorConfigChanged()`, `OnEditorReloaded()`, `OnEditorFavoriteChange()` and `OnEditorNavigationRequested()`. `ToggleEditMode()`, `CancelEdit()`, `SaveDashboard()`, `OpenAddPartDialog()`, `EditingName`, `EditingDescription` and `DashboardPermissions`, and their camelCase aliases, are deprecated and call the editor. `ConfigDashboard`, `IsEditMode` and `DashboardPermissions` are read-only, and the `configDashboard`, `isEditMode` and `dashboardPermissions` setters are removed, so a subclass that writes them no longer compiles. Before a dashboard loads, `DashboardPermissions` allows nothing.
+  - **New in `@memberjunction/ng-shared`:** `DashboardFavoritesService` (dashboard favorites in `MJ: User Favorites`, with `IsDashboardEntity()` and `DashboardFavoriteIds()`); `BuildDashboardPinInput()` and `DASHBOARD_PIN_RESOURCE_TYPE`, the Home pin that the dashboard tab and Home store for a dashboard; and `MOVED_NAV_ITEMS` with `MovedNavItem`, `FindMovedNavItem()`, `FindMovedNavItemApp()`, `ResolveMovedNavItem()`, `MovedNavItemApp` and `ResolvedMovedNavItem`. `NavigationService.SwitchToApp` opens a moved nav item in its new app, and the new `NavigationService.RetargetMovedNavItemTabs()` and `WatchMovedNavItemTabs()` move the saved tabs of a moved nav item. `HomeAppPinService` matches a dashboard pin by its `dashboardId` or `recordId`, in any letter case, and `CaptureThumbnail()` takes an optional timeout.
+  - **`NavigationService.OpenDashboard` options** (`DashboardNavigationOptions`, `@memberjunction/ng-shared`): `applicationId` names the application the dashboard's tab belongs to (default: Home), and `openInEditMode` opens the dashboard in edit mode on the usual tab path (no forced new tab): the tab it opens in (the replaced preview tab, or a new tab) starts in edit mode, and a tab already open for the dashboard is focused and enters edit mode. The tab's component is also told through `DashboardEditModeRequested$`. The tab takes the request once with `TakeDashboardEditModeRequest(tabId, dashboardId, applicationId)`; the application check keeps a cached component of the same dashboard from another application's tab from taking it.
+  - **Agent context:** the Library, the Categories page, the dashboard tab and Home report their state to the agent. The Library reports its filter with per-filter counts (`LibraryCounts`) and the dashboards opened last (`RecentlyOpenedNames`), and Categories opens a category in the Library (`OpenCategoryInLibrary`). Home reports its view (`HomeView`: Overview or Dashboard), the dashboard it shows (`CurrentDashboardName`, `CurrentDashboardID`, `IsEditingDashboard`) and the pinned dashboards the switcher lists (`PinnedDashboardNames`, plus `PinnedDashboardNameCount` when the list is capped). Home's new `SwitchHomeDashboard` tool shows a pinned dashboard by name or id, or the overview for "Home", and asks the user first when the open dashboard has unsaved changes; `OpenPin` opens a pinned Config dashboard inside Home and leaves pin edit mode. The tools of the Library, Categories and Home read, search, filter or navigate; none creates, renames, edits, shares or deletes a dashboard or a category. The dashboard tab reports the open dashboard; its read tools read it, and its Dashboard Studio tools ask the user before a save or a pin.
+  - **Fix: saving a dashboard no longer reloads its tab in a loop.** The save froze the page, because each tab reload started the next one. The dashboard tab now reports a save as the dashboard's new name (the tab keeps its dashboard id and takes the saved name as its title), not as a record save, which rewrote the component's record id to `ID|<uuid>`. The tab container's reload check also accepts that form: the new `TabContainerComponent.IsSameRecordId` treats a single-field URL segment and its bare value as the same record. The loop was already on `next`.
+  - **Fix: `mj-dashboard-viewer` (`@memberjunction/ng-dashboard-viewer`) fills its box in a scaled host.** The viewer sizes Golden Layout to the layout container's layout size (`offsetWidth` / `offsetHeight`, which Golden Layout also reads when it resizes with the container), not its on-screen size, so a dashboard shown scaled (with CSS `zoom` or a transform) no longer lays out at the scaled size and leaves an empty band.
+  - **Fix: the panels of a dashboard in a tab no longer grow from zero height after Edit or Save.** The shell's stack animation now applies only to the shell's own layouts.
+  - **Fix: a dashboard loaded into DashboardEngine's cache (or any `MJ: Dashboards` object built with `GetEntityObject()` then `LoadFromData()`) now has the loaded values as its old values.** Before, its `UIConfigDetails` and `UserID` kept the defaults of a new dashboard. That made a clean dashboard look changed and made `Revert()` put back the defaults.
+
+### Patch Changes
+
+- 91be34f: Gemini Live on Gemini Enterprise (Vertex AI): a server driver and a browser driver. `GeminiEnterpriseRealtime` (`@memberjunction/ai-vertex`) reads `AI_VENDOR_API_KEY__GeminiEnterpriseRealtime` (or a run's key), a JSON string in the shapes `VertexLLM` takes: an inline service account, a key-file path (environment key only), or neither for Application Default Credentials. A client-direct session goes through MJAPI's realtime relay: the mint issues one relay session per call, whose policy writes the Live setup from the connect config and adds a `google-auth-library` bearer token (scope `cloud-platform`) on each upstream open, never at the mint. The browser gets the relay URL, with the ticket in its path, and a pact whose config holds only the response modalities and the avatar's name: no system prompt, no tools, no credential. The upstream is the Vertex AI `v1` Live socket on the location's host (`us` and `eu` on `aiplatform.<location>.rep.googleapis.com`); the mint warns when the location is not `us`, `eu` or `us-central1`. A bridged session uses `@google/genai` in Vertex mode, audio only. The constructor never throws; a key that cannot be read fails the session with a reason that quotes none of it. `GeminiEnterpriseRealtimeClient` (`'gemini-enterprise'`, `@memberjunction/ai-realtime-client`) runs the web SDK in Vertex mode against the relay URL with a placeholder API key that never leaves the page, always states its response modalities (VIDEO while it shows the avatar), and resumes on the same URL. Both Vertex drivers now read their key through shared helpers (`ParseVertexAICredentials`, `VertexKeySourceOf`, `CreateVertexAuthClient`, `VertexGenAIOptions`) and build the `google-auth-library` client themselves instead of passing the deprecated `keyFile` or `credentials` options to `GoogleAuth`: an inline service account becomes a `JWT` client with the `cloud-platform` scope, and a key without credentials still uses Application Default Credentials. **Change to run-key handling in `VertexLLM`: a key may name a key file (`keyFilePath`) only when it is the driver's environment key (`AI_VENDOR_API_KEY__VertexLLM`; `AI_VENDOR_API_KEY__GeminiEnterpriseRealtime` for the realtime driver), byte for byte. A run's key (`apiKeys`), an MJ Credential (the Google Cloud Platform credential type's Key File Path) or any other key that names a key file is refused when the client is created, with an error that does not quote the path; use an inline service account (`serviceAccountJson`) or Application Default Credentials instead.** Environment keys behave as before: MJ reads the key file and builds the client for its `type` (service account, authorized user, impersonated service account, external account, GDCH). The file is now read when the client is created rather than at the first request, and its errors no longer quote the path. `GeminiRealtime` gains the protected `SessionPactFor`. The realtime runtime keeps the new client from being tree-shaken, and the server and browser class-registration manifests register the two drivers. Integration checks RD13 (the avatar from the voiced agent's persona, through the session prep) and RD14 (every realtime vendor DriverClass resolves). Nothing selects the Enterprise driver until its vendor row ships.
+- Updated dependencies [96d6ec2]
+- Updated dependencies [a709bb6]
+- Updated dependencies [d17de94]
+- Updated dependencies [c8409ce]
+- Updated dependencies [51c469d]
+- Updated dependencies [432cb73]
+- Updated dependencies [155aa45]
+- Updated dependencies [e4c355e]
+- Updated dependencies [4412e85]
+- Updated dependencies [6dce70c]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [822ed69]
+- Updated dependencies [1da00cb]
+- Updated dependencies [0dbd455]
+- Updated dependencies [dde482c]
+- Updated dependencies [a4b23b7]
+- Updated dependencies [49f26d9]
+- Updated dependencies [961d529]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [bb3028a]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [24fce37]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [cc0814d]
+- Updated dependencies [9d73096]
+- Updated dependencies [1ce4217]
+- Updated dependencies [b2441c3]
+- Updated dependencies [7316ac3]
+- Updated dependencies [91be34f]
+- Updated dependencies [8ef5e86]
+- Updated dependencies [596855c]
+- Updated dependencies [fdf6669]
+- Updated dependencies [4c682c1]
+- Updated dependencies [f325baa]
+- Updated dependencies [fc24fc4]
+- Updated dependencies [0c68021]
+- Updated dependencies [45ba6be]
+- Updated dependencies [318084b]
+- Updated dependencies [69bf67c]
+- Updated dependencies [95e5dd9]
+- Updated dependencies [efe4738]
+- Updated dependencies [1403d04]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [20650af]
+- Updated dependencies [dbc3462]
+- Updated dependencies [d9da1ad]
+- Updated dependencies [21175fa]
+- Updated dependencies [c5472d2]
+- Updated dependencies [4fb501e]
+- Updated dependencies [c388714]
+- Updated dependencies [5a5f8d5]
+- Updated dependencies [666d078]
+- Updated dependencies [ae78a45]
+- Updated dependencies [b2f8b5b]
+- Updated dependencies [4cff918]
+- Updated dependencies [dcfdda4]
+- Updated dependencies [d714f25]
+- Updated dependencies [989b3d0]
+- Updated dependencies [4889ca0]
+- Updated dependencies [ca2791b]
+- Updated dependencies [1ea4085]
+- Updated dependencies [975948b]
+- Updated dependencies [22c9074]
+- Updated dependencies [88b85fc]
+- Updated dependencies [7f243eb]
+- Updated dependencies [a3fcce8]
+- Updated dependencies [a08ed58]
+- Updated dependencies [2bc4677]
+- Updated dependencies [42f8016]
+- Updated dependencies [6b587b3]
+- Updated dependencies [891dc77]
+- Updated dependencies [98dbb78]
+- Updated dependencies [0a952ee]
+- Updated dependencies [ee81865]
+- Updated dependencies [a70af2d]
+- Updated dependencies [aee2d53]
+- Updated dependencies [84fc9d4]
+- Updated dependencies [038f7dc]
+- Updated dependencies [87babe6]
+- Updated dependencies [54cd610]
+- Updated dependencies [1bed7f7]
+- Updated dependencies [6328ed3]
+- Updated dependencies [b6b3990]
+- Updated dependencies [20d1f4a]
+- Updated dependencies [f1fb411]
+- Updated dependencies [f0c78c3]
+- Updated dependencies [6a19f78]
+- Updated dependencies [e402de5]
+- Updated dependencies [74d9357]
+- Updated dependencies [a5b4a72]
+- Updated dependencies [d0df5a1]
+- Updated dependencies [d853bf8]
+- Updated dependencies [e293b68]
+- Updated dependencies [44428b5]
+- Updated dependencies [1b8791e]
+- Updated dependencies [eee025e]
+- Updated dependencies [02bb563]
+- Updated dependencies [7a7ae31]
+- Updated dependencies [afe9eb4]
+- Updated dependencies [90829e3]
+- Updated dependencies [c9e1891]
+- Updated dependencies [aac148b]
+- Updated dependencies [f2f6f4b]
+- Updated dependencies [382b9aa]
+- Updated dependencies [0a3a56a]
+- Updated dependencies [7a08dc1]
+- Updated dependencies [005612e]
+- Updated dependencies [cf50330]
+- Updated dependencies [cbddadb]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [57fea6a]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [f00d5fc]
+  - @memberjunction/ai-core-plus@6.2.0-edge.4
+  - @memberjunction/ng-conversations@6.2.0-edge.4
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/ai-engine-base@6.2.0-edge.4
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.4
+  - @memberjunction/ai-realtime-client@6.2.0-edge.4
+  - @memberjunction/ng-core-entity-forms@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/ng-artifacts@6.2.0-edge.4
+  - @memberjunction/ng-dashboards@6.2.0-edge.4
+  - @memberjunction/ng-explorer-core@6.2.0-edge.4
+  - @memberjunction/ng-dashboard-viewer@6.2.0-edge.4
+  - @memberjunction/ng-shared@6.2.0-edge.4
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.4
+  - @memberjunction/ng-explorer-settings@6.2.0-edge.4
+  - @memberjunction/ng-file-storage@6.2.0-edge.4
+  - @memberjunction/feature-pipelines@6.2.0-edge.4
+  - @memberjunction/tag-engine-base@6.2.0-edge.4
+  - @memberjunction/actions-base@6.2.0-edge.4
+  - @memberjunction/ng-clustering@6.2.0-edge.4
+  - @memberjunction/ng-entity-action-ux@6.2.0-edge.4
+  - @memberjunction/communication-types@6.2.0-edge.4
+  - @memberjunction/entity-communications-base@6.2.0-edge.4
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.4
+  - @memberjunction/ng-auth-services@6.2.0-edge.4
+  - @memberjunction/rubrics-base@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Minor Changes
+
+- 60bd774: Form contributions can be metadata rows, not only compiled panels, and users can place, share, hide and remove them from the form itself.
+
+  **Contributions from metadata.** A `MJ: Entity Form Contributions` row (migration `V202610051244__v6.2.x__Entity_Form_Contributions`) mounts a `MJ: Components` row (`Type='Widget'`, spec `componentRole: 'form-panel'`) on an entity's form. It carries the same registration bag as `@RegisterClassEx` plus `Presentation`, `Title`, `Icon`, `Configuration`, `Precedence` and User/Role/Global scope. `CollectFormContributionRegistrations` merges rows with class registrations, and the form collapses the list once per resolve (`ResolveFormContributionWinners`): one winner per `ContributionKey`, the higher rank wins, a compiled panel wins a tie against any row, and between rows `User` beats `Role` beats `Global` (`FormContributionOutranks`). `CollectFormPanelRegistrations` stays as a deprecated wrapper that returns compiled registrations only. Wildcard (`'*'`) registrations take part on every form, but their place claims are ignored: one that claims a grid, a section or a tab replaces nothing, and one that names a section to draw in draws at its slot. `InteractiveFormsEngine` caches the rows and the full custom forms (in the browser, the shared ones and the signed-in user's own) and fetches each panel component by ID once (`GetComponentByID`); `InteractiveFormPanelComponent` renders them, and a panel can change only the fields it claims, in edit mode. On the 11 identity, permission and form-metadata entities in `RESTRICTED_FORM_ENTITIES`, only `User` rows and full custom forms render.
+
+  **One rule set, shared by the browser and the server.** The contribution key is derived once (`ResolveContributionWriteKey` in `@memberjunction/interactive-component-types/forms`). `@memberjunction/core-entities` `custom/FormScope/` holds the spec-to-row mapper (`ApplyContributionSpecToRow`), the claim validator (`ContributionClaimRefusal`), the scope rules (`FormScopeWriteRefusal`, which normalizes Scope and fails closed, `ComponentWriteRefusal`, `FormRowComponentRefusal`, `ComponentNameCollisionRefusal`, `IsCallersOwnComponent`, `IsCanonicalFormScope`, `ContributionScopeRank`, `FormContributionOutranks`, `IsSelectableFormOverride`, `FormScopeAllowedOnEntity`, `UserCanManageFormDefaults`), the hide-setting key helpers, and the retire rule (`ActiveContributionSiblings`, which compares keys ignoring case as the SQL Server unique index does).
+
+  **What a panel can stand in for.** One claim per row, enforced by the database: a related grid, one or several field sections (`ReplacesSectionKey`, `ReplacesSectionKeys`), a group of fields (`ReplacesFieldNames`, rendered once inside that section), or a place inside a section (`InSectionKey` + `SectionPosition`). A compiled panel renders at the slot it registered for, and a panel standing in for something takes its place. The `top-area` slot is accepted by the CHECK constraint but no form emits it, so the placement dialog does not offer it.
+
+  **Authoring.** New actions `Create Form Contribution`, `Modify Form Contribution`, `Activate Form Contribution Version`, `Get Form Contributions For Entity` and `Get Form Composition For Entity`. The write actions, and the existing Modify / Activate / Revert Interactive Form actions, change only the caller's own `User` rows; a `Role` or `Global` row returns `FORBIDDEN` for every caller. A spec with more than one claim returns `INVALID_CLAIM` before any write. The contribution actions write the Component and the row in one transaction, and so do the Modify and Activate Interactive Form paths for a full form's Component and override; Create and Revert Interactive Form do not. Modify and Activate Interactive Form set the prior version aside after that transaction, and Activate returns `PERSIST_FAILED`, with the new form already Active, when it cannot. Activating a target that is already Active also sets aside the caller's other Active personal forms for that entity. `Modify Form Contribution` accepts an optional `Precedence`. `Get Form Composition For Entity` answers for the form the user sees as far as metadata can tell (hidden panels, restricted entities, the same collapse; no compiled panels, and no rows while the kill switch is off) and returns `QUERY_FAILED` when a query fails. The artifact viewer previews a form-panel spec and offers **Add to my form**, which opens a placement dialog: the entity's real form, read-only and scaled, with the panel drawn where it will go, the positions the form actually has, order within a position, what it replaces, and draft or active. The dialog starts from the claims the panel proposes that it offers on the open form, and on a full custom form the panel starts as a draft. New `mj-icon-picker` (`@memberjunction/ng-ui-components`) chooses a Font Awesome solid or regular icon by looking at it.
+
+  **Managing a form.** A "Manage this form" drawer lists the form choice and every panel; Escape closes it and focus stays inside it. Any user can hide a panel shared with them and remove their own. Hide and Show change the open form at once: its slot-mounted panels remount, and a stock grid comes back when the panel that took it over is hidden. Publishing a panel or a full custom form to a role or everyone needs the new `Manage Form Defaults` authorization (Developer and Integration; owners count). `MJEntityFormContributionEntityServer` and `MJEntityFormOverrideEntityServer` enforce it on every save, replayed save and delete. Turning a panel on, or publishing it, retires the Active sibling for the same audience and key in the same transaction and sets the panel component's status. The stock UI role can create and update `MJ: Components` (not delete), so any user can create or change their own panel through the actions and turn it on, off or to a draft in the drawer. Without `Manage Form Defaults` the server requires the component to be the caller's own (`IsCallersOwnComponent`): used only by their own personal rows, or used by no row and created by them, as its Internal `Create` record in `MJ: Record Changes` shows. That applies to any update or delete of the component, whatever columns it changes (`MJComponentEntityServer`, `ComponentWriteRefusal`), to a contribution or override row created or re-pointed at it (`FormRowComponentRefusal`), and to reusing its name (`ComponentNameCollisionRefusal`, names compared trimmed and lower-cased, in any namespace, and sent as a Unicode literal on SQL Server); a form can also load a component by name, so a component no row uses still matters. With the grant, a delete or a change to a component's specification, status, name, namespace or type, and pointing a row at it, are refused only when another user's personal row uses the component. The reads run as the caller in one batch, the changed columns come from the stored row, and a failed read refuses the write. Publishing a draft, an off panel or a set-aside form turns it on, and the chooser says so. A set-aside (`Inactive`) shared form is retracted; a set-aside personal form stays in its owner's picker. The placement preview never saves form state.
+
+  **Form context.** The record container publishes its full composition snapshot to `FormCompositionRegistry` (`@memberjunction/ng-base-forms`), where the apply path reads it. Agents get a compact `FormAgentContext` in `AdditionalContext.Form` (entity, record key, form choice, and each section's key, title, variant, hidden flag and holding contribution), published by the record tab while it is the tab on screen. `RecordPrimaryKey` is a `CompositeKey.ToURLSegment()` string, or null for an unsaved record. The `SkipFormContext` mirror in `@askskip/types` must follow this shape.
+
+  **Kill switch.** On a Node host, `MJ_FORMS_METADATA_CONTRIBUTIONS=false` makes the engine on that process load no row. In Explorer, the `MJ: Instance Configurations` key `Forms.MetadataContributions.Enabled` set to `false` turns rows off on every form; the shell applies it after `InstanceConfigEngine.Config()` and before any form opens, it can only turn the source off, and the source stays on when Instance Config fails to load. `Get Form Contributions For Entity` and `Get Form Composition For Entity` list no row when either setting is off and report `MetadataContributionsEnabled`. The write actions still write rows. The seed row reaches a database through `mj sync push`.
+
+  **Section counts and empty sections.** A saved record fetches every related-section count and the tag, attachment and version badges in one `RunViews` call; an all-`count_only` batch runs as one `UNION ALL` statement in `GenericDatabaseProvider`, with each view's security path intact. New `whenEmpty` (`'show'` default | `'hide'` | `'more'`) and `showCount` on `EntityRelationship.Configuration.UI` and on contributions, with entity defaults `UI.Form.RelatedWhenEmpty` and `UI.Form.ShowRelatedCounts`.
+
+  **Fixes.** Eleven compiled panel registrations named their entity without the `MJ: ` prefix: the five overview cards and the realtime panel mounted only through the slot host's loose name match, which the rail did not apply, and the five header panels also used `slot: 'header'`, which is not a `FormPanelSlot`, so they never rendered. All eleven now use `MJ: ` names and the slot host matches names exactly, so the hero headers render above the overview cards on `MJ: Users`, `MJ: Companies`, `MJ: Employees`, `MJ: Conversations` and `MJ: AI Agent Categories`. The overview cards query `MJ: ` entity names (four of them queried unprefixed names and showed empty states), the overview cards and the realtime panel show a load error instead of an empty state when a query fails, and conversation turn pills and counts use the stored `User`/`AI` roles. CodeGen no longer corrupts generated validators that contain escapes, and a table-level validator's metadata guard includes the validator's `Name`.
+
+  **Behaviour changes to know about.** `BaseFormPanel.Validate()` now runs on Save (through `BaseFormComponent.ValidateAsync()`) and may return a Promise. A React panel whose `Validate` throws does not block the save and shows the failure in the panel, as it does an error from `<mj-react-component>`; a field edit from a panel that the record refuses is logged and dropped. After upgrade, editing or deleting an existing `Role` or `Global` full custom form needs `Manage Form Defaults`, and an `mj sync push` of `Global` rows needs a sync user who holds it or is an Owner. The UI role gains Create and Update on `MJ: Components`. Without `Manage Form Defaults`, whatever role grants component rights, a caller can change or delete a component, on any column, only when it is their own (used only by their own personal rows, or used by none and created by them), and two such users cannot give components the same name. With the grant, a delete or a change to one of the five guarded columns (specification, status, name, namespace or type) is refused only when another user's personal row uses the component, and a change to any other column passes. `MJRecordChangeEntityServer` refuses a caller creating a record change whose `Source` is `Internal` and `Type` is `Create` through the API; other record changes, such as version-label snapshots, are unchanged. `mj sync push` runs as the `System` user, which must hold the Developer role and so holds the grant by default; a sync user that is neither an Owner nor a holder of the grant can push changes only to components of its own. Every `mj-form-field` carries `data-field-name` and `data-field-label`. Collapsible-panel move up/down follows the visual order. New user setting `mj.formPanels.hidden.<entity>`; the existing `mj.formVariant.<entity>` is also read by `Get Form Composition For Entity`. `ng-conversations` gains a type-only dependency on `ng-base-forms`. `Get Active Form For Entity` applies the restricted-entity rule, so a Role or Global form on one of those entities is neither active nor listed. A `form-panel` spec must set `entityName`; the artifact viewer no longer falls back to `dataRequirements` for a panel.
+
+  **PostgreSQL.** `UQ_EntityFormContribution_Key` and `UQ_EntityFormContribution_RelatedClaim` include nullable columns (`UserID`, `RoleID`, `RelatedJoinField`). SQL Server treats NULLs as equal in a unique index; PostgreSQL does not, so the converted indexes need `NULLS NOT DISTINCT` (PostgreSQL 15+) or a `COALESCE` expression index to refuse the same duplicates. PostgreSQL also compares the key case-sensitively, so there the case-insensitive retire rule is stricter than the index.
+
+  **Deploy order:** deploy the server code before pushing the metadata. The UI role's grants ship as metadata only: write access to `MJ: Entity Form Contributions` and `MJ: Entity Form Overrides`, and Create and Update on `MJ: Components`. Only the new server subclasses keep that access to the user's own rows and components, so the component guard must be live before the UI role gains Update: apply the release build's consolidated metadata-sync migration together with the server deploy, never before it. A development database that already ran an earlier copy of the migration needs a Flyway repair or a rebuild.
+
+- 49e0bd8: Add the MemberJunction Durable Work Queue and Messaging Framework:
+  - **Core & Data Layer**: Transport-neutral queue contracts, database schema and entities for transports, topics, subscriptions, messages, deliveries, and deduplication ledger, backed by guarded-write stored procedures (`spWorkQueue*`) with SQL Server and PostgreSQL support.
+  - **Transports**: Native Database transport driver, consumer, and operator; AWS transport (`@memberjunction/work-queue-aws` with SNS topic publishing, SQS FIFO consumer, visibility-timeout leases, dead-letter redrive, binding validation, and LocalStack conformance); and in-memory reference transport.
+  - **Runtime & Host**: Competing-consumer `WorkQueueHost` (supporting continuous daemon and one-shot `RunOnce` container modes), `WorkQueueSweeper` (handling lease expiry and retention purging under a distributed sweep lock), REST publish endpoint (`POST /work-queue/topics/{topic}/messages` with API-key and scope authorization), and seven Remote Operations for operator control (`WorkQueue.GetSubscriptionStats`, `ReplayDeadLetter`, `DiscardDelivery`, `ValidateBindings`, etc.).
+  - **Operator Surface**: Explorer `WorkQueueDashboard` with Overview, Dead Letters (envelope/payload inspection and replay/discard), Partitions (blocked, in-flight, and idle keys), and Bindings validation tabs, plus a new "Work Queue" application record.
+  - **Tooling & Samples**: `mj queue` CLI commands (stats, dead-letters, partitions, replay, discard, backlog, work, export-topology, import-bindings, validate-bindings) and `@memberjunction/work-queue-samples` (`HelloWorldHandler` with sample topologies).
+
+### Patch Changes
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [5037000]
+- Updated dependencies [64f155a]
+- Updated dependencies [131f3c4]
+- Updated dependencies [0f04590]
+- Updated dependencies [fe39606]
+- Updated dependencies [41c2c08]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [279b93e]
+- Updated dependencies [5acbec6]
+- Updated dependencies [66fd011]
+- Updated dependencies [093e0dd]
+- Updated dependencies [f41442f]
+- Updated dependencies [196160a]
+- Updated dependencies [bea2386]
+- Updated dependencies [d046715]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [72e082b]
+- Updated dependencies [28c92e0]
+- Updated dependencies [d0a8dbf]
+- Updated dependencies [c8d1e70]
+- Updated dependencies [fbad999]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [b1b6d3d]
+- Updated dependencies [28df136]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/core-entities@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.3
+  - @memberjunction/ng-core-entity-forms@6.2.0-edge.3
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.3
+  - @memberjunction/ai-engine-base@6.2.0-edge.3
+  - @memberjunction/tag-engine-base@6.2.0-edge.3
+  - @memberjunction/ng-clustering@6.2.0-edge.3
+  - @memberjunction/ng-conversations@6.2.0-edge.3
+  - @memberjunction/ng-dashboards@6.2.0-edge.3
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.3
+  - @memberjunction/ng-explorer-core@6.2.0-edge.3
+  - @memberjunction/ai-realtime-client@6.2.0-edge.3
+  - @memberjunction/ng-shared@6.2.0-edge.3
+  - @memberjunction/ai-core-plus@6.2.0-edge.3
+  - @memberjunction/actions-base@6.2.0-edge.3
+  - @memberjunction/ng-artifacts@6.2.0-edge.3
+  - @memberjunction/feature-pipelines@6.2.0-edge.3
+  - @memberjunction/ng-explorer-settings@6.2.0-edge.3
+  - @memberjunction/ng-dashboard-viewer@6.2.0-edge.3
+  - @memberjunction/ng-entity-action-ux@6.2.0-edge.3
+  - @memberjunction/ng-file-storage@6.2.0-edge.3
+  - @memberjunction/communication-types@6.2.0-edge.3
+  - @memberjunction/entity-communications-base@6.2.0-edge.3
+  - @memberjunction/ng-auth-services@6.2.0-edge.3
+  - @memberjunction/rubrics-base@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 7e57b48: Introduce `@memberjunction/ng-record-clone`: an embeddable clone wizard (`mj-record-clone-panel`) and a slide-in wrapper (`mj-record-clone-slide-in`) built on the generic `mj-slide-panel`, plus the plan tree, values, review, progress, result and lineage-chip building blocks.
+  The `ng-base-forms` record toolbar gains a built-in Clone action, enabled by `FormToolbarConfig.ShowCloneButton` and shown only for entities whose clone configuration is enabled, with `BeforeClone` and `CloneCompleted` outputs.
+- 4d647e6: Add Rubrics, a core way to score any record against a published set of weighted criteria.
+
+  What ships:
+  - Schema for rubrics, versions, criteria, scales, anchors, bands, evaluations, and score rows, plus layered consensus views. Published versions are frozen. Raw writes to a frozen row throw 51101–51110. A draft version delete is an `INSTEAD OF DELETE` trigger. `MJ: Test Rubrics` is deprecated in metadata.
+  - `RubricScoring` and `RubricVersionDiff` in `@memberjunction/rubrics-base`. The outcome ladder is Incomplete, NotApplicableFailure, GateFailed, Passed or BelowThreshold, then Scored. The publish base is the highest Published or Retired version.
+  - `@memberjunction/rubrics`: LLM, agent, deterministic, and human evaluators. Actions are Evaluate Record Against Rubric, Get Rubric, Get Rubric Subject, Get Rubric Consensus, Create Rubric Draft, and Submit Human Rubric. Create Rubric Draft and the architect import do not publish. The evaluation agent does not call Get Rubric Consensus.
+  - Presentational widgets in `@memberjunction/ng-rubrics`, Explorer forms, and a Rubrics application. The agent form has a Rubrics tab.
+  - Six guide-example rubrics stay Draft. Seven agent rubrics publish at 1.0.0 and bind to their agents. Marketing Agent is not bound. Shipped self-check links and the sampling job stay Disabled. A test that already has an `llm-judge` oracle keeps it.
+  - Testing: rubric resolution, a `rubric` oracle, judge calibration, per-criterion spread on `--flaky-check`, `mj rubric`, and `mj test promote-criteria`. `Test.RubricID` and `TestSuite.RubricID` select a rubric. `TestSuiteRun.Score` is stored.
+  - The deterministic integration bundle is IT98 at sequence 49.
+
+  `GeneratePluralName` keeps the head of a name verbatim and pluralizes only the tail, preserving that tail's case. A linear scan finds the tail, so `user_profile` and `userProfile` no longer produce the same view name, a leading character such as Ä stays on the head, and `Contact Person` pluralizes to `Contact People`. The base view for a criterion is `vwRubricCriteria`.
+
+### Patch Changes
+
+- 21f9e15: Add `ConnectGraphQLClient` for embeds that need an authenticated client without the full metadata boot (#4887). `SetupGraphQLClient` now rejects when no metadata loaded, carrying the metadata download's failure as the cause (a user with no roles still gets the no-roles screen in Explorer and Bootstrap apps); the metadata refresh-check throttle is armed only by a successful check, and a failed metadata download no longer locks out an immediate retry; a cold boot no longer re-fetches the current user. Switching credentials on the provider (for example an anonymous connection upgraded to a login) rebuilds its GraphQL client so requests carry the new identity.
+- 513e608: Add pipeline type picker, capability-aware output filtering and validation, Decision-specific constraint editors, and type badges for Feature Pipelines. What each pipeline type can produce is now one rule set, shared by the server, the builder and the save check. A Decision pipeline reads enum values and descriptions from its own entity's fields only; before, it read them from any entity with a field of the same name. An enum reads field metadata only when it sets FromFieldMetadata or lists no values, and only a type that needs listed values (Decision) requires them.
+
+  A Record Process now refuses at save an Infer pipeline its type cannot run, on both tiers and every save path, through the shared MJRecordProcessEntityExtended; the Record Process form also refuses while the builder reports errors. The builder loads and edits CaptureReasoning, and keeps Watermark. Its pickers now show the saved pipeline type, prompt, entity document, target and constraint, not the first option, and a placeholder when the saved value is not offered.
+
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [2552b1e]
+- Updated dependencies [5114c10]
+- Updated dependencies [660ef45]
+- Updated dependencies [21f9e15]
+- Updated dependencies [75d4e8c]
+- Updated dependencies [a3d6182]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [664baea]
+- Updated dependencies [f3c6161]
+- Updated dependencies [0adaf76]
+- Updated dependencies [5ee02db]
+- Updated dependencies [a9e96dd]
+- Updated dependencies [513e608]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [ea4080e]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [a785e48]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [7e57b48]
+- Updated dependencies [705ab4e]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [e9ab27b]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [8655198]
+- Updated dependencies [4d647e6]
+- Updated dependencies [7bcba8c]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [bb33c77]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [fb267da]
+- Updated dependencies [74c5280]
+- Updated dependencies [2854a2e]
+- Updated dependencies [8766e99]
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/ng-conversations@6.2.0-edge.2
+  - @memberjunction/ng-explorer-core@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/ng-artifacts@6.2.0-edge.2
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.2
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.2
+  - @memberjunction/feature-pipelines@6.2.0-edge.2
+  - @memberjunction/ng-core-entity-forms@6.2.0-edge.2
+  - @memberjunction/ng-dashboards@6.2.0-edge.2
+  - @memberjunction/rubrics-base@6.2.0-edge.2
+  - @memberjunction/ai-engine-base@6.2.0-edge.2
+  - @memberjunction/ng-shared@6.2.0-edge.2
+  - @memberjunction/tag-engine-base@6.2.0-edge.2
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.2
+  - @memberjunction/actions-base@6.2.0-edge.2
+  - @memberjunction/ng-auth-services@6.2.0-edge.2
+  - @memberjunction/ng-explorer-settings@6.2.0-edge.2
+  - @memberjunction/ng-clustering@6.2.0-edge.2
+  - @memberjunction/ng-dashboard-viewer@6.2.0-edge.2
+  - @memberjunction/ng-entity-action-ux@6.2.0-edge.2
+  - @memberjunction/ng-file-storage@6.2.0-edge.2
+  - @memberjunction/communication-types@6.2.0-edge.2
+  - @memberjunction/entity-communications-base@6.2.0-edge.2
+  - @memberjunction/ai-realtime-client@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [beacbb2]
+- Updated dependencies [520bd09]
+- Updated dependencies [520bd09]
+- Updated dependencies [2d4bf8d]
+- Updated dependencies [307da67]
+- Updated dependencies [d67c8c0]
+- Updated dependencies [f78fd63]
+- Updated dependencies [6aa41c7]
+- Updated dependencies [67f6c85]
+- Updated dependencies [a7da50b]
+- Updated dependencies [2cb5498]
+- Updated dependencies [1d43161]
+- Updated dependencies [7110019]
+- Updated dependencies [87aa6e0]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [8a26af6]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [9845c00]
+- Updated dependencies [e2fa695]
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/ai-core-plus@6.2.0-edge.1
+  - @memberjunction/ng-core-entity-forms@6.2.0-edge.1
+  - @memberjunction/ng-dashboards@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.1
+  - @memberjunction/ng-conversations@6.2.0-edge.1
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.1
+  - @memberjunction/actions-base@6.2.0-edge.1
+  - @memberjunction/ng-explorer-core@6.2.0-edge.1
+  - @memberjunction/ai-realtime-client@6.2.0-edge.1
+  - @memberjunction/communication-types@6.2.0-edge.1
+  - @memberjunction/ng-artifacts@6.2.0-edge.1
+  - @memberjunction/ng-auth-services@6.2.0-edge.1
+  - @memberjunction/ng-clustering@6.2.0-edge.1
+  - @memberjunction/ng-dashboard-viewer@6.2.0-edge.1
+  - @memberjunction/ng-entity-action-ux@6.2.0-edge.1
+  - @memberjunction/ng-explorer-settings@6.2.0-edge.1
+  - @memberjunction/ng-file-storage@6.2.0-edge.1
+  - @memberjunction/ng-shared@6.2.0-edge.1
+  - @memberjunction/tag-engine-base@6.2.0-edge.1
+  - @memberjunction/ai-engine-base@6.2.0-edge.1
+  - @memberjunction/entity-communications-base@6.2.0-edge.1
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- f0db019: Regenerate the class-registration manifests so `RecordProcessFormComponentExtended` and `RecordProcessFormPolicy` are wired in. Both were added with `@RegisterClassEx` in #4636 without regenerating the manifests, leaving `Build` red on `next` at the freshness gate — and, more importantly, leaving the policy eligible for tree-shaking in bundled apps, which would silently drop the Record Processes form's lead-group decoration.
+- Updated dependencies [abf8778]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [37891d3]
+- Updated dependencies [6ad6434]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [d665a6e]
+- Updated dependencies [50241c8]
+- Updated dependencies [6207578]
+- Updated dependencies [6fd16d2]
+- Updated dependencies [5df9486]
+- Updated dependencies [90eea38]
+- Updated dependencies [e225ece]
+- Updated dependencies [c157749]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [7658d68]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [575bfae]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [2cd8411]
+- Updated dependencies [3977917]
+- Updated dependencies [d61b425]
+- Updated dependencies [104125c]
+- Updated dependencies [dc04823]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8d1a373]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [e962151]
+- Updated dependencies [af57e8d]
+- Updated dependencies [2c590b0]
+- Updated dependencies [6ab86a7]
+- Updated dependencies [fc3da91]
+  - @memberjunction/actions-base@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/ai-core-plus@6.2.0-edge.0
+  - @memberjunction/ng-conversations@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.0
+  - @memberjunction/ng-explorer-core@6.2.0-edge.0
+  - @memberjunction/ng-core-entity-forms@6.2.0-edge.0
+  - @memberjunction/ai-realtime-client@6.2.0-edge.0
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.0
+  - @memberjunction/ng-auth-services@6.2.0-edge.0
+  - @memberjunction/ng-dashboards@6.2.0-edge.0
+  - @memberjunction/ng-shared@6.2.0-edge.0
+  - @memberjunction/ai-engine-base@6.2.0-edge.0
+  - @memberjunction/ng-explorer-settings@6.2.0-edge.0
+  - @memberjunction/tag-engine-base@6.2.0-edge.0
+  - @memberjunction/ng-artifacts@6.2.0-edge.0
+  - @memberjunction/ng-clustering@6.2.0-edge.0
+  - @memberjunction/ng-dashboard-viewer@6.2.0-edge.0
+  - @memberjunction/ng-entity-action-ux@6.2.0-edge.0
+  - @memberjunction/ng-file-storage@6.2.0-edge.0
+  - @memberjunction/communication-types@6.2.0-edge.0
+  - @memberjunction/entity-communications-base@6.2.0-edge.0
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.0
+
+## 6.1.0
+
+### Minor Changes
+
+- ee15cf7: Add AI Persona foundation schema (`AIPersona`, `AIPersonaVendor`, `AIModelPersona`, `AIAgentPersona`) and strongly typed JSONType interfaces (`IAIPersonaStyleDescriptors`, `IAIPersonaVendorSettings`, `IAIAgentPersonaStyleOverride`).
+  - Introduce `AIPersona` catalog table with deterministic global name uniqueness for cross-modality catalog curation.
+  - Introduce `AIPersonaVendor` for concrete vendor and modality bindings with typed `VendorSettingsObject` (`IAIPersonaVendorSettings` with native ElevenLabs settings).
+  - Introduce `AIModelPersona` for model availability and priority sequences.
+  - Introduce `AIAgentPersona` for agent persona assignments with filtered unique index `UQ_AIAgentPersona_OneDefaultPerAgent` and typed `StyleOverrideObject` (`IAIAgentPersonaStyleOverride`).
+  - Add strongly-typed `<Field>Object` accessors in `MJAIPersonaEntity`, `MJAIPersonaVendorEntity`, and `MJAIAgentPersonaEntity`.
+  - Scope CodeGen remote operations emission to `includeSchemas` and partition core vs non-core operations.
+
+- 00a2483: Introduces Identity Claims infrastructure in MemberJunction core for guest record claiming, account linking, and invite verification workflows (#4012).
+  - Schema & Entities: Adds `IdentityClaimType` and `IdentityClaim` entities with lifecycle state transitions (`Pending`, `Claimed`, `Expired`, `Revoked`).
+  - Pluggable Driver Substrate: Supports custom claim handler implementations via `BaseIdentityClaimDriver` and `@RegisterClass`.
+  - Server Engine: `IdentityClaimEngineServer` handles cryptographic claim creation, SHA-256 token hashing at rest, timing-safe token verification, email notifications via MJ Communications framework with HTML escaping, configurable email providers, polymorphic entity resolution, and atomic claim redemption.
+
+- 394d276: Phase 0 of the unified workflow DAG engine program (plan: PR #3456) — retires three dead or superseded subsystems so the **Workflow** name is freed for the program's user-facing vocabulary, and so the task-graph engine isn't built alongside a parallel, non-functioning orchestration model.
+
+  **Eleven tables dropped** — the Skip v1-era workflow schema (`Workflow`, `WorkflowRun`, `WorkflowEngine`), the Skip v1-era report artifact (`Report`, `ReportCategory`, `ReportSnapshot`, `ReportUserState`, `ReportVersion`), the legacy `ScheduledAction` / `ScheduledActionParam` pair, and the report-era `OutputTriggerType`. All were verified dead or superseded: nothing outside generated code read the workflow tables, the `Reports` resource type named a `DriverClass` (`ReportResource`) that exists nowhere in the repo, and the legacy scheduled-action cron due-check is mathematically always-false so authored schedules could never fire.
+
+  **Breaking — the report execution surface is gone.** `RunReport` was already marked `@deprecated` ("Reports are no longer supported... Interactive Components and Artifacts are replacements") and read `vwReports`, which this migration drops. Removed: `IRunReportProvider`, the `RunReport` class, `RunReportParams` / `RunReportResult`, `BaseEntity.RunReportProviderToUse`, `BaseAngularComponent.RunReportToUse`, `GraphQLDataProvider.GetReportData`, the `GetReportData` GraphQL query and `CreateReportFromConversationDetailID` mutation, and the `GET /reports/:reportId` REST endpoint. Accepted deliberately in the open v6 breaking-change window. Consumers should use Interactive Components and Artifacts.
+
+  **Scheduled Actions are superseded by Scheduled Jobs, and the UI moved with them.** Contrary to the original plan's read, the entities were live authoring surface: four Knowledge Hub / AI dashboards created and read them. Those surfaces now author a `MJ: Scheduled Jobs` row of type **Action** — the same work, executed by `ActionScheduledJobDriver`, with the action and its parameters carried in the job's `Configuration` JSON rather than in child parameter rows. `ContentSource.ScheduledActionID` becomes `ContentSource.ScheduledJobID`. A shared `action-scheduled-job` helper in `ng-dashboards` owns the mapping so it isn't triplicated across surfaces.
+
+  **Also removed:** the `@memberjunction/scheduled-actions` and `@memberjunction/scheduled-actions-server` packages (nothing depended on either), the `MJScheduledActionEntityExtended` subclass, the "coming soon" Scheduled Actions placeholder dashboard, and the Explorer report wiring (route, `TabService.OpenReport`, `NavigationService.OpenReport`, resource-type map entry, home-pin matcher, and the dashboard add-item Reports branch).
+
+- ac96bb6: Empty turbo's global hash, and make every in-repo `mj` invocation resolve.
+
+  `hashOfInternalDependencies` — a hash over every non-gitignored file in the root manifest's
+  workspace-dependency closure — is an input to _every_ task hash in the repo. The root
+  `package.json` declared three `workspace:*` devDependencies (`cli`,
+  `integration-test-suite`, `server-bootstrap-lite`) whose combined closure was 154 of 310
+  packages, so editing any file in any of them invalidated all 310, builds and tests alike.
+  Task-level `inputs` cannot reach this; it is upstream of them. Removing the three drops a
+  one-file edit from 310/310 to 37/310 (`AI/Agents`) and 8/310 (Explorer dashboards).
+
+  Removing them also removes the workspace-root `node_modules/.bin/mj` that a number of things
+  quietly resolved through. Every consumer is repaired:
+  - The 15 root scripts, plus `check:ui-layers`, `check:standards` and `test:integration`, now
+    call `node packages/MJCLI/bin/run.js` directly.
+  - `mj.config.cjs`'s `checkModules` used a bare specifier that only worked via the symlink the
+    devDependency created. `check-module-loader.ts` _collects_ load failures rather than
+    throwing, so this would have silently degraded `mj test` to "Unknown integration check
+    bundle". Now an absolute `__dirname`-based path, asserted by `sibling-parity.test.ts`.
+  - Seven `prebuild`/`postbuild` hooks across `ng-bootstrap`, `ng-bootstrap-lite`,
+    `ng-explorer-core`, `server-bootstrap` and `server-bootstrap-lite` ran bare `mj codegen
+manifest` behind `|| echo 'Warning: …'`, so a lost CLI exits 0 and the build proceeds
+    against a stale class-registration manifest — a new `@RegisterClass` class never reaches it
+    and tree-shaking then drops it from bundled apps. Each now calls the workspace entry point
+    by path. Deliberately not a `@memberjunction/cli` devDependency: `ng-explorer-core` has six
+    dependents and `ng-bootstrap` two, so a devDep there would take a CLI edit from 6/310 to
+    12/310 invalidated packages, and `cli` itself depends on `server-bootstrap-lite`, where it
+    would be a build-graph cycle. A path call adds no graph edge.
+  - `a2aserver`, `ai-mcp-server` and `mj_codegen_api` ran bare `mj` in a fallback-less
+    `prestart`, exiting 127 where no global CLI existed and silently resolving a version-skewed
+    one where it did. Each now declares `@memberjunction/cli` — leaf packages only, so
+    `hashOfInternalDependencies` stays `""`.
+  - `pg-migrations.yml` invoked `npx mj` at four sites. With no root bin `npx` falls through to
+    the npm registry, where the package named `mj` is unrelated mongodb-js tooling — in a job
+    holding database credentials, in a workflow that does not trigger on `package.json`, so it
+    would have stayed silent until the next release-time PG run.
+
+  A new `check-mj-cli-resolution.mjs` gate in the `guards` job permits only the two forms that
+  actually resolve, so this cannot regress silently again.
+
+  `@memberjunction/testing-cli` carries a comment-only change to `check-module-loader.ts`
+  documenting why MJ's own root config cannot use a bare specifier while an adopter's can.
+
+  ***
+
+  **On the level:** this is `minor` to satisfy `check:changeset`, not because anything touches
+  the database. The branch adds no migration and edits no declarative metadata. The only file
+  it changes under `metadata/` is `metadata/CLAUDE.md` — an instruction document, part of the
+  repo-wide `npx mj` → `pnpm mj` rewrite — and the gate's trigger is `/^metadata\/.+/`, which
+  matches any path under that directory including Markdown. The rule's own justification for
+  metadata-⇒-minor is that "metadata counts as a migration because it becomes one" via the
+  release-time `mj sync push`; a `CLAUDE.md` never becomes one. Under permanent pre mode a
+  stray `minor` moves no version, so the cost is meaning rather than digits — hence this note,
+  so the next reader does not take it as precedent. Narrowing that pattern to exclude
+  Markdown belongs in its own PR against the gate.
+
+### Patch Changes
+
+- b915983: Align the Angular toolchain on the current 21.x patch line: framework packages 21.1.3 → 21.2.22,
+  CLI/builders 21.1.3 → 21.2.23, CDK 21.1.3 → 21.2.14, ng-packagr → 21.2.7, PrimeNG 21.1.1 → 21.1.9.
+
+  This is a patch-level move inside the supported Angular 21 LTS line, not a framework migration.
+  It closes every open Angular security advisory on the repository — fifteen distinct GHSAs
+  (i18n and template-sanitizer XSS bypasses, service-worker header leakage and credential
+  stripping, HttpTransferCache cross-request leakage, and formatDate/number-format DoS), all fixed
+  in 21.2.19 or earlier — which together accounted for 438 of the 749 open Dependabot alerts.
+
+  Every published `@memberjunction/ng-*` package's `@angular/*` peer range moves from `^21.1.3`
+  (or `^21.0.0`) to `^21.2.22`, so consumers must be on at least that patch. The era-6 platform
+  manifest in `release-lines.json` records the new pin; era 5 (the certified 5.51 line) is
+  unchanged.
+
+  Also moves the exact `@angular/*` runtime pins that 23 libraries carried in `dependencies`
+  into caret `peerDependencies` (adding the missing peers on `ng-react`), so a consumer on any
+  in-range Angular 21.2.x build gets a single Angular copy instead of a nested second runtime, and
+  drops the unused `primeng` peer from `ng-base-forms` (nothing in the repo imports PrimeNG).
+
+- b895f92: Angular DOM unit-testing — Phase 4 coverage push. Dev-only (test files + test-config/CI-gate scoping); no runtime change.
+
+  Drives the Generic DOM-coverage ratchet (`scripts/dom-test-report.mjs … --max-none`) from **185 → 137** by writing DOM specs, in usage-ranked order, for every Generic Angular component appropriate for a DOM unit test. Highlights:
+  - **Highest-leverage primitives** — `MjFormFieldComponent` (the field renderer behind ~4,000 usages) across its read/edit type matrix; the `ui-components` design system (`MJEmptyStateComponent`, the `mj-page-*` chrome family, `MJDropdown`/`MJCombobox`/`MJFilterPopover` via a new CDK-overlay test helper in `ng-test-utils`, the `mj-dialog` family, tabs, filter panel, left-nav).
+  - **Form host stack** — `MjRecordFormContainer`, `MjFormToolbar`, `MjEntityFormHost`, `MjIsaRelatedPanel`, `FormPanelSlot`, `ExplorerEntityDataGrid`, `InteractiveForm`.
+  - **Viewers, grids & dialogs** — `EntityDataGrid` + `QueryDataGrid` (AG-Grid chrome), `EntityViewer`, `ArtifactViewerPanel`, the ERD component family (`ERDComposite`/`MJEntityERD`/`ERDDiagram`), plus a broad set of panels/editors/dialogs across agents, artifacts, search, composer, list-management, scheduling, record-process-studio, user-routines, entity-action-ux, actions, and testing.
+  - **`Angular/Bootstrap` onboarded** — the last untracked library tree gains a DOM test tier (`MJAuthShell`, `MJBootstrap`) and its own `--max-none=0` CI gate, so every shipped Angular library tree (Explorer, Generic, Bootstrap) is now gated.
+
+  Reusable patterns established for the harder components: drive internal state before the first render (`setup`) rather than mutating post-render (unreliable under zoneless CD); stub the heavy core (AG-Grid, React bridge, SVG layout, plugin viewers) and spy async loaders so specs exercise the component's own chrome/wiring; add each component **and its injected services** to enumerated `tsconfig.spec.json` files (or AOT drops decorator metadata → NG0202).
+
+  Deliberately **not** covered, and left at the 137 floor: five integration/e2e-tier orchestrators (`ConversationChatArea`, `MessageInput`, `RealtimeWhiteboardBoard`, `AITestHarness`, `RealtimeSessionOverlay`) — 1,800–4,600-line components with realtime/WebRTC/canvas cores or 14–30 dependencies, which belong in the browser regression suite rather than DOM units.
+
+- 3b893b4: Regenerate the browser class-registration manifests to include MJFileFormComponentExtended so the Files custom form is not tree-shaken out of Bootstrap / BootstrapLite.
+- deea1a3: Unstick the DOM unit specs that fail under the M5 joined pnpm workspace. Two physical copies of @angular/core / @codemirror/state (parent store vs MJ store) made CodeMirror throw on EditorState.create, AgGrid crash with firstCreatePass of null, angular-split inject() hit NG0203, and bootstrap constructor inject() fail the same way. The specs now skip those host libraries (toolbar-only CodeMirror init, AgGrid/as-split stubs) and bootstrap inlines Angular through Vite so Analog and TestBed share one copy.
+- 8d0d45a: build: declare dependencies that npm's hoisting was silently supplying, as part of the monorepo's cutover to pnpm.
+
+  Under npm, a package could import a module it never declared and still resolve it, because npm flattens everything into the workspace-root `node_modules`. pnpm's strict, isolated linking gives a package only what it declares — so each of these was a latent bug that happened to work. They are fixed here independently of the package manager; nothing about the published API changes.
+
+  Added declarations: `@types/mssql` (codegen-lib, sqlserver-dataprovider, testing-cli, testing-integration, react-test-harness), `@types/pg` (codegen-lib), `@types/express` (messaging-adapters, server-extensions-core), `@types/fs-extra` (codegen-lib), `@types/babel__traverse` (react-linter), `ora` (ai-cli), `glob` (react-test-harness), `tslib` (ng-bootstrap, which compiles with `importHelpers`), `@auth0/auth0-spa-js` (ng-auth-services), `@memberjunction/core-entities` + `@memberjunction/global` + `@memberjunction/aiengine` (cli), and `@memberjunction/ng-react` (ng-explorer-core, reached from a generated file).
+
+  Two changes are more than a declaration:
+  - **`@memberjunction/server`**: `@types/express` moves `^4.17.25` → `^5.0.6`. The package declares `express@^5.2.1` at runtime, so it was only compiling because hoisting supplied the v5 types that six sibling packages declare. The types now match the express it actually runs.
+  - **`@memberjunction/ng-auth-services`**: `angularProviderFactory` gains an explicit `Provider[]` return type. Declaring `@auth0/auth0-spa-js` alone does not resolve TS2742 — the emitted declaration file still needed a nameable type rather than one inferred through a transitive package path.
+
+  (A third change in this set applied to `@memberjunction/scheduled-actions-server` — dropping `@types/axios`, a deprecated stub carrying no type definitions. That package has since been removed from the workspace, so its entry is no longer part of this changeset.)
+
+- 8b78695: Regenerate the class-registration manifests so every one of them is on the chunked format.
+
+  The chunked manifest format (`CLASS_REGISTRATIONS_0`, `CLASS_REGISTRATIONS_1`, …) was introduced to keep
+  TypeScript from hitting TS2590 on a single union that had grown too large. Only `server-bootstrap` and
+  `server-bootstrap-lite` were regenerated at the time, so the remaining manifests stayed on the old
+  single-array shape and the `Build` job's manifest gate has been failing on `next` ever since.
+
+  This regenerates all of them from a fully-built workspace. Alongside the format change the sweep picks up
+  registrations that had drifted out: `MJAIUsageTypeEntity` and the `LinearPriceUnitType` /
+  `PerImagePriceUnitType` / `TimePerHourPriceUnitType` / `TimePerMinutePriceUnitType` pricing unit types in the
+  Angular bootstraps, and `MJEntityPermissionEntityServer` / `MJTenantFilterMiddleware` / `RateLimitMiddleware`
+  from `@memberjunction/server` in the server bootstrap.
+
+  Generated output only; no hand edits, no runtime behaviour change.
+
+  One thing worth knowing for anyone regenerating these in future: **the manifest generator is sensitive to
+  build state.** `resolveSubpathExportsDetailed()` resolves a package's lazy-loading subpaths by reading the
+  `.d.ts` each `exports` entry points at, and it `continue`s past any that is missing. Run `mj codegen manifest`
+  against a workspace whose `dist/` folders are absent and the subpaths silently resolve to nothing — the
+  package falls through to the whole-package branch and `lazy-feature-config.ts` collapses its twelve
+  per-dashboard chunks into one eager import, with no warning. Build the workspace first.
+
+- cdd25c0: Regenerate the class-registration manifests for `AuthorizationCheckServerOperation`.
+
+  #4185 added `AuthorizationCheckServerOperation` in `@memberjunction/core-entities`, decorated `@RegisterClass(BaseRemotableOperation, 'Authorization.Check')`, without regenerating the committed class-registration manifests. Every push to `next` since has failed the Build job's manifest freshness gate. The four bootstrap manifests now import and register the class (one more registration each), which is what `pnpm run mj:manifest` produces. Without the entry, tree-shaking can drop the operation from bundled apps and the remotable `Authorization.Check` operation silently never registers.
+
+- 9a29da4: Retire the Workflows app; make the Flow agent form first-class.
+
+  The Workflows app owned no storage — a workflow's WHAT is a Flow agent and there is no `Workflow` table — so it was a second list of rows the AI app already listed, fronted by a canvas that duplicated the Flow agent editor and had no Save path at all. Removed, and replaced by making the agent record answer what the app was implicitly about.
+
+  **`@memberjunction/ng-core-entity-forms`** — the AI Agents form is now tabbed: the agent type's designer (any type declaring a `UIFormSectionKey`), Details (the existing accordion set, unchanged), and Invocations. The designer pane is hidden with CSS rather than removed from the DOM, so unsaved canvas edits and canvas viewport state survive a tab switch. The default tab is the first that exists, so a Flow agent opens on its diagram.
+
+  **`@memberjunction/ng-agents`** — new `<mj-agent-invocations>`: a read-only index of every automated pathway that invokes an agent (Scheduled Jobs, User Routines, Entity Action bindings, Record Processes, sub-agent steps and relationships, `ExposeAsAction`). Answers "what runs this when I'm not looking?", which no surface could previously answer from the agent's side.
+
+  **`@memberjunction/ai-core-plus`** — `AgentSpec.Status` and `AgentStep.StepType` now derive from their entity fields instead of restating them. Both had drifted: `Status` declared `'Inactive'`, which `AIAgent.Status` has never accepted, so any caller setting it wrote a value the CHECK constraint rejects; `StepType` omitted `ForEach` and `While`, making loops executable but unauthorable. `AgentStep` gains `LoopBodyType` and `Configuration`, and the action mapping fields now admit the object form that callers already pass.
+
+  **`@memberjunction/ai-agent-manager`** — `AgentSpecSync` round-trips loop fields; new pure `ValidateLoopStep` catches a loop that saves cleanly and then iterates zero times; the Architect's status validator accepts `Disabled` rather than the invalid `Inactive`, and `WorkflowAgentWriter` maps Draft/Paused workflows to `Disabled`.
+
+  **`@memberjunction/ai-mcp-server`** — the `List_Agents` status filter no longer offers `Inactive`, which could never match a row.
+
+  **`@memberjunction/ng-dashboards`** — the Workflows dashboard, its module, its resource component and its `ng-task-graph-editor` dependency are removed. `mj-task-graph-editor` itself is unchanged and keeps its read-only consumers.
+
+  The `Workflow.Draft` / `Workflow.Save` / `Workflow.Validate` Remote Operations are deliberately kept — they are the agent- and MCP-facing contract and matter more now that creation is conversational.
+
+  A migration removes the Workflows Application row from existing databases (idempotent; a no-op on a clean install). The Architect prompt template change requires `mj sync push` to take effect.
+
+- Updated dependencies [4273317]
+- Updated dependencies [394d276]
+- Updated dependencies [634aa8c]
+- Updated dependencies [834f8d7]
+- Updated dependencies [a987913]
+- Updated dependencies [e533ce5]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [2c826f7]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [b915983]
+- Updated dependencies [b895f92]
+- Updated dependencies [b895f92]
+- Updated dependencies [1bced7c]
+- Updated dependencies [05b4cb5]
+- Updated dependencies [b7819d2]
+- Updated dependencies [394d276]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [c1fea88]
+- Updated dependencies [22ec804]
+- Updated dependencies [197fdf8]
+- Updated dependencies [b8c2e33]
+- Updated dependencies [d38845a]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [2792d97]
+- Updated dependencies [3fa1fb8]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [0d3094c]
+- Updated dependencies [241c2c1]
+- Updated dependencies [255d506]
+- Updated dependencies [0ec1980]
+- Updated dependencies [199eb2b]
+- Updated dependencies [f80bdb7]
+- Updated dependencies [1940a4d]
+- Updated dependencies [e7f1f88]
+- Updated dependencies [07cb22e]
+- Updated dependencies [deea1a3]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [711c208]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [e9c5b90]
+- Updated dependencies [59def38]
+- Updated dependencies [2412415]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [9699d0e]
+- Updated dependencies [394d276]
+- Updated dependencies [78ea840]
+- Updated dependencies [43f9133]
+- Updated dependencies [469461a]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [2d14c62]
+- Updated dependencies [394d276]
+- Updated dependencies [05865ea]
+- Updated dependencies [c996a56]
+- Updated dependencies [394d276]
+- Updated dependencies [de6eb14]
+- Updated dependencies [b9de989]
+- Updated dependencies [38d4482]
+- Updated dependencies [ea003fc]
+- Updated dependencies [052b4c7]
+- Updated dependencies [8ec1515]
+- Updated dependencies [9a905e8]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [8de5f7e]
+- Updated dependencies [c996a56]
+- Updated dependencies [d907a1b]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [47930ef]
+- Updated dependencies [8d880cc]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [cefc302]
+- Updated dependencies [841e6ea]
+- Updated dependencies [394d276]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [919f0c7]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [d66a26a]
+- Updated dependencies [c643ba3]
+- Updated dependencies [e9e9873]
+- Updated dependencies [1d88e00]
+- Updated dependencies [647bd71]
+- Updated dependencies [34d9501]
+- Updated dependencies [8288711]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [5f33ca8]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [d26e202]
+- Updated dependencies [48ff99f]
+- Updated dependencies [076fa5d]
+- Updated dependencies [9f73528]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [85a8f15]
+- Updated dependencies [27e4d09]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [8d0d45a]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [98841bb]
+- Updated dependencies [53c341c]
+- Updated dependencies [2e2879e]
+- Updated dependencies [394d276]
+- Updated dependencies [dd6d1f0]
+- Updated dependencies [9fc0e2d]
+- Updated dependencies [71ccf29]
+- Updated dependencies [a8710bf]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [ceb8e46]
+- Updated dependencies [b46330e]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [e1ebab9]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [53d256f]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [9a29da4]
+- Updated dependencies [cf2484c]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [512bb53]
+- Updated dependencies [0967ba7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [7a630ba]
+- Updated dependencies [de343b5]
+- Updated dependencies [5fc861f]
+- Updated dependencies [1748491]
+- Updated dependencies [ea2d1da]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [0db6105]
+- Updated dependencies [938cd9e]
+- Updated dependencies [dbaa967]
+- Updated dependencies [d7feeae]
+- Updated dependencies [7fefca2]
+- Updated dependencies [a1a8989]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [905820a]
+- Updated dependencies [394d276]
+- Updated dependencies [34d19a9]
+- Updated dependencies [ca3657d]
+- Updated dependencies [394d276]
+- Updated dependencies [1bd9674]
+- Updated dependencies [9f6a53b]
+- Updated dependencies [6d7d3da]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [2644a76]
+- Updated dependencies [ac96bb6]
+- Updated dependencies [d0eab88]
+- Updated dependencies [d078c54]
+- Updated dependencies [7fcdc2d]
+- Updated dependencies [15319b4]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [b46330e]
+- Updated dependencies [4b1257f]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [63ea273]
+- Updated dependencies [1be0f14]
+- Updated dependencies [6cd337d]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [768980d]
+- Updated dependencies [1c0d586]
+  - @memberjunction/ng-explorer-core@6.1.0
+  - @memberjunction/ng-entity-viewer@6.1.0
+  - @memberjunction/ai-core-plus@6.1.0
+  - @memberjunction/ng-conversations@6.1.0
+  - @memberjunction/ng-artifacts@6.1.0
+  - @memberjunction/core@6.1.0
+  - @memberjunction/core-entities@6.1.0
+  - @memberjunction/ai-engine-base@6.1.0
+  - @memberjunction/ng-core-entity-forms@6.1.0
+  - @memberjunction/ng-auth-services@6.1.0
+  - @memberjunction/ng-clustering@6.1.0
+  - @memberjunction/ng-dashboard-viewer@6.1.0
+  - @memberjunction/ng-dashboards@6.1.0
+  - @memberjunction/ng-entity-action-ux@6.1.0
+  - @memberjunction/ng-explorer-settings@6.1.0
+  - @memberjunction/ng-file-storage@6.1.0
+  - @memberjunction/ng-shared@6.1.0
+  - @memberjunction/communication-types@6.1.0
+  - @memberjunction/graphql-dataprovider@6.1.0
+  - @memberjunction/actions-base@6.1.0
+  - @memberjunction/ai-realtime-client@6.1.0
+  - @memberjunction/ai-vectors-memory@6.1.0
+  - @memberjunction/tag-engine-base@6.1.0
+  - @memberjunction/entity-communications-base@6.1.0
+
+## 6.1.0-edge.7
+
+### Minor Changes
+
+- ee15cf7: Add AI Persona foundation schema (`AIPersona`, `AIPersonaVendor`, `AIModelPersona`, `AIAgentPersona`) and strongly typed JSONType interfaces (`IAIPersonaStyleDescriptors`, `IAIPersonaVendorSettings`, `IAIAgentPersonaStyleOverride`).
+  - Introduce `AIPersona` catalog table with deterministic global name uniqueness for cross-modality catalog curation.
+  - Introduce `AIPersonaVendor` for concrete vendor and modality bindings with typed `VendorSettingsObject` (`IAIPersonaVendorSettings` with native ElevenLabs settings).
+  - Introduce `AIModelPersona` for model availability and priority sequences.
+  - Introduce `AIAgentPersona` for agent persona assignments with filtered unique index `UQ_AIAgentPersona_OneDefaultPerAgent` and typed `StyleOverrideObject` (`IAIAgentPersonaStyleOverride`).
+  - Add strongly-typed `<Field>Object` accessors in `MJAIPersonaEntity`, `MJAIPersonaVendorEntity`, and `MJAIAgentPersonaEntity`.
+  - Scope CodeGen remote operations emission to `includeSchemas` and partition core vs non-core operations.
+
+### Patch Changes
+
+- Updated dependencies [a987913]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [919f0c7]
+- Updated dependencies [076fa5d]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core-entities@6.1.0-edge.7
+  - @memberjunction/ai-engine-base@6.1.0-edge.7
+  - @memberjunction/ng-core-entity-forms@6.1.0-edge.7
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.7
+  - @memberjunction/ng-dashboards@6.1.0-edge.7
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.7
+  - @memberjunction/ng-conversations@6.1.0-edge.7
+  - @memberjunction/ai-core-plus@6.1.0-edge.7
+  - @memberjunction/tag-engine-base@6.1.0-edge.7
+  - @memberjunction/actions-base@6.1.0-edge.7
+  - @memberjunction/ng-explorer-core@6.1.0-edge.7
+  - @memberjunction/ng-explorer-settings@6.1.0-edge.7
+  - @memberjunction/ng-shared@6.1.0-edge.7
+  - @memberjunction/ng-artifacts@6.1.0-edge.7
+  - @memberjunction/ng-clustering@6.1.0-edge.7
+  - @memberjunction/ng-dashboard-viewer@6.1.0-edge.7
+  - @memberjunction/ng-entity-action-ux@6.1.0-edge.7
+  - @memberjunction/ng-file-storage@6.1.0-edge.7
+  - @memberjunction/communication-types@6.1.0-edge.7
+  - @memberjunction/entity-communications-base@6.1.0-edge.7
+  - @memberjunction/ai-realtime-client@6.1.0-edge.7
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.7
+  - @memberjunction/ng-auth-services@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Minor Changes

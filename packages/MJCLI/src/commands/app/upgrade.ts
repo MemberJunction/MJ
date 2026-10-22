@@ -2,7 +2,7 @@ import { Args, Command, Flags } from '@oclif/core';
 import { UpgradeApp } from '@memberjunction/open-app-engine';
 import ora from 'ora-classic';
 import chalk from 'chalk';
-import { buildOrchestratorContext } from '../../utils/open-app-context.js';
+import { BuildOrchestratorContext } from '../../utils/open-app-context.js';
 
 /**
  * CLI command: `mj app upgrade <name>`.
@@ -41,9 +41,10 @@ export default class AppUpgrade extends Command {
   async run(): Promise<void> {
     const { args, flags } = await this.parse(AppUpgrade);
     const spinner = ora();
+    let failed = false;
 
     try {
-      const context = await buildOrchestratorContext(this, flags.verbose, !flags['non-interactive']);
+      const context = await BuildOrchestratorContext(this, flags.verbose, !flags['non-interactive']);
 
       const result = await UpgradeApp(
         {
@@ -62,12 +63,17 @@ export default class AppUpgrade extends Command {
         }
       } else {
         spinner.fail(chalk.red(`Upgrade failed: ${result.ErrorMessage}`));
-        this.exit(1);
+        failed = true;
       }
     } catch (error) {
       spinner.fail('Upgrade failed');
       const message = error instanceof Error ? error.message : String(error);
       this.error(message);
+    }
+    // Outside the try on purpose: oclif's exit() works by throwing, and the catch above would
+    // swallow it — printing a second failure line and exiting 2 with "EEXIT: 1".
+    if (failed) {
+      this.exit(1);
     }
   }
 }

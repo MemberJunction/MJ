@@ -6,9 +6,9 @@ import { PageRecordsParams } from "../generic/VectorCore.types";
 import { MJAIModelEntityExtended } from "@memberjunction/ai-core-plus";
 
 export class VectorBase {
-    _runView: RunView;
-    _metadata: Metadata;
-    _currentUser: UserInfo;
+    _runView: RunView;  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
+    _metadata: Metadata;  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
+    _currentUser: UserInfo;  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
     protected _provider: IMetadataProvider | null = null;
 
     /**
@@ -19,8 +19,9 @@ export class VectorBase {
      * multi-provider scenarios. Falls back to the global default provider when omitted.
      */
     constructor(provider?: IMetadataProvider | null) {
-        // Fall back to the global default only when no provider was supplied
-        this._metadata = (provider as unknown as Metadata) ?? new Metadata();
+        // `_metadata` is the global `Metadata` helper, kept only because the field is public. It is
+        // not an IMetadataProvider, so nothing may hand it to code that expects one — see `Provider`.
+        this._metadata = new Metadata(); // global-provider-ok: legacy public field; metadata reads go through Provider
         this.Provider = provider ?? null; // setter also binds _runView to the provider
         this._currentUser = provider?.CurrentUser ?? this._metadata.CurrentUser;
     }
@@ -31,7 +32,7 @@ export class VectorBase {
      * operations in this class hierarchy go through this getter so a bound instance never
      * leaks onto the global provider.
      */
-    public get Metadata(): IMetadataProvider { return this._provider ?? (this._metadata as unknown as IMetadataProvider); }
+    public get Metadata(): IMetadataProvider { return this.Provider; }
     public get RunView(): RunView { return this._runView; }
     public get CurrentUser(): UserInfo { return this._currentUser; }
     public set CurrentUser(user: UserInfo) { this._currentUser = user; }
@@ -41,9 +42,13 @@ export class VectorBase {
      * or set `instance.Provider = providerToUse` before invoking helper methods in
      * multi-provider contexts. Setting it rebinds the internal RunView instance so view
      * execution rides the same provider. Falls back to the global default when unset.
+     *
+     * The fallback is the global provider itself, never the `Metadata` wrapper: consumers
+     * type-check what they get here (e.g. `VectorDBBase.TryWireColocatedHost` needs an
+     * `IColocatedVectorHost`), and the wrapper fails those checks.
      */
     public get Provider(): IMetadataProvider {
-        return this._provider ?? (this._metadata as unknown as IMetadataProvider);
+        return this._provider ?? Metadata.Provider;
     }
     public set Provider(value: IMetadataProvider | null) {
         this._provider = value;
@@ -118,13 +123,30 @@ export class VectorBase {
         if (!entity || !entity.FirstPrimaryKey) return false; // first-pk-ok: keyset-eligibility check; an entity without a key column cannot be seek-paginated
         if (entity.PrimaryKeys.length !== 1) return false;
         // Inline allowlist check (avoid pulling in the helper here)
-        const t = (entity.FirstPrimaryKey.Type || '').replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase(); // first-pk-ok: guarded by PrimaryKeys.length === 1 above
+        const t = VectorBase.normalizeSqlTypeName(entity.FirstPrimaryKey.Type || ''); // first-pk-ok: guarded by PrimaryKeys.length === 1 above
         // Same set as KEYSET_PAGINATION_ORDERABLE_PK_TYPES in @memberjunction/core
         return ['uniqueidentifier','uuid','int','bigint','smallint','tinyint','decimal','numeric','money','smallmoney',
             'float','real','double precision','char','varchar','nchar','nvarchar','text','ntext',
             'date','datetime','datetime2','datetimeoffset','smalldatetime','time','bit',
             'integer','bigserial','serial','character varying','character','timestamp',
             'timestamp with time zone','timestamp without time zone','boolean'].includes(t);
+    }
+
+    /**
+     * Lower-cases a SQL type name and drops a trailing size spec, so `nvarchar(255)` becomes
+     * `nvarchar` and `decimal(10, 2)` becomes `decimal`. It scans the string instead of using a
+     * regex: the type comes from metadata, and a backtracking pattern over it runs in polynomial time.
+     */
+    private static normalizeSqlTypeName(type: string): string {
+        const trimmed = type.trim();
+        if (!trimmed.endsWith(')')) {
+            return trimmed.toLowerCase();
+        }
+        const close = trimmed.length - 1;
+        // The size spec is the last "(...)" group: it opens at the first '(' after the previous ')'.
+        const open = trimmed.indexOf('(', trimmed.lastIndexOf(')', close - 1) + 1);
+        const base = open >= 0 && open < close ? trimmed.slice(0, open) : trimmed;
+        return base.trim().toLowerCase();
     }
 
     /**
@@ -139,19 +161,79 @@ export class VectorBase {
         }).join("\n OR ");
     }
 
+    /**
+     * Resolve the embedding model to generate vectors with.
+     *
+     * **Pass an `id` wherever one exists.** The width of an embedding is a property of the model,
+     * and the width an index accepts is fixed when the index is created, so which model this
+     * returns decides whether the vectors fit. The no-`id` branch cannot know that and is a
+     * last resort only.
+     *
+     * The no-`id` branch used to be a bare `find()` over `AIEngine.Instance.Models`, which
+     * `BaseAIEngine.Config` loads with no `OrderBy` and no `IsActive` filter. So it returned
+     * whichever Embeddings row the view happened to hand back first — a different model on a
+     * different database, or after an unrelated insert, and quite possibly a deactivated one.
+     * An arbitrary answer is worse than a wrong one: the same code produces different widths in
+     * different environments and nothing in the failure names the model that was chosen.
+     *
+     * It is now deterministic — active models first, then highest `PowerRank`, then name — and it
+     * says out loud which model it picked and that nobody asked for it.
+     */
     protected GetAIModel(id?: string): MJAIModelEntityExtended {
-        let model: MJAIModelEntityExtended;
-        if(id){
-            model = AIEngine.Instance.Models.find(m => m.AIModelType === "Embeddings" && UUIDsEqual(m.ID, id));
-        }
-        else{
-            model = AIEngine.Instance.Models.find(m => m.AIModelType === "Embeddings");
+        const embeddings = AIEngine.Instance.Models.filter(m => this.isEmbeddingsModel(m));
+
+        if (id) {
+            const model = embeddings.find(m => UUIDsEqual(m.ID, id));
+            if (!model) {
+                throw new Error(
+                    `No Embeddings AI Model found with ID "${id}". ` +
+                    `The record referencing it points at a model that is missing, or at a model that is not of type Embeddings.`
+                );
+            }
+            return model;
         }
 
-        if(!model){
-            throw new Error("No AI Model Entity found");
+        if (embeddings.length === 0) {
+            throw new Error(
+                'No AI Model of type "Embeddings" is registered. Add one under AI Models before vectorizing.'
+            );
         }
-        return model;
+
+        // Prefer active models, but do not refuse outright when every embeddings model is
+        // deactivated: that would turn a soft misconfiguration into a hard stop on a path that
+        // has always tolerated it. Rank within whichever set we end up using.
+        const active = embeddings.filter(m => m.IsActive !== false);
+        const pool = active.length > 0 ? active : embeddings;
+        const chosen = [...pool].sort(VectorBase.compareEmbeddingModelPreference)[0];
+
+        LogError(
+            `GetAIModel was called with no model ID, so the embedding model was chosen by ranking rather than by configuration: ` +
+            `"${chosen.Name}" (${chosen.ID}) out of ${pool.length} candidate(s)${active.length === 0 ? ', none of which are active' : ''}. ` +
+            `The vector width this produces is not guaranteed to match any index — set the model explicitly on the Entity Document or Vector Index.`
+        );
+        return chosen;
+    }
+
+    /**
+     * Case- and whitespace-insensitive type test. The strict `=== "Embeddings"` this replaces
+     * matched the literal spelling only, so a type row stored as `embeddings` silently made
+     * every embedding model invisible.
+     */
+    private isEmbeddingsModel(model: MJAIModelEntityExtended): boolean {
+        return (model.AIModelType ?? '').trim().toLowerCase() === 'embeddings';
+    }
+
+    /**
+     * Total order over embedding models for the no-`id` fallback: higher `PowerRank` first
+     * (a null rank sorts last), then name ascending so the result never depends on row order.
+     */
+    private static compareEmbeddingModelPreference(a: MJAIModelEntityExtended, b: MJAIModelEntityExtended): number {
+        const rankA = a.PowerRank ?? Number.NEGATIVE_INFINITY;
+        const rankB = b.PowerRank ?? Number.NEGATIVE_INFINITY;
+        if (rankA !== rankB) {
+            return rankB - rankA;
+        }
+        return (a.Name ?? '').localeCompare(b.Name ?? '');
     }
 
     protected GetVectorDatabase(id?: string): MJVectorDatabaseEntity {

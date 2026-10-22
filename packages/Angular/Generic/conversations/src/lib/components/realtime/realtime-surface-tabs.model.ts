@@ -1,6 +1,6 @@
 import { Subject } from 'rxjs';
 import type { TemplateRef } from '@angular/core';
-import type { BaseRealtimeChannelClient } from './channels/base-realtime-channel-client';
+import type { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 import { ChannelTabColor } from './realtime-surface-tab-style';
 
 /**
@@ -107,7 +107,7 @@ export class RealtimeSurfaceTabsModel {
   public static readonly ActivityTabKey = 'activity';
 
   /** The activity tab definition, appended last whenever {@link showActivity} is true. */
-  private static readonly ActivityTab: RealtimeSurfaceTab = {
+  private static readonly activityTab: RealtimeSurfaceTab = {
     Key: RealtimeSurfaceTabsModel.ActivityTabKey,
     Title: 'Activity',
     Icon: 'fa-solid fa-wave-square',
@@ -139,7 +139,7 @@ export class RealtimeSurfaceTabsModel {
    */
   public get Tabs(): RealtimeSurfaceTab[] {
     return this.showActivity
-      ? [...this.channelTabs, RealtimeSurfaceTabsModel.ActivityTab]
+      ? [...this.channelTabs, RealtimeSurfaceTabsModel.activityTab]
       : [...this.channelTabs];
   }
 
@@ -158,7 +158,16 @@ export class RealtimeSurfaceTabsModel {
     return tabs.find(t => t.Key === this.ActiveKey)
       ?? tabs.find(t => t.Key === RealtimeSurfaceTabsModel.ActivityTabKey)
       ?? tabs[0]
-      ?? RealtimeSurfaceTabsModel.ActivityTab;
+      ?? RealtimeSurfaceTabsModel.activityTab;
+  }
+
+  /**
+   * The key of the channel whose tab is focused, or `null` when the focused tab is not a channel's (the Activity
+   * tab, or an empty strip). This is what tells the session which surface the user is looking at.
+   */
+  public get ActiveChannelKey(): string | null {
+    const tab = this.ActiveTab;
+    return tab.Kind === 'channel' ? tab.Key : null;
   }
 
   /**

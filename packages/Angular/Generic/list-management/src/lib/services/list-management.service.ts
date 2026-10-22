@@ -34,7 +34,16 @@ export class ListManagementService {
 
   // Loading state subjects
   private loadingSubject = new BehaviorSubject<boolean>(false);
-  public loading$: Observable<boolean> = this.loadingSubject.asObservable();
+  public Loading$: Observable<boolean> = this.loadingSubject.asObservable();
+
+  /** @deprecated Use {@link Loading$}. */
+  public get loading$(): Observable<boolean> {
+    return this.Loading$;
+  }
+  /** @deprecated Use {@link Loading$}. */
+  public set loading$(value: Observable<boolean>) {
+    this.Loading$ = value;
+  }
 
   private _provider: IMetadataProvider | null = null;
 
@@ -50,7 +59,7 @@ export class ListManagementService {
   /**
    * Get lists for a specific entity, with optional caching
    */
-  async getListsForEntity(
+  async GetListsForEntity(
     entityId: string,
     userId?: string,
     forceRefresh: boolean = false
@@ -98,10 +107,19 @@ export class ListManagementService {
     }
   }
 
+  /** @deprecated Use {@link GetListsForEntity}. */
+  async getListsForEntity(
+    entityId: string,
+    userId?: string,
+    forceRefresh: boolean = false
+  ): Promise<MJListEntity[]> {
+    return this.GetListsForEntity(entityId, userId, forceRefresh);
+  }
+
   /**
    * Get all list categories
    */
-  async getListCategories(forceRefresh: boolean = false): Promise<MJListCategoryEntity[]> {
+  async GetListCategories(forceRefresh: boolean = false): Promise<MJListCategoryEntity[]> {
     if (!forceRefresh && this.categoryCache && this.isCacheValid(this.categoryCache)) {
       return this.categoryCache.data;
     }
@@ -124,11 +142,16 @@ export class ListManagementService {
     return [];
   }
 
+  /** @deprecated Use {@link GetListCategories}. */
+  async getListCategories(forceRefresh: boolean = false): Promise<MJListCategoryEntity[]> {
+    return this.GetListCategories(forceRefresh);
+  }
+
   /**
    * Get membership information for a set of records
    * Returns a Map where key is listId and value is array of recordIds that are members
    */
-  async getRecordMembership(
+  async GetRecordMembership(
     entityId: string,
     recordIds: string[]
   ): Promise<Map<string, string[]>> {
@@ -182,10 +205,18 @@ export class ListManagementService {
     }
   }
 
+  /** @deprecated Use {@link GetRecordMembership}. */
+  async getRecordMembership(
+    entityId: string,
+    recordIds: string[]
+  ): Promise<Map<string, string[]>> {
+    return this.GetRecordMembership(entityId, recordIds);
+  }
+
   /**
    * Get lists that contain a specific record
    */
-  async getListsForRecord(
+  async GetListsForRecord(
     entityId: string,
     recordId: string
   ): Promise<MJListEntity[]> {
@@ -216,10 +247,18 @@ export class ListManagementService {
     return listsResult.Success ? (listsResult.Results || []) : [];
   }
 
+  /** @deprecated Use {@link GetListsForRecord}. */
+  async getListsForRecord(
+    entityId: string,
+    recordId: string
+  ): Promise<MJListEntity[]> {
+    return this.GetListsForRecord(entityId, recordId);
+  }
+
   /**
    * Get item count for a list
    */
-  async getListItemCount(listId: string): Promise<number> {
+  async GetListItemCount(listId: string): Promise<number> {
     const rv = RunView.FromMetadataProvider(this.Provider);
     const result = await rv.RunView({
       EntityName: 'MJ: List Details',
@@ -230,10 +269,15 @@ export class ListManagementService {
     return result.Success ? result.TotalRowCount : 0;
   }
 
+  /** @deprecated Use {@link GetListItemCount}. */
+  async getListItemCount(listId: string): Promise<number> {
+    return this.GetListItemCount(listId);
+  }
+
   /**
    * Build view models for lists with membership information
    */
-  async buildListViewModels(
+  async BuildListViewModels(
     lists: MJListEntity[],
     recordIds: string[],
     membership: Map<string, string[]>
@@ -279,10 +323,19 @@ export class ListManagementService {
     return viewModels;
   }
 
+  /** @deprecated Use {@link BuildListViewModels}. */
+  async buildListViewModels(
+    lists: MJListEntity[],
+    recordIds: string[],
+    membership: Map<string, string[]>
+  ): Promise<ListItemViewModel[]> {
+    return this.BuildListViewModels(lists, recordIds, membership);
+  }
+
   /**
    * Add records to one or more lists
    */
-  async addRecordsToLists(
+  async AddRecordsToLists(
     listIds: string[],
     recordIds: string[],
     skipDuplicates: boolean = true
@@ -375,10 +428,19 @@ export class ListManagementService {
     return result;
   }
 
+  /** @deprecated Use {@link AddRecordsToLists}. */
+  async addRecordsToLists(
+    listIds: string[],
+    recordIds: string[],
+    skipDuplicates: boolean = true
+  ): Promise<BatchOperationResult> {
+    return this.AddRecordsToLists(listIds, recordIds, skipDuplicates);
+  }
+
   /**
    * Remove records from one or more lists
    */
-  async removeRecordsFromLists(
+  async RemoveRecordsFromLists(
     listIds: string[],
     recordIds: string[]
   ): Promise<BatchOperationResult> {
@@ -452,10 +514,18 @@ export class ListManagementService {
     return result;
   }
 
+  /** @deprecated Use {@link RemoveRecordsFromLists}. */
+  async removeRecordsFromLists(
+    listIds: string[],
+    recordIds: string[]
+  ): Promise<BatchOperationResult> {
+    return this.RemoveRecordsFromLists(listIds, recordIds);
+  }
+
   /**
    * Create a new list
    */
-  async createList(config: CreateListConfig): Promise<MJListEntity | null> {
+  async CreateList(config: CreateListConfig): Promise<MJListEntity | null> {
     const md = this.Provider;
 
     try {
@@ -484,6 +554,11 @@ export class ListManagementService {
     }
   }
 
+  /** @deprecated Use {@link CreateList}. */
+  async createList(config: CreateListConfig): Promise<MJListEntity | null> {
+    return this.CreateList(config);
+  }
+
   /**
    * Check if a cache entry is still valid
    */
@@ -496,7 +571,7 @@ export class ListManagementService {
   /**
    * Invalidate cache for a specific entity or all caches
    */
-  invalidateCache(entityId?: string): void {
+  InvalidateCache(entityId?: string): void {
     if (entityId) {
       this.invalidateListCache(entityId);
     } else {
@@ -504,6 +579,11 @@ export class ListManagementService {
       this.categoryCache = null;
       this.membershipCache.clear();
     }
+  }
+
+  /** @deprecated Use {@link InvalidateCache}. */
+  invalidateCache(entityId?: string): void {
+    return this.InvalidateCache(entityId);
   }
 
   /**

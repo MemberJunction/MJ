@@ -15,15 +15,15 @@
  * @module @memberjunction/realtime-widget
  */
 
-import { defineSupportWidgetElement } from './ui/support-widget-element.js';
-import { bootstrapFromDocument } from './loader.js';
+import { DefineSupportWidgetElement } from './ui/support-widget-element.js';
+import { BootstrapFromDocument } from './loader.js';
 
 // When loaded in a browser, register the element and attempt auto-bootstrap from the host's
 // [data-widget-key] element. No-ops cleanly server-side or when nothing matches.
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-    defineSupportWidgetElement();
+    DefineSupportWidgetElement();
     const run = (): void => {
-        void bootstrapFromDocument();
+        void BootstrapFromDocument();
     };
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', run, { once: true });

@@ -2,41 +2,68 @@ import fs from 'fs-extra';
 import path from 'path';
 import fastGlob from 'fast-glob';
 import chalk from 'chalk';
-import { BaseEntity, Metadata, UserInfo, EntitySaveOptions, IsVerboseLoggingEnabled, DatabaseProviderBase, IEntityDataProvider, IMetadataProvider } from '@memberjunction/core';
+import { BaseEntity, Metadata, UserInfo, EntitySaveOptions, IsVerboseLoggingEnabled, DatabaseProviderBase, IEntityDataProvider, IMetadataProvider, RelatedRecordLoadMode, RelatedRecordRemovalMode } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { IsStringSQLType } from '@memberjunction/sql-dialect';
 import { SyncEngine, RecordData, DeferrableLookupError, SyncResolutionCollector, BatchContext } from '../lib/sync-engine';
 import { SyncMetadataEngine } from '../lib/sync-metadata-engine';
 import { BatchContextIndex, BatchContextStub } from '../lib/batch-context-index';
-import { loadEntityConfig, loadSyncConfig, EntityConfig, SyncConfig } from '../config';
+import { loadEntityConfig, EntityConfig, SyncConfig } from '../config';
 import { FileBackupManager } from '../lib/file-backup-manager';
 import { configManager } from '../lib/config-manager';
 import { SQLLogger } from '../lib/sql-logger';
 import { TransactionManager } from '../lib/transaction-manager';
 import { JsonWriteHelper } from '../lib/json-write-helper';
 import { RecordDependencyAnalyzer, FlattenedRecord, groupRecordsByGraphId } from '../lib/record-dependency-analyzer';
-import { GraphProviderPool } from '../lib/graph-provider-pool';
+import { GraphProviderPool, GraphSettleOutcome, ProbeIndependentInstances } from '../lib/graph-provider-pool';
+import {
+  PushWriteMode,
+  ResolveDirectoryMode,
+  GraphBatchSizeFor,
+  IsolatedModeWarning,
+  UnusedBatchSizeWarning,
+} from '../lib/push-write-mode';
+import { CommittedWrite, PushAbortedError, DescribeCommitFailure, DescribeRollbackOutcome } from '../lib/push-outcome';
 import { JsonPreprocessor } from '../lib/json-preprocessor';
-import { findEntityDirectories } from '../lib/provider-utils';
+import { ResolvePushFolders, SkippedDirectoryMessage } from '../lib/push-directories';
+import type { SkippedDirectory } from '../lib/push-when';
 import { DeletionAuditor, DeletionAudit } from '../lib/deletion-auditor';
-import { describeMissingEntitySubclass } from '../lib/entity-subclass-guard';
+import { DescribeMissingEntitySubclass } from '../lib/entity-subclass-guard';
 import { DeletionReportGenerator } from '../lib/deletion-report-generator';
 import { SyncStateManager } from '../lib/sync-state-manager';
-import { resolveCollectionRelationship } from '../lib/collection-resolver';
+import { EnvVariableNotSetError, OptionalEnvMissingError, OptionalEnvSkipMessage, ParseEnvReference } from '../lib/env-reference';
+import { RecordStartLine } from '../lib/json-record-lines';
+import { EnvDisplayMask, EnvSourceLabel, ENV_HIDDEN_VALUE, MaskedError } from '../lib/env-display';
+import { EnvSqlLog, AddSkippedOptionalEnvField } from '../lib/env-sql-redactor';
+import { CreatedRecordKeyFields, IsKeyReference, KeyFieldValue } from '../lib/created-record-key';
+import { EntityFieldName, RecordFieldNames } from '../lib/entity-field-names';
+import { METADATA_KEYWORDS } from '../constants/metadata-keywords';
+import { DEFAULT_RECORD_FILE_PATTERN, RECORD_FILE_GLOB_OPTIONS } from '../lib/record-file-glob';
+import { resolveCollectionRelationship } from '@memberjunction/record-graph';
 import type { GenericDatabaseProvider, SqlLoggingSession } from '@memberjunction/generic-database-provider';
 
-// Parallelism is across JSON-root graphs (independent Actions), not flattened rows.
-// Nested relatedEntities share the root's provider so parent+child stay on one TX.
-// Default 10 — never 1. 1 was a wrong workaround for mixed-provider hangs;
-// callers can pass --parallel-batch-size 1 for debugging.
-const PARALLEL_BATCH_SIZE = 10;
+// Atomic pushes (the default) run one JSON-root graph at a time on the host provider, inside
+// the push transaction. Non-atomic pushes run sibling graphs in parallel on independent
+// provider instances; nested relatedEntities always share the root's provider.
+// See lib/push-write-mode.ts.
 
 export interface PushOptions {
   dir?: string;
   dryRun?: boolean;
   verbose?: boolean;
   noValidate?: boolean;
-  parallelBatchSize?: number; // Number of records to process in parallel (default: 10)
+  /**
+   * JSON-root graphs to run at once in a directory using isolated transactions (default: 10).
+   * Ignored, with a warning, when no directory in the push uses them.
+   */
+  parallelBatchSize?: number;
+  /**
+   * Force isolated transactions on or off for every entity directory in this push, overriding
+   * `push.isolatedTransactions` in every `.mj-sync.json`. Undefined: each directory decides.
+   * true: each JSON-root graph gets its own connection and commits as it saves (not rolled back).
+   * false: everything runs in the one push transaction, one graph at a time.
+   */
+  isolatedTransactions?: boolean;
   include?: string[]; // Only process these directories (whitelist, supports patterns)
   exclude?: string[]; // Skip these directories (blacklist, supports patterns)
   deleteDbOnly?: boolean; // Delete database-only records that reference records being deleted
@@ -51,12 +78,12 @@ export interface PushOptions {
  * --format=json | jq '.errors[]'` — instead of parsing the human log.
  */
 export interface PushRecordError {
-  entityName: string;
+  entityName: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /** Source file path of the offending record, when known. */
-  path?: string;
+  path?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
   /** Display form of the primary key, e.g. "ID=85B8…". */
-  primaryKey?: string;
-  message: string;
+  primaryKey?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  message: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 export interface PushCallbacks {
@@ -83,12 +110,12 @@ export interface PushCallbacks {
  * "Changes" recap so actual mutations stand out from a sea of unchanged records.
  */
 export interface RecordChangeDetail {
-  entityName: string;
+  entityName: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /** Display form of the primary key, e.g. "ID: 85B8…14C7". */
-  primaryKey: string;
-  operation: 'created' | 'updated' | 'deleted';
+  primaryKey: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  Operation: 'created' | 'updated' | 'deleted';
   /** Field-level diffs (updates only); empty for creates/deletes. */
-  fields: Array<{ field: string; oldValue: string; newValue: string }>;
+  fields: Array<{ field: string; oldValue: string; newValue: string }>;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 export interface PushResult {
@@ -103,16 +130,25 @@ export interface PushResult {
   sqlLogPath?: string;
   /** Structured per-record changes captured during the push, for the changes recap. */
   changeLog: RecordChangeDetail[];
+  /** Folders skipped because their pushWhen variable was not true. */
+  SkippedDirectories?: SkippedDirectory[];
 }
 
 export interface EntityPushResult {
-  created: number;
-  updated: number;
-  unchanged: number;
-  deleted: number;
-  skipped: number;
-  deferred: number;
-  errors: number;
+  created: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  updated: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  unchanged: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  deleted: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  skipped: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  deferred: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  errors: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+}
+
+/** An env-sourced composition child field that is registered with the SQL log redactor at its owner's save. */
+interface PendingEnvSqlChildField {
+  Target: BaseEntity;
+  FieldName: string;
+  Variables: ReadonlySet<string>;
 }
 
 /**
@@ -136,6 +172,8 @@ interface DeferredRecord {
   entityDir: string;
   /** The entity configuration */
   entityConfig: EntityConfig;
+  /** The batch context of the main pass, so the retry finds the parents of a deferred child */
+  batchContext?: BatchContext;
 }
 
 /**
@@ -156,17 +194,105 @@ interface ProcessRecordResult {
   warnings?: string[];
 }
 
+/** Everything one push run needs, passed between the phase helpers. */
+interface PushRun {
+  entityDirs: string[];
+  deletionAudit: DeletionAudit | null;
+  options: PushOptions;
+  fileBackupManager: FileBackupManager;
+  callbacks?: PushCallbacks;
+  /** The sync root: holds the root settings, and incremental state keys are relative to it. */
+  syncRootDir: string;
+  /** True when the push runs over a folder below the sync root, so pruning stays inside the pushed folders. */
+  belowSyncRoot: boolean;
+}
+
+/** One JSON file's graphs, run level by level. */
+interface FileGraphRun {
+  filePath: string;
+  entityDir: string;
+  entityConfig: EntityConfig;
+  options: PushOptions;
+  callbacks?: PushCallbacks;
+  batchContext: BatchContextIndex;
+  levels: FlattenedRecord[][];
+  /** Applies one record result to the directory counters. */
+  applyResult: (result: ProcessRecordResult) => void;
+  /** Record errors counted so far in this directory. */
+  errorCount: () => number;
+}
+
+type GraphRecordSuccess = {
+  success: true;
+  result: ProcessRecordResult;
+  record: FlattenedRecord;
+  graphId: string;
+  /** The graph's provider was at depth 0 after this save, so in isolated mode the write is committed. */
+  settled: boolean;
+};
+type GraphRecordFailure = { success: false; error: unknown; record: FlattenedRecord; graphId: string };
+type GraphRecordOutcome = GraphRecordSuccess | GraphRecordFailure;
+
+function emptyPushTotals(): EntityPushResult {
+  return { created: 0, updated: 0, unchanged: 0, deleted: 0, skipped: 0, deferred: 0, errors: 0 };
+}
+
+function addPushTotals(totals: EntityPushResult, result: EntityPushResult): void {
+  totals.created += result.created;
+  totals.updated += result.updated;
+  totals.unchanged += result.unchanged;
+  totals.deleted += result.deleted;
+  totals.skipped += result.skipped;
+  totals.deferred += result.deferred;
+  totals.errors += result.errors;
+}
+
+/** The status a committed write is reported with, or undefined when the result wrote nothing. */
+function committedStatusOf(result: ProcessRecordResult): CommittedWrite['status'] | undefined {
+  if (result.isDuplicate || result.isDeletedRecord) {
+    return undefined;
+  }
+  if (result.status === 'updated') {
+    return 'updated';
+  }
+  if (result.status === 'created' || result.status === 'deferred') {
+    return 'created';
+  }
+  return undefined;
+}
+
 export class PushService {
   private syncEngine: SyncEngine;
   private contextUser: UserInfo;
   private warnings: string[] = [];
-  private changeDetails: RecordChangeDetail[] = [];
+  protected changeDetails: RecordChangeDetail[] = [];
   private syncConfig: SyncConfig | null = null;
   private deferredFileWrites: Map<string, DeferredFileWrite> = new Map();
   private deferredRecords: DeferredRecord[] = [];
   private stateManager: SyncStateManager | undefined;
   private syncMetadataEngine: SyncMetadataEngine;
   private confirmedCollections: Set<string> = new Set<string>();
+  /** Write mode per entity directory, resolved once at the start of the push. */
+  private directoryModes: Map<string, PushWriteMode> = new Map();
+  /** The directory being processed right now, and how it writes. */
+  private writeMode: PushWriteMode = 'shared';
+  private graphBatchSize = 1;
+  /** Counts so far, so a failed push can still report what it did. */
+  private runningTotals: EntityPushResult = emptyPushTotals();
+  /** The SQL log for this run, when one is being written. */
+  private sqlLogFilePath: string | undefined;
+  /** The open SQL log's redactor and lookup-create hook; null when no log is open. */
+  private envSqlLog: EnvSqlLog | null = null;
+  /** Composition child fields waiting for their owner's save, by the owner record's resolution collector. */
+  private pendingEnvSqlChildFields = new WeakMap<SyncResolutionCollector, PendingEnvSqlChildField[]>();
+  /** Non-atomic mode: creates and updates that were committed outside the push transaction. */
+  private committedWrites: CommittedWrite[] = [];
+  /** Incremental state, applied only after the push commits. Keyed by path relative to the sync root. */
+  private pendingChecksums: Map<string, string> = new Map();
+  private pushedEntityDirs: string[] = [];
+  private skippedDirectories: SkippedDirectory[] = [];
+  /** Errors whose record was already sent to onRecordError, so a caller does not report it twice. */
+  private reportedRecordErrors = new WeakSet<Error>();
 
   constructor(syncEngine: SyncEngine, contextUser: UserInfo, stateManager?: SyncStateManager) {
     this.syncEngine = syncEngine;
@@ -180,8 +306,13 @@ export class PushService {
   }
 
   /** Set or replace the state manager after construction. */
-  setStateManager(stateManager: SyncStateManager): void {
+  SetStateManager(stateManager: SyncStateManager): void {
     this.stateManager = stateManager;
+  }
+
+  /** @deprecated Use {@link SetStateManager}. */
+  setStateManager(stateManager: SyncStateManager): void {
+    return this.SetStateManager(stateManager);
   }
 
   /**
@@ -256,7 +387,7 @@ export class PushService {
     };
   }
 
-  async push(options: PushOptions, callbacks?: PushCallbacks): Promise<PushResult> {
+  async Push(options: PushOptions, callbacks?: PushCallbacks): Promise<PushResult> {
     this.warnings = [];
     this.changeDetails = [];
     // Warnings the engine raises while resolving lookups belong in this push's result envelope,
@@ -276,16 +407,26 @@ export class PushService {
       throw new Error('Cannot specify both --include and --exclude options. Please use one or the other.');
     }
 
-    // Reset deferred tracking for this push operation
+    // Reset per-push tracking
     this.deferredFileWrites.clear();
     this.deferredRecords = [];
+    this.committedWrites = [];
+    this.pendingChecksums.clear();
+    this.pushedEntityDirs = [];
+    this.skippedDirectories = [];
+    this.directoryModes.clear();
+    this.runningTotals = emptyPushTotals();
+    this.sqlLogFilePath = undefined;
+    this.closeEnvSqlRedactor();
     
     const fileBackupManager = new FileBackupManager();
     
     // Load sync config for SQL logging settings and autoCreateMissingRecords flag
-    // If dir option is specified, load from that directory, otherwise use original CWD
-    const configDir = options.dir ? path.resolve(configManager.getOriginalCwd(), options.dir) : configManager.getOriginalCwd();
-    this.syncConfig = await loadSyncConfig(configDir);
+    // With the dir option, load from the sync root at or above that directory, otherwise from the original CWD
+    const folders = await ResolvePushFolders(configManager.getOriginalCwd(), options.dir, options.include, options.exclude);
+    const configDir = folders.ConfigDir;
+    const syncRootDir = folders.SyncRootDir;
+    this.syncConfig = folders.SyncConfig;
     
     // Display warnings for special flags that are enabled
     if (this.syncConfig?.push?.alwaysPush && !options.dryRun) {
@@ -294,17 +435,17 @@ export class PushService {
     if (this.syncConfig?.push?.autoCreateMissingRecords && !options.dryRun) {
       callbacks?.onWarn?.('\n🔧 WARNING: autoCreateMissingRecords is enabled - Missing records with primaryKey will be created\n');
     }
-    
     if (options.verbose) {
       callbacks?.onLog?.(`Original working directory: ${configManager.getOriginalCwd()}`);
       callbacks?.onLog?.(`Config directory (with dir option): ${configDir}`);
-      callbacks?.onLog?.(`Config file path: ${path.join(configDir, '.mj-sync.json')}`);
+      callbacks?.onLog?.(`Config file path: ${path.join(syncRootDir, '.mj-sync.json')}`);
       callbacks?.onLog?.(`Full sync config loaded: ${JSON.stringify(this.syncConfig, null, 2)}`);
       callbacks?.onLog?.(`SQL logging config: ${JSON.stringify(this.syncConfig?.sqlLogging)}`);
     }
     
     const sqlLogger = new SQLLogger(this.syncConfig);
-    const transactionManager = new TransactionManager(sqlLogger);
+    // The push transaction lives on the same provider every atomic save runs on.
+    const transactionManager = new TransactionManager(sqlLogger, this.hostProvider());
     
     if (options.verbose) {
       callbacks?.onLog?.(`SQLLogger enabled status: ${sqlLogger.enabled}`);
@@ -314,96 +455,19 @@ export class PushService {
     let sqlLoggingSession: SqlLoggingSession | null = null;
     
     try {
-      // Initialize SQL logger if enabled and not dry-run
-      if (sqlLogger.enabled && !options.dryRun) {
-        const provider = Metadata.Provider as GenericDatabaseProvider; // global-provider-ok: metadata sync operates on the configured provider only
-        
-        if (options.verbose) {
-          callbacks?.onLog?.(`SQL logging enabled: ${sqlLogger.enabled}`);
-          callbacks?.onLog?.(`Provider type: ${provider?.constructor?.name || 'Unknown'}`);
-          callbacks?.onLog?.(`Has CreateSqlLogger: ${typeof provider?.CreateSqlLogger === 'function'}`);
-        }
-        
-        if (provider && typeof provider.CreateSqlLogger === 'function') {
-          // Generate filename with timestamp
-          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-          const filename = this.syncConfig?.sqlLogging?.formatAsMigration
-            ? `MetadataSync_Push_${timestamp}.sql`
-            : `push_${timestamp}.sql`;
+      sqlLoggingSession = await this.startSqlLogging(sqlLogger, options, syncRootDir, callbacks);
 
-          // Use .sql-log-push directory in the config directory (where sync was initiated)
-          const outputDir = path.join(configDir, this.syncConfig?.sqlLogging?.outputDirectory || './sql-log-push');
-          const filepath = path.join(outputDir, filename);
-
-          // Ensure the directory exists
-          await fs.ensureDir(path.dirname(filepath));
-
-          // Create the SQL logging session
-          sqlLoggingSession = await provider.CreateSqlLogger(filepath, {
-            formatAsMigration: this.syncConfig?.sqlLogging?.formatAsMigration || false,
-            description: 'MetadataSync push operation',
-            statementTypes: "mutations",
-            prettyPrint: true,
-            // batchSeparator is intentionally omitted — CreateSqlLogger injects the platform-appropriate
-            // separator automatically (GO for SQL Server, nothing for PostgreSQL) via PlatformBatchSeparator.
-            filterPatterns: this.syncConfig?.sqlLogging?.filterPatterns,
-            filterType: this.syncConfig?.sqlLogging?.filterType,
-            verboseOutput: this.syncConfig?.sqlLogging?.verboseOutput || false,
-          });
-          
-          if (options.verbose) {
-            callbacks?.onLog?.(`📝 SQL logging enabled: ${filepath}`);
-          }
-        } else {
-          if (options.verbose) {
-            callbacks?.onWarn?.('SQL logging requested but provider does not support it');
-          }
-        }
-      }
-      
-      // Find entity directories to process
-      // Note: If options.dir is specified, configDir already points to that directory
-      // So we don't need to pass it as specificDir
-      const entityDirs = findEntityDirectories(
-        configDir,
-        undefined,
-        this.syncConfig?.directoryOrder,
-        this.syncConfig?.ignoreDirectories,
-        options.include,
-        options.exclude
-      );
-      
-      if (entityDirs.length === 0) {
-        throw new Error('No entity directories found');
+      const selection = folders.SelectDirectories();
+      const entityDirs = selection.Included;
+      this.skippedDirectories = selection.Skipped;
+      for (const skipped of selection.Skipped) {
+        callbacks?.onLog?.(SkippedDirectoryMessage(configDir, skipped));
       }
 
-      // Preload entities and cache files.
-      // We pass the SyncEngine's provider explicitly rather than reaching for
-      // Metadata.Provider — `mj sync` is single-process so they resolve to the
-      // same instance today, but routing through SyncEngine keeps the wiring
-      // self-consistent and makes future provider plumbing trivial.
-      // Preload is internal plumbing — emit its progress only in verbose mode so a
-      // normal run jumps straight from validation to per-directory results.
-      if (options.verbose) {
-        callbacks?.onLog?.('⚡ Preloading metadata and caching files...');
-      }
-      this.syncMetadataEngine.setEntityDirs(entityDirs);
-      await this.syncMetadataEngine.Config(true, this.contextUser, this.syncEngine.getProvider());
-      for (const warning of this.syncMetadataEngine.drainWarnings()) {
-        callbacks?.onWarn?.(`   ⚠️  ${warning}`);
-      }
-      if (options.verbose) {
-        const delegations = this.syncMetadataEngine.getDelegationSummary();
-        if (delegations.length > 0) {
-          const donorCount = new Set(delegations.map(d => d.engineClassName)).size;
-          callbacks?.onLog?.(`   ↪ Reused in-memory caches for ${delegations.length} ${delegations.length === 1 ? 'entity' : 'entities'} already loaded by ${donorCount} ${donorCount === 1 ? 'engine' : 'engines'}`);
-          for (const d of delegations.sort((a, b) => a.entityName.localeCompare(b.entityName))) {
-            callbacks?.onLog?.(`      • ${d.entityName} ← ${d.engineClassName}`);
-          }
-        }
-        callbacks?.onLog?.('✓ Preload completed successfully\n');
-      }
-      
+      await this.applyWritePlan(entityDirs, options, callbacks);
+
+      await this.preloadMetadata(entityDirs, options, callbacks);
+
       if (options.verbose) {
         callbacks?.onLog?.(`Found ${entityDirs.length} entity ${entityDirs.length === 1 ? 'directory' : 'directories'} to process`);
       }
@@ -415,15 +479,6 @@ export class PushService {
           callbacks?.onLog?.('📁 File backup manager initialized');
         }
       }
-      
-      // Process each entity directory
-      let totalCreated = 0;
-      let totalUpdated = 0;
-      let totalUnchanged = 0;
-      let totalDeleted = 0;
-      let totalSkipped = 0;
-      let totalDeferred = 0;
-      let totalErrors = 0;
       
       // PHASE 0: Audit all deletions across all entities (if any exist)
       let deletionAudit: DeletionAudit | null = null;
@@ -438,25 +493,7 @@ export class PushService {
       if (!options.dryRun && deletionAudit) {
         const shouldProceed = await this.promptForConfirmation(deletionAudit, callbacks);
         if (!shouldProceed) {
-          callbacks?.onLog?.('\n❌ Push operation cancelled by user.\n');
-
-          // Clean up SQL logging session and file if it was created
-          if (sqlLoggingSession) {
-            const sqlLogPath = sqlLoggingSession.filePath;
-            try {
-              await sqlLoggingSession.dispose();
-              // Delete the empty SQL log file since no operations occurred
-              if (await fs.pathExists(sqlLogPath)) {
-                await fs.remove(sqlLogPath);
-                if (options.verbose) {
-                  callbacks?.onLog?.(`🗑️  Removed empty SQL log file: ${sqlLogPath}`);
-                }
-              }
-            } catch (cleanupError) {
-              callbacks?.onWarn?.(`Failed to clean up SQL logging session: ${cleanupError}`);
-            }
-          }
-
+          await this.cancelPush(sqlLoggingSession, options, callbacks);
           return {
             created: 0,
             updated: 0,
@@ -466,151 +503,25 @@ export class PushService {
             deferred: 0,
             errors: 0,
             warnings: this.warnings,
-            changeLog: this.changeDetails
+            changeLog: this.changeDetails,
+            SkippedDirectories: this.skippedDirectories
           };
         }
       }
 
-      // Host TX wraps Phase 2 deletions and Phase 2.5 deferred records.
-      // Phase 1 graph writes go to independent instances (or, if those are
-      // unavailable, ALL graphs share this host TX — never a mix).
+      // One host transaction wraps the whole push. In atomic mode (the default) Phase 1 saves run
+      // on the host too, one graph at a time. A directory using isolated transactions commits on
+      // independent instances as it goes (see lib/push-write-mode.ts).
       if (!options.dryRun) {
         await transactionManager.beginTransaction();
       }
 
-      try {
-        // PHASE 1: Process creates/updates for all entities
-        if (options.verbose) {
-          callbacks?.onLog?.('📝 Processing creates and updates...\n');
-        }
+      const totals = await this.runPushInTransaction(
+        { entityDirs, deletionAudit, options, fileBackupManager, callbacks, syncRootDir, belowSyncRoot: syncRootDir !== configDir },
+        transactionManager
+      );
 
-        for (const [dirIdx, entityDir] of entityDirs.entries()) {
-          // "X of N" position prefix — only when there's more than one directory, so a
-          // single-directory push stays uncluttered.
-          const progressPrefix = entityDirs.length > 1 ? `[${dirIdx + 1}/${entityDirs.length}] ` : '';
-
-          const entityConfig = await loadEntityConfig(entityDir);
-          if (!entityConfig) {
-            const warning = `Skipping ${entityDir} - no valid entity configuration`;
-            this.warnings.push(warning);
-            callbacks?.onWarn?.(warning);
-            totalSkipped++; // Count skipped directories
-            continue;
-          }
-
-          // Show folder with spinner at start. The folder header is redundant in a
-          // normal run (the per-directory result line below names the directory), so
-          // it's verbose-only; the live spinner still shows "[X/N] Processing <dir>…".
-          const dirName = path.relative(process.cwd(), entityDir) || '.';
-          if (options.verbose) {
-            callbacks?.onLog?.(`\n📁 ${dirName}:`);
-          }
-
-          // Use onProgress for animated spinner if available
-          if (callbacks?.onProgress) {
-            callbacks.onProgress(`${progressPrefix}Processing ${dirName}...`);
-          } else {
-            callbacks?.onLog?.(`   ⏳ Processing...`);
-          }
-          
-          if (options.verbose && callbacks?.onLog) {
-            callbacks.onLog(`Processing ${entityConfig.entity} in ${entityDir}`);
-          }
-          
-          const result = await this.processEntityDirectory(
-            entityDir,
-            entityConfig,
-            options,
-            fileBackupManager,
-            callbacks,
-            configDir
-          );
-          
-          // Per-directory result: one compact line (always), naming the directory and
-          // its changes — or "no changes" for a clean dir. The detailed per-status
-          // breakdown is verbose-only since the final summary box already aggregates it.
-          const dirTotal = result.created + result.updated + result.unchanged + result.deleted + result.skipped;
-          const { text: dirSummary, changed: dirChanged } = this.formatDirectorySummary(progressPrefix, dirName, result, dirTotal);
-          if (callbacks?.onProgress && callbacks?.onSuccess) {
-            callbacks.onSuccess(dirSummary, dirChanged);
-          } else {
-            callbacks?.onLog?.(`   ${dirSummary}`);
-          }
-
-          if (options.verbose && (dirTotal > 0 || result.errors > 0)) {
-            callbacks?.onLog?.(`   Total processed: ${dirTotal} records`);
-            if (result.created > 0) {
-              callbacks?.onLog?.(`   ✓ Created: ${result.created}`);
-            }
-            if (result.updated > 0) {
-              callbacks?.onLog?.(`   ✓ Updated: ${result.updated}`);
-            }
-            if (result.deleted > 0) {
-              callbacks?.onLog?.(`   ✓ Deleted: ${result.deleted}`);
-            }
-            if (result.deferred > 0) {
-              callbacks?.onLog?.(`   ⏳ Deferred: ${result.deferred}`);
-            }
-            if (result.unchanged > 0) {
-              callbacks?.onLog?.(`   - Unchanged: ${result.unchanged}`);
-            }
-            if (result.skipped > 0) {
-              callbacks?.onLog?.(`   - Skipped: ${result.skipped}`);
-            }
-            if (result.errors > 0) {
-              callbacks?.onLog?.(`   ✗ Errors: ${result.errors}`);
-            }
-          }
-
-          totalCreated += result.created;
-          totalUpdated += result.updated;
-          totalUnchanged += result.unchanged;
-          totalDeleted += result.deleted;
-          totalSkipped += result.skipped;
-          totalDeferred += result.deferred;
-          totalErrors += result.errors;
-        }
-
-        // PHASE 2: Process deletions in reverse dependency order (if any exist)
-        if (deletionAudit && totalErrors === 0) {
-          const deletionResult = await this.processDeletionsFromAudit(deletionAudit, options, callbacks);
-          totalDeleted += deletionResult.deleted;
-          totalErrors += deletionResult.errors;
-        }
-
-        // PHASE 2.5: Process deferred records (for circular dependencies)
-        if (this.deferredRecords.length > 0 && totalErrors === 0) {
-          const deferredResult = await this.processDeferredRecords(options, callbacks);
-          totalCreated += deferredResult.created;
-          totalUpdated += deferredResult.updated;
-          totalErrors += deferredResult.errors;
-        }
-
-        // Commit transaction if successful
-        if (!options.dryRun && totalErrors === 0) {
-          await transactionManager.commitTransaction();
-        }
-
-        // PHASE 3: Write deferred files with updated deletion timestamps
-        if (!options.dryRun && totalErrors === 0 && this.deferredFileWrites.size > 0) {
-          await this.writeDeferredFiles(options, callbacks);
-        }
-      } catch (error) {
-        // Rollback transaction on error.
-        if (!options.dryRun) {
-          callbacks?.onLog?.('\n⚠️  Rolling back database transaction due to error...');
-          const rolledBack = await transactionManager.rollbackTransaction();
-          if (rolledBack) {
-            callbacks?.onLog?.('✓ Database transaction rolled back successfully\n');
-          } else {
-            callbacks?.onLog?.('❌ Database transaction rollback failed\n');
-          }
-        }
-        throw error;
-      }
-      
-      // Commit file backups if successful and not in dry-run mode
-      if (!options.dryRun && totalErrors === 0) {
+      if (!options.dryRun) {
         await fileBackupManager.cleanup();
         if (options.verbose) {
           callbacks?.onLog?.('✅ File backups committed');
@@ -628,23 +539,20 @@ export class PushService {
         await sqlLoggingSession.dispose();
         if (hadStatements) {
           sqlLogPath = filePath;
+          this.addEnvSqlWarnings(filePath, callbacks);
           if (options.verbose) {
             callbacks?.onLog?.(`📝 SQL log written to: ${filePath}`);
           }
         }
+        this.closeEnvSqlRedactor();
       }
       
       return {
-        created: totalCreated,
-        updated: totalUpdated,
-        unchanged: totalUnchanged,
-        deleted: totalDeleted,
-        skipped: totalSkipped,
-        deferred: totalDeferred,
-        errors: totalErrors,
+        ...totals,
         warnings: this.warnings,
         sqlLogPath,
-        changeLog: this.changeDetails
+        changeLog: this.changeDetails,
+        SkippedDirectories: this.skippedDirectories
       };
 
     } catch (error) {
@@ -662,15 +570,516 @@ export class PushService {
       if (sqlLoggingSession) {
         try {
           await sqlLoggingSession.dispose();
+          if (await fs.pathExists(sqlLoggingSession.filePath)) {
+            this.addEnvSqlWarnings(sqlLoggingSession.filePath, callbacks);
+          }
         } catch (disposeError) {
           callbacks?.onWarn?.(`Failed to close SQL logging session: ${disposeError}`);
+        } finally {
+          this.closeEnvSqlRedactor();
         }
       }
       
       throw error;
     }
   }
+
+  /** @deprecated Use {@link Push}. */
+  async push(options: PushOptions, callbacks?: PushCallbacks): Promise<PushResult> {
+    return this.Push(options, callbacks);
+  }
   
+  /** Open the SQL logging session when the config asks for one and this is not a dry run. */
+  private async startSqlLogging(
+    sqlLogger: SQLLogger,
+    options: PushOptions,
+    syncRootDir: string,
+    callbacks?: PushCallbacks
+  ): Promise<SqlLoggingSession | null> {
+    let sqlLoggingSession: SqlLoggingSession | null = null;
+    if (sqlLogger.enabled && !options.dryRun) {
+      const provider = Metadata.Provider as GenericDatabaseProvider; // global-provider-ok: metadata sync operates on the configured provider only
+      
+      if (options.verbose) {
+        callbacks?.onLog?.(`SQL logging enabled: ${sqlLogger.enabled}`);
+        callbacks?.onLog?.(`Provider type: ${provider?.constructor?.name || 'Unknown'}`);
+        callbacks?.onLog?.(`Has CreateSqlLogger: ${typeof provider?.CreateSqlLogger === 'function'}`);
+      }
+      
+      if (provider && typeof provider.CreateSqlLogger === 'function') {
+        // Generate filename with timestamp
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = this.syncConfig?.sqlLogging?.formatAsMigration
+          ? `MetadataSync_Push_${timestamp}.sql`
+          : `push_${timestamp}.sql`;
+
+        // The SQL log folder is relative to the sync root
+        const outputDir = path.join(syncRootDir, this.syncConfig?.sqlLogging?.outputDirectory || './sql-log-push');
+        const filepath = path.join(outputDir, filename);
+
+        // Ensure the directory exists
+        await fs.ensureDir(path.dirname(filepath));
+
+        // Create the SQL logging session
+        this.sqlLogFilePath = filepath;
+        this.envSqlLog = new EnvSqlLog(this.syncEngine);
+        sqlLoggingSession = await provider.CreateSqlLogger(filepath, {
+          TransformStatement: this.envSqlLog.Redactor.Transform,
+          formatAsMigration: this.syncConfig?.sqlLogging?.formatAsMigration || false,
+          description: 'MetadataSync push operation',
+          statementTypes: "mutations",
+          prettyPrint: true,
+          // batchSeparator is intentionally omitted — CreateSqlLogger injects the platform-appropriate
+          // separator automatically (GO for SQL Server, nothing for PostgreSQL) via PlatformBatchSeparator.
+          filterPatterns: this.syncConfig?.sqlLogging?.filterPatterns,
+          filterType: this.syncConfig?.sqlLogging?.filterType,
+          verboseOutput: this.syncConfig?.sqlLogging?.verboseOutput || false,
+        });
+        
+        if (options.verbose) {
+          callbacks?.onLog?.(`📝 SQL logging enabled: ${filepath}`);
+        }
+      } else {
+        if (options.verbose) {
+          callbacks?.onWarn?.('SQL logging requested but provider does not support it');
+        }
+      }
+    }
+    return sqlLoggingSession;
+  }
+
+  /**
+   * Preload entity metadata and cache the files on disk.
+   *
+   * The SyncEngine's provider is passed explicitly rather than reaching for Metadata.Provider —
+   * `mj sync` is single-process so they resolve to the same instance today, but routing through
+   * SyncEngine keeps the wiring self-consistent.
+   */
+  private async preloadMetadata(entityDirs: string[], options: PushOptions, callbacks?: PushCallbacks): Promise<void> {
+    // We pass the SyncEngine's provider explicitly rather than reaching for
+    // Metadata.Provider — `mj sync` is single-process so they resolve to the
+    // same instance today, but routing through SyncEngine keeps the wiring
+    // self-consistent and makes future provider plumbing trivial.
+    // Preload is internal plumbing — emit its progress only in verbose mode so a
+    // normal run jumps straight from validation to per-directory results.
+    if (options.verbose) {
+      callbacks?.onLog?.('⚡ Preloading metadata and caching files...');
+    }
+    this.syncMetadataEngine.setEntityDirs(entityDirs);
+    await this.syncMetadataEngine.Config(true, this.contextUser, this.syncEngine.getProvider());
+    for (const warning of this.syncMetadataEngine.drainWarnings()) {
+      callbacks?.onWarn?.(`   ⚠️  ${warning}`);
+    }
+    if (options.verbose) {
+      const delegations = this.syncMetadataEngine.getDelegationSummary();
+      if (delegations.length > 0) {
+        const donorCount = new Set(delegations.map(d => d.engineClassName)).size;
+        callbacks?.onLog?.(`   ↪ Reused in-memory caches for ${delegations.length} ${delegations.length === 1 ? 'entity' : 'entities'} already loaded by ${donorCount} ${donorCount === 1 ? 'engine' : 'engines'}`);
+        for (const d of delegations.sort((a, b) => a.entityName.localeCompare(b.entityName))) {
+          callbacks?.onLog?.(`      • ${d.entityName} ← ${d.engineClassName}`);
+        }
+      }
+      callbacks?.onLog?.('✓ Preload completed successfully\n');
+    }
+  }
+
+  /** The user declined the deletion prompt: drop an empty SQL log and say nothing happened. */
+  private async cancelPush(
+    sqlLoggingSession: SqlLoggingSession | null,
+    options: PushOptions,
+    callbacks?: PushCallbacks
+  ): Promise<void> {
+        callbacks?.onLog?.('\n❌ Push operation cancelled by user.\n');
+
+        // Clean up SQL logging session and file if it was created
+        if (sqlLoggingSession) {
+          const sqlLogPath = sqlLoggingSession.filePath;
+          try {
+            await sqlLoggingSession.dispose();
+            // Delete the empty SQL log file since no operations occurred
+            if (await fs.pathExists(sqlLogPath)) {
+              await fs.remove(sqlLogPath);
+              if (options.verbose) {
+                callbacks?.onLog?.(`🗑️  Removed empty SQL log file: ${sqlLogPath}`);
+              }
+            }
+          } catch (cleanupError) {
+            callbacks?.onWarn?.(`Failed to clean up SQL logging session: ${cleanupError}`);
+          } finally {
+            this.closeEnvSqlRedactor();
+          }
+        }
+  }
+
+  /** Drops the SQL log redactor and this push's lookup-create hook, after the log is closed. */
+  private closeEnvSqlRedactor(): void {
+    this.envSqlLog?.Close();
+    this.envSqlLog = null;
+  }
+
+  /**
+   * Decide, once and up front, how each entity directory writes: shared by default, isolated where
+   * the entity (or the root, or the CLI flag) asks for it. Deciding it here means a push can never
+   * discover mid-file that it must change topology, which is the mixed-provider deadlock.
+   */
+  private async applyWritePlan(entityDirs: string[], options: PushOptions, callbacks?: PushCallbacks): Promise<void> {
+    const isolated: string[] = [];
+    for (const entityDir of entityDirs) {
+      const entityConfig = await loadEntityConfig(entityDir);
+      const resolved = ResolveDirectoryMode({
+        isolatedFlag: options.isolatedTransactions,
+        entityIsolated: entityConfig?.push?.isolatedTransactions,
+        rootIsolated: this.syncConfig?.push?.isolatedTransactions,
+      });
+      this.directoryModes.set(entityDir, resolved.mode);
+      if (resolved.mode === 'isolated') {
+        isolated.push(path.relative(process.cwd(), entityDir) || entityDir);
+      }
+      if (options.verbose) {
+        callbacks?.onLog?.(`   ${path.relative(process.cwd(), entityDir) || entityDir}: ${resolved.mode} (from ${resolved.source})`);
+      }
+    }
+
+    if (isolated.length > 0) {
+      await this.confirmIsolatedTransactions(isolated, options, callbacks);
+    } else if (options.parallelBatchSize !== undefined && options.parallelBatchSize !== 1) {
+      this.addWarning(UnusedBatchSizeWarning(options.parallelBatchSize), callbacks);
+    }
+  }
+
+  /**
+   * Isolation needs independent provider instances. Without them every directory runs shared,
+   * because the alternative — some graphs on the host, some on their own connection — is the
+   * deadlock the graph pool exists to prevent.
+   */
+  private async confirmIsolatedTransactions(isolated: string[], options: PushOptions, callbacks?: PushCallbacks): Promise<void> {
+    const reason = await ProbeIndependentInstances(this.hostProvider());
+    if (reason) {
+      this.addWarning(
+        `Independent provider instances are not available (${reason}), so every directory runs in the shared ` +
+          `push transaction: one transaction, one graph at a time.`,
+        callbacks
+      );
+      for (const dir of this.directoryModes.keys()) {
+        this.directoryModes.set(dir, 'shared');
+      }
+      return;
+    }
+    if (!options.dryRun) {
+      this.addWarning(IsolatedModeWarning(isolated, GraphBatchSizeFor('isolated', options.parallelBatchSize)), callbacks);
+    }
+  }
+
+  /** Adopt one directory's mode for the work about to run in it. */
+  private useDirectoryMode(entityDir: string, options: PushOptions): void {
+    this.writeMode = this.directoryModes.get(entityDir) ?? 'shared';
+    this.graphBatchSize = GraphBatchSizeFor(this.writeMode, options.parallelBatchSize);
+  }
+
+  private addWarning(message: string, callbacks?: PushCallbacks): void {
+    this.warnings.push(message);
+    callbacks?.onWarn?.(`⚠️  ${message}`);
+  }
+
+  /** The process-wide provider that owns the push transaction. */
+  private hostProvider(): DatabaseProviderBase {
+    return Metadata.Provider as unknown as DatabaseProviderBase; // global-provider-ok: mj sync is single-process; this provider owns the push transaction
+  }
+
+  /**
+   * When a directory wrote a metadata-dataset entity, reload inside the push transaction so the
+   * next directory sees those rows (MJ#4836). Dry runs never reload.
+   *
+   * `since` is an index into `changeDetails`. Pass the index from before one directory to reload
+   * only for that directory. Pass the index from the start of Phase 2 before Phase 2.5 so a
+   * deletion recorded after the per-directory reloads still reloads, without repeating them.
+   */
+  private async reloadMetadataIfTouched(since: number, dryRun: boolean): Promise<void> {
+    if (dryRun) {
+      return;
+    }
+    const host = this.hostProvider();
+    const touched = this.changeDetails.slice(since).some((change) => host.IsMetadataDatasetMember(change.entityName));
+    if (touched) {
+      await host.RefreshWithinTransaction();
+    }
+  }
+
+  /**
+   * After a rollback, drop any metadata the within-transaction reloads copied in. A pool read
+   * sees only committed rows. A failure here must not hide the rollback error.
+   */
+  private async refreshHostMetadataAfterRollback(callbacks?: PushCallbacks): Promise<void> {
+    try {
+      await this.hostProvider().Refresh();
+    } catch (refreshError) {
+      const message = refreshError instanceof Error ? refreshError.message : String(refreshError);
+      callbacks?.onWarn?.(`⚠️  Metadata could not be reloaded after the push rolled back: ${message}`);
+    }
+  }
+
+  /**
+   * Run every phase inside the push transaction, commit it, then do the post-commit work.
+   * Never returns or throws with the transaction still open.
+   */
+  private async runPushInTransaction(run: PushRun, transactionManager: TransactionManager): Promise<EntityPushResult> {
+    let committed = false;
+    try {
+      const totals = await this.runPushPhases(run);
+      if (!run.options.dryRun) {
+        await this.commitPushTransaction(transactionManager);
+        committed = true;
+        // PHASE 3: files that contained deletions, then the incremental state
+        await this.writeDeferredFiles(run.options, run.callbacks);
+        await this.persistIncrementalState(run.syncRootDir, run.belowSyncRoot);
+      }
+      return totals;
+    } catch (error) {
+      if (committed) {
+        throw await this.failAfterCommit(error, run);
+      }
+      throw await this.abortPush(error, transactionManager, run);
+    } finally {
+      await this.ensureTransactionClosed(transactionManager, run.callbacks);
+    }
+  }
+
+  /** Phases 1, 2 and 2.5. Any failure throws; counted errors only survive a dry run. */
+  private async runPushPhases(run: PushRun): Promise<EntityPushResult> {
+    const { options, callbacks } = run;
+    if (options.verbose) {
+      callbacks?.onLog?.('📝 Processing creates and updates...\n');
+    }
+    // PHASE 1: creates and updates
+    const totals = await this.processAllEntityDirectories(run);
+
+    // Taken before any Phase 2 write. Each directory already reloaded after its own writes,
+    // so Phase 2 does not reload again. Phase 2.5 uses this index: a deletion lands in
+    // changeDetails after it, and that is the only reason to reload again (MJ#4836).
+    const changesBeforePhase2 = this.changeDetails.length;
+
+    // PHASE 2: deletions in reverse dependency order.
+    if (run.deletionAudit && totals.errors === 0) {
+      const deletionResult = await this.processDeletionsFromAudit(run.deletionAudit, options, callbacks);
+      totals.deleted += deletionResult.deleted;
+      totals.errors += deletionResult.errors;
+    }
+
+    // PHASE 2.5: deferred records (circular dependencies).
+    // Reload when a deletion since the start of Phase 2 touched a metadata dataset, so a
+    // deferred save sees that row gone. Directories already reloaded their own writes (MJ#4836).
+    if (this.deferredRecords.length > 0 && totals.errors === 0) {
+      await this.reloadMetadataIfTouched(changesBeforePhase2, options.dryRun);
+      const deferredResult = await this.processDeferredRecords(options, callbacks);
+      totals.created += deferredResult.created;
+      totals.updated += deferredResult.updated;
+      totals.errors += deferredResult.errors;
+    }
+
+    if (!options.dryRun && totals.errors > 0) {
+      throw new Error(`${totals.errors} record error${totals.errors === 1 ? '' : 's'} occurred; the push was not committed.`);
+    }
+    return totals;
+  }
+
+  private async commitPushTransaction(transactionManager: TransactionManager): Promise<void> {
+    try {
+      await transactionManager.commitTransaction();
+    } catch (error) {
+      throw new Error(DescribeCommitFailure(error, this.hostProvider()?.PlatformKey), { cause: error });
+    }
+  }
+
+  /** Roll back, say truthfully what is left in the database, and wrap the failure. */
+  private async abortPush(error: unknown, transactionManager: TransactionManager, run: PushRun): Promise<PushAbortedError> {
+    const { options, callbacks } = run;
+    let rolledBack = true;
+    if (!options.dryRun) {
+      callbacks?.onWarn?.('\n⚠️  Rolling back database transaction due to error...');
+      rolledBack = await transactionManager.rollbackTransaction();
+      if (rolledBack) {
+        // The within-transaction reloads copied uncommitted rows into memory. A pool read
+        // puts back only what survived the rollback (MJ#4836).
+        await this.refreshHostMetadataAfterRollback(callbacks);
+      }
+      await this.writeFilesWithCommittedRecords(run);
+      for (const line of DescribeRollbackOutcome(rolledBack, this.committedWrites, configManager.getOriginalCwd())) {
+        callbacks?.onWarn?.(line);
+      }
+    }
+    return new PushAbortedError({
+      modes: [...new Set(this.directoryModes.values())],
+      rolledBack,
+      committedWrites: [...this.committedWrites],
+      totals: { ...this.runningTotals },
+      sqlLogPath: this.sqlLogFilePath,
+      cause: error,
+    });
+  }
+
+  /**
+   * A file whose write was deferred to Phase 3 — it contains deletions — never reaches that phase
+   * when the push fails. In an isolated directory its creates are committed all the same, so write
+   * it now and keep it: otherwise the primary keys those rows were given exist only in the
+   * database, and the next push creates them a second time.
+   */
+  private async writeFilesWithCommittedRecords(run: PushRun): Promise<void> {
+    const committedFiles = new Set(this.committedWrites.map((w) => w.filePath));
+    for (const deferred of this.deferredFileWrites.values()) {
+      if (!committedFiles.has(deferred.filePath)) {
+        continue;
+      }
+      try {
+        const payload = deferred.isArray ? deferred.records : deferred.records[0];
+        await JsonWriteHelper.writeOrderedRecordData(deferred.filePath, payload);
+        this.syncMetadataEngine.invalidateCachedFile(deferred.filePath);
+        run.fileBackupManager.releaseBackup(deferred.filePath);
+        run.callbacks?.onWarn?.(
+          `   kept ${path.relative(configManager.getOriginalCwd(), deferred.filePath) || deferred.filePath}: ` +
+            `it holds records that are committed`
+        );
+      } catch (writeError) {
+        run.callbacks?.onWarn?.(
+          `Failed to write ${deferred.filePath} after a partial push: ${writeError instanceof Error ? writeError.message : String(writeError)}`
+        );
+      }
+    }
+  }
+
+  /**
+   * The database already committed, so the metadata files must keep what they were written with.
+   * Drop the file backups so the caller's error path does not restore stale files.
+   */
+  private async failAfterCommit(error: unknown, run: PushRun): Promise<unknown> {
+    await run.fileBackupManager.cleanup();
+    const message = error instanceof Error ? error.message : String(error);
+    run.callbacks?.onWarn?.(
+      `⚠️  The database changes were committed, but a step after the commit failed: ${message}. ` +
+        `Some metadata files or the incremental state may not match the database; run the push again to bring them in line.`
+    );
+    return error;
+  }
+
+  private async ensureTransactionClosed(transactionManager: TransactionManager, callbacks?: PushCallbacks): Promise<void> {
+    if (!transactionManager.isInTransaction) {
+      return;
+    }
+    const rolledBack = await transactionManager.rollbackTransaction();
+    callbacks?.onWarn?.(
+      rolledBack
+        ? '⚠️  The push transaction was still open when the push ended, so it was rolled back.'
+        : '❌ The push transaction was still open when the push ended, and rolling it back failed.'
+    );
+  }
+
+  /** Apply incremental checksums and push timestamps. Called only after the push commits. */
+  private async persistIncrementalState(syncRootDir: string, belowSyncRoot: boolean): Promise<void> {
+    if (!this.stateManager) {
+      return;
+    }
+    for (const [relativePath, checksum] of this.pendingChecksums) {
+      this.stateManager.setFileChecksum(relativePath, checksum);
+    }
+    const pushedAt = new Date().toISOString();
+    for (const relativeEntityDir of this.pushedEntityDirs) {
+      this.stateManager.setLastPushTimestamp(relativeEntityDir, pushedAt);
+    }
+    await this.stateManager.pruneStaleChecksums(syncRootDir, belowSyncRoot ? this.pushedEntityDirs : undefined);
+    await this.stateManager.save();
+  }
+
+  /** PHASE 1 over every entity directory, in order. */
+  private async processAllEntityDirectories(run: PushRun): Promise<EntityPushResult> {
+    const { entityDirs, options, callbacks } = run;
+    const totals = emptyPushTotals();
+    for (const [dirIdx, entityDir] of entityDirs.entries()) {
+      // "X of N" position prefix — only when there's more than one directory.
+      const progressPrefix = entityDirs.length > 1 ? `[${dirIdx + 1}/${entityDirs.length}] ` : '';
+      const entityConfig = await loadEntityConfig(entityDir);
+      if (!entityConfig) {
+        const warning = `Skipping ${entityDir} - no valid entity configuration`;
+        this.warnings.push(warning);
+        callbacks?.onWarn?.(warning);
+        totals.skipped++;
+        continue;
+      }
+      const dirName = path.relative(process.cwd(), entityDir) || '.';
+      this.useDirectoryMode(entityDir, options);
+      this.announceDirectory(dirName, progressPrefix, entityConfig.entity, entityDir, options, callbacks);
+      const firstChange = this.changeDetails.length;
+      const result = await this.processEntityDirectory(
+        entityDir, entityConfig, options, run.fileBackupManager, callbacks, run.syncRootDir
+      );
+      // Nested relatedEntities land in changeDetails under their own entity name, so the
+      // directory's configured entity is not what decides the reload (MJ#4836).
+      await this.reloadMetadataIfTouched(firstChange, options.dryRun);
+      this.reportDirectoryResult(progressPrefix, dirName, result, options, callbacks);
+      addPushTotals(totals, result);
+      addPushTotals(this.runningTotals, result);
+    }
+    return totals;
+  }
+
+  private announceDirectory(
+    dirName: string,
+    progressPrefix: string,
+    entityName: string,
+    entityDir: string,
+    options: PushOptions,
+    callbacks?: PushCallbacks
+  ): void {
+    // The folder header is verbose-only; the live spinner still shows "[X/N] Processing <dir>…".
+    if (options.verbose) {
+      callbacks?.onLog?.(`\n📁 ${dirName}:`);
+    }
+    if (callbacks?.onProgress) {
+      callbacks.onProgress(`${progressPrefix}Processing ${dirName}...`);
+    } else {
+      callbacks?.onLog?.(`   ⏳ Processing...`);
+    }
+    if (options.verbose) {
+      callbacks?.onLog?.(`Processing ${entityName} in ${entityDir}`);
+    }
+  }
+
+  /** One compact line per directory, plus the per-status breakdown in verbose mode. */
+  private reportDirectoryResult(
+    progressPrefix: string,
+    dirName: string,
+    result: EntityPushResult,
+    options: PushOptions,
+    callbacks?: PushCallbacks
+  ): void {
+    const dirTotal = result.created + result.updated + result.unchanged + result.deleted + result.skipped;
+    const { text: dirSummary, changed: dirChanged } = this.formatDirectorySummary(progressPrefix, dirName, result, dirTotal);
+    if (callbacks?.onProgress && callbacks?.onSuccess) {
+      callbacks.onSuccess(dirSummary, dirChanged);
+    } else {
+      callbacks?.onLog?.(`   ${dirSummary}`);
+    }
+    if (options.verbose && (dirTotal > 0 || result.errors > 0)) {
+      this.logDirectoryBreakdown(result, dirTotal, callbacks);
+    }
+  }
+
+  private logDirectoryBreakdown(result: EntityPushResult, dirTotal: number, callbacks?: PushCallbacks): void {
+    const lines: Array<[number, string]> = [
+      [result.created, `   ✓ Created: ${result.created}`],
+      [result.updated, `   ✓ Updated: ${result.updated}`],
+      [result.deleted, `   ✓ Deleted: ${result.deleted}`],
+      [result.deferred, `   ⏳ Deferred: ${result.deferred}`],
+      [result.unchanged, `   - Unchanged: ${result.unchanged}`],
+      [result.skipped, `   - Skipped: ${result.skipped}`],
+      [result.errors, `   ✗ Errors: ${result.errors}`],
+    ];
+    callbacks?.onLog?.(`   Total processed: ${dirTotal} records`);
+    for (const [count, line] of lines) {
+      if (count > 0) {
+        callbacks?.onLog?.(line);
+      }
+    }
+  }
+
   private async processEntityDirectory(
     entityDir: string,
     entityConfig: any,
@@ -689,21 +1098,15 @@ export class PushService {
     
     // Issue #4199: a push against an entity whose subclass is not loaded in this process
     // "succeeds" with a generic BaseEntity and silently skips the entity's custom logic. Say so.
-    const subclassWarning = describeMissingEntitySubclass(String(entityConfig.entity ?? ''), { dryRun: options.dryRun });
+    const subclassWarning = DescribeMissingEntitySubclass(String(entityConfig.entity ?? ''), { DryRun: options.dryRun });
     if (subclassWarning) {
       this.warnings.push(subclassWarning);
       callbacks?.onWarn?.(`⚠️  ${subclassWarning}`);
     }
 
     // Find all JSON files in the directory
-    const pattern = entityConfig.filePattern || '*.json';
-    const files = await fastGlob(pattern, {
-      cwd: entityDir,
-      absolute: true,
-      onlyFiles: true,
-      dot: true,
-      ignore: ['**/node_modules/**', '**/.mj-*.json']
-    });
+    const pattern = entityConfig.filePattern || DEFAULT_RECORD_FILE_PATTERN;
+    const files = await fastGlob(pattern, { ...RECORD_FILE_GLOB_OPTIONS, cwd: entityDir });
     
     if (options.verbose) {
       callbacks?.onLog?.(`Found ${files.length} files to process`);
@@ -765,6 +1168,9 @@ export class PushService {
         // Analyze dependencies and get sorted records
         const analyzer = new RecordDependencyAnalyzer();
         const analysisResult = await analyzer.analyzeFileRecords(records, entityConfig.entity);
+        for (const flattened of analysisResult.sortedRecords) {
+          flattened.FilePath = filePath;
+        }
         
         if (analysisResult.circularDependencies.length > 0) {
           callbacks?.onWarn?.(`⚠️  Circular dependencies detected in ${filePath}`);
@@ -777,19 +1183,9 @@ export class PushService {
           callbacks?.onLog?.(`   Analyzed ${analysisResult.sortedRecords.length} records (including nested)`);
         }
         
-        // Create batch context for in-memory entity resolution
-        // Note: While JavaScript is single-threaded, async operations can interleave.
-        // Map operations themselves are atomic, but we ensure records are added to
-        // the context AFTER successful save to maintain consistency.
+        // Records are added to the batch context only AFTER a successful save (applyProcessResult),
+        // so later lookups in this file see consistent state.
         const batchContext = new BatchContextIndex();
-
-        // One provider per JSON-root graph (Action + nested Action Params share a
-        // connection). Parallelize sibling roots only. Drain a graph when its last
-        // level finishes, or when TransactionDepth is already 0 (Save settled).
-        // Peak live independent instances is then the current batch plus any
-        // leftover-depth graphs still spanning later levels.
-        const hostProvider = Metadata.Provider as unknown as DatabaseProviderBase; // global-provider-ok: host provider template for GraphProviderPool cloning
-        const graphPool = new GraphProviderPool(hostProvider, (msg) => callbacks?.onLog?.(msg));
 
         const applyProcessResult = (result: ProcessRecordResult): void => {
           if (result.batchContextEntry) {
@@ -811,102 +1207,29 @@ export class PushService {
           else if (result.status === 'unchanged') unchanged++;
           else if (result.status === 'deleted') deleted++;
           else if (result.status === 'skipped') skipped++;
-          else if (result.status === 'error') {
-            // A non-throwing record error must not commit leftover graph depth —
-            // the previous per-record release rolled that work back.
-            errors++;
-            graphPool.markFailed();
-          }
+          else if (result.status === 'error') errors++;
           else if (result.status === 'deferred') {
             created++;
             deferred++;
           }
         };
 
-        // Fail-fast: the first thrown record error aborts the file. That is
-        // intentional and matches the parallel path; it is a change from the
-        // old sequential fallback, which continued after onError.
-        let runError: unknown;
-        try {
-          const levels =
-            analysisResult.dependencyLevels && analysisResult.dependencyLevels.length > 0
-              ? analysisResult.dependencyLevels
-              : [analysisResult.sortedRecords];
+        const levels =
+          analysisResult.dependencyLevels && analysisResult.dependencyLevels.length > 0
+            ? analysisResult.dependencyLevels
+            : [analysisResult.sortedRecords];
 
-          graphPool.noteLevels(levels);
-
-          for (let levelIndex = 0; levelIndex < levels.length; levelIndex++) {
-            const level = levels[levelIndex];
-            const byGraph = groupRecordsByGraphId(level);
-            const graphIds = Array.from(byGraph.keys());
-            const batchSize = options.parallelBatchSize || PARALLEL_BATCH_SIZE;
-
-            if (options.verbose && graphIds.length > 1) {
-              callbacks?.onLog?.(
-                `   Level ${levelIndex}: ${level.length} records in ${graphIds.length} graphs (parallel batch ${batchSize})`
-              );
-            }
-
-            for (let i = 0; i < graphIds.length; i += batchSize) {
-              const batchIds = graphIds.slice(i, i + batchSize);
-              const batchResults = await Promise.all(
-                batchIds.map(async (graphId) => {
-                  const recs = byGraph.get(graphId)!;
-                  const provider = await graphPool.obtain(graphId);
-                  const results: Array<
-                    | { success: true; result: ProcessRecordResult; record: FlattenedRecord; graphId: string }
-                    | { success: false; error: unknown; record: FlattenedRecord; graphId: string }
-                  > = [];
-                  for (const flattenedRecord of recs) {
-                    try {
-                      const result = await this.processFlattenedRecord(
-                        flattenedRecord,
-                        entityDir,
-                        options,
-                        batchContext,
-                        callbacks,
-                        entityConfig,
-                        true,
-                        provider as unknown as IMetadataProvider
-                      );
-                      results.push({ success: true, result, record: flattenedRecord, graphId });
-                    } catch (error) {
-                      graphPool.markFailed();
-                      results.push({ success: false, error, record: flattenedRecord, graphId });
-                      break;
-                    }
-                  }
-                  return results;
-                })
-              );
-
-              for (const graphResults of batchResults) {
-                for (const batchResult of graphResults) {
-                  if (batchResult.success === false) {
-                    const err = batchResult.error as Error;
-                    const rec = batchResult.record;
-                    callbacks?.onLog?.(`\n❌ Processing failed for ${rec.entityName} at ${rec.path}`);
-                    callbacks?.onLog?.(`   ${err.message}\n`);
-                    if (err.stack) {
-                      callbacks?.onLog?.(`   Stack: ${err.stack}\n`);
-                    }
-                    throw err;
-                  }
-                  applyProcessResult(batchResult.result);
-                }
-              }
-
-              const drainError = await graphPool.drainBatch(batchIds, levelIndex);
-              if (drainError) throw drainError;
-            }
-          }
-        } catch (e) {
-          graphPool.markFailed();
-          runError = e;
-        }
-        const settleError = await graphPool.releaseAll();
-        if (runError) throw runError;
-        if (settleError) throw settleError;
+        await this.runFileGraphs({
+          filePath,
+          entityDir,
+          entityConfig,
+          options,
+          callbacks,
+          batchContext,
+          levels,
+          applyResult: applyProcessResult,
+          errorCount: () => errors,
+        });
         
         // Check if this file has any deletion records (including nested relatedEntities)
         const hasDeletions = this.hasAnyDeletions(records);
@@ -932,15 +1255,20 @@ export class PushService {
             // Drop the cached snapshot — file on disk no longer matches it,
             // and any later reader within this push must see fresh contents.
             this.syncMetadataEngine.invalidateCachedFile(filePath);
+            // Non-atomic: this file's records are already committed, so a later failure must
+            // not restore the old file and lose their primary keys and sync blocks.
+            if (this.writeMode === 'isolated') {
+              fileBackupManager.releaseBackup(filePath);
+            }
           }
         }
 
-        // Update stored checksum after successful processing (reuse cached value if available)
+        // Remember the checksum; it is stored only after the push commits (persistIncrementalState).
         // Uses resolved content (after @include) so included-file changes are tracked.
         if (this.stateManager && syncRootDir) {
           const relativePath = path.relative(syncRootDir, filePath);
           const checksum = cachedChecksum ?? this.syncEngine.calculateChecksum(fileData);
-          this.stateManager.setFileChecksum(relativePath, checksum);
+          this.pendingChecksums.set(relativePath, checksum);
         }
       } catch (fileError) {
         // Error details already logged by lower-level handlers, just re-throw
@@ -948,15 +1276,205 @@ export class PushService {
       }
     }
 
-    // Persist push timestamp for this entity directory after all files processed
+    // The push timestamp for this directory is stored only after the push commits.
     if (this.stateManager && syncRootDir) {
-      const relativeEntityDir = path.relative(syncRootDir, entityDir);
-      this.stateManager.setLastPushTimestamp(relativeEntityDir, new Date().toISOString());
-      await this.stateManager.pruneStaleChecksums(syncRootDir);
-      await this.stateManager.save();
+      this.pushedEntityDirs.push(path.relative(syncRootDir, entityDir));
     }
 
     return { created, updated, unchanged, deleted, skipped, deferred, errors };
+  }
+
+  /**
+   * Run one file's JSON-root graphs, level by level. Atomic mode: one graph at a time on the host.
+   * Isolated mode: `graphBatchSize` graphs at once, each on its own independent instance.
+   * Fail-fast: the first failed record (thrown or `status: 'error'`) stops the file.
+   */
+  private async runFileGraphs(run: FileGraphRun): Promise<void> {
+    const pendingWrites = new Map<string, CommittedWrite[]>();
+    const pool = this.createGraphPool(pendingWrites, run.callbacks);
+    pool.noteLevels(run.levels);
+
+    let runError: unknown;
+    try {
+      for (let levelIndex = 0; levelIndex < run.levels.length; levelIndex++) {
+        await this.runGraphLevel(run, pool, pendingWrites, levelIndex);
+      }
+    } catch (e) {
+      pool.markFailed();
+      runError = e;
+    }
+    const settleError = await pool.releaseAll();
+    if (runError) throw runError;
+    if (settleError) throw settleError;
+  }
+
+  private createGraphPool(pendingWrites: Map<string, CommittedWrite[]>, callbacks?: PushCallbacks): GraphProviderPool {
+    return new GraphProviderPool(this.hostProvider(), {
+      mode: this.writeMode === 'isolated' ? 'independent' : 'host',
+      log: (msg) => callbacks?.onLog?.(msg),
+      onGraphSettled: (graphId, outcome) => this.recordGraphOutcome(pendingWrites, graphId, outcome),
+    });
+  }
+
+  /** Non-atomic mode: a graph whose instance committed leaves its writes in the database. */
+  private recordGraphOutcome(pendingWrites: Map<string, CommittedWrite[]>, graphId: string, outcome: GraphSettleOutcome): void {
+    const writes = pendingWrites.get(graphId);
+    pendingWrites.delete(graphId);
+    if (writes && outcome === 'committed') {
+      this.committedWrites.push(...writes);
+    }
+  }
+
+  private async runGraphLevel(
+    run: FileGraphRun,
+    pool: GraphProviderPool,
+    pendingWrites: Map<string, CommittedWrite[]>,
+    levelIndex: number
+  ): Promise<void> {
+    const byGraph = groupRecordsByGraphId(run.levels[levelIndex]);
+    const graphIds = Array.from(byGraph.keys());
+    const batchSize = this.graphBatchSize;
+    if (run.options.verbose && graphIds.length > 1) {
+      run.callbacks?.onLog?.(
+        `   Level ${levelIndex}: ${run.levels[levelIndex].length} records in ${graphIds.length} graphs (batch ${batchSize}, ${this.writeMode})`
+      );
+    }
+    for (let i = 0; i < graphIds.length; i += batchSize) {
+      const batchIds = graphIds.slice(i, i + batchSize);
+      const outcomes = await Promise.all(
+        batchIds.map((graphId) => this.runGraph(run, pool, graphId, byGraph.get(graphId) ?? []))
+      );
+      this.applyGraphOutcomes(run, pool, pendingWrites, outcomes.flat());
+      const drainError = await pool.drainBatch(batchIds, levelIndex);
+      if (drainError) throw drainError;
+    }
+  }
+
+  /** One graph's records, in order, on the graph's provider. Stops at the first thrown error. */
+  private async runGraph(
+    run: FileGraphRun,
+    pool: GraphProviderPool,
+    graphId: string,
+    records: FlattenedRecord[]
+  ): Promise<GraphRecordOutcome[]> {
+    const provider = await pool.obtain(graphId);
+    const outcomes: GraphRecordOutcome[] = [];
+    for (const record of records) {
+      try {
+        const result = await this.processFlattenedRecord(
+          record, run.entityDir, run.options, run.batchContext, run.callbacks, run.entityConfig, true,
+          provider as unknown as IMetadataProvider
+        );
+        // Read the depth NOW: a save that settled its own scope is already committed in isolated
+        // mode, and that is true whatever the rest of the graph goes on to do.
+        outcomes.push({ success: true, result, record, graphId, settled: provider.TransactionDepth === 0 });
+      } catch (error) {
+        pool.markFailed();
+        outcomes.push({ success: false, error, record, graphId });
+        break;
+      }
+    }
+    return outcomes;
+  }
+
+  /**
+   * Apply a batch's results. Successful writes are tracked first, so a failure still reports
+   * what isolated graphs committed. Then the first thrown error, or any counted record
+   * error outside a dry run, stops the push.
+   */
+  private applyGraphOutcomes(
+    run: FileGraphRun,
+    pool: GraphProviderPool,
+    pendingWrites: Map<string, CommittedWrite[]>,
+    outcomes: GraphRecordOutcome[]
+  ): void {
+    let firstFailure: GraphRecordFailure | undefined;
+    for (const outcome of outcomes) {
+      if (outcome.success === false) {
+        firstFailure ??= outcome;
+        continue;
+      }
+      run.applyResult(outcome.result);
+      if (outcome.result.status === 'error') {
+        // A non-throwing record error must not commit leftover graph depth.
+        pool.markFailed();
+      }
+      this.trackPendingWrite(pendingWrites, run.filePath, outcome);
+    }
+    if (firstFailure) {
+      this.throwRecordFailure(firstFailure, run.callbacks);
+    }
+    const errorCount = run.errorCount();
+    if (!run.options.dryRun && errorCount > 0) {
+      throw new Error(
+        `${errorCount} record${errorCount === 1 ? '' : 's'} in ${path.basename(run.filePath)} could not be pushed ` +
+          `(see the errors above). The push stops at the first failed record.`
+      );
+    }
+  }
+
+  private trackPendingWrite(pendingWrites: Map<string, CommittedWrite[]>, filePath: string, outcome: GraphRecordSuccess): void {
+    if (this.writeMode !== 'isolated') {
+      return; // shared: nothing commits before the push transaction does
+    }
+    const status = committedStatusOf(outcome.result);
+    if (!status) {
+      return;
+    }
+    const write: CommittedWrite = {
+      filePath,
+      entityName: outcome.record.entityName,
+      recordPath: outcome.record.path,
+      status,
+    };
+    if (outcome.settled) {
+      // Committed as it was saved. Reporting it now means a later rollback of the graph's leftover
+      // depth cannot make this write disappear from the report while its row is in the database.
+      this.committedWrites.push(write);
+      return;
+    }
+    const writes = pendingWrites.get(outcome.graphId) ?? [];
+    writes.push(write);
+    pendingWrites.set(outcome.graphId, writes);
+  }
+
+  private throwRecordFailure(failure: GraphRecordFailure, callbacks?: PushCallbacks): never {
+    const rec = failure.record;
+    const err = this.locateRecordError(failure.error instanceof Error ? failure.error : new Error(String(failure.error)), rec);
+    callbacks?.onLog?.(`\n❌ Processing failed for ${rec.entityName} at ${rec.path}`);
+    callbacks?.onLog?.(`   ${err.message}\n`);
+    if (err.stack) {
+      callbacks?.onLog?.(`   Stack: ${err.stack}\n`);
+    }
+    throw err;
+  }
+
+  /**
+   * For an unset `@env:` variable, an error that names the record file with the record's start line,
+   * the entity and the field: `/abs/file.json:12: Entity fields.Name uses @env:VAR, which is not set`.
+   * Other errors are returned as they are.
+   */
+  private locateRecordError(error: Error, record: FlattenedRecord): Error {
+    if (!(error instanceof EnvVariableNotSetError)) {
+      return error;
+    }
+    const field = error.Field ?? 'a field';
+    const message = `${this.recordLocation(record)}: ${error.EntityName ?? record.entityName} ${field} uses @env:${error.VariableName}, which is not set`;
+    return new Error(message, { cause: error });
+  }
+
+  /** `/abs/file.json:12` for a record from a file (the line where the record starts, when found), else the record path. */
+  private recordLocation(record: FlattenedRecord): string {
+    if (!record.FilePath) {
+      return record.path;
+    }
+    const filePath = path.resolve(record.FilePath);
+    try {
+      const line = RecordStartLine(fs.readFileSync(filePath, 'utf8'), record.path);
+      return line === undefined ? filePath : `${filePath}:${line}`;
+    } catch {
+      return filePath;
+    }
   }
 
   protected async processFlattenedRecord(
@@ -987,14 +1505,23 @@ export class PushService {
     // This ensures we can properly find parent entities even when they're new
     const lookupKey = recordId;
     
-    // Check if already in batch context
+    // Check if already in batch context; the deferred retry runs again for a record the main pass added
     const existingEntry = batchContext.get(lookupKey);
-    if (existingEntry) {
+    if (existingEntry && allowDefer) {
       // Already processed
       return { status: 'unchanged', isDuplicate: true };
     }
 
     let entity: BaseEntity;
+
+    // Parent entity from the batch context, for @parent refs in primaryKey
+    let parentEntity: BaseEntity | BatchContextStub | null = null;
+    if (parentContext) {
+      const parentRecordId = flattenedRecord.dependencies.values().next().value;
+      if (parentRecordId) {
+        parentEntity = batchContext.get(parentRecordId) || null;
+      }
+    }
 
     // Record-level skip (--incremental only): if the record has a stored
     // checksum and it matches the current fields, nothing changed — skip
@@ -1009,16 +1536,20 @@ export class PushService {
     // drift-correction behavior single-env workflows rely on, and prevents
     // silent no-ops when seeding a fresh DB from JSON files that already
     // carry stored checksums from another environment.
-    if (options.incremental && record.sync?.checksum && record.fields && record.primaryKey && !record.deleteRecord) {
+    // The deferred retry (allowDefer false) never takes this shortcut: the first pass left fields unsaved
+    if (allowDefer && options.incremental && record.sync?.checksum && record.fields && record.primaryKey && !record.deleteRecord) {
       // Use calculateChecksumWithFileContent so @file: reference changes are detected.
       // This reads local files (fast) rather than hitting the DB (slow). The stored
       // checksum was also computed with file content and composition payloads, so the comparison is apples-to-apples.
       const checksumPayload = this.buildRecordChecksumPayload(record);
       const currentChecksum = await this.syncEngine.calculateChecksumWithFileContent(checksumPayload, entityDir);
       if (currentChecksum === record.sync.checksum) {
-        // Lightweight stub — just enough for @parent:ID and @lookup resolution.
-        // No DB call, no entity framework overhead.
-        const allFields = { ...record.primaryKey, ...record.fields };
+        // Lightweight stub — just enough for @parent:ID and @lookup resolution. No entity load.
+        // @env:, @parent: and @owner: key values are resolved without a DB call, so a child's @parent:
+        // reference copies the value; other key values (such as @lookup:) stay raw.
+        const keyCollector: SyncResolutionCollector = { notes: [], fieldPrefix: 'primaryKey', EnvFields: new Map() };
+        const shortcutKey = await this.resolvePrimaryKey(record.primaryKey, entityDir, parentEntity, batchContext, keyCollector, recordProvider, true);
+        const allFields = { ...record.fields, ...shortcutKey };
         const stub = {
           EntityInfo: { Name: entityName, PrimaryKeys: Object.keys(record.primaryKey).map(k => ({ Name: k })), Fields: Object.keys(allFields).map(k => ({ Name: k })) },
           Get: (field: string) => allFields[field],
@@ -1037,47 +1568,20 @@ export class PushService {
       throw new Error(`Failed to create entity object for ${entityName}`);
     }
 
-    // Get parent entity from context if available (needed for @parent refs in primaryKey)
-    let parentEntity: BaseEntity | BatchContextStub | null = null;
-    if (parentContext) {
-      const parentRecordId = flattenedRecord.dependencies.values().next().value;
-      if (parentRecordId) {
-        parentEntity = batchContext.get(parentRecordId) || null;
-      }
-      if (!parentEntity) {
-        throw new Error(`Parent entity not found in batch context for ${entityName}. Parent dependencies: ${Array.from(flattenedRecord.dependencies).join(', ')}`);
-      }
+    if (parentContext && !parentEntity) {
+      throw new Error(`Parent entity not found in batch context for ${entityName}. Parent dependencies: ${Array.from(flattenedRecord.dependencies).join(', ')}`);
     }
 
     // Check if record exists
     // Process primaryKey values through processFieldValue to resolve @lookup, @parent, etc.
     // Create a resolution collector to track @lookup and @parent resolutions
-    const resolutionCollector: SyncResolutionCollector = { notes: [], fieldPrefix: 'primaryKey' };
+    const resolutionCollector: SyncResolutionCollector = { notes: [], fieldPrefix: 'primaryKey', EnvFields: new Map() };
+    // Reads the same EnvFields map, so fields recorded later are masked too
+    const envMask = new EnvDisplayMask(resolutionCollector.EnvFields);
 
-    let resolvedPrimaryKey: Record<string, any> | undefined;
+    let resolvedPrimaryKey: Record<string, unknown> | undefined;
     if (record.primaryKey && Object.keys(record.primaryKey).length > 0) {
-      resolvedPrimaryKey = {};
-      for (const [pkField, pkValue] of Object.entries(record.primaryKey)) {
-        try {
-          resolvedPrimaryKey[pkField] = await this.syncEngine.processFieldValue(
-            pkValue,
-            entityDir,
-            parentEntity,
-            null, // rootRecord
-            0,
-            batchContext,
-            resolutionCollector,
-            pkField,
-            recordProvider
-          );
-        } catch (pkError: unknown) {
-          // Check if this is a deferrable lookup error
-          if (pkError instanceof DeferrableLookupError) {
-            throw new Error(`Cannot defer lookup in primaryKey field '${pkField}': ${(pkError as DeferrableLookupError).message}. Primary key lookups must resolve immediately.`);
-          }
-          throw pkError;
-        }
-      }
+      resolvedPrimaryKey = await this.resolvePrimaryKey(record.primaryKey, entityDir, parentEntity, batchContext, resolutionCollector, recordProvider);
     }
 
     let exists = false;
@@ -1099,7 +1603,7 @@ export class PushService {
         // Record doesn't exist in database
         const autoCreate = this.syncConfig?.push?.autoCreateMissingRecords ?? false;
         const pkDisplay = Object.entries(resolvedPrimaryKey)
-          .map(([key, value]) => `${key}=${value}`)
+          .map(([key, value]) => `${key}=${envMask.NewValue(key, String(value))}`)
           .join(', ');
 
         if (!autoCreate) {
@@ -1138,12 +1642,35 @@ export class PushService {
 
     // Apply defaults if entityConfig is provided
     if (entityConfig) {
-      const defaults = await this.syncEngine.buildDefaults(flattenedRecord.path, entityConfig);
+      const defaultsCollector: SyncResolutionCollector = { notes: [], fieldPrefix: 'fields', EnvFields: new Map() };
+      // Folder defaults come from the record file's folders
+      const recordFile = flattenedRecord.FilePath ?? path.join(entityDir, '.record.json');
+      const skippedDefaults = new Map<string, string>();
+      const defaults = await this.syncEngine.buildDefaults(recordFile, entityConfig, defaultsCollector, skippedDefaults);
+
+      // Field names match the entity's fields without case; a default for a virtual property applies when the entity has that property
+      const recordFields = new RecordFieldNames(record.fields);
+
+      // A default left out for an unset optional variable warns when the record would have used it
+      for (const [field, variableName] of skippedDefaults) {
+        const name = EntityFieldName(entity, field) ?? (field in entity ? field : undefined);
+        if (name && !recordFields.Has(name)) {
+          const warning = OptionalEnvSkipMessage(entityName, name, variableName);
+          localWarnings.push(warning);
+          callbacks?.onWarn?.(`⚠️  ${warning}`);
+          AddSkippedOptionalEnvField(resolutionCollector.EnvFields, name, variableName);
+        }
+      }
 
       // Apply defaults only to fields not explicitly set in record.fields
       for (const [field, value] of Object.entries(defaults)) {
-        if (!(field in record.fields) && field in entity) {
-          entity.Set(field, value);
+        const name = EntityFieldName(entity, field) ?? (field in entity ? field : undefined);
+        if (name && !recordFields.Has(name)) {
+          entity.Set(name, value);
+          const variables = defaultsCollector.EnvFields?.get(field);
+          if (variables) {
+            resolutionCollector.EnvFields?.set(name, variables);
+          }
         }
       }
     }
@@ -1220,6 +1747,16 @@ export class PushService {
           entity.Set(fieldName, valueToSet);
         }
       } catch (fieldError: unknown) {
+        if (fieldError instanceof EnvVariableNotSetError) {
+          throw fieldError.ForField(`fields.${fieldName}`);
+        }
+        if (fieldError instanceof OptionalEnvMissingError) {
+          const warning = OptionalEnvSkipMessage(entityName, fieldName, fieldError.VariableName);
+          localWarnings.push(warning);
+          callbacks?.onWarn?.(`⚠️  ${warning}`);
+          AddSkippedOptionalEnvField(resolutionCollector.EnvFields, EntityFieldName(entity, fieldName) ?? fieldName, fieldError.VariableName);
+          continue;
+        }
         // Check if this is a deferrable lookup error first
         if (fieldError instanceof DeferrableLookupError) {
           // If allowDefer is false, we're in deferred processing mode - can't defer again
@@ -1326,20 +1863,6 @@ export class PushService {
       }
     }
     
-    if (options.dryRun) {
-      // Still add to batch context so child records at later dependency levels
-      // can resolve @parent references. Without this, dry-run fails on any
-      // metadata with parent-child nesting (e.g. Actions → Action Params).
-      const batchContextEntry = { key: lookupKey, entity };
-      if (exists) {
-        callbacks?.onLog?.(`[DRY RUN] Would update ${entityName} record`);
-        return { status: 'updated', batchContextEntry };
-      } else {
-        callbacks?.onLog?.(`[DRY RUN] Would create ${entityName} record`);
-        return { status: 'created', batchContextEntry };
-      }
-    }
-    
     // If updating an existing record that's dirty, capture what changed for the
     // end-of-run recap. The inline diff is verbose-only now: the recap is the default
     // surface, and emitting the diff mid-spinner previously garbled the spinner line.
@@ -1352,22 +1875,23 @@ export class PushService {
         const primaryKeyDisplay: string[] = [];
         if (entityInfo) {
           for (const pk of entityInfo.PrimaryKeys) {
-            primaryKeyDisplay.push(`${pk.Name}: ${entity.Get(pk.Name)}`);
+            primaryKeyDisplay.push(`${pk.Name}: ${envMask.NewValue(pk.Name, String(entity.Get(pk.Name)))}`);
           }
         }
 
         const fieldDiffs = changeKeys.map((fieldName) => {
           const field = entity.GetFieldByName(fieldName);
+          const envName = field?.Name ?? fieldName;
           return {
             field: fieldName,
-            oldValue: this.formatFieldValue(field ? field.OldValue : undefined),
-            newValue: this.formatFieldValue((changes as Record<string, unknown>)[fieldName]),
+            oldValue: envMask.OldValue(envName, this.formatFieldValue(field ? field.OldValue : undefined)),
+            newValue: envMask.NewValue(envName, this.formatFieldValue((changes as Record<string, unknown>)[fieldName])),
           };
         });
         this.changeDetails.push({
           entityName,
           primaryKey: primaryKeyDisplay.join(', '),
-          operation: 'updated',
+          Operation: 'updated',
           fields: fieldDiffs,
         });
 
@@ -1394,10 +1918,45 @@ export class PushService {
         status: 'unchanged',
       };
     }
+
+    // A dry run stops here, after the same change detection a real push uses, so an
+    // in-sync record reports unchanged above rather than "would update" (#4529).
+    if (options.dryRun) {
+      // Still add to batch context so child records at later dependency levels
+      // can resolve @parent references. Without this, dry-run fails on any
+      // metadata with parent-child nesting (e.g. Actions → Action Params).
+      const batchContextEntry = { key: lookupKey, entity };
+      if (exists) {
+        callbacks?.onLog?.(`[DRY RUN] Would update ${entityName} record`);
+        return { status: 'updated', batchContextEntry, warnings: localWarnings.length > 0 ? localWarnings : undefined };
+      } else {
+        callbacks?.onLog?.(`[DRY RUN] Would create ${entityName} record`);
+        // A real push records the create after Save; a dry run records it here so the
+        // recap counts it. Only a key the record declares is shown: NewRecord() assigns
+        // a throwaway UUID that changes every run and is never the one a push writes.
+        const entityInfo = this.syncEngine.getEntityInfo(entityName);
+        const primaryKeyDisplay = (entityInfo?.PrimaryKeys ?? [])
+          .filter((pk) => KeyFieldValue(resolvedPrimaryKey, pk.Name) != null || KeyFieldValue(record.fields, pk.Name) != null)
+          .map((pk) => `${pk.Name}: ${envMask.NewValue(pk.Name, String(KeyFieldValue(resolvedPrimaryKey, pk.Name) ?? entity.Get(pk.Name)))}`);
+        this.changeDetails.push({
+          entityName,
+          primaryKey: primaryKeyDisplay.length > 0 ? primaryKeyDisplay.join(', ') : 'new',
+          Operation: 'created',
+          fields: [],
+        });
+        return { status: 'created', batchContextEntry, warnings: localWarnings.length > 0 ? localWarnings : undefined };
+      }
+    }
     
+    this.registerEnvSqlFields(entity, resolutionCollector.EnvFields, isNew || alwaysPush);
+    this.registerPendingEnvSqlChildFields(resolutionCollector);
+
     // Save the record with detailed error logging
+    const keyBeforeSave = new Map(entity.PrimaryKeys.map((pk) => [pk.Name, entity.Get(pk.Name)]));
     const recordName = entity.Get('Name');
-    const entityRecordId = entity.Get('ID');
+    const recordKeyText = this.recordIdLabel(entity, envMask);
+    // Free error text can hold a value of any variable push resolved, composition children included
+    const errorTextMask = EnvDisplayMask.ForVariables(this.syncEngine.ResolvedEnvVariables);
     
     let saveResult;
     try {
@@ -1416,10 +1975,10 @@ export class PushService {
       };
 
       logError(`\n❌ SAVE EXCEPTION for ${entityName}`);
-      logError(`   Record ID: ${entityRecordId || 'NEW'}`);
-      logError(`   Record Name: ${recordName || 'N/A'}`);
+      logError(`   Record ID: ${recordKeyText}`);
+      logError(`   Record Name: ${recordName ? envMask.NewValue('Name', String(recordName)) : 'N/A'}`);
       logError(`   File Path: ${flattenedRecord.path}`);
-      logError(`   Error: ${saveError.message || saveError}`);
+      logError(`   Error: ${errorTextMask.MaskText(String(saveError.message || saveError))}`);
 
       // Check for specific error patterns
       if (saveError.message?.includes('Cannot insert the value NULL')) {
@@ -1440,11 +1999,11 @@ export class PushService {
           const displayValue = typeof value === 'string' && value.length > 100
             ? value.substring(0, 100) + '...'
             : value;
-          logError(`     ${field.Name}: ${displayValue}`);
+          logError(`     ${field.Name}: ${envMask.NewValue(field.Name, String(displayValue))}`);
         }
       }
       logError(''); // Empty line for readability
-      throw saveError;
+      throw MaskedError(saveError, errorTextMask);
     }
     
     if (!saveResult) {
@@ -1455,15 +2014,15 @@ export class PushService {
       };
 
       logError(`\n❌ SAVE RETURNED FALSE for ${entityName}`);
-      logError(`   Record ID: ${entityRecordId || 'NEW'}`);
-      logError(`   Record Name: ${recordName || 'N/A'}`);
+      logError(`   Record ID: ${recordKeyText}`);
+      logError(`   Record Name: ${recordName ? envMask.NewValue('Name', String(recordName)) : 'N/A'}`);
       logError(`   File Path: ${flattenedRecord.path}`);
 
       // Log the LatestResult for debugging
       if (entity.LatestResult) {
         const completeMessage = entity.LatestResult.CompleteMessage;
         if (completeMessage) {
-          logError(`   Database Error: ${completeMessage}`);
+          logError(`   Database Error: ${errorTextMask.MaskText(completeMessage)}`);
         }
         if ((entity.LatestResult as any).SQL) {
           // Don't log the full SQL as it might be huge, just indicate it's available
@@ -1479,7 +2038,7 @@ export class PushService {
           const displayValue = typeof value === 'string' && value.length > 100
             ? value.substring(0, 100) + '...'
             : value;
-          logError(`     ${field.Name}: ${displayValue}`);
+          logError(`     ${field.Name}: ${envMask.NewValue(field.Name, String(displayValue))}`);
         }
       }
       logError(''); // Empty line for readability
@@ -1492,21 +2051,22 @@ export class PushService {
       if (entityInfo) {
         for (const pk of entityInfo.PrimaryKeys) {
           const pkValue = entity.Get(pk.Name);
-          primaryKeyInfo.push(`${pk.Name}=${this.formatFieldValue(pkValue)}`);
+          primaryKeyInfo.push(`${pk.Name}=${envMask.NewValue(pk.Name, this.formatFieldValue(pkValue))}`);
         }
       }
       
       // Collect field values that were being saved
       for (const [fieldName, fieldValue] of Object.entries(record.fields)) {
         const processedValue = entity.Get(fieldName);
-        fieldInfo.push(`${fieldName}=${this.formatFieldValue(processedValue)}`);
+        const envName = entity.GetFieldByName(fieldName)?.Name ?? fieldName;
+        fieldInfo.push(`${fieldName}=${envMask.NewValue(envName, this.formatFieldValue(processedValue))}`);
       }
       
       // Get the actual error details from the entity
-      const errorMessage = entity.LatestResult?.CompleteMessage || 'Unknown error';
-      const errorDetails = entity.LatestResult?.Errors?.map(err => 
+      const errorMessage = errorTextMask.MaskText(entity.LatestResult?.CompleteMessage || 'Unknown error');
+      const errorDetails = errorTextMask.MaskText(entity.LatestResult?.Errors?.map(err => 
         typeof err === 'string' ? err : (err?.message || JSON.stringify(err))
-      )?.join(', ') || '';
+      )?.join(', ') || '');
       
       // Log detailed error information
       callbacks?.onError?.(`\n❌ FATAL ERROR: Failed to save ${entityName} record`);
@@ -1542,7 +2102,9 @@ export class PushService {
       });
 
       // Throw error to trigger rollback and stop processing
-      throw new Error(`Failed to save ${entityName} record at ${flattenedRecord.path}: ${errorMessage}`);
+      const saveFailure = new Error(`Failed to save ${entityName} record at ${flattenedRecord.path}: ${errorMessage}`);
+      this.reportedRecordErrors.add(saveFailure);
+      throw saveFailure;
     }
     
     // Return batch context entry as a side effect instead of mutating directly.
@@ -1559,7 +2121,8 @@ export class PushService {
       deferredRecord = {
         flattenedRecord,
         entityDir,
-        entityConfig
+        entityConfig,
+        batchContext
       };
 
       if (options.verbose) {
@@ -1576,16 +2139,17 @@ export class PushService {
       if (entityInfo) {
         const newPrimaryKey: Record<string, any> = {};
         const primaryKeyDisplay: string[] = [];
-        for (const pk of entityInfo.PrimaryKeys) {
-          newPrimaryKey[pk.Name] = entity.Get(pk.Name);
-          primaryKeyDisplay.push(`${pk.Name}: ${entity.Get(pk.Name)}`);
+        // An env-sourced key keeps the file's reference unless the database assigned another value
+        for (const key of CreatedRecordKeyFields(entityInfo.PrimaryKeys, entity, keyBeforeSave, record.primaryKey, originalFields, envMask)) {
+          newPrimaryKey[key.Name] = key.FileValue;
+          primaryKeyDisplay.push(`${key.Name}: ${key.KeptBySave ? envMask.NewValue(key.Name, String(key.SavedValue)) : String(key.SavedValue)}`);
         }
         record.primaryKey = newPrimaryKey;
         // Capture the create for the changes recap (no field diffs — the whole record is new).
         this.changeDetails.push({
           entityName,
           primaryKey: primaryKeyDisplay.join(', '),
-          operation: 'created',
+          Operation: 'created',
           fields: [],
         });
       }
@@ -1596,6 +2160,11 @@ export class PushService {
     const shouldWriteSync = entityConfig?.push?.writeSyncMetadata !== false;
     if (!shouldWriteSync) {
       delete record.sync;
+    } else if (deferredRecord) {
+      // A deferred record keeps its earlier checksum in the file, so each later --incremental push checks it again until the record changes
+      if (options.verbose) {
+        callbacks?.onLog?.(`   - Sync metadata waits for the deferred fields`);
+      }
     } else if (isNew || isDirty) {
       const checksumPayload = this.buildRecordChecksumPayload(record, originalFields);
       const checksum = await this.syncEngine.calculateChecksumWithFileContent(checksumPayload, entityDir);
@@ -1666,6 +2235,102 @@ export class PushService {
     };
   }
 
+  /**
+   * Resolves each primary-key value (`@lookup`, `@parent`, `@env`, …). A key lookup cannot be deferred.
+   * With `referencesOnly`, only `@env:`, `@parent:` and `@owner:` values are resolved; others are copied as is.
+   */
+  private async resolvePrimaryKey(
+    primaryKey: Record<string, unknown>,
+    entityDir: string,
+    parentEntity: BaseEntity | BatchContextStub | null,
+    batchContext: BatchContext,
+    resolutionCollector: SyncResolutionCollector,
+    recordProvider?: IMetadataProvider,
+    referencesOnly = false
+  ): Promise<Record<string, unknown>> {
+    const resolved: Record<string, unknown> = {};
+    for (const [pkField, pkValue] of Object.entries(primaryKey)) {
+      if (referencesOnly && !IsKeyReference(pkValue)) {
+        resolved[pkField] = pkValue;
+        continue;
+      }
+      try {
+        resolved[pkField] = await this.syncEngine.processFieldValue(
+          pkValue,
+          entityDir,
+          parentEntity,
+          null, // rootRecord
+          0,
+          batchContext,
+          resolutionCollector,
+          pkField,
+          recordProvider
+        );
+      } catch (pkError: unknown) {
+        if (pkError instanceof EnvVariableNotSetError) {
+          throw pkError.ForField(`primaryKey.${pkField}`);
+        }
+        if (pkError instanceof DeferrableLookupError) {
+          throw new Error(`Cannot defer lookup in primaryKey field '${pkField}': ${pkError.message}. Primary key lookups must resolve immediately.`);
+        }
+        throw pkError;
+      }
+    }
+    return resolved;
+  }
+
+  /** A file key value for printing: `<from @env:VAR>` for an `@env:` reference, else the value. */
+  private fileKeyText(value: unknown): string {
+    const reference = ParseEnvReference(value);
+    return reference ? EnvSourceLabel([reference.VariableName]) : String(value);
+  }
+
+  /**
+   * The key with each `@env:` value resolved through `collector`, which records the env-sourced fields.
+   * Other values are copied as written. A malformed or unset reference throws a names-only error.
+   */
+  private async resolveEnvKeyValues(
+    primaryKey: Record<string, unknown>,
+    entityDir: string,
+    collector: SyncResolutionCollector
+  ): Promise<Record<string, unknown>> {
+    const resolved: Record<string, unknown> = {};
+    for (const [field, value] of Object.entries(primaryKey)) {
+      resolved[field] = typeof value === 'string' && value.startsWith(METADATA_KEYWORDS.ENV)
+        ? await this.syncEngine.processFieldValue(value, entityDir, null, null, 0, undefined, collector, field)
+        : value;
+    }
+    return resolved;
+  }
+
+  /** True when the child holds every key value; UUID key fields match without regard to case. */
+  private childHasKey(child: BaseEntity, key: Record<string, unknown>): boolean {
+    return Object.entries(key).every(([field, value]) => {
+      const current = child.Get(field);
+      const isUuidField = child.GetFieldByName(field)?.EntityFieldInfo?.IsUniqueIdentifier === true;
+      if (isUuidField && typeof current === 'string' && typeof value === 'string') {
+        return UUIDsEqual(current, value);
+      }
+      return String(current) === String(value);
+    });
+  }
+
+  /**
+   * The record's key for save-failure output: the value of a single key field, or `Field=value` pairs
+   * for a composite key, with env-sourced key fields shown as labels. `NEW` when no key field has a value.
+   */
+  private recordIdLabel(entity: BaseEntity, envMask: EnvDisplayMask): string {
+    const keyFields = entity.PrimaryKeys.filter((pk) => {
+      const value = entity.Get(pk.Name);
+      return value !== null && value !== undefined && value !== '';
+    });
+    if (keyFields.length === 0) {
+      return 'NEW';
+    }
+    const labels = keyFields.map((pk) => envMask.NewValue(pk.Name, String(entity.Get(pk.Name))));
+    return keyFields.length === 1 ? labels[0] : keyFields.map((pk, i) => `${pk.Name}=${labels[i]}`).join(', ');
+  }
+
   private formatFieldValue(value: any): string {
     if (value === null || value === undefined) return 'null';
     if (typeof value === 'string') {
@@ -1684,7 +2349,7 @@ export class PushService {
   
   private async processDeleteRecord(
     flattenedRecord: FlattenedRecord,
-    _entityDir: string,
+    entityDir: string,
     options: PushOptions,
     callbacks?: PushCallbacks,
     isDbOnly: boolean = false
@@ -1696,8 +2361,11 @@ export class PushService {
       throw new Error(`Cannot delete ${entityName} record without primaryKey. Please specify primaryKey fields.`);
     }
     
-    // Load the entity to check if it exists in the target database
-    const existingEntity = await this.syncEngine.loadEntity(entityName, record.primaryKey);
+    // Load the entity to check if it exists in the target database; an `@env:` key value is resolved first
+    const keyCollector: SyncResolutionCollector = { notes: [], fieldPrefix: 'primaryKey', EnvFields: new Map() };
+    const resolvedKey = await this.resolveEnvKeyValues(record.primaryKey, entityDir, keyCollector);
+    const keyMask = new EnvDisplayMask(keyCollector.EnvFields);
+    const existingEntity = await this.syncEngine.loadEntity(entityName, resolvedKey);
 
     // Check if the deletion has already been processed
     if (record.deleteRecord?.deletedAt) {
@@ -1719,7 +2387,7 @@ export class PushService {
     
     if (!existingEntity) {
       const pkDisplay = Object.entries(record.primaryKey)
-        .map(([key, value]) => `${key}=${value}`)
+        .map(([key, value]) => `${key}=${this.fileKeyText(value)}`)
         .join(', ');
       
       const warning = `Record not found for deletion: ${entityName} with primaryKey {${pkDisplay}}`;
@@ -1736,12 +2404,15 @@ export class PushService {
       return { status: 'skipped', isDuplicate: false };
     }
     
+    // Key values and free error text can hold a value of any variable push resolved
+    const errorTextMask = EnvDisplayMask.ForVariables(this.syncEngine.ResolvedEnvVariables);
+
     // Log the deletion
     const entityInfo = this.syncEngine.getEntityInfo(entityName);
     const primaryKeyDisplay: string[] = [];
     if (entityInfo) {
       for (const pk of entityInfo.PrimaryKeys) {
-        primaryKeyDisplay.push(`${pk.Name}: ${existingEntity.Get(pk.Name)}`);
+        primaryKeyDisplay.push(`${pk.Name}: ${keyMask.NewValue(pk.Name, errorTextMask.MaskText(String(existingEntity.Get(pk.Name))))}`);
       }
     }
     
@@ -1758,7 +2429,9 @@ export class PushService {
       }
       const recordNameVerbose = existingEntity.Get('Name');
       if (recordNameVerbose) {
-        callbacks?.onLog?.(`   Name: ${recordNameVerbose}`);
+        const fileNameKey = Object.keys(record.fields ?? {}).find((key) => key.toLowerCase() === 'name');
+        const nameFromEnv = fileNameKey !== undefined && ParseEnvReference(record.fields?.[fileNameKey]) !== null;
+        callbacks?.onLog?.(`   Name: ${nameFromEnv ? ENV_HIDDEN_VALUE : recordNameVerbose}`);
       }
     }
 
@@ -1766,7 +2439,7 @@ export class PushService {
     this.changeDetails.push({
       entityName,
       primaryKey: primaryKeyDisplay.join(', '),
-      operation: 'deleted',
+      Operation: 'deleted',
       fields: [],
     });
 
@@ -1777,16 +2450,19 @@ export class PushService {
       return { status: 'deleted', isDuplicate: false };
     }
     
+    // An env-sourced delete key gets the names-only SQL log warning
+    this.registerEnvSqlFields(existingEntity, keyCollector.EnvFields, false);
+
     // Delete the record
     try {
       const deleteResult = await existingEntity.Delete();
       
       if (!deleteResult) {
         // Check the LatestResult for error details
-        const errorMessage = existingEntity.LatestResult?.CompleteMessage || 'Unknown error';
-        const errorDetails = existingEntity.LatestResult?.Errors?.map(err => 
+        const errorMessage = errorTextMask.MaskText(existingEntity.LatestResult?.CompleteMessage || 'Unknown error');
+        const errorDetails = errorTextMask.MaskText(existingEntity.LatestResult?.Errors?.map(err => 
           typeof err === 'string' ? err : (err?.message || JSON.stringify(err))
-        )?.join(', ') || '';
+        )?.join(', ') || '');
         
         callbacks?.onError?.(`\n❌ Failed to delete ${entityName} record`);
         callbacks?.onError?.(`   Primary Key: {${primaryKeyDisplay.join(', ')}}`);
@@ -1806,7 +2482,7 @@ export class PushService {
       }
 
       // Remove from metadata cache
-      this.syncMetadataEngine.removeEntityFromCache(entityName, record.primaryKey);
+      this.syncMetadataEngine.removeEntityFromCache(entityName, resolvedKey);
       
       // Set deletedAt timestamp after successful deletion (only for metadata records)
       if (!isDbOnly) {
@@ -1832,7 +2508,7 @@ export class PushService {
     } catch (deleteError: any) {
       console.error(`\n❌ DELETE EXCEPTION for ${entityName}`);
       console.error(`   Primary Key: {${primaryKeyDisplay.join(', ')}}`);
-      console.error(`   Error: ${deleteError.message || deleteError}`);
+      console.error(`   Error: ${errorTextMask.MaskText(String(deleteError.message || deleteError))}`);
       
       // Check for specific error patterns
       if (deleteError.message?.includes('FOREIGN KEY constraint')) {
@@ -1842,7 +2518,7 @@ export class PushService {
         console.error(`   Tip: You may not have permission to delete this record.`);
       }
       
-      throw deleteError;
+      throw MaskedError(deleteError, errorTextMask);
     }
   }
   
@@ -1884,7 +2560,9 @@ export class PushService {
     }
 
     messages.push('');
-    messages.push('All operations will occur within a transaction and can be rolled back on error.');
+    for (const line of this.transactionBannerLines()) {
+      messages.push(line);
+    }
     messages.push('');
     messages.push('═'.repeat(80));
     messages.push('');
@@ -1910,6 +2588,20 @@ export class PushService {
    * Audit all deletions across all metadata files
    * This pre-processes all records to identify deletion dependencies and order
    */
+  /** What the deletion confirmation says about rollback. Must match the write mode. */
+  private transactionBannerLines(): string[] {
+    const isolated = [...this.directoryModes.entries()].filter(([, mode]) => mode === 'isolated');
+    if (isolated.length === 0) {
+      return ['All creates, updates and deletes run in one database transaction. If anything fails, nothing is saved.'];
+    }
+    const names = isolated.map(([dir]) => path.relative(process.cwd(), dir) || dir).join(', ');
+    return [
+      'Deletes and deferred records run in one database transaction and are rolled back on error.',
+      `These directories use isolated transactions, so each create and update in them is committed as soon as it is`,
+      `saved and is NOT rolled back: ${names}.`,
+    ];
+  }
+
   private async auditAllDeletions(
     entityDirs: string[],
     options: PushOptions,
@@ -1936,7 +2628,7 @@ export class PushService {
         }
       }
 
-      const pattern = entityConfig.filePattern || '*.json';
+      const pattern = entityConfig.filePattern || DEFAULT_RECORD_FILE_PATTERN;
       const files = await fastGlob(pattern, {
         cwd: entityDir,
         absolute: true,
@@ -1995,7 +2687,7 @@ export class PushService {
       }
 
       // Find all JSON files
-      const pattern = entityConfig.filePattern || '*.json';
+      const pattern = entityConfig.filePattern || DEFAULT_RECORD_FILE_PATTERN;
       const files = await fastGlob(pattern, {
         cwd: entityDir,
         absolute: true,
@@ -2023,6 +2715,9 @@ export class PushService {
 
           // Phase 1: Flatten only - accumulates into analyzer's internal state
           const flattenedRecords = analyzer.flattenFileRecords(records, entityConfig.entity);
+          for (const flattened of flattenedRecords) {
+            flattened.FilePath = filePath;
+          }
           allFlattenedRecords.push(...flattenedRecords);
         } catch (error) {
           if (options.verbose) {
@@ -2153,9 +2848,10 @@ export class PushService {
             // Record not found, already handled in processDeleteRecord
           }
         } catch (error) {
-          callbacks?.onError?.(`   Failed to delete ${record.entityName}: ${error}`);
+          const located = error instanceof Error ? this.locateRecordError(error, record) : error;
+          callbacks?.onError?.(`   Failed to delete ${record.entityName}: ${located}`);
           errors++;
-          throw error; // Fail fast on first deletion error
+          throw located; // Fail fast on first deletion error
         }
       }
     }
@@ -2219,15 +2915,15 @@ export class PushService {
     let updated = 0;
     let errors = 0;
 
-    // Create a fresh batch context for deferred processing
-    // Records are in DB now, so this is mainly for tracking within this phase
-    const batchContext = new BatchContextIndex();
+    // A deferred record without the batch context of its main pass gets one for this phase
+    const phaseBatchContext = new BatchContextIndex();
 
     for (const deferred of this.deferredRecords) {
       const { flattenedRecord, entityDir, entityConfig } = deferred;
+      const batchContext = deferred.batchContext ?? phaseBatchContext;
       const entityName = flattenedRecord.entityName;
       const recordId = flattenedRecord.record.primaryKey
-        ? Object.entries(flattenedRecord.record.primaryKey).map(([k, v]) => `${k}=${v}`).join(', ')
+        ? Object.entries(flattenedRecord.record.primaryKey).map(([k, v]) => `${k}=${this.fileKeyText(v)}`).join(', ')
         : (flattenedRecord.record.fields.Name || 'NEW');
 
       try {
@@ -2263,7 +2959,7 @@ export class PushService {
         }
 
       } catch (error) {
-        const err = error as Error;
+        const err = this.locateRecordError(error instanceof Error ? error : new Error(String(error)), flattenedRecord);
 
         callbacks?.onError?.(
           `   ✗ Failed to process deferred record: ${entityName} (${recordId})`
@@ -2274,8 +2970,20 @@ export class PushService {
         callbacks?.onError?.(
           `     Tip: Ensure all referenced records exist or remove the ?allowDefer flag`
         );
+        if (!this.reportedRecordErrors.has(err)) {
+          callbacks?.onRecordError?.({
+            entityName,
+            path: flattenedRecord.path,
+            primaryKey: recordId,
+            message: `Deferred record could not be resolved: ${err.message}`,
+          });
+        }
 
         errors++;
+        if (!options.dryRun) {
+          // Same as a thrown Phase 1 error: stop, and let push() roll the transaction back.
+          throw new Error(`Failed to process deferred record ${entityName} (${recordId}): ${err.message}`, { cause: err });
+        }
       }
     }
 
@@ -2426,21 +3134,131 @@ export class PushService {
   }
 
   /**
-   * Builds the payload used for calculating record checksums, including composition axes (§5, §6)
+   * Builds the payload used for calculating record checksums, including composition axes (§5, §6).
+   * Shares its shape with pull via {@link SyncEngine.BuildRecordChecksumPayload}.
    */
   private buildRecordChecksumPayload(
     record: RecordData,
     fieldsOverride?: Record<string, unknown>
   ): Record<string, unknown> {
-    const fields = fieldsOverride ?? record.fields;
-    if (!record.collections && !record.embeds && !record.extension) {
-      return fields as Record<string, unknown>;
+    return SyncEngine.BuildRecordChecksumPayload(
+      fieldsOverride ?? record.fields,
+      record.collections,
+      record.embeds,
+      record.extension
+    );
+  }
+
+  /**
+   * Resolves one field of an embed, collection item or extension and sets it on the target.
+   * A missing `@env:VAR?optional` variable leaves the field unset and raises a warning.
+   * `sharesOwnerFields` (IS-A extension children) records env-sourced fields in the owner's collector.
+   */
+  private async setCompositionField(
+    target: BaseEntity,
+    fieldName: string,
+    rawValue: unknown,
+    entityDir: string,
+    batchContext: BatchContext,
+    resolutionCollector: SyncResolutionCollector,
+    recordProvider: IMetadataProvider | undefined,
+    ownerRecord: BaseEntity,
+    callbacks?: PushCallbacks,
+    sharesOwnerFields: boolean = false
+  ): Promise<void> {
+    // An IS-A extension child writes owner fields, so it records into the owner's collector. Other
+    // children get their own EnvFields map, so a child field never masks an owner field of the same name.
+    const childCollector: SyncResolutionCollector = sharesOwnerFields
+      ? resolutionCollector
+      : { notes: resolutionCollector.notes, fieldPrefix: resolutionCollector.fieldPrefix, EnvFields: new Map() };
+    try {
+      const value = await this.syncEngine.processFieldValue(
+        rawValue,
+        entityDir,
+        null,
+        null,
+        0,
+        batchContext,
+        childCollector,
+        fieldName,
+        recordProvider,
+        ownerRecord
+      );
+      target.Set(fieldName, value);
+      const variables = childCollector.EnvFields?.get(fieldName);
+      if (variables) {
+        this.queueEnvSqlChildField(resolutionCollector, { Target: target, FieldName: fieldName, Variables: variables });
+      }
+    } catch (error) {
+      if (error instanceof EnvVariableNotSetError) {
+        throw error.ForField(`fields.${fieldName}`, target.EntityInfo.Name);
+      }
+      if (!(error instanceof OptionalEnvMissingError)) {
+        throw error;
+      }
+      this.addWarning(OptionalEnvSkipMessage(target.EntityInfo.Name, fieldName, error.VariableName), callbacks);
+      this.queueEnvSqlChildField(resolutionCollector, { Target: target, FieldName: fieldName, Variables: new Set([error.VariableName]) });
     }
-    const payload: Record<string, unknown> = { fields };
-    if (record.collections) payload.collections = record.collections;
-    if (record.embeds) payload.embeds = record.embeds;
-    if (record.extension) payload.extension = record.extension;
-    return payload;
+  }
+
+  /** Runs composition work and names its path (and entity) in an unset-variable error. */
+  private async withCompositionPath(compositionPath: string, entityName: () => string | undefined, work: () => Promise<void>): Promise<void> {
+    try {
+      await work();
+    } catch (error) {
+      if (error instanceof EnvVariableNotSetError) {
+        throw error.Within(compositionPath, entityName());
+      }
+      throw error;
+    }
+  }
+
+  /** Registers the env-sourced fields of this save with the SQL log redactor, when a log is open. */
+  private registerEnvSqlFields(
+    entity: BaseEntity,
+    envFields: ReadonlyMap<string, ReadonlySet<string>> | undefined,
+    fullRow: boolean
+  ): void {
+    this.envSqlLog?.Redactor.RegisterEntityFields(entity, envFields, fullRow);
+  }
+
+  /** Keeps an env-sourced composition child field until its owner's save, when a SQL log is open. */
+  private queueEnvSqlChildField(ownerCollector: SyncResolutionCollector, field: PendingEnvSqlChildField): void {
+    if (!this.envSqlLog) {
+      return;
+    }
+    const pending = this.pendingEnvSqlChildFields.get(ownerCollector) ?? [];
+    pending.push(field);
+    this.pendingEnvSqlChildFields.set(ownerCollector, pending);
+  }
+
+  /** Queues each env-sourced key field of a composition child for the names-only SQL log warning. */
+  private queueEnvSqlChildKey(ownerCollector: SyncResolutionCollector, child: BaseEntity, keyCollector: SyncResolutionCollector): void {
+    for (const [fieldName, variables] of keyCollector.EnvFields ?? []) {
+      this.queueEnvSqlChildField(ownerCollector, { Target: child, FieldName: fieldName, Variables: variables });
+    }
+  }
+
+  /** Registers the queued composition child fields of the record that is about to be saved. */
+  private registerPendingEnvSqlChildFields(ownerCollector: SyncResolutionCollector): void {
+    const pending = this.pendingEnvSqlChildFields.get(ownerCollector) ?? [];
+    this.pendingEnvSqlChildFields.delete(ownerCollector);
+    for (const field of pending) {
+      this.registerEnvSqlCompositionField(field.Target, field.FieldName, field.Variables);
+    }
+  }
+
+  /** Registers one env-sourced composition child field when its save statement holds it. */
+  private registerEnvSqlCompositionField(target: BaseEntity, fieldName: string, variables: ReadonlySet<string>): void {
+    const fullRow = !target.IsSaved || this.syncConfig?.push?.alwaysPush === true;
+    this.registerEnvSqlFields(target, new Map([[fieldName, variables]]), fullRow);
+  }
+
+  /** Adds the names-only SQL log warnings of this run. */
+  private addEnvSqlWarnings(sqlLogPath: string, callbacks?: PushCallbacks): void {
+    for (const warning of this.envSqlLog?.Redactor.Warnings(sqlLogPath) ?? []) {
+      this.addWarning(warning, callbacks);
+    }
   }
 
   /**
@@ -2504,39 +3322,30 @@ export class PushService {
           );
         }
 
-        // Apply embed fields, passing ownerRecord = entity for @owner: resolution
-        if (embedRecord.fields && typeof embedRecord.fields === 'object') {
-          for (const [fName, fVal] of Object.entries(embedRecord.fields)) {
-            const processedValue = await this.syncEngine.processFieldValue(
-              fVal,
-              entityDir,
-              null,
-              null,
-              0,
-              batchContext,
-              resolutionCollector,
-              fName,
-              recordProvider,
-              entity // ownerRecord
-            );
-            embeddedEntity.Set(fName, processedValue);
+        const embedded = embeddedEntity;
+        await this.withCompositionPath(`embeds.${fkField}`, () => embedded.EntityInfo.Name, async () => {
+          // Apply embed fields, passing ownerRecord = entity for @owner: resolution
+          if (embedRecord.fields && typeof embedRecord.fields === 'object') {
+            for (const [fName, fVal] of Object.entries(embedRecord.fields)) {
+              await this.setCompositionField(embedded, fName, fVal, entityDir, batchContext, resolutionCollector, recordProvider, entity, callbacks);
+            }
           }
-        }
 
-        // Recursively apply nested composition on the embedded record
-        await this.applyCompositionAxes(
-          embeddedEntity,
-          embedRecord,
-          embeddedEntity.EntityInfo.Name,
-          entityDir,
-          batchContext,
-          resolutionCollector,
-          options,
-          callbacks,
-          entityConfig,
-          recordProvider,
-          depth + 1
-        );
+          // Recursively apply nested composition on the embedded record
+          await this.applyCompositionAxes(
+            embedded,
+            embedRecord,
+            embedded.EntityInfo.Name,
+            entityDir,
+            batchContext,
+            resolutionCollector,
+            options,
+            callbacks,
+            entityConfig,
+            recordProvider,
+            depth + 1
+          );
+        });
       }
     }
 
@@ -2571,28 +3380,20 @@ export class PushService {
           }
         }
 
-        // Dynamically register collection companion if entity supports DeclareRelatedRecords
-        if (!collectionCompanion && typeof (entity as unknown as { DeclareRelatedRecords?: unknown }).DeclareRelatedRecords === 'function') {
+        // Dynamically register collection companion if entity supports DeclareRelatedRecordsDynamic
+        if (!collectionCompanion && typeof (entity as BaseEntity).DeclareRelatedRecordsDynamic === 'function') {
           const entityInfo = entity.EntityInfo ?? new Metadata().EntityByName(entityName);
           const resolved = resolveCollectionRelationship(entityInfo, colName);
           if (resolved) {
-            const colOpts: {
-              Name: string;
-              RelatedEntity: string;
-              RelatedEntityJoinField: string;
-              Load?: string;
-              OnRemove?: string;
-              OrderBy?: string;
-            } = {
+            const colOpts = {
               Name: resolved.collectionName,
               RelatedEntity: resolved.relatedEntity,
               RelatedEntityJoinField: resolved.joinField,
-              Load: resolved.load,
-              OnRemove: resolved.onRemove,
+              Load: resolved.load as RelatedRecordLoadMode | undefined,
+              OnRemove: resolved.onRemove as RelatedRecordRemovalMode | undefined,
               ...(resolved.orderBy ? { OrderBy: resolved.orderBy } : {}),
             };
-            const declareFn = (entity as unknown as { DeclareRelatedRecords: (options: unknown) => unknown }).DeclareRelatedRecords.bind(entity);
-            collectionCompanion = declareFn(colOpts) as typeof collectionCompanion;
+            collectionCompanion = (entity as BaseEntity).DeclareRelatedRecordsDynamic(colOpts) as typeof collectionCompanion;
           }
         }
 
@@ -2610,6 +3411,7 @@ export class PushService {
           Load: () => Promise<void>;
           Create: () => Promise<BaseEntity>;
           Remove: (item: BaseEntity | number) => void;
+          RelatedEntityName?: string;
         };
 
         // Rider 4: Load: 'never' fails loud under both modes
@@ -2631,76 +3433,66 @@ export class PushService {
         const colConfig = entityConfig?.collections?.[colName];
         const mode = colConfig?.mode ?? 'upsert';
 
-        for (const itemData of colItems) {
+        for (const [itemIndex, itemData] of colItems.entries()) {
           if (!itemData || typeof itemData !== 'object') continue;
 
-          let targetChild: BaseEntity | null = null;
+          await this.withCompositionPath(`collections.${colName}[${itemIndex}]`, () => col.RelatedEntityName, async () => {
+            let targetChild: BaseEntity | null = null;
 
-          // Match by primaryKey if available
-          if (itemData.primaryKey && Object.keys(itemData.primaryKey).length > 0 && loadedItems.length > 0) {
-            targetChild = loadedItems.find((child) => {
-              for (const [pkK, pkV] of Object.entries(itemData.primaryKey!)) {
-                if (String(child.Get(pkK)) !== String(pkV)) {
-                  return false;
-                }
-              }
-              return true;
-            }) ?? null;
-          }
+            // The child's key with `@env:` values resolved; env-sourced key fields are kept for the SQL log
+            const childKeyCollector: SyncResolutionCollector = { notes: resolutionCollector.notes, fieldPrefix: 'primaryKey', EnvFields: new Map() };
+            const childKey = itemData.primaryKey
+              ? await this.resolveEnvKeyValues(itemData.primaryKey, entityDir, childKeyCollector)
+              : undefined;
 
-          if (itemData.deleteRecord?.delete === true) {
-            // Explicit delete in both modes (§8.1(a) rider 1)
-            if (targetChild) {
-              col.Remove(targetChild);
-              matchedItemSet.add(targetChild);
+            // Match by primaryKey if available
+            if (childKey && Object.keys(childKey).length > 0 && loadedItems.length > 0) {
+              targetChild = loadedItems.find((child) => this.childHasKey(child, childKey)) ?? null;
             }
-            continue;
-          }
 
-          if (!targetChild) {
-            targetChild = await col.Create();
-            if (itemData.primaryKey) {
-              for (const [pkK, pkV] of Object.entries(itemData.primaryKey)) {
+            if (itemData.deleteRecord?.delete === true) {
+              // Explicit delete in both modes (§8.1(a) rider 1)
+              if (targetChild) {
+                this.queueEnvSqlChildKey(resolutionCollector, targetChild, childKeyCollector);
+                col.Remove(targetChild);
+                matchedItemSet.add(targetChild);
+              }
+              return;
+            }
+
+            if (!targetChild) {
+              targetChild = await col.Create();
+              for (const [pkK, pkV] of Object.entries(childKey ?? {})) {
                 targetChild.Set(pkK, pkV);
               }
+            } else {
+              matchedItemSet.add(targetChild);
             }
-          } else {
-            matchedItemSet.add(targetChild);
-          }
 
-          // Apply fields with ownerRecord = entity for @owner:Field resolution
-          if (itemData.fields && typeof itemData.fields === 'object') {
-            for (const [fName, fVal] of Object.entries(itemData.fields)) {
-              const processedValue = await this.syncEngine.processFieldValue(
-                fVal,
-                entityDir,
-                null,
-                null,
-                0,
-                batchContext,
-                resolutionCollector,
-                fName,
-                recordProvider,
-                entity // ownerRecord
-              );
-              targetChild.Set(fName, processedValue);
+            this.queueEnvSqlChildKey(resolutionCollector, targetChild, childKeyCollector);
+
+            // Apply fields with ownerRecord = entity for @owner:Field resolution
+            if (itemData.fields && typeof itemData.fields === 'object') {
+              for (const [fName, fVal] of Object.entries(itemData.fields)) {
+                await this.setCompositionField(targetChild, fName, fVal, entityDir, batchContext, resolutionCollector, recordProvider, entity, callbacks);
+              }
             }
-          }
 
-          // Recursively apply nested composition on the collection item
-          await this.applyCompositionAxes(
-            targetChild,
-            itemData,
-            targetChild.EntityInfo.Name,
-            entityDir,
-            batchContext,
-            resolutionCollector,
-            options,
-            callbacks,
-            entityConfig,
-            recordProvider,
-            depth + 1
-          );
+            // Recursively apply nested composition on the collection item
+            await this.applyCompositionAxes(
+              targetChild,
+              itemData,
+              targetChild.EntityInfo.Name,
+              entityDir,
+              batchContext,
+              resolutionCollector,
+              options,
+              callbacks,
+              entityConfig,
+              recordProvider,
+              depth + 1
+            );
+          });
         }
 
         // Handle authoritative mode deletions (§8.1(a))
@@ -2766,36 +3558,26 @@ export class PushService {
           );
         }
 
-        for (const [fName, fVal] of Object.entries(extObj.fields as Record<string, unknown>)) {
-          const processedValue = await this.syncEngine.processFieldValue(
-            fVal,
+        await this.withCompositionPath('extension', () => child.EntityInfo.Name, async () => {
+          for (const [fName, fVal] of Object.entries(extObj.fields as Record<string, unknown>)) {
+            await this.setCompositionField(child, fName, fVal, entityDir, batchContext, resolutionCollector, recordProvider, entity, callbacks, true);
+          }
+
+          // Recursively apply nested composition on the child extension
+          await this.applyCompositionAxes(
+            child,
+            extObj as unknown as RecordData,
+            child.EntityInfo.Name,
             entityDir,
-            null,
-            null,
-            0,
             batchContext,
             resolutionCollector,
-            fName,
+            options,
+            callbacks,
+            entityConfig,
             recordProvider,
-            entity // ownerRecord
+            depth + 1
           );
-          child.Set(fName, processedValue);
-        }
-
-        // Recursively apply nested composition on the child extension
-        await this.applyCompositionAxes(
-          child,
-          extObj as unknown as RecordData,
-          child.EntityInfo.Name,
-          entityDir,
-          batchContext,
-          resolutionCollector,
-          options,
-          callbacks,
-          entityConfig,
-          recordProvider,
-          depth + 1
-        );
+        });
       } else {
         // Map form: { [SubtypeName]: { fields: { ... } } }
         for (const [subKey, subVal] of Object.entries(extObj)) {
@@ -2809,39 +3591,29 @@ export class PushService {
             );
           }
 
-          const subRecord = subVal as Record<string, unknown>;
-          if (subRecord.fields && typeof subRecord.fields === 'object') {
-            for (const [fName, fVal] of Object.entries(subRecord.fields as Record<string, unknown>)) {
-              const processedValue = await this.syncEngine.processFieldValue(
-                fVal,
-                entityDir,
-                null,
-                null,
-                0,
-                batchContext,
-                resolutionCollector,
-                fName,
-                recordProvider,
-                entity // ownerRecord
-              );
-              child.Set(fName, processedValue);
+          await this.withCompositionPath(`extension.${subKey}`, () => child.EntityInfo.Name, async () => {
+            const subRecord = subVal as Record<string, unknown>;
+            if (subRecord.fields && typeof subRecord.fields === 'object') {
+              for (const [fName, fVal] of Object.entries(subRecord.fields as Record<string, unknown>)) {
+                await this.setCompositionField(child, fName, fVal, entityDir, batchContext, resolutionCollector, recordProvider, entity, callbacks, true);
+              }
             }
-          }
 
-          // Recursively apply nested composition on the child extension
-          await this.applyCompositionAxes(
-            child,
-            subRecord as unknown as RecordData,
-            child.EntityInfo.Name,
-            entityDir,
-            batchContext,
-            resolutionCollector,
-            options,
-            callbacks,
-            entityConfig,
-            recordProvider,
-            depth + 1
-          );
+            // Recursively apply nested composition on the child extension
+            await this.applyCompositionAxes(
+              child,
+              subRecord as unknown as RecordData,
+              child.EntityInfo.Name,
+              entityDir,
+              batchContext,
+              resolutionCollector,
+              options,
+              callbacks,
+              entityConfig,
+              recordProvider,
+              depth + 1
+            );
+          });
         }
       }
     }

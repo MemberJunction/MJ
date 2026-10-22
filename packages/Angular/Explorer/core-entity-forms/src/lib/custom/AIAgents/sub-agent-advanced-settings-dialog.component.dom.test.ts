@@ -130,11 +130,11 @@ describe('SubAgentAdvancedSettingsDialogComponent (DOM)', () => {
     expect(closed.length).toBe(1);
     expect(emitted.length).toBe(1);
     expect(emitted[0]).toMatchObject({
-      executionOrder: 4,
-      executionMode: 'Sequential',
-      status: 'Active',
-      typeID: 'type-1',
-      exposeAsAction: false,
+      ExecutionOrder: 4,
+      ExecutionMode: 'Sequential',
+      Status: 'Active',
+      TypeID: 'type-1',
+      ExposeAsAction: false,
     });
   });
 

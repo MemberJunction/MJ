@@ -77,7 +77,7 @@ export function ParseTemplateParameters(templateText: string): ParseResult {
 
     // Handle null/empty input
     if (!templateText || templateText.trim().length === 0) {
-        return { parameters: [], warnings: [] };
+        return { parameters: [], Warnings: [] };
     }
 
     // Strip MJ-specific {@include ...} directives before parsing — Nunjucks doesn't understand them
@@ -89,14 +89,14 @@ export function ParseTemplateParameters(templateText: string): ParseResult {
     } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         warnings.push(`Nunjucks parse error: ${msg}`);
-        return { parameters: [], warnings };
+        return { parameters: [], Warnings: warnings };
     }
 
     const walker = new ASTWalker();
     walker.walk(ast);
 
     const parameters = walker.buildParameters();
-    return { parameters, warnings };
+    return { parameters, Warnings: warnings };
 }
 
 /**
@@ -118,7 +118,7 @@ class ASTWalker {
     /** Set of parameter names that are currently being guarded by a conditional */
     private guardedParams = new Set<string>();
 
-    walk(node: ASTNode): void {
+    Walk(node: ASTNode): void {
         if (!node) return;
         const handler = this.handlers[node.typename];
         if (handler) {
@@ -128,10 +128,15 @@ class ASTWalker {
         }
     }
 
+    /** @deprecated Use {@link Walk}. */
+    walk(node: ASTNode): void {
+        return this.Walk(node);
+    }
+
     /**
      * Build final DeterministicParameter[] from accumulated data.
      */
-    buildParameters(): DeterministicParameter[] {
+    BuildParameters(): DeterministicParameter[] {
         const result: DeterministicParameter[] = [];
 
         for (const acc of this.params.values()) {
@@ -140,17 +145,22 @@ class ASTWalker {
                 name: acc.name,
                 type,
                 isRequired: acc.usedUnconditionally,
-                defaultValue: acc.defaultValue,
-                isSystemVariable: acc.name.startsWith('_'),
-                appliedFilters: [...acc.filters],
+                DefaultValue: acc.defaultValue,
+                IsSystemVariable: acc.name.startsWith('_'),
+                AppliedFilters: [...acc.filters],
                 properties: buildPropertyTree(acc.properties),
-                usages: acc.usages,
+                Usages: acc.usages,
             });
         }
 
         // Sort alphabetically for deterministic output
         result.sort((a, b) => a.name.localeCompare(b.name));
         return result;
+    }
+
+    /** @deprecated Use {@link BuildParameters}. */
+    buildParameters(): DeterministicParameter[] {
+        return this.BuildParameters();
     }
 
     // ─── Handler dispatch table ──────────────────────────────────────────────
@@ -260,7 +270,7 @@ class ASTWalker {
 
         // Walk the filtered expression (first arg), skip subsequent literal args
         if (node.args?.children && node.args.children.length > 0) {
-            this.walk(node.args.children[0]);
+            this.Walk(node.args.children[0]);
         }
     }
 
@@ -287,7 +297,7 @@ class ASTWalker {
                 }
             } else {
                 // If it's a complex expression, walk it normally
-                this.walk(node.arr);
+                this.Walk(node.arr);
             }
         }
 
@@ -296,8 +306,8 @@ class ASTWalker {
         this.pushScope(loopVar ? [loopVar] : []);
 
         // Walk the loop body with the loop var in scope
-        if (node.body) this.walk(node.body);
-        if (node.else_) this.walk(node.else_);
+        if (node.body) this.Walk(node.body);
+        if (node.else_) this.Walk(node.else_);
 
         this.popScope();
     }
@@ -324,10 +334,10 @@ class ASTWalker {
         this.conditionalDepth++;
 
         // Walk the condition (params referenced here are recorded as conditional)
-        if (node.cond) this.walk(node.cond);
+        if (node.cond) this.Walk(node.cond);
 
         // Walk the true branch
-        if (node.body) this.walk(node.body);
+        if (node.body) this.Walk(node.body);
 
         // Restore guard context before walking elif/else
         this.conditionalDepth--;
@@ -336,7 +346,7 @@ class ASTWalker {
                 this.guardedParams.delete(name);
             }
         }
-        if (node.else_) this.walk(node.else_);
+        if (node.else_) this.Walk(node.else_);
     }
 
     /**
@@ -353,10 +363,10 @@ class ASTWalker {
         // Set node's `.value` is actually another AST node (e.g., Add, Symbol, etc.).
         const valueExpr = (node as unknown as Record<string, unknown>).value;
         if (valueExpr && typeof valueExpr === 'object' && 'typename' in valueExpr) {
-            this.walk(valueExpr as ASTNode);
+            this.Walk(valueExpr as ASTNode);
         }
         // Also check body ({% set x %}...{% endset %} capture form)
-        if (node.body) this.walk(node.body);
+        if (node.body) this.Walk(node.body);
 
         // Then add the variable to the current scope
         if (node.targets) {
@@ -383,7 +393,7 @@ class ASTWalker {
         }
 
         this.pushScope(macroArgs);
-        if (node.body) this.walk(node.body);
+        if (node.body) this.Walk(node.body);
         this.popScope();
     }
 
@@ -391,8 +401,8 @@ class ASTWalker {
      * Handle binary operations: `{{ a + b }}`, `{{ a and b }}`, etc.
      */
     private handleBinaryOp(node: ASTNode): void {
-        if (node.left) this.walk(node.left);
-        if (node.right) this.walk(node.right);
+        if (node.left) this.Walk(node.left);
+        if (node.right) this.Walk(node.right);
     }
 
     /**
@@ -400,7 +410,7 @@ class ASTWalker {
      * When the right side is a Literal, it's a default value.
      */
     private handleOr(node: ASTNode): void {
-        if (node.left) this.walk(node.left);
+        if (node.left) this.Walk(node.left);
 
         // Check if right side is a literal (fallback/default pattern)
         if (node.right?.typename === 'Literal' && node.left) {
@@ -413,25 +423,25 @@ class ASTWalker {
             }
         }
 
-        if (node.right) this.walk(node.right);
+        if (node.right) this.Walk(node.right);
     }
 
     /**
      * Handle unary operations: `{{ not x }}`, `{{ -x }}`
      */
     private handleUnaryOp(node: ASTNode): void {
-        if (node.target) this.walk(node.target);
-        if (node.expr) this.walk(node.expr);
+        if (node.target) this.Walk(node.target);
+        if (node.expr) this.Walk(node.expr);
     }
 
     /**
      * Handle Compare nodes: `{{ a > 0 }}`, `{{ a == b }}`
      */
     private handleCompare(node: ASTNode): void {
-        if (node.expr) this.walk(node.expr);
+        if (node.expr) this.Walk(node.expr);
         if (node.ops) {
             for (const op of node.ops) {
-                if (op.expr) this.walk(op.expr);
+                if (op.expr) this.Walk(op.expr);
             }
         }
     }
@@ -440,9 +450,9 @@ class ASTWalker {
      * Handle inline ternary: `{{ 'yes' if active else 'no' }}`
      */
     private handleInlineIf(node: ASTNode): void {
-        if (node.cond) this.walk(node.cond);
-        if (node.body) this.walk(node.body);
-        if (node.else_) this.walk(node.else_);
+        if (node.cond) this.Walk(node.cond);
+        if (node.body) this.Walk(node.body);
+        if (node.else_) this.Walk(node.else_);
     }
 
     /**
@@ -450,11 +460,11 @@ class ASTWalker {
      */
     private handlePair(node: ASTNode): void {
         // key is typically a Literal, value may reference a param
-        if (node.val) this.walk(node.val);
+        if (node.val) this.Walk(node.val);
         // walk key too in case it references a variable
         if (node.children) {
             for (const child of node.children) {
-                this.walk(child);
+                this.Walk(child);
             }
         }
     }
@@ -465,11 +475,11 @@ class ASTWalker {
     private handleFunCall(node: ASTNode): void {
         if (node.name) {
             const nameNode = node.name as ASTNode;
-            if (nameNode.typename) this.walk(nameNode);
+            if (nameNode.typename) this.Walk(nameNode);
         }
         if (node.args?.children) {
             for (const arg of node.args.children) {
-                this.walk(arg);
+                this.Walk(arg);
             }
         }
     }
@@ -482,13 +492,13 @@ class ASTWalker {
         // Walk any content args (the body between extension tags)
         if (node.contentArgs) {
             for (const arg of node.contentArgs) {
-                this.walk(arg);
+                this.Walk(arg);
             }
         }
         // Walk regular args
         if (node.args?.children) {
             for (const arg of node.args.children) {
-                this.walk(arg);
+                this.Walk(arg);
             }
         }
     }
@@ -555,10 +565,10 @@ class ASTWalker {
         }
 
         acc.usages.push({
-            line: node.lineno,
-            col: node.colno,
-            accessPath,
-            isConditional,
+            Line: node.lineno,
+            Col: node.colno,
+            AccessPath: accessPath,
+            IsConditional: isConditional,
         });
     }
 
@@ -623,14 +633,14 @@ class ASTWalker {
     private walkChildren(node: ASTNode): void {
         if (node.children) {
             for (const child of node.children) {
-                this.walk(child);
+                this.Walk(child);
             }
         }
     }
 
     private walkBody(node: ASTNode): void {
-        if (node.body) this.walk(node.body);
-        if (node.else_) this.walk(node.else_);
+        if (node.body) this.Walk(node.body);
+        if (node.else_) this.Walk(node.else_);
     }
 }
 
@@ -761,8 +771,8 @@ function buildPropertyTree(propMap: Map<string, PropAccumulator>): PropertyAcces
         result.push({
             name: acc.name,
             type: resolveType(acc.types),
-            optional: !acc.usedUnconditionally,
-            children: buildPropertyTree(acc.children),
+            Optional: !acc.usedUnconditionally,
+            Children: buildPropertyTree(acc.children),
         });
     }
     result.sort((a, b) => a.name.localeCompare(b.name));

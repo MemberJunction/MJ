@@ -117,6 +117,8 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
         if (value === this.parentTaskID) return;
         this.parentTaskID = value;
         this.settledEmitted = false;
+        this.SelectedTaskID = null;
+        this.LiveActivity.clear();
         void this.load();
     }
     public get ParentTaskID(): string | null {
@@ -242,8 +244,8 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
     @Input() public AllowBreakpointEditing: boolean = false;
     /** Compact debug key under the summary line. Off unless the host is a debugger. */
     @Input() public ShowDebugLegend: boolean = false;
-    /** VS Code VARIABLES pane to the left of the canvas. Off unless the host is debugging. */
-    @Input() public ShowVariables: boolean = false;
+    /** Step Inputs & Outputs (VARIABLES) inspector pane to the left of the canvas. Enabled by default across all task graph views. */
+    @Input() public ShowVariables: boolean = true;
     /** The parent bag's `data` / `context` roots, for the Invocation scope. */
     @Input() public Invocation: { data?: unknown; context?: unknown } | null = null;
 
@@ -379,6 +381,9 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
         const tempId = args?.Task?.tempId;
         if (!tempId) return;
         this.SelectedTaskID = tempId;
+        if (this.ShowVariables && !this.Prefs.InvocationOpen) {
+            this.prefsStore.SetInvocationOpen(true);
+        }
         this.NodeSelected.emit({ TaskID: tempId, Task: this.taskByID.get(tempId) ?? null });
         this.cdr.markForCheck();
     }
@@ -428,6 +433,11 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
 
     public get SelectedTask(): MJTaskEntity | null {
         return this.SelectedTaskID ? this.taskByID.get(this.SelectedTaskID) ?? null : null;
+    }
+
+    /** All loaded task step entities for the current parent workflow run. */
+    public get Tasks(): MJTaskEntity[] {
+        return [...this.taskByID.values()];
     }
 
     public OnToggleSelectedBreakpoint(): void {
@@ -559,7 +569,7 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
                 },
                 {
                     EntityName: 'MJ: Task Dependencies',
-                    ExtraFilter: `TaskID IN (SELECT ID FROM __mj.Task WHERE ParentID='${this.parentTaskID}')`,
+                    ExtraFilter: `TaskID IN (SELECT ID FROM [__mj].[vwTasks] WHERE ParentID='${this.parentTaskID}')`,
                     ResultType: 'entity_object',
                     BypassCache: true,
                 },
@@ -590,6 +600,12 @@ export class TaskGraphRunViewComponent extends BaseAngularComponent implements O
     /** Rows → spec + runtime + geometry. */
     private project(taskRows: MJTaskEntity[], depRows: MJTaskDependencyEntity[]): void {
         this.taskByID = new Map(taskRows.map((t) => [t.ID, t]));
+        if (taskRows.length === 0) {
+            this.SelectedTaskID = null;
+        } else if (!this.SelectedTaskID || !this.taskByID.has(this.SelectedTaskID)) {
+            const activeRow = taskRows.find((t) => t.Status === 'In Progress');
+            this.SelectedTaskID = (activeRow ?? taskRows[0]).ID;
+        }
 
         const projection = ProjectTaskRowsToSpec(this.WorkflowName, taskRows, depRows);
         this.Spec = projection.Spec;

@@ -1,7 +1,6 @@
 import fs from 'fs-extra';
 import path from 'path';
-import { BaseEntity } from '@memberjunction/core';
-import { METADATA_KEYWORDS, extractKeywordValue, createKeywordReference } from '../constants/metadata-keywords';
+import { METADATA_KEYWORDS, ExtractKeywordValue, CreateKeywordReference } from '../constants/metadata-keywords';
 
 /**
  * Handles externalization of field values to separate files with @file: references
@@ -10,11 +9,11 @@ export class FieldExternalizer {
   /**
    * Externalize a field value to a separate file and return @file: reference
    */
-  async externalizeField(
+  async ExternalizeField(
     fieldName: string,
     fieldValue: any,
     pattern: string,
-    recordData: BaseEntity,
+    recordData: Record<string, unknown>,
     targetDir: string,
     existingFileReference?: string,
     mergeStrategy: string = 'merge',
@@ -41,12 +40,26 @@ export class FieldExternalizer {
     return fileReference;
   }
 
+  /** @deprecated Use {@link ExternalizeField}. */
+  async externalizeField(
+    fieldName: string,
+    fieldValue: any,
+    pattern: string,
+    recordData: Record<string, unknown>,
+    targetDir: string,
+    existingFileReference?: string,
+    mergeStrategy: string = 'merge',
+    verbose?: boolean
+  ): Promise<string> {
+    return this.ExternalizeField(fieldName, fieldValue, pattern, recordData, targetDir, existingFileReference, mergeStrategy, verbose);
+  }
+
   /**
    * Determines the file path and reference for externalization
    */
   private determineFilePath(
     pattern: string,
-    recordData: BaseEntity,
+    recordData: Record<string, unknown>,
     targetDir: string,
     existingFileReference?: string,
     mergeStrategy: string = 'merge',
@@ -78,7 +91,7 @@ export class FieldExternalizer {
     targetDir: string,
     verbose?: boolean
   ): { finalFilePath: string; fileReference: string } {
-    const existingPath = extractKeywordValue(existingFileReference) as string;
+    const existingPath = ExtractKeywordValue(existingFileReference) as string;
     const finalFilePath = path.resolve(targetDir, existingPath);
     
     if (verbose) {
@@ -93,7 +106,7 @@ export class FieldExternalizer {
    */
   private createNewFileReference(
     pattern: string,
-    recordData: BaseEntity,
+    recordData: Record<string, unknown>,
     targetDir: string,
     fieldName: string,
     verbose?: boolean
@@ -101,7 +114,7 @@ export class FieldExternalizer {
     const processedPattern = this.processPattern(pattern, recordData, fieldName);
     const cleanPattern = this.removeFilePrefix(processedPattern);
     const finalFilePath = path.resolve(targetDir, cleanPattern);
-    const fileReference = createKeywordReference('file', cleanPattern);
+    const fileReference = CreateKeywordReference('file', cleanPattern);
     
     if (verbose) {
       console.log(`Creating new external file: ${finalFilePath}`);
@@ -113,12 +126,12 @@ export class FieldExternalizer {
   /**
    * Processes pattern placeholders with actual values
    */
-  private processPattern(pattern: string, recordData: BaseEntity, fieldName: string): string {
+  private processPattern(pattern: string, recordData: Record<string, unknown>, fieldName: string): string {
     let processedPattern = pattern;
     
     // Replace common placeholders
-    processedPattern = this.replacePlaceholder(processedPattern, 'Name', (recordData as any).Name);
-    processedPattern = this.replacePlaceholder(processedPattern, 'ID', (recordData as any).ID);
+    processedPattern = this.replacePlaceholder(processedPattern, 'Name', recordData.Name);
+    processedPattern = this.replacePlaceholder(processedPattern, 'ID', recordData.ID);
     processedPattern = this.replacePlaceholder(processedPattern, 'FieldName', fieldName);
     
     // Replace any other field placeholders
@@ -141,10 +154,10 @@ export class FieldExternalizer {
   /**
    * Replaces field placeholders with values from the record
    */
-  private replaceFieldPlaceholders(pattern: string, recordData: BaseEntity): string {
+  private replaceFieldPlaceholders(pattern: string, recordData: Record<string, unknown>): string {
     let processedPattern = pattern;
     
-    for (const [key, value] of Object.entries(recordData as any)) {
+    for (const [key, value] of Object.entries(recordData)) {
       if (value != null) {
         const sanitizedValue = this.sanitizeForFilename(String(value));
         processedPattern = processedPattern.replace(new RegExp(`\\{${key}\\}`, 'g'), sanitizedValue);
@@ -158,7 +171,7 @@ export class FieldExternalizer {
    * Removes @file: prefix if present
    */
   private removeFilePrefix(pattern: string): string {
-    return pattern.startsWith(METADATA_KEYWORDS.FILE) ? (extractKeywordValue(pattern) as string) : pattern;
+    return pattern.startsWith(METADATA_KEYWORDS.FILE) ? (ExtractKeywordValue(pattern) as string) : pattern;
   }
 
   /**

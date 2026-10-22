@@ -38,7 +38,7 @@
  */
 
 // Configuration exports
-export { initializeConfig } from './Config/config'
+export { InitializeConfig, initializeConfig } from './Config/config'
 export * from './Config/config'
 export * from './Config/db-connection'
 
@@ -54,8 +54,6 @@ export * from './Database/sql_codegen'
 export * from './Database/sql'
 export * from './Database/schema-scope'
 export * from './Database/exclude-tables'
-export * from './Database/decision-metadata-format'
-export * from './Database/decision-metadata-writer'
 export * from './Config/schema-output'
 export * from './Misc/file-write'
 export * from './Misc/emit-stats'

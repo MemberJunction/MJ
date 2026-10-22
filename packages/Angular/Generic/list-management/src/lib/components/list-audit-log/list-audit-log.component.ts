@@ -51,11 +51,47 @@ export class ListAuditLogComponent extends BaseAngularComponent implements OnIni
   /** Max rows to load. Defaults to a sensible 200 for the per-list view. */
   @Input() PageSize = 200;
 
-  public entries: AuditLogRow[] = [];
-  public eventTypes: Array<{ ID: string; Name: string }> = [];
-  public filterType = '';
+  public Entries: AuditLogRow[] = [];
+
+  /** @deprecated Use {@link Entries}. */
+  public get entries(): AuditLogRow[] {
+    return this.Entries;
+  }
+  /** @deprecated Use {@link Entries}. */
+  public set entries(value: AuditLogRow[]) {
+    this.Entries = value;
+  }
+  public EventTypes: Array<{ ID: string; Name: string }> = [];
+
+  /** @deprecated Use {@link EventTypes}. */
+  public get eventTypes(): Array<{ ID: string; Name: string }> {
+    return this.EventTypes;
+  }
+  /** @deprecated Use {@link EventTypes}. */
+  public set eventTypes(value: Array<{ ID: string; Name: string }>) {
+    this.EventTypes = value;
+  }
+  public FilterType = '';
+
+  /** @deprecated Use {@link FilterType}. */
+  public get filterType() {
+    return this.FilterType;
+  }
+  /** @deprecated Use {@link FilterType}. */
+  public set filterType(value) {
+    this.FilterType = value;
+  }
   public filterText = '';
-  public loading = false;
+  public Loading = false;
+
+  /** @deprecated Use {@link Loading}. */
+  public get loading() {
+    return this.Loading;
+  }
+  /** @deprecated Use {@link Loading}. */
+  public set loading(value) {
+    this.Loading = value;
+  }
   public errorMessage: string | null = null;
 
   private initialized = false;
@@ -65,16 +101,21 @@ export class ListAuditLogComponent extends BaseAngularComponent implements OnIni
     if (this._listId) await this.loadEntries();
   }
 
-  public get visibleEntries(): AuditLogRow[] {
+  public get VisibleEntries(): AuditLogRow[] {
     const term = this.filterText.trim().toLowerCase();
-    return this.entries.filter((e) => {
-      if (this.filterType && e.AuditLogTypeID !== this.filterType) return false;
+    return this.Entries.filter((e) => {
+      if (this.FilterType && e.AuditLogTypeID !== this.FilterType) return false;
       if (term) {
         const hay = `${e.Description} ${e.UserName}`.toLowerCase();
         if (!hay.includes(term)) return false;
       }
       return true;
     });
+  }
+
+  /** @deprecated Use {@link VisibleEntries}. */
+  public get visibleEntries(): AuditLogRow[] {
+    return this.VisibleEntries;
   }
 
   public OnFilterChange(): void {
@@ -85,7 +126,7 @@ export class ListAuditLogComponent extends BaseAngularComponent implements OnIni
     return d.toLocaleString();
   }
 
-  public formatDetails(raw: string | null): string {
+  public FormatDetails(raw: string | null): string {
     if (!raw) return '';
     try {
       const parsed = JSON.parse(raw);
@@ -95,6 +136,11 @@ export class ListAuditLogComponent extends BaseAngularComponent implements OnIni
     }
   }
 
+  /** @deprecated Use {@link FormatDetails}. */
+  public formatDetails(raw: string | null): string {
+    return this.FormatDetails(raw);
+  }
+
   /**
    * Bulk-load audit-log entries + their type names + user names in three
    * RunViews via the batch helper so the UI only spins once. We then
@@ -102,7 +148,7 @@ export class ListAuditLogComponent extends BaseAngularComponent implements OnIni
    */
   private async loadEntries(): Promise<void> {
     if (!this._listId) return;
-    this.loading = true;
+    this.Loading = true;
     this.errorMessage = null;
     this.cdr.markForCheck();
 
@@ -130,7 +176,7 @@ export class ListAuditLogComponent extends BaseAngularComponent implements OnIni
 
       if (!logs.Success) {
         this.errorMessage = logs.ErrorMessage ?? 'Failed to load audit logs';
-        this.entries = [];
+        this.Entries = [];
         return;
       }
 
@@ -162,7 +208,7 @@ export class ListAuditLogComponent extends BaseAngularComponent implements OnIni
       const typeById = new Map<string, string>();
       for (const t of types.Results ?? []) typeById.set(String(t.ID), String(t.Name));
 
-      this.entries = rows.map((r) => ({
+      this.Entries = rows.map((r) => ({
         ID: String(r.ID),
         EventDate: new Date(r.__mj_CreatedAt),
         UserID: String(r.UserID),
@@ -174,14 +220,14 @@ export class ListAuditLogComponent extends BaseAngularComponent implements OnIni
       }));
 
       // Populate the event-type dropdown with only types we actually have.
-      this.eventTypes = [...typeById.entries()]
+      this.EventTypes = [...typeById.entries()]
         .map(([ID, Name]) => ({ ID, Name }))
         .sort((a, b) => a.Name.localeCompare(b.Name));
     } catch (e) {
       this.errorMessage = e instanceof Error ? e.message : String(e);
-      this.entries = [];
+      this.Entries = [];
     } finally {
-      this.loading = false;
+      this.Loading = false;
       this.cdr.markForCheck();
     }
   }

@@ -7,6 +7,7 @@ import { MJGlobal } from '@memberjunction/global';
 import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
 import { AutoDocConnectionConfig } from '../types/driver.js';
 import { SchemaDefinition, TableDefinition, ColumnDefinition, ForeignKeyReference } from '../types/state.js';
+import { AttachIndexesToTables } from '../utils/index-hints.js';
 import { SchemaFilterConfig, TableFilterConfig, AnalysisConfig } from '../types/config.js';
 import '../drivers/SQLServerDriver.js'; // Import to ensure registration
 import '../drivers/MySQLDriver.js'; // Import to ensure registration
@@ -15,7 +16,7 @@ import '../drivers/PostgreSQLDriver.js'; // Import to ensure registration
 /**
  * Create a database driver instance
  */
-export function createDriver(config: AutoDocConnectionConfig): BaseAutoDocDriver {
+export function CreateDriver(config: AutoDocConnectionConfig): BaseAutoDocDriver {
   const providerKey = config.provider === 'sqlserver' || !config.provider ? 'SQLServer' :
                       config.provider === 'mysql' ? 'MySQL' :
                       config.provider === 'postgresql' ? 'PostgreSQL' :
@@ -34,6 +35,11 @@ export function createDriver(config: AutoDocConnectionConfig): BaseAutoDocDriver
   return driver;
 }
 
+/** @deprecated Use {@link CreateDriver}. */
+export function createDriver(config: AutoDocConnectionConfig): BaseAutoDocDriver {
+  return CreateDriver(config);
+}
+
 /**
  * Database connection class
  * Provides connection management and query execution
@@ -42,31 +48,59 @@ export class DatabaseConnection {
   private driver: BaseAutoDocDriver;
 
   constructor(dbConfig: AutoDocConnectionConfig) {
-    this.driver = createDriver(dbConfig);
+    this.driver = CreateDriver(dbConfig);
   }
 
-  public async connect(): Promise<void> {
+  public async Connect(): Promise<void> {
     await this.driver.connect();
   }
 
-  public async test(): Promise<{ success: boolean; message: string }> {
+  /** @deprecated Use {@link Connect}. */
+  public async connect(): Promise<void> {
+    return this.Connect();
+  }
+
+  public async Test(): Promise<{ success: boolean; message: string }> {
     return await this.driver.test();
   }
 
-  public async query<T = any>(
+  /** @deprecated Use {@link Test}. */
+  public async test(): Promise<{ success: boolean; message: string }> {
+    return this.Test();
+  }
+
+  public async Query<T = any>(
     queryText: string,
     maxRetries: number = 3
   ): Promise<{ success: boolean; data?: T[]; errorMessage?: string }> {
     return await this.driver.executeQuery<T>(queryText, maxRetries);
   }
 
-  public async close(): Promise<void> {
+  /** @deprecated Use {@link Query}. */
+  public async query<T = any>(
+    queryText: string,
+    maxRetries: number = 3
+  ): Promise<{ success: boolean; data?: T[]; errorMessage?: string }> {
+    return this.Query(queryText, maxRetries);
+  }
+
+  public async Close(): Promise<void> {
     await this.driver.close();
   }
 
+  /** @deprecated Use {@link Close}. */
+  public async close(): Promise<void> {
+    return this.Close();
+  }
+
   // Expose the underlying driver for advanced usage
-  public getDriver(): BaseAutoDocDriver {
+  public GetDriver(): BaseAutoDocDriver {
     return this.driver;
+  }
+
+  /** @deprecated Use {@link GetDriver}. */
+  public getDriver(): BaseAutoDocDriver {
+    return this.GetDriver();
   }
 }
 
@@ -77,7 +111,7 @@ export class DatabaseConnection {
 export class Introspector {
   constructor(private driver: BaseAutoDocDriver) {}
 
-  public async getSchemas(
+  public async GetSchemas(
     schemaFilter: SchemaFilterConfig,
     tableFilter: TableFilterConfig
   ): Promise<SchemaDefinition[]> {
@@ -94,7 +128,8 @@ export class Introspector {
           schema: fk.referencedSchema,
           table: fk.referencedTable,
           column: fk.columnName,
-          referencedColumn: fk.referencedColumn
+          referencedColumn: fk.referencedColumn,
+          constraintName: fk.constraintName
         }));
 
         // Convert columns
@@ -106,6 +141,7 @@ export class Introspector {
           isForeignKey: col.isForeignKey,
           checkConstraint: col.checkConstraint,
           defaultValue: col.defaultValue,
+          maxLength: col.maxLength,
           descriptionIterations: []
         }));
 
@@ -151,7 +187,31 @@ export class Introspector {
     return schemas;
   }
 
-  public async getExistingDescriptions(
+  /**
+   * Reads each schema's indexes and stores them on its tables (`TableDefinition.indexes`).
+   * A schema whose catalog read fails is left without indexes and reported in the result.
+   */
+  public async LoadIndexes(schemas: SchemaDefinition[]): Promise<{ SchemaName: string; Error: string }[]> {
+    const failed: { SchemaName: string; Error: string }[] = [];
+    for (const schema of schemas) {
+      try {
+        AttachIndexesToTables(schema.tables, await this.driver.GetIndexes(schema.name));
+      } catch (err) {
+        failed.push({ SchemaName: schema.name, Error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+    return failed;
+  }
+
+  /** @deprecated Use {@link GetSchemas}. */
+  public async getSchemas(
+    schemaFilter: SchemaFilterConfig,
+    tableFilter: TableFilterConfig
+  ): Promise<SchemaDefinition[]> {
+    return this.GetSchemas(schemaFilter, tableFilter);
+  }
+
+  public async GetExistingDescriptions(
     schemaName: string,
     tableName: string
   ): Promise<Map<string, string>> {
@@ -165,6 +225,14 @@ export class Introspector {
 
     return map;
   }
+
+  /** @deprecated Use {@link GetExistingDescriptions}. */
+  public async getExistingDescriptions(
+    schemaName: string,
+    tableName: string
+  ): Promise<Map<string, string>> {
+    return this.GetExistingDescriptions(schemaName, tableName);
+  }
 }
 
 /**
@@ -177,7 +245,7 @@ export class DataSampler {
     private config: AnalysisConfig
   ) {}
 
-  public async analyzeTable(
+  public async AnalyzeTable(
     schemaName: string,
     tableName: string,
     columns: ColumnDefinition[]
@@ -203,6 +271,9 @@ export class DataSampler {
           nullCount: stats.nullCount,
           nullPercentage: stats.nullPercentage,
           sampleValues: stats.sampleValues,
+          // Every distinct value of a low-cardinality column. The enum candidate gate reads it to know
+          // which values a column holds; without it, the gate falls back to the 20-row random sample.
+          valueDistribution: stats.valueDistribution?.map(v => ({ value: v.value, frequency: v.frequency })),
           min: stats.min,
           max: stats.max,
           avg: stats.avg,
@@ -231,5 +302,14 @@ export class DataSampler {
         `  Warning: ${columnErrors} column(s) in ${schemaName}.${tableName} failed statistics gathering`
       );
     }
+  }
+
+  /** @deprecated Use {@link AnalyzeTable}. */
+  public async analyzeTable(
+    schemaName: string,
+    tableName: string,
+    columns: ColumnDefinition[]
+  ): Promise<void> {
+    return this.AnalyzeTable(schemaName, tableName, columns);
   }
 }

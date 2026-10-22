@@ -1,0 +1,90 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "dbresearch-adhoc-query-01 [gemini-3.7-flash · Google · native-implicit]",
+    "Description": "Mid-loop: entity metadata already retrieved; the next decision must be to run the query, not to look the entity up again.",
+    "InputDefinition": {
+      "payload": {
+        "databaseResearch": {
+          "entitiesFound": [
+            "MJ: AI Agents"
+          ],
+          "queries": []
+        }
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "How many AI agents are active, grouped by type?"
+        },
+        {
+          "role": "user",
+          "content": "[Action Result] Get Entity Details succeeded. Entity 'MJ: AI Agents' base view [__mj].vwAIAgents; columns include ID, Name, TypeID, Status."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "dbresearch-adhoc-query-01",
+      "expect": {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Run Ad-hoc Query",
+            "params": {
+              "Query": {
+                "matcher": "regex",
+                "pattern": "SELECT[\\s\\S]+FROM[\\s\\S]+GROUP\\s+BY",
+                "flags": "i"
+              }
+            }
+          }
+        ],
+        "allowAdditionalActions": false
+      }
+    },
+    "Configuration": {
+      "agentName": "Database Research Agent",
+      "modelId": "63B1434F-0400-4A98-A1B9-0765BE4362F0",
+      "vendorId": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "native",
+      "nativeControlFlow": "implicit",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Run Ad-hoc Query",
+                "params": {
+                  "Query": {
+                    "matcher": "regex",
+                    "pattern": "SELECT[\\s\\S]+FROM[\\s\\S]+GROUP\\s+BY",
+                    "flags": "i"
+                  }
+                }
+              }
+            ],
+            "allowAdditionalActions": false
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "FF3999A2-6AAC-4DB9-A96B-ACDD2C6CACDE"
+  }
+}

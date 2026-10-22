@@ -106,16 +106,43 @@ import { ActiveTasksService, ActiveTask } from '../../services/active-tasks.serv
   `]
 })
 export class ActiveTasksPanelComponent {
-  tasks$: Observable<ActiveTask[]>;
-  taskCount$: Observable<number>;
-  isExpanded = true;
+  Tasks$: Observable<ActiveTask[]>;
 
-  constructor(private activeTasksService: ActiveTasksService) {
-    this.tasks$ = this.activeTasksService.tasks$;
-    this.taskCount$ = this.activeTasksService.taskCount$;
+  /** @deprecated Use {@link Tasks$}. */
+  get tasks$(): Observable<ActiveTask[]> {
+    return this.Tasks$;
+  }
+  /** @deprecated Use {@link Tasks$}. */
+  set tasks$(value: Observable<ActiveTask[]>) {
+    this.Tasks$ = value;
+  }
+  TaskCount$: Observable<number>;
+
+  /** @deprecated Use {@link TaskCount$}. */
+  get taskCount$(): Observable<number> {
+    return this.TaskCount$;
+  }
+  /** @deprecated Use {@link TaskCount$}. */
+  set taskCount$(value: Observable<number>) {
+    this.TaskCount$ = value;
+  }
+  IsExpanded = true;
+
+  /** @deprecated Use {@link IsExpanded}. */
+  get isExpanded() {
+    return this.IsExpanded;
+  }
+  /** @deprecated Use {@link IsExpanded}. */
+  set isExpanded(value) {
+    this.IsExpanded = value;
   }
 
-  getElapsedTime(task: ActiveTask): string {
+  constructor(private activeTasksService: ActiveTasksService) {
+    this.Tasks$ = this.activeTasksService.tasks$;
+    this.TaskCount$ = this.activeTasksService.taskCount$;
+  }
+
+  GetElapsedTime(task: ActiveTask): string {
     const elapsed = Date.now() - task.startTime;
     const seconds = Math.floor(elapsed / 1000);
 
@@ -128,11 +155,21 @@ export class ActiveTasksPanelComponent {
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   }
 
-  getTrimmedStatus(status: string): string {
+  /** @deprecated Use {@link GetElapsedTime}. */
+  getElapsedTime(task: ActiveTask): string {
+    return this.GetElapsedTime(task);
+  }
+
+  GetTrimmedStatus(status: string): string {
     const maxLength = 50;
     if (status.length <= maxLength) {
       return status;
     }
     return status.substring(0, maxLength) + '...';
+  }
+
+  /** @deprecated Use {@link GetTrimmedStatus}. */
+  getTrimmedStatus(status: string): string {
+    return this.GetTrimmedStatus(status);
   }
 }

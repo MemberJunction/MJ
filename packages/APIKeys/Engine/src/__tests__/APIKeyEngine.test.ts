@@ -30,12 +30,12 @@ vi.mock('crypto', async () => {
 import { cosmiconfigSync } from 'cosmiconfig';
 import {
     UserInfo,
-    setMockRunViewResult,
-    clearMockRunViewResults,
-    clearMockEntities,
-    setMockMetadataEntities,
-    setMockRowLevelSecurityFilters,
-    clearMockMetadataState,
+    SetMockRunViewResult,
+    ClearMockRunViewResults,
+    ClearMockEntities,
+    SetMockMetadataEntities,
+    SetMockRowLevelSecurityFilters,
+    ClearMockMetadataState,
     EntityInfo,
     RowLevelSecurityFilterInfo,
 } from '../__mocks__/core';
@@ -45,14 +45,16 @@ import {
     MJAPIScopeEntity,
     MJAPIApplicationScopeEntity,
     MJAPIKeyScopeEntity,
+    MJUserEntity,
 } from '../__mocks__/core-entities';
+import { MJGlobal, MJEventType } from '@memberjunction/global';
 import {
-    setMockBaseScopes,
-    setMockBaseApplications,
-    setMockBaseApplicationScopes,
-    setMockBaseKeyScopes,
-    setMockBaseLoaded,
-    clearMockBaseState,
+    SetMockBaseScopes,
+    SetMockBaseApplications,
+    SetMockBaseApplicationScopes,
+    SetMockBaseKeyScopes,
+    SetMockBaseLoaded,
+    ClearMockBaseState,
 } from '../__mocks__/api-keys-base';
 import {
     APIKeyEngine,
@@ -69,10 +71,10 @@ describe('APIKeyEngine', () => {
 
     beforeEach(() => {
         ResetAPIKeyEngine();
-        clearMockBaseState();
-        clearMockRunViewResults();
-        clearMockEntities();
-        clearMockMetadataState();
+        ClearMockBaseState();
+        ClearMockRunViewResults();
+        ClearMockEntities();
+        ClearMockMetadataState();
         engine = new APIKeyEngine();
     });
 
@@ -566,26 +568,26 @@ describe('row filters', () => {
 
     beforeEach(() => {
         ResetAPIKeyEngine();
-        clearMockBaseState();
-        clearMockRunViewResults();
-        clearMockEntities();
-        clearMockMetadataState();
+        ClearMockBaseState();
+        ClearMockRunViewResults();
+        ClearMockEntities();
+        ClearMockMetadataState();
     });
 
     /** Configures a valid key + application so Authorize reaches scope evaluation. */
     function setupKeyAndApp(): void {
-        setMockRunViewResult('MJ: API Keys', {
+        SetMockRunViewResult('MJ: API Keys', {
             Success: true,
             Results: [new MJAPIKeyEntity({ ID: 'key-1', UserID: 'user-1', Status: 'Active' })],
         });
-        setMockBaseApplications([
+        SetMockBaseApplications([
             new MJAPIApplicationEntity({ ID: 'app-1', Name: 'MJAPI', IsActive: true }),
         ]);
     }
 
     /** Standard scope set used across the tests below. */
     function setupScopes(): void {
-        setMockBaseScopes([
+        SetMockBaseScopes([
             new MJAPIScopeEntity({ ID: 'scope-read', FullPath: 'entity:read', IsActive: true }),
             new MJAPIScopeEntity({ ID: 'scope-update', FullPath: 'entity:update', IsActive: true }),
             new MJAPIScopeEntity({ ID: 'scope-fa', FullPath: 'full_access', IsActive: true }),
@@ -596,7 +598,7 @@ describe('row filters', () => {
 
     /** Allows everything at the application ceiling for the given scope IDs. */
     function allowCeiling(...scopeIds: string[]): void {
-        setMockBaseApplicationScopes(scopeIds.map((scopeId, i) =>
+        SetMockBaseApplicationScopes(scopeIds.map((scopeId, i) =>
             new MJAPIApplicationScopeEntity({
                 ID: `as-${i}`, ApplicationID: 'app-1', ScopeID: scopeId,
                 ResourcePattern: '*', PatternType: 'Include', IsDeny: false, Priority: 0,
@@ -606,7 +608,7 @@ describe('row filters', () => {
 
     describe('startup invariant (§5.6 rows 3/4)', () => {
         it('Config() throws when a filtered KEY scope rule exists and enforcement is disabled', async () => {
-            setMockBaseKeyScopes([
+            SetMockBaseKeyScopes([
                 new MJAPIKeyScopeEntity({
                     ID: 'ks-1', APIKeyID: 'key-1', ScopeID: 'scope-read',
                     ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 0,
@@ -619,7 +621,7 @@ describe('row filters', () => {
         });
 
         it('Config() throws when a filtered APPLICATION scope rule exists and defaultBehaviorNoScopes is allow', async () => {
-            setMockBaseApplicationScopes([
+            SetMockBaseApplicationScopes([
                 new MJAPIApplicationScopeEntity({
                     ID: 'as-1', ApplicationID: 'app-1', ScopeID: 'scope-read',
                     ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 0,
@@ -631,7 +633,7 @@ describe('row filters', () => {
         });
 
         it('Config() succeeds with filtered rules under an enforcing, default-deny engine', async () => {
-            setMockBaseKeyScopes([
+            SetMockBaseKeyScopes([
                 new MJAPIKeyScopeEntity({
                     ID: 'ks-1', APIKeyID: 'key-1', ScopeID: 'scope-read',
                     ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 0,
@@ -644,7 +646,7 @@ describe('row filters', () => {
         });
 
         it('Config() succeeds with no filtered rules even when enforcement is disabled (regression)', async () => {
-            setMockBaseKeyScopes([
+            SetMockBaseKeyScopes([
                 new MJAPIKeyScopeEntity({
                     ID: 'ks-1', APIKeyID: 'key-1', ScopeID: 'scope-read',
                     ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 0,
@@ -660,7 +662,7 @@ describe('row filters', () => {
             setupKeyAndApp();
             setupScopes();
             allowCeiling('scope-fa');
-            setMockBaseKeyScopes([
+            SetMockBaseKeyScopes([
                 new MJAPIKeyScopeEntity({
                     ID: 'ks-fa', APIKeyID: 'key-1', ScopeID: 'scope-fa',
                     ResourcePattern: '*', PatternType: 'Include', IsDeny: false, Priority: 0,
@@ -687,7 +689,7 @@ describe('row filters', () => {
             setupKeyAndApp();
             setupScopes();
             allowCeiling('scope-fa');
-            setMockBaseKeyScopes([
+            SetMockBaseKeyScopes([
                 new MJAPIKeyScopeEntity({
                     ID: 'ks-fa', APIKeyID: 'key-1', ScopeID: 'scope-fa',
                     ResourcePattern: '*', PatternType: 'Include', IsDeny: false, Priority: 0,
@@ -705,7 +707,7 @@ describe('row filters', () => {
             it(`denies '${scopePath}' for a filtered key, naming the row filter and the split-the-key remedy`, async () => {
                 setupKeyAndApp();
                 setupScopes();
-                setMockBaseKeyScopes([
+                SetMockBaseKeyScopes([
                     new MJAPIKeyScopeEntity({
                         ID: 'ks-filtered', APIKeyID: 'key-1', ScopeID: 'scope-read',
                         ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 0,
@@ -728,7 +730,7 @@ describe('row filters', () => {
             setupKeyAndApp();
             setupScopes();
             allowCeiling('scope-qr');
-            setMockBaseKeyScopes([
+            SetMockBaseKeyScopes([
                 new MJAPIKeyScopeEntity({
                     ID: 'ks-qr', APIKeyID: 'key-1', ScopeID: 'scope-qr',
                     ResourcePattern: '*', PatternType: 'Include', IsDeny: false, Priority: 0,
@@ -746,15 +748,15 @@ describe('row filters', () => {
             setupKeyAndApp();
             setupScopes();
             allowCeiling('scope-read');
-            setMockBaseKeyScopes([
+            SetMockBaseKeyScopes([
                 new MJAPIKeyScopeEntity({
                     ID: 'ks-filtered', APIKeyID: 'key-1', ScopeID: 'scope-read',
                     ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 0,
                     RowFilterID: 'filter-1',
                 }),
             ]);
-            setMockMetadataEntities([new EntityInfo({ ID: 'entity-users', Name: 'Users' })]);
-            setMockRowLevelSecurityFilters([
+            SetMockMetadataEntities([new EntityInfo({ ID: 'entity-users', Name: 'Users' })]);
+            SetMockRowLevelSecurityFilters([
                 new RowLevelSecurityFilterInfo({ ID: 'filter-1', Name: 'OrgFilter', FilterText: filterText }),
             ]);
         }
@@ -829,7 +831,7 @@ describe('row filters', () => {
 
         it('unresolvable entity name on a filtered matching rule → denied (fail closed)', async () => {
             setupFilteredReadRule("OrganizationID = '{{ActingOrganizationID}}'");
-            setMockMetadataEntities([]); // entity no longer resolvable
+            SetMockMetadataEntities([]); // entity no longer resolvable
             const engine = new APIKeyEngine();
             const result = await engine.Authorize(HASH, 'MJAPI', 'entity:read', 'Users', systemUser as never, undefined, {
                 skipLogging: true,
@@ -841,7 +843,7 @@ describe('row filters', () => {
 
         it('dangling RowFilterID → denied (fail closed)', async () => {
             setupFilteredReadRule("Col = '{{ActingOrganizationID}}'");
-            setMockRowLevelSecurityFilters([]); // filter missing from metadata
+            SetMockRowLevelSecurityFilters([]); // filter missing from metadata
             const engine = new APIKeyEngine();
             const result = await engine.Authorize(HASH, 'MJAPI', 'entity:read', 'Users', systemUser as never, undefined, {
                 skipLogging: true,
@@ -855,7 +857,7 @@ describe('row filters', () => {
             setupKeyAndApp();
             setupScopes();
             allowCeiling('scope-agent');
-            setMockBaseKeyScopes([
+            SetMockBaseKeyScopes([
                 new MJAPIKeyScopeEntity({
                     ID: 'ks-agent', APIKeyID: 'key-1', ScopeID: 'scope-agent',
                     ResourcePattern: 'SomeAgent', PatternType: 'Include', IsDeny: false, Priority: 0,
@@ -872,7 +874,7 @@ describe('row filters', () => {
             setupKeyAndApp();
             setupScopes();
             allowCeiling('scope-read');
-            setMockBaseKeyScopes([
+            SetMockBaseKeyScopes([
                 new MJAPIKeyScopeEntity({
                     ID: 'ks-1', APIKeyID: 'key-1', ScopeID: 'scope-read',
                     ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 0,
@@ -889,14 +891,14 @@ describe('row filters', () => {
     describe('GetRowFilterBindingsForKey()', () => {
         beforeEach(() => {
             setupScopes();
-            setMockMetadataEntities([
+            SetMockMetadataEntities([
                 new EntityInfo({ ID: 'entity-users', Name: 'Users' }),
                 new EntityInfo({ ID: 'entity-orders', Name: 'Orders' }),
             ]);
         });
 
         it('maps rule → entity → permission type, skipping unfiltered rules', () => {
-            setMockBaseKeyScopes([
+            SetMockBaseKeyScopes([
                 new MJAPIKeyScopeEntity({
                     ID: 'ks-read', APIKeyID: 'key-1', ScopeID: 'scope-read',
                     ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 0,
@@ -922,7 +924,7 @@ describe('row filters', () => {
         });
 
         it('skips rules whose entity does not resolve (fail closed per rule, no binding)', () => {
-            setMockBaseKeyScopes([
+            SetMockBaseKeyScopes([
                 new MJAPIKeyScopeEntity({
                     ID: 'ks-bad', APIKeyID: 'key-1', ScopeID: 'scope-read',
                     ResourcePattern: 'NoSuchEntity', PatternType: 'Include', IsDeny: false, Priority: 0,
@@ -934,7 +936,7 @@ describe('row filters', () => {
         });
 
         it('skips deny and Exclude rules carrying a filter (invalid config)', () => {
-            setMockBaseKeyScopes([
+            SetMockBaseKeyScopes([
                 new MJAPIKeyScopeEntity({
                     ID: 'ks-deny', APIKeyID: 'key-1', ScopeID: 'scope-read',
                     ResourcePattern: 'Users', PatternType: 'Include', IsDeny: true, Priority: 0,
@@ -951,7 +953,7 @@ describe('row filters', () => {
         });
 
         it('only returns bindings for the requested key', () => {
-            setMockBaseKeyScopes([
+            SetMockBaseKeyScopes([
                 new MJAPIKeyScopeEntity({
                     ID: 'ks-other', APIKeyID: 'other-key', ScopeID: 'scope-read',
                     ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 0,
@@ -963,9 +965,83 @@ describe('row filters', () => {
         });
 
         it('throws when the base engine has not loaded (fail closed, §5.6 row 7)', () => {
-            setMockBaseLoaded(false);
+            SetMockBaseLoaded(false);
             const engine = new APIKeyEngine();
             expect(() => engine.GetRowFilterBindingsForKey('key-1')).toThrow(/before APIKeysEngineBase loaded/);
+        });
+    });
+
+    describe('validation cache & LastUsedAt throttling', () => {
+        it('caches ValidateKeyByHash results within scopeCacheTTLMs and avoids repeated RunView lookups', async () => {
+            const keyEntity = new MJAPIKeyEntity({ ID: 'key-cache-1', UserID: 'user-1', Status: 'Active' });
+            SetMockRunViewResult('MJ: API Keys', {
+                Success: true,
+                Results: [keyEntity],
+            });
+
+            const engine = new APIKeyEngine({ scopeCacheTTLMs: 60_000 });
+            const first = await engine.ValidateKeyByHash(HASH, systemUser as never);
+            expect(first.Valid).toBe(true);
+            expect(engine.CachedKeyValidationCount).toBe(1);
+
+            // Clear the mock RunView so a second DB lookup would fail if executed
+            ClearMockRunViewResults();
+
+            const second = await engine.ValidateKeyByHash(HASH, systemUser as never);
+            expect(second.Valid).toBe(true);
+            expect(second.APIKey?.ID).toBe('key-cache-1');
+            engine.ClearCache();
+        });
+
+        it('throttles LastUsedAt Save() calls across rapid ValidateAPIKey requests', async () => {
+            const engine = new APIKeyEngine({ scopeCacheTTLMs: 60_000, loggingEnabled: false });
+            const { Raw } = engine.GenerateAPIKey();
+            const keyEntity = new MJAPIKeyEntity({ ID: 'key-throttle-1', UserID: 'user-1', Status: 'Active' });
+            const saveSpy = vi.spyOn(keyEntity, 'Save');
+            const userEntity = new MJUserEntity({ ID: 'user-1', Name: 'Test User', Email: 't@example.com', IsActive: true });
+
+            SetMockRunViewResult('MJ: API Keys', { Success: true, Results: [keyEntity] });
+            SetMockRunViewResult('MJ: Users', { Success: true, Results: [userEntity] });
+
+            const first = await engine.ValidateAPIKey({ RawKey: Raw }, systemUser as never);
+            expect(first.IsValid).toBe(true);
+            expect(saveSpy).toHaveBeenCalledTimes(1);
+
+            // Second and third rapid calls hit cache and skip redundant LastUsedAt DB Save()
+            ClearMockRunViewResults();
+            const second = await engine.ValidateAPIKey({ RawKey: Raw }, systemUser as never);
+            const third = await engine.ValidateAPIKey({ RawKey: Raw }, systemUser as never);
+            expect(second.IsValid).toBe(true);
+            expect(third.IsValid).toBe(true);
+            expect(saveSpy).toHaveBeenCalledTimes(1);
+            engine.ClearCache();
+        });
+
+        it('evicts cached key immediately on MJGlobal BaseEntity save/delete/remote-invalidate events', async () => {
+            const keyEntity = new MJAPIKeyEntity({ ID: 'key-evict-1', UserID: 'user-1', Status: 'Active' });
+            SetMockRunViewResult('MJ: API Keys', {
+                Success: true,
+                Results: [keyEntity],
+            });
+
+            const engine = new APIKeyEngine({ scopeCacheTTLMs: 60_000 });
+            const first = await engine.ValidateKeyByHash(HASH, systemUser as never);
+            expect(first.Valid).toBe(true);
+            expect(engine.CachedKeyValidationCount).toBe(1);
+
+            MJGlobal.Instance.RaiseEvent({
+                component: engine,
+                event: MJEventType.ComponentEvent,
+                eventCode: 'BaseEntityEvent',
+                args: {
+                    type: 'remote-invalidate',
+                    entityName: 'MJ: API Keys',
+                    baseEntity: null,
+                },
+            });
+
+            expect(engine.CachedKeyValidationCount).toBe(0);
+            engine.ClearCache();
         });
     });
 });

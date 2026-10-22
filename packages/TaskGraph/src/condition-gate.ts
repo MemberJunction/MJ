@@ -16,6 +16,7 @@
  *
  * @module @memberjunction/task-graph
  */
+import { DecisionHoldReason, NO_DECISIONS, type GraphDecisions } from '@memberjunction/ai-core-plus';
 
 /**
  * What to do with a gating edge whose condition has been considered.
@@ -36,8 +37,14 @@ export type GateOutcome = 'keep' | 'drop' | 'hold';
  */
 export type FailureSemantics = 'block' | 'edges';
 
-/** The evaluator's answer, in the shape `IConditionEvaluator` returns. */
-export type ConditionVerdict = { Success: boolean; Value?: unknown; ErrorMessage?: string };
+/**
+ * The evaluator's answer, in the shape `IConditionEvaluator` returns.
+ *
+ * `Unevaluable` is the third value said outright: the condition reads a fact that is not settled — a
+ * decision below its question's `minConfidence`, or one whose call failed — so it was not evaluated
+ * at all. Such a verdict HOLDS. It never reads as false, whatever `Success` and `Value` say.
+ */
+export type ConditionVerdict = { Success: boolean; Value?: unknown; ErrorMessage?: string; Unevaluable?: boolean };
 
 /**
  * The invocation's contribution to the condition envelope — the flow dialect's `data`/`context`.
@@ -137,6 +144,7 @@ export function BuildConditionContext(
     origin: ConditionOrigin,
     output: unknown,
     invocation: ConditionInvocation = {},
+    decisions: GraphDecisions['Answers'] = NO_DECISIONS.Answers,
 ): Record<string, unknown> {
     // The envelope and the spec's declared roots (`CONDITION_ROOTS`, in ai-core-plus) are one
     // contract split across two packages, and the validator refuses conditions on the strength of
@@ -182,7 +190,30 @@ export function BuildConditionContext(
         // no hold, and the validator blessing the condition at the door.
         data: invocation.Data ?? NO_OUTPUT,
         context: invocation.Context ?? NO_OUTPUT,
+        // JUDGMENT, ALREADY RESOLVED (plan 4.2). The answers the graph's Decision steps gave BEFORE
+        // this condition runs — reading one is a property access, never a model call. Keyed by the
+        // step's tempId rather than taken from the origin's output, because a condition names the
+        // step it reads and the answer must mean the same thing on every edge. Only answers a
+        // condition may act on are here; `DecisionHoldReason` holds on the rest before evaluation.
+        decisions: readable(decisions),
     };
+}
+
+/**
+ * Evaluates an edge condition, holding first on any decision it reads that is not settled.
+ *
+ * The evaluation itself is the caller's, so this stays synchronous and pure: the answers were
+ * resolved by their Decision steps before any condition was read.
+ */
+export function EvaluateCondition(
+    condition: string,
+    context: Record<string, unknown>,
+    decisions: GraphDecisions,
+    evaluate: (condition: string, context: Record<string, unknown>) => ConditionVerdict,
+): ConditionVerdict {
+    const held = DecisionHoldReason(condition, decisions);
+    if (held) return { Success: false, Unevaluable: true, ErrorMessage: held };
+    return evaluate(condition, context);
 }
 
 /**
@@ -248,6 +279,10 @@ export function DecideGate(
     if (!TERMINAL_FOR_CONDITIONS.has(originStatus)) return 'keep';
 
     const result = evaluate();
+    // CANNOT TELL, SAID OUTRIGHT (plan 4.5). Until decisions, the only way to produce "cannot tell"
+    // was a ReferenceError. A condition reading an unsettled judgment now says so directly, and it
+    // holds — a below-threshold or failed decision must never read as false.
+    if (result.Unevaluable) return 'hold';
     if (result.Success) return result.Value ? 'keep' : 'drop';
 
     // FAILED TO EVALUATE — but there are two of those, and they are not the same thing.

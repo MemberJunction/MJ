@@ -79,7 +79,7 @@ export interface IPipelineResolver {
    * @param input the experiment + plan + iteration/session context
    * @returns the pipeline id to hand to `TrainingEngine.trainModel`
    */
-  resolvePipelineId(input: TrainExperimentInput): Promise<string>;
+  resolvePipelineId(input: TrainExperimentInput): Promise<string>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -112,7 +112,7 @@ export class TrainingEngineExperimentTrainer implements IExperimentTrainer {
       },
       this.trainingDeps,
     );
-    const score = extractNormalizedScore(model.HoldoutMetrics, model.Metrics, input.plan.TargetDefinition.SuccessMetric, input.plan.TargetDefinition.ProblemType);
+    const score = ExtractNormalizedScore(model.HoldoutMetrics, model.Metrics, input.plan.TargetDefinition.SuccessMetric, input.plan.TargetDefinition.ProblemType);
     return {
       model,
       run,
@@ -137,7 +137,7 @@ export class TrainingEngineExperimentTrainer implements IExperimentTrainer {
  * @param successMetric the plan's `SuccessMetric` (e.g. `AUC`, `RMSE`)
  * @param problemType classification vs. regression (informs the error-metric direction)
  */
-export function extractNormalizedScore(
+export function ExtractNormalizedScore(
   holdoutMetricsJson: string | null,
   trainMetricsJson: string | null,
   successMetric: string,
@@ -154,6 +154,16 @@ export function extractNormalizedScore(
   // the Core `isErrorMetric`) so the two consumers can never drift apart.
   void problemType;
   return isErrorMetric(key) ? -raw : raw;
+}
+
+/** @deprecated Use {@link ExtractNormalizedScore}. */
+export function extractNormalizedScore(
+  holdoutMetricsJson: string | null,
+  trainMetricsJson: string | null,
+  successMetric: string,
+  problemType: 'classification' | 'regression',
+): number {
+  return ExtractNormalizedScore(holdoutMetricsJson, trainMetricsJson, successMetric, problemType);
 }
 
 /** Parse a metrics JSON column into a lower-cased numeric record, or null. */

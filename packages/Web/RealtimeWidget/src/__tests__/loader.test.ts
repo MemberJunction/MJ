@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { mountWidget, bootstrapFromDocument } from '../loader.js';
+import { MountWidget, BootstrapFromDocument } from '../loader.js';
 import { WidgetSessionClient, type FetchLike } from '../session/widget-session-client.js';
 import { MockWidgetTransport } from '../transport/mock-widget-transport.js';
 import { WIDGET_TAG_NAME } from '../ui/support-widget-element.js';
-import { readVisitorKey } from '../session/visitor-key-cookie.js';
+import { ReadVisitorKey } from '../session/visitor-key-cookie.js';
 
 const sessionBody = {
     success: true,
@@ -38,7 +38,7 @@ describe('mountWidget', () => {
         const target = document.createElement('div');
         document.body.appendChild(target);
 
-        const el = await mountWidget({ widgetKey: 'pk', apiUrl: 'https://api.test', mountTarget: target }, deps(transport, scheduled));
+        const el = await MountWidget({ widgetKey: 'pk', apiUrl: 'https://api.test', mountTarget: target }, deps(transport, scheduled));
 
         expect(el.tagName.toLowerCase()).toBe(WIDGET_TAG_NAME);
         expect(target.querySelector(WIDGET_TAG_NAME)).toBe(el);
@@ -48,7 +48,7 @@ describe('mountWidget', () => {
     });
 
     it('falls back to <body> when no mount target is given', async () => {
-        const el = await mountWidget({ widgetKey: 'pk', apiUrl: 'https://api.test' }, deps(new MockWidgetTransport(), []));
+        const el = await MountWidget({ widgetKey: 'pk', apiUrl: 'https://api.test' }, deps(new MockWidgetTransport(), []));
         expect(el.parentElement).toBe(document.body);
     });
 });
@@ -73,16 +73,16 @@ describe('mountWidget — returning-visitor cookie (RV1, gated)', () => {
     }
 
     it('writes the durable cookie when remembering is on and a key is returned', async () => {
-        await mountWidget(
+        await MountWidget(
             { widgetKey: 'pk_remember', apiUrl: 'https://api.test' },
             depsWithBody({ ...sessionBody, rememberReturningVisitors: true, visitorKey: 'vk_persist_me' }),
         );
-        expect(readVisitorKey('pk_remember')).toBe('vk_persist_me');
+        expect(ReadVisitorKey('pk_remember')).toBe('vk_persist_me');
     });
 
     it('writes NO cookie when remembering is off (default)', async () => {
-        await mountWidget({ widgetKey: 'pk_off', apiUrl: 'https://api.test' }, depsWithBody(sessionBody));
-        expect(readVisitorKey('pk_off')).toBeUndefined();
+        await MountWidget({ widgetKey: 'pk_off', apiUrl: 'https://api.test' }, depsWithBody(sessionBody));
+        expect(ReadVisitorKey('pk_off')).toBeUndefined();
     });
 });
 
@@ -92,7 +92,7 @@ describe('bootstrapFromDocument', () => {
     });
 
     it('returns null when no [data-widget-key] element is present', async () => {
-        const result = await bootstrapFromDocument(document);
+        const result = await BootstrapFromDocument(document);
         expect(result).toBeNull();
     });
 });

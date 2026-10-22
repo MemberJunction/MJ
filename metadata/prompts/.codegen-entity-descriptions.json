@@ -73,7 +73,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 10
           },
@@ -81,14 +81,14 @@
             "ID": "25554962-6B1A-4FEC-9C76-B69841F06182"
           },
           "sync": {
-            "lastModified": "2026-05-29T19:48:58.903Z",
-            "checksum": "f73dcd14aeb277725c2bf0b147d266c30a90951d1f35572303cd1cf8aba4ca73"
+            "lastModified": "2026-10-02T21:42:11.256Z",
+            "checksum": "16ae6811aae94d52bed203c8c0d10a4f2d74035edf8bbe657cc0fb9c54a03df3"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5.5 Instant",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-6 Luna",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "Priority": 1
           },
@@ -96,14 +96,14 @@
             "ID": "F9441B29-B98E-4392-B663-151B012BAB29"
           },
           "sync": {
-            "lastModified": "2026-05-29T19:48:58.922Z",
-            "checksum": "0fbff8e055836faf4ae3e96e5e5a26f1a2665442185baa35f76e4675c832ada6"
+            "lastModified": "2026-10-02T21:42:11.274Z",
+            "checksum": "678044bc528794ef1fbe0c708b488d8a5f0583e4ea828d9e33f0c7a66cd1757a"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
             "Priority": 9
           },
@@ -111,8 +111,8 @@
             "ID": "637D26D4-C290-4F6A-9322-A59A63B7CC9F"
           },
           "sync": {
-            "lastModified": "2026-05-29T19:48:58.937Z",
-            "checksum": "1702dcefdc5af476fedab1959e4a7b8e999f71bdf19c2f51f14e2c8b165f96f2"
+            "lastModified": "2026-10-02T21:42:11.289Z",
+            "checksum": "13bc8b6a2097c32d1a3db8a9cdd44e04bd8e5e7cc4a8971fe6178a2f8aff5958"
           }
         }
       ]

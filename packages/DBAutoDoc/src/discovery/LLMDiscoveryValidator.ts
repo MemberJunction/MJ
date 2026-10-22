@@ -5,9 +5,12 @@
  */
 
 import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
-import { MJGlobal } from '@memberjunction/global';
+import { ResolveCallTimeoutMs, WithCallDeadline } from '../utils/call-deadline.js';
 import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
 import { ColumnStatsCache } from './ColumnStatsCache.js';
+import { CreateLLMInstance } from '../utils/llm-factory.js';
+import { BuildIndexHints, FormatIndexHint } from '../utils/index-hints.js';
+import { SeedContextExcerpt, SeedContextText } from '../utils/seed-context.js';
 import { SchemaDefinition } from '../types/state.js';
 import {
   PKCandidate,
@@ -26,28 +29,20 @@ export class LLMDiscoveryValidator {
     private config: RelationshipDiscoveryConfig,
     private aiConfig: AIConfig,
     private statsCache: ColumnStatsCache,
-    private schemas: SchemaDefinition[]
+    private schemas: SchemaDefinition[],
+    /** The operator's seed context; paragraphs naming the target table are added to the prompt. */
+    private seedContext?: SeedContextText
   ) {
-    // Create LLM instance using MJ ClassFactory
-    const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
-      BaseLLM,
-      aiConfig.provider,
-      aiConfig.apiKey
-    );
-
-    if (!llm) {
-      throw new Error(
-        `Failed to create LLM instance for provider: ${aiConfig.provider}. Check that the provider name matches a registered BaseLLM subclass.`
-      );
-    }
-
-    this.llm = llm;
+    // Resolve the provider name (e.g. 'gemini') to its driver class (e.g. 'GeminiLLM'), as the rest
+    // of DBAutoDoc does. Using the raw provider name as the registration key resolved to nothing and
+    // left a bare BaseLLM, so every validation call failed.
+    this.llm = CreateLLMInstance(aiConfig.provider, aiConfig.apiKey);
   }
 
   /**
    * Validate PK/FK candidates for a single table using LLM reasoning
    */
-  public async validateTableRelationships(
+  public async ValidateTableRelationships(
     schemaName: string,
     tableName: string,
     pkCandidates: PKCandidate[],
@@ -77,17 +72,24 @@ export class LLMDiscoveryValidator {
       responseFormat: 'JSON'
     };
 
-    const chatResult: ChatResult = await this.llm.ChatCompletion(params);
+    // Bounded. This runs once per candidate table inside a sequential loop, so one stalled call
+    // parks every table after it — the discovery phase would appear to be working and simply never
+    // reach its next table.
+    const chatResult: ChatResult = await WithCallDeadline(
+      ResolveCallTimeoutMs(this.aiConfig.callTimeoutMs),
+      `relationship validation for ${schemaName}.${tableName}`,
+      signal => this.llm.ChatCompletion({ ...params, cancellationToken: signal })
+    );
 
     if (!chatResult.success) {
       return {
         validated: false,
         reasoning: `LLM call failed: ${chatResult.errorMessage}`,
-        confidenceAdjustment: 0,
-        recommendations: [],
+        ConfidenceAdjustment: 0,
+        Recommendations: [],
         tokensUsed: 0,
-        inputTokens: 0,
-        outputTokens: 0
+        InputTokens: 0,
+        OutputTokens: 0
       };
     }
 
@@ -119,23 +121,33 @@ export class LLMDiscoveryValidator {
       return {
         validated: result.validated,
         reasoning: result.reasoning,
-        confidenceAdjustment: 0, // Overall adjustment
-        recommendations: result.recommendations || [],
+        ConfidenceAdjustment: 0, // Overall adjustment
+        Recommendations: result.recommendations || [],
         tokensUsed: usage?.totalTokens || 0,
-        inputTokens: usage?.promptTokens || 0,
-        outputTokens: usage?.completionTokens || 0
+        InputTokens: usage?.promptTokens || 0,
+        OutputTokens: usage?.completionTokens || 0
       };
     } catch (parseError) {
       return {
         validated: false,
         reasoning: `Failed to parse LLM response: ${(parseError as Error).message}\n\nRaw content:\n${content}`,
-        confidenceAdjustment: 0,
-        recommendations: [],
+        ConfidenceAdjustment: 0,
+        Recommendations: [],
         tokensUsed: usage?.totalTokens || 0,
-        inputTokens: usage?.promptTokens || 0,
-        outputTokens: usage?.completionTokens || 0
+        InputTokens: usage?.promptTokens || 0,
+        OutputTokens: usage?.completionTokens || 0
       };
     }
+  }
+
+  /** @deprecated Use {@link ValidateTableRelationships}. */
+  public async validateTableRelationships(
+    schemaName: string,
+    tableName: string,
+    pkCandidates: PKCandidate[],
+    fkCandidates: FKCandidate[]
+  ): Promise<LLMValidationResult> {
+    return this.ValidateTableRelationships(schemaName, tableName, pkCandidates, fkCandidates);
   }
 
   /**
@@ -154,13 +166,13 @@ export class LLMDiscoveryValidator {
 
       // Return minimal context without column stats
       return {
-        targetTable: {
+        TargetTable: {
           schema: schemaName,
           table: tableName,
           rowCount: 0,
           columns: []
         },
-        relatedTables: [],
+        RelatedTables: [],
         pkCandidates: pkCandidates.map(pk => ({
           columnNames: pk.columnNames,
           confidence: pk.confidence,
@@ -180,7 +192,7 @@ export class LLMDiscoveryValidator {
     const targetTable = {
       schema: schemaName,
       table: tableName,
-      rowCount: tableStats.totalRows,
+      rowCount: tableStats.TotalRows,
       columns: Array.from(tableStats.columns.values()).map(col => ({
         name: col.columnName,
         type: col.dataType,
@@ -214,11 +226,18 @@ export class LLMDiscoveryValidator {
       }));
 
     return {
-      targetTable,
-      relatedTables,
+      TargetTable: targetTable,
+      RelatedTables: relatedTables,
       pkCandidates: pkContext,
-      fkCandidates: fkContext
+      fkCandidates: fkContext,
+      ExistingIndexes: this.indexHintLines(schemaName, tableName)
     };
+  }
+
+  /** Existing indexes on the table as prompt lines, from the introspected schema. */
+  private indexHintLines(schemaName: string, tableName: string): string[] {
+    const table = this.schemas.find(s => s.name === schemaName)?.tables.find(t => t.name === tableName);
+    return BuildIndexHints(table).map(FormatIndexHint);
   }
 
   /**
@@ -291,7 +310,7 @@ export class LLMDiscoveryValidator {
         related.push({
           schema: otherTableStats.schemaName,
           table: otherTableStats.tableName,
-          rowCount: otherTableStats.totalRows,
+          rowCount: otherTableStats.TotalRows,
           potentialRelationships: potentialRelationships.sort(
             (a, b) => b.similarity - a.similarity
           ).slice(0, 5) // Top 5 relationships
@@ -510,6 +529,20 @@ export class LLMDiscoveryValidator {
     return reasons.join(', ');
   }
 
+  /** The operator's notes on the target table, as a prompt section, or an empty string when there are none. */
+  protected seedNotes(tableName: string): string {
+    const excerpt = SeedContextExcerpt(this.seedContext, [tableName]);
+    if (!excerpt) {
+      return '';
+    }
+    return `## Notes from the operator about this data
+Written by the person running the analysis. Treat them as evidence about how tables relate and which columns are keys; they do not override what the data and constraints show.
+
+${excerpt}
+
+`;
+  }
+
   /**
    * Build LLM validation prompt
    */
@@ -517,11 +550,11 @@ export class LLMDiscoveryValidator {
     return `
 You are a database schema expert analyzing potential primary keys and foreign keys.
 
-## Target Table: ${context.targetTable.schema}.${context.targetTable.table}
-Row Count: ${context.targetTable.rowCount}
+## Target Table: ${context.TargetTable.schema}.${context.TargetTable.table}
+Row Count: ${context.TargetTable.rowCount}
 
 ### Columns and Statistics:
-${context.targetTable.columns
+${context.TargetTable.columns
   .map(
     col => `
 - **${col.name}** (${col.type})
@@ -535,10 +568,10 @@ ${context.targetTable.columns
   .join('\n')}
 
 ${
-  context.relatedTables && context.relatedTables.length > 0
+  context.RelatedTables && context.RelatedTables.length > 0
     ? `
 ### Related Tables (by column name similarity):
-${context.relatedTables
+${context.RelatedTables
   .map(
     table => `
 - **${table.schema}.${table.table}** (${table.rowCount} rows)
@@ -550,6 +583,15 @@ ${context.relatedTables
     : ''
 }
 
+${
+  context.ExistingIndexes && context.ExistingIndexes.length > 0
+    ? `### Existing Indexes (declared in the database):
+${context.ExistingIndexes.map(line => `- ${line}`).join('\n')}
+
+Indexes are evidence, not proof: a UNIQUE index or PRIMARY KEY on non-null columns strongly supports a PK candidate on exactly those columns; a non-unique index led by an ID-like column often marks a foreign key. "(expression)" is a computed key part.
+`
+    : ''
+}
 ### Statistical Analysis Found:
 
 **Primary Key Candidates:**
@@ -580,7 +622,7 @@ ${
     : 'None'
 }
 
-## Your Task:
+${this.seedNotes(context.TargetTable.table)}## Your Task:
 Analyze the statistical findings and provide validation:
 
 1. **Validate Primary Keys**: Are the PK candidates correct? Should any be removed?

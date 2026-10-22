@@ -112,11 +112,16 @@ export interface ApolloContact {
 export interface ApolloPerson {
     id: string;
     firstName: string;
+    /** Full last name. Since 2026 Apollo withholds it on `api_search` (see `lastNameObfuscated`); '' then. */
     lastName: string;
+    /** Apollo's masked last name, e.g. `De***n`, on `api_search`; '' when the full name was sent. */
+    lastNameObfuscated: string;
     name: string;
     title: string;
-    /** LinkedIn profile URL when present; '' otherwise. */
+    /** LinkedIn profile URL when present; '' otherwise (withheld on `api_search`). */
     linkedinUrl: string;
+    /** Apollo's `has_email` flag on `api_search`: whether a bulk_match on this id would return an email. Null when absent. */
+    hasEmail: boolean | null;
     /** Apollo organization id of the employer; null when absent. */
     organizationId: string | null;
     /** Employer name; '' when absent. */
@@ -125,7 +130,12 @@ export interface ApolloPerson {
 
 // ─── Pagination ─────────────────────────────────────────────────────────────
 
-/** Apollo's `pagination` envelope on every search response. */
+/**
+ * Apollo's `pagination` envelope on the saved-record searches. The prospecting
+ * search (`mixed_people/api_search`) no longer sends one, only a top-level
+ * `total_entries`; the client fills this shape from that, with `totalPages`
+ * computed from the requested page size.
+ */
 export interface ApolloPagination {
     page: number;
     perPage: number;
@@ -187,7 +197,8 @@ export interface ApolloContactSearchFilter {
 /**
  * Prospecting-search filter. `organizationDomains` → `q_organization_domains_list`,
  * `organizationIds` → `organization_ids`, `titles` → `person_titles`,
- * `seniorities` → `person_seniorities`. All are optional to Apollo, but supplying
+ * `seniorities` → `person_seniorities`, `locations` → `person_locations`,
+ * `keywords` → `q_keywords`. All are optional to Apollo, but supplying
  * none returns an unscoped firehose that burns the rate limit for nothing, so the
  * action requires at least one.
  */
@@ -197,6 +208,10 @@ export interface ApolloPeopleSearchFilter {
     titles?: string[];
     /** e.g. 'owner' | 'founder' | 'c_suite' | 'vp' | 'director' | 'manager' */
     seniorities?: string[];
+    /** Person locations as Apollo spells them, e.g. 'Boston, Massachusetts, United States'. */
+    locations?: string[];
+    /** Free-text keywords matched against names, titles and employers. */
+    keywords?: string;
 }
 
 // ─── Move results ───────────────────────────────────────────────────────────
@@ -246,32 +261,32 @@ export interface ApolloMoveResult {
 /** The operations the list/search actions need. No delete surface, by design. */
 export interface IApolloRESTClient {
     /** Every label, account and contact alike. Master key required. */
-    listLabels(): Promise<ApolloLabel[]>;
+    listLabels(): Promise<ApolloLabel[]>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Create a label. `modality` is required by Apollo — omitting it returns 422. */
-    createLabel(name: string, modality?: 'contacts' | 'accounts'): Promise<ApolloLabel>;
+    createLabel(name: string, modality?: 'contacts' | 'accounts'): Promise<ApolloLabel>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Resolve a label by exact name, case-insensitive; null when no match. */
-    findLabelByName(name: string): Promise<ApolloLabel | null>;
+    findLabelByName(name: string): Promise<ApolloLabel | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /** One page of saved accounts. */
-    searchAccounts(filter: ApolloAccountSearchFilter, paging?: ApolloPagingOptions): Promise<ApolloAccountsPage>;
+    searchAccounts(filter: ApolloAccountSearchFilter, paging?: ApolloPagingOptions): Promise<ApolloAccountsPage>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** One page of saved contacts. */
-    searchContacts(filter: ApolloContactSearchFilter, paging?: ApolloPagingOptions): Promise<ApolloContactsPage>;
+    searchContacts(filter: ApolloContactSearchFilter, paging?: ApolloPagingOptions): Promise<ApolloContactsPage>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** One page of net-new prospects. */
-    searchPeople(filter: ApolloPeopleSearchFilter, paging?: ApolloPagingOptions): Promise<ApolloPeoplePage>;
+    searchPeople(filter: ApolloPeopleSearchFilter, paging?: ApolloPagingOptions): Promise<ApolloPeoplePage>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Move accounts between lists, two-step and label-preserving. The supplied
      * accounts MUST carry current `labelNames` from a fresh read — stale labels
      * would be written back as the intended set and strip real memberships.
      */
-    moveAccounts(
+    moveAccounts(  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
         accounts: ApolloAccount[],
         fromList: string,
         toList: string,
         options?: { verify?: boolean },
     ): Promise<ApolloMoveResult>;
     /** The same for contacts. */
-    moveContacts(
+    moveContacts(  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
         contacts: ApolloContact[],
         fromList: string,
         toList: string,

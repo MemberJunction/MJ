@@ -137,7 +137,7 @@ function detectCIProvider(): {
  *
  * @returns RunContextDetails object with all available context
  */
-export function gatherExecutionContext(): RunContextDetails {
+export function GatherExecutionContext(): RunContextDetails {
     const ciInfo = detectCIProvider();
 
     return {
@@ -151,18 +151,33 @@ export function gatherExecutionContext(): RunContextDetails {
     };
 }
 
+/** @deprecated Use {@link GatherExecutionContext}. */
+export function gatherExecutionContext(): RunContextDetails {
+    return GatherExecutionContext();
+}
+
 /**
  * Get the hostname of the current machine.
  * @returns Machine hostname
  */
-export function getMachineName(): string {
+export function GetMachineName(): string {
     return os.hostname();
+}
+
+/** @deprecated Use {@link GetMachineName}. */
+export function getMachineName(): string {
+    return GetMachineName();
 }
 
 /**
  * Get the machine identifier (MAC address).
  * @returns MAC address or undefined if not available
  */
-export function getMachineIdentifier(): string | undefined {
+export function GetMachineIdentifier(): string | undefined {
     return getMachineId();
+}
+
+/** @deprecated Use {@link GetMachineIdentifier}. */
+export function getMachineIdentifier(): string | undefined {
+    return GetMachineIdentifier();
 }

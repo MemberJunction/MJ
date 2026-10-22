@@ -1,5 +1,195 @@
 # @memberjunction/ai-huggingface
 
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [3080e83]
+- Updated dependencies [81aea34]
+- Updated dependencies [2274f42]
+- Updated dependencies [230cdad]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [72dd65c]
+- Updated dependencies [17a4137]
+  - @memberjunction/ai@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/ai-openai@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- 6c8798b: MJAPI realtime relay. `RealtimeProxyServer` also serves `/realtime/relay/<ticket>/…` (any suffix after the ticket, which a provider's browser SDK appends): a ticketed websocket that runs a provider's frame policy (`IRealtimeRelayPolicy` in `@memberjunction/ai`) between the browser and the upstream. A relay session (`RealtimeProxyRegistry.IssueRelaySession`) opens one fresh connection within 5 minutes of the mint, then only resumes that present a resumption handle the relay forwarded to that session; it ends at 30 minutes or `MaxSessionSeconds`, whichever comes first, or after 10 connections. The policy mints the upstream headers on every open, writes the opening frames, filters client frames and reports handles; server frames pass unchanged. The relay pings both legs every 20 s and terminates a leg that answers none of its last 2 pings (the other leg gets 1001 upstream or 1014 in the browser), closes a browser that falls more than 16 MiB behind (1013; the client resumes), closes on a client frame over 2 MiB, waits 10 s for the first client frame, keeps the 15 s upstream deadline and the 512-frame pre-open buffer, passes close codes through, keeps one live upstream per session, applies the Origin allowlist, and logs only counts, codes and an 8-character ticket prefix. Relay state is in memory, so a resume must reach the MJAPI instance that issued the session. The MJAPI public-URL helper moves from the HuggingFace driver to `@memberjunction/ai` (`ResolveRealtimeProxyBaseWsUrl`, `HttpOriginToWs`, `BuildRealtimeRelayUrl`); HuggingFace behaves as before. Nothing issues relay sessions yet, and `/realtime-proxy?ticket=` is unchanged.
+- Updated dependencies [d17de94]
+- Updated dependencies [7ada797]
+- Updated dependencies [432cb73]
+- Updated dependencies [293c316]
+- Updated dependencies [155aa45]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [1da00cb]
+- Updated dependencies [b699a37]
+- Updated dependencies [a4b23b7]
+- Updated dependencies [961d529]
+- Updated dependencies [10c2311]
+- Updated dependencies [4889fb2]
+- Updated dependencies [b2441c3]
+- Updated dependencies [69e19c5]
+- Updated dependencies [7316ac3]
+- Updated dependencies [8ef5e86]
+- Updated dependencies [596855c]
+- Updated dependencies [fdf6669]
+- Updated dependencies [4c682c1]
+- Updated dependencies [f325baa]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [b09fe34]
+- Updated dependencies [95e5dd9]
+- Updated dependencies [ecc5658]
+- Updated dependencies [8bac4d6]
+- Updated dependencies [5a3de97]
+- Updated dependencies [0d0ba18]
+- Updated dependencies [b6fcb30]
+- Updated dependencies [f73e192]
+- Updated dependencies [8704df6]
+- Updated dependencies [5345e3d]
+- Updated dependencies [22c9074]
+- Updated dependencies [aee2d53]
+- Updated dependencies [5dc3752]
+- Updated dependencies [6c8798b]
+- Updated dependencies [5e21f50]
+- Updated dependencies [25f7b82]
+- Updated dependencies [35ed7b5]
+- Updated dependencies [d853bf8]
+- Updated dependencies [e293b68]
+- Updated dependencies [afe9eb4]
+- Updated dependencies [d2cb42e]
+- Updated dependencies [cbddadb]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [6b487b8]
+  - @memberjunction/ai@6.2.0-edge.4
+  - @memberjunction/ai-openai@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [279b93e]
+- Updated dependencies [bea2386]
+- Updated dependencies [72e082b]
+  - @memberjunction/ai@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/ai-openai@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [2552b1e]
+- Updated dependencies [f3c6161]
+- Updated dependencies [5148534]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [4d647e6]
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/ai-openai@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [a50948e]
+- Updated dependencies [15a4333]
+- Updated dependencies [5da3ad2]
+- Updated dependencies [e1dd673]
+- Updated dependencies [c261eb8]
+- Updated dependencies [1d43161]
+- Updated dependencies [80905a1]
+  - @memberjunction/ai@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/ai-openai@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [b518dfa]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [d665a6e]
+- Updated dependencies [575bfae]
+- Updated dependencies [2cd8411]
+- Updated dependencies [e962151]
+- Updated dependencies [fc3da91]
+  - @memberjunction/ai@6.2.0-edge.0
+  - @memberjunction/ai-openai@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
+## 6.1.0
+
+### Minor Changes
+
+- 48ff99f: Add `ModelConfiguration` — a per-modality, strongly-typed JSON configuration bag on the AI model catalog — at three levels forming an inherit-with-override cascade: `AIModelType` < `AIModel` < `AIModelVendor`, resolved base-first with per-key deep merge. One interface (`IAIModelConfiguration`: `LLM` / `Realtime` / `Vision` / `Audio` sections) is shared by all three levels via MJ's JSONType mechanism, so CodeGen emits typed `ModelConfigurationObject` accessors on all three entities. This generalizes the scalar cascade those tables already carry (`SupportsPrefill` / `PrefillFallbackText`): new session/call-time capability knobs now land as typed properties in one bag instead of a column per knob. Existing capability columns are untouched. `AIEngine.GetEffectiveModelConfiguration(modelID, modelVendorID)` is the single canonical read path; the pure `ParseModelConfiguration` / `ResolveEffectiveModelConfiguration` live in `@memberjunction/ai`.
+
+  First consumer: realtime turn detection. `Realtime.TurnDetection` (`Mode: 'default' | 'serverVad' | 'semanticVad' | 'native'`, plus eagerness / threshold / silence tuning) flows catalog → session config bag → provider wire block on both realtime topologies, with precedence `profile default < ModelConfiguration cascade < realtime.session.turnDetection < runtime configOverridesJson`. Profiles declare `supportedTurnModes` and translate through the shared `MapNormalizedTurnDetection`; an unsupported mode is diagnostic-logged and falls back to the profile default, so a shared model catalog never rejects a session on any provider. Non-protocol drivers scrub the key. Turn detection was previously hardcoded per provider profile, so smarter models had no way to opt into their smarter turn modes.
+
+  Fixes a latent bug: a live `Reconfigure` (the meeting-mode auto-response flip) hardcoded `server_vad`, silently downgrading any session running a non-server-VAD turn mode. It now rebuilds the session's actual resolved mode, with meeting-mode floor control composed on top.
+
+  GPT Realtime 2.1 and 2.1-mini are seeded to `semanticVad` (eagerness `auto`) at the model level — the one behavior-affecting change here. Everything else is behavior-neutral while `ModelConfiguration` is `NULL`.
+
+### Patch Changes
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [e533ce5]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [2c826f7]
+- Updated dependencies [61b5612]
+- Updated dependencies [4586215]
+- Updated dependencies [197fdf8]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [ada8784]
+- Updated dependencies [11de1a3]
+- Updated dependencies [cefc302]
+- Updated dependencies [080f4cd]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [48ff99f]
+- Updated dependencies [076fa5d]
+- Updated dependencies [23c2521]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [de343b5]
+- Updated dependencies [1bd9674]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/global@6.1.0
+  - @memberjunction/ai@6.1.0
+  - @memberjunction/ai-openai@6.1.0
+
+## 6.1.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [61b5612]
+- Updated dependencies [076fa5d]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/ai@6.1.0-edge.7
+  - @memberjunction/ai-openai@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Patch Changes

@@ -1,9 +1,11 @@
-import { Anthropic, APIUserAbortError } from "@anthropic-ai/sdk";
-import { MessageCreateParams, MessageParam } from "@anthropic-ai/sdk/resources/messages";
+import { Anthropic } from "@anthropic-ai/sdk";
+import { ContentBlock, MessageCreateParams, MessageParam, Tool, ToolChoice } from "@anthropic-ai/sdk/resources/messages";
 import { BaseLLM, ChatMessage, ChatMessageRole, ChatMessageContent, ChatMessageContentBlock, ChatParams, ChatResult, ClassifyParams, ClassifyResult,
     GetSystemPromptFromChatParams, GetUserMessageFromChatParams, SummarizeParams,
-    SummarizeResult, ModelUsage, ErrorAnalyzer, parseBase64DataUrl, FileCapabilities } from "@memberjunction/ai";
+    SummarizeResult, ModelUsage, ErrorAnalyzer, parseBase64DataUrl, FileCapabilities,
+    ChatToolCall, CHAT_FINISH_REASON_TOOL_CALLS } from "@memberjunction/ai";
 import { RegisterClass, ToJSONSafe } from "@memberjunction/global";
+import { BuildAnthropicThinking, UsesAdaptiveThinking } from "./thinking-config";
 
 /**
  * Sentinel a prompt can embed to tell the Anthropic adapter WHERE the stable, cacheable prefix ends
@@ -45,12 +47,6 @@ export class AnthropicLLM extends BaseLLM {
         outputTokens: number;
         cacheReadTokens: number;
         cacheWriteTokens: number;
-        // Cancellation token for the in-flight streaming request. The Anthropic SDK's raw `Stream`
-        // exits *silently* when its underlying request is aborted (it swallows the AbortError rather
-        // than throwing), so the base-class chunk loop simply ends. We keep the signal here so
-        // finalizeStreamingResponse() can tell "the model finished" from "we cancelled it" and
-        // report a failed/cancelled result instead of a truncated success.
-        cancellationToken?: AbortSignal;
     } = {
         accumulatedThinking: '',
         inThinkingBlock: false,
@@ -59,8 +55,7 @@ export class AnthropicLLM extends BaseLLM {
         inputTokens: 0,
         outputTokens: 0,
         cacheReadTokens: 0,
-        cacheWriteTokens: 0,
-        cancellationToken: undefined
+        cacheWriteTokens: 0
     };
 
     constructor(apiKey: string) {
@@ -86,6 +81,13 @@ export class AnthropicLLM extends BaseLLM {
      * Anthropic natively supports assistant prefill
      */
     public override get SupportsPrefill(): boolean {
+        return true;
+    }
+
+    /**
+     * Anthropic natively supports tool calling (`tool_use` / `tool_result` content blocks).
+     */
+    public override get SupportsTools(): boolean {
         return true;
     }
 
@@ -173,6 +175,16 @@ export class AnthropicLLM extends BaseLLM {
                     if (docBlock) {
                         formattedBlocks.push(docBlock);
                     }
+                } else if (block.type === 'tool_result') {
+                    // Anthropic carries tool results as `tool_result` blocks inside a USER turn,
+                    // paired to the originating call by `tool_use_id`. Never cache-marked: results
+                    // are the volatile tail of the conversation by definition.
+                    formattedBlocks.push({
+                        type: 'tool_result',
+                        tool_use_id: block.toolCallId,
+                        content: block.content,
+                        ...(block.isError ? { is_error: true } : {})
+                    });
                 }
                 // Note: video_url, audio_url not yet supported by Anthropic
             }
@@ -321,6 +333,31 @@ export class AnthropicLLM extends BaseLLM {
     }
 
     /**
+     * Extends the framework's metadata-flag test with a text fallback: a message whose text opens with
+     * the runtime-state or agent-specialization tag literal is treated as the trailing fragment even
+     * when the caller passed plain `ChatMessage`s without metadata. Forged tags in history cannot
+     * reach here as an opening literal because the agent layer escapes them before sending.
+     */
+    protected override isVolatileStateMessage(message: ChatMessage | undefined): boolean {
+        if (super.isVolatileStateMessage(message)) {
+            return true;
+        }
+        if (!message) {
+            return false;
+        }
+        if (typeof message.content === 'string') {
+            return /^<mj-(runtime-state|agent-specialization)>/.test(message.content.trimStart());
+        }
+        if (Array.isArray(message.content)) {
+            const first = message.content[0];
+            if (first && (first.type === 'text' || first.type === 'tool_result') && typeof first.content === 'string') {
+                return /^<mj-(runtime-state|agent-specialization)>/.test(first.content.trimStart());
+            }
+        }
+        return false;
+    }
+
+    /**
      * Format messages for Anthropic API with caching support.
      * Handles both text and multi-modal content (images).
      * @param messages Messages to format
@@ -328,12 +365,36 @@ export class AnthropicLLM extends BaseLLM {
      * @returns Formatted messages
      */
     protected formatMessagesWithCaching(messages: ChatMessage[], enableCaching: boolean = true): any[] {
-        const result: any[] = [];
-        let lastRole = "assistant";
+        // When the request ends with a trailing runtime state fragment (optionally followed by an
+        // assistant prefill), place the ephemeral cache breakpoint on the last real history message
+        // instead, so the next iteration's prefix still ends at a cached boundary. Otherwise the
+        // volatile fragment would sit inside the cached prefix and miss on every iteration.
+        const split = enableCaching ? this.splitTrailingVolatileState(messages) : null;
+        if (split) {
+            const head = this.formatMessagesWithCaching(split.head, true);
+            const tail = this.formatMessagesWithCaching(split.tail, false);
+            if (head[head.length - 1]?.role === 'user' && tail[0]?.role === 'user') {
+                head.push({
+                    role: 'assistant',
+                    content: [{ type: 'text', text: 'OK' }]
+                });
+            }
+            return [...head, ...tail];
+        }
 
-        for (let i = 0; i < messages.length; i++) {
+        const result: any[] = [];
+        // Compare ANTHROPIC roles, not MJ roles: `tool` and `user` both become `user` here, and it
+        // is the wire role that has to alternate. For conversations without tool turns the two are
+        // identical (user->user, assistant->assistant), so this is unchanged behavior.
+        let lastRole: 'assistant' | 'user' = 'assistant';
+
+        const coalesced = this.coalesceToolMessages(messages);
+
+        for (let i = 0; i < coalesced.length; i++) {
+            const role = this.ConvertMJToAnthropicRole(coalesced[i].role);
+
             // If we have two messages with the same role back-to-back, insert an assistant message
-            if (messages[i].role === lastRole) {
+            if (role === lastRole) {
                 result.push({
                     role: "assistant",
                     content: [{ type: "text", text: "OK" }]
@@ -341,24 +402,75 @@ export class AnthropicLLM extends BaseLLM {
             }
 
             // Apply caching only to the last message
-            const isLastMessage = i === (messages.length - 1);
+            const isLastMessage = i === (coalesced.length - 1);
 
             // Format the content - now returns an array of content blocks
             const contentBlocks = this.formatContentWithCaching(
-                messages[i].content,
+                coalesced[i].content,
                 enableCaching && isLastMessage
             );
 
+            // An assistant turn that called tools must replay those calls as `tool_use` blocks, or
+            // Anthropic rejects the `tool_result` blocks that answer them as orphaned.
+            for (const call of coalesced[i].toolCalls ?? []) {
+                contentBlocks.push({
+                    type: 'tool_use',
+                    id: call.id,
+                    name: call.name,
+                    input: call.arguments ?? {}
+                });
+            }
+
             const formattedMsg: any = {
-                role: this.ConvertMJToAnthropicRole(messages[i].role),
-                content: contentBlocks
+                role,
+                // Anthropic rejects empty text blocks. A tool-call turn commonly has no prose at
+                // all, so drop empty text once something else is carrying the turn.
+                content: contentBlocks.length > 1
+                    ? contentBlocks.filter(b => b.type !== 'text' || (b.text ?? '').length > 0)
+                    : contentBlocks
             };
 
             result.push(formattedMsg);
-            lastRole = messages[i].role;
+            lastRole = role;
         }
 
         return result;
+    }
+
+    /**
+     * Merges runs of consecutive `tool` messages into one.
+     *
+     * Anthropic requires EVERY `tool_result` answering a given assistant turn to travel in the
+     * single user turn immediately after it. Left as separate messages they would be split across
+     * turns — and the alternation filler above would push an assistant "OK" between them, orphaning
+     * every result after the first.
+     *
+     * @param messages The caller's messages
+     * @returns The same messages with consecutive tool turns merged; the input is not mutated
+     */
+    private coalesceToolMessages(messages: ChatMessage[]): ChatMessage[] {
+        if (!messages.some(m => m.role === ChatMessageRole.tool)) {
+            return messages;
+        }
+
+        const out: ChatMessage[] = [];
+        for (const message of messages) {
+            const previous = out[out.length - 1];
+            if (message.role === ChatMessageRole.tool && previous?.role === ChatMessageRole.tool) {
+                out[out.length - 1] = {
+                    ...previous,
+                    content: [...this.asContentBlocks(previous.content), ...this.asContentBlocks(message.content)]
+                };
+            } else {
+                out.push(message);
+            }
+        }
+        return out;
+    }
+
+    /** Normalizes message content to a block array so two tool turns can be concatenated. */
+    private asContentBlocks(content: ChatMessageContent): ChatMessageContentBlock[] {
+        return typeof content === 'string' ? [{ type: 'text', content }] : content;
     }
 
 
@@ -426,44 +538,85 @@ export class AnthropicLLM extends BaseLLM {
     }
 
     /**
-     * Was this error produced by the caller aborting the request?
+     * Maps the neutral {@link ChatParams.tools} onto Anthropic's `tools` array.
+     * JSON Schema passes through untouched — Anthropic's `input_schema` IS JSON Schema.
      *
-     * The Anthropic SDK raises {@link APIUserAbortError} when the `signal` we hand it fires (and it
-     * does NOT retry an aborted request — `makeRequest` throws the abort before any retry decision).
-     * We also treat "the token is aborted" as cancellation, which covers the raw `Stream` path where
-     * the SDK swallows the abort instead of surfacing an error.
+     * @param params The chat params for this request
+     * @returns The Anthropic tool declarations, or undefined when no tools were declared
      */
-    private isCancellation(error: unknown, token?: AbortSignal): boolean {
-        if (token?.aborted) {
-            return true;
+    private buildAnthropicTools(params: ChatParams): Tool[] | undefined {
+        if (!params.tools || params.tools.length === 0) {
+            return undefined;
         }
-        if (error instanceof APIUserAbortError) {
-            return true;
-        }
-        return error instanceof Error && error.name === 'AbortError';
+        return params.tools.map(tool => ({
+            name: tool.name,
+            description: tool.description,
+            input_schema: tool.inputSchema as Tool.InputSchema
+        }));
     }
 
     /**
-     * Build the failed ChatResult returned when a request is cancelled (caller abort or the
-     * timeout composed into `cancellationToken` by AIPromptRunner). Shaped like every other
-     * failure this driver reports, so callers keep using `success === false` + `errorMessage`.
+     * Maps the neutral {@link ChatParams.toolChoice} onto Anthropic's `tool_choice`.
+     *
+     * Anthropic spells "the model must call something" as `any` (not `required`), and expresses
+     * "one call at a time" as `disable_parallel_tool_use` on the choice object rather than as a
+     * top-level request field.
+     *
+     * Manual (budget) thinking accepts only `auto` and `none`; a forced choice there is rejected
+     * with a 400, so it becomes `auto` and the prompt is what steers the model to the tool.
+     *
+     * @param params The chat params for this request
+     * @param budgetThinking Whether this request enables thinking in its budget form
+     * @returns The Anthropic tool_choice object, or undefined to accept the provider default
      */
-    private buildCancelledResult(startTime: Date, endTime: Date): ChatResult {
-        const message = 'Anthropic request was cancelled';
-        return {
-            data: {
-                choices: [],
-                usage: new ModelUsage(0, 0)
-            },
-            success: false,
-            statusText: 'cancelled',
-            startTime,
-            endTime,
-            timeElapsed: endTime.getTime() - startTime.getTime(),
-            errorMessage: message,
-            exception: new APIUserAbortError(),
-            errorInfo: ErrorAnalyzer.analyzeError(new Error(message), 'Anthropic')
-        };
+    private buildAnthropicToolChoice(params: ChatParams, budgetThinking: boolean): ToolChoice | undefined {
+        const choice = params.toolChoice;
+        // `parallelToolCalls === false` still needs a choice object to hang the flag on; Anthropic's
+        // own default is `auto`, so that is the one we synthesize.
+        if (choice === undefined && params.parallelToolCalls !== false) {
+            return undefined;
+        }
+
+        let mapped: ToolChoice;
+        if (choice === undefined || choice === 'auto') {
+            mapped = { type: 'auto' };
+        } else if (choice === 'none') {
+            mapped = { type: 'none' };
+        } else if (budgetThinking) {
+            mapped = { type: 'auto' };
+        } else if (choice === 'required') {
+            mapped = { type: 'any' };
+        } else {
+            mapped = { type: 'tool', name: choice.name };
+        }
+
+        // `none` takes no parallelism flag — there will be no calls to serialize.
+        if (params.parallelToolCalls === false && mapped.type !== 'none') {
+            mapped.disable_parallel_tool_use = true;
+        }
+        return mapped;
+    }
+
+    /**
+     * Pulls the `tool_use` blocks out of an Anthropic response and normalizes them.
+     *
+     * @param content The response's content blocks
+     * @returns The normalized calls, or undefined when the model called nothing
+     */
+    private extractToolCalls(content: ContentBlock[]): ChatToolCall[] | undefined {
+        const calls: ChatToolCall[] = [];
+        for (const block of content ?? []) {
+            if (block?.type === 'tool_use') {
+                calls.push({
+                    id: block.id,
+                    name: block.name,
+                    // Anthropic already delivers parsed input; guard anyway so a malformed block
+                    // yields an empty argument set rather than a non-object.
+                    arguments: (block.input && typeof block.input === 'object') ? block.input as Record<string, unknown> : {}
+                });
+            }
+        }
+        return calls.length > 0 ? calls : undefined;
     }
 
     /**
@@ -472,21 +625,20 @@ export class AnthropicLLM extends BaseLLM {
     protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
         const startTime = new Date();
         let result: any = null;
-        if (params.cancellationToken?.aborted) {
-            // Already cancelled before we opened a socket — don't bother the API.
-            return this.buildCancelledResult(startTime, new Date());
-        }
         try {
             // Find system message and non-system messages
             const systemMsgs = params.messages.filter(m => m.role === "system");
             const nonSystemMsgs = params.messages.filter(m => m.role !== "system");
             
             // Determine max_tokens and thinking budget
-            // When thinking is enabled, max_tokens must be greater than budget_tokens
+            // When BUDGET-form thinking is enabled, max_tokens must be greater than budget_tokens.
+            // Adaptive-thinking models (Claude 4.6+, all of Claude 5) have no budget: they take
+            // `thinking.type = 'adaptive'` + `output_config.effort` and reject the budget form with
+            // HTTP 400 (observed on claude-sonnet-5) — see `UsesAdaptiveThinking`.
             let maxTokens = params.maxOutputTokens || 32000;
             let thinkingBudget: number | undefined = undefined;
 
-            if (params.effortLevel && (params.reasoningBudgetTokens >= 1 || params.reasoningBudgetTokens === undefined || params.reasoningBudgetTokens === null)) {
+            if (!UsesAdaptiveThinking(params.model) && params.effortLevel && (params.reasoningBudgetTokens >= 1 || params.reasoningBudgetTokens === undefined || params.reasoningBudgetTokens === null)) {
                 thinkingBudget = params.reasoningBudgetTokens || 31000;
                 // Ensure max_tokens is greater than budget_tokens
                 if (maxTokens <= thinkingBudget) {
@@ -548,12 +700,24 @@ export class AnthropicLLM extends BaseLLM {
                 );
             }
 
-            // Add thinking parameter if effort level is set
-            if (thinkingBudget !== undefined) {
-                createParams.thinking = {
-                    type: "enabled" as const,
-                    budget_tokens: thinkingBudget
-                };
+            // Add thinking, in whichever form the model accepts, if an effort level is set
+            const thinking = BuildAnthropicThinking({ model: params.model, effortLevel: params.effortLevel, budgetTokens: thinkingBudget });
+            if (thinking.thinking) {
+                createParams.thinking = thinking.thinking;
+            }
+            if (thinking.output_config) {
+                createParams.output_config = thinking.output_config;
+            }
+
+            // Native tool calling (§5.1). Declarations and choice are ephemeral per-call params —
+            // the prompt runner decides whether they are present; the driver just maps them.
+            const anthropicTools = this.buildAnthropicTools(params);
+            if (anthropicTools) {
+                createParams.tools = anthropicTools;
+                const toolChoice = this.buildAnthropicToolChoice(params, thinking.thinking?.type === 'enabled');
+                if (toolChoice) {
+                    createParams.tool_choice = toolChoice;
+                }
             }
 
             switch (params.responseFormat) {
@@ -615,6 +779,10 @@ export class AnthropicLLM extends BaseLLM {
             usage.cacheReadTokens = cacheReadTokens;
             usage.cacheWriteTokens = cacheWriteTokens;
 
+            // Normalize any native tool calls the model made. A turn can carry BOTH text and tool
+            // calls, so this never displaces `content`.
+            const toolCalls = this.extractToolCalls(result.content);
+
             const chatResult: ChatResult = {
                 data: {
                     choices: [
@@ -622,9 +790,13 @@ export class AnthropicLLM extends BaseLLM {
                             message: {
                                 role: "assistant",
                                 content: content,
-                                thinking: thinkingContent
+                                thinking: thinkingContent,
+                                toolCalls: toolCalls
                             },
-                            finish_reason: "completed",
+                            // Only the tool-call case gets a normalized reason; everything else keeps
+                            // this driver's long-standing "completed" so existing consumers are
+                            // untouched.
+                            finish_reason: toolCalls ? CHAT_FINISH_REASON_TOOL_CALLS : "completed",
                             index: 0
                         }
                     ],
@@ -669,8 +841,9 @@ export class AnthropicLLM extends BaseLLM {
         }
         catch (e) {
             const endTime = new Date();
-            if (this.isCancellation(e, params.cancellationToken)) {
-                return this.buildCancelledResult(startTime, endTime);
+            // The SDK raises APIUserAbortError when the signal fires, and never retries an abort.
+            if (this.IsCancellationError(e, params.cancellationToken)) {
+                return this.BuildCancelledChatResult(startTime, { error: e, signal: params.cancellationToken });
             }
             return {
                 data: {
@@ -706,8 +879,7 @@ export class AnthropicLLM extends BaseLLM {
             inputTokens: 0,
             outputTokens: 0,
             cacheReadTokens: 0,
-            cacheWriteTokens: 0,
-            cancellationToken: undefined
+            cacheWriteTokens: 0
         };
     }
 
@@ -717,9 +889,6 @@ export class AnthropicLLM extends BaseLLM {
     protected async createStreamingRequest(params: ChatParams): Promise<any> {
         // Reset streaming state for new request
         this.resetStreamingState();
-        // Remember the caller's cancellation token so finalizeStreamingResponse() can distinguish
-        // a cancelled stream from a completed one (the SDK's Stream ends silently on abort).
-        this._streamingState.cancellationToken = params.cancellationToken;
         // Find system message and non-system messages
         const systemMsg = params.messages.find(m => m.role === "system");
         const nonSystemMsgs = params.messages.filter(m => m.role !== "system");
@@ -776,13 +945,19 @@ export class AnthropicLLM extends BaseLLM {
             params.enableCaching
         );
         
-        // Add thinking parameter if effort level is set
-        // Note: Requires minimum 1024 tokens and must be less than max_tokens
-        if (params.effortLevel && params.reasoningBudgetTokens >= 1024) {
-            createParams.thinking = {
-                type: "enabled" as const,
-                budget_tokens: params.reasoningBudgetTokens
-            };
+        // Add thinking, in whichever form the model accepts, if an effort level is set. The budget
+        // form needs a caller-supplied budget of at least 1024 tokens (and below max_tokens); the
+        // adaptive form (Claude 4.6+, all of Claude 5) has no budget at all.
+        const streamingThinking = BuildAnthropicThinking({
+            model: params.model,
+            effortLevel: params.effortLevel,
+            budgetTokens: params.reasoningBudgetTokens >= 1024 ? params.reasoningBudgetTokens : undefined
+        });
+        if (streamingThinking.thinking) {
+            createParams.thinking = streamingThinking.thinking;
+        }
+        if (streamingThinking.output_config) {
+            createParams.output_config = streamingThinking.output_config;
         }
 
         switch (params.responseFormat) {
@@ -953,14 +1128,6 @@ export class AnthropicLLM extends BaseLLM {
         lastChunk: any | null | undefined,
         usage: any | null | undefined
     ): ChatResult {
-        // A cancelled stream ends silently (the SDK's Stream swallows the abort), so the base-class
-        // chunk loop would otherwise hand us a truncated response and we'd report it as a success.
-        // Detect it here and report the same cancelled failure the non-streaming path returns.
-        if (this._streamingState.cancellationToken?.aborted) {
-            const now = new Date();
-            return this.buildCancelledResult(now, now);
-        }
-
         // Handle possible null/undefined values. Token usage is read from streaming state, which
         // accumulated input/output/cache counts across the message_start + message_delta events
         // (the `usage` param from the base loop only reflects the last chunk that carried usage and

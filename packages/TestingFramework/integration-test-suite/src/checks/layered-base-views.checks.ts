@@ -47,7 +47,7 @@ import { RunView } from '@memberjunction/core';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
-import { hasFullCatalogVisibility } from './catalog-visibility';
+import { HasFullCatalogVisibility } from './catalog-visibility';
 
 /** Every entity in live metadata that declares a layered base view. */
 function layeredEntities(ctx: IntegrationCheckContext): EntityInfo[] {
@@ -119,7 +119,7 @@ async function catalogOrSkip(ctx: IntegrationCheckContext, checkId: string): Pro
         console.log(`      → ${checkId} SKIPPED (no assertions ran): no catalog access on this run path (provider '${providerName}')`);
         return null;
     }
-    if (ctx.Pool && !(await hasFullCatalogVisibility(ctx.Pool))) {
+    if (ctx.Pool && !(await HasFullCatalogVisibility(ctx.Pool))) {
         console.log(`      → ${checkId} SKIPPED (no assertions ran): the login lacks VIEW DEFINITION — sys.sql_modules definitions are hidden from least-privilege logins`);
         return null;
     }

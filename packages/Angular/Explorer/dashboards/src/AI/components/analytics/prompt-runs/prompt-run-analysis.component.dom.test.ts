@@ -3,16 +3,17 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RunViewParams } from '@memberjunction/core';
 import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { createFakeProvider, useFakeGlobalProvider, query, queryAll, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
+import { MJClickableDirective, MJViewToggleComponent } from '@memberjunction/ng-ui-components';
 import { AnalyticsPromptRunsComponent } from './prompt-run-analysis.component';
 
 /**
  * DOM coverage for <app-analytics-prompt-runs> — the prompt-run explorer: an eight-tile stats bar, a
- * "Runs Over Time" chart with four metric-toggle chips, three breakdown cards (Model / Prompt /
+ * "Runs Over Time" chart with a four-option `mj-view-toggle`, three breakdown cards (Model / Prompt /
  * Status, each empty-state-gated), and a paginated Run Details table. It loads `MJ: AI Prompt Runs`
  * through `this.ProviderToUse`; all displayed slices are derived getters over the loaded set. A
  * `createFakeProvider` supplies rows via `[Provider]`. Empty → the chart + breakdown + table empty
- * states; a run set → chart bars, breakdown rows, and table rows. Clicking a metric chip calls
- * `OnChartMetricChange`, which flips `ActiveChartMetric` and marks the chip active. `mj-loading` /
+ * states; a run set → chart bars, breakdown rows, and table rows. Clicking a toggle option calls
+ * `OnChartMetricToggle`, which flips `ActiveChartMetric` and marks that option active. `mj-loading` /
  * `mj-empty-state` stubbed; explicit `detectChanges(false)` (LoadData toggles IsLoading).
  */
 
@@ -28,10 +29,13 @@ const RUNS: PromptRunFixture[] = [
   { ID: 'r2', RunAt: '2026-01-05T10:00:00Z', Prompt: 'Classify', PromptID: 'p2', Model: 'Claude', ModelID: 'm2', Status: 'Failed', Success: false, ExecutionTimeMS: 800, TokensUsed: 400, Cost: 0.01 },
 ];
 
-async function render(rows: unknown[]): Promise<ComponentFixture<AnalyticsPromptRunsComponent>> {
-  TestBed.configureTestingModule({ declarations: [AnalyticsPromptRunsComponent], imports: [StubLoadingComponent, StubEmptyStateComponent] });
+async function render(rows: unknown[], usageRows: unknown[] = []): Promise<ComponentFixture<AnalyticsPromptRunsComponent>> {
+  TestBed.configureTestingModule({
+    declarations: [AnalyticsPromptRunsComponent],
+    imports: [StubLoadingComponent, StubEmptyStateComponent, MJViewToggleComponent, MJClickableDirective],
+  });
   const fixture = TestBed.createComponent(AnalyticsPromptRunsComponent);
-  fixture.componentRef.setInput('Provider', createFakeProvider({ runViewResults: (_p: RunViewParams) => rows }));
+  fixture.componentRef.setInput('Provider', createFakeProvider({ runViewResults: (_p: RunViewParams) => rows, RunQueryResults: usageRows }));
   fixture.detectChanges(false);
   await new Promise((r) => setTimeout(r, 0));
   fixture.componentRef.changeDetectorRef.markForCheck();
@@ -50,27 +54,26 @@ describe('AnalyticsPromptRunsComponent (DOM)', () => {
     expect(labels).toEqual(expect.arrayContaining(['Total Runs', 'Success Rate', 'Cache Hit Rate']));
   });
 
-  it('renders the four chart metric-toggle chips with the default active', async () => {
+  it('renders the four chart metric-toggle options with the default active', async () => {
     installProvider({ runViewResults: [] });
     const fixture = await render(RUNS);
-    const chips = queryAll(fixture, '.toggle-chip');
-    expect(chips.map((c) => c.textContent?.trim())).toEqual(['By Volume', 'By Cost', 'By Tokens', 'By Cache Hit %']);
-    expect((chips[0] as HTMLElement).classList.contains('active')).toBe(true);
+    const options = queryAll(fixture, '.chart-toggles .mj-view-toggle-btn');
+    expect(options.map((c) => c.textContent?.trim())).toEqual(['By Volume', 'By Cost', 'By Tokens', 'By Cache Hit %']);
+    expect(options[0].getAttribute('aria-pressed')).toBe('true');
   });
 
   it('shows the chart + breakdown + table empty states when there are no runs', async () => {
     installProvider({ runViewResults: [] });
     const fixture = await render([]);
     const emptyTitles = queryAll(fixture, '.stub-empty').map((e) => e.textContent?.trim());
-    expect(emptyTitles).toEqual(expect.arrayContaining(['No data for selected time range', 'No data']));
-    expect(query(fixture, '.empty-row')?.textContent).toContain('No prompt runs found');
+    expect(emptyTitles).toEqual(expect.arrayContaining(['No data for selected time range', 'No data', 'No prompt runs found for the selected filters.']));
   });
 
   it('renders chart bars and run-detail rows once data loads', async () => {
     installProvider({ runViewResults: [] });
     const fixture = await render(RUNS);
     expect(queryAll(fixture, '.chart-bar-wrapper').length).toBeGreaterThan(0);
-    expect(query(fixture, '.empty-row')).toBeNull();
+    expect(query(fixture, '.runs-table .empty-cell')).toBeNull();
     expect(queryAll(fixture, '.runs-table tbody tr').length).toBe(RUNS.length);
     // The 'Failed' run must render its status pill (text + pill-failed class) — the failed
     // render path the old impossible 'Error' value never exercised.
@@ -83,13 +86,85 @@ describe('AnalyticsPromptRunsComponent (DOM)', () => {
     );
   });
 
-  it('moves the active class when a different metric chip is clicked', async () => {
+  it('moves the active option when a different metric is chosen', async () => {
     installProvider({ runViewResults: [] });
     const fixture = await render(RUNS);
-    const costChip = queryAll(fixture, '.toggle-chip').find((c) => c.textContent?.includes('By Cost')) as HTMLElement;
-    costChip.click();
+    const costOption = queryAll(fixture, '.chart-toggles .mj-view-toggle-btn').find((c) => c.textContent?.includes('By Cost')) as HTMLElement;
+    costOption.click();
+    fixture.componentRef.changeDetectorRef.markForCheck();
     fixture.detectChanges(false);
     expect(fixture.componentInstance.ActiveChartMetric).toBe('cost');
-    expect(costChip.classList.contains('active')).toBe(true);
+    expect(costOption.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('makes each breakdown row keyboard-accessible and names it after the filter it applies', async () => {
+    installProvider({ runViewResults: [] });
+    const fixture = await render(RUNS);
+    const rows = queryAll(fixture, '.breakdown-row');
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => r.getAttribute('role') === 'button' && r.getAttribute('tabindex') === '0')).toBe(true);
+    expect(rows.map((r) => r.getAttribute('aria-label'))).toEqual(expect.arrayContaining(['Filter by model GPT-4o', 'Filter by status Failed']));
+  });
+
+  it('takes the period totals from the usage aggregates, not from the latest-runs sample', async () => {
+    installProvider({ runViewResults: [] });
+    const hour = new Date(Math.floor(Date.now() / 3600000) * 3600000).toISOString();
+    const usage = [{
+      HourBucket: hour, AgentID: null, PromptID: 'p1', ModelID: 'm1', CostCurrency: 'USD',
+      Runs: 1500, SucceededRuns: 1470, FailedRuns: 30, PricedRuns: 1400, UnpricedRuns: 100,
+      TokensPrompt: 100, TokensCompletion: 50, TokensCacheRead: 0, TokensCacheWrite: 0, OwnCost: 12.5,
+    }];
+    const fixture = await render(RUNS, usage);
+    const card = (label: string) => queryAll(fixture, '.stat-card').find((c) => c.querySelector('.stat-label')?.textContent?.trim() === label) as HTMLElement;
+    expect(card('Total Runs').querySelector('.stat-value')?.textContent?.trim()).toBe('1,500');
+    expect(card('Total Cost').querySelector('.stat-value')?.textContent?.trim()).toBe('$12.50');
+    expect(card('Total Cost').querySelector('.stat-subtitle')?.textContent?.trim()).toBe('covers 93% of runs');
+    expect(card('Success Rate').querySelector('.stat-value')?.textContent?.trim()).toBe('98.0%');
+    // Latency is per-run, so it stays on the sample — and says so.
+    expect(card('Avg Latency').querySelector('.stat-subtitle')?.textContent?.trim()).toBe('latest 2 runs');
+  });
+
+  it('charts cost on the Total Cost card\'s basis: one currency, and an unpriced bucket as unknown, not $0', async () => {
+    installProvider({ runViewResults: [] });
+    const hour = (back: number) => new Date((Math.floor(Date.now() / 3600000) - back) * 3600000).toISOString();
+    const row = (over: Record<string, unknown>) => ({
+      AgentID: null, PromptID: 'p1', ModelID: 'm1', Runs: 0, SucceededRuns: 0, FailedRuns: 0, PricedRuns: 0, UnpricedRuns: 0,
+      TokensPrompt: 0, TokensCompletion: 0, TokensCacheRead: 0, TokensCacheWrite: 0, OwnCost: null, CostCurrency: null, ...over,
+    });
+    const usage = [
+      row({ HourBucket: hour(3), CostCurrency: 'USD', Runs: 100, SucceededRuns: 100, PricedRuns: 100, OwnCost: 40 }),
+      row({ HourBucket: hour(2), CostCurrency: 'EUR', Runs: 20, SucceededRuns: 20, PricedRuns: 20, OwnCost: 500 }),
+      row({ HourBucket: hour(1), Runs: 5, SucceededRuns: 5, UnpricedRuns: 5 }),
+    ];
+    const fixture = await render(RUNS, usage);
+    fixture.componentInstance.OnChartMetricToggle('cost');
+    fixture.componentRef.changeDetectorRef.markForCheck();
+    fixture.detectChanges(false);
+
+    const card = queryAll(fixture, '.stat-card').find((c) => c.querySelector('.stat-label')?.textContent?.trim() === 'Total Cost') as HTMLElement;
+    expect(card.querySelector('.stat-value')?.textContent?.trim()).toBe('$40.00');
+    expect(card.querySelector('.stat-subtitle')?.textContent?.trim()).toBe('covers 96% of runs · USD only');
+
+    const values = fixture.componentInstance.ChartBuckets.map((b) => b.value);
+    // The EUR spend is outside the card's currency (0 here, as on the card); the bars sum to the card.
+    expect(values.filter((v): v is number => v !== null).reduce((a, b) => a + b, 0)).toBe(40);
+    // The all-unpriced hour is unknown, drawn as an outline, never a $0.00 bar.
+    expect(values.filter((v) => v === null)).toHaveLength(1);
+    expect(queryAll(fixture, '.chart-bar.chart-bar--unpriced')).toHaveLength(1);
+  });
+
+  it('shows an unpriced run as a dash, never as $0.00', async () => {
+    installProvider({ runViewResults: [] });
+    const fixture = await render([{ ...RUNS[0], Cost: null }]);
+    const costCell = queryAll(fixture, '.runs-table tbody tr td.cell-number').pop() as HTMLElement;
+    expect(costCell.textContent?.trim()).toBe('—');
+  });
+
+  it('does not present chart bars as interactive (there is no drill-down behind them)', async () => {
+    installProvider({ runViewResults: [] });
+    const fixture = await render(RUNS);
+    const bar = query(fixture, '.chart-bar-wrapper') as HTMLElement;
+    expect(bar.getAttribute('role')).toBeNull();
+    expect(bar.getAttribute('tabindex')).toBeNull();
   });
 });

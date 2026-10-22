@@ -46,7 +46,7 @@ function makeRecord(
     path: `test/${id}`,
     dependencies: new Set<string>(),
     id,
-    originalIndex: 0
+    originalIndex: 0, graphId: id
   };
 }
 
@@ -138,9 +138,9 @@ describe('DeletionAuditor.checkRecordExistence', () => {
   it('falls back to the per-record path for composite-key entities (no batched query)', async () => {
     const auditor = makeAuditor();
     const loadEntity = vi
-      .spyOn(SyncEngine.prototype, 'loadEntity')
+      .spyOn(SyncEngine.prototype, 'LoadEntity')
       // Truthy => the record still exists in the database.
-      .mockResolvedValue({} as unknown as Awaited<ReturnType<SyncEngine['loadEntity']>>);
+      .mockResolvedValue({} as unknown as Awaited<ReturnType<SyncEngine['LoadEntity']>>);
 
     const records = [
       makeRecord(COMPOSITE, 'c1', { PartA: '1', PartB: '2' }),
@@ -153,5 +153,44 @@ describe('DeletionAuditor.checkRecordExistence', () => {
     expect(runViewCalls).toHaveLength(0); // composite keys never use the batched IN() path
     expect(existingRecords.map(r => r.id)).toEqual(['c1', 'c2']);
     expect(alreadyDeleted.size).toBe(0);
+  });
+
+  describe('@env: keys', () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it('checks a single-key record by the value of its key variable', async () => {
+      vi.stubEnv('MJ_AUDIT_KEY', 'env-key-1');
+      const records = [makeRecord(SINGLE, 'r-env', { ID: '@env:MJ_AUDIT_KEY' })];
+      runViewImpl = () => ({ Success: true, Results: [{ ID: 'ENV-KEY-1' }] } as unknown as RunViewResult);
+
+      const { existingRecords, alreadyDeleted } = await makeAuditor().checkRecordExistence(records);
+
+      expect(runViewCalls[0].ExtraFilter).toBe("ID IN ('ENV-KEY-1')");
+      expect(existingRecords.map(r => r.id)).toEqual(['r-env']);
+      expect(alreadyDeleted.size).toBe(0);
+    });
+
+    it('treats a record whose key variable is not set as still-existing, so push reports the variable', async () => {
+      const records = [makeRecord(SINGLE, 'r-unset', { ID: '@env:MJ_AUDIT_UNSET' })];
+
+      const { existingRecords, alreadyDeleted } = await makeAuditor().checkRecordExistence(records);
+
+      expect(existingRecords.map(r => r.id)).toEqual(['r-unset']);
+      expect(alreadyDeleted.size).toBe(0);
+      expect(runViewCalls).toHaveLength(0);
+    });
+
+    it('loads a composite-key record by the value of its key variable', async () => {
+      vi.stubEnv('MJ_AUDIT_PART', 'part-b');
+      const loadEntity = vi
+        .spyOn(SyncEngine.prototype, 'LoadEntity')
+        .mockResolvedValue({} as unknown as Awaited<ReturnType<SyncEngine['LoadEntity']>>);
+
+      await makeAuditor().checkRecordExistence([makeRecord(COMPOSITE, 'c-env', { PartA: '1', PartB: '@env:MJ_AUDIT_PART' })]);
+
+      expect(loadEntity.mock.calls[0].slice(0, 2)).toEqual([COMPOSITE, { PartA: '1', PartB: 'part-b' }]);
+    });
   });
 });

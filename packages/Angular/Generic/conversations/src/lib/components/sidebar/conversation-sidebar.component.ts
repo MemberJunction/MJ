@@ -77,13 +77,76 @@ import { NavigationTab } from '../../models/conversation-state.model';
   `]
 })
 export class ConversationSidebarComponent extends BaseAngularComponent {
-  @Input() activeTab: NavigationTab = 'conversations';
-  @Input() environmentId!: string;
-  @Input() currentUser!: UserInfo;
-  @Input() selectedConversationId: string | null = null;
-  @Input() renamedConversationId: string | null = null;
-  @Input() isSidebarPinned: boolean = true;
-  @Input() isMobileView: boolean = false;
+  @Input() ActiveTab: NavigationTab = 'conversations';
+
+  /** @deprecated Use {@link ActiveTab}. */
+  @Input() set activeTab(value: NavigationTab) {
+    this.ActiveTab = value;
+  }
+  /** @deprecated Use {@link ActiveTab}. */
+  get activeTab(): NavigationTab {
+    return this.ActiveTab;
+  }
+  @Input() EnvironmentId!: string;
+
+  /** @deprecated Use {@link EnvironmentId}. */
+  @Input() set environmentId(value: string) {
+    this.EnvironmentId = value;
+  }
+  /** @deprecated Use {@link EnvironmentId}. */
+  get environmentId(): string {
+    return this.EnvironmentId;
+  }
+  @Input() CurrentUser!: UserInfo;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
+  @Input() SelectedConversationId: string | null = null;
+
+  /** @deprecated Use {@link SelectedConversationId}. */
+  @Input() set selectedConversationId(value: string | null) {
+    this.SelectedConversationId = value;
+  }
+  /** @deprecated Use {@link SelectedConversationId}. */
+  get selectedConversationId(): string | null {
+    return this.SelectedConversationId;
+  }
+  @Input() RenamedConversationId: string | null = null;
+
+  /** @deprecated Use {@link RenamedConversationId}. */
+  @Input() set renamedConversationId(value: string | null) {
+    this.RenamedConversationId = value;
+  }
+  /** @deprecated Use {@link RenamedConversationId}. */
+  get renamedConversationId(): string | null {
+    return this.RenamedConversationId;
+  }
+  @Input() IsSidebarPinned: boolean = true;
+
+  /** @deprecated Use {@link IsSidebarPinned}. */
+  @Input() set isSidebarPinned(value: boolean) {
+    this.IsSidebarPinned = value;
+  }
+  /** @deprecated Use {@link IsSidebarPinned}. */
+  get isSidebarPinned(): boolean {
+    return this.IsSidebarPinned;
+  }
+  @Input() IsMobileView: boolean = false;
+
+  /** @deprecated Use {@link IsMobileView}. */
+  @Input() set isMobileView(value: boolean) {
+    this.IsMobileView = value;
+  }
+  /** @deprecated Use {@link IsMobileView}. */
+  get isMobileView(): boolean {
+    return this.IsMobileView;
+  }
   /** Show the Routines section at the bottom of the sidebar (bubbled from the workspace; default true). */
   @Input() ShowRoutines: boolean = true;
 
@@ -92,29 +155,129 @@ export class ConversationSidebarComponent extends BaseAngularComponent {
   /** Show the list's search box. */
   @Input() showSearch: boolean = true;
   /** Show the list's "New Conversation" button. */
-  @Input() showNewConversationButton: boolean = true;
+  @Input() ShowNewConversationButton: boolean = true;
+
+  /** @deprecated Use {@link ShowNewConversationButton}. */
+  @Input() set showNewConversationButton(value: boolean) {
+    this.ShowNewConversationButton = value;
+  }
+  /** @deprecated Use {@link ShowNewConversationButton}. */
+  get showNewConversationButton(): boolean {
+    return this.ShowNewConversationButton;
+  }
   /** Show the list's ⋯ header options menu. */
-  @Input() showHeaderMenu: boolean = true;
+  @Input() ShowHeaderMenu: boolean = true;
+
+  /** @deprecated Use {@link ShowHeaderMenu}. */
+  @Input() set showHeaderMenu(value: boolean) {
+    this.ShowHeaderMenu = value;
+  }
+  /** @deprecated Use {@link ShowHeaderMenu}. */
+  get showHeaderMenu(): boolean {
+    return this.ShowHeaderMenu;
+  }
   /** Show the list's collapsible section headers. */
-  @Input() showSectionHeaders: boolean = true;
+  @Input() ShowSectionHeaders: boolean = true;
 
-  @Output() conversationSelected = new EventEmitter<string>();
-  /** Forwarded from the routines section — a run's linked execution record was clicked. */
-  @Output() openEntityRecord = new EventEmitter<{ entityName: string; compositeKey: CompositeKey }>();
-  @Output() newConversationRequested = new EventEmitter<void>();
-  @Output() pinSidebarRequested = new EventEmitter<void>();
-  @Output() unpinSidebarRequested = new EventEmitter<void>();
-  /** Re-emitted from the conversation list — a conversation was deleted (payload = its ID).
-   *  Hosts use this to recover when the ACTIVE conversation is deleted. */
-  @Output() conversationDeleted = new EventEmitter<string>();
-  /** Re-emitted from the conversation list — the user refreshed the list. */
-  @Output() refreshRequested = new EventEmitter<void>();
-
-  onPinSidebarRequested(): void {
-    this.pinSidebarRequested.emit();
+  /** @deprecated Use {@link ShowSectionHeaders}. */
+  @Input() set showSectionHeaders(value: boolean) {
+    this.ShowSectionHeaders = value;
+  }
+  /** @deprecated Use {@link ShowSectionHeaders}. */
+  get showSectionHeaders(): boolean {
+    return this.ShowSectionHeaders;
   }
 
+  @Output() ConversationSelected = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link ConversationSelected}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (conversationSelected) keeps working. Must stay AFTER ConversationSelected: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() conversationSelected = this.ConversationSelected;
+  /** Forwarded from the routines section — a run's linked execution record was clicked. */
+  @Output() OpenEntityRecord = new EventEmitter<{ entityName: string; compositeKey: CompositeKey }>();
+
+  /**
+   * @deprecated Use {@link OpenEntityRecord}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (openEntityRecord) keeps working. Must stay AFTER OpenEntityRecord: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() openEntityRecord = this.OpenEntityRecord;
+  @Output() NewConversationRequested = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link NewConversationRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (newConversationRequested) keeps working. Must stay AFTER NewConversationRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() newConversationRequested = this.NewConversationRequested;
+  @Output() PinSidebarRequested = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link PinSidebarRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (pinSidebarRequested) keeps working. Must stay AFTER PinSidebarRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() pinSidebarRequested = this.PinSidebarRequested;
+  @Output() UnpinSidebarRequested = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link UnpinSidebarRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (unpinSidebarRequested) keeps working. Must stay AFTER UnpinSidebarRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() unpinSidebarRequested = this.UnpinSidebarRequested;
+  /** Re-emitted from the conversation list — a conversation was deleted (payload = its ID).
+   *  Hosts use this to recover when the ACTIVE conversation is deleted. */
+  @Output() ConversationDeleted = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link ConversationDeleted}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (conversationDeleted) keeps working. Must stay AFTER ConversationDeleted: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() conversationDeleted = this.ConversationDeleted;
+  /** Re-emitted from the conversation list — the user refreshed the list. */
+  @Output() RefreshRequested = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link RefreshRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (refreshRequested) keeps working. Must stay AFTER RefreshRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() refreshRequested = this.RefreshRequested;
+
+  OnPinSidebarRequested(): void {
+    this.PinSidebarRequested.emit();
+  }
+
+  /** @deprecated Use {@link OnPinSidebarRequested}. */
+  onPinSidebarRequested(): void {
+    return this.OnPinSidebarRequested();
+  }
+
+  OnUnpinSidebarRequested(): void {
+    this.UnpinSidebarRequested.emit();
+  }
+
+  /** @deprecated Use {@link OnUnpinSidebarRequested}. */
   onUnpinSidebarRequested(): void {
-    this.unpinSidebarRequested.emit();
+    return this.OnUnpinSidebarRequested();
   }
 }

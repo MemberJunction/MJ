@@ -4,14 +4,14 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
 import { MJConversationDetailEntity, ResourceData } from '@memberjunction/core-entities';
 import { MediaTranscriptCue } from '@memberjunction/ng-media-player';
-import { AgentToolResult, validateStringParam } from '../shared/agent-tool-validation';
+import { AgentToolResult, ValidateStringParam } from '../shared/agent-tool-validation';
 import {
-  buildRealtimeRecordingsAgentContext,
-  buildSessionNotFoundError,
-  isValidSessionSortDirection,
-  isValidSessionSortField,
-  resolveSessionByIdOrName,
-  sessionMatchesQuery,
+  BuildRealtimeRecordingsAgentContext,
+  BuildSessionNotFoundError,
+  IsValidSessionSortDirection,
+  IsValidSessionSortField,
+  ResolveSessionByIdOrName,
+  SessionMatchesQuery,
   type SessionSortDirection,
   type SessionSortField,
 } from './realtime-recordings-agent-context';
@@ -202,7 +202,7 @@ export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent 
    * the agent context, so the agent's "what's selectable" view matches the screen exactly.
    */
   public get VisibleSessions(): RecordedSession[] {
-    const filtered = this.Sessions.filter(s => sessionMatchesQuery(s, this.SearchQuery));
+    const filtered = this.Sessions.filter(s => SessionMatchesQuery(s, this.SearchQuery));
     const dir = this.SortDirection === 'asc' ? 1 : -1;
     return filtered.sort((a, b) => this.compareSessions(a, b, this.SortField) * dir);
   }
@@ -276,7 +276,7 @@ export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent 
    */
   private publishAgentContext(): void {
     const selected = this.SelectedSession;
-    const context = buildRealtimeRecordingsAgentContext({
+    const context = BuildRealtimeRecordingsAgentContext({
       SessionCount: this.Sessions.length,
       SelectedSession: selected
         ? {
@@ -375,7 +375,7 @@ export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent 
    * Tolerant: returns a structured failure (with a sample of available recordings) on a miss.
    */
   private async toolSelectSession(params: Record<string, unknown>): Promise<AgentToolResult & { Data?: Record<string, unknown> }> {
-    const validation = validateStringParam(params['session'], 'session');
+    const validation = ValidateStringParam(params['session'], 'session');
     if (!validation.ok) {
       return validation.result;
     }
@@ -383,9 +383,9 @@ export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent 
     if (ref.length === 0) {
       return { Success: false, ErrorMessage: 'A session ID or name is required.' };
     }
-    const session = resolveSessionByIdOrName(ref, this.Sessions);
+    const session = ResolveSessionByIdOrName(ref, this.Sessions);
     if (!session) {
-      return { Success: false, ErrorMessage: buildSessionNotFoundError(ref, this.Sessions) };
+      return { Success: false, ErrorMessage: BuildSessionNotFoundError(ref, this.Sessions) };
     }
     await this.SelectSession(session);
     return { Success: true, Data: { SelectedSessionId: session.ID, AgentName: session.AgentName } };
@@ -393,7 +393,7 @@ export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent 
 
   /** Apply a client-side text filter to the visible list (updates the UI + agent context). */
   private toolSearchSessions(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
-    const validation = validateStringParam(params['query'], 'query');
+    const validation = ValidateStringParam(params['query'], 'query');
     if (!validation.ok) {
       return validation.result;
     }
@@ -419,7 +419,7 @@ export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent 
   /** Re-order the visible list by date / agent / duration, asc or desc. Read-only display ordering. */
   private toolSortSessions(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
     const rawField = params['field'];
-    if (!isValidSessionSortField(rawField)) {
+    if (!IsValidSessionSortField(rawField)) {
       return { Success: false, ErrorMessage: 'field must be one of: date, agent, duration.' };
     }
     const rawDirection = params['direction'];
@@ -427,7 +427,7 @@ export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent 
     let direction: SessionSortDirection;
     if (rawDirection === undefined || rawDirection === null) {
       direction = rawField === 'date' ? 'desc' : 'asc';
-    } else if (isValidSessionSortDirection(rawDirection)) {
+    } else if (IsValidSessionSortDirection(rawDirection)) {
       direction = rawDirection;
     } else {
       return { Success: false, ErrorMessage: 'direction must be one of: asc, desc.' };

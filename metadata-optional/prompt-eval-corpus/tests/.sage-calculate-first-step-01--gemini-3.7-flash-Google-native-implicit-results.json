@@ -1,0 +1,68 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "sage-calculate-first-step-01 [gemini-3.7-flash · Google · native-implicit-results]",
+    "Description": "Arithmetic Sage must not do by inference. Calculate Expression exists precisely so the model does not guess at numbers.",
+    "InputDefinition": {
+      "payload": {},
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "What is 1847 * 293 divided by 7? Compute it exactly."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "sage-calculate-first-step-01",
+      "expect": {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Calculate Expression",
+            "params": {}
+          }
+        ],
+        "allowAdditionalActions": false
+      }
+    },
+    "Configuration": {
+      "agentName": "Sage",
+      "modelId": "63B1434F-0400-4A98-A1B9-0765BE4362F0",
+      "vendorId": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "native",
+      "nativeControlFlow": "implicit",
+      "nativeToolResults": true,
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Calculate Expression",
+                "params": {}
+              }
+            ],
+            "allowAdditionalActions": false
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "FCBBB6F2-CE81-4008-A9CF-81021CD08103"
+  }
+}

@@ -47,8 +47,13 @@ RuleRegistry.RegisterAll(tsqlToPostgresRules);
  * Get all TSQL -> PostgreSQL conversion rules in priority order.
  * Backward-compatible entry point.
  */
-export function getTSQLToPostgresRules(): IConversionRule[] {
+export function GetTSQLToPostgresRules(): IConversionRule[] {
   return [...tsqlToPostgresRules];
+}
+
+/** @deprecated Use {@link GetTSQLToPostgresRules}. */
+export function getTSQLToPostgresRules(): IConversionRule[] {
+  return GetTSQLToPostgresRules();
 }
 
 /**
@@ -58,7 +63,7 @@ export function getTSQLToPostgresRules(): IConversionRule[] {
  * Falls back to the legacy getTSQLToPostgresRules() if the registry has no
  * rules for the requested combination (backward compatibility).
  */
-export function getRulesForDialects(from: string, to: string): IConversionRule[] {
+export function GetRulesForDialects(from: string, to: string): IConversionRule[] {
   // Try the registry first — supports extensible dialect combinations
   if (RuleRegistry.HasRules(from, to)) {
     return RuleRegistry.GetRules(from, to);
@@ -71,4 +76,9 @@ export function getRulesForDialects(from: string, to: string): IConversionRule[]
   }
 
   return [];
+}
+
+/** @deprecated Use {@link GetRulesForDialects}. */
+export function getRulesForDialects(from: string, to: string): IConversionRule[] {
+  return GetRulesForDialects(from, to);
 }

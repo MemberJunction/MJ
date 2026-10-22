@@ -12,7 +12,7 @@ vi.mock('dotenv', () => ({
   default: { config: vi.fn() },
 }));
 
-import { loadCLIConfig } from '../utils/config-loader';
+import { LoadCLIConfig } from '../utils/config-loader';
 
 describe('config-loader', () => {
   beforeEach(() => {
@@ -21,7 +21,7 @@ describe('config-loader', () => {
 
   describe('loadCLIConfig', () => {
     it('should return defaults when no cached config exists', () => {
-      const config = loadCLIConfig();
+      const config = LoadCLIConfig();
       expect(config.defaultFormat).toBe('console');
       expect(config.failFast).toBe(false);
       expect(config.parallel).toBe(false);
@@ -30,7 +30,7 @@ describe('config-loader', () => {
     });
 
     it('should return a database configuration with defaults', () => {
-      const config = loadCLIConfig();
+      const config = LoadCLIConfig();
       expect(config.database).toBeDefined();
       expect(config.database!.host).toBe('localhost');
       expect(config.database!.schema).toBe('__mj');

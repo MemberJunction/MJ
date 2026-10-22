@@ -5,8 +5,8 @@ import { ResourceData, MJListCategoryEntity, MJListEntity } from '@memberjunctio
 import { Metadata, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { validateStringParam } from '../../shared/agent-tool-validation';
-import { buildListCategoriesAgentContext, resolveNamedRecord, buildNotFoundError } from '../lists-agent-context';
+import { ValidateStringParam } from '../../shared/agent-tool-validation';
+import { BuildListCategoriesAgentContext, ResolveNamedRecord, BuildNotFoundError } from '../lists-agent-context';
 interface CategoryViewModel {
   category: MJListCategoryEntity;
   listCount: number;
@@ -814,25 +814,142 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
   protected override destroy$ = new Subject<void>();
 
   isLoading = true;
-  categories: MJListCategoryEntity[] = [];
-  categoryViewModels: CategoryViewModel[] = [];
-  selectedCategory: MJListCategoryEntity | null = null;
-  selectedCategoryLists: MJListEntity[] = [];
+  Categories: MJListCategoryEntity[] = [];
+
+  /** @deprecated Use {@link Categories}. */
+  get categories(): MJListCategoryEntity[] {
+    return this.Categories;
+  }
+  /** @deprecated Use {@link Categories}. */
+  set categories(value: MJListCategoryEntity[]) {
+    this.Categories = value;
+  }
+  CategoryViewModels: CategoryViewModel[] = [];
+
+  /** @deprecated Use {@link CategoryViewModels}. */
+  get categoryViewModels(): CategoryViewModel[] {
+    return this.CategoryViewModels;
+  }
+  /** @deprecated Use {@link CategoryViewModels}. */
+  set categoryViewModels(value: CategoryViewModel[]) {
+    this.CategoryViewModels = value;
+  }
+  SelectedCategory: MJListCategoryEntity | null = null;
+
+  /** @deprecated Use {@link SelectedCategory}. */
+  get selectedCategory(): MJListCategoryEntity | null {
+    return this.SelectedCategory;
+  }
+  /** @deprecated Use {@link SelectedCategory}. */
+  set selectedCategory(value: MJListCategoryEntity | null) {
+    this.SelectedCategory = value;
+  }
+  SelectedCategoryLists: MJListEntity[] = [];
+
+  /** @deprecated Use {@link SelectedCategoryLists}. */
+  get selectedCategoryLists(): MJListEntity[] {
+    return this.SelectedCategoryLists;
+  }
+  /** @deprecated Use {@link SelectedCategoryLists}. */
+  set selectedCategoryLists(value: MJListEntity[]) {
+    this.SelectedCategoryLists = value;
+  }
 
   // Dialog
-  showDialog = false;
-  editingCategory: MJListCategoryEntity | null = null;
-  dialogName = '';
-  dialogDescription = '';
-  dialogParentId: string | null = null;
-  availableParents: Array<{ ID: string | null; displayName: string }> = [];
+  ShowDialog = false;
+
+  /** @deprecated Use {@link ShowDialog}. */
+  get showDialog() {
+    return this.ShowDialog;
+  }
+  /** @deprecated Use {@link ShowDialog}. */
+  set showDialog(value) {
+    this.ShowDialog = value;
+  }
+  EditingCategory: MJListCategoryEntity | null = null;
+
+  /** @deprecated Use {@link EditingCategory}. */
+  get editingCategory(): MJListCategoryEntity | null {
+    return this.EditingCategory;
+  }
+  /** @deprecated Use {@link EditingCategory}. */
+  set editingCategory(value: MJListCategoryEntity | null) {
+    this.EditingCategory = value;
+  }
+  DialogName = '';
+
+  /** @deprecated Use {@link DialogName}. */
+  get dialogName() {
+    return this.DialogName;
+  }
+  /** @deprecated Use {@link DialogName}. */
+  set dialogName(value) {
+    this.DialogName = value;
+  }
+  DialogDescription = '';
+
+  /** @deprecated Use {@link DialogDescription}. */
+  get dialogDescription() {
+    return this.DialogDescription;
+  }
+  /** @deprecated Use {@link DialogDescription}. */
+  set dialogDescription(value) {
+    this.DialogDescription = value;
+  }
+  DialogParentId: string | null = null;
+
+  /** @deprecated Use {@link DialogParentId}. */
+  get dialogParentId(): string | null {
+    return this.DialogParentId;
+  }
+  /** @deprecated Use {@link DialogParentId}. */
+  set dialogParentId(value: string | null) {
+    this.DialogParentId = value;
+  }
+  AvailableParents: Array<{ ID: string | null; displayName: string }> = [];
+
+  /** @deprecated Use {@link AvailableParents}. */
+  get availableParents(): Array<{ ID: string | null; displayName: string }> {
+    return this.AvailableParents;
+  }
+  /** @deprecated Use {@link AvailableParents}. */
+  set availableParents(value: Array<{ ID: string | null; displayName: string }>) {
+    this.AvailableParents = value;
+  }
 
   // Operation states
-  isSaving = false;
+  IsSaving = false;
+
+  /** @deprecated Use {@link IsSaving}. */
+  get isSaving() {
+    return this.IsSaving;
+  }
+  /** @deprecated Use {@link IsSaving}. */
+  set isSaving(value) {
+    this.IsSaving = value;
+  }
 
   // Delete confirmation dialog
-  showDeleteConfirm = false;
-  deleteConfirmMessage = '';
+  ShowDeleteConfirm = false;
+
+  /** @deprecated Use {@link ShowDeleteConfirm}. */
+  get showDeleteConfirm() {
+    return this.ShowDeleteConfirm;
+  }
+  /** @deprecated Use {@link ShowDeleteConfirm}. */
+  set showDeleteConfirm(value) {
+    this.ShowDeleteConfirm = value;
+  }
+  DeleteConfirmMessage = '';
+
+  /** @deprecated Use {@link DeleteConfirmMessage}. */
+  get deleteConfirmMessage() {
+    return this.DeleteConfirmMessage;
+  }
+  /** @deprecated Use {@link DeleteConfirmMessage}. */
+  set deleteConfirmMessage(value) {
+    this.DeleteConfirmMessage = value;
+  }
   private categoryToDelete: MJListCategoryEntity | null = null;
 
   private listsByCategoryId: Map<string, MJListEntity[]> = new Map();
@@ -876,16 +993,16 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
    * Re-called whenever the selection changes or data reloads.
    */
   private publishAgentContext(): void {
-    this.navigationService.SetAgentContext(this, buildListCategoriesAgentContext({
-      SelectedCategoryId: this.selectedCategory?.ID ?? null,
-      SelectedCategoryName: this.selectedCategory?.Name ?? null,
-      CategoryCount: this.categories.length,
-      SelectedCategoryListCount: this.selectedCategoryLists.length,
+    this.navigationService.SetAgentContext(this, BuildListCategoriesAgentContext({
+      SelectedCategoryId: this.SelectedCategory?.ID ?? null,
+      SelectedCategoryName: this.SelectedCategory?.Name ?? null,
+      CategoryCount: this.Categories.length,
+      SelectedCategoryListCount: this.SelectedCategoryLists.length,
       // Deep context: the member-list NAMES under the selection (bounded) and a
       // bounded view of the category tree (name / count / expanded), so the agent
       // sees what the user sees and can act by name.
-      SelectedCategoryListNames: this.selectedCategoryLists.map(l => l.Name),
-      CategoryNodes: this.categoryViewModels.map(vm => ({
+      SelectedCategoryListNames: this.SelectedCategoryLists.map(l => l.Name),
+      CategoryNodes: this.CategoryViewModels.map(vm => ({
         Name: vm.category.Name,
         ListCount: vm.listCount,
         Expanded: vm.isExpanded,
@@ -899,11 +1016,11 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
    * helper. Returns the matching {@link MJListCategoryEntity}, or null.
    */
   private resolveCategory(input: string): MJListCategoryEntity | null {
-    const match = resolveNamedRecord(input, this.categories.map(c => ({ ID: c.ID, Name: c.Name })));
+    const match = ResolveNamedRecord(input, this.Categories.map(c => ({ ID: c.ID, Name: c.Name })));
     if (!match) {
       return null;
     }
-    return this.categories.find(c => UUIDsEqual(c.ID, match.ID)) ?? null;
+    return this.Categories.find(c => UUIDsEqual(c.ID, match.ID)) ?? null;
   }
 
   /**
@@ -918,13 +1035,13 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
         Description: 'Select a category to view its detail and member lists. Pass the category ID or name (see CategoryNodes) — the tool resolves an exact ID, an exact name, or a partial name match.',
         ParameterSchema: { type: 'object', properties: { category: { type: 'string', description: 'The category ID or name to select' }, categoryId: { type: 'string', description: 'Deprecated alias for "category".' } } },
         Handler: async (params: Record<string, unknown>) => {
-          const check = validateStringParam(params['category'] ?? params['categoryId'], 'category');
+          const check = ValidateStringParam(params['category'] ?? params['categoryId'], 'category');
           if (!check.ok) return check.result;
           const category = this.resolveCategory(check.value);
-          if (!category) return { Success: false, ErrorMessage: buildNotFoundError(check.value, this.categories.map(c => ({ ID: c.ID, Name: c.Name })), 'category') };
-          this.selectCategory(category);
+          if (!category) return { Success: false, ErrorMessage: BuildNotFoundError(check.value, this.Categories.map(c => ({ ID: c.ID, Name: c.Name })), 'category') };
+          this.SelectCategory(category);
           this.publishAgentContext();
-          return { Success: true, Data: { categoryName: category.Name, listCount: this.selectedCategoryLists.length } };
+          return { Success: true, Data: { categoryName: category.Name, listCount: this.SelectedCategoryLists.length } };
         },
       },
       {
@@ -932,12 +1049,12 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
         Description: 'Expand (or collapse) a category node in the tree. Pass the category ID or name (see CategoryNodes) — the tool resolves an exact ID, an exact name, or a partial name match.',
         ParameterSchema: { type: 'object', properties: { category: { type: 'string', description: 'The category ID or name to toggle' }, categoryId: { type: 'string', description: 'Deprecated alias for "category".' } } },
         Handler: async (params: Record<string, unknown>) => {
-          const check = validateStringParam(params['category'] ?? params['categoryId'], 'category');
+          const check = ValidateStringParam(params['category'] ?? params['categoryId'], 'category');
           if (!check.ok) return check.result;
           const category = this.resolveCategory(check.value);
-          if (!category) return { Success: false, ErrorMessage: buildNotFoundError(check.value, this.categories.map(c => ({ ID: c.ID, Name: c.Name })), 'category') };
-          const vm = this.categoryViewModels.find(v => UUIDsEqual(v.category.ID, category.ID));
-          if (!vm) return { Success: false, ErrorMessage: buildNotFoundError(check.value, this.categories.map(c => ({ ID: c.ID, Name: c.Name })), 'category') };
+          if (!category) return { Success: false, ErrorMessage: BuildNotFoundError(check.value, this.Categories.map(c => ({ ID: c.ID, Name: c.Name })), 'category') };
+          const vm = this.CategoryViewModels.find(v => UUIDsEqual(v.category.ID, category.ID));
+          if (!vm) return { Success: false, ErrorMessage: BuildNotFoundError(check.value, this.Categories.map(c => ({ ID: c.ID, Name: c.Name })), 'category') };
           vm.isExpanded = !vm.isExpanded;
           this.publishAgentContext();
           this.cdr.detectChanges();
@@ -951,7 +1068,7 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
         Description: 'Open the "Create Category" dialog. The user confirms the name in the dialog; nothing is saved until they do.',
         ParameterSchema: { type: 'object', properties: {} },
         Handler: async () => {
-          this.createCategory();
+          this.CreateCategory();
           return { Success: true };
         },
       },
@@ -985,12 +1102,12 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
         return;
       }
 
-      this.categories = categoriesResult.Results as MJListCategoryEntity[];
+      this.Categories = categoriesResult.Results as MJListCategoryEntity[];
       const lists = listsResult.Results as MJListEntity[];
 
       // Build category map
       this.categoryMap.clear();
-      for (const cat of this.categories) {
+      for (const cat of this.Categories) {
         this.categoryMap.set(cat.ID, cat);
       }
 
@@ -1016,11 +1133,11 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
   }
 
   private buildCategoryViewModels() {
-    this.categoryViewModels = [];
+    this.CategoryViewModels = [];
 
     const buildVm = (category: MJListCategoryEntity, depth: number): CategoryViewModel => {
       const lists = this.listsByCategoryId.get(category.ID) || [];
-      const children = this.categories.filter(c => UUIDsEqual(c.ParentID, category.ID));
+      const children = this.Categories.filter(c => UUIDsEqual(c.ParentID, category.ID));
 
       return {
         category,
@@ -1032,37 +1149,37 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
     };
 
     const processCategory = (category: MJListCategoryEntity, depth: number) => {
-      this.categoryViewModels.push(buildVm(category, depth));
-      const children = this.categories.filter(c => UUIDsEqual(c.ParentID, category.ID));
+      this.CategoryViewModels.push(buildVm(category, depth));
+      const children = this.Categories.filter(c => UUIDsEqual(c.ParentID, category.ID));
       for (const child of children) {
         processCategory(child, depth + 1);
       }
     };
 
-    const topLevel = this.categories.filter(c => !c.ParentID);
+    const topLevel = this.Categories.filter(c => !c.ParentID);
     for (const cat of topLevel) {
       processCategory(cat, 0);
     }
   }
 
   private buildAvailableParents() {
-    this.availableParents = [{ ID: null, displayName: '(Top Level)' }];
+    this.AvailableParents = [{ ID: null, displayName: '(Top Level)' }];
 
     const addCategory = (cat: MJListCategoryEntity, prefix: string) => {
       // Exclude the editing category and its descendants
-      if (this.editingCategory && this.isDescendantOf(cat, this.editingCategory)) {
+      if (this.EditingCategory && this.isDescendantOf(cat, this.EditingCategory)) {
         return;
       }
-      this.availableParents.push({ ID: cat.ID, displayName: prefix + cat.Name });
-      const children = this.categories.filter(c => UUIDsEqual(c.ParentID, cat.ID));
+      this.AvailableParents.push({ ID: cat.ID, displayName: prefix + cat.Name });
+      const children = this.Categories.filter(c => UUIDsEqual(c.ParentID, cat.ID));
       for (const child of children) {
         addCategory(child, prefix + '\u00A0\u00A0');
       }
     };
 
-    const topLevel = this.categories.filter(c => !c.ParentID);
+    const topLevel = this.Categories.filter(c => !c.ParentID);
     for (const cat of topLevel) {
-      if (!UUIDsEqual(this.editingCategory?.ID, cat.ID)) {
+      if (!UUIDsEqual(this.EditingCategory?.ID, cat.ID)) {
         addCategory(cat, '');
       }
     }
@@ -1075,88 +1192,148 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
     return parent ? this.isDescendantOf(parent, ancestor) : false;
   }
 
+  GetTopLevelCategories(): CategoryViewModel[] {
+    return this.CategoryViewModels.filter(vm => !vm.category.ParentID);
+  }
+
+  /** @deprecated Use {@link GetTopLevelCategories}. */
   getTopLevelCategories(): CategoryViewModel[] {
-    return this.categoryViewModels.filter(vm => !vm.category.ParentID);
+    return this.GetTopLevelCategories();
   }
 
+  GetChildCategories(parent: MJListCategoryEntity): CategoryViewModel[] {
+    return this.CategoryViewModels.filter(vm => UUIDsEqual(vm.category.ParentID, parent.ID));
+  }
+
+  /** @deprecated Use {@link GetChildCategories}. */
   getChildCategories(parent: MJListCategoryEntity): CategoryViewModel[] {
-    return this.categoryViewModels.filter(vm => UUIDsEqual(vm.category.ParentID, parent.ID));
+    return this.GetChildCategories(parent);
   }
 
+  HasChildren(category: MJListCategoryEntity): boolean {
+    return this.Categories.some(c => UUIDsEqual(c.ParentID, category.ID));
+  }
+
+  /** @deprecated Use {@link HasChildren}. */
   hasChildren(category: MJListCategoryEntity): boolean {
-    return this.categories.some(c => UUIDsEqual(c.ParentID, category.ID));
+    return this.HasChildren(category);
   }
 
-  toggleExpand(event: Event, vm: CategoryViewModel) {
+  ToggleExpand(event: Event, vm: CategoryViewModel) {
     event.stopPropagation();
     vm.isExpanded = !vm.isExpanded;
   }
 
-  expandNode(event: Event, vm: CategoryViewModel) {
+  /** @deprecated Use {@link ToggleExpand}. */
+  toggleExpand(event: Event, vm: CategoryViewModel) {
+    return this.ToggleExpand(event, vm);
+  }
+
+  ExpandNode(event: Event, vm: CategoryViewModel) {
     event.preventDefault();
-    if (this.hasChildren(vm.category) && !vm.isExpanded) {
+    if (this.HasChildren(vm.category) && !vm.isExpanded) {
       vm.isExpanded = true;
     }
   }
 
-  collapseNode(event: Event, vm: CategoryViewModel) {
+  /** @deprecated Use {@link ExpandNode}. */
+  expandNode(event: Event, vm: CategoryViewModel) {
+    return this.ExpandNode(event, vm);
+  }
+
+  CollapseNode(event: Event, vm: CategoryViewModel) {
     event.preventDefault();
     if (vm.isExpanded) {
       vm.isExpanded = false;
     }
   }
 
-  IsCategorySelected(category: MJListCategoryEntity): boolean {
-    return UUIDsEqual(this.selectedCategory?.ID, category.ID);
+  /** @deprecated Use {@link CollapseNode}. */
+  collapseNode(event: Event, vm: CategoryViewModel) {
+    return this.CollapseNode(event, vm);
   }
 
-  selectCategory(category: MJListCategoryEntity) {
-    this.selectedCategory = category;
-    this.selectedCategoryLists = this.listsByCategoryId.get(category.ID) || [];
+  IsCategorySelected(category: MJListCategoryEntity): boolean {
+    return UUIDsEqual(this.SelectedCategory?.ID, category.ID);
+  }
+
+  SelectCategory(category: MJListCategoryEntity) {
+    this.SelectedCategory = category;
+    this.SelectedCategoryLists = this.listsByCategoryId.get(category.ID) || [];
     this.publishAgentContext();
   }
 
-  getParentCategoryName(category: MJListCategoryEntity): string | null {
+  /** @deprecated Use {@link SelectCategory}. */
+  selectCategory(category: MJListCategoryEntity) {
+    return this.SelectCategory(category);
+  }
+
+  GetParentCategoryName(category: MJListCategoryEntity): string | null {
     if (!category.ParentID) return null;
     return this.categoryMap.get(category.ParentID)?.Name || null;
   }
 
+  /** @deprecated Use {@link GetParentCategoryName}. */
+  getParentCategoryName(category: MJListCategoryEntity): string | null {
+    return this.GetParentCategoryName(category);
+  }
+
+  GetSelectedCategoryListCount(): number {
+    if (!this.SelectedCategory) return 0;
+    return this.listsByCategoryId.get(this.SelectedCategory.ID)?.length || 0;
+  }
+
+  /** @deprecated Use {@link GetSelectedCategoryListCount}. */
   getSelectedCategoryListCount(): number {
-    if (!this.selectedCategory) return 0;
-    return this.listsByCategoryId.get(this.selectedCategory.ID)?.length || 0;
+    return this.GetSelectedCategoryListCount();
   }
 
+  GetSelectedCategoryChildCount(): number {
+    if (!this.SelectedCategory) return 0;
+    return this.Categories.filter(c => UUIDsEqual(c.ParentID, this.SelectedCategory!.ID)).length
+  }
+
+  /** @deprecated Use {@link GetSelectedCategoryChildCount}. */
   getSelectedCategoryChildCount(): number {
-    if (!this.selectedCategory) return 0;
-    return this.categories.filter(c => UUIDsEqual(c.ParentID, this.selectedCategory!.ID)).length
+    return this.GetSelectedCategoryChildCount();
   }
 
+  CreateCategory() {
+    this.EditingCategory = null;
+    this.DialogName = '';
+    this.DialogDescription = '';
+    this.DialogParentId = null;
+    this.buildAvailableParents();
+    this.ShowDialog = true;
+  }
+
+  /** @deprecated Use {@link CreateCategory}. */
   createCategory() {
-    this.editingCategory = null;
-    this.dialogName = '';
-    this.dialogDescription = '';
-    this.dialogParentId = null;
-    this.buildAvailableParents();
-    this.showDialog = true;
+    return this.CreateCategory();
   }
 
+  EditCategory() {
+    if (!this.SelectedCategory) return;
+    this.EditingCategory = this.SelectedCategory;
+    this.DialogName = this.SelectedCategory.Name;
+    this.DialogDescription = this.SelectedCategory.Description || '';
+    this.DialogParentId = this.SelectedCategory.ParentID || null;
+    this.buildAvailableParents();
+    this.ShowDialog = true;
+  }
+
+  /** @deprecated Use {@link EditCategory}. */
   editCategory() {
-    if (!this.selectedCategory) return;
-    this.editingCategory = this.selectedCategory;
-    this.dialogName = this.selectedCategory.Name;
-    this.dialogDescription = this.selectedCategory.Description || '';
-    this.dialogParentId = this.selectedCategory.ParentID || null;
-    this.buildAvailableParents();
-    this.showDialog = true;
+    return this.EditCategory();
   }
 
-  deleteCategory() {
-    if (!this.selectedCategory) return;
+  DeleteCategory() {
+    if (!this.SelectedCategory) return;
 
-    this.categoryToDelete = this.selectedCategory;
+    this.categoryToDelete = this.SelectedCategory;
     const categoryName = this.categoryToDelete.Name;
     const listsInCategory = this.listsByCategoryId.get(this.categoryToDelete.ID) || [];
-    const childCategories = this.categories.filter(c => UUIDsEqual(c.ParentID, this.categoryToDelete!.ID));
+    const childCategories = this.Categories.filter(c => UUIDsEqual(c.ParentID, this.categoryToDelete!.ID));
 
     let message = `Are you sure you want to delete "${categoryName}"?`;
     if (listsInCategory.length > 0) {
@@ -1166,22 +1343,32 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
       message += ` ${childCategories.length} subcategory(ies) will become top-level.`;
     }
 
-    this.deleteConfirmMessage = message;
-    this.showDeleteConfirm = true;
+    this.DeleteConfirmMessage = message;
+    this.ShowDeleteConfirm = true;
   }
 
-  cancelDelete() {
-    this.showDeleteConfirm = false;
+  /** @deprecated Use {@link DeleteCategory}. */
+  deleteCategory() {
+    return this.DeleteCategory();
+  }
+
+  CancelDelete() {
+    this.ShowDeleteConfirm = false;
     this.categoryToDelete = null;
-    this.deleteConfirmMessage = '';
+    this.DeleteConfirmMessage = '';
   }
 
-  async confirmDelete() {
+  /** @deprecated Use {@link CancelDelete}. */
+  cancelDelete() {
+    return this.CancelDelete();
+  }
+
+  async ConfirmDelete() {
     if (!this.categoryToDelete) return;
 
     const categoryName = this.categoryToDelete.Name;
     const categoryToDelete = this.categoryToDelete;
-    this.showDeleteConfirm = false;
+    this.ShowDeleteConfirm = false;
     this.isLoading = true;
     this.cdr.detectChanges();
 
@@ -1195,7 +1382,7 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
         console.error('Failed to delete category:', categoryToDelete.LatestResult);
         this.notificationService.CreateSimpleNotification(`Failed to delete category: ${errorMessage}`, 'error', 6000);
       }
-      this.selectedCategory = null;
+      this.SelectedCategory = null;
       this.categoryToDelete = null;
       await this.loadData();
     } catch (error) {
@@ -1208,32 +1395,42 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
     }
   }
 
-  closeDialog() {
-    this.showDialog = false;
-    this.editingCategory = null;
+  /** @deprecated Use {@link ConfirmDelete}. */
+  async confirmDelete() {
+    return this.ConfirmDelete();
   }
 
-  async saveCategory() {
-    this.isSaving = true;
+  CloseDialog() {
+    this.ShowDialog = false;
+    this.EditingCategory = null;
+  }
+
+  /** @deprecated Use {@link CloseDialog}. */
+  closeDialog() {
+    return this.CloseDialog();
+  }
+
+  async SaveCategory() {
+    this.IsSaving = true;
     this.cdr.detectChanges();
 
-    const isEditing = !!this.editingCategory;
-    const categoryName = this.dialogName;
+    const isEditing = !!this.EditingCategory;
+    const categoryName = this.DialogName;
 
     try {
       const md = this.ProviderToUse;
       let category: MJListCategoryEntity;
 
-      if (this.editingCategory) {
-        category = this.editingCategory;
+      if (this.EditingCategory) {
+        category = this.EditingCategory;
       } else {
         category = await md.GetEntityObject<MJListCategoryEntity>('MJ: List Categories');
         category.UserID = md.CurrentUser!.ID;
       }
 
-      category.Name = this.dialogName;
-      category.Description = this.dialogDescription || null;
-      category.ParentID = this.dialogParentId || null;
+      category.Name = this.DialogName;
+      category.Description = this.DialogDescription || null;
+      category.ParentID = this.DialogParentId || null;
 
       const saved = await category.Save();
       if (saved) {
@@ -1242,13 +1439,13 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
           'success',
           3000
         );
-        this.closeDialog();
+        this.CloseDialog();
         await this.loadData();
 
         // Re-select the saved category
         if (isEditing) {
-          this.selectedCategory = category;
-          this.selectedCategoryLists = this.listsByCategoryId.get(category.ID) || [];
+          this.SelectedCategory = category;
+          this.SelectedCategoryLists = this.listsByCategoryId.get(category.ID) || [];
         }
       } else {
         // Get the detailed error message from LatestResult
@@ -1266,9 +1463,14 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.notificationService.CreateSimpleNotification(`Error saving category: ${errorMessage}`, 'error', 6000);
     } finally {
-      this.isSaving = false;
+      this.IsSaving = false;
       this.cdr.detectChanges();
     }
+  }
+
+  /** @deprecated Use {@link SaveCategory}. */
+  async saveCategory() {
+    return this.SaveCategory();
   }
 
   async GetResourceDisplayName(data: ResourceData): Promise<string> {

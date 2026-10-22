@@ -10,7 +10,7 @@ export class TopologicalSorter {
   /**
    * Build dependency graph and sort topologically
    */
-  public buildAndSort(schemas: SchemaDefinition[]): DependencyGraph {
+  public BuildAndSort(schemas: SchemaDefinition[]): DependencyGraph {
     // Build graph from schemas
     const nodes = this.buildGraph(schemas);
 
@@ -18,6 +18,11 @@ export class TopologicalSorter {
     const levels = this.sort(nodes);
 
     return { nodes, levels };
+  }
+
+  /** @deprecated Use {@link BuildAndSort}. */
+  public buildAndSort(schemas: SchemaDefinition[]): DependencyGraph {
+    return this.BuildAndSort(schemas);
   }
 
   /**
@@ -140,7 +145,7 @@ export class TopologicalSorter {
   /**
    * Detect cycles in the dependency graph
    */
-  public detectCycles(nodes: Map<string, TableNode>): string[][] {
+  public DetectCycles(nodes: Map<string, TableNode>): string[][] {
     const cycles: string[][] = [];
     const visited = new Set<string>();
     const recursionStack = new Set<string>();
@@ -172,5 +177,10 @@ export class TopologicalSorter {
     }
 
     return cycles;
+  }
+
+  /** @deprecated Use {@link DetectCycles}. */
+  public detectCycles(nodes: Map<string, TableNode>): string[][] {
+    return this.DetectCycles(nodes);
   }
 }

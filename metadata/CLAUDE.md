@@ -16,10 +16,12 @@ When creating or editing metadata JSON files, **NEVER** include the following fi
 The `sync` blocks will be automatically added/updated when `mj sync push` runs.
 
 ### 1b. Release-Time Metadata Sync — NO Per-PR Metadata_Sync Migrations
+**Installs receive metadata only through migrations, and individual PRs never ship metadata migration SQL** (so reviewers should not flag its absence). The model, where each package's recipe lives (core: [`DEPLOYMENT.md`](../DEPLOYMENT.md) Step 3), and how to diagnose rows missing after a fresh install: [Release Metadata Migrations](../guides/RELEASE_METADATA_MIGRATIONS_GUIDE.md).
+
 **Do NOT hand-author `*__Metadata_Sync.sql` migrations for metadata changes** (new AI models, prompts, agents, etc.). The release workflow is:
 
 1. PRs contribute ONLY the declarative metadata JSON changes (fields + `@lookup` refs + `uuidgen` primaryKey, no `sync`).
-2. At build time, the build engineer takes all merged PRs on `next` and runs `mj sync push` against a clean DB at the last released version.
+2. At build time, the build engineer starts from a clean DB at the last released version, runs `mj migrate` to apply every migration merged to `next` since that release, then runs `mj sync push`. CodeGen is not needed to generate the seed: `mj migrate` on a fresh database already replays every `CodeGen_Run_*.sql`. Running `mj codegen` afterwards is an optional drift check that should produce nothing. Full steps: [`DEPLOYMENT.md`](../DEPLOYMENT.md) Step 3.
 3. That push generates ONE consolidated metadata-sync migration for the release (SQL Server + PostgreSQL) and writes the `sync` blocks back into the JSON files.
 4. **Post-Sync Verification**: After applying a new `Metadata_Sync` migration to a from-nothing database, verify that `SELECT COUNT(*) FROM [__mj].[EntityField] WHERE ID IN (<ids in file>)` matches the count of `-- Save MJ: Entity Fields` blocks. `spUpdateEntityField` is a full-row procedure that silently no-ops when an ID is absent rather than throwing a SQL error.
 
@@ -65,6 +67,16 @@ All agents in MemberJunction currently use the "Loop" agent type, which provides
 - **ActionID**: Reference to action using `@lookup:`
 - **Status**: Typically "Active"
 
+#### AI Agent Rubrics
+Nest under the agent as `relatedEntities["MJ: AI Agent Rubrics"]`.
+- **AgentID**: `@parent:ID`
+- **RubricID**: `@lookup:MJ: Rubrics.Name=...` for a rubric authored under `metadata/rubrics/`
+- **Purpose**: `Evaluation`, `SelfCheck`, or `ProductionSampling`
+- **IsDefault**: true for the rubric used when a caller does not name one
+- **Status**: `Active` or `Disabled`
+- **PassThreshold**, **SampleRate**, **MaxSelfCheckAttempts**, **EvaluatorConfig**: optional overrides
+- **primaryKey**: a UUID from `uuidgen`. Do not add a `sync` block.
+
 #### AI Prompts
 - **Name**: Unique prompt name
 - **Description**: Purpose of the prompt
@@ -81,6 +93,29 @@ All agents in MemberJunction currently use the "Loop" agent type, which provides
 - Its paired cost row (`MJ: AI Model Costs`): `Status: "Expired"` plus an `EndedAt` ISO timestamp.
 - `"Inactive"` is **not** a valid cost `Status` — the CHECK constraint allows only `Active`, `Pending`, `Expired`, `Invalid`, and a bad value fails `mj sync push` in CI.
 - Run `mj sync validate --dir=metadata` before opening a PR.
+
+#### Polymorphic Foreign Keys (`EntityField.EntityIDFieldName`)
+Whenever an entity has a polymorphic foreign-key pair (a column storing a record ID paired with a sibling column on the same table that identifies the target entity by `EntityID` or entity name — e.g., `EntityID` + `RecordID`, `SourceEntityID` + `SourceRecordID`, `TargetEntityID` + `TargetRecordID`, `AssigneeEntityID` + `AssigneeRecordID`), you **MUST** set `EntityIDFieldName` on the record-ID field's `MJ: Entity Fields` metadata record in `metadata/entities/.polymorphic-fk-entity-fields.json`:
+```json
+{
+  "fields": {
+    "Name": "MJ: Tagged Items"
+  },
+  "relatedEntities": {
+    "MJ: Entity Fields": [
+      {
+        "fields": {
+          "EntityID": "@parent:ID",
+          "Name": "RecordID",
+          "EntityIDFieldName": "EntityID"
+        }
+      }
+    ]
+  }
+}
+```
+- **Why**: Forms (`<mj-form-field>`), grids (`<mj-entity-data-grid>`), cards (`<mj-entity-cards>`), and record detail panels (`<mj-entity-record-detail-panel>`) rely strictly on the hard metadata link `EntityField.EntityIDFieldName` (never heuristics) to resolve target record names, render clickable record links, and scope edit-mode FK search pickers.
+- **Remember**: Do not include `primaryKey` or `sync` blocks on these `EntityField` overrides — `EntityID: "@parent:ID"` + `Name: "<FieldName>"` uniquely identifies the CodeGen-created `EntityField` row across all environments.
 
 ### 5. Template Variable Conventions
 Agent prompt templates receive these standard variables:
@@ -334,8 +369,8 @@ When creating new applications with custom dashboards:
    - `ResourceType`: Usually `"Custom"` for dashboard resources
    - `DriverClass`: Class name registered with `@RegisterClass(BaseResourceComponent, 'ClassName')`
    - `isDefault`: Set to `true` for the default tab (only one per app)
-4. For new apps, omit `primaryKey` and `sync` (see rule 1)
-5. Include `"relatedEntities": { "Application Entities": [] }` for the sync structure
+4. For new apps, include a `primaryKey` from CLI `uuidgen` and omit `sync` (see rule 1)
+5. Include `"relatedEntities": { "MJ: Application Entities": [] }` for the sync structure
 
 **Resource components for custom dashboards** — each nav item with `ResourceType: "Custom"` requires a corresponding Angular component:
 
@@ -346,6 +381,14 @@ When creating new applications with custom dashboards:
 5. Register the component in the module's declarations and exports
 
 > **Note**: every `BaseResourceComponent` subclass must call `this.NotifyLoadComplete()` when its initial load finishes, or direct URL navigation hangs on the loading screen. See [`packages/Angular/CLAUDE.md`](../packages/Angular/CLAUDE.md).
+
+### 17. Clone Configurations (`entities/.clone-configurations.json`)
+
+`metadata/entities/.clone-configurations.json` seeds each entity's `Configuration.Clone` bag, which the record-cloning engine reads.
+
+- **It is the only file that may set `Configuration` on the entities it covers.** `mj sync push` writes the whole `Configuration` field, so a second file setting it on the same entity would overwrite this one, depending on push order. `packages/RecordCloning/base/src/__tests__/ShippedCloneConfigurations.test.ts` fails if any entity's `Configuration` is set in more than one `metadata/entities` file. To add another bag (for example `Hierarchy`) to one of these entities, add it here.
+- **Relationship keys:** a bare child entity name matches every FK from that child. When the child has more than one FK to the root, use the qualified `"<Child>.<JoinField>"` form so each edge gets its own policy. For example, `MJ: AI Agent Relationships` has both `AgentID` and `SubAgentID`, so the `MJ: AI Agents` bag uses `"MJ: AI Agent Relationships.AgentID"`. A bare key applies only to edges from the root's own entity; below it (rows of a copied prompt or step), only relationship-ID and `"<Child>.<JoinField>"` keys match, so a child that hangs from a deeper entity, such as step paths from steps, is keyed by its join column.
+- The same test also checks that every enabled root skips relationships it doesn't list, that `NotCloneable` entities are never listed as `Deep`, and that agent credentials, company integrations, clone logs and agent runs stay `NotCloneable`.
 
 ## Remember
 The metadata system is designed to be declarative and version-controlled. Let the MetadataSync tool handle all the system-level bookkeeping while you focus on defining the business logic and behavior of your agents.

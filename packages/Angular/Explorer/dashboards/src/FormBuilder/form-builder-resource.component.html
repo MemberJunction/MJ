@@ -847,7 +847,6 @@
             [applicationId]="CockpitApplicationId"
             [linkedEntityId]="ComponentsEntityID"
             [linkedRecordId]="SelectedFormID"
-            [threadId]="ChatThreadId"
             [pendingArtifactId]="ChatPendingArtifactId"
             [pendingArtifactVersionNumber]="ChatPendingArtifactVersionNumber"
             [emptyStateGreeting]="'How can I help with this form?'"
@@ -858,8 +857,6 @@
             (taskClicked)="OnChatTaskClicked($event)"
             (artifactLinkClicked)="OnChatArtifactLinkClicked($event)"
             (conversationRenamed)="OnChatConversationRenamed($event)"
-            (threadOpened)="OnChatThreadOpened($event)"
-            (threadClosed)="OnChatThreadClosed()"
             (pendingArtifactConsumed)="OnChatPendingArtifactConsumed()">
           </mj-conversation-chat-area>
         } @else {

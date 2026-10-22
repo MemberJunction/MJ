@@ -74,8 +74,13 @@ export class MaterializationRefresher {
      * {@link FULL_REBUILD_EVERY_N_INCREMENTAL_REFRESHES}. Pure (no IO) so the cadence boundary is
      * unit-testable without a provider/DB. Null-safe: an unset counter is treated as 0.
      */
-    public static shouldForceFullRebuild(refreshesSinceFullRebuild: number | null | undefined): boolean {
+    public static ShouldForceFullRebuild(refreshesSinceFullRebuild: number | null | undefined): boolean {
         return (refreshesSinceFullRebuild ?? 0) >= FULL_REBUILD_EVERY_N_INCREMENTAL_REFRESHES;
+    }
+
+    /** @deprecated Use {@link ShouldForceFullRebuild}. */
+    public static shouldForceFullRebuild(refreshesSinceFullRebuild: number | null | undefined): boolean {
+        return this.ShouldForceFullRebuild(refreshesSinceFullRebuild);
     }
 
     /**
@@ -83,8 +88,13 @@ export class MaterializationRefresher {
      * 0 on any full rebuild — so the counter measures how many refreshes we've gone WITHOUT a full reconcile.
      * Pure (no IO) so the increment/reset semantics are unit-testable. Null-safe: an unset counter is 0.
      */
-    public static nextRefreshesSinceFullRebuild(current: number | null | undefined, ranIncremental: boolean): number {
+    public static NextRefreshesSinceFullRebuild(current: number | null | undefined, ranIncremental: boolean): number {
         return ranIncremental ? (current ?? 0) + 1 : 0;
+    }
+
+    /** @deprecated Use {@link NextRefreshesSinceFullRebuild}. */
+    public static nextRefreshesSinceFullRebuild(current: number | null | undefined, ranIncremental: boolean): number {
+        return this.NextRefreshesSinceFullRebuild(current, ranIncremental);
     }
 
     /** A plain, unquoted SQL identifier: leading letter/underscore, then letters/digits/underscores. */
@@ -119,8 +129,13 @@ export class MaterializationRefresher {
      * decline quietly rather than re-enter (or bypass) the assertion that already rejected the value.
      * @internal exposed for unit testing; not part of the supported surface.
      */
-    public static isSafeObjectName(value: string): boolean {
+    public static IsSafeObjectName(value: string): boolean {
         return typeof value === 'string' && MaterializationRefresher.SAFE_SQL_IDENTIFIER.test(value);
+    }
+
+    /** @deprecated Use {@link IsSafeObjectName}. */
+    public static isSafeObjectName(value: string): boolean {
+        return this.IsSafeObjectName(value);
     }
 
     /**
@@ -137,12 +152,17 @@ export class MaterializationRefresher {
      * @returns the platform-resolved SQL, or null when neither source yields a non-empty statement.
      * @internal exposed for unit testing; not part of the supported surface.
      */
-    public static resolvePlatformQuerySQL(provider: IMetadataProvider, queryId: string, entitySql: string | null, isPostgres: boolean): string | null {
+    public static ResolvePlatformQuerySQL(provider: IMetadataProvider, queryId: string, entitySql: string | null, isPostgres: boolean): string | null {
         const platform: DatabasePlatform = isPostgres ? 'postgresql' : 'sqlserver';
         const info = provider.Queries?.find((q) => UUIDsEqual(q.ID, queryId));
         const resolved = info ? info.GetPlatformSQL(platform) : null;
         const chosen = resolved && resolved.trim().length > 0 ? resolved : entitySql;
         return chosen && chosen.trim().length > 0 ? chosen : null;
+    }
+
+    /** @deprecated Use {@link ResolvePlatformQuerySQL}. */
+    public static resolvePlatformQuerySQL(provider: IMetadataProvider, queryId: string, entitySql: string | null, isPostgres: boolean): string | null {
+        return this.ResolvePlatformQuerySQL(provider, queryId, entitySql, isPostgres);
     }
 
     /**
@@ -153,7 +173,7 @@ export class MaterializationRefresher {
      *   `SELECT IDENTITY(int,1,1) AS <surrogate>, src.* INTO <shadow>`;
      * - base-view case (no surrogate): `SELECT * INTO <shadow>` copies the source shape (incl. its PK column).
      */
-    public static buildFullRebuildStatementsSQLServer(opts: {
+    public static BuildFullRebuildStatementsSQLServer(opts: {
         schema: string;
         tableName: string;
         viewName: string;
@@ -216,6 +236,21 @@ export class MaterializationRefresher {
         ];
     }
 
+    /** @deprecated Use {@link BuildFullRebuildStatementsSQLServer}. */
+    public static buildFullRebuildStatementsSQLServer(opts: {
+        schema: string;
+        tableName: string;
+        viewName: string;
+        sourceSelect: string;
+        surrogateColumn?: string;
+        hashKeyColumns?: { name: string; type: string }[];
+        /** Run-unique shadow table name (see {@link makeShadowTableName}) so two concurrent refreshes of the
+         *  same materialization never share a shadow. Defaults to the legacy fixed name when omitted. */
+        shadowName?: string;
+    }): string[] {
+        return this.BuildFullRebuildStatementsSQLServer(opts);
+    }
+
     /**
      * Builds the ordered SQL statements for a PostgreSQL full rebuild with atomic swap (plan §11.2) —
      * the PG counterpart to {@link buildFullRebuildStatementsSQLServer}. Pure (no IO), unit-testable.
@@ -232,7 +267,7 @@ export class MaterializationRefresher {
      *   CASCADE clears a transient wrapper-view dependency from a partially-failed prior run — the view is
      *   recreated within this sequence, so the stable contract is restored before the method returns).
      */
-    public static buildFullRebuildStatementsPostgreSQL(opts: {
+    public static BuildFullRebuildStatementsPostgreSQL(opts: {
         schema: string;
         tableName: string;
         viewName: string;
@@ -290,13 +325,33 @@ export class MaterializationRefresher {
         ];
     }
 
+    /** @deprecated Use {@link BuildFullRebuildStatementsPostgreSQL}. */
+    public static buildFullRebuildStatementsPostgreSQL(opts: {
+        schema: string;
+        tableName: string;
+        viewName: string;
+        sourceSelect: string;
+        surrogateColumn?: string;
+        hashKeyColumns?: { name: string; type: string }[];
+        /** Run-unique shadow table name (see {@link makeShadowTableName}) so two concurrent refreshes of the
+         *  same materialization never share a shadow. Defaults to the legacy fixed name when omitted. */
+        shadowName?: string;
+    }): string[] {
+        return this.BuildFullRebuildStatementsPostgreSQL(opts);
+    }
+
     /**
      * Selects the materializations due for refresh: those with no `NextRefreshAt` (never run) or whose
      * `NextRefreshAt` is at/before `now`. Pure (unit-testable); the caller supplies the candidate rows
      * (e.g. all non-disabled, scheduled materializations).
      */
-    public static filterDue<T extends { NextRefreshAt?: Date | null }>(rows: T[], now: Date): T[] {
+    public static FilterDue<T extends { NextRefreshAt?: Date | null }>(rows: T[], now: Date): T[] {
         return rows.filter((r) => !r.NextRefreshAt || new Date(r.NextRefreshAt) <= now);
+    }
+
+    /** @deprecated Use {@link FilterDue}. */
+    public static filterDue<T extends { NextRefreshAt?: Date | null }>(rows: T[], now: Date): T[] {
+        return this.FilterDue(rows, now);
     }
 
     /**
@@ -797,8 +852,13 @@ export class MaterializationRefresher {
     }
 
     /** A SQL datetime literal (ISO-8601 UTC) parsed by both SQL Server and PostgreSQL. */
-    public static sqlDateTimeLiteral(date: Date): string {
+    public static SqlDateTimeLiteral(date: Date): string {
         return `'${date.toISOString()}'`;
+    }
+
+    /** @deprecated Use {@link SqlDateTimeLiteral}. */
+    public static sqlDateTimeLiteral(date: Date): string {
+        return this.SqlDateTimeLiteral(date);
     }
 
     /**
@@ -811,8 +871,13 @@ export class MaterializationRefresher {
      * residue), and dropped by RefreshOne's failure cleanup on a caught error; only a hard process crash between
      * shadow creation and swap can leak one — a harmless orphan table with no dependents.
      */
-    public static makeShadowTableName(): string {
+    public static MakeShadowTableName(): string {
         return `mj_mat_shd_${randomUUID().replace(/-/g, '')}`;
+    }
+
+    /** @deprecated Use {@link MakeShadowTableName}. */
+    public static makeShadowTableName(): string {
+        return this.MakeShadowTableName();
     }
 
     /**
@@ -822,8 +887,13 @@ export class MaterializationRefresher {
      * predates the probed MAX — is re-processed (idempotent MERGE) instead of being skipped forever. Pure and
      * unit-testable; extracted from probeSourceFingerprint so the skew-safety math is verifiable in isolation.
      */
-    public static applyWatermarkSafetyOverlap(rawMax: Date | null): Date | null {
+    public static ApplyWatermarkSafetyOverlap(rawMax: Date | null): Date | null {
         return rawMax == null ? null : new Date(rawMax.getTime() - WATERMARK_SAFETY_OVERLAP_MS);
+    }
+
+    /** @deprecated Use {@link ApplyWatermarkSafetyOverlap}. */
+    public static applyWatermarkSafetyOverlap(rawMax: Date | null): Date | null {
+        return this.ApplyWatermarkSafetyOverlap(rawMax);
     }
 
     /**
@@ -834,8 +904,13 @@ export class MaterializationRefresher {
      * gate. Used to refuse refreshing a local mirror of an EXTERNAL RLS-protected entity — a mirror can't
      * reproduce remote RLS.
      */
-    public static entityHasReadRLS(entity: EntityInfo): boolean {
+    public static EntityHasReadRLS(entity: EntityInfo): boolean {
         return entity.Permissions.some((p) => !!p.ReadRLSFilterID && p.ReadRLSFilterID.trim().length > 0);
+    }
+
+    /** @deprecated Use {@link EntityHasReadRLS}. */
+    public static entityHasReadRLS(entity: EntityInfo): boolean {
+        return this.EntityHasReadRLS(entity);
     }
 
     /**
@@ -850,10 +925,15 @@ export class MaterializationRefresher {
      *        when that layer could not be enumerated — in which case every entity is treated as restricted,
      *        because refusing to refresh is recoverable and mirroring restricted rows is not.
      */
-    public static entityHasRowLevelRestriction(entity: EntityInfo, apiKeyRowFilterTargets: ReadonlySet<string> | 'unknown'): boolean {
+    public static EntityHasRowLevelRestriction(entity: EntityInfo, apiKeyRowFilterTargets: ReadonlySet<string> | 'unknown'): boolean {
         if (MaterializationRefresher.entityHasReadRLS(entity)) return true;
         if (apiKeyRowFilterTargets === 'unknown') return true;
         return apiKeyRowFilterTargets.has((entity.Name ?? '').trim().toLowerCase());
+    }
+
+    /** @deprecated Use {@link EntityHasRowLevelRestriction}. */
+    public static entityHasRowLevelRestriction(entity: EntityInfo, apiKeyRowFilterTargets: ReadonlySet<string> | 'unknown'): boolean {
+        return this.EntityHasRowLevelRestriction(entity, apiKeyRowFilterTargets);
     }
 
     /**
@@ -972,7 +1052,7 @@ export class MaterializationRefresher {
      * Uses the SQL parser; on any parse/shape surprise, or no top-level ORDER BY, returns the SQL unchanged
      * (an ORDER BY nested inside a subquery is legal and left intact).
      */
-    public static stripTopLevelOrderBy(sql: string, isPostgres: boolean): string {
+    public static StripTopLevelOrderBy(sql: string, isPostgres: boolean): string {
         if (isPostgres) return sql; // PG allows ORDER BY in a derived table → nothing to strip
         try {
             const dialect = GetDialect('sqlserver');
@@ -996,6 +1076,11 @@ export class MaterializationRefresher {
         }
     }
 
+    /** @deprecated Use {@link StripTopLevelOrderBy}. */
+    public static stripTopLevelOrderBy(sql: string, isPostgres: boolean): string {
+        return this.StripTopLevelOrderBy(sql, isPostgres);
+    }
+
     /**
      * Phase 1.5 (EDS composition): if this materialization is backed by an EXTERNAL entity base view
      * (the source entity carries an `ExternalDataSourceID`), returns that entity — the signal to rebuild
@@ -1013,7 +1098,7 @@ export class MaterializationRefresher {
      * hash-key column list, or undefined when it isn't keyed. A null/empty/malformed value yields undefined
      * — the caller then uses the synthetic IDENTITY/ROW_NUMBER surrogate (Phase 1/2 behavior).
      */
-    public static parseKeyColumns(raw: string | null | undefined): { name: string; type: string }[] | undefined {
+    public static ParseKeyColumns(raw: string | null | undefined): { name: string; type: string }[] | undefined {
         if (!raw || raw.trim().length === 0) return undefined;
         try {
             const parsed = JSON.parse(raw) as unknown;
@@ -1026,6 +1111,11 @@ export class MaterializationRefresher {
             // failing the refresh; a bad KeyColumns value is a config error, not a reason to block rebuilds.
         }
         return undefined;
+    }
+
+    /** @deprecated Use {@link ParseKeyColumns}. */
+    public static parseKeyColumns(raw: string | null | undefined): { name: string; type: string }[] | undefined {
+        return this.ParseKeyColumns(raw);
     }
 
     /**
@@ -1232,7 +1322,7 @@ export class MaterializationRefresher {
      * ordering, so ORDER BY / `> 'YYYY-MM-DD…'` filters stay correct. Only genuine Date objects, whose bind is
      * well-defined, are typed as datetime2/timestamptz.
      */
-    public static inferSqlType(values: unknown[], isPostgres: boolean): string {
+    public static InferSqlType(values: unknown[], isPostgres: boolean): string {
         const text = isPostgres ? 'text' : 'nvarchar(max)';
         const present = values.filter((v) => v !== null && v !== undefined);
         if (present.length === 0) return text;
@@ -1254,6 +1344,11 @@ export class MaterializationRefresher {
         if (present.every((v) => typeof v === 'boolean')) return isPostgres ? 'boolean' : 'bit';
         if (present.every((v) => v instanceof Date && !Number.isNaN(v.getTime()))) return isPostgres ? 'timestamptz' : 'datetime2';
         return text;
+    }
+
+    /** @deprecated Use {@link InferSqlType}. */
+    public static inferSqlType(values: unknown[], isPostgres: boolean): string {
+        return this.InferSqlType(values, isPostgres);
     }
 
     /**
@@ -1278,7 +1373,7 @@ export class MaterializationRefresher {
      * RunQueryExternal return the complete result set), so this fixes the SQL-text/packet half of the scale
      * problem; true end-to-end streaming would require a streaming read API on the EDS router (future work).
      */
-    public static buildExternalRebuildPlan(opts: {
+    public static BuildExternalRebuildPlan(opts: {
         schema: string; tableName: string; viewName: string;
         columns: { name: string; sqlType: string }[];
         rows: Record<string, unknown>[];
@@ -1365,21 +1460,42 @@ export class MaterializationRefresher {
         return { preStatements, insertBatches, postStatements };
     }
 
+    /** @deprecated Use {@link BuildExternalRebuildPlan}. */
+    public static buildExternalRebuildPlan(opts: {
+        schema: string; tableName: string; viewName: string;
+        columns: { name: string; sqlType: string }[];
+        rows: Record<string, unknown>[];
+        isPostgres: boolean;
+        /** Query case: the synthetic surrogate column to restore a UNIQUE index on post-swap (the minted
+         *  entity's PK). Omit for the base-view case (the source PK column carries its own identity). */
+        surrogateColumn?: string;
+        /** Run-unique shadow table name (see {@link makeShadowTableName}) so two concurrent refreshes of the
+         *  same materialization never share a shadow. Defaults to the legacy fixed name when omitted. */
+        shadowName?: string;
+    }): { preStatements: string[]; insertBatches: { sql: string; params: unknown[] }[]; postStatements: string[] } {
+        return this.BuildExternalRebuildPlan(opts);
+    }
+
     /**
      * Coerce a JS value fetched from an external source into a driver-bindable parameter value:
      * null/undefined → null (the caller emits a literal `NULL` for these); non-finite numbers → null;
      * plain objects → JSON text (matches the `inferSqlType` text mapping for object columns); Date and
      * primitives (boolean/number/string) pass through — the driver binds them to the shadow column type.
      */
-    public static coerceExternalParamValue(value: unknown): unknown {
+    public static CoerceExternalParamValue(value: unknown): unknown {
         if (value === null || value === undefined) return null;
         if (typeof value === 'number') return Number.isFinite(value) ? value : null;
         if (typeof value === 'object' && !(value instanceof Date)) return JSON.stringify(value);
         return value; // boolean, Date, string
     }
 
+    /** @deprecated Use {@link CoerceExternalParamValue}. */
+    public static coerceExternalParamValue(value: unknown): unknown {
+        return this.CoerceExternalParamValue(value);
+    }
+
     /** Map a SQL-Server-style `SQLFullType` (e.g. `nvarchar(255)`, `int`, `bit`) to a PostgreSQL column type. */
-    public static mapSqlTypeToPostgres(sqlFullType: string): string {
+    public static MapSqlTypeToPostgres(sqlFullType: string): string {
         const base = sqlFullType.trim().toLowerCase().replace(/\(.*\)$/, '');
         switch (base) {
             case 'bit': return 'boolean';
@@ -1411,14 +1527,24 @@ export class MaterializationRefresher {
         }
     }
 
+    /** @deprecated Use {@link MapSqlTypeToPostgres}. */
+    public static mapSqlTypeToPostgres(sqlFullType: string): string {
+        return this.MapSqlTypeToPostgres(sqlFullType);
+    }
+
     /**
      * Quote a SQL identifier for the engine, ESCAPING the closing delimiter so a column name that contains
      * it can't break out of the quotes: `]`→`]]` (SQL Server), `"`→`""` (PostgreSQL). Column names in the
      * keyed/incremental builders are CodeGen-derived (entity field / KeyColumns names), so this is a
      * consistency + robustness guard (matching buildExternalRebuildPlan's escId), not a live-injection fix.
      */
-    public static quoteIdent(name: string, isPostgres: boolean): string {
+    public static QuoteIdent(name: string, isPostgres: boolean): string {
         return isPostgres ? `"${name.replace(/"/g, '""')}"` : `[${name.replace(/]/g, ']]')}]`;
+    }
+
+    /** @deprecated Use {@link QuoteIdent}. */
+    public static quoteIdent(name: string, isPostgres: boolean): string {
+        return this.QuoteIdent(name, isPostgres);
     }
 
     /**
@@ -1427,7 +1553,7 @@ export class MaterializationRefresher {
      * sentinel (CHAR(30)) so it can't collide with a literal value. `type` is the column's SQL-Server-style
      * type (EntityFieldInfo.SQLFullType); the base type drives the canonical cast.
      */
-    public static canonicalKeyColumnSql(name: string, type: string, isPostgres: boolean): string {
+    public static CanonicalKeyColumnSql(name: string, type: string, isPostgres: boolean): string {
         const base = type.trim().toLowerCase().replace(/\(.*\)$/, '');
         const col = MaterializationRefresher.quoteIdent(name, isPostgres);
         const nullSentinel = isPostgres ? `chr(30) || 'NULL' || chr(30)` : `CHAR(30) + 'NULL' + CHAR(30)`;
@@ -1471,6 +1597,11 @@ export class MaterializationRefresher {
         return `COALESCE(${canonical}, ${nullSentinel})`;
     }
 
+    /** @deprecated Use {@link CanonicalKeyColumnSql}. */
+    public static canonicalKeyColumnSql(name: string, type: string, isPostgres: boolean): string {
+        return this.CanonicalKeyColumnSql(name, type, isPostgres);
+    }
+
     /**
      * Phase 3: SQL expression computing the combined-key surrogate — `SHA2_256` (lowercase hex) over the
      * canonical key columns in declared key order (§17.1). Deterministic WITHIN an engine (the
@@ -1489,7 +1620,7 @@ export class MaterializationRefresher {
      * a deployment that dropped that baseline step would see refreshes fail with a clear `function digest(...)
      * does not exist` — provision pgcrypto to resolve.
      */
-    public static buildHashKeyExpression(keyColumns: { name: string; type: string }[], isPostgres: boolean): string {
+    public static BuildHashKeyExpression(keyColumns: { name: string; type: string }[], isPostgres: boolean): string {
         if (keyColumns.length === 0) {
             throw new Error('buildHashKeyExpression requires at least one key column.');
         }
@@ -1504,6 +1635,11 @@ export class MaterializationRefresher {
         return `LOWER(CONVERT(varchar(64), HASHBYTES('SHA2_256', ${joined}), 2))`;
     }
 
+    /** @deprecated Use {@link BuildHashKeyExpression}. */
+    public static buildHashKeyExpression(keyColumns: { name: string; type: string }[], isPostgres: boolean): string {
+        return this.BuildHashKeyExpression(keyColumns, isPostgres);
+    }
+
     /**
      * Phase 3 (DirtyGroupRecompute): a NULL-safe equality predicate matching the key columns of two
      * aliases (`(a.[k] = b.[k] OR (a.[k] IS NULL AND b.[k] IS NULL)) AND ...`). Two NULL keys are treated
@@ -1511,7 +1647,7 @@ export class MaterializationRefresher {
      * Portable across SQL Server and PostgreSQL (the `OR ... IS NULL` form works on both; we avoid
      * `IS NOT DISTINCT FROM`, which SQL Server lacks pre-2022). Pure/unit-testable.
      */
-    public static buildKeyMatchPredicate(aliasA: string, aliasB: string, keyColumns: { name: string }[], isPostgres: boolean): string {
+    public static BuildKeyMatchPredicate(aliasA: string, aliasB: string, keyColumns: { name: string }[], isPostgres: boolean): string {
         const q = (n: string) => MaterializationRefresher.quoteIdent(n, isPostgres);
         return keyColumns
             .map((c) => {
@@ -1520,6 +1656,11 @@ export class MaterializationRefresher {
                 return `(${a} = ${b} OR (${a} IS NULL AND ${b} IS NULL))`;
             })
             .join(' AND ');
+    }
+
+    /** @deprecated Use {@link BuildKeyMatchPredicate}. */
+    public static buildKeyMatchPredicate(aliasA: string, aliasB: string, keyColumns: { name: string }[], isPostgres: boolean): string {
+        return this.BuildKeyMatchPredicate(aliasA, aliasB, keyColumns, isPostgres);
     }
 
     /**
@@ -1567,7 +1708,7 @@ export class MaterializationRefresher {
     }
 
     /** SQL Server dirty-group recompute (see {@link buildDirtyGroupRecomputeCore}). */
-    public static buildDirtyGroupRecomputeStatementsSQLServer(opts: {
+    public static BuildDirtyGroupRecomputeStatementsSQLServer(opts: {
         schema: string; tableName: string;
         sourceSchema: string; sourceTable: string;
         keyColumns: { name: string; type: string }[];
@@ -1585,8 +1726,19 @@ export class MaterializationRefresher {
         });
     }
 
+    /** @deprecated Use {@link BuildDirtyGroupRecomputeStatementsSQLServer}. */
+    public static buildDirtyGroupRecomputeStatementsSQLServer(opts: {
+        schema: string; tableName: string;
+        sourceSchema: string; sourceTable: string;
+        keyColumns: { name: string; type: string }[];
+        aggregationSelect: string; surrogateColumn: string; dataColumns: string[];
+        updatedAtColumn: string; watermarkSql: string;
+    }): string[] {
+        return this.BuildDirtyGroupRecomputeStatementsSQLServer(opts);
+    }
+
     /** PostgreSQL dirty-group recompute (see {@link buildDirtyGroupRecomputeCore}). */
-    public static buildDirtyGroupRecomputeStatementsPostgreSQL(opts: {
+    public static BuildDirtyGroupRecomputeStatementsPostgreSQL(opts: {
         schema: string; tableName: string;
         sourceSchema: string; sourceTable: string;
         keyColumns: { name: string; type: string }[];
@@ -1604,6 +1756,17 @@ export class MaterializationRefresher {
         });
     }
 
+    /** @deprecated Use {@link BuildDirtyGroupRecomputeStatementsPostgreSQL}. */
+    public static buildDirtyGroupRecomputeStatementsPostgreSQL(opts: {
+        schema: string; tableName: string;
+        sourceSchema: string; sourceTable: string;
+        keyColumns: { name: string; type: string }[];
+        aggregationSelect: string; surrogateColumn: string; dataColumns: string[];
+        updatedAtColumn: string; watermarkSql: string;
+    }): string[] {
+        return this.BuildDirtyGroupRecomputeStatementsPostgreSQL(opts);
+    }
+
     /**
      * Phase 4 (RefreshStrategy = 'Incremental'): incrementally refresh a keyed ADDITIVE aggregation by
      * recomputing only the changed groups and UPSERTING them onto the surrogate key — an in-place MERGE
@@ -1614,7 +1777,7 @@ export class MaterializationRefresher {
      * (deletes) still falls back to full rebuild via the RefreshOne guard. Requires the surrogate to be
      * unique (it is the materialized table's PK). Pure (no IO) / unit-testable.
      */
-    public static buildIncrementalMergeStatementsSQLServer(opts: {
+    public static BuildIncrementalMergeStatementsSQLServer(opts: {
         schema: string; tableName: string;
         sourceSchema: string; sourceTable: string;
         keyColumns: { name: string; type: string }[];
@@ -1644,8 +1807,19 @@ export class MaterializationRefresher {
         ];
     }
 
+    /** @deprecated Use {@link BuildIncrementalMergeStatementsSQLServer}. */
+    public static buildIncrementalMergeStatementsSQLServer(opts: {
+        schema: string; tableName: string;
+        sourceSchema: string; sourceTable: string;
+        keyColumns: { name: string; type: string }[];
+        aggregationSelect: string; surrogateColumn: string; dataColumns: string[];
+        updatedAtColumn: string; watermarkSql: string;
+    }): string[] {
+        return this.BuildIncrementalMergeStatementsSQLServer(opts);
+    }
+
     /** PostgreSQL incremental upsert — the INSERT…ON CONFLICT counterpart of the SQL Server MERGE above. */
-    public static buildIncrementalMergeStatementsPostgreSQL(opts: {
+    public static BuildIncrementalMergeStatementsPostgreSQL(opts: {
         schema: string; tableName: string;
         sourceSchema: string; sourceTable: string;
         keyColumns: { name: string; type: string }[];
@@ -1667,5 +1841,16 @@ export class MaterializationRefresher {
                 `WHERE EXISTS (SELECT 1 FROM ${sourceTable} AS s WHERE ${changedSince} AND ${match}) ` +
                 `ON CONFLICT (${q(opts.surrogateColumn)}) DO UPDATE SET ${setList};`,
         ];
+    }
+
+    /** @deprecated Use {@link BuildIncrementalMergeStatementsPostgreSQL}. */
+    public static buildIncrementalMergeStatementsPostgreSQL(opts: {
+        schema: string; tableName: string;
+        sourceSchema: string; sourceTable: string;
+        keyColumns: { name: string; type: string }[];
+        aggregationSelect: string; surrogateColumn: string; dataColumns: string[];
+        updatedAtColumn: string; watermarkSql: string;
+    }): string[] {
+        return this.BuildIncrementalMergeStatementsPostgreSQL(opts);
     }
 }

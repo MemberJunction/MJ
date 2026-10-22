@@ -12,6 +12,7 @@ import {
   MJAIAgentRunEntity
 } from '@memberjunction/core-entities';
 import { IOracle } from './oracles/IOracle';
+import type { JudgeOutputEvidence } from './utils/judge-evidence';
 
 // Re-export all types from EngineBase for convenience
 export {
@@ -21,6 +22,7 @@ export {
   SuiteRunOptions,
   OracleResult,
   TestRunResult,
+  PriorAttemptSummary,
   TestSuiteRunResult,
   ScoringWeights,
   ValidationResult,
@@ -40,7 +42,8 @@ export {
   ResolvedTestVariables,
   TestVariableValue,
   TestRunOutputItem,
-  SuiteFixtureContext
+  SuiteFixtureContext,
+  ReplayTelemetry
 } from '@memberjunction/testing-engine-base';
 
 // Import types we need for local interfaces
@@ -49,7 +52,9 @@ import {
   OracleResult,
   ResolvedTestVariables,
   TestRunOutputItem,
-  SuiteFixtureContext
+  SuiteFixtureContext,
+  PriorAttemptSummary,
+  ReplayTelemetry
 } from '@memberjunction/testing-engine-base';
 
 /**
@@ -124,6 +129,15 @@ export interface DriverExecutionContext {
    * fixture-dependent tests must be run via `mj test suite`.
    */
   fixtures?: SuiteFixtureContext;
+
+  /**
+   * Summaries of this test's earlier FAILED attempts, oldest first, threaded in
+   * by a retry loop so a retry is not a blind re-roll. A driver can read the
+   * latest attempt's `failureMemo` and feed it to its engine (Computer Use sets
+   * `params.PreviousAttemptSummary` from it). Undefined on the first attempt and
+   * wherever nothing retries.
+   */
+  priorAttempts?: PriorAttemptSummary[];
 }
 
 /**
@@ -279,6 +293,37 @@ export interface DriverExecutionResult {
    * The engine persists each item as a TestRunOutput entity record.
    */
   outputs?: TestRunOutputItem[];
+
+  /**
+   * Machine-readable failure classification a driver may compute from its run
+   * signals (e.g. Computer Use's `nav-loop` / `stuck-page` / `app-error` /
+   * `assertion`). Free-form so each driver owns its own taxonomy; a retry
+   * scheduler keys policy on it. Absent on success.
+   */
+  failureClass?: string;
+
+  /**
+   * Non-blind retry memo a driver may surface from its engine on a non-passing
+   * result — a short "here's what went wrong last time". A retry loop copies it
+   * onto {@link PriorAttemptSummary} so the next attempt can consume it. Absent
+   * on success.
+   */
+  failureMemo?: string;
+
+  /**
+   * Execution-tier label a tiered driver reports — e.g. Computer Use's
+   * `'replay'` / `'replay-with-heal'` / `'llm'`. Free-form so each driver owns
+   * its own tiering. A diverged replay that fell back to the LLM leg reports
+   * `'llm'` (the tier that produced the result). Absent for single-tier drivers.
+   */
+  tier?: string;
+
+  /**
+   * Replay telemetry — present whenever a replay was attempted, so the drift
+   * signal survives a green LLM-fallback. Copied to {@link TestRunResult.replay}.
+   * Absent on pure-LLM runs.
+   */
+  replay?: ReplayTelemetry;
 }
 
 /**
@@ -311,9 +356,23 @@ export interface OracleInput {
   contextUser: UserInfo;
 
   /**
+   * The test run being judged. The rubric oracle uses this as the subject record.
+   */
+  testRunId?: string;
+
+  /**
    * Optional metadata provider to use for entity/SQL operations during oracle evaluation.
    * If supplied, oracles should use this provider instead of the global Metadata.Provider
    * to participate in the same transaction/connection as the calling test run.
    */
   provider?: IMetadataProvider;
+
+  /**
+   * Labeled, size-bounded evidence for judge oracles: the agent's final message, its final payload
+   * and the artifacts the run produced. Set by drivers whose output is not all in the payload (an
+   * agent that answers in its message, or one that leaves a manifest in its payload and the
+   * substance in an artifact). Judge oracles read it in place of `actualOutput` when present;
+   * `actualOutput` itself is unchanged, so structural oracles (schema, exact-match) are unaffected.
+   */
+  judgeEvidence?: JudgeOutputEvidence;
 }

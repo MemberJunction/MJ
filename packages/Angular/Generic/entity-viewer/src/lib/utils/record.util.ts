@@ -1,20 +1,30 @@
-import { EntityInfo, CompositeKey } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, CompositeKey, EntityRecordNameInput, IMetadataProvider } from '@memberjunction/core';
 import { ViewGridState } from '../types';
 
 /**
  * Build a CompositeKey from a plain record using EntityInfo PK fields.
  * Works with both plain objects (from ResultType: 'simple') and BaseEntity instances.
  */
-export function buildCompositeKey(record: Record<string, unknown>, entityInfo: EntityInfo): CompositeKey {
+export function BuildCompositeKey(record: Record<string, unknown>, entityInfo: EntityInfo): CompositeKey {
     return CompositeKey.FromEntityRecord(entityInfo, record);
+}
+
+/** @deprecated Use {@link BuildCompositeKey}. */
+export function buildCompositeKey(record: Record<string, unknown>, entityInfo: EntityInfo): CompositeKey {
+    return BuildCompositeKey(record, entityInfo);
 }
 
 /**
  * Build a PK concatenated string matching CompositeKey.ToConcatenatedString() format.
  * Used as a stable row identifier for selection, tracking, and map keys.
  */
+export function BuildPkString(record: Record<string, unknown>, entityInfo: EntityInfo): string {
+    return BuildCompositeKey(record, entityInfo).ToConcatenatedString();
+}
+
+/** @deprecated Use {@link BuildPkString}. */
 export function buildPkString(record: Record<string, unknown>, entityInfo: EntityInfo): string {
-    return buildCompositeKey(record, entityInfo).ToConcatenatedString();
+    return BuildPkString(record, entityInfo);
 }
 
 /**
@@ -35,7 +45,7 @@ export function buildPkString(record: Record<string, unknown>, entityInfo: Entit
  * ones as copies — the host's own array and objects are never mutated. A name matching no field is
  * left alone for the existing validation to reject.
  */
-export function canonicalizeColumnFields<T extends { field: string }>(
+export function CanonicalizeColumnFields<T extends { field: string }>(
     entityInfo: EntityInfo,
     columns: readonly T[],
 ): T[] {
@@ -45,11 +55,19 @@ export function canonicalizeColumnFields<T extends { field: string }>(
     });
 }
 
+/** @deprecated Use {@link CanonicalizeColumnFields}. */
+export function canonicalizeColumnFields<T extends { field: string }>(
+    entityInfo: EntityInfo,
+    columns: readonly T[],
+): T[] {
+    return CanonicalizeColumnFields(entityInfo, columns);
+}
+
 /**
  * Compute the Fields array to request from RunView based on EntityInfo and optional grid state.
  * Includes: PK fields, NameField, visible display fields, and timestamp fields.
  */
-export function computeFieldsList(
+export function ComputeFieldsList(
     entityInfo: EntityInfo,
     gridState?: ViewGridState | null,
     hostColumnFields?: readonly string[] | null,
@@ -143,5 +161,138 @@ export function computeFieldsList(
         fields.add('BoundaryGeoJSON');
     }
 
+    // For any polymorphic FK field (where EntityField.EntityIDFieldName is populated) included in
+    // the projection, always include its companion EntityIDFieldName column (and any mapped virtual
+    // name column) so the grid/cards/detail panel can resolve the target entity and record name
+    // even if the user hid the EntityID column in their view settings.
+    for (const f of entityInfo.Fields) {
+        if (!fields.has(f.Name)) continue;
+        const companionName = f.EntityIDFieldName?.trim();
+        if (companionName) {
+            const companionField = entityInfo.Fields.find(
+                cf => cf.Name.toLowerCase() === companionName.toLowerCase()
+            );
+            if (companionField) {
+                fields.add(companionField.Name);
+                if (companionField.RelatedEntityNameFieldMap) {
+                    fields.add(companionField.RelatedEntityNameFieldMap);
+                }
+            }
+        }
+        if (f.RelatedEntityNameFieldMap) {
+            fields.add(f.RelatedEntityNameFieldMap);
+        }
+    }
+
     return Array.from(fields);
+}
+
+/** @deprecated Use {@link ComputeFieldsList}. */
+export function computeFieldsList(
+    entityInfo: EntityInfo,
+    gridState?: ViewGridState | null,
+    hostColumnFields?: readonly string[] | null,
+): string[] {
+    return ComputeFieldsList(entityInfo, gridState, hostColumnFields);
+}
+
+/**
+ * Resolves the target `EntityInfo` for a polymorphic FK field (`field.EntityIDFieldName`)
+ * on a plain record or `BaseEntity`-like map. Strictly relies on the hard metadata link
+ * `field.EntityIDFieldName` — never falls back to field-name heuristics.
+ */
+export function ResolvePolymorphicTargetEntity(
+    record: Record<string, unknown>,
+    field: EntityFieldInfo,
+    provider: IMetadataProvider | null | undefined,
+): EntityInfo | undefined {
+    const companionName = field.EntityIDFieldName?.trim();
+    if (!companionName || !provider || !record) return undefined;
+    const rawRef = record[companionName];
+    if (rawRef == null) return undefined;
+    const refStr = String(rawRef).trim();
+    if (!refStr) return undefined;
+    return provider.EntityByID(refStr) ?? provider.EntityByName(refStr);
+}
+
+/**
+ * Builds a `CompositeKey` for a polymorphic `RecordID` value against `targetEntity`,
+ * supporting both single-column bare values and `Field1|Val1||Field2|Val2` segments.
+ */
+export function BuildPolymorphicCompositeKey(
+    rawRecordId: unknown,
+    targetEntity: EntityInfo,
+): CompositeKey | null {
+    if (rawRecordId == null) return null;
+    const str = String(rawRecordId).trim();
+    if (!str) return null;
+    return CompositeKey.FromURLSegment(targetEntity, str);
+}
+
+/**
+ * Stable lookup key for a resolved polymorphic record name in a view's cache map.
+ */
+export function PolymorphicCacheKey(entityName: string, key: CompositeKey): string {
+    return `${entityName}::${key.ToConcatenatedString()}`;
+}
+
+/**
+ * Batch-resolves human-readable record names for all polymorphic FK fields (`EntityIDFieldName`)
+ * across a page of records using a single `provider.GetEntityRecordNames(...)` call.
+ */
+export async function BatchResolvePolymorphicRecordNames(
+    records: readonly Record<string, unknown>[],
+    entityInfo: EntityInfo | null | undefined,
+    provider: IMetadataProvider | null | undefined,
+    existingCache?: Map<string, string>,
+): Promise<Map<string, string>> {
+    const cache = existingCache ?? new Map<string, string>();
+    if (!entityInfo?.Fields || !provider || !records || records.length === 0) {
+        return cache;
+    }
+
+    const polyFields = entityInfo.Fields.filter(
+        f => typeof f.EntityIDFieldName === 'string' && f.EntityIDFieldName.trim().length > 0
+    );
+    if (polyFields.length === 0) {
+        return cache;
+    }
+
+    const pendingByKey = new Map<string, EntityRecordNameInput>();
+    for (const row of records) {
+        for (const pf of polyFields) {
+            const rawId = row[pf.Name];
+            if (rawId == null || rawId === '') continue;
+            const targetEntity = ResolvePolymorphicTargetEntity(row, pf, provider);
+            if (!targetEntity) continue;
+            const compositeKey = BuildPolymorphicCompositeKey(rawId, targetEntity);
+            if (!compositeKey || !compositeKey.HasValue) continue;
+            const cacheKey = PolymorphicCacheKey(targetEntity.Name, compositeKey);
+            if (!cache.has(cacheKey) && !pendingByKey.has(cacheKey)) {
+                pendingByKey.set(cacheKey, {
+                    EntityName: targetEntity.Name,
+                    CompositeKey: compositeKey,
+                });
+            }
+        }
+    }
+
+    if (pendingByKey.size === 0) {
+        return cache;
+    }
+
+    try {
+        const inputs = Array.from(pendingByKey.values());
+        const results = await provider.GetEntityRecordNames(inputs);
+        for (const res of results) {
+            if (res.Success && res.RecordName) {
+                const key = PolymorphicCacheKey(res.EntityName, res.CompositeKey);
+                cache.set(key, res.RecordName);
+            }
+        }
+    } catch {
+        // Non-fatal: unresolved cells fall back to showing the raw RecordID
+    }
+
+    return cache;
 }

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useMJ } from '@/providers/mj-provider';
-import { createConversation } from '@/data/services/agents';
+import { CreateConversation } from '@/data/services/agents';
 import { Colors, Spacing, Type } from '@/theme/tokens';
 
 /** Fixed QA prompt that exercises markdown rendering (heading + fenced TS code + a table). */
@@ -14,7 +14,7 @@ const PROMPT = 'Reply in markdown ONLY (no preamble). Include: a "## Demo" headi
  * Route: `/devchat` (Expo Router, `app/devchat.tsx`), reached via deep link:
  *   `xcrun simctl openurl booted "org.memberjunction.mobile:///devchat"`.
  * Purpose: automate the end-to-end send flow for QA — waits for `useMJ().status`
- *   to be `ready`, calls `createConversation('Markdown demo')`
+ *   to be `ready`, calls `CreateConversation('Markdown demo')`
  *   (`@/data/services/agents`), then `router.replace`s into `/chat/[id]` with
  *   `?autosend={@link PROMPT}` so the real thread runs the normal send loop
  *   (working indicator + agent run + refresh) with no manual typing.
@@ -31,8 +31,8 @@ export default function DevChat() {
         (async () => {
             try {
                 setMsg('creating conversation…');
-                const conv = await createConversation('Markdown demo');
-                if (!conv) { setMsg('createConversation returned null'); return; }
+                const conv = await CreateConversation('Markdown demo');
+                if (!conv) { setMsg('CreateConversation returned null'); return; }
                 if (!cancelled) {
                     router.replace({ pathname: '/chat/[id]', params: { id: conv.id, autosend: PROMPT } });
                 }

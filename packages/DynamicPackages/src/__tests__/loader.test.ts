@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } 
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { LoadDynamicPackages, ResetLoadedDynamicPackages, StderrDynamicPackagesLogger, mergeCandidates } from '../loader';
+import { LoadDynamicPackages, ResetLoadedDynamicPackages, StderrDynamicPackagesLogger, MergeCandidates } from '../loader';
 import { DYNAMIC_PACKAGES_MODE_ENV_VAR } from '../mode';
 import type { DynamicPackagesLogger } from '../types';
 
@@ -98,6 +98,21 @@ describe('LoadDynamicPackages', () => {
         expect(log.infos).toContain('Loading Open App server packages...');
         expect(log.infos).toContain(`  Loaded Open App server package: ${scope}/server (ran LoadServer)`);
         expect(log.warns).toEqual([]);
+    });
+
+    it('passes DynamicPackageStartupContext with normalized ProcessId to StartupExport', async () => {
+        writeHostPackage('ctx-startup', "export let receivedContext = null; export function Init(ctx) { receivedContext = ctx; }");
+        const report = await LoadDynamicPackages({
+            processId: 'MJAPI',
+            config: {
+                dynamicPackages: { server: [{ PackageName: `${scope}/ctx-startup`, StartupExport: 'Init', Enabled: true }] },
+            },
+            configFilePath: hostConfigPath,
+        });
+        expect(report.Loaded[0].RanStartupExport).toBe(true);
+        expect((report.Loaded[0].Module as { receivedContext?: { ProcessId: string } }).receivedContext).toEqual({
+            ProcessId: 'mjapi',
+        });
     });
 
     it('skips disabled entries and entries scoped to other processes, recording why', async () => {
@@ -420,20 +435,20 @@ describe('LoadDynamicPackages', () => {
         const manifest = { Source: 'manifest' as const, Entry: { PackageName: '@x/a', StartupExport: 'Load' }, WorkspaceHome: { RepoDir: '/repo', SourceDirectory: 'packages' } };
 
         it('keeps discovery order, one candidate per package, and reports the rest as duplicates', () => {
-            const { candidates, duplicates } = mergeCandidates([generated, config, manifest]);
+            const { candidates, duplicates } = MergeCandidates([generated, config, manifest]);
             expect(candidates).toHaveLength(1);
             expect(duplicates).toHaveLength(2);
         });
 
         it('lets the config entry decide Enabled/scoping while keeping the manifest location as the fallback', () => {
-            const { candidates } = mergeCandidates([generated, config, manifest]);
+            const { candidates } = MergeCandidates([generated, config, manifest]);
             expect(candidates[0].Source).toBe('config');
             expect(candidates[0].Entry).toEqual(config.Entry);
             expect(candidates[0].WorkspaceHome).toEqual(manifest.WorkspaceHome);
         });
 
         it('does not mutate the inputs', () => {
-            mergeCandidates([generated, manifest]);
+            MergeCandidates([generated, manifest]);
             expect(generated.Source).toBe('generated');
             expect((generated as { WorkspaceHome?: unknown }).WorkspaceHome).toBeUndefined();
         });

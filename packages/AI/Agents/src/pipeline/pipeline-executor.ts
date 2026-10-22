@@ -22,8 +22,8 @@ import {
 } from './pipeline.types';
 import { PipelineToolRegistry } from './pipeline-registry';
 import { GetOperator, CONTROL_VERBS } from './operators';
-import { resolveParams, TemplateScope } from './template';
-import { sizeOf, previewOf, describeEmptyMatch } from './coerce';
+import { ResolveParams, TemplateScope } from './template';
+import { SizeOf, PreviewOf, DescribeEmptyMatch } from './coerce';
 
 export const MAX_PIPELINE_STAGES = 20;
 export const MAX_MAP_ELEMENTS = 1000;
@@ -106,7 +106,7 @@ export class PipelineExecutor {
 
         for (let i = 0; i < stages.length; i++) {
             const inputValue = current;
-            const inputSize = sizeOf(current);
+            const inputSize = SizeOf(current);
             const startedAt = Date.now();
             const outcome = await this.runStage(stages[i], current, scope);
             const durationMs = Date.now() - startedAt;
@@ -126,7 +126,7 @@ export class PipelineExecutor {
                 toolName: outcome.toolName,
                 providerKind: outcome.providerKind,
                 inputSize,
-                outputSize: sizeOf(outcome.output),
+                outputSize: SizeOf(outcome.output),
                 durationMs,
                 success: outcome.success,
                 error: outcome.error,
@@ -134,7 +134,7 @@ export class PipelineExecutor {
                 logRef: {
                     providerKind: outcome.providerKind,
                     actionExecutionLogId: outcome.actionExecutionLogId,
-                    preview: outcome.preview ?? previewOf(outcome.output),
+                    preview: outcome.preview ?? PreviewOf(outcome.output),
                 },
             });
             this.producedBytes += records[records.length - 1].outputSize;
@@ -204,7 +204,7 @@ export class PipelineExecutor {
         if (!invocable) {
             throw new Error(`Unknown pipeline tool "${toolName}". Available tools: ${this.registry.ToolNames().join(', ')}.`);
         }
-        const params = resolveParams((stage.with as Record<string, unknown>) ?? {}, { ...scope, $: current });
+        const params = ResolveParams((stage.with as Record<string, unknown>) ?? {}, { ...scope, $: current });
         if (typeof stage.pipeInto === 'string') {
             params[stage.pipeInto] = current;
         }
@@ -272,7 +272,7 @@ export class PipelineExecutor {
             error: summary,
             providerKind: 'Transform',
             toolName: `map(${current.length})`,
-            preview: previewOf(results),
+            preview: PreviewOf(results),
         };
     }
 
@@ -301,7 +301,7 @@ export class PipelineExecutor {
             const outcome = await this.runStage(stage, current, scope);
             // Every sub-pipeline stage output is processed server-side and never surfaces to the
             // LLM directly (only the top-level final value does) — count it toward bytes saved.
-            this.producedBytes += sizeOf(outcome.output);
+            this.producedBytes += SizeOf(outcome.output);
             if (!outcome.success) {
                 return { value: null, success: false, error: outcome.error };
             }
@@ -340,7 +340,7 @@ export class PipelineExecutor {
      * (e.g. full pages fetched per element) are counted here, not just top-level stages.
      */
     private computeSaved(finalOutput: PipeValue): number {
-        return Math.max(0, this.producedBytes - sizeOf(finalOutput));
+        return Math.max(0, this.producedBytes - SizeOf(finalOutput));
     }
 }
 
@@ -389,7 +389,7 @@ function stageDegenerationHint(
         return undefined;
     }
     if (isEmpty(output)) {
-        return `Stage ${oneBasedIndex} ("${toolName}") ${describeEmptyMatch(inputValue)}`;
+        return `Stage ${oneBasedIndex} ("${toolName}") ${DescribeEmptyMatch(inputValue)}`;
     }
     if (Array.isArray(output) && output.length > 0 && output.every((el) => el == null || isAllNullObject(el))) {
         const why =

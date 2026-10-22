@@ -5,6 +5,7 @@
 
 import { MJComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
+import { BaseSingleton } from '@memberjunction/global';
 import * as t from '@babel/types';
 
 export interface CompiledValidator {
@@ -21,26 +22,39 @@ export interface CompiledLibraryRules {
   options?: any;
 }
 
-export class LibraryLintCache {
-  private static instance: LibraryLintCache;
-  private compiledRules: Map<string, CompiledLibraryRules> = new Map();
+export class LibraryLintCache extends BaseSingleton<LibraryLintCache> {
+  private compiledRules!: Map<string, CompiledLibraryRules>;
   private loadingPromise: Promise<void> | null = null;
   private isLoaded = false;
 
-  private constructor() {}
-
-  public static getInstance(): LibraryLintCache {
-    if (!LibraryLintCache.instance) {
-      LibraryLintCache.instance = new LibraryLintCache();
+  public constructor() {
+    super();
+    if (!this.compiledRules) {
+      this.compiledRules = new Map();
     }
-    return LibraryLintCache.instance;
+  }
+
+  public static get Instance(): LibraryLintCache {
+    return super.getInstance<LibraryLintCache>();
+  }
+
+  public static GetInstance(): LibraryLintCache {
+    return super.getInstance<LibraryLintCache>();
+  }
+
+  /** @deprecated Use {@link Instance} or {@link GetInstance}. */
+  public static override getInstance<T extends BaseSingleton<unknown> = LibraryLintCache>(
+    this: new () => T,
+    className?: string
+  ): T {
+    return super.getInstance<T>(className);
   }
 
   /**
    * Load and compile all library lint rules
    * Returns existing promise if already loading
    */
-  public async loadLibraryRules(contextUser?: UserInfo): Promise<void> {
+  public async LoadLibraryRules(contextUser?: UserInfo): Promise<void> {
     // If already loaded, return immediately
     if (this.isLoaded) {
       return Promise.resolve();
@@ -66,6 +80,11 @@ export class LibraryLintCache {
     } finally {
       this.loadingPromise = null;
     }
+  }
+
+  /** @deprecated Use {@link LoadLibraryRules}. */
+  public async loadLibraryRules(contextUser?: UserInfo): Promise<void> {
+    return this.LoadLibraryRules(contextUser);
   }
 
   private async performLoad(contextUser?: UserInfo): Promise<void> {
@@ -138,30 +157,45 @@ export class LibraryLintCache {
   /**
    * Get compiled rules for a specific library
    */
-  public getLibraryRules(libraryName: string): CompiledLibraryRules | undefined {
+  public GetLibraryRules(libraryName: string): CompiledLibraryRules | undefined {
     return this.compiledRules.get(libraryName);
+  }
+
+  /** @deprecated Use {@link GetLibraryRules}. */
+  public getLibraryRules(libraryName: string): CompiledLibraryRules | undefined {
+    return this.GetLibraryRules(libraryName);
   }
 
   /**
    * Get all compiled library rules
    */
-  public getAllLibraryRules(): CompiledLibraryRules[] {
+  public GetAllLibraryRules(): CompiledLibraryRules[] {
     return Array.from(this.compiledRules.values());
+  }
+
+  /** @deprecated Use {@link GetAllLibraryRules}. */
+  public getAllLibraryRules(): CompiledLibraryRules[] {
+    return this.GetAllLibraryRules();
   }
 
   /**
    * Clear the cache (useful for testing or when libraries are updated)
    */
-  public clearCache(): void {
+  public ClearCache(): void {
     this.compiledRules.clear();
     this.isLoaded = false;
     this.loadingPromise = null;
   }
 
+  /** @deprecated Use {@link ClearCache}. */
+  public clearCache(): void {
+    return this.ClearCache();
+  }
+
   /**
    * Manually add library rules for testing without database access
    */
-  public addTestLibraryRules(libraryName: string, lintRules: any): void {
+  public AddTestLibraryRules(libraryName: string, lintRules: any): void {
     try {
       // Compile validators if they exist
       const compiledRules: CompiledLibraryRules = {
@@ -210,5 +244,10 @@ export class LibraryLintCache {
     } catch (error) {
       console.warn(`Failed to add test rules for library ${libraryName}:`, error);
     }
+  }
+
+  /** @deprecated Use {@link AddTestLibraryRules}. */
+  public addTestLibraryRules(libraryName: string, lintRules: any): void {
+    return this.AddTestLibraryRules(libraryName, lintRules);
   }
 }

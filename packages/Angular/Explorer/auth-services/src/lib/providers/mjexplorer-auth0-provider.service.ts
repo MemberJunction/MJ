@@ -25,14 +25,20 @@ import {
 @RegisterClass(MJAuthBase, 'auth0')
 export class MJAuth0Provider extends MJAuthBase {
   static readonly PROVIDER_TYPE = 'auth0';
+  /**
+   * Maximum time (in seconds) to wait for a silent token refresh before failing over
+   * to the login screen. Replaces Auth0 SPA SDK's 60-second default iframe timeout.
+   */
+  static readonly SILENT_REFRESH_TIMEOUT_SECONDS = 5;
   readonly type = MJAuth0Provider.PROVIDER_TYPE;
   private _initialized = false;
+  private _staleSessionEvicted = false;
 
   /**
    * Factory function to provide Angular dependencies required by Auth0
    * Stored as a static property for the factory to access without instantiation
    */
-  static angularProviderFactory = (environment: Record<string, unknown>): Provider[] => {
+  static AngularProviderFactory = (environment: Record<string, unknown>): Provider[] => {
     // Check if we're on the MCP OAuth callback path
     const isMCPOAuthCallback = window.location.pathname.startsWith('/oauth/callback');
 
@@ -53,8 +59,12 @@ export class MJAuth0Provider extends MJAuthBase {
           cacheLocation: 'localstorage',
           // Enable refresh tokens so we can refresh without relying on Auth0 session cookies
           useRefreshTokens: true,
-          // Use rotating refresh tokens for better security
-          useRefreshTokensFallback: true,
+          // Disable hidden-iframe web_message fallback: in modern browsers with third-party
+          // cookie restrictions (or unallowlisted localhost dev ports), iframe silent auth
+          // hangs silently until authorizeTimeoutInSeconds (60s by default) when the refresh
+          // token is missing or expired. Direct refresh-token grant fails fast (~150ms).
+          useRefreshTokensFallback: false,
+          authorizeTimeoutInSeconds: MJAuth0Provider.SILENT_REFRESH_TIMEOUT_SECONDS,
           // CRITICAL: Skip Auth0's redirect callback handling for MCP OAuth callbacks
           // The /oauth/callback path is used by MCP OAuth, not Auth0. If we don't skip,
           // Auth0 will consume the code parameter and redirect to /, preventing the
@@ -70,12 +80,30 @@ export class MJAuth0Provider extends MJAuthBase {
     ];
   };
 
-  constructor(public auth: AuthService) {
+  /** @deprecated Use {@link AngularProviderFactory}. */
+  static get angularProviderFactory() {
+    return this.AngularProviderFactory;
+  }
+  /** @deprecated Use {@link AngularProviderFactory}. */
+  static set angularProviderFactory(value) {
+    this.AngularProviderFactory = value;
+  }
+
+  constructor(public Auth: AuthService) {
     const config: AngularAuthProviderConfig = {
       name: MJAuth0Provider.PROVIDER_TYPE,
       type: MJAuth0Provider.PROVIDER_TYPE
     };
     super(config);
+  }
+
+  /** @deprecated Use {@link Auth}. */
+  public get auth(): AuthService {
+    return this.Auth;
+  }
+  /** @deprecated Use {@link Auth}. */
+  public set auth(value: AuthService) {
+    this.Auth = value;
   }
 
   // ============================================================================
@@ -89,18 +117,28 @@ export class MJAuth0Provider extends MJAuthBase {
 
     // CRITICAL: Wait for Auth0 SDK to process any redirect callback
     // The SDK handles this internally and updates isLoading$ when done
-    await firstValueFrom(this.auth.isLoading$.pipe(
+    await firstValueFrom(this.Auth.isLoading$.pipe(
       filter(loading => !loading),
       take(1)
     ));
 
     // Get current authentication state
-    const isAuthenticated = await firstValueFrom(this.auth.isAuthenticated$);
+    let isAuthenticated = await firstValueFrom(this.Auth.isAuthenticated$);
+
+    // If Auth0 reports authenticated from localStorage, verify the cached ID token
+    // is not already expired before exposing an authenticated state to the shell.
+    if (isAuthenticated) {
+      const claims = await firstValueFrom(this.Auth.idTokenClaims$);
+      if (!claims?.__raw || this.isClaimExpired(claims.exp)) {
+        const refreshResult = await this.refreshTokenInternal();
+        isAuthenticated = refreshResult.success;
+      }
+    }
 
     // CRITICAL: Get current user BEFORE setting up subscriptions
     // This ensures userInfo$ has a value before app.component.ts subscribes
     if (isAuthenticated) {
-      const user = await firstValueFrom(this.auth.user$);
+      const user = await firstValueFrom(this.Auth.user$);
       if (user) {
         const userInfo = this.mapAuth0UserToStandard(user);
         this.updateUserInfo(userInfo);
@@ -108,11 +146,19 @@ export class MJAuth0Provider extends MJAuthBase {
     }
 
     // Subscribe to authentication state and user info for future changes
-    this.auth.isAuthenticated$.subscribe((loggedIn) => {
+    this.Auth.isAuthenticated$.subscribe((loggedIn) => {
+      if (this._staleSessionEvicted && loggedIn) {
+        this.updateAuthState(false);
+        return;
+      }
       this.updateAuthState(loggedIn);
     });
 
-    this.auth.user$.subscribe((user) => {
+    this.Auth.user$.subscribe((user) => {
+      if (this._staleSessionEvicted) {
+        this.updateUserInfo(null);
+        return;
+      }
       if (user) {
         const userInfo = this.mapAuth0UserToStandard(user);
         this.updateUserInfo(userInfo);
@@ -125,15 +171,16 @@ export class MJAuth0Provider extends MJAuthBase {
   }
 
   protected async loginInternal(options?: Record<string, unknown>): Promise<void> {
+    this._staleSessionEvicted = false;
     await this.ensureInitialized();
-    this.auth.loginWithRedirect(options);
+    this.Auth.loginWithRedirect(options);
   }
 
   protected async logoutInternal(): Promise<void> {
     // Subscribe to the Observable so Auth0 Angular SDK v2's authState.refresh() fires.
     try {
       await firstValueFrom(
-        this.auth.logout({ logoutParams: { returnTo: document.location.origin } })
+        this.Auth.logout({ logoutParams: { returnTo: document.location.origin } })
       );
     } catch {
       // Expected when Auth0 redirects the browser before the Observable completes.
@@ -152,14 +199,22 @@ export class MJAuth0Provider extends MJAuthBase {
   /**
    * Extract ID token from Auth0's storage
    *
-   * Auth0 stores the JWT string in idTokenClaims.__raw
-   * This is the key abstraction - consumers never need to know about __raw!
+   * Auth0 stores the JWT string in idTokenClaims.__raw.
+   * Returns null if the cached claim is missing or already past its `exp` timestamp,
+   * preventing known-expired localStorage tokens from being sent to GraphQL.
    */
   protected async extractIdTokenInternal(): Promise<string | null> {
     try {
-      const claims = await firstValueFrom(this.auth.idTokenClaims$);
+      const claims = await firstValueFrom(this.Auth.idTokenClaims$);
+      if (!claims?.__raw) {
+        return null;
+      }
+      if (this.isClaimExpired(claims.exp)) {
+        console.warn('[Auth0] Cached ID token is expired; refresh required.');
+        return null;
+      }
       // Auth0-specific detail: JWT is in __raw property
-      return claims?.__raw || null;
+      return claims.__raw;
     } catch (error) {
       console.error('[Auth0] Error extracting ID token:', error);
       return null;
@@ -169,17 +224,18 @@ export class MJAuth0Provider extends MJAuthBase {
   /**
    * Extract complete token info from Auth0
    *
-   * Maps Auth0's token structure to StandardAuthToken
+   * Maps Auth0's token structure to StandardAuthToken. Returns null if the
+   * cached token is already expired.
    */
   protected async extractTokenInfoInternal(): Promise<StandardAuthToken | null> {
     try {
-      const claims = await firstValueFrom(this.auth.idTokenClaims$);
+      const claims = await firstValueFrom(this.Auth.idTokenClaims$);
       if (!claims) {
         return null;
       }
 
       const idToken = claims.__raw;
-      if (!idToken) {
+      if (!idToken || this.isClaimExpired(claims.exp)) {
         return null;
       }
 
@@ -201,7 +257,7 @@ export class MJAuth0Provider extends MJAuthBase {
    */
   protected async extractUserInfoInternal(): Promise<StandardUserInfo | null> {
     try {
-      const user = await firstValueFrom(this.auth.user$);
+      const user = await firstValueFrom(this.Auth.user$);
       if (!user) {
         return null;
       }
@@ -223,10 +279,10 @@ export class MJAuth0Provider extends MJAuthBase {
     try {
       console.log('[Auth0] Attempting to refresh token...');
 
-      // Force token refresh by bypassing cache
-      // With useRefreshTokens: true and offline_access scope, this will use refresh tokens
-      await firstValueFrom(this.auth.getAccessTokenSilently({
-        cacheMode: 'off'
+      // Force token refresh by bypassing cache, bounded by SILENT_REFRESH_TIMEOUT_SECONDS
+      await firstValueFrom(this.Auth.getAccessTokenSilently({
+        cacheMode: 'off',
+        timeoutInSeconds: MJAuth0Provider.SILENT_REFRESH_TIMEOUT_SECONDS
       }));
 
       // Small delay to ensure Auth0 SDK has updated observables
@@ -236,16 +292,18 @@ export class MJAuth0Provider extends MJAuthBase {
       const token = await this.extractTokenInfoInternal();
 
       if (!token) {
+        this.evictStaleAuthState();
         return {
           success: false,
           error: {
             type: AuthErrorType.NO_ACTIVE_SESSION,
-            message: 'Token refresh succeeded but could not extract token info',
+            message: 'Token refresh succeeded but could not extract a non-expired token',
             userMessage: 'Session refresh failed. Please log in again.'
           }
         };
       }
 
+      this._staleSessionEvicted = false;
       console.log('[Auth0] Token refresh successful', {
         expiresAt: new Date(token.expiresAt).toISOString()
       });
@@ -256,6 +314,7 @@ export class MJAuth0Provider extends MJAuthBase {
       };
     } catch (error) {
       console.error('[Auth0] Token refresh failed:', error);
+      this.evictStaleAuthState();
 
       return {
         success: false,
@@ -273,9 +332,21 @@ export class MJAuth0Provider extends MJAuthBase {
     const errorObj = error as Record<string, unknown>;
     const message = errorObj?.['message'] as string || 'Unknown error';
     const errorType = errorObj?.['error'] as string || '';
+    const lowerMessage = message.toLowerCase();
+    const lowerErrorType = errorType.toLowerCase();
 
-    // Check for specific Auth0 error patterns
-    if (message.includes('jwt expired') || message.includes('token expired')) {
+    // Check for specific Auth0 token/refresh expiration patterns
+    if (
+      lowerMessage.includes('jwt expired') ||
+      lowerMessage.includes('token expired') ||
+      lowerMessage.includes('missing refresh token') ||
+      lowerMessage.includes('invalid refresh token') ||
+      lowerMessage.includes('invalid_grant') ||
+      lowerMessage.includes('timeout') ||
+      lowerErrorType === 'missing_refresh_token' ||
+      lowerErrorType === 'invalid_grant' ||
+      lowerErrorType === 'timeout'
+    ) {
       return {
         type: AuthErrorType.TOKEN_EXPIRED,
         message,
@@ -284,7 +355,7 @@ export class MJAuth0Provider extends MJAuthBase {
       };
     }
 
-    if (errorType === 'login_required' || message.includes('login_required')) {
+    if (lowerErrorType === 'login_required' || lowerMessage.includes('login_required')) {
       return {
         type: AuthErrorType.NO_ACTIVE_SESSION,
         message,
@@ -293,7 +364,7 @@ export class MJAuth0Provider extends MJAuthBase {
       };
     }
 
-    if (errorType === 'consent_required' || message.includes('consent_required')) {
+    if (lowerErrorType === 'consent_required' || lowerMessage.includes('consent_required')) {
       return {
         type: AuthErrorType.INTERACTION_REQUIRED,
         message,
@@ -302,7 +373,7 @@ export class MJAuth0Provider extends MJAuthBase {
       };
     }
 
-    if (message.includes('user closed') || message.includes('cancelled')) {
+    if (lowerMessage.includes('user closed') || lowerMessage.includes('cancelled')) {
       return {
         type: AuthErrorType.USER_CANCELLED,
         message,
@@ -311,7 +382,7 @@ export class MJAuth0Provider extends MJAuthBase {
       };
     }
 
-    if (message.includes('network') || message.includes('fetch')) {
+    if (lowerMessage.includes('network') || lowerMessage.includes('fetch')) {
       return {
         type: AuthErrorType.NETWORK_ERROR,
         message,
@@ -332,6 +403,43 @@ export class MJAuth0Provider extends MJAuthBase {
   // ============================================================================
   // HELPER METHODS
   // ============================================================================
+
+  /**
+   * Returns true if a numeric JWT `exp` claim (in epoch seconds) is at or before the current time.
+   */
+  private isClaimExpired(expSeconds: number | undefined): boolean {
+    if (typeof expSeconds !== 'number' || expSeconds <= 0) {
+      return false;
+    }
+    return expSeconds * 1000 <= Date.now();
+  }
+
+  /**
+   * Removes cached Auth0 SPA SDK entries (`@@auth0spajs@@*`) from localStorage and
+   * marks the provider as unauthenticated so the login screen renders immediately
+   * when silent token refresh fails.
+   */
+  private evictStaleAuthState(): void {
+    this._staleSessionEvicted = true;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('@@auth0spajs@@')) {
+            keysToRemove.push(key);
+          }
+        }
+        for (const key of keysToRemove) {
+          localStorage.removeItem(key);
+        }
+      }
+    } catch {
+      // Ignore storage access errors in restricted environments
+    }
+    this.updateAuthState(false);
+    this.updateUserInfo(null);
+  }
 
   private async ensureInitialized(): Promise<void> {
     if (!this._initialized) {
@@ -364,7 +472,7 @@ export class MJAuth0Provider extends MJAuthBase {
    */
   protected async getProfilePictureUrlInternal(): Promise<string | null> {
     try {
-      const user = await firstValueFrom(this.auth.user$);
+      const user = await firstValueFrom(this.Auth.user$);
       return user?.picture || null;
     } catch (error) {
       console.error('[Auth0] Error getting profile picture:', error);

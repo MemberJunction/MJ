@@ -1,7 +1,16 @@
+import '@angular/compiler';
 import { describe, it, expect } from 'vitest';
+import { getTestBed } from '@angular/core/testing';
+import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
 import type { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import { PSExperimentsComponent } from './ps-experiments.component';
+
+try {
+  getTestBed().initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
+} catch {
+  // already initialized
+}
 
 /**
  * DOM coverage for <ps-experiments> — the kanban + leaderboard for the active experiment session. The

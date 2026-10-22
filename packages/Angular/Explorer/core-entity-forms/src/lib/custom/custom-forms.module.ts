@@ -31,6 +31,7 @@ import { CreatePromptDialogComponent } from "./AIAgents/create-prompt-dialog.com
 import { CreateSubAgentDialogComponent } from "./AIAgents/create-sub-agent-dialog.component";
 import { AIAgentManagementService } from "./AIAgents/ai-agent-management.service";
 import { AgentsModule } from "@memberjunction/ng-agents";
+import { ArtifactsModule } from "@memberjunction/ng-artifacts";
 import { AITestHarnessModule } from "@memberjunction/ng-ai-test-harness";
 import { ActionGalleryModule } from "@memberjunction/ng-action-gallery";
 import { TestingModule } from "@memberjunction/ng-testing";
@@ -42,6 +43,7 @@ import { ListManagementModule } from '@memberjunction/ng-list-management';
 import { EntitySelectorDialogComponent } from "./shared/entity-selector-dialog.component";
 import { MJAIPromptRunFormComponentExtended } from "./AIPromptRuns/ai-prompt-run-form.component";
 import { ChatMessageViewerComponent } from "./AIPromptRuns/chat-message-viewer.component";
+import { PromptRunDataCaptureNoteComponent } from "./AIPromptRuns/prompt-run-data-capture-note.component";
 import { MJActionFormComponentExtended } from "./Actions/action-form.component";
 import { MJActionExecutionLogFormComponentExtended } from "./Actions/action-execution-log-form.component";
 import { ActionsModule } from "@memberjunction/ng-actions";
@@ -85,8 +87,8 @@ import { MJAIAgentChannelFormComponentExtended } from "./AIAgentChannels/ai-agen
 // Realtime Bridges — custom Extended forms (Pattern 2) for the three major bridge entities.
 import { MJAIBridgeProviderFormComponentExtended, LoadMJAIBridgeProviderFormComponentExtended } from "./BridgeProviders/bridge-provider-form.component";
 import { MJAIAgentSessionBridgeFormComponentExtended, LoadMJAIAgentSessionBridgeFormComponentExtended } from "./SessionBridges/session-bridge-form.component";
-import { RecordProcessFormComponentExtended } from "./RecordProcesses/record-process-form.component";
-import { RecordProcessEditorComponent } from "@memberjunction/ng-record-process-studio";
+import { RecordProcessFormComponentExtended, LoadRecordProcessFormComponentExtended } from "./RecordProcesses/record-process-form.component";
+import { RecordProcessEditorComponent, FeaturePipelineBuilderComponent, RecordProcessHistoryComponent } from "@memberjunction/ng-record-process-studio";
 import { MJAIBridgeAgentIdentityFormComponentExtended, LoadMJAIBridgeAgentIdentityFormComponentExtended } from "./BridgeAgentIdentities/bridge-agent-identity-form.component";
 // AI Agent "Realtime" panel (Pattern 1 — BaseFormPanel slot). Imported so the
 // @RegisterClassEx decorator runs at module load (Angular tree-shaking guard).
@@ -96,13 +98,24 @@ import { AgentRealtimePanel, LoadAgentRealtimePanel } from "../panels/ai-agents/
 // self-hides unless that entity has an active MJ: ML Model Scoring Binding.
 // Imported here so the @RegisterClassEx decorator runs at module load.
 import { ModelPredictionPanel } from "../panels/model-predictions/model-prediction.panel";
+import { FeatureValuesPanel } from "../panels/feature-values/feature-values.panel";
 // AI Skills sharing/portability panel (Pattern 1 — BaseFormPanel slot): Share
 // dialog + SKILL.md export/import actions, mounted on the generated MJ: AI
 // Skills form. Imported so the @RegisterClassEx decorator runs at module load.
 import { AISkillSharingPanel } from "../panels/ai-skill-sharing/ai-skill-sharing-panel.component";
 import { EntityFormChromeEditorComponent } from "../panels/form-chrome/entity-form-chrome-editor.component";
 import { EntityRelationshipFormRolePanel } from "../panels/form-chrome/entity-relationship-form-role.panel";
+import { EntityCloneConfigEditorComponent } from "../panels/record-clone/entity-clone-config-editor.component";
+import { ClonePlanTreeComponent } from "@memberjunction/ng-record-clone";
 import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissions";
+import { MLModelFormComponentExtended, LoadMLModelFormComponentExtended } from "./MLModels/ml-model-form.component";
+import { RubricsModule } from "@memberjunction/ng-rubrics";
+import { MJRubricFormComponentExtended } from "./Rubrics/rubric-form.component";
+import { RubricAuthorPanel, RubricDiffPanel, RubricPublishPanel, RubricVersionsPanel } from "./Rubrics/rubric-form.panels";
+import { MJRubricEvaluationFormComponentExtended, RubricEvaluationComparePanel, RubricEvaluationResultPanel } from "./Rubrics/evaluation-form.component";
+import { MJRubricScaleFormComponentExtended, RubricScaleLevelsPanel } from "./Rubrics/scale-form.component";
+import { MJAIAgentRubricFormComponentExtended, MJRubricBandFormComponentExtended, MJRubricCategoryFormComponentExtended, MJRubricCriterionFormComponentExtended, MJRubricEvaluationScoreFormComponentExtended, MJRubricScaleLevelFormComponentExtended, MJRubricVersionFormComponentExtended, RubricVersionSummaryPanel } from "./Rubrics/record-forms.component";
+import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
 
 @NgModule({
     declarations: [
@@ -125,6 +138,7 @@ import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissio
         EntitySelectorDialogComponent,
         MJAIPromptRunFormComponentExtended,
         ChatMessageViewerComponent,
+        PromptRunDataCaptureNoteComponent,
         MJActionFormComponentExtended,
         MJActionExecutionLogFormComponentExtended,
         MJAIAgentRunFormComponentExtended,
@@ -148,11 +162,22 @@ import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissio
         MJTestRubricFormComponentExtended,
         EntityLinkPillComponent,
         MJListFormComponentExtended,
+        MJRubricFormComponentExtended,
+        MJRubricEvaluationFormComponentExtended,
+        MJRubricScaleFormComponentExtended,
+        MJRubricVersionFormComponentExtended,
+        MJRubricCriterionFormComponentExtended,
+        MJRubricEvaluationScoreFormComponentExtended,
+        MJRubricScaleLevelFormComponentExtended,
+        MJRubricBandFormComponentExtended,
+        MJRubricCategoryFormComponentExtended,
+        MJAIAgentRubricFormComponentExtended,
         // ContentSource-specific BaseFormPanel slot components (no custom form override).
         TagPipelineConfigurationPanel,
         WebsiteCrawlerSettingsPanel,
         // Entity-agnostic ('*') Model Predictions panel — mounts on every form, self-hides when N/A.
         ModelPredictionPanel,
+        FeatureValuesPanel,
         AISkillSharingPanel,
         MJSearchScopeFormComponentExtended,
         MJSearchScopeProviderFormComponentExtended,
@@ -165,14 +190,27 @@ import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissio
         RecordProcessFormComponentExtended,
         EntityFormChromeEditorComponent,
         EntityRelationshipFormRolePanel,
+        EntityCloneConfigEditorComponent,
         MJFileFormComponentExtended,
+        MLModelFormComponentExtended,
     ],
     imports: [
+    ArtifactsModule,
         CommonModule,
+        RubricsModule,
+        RubricAuthorPanel,
+        RubricDiffPanel,
+        RubricPublishPanel,
+        RubricVersionsPanel,
+        RubricVersionSummaryPanel,
+        RubricEvaluationResultPanel,
+        RubricEvaluationComparePanel,
+        RubricScaleLevelsPanel,
         FormsModule,
         ReactiveFormsModule,
         DragDropModule,
         AgGridModule,
+        PSModelDetailComponent,
         MJEmptyStateComponent,
         MJAlertComponent,
         MJTabNavComponent,
@@ -191,6 +229,7 @@ import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissio
         LinkDirectivesModule,
         JoinGridModule,
         BaseFormsModule,
+        ClonePlanTreeComponent,
         MJTabStripModule,
         CodeEditorModule,
         DeepDiffModule,
@@ -212,6 +251,8 @@ import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissio
         MjFormDialogComponent,
         SearchModule,
         RecordProcessEditorComponent,
+        FeaturePipelineBuilderComponent,
+        RecordProcessHistoryComponent,
         ResourcePermissionsModule,
         ...HIERARCHY_FORM_PANELS
     ],
@@ -226,6 +267,7 @@ import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissio
         MJAIAgentFormComponentExtended,
         MJAIPromptRunFormComponentExtended,
         ChatMessageViewerComponent,
+        PromptRunDataCaptureNoteComponent,
         MJActionFormComponentExtended,
         MJActionExecutionLogFormComponentExtended,
         MJAIAgentRunFormComponentExtended,
@@ -245,6 +287,7 @@ import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissio
         TagPipelineConfigurationPanel,
         WebsiteCrawlerSettingsPanel,
         ModelPredictionPanel,
+        FeatureValuesPanel,
         AISkillSharingPanel,
         MJSearchScopeFormComponentExtended,
         MJSearchScopeProviderFormComponentExtended,
@@ -255,7 +298,9 @@ import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissio
         MJAIBridgeAgentIdentityFormComponentExtended,
         AgentRealtimePanel,
         ActionsModule,
-        RecordProcessFormComponentExtended
+        RecordProcessFormComponentExtended,
+        MLModelFormComponentExtended,
+        PSModelDetailComponent
     ],
     providers: [
         NewAgentDialogService,

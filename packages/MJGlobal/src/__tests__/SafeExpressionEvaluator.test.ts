@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   SafeExpressionEvaluator,
   ExpressionEvaluationResult,
-  defaultExpressionEvaluator,
+  DefaultExpressionEvaluator,
 } from '../SafeExpressionEvaluator';
 
 /**
@@ -416,8 +416,8 @@ describe('SafeExpressionEvaluator', () => {
   // ---------------------------------------------------------------
   describe('defaultExpressionEvaluator', () => {
     it('should be a usable SafeExpressionEvaluator instance', () => {
-      expect(defaultExpressionEvaluator).toBeInstanceOf(SafeExpressionEvaluator);
-      expect(defaultExpressionEvaluator.evaluate('1 == 1', {}).value).toBe(true);
+      expect(DefaultExpressionEvaluator).toBeInstanceOf(SafeExpressionEvaluator);
+      expect(DefaultExpressionEvaluator.evaluate('1 == 1', {}).value).toBe(true);
     });
   });
 });

@@ -30,9 +30,9 @@ import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext, AgentLiveFixture } from '@memberjunction/testing-integration';
 import {
-    AGENT_LIVE_FIXTURE_TAG, AGENT_LIVE_SETTLE_MS, newMarker, sleep,
-    makeAIClient, userTurn, runAgentOverWire, resolveRunId, firstPromptMessages,
-    deleteById, purgeAgentRun,
+    AGENT_LIVE_FIXTURE_TAG, AGENT_LIVE_SETTLE_MS, NewMarker, Sleep,
+    MakeAIClient, UserTurn, RunAgentOverWire, ResolveRunId, FirstPromptMessages,
+    DeleteById, PurgeAgentRun,
 } from './agent-live-shared';
 
 /**
@@ -79,10 +79,14 @@ async function createConversationTurn(ctx: IntegrationCheckContext, text: string
 }
 
 /** Fabricate a settled prior ROOT run for (conversation, agent) — the §3.4 prior turn. */
-async function fabricatePriorRun(ctx: IntegrationCheckContext, conversationId: string, agentId: string, status: MJAIAgentRunEntityExtended['Status']): Promise<MJAIAgentRunEntityExtended> {
+async function fabricatePriorRun(ctx: IntegrationCheckContext, turn: { conversationId: string; detailId: string }, agentId: string, status: MJAIAgentRunEntityExtended['Status']): Promise<MJAIAgentRunEntityExtended> {
     const run = await ctx.Provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', ctx.User);
     run.AgentID = agentId;
-    run.ConversationID = conversationId;
+    run.ConversationID = turn.conversationId;
+    // Carry-forward only reads a prior run whose reply row is a live row on the turn's branch
+    // path (BaseAgent.BuildPriorTurnRunFilter), as every real conversation run has. The turn's
+    // own trunk row stands in for that reply.
+    run.ConversationDetailID = turn.detailId;
     run.Status = status;              // settled (AwaitingFeedback|Completed) or Failed depending on the scenario
     run.StartedAt = new Date();
     run.CompletedAt = new Date();
@@ -118,12 +122,12 @@ function eligibleOutputData(dataMarker: string): string {
 
 /** Run IT: Echo Agent one live turn linked to the conversation; return that run's first prompt Messages. */
 async function observeTurn(ctx: IntegrationCheckContext, observer: MJAIAgentEntityExtended, detailId: string, conversationId: string): Promise<{ role: string; content: string }[]> {
-    const result = await runAgentOverWire(makeAIClient(ctx.Provider, ctx.User), observer, userTurn('Acknowledge and finish.'), { conversationDetailId: detailId, conversationId });
-    await sleep(AGENT_LIVE_SETTLE_MS);
-    const runId = await resolveRunId(result, ctx.User, `ConversationID='${conversationId}' AND AgentID='${observer.ID}'`, ctx.Provider);
+    const result = await RunAgentOverWire(MakeAIClient(ctx.Provider, ctx.User), observer, UserTurn('Acknowledge and finish.'), { conversationDetailId: detailId, ConversationId: conversationId });
+    await Sleep(AGENT_LIVE_SETTLE_MS);
+    const runId = await ResolveRunId(result, ctx.User, `ConversationID='${conversationId}' AND AgentID='${observer.ID}'`, ctx.Provider);
     Assert(!!runId, 'CF: the observing turn landed an AI Agent Run');
     fixture(ctx).LiveRunIds.push(runId!);
-    return firstPromptMessages(runId!, ctx.User, ctx.Provider);
+    return FirstPromptMessages(runId!, ctx.User, ctx.Provider);
 }
 
 /** Messages whose content carries the carry-forward header (the injected transient message(s)). */
@@ -140,7 +144,7 @@ export const AgentCarryForwardChecks: NamedCheck[] = [
             const echo = await agentByName('IT: Echo Agent', ctx.User);
             const turn = await createConversationTurn(ctx, `CF1 ${fixture(ctx).Marker}`);
             const marker = `CF1-DATA-${fixture(ctx).Marker}`;
-            const prior = await fabricatePriorRun(ctx, turn.conversationId, echo.ID, 'AwaitingFeedback');
+            const prior = await fabricatePriorRun(ctx, turn, echo.ID, 'AwaitingFeedback');
             await fabricateToolStep(ctx, prior.ID, 1, eligibleOutputData(marker));
 
             const messages = await observeTurn(ctx, echo, turn.detailId, turn.conversationId);
@@ -158,7 +162,7 @@ export const AgentCarryForwardChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const echo = await agentByName('IT: Echo Agent', ctx.User);
             const turn = await createConversationTurn(ctx, `CF2 ${fixture(ctx).Marker}`);
-            const prior = await fabricatePriorRun(ctx, turn.conversationId, echo.ID, 'AwaitingFeedback');
+            const prior = await fabricatePriorRun(ctx, turn, echo.ID, 'AwaitingFeedback');
             // Two ~60k results → ~120k combined > 100k cap: first fits, second is dropped-with-note.
             const keep = `CF2-KEEP-${fixture(ctx).Marker}`;
             const drop = `CF2-DROP-${fixture(ctx).Marker}`;
@@ -189,7 +193,7 @@ export const AgentCarryForwardChecks: NamedCheck[] = [
             const contents: string[] = [];
             for (const tag of ['A', 'B']) {
                 const turn = await createConversationTurn(ctx, `CF3-${tag} ${fixture(ctx).Marker}`);
-                const prior = await fabricatePriorRun(ctx, turn.conversationId, echo.ID, 'AwaitingFeedback');
+                const prior = await fabricatePriorRun(ctx, turn, echo.ID, 'AwaitingFeedback');
                 await fabricateToolStep(ctx, prior.ID, 1, eligibleOutputData(marker));
                 const injected = carryForwardMessages(await observeTurn(ctx, echo, turn.detailId, turn.conversationId));
                 AssertEqual(injected.length, 1, `CF3-${tag}: one injected carry-forward message`);
@@ -209,14 +213,14 @@ export const AgentCarryForwardChecks: NamedCheck[] = [
 
             // (a) same conversation, DIFFERENT agent observing → AgentID filter blocks injection.
             const turnA = await createConversationTurn(ctx, `CF4a ${fixture(ctx).Marker}`);
-            const priorA = await fabricatePriorRun(ctx, turnA.conversationId, echo.ID, 'AwaitingFeedback');
+            const priorA = await fabricatePriorRun(ctx, turnA, echo.ID, 'AwaitingFeedback');
             await fabricateToolStep(ctx, priorA.ID, 1, eligibleOutputData(marker));
             const crossAgent = carryForwardMessages(await observeTurn(ctx, other, turnA.detailId, turnA.conversationId));
             AssertEqual(crossAgent.length, 0, 'CF4: a different agent in the same conversation gets NO injection (cross-agent isolation)');
 
             // (b) same agent, DIFFERENT conversation observing → ConversationID filter blocks injection.
             const turnB = await createConversationTurn(ctx, `CF4b-prior ${fixture(ctx).Marker}`);
-            const priorB = await fabricatePriorRun(ctx, turnB.conversationId, echo.ID, 'AwaitingFeedback');
+            const priorB = await fabricatePriorRun(ctx, turnB, echo.ID, 'AwaitingFeedback');
             await fabricateToolStep(ctx, priorB.ID, 1, eligibleOutputData(marker));
             const turnC = await createConversationTurn(ctx, `CF4b-observe ${fixture(ctx).Marker}`); // fresh conversation, no prior run
             const crossConv = carryForwardMessages(await observeTurn(ctx, echo, turnC.detailId, turnC.conversationId));
@@ -231,7 +235,7 @@ export const AgentCarryForwardChecks: NamedCheck[] = [
             const echo = await agentByName('IT: Echo Agent', ctx.User);
             const turn = await createConversationTurn(ctx, `CF5 ${fixture(ctx).Marker}`);
             const marker = `CF5-DATA-${fixture(ctx).Marker}`;
-            const prior = await fabricatePriorRun(ctx, turn.conversationId, echo.ID, 'Failed'); // NOT a settled status
+            const prior = await fabricatePriorRun(ctx, turn, echo.ID, 'Failed'); // NOT a settled status
             await fabricateToolStep(ctx, prior.ID, 1, eligibleOutputData(marker));
 
             const injected = carryForwardMessages(await observeTurn(ctx, echo, turn.detailId, turn.conversationId));
@@ -250,7 +254,7 @@ export const AgentCarryForwardChecks: NamedCheck[] = [
             const echo = await agentByName('IT: Echo Agent', ctx.User);
             const turn = await createConversationTurn(ctx, `CF6 ${fixture(ctx).Marker}`);
             const marker = `CF6-DATA-${fixture(ctx).Marker}`;
-            const prior = await fabricatePriorRun(ctx, turn.conversationId, echo.ID, 'AwaitingFeedback');
+            const prior = await fabricatePriorRun(ctx, turn, echo.ID, 'AwaitingFeedback');
             // A Tool step with NO carry-forward toolFamily (shaped like a non-replayable memory-write result).
             const ineligible = JSON.stringify({ tool: 'writeMemory', input: { note: marker }, result: { success: true, data: marker } });
             await fabricateToolStep(ctx, prior.ID, 1, ineligible);
@@ -270,13 +274,13 @@ async function teardownCarryForward(fx: AgentLiveFixture | undefined, provider: 
         return;
     }
     for (const runId of fx.LiveRunIds) {
-        try { await purgeAgentRun(runId, provider, user); } catch (e) { console.error('CF live run purge failed:', e); }
+        try { await PurgeAgentRun(runId, provider, user); } catch (e) { console.error('CF live run purge failed:', e); }
     }
     for (const stepId of fx.FabricatedStepIds) {
-        await deleteById('MJ: AI Agent Run Steps', stepId, provider, user);
+        await DeleteById('MJ: AI Agent Run Steps', stepId, provider, user);
     }
     for (const runId of fx.FabricatedRunIds) {
-        await deleteById('MJ: AI Agent Runs', runId, provider, user);
+        await DeleteById('MJ: AI Agent Runs', runId, provider, user);
     }
     for (const convId of fx.ConversationIds) {
         try {
@@ -284,9 +288,9 @@ async function teardownCarryForward(fx: AgentLiveFixture | undefined, provider: 
                 EntityName: 'MJ: Conversation Details', ExtraFilter: `ConversationID='${convId}'`, Fields: ['ID'], ResultType: 'simple', BypassCache: true,
             }, user);
             for (const d of (details.Success ? details.Results : [])) {
-                await deleteById('MJ: Conversation Details', d.ID, provider, user);
+                await DeleteById('MJ: Conversation Details', d.ID, provider, user);
             }
-            await deleteById('MJ: Conversations', convId, provider, user);
+            await DeleteById('MJ: Conversations', convId, provider, user);
         } catch (e) { console.error('CF conversation cleanup failed:', e); }
     }
 }
@@ -294,7 +298,7 @@ async function teardownCarryForward(fx: AgentLiveFixture | undefined, provider: 
 IntegrationCheckRegistry.Instance.RegisterLifecycle('agent-carry-forward', {
     Setup: async ctx => {
         ctx.AgentCarryForwardFixture = {
-            Marker: newMarker('CF'),
+            Marker: NewMarker('CF'),
             ConversationIds: [], ConversationDetailIds: [], LiveRunIds: [], FabricatedRunIds: [], FabricatedStepIds: [],
         };
     },

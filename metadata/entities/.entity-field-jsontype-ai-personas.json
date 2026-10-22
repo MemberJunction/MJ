@@ -1,0 +1,101 @@
+[
+  {
+    "_comments": [
+      "Binds JSONType metadata to AIPersona.StyleDescriptors so CodeGen emits a typed",
+      "accessor conforming to IAIPersonaStyleDescriptors."
+    ],
+    "fields": {
+      "Name": "MJ: AI Personas"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IAIPersonaStyleDescriptors",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IAIPersonaStyleDescriptors.ts"
+          },
+          "_comments": [
+            "StyleDescriptors field — nuanced personality and presentation traits"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Personas&Name=StyleDescriptors"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:08.970Z",
+            "checksum": "dc8dae29d2e53c9425d59140220fd61561a9802296d9bacd14f65c0225018d19"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Personas"
+    }
+  },
+  {
+    "_comments": [
+      "Binds JSONType metadata to AIPersonaVendor.VendorSettings so CodeGen emits a typed",
+      "accessor conforming to IAIPersonaVendorSettings."
+    ],
+    "fields": {
+      "Name": "MJ: AI Persona Vendors"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IAIPersonaVendorSettings",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IAIPersonaVendorSettings.ts"
+          },
+          "_comments": [
+            "VendorSettings field — provider-specific tuning parameters (e.g. ElevenLabs stability/similarityBoost)"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Persona Vendors&Name=VendorSettings"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:08.988Z",
+            "checksum": "a5edadd9cca0cd9486835b7397807bfd05865fa4b74f920fff92adca9a4f12f7"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Persona Vendors"
+    }
+  },
+  {
+    "_comments": [
+      "Binds JSONType metadata to AIAgentPersona.StyleOverride so CodeGen emits a typed",
+      "accessor conforming to IAIAgentPersonaStyleOverride."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Personas"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IAIAgentPersonaStyleOverride",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IAIAgentPersonaStyleOverride.ts"
+          },
+          "_comments": [
+            "StyleOverride field — agent-specific style adjustments for assigned persona"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Personas&Name=StyleOverride"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:09.005Z",
+            "checksum": "2bce79faaad7318bea256c8822dc1832d95c69cbd51ce531f9b022a6da54572a"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Personas"
+    }
+  }
+]

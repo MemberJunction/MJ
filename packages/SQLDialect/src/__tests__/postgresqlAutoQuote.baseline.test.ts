@@ -186,6 +186,28 @@ describe('PostgreSQL auto-quoting vs. the shipped baseline schema', () => {
                 'OFFSET', 'ON', 'ONLY', 'OR', 'ORDER', 'PRIMARY', 'REFERENCES', 'RETURNING',
                 'SELECT', 'SESSION_USER', 'SOME', 'SYSTEM', 'TABLE', 'THEN', 'TO', 'TRUE', 'UNION',
                 'UNIQUE', 'UPDATE', 'USING', 'VALID', 'WHEN', 'WHERE', 'WITH',
+                // The niladic datetime/identity functions. This oracle was itself incomplete here,
+                // which is exactly how the gap survived: `CURRENT_USER` and `SESSION_USER` were
+                // listed but their siblings were not, so `SELECT CURRENT_DATE` quoting to
+                // `SELECT "CURRENT_DATE"` was invisible to this guard. Found in production against
+                // a PostgreSQL client, not by this test.
+                //
+                // `USER` is deliberately absent. It is a PostgreSQL reserved word too, but unlike
+                // these it is a believable ALL-CAPS identifier in customer schemas that this
+                // repo's baseline cannot see, and nothing in MJ emits a bare `USER`. Adding it
+                // would trade a real risk for no benefit.
+                'CURRENT_CATALOG', 'CURRENT_DATE', 'CURRENT_ROLE', 'CURRENT_SCHEMA',
+                'CURRENT_TIME', 'CURRENT_TIMESTAMP', 'LOCALTIME', 'LOCALTIMESTAMP',
+                // The remainder of PostgreSQL's reserved-word table, transcribed in full rather
+                // than sampled. Sampling is what let `CURRENT_DATE` through: the oracle listed two
+                // of the ten niladic functions and the other eight were invisible to it. A partial
+                // oracle for a heuristic denylist only ever proves the examples someone happened to
+                // write down, so the whole table is here and new gaps fail CI instead of shipping.
+                'ANALYSE', 'ANALYZE', 'ARRAY', 'ASYMMETRIC', 'AUTHORIZATION', 'BINARY', 'COLLATION',
+                'CONCURRENTLY', 'CROSS', 'FETCH', 'FOREIGN', 'FREEZE', 'FULL', 'GRANT', 'ILIKE',
+                'INNER', 'IS', 'ISNULL', 'JOIN', 'LATERAL', 'LEADING', 'LEFT', 'LIKE', 'NATURAL',
+                'NOTNULL', 'OUTER', 'OVERLAPS', 'PLACING', 'RIGHT', 'SIMILAR', 'SYMMETRIC',
+                'TABLESAMPLE', 'TRAILING', 'VARIADIC', 'VERBOSE', 'WINDOW',
             ];
 
             const quoted = PG_RESERVED.filter((kw) =>

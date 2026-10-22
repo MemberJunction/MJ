@@ -1,5 +1,679 @@
 # Change Log - @memberjunction/ai-vector-dupe
 
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [52b9fd5]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [5465489]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [2274f42]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [230cdad]
+- Updated dependencies [7e72c86]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [8420f36]
+- Updated dependencies [72dd65c]
+- Updated dependencies [1d29837]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [5f707d1]
+- Updated dependencies [03c085c]
+- Updated dependencies [dc38250]
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/ai-prompts@6.2.0-edge.5
+  - @memberjunction/ai@6.2.0-edge.5
+  - @memberjunction/ai-core-plus@6.2.0-edge.5
+  - @memberjunction/aiengine@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/templates@6.2.0-edge.5
+  - @memberjunction/ai-vector-sync@6.2.0-edge.5
+  - @memberjunction/ai-vectors@6.2.0-edge.5
+  - @memberjunction/ai-vectordb@6.2.0-edge.5
+  - @memberjunction/entity-documents@6.2.0-edge.5
+  - @memberjunction/record-comparison@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- 0a7c255: Duplicate detection no longer accumulates the whole run in memory, so whole-entity runs can finish.
+
+  `GetDuplicateRecords` batches its work 500 records at a time, but accumulated its **results** for
+  the entire run — O(records), not O(batch). On a 61,671-record entity that alone exhausted an 8 GB
+  heap and the process died mid-run, so whole-entity detection could not complete at all. Three
+  consecutive attempts on one tenant each ended in `FATAL ERROR: Reached heap limit`, while a full
+  re-embed over the same records succeeded every time — the cost was in the detection path, not the
+  vectorization.
+
+  Retaining every result was never load-bearing: `processBatch` already persists each one as
+  `Duplicate Run Detail` / `Duplicate Run Detail Match` rows as it goes, so the array was a second
+  copy of durable data, kept only to feed the post-pass auto-merge and a single `.length` read.
+
+  Retention is now capped at 1,000 results. Auto-merge carries only candidates that can actually
+  merge — a small fraction by definition, since they must clear the absolute threshold — and still
+  runs **once, after the full pass**, so detection continues to see the pre-merge dataset exactly as
+  before.
+
+  `PotentialDuplicateResponse` gains two optional fields: `TotalRecordsWithDuplicates` (never capped,
+  correct at any scale) and `ResultsTruncated`. Small runs are unaffected — under the cap the
+  response is identical to before.
+
+- 1a95eaf: Duplicate detection now queries with the same text vector sync stored (#5198). It rendered each record's template from the record's own fields alone, so every `Entity` template param (a person's Phones, Emails, Addresses...) rendered empty, and dates came through as `Date` objects instead of the view's values. The query vector then described a shorter document than the stored one: duplicates that share contact data fell below the threshold, and records with no contact data over-matched.
+  - **One builder for both sides.** `EntityDocumentTemplateDataBuilder` (new export of `@memberjunction/ai-vector-sync`) loads a batch's related-entity rows and builds each record's template data. `EntityVectorSyncer.GetTemplateData` and `GetRelatedTemplateDataForBatch` keep their signatures and delegate to it.
+  - **Same row as sync.** The detector renders each saved record from its `RunView` row (`ResultType: 'simple'`), one query per sub-batch. An unsaved record (the entry-time check) renders from its own values with empty related rows, and runs no related-data query.
+  - **Fails loudly.** When a related param's rows can't be loaded, the batch throws instead of rendering the param empty. Rendering skips validation and suppresses its warnings, as sync does, which ends the "Template validation warnings (non-fatal) … Parameter Phones is required" log spam on every run.
+  - A page with no keys (an empty last page) no longer sends `IN ()` to the database for each related param.
+
+- 0a7c255: Duplicate detection checks every record in scope, and probes at the vector index's width.
+  - **Every record.** The three record-id loads (list, saved view, entity or filter) now read with
+    `IgnoreMaxRows`. They fell back to the entity's `UserViewMaxRows`, so a run checked only the first
+    1,000 records, set `TotalItemCount` from them, and reported "1000 of 1000 complete" on a
+    61,671-record entity.
+  - **The index's width.** Probe vectors are embedded at the index's `Dimensions`, the width entity
+    vector sync already uses when it fills the index. At the model's default width a 512-wide index
+    was queried with 1,536-wide vectors: the vector database rejected every query, and the run
+    completed with no matches. An index with no `Dimensions` still uses the model's default.
+
+- ef182be: An entity document's record filter, `Configuration.recordFilter.extraFilter`, now does what its documentation said (#5199). It was declared, with `IsDeleted = 0` as its example, but nothing read it, so records it was meant to exclude were vectorized and offered as duplicates anyway.
+  - **Vector sync** ANDs the filter into every page it reads, with a list run's membership filter (`BuildRecordPageFilter`).
+  - **Duplicate detection** checks only records that pass it: a whole-entity run ANDs it into the run's `ExtraFilter`, and a list or view run is narrowed to the members that pass it.
+  - **Candidates** that fail it are dropped by `FilterNonExistentMatches`, which now takes the filter: their vectors can predate it. `CheckSingleRecord` and the entry-time check apply it to their candidates too, and still check the record they are given. With a filter set, the query over-fetches three times TopK and trims back to TopK after filtering.
+  - **Fails loudly.** If the filter can't be applied, detection throws instead of failing open; without a filter, a failed existence check still fails open as before.
+  - The candidate existence check now reads with `IgnoreMaxRows`, so an entity whose `UserViewMaxRows` is below the 500-key chunk no longer drops valid matches.
+  - New exports from `@memberjunction/ai-vector-sync`: `ParseEntityDocumentConfiguration`, `GetEntityDocumentRecordFilter`, `CombineExtraFilters` (sync and detection now share it).
+  - The READMEs say which SQL the filter can use so it also runs on PostgreSQL: plain comparisons, not T-SQL such as `ISNULL`, `LEN` or `+` concatenation.
+
+- Updated dependencies [96d6ec2]
+- Updated dependencies [a709bb6]
+- Updated dependencies [d17de94]
+- Updated dependencies [7ada797]
+- Updated dependencies [432cb73]
+- Updated dependencies [293c316]
+- Updated dependencies [155aa45]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [1da00cb]
+- Updated dependencies [b699a37]
+- Updated dependencies [a4b23b7]
+- Updated dependencies [49f26d9]
+- Updated dependencies [961d529]
+- Updated dependencies [10c2311]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [bb3028a]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [1a95eaf]
+- Updated dependencies [64b6fa5]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [ef182be]
+- Updated dependencies [af6f892]
+- Updated dependencies [432fe69]
+- Updated dependencies [4889fb2]
+- Updated dependencies [b2441c3]
+- Updated dependencies [69e19c5]
+- Updated dependencies [7316ac3]
+- Updated dependencies [8ef5e86]
+- Updated dependencies [596855c]
+- Updated dependencies [fdf6669]
+- Updated dependencies [4c682c1]
+- Updated dependencies [f325baa]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [b09fe34]
+- Updated dependencies [6d5c6ad]
+- Updated dependencies [8bac4d6]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [5a3de97]
+- Updated dependencies [0d0ba18]
+- Updated dependencies [b6fcb30]
+- Updated dependencies [f73e192]
+- Updated dependencies [8704df6]
+- Updated dependencies [5345e3d]
+- Updated dependencies [1ea4085]
+- Updated dependencies [975948b]
+- Updated dependencies [22c9074]
+- Updated dependencies [88b85fc]
+- Updated dependencies [aee2d53]
+- Updated dependencies [5dc3752]
+- Updated dependencies [6c8798b]
+- Updated dependencies [f0c78c3]
+- Updated dependencies [25f7b82]
+- Updated dependencies [35ed7b5]
+- Updated dependencies [d853bf8]
+- Updated dependencies [e293b68]
+- Updated dependencies [02bb563]
+- Updated dependencies [afe9eb4]
+- Updated dependencies [90829e3]
+- Updated dependencies [57096ab]
+- Updated dependencies [aac148b]
+- Updated dependencies [9ce70b3]
+- Updated dependencies [d2cb42e]
+- Updated dependencies [cbddadb]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [fd7479e]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [57fea6a]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [6b487b8]
+  - @memberjunction/ai-core-plus@6.2.0-edge.4
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/aiengine@6.2.0-edge.4
+  - @memberjunction/ai@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/ai-prompts@6.2.0-edge.4
+  - @memberjunction/ai-vector-sync@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/templates@6.2.0-edge.4
+  - @memberjunction/ai-vectors@6.2.0-edge.4
+  - @memberjunction/entity-documents@6.2.0-edge.4
+  - @memberjunction/record-comparison@6.2.0-edge.4
+  - @memberjunction/ai-vectordb@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [131f3c4]
+- Updated dependencies [0f04590]
+- Updated dependencies [0a75bb2]
+- Updated dependencies [41c2c08]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [279b93e]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [bea2386]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [28df136]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/ai@6.2.0-edge.3
+  - @memberjunction/aiengine@6.2.0-edge.3
+  - @memberjunction/core-entities@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/ai-vector-sync@6.2.0-edge.3
+  - @memberjunction/ai-prompts@6.2.0-edge.3
+  - @memberjunction/ai-core-plus@6.2.0-edge.3
+  - @memberjunction/ai-vectors@6.2.0-edge.3
+  - @memberjunction/templates@6.2.0-edge.3
+  - @memberjunction/entity-documents@6.2.0-edge.3
+  - @memberjunction/record-comparison@6.2.0-edge.3
+  - @memberjunction/ai-vectordb@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Minor Changes
+
+- 0adaf76: Duplicate detection gains two reasoning modes: `Decision`, where a typed decision model recommends without ever merging, and `DecisionThenPrompt`, where the decision filters candidates before the prompt reasons over the survivors. Auto-merge (`AutoMergeAboveAbsolute`) now also requires the candidate's own verdict to be `Merge`, carried on the new `PotentialDuplicate.ReasoningRecommendation`, so a set-level `Merge` never merges a candidate the reasoner judged otherwise.
+
+### Patch Changes
+
+- eaa9455: Introduce `AIEmbeddingRunner` extending `BaseModelRunner` with `RequiredModelType = 'Embeddings'`.
+  - Implement credential resolution, failover across candidate models/vendors, retry handling, and `MJAIPromptRun` persistence.
+  - Deprecate `AIModelRunner.RunEmbedding` and delegate transparently to `AIEmbeddingRunner`.
+  - Migrate embedding call sites in `@memberjunction/tag-engine`, `@memberjunction/ai-vector-dupe`, `@memberjunction/ai-vector-sync`, `@memberjunction/content-autotagging`, and `@memberjunction/search-engine` to use `AIEmbeddingRunner`.
+  - `AIEmbeddingRunner` runs a driver that needs no API key (`LocalEmbedding`, `OllamaEmbedding`) with no key configured, and follows the prompt's `FailoverStrategy` (`SameModelDifferentVendor` never switches models).
+  - With no Embedding prompt, the runner embeds under an unsaved stand-in and writes no run row. `EmbeddingRunParams.SkipRunRecord` skips the row on demand.
+  - `TagEngine` embeds tags, queries and new tags with one model (the Tag Semantic Matching prompt's, else the smallest) and persists that ID.
+  - Vector search keys its query-embedding cache by model and dimension, not by driver.
+- cf97480: The duplicate check's `Decision` reasoning mode now calibrates each decision model's probability for that model (Platt scaling) before banding it, at a band set from the duplicate-check measurement. A candidate is flagged at a calibrated 0.7 or above, and the decision stage of `DecisionThenPrompt` keeps candidates at a calibrated 0.3 or above for the prompt. Each calibration is tied to the exact model it was fitted on (the MJ decision model and the resolved model behind it, through `FindDecisionCalibration`), so Jev at another version, or LLM Decision answered by another chat model, is uncalibrated. A model with no calibration gives no calibrated probability: the entry check (`CheckRecordValues`) then flags nothing and returns `Failed`, as it does for a failed decision, and batch `Decision` mode flags its candidates for review. The provider logs a missing calibration once per model. Each candidate also carries the model's own `RawProbability`; `BuildDecisionParams` and `CalibrationFor` are protected extension points, and the shipped calibrations are exported.
+- 5ee02db: Record forms now flag likely duplicates while a person enters a new record, for entities whose entity document has LLM reasoning enabled and uses the `Decision` or `DecisionThenPrompt` reasoning mode. The check only flags: it never blocks a save or merges, and it shows nothing if it misses its time budget. The server bounds each check with its own budget and stops it there, a form keeps at most one check in flight, and an API key needs both the `view:run` and `prompt:execute` scopes to run one. A user who cannot read the entity is never checked.
+- 2854a2e: Address vector indexes by their provider-side name (`ExternalID`), not the MJ display `Name`. Entity vectorization, duplicate detection and the entity-vectors resolver passed `Name`, so any index whose label differs from its provider name (e.g. "More Cheese Content (Pinecone)" vs `morecheese-content`) returned 404 on every upsert/query.
+
+  `AIEngineBase` now owns the single `MJ: Vector Indexes` cache (`VectorIndexes`, `GetVectorIndexByID`) and the one rule for the provider name (`GetProviderIndexName`: ExternalID, falling back to `Name`), proxied on `AIEngine`. `KnowledgeHubMetadataEngine` no longer caches Vector Indexes; its `VectorIndexes` / `GetVectorIndexByID` proxy the AIEngineBase cache. Every caller, including `MJVectorIndexEntityServer`'s delete path, now resolves the provider name through `GetProviderIndexName`.
+
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [e97d95c]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [3fbda62]
+- Updated dependencies [eaa9455]
+- Updated dependencies [ff00d60]
+- Updated dependencies [2552b1e]
+- Updated dependencies [660ef45]
+- Updated dependencies [8fd1c46]
+- Updated dependencies [21f9e15]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [f3c6161]
+- Updated dependencies [01fafc6]
+- Updated dependencies [35ffb95]
+- Updated dependencies [5148534]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [0d61b53]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [861cbf0]
+- Updated dependencies [705ab4e]
+- Updated dependencies [e51ce8a]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [14e2a3a]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [fb267da]
+- Updated dependencies [2854a2e]
+  - @memberjunction/ai-core-plus@6.2.0-edge.2
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/ai@6.2.0-edge.2
+  - @memberjunction/ai-prompts@6.2.0-edge.2
+  - @memberjunction/ai-vector-sync@6.2.0-edge.2
+  - @memberjunction/aiengine@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/ai-vectors@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/templates@6.2.0-edge.2
+  - @memberjunction/entity-documents@6.2.0-edge.2
+  - @memberjunction/ai-vectordb@6.2.0-edge.2
+  - @memberjunction/record-comparison@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [ddcd666]
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [15a4333]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [5da3ad2]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [9b8a84e]
+- Updated dependencies [c261eb8]
+- Updated dependencies [307da67]
+- Updated dependencies [7110019]
+- Updated dependencies [a7da50b]
+- Updated dependencies [1d43161]
+- Updated dependencies [7110019]
+- Updated dependencies [f2a4171]
+- Updated dependencies [e482249]
+- Updated dependencies [37e2f6b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+  - @memberjunction/aiengine@6.2.0-edge.1
+  - @memberjunction/ai@6.2.0-edge.1
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/ai-core-plus@6.2.0-edge.1
+  - @memberjunction/ai-prompts@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/ai-vector-sync@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/templates@6.2.0-edge.1
+  - @memberjunction/ai-vectors@6.2.0-edge.1
+  - @memberjunction/entity-documents@6.2.0-edge.1
+  - @memberjunction/record-comparison@6.2.0-edge.1
+  - @memberjunction/ai-vectordb@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Minor Changes
+
+- 42d701e: Extract @memberjunction/entity-documents from @memberjunction/ai-vector-sync to provide reusable entity document parsing and caching across vector sync, autotagging, and feature pipelines.
+
+### Patch Changes
+
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [b518dfa]
+- Updated dependencies [37891d3]
+- Updated dependencies [6ad6434]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [42d701e]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [7658d68]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [575bfae]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [e962151]
+- Updated dependencies [2c590b0]
+- Updated dependencies [6ab86a7]
+- Updated dependencies [fc3da91]
+  - @memberjunction/ai@6.2.0-edge.0
+  - @memberjunction/aiengine@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/ai-prompts@6.2.0-edge.0
+  - @memberjunction/ai-core-plus@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/entity-documents@6.2.0-edge.0
+  - @memberjunction/ai-vector-sync@6.2.0-edge.0
+  - @memberjunction/ai-vectors@6.2.0-edge.0
+  - @memberjunction/templates@6.2.0-edge.0
+  - @memberjunction/record-comparison@6.2.0-edge.0
+  - @memberjunction/ai-vectordb@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
+## 6.1.0
+
+### Patch Changes
+
+- 92f2ac9: Repo-wide sweep of code that assumed an entity's primary key is a single column named `ID`, plus a `PrimaryKeyCompliance` gate in `@memberjunction/core` so the pattern cannot come back.
+
+  MJ supports primary keys with any column name(s) and type(s). Every MJ core entity happens to use `ID`, so hardcoding it works across the whole core product and silently breaks on customer entities mapped from external schemas — `Load()` rejects the invented field name, or a composite key is truncated to its first column. #4179 (search result click-through) was one instance; this sweep found the same shape in ~90 files and fixes all of it on top of the `CompositeKey.FromURLSegment` / `FromEntityRecord` / `ToCompactURLSegment` primitives introduced with that fix.
+
+  **What changed, by kind**
+  - **Literal `ID` key construction** (`{ FieldName: 'ID', Value: x }`, `LoadFromSingleKeyValuePair('ID', …)`, `FromKeyValuePair('ID', …)`) — ~135 sites. Where the entity is a literal MJ core entity the key is now `CompositeKey.FromID(x)`, the one sanctioned way to say "this entity's key is `ID`". Where the entity is a variable (an event's `EntityName`, an `entityInfo`, a configured entity) the key is `CompositeKey.FromURLSegment(entityInfo, recordId)`, which reads a bare value or a `F1|v1||F2|v2` segment against the entity's real primary key(s).
+  - **`PrimaryKeys[0]` → `FirstPrimaryKey`** — 39 sites. Same semantics, a named accessor the gate can track. IS-A shared-key and keyset uses are annotated `// first-pk-ok`.
+  - **Real defects fixed** (arbitrary entity keyed as `ID`): Mobile app record load/edit/offline sync; the generic form overlay; the ERD "open record" path; version-history label/diff/micro-view links (which stripped `ID|` off a stored key and re-wrapped the value as `ID`); `RestoreEngine` and `buildPrimaryKeyForLoad`; the Apollo enrichment connector (six `GetEntityObject(configuredEntity, FromID(record.ID))` calls); geocoding record reload; List Detail record-open (composite keys now open instead of showing a notice); `EmbeddedRecord`; `DatabaseReferenceScanner`; hardcoded `ID` filters on a variable entity in Data Explorer's record load, Predictive Studio's label lookup, the realtime-widget visitor identity lookup, `DuplicateRecordDetector.LoadRecordsByListID`, and MetadataSync's `@lookup` GUID conversion.
+  - **REST API**: `EntityCRUDHandler` / `RESTEndpointHandler` built the key from the `:id` segment for single-column keys only and threw "Composite primary keys are not supported". Both now accept a bare value or a URL-encoded `Field1|Value1||Field2|Value2` segment. Single-column behavior is unchanged.
+  - **One serializer instead of eight**: `ListOperations.serializeRecordId`, `list-set-operations.serializeRecordId`, RecordSetProcessor's `serializeRecordId`, `GetListRecordsAction`'s inline copy, `MJListDetailEntityExtended.BuildRecordID` / `GetCompositeKey`, `record.util.buildCompositeKey`, `VersionHistory.buildCompositeKeyFromRecord` and `ChangeDetector.buildDeleteItem` all delegate to `CompositeKey.FromEntityRecord(...).ToCompactURLSegment()` / `FromURLSegment(...)`. Output is byte-identical for single-column keys.
+
+  **`FirstPrimaryKey` triage** — every one of the ~390 `FirstPrimaryKey` / `FromID` uses in the repo was read in context and either rewritten or annotated with a reason (154 annotations). Real defects found and fixed along the way, all of the shape "first key column used as the whole key" on an entity that can be composite-keyed:
+  - **Data providers**: the deterministic `ORDER BY` fallback for row-limited queries ordered by the first key column only, leaving composite-key pages in undefined order; it now orders by every key column. Saved-view run logging / exclusion and the `{%UserView%}` template subquery, whose persisted `RecordID` cannot hold a composite key, now refuse loudly instead of excluding wrong rows. The dependency-link subquery now predicates on the full key. Single-column SQL is byte-identical.
+  - **CodeGen**: generated cascade delete/update procs bound the child FK to `@<firstPK>` regardless of which parent key column the FK references; a composite key containing an identity column dropped the other key columns from the generated INSERT (both providers); the PostgreSQL JSON-arg `spCreate` inserted only the first key column; the generated join-grid/timeline filters and the GraphQL audit-log `RecordID` truncated composite keys. Single-key generator output verified byte-identical against `HEAD` (168 shapes).
+  - **Smart cache** (`ProviderBase` differential merge): keyed rows on the first PK, so composite-key deletes never applied and rows sharing the first column collapsed.
+  - **Integration push sync**: composed record identity from the first key column while the record map stores all columns joined, so every already-synced composite-key row was re-created externally as a duplicate on each full push; the changed-record path silently dropped rows.
+  - **Scheduled geocoding orphan cleanup** (destructive): compared a cast of the first key column to a `RecordID` holding all columns, so every geocode row for a composite-key entity was deleted on each run.
+  - **Lists**: list membership, export and add-record paths filtered on the first key column and wrote only its value into `ListDetail.RecordID`; Explorer "open record" paths on user-selected entities, duplicate detection, omnibar record search, Data Explorer deep links, the sharing center revoke, recent-access, tree dropdowns, the mobile app's record ids and offline queue.
+  - **AI**: duplicate detection, vector sync record ids, Predictive Studio list scope and write-back; the Recommendations engine also wrote a record id into `SourceEntityID` (an FK to Entities) and never set `SourceEntityRecordID`.
+  - **Apollo enrichment**: `Accounts` (a customer entity) loaded by literal `ID`; the contacts path read its key off an entity that had never been loaded.
+  - Every `entityInfo.FirstPrimaryKey?.Name ?? 'ID'` fallback is gone; where the entity can be missing the code now fails loudly instead of inventing `ID`.
+
+  **The gate** — `packages/MJCore/src/__tests__/PrimaryKeyCompliance.test.ts`, modelled on `MultiProviderCompliance` / `UUIDCompliance`:
+  1. _Strict_: a key built with a literal `ID` field name. Marker `// pk-literal-ok: <reason>`.
+  2. _Strict_: `PrimaryKeys[0]` / `PrimaryKeys.at(0)`.
+  3. _Strict_: `FirstPrimaryKey` and `CompositeKey.FromID(`. These are legitimate only where MJ is single-column by design (foreign-key targets, keyset `ORDER BY` / `AfterKey`, IS-A shared keys, core entities), so every use must be self-evidently on a core entity or say why: `FromID` is exempt when a `'MJ: …'` entity literal is on the same line or within 8 lines above (the `GetEntityObject` / `OpenEntityRecord` naming the core entity); everything else carries `// first-pk-ok: <reason>` on the same line, reason mandatory.
+  4. _Strict_: an `ID = …` / `ID IN (…)` `ExtraFilter` or `Fields: ['ID']` within eight lines of an `EntityName:` that is a variable rather than a string literal or ALL_CAPS constant. Marker `// pk-filter-ok: <reason>`.
+
+  Generated code, tests, `dist/`, and the `TestingFramework` / `UnitTesting` packages are not scanned. The rule is written up in `.claude/rules/data-access.md` § "Primary keys: never assume a column named ID". There is no baseline file: all four gates are strict.
+
+  No public signatures change; every edit is additive or a same-shape substitution, so this is `patch` throughout.
+
+- d8adda1: **BREAKING — `UserCache` moved packages. Update the import, not just the call.**
+
+  `UserCache` now lives in `@memberjunction/generic-database-provider`. It is no longer exported
+  from `@memberjunction/sqlserver-dataprovider`, and there is deliberately **no re-export shim**,
+  so every import of the symbol must be repointed or it will fail to resolve:
+
+  ```diff
+  - import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+  + import { UserCache } from '@memberjunction/generic-database-provider';
+  ```
+
+  `Refresh` is now dialect-neutral and takes the configured provider rather than an
+  `mssql.ConnectionPool`:
+
+  ```diff
+  - await UserCache.Instance.Refresh(pool, intervalMs);
+  + await UserCache.Instance.Refresh(provider, intervalMs);
+  ```
+
+  **These are two separate breaks, and the first is much wider than the second.** The import path
+  affects _every_ consumer of the symbol — reads included. The signature affects only the handful
+  of callers of `Refresh`. Anything that imports `UserCache` merely to call `Users`,
+  `GetSystemUser()` or `UserByName()` still has to change its import, so a consumer who reads only
+  "the signature changed" will treat this as a no-op and fail to build. In this repo the split was
+  56 files versus 9 call sites.
+
+  Packages that import `UserCache` must also declare `@memberjunction/generic-database-provider`
+  as a dependency — pnpm resolves strictly, so an undeclared import fails rather than falling
+  through to a hoisted copy.
+
+  **Check for dynamic imports too**, not just static ones. `await import('@memberjunction/sqlserver-dataprovider')`
+  destructuring `UserCache` breaks the same way, and a grep for `import { … } from` will not find it.
+
+  **Unchanged:** the read surface (`Users`, `GetSystemUser`, `UserByName`, `SYSTEM_USER_ID`), and
+  the class name. The name is load-bearing — `BaseSingleton` keys its global store on the
+  constructor name, so keeping it `UserCache` preserves singleton identity across the move.
+
+  **Also fixed:** `_users` now initializes to `[]`. It previously stayed `undefined` after a
+  `Refresh` that never ran or that failed (failures are swallowed into `LogError`), so
+  `GetSystemUser()` threw a `TypeError` off `.find()` instead of returning `undefined` as its
+  callers already assume.
+
+  **Why:** the cache was dialect-neutral except for that one `mssql` type, which left PostgreSQL
+  with no user cache at all and produced four separate hand-rolled "read `vwUsers` + `vwUserRoles`,
+  build `UserInfo[]`" implementations — one of which reached into the singleton's private field
+  through a cast from another package. Those are all removed, and a PostgreSQL process that never
+  goes through the server bootstrap now has a system user.
+
+- Updated dependencies [634aa8c]
+- Updated dependencies [834f8d7]
+- Updated dependencies [a987913]
+- Updated dependencies [e533ce5]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [2c826f7]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [394d276]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [4586215]
+- Updated dependencies [22ec804]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [0d3094c]
+- Updated dependencies [255d506]
+- Updated dependencies [0ec1980]
+- Updated dependencies [199eb2b]
+- Updated dependencies [1940a4d]
+- Updated dependencies [e7f1f88]
+- Updated dependencies [07cb22e]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [711c208]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [59def38]
+- Updated dependencies [2412415]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [9699d0e]
+- Updated dependencies [394d276]
+- Updated dependencies [43f9133]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [2d14c62]
+- Updated dependencies [394d276]
+- Updated dependencies [c996a56]
+- Updated dependencies [de6eb14]
+- Updated dependencies [b9de989]
+- Updated dependencies [38d4482]
+- Updated dependencies [052b4c7]
+- Updated dependencies [ada8784]
+- Updated dependencies [8ec1515]
+- Updated dependencies [9a905e8]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [c996a56]
+- Updated dependencies [d907a1b]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [8d880cc]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [11de1a3]
+- Updated dependencies [cefc302]
+- Updated dependencies [841e6ea]
+- Updated dependencies [394d276]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [080f4cd]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [d66a26a]
+- Updated dependencies [c643ba3]
+- Updated dependencies [e9e9873]
+- Updated dependencies [1d88e00]
+- Updated dependencies [647bd71]
+- Updated dependencies [8288711]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [48ff99f]
+- Updated dependencies [076fa5d]
+- Updated dependencies [9f73528]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [27e4d09]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [23c2521]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [98841bb]
+- Updated dependencies [53c341c]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [b46330e]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [53d256f]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [9a29da4]
+- Updated dependencies [cf2484c]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [0967ba7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [7a630ba]
+- Updated dependencies [de343b5]
+- Updated dependencies [5fc861f]
+- Updated dependencies [1748491]
+- Updated dependencies [1100077]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [0db6105]
+- Updated dependencies [d7feeae]
+- Updated dependencies [7fefca2]
+- Updated dependencies [a1a8989]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [905820a]
+- Updated dependencies [ca3657d]
+- Updated dependencies [394d276]
+- Updated dependencies [1bd9674]
+- Updated dependencies [9f6a53b]
+- Updated dependencies [6d7d3da]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [d078c54]
+- Updated dependencies [7fcdc2d]
+- Updated dependencies [15319b4]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [394d276]
+- Updated dependencies [4b1257f]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [394d276]
+- Updated dependencies [1c0d586]
+  - @memberjunction/ai-core-plus@6.1.0
+  - @memberjunction/global@6.1.0
+  - @memberjunction/core@6.1.0
+  - @memberjunction/core-entities@6.1.0
+  - @memberjunction/aiengine@6.1.0
+  - @memberjunction/ai@6.1.0
+  - @memberjunction/ai-prompts@6.1.0
+  - @memberjunction/ai-vector-sync@6.1.0
+  - @memberjunction/ai-vectors@6.1.0
+  - @memberjunction/ai-vectordb@6.1.0
+  - @memberjunction/templates@6.1.0
+  - @memberjunction/record-comparison@6.1.0
+
+## 6.1.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [a987913]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [076fa5d]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core-entities@6.1.0-edge.7
+  - @memberjunction/aiengine@6.1.0-edge.7
+  - @memberjunction/ai@6.1.0-edge.7
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/ai-prompts@6.1.0-edge.7
+  - @memberjunction/ai-core-plus@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+  - @memberjunction/ai-vectors@6.1.0-edge.7
+  - @memberjunction/ai-vector-sync@6.1.0-edge.7
+  - @memberjunction/record-comparison@6.1.0-edge.7
+  - @memberjunction/templates@6.1.0-edge.7
+  - @memberjunction/ai-vectordb@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Patch Changes

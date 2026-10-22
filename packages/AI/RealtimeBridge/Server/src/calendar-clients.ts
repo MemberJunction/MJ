@@ -79,7 +79,7 @@ export interface GraphCalendarClientOptions {
 }
 
 /** Lazily loads + memoizes `@microsoft/microsoft-graph-client`; throws a clear install hint on failure. */
-export const defaultGraphCalendarModuleLoader: GraphCalendarModuleLoader = async () => {
+export const DefaultGraphCalendarModuleLoader: GraphCalendarModuleLoader = async () => {
     try {
         const mod: unknown = await import('@microsoft/microsoft-graph-client');
         const resolved = unwrap(mod);
@@ -96,6 +96,9 @@ export const defaultGraphCalendarModuleLoader: GraphCalendarModuleLoader = async
     }
 };
 
+/** @deprecated Use {@link DefaultGraphCalendarModuleLoader}. */
+export const defaultGraphCalendarModuleLoader: GraphCalendarModuleLoader = DefaultGraphCalendarModuleLoader;
+
 /**
  * A real {@link IGraphCalendarLike} over Microsoft Graph (`GET /users/{id}/calendarView/delta`).
  * The first poll requests a forward window (`startDateTime`..`endDateTime`) in UTC; later polls pass
@@ -109,7 +112,7 @@ export class GraphCalendarClient implements IGraphCalendarLike {
 
     constructor(options: GraphCalendarClientOptions) {
         this.options = options;
-        this.loadModule = options.ModuleLoader ?? defaultGraphCalendarModuleLoader;
+        this.loadModule = options.ModuleLoader ?? DefaultGraphCalendarModuleLoader;
     }
 
     /** @inheritdoc */
@@ -201,7 +204,7 @@ export interface GoogleCalendarClientOptions {
 }
 
 /** Lazily loads + memoizes `googleapis`; throws a clear install hint on failure. */
-export const defaultGoogleApisModuleLoader: GoogleApisModuleLoader = async () => {
+export const DefaultGoogleApisModuleLoader: GoogleApisModuleLoader = async () => {
     try {
         const mod: unknown = await import('googleapis');
         const resolved = unwrap(mod);
@@ -218,6 +221,9 @@ export const defaultGoogleApisModuleLoader: GoogleApisModuleLoader = async () =>
     }
 };
 
+/** @deprecated Use {@link DefaultGoogleApisModuleLoader}. */
+export const defaultGoogleApisModuleLoader: GoogleApisModuleLoader = DefaultGoogleApisModuleLoader;
+
 /**
  * A real {@link IGoogleCalendarLike} over `calendar.events.list`. The first poll requests a forward
  * window (`timeMin`..`timeMax`, `singleEvents`, ordered) so Google returns an initial `nextSyncToken`;
@@ -231,7 +237,7 @@ export class GoogleCalendarClient implements IGoogleCalendarLike {
 
     constructor(options: GoogleCalendarClientOptions) {
         this.options = options;
-        this.loadModule = options.ModuleLoader ?? defaultGoogleApisModuleLoader;
+        this.loadModule = options.ModuleLoader ?? DefaultGoogleApisModuleLoader;
     }
 
     /** @inheritdoc */

@@ -1,6 +1,6 @@
-import { AIErrorInfo, BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, toClassicChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer } from '@memberjunction/ai';
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
-import { LMStudioClient, LLMPredictionFragment } from '@lmstudio/sdk';
+import { LMStudioClient, LLMPredictionFragment, OngoingPrediction, PredictionResult } from '@lmstudio/sdk';
 
 /**
  * LM Studio implementation of the BaseLLM class
@@ -8,11 +8,6 @@ import { LMStudioClient, LLMPredictionFragment } from '@lmstudio/sdk';
 @RegisterClass(BaseLLM, "LMStudioLLM")
 export class LMStudioLLM extends BaseLLM {
     private _client: LMStudioClient;
-    /**
-     * Set when the in-flight streaming request was cancelled via ChatParams.cancellationToken.
-     * Reset at the start and end of every streaming request by resetStreamingState().
-     */
-    private streamCancelled: boolean = false;
 
     constructor(apiKey?: string) {
         super(apiKey || ''); // LM Studio doesn't require API key for local usage
@@ -29,8 +24,13 @@ export class LMStudioLLM extends BaseLLM {
     /**
      * Read only getter method to get the LM Studio client instance
      */
-    public get client(): LMStudioClient {
+    public get Client(): LMStudioClient {
         return this.LMStudioClient;
+    }
+
+    /** @deprecated Use {@link Client}. */
+    public get client(): LMStudioClient {
+        return this.Client;
     }
     
     /**
@@ -64,88 +64,34 @@ export class LMStudioLLM extends BaseLLM {
     }
 
     /**
-     * Determines whether an error (or the current state of the signal) represents a caller-initiated
-     * cancellation rather than a genuine failure. Note that the LM Studio SDK does NOT reject when a
-     * prediction is aborted — it stops the prediction with stop reason `userStopped` — so the aborted
-     * state of the signal is the primary indicator here.
+     * Whether a resolved prediction was ended by an abort. The LM Studio SDK does not reject when the
+     * signal fires: it resolves the prediction with stop reason `userStopped`, so the abort has to be
+     * read off the result.
      */
-    private isCancellation(error: unknown, signal?: AbortSignal): boolean {
-        if (signal?.aborted) {
-            return true;
-        }
-        return error instanceof Error && error.name === 'AbortError';
+    private isUserStopped(response: PredictionResult): boolean {
+        return response.stats?.stopReason === 'userStopped';
     }
 
     /**
-     * Builds the ChatResult returned when a request is cancelled through ChatParams.cancellationToken
-     * (caller abort or AIPromptRunner timeout). Marked Fatal / non-failover so no layer retries a request
-     * the caller explicitly gave up on.
+     * The result of a prediction LM Studio stopped on its own (from its UI or the server), not because
+     * the caller aborted it: a failure, and a retriable one, since another model or vendor can answer.
      */
-    private buildCancelledResult(startTime: Date): ChatResult {
-        const errorInfo: AIErrorInfo = {
-            errorType: 'Unknown',
-            severity: 'Fatal',
-            canFailover: false,
-            providerErrorCode: 'request_cancelled',
-            context: { provider: 'lmstudio', cancelled: true }
-        };
-
-        const result = new ChatResult(false, startTime, new Date());
-        result.statusText = 'cancelled';
-        result.errorMessage = 'Request cancelled via cancellationToken';
-        result.exception = null;
-        result.errorInfo = errorInfo;
-        result.data = {
-            choices: [],
-            usage: new ModelUsage(0, 0)
-        };
+    private stoppedByServerResult(startTime: Date, endTime: Date): ChatResult {
+        const result = new ChatResult(false, startTime, endTime);
+        result.data = { choices: [], usage: new ModelUsage(0, 0) };
+        result.statusText = 'error';
+        result.errorMessage = 'LM Studio stopped the prediction before it finished';
+        result.errorInfo = { errorType: 'ServiceUnavailable', severity: 'Retriable', canFailover: true };
         return result;
     }
 
     /**
-     * Wraps the LM Studio prediction stream so that an abort ends iteration cleanly (flagging the
-     * cancellation for finalizeStreamingResponse) instead of being reported as a truncated success.
+     * Exposes a prediction as a plain async-iterable of its fragments. An `OngoingPrediction` is also
+     * a thenable, so returning it from an `async` method would await the whole prediction instead of
+     * streaming it; this hands back only its iterator.
      */
-    private async *iterateWithCancellation(
-        stream: AsyncIterable<LLMPredictionFragment>,
-        signal?: AbortSignal
-    ): AsyncGenerator<LLMPredictionFragment> {
-        try {
-            for await (const chunk of stream) {
-                if (signal?.aborted) {
-                    this.streamCancelled = true;
-                    return;
-                }
-                yield chunk;
-            }
-            // LM Studio ends the prediction (stop reason `userStopped`) rather than throwing on abort,
-            // so re-check the signal once the stream is exhausted.
-            if (signal?.aborted) {
-                this.streamCancelled = true;
-            }
-        } catch (error) {
-            if (this.isCancellation(error, signal)) {
-                this.streamCancelled = true;
-                return;
-            }
-            throw error;
-        }
-    }
-
-    /**
-     * An already-exhausted stream, used when the request was cancelled before it was sent.
-     */
-    private async *emptyStream(): AsyncGenerator<LLMPredictionFragment> {
-        // intentionally yields nothing
-    }
-
-    /**
-     * Clear per-request streaming state. Invoked by the base class at the start and end of every
-     * streaming request.
-     */
-    protected override resetStreamingState(): void {
-        super.resetStreamingState();
-        this.streamCancelled = false;
+    private asFragmentStream(prediction: OngoingPrediction): AsyncIterable<LLMPredictionFragment> {
+        return { [Symbol.asyncIterator]: () => prediction[Symbol.asyncIterator]() };
     }
 
     /**
@@ -154,18 +100,13 @@ export class LMStudioLLM extends BaseLLM {
     protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
         const startTime = new Date();
 
-        // Already cancelled before we even dial out
-        if (params.cancellationToken?.aborted) {
-            return this.buildCancelledResult(startTime);
-        }
-
         try {
             // Get the model instance — the signal also cancels a pending model load
-            const model = await this.client.llm.model(params.model, { signal: params.cancellationToken });
+            const model = await this.Client.llm.model(params.model, { signal: params.cancellationToken });
 
             // Convert MJ messages to LM Studio format
             const messages = params.messages.map(m => ({
-                role: m.role,
+                role: toClassicChatMessageRole(m.role),
                 content: Array.isArray(m.content) ? 
                     m.content.map(block => block.content).join('\n') : 
                     m.content
@@ -220,10 +161,14 @@ export class LMStudioLLM extends BaseLLM {
             const response = await model.respond(messages, respondOptions);
             const endTime = new Date();
 
-            // LM Studio resolves (stop reason `userStopped`) rather than throwing when aborted, so we
-            // must check the token ourselves to avoid presenting a truncated answer as a success.
+            // LM Studio resolves (stop reason `userStopped`) rather than throwing when aborted, so the
+            // truncated answer must not be reported as a success. Our own abort is a cancellation; a
+            // stop that did not come from our signal (LM Studio's UI, the server) is a retriable failure.
             if (params.cancellationToken?.aborted) {
-                return this.buildCancelledResult(startTime);
+                return this.BuildCancelledChatResult(startTime, { signal: params.cancellationToken });
+            }
+            if (this.isUserStopped(response)) {
+                return this.stoppedByServerResult(startTime, endTime);
             }
 
             const choices: ChatResultChoice[] = [{
@@ -274,8 +219,8 @@ export class LMStudioLLM extends BaseLLM {
             
             return result;
         } catch (error) {
-            if (this.isCancellation(error, params.cancellationToken)) {
-                return this.buildCancelledResult(startTime);
+            if (this.IsCancellationError(error, params.cancellationToken)) {
+                return this.BuildCancelledChatResult(startTime, { error, signal: params.cancellationToken });
             }
 
             const endTime = new Date();
@@ -306,19 +251,12 @@ export class LMStudioLLM extends BaseLLM {
             this.initializeThinkingStreamState();
         }
 
-        // Already cancelled before we dial out — hand back an empty stream; finalizeStreamingResponse
-        // will report the cancellation.
-        if (params.cancellationToken?.aborted) {
-            this.streamCancelled = true;
-            return this.emptyStream();
-        }
-
         // Get the model instance — the signal also cancels a pending model load
-        const model = await this.client.llm.model(params.model, { signal: params.cancellationToken });
+        const model = await this.Client.llm.model(params.model, { signal: params.cancellationToken });
 
         // Convert MJ messages to LM Studio format
         const messages = params.messages.map(m => ({
-            role: m.role,
+            role: toClassicChatMessageRole(m.role),
             content: Array.isArray(m.content) ? 
                 m.content.map(block => block.content).join('\n') : 
                 m.content
@@ -364,9 +302,9 @@ export class LMStudioLLM extends BaseLLM {
                 break;
         }
         
-        // OngoingPrediction is an async-iterable of prediction fragments; wrap it so an abort is
-        // reported as a cancellation rather than a truncated success.
-        return this.iterateWithCancellation(model.respond(messages, respondOptions), params.cancellationToken);
+        // OngoingPrediction is an async-iterable of prediction fragments. On abort it ends without
+        // throwing; BaseLLM reads the aborted signal and reports the request as cancelled.
+        return this.asFragmentStream(model.respond(messages, respondOptions));
     }
 
     /**
@@ -418,12 +356,6 @@ export class LMStudioLLM extends BaseLLM {
         lastChunk: any | null | undefined,
         usage: any | null | undefined
     ): ChatResult {
-        // If the prediction was aborted via the cancellation token, report a cancellation instead of
-        // presenting whatever partial content we managed to accumulate as a successful response.
-        if (this.streamCancelled) {
-            return this.buildCancelledResult(new Date());
-        }
-
         // Extract finish reason from last chunk if available
         let finishReason = 'stop';
         if (lastChunk?.finished) {

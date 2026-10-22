@@ -4,12 +4,12 @@ import * as path from 'path';
 import { glob } from 'glob';
 
 export interface LinterTestResult {
-  component: string;
-  path: string;
-  passed: boolean;
-  errors: string[];
-  warnings: string[];
-  subComponents?: LinterTestResult[];
+  component: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  path: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  Passed: boolean;
+  errors: string[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  warnings: string[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  SubComponents?: LinterTestResult[];
 }
 
 export class LinterTestTool {
@@ -22,7 +22,7 @@ export class LinterTestTool {
   /**
    * Test a single component spec file
    */
-  public async testComponentSpec(specPath: string, contextUser?: any): Promise<LinterTestResult> {
+  public async TestComponentSpec(specPath: string, contextUser?: any): Promise<LinterTestResult> {
     try {
       // Read the spec file
       const specContent = fs.readFileSync(specPath, 'utf-8');
@@ -34,7 +34,7 @@ export class LinterTestTool {
         return {
           component: spec.name || 'Unknown',
           path: specPath,
-          passed: false,
+          Passed: false,
           errors: [`Code file not found: ${spec.code}`],
           warnings: []
         };
@@ -71,20 +71,25 @@ export class LinterTestTool {
       return {
         component: spec.name,
         path: specPath,
-        passed: result.success && result.violations.filter(v => v.severity === 'critical' || v.severity === 'high').length === 0,
+        Passed: result.success && result.violations.filter(v => v.severity === 'critical' || v.severity === 'high').length === 0,
         errors: result.violations.filter(v => v.severity === 'critical' || v.severity === 'high').map(v => `${v.rule}: ${v.message} (line ${v.line})`),
         warnings: result.violations.filter(v => v.severity === 'medium' || v.severity === 'low').map(v => `${v.rule}: ${v.message} (line ${v.line})`),
-        subComponents: subComponents.length > 0 ? subComponents : undefined
+        SubComponents: subComponents.length > 0 ? subComponents : undefined
       };
     } catch (error) {
       return {
         component: 'Unknown',
         path: specPath,
-        passed: false,
+        Passed: false,
         errors: [`Failed to test component: ${error instanceof Error ? error.message : String(error)}`],
         warnings: []
       };
     }
+  }
+
+  /** @deprecated Use {@link TestComponentSpec}. */
+  public async testComponentSpec(specPath: string, contextUser?: any): Promise<LinterTestResult> {
+    return this.TestComponentSpec(specPath, contextUser);
   }
 
   /**
@@ -100,7 +105,7 @@ export class LinterTestTool {
         return {
           component: spec.name || 'Unknown',
           path: specPath,
-          passed: false,
+          Passed: false,
           errors: [`Code file not found: ${spec.code}`],
           warnings: []
         };
@@ -120,7 +125,7 @@ export class LinterTestTool {
       return {
         component: spec.name,
         path: specPath,
-        passed: result.success && result.violations.filter(v => v.severity === 'critical' || v.severity === 'high').length === 0,
+        Passed: result.success && result.violations.filter(v => v.severity === 'critical' || v.severity === 'high').length === 0,
         errors: result.violations.filter(v => v.severity === 'critical' || v.severity === 'high').map(v => `${v.rule}: ${v.message} (line ${v.line})`),
         warnings: result.violations.filter(v => v.severity === 'medium' || v.severity === 'low').map(v => `${v.rule}: ${v.message} (line ${v.line})`)
       };
@@ -128,7 +133,7 @@ export class LinterTestTool {
       return {
         component: 'Unknown',
         path: specPath,
-        passed: false,
+        Passed: false,
         errors: [`Failed to test sub-component: ${error instanceof Error ? error.message : String(error)}`],
         warnings: []
       };
@@ -138,7 +143,7 @@ export class LinterTestTool {
   /**
    * Test all component specs in a directory
    */
-  public async testDirectory(dirPath: string, contextUser?: any): Promise<LinterTestResult[]> {
+  public async TestDirectory(dirPath: string, contextUser?: any): Promise<LinterTestResult[]> {
     const pattern = path.join(dirPath, '**/spec/*.spec.json');
     const files = await glob(pattern);
     
@@ -148,7 +153,7 @@ export class LinterTestTool {
       // Skip sub-component specs (they'll be tested as part of their parent)
       const fileName = path.basename(file);
       if (!fileName.includes('-')) {
-        const result = await this.testComponentSpec(file, contextUser);
+        const result = await this.TestComponentSpec(file, contextUser);
         results.push(result);
       }
     }
@@ -156,10 +161,15 @@ export class LinterTestTool {
     return results;
   }
 
+  /** @deprecated Use {@link TestDirectory}. */
+  public async testDirectory(dirPath: string, contextUser?: any): Promise<LinterTestResult[]> {
+    return this.TestDirectory(dirPath, contextUser);
+  }
+
   /**
    * Test specific component by name
    */
-  public async testComponentByName(componentName: string, baseDir: string, contextUser?: any): Promise<LinterTestResult | null> {
+  public async TestComponentByName(componentName: string, baseDir: string, contextUser?: any): Promise<LinterTestResult | null> {
     // Convert component name to file name format (kebab-case)
     const fileName = componentName
       .replace(/([A-Z])/g, '-$1')
@@ -174,7 +184,12 @@ export class LinterTestTool {
       return null;
     }
     
-    return this.testComponentSpec(files[0], contextUser);
+    return this.TestComponentSpec(files[0], contextUser);
+  }
+
+  /** @deprecated Use {@link TestComponentByName}. */
+  public async testComponentByName(componentName: string, baseDir: string, contextUser?: any): Promise<LinterTestResult | null> {
+    return this.TestComponentByName(componentName, baseDir, contextUser);
   }
 
   /**
@@ -195,7 +210,7 @@ export class LinterTestTool {
   /**
    * Format test results for display
    */
-  public formatResults(results: LinterTestResult | LinterTestResult[]): string {
+  public FormatResults(results: LinterTestResult | LinterTestResult[]): string {
     const resultArray = Array.isArray(results) ? results : [results];
     let output = '';
     
@@ -205,7 +220,7 @@ export class LinterTestTool {
     
     // Summary
     const total = resultArray.length;
-    const passed = resultArray.filter(r => r.passed).length;
+    const passed = resultArray.filter(r => r.Passed).length;
     const failed = total - passed;
     
     output += '\n' + '='.repeat(60) + '\n';
@@ -218,12 +233,17 @@ export class LinterTestTool {
     return output;
   }
 
+  /** @deprecated Use {@link FormatResults}. */
+  public formatResults(results: LinterTestResult | LinterTestResult[]): string {
+    return this.FormatResults(results);
+  }
+
   private formatSingleResult(result: LinterTestResult, indent: number = 0): string {
     const prefix = '  '.repeat(indent);
     let output = '';
     
-    const status = result.passed ? '✓' : '✗';
-    const color = result.passed ? '\x1b[32m' : '\x1b[31m'; // Green or Red
+    const status = result.Passed ? '✓' : '✗';
+    const color = result.Passed ? '\x1b[32m' : '\x1b[31m'; // Green or Red
     const reset = '\x1b[0m';
     
     output += `${prefix}${color}${status}${reset} ${result.component}\n`;
@@ -242,9 +262,9 @@ export class LinterTestTool {
       }
     }
     
-    if (result.subComponents) {
+    if (result.SubComponents) {
       output += `${prefix}  Sub-components:\n`;
-      for (const sub of result.subComponents) {
+      for (const sub of result.SubComponents) {
         output += this.formatSingleResult(sub, indent + 2);
       }
     }
@@ -255,13 +275,18 @@ export class LinterTestTool {
   /**
    * Save test results to file
    */
-  public saveResults(results: LinterTestResult | LinterTestResult[], outputPath: string): void {
+  public SaveResults(results: LinterTestResult | LinterTestResult[], outputPath: string): void {
     const data = {
       timestamp: new Date().toISOString(),
       results: Array.isArray(results) ? results : [results]
     };
     
     fs.writeFileSync(outputPath, JSON.stringify(data, null, 2));
+  }
+
+  /** @deprecated Use {@link SaveResults}. */
+  public saveResults(results: LinterTestResult | LinterTestResult[], outputPath: string): void {
+    return this.SaveResults(results, outputPath);
   }
 }
 

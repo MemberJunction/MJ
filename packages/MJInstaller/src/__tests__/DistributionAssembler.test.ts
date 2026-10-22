@@ -10,7 +10,7 @@ import { mkdtemp, mkdir, writeFile, rm, readFile, readdir } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import AdmZip from 'adm-zip';
-import { DistributionAssembler, distributionSourcePaths, type WriteOp } from '../distribution/DistributionAssembler.js';
+import { DistributionAssembler, DistributionSourcePaths, type WriteOp } from '../distribution/DistributionAssembler.js';
 
 let sourceDir: string;
 
@@ -201,35 +201,35 @@ describe('DistributionAssembler.Plan', () => {
 
 describe('distributionSourcePaths', () => {
   it('lists no migration dirs by default', () => {
-    const paths = distributionSourcePaths();
+    const paths = DistributionSourcePaths();
     expect(paths.some((p) => p === 'migrations' || p === 'migrations-pg')).toBe(false);
   });
 
   it('includes both migration dirs when migrations are requested with no platform', () => {
-    const paths = distributionSourcePaths(true);
+    const paths = DistributionSourcePaths(true);
     expect(paths).toContain('migrations');
     expect(paths).toContain('migrations-pg');
   });
 
   it('includes only the sqlserver dir when narrowed to sqlserver', () => {
-    const paths = distributionSourcePaths(true, 'sqlserver');
+    const paths = DistributionSourcePaths(true, 'sqlserver');
     expect(paths).toContain('migrations');
     expect(paths).not.toContain('migrations-pg');
   });
 
   it('includes only the postgresql dir when narrowed to postgresql', () => {
-    const paths = distributionSourcePaths(true, 'postgresql');
+    const paths = DistributionSourcePaths(true, 'postgresql');
     expect(paths).toContain('migrations-pg');
     expect(paths).not.toContain('migrations');
   });
 
   it('includes the claude pack source by default', () => {
-    const paths = distributionSourcePaths();
+    const paths = DistributionSourcePaths();
     expect(paths).toContain('templates/claude-pack/dist');
   });
 
   it('omits the claude pack source when explicitly excluded', () => {
-    const paths = distributionSourcePaths(false, undefined, false);
+    const paths = DistributionSourcePaths(false, undefined, false);
     expect(paths).not.toContain('templates/claude-pack/dist');
   });
 });

@@ -36,7 +36,7 @@ export interface IOracle {
      * Unique type identifier for this oracle.
      * Used in test configuration to specify which oracles to run.
      */
-    readonly type: string;
+    readonly type: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Evaluate the test output.
@@ -45,5 +45,5 @@ export interface IOracle {
      * @param config - Oracle-specific configuration
      * @returns Promise resolving to oracle result
      */
-    evaluate(input: OracleInput, config: OracleConfig): Promise<OracleResult>;
+    evaluate(input: OracleInput, config: OracleConfig): Promise<OracleResult>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }

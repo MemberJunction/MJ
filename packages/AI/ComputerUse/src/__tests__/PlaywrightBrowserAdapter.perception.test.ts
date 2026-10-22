@@ -54,6 +54,7 @@ interface MockPage {
     title: ReturnType<typeof vi.fn>;
     waitForLoadState: ReturnType<typeof vi.fn>;
     locator: ReturnType<typeof vi.fn>;
+    evaluate: ReturnType<typeof vi.fn>;
     accessibility: MockAccessibility;
     mouse: MockMouse;
 }
@@ -119,6 +120,7 @@ beforeEach(() => {
         title: vi.fn().mockResolvedValue('Page Title'),
         waitForLoadState: vi.fn().mockResolvedValue(undefined),
         locator: vi.fn().mockReturnValue(locator),
+        evaluate: vi.fn().mockResolvedValue([]),
         accessibility: {
             snapshot: vi.fn().mockResolvedValue(null),
         },
@@ -425,4 +427,25 @@ describe('PlaywrightBrowserAdapter screencast', () => {
 
         await expect(adapter.StartScreencast(() => {})).rejects.toThrow(/Browser not launched/);
     });
+});
+
+// ─── Interactivity probe is bounded ────────────────────────────
+describe('PlaywrightBrowserAdapter — interactivity probe bound', () => {
+    it('bounds ExtractInteractiveElements by the configured ActionTimeoutMs', async () => {
+        // A renderer that accepts the call and never answers. `page.evaluate()`
+        // is the one page call Playwright does not govern with
+        // setDefaultTimeout, so without an explicit bound this await never
+        // returns — parking the run where no budget or Stop() can reach it.
+        page.evaluate.mockImplementation(() => new Promise(() => {}));
+
+        const adapter = new PlaywrightBrowserAdapter();
+        await adapter.Launch(makeConfig({ ActionTimeoutMs: 60 }));
+
+        const started = Date.now();
+        await expect(adapter.ExtractInteractiveElements()).resolves.toEqual([]);
+
+        // Must honour the adapter's own 60ms budget, not the module fallback —
+        // a caller that ignores its config would still be sitting here.
+        expect(Date.now() - started).toBeLessThan(2000);
+    }, 3000);
 });

@@ -1,8 +1,8 @@
 /**
  * Pins the reserved-root set passed into prepareServerExtensionConfigs.
- * A new public mount in index.ts / a drifted `*_MOUNT_PATH` constant is a
- * contract failure — this file reads those sources as text so it never loads
- * `config.ts`.
+ * A drifted `*_MOUNT_PATH` constant is a contract failure — this file reads those
+ * sources as text so it never loads `config.ts`. That every core mount is reserved
+ * is checked against the real mounts in apiRootBoot.test.ts.
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import {
     CORE_CONSTANT_RESERVED_SERVER_EXTENSION_ROOTS,
     CORE_STATIC_RESERVED_SERVER_EXTENSION_ROOTS,
-    coreReservedServerExtensionRoots,
+    CoreReservedServerExtensionRoots,
 } from '../serverExtensionReservedRoots.js';
 import { validateServerExtensionRootPath } from '@memberjunction/server-extensions-core';
 
@@ -26,71 +26,54 @@ function exportedStringConst(relativeFile: string, name: string): string {
     return match[1];
 }
 
-function indexContainsLiteralPath(path: string): boolean {
-    const src = readFileSync(join(SRC, 'index.ts'), 'utf8');
-    return src.includes(`'${path}'`) || src.includes(`\`${path}\``) || src.includes(path.replace(/^\//, ''));
-}
-
 describe('coreReservedServerExtensionRoots', () => {
     it('stays in lockstep with exported *_MOUNT_PATH constants', () => {
         expect(CORE_CONSTANT_RESERVED_SERVER_EXTENSION_ROOTS).toEqual([
             exportedStringConst('auth/AuthProviderCatalogRouter.ts', 'AUTH_CATALOG_MOUNT_PATH'),
             exportedStringConst('auth/magicLink/MagicLinkRouter.ts', 'MAGIC_LINK_MOUNT_PATH'),
             exportedStringConst('realtimeWidget/WidgetRouter.ts', 'WIDGET_MOUNT_PATH'),
-            exportedStringConst('telephony/TwilioTelephonyRouter.ts', 'TWILIO_TELEPHONY_MOUNT_PATH'),
-            exportedStringConst('telephony/VonageTelephonyRouter.ts', 'VONAGE_TELEPHONY_MOUNT_PATH'),
-            exportedStringConst('telephony/TeamsMeetingsRouter.ts', 'TEAMS_MEETINGS_MOUNT_PATH'),
         ]);
     });
 
-    it('includes the literal pre-auth paths serve() registers without a constant', () => {
-        const indexSrc = readFileSync(join(SRC, 'index.ts'), 'utf8');
-        for (const path of CORE_STATIC_RESERVED_SERVER_EXTENSION_ROOTS) {
-            // /health is the prefix for /health/extensions
-            const needle = path === '/health' ? '/health/extensions' : path;
-            expect(indexSrc, `${path} missing from serve()`).toContain(`'${needle}'`);
-        }
-        expect(indexContainsLiteralPath('/healthcheck')).toBe(true);
-    });
-
-    it('includes graphqlRootPath and every core mount', () => {
-        const roots = coreReservedServerExtensionRoots('/api');
+    it('includes every core mount, and no longer graphqlRootPath', () => {
+        const roots = CoreReservedServerExtensionRoots();
+        expect(roots).not.toContain('/api');
         expect(roots).toEqual(
             expect.arrayContaining([
-                '/api',
                 '/auth',
                 '/magic-link',
                 '/widget',
-                '/telephony/twilio',
-                '/telephony/vonage',
-                '/meetings/teams',
                 '/healthcheck',
                 '/esignature',
                 '/media',
                 '/oauth',
                 '/health',
+                '/realtime',
+                '/realtime-proxy',
             ])
         );
     });
 
     it('closes the F-M2 bypasses: cased /auth and sibling /healthcheck', () => {
-        const extra = coreReservedServerExtensionRoots('/');
+        const extra = CoreReservedServerExtensionRoots();
         expect(validateServerExtensionRootPath('/Auth', extra)).toMatch(/reserved prefix/);
         expect(validateServerExtensionRootPath('/healthcheck', extra)).toMatch(/reserved prefix/);
         expect(validateServerExtensionRootPath('/Healthcheck', extra)).toMatch(/reserved prefix/);
         expect(validateServerExtensionRootPath('/esignature', extra)).toMatch(/reserved prefix/);
         expect(validateServerExtensionRootPath('/media', extra)).toMatch(/reserved prefix/);
         expect(validateServerExtensionRootPath('/widget', extra)).toMatch(/reserved prefix/);
-        expect(validateServerExtensionRootPath('/telephony', extra)).toMatch(/reserved prefix/);
-        expect(validateServerExtensionRootPath('/meetings/teams', extra)).toMatch(/reserved prefix/);
+        expect(validateServerExtensionRootPath('/realtime', extra)).toMatch(/reserved prefix/);
+        expect(validateServerExtensionRootPath('/realtime-proxy', extra)).toMatch(/reserved prefix/);
+        expect(validateServerExtensionRootPath('/Realtime', extra)).toMatch(/reserved prefix/);
         expect(validateServerExtensionRootPath('/checkout', extra)).toBeNull();
         expect(validateServerExtensionRootPath('/healthcare', extra)).toBeNull();
+        expect(validateServerExtensionRootPath('/telephony/twilio', extra)).toBeNull();
+        expect(validateServerExtensionRootPath('/meetings/teams', extra)).toBeNull();
     });
 
-    it('reserves a non-default graphqlRootPath and its nested paths', () => {
-        const extra = coreReservedServerExtensionRoots('/api');
-        expect(validateServerExtensionRootPath('/api', extra)).toMatch(/reserved prefix/);
-        expect(validateServerExtensionRootPath('/api/graphql', extra)).toMatch(/reserved prefix/);
-        expect(validateServerExtensionRootPath('/apiv2', extra)).toBeNull();
+    it('lets extensions sit under the GraphQL path (#5674): RootPaths are relative to MJAPI_BASE_PATH', () => {
+        const extra = CoreReservedServerExtensionRoots();
+        expect(validateServerExtensionRootPath('/api', extra)).toBeNull();
+        expect(validateServerExtensionRootPath('/forms', extra)).toBeNull();
     });
 });

@@ -1,31 +1,46 @@
 /**
- * The canonical `ModelConfiguration` shape + the pure cascade resolver.
+ * The canonical AI configuration shapes + the pure cascade resolvers.
  *
- * `ModelConfiguration` is a JSONType `nvarchar(max)` column that exists at THREE levels of the
- * model catalog, forming an inherit-with-override cascade (the structured generalization of the
- * scalar `SupportsPrefill` / `PrefillFallbackText` cascade those same three entities already carry):
+ * The AI stack carries `nvarchar(max)` JSONType configuration bags at six levels, in two cascades.
+ * The MODEL CATALOG cascade describes the model:
  *
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
  *   < MJ: AI Models . ModelConfiguration      (per-model)
- *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *     < MJ: AI Vendors . Configuration.ModelDefaults   (host-wide default for every model this vendor serves)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the tie-breaker, wins)
  * ```
  *
- * **Lockstep contract**: this interface is the package-side mirror of
- * `metadata/entities/JSONType-interfaces/IAIModelConfiguration.ts`, which is pushed into
- * `EntityField.JSONTypeDefinition` and drives the CodeGen-generated `ModelConfigurationObject`
- * accessors on the three entities. Keep the two in step when adding a section or property —
- * the same pact `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
+ * The PROMPT cascade describes what a given prompt asks for, and layers on top of the catalog:
+ *
+ * ```
+ * MJ: AI Prompts . PromptConfiguration        (per-prompt)
+ *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
+ * ```
+ *
+ * Both compose the SAME per-modality section types ({@link LLMConfigurationSettings},
+ * {@link RealtimeConfigurationSettings}, …) — one definition of what "the LLM configuration" means,
+ * reused at every layer. Only the outer per-table type differs.
+ *
+ * **Lockstep contract**: these interfaces mirror
+ * `metadata/entities/JSONType-interfaces/IAIConfiguration.ts`, which is pushed into
+ * `EntityField.JSONTypeDefinition` and drives the CodeGen-generated `ModelConfigurationObject` /
+ * `PromptConfigurationObject` / `ConfigurationObject` accessors on the six entities. Keep the two in
+ * step when adding a section or property — the same pact `IAgentSettings` follows with
+ * `@memberjunction/ai-core-plus`. The JSONType source carries its own copy of the track types this
+ * file imports from `realtimeTracks.ts`. `modelConfiguration.test.ts` fails when the two differ.
  *
  * **Boundary rule** (also documented on the metadata interface): anything the engine filters,
  * sorts, or joins on stays a COLUMN (`PowerRank`, `IsActive`, `Priority`, `Status` — SQL cannot
- * cheaply predicate into this bag); anything a driver consumes at session/call time belongs HERE.
- * New capability knobs go in this bag — do not add a new capability column per knob.
+ * cheaply predicate into this bag); anything a driver or runner consumes at call time belongs HERE.
+ * New capability knobs go in the bag — do not add a capability column per knob. A knob graduates to
+ * a real column when it needs a foreign key or becomes a first-class platform concept.
  */
 
 import { IsPlainObject } from '@memberjunction/global';
 
 import { JSONObject, JSONValue } from './baseRealtime';
+import type { RealtimeTrackDescriptor } from './realtimeTracks';
 
 /**
  * MJ-normalized turn-detection mode vocabulary — provider-neutral by design so a shared model
@@ -57,45 +72,396 @@ export interface RealtimeTurnDetectionSettings {
     Threshold?: number;
     /** Server-VAD trailing-silence duration in ms; ignored by profiles without a mapping. */
     SilenceDurationMs?: number;
+
+    /**
+     * What a turn's input is allowed to include. Distinct from DETECTION (when a turn ends):
+     * coverage is WHAT rides in it.
+     *
+     * Gemini 3.8 Live defaults to `audioActivityAndAllVideo`, which ships every video frame to the
+     * model by default — billed and consuming context. Declaring coverage explicitly keeps that a
+     * decision rather than an inherited default. Profiles without a mapping ignore it.
+     */
+    Coverage?: RealtimeTurnCoverage;
 }
 
-/** The `Realtime` section of {@link AIModelConfiguration} — knobs the realtime drivers consume. */
-export interface RealtimeModelConfigurationSection {
+/**
+ * What a turn carries as input.
+ *
+ * - `'audioActivityOnly'` — audio activity only; video frames are sent deliberately, not by default.
+ * - `'audioActivityAndAllVideo'` — audio activity plus every video frame (Gemini 3.8 Live's own
+ *   default, `TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO`).
+ */
+export type RealtimeTurnCoverage = 'audioActivityOnly' | 'audioActivityAndAllVideo';
+
+/**
+ * Which plane handles reasoning during a realtime session:
+ * - `'local'` — the application/agent loop handles reasoning, Actions, and tool results (MJ default).
+ * - `'remote'` — the model delegates reasoning to a remote model or hosted agent backend.
+ */
+export type RealtimeReasoningPlane = 'local' | 'remote';
+
+/**
+ * A reasoning effort in MJ's neutral vocabulary. Each provider profile maps the values its model
+ * accepts (Gemini: `low` / `medium` / `high` on Extended Thinking) and warns on the rest.
+ */
+export type RealtimeReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+
+/**
+ * Configuration for remote reasoning delegation.
+ */
+export interface RealtimeRemoteReasoning {
+    /** What the remote reference denotes. `model` = Live/Inworld; `hostedAgent` = ElevenLabs. */
+    Kind?: 'model' | 'hostedAgent';
+    /** 'gpt-5.6-terra' | 'anthropic/claude-sonnet-4-6' | 'MJ Realtime Co-Agent'. */
+    Ref?: string;
+    /** Reasoning effort level for supported models. */
+    Effort?: RealtimeReasoningEffort;
+    /** Maximum output tokens for the remote reasoning pass. */
+    MaxOutputTokens?: number;
+}
+
+/**
+ * Realtime reasoning settings controlling dual delegation.
+ */
+export interface RealtimeReasoningSettings {
+    /** Absent = 'local'. Session-creation-time only — NOT runtime-switchable. */
+    Plane?: RealtimeReasoningPlane;
+    /** Remote reasoning target when Plane is 'remote'. */
+    Remote?: RealtimeRemoteReasoning;
+
+    /**
+     * How hard the model itself reasons (Gemini `thinkingConfig.thinkingLevel`), as the catalog
+     * seeds it for Gemini 3.8 Live Extended Thinking. A profile that cannot honour the value logs a
+     * warning and uses its own default; the Gemini driver reads `Remote.Effort` first when both are
+     * set.
+     */
+    Level?: RealtimeReasoningEffort;
+
+    /**
+     * Ask the model to emit human-readable summaries of its own reasoning as it works
+     * (Gemini `thinkingConfig.includeThoughts`).
+     *
+     * These are NOT assistant speech — they are progress narration authored by the model, and
+     * belong on the narration transcript path rather than the spoken-response path. Absent =
+     * off; a profile with no mapping ignores it.
+     */
+    IncludeThoughtSummaries?: boolean;
+}
+
+/**
+ * One price for a quantity a realtime session produces, in one currency. It applies only when all
+ * three fields are set; a partial price, or a unit or currency the reader does not handle, counts
+ * as no price.
+ *
+ * Mirrors the JSONType source member for member, including the `| null`s, so a CodeGen-generated
+ * copy assigns into this type.
+ */
+export interface RealtimeUnitPrice {
+    /** The amount charged per {@link RealtimeUnitPrice.Unit}. Never negative. */
+    Price?: number | null;
+    /**
+     * The billing unit, named as in `MJ: AI Model Price Unit Types`. `'Per Minute'`: one minute.
+     * `'Per 1M Tokens'`: one million tokens.
+     */
+    Unit?: 'Per Minute' | 'Per 1M Tokens' | null;
+    /** ISO 4217 currency code, uppercase (e.g. `USD`), as on `MJ: AI Model Costs`. */
+    Currency?: string | null;
+}
+
+/**
+ * Prices for realtime output that the model's cost rows (`MJ: AI Model Costs`) do not price on
+ * their own; the cost rows stay the authority for token prices. A price belongs to the host that
+ * charges it, so set this on the model-vendor row: a price on the model or the model type would
+ * reach every vendor that serves the model.
+ */
+export interface RealtimePricingSettings {
+    /**
+     * The price of avatar video output, charged on top of the session's token cost. `'Per Minute'`
+     * prices the seconds of avatar video the model generates; `'Per 1M Tokens'` prices the output
+     * tokens the provider counts as video. Set the price and its unit together: the cascade merges
+     * per key, so a layer that sets only one of them keeps the other from the layer below.
+     *
+     * Gemini 3.8 Live on Vertex AI is seeded at Google's $1.00 per 1M avatar video output tokens.
+     * Google bills avatar video only while the avatar speaks, so a token price follows the bill; a
+     * per-minute price would also count the idle avatar between answers.
+     */
+    AvatarVideoOutput?: RealtimeUnitPrice | null;
+}
+
+/** The `Realtime` section — knobs the realtime drivers consume. */
+export interface RealtimeConfigurationSettings {
     /**
      * Catalog-level turn-detection default for this model. Folded into the session Config bag as
      * the `turnDetection` key BELOW the agent/app config cascade (`realtime.session.turnDetection`)
      * and the runtime override — the catalog supplies the default, agents/apps/callers refine it.
      */
-    TurnDetection?: RealtimeTurnDetectionSettings;
+    TurnDetection?: RealtimeTurnDetectionSettings | null;
+
+    /**
+     * Reasoning plane settings — dual delegation configuration.
+     * Absent defaults to 'local'.
+     */
+    Reasoning?: RealtimeReasoningSettings;
+
+    /**
+     * Whether this realtime model natively supports full-duplex conversational audio
+     * (simultaneous speaking and listening with natural interruptions).
+     *
+     * When true, full-duplex models do not receive turn-taking tools or an energy-VAD floor gate,
+     * allowing the provider's native full-duplex model to handle natural turn transitions.
+     * Cascades AIModelType -> Vendor ModelDefaults -> AIModel -> AIModelVendor.
+     */
+    FullDuplex?: boolean | null;
+
+    /** Tool-execution semantics this model permits. Absent = the profile's own defaults. */
+    Tooling?: RealtimeToolingSettings;
+
+    /**
+     * Media tracks this session asks the model to establish, beyond audio.
+     *
+     * **The request side of negotiation, and the reason "video off by default" is structural rather
+     * than a default value someone can forget.** Absent or empty establishes audio only; a video
+     * track exists only because something asked for it. That matters concretely: Gemini 3.8 Live's
+     * own turn coverage defaults to including every video frame, billed, so a design where omission
+     * means "inherit the provider" would ship a silent cost.
+     *
+     * Requests are intersected with the model's `SupportedInboundTracks` /
+     * `SupportedOutboundTracks`; anything unsupported resolves to `'unsupported'` so the caller
+     * falls back deliberately.
+     */
+    RequestedTracks?: readonly RealtimeTrackDescriptor[];
+
+    /**
+     * Which server signal means "the session has gone idle and deferred work may be flushed".
+     *
+     * Absent = `'turnComplete'`, which is every model MJ spoke to before Gemini 3.8 Live
+     * Extended Thinking. On a model with asynchronous reasoning, `turnComplete` arrives while the
+     * server is STILL reasoning and still issuing tool calls, so treating it as idle drains queued
+     * work at the wrong moment; those models report `'interactionStatus'` instead.
+     */
+    IdleSignal?: RealtimeIdleSignal;
+
+    /**
+     * Prices for output the token cost rows do not cover, such as avatar video. Set it on the
+     * model-vendor row.
+     */
+    Pricing?: RealtimePricingSettings | null;
 }
 
 /**
- * The `LLM` section of {@link AIModelConfiguration}. Reserved — no consumers yet. Candidate
- * contents: per-model effort-level defaults, response-format quirks, tool-calling behavior flags.
- * Existing capability COLUMNS (`SupportsEffortLevel`, `SupportsStreaming`, …) are NOT migrating
- * here — new knobs only (see the boundary rule in the module docstring).
+ * Which server signal a driver should treat as "idle".
+ *
+ * - `'turnComplete'` — the turn-terminal frame also means the server is done (the classic case).
+ * - `'interactionStatus'` — a separate status field carries idleness because `turnComplete` does
+ *   NOT imply it (Gemini `interaction_status`: `IN_PROGRESS` vs `IDLE`).
  */
-export interface LLMModelConfigurationSection {
-    /** Open extension point until the first typed knob lands. */
+export type RealtimeIdleSignal = 'turnComplete' | 'interactionStatus';
+
+/**
+ * Tool-execution semantics, declared per model because the same Live API permits different
+ * combinations per model rather than per provider.
+ *
+ * Both flags are capability DECLARATIONS, not requests: they say what the model will accept, so a
+ * driver can refuse locally with a clear message instead of emitting a frame the server rejects.
+ */
+export interface RealtimeToolingSettings {
+    /**
+     * Whether synchronous blocking tool execution is legal.
+     *
+     * `false` on models that only accept asynchronous execution — Gemini 3.8 Live Extended
+     * Thinking returns a HARD ERROR for blocking mode, so this must be caught before the frame is
+     * sent. Absent = permitted (the historical default).
+     */
+    SupportsBlockingExecution?: boolean;
+
+    /**
+     * Whether per-function scheduling hints are legal (Gemini `SILENT` / `WHEN_IDLE` /
+     * `INTERRUPTED`). Absent = not supported; only declare `true` where the model documents it.
+     */
+    SupportsScheduling?: boolean;
+
+    /**
+     * Preferred function calling behavior ('BLOCKING' | 'NON_BLOCKING').
+     */
+    Behavior?: 'BLOCKING' | 'NON_BLOCKING';
+}
+
+/**
+ * The `LLM` section — knobs the LLM drivers and the prompt runner consume at call time.
+ *
+ * Every flag here is TRI-STATE (`boolean | null | absent`), and the three differ. The cascade
+ * REPLACES on any explicit value (including `null`) and only skips a layer that OMITS the property.
+ * So absent means "inherit", while an explicit value at a higher layer overrides a lower one even
+ * when that value is `false`.
+ *
+ * Properties are marked with the layers that HONOR them. Setting one at a layer that does not honor
+ * it is inert rather than an error — deliberate tolerance, so a knob can move between layers
+ * without a schema change.
+ *
+ * Deliberately NO index signature: this interface must stay structurally identical to the JSONType
+ * source, because CodeGen emits per-entity copies of that source and runtime code assigns those
+ * generated types straight into this one. An index signature here (and not there) makes the two
+ * incompatible. Unknown keys in stored JSON still round-trip fine at runtime — the parse is
+ * tolerant; what is lost is only a compile-time affordance nothing needs.
+ */
+export interface LLMConfigurationSettings {
+    /**
+     * **Catalog layers only.** Whether this model — or this vendor's serving of it — supports native
+     * tool/function calling. CAPABILITY flag, and a hard gate: no policy or preference at any layer
+     * can force tools onto a (model, vendor) whose resolved value is not true.
+     *
+     * Set `false` only for a model or serving path verified NOT to support tools; leave absent when
+     * support is unknown, because absent is the honest value and it inherits.
+     */
+    SupportsNativeToolCalling?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether prompts run against this model default to native tool calling
+     * when they express no preference of their own. POLICY flag — subordinate to
+     * {@link LLMConfigurationSettings.SupportsNativeToolCalling}.
+     */
+    DefaultToNativeToolCalling?: boolean | null;
+
+    /**
+     * **Prompt layers only.** Whether THIS prompt asks for native tool calling. PREFERENCE — it
+     * outranks the catalog's `DefaultToNativeToolCalling` and is still subordinate to the capability
+     * gate. Absent means "no preference; fall through to the model's default".
+     */
+    UseNativeToolCalling?: boolean | null;
+
+    /**
+     * **Catalog layers only.** How control flow is expressed when a request resolves to native tool
+     * calling. `'envelope'` (the default when absent) is the hybrid: Actions are tools, everything
+     * else — completion, chat, delegation, payload changes — is the JSON envelope. `'implicit'` is the
+     * implicit protocol: sub-agents, `payload_change_request` and `ask_user` are tools too, a tool call
+     * continues the loop, and plain text with no call ends the turn as task completion. Consulted only
+     * when the gate resolves native; subordinate to {@link LLMConfigurationSettings.SupportsNativeToolCalling}.
+     */
+    NativeControlFlow?: 'envelope' | 'implicit' | null;
+
+    /**
+     * **Catalog layers only.** Whether action results are returned to the model as native tool-result
+     * turns instead of a markdown "Action results" user message. Absent means `false`. Consulted
+     * only when the gate resolves native.
+     */
+    NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this model accepts a forced tool choice — a named tool or
+     * `'required'`. Absent means it does. When `false`, the prompt runner sends `'auto'` in place of a
+     * forced choice, and the agent's prompt is what steers the model to the tool.
+     */
+    SupportsForcedToolChoice?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
+     * it reuses a prior request only when that request's entire prompt is a prefix of the new one
+     * (OpenAI's automatic cache, xAI). Per-iteration framework state must then be appended, never
+     * replaced, or the reusable prefix ends at the system prompt. Absent or `false` means a block or
+     * segment cache (Anthropic's explicit breakpoints, Gemini's implicit cache, Cerebras's sliding
+     * cache), where a trailing per-iteration message can be replaced in place — the safe default,
+     * since replace-in-place costs a block-cache provider nothing whereas append-only only grows the
+     * context.
+     *
+     * Set `true` under `Configuration.ModelDefaults` on the VENDOR row of a prefix-cache provider so
+     * every model it serves inherits it (the vendor default beats the model's own bag); a MODEL-VENDOR
+     * row overrides it, so a host that serves many models (Fireworks, Cerebras, Azure, Bedrock) can
+     * carry a per-model answer that differs from the vendor default.
+     *
+     * Consumed by the loop agent's trailing runtime-state layout: see `TrailingStateMode` in
+     * `@memberjunction/ai-agents`.
+     */
+    PrefixPromptCache?: boolean | null;
+}
+
+/** Vision knobs. Reserved — no consumers yet. */
+export interface VisionConfigurationSettings {
+    [key: string]: unknown;
+}
+
+/** Audio (TTS/STT) knobs. Reserved — no consumers yet. */
+export interface AudioConfigurationSettings {
     [key: string]: unknown;
 }
 
 /**
- * The per-modality model-configuration bag stored (as JSON) in the `ModelConfiguration` column of
- * `MJ: AI Model Types`, `MJ: AI Models`, and `MJ: AI Model Vendors`. Sections are optional and
- * per-modality so one catalog row can configure everything its model does.
+ * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
+ * model accepts, so an oversized request can be refused with a clear message before the call,
+ * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
+ * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
+ * declared. A decision always needs at least two Choice options or Score levels; that minimum
+ * belongs to `BaseDecision`, not to this bag.
  */
-export interface AIModelConfiguration {
-    /** Text-generation knobs. Reserved. */
-    LLM?: LLMModelConfigurationSection;
-    /** Realtime (speech-to-speech) knobs — the first live section. */
-    Realtime?: RealtimeModelConfigurationSection;
-    /** Vision knobs. Reserved. */
-    Vision?: JSONObject;
-    /** Audio (TTS/STT) knobs. Reserved. */
-    Audio?: JSONObject;
+export interface DecisionConfigurationSettings {
+    /** The most questions one call may carry. */
+    MaxQuestionsPerCall?: number | null;
+    /** The most options one Choice question may list. */
+    MaxChoiceOptions?: number | null;
+    /** The most levels one Score question may list. */
+    MaxScoreLevels?: number | null;
+    /** The largest state the model reads, in tokens. */
+    MaxStateTokens?: number | null;
 }
 
+/**
+ * Privacy posture of the model deployment this configuration describes. Set it on the catalog layers
+ * (`MJ: AI Models`, `MJ: AI Model Vendors`, a vendor's `ModelDefaults`): data retention is a property of
+ * how a model is SERVED, so the vendor row is usually where it is true.
+ */
+export interface PrivacyConfigurationSettings {
+    /**
+     * Whether this model is served under a zero-data-retention agreement: the provider does not store
+     * prompts, audio, images or outputs beyond serving the request. `true` is a positive claim that
+     * somebody verified; absent, `null` and `false` all mean "not declared", never "retained", because
+     * an undeclared model is not known to be bad. It is read by realtime channel exposure policy:
+     * an agent that requires zero data retention for a channel's `'state'` or `'pixels'` exposure has
+     * that exposure lowered on any model that does not declare `true` here.
+     */
+    ZeroDataRetention?: boolean | null;
+}
+
+/**
+ * The per-modality bag common to every AI configuration column. Sections are optional and
+ * per-modality so one row can configure everything the thing it describes does.
+ */
+export interface AIConfigurationSections {
+    /** Text-generation knobs. */
+    LLM?: LLMConfigurationSettings | null;
+    /** Realtime (speech-to-speech) knobs. */
+    Realtime?: RealtimeConfigurationSettings | null;
+    /** Vision knobs. Reserved. */
+    Vision?: VisionConfigurationSettings | null;
+    /** Audio (TTS/STT) knobs. Reserved. */
+    Audio?: AudioConfigurationSettings | null;
+    /** Typed-decision limits. Honored at the catalog layers. */
+    Decision?: DecisionConfigurationSettings | null;
+    /** Privacy posture of the model deployment. Honored at the catalog layers. */
+    Privacy?: PrivacyConfigurationSettings | null;
+}
+
+/**
+ * The `ModelConfiguration` column on `MJ: AI Model Types`, `MJ: AI Models` and
+ * `MJ: AI Model Vendors` — the model-catalog cascade.
+ */
+export type AIModelConfiguration = AIConfigurationSections;
+
+/**
+ * The `PromptConfiguration` column on `MJ: AI Prompts` — per-prompt call-time knobs, layered on top of
+ * the resolved model-catalog configuration by the prompt runner.
+ */
+export type AIPromptConfiguration = AIConfigurationSections;
+
+/**
+ * The `PromptConfiguration` column on `MJ: AI Prompt Models` — the most specific layer, overriding both
+ * the prompt's own bag and the model catalog for this one (prompt, model) pairing.
+ */
+export type AIPromptModelConfiguration = AIConfigurationSections;
+
+/** @deprecated Renamed to {@link RealtimeConfigurationSettings}; the sections are shared now. */
+export type RealtimeModelConfigurationSection = RealtimeConfigurationSettings;
+
+/** @deprecated Renamed to {@link LLMConfigurationSettings}; the sections are shared now. */
+export type LLMModelConfigurationSection = LLMConfigurationSettings;
 /**
  * TOLERANTLY parses one `ModelConfiguration` column value. Returns `null` — never throws — for
  * absent, blank, malformed, or non-object payloads, so a bad catalog row contributes nothing to
@@ -105,20 +471,52 @@ export interface AIModelConfiguration {
  * @returns The parsed configuration, or `null` when the layer contributes nothing.
  */
 export function ParseModelConfiguration(json: string | null | undefined): AIModelConfiguration | null {
+    return parseConfigurationBag<AIModelConfiguration>(json, 'ParseModelConfiguration', 'ModelConfiguration');
+}
+
+/**
+ * `MJ: AI Vendors . Configuration` — the vendor's own configuration bag (lockstep with
+ * `IAIVendorConfiguration` in the metadata interface). General-purpose; its first key,
+ * {@link AIVendorConfiguration.ModelDefaults}, is the vendor layer of the model-configuration cascade.
+ */
+export interface AIVendorConfiguration {
+    /**
+     * The default model configuration for every model this vendor serves. Resolved ABOVE the
+     * model's own bag and BELOW the model-vendor row (the tie-breaker); merged per key, so it only
+     * touches the keys it sets.
+     */
+    ModelDefaults?: AIModelConfiguration | null;
+}
+
+/**
+ * Tolerant parse of one `AIVendor.Configuration` column value — the same contract as
+ * {@link ParseModelConfiguration}: absent, blank, malformed or non-object JSON contributes nothing.
+ */
+export function ParseVendorConfiguration(json: string | null | undefined): AIVendorConfiguration | null {
+    return parseConfigurationBag<AIVendorConfiguration>(json, 'ParseVendorConfiguration', 'Configuration');
+}
+
+/** Shared tolerant parse: a plain object or nothing, never a throw. */
+function parseConfigurationBag<T>(json: string | null | undefined, caller: string, column: string): T | null {
     if (typeof json !== 'string' || json.trim().length === 0) {
         return null;
     }
     try {
         const parsed: unknown = JSON.parse(json);
-        return IsPlainObject(parsed) ? (parsed as AIModelConfiguration) : null;
-    } catch {
+        if (IsPlainObject(parsed)) {
+            return parsed as T;
+        }
+        console.warn(`[${caller}] ${column} JSON is not a plain object; skipping layer.`);
+        return null;
+    } catch (err) {
+        console.warn(`[${caller}] Failed to parse ${column} JSON; skipping malformed layer:`, err);
         return null;
     }
 }
 
 /**
  * Resolves the EFFECTIVE model configuration by deep-merging the catalog layers, base first —
- * type default < model < model-vendor. Merge semantics are identical to the realtime config
+ * type default < model < vendor default < model-vendor. Merge semantics are identical to the realtime config
  * cascade (`DeepMergeConfigs` in `@memberjunction/ai-agents` — duplicated here because package
  * layering runs the other way):
  *
@@ -164,3 +562,51 @@ function mergeInto(target: JSONObject, source: JSONObject): void {
         }
     }
 }
+
+/**
+ * Whether an effective model configuration declares the model is served under zero data retention
+ * (`Privacy.ZeroDataRetention === true`). Absent, `null` and `false` all read as "not declared". Read
+ * it through {@link ResolveEffectiveModelConfiguration} (or `AIEngineBase.GetEffectiveModelConfiguration`)
+ * so the most specific layer's answer wins.
+ */
+export function IsZeroDataRetention(config: AIModelConfiguration | null | undefined): boolean {
+    return config?.Privacy?.ZeroDataRetention === true;
+}
+
+/**
+ * Whether an effective model configuration declares a byte-prefix prompt cache
+ * (`LLM.PrefixPromptCache === true`). Absent, `null` or `false` all mean a block cache. Read through
+ * {@link ResolveEffectiveModelConfiguration} (or `AIEngineBase.GetEffectiveModelConfiguration`) so
+ * the most specific layer's answer wins.
+ */
+export function IsPrefixPromptCache(config: AIModelConfiguration | null | undefined): boolean {
+    return config?.LLM?.PrefixPromptCache === true;
+}
+
+/**
+ * Resolves whether a realtime model/session is full-duplex.
+ *
+ * Resolution order:
+ * 1. The cascaded metadata value (`modelConfig.Realtime.FullDuplex`) if explicitly set (boolean).
+ * 2. Otherwise falls back to the driver capability (`driverCapabilities?.FullDuplex === true`).
+ *
+ * @param modelConfig The effective model configuration (or raw Realtime configuration section).
+ * @param driverCapabilities Optional capabilities declared by the realtime session/driver.
+ * @returns Whether full-duplex mode is active for this model/session.
+ */
+export function ResolveIsModelFullDuplex(
+    modelConfig?: { Realtime?: { FullDuplex?: boolean | null } | null } | { FullDuplex?: boolean | null } | null,
+    driverCapabilities?: { FullDuplex?: boolean | null } | boolean | null
+): boolean {
+    if (modelConfig) {
+        const realtime = 'Realtime' in modelConfig ? modelConfig.Realtime : (modelConfig as { FullDuplex?: boolean | null });
+        if (typeof realtime?.FullDuplex === 'boolean') {
+            return realtime.FullDuplex;
+        }
+    }
+    if (typeof driverCapabilities === 'boolean') {
+        return driverCapabilities;
+    }
+    return driverCapabilities?.FullDuplex === true;
+}
+

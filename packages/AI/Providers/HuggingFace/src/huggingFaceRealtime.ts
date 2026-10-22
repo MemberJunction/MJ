@@ -16,8 +16,10 @@
 
 import {
     BaseRealtimeModel,
+    HttpOriginToWs as CoreHttpOriginToWs,
     RealtimeProxyRegistry,
     REALTIME_PROXY_PATH,
+    ResolveRealtimeProxyBaseWsUrl,
     type ClientRealtimeSessionConfig,
     type IRealtimeSession,
     type RealtimeSessionParams,
@@ -80,6 +82,9 @@ export const HUGGINGFACE_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     supportsVoiceOutput: true,
     // The compat layer has no create_response gating — no live turn-mode reconfiguration.
     supportsLiveReconfigure: false,
+    // Self-hosted speech-to-speech compat layers use fixed toolsets declared at session start.
+    // Dynamic tool set projection (per-agent direct actions) is not supported.
+    supportsDynamicToolSet: false,
     unexpectedCloseMessage: 'HuggingFace realtime session closed unexpectedly',
     // The cascade's own VAD stage governs turn taking — no wire-level turn modes to request, so
     // a normalized `turnDetection` request from the catalog/config cascade is diag-logged + dropped.
@@ -116,6 +121,7 @@ export const HUGGINGFACE_REALTIME_PROFILE: OpenAIRealtimeProfile = {
  */
 @RegisterClass(BaseRealtimeModel, 'HuggingFaceRealtime')
 export class HuggingFaceRealtime extends OpenAIRealtime {
+    public static override readonly SupportsDynamicToolSet = HUGGINGFACE_REALTIME_PROFILE.supportsDynamicToolSet;
     /**
      * @param apiKey The upstream key, or a keyless sentinel (`none` / `self-hosted` / `local` / `n/a`)
      * for unauthenticated self-hosted endpoints. The inherited SDK client is never used for the
@@ -235,7 +241,7 @@ export class HuggingFaceRealtime extends OpenAIRealtime {
         if (tools.length > 0) {
             session['tools'] = tools.map((tool) => HuggingFaceRealtime.MapToolToFunction(tool));
         }
-        const audio = HuggingFaceRealtime.BuildAudioConfig(params.Config ?? {});
+        const audio = HuggingFaceRealtime.buildAudioConfig(params.Config ?? {});
         if (Object.keys(audio).length > 0) {
             session['audio'] = audio;
         }
@@ -243,7 +249,7 @@ export class HuggingFaceRealtime extends OpenAIRealtime {
     }
 
     /** Assembles the OpenAI-Realtime `audio` sub-object (output voice + optional input transcription). */
-    private static BuildAudioConfig(config: JSONObject): JSONObject {
+    private static buildAudioConfig(config: JSONObject): JSONObject {
         const audio: JSONObject = {};
         const voice = config['voice'];
         if (typeof voice === 'string' && voice.trim().length > 0) {
@@ -325,34 +331,22 @@ export class HuggingFaceRealtime extends OpenAIRealtime {
     private static readonly NO_AUTH_SENTINELS: ReadonlySet<string> = new Set(['none', 'self-hosted', 'local', 'n/a']);
 
     /**
-     * Resolves the browser-facing proxy ORIGIN as a `ws(s)://host[:port]` string. Precedence:
+     * Resolves the browser-facing proxy ORIGIN as a `ws(s)://host[:port]` string through the shared
+     * {@link ResolveRealtimeProxyBaseWsUrl} (`@memberjunction/ai`), which the relay drivers use too. Precedence:
      * `params.Config.proxyBaseUrl` override → `MJAPI_PUBLIC_URL` → `GRAPHQL_BASE_URL` + `GRAPHQL_PORT`
      * (the same env vars MJAPI derives its public URL from). Any path on the source URL is dropped — only
      * the origin is used, and {@link REALTIME_PROXY_PATH} is appended by the caller.
      */
     protected resolveProxyBaseWsUrl(params: RealtimeSessionParams): string {
-        const override = params.Config?.['proxyBaseUrl'];
-        const source =
-            (typeof override === 'string' && override.trim().length > 0 ? override.trim() : '') ||
-            HuggingFaceRealtime.readEnv('MJAPI_PUBLIC_URL') ||
-            `${HuggingFaceRealtime.readEnv('GRAPHQL_BASE_URL') ?? 'http://localhost'}:${HuggingFaceRealtime.readEnv('GRAPHQL_PORT') ?? '4000'}`;
-        return HuggingFaceRealtime.HttpOriginToWs(source);
+        return ResolveRealtimeProxyBaseWsUrl(params);
     }
 
-    /** Converts an http(s) URL (or origin) into a `ws(s)://host[:port]` origin, dropping any path. */
+    /**
+     * Converts an http(s) URL (or origin) into a `ws(s)://host[:port]` origin, dropping any path. Delegates to the
+     * shared `HttpOriginToWs` in `@memberjunction/ai`.
+     */
     public static HttpOriginToWs(source: string): string {
-        try {
-            const url = new URL(source);
-            const wsScheme = url.protocol === 'https:' || url.protocol === 'wss:' ? 'wss' : 'ws';
-            return `${wsScheme}://${url.host}`;
-        } catch {
-            // Not a parseable absolute URL — best-effort scheme swap, strip any trailing slash.
-            const trimmed = source.replace(/\/+$/, '');
-            if (trimmed.startsWith('wss://') || trimmed.startsWith('ws://')) {
-                return trimmed;
-            }
-            return trimmed.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://');
-        }
+        return CoreHttpOriginToWs(source);
     }
 
     /** Reads a process env var (indirected so tests can stub it and non-Node runtimes don't throw). */

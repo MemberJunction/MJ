@@ -2,7 +2,7 @@ import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
-import { createViolation } from '../lint-utils';
+import { CreateViolation } from '../lint-utils';
 
 /**
  * Rule: no-iife-wrapper
@@ -37,7 +37,7 @@ export class NoIifeWrapperRule extends BaseLintRule {
               const inner = callee.expression;
               if (t.isFunctionExpression(inner) || t.isArrowFunctionExpression(inner)) {
                 violations.push(
-                  createViolation(
+                  CreateViolation(
                     'no-iife-wrapper',
                     'critical',
                     statement,
@@ -87,7 +87,7 @@ function MyComponent({ utilities, styles, components }) {
             // Also check without ParenthesizedExpression (some parsers handle it differently)
             if (t.isFunctionExpression(callee) || t.isArrowFunctionExpression(callee)) {
               violations.push(
-                createViolation(
+                CreateViolation(
                   'no-iife-wrapper',
                   'critical',
                   statement,
@@ -141,7 +141,7 @@ function MyComponent({ utilities, styles, components }) {
               const callee = inner.callee;
               if (t.isFunctionExpression(callee) || t.isArrowFunctionExpression(callee)) {
                 violations.push(
-                  createViolation(
+                  CreateViolation(
                     'no-iife-wrapper',
                     'critical',
                     statement,
@@ -197,7 +197,7 @@ function MyComponent({ utilities, styles, components }) {
               const callee = decl.init.callee;
               if (t.isFunctionExpression(callee) || t.isArrowFunctionExpression(callee)) {
                 violations.push(
-                  createViolation(
+                  CreateViolation(
                     'no-iife-wrapper',
                     'critical',
                     decl,

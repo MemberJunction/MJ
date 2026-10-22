@@ -33,56 +33,91 @@ export class StandardLibraryManager {
   /**
    * Set a custom library configuration
    */
-  static setConfiguration(config: LibraryConfiguration): void {
+  static SetConfiguration(config: LibraryConfiguration): void {
     this.configuration = config;
+  }
+
+  /** @deprecated Use {@link SetConfiguration}. */
+  static setConfiguration(config: LibraryConfiguration): void {
+    return this.SetConfiguration(config);
   }
   
   /**
    * Get the current library configuration
    */
-  static getConfiguration(): LibraryConfiguration {
+  static GetConfiguration(): LibraryConfiguration {
     return this.configuration;
+  }
+
+  /** @deprecated Use {@link GetConfiguration}. */
+  static getConfiguration(): LibraryConfiguration {
+    return this.GetConfiguration();
   }
   
   /**
    * Get all enabled libraries
    */
-  static getEnabledLibraries(): ExternalLibraryConfig[] {
+  static GetEnabledLibraries(): ExternalLibraryConfig[] {
     return this.configuration.libraries.filter(lib => lib.isEnabled);
+  }
+
+  /** @deprecated Use {@link GetEnabledLibraries}. */
+  static getEnabledLibraries(): ExternalLibraryConfig[] {
+    return this.GetEnabledLibraries();
   }
   
   /**
    * Get libraries by category
    */
-  static getLibrariesByCategory(category: ExternalLibraryConfig['category']): ExternalLibraryConfig[] {
+  static GetLibrariesByCategory(category: ExternalLibraryConfig['category']): ExternalLibraryConfig[] {
     return this.configuration.libraries.filter(lib => lib.category === category && lib.isEnabled);
+  }
+
+  /** @deprecated Use {@link GetLibrariesByCategory}. */
+  static getLibrariesByCategory(category: ExternalLibraryConfig['category']): ExternalLibraryConfig[] {
+    return this.GetLibrariesByCategory(category);
   }
   
   /**
    * Get core libraries (runtime essentials)
    */
-  static getCoreLibraries(): ExternalLibraryConfig[] {
+  static GetCoreLibraries(): ExternalLibraryConfig[] {
     return this.configuration.libraries.filter(lib => lib.isCore && lib.isEnabled);
+  }
+
+  /** @deprecated Use {@link GetCoreLibraries}. */
+  static getCoreLibraries(): ExternalLibraryConfig[] {
+    return this.GetCoreLibraries();
   }
   
   /**
    * Get component libraries (non-runtime)
    */
-  static getComponentLibraries(): ExternalLibraryConfig[] {
+  static GetComponentLibraries(): ExternalLibraryConfig[] {
     return this.configuration.libraries.filter(lib => !lib.isRuntimeOnly && lib.isEnabled);
+  }
+
+  /** @deprecated Use {@link GetComponentLibraries}. */
+  static getComponentLibraries(): ExternalLibraryConfig[] {
+    return this.GetComponentLibraries();
   }
   
   /**
    * Get library by ID
    */
-  static getLibraryById(id: string): ExternalLibraryConfig | undefined {
+  static GetLibraryById(id: string): ExternalLibraryConfig | undefined {
     return this.configuration.libraries.find(lib => lib.id === id);
+  }
+
+  /** @deprecated Use {@link GetLibraryById}. */
+  static getLibraryById(id: string): ExternalLibraryConfig | undefined {
+    return this.GetLibraryById(id);
   }
   
   /**
    * Get library URLs as a simple object (for backward compatibility)
    */
-  static getLibraryUrls(): Record<string, string> {
+  static GetLibraryUrls(): Record<string, string> {
     const urls: Record<string, string> = {};
     this.configuration.libraries
       .filter(lib => lib.isEnabled)
@@ -96,12 +131,22 @@ export class StandardLibraryManager {
       });
     return urls;
   }
+
+  /** @deprecated Use {@link GetLibraryUrls}. */
+  static getLibraryUrls(): Record<string, string> {
+    return this.GetLibraryUrls();
+  }
   
   /**
    * Reset to default configuration
    */
-  static resetToDefault(): void {
+  static ResetToDefault(): void {
     this.configuration = DEFAULT_LIBRARY_CONFIG;
+  }
+
+  /** @deprecated Use {@link ResetToDefault}. */
+  static resetToDefault(): void {
+    return this.ResetToDefault();
   }
 }
 
@@ -110,7 +155,7 @@ export class StandardLibraryManager {
  * Creates a standard libraries object for browser environments
  * Dynamically collects all libraries based on current configuration
  */
-export function createStandardLibraries(): StandardLibraries {
+export function CreateStandardLibraries(): StandardLibraries {
   if (typeof window === 'undefined') {
     // Return empty object in Node.js environments
     return {};
@@ -127,4 +172,9 @@ export function createStandardLibraries(): StandardLibraries {
   });
   
   return libs;
+}
+
+/** @deprecated Use {@link CreateStandardLibraries}. */
+export function createStandardLibraries(): StandardLibraries {
+  return CreateStandardLibraries();
 }

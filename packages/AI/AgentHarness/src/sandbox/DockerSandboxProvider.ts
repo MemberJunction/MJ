@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { ISandboxProvider, SandboxConfig, SandboxHandle, WorkspaceKey } from './ISandboxProvider.js';
 import { HarnessProcess, HarnessProcessSpec, SandboxExecutor } from './SandboxExecutor.js';
-import { wrapChildProcess } from './ChildProcessExecutor.js';
+import { WrapChildProcess } from './ChildProcessExecutor.js';
 import { HarnessNetworkPolicy } from '../types.js';
 
 /** Path the host workspace is mounted at inside the container. */
@@ -182,7 +182,7 @@ export class DockerExecExecutor implements SandboxExecutor {
         args.push(this.containerName, spec.Command, ...spec.Args);
 
         const child = spawn('docker', args, { signal: spec.CancellationToken });
-        return wrapChildProcess(child);
+        return WrapChildProcess(child);
     }
 }
 

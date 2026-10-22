@@ -556,6 +556,9 @@ export class SmokeTestPhase {
       const response = await fetch(healthUrl, {
         signal: AbortSignal.timeout(5000),
       });
+      // Never read: only the status matters here. Cancel the body so the
+      // connection isn't held open pending consumption.
+      void response.body?.cancel().catch(() => {});
       return response.ok || response.status < 500;
     } catch {
       return false;

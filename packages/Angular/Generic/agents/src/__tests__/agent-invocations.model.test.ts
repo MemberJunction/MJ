@@ -15,7 +15,7 @@ import {
     IsUUID,
     ResolveInvocationState,
     SummarizeInvocations,
-    joinWithOr,
+    JoinWithOr,
     type AgentInvocationPathway,
 } from '../lib/components/agent-invocations.model';
 
@@ -187,10 +187,10 @@ describe('DescribeInvocationTypes', () => {
 
 describe('joinWithOr', () => {
     it('reads the way a person would say it', () => {
-        expect(joinWithOr([])).toBe('');
-        expect(joinWithOr(['a'])).toBe('a');
-        expect(joinWithOr(['a', 'b'])).toBe('a or b');
-        expect(joinWithOr(['a', 'b', 'c'])).toBe('a, b or c');
+        expect(JoinWithOr([])).toBe('');
+        expect(JoinWithOr(['a'])).toBe('a');
+        expect(JoinWithOr(['a', 'b'])).toBe('a or b');
+        expect(JoinWithOr(['a', 'b', 'c'])).toBe('a, b or c');
     });
 });
 

@@ -68,11 +68,11 @@ export const TEST_FORMAT_FLAG = Flags.string({
 /** Inputs to {@link resolveLegacyFormat}. */
 export interface LegacyFormatInput<TLegacy extends string> {
   /** The canonical `--format` value, if the caller passed one. */
-  format?: string;
+  Format?: string;
   /** The family's own flag value as oclif parsed it (its default included). */
-  legacy: TLegacy;
+  Legacy: TLegacy;
   /** What that flag falls back to when nothing was specified. */
-  legacyDefault: TLegacy;
+  LegacyDefault: TLegacy;
   /**
    * Whether the caller actually typed the family's flag. Pass
    * `metadata.flags.<name>?.setFromDefault === false` from the command's `parse()`.
@@ -82,13 +82,13 @@ export interface LegacyFormatInput<TLegacy extends string> {
    * all — so a piped `mj ai agents list -o compact` would silently return json,
    * overriding an explicit request. Always pass it from a real command.
    */
-  legacyWasExplicit?: boolean;
+  LegacyWasExplicit?: boolean;
   /** How each canonical format maps onto this family's vocabulary. */
-  map: Record<OutputFormat, TLegacy>;
+  Map: Record<OutputFormat, TLegacy>;
   /** Defaults to `process.stdout.isTTY`. Injectable for tests. */
-  stdoutIsTTY?: boolean;
+  StdoutIsTTY?: boolean;
   /** Defaults to `process.env`. Injectable for tests. */
-  env?: NodeJS.ProcessEnv;
+  env?: NodeJS.ProcessEnv;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /**
@@ -104,25 +104,30 @@ export interface LegacyFormatInput<TLegacy extends string> {
  * `--format=markdown` or `-o table` keeps getting exactly what it always got.
  * Rule 4 only fires when the caller expressed no preference at all, so it can
  * never override an intentional choice — which is precisely why rule 2 needs
- * {@link LegacyFormatInput.legacyWasExplicit} rather than a value comparison.
+ * {@link LegacyFormatInput.LegacyWasExplicit} rather than a value comparison.
  */
-export function resolveLegacyFormat<TLegacy extends string>(input: LegacyFormatInput<TLegacy>): TLegacy {
-  const explicitCanonical = NormalizeFormatAlias(input.format);
-  if (explicitCanonical) return input.map[explicitCanonical];
+export function ResolveLegacyFormat<TLegacy extends string>(input: LegacyFormatInput<TLegacy>): TLegacy {
+  const explicitCanonical = NormalizeFormatAlias(input.Format);
+  if (explicitCanonical) return input.Map[explicitCanonical];
 
   // The caller typed the family's own flag — an explicit choice that outranks any
   // inference we could make, even when the value they typed IS the default.
-  const legacyWasExplicit = input.legacyWasExplicit ?? input.legacy !== input.legacyDefault;
-  if (legacyWasExplicit) return input.legacy;
+  const legacyWasExplicit = input.LegacyWasExplicit ?? input.Legacy !== input.LegacyDefault;
+  if (legacyWasExplicit) return input.Legacy;
 
   const { format, reason } = ResolveOutputFormat({
-    stdoutIsTTY: input.stdoutIsTTY,
+    stdoutIsTTY: input.StdoutIsTTY,
     env: input.env,
   });
 
   // 'tty-default' means nothing at all asked for a format — keep the family's own
   // default rather than flattening every human rendering to a generic 'text'.
-  return reason === 'tty-default' ? input.legacyDefault : input.map[format];
+  return reason === 'tty-default' ? input.LegacyDefault : input.Map[format];
+}
+
+/** @deprecated Use {@link ResolveLegacyFormat}. */
+export function resolveLegacyFormat<TLegacy extends string>(input: LegacyFormatInput<TLegacy>): TLegacy {
+  return ResolveLegacyFormat(input);
 }
 
 /** Canonical → `mj test *` vocabulary. */

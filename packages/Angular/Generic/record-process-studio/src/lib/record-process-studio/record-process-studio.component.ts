@@ -8,6 +8,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnInit, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { RunView } from '@memberjunction/core';
+import type { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { EntityActionUXHostComponent, type EntityActionUXContext, type EntityActionUXResult } from '@memberjunction/ng-entity-action-ux';
 import { MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { RecordProcessEditorComponent } from '../record-process-editor/record-process-editor.component';
@@ -19,9 +20,9 @@ interface ProcessRow {
     Description?: string;
     Entity: string;
     EntityID: string;
-    WorkType: string;
-    Status: string;
-    ScopeType: string;
+    WorkType: MJRecordProcessEntity['WorkType'];
+    Status: MJRecordProcessEntity['Status'];
+    ScopeType: MJRecordProcessEntity['ScopeType'];
     ScopeFilter?: string;
     ScopeViewID?: string;
     ScopeListID?: string;
@@ -137,7 +138,7 @@ export class RecordProcessStudioComponent extends BaseAngularComponent implement
     public RunDriver: { DriverClass: string; Context: EntityActionUXContext } | null = null;
 
     async ngOnInit(): Promise<void> {
-        await this.reload();
+        await this.Reload();
     }
 
     get Filtered(): ProcessRow[] {
@@ -146,7 +147,7 @@ export class RecordProcessStudioComponent extends BaseAngularComponent implement
         return this.Processes.filter((p) => p.Name.toLowerCase().includes(q) || (p.Entity ?? '').toLowerCase().includes(q));
     }
 
-    async reload(): Promise<void> {
+    async Reload(): Promise<void> {
         this.Loading = true; this.cdr.detectChanges();
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const filter = this.EntityID ? `EntityID='${this.EntityID}'` : '';
@@ -162,12 +163,32 @@ export class RecordProcessStudioComponent extends BaseAngularComponent implement
         this.cdr.detectChanges();
     }
 
-    onSearch(event: Event): void { this.Search = (event.target as HTMLInputElement).value; this.cdr.detectChanges(); }
+    /** @deprecated Use {@link Reload}. */
+    async reload(): Promise<void> {
+        return this.Reload();
+    }
+
+    OnSearch(event: Event): void { this.Search = (event.target as HTMLInputElement).value; this.cdr.detectChanges(); }
+
+    /** @deprecated Use {@link OnSearch}. */
+    onSearch(event: Event): void {
+        return this.OnSearch(event);
+    }
 
     New(): void { this.EditingID = null; this.Mode = 'edit'; this.cdr.detectChanges(); }
     Edit(p: ProcessRow): void { this.EditingID = p.ID; this.Mode = 'edit'; this.cdr.detectChanges(); }
-    backToList(): void { this.Mode = 'list'; this.EditingID = null; this.cdr.detectChanges(); }
-    async onSaved(): Promise<void> { this.backToList(); await this.reload(); }
+    BackToList(): void { this.Mode = 'list'; this.EditingID = null; this.cdr.detectChanges(); }
+
+    /** @deprecated Use {@link BackToList}. */
+    backToList(): void {
+        return this.BackToList();
+    }
+    async OnSaved(): Promise<void> { this.BackToList(); await this.Reload(); }
+
+    /** @deprecated Use {@link OnSaved}. */
+    async onSaved(): Promise<void> {
+        return this.OnSaved();
+    }
 
     /** Runs a process on demand against its default scope, via the dry-run → confirm runner. */
     Run(p: ProcessRow): void {
@@ -189,9 +210,19 @@ export class RecordProcessStudioComponent extends BaseAngularComponent implement
         this.cdr.detectChanges();
     }
 
-    onRunDone(_r: EntityActionUXResult): void { this.RunDriver = null; this.cdr.detectChanges(); }
+    OnRunDone(_r: EntityActionUXResult): void { this.RunDriver = null; this.cdr.detectChanges(); }
 
-    workLabel(workType: string): string {
+    /** @deprecated Use {@link OnRunDone}. */
+    onRunDone(_r: EntityActionUXResult): void {
+        return this.OnRunDone(_r);
+    }
+
+    WorkLabel(workType: string): string {
         return workType === 'FieldRules' ? 'Field Rules' : workType;
+    }
+
+    /** @deprecated Use {@link WorkLabel}. */
+    workLabel(workType: string): string {
+        return this.WorkLabel(workType);
     }
 }

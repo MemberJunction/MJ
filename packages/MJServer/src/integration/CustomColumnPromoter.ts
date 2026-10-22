@@ -133,7 +133,7 @@ interface WorkItem {
 }
 
 /** Registers the post-sync custom-column promotion hook on the IntegrationEngine singleton. */
-export function registerIntegrationCustomColumnPromoter(): void {
+export function RegisterIntegrationCustomColumnPromoter(): void {
     IntegrationEngine.Instance.SetPostSyncSchemaPromotionCallback(async (ctx) => {
         const user = ctx.ContextUser as UserInfo;
         const provider = ctx.Provider as IMetadataProvider | undefined;
@@ -162,6 +162,11 @@ export function registerIntegrationCustomColumnPromoter(): void {
     // Verbose-only: this is a boot-time registration confirmation, not operator-actionable at
     // standard level. Routes through the global verbose gate (set from the server's telemetry.level).
     LogStatusEx({ message: '[CustomColumnPromoter] Registered post-sync custom-column promotion hook (auto-promote opt-in, default OFF).', verboseOnly: true });
+}
+
+/** @deprecated Use {@link RegisterIntegrationCustomColumnPromoter}. */
+export function registerIntegrationCustomColumnPromoter(): void {
+    return RegisterIntegrationCustomColumnPromoter();
 }
 
 /** Reads the per-connection `autoPromoteCustomColumns` flag (default false = capture-only, on-demand promotion). */
@@ -295,7 +300,12 @@ export class IntegrationCustomColumnPromoter {
         // step with the database.
         let batchResults: RSUPipelineResult[] = [];
         if (batchInputs.length > 0) {
-            const batch = await RuntimeSchemaManager.Instance.RunPipelineBatch(batchInputs);
+            // Retrying variant. This runs UNATTENDED, mid-sync, with no operator watching: a
+            // transient ExecuteMigration / RunCodeGen / CompileTypeScript / RestartMJAPI failure
+            // drops the whole promotion, and the columns simply stay in overflow until something
+            // triggers a promotion again. The wrapper replays only those four steps and only while
+            // nothing in the batch was applied, so a partially-applied batch is still returned as-is.
+            const batch = await RuntimeSchemaManager.Instance.RunPipelineBatchWithRetry(batchInputs);
             batchResults = batch.Results ?? [];
             // M3: make the freshly-created EntityFields + regenerated sprocs visible in-process
             // ONCE for the whole batch. CRITICAL: the spread below builds sproc calls from this

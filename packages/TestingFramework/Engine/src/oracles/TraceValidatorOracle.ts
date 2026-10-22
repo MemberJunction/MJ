@@ -73,7 +73,7 @@ export class TraceValidatorOracle implements IOracle {
             const stepsResult = await rv.RunView<MJAIAgentRunStepEntity>({
                 EntityName: 'MJ: AI Agent Run Steps',
                 ExtraFilter: `AgentRunID='${agentRun.ID}'`,
-                OrderBy: 'Sequence ASC',
+                OrderBy: 'StepNumber ASC',
                 ResultType: 'entity_object'
             }, input.contextUser);
 

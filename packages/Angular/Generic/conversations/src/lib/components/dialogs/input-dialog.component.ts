@@ -103,20 +103,110 @@ import { Component, Input } from '@angular/core';
   `]
 })
 export class InputDialogComponent {
-  @Input() message: string = '';
-  @Input() inputLabel: string = '';
-  @Input() inputType: 'text' | 'textarea' | 'number' | 'email' = 'text';
-  @Input() placeholder: string = '';
-  @Input() required: boolean = false;
-  @Input() value: string = '';
-  @Input() secondInputLabel: string = '';
-  @Input() secondInputPlaceholder: string = '';
-  @Input() secondInputRequired: boolean = false;
-  @Input() secondValue: string = '';
+  @Input() Message: string = '';
 
-  onEnterKey(event: Event): void {
+  /** @deprecated Use {@link Message}. */
+  @Input() set message(value: string) {
+    this.Message = value;
+  }
+  /** @deprecated Use {@link Message}. */
+  get message(): string {
+    return this.Message;
+  }
+  @Input() InputLabel: string = '';
+
+  /** @deprecated Use {@link InputLabel}. */
+  @Input() set inputLabel(value: string) {
+    this.InputLabel = value;
+  }
+  /** @deprecated Use {@link InputLabel}. */
+  get inputLabel(): string {
+    return this.InputLabel;
+  }
+  @Input() InputType: 'text' | 'textarea' | 'number' | 'email' = 'text';
+
+  /** @deprecated Use {@link InputType}. */
+  @Input() set inputType(value: 'text' | 'textarea' | 'number' | 'email') {
+    this.InputType = value;
+  }
+  /** @deprecated Use {@link InputType}. */
+  get inputType(): 'text' | 'textarea' | 'number' | 'email' {
+    return this.InputType;
+  }
+  @Input() Placeholder: string = '';
+
+  /** @deprecated Use {@link Placeholder}. */
+  @Input() set placeholder(value: string) {
+    this.Placeholder = value;
+  }
+  /** @deprecated Use {@link Placeholder}. */
+  get placeholder(): string {
+    return this.Placeholder;
+  }
+  @Input() Required: boolean = false;
+
+  /** @deprecated Use {@link Required}. */
+  @Input() set required(value: boolean) {
+    this.Required = value;
+  }
+  /** @deprecated Use {@link Required}. */
+  get required(): boolean {
+    return this.Required;
+  }
+  @Input() Value: string = '';
+
+  /** @deprecated Use {@link Value}. */
+  @Input() set value(value: string) {
+    this.Value = value;
+  }
+  /** @deprecated Use {@link Value}. */
+  get value(): string {
+    return this.Value;
+  }
+  @Input() SecondInputLabel: string = '';
+
+  /** @deprecated Use {@link SecondInputLabel}. */
+  @Input() set secondInputLabel(value: string) {
+    this.SecondInputLabel = value;
+  }
+  /** @deprecated Use {@link SecondInputLabel}. */
+  get secondInputLabel(): string {
+    return this.SecondInputLabel;
+  }
+  @Input() SecondInputPlaceholder: string = '';
+
+  /** @deprecated Use {@link SecondInputPlaceholder}. */
+  @Input() set secondInputPlaceholder(value: string) {
+    this.SecondInputPlaceholder = value;
+  }
+  /** @deprecated Use {@link SecondInputPlaceholder}. */
+  get secondInputPlaceholder(): string {
+    return this.SecondInputPlaceholder;
+  }
+  @Input() SecondInputRequired: boolean = false;
+
+  /** @deprecated Use {@link SecondInputRequired}. */
+  @Input() set secondInputRequired(value: boolean) {
+    this.SecondInputRequired = value;
+  }
+  /** @deprecated Use {@link SecondInputRequired}. */
+  get secondInputRequired(): boolean {
+    return this.SecondInputRequired;
+  }
+  @Input() SecondValue: string = '';
+
+  /** @deprecated Use {@link SecondValue}. */
+  @Input() set secondValue(value: string) {
+    this.SecondValue = value;
+  }
+  /** @deprecated Use {@link SecondValue}. */
+  get secondValue(): string {
+    return this.SecondValue;
+  }
+
+  OnEnterKey(event: Event): void {
     const keyEvent = event as KeyboardEvent;
-    if (this.inputType !== 'textarea') {
+    if (this.InputType !== 'textarea') {
       keyEvent.preventDefault();
       // Trigger OK/primary button click in the MJ dialog
       const okButton = document.querySelector('.mj-dialog-actions .mj-btn--primary') as HTMLButtonElement;
@@ -126,11 +216,26 @@ export class InputDialogComponent {
     }
   }
 
-  getValue(): string {
-    return this.value.trim();
+  /** @deprecated Use {@link OnEnterKey}. */
+  onEnterKey(event: Event): void {
+    return this.OnEnterKey(event);
   }
 
+  GetValue(): string {
+    return this.Value.trim();
+  }
+
+  /** @deprecated Use {@link GetValue}. */
+  getValue(): string {
+    return this.GetValue();
+  }
+
+  GetSecondValue(): string {
+    return this.SecondValue.trim();
+  }
+
+  /** @deprecated Use {@link GetSecondValue}. */
   getSecondValue(): string {
-    return this.secondValue.trim();
+    return this.GetSecondValue();
   }
 }

@@ -2,7 +2,7 @@ import { JwtHeader, SigningKeyCallback, JwtPayload } from 'jsonwebtoken';
 import { configInfo } from '../config.js';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import sql from 'mssql';
-import { DatabaseProviderBase, Metadata, RoleInfo, UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, LogError, Metadata, RoleInfo, UserInfo } from '@memberjunction/core';
 import { NewUserBase } from './newUsers.js';
 import { MJGlobal } from '@memberjunction/global';
 import { MJUserEntity, MJUserEntityType } from '@memberjunction/core-entities';
@@ -13,8 +13,9 @@ export * from './APIKeyScopeAuth.js';
 export * from './scopeLimitedPrincipal.js';
 export * from './actingContextResolver.js';
 export * from './AuthProviderEngine.js';
+export * from './LoginScreenEngine.js';
 export * from './AuthProviderCatalogRouter.js';
-export { initializeAuthProviders, initializeAuthProvidersFromMetadata, refreshAuthProviders, validateAuthProvidersRegistered } from './initializeProviders.js';
+export { InitializeAuthProviders, initializeAuthProviders, InitializeAuthProvidersFromMetadata, initializeAuthProvidersFromMetadata, RefreshAuthProviders, refreshAuthProviders, ValidateAuthProvidersRegistered, validateAuthProvidersRegistered } from './initializeProviders.js';
 
 // This is a hard-coded forever constant due to internal migrations
 
@@ -58,7 +59,7 @@ const refreshUserCache = async () => {
  * the same domain with different audiences/client IDs), all unique audiences
  * are aggregated into an array. jwt.verify() natively accepts string | string[].
  */
-export const getValidationOptions = (issuer: string): { audience: string | string[]; jwksUri: string } | undefined => {
+export const GetValidationOptions = (issuer: string): { audience: string | string[]; jwksUri: string } | undefined => {
   const factory = AuthProviderFactory.Instance;
   const providers = factory.getAllByIssuer(issuer);
 
@@ -75,16 +76,19 @@ export const getValidationOptions = (issuer: string): { audience: string | strin
   };
 };
 
+/** @deprecated Use {@link GetValidationOptions}. */
+export const getValidationOptions = GetValidationOptions;
+
 /**
  * Backward compatible validationOptions object
  * @deprecated Use getValidationOptions() or AuthProviderRegistry instead
  */
 export const validationOptions: Record<string, { audience: string | string[]; jwksUri: string }> = new Proxy({}, {
   get: (target, prop: string) => {
-    return getValidationOptions(prop);
+    return GetValidationOptions(prop);
   },
   has: (target, prop: string) => {
-    return getValidationOptions(prop) !== undefined;
+    return GetValidationOptions(prop) !== undefined;
   },
   ownKeys: () => {
     const factory = AuthProviderFactory.Instance;
@@ -93,31 +97,31 @@ export const validationOptions: Record<string, { audience: string | string[]; jw
 });
 
 export class UserPayload {
-  aio?: string;
-  aud?: string;
-  exp?: number;
-  iat?: number;
-  iss?: string;
-  name?: string;
-  nbf?: number;
-  nonce?: string;
-  oid?: string;
-  preferred_username?: string;
-  rh?: string;
-  sub?: string;
-  tid?: string;
-  uti?: string;
-  ver?: string;
-  email?: string;
-  given_name?: string;
-  family_name?: string;
+  aio?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  aud?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  exp?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  iat?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  iss?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  name?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  nbf?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  nonce?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  oid?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  preferred_username?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  rh?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  sub?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  tid?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  uti?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  ver?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  email?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  given_name?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  family_name?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
   [key: string]: unknown; // Allow additional claims
 }
 
 /**
  * Gets signing keys for JWT validation
  */
-export const getSigningKeys = (issuer: string) => (header: JwtHeader, cb: SigningKeyCallback) => {
+export const GetSigningKeys = (issuer: string) => (header: JwtHeader, cb: SigningKeyCallback) => {
   const factory = AuthProviderFactory.Instance;
   
   // Initialize providers if not already done
@@ -138,10 +142,13 @@ export const getSigningKeys = (issuer: string) => (header: JwtHeader, cb: Signin
   provider.getSigningKey(header, cb);
 };
 
+/** @deprecated Use {@link GetSigningKeys}. */
+export const getSigningKeys = GetSigningKeys;
+
 /**
  * Extracts user information from JWT payload using the appropriate provider
  */
-export const extractUserInfoFromPayload = (payload: JwtPayload): {
+export const ExtractUserInfoFromPayload = (payload: JwtPayload): {
   email?: string;
   firstName?: string;
   lastName?: string;
@@ -181,19 +188,25 @@ export const extractUserInfoFromPayload = (payload: JwtPayload): {
   return provider.extractUserInfo(payload);
 };
 
-export const getSystemUser = async (dataSource?: sql.ConnectionPool, attemptCacheUpdateIfNeeded: boolean = true): Promise<UserInfo> => {
+/** @deprecated Use {@link ExtractUserInfoFromPayload}. */
+export const extractUserInfoFromPayload = ExtractUserInfoFromPayload;
+
+export const GetSystemUser = async (dataSource?: sql.ConnectionPool, attemptCacheUpdateIfNeeded: boolean = true): Promise<UserInfo> => {
   const systemUser = UserCache.Instance.GetSystemUser();
   if (!systemUser) {
     if (dataSource && attemptCacheUpdateIfNeeded) {
       console.warn(`System user not found in cache. Updating cache in attempt to find the user...`);
 
       await refreshUserCache();
-      return getSystemUser(dataSource, false); // try one more time but do not update cache next time if not found
+      return GetSystemUser(dataSource, false); // try one more time but do not update cache next time if not found
     }
     throw new Error(`System user ID '${UserCache.Instance.SYSTEM_USER_ID}' not found in database`);
   }
   return systemUser;
 };
+
+/** @deprecated Use {@link GetSystemUser}. */
+export const getSystemUser = GetSystemUser;
 
 /**
  * Extracts the lowercased domain portion of an email address.
@@ -231,7 +244,7 @@ const isDomainAuthorized = (domain: string): boolean =>
  *        authorization runs against the verified JWT's email domain instead. Retained for audit
  *        logging and for the recursive retry call.
  */
-export const verifyUserRecord = async (
+export const VerifyUserRecord = async (
   email?: string,
   firstName?: string,
   lastName?: string,
@@ -241,7 +254,14 @@ export const verifyUserRecord = async (
 ): Promise<UserInfo | undefined> => {
   if (!email) return undefined;
 
-  let user = UserCache.Instance.Users.find((u) => {
+  // Collect ALL matches rather than taking .find()'s first hit. Two User rows can share an email
+  // case-insensitively (see the duplicate-provisioning path below), and .find() then resolved to
+  // whichever row happened to sit earlier in UserCache.Instance.Users — i.e. database row order.
+  // That order changes when the cache is rebuilt, so an MJAPI restart silently moved a user onto a
+  // different record: their conversations, artifacts, items shared with them and their profile
+  // picture (UserImageURL lives on the User row) all vanished at once, and came back if the order
+  // flipped again. Observed in production 2026-09-15. Resolution must not depend on row order.
+  const emailMatches = UserCache.Instance.Users.filter((u) => {
     if (!u.Email || u.Email.trim() === '') {
       // this condition should never occur. If it doesn throw a console error including the user id
       // DB requires non-null but this is just an extra check and we could in theory have a blank string in the DB
@@ -250,7 +270,47 @@ export const verifyUserRecord = async (
     } else return u.Email.toLowerCase().trim() === email.toLowerCase().trim();
   });
 
+  if (emailMatches.length > 1) {
+    // Deterministic tie-break by ID so every process and every restart agrees, and a LOUD error
+    // because this is a data problem an operator has to resolve — silently picking a row is what
+    // made it look like data loss to the customer. Sorting by ID is arbitrary but stable; the point
+    // is that it never changes, not that it picks the "right" one.
+    emailMatches.sort((a, b) => a.ID.localeCompare(b.ID));
+    LogError(
+      `AMBIGUOUS LOGIN: ${emailMatches.length} User records share the email '${email}' ` +
+        `(case-insensitively): ${emailMatches.map((u) => `${u.ID} (${u.Email})`).join(', ')}. ` +
+        `Resolving to ${emailMatches[0].ID} by stable ID order. Until the duplicates are merged, ` +
+        `content owned by the other records is invisible to this login. Find every affected user ` +
+        `with: SELECT LOWER(Email), COUNT(*) FROM __mj.[User] GROUP BY LOWER(Email) HAVING COUNT(*) > 1`
+    );
+  }
+
+  // Nothing cached: ask FindUser, which reads the database for a user this process has not loaded
+  // yet (created seconds ago on another server) instead of treating them as nonexistent.
+  let user = emailMatches[0] ?? (await UserCache.Instance.FindUser({ Email: email }));
+
   if (!user) {
+    // REFRESH THE CACHE BEFORE PROVISIONING. This block used to sit AFTER the auto-create below,
+    // gated on `!user`, so it could only ever run when creation had already failed or was not
+    // attempted. That made it dead code in the exact case it exists to handle: a user who IS in the
+    // database but is NOT yet in this process's UserCache. Users provisioned out of band (an admin,
+    // an invite, a direct insert) are absent from the cache until it is rebuilt, so the lookup above
+    // missed and auto-create minted a SECOND record for someone who already had one — which is how
+    // the duplicate emails that Fix 1 above has to tolerate get created in the first place.
+    // Observed in production: three users created 2026-09-14 18:18, a duplicate for one of them
+    // created 2026-09-15 01:38 on that user's next sign-in.
+    //
+    // The recursive call passes attemptCacheUpdateIfNeeded=false, so the second pass skips straight
+    // to auto-create if the refreshed cache still has no match. Auto-provisioning of genuinely new
+    // users is therefore unchanged — it just no longer runs before we have looked properly.
+    if (configInfo.userHandling.updateCacheWhenNotFound && dataSource && attemptCacheUpdateIfNeeded) {
+      console.warn(`User ${email} not found in cache. Updating cache in attempt to find the user...`);
+
+      await refreshUserCache();
+
+      return VerifyUserRecord(email, firstName, lastName, requestDomain, dataSource, false);
+    }
+
     // NOTE: `requestDomain` (parsed from the spoofable `Origin` header) is deliberately NOT part of
     // this condition. It was previously required here, which meant a non-browser client sending no
     // Origin could never auto-provision while an attacker simply forged one — it gated entry without
@@ -305,18 +365,13 @@ export const verifyUserRecord = async (
       }
     }
 
-    if (!user && configInfo.userHandling.updateCacheWhenNotFound && dataSource && attemptCacheUpdateIfNeeded) {
-      // if we get here that means in the above, if we were attempting to create a new user, it did not work, or it wasn't attempted and we have a config that asks us to auto update the cache
-      console.warn(`User ${email} not found in cache. Updating cache in attempt to find the user...`);
-
-      await refreshUserCache();
-
-      return verifyUserRecord(email, firstName, lastName, requestDomain, dataSource, false); // try one more time but do not update cache next time if not found
-    }
   }
 
   return user;
 };
+
+/** @deprecated Use {@link VerifyUserRecord}. */
+export const verifyUserRecord = VerifyUserRecord;
 
 // Initialize providers on module load
 initializeAuthProviders();

@@ -56,12 +56,30 @@ export class FilterBuilderComponent implements OnInit, OnChanges {
    * Several sources: two-pane field picker. One source: same JSON prefix, simpler picker.
    * Omit for legacy views that still persist bare field names.
    */
-  @Input() sources: FilterSource[] | null = null;
+  @Input() Sources: FilterSource[] | null = null;
+
+  /** @deprecated Use {@link Sources}. */
+  @Input() set sources(value: FilterSource[] | null) {
+    this.Sources = value;
+  }
+  /** @deprecated Use {@link Sources}. */
+  get sources(): FilterSource[] | null {
+    return this.Sources;
+  }
 
   /**
    * Current filter state (Kendo-compatible CompositeFilterDescriptor)
    */
-  @Input() filter: CompositeFilterDescriptor | null = null;
+  @Input() Filter: CompositeFilterDescriptor | null = null;
+
+  /** @deprecated Use {@link Filter}. */
+  @Input() set filter(value: CompositeFilterDescriptor | null) {
+    this.Filter = value;
+  }
+  /** @deprecated Use {@link Filter}. */
+  get filter(): CompositeFilterDescriptor | null {
+    return this.Filter;
+  }
 
   /**
    * Configuration options
@@ -71,54 +89,135 @@ export class FilterBuilderComponent implements OnInit, OnChanges {
   /**
    * Whether the component is disabled
    */
-  @Input() disabled: boolean = false;
+  @Input() Disabled: boolean = false;
+
+  /** @deprecated Use {@link Disabled}. */
+  @Input() set disabled(value: boolean) {
+    this.Disabled = value;
+  }
+  /** @deprecated Use {@link Disabled}. */
+  get disabled(): boolean {
+    return this.Disabled;
+  }
 
   /**
    * Whether to show the natural language filter summary at the bottom
    */
-  @Input() showSummary: boolean = false;
+  @Input() ShowSummary: boolean = false;
+
+  /** @deprecated Use {@link ShowSummary}. */
+  @Input() set showSummary(value: boolean) {
+    this.ShowSummary = value;
+  }
+  /** @deprecated Use {@link ShowSummary}. */
+  get showSummary(): boolean {
+    return this.ShowSummary;
+  }
 
   /**
    * Whether the filter summary is expanded (visible)
    */
-  public isSummaryExpanded: boolean = false;
+  public IsSummaryExpanded: boolean = false;
+
+  /** @deprecated Use {@link IsSummaryExpanded}. */
+  public get isSummaryExpanded(): boolean {
+    return this.IsSummaryExpanded;
+  }
+  /** @deprecated Use {@link IsSummaryExpanded}. */
+  public set isSummaryExpanded(value: boolean) {
+    this.IsSummaryExpanded = value;
+  }
 
   /**
    * Emitted when the filter changes
    */
-  @Output() filterChange = new EventEmitter<CompositeFilterDescriptor>();
+  @Output() FilterChange = new EventEmitter<CompositeFilterDescriptor>();
+
+  /**
+   * @deprecated Use {@link FilterChange}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (filterChange) keeps working. Must stay AFTER FilterChange: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() filterChange = this.FilterChange;
 
   /**
    * Emitted when the Apply button is clicked (if showApplyButton is true)
    */
-  @Output() apply = new EventEmitter<CompositeFilterDescriptor>();
+  @Output() Apply = new EventEmitter<CompositeFilterDescriptor>();
+
+  /**
+   * @deprecated Use {@link Apply}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (apply) keeps working. Must stay AFTER Apply: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() apply = this.Apply;
 
   /**
    * Emitted when the Clear button is clicked
    */
-  @Output() clear = new EventEmitter<void>();
+  @Output() Clear = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link Clear}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (clear) keeps working. Must stay AFTER Clear: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() clear = this.Clear;
 
   /**
    * Internal filter state
    */
-  public internalFilter: CompositeFilterDescriptor = CreateEmptyFilter();
+  public InternalFilter: CompositeFilterDescriptor = CreateEmptyFilter();
+
+  /** @deprecated Use {@link InternalFilter}. */
+  public get internalFilter(): CompositeFilterDescriptor {
+    return this.InternalFilter;
+  }
+  /** @deprecated Use {@link InternalFilter}. */
+  public set internalFilter(value: CompositeFilterDescriptor) {
+    this.InternalFilter = value;
+  }
 
   /**
    * Merged configuration
    */
-  public mergedConfig: FilterBuilderConfig = { ...DEFAULT_CONFIG };
+  public MergedConfig: FilterBuilderConfig = { ...DEFAULT_CONFIG };
+
+  /** @deprecated Use {@link MergedConfig}. */
+  public get mergedConfig(): FilterBuilderConfig {
+    return this.MergedConfig;
+  }
+  /** @deprecated Use {@link MergedConfig}. */
+  public set mergedConfig(value: FilterBuilderConfig) {
+    this.MergedConfig = value;
+  }
 
   /**
    * Whether there are any active filters
    */
-  public hasActiveFilters: boolean = false;
+  public HasActiveFilters: boolean = false;
+
+  /** @deprecated Use {@link HasActiveFilters}. */
+  public get hasActiveFilters(): boolean {
+    return this.HasActiveFilters;
+  }
+  /** @deprecated Use {@link HasActiveFilters}. */
+  public set hasActiveFilters(value: boolean) {
+    this.HasActiveFilters = value;
+  }
 
   /**
    * Fields the rule UI binds to. When `sources` is set, names are always `key.field`.
    */
-  public get effectiveFields(): FilterFieldInfo[] {
-    if (this.sources?.length) {
-      return this.sources.flatMap((s) =>
+  public get EffectiveFields(): FilterFieldInfo[] {
+    if (this.Sources?.length) {
+      return this.Sources.flatMap((s) =>
         (s.fields ?? []).map((f) => ({
           ...f,
           name: CompositeFilter.FormatFilterField(s.key, f.name),
@@ -127,6 +226,11 @@ export class FilterBuilderComponent implements OnInit, OnChanges {
       );
     }
     return this.fields;
+  }
+
+  /** @deprecated Use {@link EffectiveFields}. */
+  public get effectiveFields(): FilterFieldInfo[] {
+    return this.EffectiveFields;
   }
 
   constructor(private sanitizer: DomSanitizer) {}
@@ -149,10 +253,10 @@ export class FilterBuilderComponent implements OnInit, OnChanges {
    * Initialize the internal filter state
    */
   private initializeFilter(): void {
-    if (this.filter && IsCompositeFilter(this.filter)) {
-      this.internalFilter = this.deepCloneFilter(this.filter);
+    if (this.Filter && IsCompositeFilter(this.Filter)) {
+      this.InternalFilter = this.deepCloneFilter(this.Filter);
     } else {
-      this.internalFilter = CreateEmptyFilter();
+      this.InternalFilter = CreateEmptyFilter();
     }
     this.updateHasActiveFilters();
   }
@@ -161,44 +265,54 @@ export class FilterBuilderComponent implements OnInit, OnChanges {
    * Merge provided config with defaults
    */
   private mergeConfig(): void {
-    this.mergedConfig = { ...DEFAULT_CONFIG, ...this.config };
+    this.MergedConfig = { ...DEFAULT_CONFIG, ...this.config };
   }
 
   /**
    * Handle filter change from the filter group
    */
   onFilterChange(filter: CompositeFilterDescriptor): void {
-    this.internalFilter = filter;
+    this.InternalFilter = filter;
     this.updateHasActiveFilters();
 
-    if (this.mergedConfig.applyOnChange) {
-      this.filterChange.emit(filter);
+    if (this.MergedConfig.applyOnChange) {
+      this.FilterChange.emit(filter);
     }
   }
 
   /**
    * Handle Apply button click
    */
+  OnApply(): void {
+    this.FilterChange.emit(this.InternalFilter);
+    this.Apply.emit(this.InternalFilter);
+  }
+
+  /** @deprecated Use {@link OnApply}. */
   onApply(): void {
-    this.filterChange.emit(this.internalFilter);
-    this.apply.emit(this.internalFilter);
+    return this.OnApply();
   }
 
   /**
    * Handle Clear button click
    */
-  onClear(): void {
-    this.internalFilter = CreateEmptyFilter();
+  OnClear(): void {
+    this.InternalFilter = CreateEmptyFilter();
     this.updateHasActiveFilters();
-    this.filterChange.emit(this.internalFilter);
-    this.clear.emit();
+    this.FilterChange.emit(this.InternalFilter);
+    this.Clear.emit();
+  }
+
+  /** @deprecated Use {@link OnClear}. */
+  onClear(): void {
+    return this.OnClear();
   }
 
   /**
    * Get the count of active filter rules
    */
   GetFilterCount(): number {
-    return this.countFilters(this.internalFilter);
+    return this.countFilters(this.InternalFilter);
   }
 
   /**
@@ -224,7 +338,7 @@ export class FilterBuilderComponent implements OnInit, OnChanges {
    * Update hasActiveFilters flag
    */
   private updateHasActiveFilters(): void {
-    this.hasActiveFilters = this.GetFilterCount() > 0;
+    this.HasActiveFilters = this.GetFilterCount() > 0;
   }
 
   /**
@@ -237,17 +351,22 @@ export class FilterBuilderComponent implements OnInit, OnChanges {
   /**
    * Toggle the filter summary visibility
    */
+  ToggleSummary(): void {
+    this.IsSummaryExpanded = !this.IsSummaryExpanded;
+  }
+
+  /** @deprecated Use {@link ToggleSummary}. */
   toggleSummary(): void {
-    this.isSummaryExpanded = !this.isSummaryExpanded;
+    return this.ToggleSummary();
   }
 
   /**
    * Generate HTML-formatted summary of the filter expression with syntax highlighting
    */
   GetFilterSummaryHtml(): SafeHtml {
-    const html = CompositeFilter.FromDescriptor(this.internalFilter).SummaryHTML({
-      Fields: this.effectiveFields.map((f) => ({ Name: f.name, DisplayName: f.displayName })),
-      SourceLabels: Object.fromEntries((this.sources ?? []).map((s) => [s.key, s.label])),
+    const html = CompositeFilter.FromDescriptor(this.InternalFilter).SummaryHTML({
+      Fields: this.EffectiveFields.map((f) => ({ Name: f.name, DisplayName: f.displayName })),
+      SourceLabels: Object.fromEntries((this.Sources ?? []).map((s) => [s.key, s.label])),
     });
     return this.sanitizer.bypassSecurityTrustHtml(html);
   }

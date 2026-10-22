@@ -236,3 +236,24 @@ describe('Pipeline sync stage — stale record cleanup', () => {
         });
     });
 });
+
+describe('Pipeline enrich stage — SkipAIEnrichment', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('skips the LLM enrichment call and still syncs the deterministic result', async () => {
+        const ctx: QuerySyncContext = { ...buildCtx('SELECT col1 FROM SomeTable WHERE x = {{ X }}'), SkipAIEnrichment: true };
+        const result = await RunExtractionPipeline(ctx);
+
+        expect(mockRunLLMEnrichment).not.toHaveBeenCalled();
+        expect(mockSyncParameters).toHaveBeenCalled();
+        expect(mockSyncDependencies).toHaveBeenCalled();
+        expect(result.UsesTemplate).toBe(true);
+    });
+
+    it('calls the LLM enrichment by default', async () => {
+        await RunExtractionPipeline(buildCtx());
+        expect(mockRunLLMEnrichment).toHaveBeenCalledTimes(1);
+    });
+});

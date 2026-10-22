@@ -63,7 +63,7 @@ export class ComponentResolver {
    * @param contextUser - Optional user context for database operations
    * @returns Map of component names to resolved components
    */
-  async resolveComponents(
+  async ResolveComponents(
     spec: ComponentSpec, 
     namespace: string = 'Global',
     contextUser?: UserInfo
@@ -150,6 +150,15 @@ export class ComponentResolver {
     }
     
     return unwrapped;
+  }
+
+  /** @deprecated Use {@link ResolveComponents}. */
+  async resolveComponents(
+    spec: ComponentSpec, 
+    namespace: string = 'Global',
+    contextUser?: UserInfo
+  ): Promise<ResolvedComponents> {
+    return this.ResolveComponents(spec, namespace, contextUser);
   }
 
   /**
@@ -377,7 +386,7 @@ export class ComponentResolver {
   /**
    * Cleanup resolver resources
    */
-  cleanup(): void {
+  Cleanup(): void {
     // Remove our references when resolver is destroyed
     if (this.registryService) {
       // This would allow the registry service to clean up unused components
@@ -388,19 +397,29 @@ export class ComponentResolver {
     }
   }
 
+  /** @deprecated Use {@link Cleanup}. */
+  cleanup(): void {
+    return this.Cleanup();
+  }
+
   /**
    * Validates that all required components are available
    * @param spec - Component specification to validate
    * @param namespace - Namespace for validation
    * @returns Array of missing component names
    */
-  validateDependencies(spec: ComponentSpec, namespace: string = 'Global'): string[] {
+  ValidateDependencies(spec: ComponentSpec, namespace: string = 'Global'): string[] {
     const missing: string[] = [];
     const checked = new Set<string>();
     
     this.checkDependencies(spec, namespace, missing, checked);
     
     return missing;
+  }
+
+  /** @deprecated Use {@link ValidateDependencies}. */
+  validateDependencies(spec: ComponentSpec, namespace: string = 'Global'): string[] {
+    return this.ValidateDependencies(spec, namespace);
   }
 
   /**
@@ -436,13 +455,18 @@ export class ComponentResolver {
    * @param spec - Component specification
    * @returns Dependency graph as adjacency list
    */
-  getDependencyGraph(spec: ComponentSpec): Map<string, string[]> {
+  GetDependencyGraph(spec: ComponentSpec): Map<string, string[]> {
     const graph = new Map<string, string[]>();
     const visited = new Set<string>();
     
     this.buildDependencyGraph(spec, graph, visited);
     
     return graph;
+  }
+
+  /** @deprecated Use {@link GetDependencyGraph}. */
+  getDependencyGraph(spec: ComponentSpec): Map<string, string[]> {
+    return this.GetDependencyGraph(spec);
   }
 
   /**
@@ -475,8 +499,8 @@ export class ComponentResolver {
    * @param spec - Root component specification
    * @returns Array of component names in dependency order
    */
-  getLoadOrder(spec: ComponentSpec): string[] {
-    const graph = this.getDependencyGraph(spec);
+  GetLoadOrder(spec: ComponentSpec): string[] {
+    const graph = this.GetDependencyGraph(spec);
     const visited = new Set<string>();
     const stack: string[] = [];
 
@@ -489,6 +513,11 @@ export class ComponentResolver {
 
     // Reverse to get correct load order
     return stack.reverse();
+  }
+
+  /** @deprecated Use {@link GetLoadOrder}. */
+  getLoadOrder(spec: ComponentSpec): string[] {
+    return this.GetLoadOrder(spec);
   }
 
   /**
@@ -522,11 +551,11 @@ export class ComponentResolver {
    * @param namespace - Namespace for resolution
    * @returns Ordered array of resolved components
    */
-  resolveInOrder(spec: ComponentSpec, namespace: string = 'Global'): Array<{
+  ResolveInOrder(spec: ComponentSpec, namespace: string = 'Global'): Array<{
     name: string;
     component: any;
   }> {
-    const loadOrder = this.getLoadOrder(spec);
+    const loadOrder = this.GetLoadOrder(spec);
     const resolved: Array<{ name: string; component: any }> = [];
 
     for (const name of loadOrder) {
@@ -539,18 +568,31 @@ export class ComponentResolver {
     return resolved;
   }
 
+  /** @deprecated Use {@link ResolveInOrder}. */
+  resolveInOrder(spec: ComponentSpec, namespace: string = 'Global'): Array<{
+    name: string;
+    component: any;
+  }> {
+    return this.ResolveInOrder(spec, namespace);
+  }
+
   /**
    * Creates a flattened list of all component specifications
    * @param spec - Root component specification
    * @returns Array of all component specs in the hierarchy
    */
-  flattenComponentSpecs(spec: ComponentSpec): ComponentSpec[] {
+  FlattenComponentSpecs(spec: ComponentSpec): ComponentSpec[] {
     const flattened: ComponentSpec[] = [];
     const visited = new Set<string>();
 
     this.collectComponentSpecs(spec, flattened, visited);
 
     return flattened;
+  }
+
+  /** @deprecated Use {@link FlattenComponentSpecs}. */
+  flattenComponentSpecs(spec: ComponentSpec): ComponentSpec[] {
+    return this.FlattenComponentSpecs(spec);
   }
 
   /**

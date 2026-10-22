@@ -1,5 +1,325 @@
 # @memberjunction/server-extensions-core
 
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- c159e2f: MJAPI can now live under a path prefix without per-route CDN patches (#5674). A new setting, `MJAPI_BASE_PATH` (default `/`), is the prefix MJAPI mounts every route under. `GRAPHQL_ROOT_PATH` stays only where Apollo listens, and `MJAPI_PUBLIC_URL` stays where the world reaches MJAPI.
+  - **`ApiRoute(subpath, { absolute? })`** (new, `@memberjunction/server`): the mount path under `MJAPI_BASE_PATH`, or with `absolute` the public URL (`MJAPI_PUBLIC_URL` + subpath). Also exports `ApiRootPath()`, `ConfiguredPublicUrl()`, `JoinApiRoute()` and `NormalizeApiRootPath()`.
+  - **Core mounts** (`/healthcheck`, `/oauth`, `/esignature`, `/media`, `/realtime/sdp-exchange`, `/magic-link`, `/widget`, `/realtime/verify`, `/health/extensions`, `/auth`) are composed under the base path, as are the magic-link and realtime-verify form actions, `CreateMediaAccessToken`'s URL and `CreateUploadStageToken`'s `Url`.
+  - **Server extensions:** every `RootPath` is relative to the base path. `PrepareServerExtensionConfigs({ apiRootPath })` composes the mount path (new `ComposeServerExtensionMountPath`), and `ServerExtensionInitContext.apiRootPath` carries it. `graphqlRootPath` is no longer a reserved root, and `CoreReservedServerExtensionRoots()` no longer takes it.
+  - **Explorer is told where MJAPI is.** New optional `MJAPI_URI` environment value (`MJEnvironmentConfig`, `WorkspaceEnvironment`, `GraphQLProviderConfigData.MJAPIURL`) and `ResolveMJAPIURL(mjapiUrl)` in `@memberjunction/core`. When set, the auth-provider catalog, the Login Studio sign-in page, the healthcheck poll, the OAuth code exchange and the upload-stage POST use it as given. When unset, each keeps exactly its previous behaviour.
+  - Default config changes nothing: with `MJAPI_BASE_PATH` and `MJAPI_URI` unset, every mount path, emitted URL and Explorer request is unchanged, whatever `GRAPHQL_ROOT_PATH` is. REST stays at the origin-absolute `/api/v1`.
+
+  **Opting in (`MJAPI_BASE_PATH=/api`, e.g. behind MJ Central's CloudFront, which forwards `/api/*` unstripped).** Every route moves under the prefix, and nothing on the MJ side reports a caller still using the old address. In the same change:
+  - Set `MJAPI_PUBLIC_URL` to the prefixed address (`https://host/api`) so links MJAPI hands out carry it, and set Explorer's `MJAPI_URI` to the same. Server and Explorer switch together: either one alone leaves the login-provider catalog and the healthcheck pointing at the wrong place.
+  - Re-register every URL an outside party holds, or keep a temporary edge redirect from the old path: provider webhooks (Open App extensions such as Orders' `/webhooks/payments` and `/webhooks/billcom`, telephony `/telephony/*` and `/meetings/teams`, Slack/Teams messaging, core `/esignature/webhook/:driverKey`), OAuth redirect URIs (`/oauth/callback`), and links already emailed (magic-link invites, realtime-verify links). Carrier URLs MJ registers itself (`BuildCallbackUrl`) follow automatically.
+  - Remove CDN behaviors added per route for the old root paths once nothing calls them.
+  - **Update your own MJExplorer app.** `packages/MJExplorer` is a starter template, not a published package, so this release does not change your copy. Its `src/main.ts` preloads the sign-in data before Angular starts and must pass `MJAPI_URI` through itself. Add `MJAPI_URI` to your `environment.ts` files, then change the two preload calls:
+
+    ```ts
+    AuthProviderCatalog.Preload(environment.GRAPHQL_URI, undefined, environment.MJAPI_URI),
+    LoginScreenLoader.Load(environment.GRAPHQL_URI, undefined, environment.MJAPI_URI),
+    ```
+
+    If your `environment.ts` is a plain object literal without `MJAPI_URI`, type it as `MJEnvironmentConfig` from `@memberjunction/ng-bootstrap` so the property exists. Everything after bootstrap (healthcheck, OAuth exchange, uploads, the login screen) reads `MJAPI_URI` from the environment you already pass to `MJExplorerAppModule.forRoot()`; no other change is needed. Skipping this step does not break sign-in. The provider list and the Login Studio design just fall back to the compiled defaults.
+
+  Telephony media WebSocket URLs (`/telephony/*/media`) and `/realtime-proxy` do not move.
+
+- b73e3bc: Five fixes found while building and testing the BizApps Voting Open App:
+  - **IS-A lookups and other Info-class lookups now use the entity's own provider.** Info objects keep the provider that built them (`BaseInfo.OwningProvider`). `EntityInfo.ChildEntities` / `ParentEntityInfo`, RLS filter lookups, `QueryInfo` sibling getters and `AuthorizationInfo.Roles` resolve through that provider and fall back to the global one only when there is none. `EnsureISAChild` no longer throws "not a declared IsA child entity" in a process with several providers and no global provider. The constructors take an optional provider, so existing callers still compile.
+  - **Server-side writes clear the client's RunView dedup-linger cache.** There is a new `ProviderBase.InvalidateRunViewDedupCache(entityNames?)`. `RouteOperation` calls it after every Remote Operation, and the GraphQL client calls it after every mutation (Actions, agent runs and saves included). Both run on failure too. An identical RunView no longer returns pre-operation rows for up to 5 s.
+  - **Server extensions can own CORS.** A new `OwnsCORS` option on a server extension config makes global CORS skip that extension's `RootPath`, so the extension's own origin policy and `OPTIONS` handler apply. `X-Powered-By` is now disabled app-wide.
+  - **Explorer deep links beat the saved workspace on a full load.** When the URL carries query params for an open tab, they replace that tab's saved params. Workspace changes are also written to localStorage synchronously and flushed on `pagehide` / `visibilitychange`, so a quick refresh no longer comes back one step behind.
+  - **Magic-link sessions no longer get an uncaught `PermissionConstrainedError` at boot.** `UserInfoEngine` adds `UserNotificationsIfPermitted`, and `GetSetting` returns "not set" for a user who can't read settings. It logs once per property. Notifications and `ApplicationManager` use the safe paths.
+
+- 08be974: Review follow-ups to the multi-provider / cache / CORS / deep-link fixes:
+  - `QueryFieldInfo.QueryInfo` matches the parent query by `QueryID` (it compared the field's own ID and always returned undefined). Query Info getters no longer throw when no provider is bound.
+  - The IS-A SubtypeSelector lookup memo is partitioned per provider, so one provider never receives a row (or a miss) recorded through another.
+  - Entity `Save()`/`Delete()` and transaction groups clear only their own entities' RunView dedup-linger entries (`ExecuteGQL` takes `{ AffectedEntityNames }`). Other mutations still clear everything. `IsGraphQLMutation` reads only top-level tokens, so a fragment field named `query` can no longer hide a mutation. A failed coalesced RunView no longer evicts a newer request's entry.
+  - A host `serverExtensions[]` entry may be a partial overlay: only `DriverClass` is required. An overlay without `Enabled` inherits the published value; a host-only entry without it is enabled.
+  - Explorer: a startup deep link waits for the app list before it is resolved. A permission-constrained magic-link session gets its scoped app (plus default apps when access can be judged) instead of "No Applications Available". Workspace saves run one at a time, and a save that lands after the page unloads no longer wins over newer journaled changes. A brand-new user's first boot also runs the deep-link hook.
+  - `UserInfoEngine.UserFavorites`, `NotificationPreferences` and `NotificationTypes` read empty for a session that cannot read them.
+
+- Updated dependencies [39b35f1]
+- Updated dependencies [c159e2f]
+- Updated dependencies [db39145]
+- Updated dependencies [5e4205c]
+- Updated dependencies [81aea34]
+- Updated dependencies [5465489]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [2274f42]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [7e72c86]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [5f707d1]
+- Updated dependencies [dc38250]
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [49f26d9]
+- Updated dependencies [88e6902]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [25f7b82]
+- Updated dependencies [90829e3]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [dfe40a4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [e97d95c]
+- Updated dependencies [21f9e15]
+- Updated dependencies [4248fb3]
+- Updated dependencies [0adaf76]
+- Updated dependencies [705ab4e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [369e229]
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [a7da50b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [2c590b0]
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
+## 6.1.0
+
+### Minor Changes
+
+- 45ca475: Implement Server Extension Lifecycle (Phase 2): Pre-Auth vs Post-Auth phases, typed Service Registry, reserved root collision guards, and cross-extension lifecycle hook.
+  - **Pre-Auth vs. Post-Auth Phases (G1)**: Introduce `ServerExtensionPhase` (`'pre-auth' | 'post-auth'`) on `BaseServerExtension` (`DefaultPhase`) and `ServerExtensionConfig` (`Phase`). Mount pre-auth extensions before authentication middleware (for webhook signatures) and post-auth extensions after `createUnifiedAuthMiddleware`.
+  - **Reserved Roots Collision Prevention (G2)**: Enforce validation against reserved system endpoints (`/graphql`, `/auth`, `/health`, `/media`, `/schema`, `/mcp`) so extensions cannot shadow core routes.
+  - **Typed Service Registry & Init Context (G3)**: Pass `ServerExtensionInitContext` with `app`, `services`, `httpServer`, `publicUrl`, and `phase`. Provide `ServerExtensionServiceRegistry` for decoupled cross-extension service discovery. Automatically register `ExtensionInitResult.Service` into the registry.
+  - **Awaitable Cross-Extension Hook**: Add `OnAllExtensionsMounted(context)` lifecycle hook awaited across all loaded extensions after all phases mount.
+  - **Telephony Service Discovery**: Register core telephony and meeting services (`TwilioTelephonyService`, `VonageTelephonyService`, `RingCentralTelephonyService`, `TeamsMeetingsService`) into `ServerExtensionServiceRegistry`.
+  - **Messaging Adapters Alignment**: Expose `SlackAdapter` and `TeamsAdapter` services in `SlackMessagingExtension` and `TeamsMessagingExtension` with explicit `DefaultPhase = 'pre-auth'`.
+  - **Developer Guide**: Author comprehensive `guides/SERVER_EXTENSIONS_GUIDE.md` and update package READMEs.
+
+### Patch Changes
+
+- d0568e6: Auto-load Open App `serverExtensions` from packages listed in host `dynamicPackages.server[]`. Packages declare them via the `MJ_SERVER_EXTENSIONS` export or `package.json` `memberjunction.serverExtensions`; `serve()` overlays host `mj.config.cjs` `serverExtensions[]` by DriverClass so operators no longer copy Open App extension blocks into the host config.
+- 8d0d45a: build: declare dependencies that npm's hoisting was silently supplying, as part of the monorepo's cutover to pnpm.
+
+  Under npm, a package could import a module it never declared and still resolve it, because npm flattens everything into the workspace-root `node_modules`. pnpm's strict, isolated linking gives a package only what it declares — so each of these was a latent bug that happened to work. They are fixed here independently of the package manager; nothing about the published API changes.
+
+  Added declarations: `@types/mssql` (codegen-lib, sqlserver-dataprovider, testing-cli, testing-integration, react-test-harness), `@types/pg` (codegen-lib), `@types/express` (messaging-adapters, server-extensions-core), `@types/fs-extra` (codegen-lib), `@types/babel__traverse` (react-linter), `ora` (ai-cli), `glob` (react-test-harness), `tslib` (ng-bootstrap, which compiles with `importHelpers`), `@auth0/auth0-spa-js` (ng-auth-services), `@memberjunction/core-entities` + `@memberjunction/global` + `@memberjunction/aiengine` (cli), and `@memberjunction/ng-react` (ng-explorer-core, reached from a generated file).
+
+  Two changes are more than a declaration:
+  - **`@memberjunction/server`**: `@types/express` moves `^4.17.25` → `^5.0.6`. The package declares `express@^5.2.1` at runtime, so it was only compiling because hoisting supplied the v5 types that six sibling packages declare. The types now match the express it actually runs.
+  - **`@memberjunction/ng-auth-services`**: `angularProviderFactory` gains an explicit `Provider[]` return type. Declaring `@auth0/auth0-spa-js` alone does not resolve TS2742 — the emitted declaration file still needed a nameable type rather than one inferred through a transitive package path.
+
+  (A third change in this set applied to `@memberjunction/scheduled-actions-server` — dropping `@types/axios`, a deprecated stub carrying no type definitions. That package has since been removed from the workspace, so its entry is no longer part of this changeset.)
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [394d276]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [4586215]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0ec1980]
+- Updated dependencies [1940a4d]
+- Updated dependencies [07cb22e]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [9699d0e]
+- Updated dependencies [394d276]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [2d14c62]
+- Updated dependencies [c996a56]
+- Updated dependencies [38d4482]
+- Updated dependencies [052b4c7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [c996a56]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [8d880cc]
+- Updated dependencies [cefc302]
+- Updated dependencies [841e6ea]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [080f4cd]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [d66a26a]
+- Updated dependencies [1d88e00]
+- Updated dependencies [647bd71]
+- Updated dependencies [8288711]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [48ff99f]
+- Updated dependencies [9f73528]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [27e4d09]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [23c2521]
+- Updated dependencies [048c5ce]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [98841bb]
+- Updated dependencies [53c341c]
+- Updated dependencies [b46330e]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [2be2960]
+- Updated dependencies [cf2484c]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [0967ba7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [de343b5]
+- Updated dependencies [5fc861f]
+- Updated dependencies [1748491]
+- Updated dependencies [a1a8989]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [905820a]
+- Updated dependencies [1bd9674]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [7fcdc2d]
+- Updated dependencies [15319b4]
+- Updated dependencies [d0a2a55]
+  - @memberjunction/global@6.1.0
+  - @memberjunction/core@6.1.0
+
+## 6.1.0-edge.7
+
+### Minor Changes
+
+- 45ca475: Implement Server Extension Lifecycle (Phase 2): Pre-Auth vs Post-Auth phases, typed Service Registry, reserved root collision guards, and cross-extension lifecycle hook.
+  - **Pre-Auth vs. Post-Auth Phases (G1)**: Introduce `ServerExtensionPhase` (`'pre-auth' | 'post-auth'`) on `BaseServerExtension` (`DefaultPhase`) and `ServerExtensionConfig` (`Phase`). Mount pre-auth extensions before authentication middleware (for webhook signatures) and post-auth extensions after `createUnifiedAuthMiddleware`.
+  - **Reserved Roots Collision Prevention (G2)**: Enforce validation against reserved system endpoints (`/graphql`, `/auth`, `/health`, `/media`, `/schema`, `/mcp`) so extensions cannot shadow core routes.
+  - **Typed Service Registry & Init Context (G3)**: Pass `ServerExtensionInitContext` with `app`, `services`, `httpServer`, `publicUrl`, and `phase`. Provide `ServerExtensionServiceRegistry` for decoupled cross-extension service discovery. Automatically register `ExtensionInitResult.Service` into the registry.
+  - **Awaitable Cross-Extension Hook**: Add `OnAllExtensionsMounted(context)` lifecycle hook awaited across all loaded extensions after all phases mount.
+  - **Telephony Service Discovery**: Register core telephony and meeting services (`TwilioTelephonyService`, `VonageTelephonyService`, `RingCentralTelephonyService`, `TeamsMeetingsService`) into `ServerExtensionServiceRegistry`.
+  - **Messaging Adapters Alignment**: Expose `SlackAdapter` and `TeamsAdapter` services in `SlackMessagingExtension` and `TeamsMessagingExtension` with explicit `DefaultPhase = 'pre-auth'`.
+  - **Developer Guide**: Author comprehensive `guides/SERVER_EXTENSIONS_GUIDE.md` and update package READMEs.
+
+### Patch Changes
+
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Patch Changes

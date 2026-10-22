@@ -61,10 +61,15 @@ export class ThemeManagerResourceComponent extends BaseResourceComponent impleme
     return 'fa-solid fa-swatchbook';
   }
 
-  public onOpenEntityRecord(event: { EntityName: string; RecordPKey: CompositeKey }): void {
+  public OnOpenEntityRecord(event: { EntityName: string; RecordPKey: CompositeKey }): void {
     if (event?.EntityName && event.RecordPKey) {
       this.navigationService.OpenEntityRecord(event.EntityName, event.RecordPKey);
     }
+  }
+
+  /** @deprecated Use {@link OnOpenEntityRecord}. */
+  public onOpenEntityRecord(event: { EntityName: string; RecordPKey: CompositeKey }): void {
+    return this.OnOpenEntityRecord(event);
   }
 
   private wireDashboard(): void {

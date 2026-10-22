@@ -16,40 +16,51 @@ import { EnumCandidateContext } from '../types/analysis.js';
 /** Configuration knobs for the pre-filter gates */
 export interface EnumGateConfig {
   /** Maximum column declared length to consider (default 50) */
-  maxColumnLength: number;
+  MaxColumnLength: number;
   /** Upper bound on distinct values (default 50) */
-  maxDistinctValues: number;
+  MaxDistinctValues: number;
   /** Minimum total rows before applying cardinality ratio (default 50) */
-  minTotalRows: number;
+  MinTotalRows: number;
   /** Maximum cardinality ratio (distinct / total) to pass (default 0.05) */
-  maxCardinalityRatio: number;
+  MaxCardinalityRatio: number;
   /** Regex patterns for column names to always exclude */
-  excludeColumnNamePatterns: RegExp[];
+  ExcludeColumnNamePatterns: RegExp[];
 }
 
 /** Result returned when a column passes the gate */
 export interface EnumCandidate {
-  columnName: string;
-  values: string[];
-  distinctCount: number;
-  totalRows: number;
-  cardinalityRatio: number;
-  dataType: string;
-  maxLength?: number;
+  ColumnName: string;
+  Values: string[];
+  DistinctCount: number;
+  TotalRows: number;
+  CardinalityRatio: number;
+  dataType: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  MaxLength?: number;
 }
 
 const DEFAULT_CONFIG: EnumGateConfig = {
-  maxColumnLength: 50,
-  maxDistinctValues: 50,
-  minTotalRows: 50,
-  maxCardinalityRatio: 0.05,
-  excludeColumnNamePatterns: [
+  MaxColumnLength: 50,
+  MaxDistinctValues: 50,
+  MinTotalRows: 50,
+  MaxCardinalityRatio: 0.05,
+  ExcludeColumnNamePatterns: [
     /Notes?$/i,
     /Description$/i,
     /Comment$/i,
     /Address/i,
+    // MJ's own system columns: their domain is defined by MJ, not by whatever a sample holds.
+    /^__mj_/i,
+    // Audit columns naming who wrote the row (e.g. CreatedBy, cst_add_user): a list of users, not a closed set.
+    /(^|_)(add|change|changed|create|created|modify|modified|update|updated|delete|deleted|insert|inserted)_?(user|usr|by|login)$/i,
   ],
 };
+
+/** Value shapes that make a column a poor closed list even when its cardinality is low. */
+const VALUE_SHAPES_NOT_ENUM: RegExp[] = [
+  /^(19|20)\d{2}$/, // years
+  /^\{?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\}?$/i, // GUIDs
+  /^\d{4}-\d{2}-\d{2}([ T].*)?$/, // ISO dates and timestamps
+];
 
 /** Set of data-type base names eligible for enum detection (string types) */
 const STRING_TYPES = new Set([
@@ -70,13 +81,13 @@ export class EnumCandidateGate {
   /**
    * Evaluate all columns of a table and return candidates that pass every gate.
    */
-  public evaluateTable(
+  public EvaluateTable(
     columns: ColumnDefinition[],
     tableRowCount: number
   ): EnumCandidateContext[] {
     const candidates: EnumCandidateContext[] = [];
     for (const col of columns) {
-      const candidate = this.evaluateColumn(col, tableRowCount);
+      const candidate = this.EvaluateColumn(col, tableRowCount);
       if (candidate) {
         candidates.push(candidate);
       }
@@ -84,16 +95,24 @@ export class EnumCandidateGate {
     return candidates;
   }
 
+  /** @deprecated Use {@link EvaluateTable}. */
+  public evaluateTable(
+    columns: ColumnDefinition[],
+    tableRowCount: number
+  ): EnumCandidateContext[] {
+    return this.EvaluateTable(columns, tableRowCount);
+  }
+
   /**
    * Evaluate a single column against all deterministic gates.
    * Returns an EnumCandidateContext if the column passes, or null if it doesn't.
    */
-  public evaluateColumn(
+  public EvaluateColumn(
     column: ColumnDefinition,
     tableRowCount: number
   ): EnumCandidateContext | null {
     if (!this.passesDataTypeGate(column.dataType)) return null;
-    if (!this.passesColumnLengthGate(column.dataType)) return null;
+    if (!this.passesColumnLengthGate(column)) return null;
     if (!this.passesNameExclusionGate(column.name)) return null;
     if (!this.passesKeyGate(column)) return null;
     if (!this.passesPatternGate(column.statistics)) return null;
@@ -106,6 +125,7 @@ export class EnumCandidateGate {
 
     const values = this.extractValues(stats);
     if (values.length < 2) return null;
+    if (!this.passesValueShapeGate(values)) return null;
 
     return {
       columnName: column.name,
@@ -114,8 +134,34 @@ export class EnumCandidateGate {
       totalRows: tableRowCount,
       cardinalityRatio: tableRowCount > 0 ? stats.distinctCount / tableRowCount : 1,
       dataType: column.dataType,
-      maxLength: this.parseDeclaredLength(column.dataType) ?? undefined,
+      maxLength: this.declaredLength(column) ?? undefined,
     };
+  }
+
+  /**
+   * Checks an LLM value-list verdict against the data. The verdict counts only for a column that
+   * passes every gate here, and its values are cut down to the ones observed in that column, so a
+   * value the model invented never reaches the output. Returns the values to keep, or null when
+   * the verdict should be dropped (not a candidate, or fewer than two observed values remain).
+   */
+  public FilterVerdictValues(
+    column: ColumnDefinition,
+    tableRowCount: number,
+    verdictValues: string[]
+  ): string[] | null {
+    const candidate = this.EvaluateColumn(column, tableRowCount);
+    if (!candidate) return null;
+    const observed = new Set(candidate.values);
+    const kept = verdictValues.filter(v => observed.has(v));
+    return kept.length >= 2 ? kept : null;
+  }
+
+  /** @deprecated Use {@link EvaluateColumn}. */
+  public evaluateColumn(
+    column: ColumnDefinition,
+    tableRowCount: number
+  ): EnumCandidateContext | null {
+    return this.EvaluateColumn(column, tableRowCount);
   }
 
   // ─── Individual Gates ─────────────────────────────────────────────
@@ -132,17 +178,22 @@ export class EnumCandidateGate {
   /**
    * Gate: declared column length must be ≤ maxColumnLength.
    * Unbounded text/varchar(max) is excluded.
+   *
+   * The drivers report the bare type name (`varchar`, `nvarchar`) with the length in
+   * `column.maxLength`, so the length comes from there when the type string carries none.
+   * Reading only the type string made every varchar/nvarchar column look unbounded, so no
+   * string column was ever a candidate.
    */
-  private passesColumnLengthGate(dataType: string): boolean {
-    const baseType = this.parseBaseType(dataType);
-    const length = this.parseDeclaredLength(dataType);
+  private passesColumnLengthGate(column: ColumnDefinition): boolean {
+    const baseType = this.parseBaseType(column.dataType);
+    const length = this.declaredLength(column);
 
     // Unbounded text type — exclude
     if (baseType === 'text' && length === null) return false;
     // varchar(max) / nvarchar(max) — exclude
     if (length === null && (baseType === 'varchar' || baseType === 'nvarchar')) return false;
     // Length known and exceeds limit
-    if (length !== null && length > this.config.maxColumnLength) return false;
+    if (length !== null && length > this.config.MaxColumnLength) return false;
 
     return true;
   }
@@ -151,7 +202,7 @@ export class EnumCandidateGate {
    * Gate: column name must not match any exclusion pattern.
    */
   private passesNameExclusionGate(columnName: string): boolean {
-    return !this.config.excludeColumnNamePatterns.some(pattern => pattern.test(columnName));
+    return !this.config.ExcludeColumnNamePatterns.some(pattern => pattern.test(columnName));
   }
 
   /**
@@ -170,10 +221,18 @@ export class EnumCandidateGate {
   }
 
   /**
+   * Gate: the observed values must not all be years, GUIDs or dates. A year column grows every
+   * year, and GUIDs and dates are keys or timestamps, so none of them is a closed set.
+   */
+  private passesValueShapeGate(values: string[]): boolean {
+    return !VALUE_SHAPES_NOT_ENUM.some(shape => values.every(v => shape.test(v)));
+  }
+
+  /**
    * Gate: distinct count must be ≥ 2 and ≤ maxDistinctValues.
    */
   private passesDistinctCountGate(distinctCount: number): boolean {
-    return distinctCount >= 2 && distinctCount <= this.config.maxDistinctValues;
+    return distinctCount >= 2 && distinctCount <= this.config.MaxDistinctValues;
   }
 
   /**
@@ -186,10 +245,10 @@ export class EnumCandidateGate {
     tableRowCount: number
   ): boolean {
     // Small tables bypass the ratio gate — LLM decides
-    if (tableRowCount < this.config.minTotalRows) return true;
+    if (tableRowCount < this.config.MinTotalRows) return true;
 
     const ratio = tableRowCount > 0 ? stats.distinctCount / tableRowCount : 1;
-    return ratio <= this.config.maxCardinalityRatio;
+    return ratio <= this.config.MaxCardinalityRatio;
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────
@@ -202,6 +261,11 @@ export class EnumCandidateGate {
     // Remove parenthetical (length/precision)
     const base = dataType.replace(/\(.*\)/, '').trim().toLowerCase();
     return base;
+  }
+
+  /** The declared length: from the type string when it carries one, else from the driver's maxLength. */
+  private declaredLength(column: ColumnDefinition): number | null {
+    return this.parseDeclaredLength(column.dataType) ?? column.maxLength ?? null;
   }
 
   /**

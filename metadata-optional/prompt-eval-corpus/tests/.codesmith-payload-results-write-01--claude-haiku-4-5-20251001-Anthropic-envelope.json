@@ -1,0 +1,124 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "codesmith-payload-results-write-01 [claude-haiku-4-5-20251001 · Anthropic · envelope]",
+    "Description": "Execution succeeded; the payload contract says to store results and working code. Any of the write sections may carry them; taskComplete alone (without writing) is not enough.",
+    "InputDefinition": {
+      "payload": {
+        "task": "count by category",
+        "inputData": {
+          "rows": [
+            {
+              "c": "a"
+            },
+            {
+              "c": "b"
+            },
+            {
+              "c": "a"
+            }
+          ]
+        },
+        "iterations": 1
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Count the rows by category."
+        },
+        {
+          "role": "user",
+          "content": "[Action Result] Execute Code succeeded. code = `output = Object.entries(input.rows.reduce((m,r)=>(m[r.c]=(m[r.c]||0)+1,m),{}))`; output = { a: 2, b: 1 }"
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "codesmith-payload-results-write-01",
+      "expect": {
+        "kind": "anyOf",
+        "anyOf": [
+          {
+            "kind": "payloadChange",
+            "payload": {
+              "newElements.results": {
+                "matcher": "nonEmpty"
+              }
+            }
+          },
+          {
+            "kind": "payloadChange",
+            "payload": {
+              "updateElements.results": {
+                "matcher": "nonEmpty"
+              }
+            }
+          },
+          {
+            "kind": "payloadChange",
+            "payload": {
+              "replaceElements.results": {
+                "matcher": "nonEmpty"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Codesmith Agent",
+      "modelId": "4FD92457-0BA8-486F-978A-E5947154F4F4",
+      "vendorId": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "envelope",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "anyOf",
+            "anyOf": [
+              {
+                "kind": "payloadChange",
+                "payload": {
+                  "newElements.results": {
+                    "matcher": "nonEmpty"
+                  }
+                }
+              },
+              {
+                "kind": "payloadChange",
+                "payload": {
+                  "updateElements.results": {
+                    "matcher": "nonEmpty"
+                  }
+                }
+              },
+              {
+                "kind": "payloadChange",
+                "payload": {
+                  "replaceElements.results": {
+                    "matcher": "nonEmpty"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "6E5DBD03-C190-48D4-ACC2-908EDFC39090"
+  }
+}

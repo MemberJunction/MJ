@@ -3,6 +3,7 @@ import { createMockEmitter, emittedEvents } from './mocks/emitter.js';
 import { sampleConfig } from './mocks/fixtures.js';
 import type { ConfigureContext } from '../phases/ConfigurePhase.js';
 import type { InstallConfig, PartialInstallConfig } from '../models/InstallConfig.js';
+import { InstallConfigDefaults } from '../models/InstallConfig.js';
 
 // ---------------------------------------------------------------------------
 // Adapter mocks — ConfigurePhase creates FileSystemAdapter via `new`
@@ -19,7 +20,7 @@ vi.mock('../adapters/FileSystemAdapter.js', () => {
 // Import the phase under test AFTER mocks are set up
 // ---------------------------------------------------------------------------
 
-import { ConfigurePhase } from '../phases/ConfigurePhase.js';
+import { ConfigurePhase, FindUnsetRequiredConfig } from '../phases/ConfigurePhase.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -846,25 +847,50 @@ describe('ConfigurePhase', () => {
 
   // ─── Warning about default values in yes mode ──────────────────────
 
-  describe('yes mode default values warning', () => {
-    it('should emit warn about default values when files are created in yes mode', async () => {
+  describe('yes mode unset values warning', () => {
+    function arrangeFreshDir(): void {
       mockFs.FileExists.mockResolvedValue(false);
       mockFs.DirectoryExists.mockImplementation(async (path: string) => {
         if (path.includes('environments')) return false;
-        if (path.includes('MJExplorer/src') || path.includes('MJExplorer\\src')) return true;
         return true;
       });
       mockFs.ListFiles.mockResolvedValue([]);
+    }
 
+    function unsetWarning(emitSpy: Parameters<typeof emittedEvents>[0]): string | undefined {
+      const warn = emittedEvents(emitSpy, 'warn').find((e: unknown) =>
+        (e as Record<string, string>).Message?.includes('values unset')
+      ) as Record<string, string> | undefined;
+      return warn?.Message;
+    }
+
+    it('does not warn when every required value was supplied', async () => {
+      arrangeFreshDir();
       const { emitter, emitSpy } = createMockEmitter();
-      const ctx = makeContext({ Yes: true, Emitter: emitter });
-      await phase.Run(ctx);
+      await phase.Run(makeContext({ Yes: true, Emitter: emitter }));
+      expect(unsetWarning(emitSpy)).toBeUndefined();
+    });
 
-      const warnEvents = emittedEvents(emitSpy, 'warn');
-      const defaultWarn = warnEvents.find((e: unknown) =>
-        (e as Record<string, string>).Message?.includes('default/empty values')
-      );
-      expect(defaultWarn).toBeDefined();
+    it('names exactly the required values left empty', async () => {
+      arrangeFreshDir();
+      const config = sampleConfig();
+      config.CodeGenPassword = '';
+      config.APIPassword = '   ';
+      const { emitter, emitSpy } = createMockEmitter();
+      await phase.Run(makeContext({ Config: config, Yes: true, Emitter: emitter }));
+      const message = unsetWarning(emitSpy);
+      expect(message).toContain('CodeGenPassword, APIPassword');
+      expect(message).not.toContain('DatabaseName');
+    });
+  });
+
+  describe('FindUnsetRequiredConfig', () => {
+    it('lists only the empty required connection values, in a stable order', () => {
+      const config = sampleConfig();
+      expect(FindUnsetRequiredConfig(config)).toEqual([]);
+      config.DatabaseName = '';
+      config.APIUser = ' ';
+      expect(FindUnsetRequiredConfig(config)).toEqual(['DatabaseName', 'APIUser']);
     });
   });
 
@@ -1028,5 +1054,179 @@ describe('ConfigurePhase', () => {
         expect(written).toContain(`CLIENT_ID: '${clientId}'`);
       });
     }
+  });
+
+  // ─── prompts that have defaults (#4562) ────────────────────────────
+
+  describe('prompts that have defaults (#4562)', () => {
+    it('does not pre-answer fields that exist only as prompt fallbacks', () => {
+      // CreatePlan spreads InstallConfigDefaults into the config before
+      // ConfigurePhase applies its `??` guards, so any field with a default was
+      // already non-nullish and could never prompt — and `false ?? x` is `false`,
+      // which wrote an empty DB_TRUST_SERVER_CERTIFICATE and broke migrate
+      // against every Docker SQL Server.
+      expect(InstallConfigDefaults).not.toHaveProperty('DatabaseHost');
+      expect(InstallConfigDefaults).not.toHaveProperty('DatabasePort');
+      expect(InstallConfigDefaults).not.toHaveProperty('DatabaseTrustCert');
+      expect(InstallConfigDefaults).not.toHaveProperty('APIPort');
+      expect(InstallConfigDefaults).not.toHaveProperty('ExplorerPort');
+    });
+
+    it('keeps the defaults that phases before configure depend on', () => {
+      // resolvePackageManager() runs in preflight; InstallMode drives plan construction.
+      expect(InstallConfigDefaults.PackageManager).toBe('pnpm');
+      expect(InstallConfigDefaults.InstallMode).toBe('distribution');
+      expect(InstallConfigDefaults.AuthProvider).toBe('none');
+    });
+
+    it('prompts for trust-cert in interactive mode', async () => {
+      const config = { ...sampleConfig() };
+      delete (config as Partial<InstallConfig>).DatabaseTrustCert;
+
+      const { emitter, emitSpy } = createMockEmitter();
+      const answered: string[] = [];
+      emitter.On('prompt', (prompt) => {
+        answered.push(prompt.PromptId);
+        prompt.Resolve(prompt.Default ?? '');
+      });
+
+      await phase.Run(makeContext({ Config: config, Yes: false, Emitter: emitter }));
+
+      expect(answered).toContain('db-trust-cert');
+      expect(emittedEvents(emitSpy, 'prompt').length).toBeGreaterThan(0);
+    });
+
+    it('falls back to the default port when the prompt answer is not a number', async () => {
+      const config = { ...sampleConfig() };
+      delete (config as Partial<InstallConfig>).DatabasePort;
+
+      const { emitter } = createMockEmitter();
+      emitter.On('prompt', (prompt) => {
+        if (prompt.PromptId === 'db-port') {
+          prompt.Resolve('not-a-number');
+        } else {
+          prompt.Resolve(prompt.Default ?? '');
+        }
+      });
+
+      const result = await phase.Run(makeContext({ Config: config, Yes: false, Emitter: emitter }));
+
+      expect(result.Config.DatabasePort).toBe(1433);
+    });
+  });
+
+  // ─── Database platform ─────────────────────────────────────────────
+
+  describe('database platform', () => {
+    function pgConfig(): InstallConfig {
+      return {
+        ...sampleConfig(),
+        DatabasePlatform: 'postgresql',
+        DatabaseHost: 'pg.local',
+        DatabasePort: 5433,
+        DatabaseName: 'mj_pg',
+        CodeGenUser: 'mj_codegen',
+        CodeGenPassword: 'cg_secret',
+        APIUser: 'mj_api',
+        APIPassword: 'api_secret',
+      } as InstallConfig;
+    }
+
+    function rootEnv(): string {
+      const calls = mockFs.WriteText.mock.calls as [string, string][];
+      return calls.find(([p]) => p.endsWith('.env') && !p.includes('MJAPI'))?.[1] ?? '';
+    }
+
+    it('PostgreSQL .env: DB_PLATFORM plus separate CodeGen and API logins, no PG_USERNAME', async () => {
+      mockFs.DirectoryExists.mockResolvedValue(true);
+      await phase.Run(makeContext({ Config: pgConfig(), Yes: true }));
+
+      const env = rootEnv();
+      expect(env).toContain(
+        "#Database Setup\nDB_PLATFORM='postgresql'\nDB_HOST='pg.local'\nDB_PORT=5433\n"
+          + "CODEGEN_DB_USERNAME='mj_codegen'\nCODEGEN_DB_PASSWORD='cg_secret'\n"
+          + "DB_USERNAME='mj_api'\nDB_PASSWORD='api_secret'\nDB_DATABASE='mj_pg'\n"
+      );
+      expect(env).not.toMatch(/^PG_(USERNAME|PASSWORD|HOST|PORT|DATABASE)=/m);
+      expect(env).not.toContain('DB_TRUST_SERVER_CERTIFICATE');
+
+      const mjapiEnv = (mockFs.WriteText.mock.calls as [string, string][]).find(([p]) => p.includes('MJAPI') && p.endsWith('.env'))?.[1];
+      expect(mjapiEnv).toContain("DB_PLATFORM='postgresql'");
+      expect(mjapiEnv).toContain("DB_USERNAME='mj_api'");
+    });
+
+    it('PostgreSQL mj.config.cjs pins dbPlatform', async () => {
+      await phase.Run(makeContext({ Config: pgConfig(), Yes: true }));
+
+      const configContent = findWrittenContent('mj.config.cjs');
+      expect(configContent).toContain("module.exports = {\n  dbPlatform: 'postgresql',\n  settings: {");
+      expect(configContent).toContain('port: 5433');
+    });
+
+    it('SQL Server output is unchanged: no DB_PLATFORM in .env, no dbPlatform in mj.config.cjs', async () => {
+      const config = sampleConfig();
+      config.DatabasePlatform = 'sqlserver';
+      await phase.Run(makeContext({ Config: config, Yes: true }));
+
+      expect(rootEnv()).toMatch(/^#Database Setup\nDB_HOST=/);
+      expect(rootEnv()).not.toContain('DB_PLATFORM');
+      expect(findWrittenContent('mj.config.cjs')).not.toContain('dbPlatform');
+    });
+
+    it('--yes without a platform resolves to SQL Server', async () => {
+      const result = await phase.Run(makeContext({ Config: sampleConfig(), Yes: true }));
+
+      expect(result.Config.DatabasePlatform).toBe('sqlserver');
+      expect(rootEnv()).not.toContain('DB_PLATFORM');
+    });
+
+    it('PostgreSQL defaults the port to 5432 and never sets the SQL Server trust-certificate flag', async () => {
+      const config = pgConfig() as Partial<InstallConfig>;
+      delete config.DatabasePort;
+      config.DatabaseTrustCert = true;
+
+      const result = await phase.Run(makeContext({ Config: config as InstallConfig, Yes: true }));
+
+      expect(result.Config.DatabasePort).toBe(5432);
+      expect(result.Config.DatabaseTrustCert).toBe(false);
+      expect(rootEnv()).toContain('DB_PORT=5432');
+      expect(rootEnv()).not.toContain('DB_TRUST_SERVER_CERTIFICATE');
+    });
+
+    it('interactive: asks for the platform first and offers 5432 for PostgreSQL', async () => {
+      const config = { ...sampleConfig() } as Partial<InstallConfig>;
+      delete config.DatabasePlatform;
+      delete config.DatabasePort;
+      delete config.DatabaseTrustCert;
+
+      const { emitter } = createMockEmitter();
+      const prompts: Array<{ Id: string; Default?: string }> = [];
+      emitter.On('prompt', (prompt) => {
+        prompts.push({ Id: prompt.PromptId, Default: prompt.Default });
+        prompt.Resolve(prompt.PromptId === 'db-platform' ? 'postgresql' : prompt.Default ?? '');
+      });
+
+      const result = await phase.Run(makeContext({ Config: config as InstallConfig, Yes: false, Emitter: emitter }));
+
+      expect(prompts[0].Id).toBe('db-platform');
+      expect(prompts.find((p) => p.Id === 'db-port')?.Default).toBe('5432');
+      expect(prompts.some((p) => p.Id === 'db-trust-cert')).toBe(false);
+      expect(result.Config.DatabasePlatform).toBe('postgresql');
+    });
+
+    it('syncs DB_PLATFORM from the root .env into an existing MJAPI .env', async () => {
+      mockFs.FileExists.mockResolvedValue(true);
+      mockFs.DirectoryExists.mockResolvedValue(true);
+      const root = "DB_PLATFORM='postgresql'\nDB_HOST='localhost'\n";
+      const mjapi = "DB_HOST='localhost'\n";
+      mockFs.ReadText.mockImplementation(async (p: string) =>
+        p.includes('MJAPI') && p.endsWith('.env') ? mjapi : p.endsWith('.env') ? root : '',
+      );
+
+      await phase.Run(makeContext({ Config: pgConfig(), Yes: true }));
+
+      const written = (mockFs.WriteText.mock.calls as [string, string][]).find(([p]) => p.includes('MJAPI') && p.endsWith('.env'))?.[1];
+      expect(written).toContain("DB_PLATFORM='postgresql'");
+    });
   });
 });

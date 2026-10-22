@@ -5,9 +5,9 @@ import { BaseInfo } from '../generic/baseInfo';
 // Matches the real MJ pattern: call super() (NO args), let field initializers
 // run, then call copyInitData(initData) from the subclass constructor.
 abstract class TestableInfo extends BaseInfo {
-    public CallCopyInitData(initData: Record<string, unknown>) {
+    public CallCopyInitData(initData: Record<string, unknown>, skipKeys?: ReadonlySet<string>) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (this as unknown as { copyInitData(d: unknown): void }).copyInitData(initData);
+        (this as unknown as { copyInitData(d: unknown, s?: ReadonlySet<string>): void }).copyInitData(initData, skipKeys);
     }
 }
 
@@ -119,6 +119,95 @@ describe('BaseInfo.copyInitData (perf-bundle)', () => {
             const info = new WideInfo({ DefaultValues: "(('ShouldStay'))" });
 
             expect(info.DefaultValues).toBe("(('ShouldStay'))");
+        });
+    });
+});
+
+/**
+ * A class shaped like the metadata classes after a PascalCase rename: the real field is `SpCreate`
+ * and the old camelCase name survives as a @deprecated accessor pair on the prototype.
+ */
+class AliasedInfo extends TestableInfo {
+    SpCreate: string | null = null;
+    ReadOnlyAlias: string | null = null;
+
+    /** @deprecated Use {@link SpCreate}. */
+    get spCreate(): string | null {
+        return this.SpCreate;
+    }
+    set spCreate(value: string | null) {
+        this.SpCreate = value;
+    }
+
+    /** A get-only accessor has nothing to assign to, so a matching key must NOT be copied. */
+    get derived(): string | null {
+        return this.ReadOnlyAlias;
+    }
+
+    constructor(initData: Record<string, unknown> | null = null) {
+        super();
+        if (initData) this.CallCopyInitData(initData);
+    }
+}
+
+describe('copyInitData — @deprecated aliases for renamed fields', () => {
+    it('routes a value arriving under the OLD name through the alias setter', () => {
+        // The `Entities` table's column really is `spCreate`, so metadata rows arrive spelling it
+        // that way. An alias is a PROTOTYPE accessor, which hasOwnProperty does not see — without
+        // the settable-accessor check the value is dropped and the entity loads with no custom
+        // routine name, silently.
+        const info = new AliasedInfo({ spCreate: 'custom_fn_create' });
+
+        expect(info.SpCreate).toBe('custom_fn_create');
+        expect(info.spCreate).toBe('custom_fn_create');
+    });
+
+    it('still copies a value arriving under the NEW name', () => {
+        const info = new AliasedInfo({ SpCreate: 'direct' });
+        expect(info.SpCreate).toBe('direct');
+    });
+
+    it('ignores a key that only matches a read-only getter', () => {
+        const info = new AliasedInfo({ derived: 'nope' });
+        expect(info.ReadOnlyAlias).toBeNull();
+        expect(info.derived).toBeNull();
+    });
+
+    it('does not copy a key that merely matches an inherited METHOD', () => {
+        const info = new AliasedInfo({ CallCopyInitData: 'clobbered' });
+        expect(typeof info.CallCopyInitData).toBe('function');
+    });
+
+    it('overwrites non-null default values when initData supplies null, while fast-skipping already-null fields', () => {
+        class NonNullDefaultInfo extends TestableInfo {
+            TrustServerCacheCompletely: boolean | null = true;
+            AlreadyNullField: string | null = null;
+            private _items: string[] = [];
+
+            get Items(): string[] {
+                return this._items;
+            }
+
+            constructor(initData: Record<string, unknown> | null = null, skipKeys?: ReadonlySet<string>) {
+                super();
+                if (initData) this.CallCopyInitData(initData, skipKeys);
+            }
+        }
+
+        const info = new NonNullDefaultInfo({
+            TrustServerCacheCompletely: null,
+            AlreadyNullField: null,
+            Items: ['skip-me'],
+        }, new Set(['Items']));
+
+        expect(info.TrustServerCacheCompletely).toBeNull();
+        expect(info.AlreadyNullField).toBeNull();
+        expect(info.Items).toEqual([]);
+        expect(info.toJSON()).toMatchObject({
+            ID: null,
+            TrustServerCacheCompletely: null,
+            AlreadyNullField: null,
+            Items: [],
         });
     });
 });

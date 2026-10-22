@@ -21,6 +21,9 @@ import fs from 'fs';
 import path from 'path';
 import { writeFileSync } from 'fs';
 
+// PushAbortedError lives in a dependency-free module, so importing it does not load the engine.
+import { PushAbortedError } from '../lib/push-outcome';
+
 // Type-only imports are erased at runtime — they never load the engine.
 import type { PushResult } from '../services/PushService';
 import type { PullOptions } from '../services/PullService';
@@ -33,6 +36,23 @@ type SyncPullFlags = Interfaces.InferredFlags<(typeof SyncPullPlugin)['flags']>;
 /** Shared loader for the heavy sync engine. Dynamic so the plugin module stays light. */
 async function loadEngine() {
   return import('../index.js');
+}
+
+const MERGE_STRATEGIES = ['merge', 'overwrite', 'skip'] as const;
+
+function isMergeStrategy(value: string | undefined): value is (typeof MERGE_STRATEGIES)[number] {
+  return value !== undefined && (MERGE_STRATEGIES as readonly string[]).includes(value);
+}
+
+/** Splits repeated or comma-separated flag values into a list, or undefined when empty. */
+function splitListFlag(values: string[] | undefined): string[] | undefined {
+  const items = (values ?? []).flatMap((v) => v.split(',')).map((v) => v.trim()).filter((v) => v.length > 0);
+  return items.length > 0 ? items : undefined;
+}
+
+/** Warning text without a leading warning sign, used to find duplicates. */
+function warningKey(message: string): string {
+  return message.replace(/^\s*⚠️?\s*/u, '').trim();
 }
 
 /**
@@ -49,6 +69,30 @@ function flushAndExit(code: number): void {
   process.stdout.write('', () => process.exit(code));
 }
 
+/**
+ * The `data` block for a failed push. `PushAbortedError` carries the counts the push reached and
+ * the SQL log path; anything else failed before the push started and has nothing to report.
+ */
+function failureData(error: unknown, dryRun: boolean): Record<string, unknown> | undefined {
+  if (!(error instanceof PushAbortedError)) {
+    return undefined;
+  }
+  const { totals } = error;
+  return {
+    created: totals.created,
+    updated: totals.updated,
+    unchanged: totals.unchanged,
+    deleted: totals.deleted,
+    skipped: totals.skipped,
+    deferred: totals.deferred,
+    errorCount: totals.errors,
+    dryRun,
+    sqlLogPath: error.sqlLogPath,
+    rolledBack: error.rolledBack,
+    committedOutsideTransaction: error.committedWrites.length,
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // mj sync push
 // ─────────────────────────────────────────────────────────────────────────────
@@ -57,12 +101,21 @@ function flushAndExit(code: number): void {
 export class SyncPushPlugin extends BaseCLIPlugin {
   static description = 'Push local file changes to the database';
 
-  static examples = [
+  static Examples = [
     `<%= config.bin %> <%= command.id %>`,
     `<%= config.bin %> <%= command.id %> --dry-run`,
     `<%= config.bin %> <%= command.id %> --dir="ai-prompts"`,
     `<%= config.bin %> <%= command.id %> --ci --format=json`,
   ];
+
+  /** @deprecated Use {@link Examples}. */
+  static get examples() {
+    return this.Examples;
+  }
+  /** @deprecated Use {@link Examples}. */
+  static set examples(value) {
+    this.Examples = value;
+  }
 
   static flags = {
     dir: Flags.string({ description: 'Specific entity directory to push' }),
@@ -73,9 +126,16 @@ export class SyncPushPlugin extends BaseCLIPlugin {
       description: 'Delete database-only records that reference records being deleted (prevents FK errors)',
       default: false,
     }),
+    'isolated-transactions': Flags.boolean({
+      description:
+        'Give every JSON-root graph its own connection and transaction, so siblings are written in parallel and each ' +
+        'create/update commits as it is saved (a failure does not roll those back). Off by default: the whole push runs ' +
+        'in one transaction, one graph at a time. Overrides push.isolatedTransactions in every .mj-sync.json, in both ' +
+        'directions — use --no-isolated-transactions to force one run back to a single transaction',
+      allowNo: true,
+    }),
     'parallel-batch-size': Flags.integer({
-      description: 'JSON-root graphs to process in parallel (default: 10, not 1)',
-      default: 10,
+      description: 'JSON-root graphs to process in parallel in a directory using isolated transactions (default: 10)',
       min: 1,
       max: 50,
     }),
@@ -103,6 +163,8 @@ export class SyncPushPlugin extends BaseCLIPlugin {
       { name: '--ci', type: 'boolean', description: 'No prompts; non-zero exit on error' },
       { name: '--no-validate', type: 'boolean', description: 'Skip pre-push validation' },
       { name: '--incremental', type: 'boolean', description: 'Skip unchanged files using stored checksums' },
+      { name: '--isolated-transactions', type: 'boolean', description: 'Per-graph connections; creates/updates commit as they go and are not rolled back' },
+      { name: '--parallel-batch-size', type: 'number', description: 'Graphs at once in an isolated directory (default 10)' },
       { name: '--format', type: 'text|json|md', description: 'Output format (json for machine-readable result)' },
     ],
     examples: ['mj sync push --dir=ai-agents', 'mj sync push --ci --format=json'],
@@ -119,11 +181,18 @@ export class SyncPushPlugin extends BaseCLIPlugin {
     const {
       PushService, ValidationService, FormattingService,
       loadMJConfig, loadSyncConfig, initializeProvider,
-      getSyncEngine, getSystemUser, configManager, SyncStateManager,
+      getSyncEngine, getSystemUser, configManager, SyncStateManager, FindSyncRootDir,
     } = engine;
 
     const errors: MJCLIResultError[] = [];
     const warnings: string[] = [];
+    const warningKeys = new Set<string>();
+    const addWarning = (message: string): void => {
+      const key = warningKey(message);
+      if (warningKeys.has(key)) return;
+      warningKeys.add(key);
+      warnings.push(message);
+    };
 
     try {
     this.Host.StartStep('Loading configuration');
@@ -148,7 +217,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
     // ── Validation ────────────────────────────────────────────────────────────
     if (!flags['no-validate']) {
       this.Host.StartStep('Validating metadata');
-      const validator = new ValidationService({ verbose: this.Host.Verbose, include: includeFilter, exclude: excludeFilter });
+      const validator = new ValidationService({ verbose: this.Host.Verbose, include: includeFilter, exclude: excludeFilter, HonorPushWhen: true, ValidateChildFoldersOnly: !flags.dir });
       const targetDir = flags.dir ? path.resolve(baseDir, flags.dir) : baseDir;
       const validationResult = await validator.validateDirectory(targetDir);
 
@@ -177,7 +246,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
     // ── Push ────────────────────────────────────────────────────────────────��─
     const pushService = new PushService(await getSyncEngine(getSystemUser()), getSystemUser());
     if (flags.incremental) {
-      const stateDir = flags.dir ? path.resolve(baseDir, flags.dir) : baseDir;
+      const stateDir = flags.dir ? FindSyncRootDir(path.resolve(baseDir, flags.dir)) : baseDir;
       const stateManager = new SyncStateManager(stateDir);
       await stateManager.load();
       pushService.setStateManager(stateManager);
@@ -191,6 +260,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
         noValidate: flags['no-validate'],
         deleteDbOnly: flags['delete-db-only'],
         parallelBatchSize: flags['parallel-batch-size'],
+        isolatedTransactions: flags['isolated-transactions'],
         include: includeFilter,
         exclude: excludeFilter,
         incremental: flags.incremental,
@@ -203,7 +273,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
         // via onRecordError (below), so errors[] stays clean (plan §1a/§6/D6).
         onError: (message) => {
           if (message.includes('Rolling back database') || message.includes('rolled back successfully')) {
-            warnings.push(message);
+            addWarning(message);
             this.Host.Log(message, 'warn');
           } else {
             this.Host.Log(message, 'error');
@@ -215,7 +285,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
           errors.push({ context, message });
         },
         onWarn: (message) => {
-          warnings.push(message);
+          addWarning(message);
           this.Host.Log(message, 'warn');
         },
         onLog: (message) => this.Host.Log(message),
@@ -224,23 +294,14 @@ export class SyncPushPlugin extends BaseCLIPlugin {
     );
 
     const endTime = Date.now();
-    for (const w of result.warnings) if (!warnings.includes(w)) warnings.push(w);
+    for (const w of result.warnings) addWarning(w);
 
-    // Recovery decision: with non-fatal errors, the original CLI asked whether to
-    // keep the successfully-committed changes. Preserve that for interactive text
-    // mode. CI / non-interactive keeps the failure (no prompt possible).
-    let success = result.errors === 0 && errors.length === 0;
-    if (!success && result.errors > 0 && !flags.ci && isText) {
-      const commit = await confirm({
-        message: 'Push completed with errors. Do you want to commit the successful changes?',
-        default: false,
-      });
-      if (commit) success = true;
-      else warnings.push('Push cancelled due to errors.');
-    }
+    // A push that fails rolls back and throws (see the catch below), so a result with
+    // errors only comes from a dry run. There is nothing to commit, so no prompt.
+    const success = result.errors === 0 && errors.length === 0;
 
     if (isText) {
-      this.renderPushTextSummary(formatter, result, flags['change-detail'], startTime, endTime);
+      this.renderPushTextSummary(formatter, result, flags['change-detail'], !!flags['dry-run'], startTime, endTime);
     }
 
     return {
@@ -259,6 +320,10 @@ export class SyncPushPlugin extends BaseCLIPlugin {
         errorCount: result.errors,
         dryRun: !!flags['dry-run'],
         sqlLogPath: result.sqlLogPath,
+        skippedDirectories: (result.SkippedDirectories ?? []).map((s) => ({
+          directory: path.relative(baseDir, s.Directory) || path.basename(s.Directory),
+          reason: s.Reason,
+        })),
       },
       errors,
       warnings,
@@ -272,7 +337,10 @@ export class SyncPushPlugin extends BaseCLIPlugin {
       const message = error instanceof Error ? error.message : String(error);
       this.Host.FailStep('Push failed', message);
       if (errors.length === 0) errors.push({ message });
-      return { success: false, command: 'sync:push', durationSeconds: (Date.now() - startTime) / 1000, errors, warnings };
+      // A failed push still reports what it did. Without this the JSON consumer loses the counts
+      // and the SQL log path on exactly the runs that need them.
+      const data = failureData(error, flags['dry-run'] === true);
+      return { success: false, command: 'sync:push', durationSeconds: (Date.now() - startTime) / 1000, data, errors, warnings };
     }
   }
 
@@ -281,10 +349,11 @@ export class SyncPushPlugin extends BaseCLIPlugin {
     formatter: InstanceType<(typeof import('../services/FormattingService'))['FormattingService']>,
     result: PushResult,
     changeDetail: boolean,
+    dryRun: boolean,
     startTime: number,
     endTime: number,
   ): void {
-    const recap = formatter.formatChangesRecap(result.changeLog);
+    const recap = formatter.FormatChangesRecap(result.changeLog, dryRun);
     if (recap) this.Host.Log('\n' + recap);
 
     if (changeDetail && result.changeLog.length > 0) {
@@ -292,7 +361,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
       const reportDir = result.sqlLogPath ? path.dirname(result.sqlLogPath) : process.cwd();
       const reportPath = path.join(reportDir, `MetadataSync_Changes_${stamp}.log`);
       try {
-        writeFileSync(reportPath, formatter.formatChangesReport(result.changeLog, new Date(endTime).toISOString()));
+        writeFileSync(reportPath, formatter.FormatChangesReport(result.changeLog, new Date(endTime).toISOString(), dryRun));
         this.Host.Log(`\n📄 Detailed change report: ${path.relative(process.cwd(), reportPath)}`);
       } catch (writeErr) {
         this.Host.Log(`\n⚠️  Could not write change report: ${writeErr instanceof Error ? writeErr.message : String(writeErr)}`, 'warn');
@@ -303,7 +372,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
     if (changed || this.Host.Verbose) {
       this.Host.Log(
         '\n' +
-          formatter.formatSyncSummary('push', {
+          formatter.FormatSyncSummary('push', {
             created: result.created,
             updated: result.updated,
             unchanged: result.unchanged,
@@ -312,7 +381,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
             deferred: result.deferred || 0,
             errors: result.errors,
             duration: endTime - startTime,
-          }),
+          }, dryRun),
       );
     }
 
@@ -322,10 +391,11 @@ export class SyncPushPlugin extends BaseCLIPlugin {
     }
 
     const extras = changed || this.Host.Verbose ? '' : ` · no changes · ${formatter.formatDuration(endTime - startTime)}`;
+    const label = dryRun ? 'Dry run' : 'Push';
     if (result.errors === 0) {
-      this.Host.Log(`\n✓ Push completed successfully${extras}`);
+      this.Host.Log(`\n✓ ${label} completed successfully${dryRun ? ' · nothing written' : ''}${extras}`);
     } else {
-      this.Host.Log('\n⚠️  Push completed with errors', 'warn');
+      this.Host.Log(`\n⚠️  ${label} completed with errors`, 'warn');
     }
     if (result.sqlLogPath) this.Host.Log(`\n📄 SQL log saved to: ${path.relative(process.cwd(), result.sqlLogPath)}`);
   }
@@ -336,7 +406,8 @@ export class SyncPushPlugin extends BaseCLIPlugin {
 
   private cancelled(startTime: number, message: string): MJCLIResult {
     if (this.Host.Format === 'text') this.Host.Log(`\n⚠️  ${message}`, 'warn');
-    return { success: true, command: 'sync:push', durationSeconds: (Date.now() - startTime) / 1000, warnings: [message] };
+    // `cancelled` tells callers nothing was written, so there is nothing for them to invalidate.
+    return { success: true, command: 'sync:push', durationSeconds: (Date.now() - startTime) / 1000, data: { cancelled: true }, warnings: [message] };
   }
 
   /**
@@ -364,11 +435,20 @@ export class SyncPushPlugin extends BaseCLIPlugin {
 export class SyncPullPlugin extends BaseCLIPlugin {
   static description = 'Pull metadata from database to local files';
 
-  static examples = [
+  static Examples = [
     `<%= config.bin %> <%= command.id %> --entity="MJ: AI Prompts"`,
     `<%= config.bin %> <%= command.id %> --entity="MJ: AI Agents" --merge-strategy=overwrite`,
     `<%= config.bin %> <%= command.id %> --entity="Templates" --dry-run --verbose`,
   ];
+
+  /** @deprecated Use {@link Examples}. */
+  static get examples() {
+    return this.Examples;
+  }
+  /** @deprecated Use {@link Examples}. */
+  static set examples(value) {
+    this.Examples = value;
+  }
 
   static flags = {
     entity: Flags.string({ description: 'Entity name to pull', required: true }),
@@ -376,10 +456,10 @@ export class SyncPullPlugin extends BaseCLIPlugin {
     'dry-run': Flags.boolean({ description: 'Show what would be pulled without actually pulling' }),
     'multi-file': Flags.string({ description: 'Create a single file with multiple records (provide filename)' }),
     'no-validate': Flags.boolean({ description: 'Skip validation before pull' }),
-    'update-existing': Flags.boolean({ description: 'Update existing records during pull', default: true }),
-    'create-new': Flags.boolean({ description: 'Create new files for records not found locally', default: true }),
+    'update-existing': Flags.boolean({ description: 'Update existing records during pull (default: the folder config, else true)', allowNo: true }),
+    'create-new': Flags.boolean({ description: 'Create new files for records not found locally (default: the folder config, else true)', allowNo: true }),
     'backup-before-update': Flags.boolean({ description: 'Create backups before updating files', default: true }),
-    'merge-strategy': Flags.string({ description: 'Merge strategy for updates', options: ['merge', 'overwrite', 'skip'], default: 'merge' }),
+    'merge-strategy': Flags.string({ description: 'Merge strategy for updates (default: the folder config, else merge)', options: ['merge', 'overwrite', 'skip'] }),
     'backup-directory': Flags.string({ description: 'Custom backup directory (default: .backups)' }),
     'preserve-fields': Flags.string({ description: 'Comma-separated list of fields to preserve during updates', multiple: true }),
     'exclude-fields': Flags.string({ description: 'Comma-separated list of fields to exclude from pull', multiple: true }),
@@ -456,7 +536,7 @@ export class SyncPullPlugin extends BaseCLIPlugin {
       const formatter = new FormattingService();
       if (!flags['no-validate']) {
         this.Host.StartStep('Validating target directory');
-        const validator = new ValidationService({ verbose: this.Host.Verbose });
+        const validator = new ValidationService({ verbose: this.Host.Verbose, ValidateChildFoldersOnly: true });
         const validationResult = await validator.validateDirectory(targetDir);
         if (!validationResult.isValid || validationResult.warnings.length > 0) {
           this.Host.FailStep('Validation reported issues');
@@ -488,9 +568,7 @@ export class SyncPullPlugin extends BaseCLIPlugin {
         pullService.setStateManager(stateManager);
       }
 
-      // Only the fields PullService.pull() actually reads are forwarded; the
-      // backup/merge/preserve/exclude flags it ignores are kept for help/CLI
-      // compatibility but were no-ops in the original (passed via `any`).
+      // The backup flags are not forwarded; PullService takes its backup settings from the folder config.
       const pullOptions: PullOptions = { entity: flags.entity, targetDir, dryRun: flags['dry-run'], verbose: this.Host.Verbose, noValidate: flags['no-validate'] };
       if (flags.filter !== undefined) pullOptions.filter = flags.filter;
       if (flags['multi-file'] !== undefined) pullOptions.multiFile = flags['multi-file'];
@@ -498,6 +576,11 @@ export class SyncPullPlugin extends BaseCLIPlugin {
       if (flags['create-new'] !== undefined) pullOptions.createNewFileIfNotFound = flags['create-new'];
       if (flags.incremental) pullOptions.incremental = flags.incremental;
       if (flags.since !== undefined) pullOptions.since = flags.since;
+      if (isMergeStrategy(flags['merge-strategy'])) pullOptions.MergeStrategy = flags['merge-strategy'];
+      const preserveFields = splitListFlag(flags['preserve-fields']);
+      if (preserveFields) pullOptions.PreserveFields = preserveFields;
+      const excludeFields = splitListFlag(flags['exclude-fields']);
+      if (excludeFields) pullOptions.ExcludeFields = excludeFields;
 
       const result = await pullService.pull(pullOptions, {
         onProgress: (message) => this.Host.StartStep(message),

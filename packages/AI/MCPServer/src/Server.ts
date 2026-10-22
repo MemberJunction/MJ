@@ -14,21 +14,22 @@
  */
 
 import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, Metadata, RunView, RunQuery, UserInfo } from "@memberjunction/core";
-import { UUIDsEqual } from "@memberjunction/global";
+import { CountByUUID, IndexByUUID, UUIDsEqual } from "@memberjunction/global";
 import { setupSQLServerClient, SQLServerProviderConfigData } from "@memberjunction/sqlserver-dataprovider";
 import { UserCache } from "@memberjunction/generic-database-provider";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { randomUUID } from 'crypto';
+import { Readable } from 'stream';
 import express, { Request, Response, NextFunction } from 'express';
 import sql from "mssql";
 import { z } from "zod";
-import { initConfig, ConfigInfo, MCPServerActionToolInfo, MCPServerPromptToolInfo, MCPServerAgentToolInfo, MCPServerEntityToolInfo } from './config.js';
+import { InitConfig, ConfigInfo, MCPServerActionToolInfo, MCPServerPromptToolInfo, MCPServerAgentToolInfo, MCPServerEntityToolInfo } from './config.js';
 import { DiscoverMJConfig, LoadDynamicPackages } from '@memberjunction/dynamic-packages';
-import { loadAgentManagementTools } from './tools/agentManagementTools.js';
+import { LoadAgentManagementTools } from './tools/agentManagementTools.js';
 import { AgentRunner } from "@memberjunction/ai-agents";
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, ResolvePayloadAtStart, ResolvePayloadAtEnd } from "@memberjunction/ai-core-plus";
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { AIEngine } from "@memberjunction/aiengine";
@@ -50,28 +51,28 @@ import {
     ProtectedResourceMetadata,
 } from './auth/types.js';
 import {
-    getAuthMode,
-    getResourceIdentifier,
-    isOAuthEnabled,
-    validateOAuthConfig,
-    logAuthConfig,
+    GetAuthMode,
+    GetResourceIdentifier,
+    IsOAuthEnabled,
+    ValidateOAuthConfig,
+    LogAuthConfig,
 } from './auth/OAuthConfig.js';
 import {
     authenticateRequest as oauthAuthenticateRequest,
-    toSessionContext,
-    sendAuthErrorResponse,
+    ToSessionContext,
+    SendAuthErrorResponse,
     AuthGateConfig,
 } from './auth/AuthGate.js';
 import {
-    buildProtectedResourceMetadata,
-    extractAuthorizationServers,
+    BuildProtectedResourceMetadata,
+    ExtractAuthorizationServers,
 } from './auth/ProtectedResourceMetadata.js';
-import { hasAuthProviders, setProxyTokenConfig } from './auth/TokenValidator.js';
-import { send401Response } from './auth/WWWAuthenticate.js';
+import { HasAuthProviders, SetProxyTokenConfig } from './auth/TokenValidator.js';
+import { Send401Response } from './auth/WWWAuthenticate.js';
 // OAuth Proxy imports
-import { createOAuthProxyRouter } from './auth/OAuthProxyRouter.js';
+import { CreateOAuthProxyRouter } from './auth/OAuthProxyRouter.js';
 import type { OAuthProxyConfig } from './auth/OAuthProxyTypes.js';
-import { resolveUpstreamOAuthEndpoints } from './auth/UpstreamEndpoints.js';
+import { ResolveUpstreamOAuthEndpoints } from './auth/UpstreamEndpoints.js';
 
 
 /*******************************************************************************
@@ -394,7 +395,7 @@ async function authenticateRequest(request: Request | http.IncomingMessage): Pro
         throw new Error(error?.message || 'Authentication failed');
     }
 
-    return toSessionContext(result);
+    return ToSessionContext(result);
 }
 
 /**
@@ -695,7 +696,7 @@ function shouldIncludeTool(toolName: string, filterOptions: ToolFilterOptions): 
  * truncateText("Hello World", 5) // { value: "Hel...[4 chars]...ld", truncated: true }
  * truncateText("Hi", 100) // { value: "Hi", truncated: false }
  */
-export function truncateText(text: string | null | undefined, maxChars: number): { value: string; truncated: boolean } {
+export function TruncateText(text: string | null | undefined, maxChars: number): { value: string; truncated: boolean } {
     if (!text) {
         return { value: '', truncated: false };
     }
@@ -714,6 +715,11 @@ export function truncateText(text: string | null | undefined, maxChars: number):
         text.substring(text.length - endChars);
 
     return { value: truncated, truncated: true };
+}
+
+/** @deprecated Use {@link TruncateText}. */
+export function truncateText(text: string | null | undefined, maxChars: number): { value: string; truncated: boolean } {
+    return TruncateText(text, maxChars);
 }
 
 /*******************************************************************************
@@ -741,6 +747,129 @@ export interface ToolConfig {
  * Function type for registering a tool with filtering and authorization support.
  */
 export type AddToolFn = (config: ToolConfig) => void;
+
+/**
+ * Cached compiled built-in tool configurations (including pre-built Zod input schemas)
+ * so new MCP sessions reuse the compiled definitions instead of rebuilding thousands of
+ * Zod schemas per connection.
+ */
+let _compiledToolConfigsCache: { key: string; tools: ToolConfig[] } | null = null;
+
+/**
+ * Clears the cached compiled MCP tool definitions (e.g. when configuration or metadata changes).
+ */
+export function ClearCompiledToolCache(): void {
+    _compiledToolConfigsCache = null;
+}
+
+/**
+ * Computes a cache key reflecting the current MCP server configuration and engine metadata counts.
+ */
+function computeCompiledToolCacheKey(): string {
+    const md = Metadata.Provider; // global-provider-ok: process-wide tool cache key, not per-request
+    const entityCount = md?.Entities?.length ?? 0;
+    const actionCount = ActionEngineServer.Instance.Loaded ? ActionEngineServer.Instance.Actions.length : 0;
+    const actionParamCount = ActionEngineServer.Instance.Loaded ? ActionEngineServer.Instance.ActionParams.length : 0;
+    const agentCount = AIEngine.Instance.Loaded ? AIEngine.Instance.Agents.length : 0;
+    const promptCount = AIEngine.Instance.Loaded ? AIEngine.Instance.Prompts.length : 0;
+    return JSON.stringify({
+        entityTools: _config?.mcpServerSettings?.entityTools ?? null,
+        actionTools: _config?.mcpServerSettings?.actionTools ?? null,
+        agentTools: _config?.mcpServerSettings?.agentTools ?? null,
+        agentManagementTools: _config?.mcpServerSettings?.agentManagementTools ?? null,
+        queryTools: _config?.mcpServerSettings?.queryTools ?? null,
+        promptTools: _config?.mcpServerSettings?.promptTools ?? null,
+        communicationTools: _config?.mcpServerSettings?.communicationTools ?? null,
+        entityCount,
+        actionCount,
+        actionParamCount,
+        agentCount,
+        promptCount,
+    });
+}
+
+/**
+ * Returns the compiled built-in {@link ToolConfig} list, building and caching it on first call
+ * or when the underlying metadata/configuration changes. Each tool's `execute(props, sessionContext)`
+ * receives the active connection's `MCPSessionContext` at invocation time.
+ */
+export async function GetOrBuildCompiledToolConfigs(
+    systemUser: UserInfo,
+    fallbackSessionContext: MCPSessionContext
+): Promise<ToolConfig[]> {
+    const currentKey = computeCompiledToolCacheKey();
+    if (_compiledToolConfigsCache && _compiledToolConfigsCache.key === currentKey) {
+        return _compiledToolConfigsCache.tools;
+    }
+
+    const compiledTools: ToolConfig[] = [];
+    const seenToolNames = new Set<string>();
+    const collectTool: AddToolFn = (config: ToolConfig): void => {
+        if (seenToolNames.has(config.name)) {
+            return;
+        }
+        seenToolNames.add(config.name);
+        compiledTools.push(config);
+    };
+
+    // Register Get_Entity_List tool - ultra-lightweight list of all entities
+    collectTool({
+        name: "Get_Entity_List",
+        description: "Retrieves a list of all entity names. Use Get_Single_Entity(entityName) to get full details including description, fields, and relationships for a specific entity.",
+        parameters: z.object({}),
+        scopeInfo: { scopePath: 'entity:read', resource: '*' },
+        async execute() {
+            const md = new Metadata(); // global-provider-ok: MCP server bootstrap
+            // Just return entity names - minimal payload
+            const entityNames = md.Entities.map(e => e.Name);
+            return JSON.stringify(entityNames);
+        }
+    });
+
+    // Register Get_Single_Entity tool - full details for one entity
+    collectTool({
+        name: "Get_Single_Entity",
+        description: "Retrieves complete details for a single entity including all fields, relationships, and metadata. Use Get_Entity_List first to find entity names.",
+        parameters: z.object({
+            entityName: z.string().describe("The exact name of the entity to retrieve (e.g., 'Users', 'MJ: AI Models')")
+        }),
+        scopeInfo: (props) => ({ scopePath: 'entity:read', resource: props.entityName as string || '*' }),
+        async execute(params: Record<string, unknown>) {
+            const entityName = params.entityName as string;
+            const md = new Metadata(); // global-provider-ok: MCP server bootstrap
+            const entity = md.Entities.find(e =>
+                e.Name.toLowerCase() === entityName.toLowerCase()
+            );
+            if (!entity) {
+                return JSON.stringify({
+                    error: `Entity '${entityName}' not found`,
+                    suggestion: "Use Get_Entity_List to see available entity names"
+                });
+            }
+            return JSON.stringify(entity, null, 2);
+        }
+    });
+
+    // Load all tool categories into the compiled cache
+    await loadEntityTools(collectTool);
+    await loadActionTools(collectTool, systemUser, fallbackSessionContext);
+    await loadAgentTools(collectTool, systemUser, fallbackSessionContext);
+    await LoadAgentManagementTools(
+        collectTool,
+        systemUser,
+        fallbackSessionContext,
+        (agent) => addAgentExecuteTool(collectTool, agent, fallbackSessionContext),
+        _config?.mcpServerSettings?.agentManagementTools
+    );
+    loadAgentRunDiagnosticTools(collectTool, fallbackSessionContext);
+    loadQueryTools(collectTool, fallbackSessionContext);
+    await loadPromptTools(collectTool, systemUser, fallbackSessionContext);
+    loadCommunicationTools(collectTool, fallbackSessionContext);
+
+    const postLoadKey = computeCompiledToolCacheKey();
+    _compiledToolConfigsCache = { key: postLoadKey, tools: compiledTools };
+    return compiledTools;
+}
 
 /**
  * Registers all tools with the MCP server for a specific authenticated session.
@@ -806,59 +935,10 @@ async function registerAllTools(
         );
     };
 
-    // Register Get_Entity_List tool - ultra-lightweight list of all entities
-    addToolWithFilter({
-        name: "Get_Entity_List",
-        description: "Retrieves a list of all entity names. Use Get_Single_Entity(entityName) to get full details including description, fields, and relationships for a specific entity.",
-        parameters: z.object({}),
-        scopeInfo: { scopePath: 'entity:read', resource: '*' },
-        async execute() {
-            const md = new Metadata(); // global-provider-ok: MCP server bootstrap
-            // Just return entity names - minimal payload
-            const entityNames = md.Entities.map(e => e.Name);
-            return JSON.stringify(entityNames);
-        }
-    });
-
-    // Register Get_Single_Entity tool - full details for one entity
-    addToolWithFilter({
-        name: "Get_Single_Entity",
-        description: "Retrieves complete details for a single entity including all fields, relationships, and metadata. Use Get_Entity_List first to find entity names.",
-        parameters: z.object({
-            entityName: z.string().describe("The exact name of the entity to retrieve (e.g., 'Users', 'MJ: AI Models')")
-        }),
-        scopeInfo: (props) => ({ scopePath: 'entity:read', resource: props.entityName as string || '*' }),
-        async execute(params: Record<string, unknown>) {
-            const entityName = params.entityName as string;
-            const md = new Metadata(); // global-provider-ok: MCP server bootstrap
-            const entity = md.Entities.find(e =>
-                e.Name.toLowerCase() === entityName.toLowerCase()
-            );
-            if (!entity) {
-                return JSON.stringify({
-                    error: `Entity '${entityName}' not found`,
-                    suggestion: "Use Get_Entity_List to see available entity names"
-                });
-            }
-            return JSON.stringify(entity, null, 2);
-        }
-    });
-
-    // Load all tool categories
-    await loadEntityTools(addToolWithFilter);
-    await loadActionTools(addToolWithFilter, systemUser, sessionContext);
-    await loadAgentTools(addToolWithFilter, systemUser, sessionContext);
-    await loadAgentManagementTools(
-        addToolWithFilter,
-        systemUser,
-        sessionContext,
-        (agent) => addAgentExecuteTool(addToolWithFilter, agent, sessionContext),
-        _config.mcpServerSettings?.agentManagementTools
-    );
-    loadAgentRunDiagnosticTools(addToolWithFilter, sessionContext);
-    loadQueryTools(addToolWithFilter, sessionContext);
-    await loadPromptTools(addToolWithFilter, systemUser, sessionContext);
-    loadCommunicationTools(addToolWithFilter, sessionContext);
+    const compiledTools = await GetOrBuildCompiledToolConfigs(systemUser, sessionContext);
+    for (const toolConfig of compiledTools) {
+        addToolWithFilter(toolConfig);
+    }
 
     // Register custom tool providers
     for (const provider of activeCustomToolProviders) {
@@ -919,7 +999,7 @@ async function loadOpenAppServerPackages(): Promise<void> {
  *   customToolProviders: [myCustomProvider]
  * });
  */
-export async function initializeServer(optionsOrFilterOptions: MCPServerOptions | ToolFilterOptions = {}): Promise<void> {
+export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions | ToolFilterOptions = {}): Promise<void> {
     try {
         // Support both MCPServerOptions and legacy ToolFilterOptions parameter
         const options: MCPServerOptions = isToolFilterOptions(optionsOrFilterOptions)
@@ -927,7 +1007,7 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
             : optionsOrFilterOptions;
 
         // Initialize configuration (loads .env and mj.config.cjs)
-        _config = await initConfig();
+        _config = await InitConfig();
         await loadOpenAppServerPackages();
         mcpServerPort = _config.mcpServerSettings?.port || 3100;
 
@@ -975,14 +1055,14 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
         };
 
         // Validate OAuth configuration if OAuth is enabled
-        const authMode = getAuthMode();
+        const authMode = GetAuthMode();
         let effectiveAuthMode = authMode;
         let configuredProviderNames: string[] = [];
 
         if (authMode === 'oauth' || authMode === 'both') {
             // Check if auth providers are configured
-            const providersConfigured = await hasAuthProviders();
-            const validationResult = validateOAuthConfig(providersConfigured);
+            const providersConfigured = await HasAuthProviders();
+            const validationResult = ValidateOAuthConfig(providersConfigured);
 
             if (validationResult.errors.length > 0) {
                 console.error(`[Auth] OAuth configuration errors: ${validationResult.errors.join('; ')}`);
@@ -1011,7 +1091,7 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
         }
 
         // Log auth configuration
-        logAuthConfig(effectiveAuthMode, configuredProviderNames);
+        LogAuthConfig(effectiveAuthMode, configuredProviderNames);
 
         // Create Express app for SSE transport
         const app = express();
@@ -1051,7 +1131,7 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
         const oauthProxyEnabled = _config.mcpServerSettings?.auth?.proxy?.enabled ?? false;
         let oauthProxyBaseUrl: string | undefined;
 
-        if (isOAuthEnabled() && oauthProxyEnabled) {
+        if (IsOAuthEnabled() && oauthProxyEnabled) {
             try {
                 // Get the upstream provider configuration
                 const factory = AuthProviderFactory.Instance;
@@ -1070,7 +1150,7 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
                         console.error(`[OAuth Proxy] Upstream provider '${upstreamProviderName}' not found`);
                     } else {
                         // Build OAuth proxy configuration
-                        oauthProxyBaseUrl = getResourceIdentifier();
+                        oauthProxyBaseUrl = GetResourceIdentifier();
 
                         // Derive the upstream OAuth endpoints from the provider's issuer.
                         // Cast to access provider properties (IAuthProvider interface)
@@ -1081,7 +1161,7 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
                             clientId?: string;
                             domain?: string;
                         };
-                        const { flavor, authorizationEndpoint, tokenEndpoint } = resolveUpstreamOAuthEndpoints(provider);
+                        const { flavor, authorizationEndpoint, tokenEndpoint } = ResolveUpstreamOAuthEndpoints(provider);
 
                         // Build scopes for upstream - use standard OIDC scopes only
                         // Note: We don't include api://.../.default because that would cause
@@ -1145,7 +1225,7 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
                         };
 
                         // Create and mount OAuth proxy router
-                        const oauthProxyRouter = createOAuthProxyRouter(proxyConfig);
+                        const oauthProxyRouter = CreateOAuthProxyRouter(proxyConfig);
                         app.use(oauthProxyRouter);
 
                         console.log(`[OAuth Proxy] Enabled with upstream provider: ${provider.name}`);
@@ -1155,7 +1235,7 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
                         if (jwtConfig) {
                             console.log(`[OAuth Proxy] JWT signing enabled (issuer: ${jwtConfig.issuer})`);
                             // Configure TokenValidator to accept proxy-signed JWTs
-                            setProxyTokenConfig({
+                            SetProxyTokenConfig({
                                 signingSecret: jwtConfig.signingSecret,
                                 issuer: jwtConfig.issuer,
                                 audience: oauthProxyBaseUrl,
@@ -1175,14 +1255,14 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
         // =====================================================================
         // This endpoint allows MCP clients to discover how to authenticate.
         // It's required by the MCP Authorization specification when OAuth is enabled.
-        if (isOAuthEnabled()) {
+        if (IsOAuthEnabled()) {
             app.get('/.well-known/oauth-protected-resource', async (_req: Request, res: Response) => {
                 try {
                     const factory = AuthProviderFactory.Instance;
                     const providers = factory.getAllProviders();
 
                     // Extract issuer URLs from configured auth providers
-                    const authorizationServers = extractAuthorizationServers(
+                    const authorizationServers = ExtractAuthorizationServers(
                         providers.map((p: { issuer: string }) => ({ issuer: p.issuer }))
                     );
 
@@ -1190,7 +1270,7 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
                         console.warn('[OAuth] No authorization servers configured - metadata endpoint returning empty list');
                     }
 
-                    const metadata: ProtectedResourceMetadata = buildProtectedResourceMetadata({
+                    const metadata: ProtectedResourceMetadata = BuildProtectedResourceMetadata({
                         authorizationServers,
                         resourceName: 'MemberJunction MCP Server',
                         providers, // Pass providers for automatic scope generation
@@ -1216,11 +1296,11 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
             // Authenticate the request with full result for proper error handling
             const authResult = await authenticateRequestWithResult(req);
             if (!authResult.authenticated) {
-                sendAuthErrorResponse(res, authResult);
+                SendAuthErrorResponse(res, authResult);
                 return;
             }
 
-            const sessionContext = toSessionContext(authResult);
+            const sessionContext = ToSessionContext(authResult);
 
             try {
                 // Create a new MCP server for this connection
@@ -1302,8 +1382,8 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
             if (!transport) {
                 // Session expired or invalid - client needs to re-authenticate
                 // When OAuth is enabled, include WWW-Authenticate header to guide client
-                if (isOAuthEnabled()) {
-                    send401Response(res, 'Session expired or invalid. Please re-authenticate via /mcp/sse endpoint.', {
+                if (IsOAuthEnabled()) {
+                    Send401Response(res, 'Session expired or invalid. Please re-authenticate via /mcp/sse endpoint.', {
                         errorDescription: 'Session not found - establish a new authenticated session'
                     });
                 } else {
@@ -1323,7 +1403,6 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
             const bodyBuffer = Buffer.concat(chunks as unknown as Uint8Array[]);
 
             // Create a new readable stream from the buffered body for the transport
-            const { Readable } = await import('stream');
             const bodyStream = new Readable({
                 read() {
                     this.push(bodyBuffer);
@@ -1388,11 +1467,11 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
             // We need to authenticate and create a new transport
             const authResult = await authenticateRequestWithResult(req);
             if (!authResult.authenticated) {
-                sendAuthErrorResponse(res, authResult);
+                SendAuthErrorResponse(res, authResult);
                 return;
             }
 
-            const sessionContext = toSessionContext(authResult);
+            const sessionContext = ToSessionContext(authResult);
 
             try {
                 // Create a new MCP server for this session
@@ -1452,7 +1531,7 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
             console.log(`Streamable HTTP endpoint: http://localhost:${mcpServerPort}/mcp`);
 
             // Log OAuth-specific endpoints if enabled
-            if (isOAuthEnabled()) {
+            if (IsOAuthEnabled()) {
                 console.log(`Protected Resource Metadata: http://localhost:${mcpServerPort}/.well-known/oauth-protected-resource`);
             }
         });
@@ -1460,6 +1539,11 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
     } catch (error) {
         console.error("Failed to initialize MCP server:", error);
     }
+}
+
+/** @deprecated Use {@link InitializeServer}. */
+export async function initializeServer(optionsOrFilterOptions: MCPServerOptions | ToolFilterOptions = {}): Promise<void> {
+    return InitializeServer(optionsOrFilterOptions);
 }
 
 /*******************************************************************************
@@ -1483,7 +1567,7 @@ async function loadActionTools(
     systemUser: UserInfo,
     sessionContext: MCPSessionContext
 ): Promise<void> {
-    const actionTools = _config.mcpServerSettings?.actionTools;
+    const actionTools = _config?.mcpServerSettings?.actionTools;
 
     if (actionTools && actionTools.length > 0) {
         // Ensure ActionEngine is configured
@@ -1501,9 +1585,10 @@ async function loadActionTools(
                     category: z.string().optional().describe("Category name to filter actions")
                 }),
                 scopeInfo: { scopePath: 'action:read', resource: '*' },
-                async execute(props) {
-                    const sessionUser = sessionContext.user;
+                async execute(props, activeSessionContext) {
+                    const sessionUser = (activeSessionContext ?? sessionContext).user;
                     const actions = await discoverActions(props.pattern as string || '*', props.category as string | undefined, sessionUser);
+                    const paramCounts = CountByUUID(actionEngine.ActionParams, (p: MJActionParamEntity) => p.ActionID);
                     return JSON.stringify(actions.map(action => ({
                         id: action.ID,
                         name: action.Name,
@@ -1512,7 +1597,7 @@ async function loadActionTools(
                         categoryId: action.CategoryID,
                         type: action.Type,
                         status: action.Status,
-                        paramCount: actionEngine.ActionParams.filter((p: MJActionParamEntity) => UUIDsEqual(p.ActionID, action.ID)).length
+                        paramCount: paramCounts.Get(action.ID) ?? 0
                     })));
                 }
             });
@@ -1533,8 +1618,8 @@ async function loadActionTools(
                     scopePath: 'action:execute',
                     resource: (props.actionName as string) || (props.actionId as string) || '*'
                 }),
-                async execute(props) {
-                    const sessionUser = sessionContext.user;
+                async execute(props, activeSessionContext) {
+                    const sessionUser = (activeSessionContext ?? sessionContext).user;
                     try {
                         const actionEngine = ActionEngineServer.Instance;
                         await actionEngine.Config(false, sessionUser);
@@ -1605,8 +1690,8 @@ async function loadActionTools(
                     actionId: z.string().optional().describe("ID of the action")
                 }),
                 scopeInfo: (props) => ({ scopePath: 'action:read', resource: (props.actionName as string) || (props.actionId as string) || '*' }),
-                async execute(props) {
-                    const sessionUser = sessionContext.user;
+                async execute(props, activeSessionContext) {
+                    const sessionUser = (activeSessionContext ?? sessionContext).user;
                     const actionEngine = ActionEngineServer.Instance;
                     await actionEngine.Config(false, sessionUser);
 
@@ -1759,8 +1844,8 @@ function addActionExecuteTool(
         description: `Execute the ${action.Name || 'Unknown'} action. ${action.Description || ''}`,
         parameters: z.object(paramSchema),
         scopeInfo: { scopePath: 'action:execute', resource: action.Name || '*' },
-        async execute(props) {
-            const sessionUser = sessionContext.user;
+        async execute(props, activeSessionContext) {
+            const sessionUser = (activeSessionContext ?? sessionContext).user;
             try {
                 const runParams: RunActionParams = {
                     Action: action,
@@ -1810,7 +1895,7 @@ async function loadAgentTools(
     systemUser: UserInfo,
     sessionContext: MCPSessionContext
 ): Promise<void> {
-    const agentTools = _config.mcpServerSettings?.agentTools;
+    const agentTools = _config?.mcpServerSettings?.agentTools;
 
     if (agentTools && agentTools.length > 0) {
         // Ensure AIEngine is configured
@@ -1827,8 +1912,8 @@ async function loadAgentTools(
                     pattern: z.string().describe("Name pattern to match agents (supports wildcards: *, *Agent, Agent*, *Agent*)")
                 }),
                 scopeInfo: { scopePath: 'agent:read', resource: '*' },
-                async execute(props) {
-                    const sessionUser = sessionContext.user;
+                async execute(props, activeSessionContext) {
+                    const sessionUser = (activeSessionContext ?? sessionContext).user;
                     const agents = await discoverAgents(props.pattern as string, sessionUser);
                     return JSON.stringify(agents.map(agent => ({
                         id: agent.ID,
@@ -1861,8 +1946,8 @@ async function loadAgentTools(
                     scopePath: 'agent:execute',
                     resource: (props.agentName as string) || (props.agentId as string) || '*'
                 }),
-                async execute(props) {
-                    const sessionUser = sessionContext.user;
+                async execute(props, activeSessionContext) {
+                    const sessionUser = (activeSessionContext ?? sessionContext).user;
                     try {
                         // Find the agent
                         const aiEngine = AIEngine.Instance;
@@ -1970,8 +2055,8 @@ async function loadAgentTools(
                     runId: z.string().describe("The agent run ID")
                 }),
                 scopeInfo: (props) => ({ scopePath: 'agent:monitor', resource: props.runId as string || '*' }),
-                async execute(props) {
-                    const sessionUser = sessionContext.user;
+                async execute(props, activeSessionContext) {
+                    const sessionUser = (activeSessionContext ?? sessionContext).user;
                     const md = new Metadata(); // global-provider-ok: MCP server bootstrap
                     const agentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', sessionUser);
                     const loaded = await agentRun.Load(props.runId as string);
@@ -2003,8 +2088,8 @@ async function loadAgentTools(
                     runId: z.string().describe("The run ID of the agent execution to cancel")
                 }),
                 scopeInfo: (props) => ({ scopePath: 'agent:cancel', resource: props.runId as string || '*' }),
-                async execute(props) {
-                    const sessionUser = sessionContext.user;
+                async execute(props, activeSessionContext) {
+                    const sessionUser = (activeSessionContext ?? sessionContext).user;
                     // Note: Actual cancellation would require the agent to check the cancellation token
                     // For now, we can update the status to indicate cancellation was requested
                     const md = new Metadata(); // global-provider-ok: MCP server bootstrap
@@ -2054,8 +2139,8 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
             limit: z.number().default(10).describe("Maximum number of runs to return")
         }),
         scopeInfo: { scopePath: 'agent:monitor', resource: '*' },
-        async execute(props) {
-            const sessionUser = sessionContext.user;
+        async execute(props, activeSessionContext) {
+            const sessionUser = (activeSessionContext ?? sessionContext).user;
             const rv = new RunView();
             const cutoffDate = new Date();
             cutoffDate.setDate(cutoffDate.getDate() - (props.days as number));
@@ -2093,8 +2178,8 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
         parameters: z.object({
             runId: z.string().describe("The agent run ID to summarize")
         }),
-        async execute(props) {
-            const sessionUser = sessionContext.user;
+        async execute(props, activeSessionContext) {
+            const sessionUser = (activeSessionContext ?? sessionContext).user;
             const md = new Metadata(); // global-provider-ok: MCP server bootstrap
             const agentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', sessionUser);
             const loaded = await agentRun.Load(props.runId as string);
@@ -2167,8 +2252,8 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
             maxChars: z.number().default(5000).describe("Maximum characters for I/O data (0 = no truncation)")
         }),
         scopeInfo: (props) => ({ scopePath: 'agent:monitor', resource: props.runId as string || '*' }),
-        async execute(props) {
-            const sessionUser = sessionContext.user;
+        async execute(props, activeSessionContext) {
+            const sessionUser = (activeSessionContext ?? sessionContext).user;
             const rv = new RunView();
             const stepsResult = await rv.RunView<MJAIAgentRunStepEntityExtended>({
                 EntityName: 'MJ: AI Agent Run Steps',
@@ -2188,8 +2273,8 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
             }
 
             const step = steps[stepNumber - 1];
-            const inputData = truncateText(step.InputData, props.maxChars as number);
-            const outputData = truncateText(step.OutputData, props.maxChars as number);
+            const inputData = TruncateText(step.InputData, props.maxChars as number);
+            const outputData = TruncateText(step.OutputData, props.maxChars as number);
 
             const detail = {
                 stepNumber: step.StepNumber,
@@ -2229,8 +2314,8 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
             stepNumber: z.number().describe("The step number to retrieve (1-based)"),
             outputFile: z.string().optional().describe("File path to write JSON output (optional)")
         }),
-        async execute(props) {
-            const sessionUser = sessionContext.user;
+        async execute(props, activeSessionContext) {
+            const sessionUser = (activeSessionContext ?? sessionContext).user;
             const rv = new RunView();
             const stepsResult = await rv.RunView<MJAIAgentRunStepEntityExtended>({
                 EntityName: 'MJ: AI Agent Run Steps',
@@ -2250,7 +2335,13 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
             }
 
             const step = steps[stepNumber - 1];
-            const stepData = step.GetAll();
+            // A step can store its start or end payload as a pointer to an earlier step's end; export the resolved payloads.
+            const stepsById = IndexByUUID(steps);
+            const stepData: Record<string, unknown> = {
+                ...step.GetAll(),
+                PayloadAtStart: ResolvePayloadAtStart(step, stepsById),
+                PayloadAtEnd: ResolvePayloadAtEnd(step, stepsById),
+            };
 
             // Determine output file path
             const runIdShort = (props.runId as string).substring(0, 8);
@@ -2302,7 +2393,7 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
  * @param sessionContext - The authenticated session context
  */
 function loadQueryTools(addToolWithFilter: AddToolFn, sessionContext: MCPSessionContext): void {
-    const queryTools = _config.mcpServerSettings?.queryTools;
+    const queryTools = _config?.mcpServerSettings?.queryTools;
 
     if (queryTools?.enabled) {
         // Add query discovery tool
@@ -2314,8 +2405,9 @@ function loadQueryTools(addToolWithFilter: AddToolFn, sessionContext: MCPSession
                 category: z.string().optional().describe("Category name or path to filter queries (e.g., 'Reports', '/MJ/AI/')")
             }),
             scopeInfo: { scopePath: 'query:read', resource: '*' },
-            async execute(props) {
-                const sessionUser = sessionContext.user;
+            async execute(props, activeSessionContext) {
+                const sessionUser = (activeSessionContext ?? sessionContext).user;
+                void sessionUser;
 
                 try {
                     let queries = QueryEngine.Instance.Queries
@@ -2367,8 +2459,8 @@ function loadQueryTools(addToolWithFilter: AddToolFn, sessionContext: MCPSession
                 scopePath: 'query:run',
                 resource: (props.queryName as string) || (props.queryId as string) || '*'
             }),
-            async execute(props) {
-                const sessionUser = sessionContext.user;
+            async execute(props, activeSessionContext) {
+                const sessionUser = (activeSessionContext ?? sessionContext).user;
 
                 if (!props.queryName && !props.queryId) {
                     return JSON.stringify({
@@ -2493,7 +2585,7 @@ async function loadPromptTools(
     systemUser: UserInfo,
     sessionContext: MCPSessionContext
 ): Promise<void> {
-    const promptTools = _config.mcpServerSettings?.promptTools;
+    const promptTools = _config?.mcpServerSettings?.promptTools;
 
     if (promptTools && promptTools.length > 0) {
         // Ensure AIEngine is configured
@@ -2511,8 +2603,8 @@ async function loadPromptTools(
                     category: z.string().optional().describe("Category name to filter prompts")
                 }),
                 scopeInfo: { scopePath: 'prompt:read', resource: '*' },
-                async execute(props) {
-                    const sessionUser = sessionContext.user;
+                async execute(props, activeSessionContext) {
+                    const sessionUser = (activeSessionContext ?? sessionContext).user;
 
                     const aiEngine = AIEngine.Instance;
                     await aiEngine.Config(false, sessionUser);
@@ -2567,8 +2659,8 @@ async function loadPromptTools(
                     scopePath: 'prompt:execute',
                     resource: (props.promptName as string) || (props.promptId as string) || '*'
                 }),
-                async execute(props) {
-                    const sessionUser = sessionContext.user;
+                async execute(props, activeSessionContext) {
+                    const sessionUser = (activeSessionContext ?? sessionContext).user;
 
                     try {
                         const aiEngine = AIEngine.Instance;
@@ -2641,7 +2733,7 @@ async function loadPromptTools(
  * @param sessionContext - The authenticated session context
  */
 function loadCommunicationTools(addToolWithFilter: AddToolFn, sessionContext: MCPSessionContext): void {
-    const commTools = _config.mcpServerSettings?.communicationTools;
+    const commTools = _config?.mcpServerSettings?.communicationTools;
 
     if (commTools?.enabled) {
         // Add email sending tool
@@ -2679,8 +2771,8 @@ function loadCommunicationTools(addToolWithFilter: AddToolFn, sessionContext: MC
             description: "List available communication providers configured in the system",
             parameters: z.object({}),
             scopeInfo: { scopePath: 'communication:read', resource: '*' },
-            async execute() {
-                const sessionUser = sessionContext.user;
+            async execute(_props, activeSessionContext) {
+                const sessionUser = (activeSessionContext ?? sessionContext).user;
                 const rv = new RunView();
                 const result = await rv.RunView({
                     EntityName: 'MJ: Communication Providers',
@@ -2772,8 +2864,8 @@ function addAgentExecuteTool(
             waitForCompletion: z.boolean().optional().default(true).describe("Wait for agent to complete before returning")
         }),
         scopeInfo: { scopePath: 'agent:execute', resource: agent.Name || '*' },
-        async execute(props) {
-            const sessionUser = sessionContext.user;
+        async execute(props, activeSessionContext) {
+            const sessionUser = (activeSessionContext ?? sessionContext).user;
             try {
                 // Convert conversation history to ChatMessage format
                 const historyArray = props.conversationHistory as Array<{ role: string; content: string }> | undefined;
@@ -2838,7 +2930,7 @@ function addAgentExecuteTool(
  * @param addToolWithFilter - Function to register tools with filter check
  */
 async function loadEntityTools(addToolWithFilter: AddToolFn): Promise<void> {
-    const entityTools = _config.mcpServerSettings?.entityTools;
+    const entityTools = _config?.mcpServerSettings?.entityTools;
 
     if (entityTools && entityTools.length > 0) {
         const md = new Metadata(); // global-provider-ok: MCP server bootstrap
@@ -3281,10 +3373,10 @@ function getMatchingEntitiesForTool(allEntities: EntityInfo[], tool: EntityToolC
  * // List only Get_* tools
  * await listAvailableTools({ includePatterns: ['Get_*'] });
  */
-export async function listAvailableTools(filterOptions: ToolFilterOptions = {}): Promise<void> {
+export async function ListAvailableTools(filterOptions: ToolFilterOptions = {}): Promise<void> {
     try {
         // Initialize configuration (loads .env and mj.config.cjs)
-        _config = await initConfig();
+        _config = await InitConfig();
         await loadOpenAppServerPackages();
 
         if (!_config.mcpServerSettings?.enableMCPServer) {
@@ -3299,82 +3391,95 @@ export async function listAvailableTools(filterOptions: ToolFilterOptions = {}):
         // Initialize database connection to discover dynamic tools
         const poolConfig = buildPoolConfig();
         const pool = new sql.ConnectionPool(poolConfig);
+        // Without this handler, a dropped idle connection crashes the process with an
+        // uncaught pool-level error instead of letting the pool recover.
+        pool.on('error', (err) => {
+            console.error('[ConnectionPool] Pool-level connection error (stale connection evicted):', err.message);
+        });
         await pool.connect();
 
-        const sqlConfig = new SQLServerProviderConfigData(pool, _config.mjCoreSchema);
-        await setupSQLServerClient(sqlConfig);
+        try {
+            const sqlConfig = new SQLServerProviderConfigData(pool, _config.mjCoreSchema);
+            await setupSQLServerClient(sqlConfig);
 
-        // Register all tools (they won't actually be added to server, just tracked)
-        // We need to use a dummy filter that includes everything for listing
-        const listingFilterOptions = { ...filterOptions };
-        activeFilterOptions = {}; // Temporarily clear filters to get all tool names
+            // Register all tools (they won't actually be added to server, just tracked)
+            // We need to use a dummy filter that includes everything for listing
+            const listingFilterOptions = { ...filterOptions };
+            activeFilterOptions = {}; // Temporarily clear filters to get all tool names
 
-        // Add built-in tools
-        registeredToolNames.push("Get_Entity_List");
-        registeredToolNames.push("Get_Single_Entity");
+            // Add built-in tools
+            registeredToolNames.push("Get_Entity_List");
+            registeredToolNames.push("Get_Single_Entity");
 
-        // Add agent run diagnostic tools
-        registeredToolNames.push("List_Recent_Agent_Runs");
-        registeredToolNames.push("Get_Agent_Run_Summary");
-        registeredToolNames.push("Get_Agent_Run_Step_Detail");
-        registeredToolNames.push("Get_Agent_Run_Step_Full_Data");
+            // Add agent run diagnostic tools
+            registeredToolNames.push("List_Recent_Agent_Runs");
+            registeredToolNames.push("Get_Agent_Run_Summary");
+            registeredToolNames.push("Get_Agent_Run_Step_Detail");
+            registeredToolNames.push("Get_Agent_Run_Step_Full_Data");
 
-        // Use system user for tool discovery
-        const systemUser = UserCache.Instance.GetSystemUser();
-        if (!systemUser) {
-            throw new Error('System user not found in UserCache');
-        }
-
-        // Load tools to populate registeredToolNames
-        await loadEntityToolsForListing(systemUser);
-        await loadAgentToolsForListing(systemUser);
-
-        // Close database connection
-        await pool.close();
-
-        // Apply filters to the list if specified
-        let toolsToShow = registeredToolNames;
-        if (listingFilterOptions.includePatterns || listingFilterOptions.excludePatterns) {
-            activeFilterOptions = listingFilterOptions;
-            toolsToShow = registeredToolNames.filter(name => shouldIncludeTool(name, listingFilterOptions));
-        }
-
-        // Sort tools alphabetically
-        toolsToShow.sort();
-
-        console.log("\n=== Available MCP Tools ===\n");
-
-        if (listingFilterOptions.includePatterns || listingFilterOptions.excludePatterns) {
-            console.log(`Showing ${toolsToShow.length} of ${registeredToolNames.length} tools (filtered)\n`);
-        } else {
-            console.log(`Total tools: ${toolsToShow.length}\n`);
-        }
-
-        // Group tools by prefix for better readability
-        const toolGroups: Record<string, string[]> = {};
-        for (const tool of toolsToShow) {
-            const prefix = tool.split('_')[0];
-            if (!toolGroups[prefix]) {
-                toolGroups[prefix] = [];
+            // Use system user for tool discovery
+            const systemUser = UserCache.Instance.GetSystemUser();
+            if (!systemUser) {
+                throw new Error('System user not found in UserCache');
             }
-            toolGroups[prefix].push(tool);
-        }
 
-        // Print grouped tools
-        for (const [prefix, tools] of Object.entries(toolGroups).sort()) {
-            console.log(`--- ${prefix} ---`);
-            for (const tool of tools) {
-                console.log(`  ${tool}`);
+            // Load tools to populate registeredToolNames
+            await loadEntityToolsForListing(systemUser);
+            await loadAgentToolsForListing(systemUser);
+
+            // Apply filters to the list if specified
+            let toolsToShow = registeredToolNames;
+            if (listingFilterOptions.includePatterns || listingFilterOptions.excludePatterns) {
+                activeFilterOptions = listingFilterOptions;
+                toolsToShow = registeredToolNames.filter(name => shouldIncludeTool(name, listingFilterOptions));
             }
-            console.log();
-        }
 
-        console.log("Use --include and --exclude to filter tools when starting the server.");
-        console.log("Example: npx @memberjunction/ai-mcp-server --include \"Get_Users_*,Run_Agent\"");
+            // Sort tools alphabetically
+            toolsToShow.sort();
+
+            console.log("\n=== Available MCP Tools ===\n");
+
+            if (listingFilterOptions.includePatterns || listingFilterOptions.excludePatterns) {
+                console.log(`Showing ${toolsToShow.length} of ${registeredToolNames.length} tools (filtered)\n`);
+            } else {
+                console.log(`Total tools: ${toolsToShow.length}\n`);
+            }
+
+            // Group tools by prefix for better readability
+            const toolGroups: Record<string, string[]> = {};
+            for (const tool of toolsToShow) {
+                const prefix = tool.split('_')[0];
+                if (!toolGroups[prefix]) {
+                    toolGroups[prefix] = [];
+                }
+                toolGroups[prefix].push(tool);
+            }
+
+            // Print grouped tools
+            for (const [prefix, tools] of Object.entries(toolGroups).sort()) {
+                console.log(`--- ${prefix} ---`);
+                for (const tool of tools) {
+                    console.log(`  ${tool}`);
+                }
+                console.log();
+            }
+
+            console.log("Use --include and --exclude to filter tools when starting the server.");
+            console.log("Example: npx @memberjunction/ai-mcp-server --include \"Get_Users_*,Run_Agent\"");
+        } finally {
+            // Guarantee the pool is released even if tool discovery throws — otherwise a
+            // failed listing leaks the connection pool for the rest of the CLI process.
+            await pool.close().catch(() => {});
+        }
 
     } catch (error) {
         console.error("Failed to list tools:", error);
     }
+}
+
+/** @deprecated Use {@link ListAvailableTools}. */
+export async function listAvailableTools(filterOptions: ToolFilterOptions = {}): Promise<void> {
+    return ListAvailableTools(filterOptions);
 }
 
 /**
@@ -3384,7 +3489,7 @@ export async function listAvailableTools(filterOptions: ToolFilterOptions = {}):
  * @param _systemUser - System user for context (unused in this function but kept for API consistency)
  */
 async function loadEntityToolsForListing(_systemUser: UserInfo): Promise<void> {
-    const entityTools = _config.mcpServerSettings?.entityTools;
+    const entityTools = _config?.mcpServerSettings?.entityTools;
 
     if (entityTools && entityTools.length > 0) {
         const md = new Metadata(); // global-provider-ok: MCP server bootstrap
@@ -3419,7 +3524,7 @@ async function loadEntityToolsForListing(_systemUser: UserInfo): Promise<void> {
  * @param systemUser - System user for context when discovering agents
  */
 async function loadAgentToolsForListing(systemUser: UserInfo): Promise<void> {
-    const agentTools = _config.mcpServerSettings?.agentTools;
+    const agentTools = _config?.mcpServerSettings?.agentTools;
 
     if (agentTools && agentTools.length > 0) {
         const aiEngine = AIEngine.Instance;

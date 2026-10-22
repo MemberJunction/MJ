@@ -76,8 +76,10 @@ export interface CachedEntityMatch<T extends BaseEntity = BaseEntity> {
      * The engine's full property config for this entity — `EntityName`,
      * `PropertyName`, `Filter`, `OrderBy`, `ResultType`, etc. Inspect this to
      * decide whether the cache fits your needs (e.g. check `Filter`/`ResultType`).
+     * For a `BaseEngine` it's the engine's own config object, not a copy: read it,
+     * don't change it.
      */
-    config: BaseEnginePropertyConfig;
+    config: Readonly<BaseEnginePropertyConfig>;
     /**
      * **Live reference** to the engine's cached array for this entity — NOT a
      * copy. Reading is cheap; do not mutate it. When the config's `ResultType`
@@ -180,7 +182,7 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
             // Update existing registration
             existingInfo.instance = engine;
             existingInfo.lastLoadedAt = new Date();
-            existingInfo.isLoaded = this.CheckEngineLoaded(engine);
+            existingInfo.isLoaded = this.checkEngineLoaded(engine);
             // NOTE: Memory/item counts are computed lazily in GetMemoryStats() to avoid
             // blocking during registration. Don't compute them here.
         } else {
@@ -189,8 +191,8 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
                 className: name,
                 instance: engine,
                 registeredAt: new Date(),
-                lastLoadedAt: this.CheckEngineLoaded(engine) ? new Date() : null,
-                isLoaded: this.CheckEngineLoaded(engine),
+                lastLoadedAt: this.checkEngineLoaded(engine) ? new Date() : null,
+                isLoaded: this.checkEngineLoaded(engine),
                 estimatedMemoryBytes: 0, // Computed lazily
                 itemCount: 0 // Computed lazily
             });
@@ -245,9 +247,9 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
     public GetMemoryStats(): EngineMemoryStats {
         // Update all engine stats first
         for (const [name, info] of this._engines) {
-            info.isLoaded = this.CheckEngineLoaded(info.instance);
-            info.estimatedMemoryBytes = this.EstimateEngineMemory(info.instance);
-            info.itemCount = this.CountEngineItems(info.instance);
+            info.isLoaded = this.checkEngineLoaded(info.instance);
+            info.estimatedMemoryBytes = this.estimateEngineMemory(info.instance);
+            info.itemCount = this.countEngineItems(info.instance);
         }
 
         const engineStats = Array.from(this._engines.values());
@@ -269,12 +271,12 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
         let refreshed = 0;
 
         for (const [name, info] of this._engines) {
-            if (info.isLoaded && this.HasRefreshMethod(info.instance)) {
+            if (info.isLoaded && this.hasRefreshMethod(info.instance)) {
                 try {
                     await (info.instance as { RefreshAllItems: () => Promise<void> }).RefreshAllItems();
                     info.lastLoadedAt = new Date();
-                    info.estimatedMemoryBytes = this.EstimateEngineMemory(info.instance);
-                    info.itemCount = this.CountEngineItems(info.instance);
+                    info.estimatedMemoryBytes = this.estimateEngineMemory(info.instance);
+                    info.itemCount = this.countEngineItems(info.instance);
                     refreshed++;
                 } catch (error) {
                     LogError(`Failed to refresh engine ${name}: ${error}`);
@@ -328,7 +330,7 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
     /**
      * Check if an engine is loaded by looking for a 'Loaded' property
      */
-    private CheckEngineLoaded(engine: unknown): boolean {
+    private checkEngineLoaded(engine: unknown): boolean {
         if (engine && typeof engine === 'object' && 'Loaded' in engine) {
             return Boolean((engine as { Loaded: boolean }).Loaded);
         }
@@ -336,9 +338,25 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
     }
 
     /**
+     * An engine's property configs, without copying them where the engine allows it. A
+     * `BaseEngine` exposes its own array as `ReadonlyConfigs`; its `Configs` getter deep-copies on
+     * every read. An engine that doesn't extend `BaseEngine` is read through `Configs`.
+     *
+     * @returns The configs, or null when the engine declares none.
+     */
+    private readEngineConfigs(engineObj: Record<string, unknown>): ReadonlyArray<Readonly<BaseEnginePropertyConfig>> | null {
+        const own = engineObj['ReadonlyConfigs'];
+        if (Array.isArray(own)) {
+            return own;
+        }
+        const copy = engineObj['Configs'];
+        return Array.isArray(copy) ? copy : null;
+    }
+
+    /**
      * Check if an engine has a RefreshAllItems method
      */
-    private HasRefreshMethod(engine: unknown): boolean {
+    private hasRefreshMethod(engine: unknown): boolean {
         return engine &&
                typeof engine === 'object' &&
                'RefreshAllItems' in engine &&
@@ -348,7 +366,7 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
     /**
      * Estimate memory usage of an engine by examining its data properties
      */
-    private EstimateEngineMemory(engine: unknown): number {
+    private estimateEngineMemory(engine: unknown): number {
         if (!engine || typeof engine !== 'object') return 0;
 
         let totalBytes = 0;
@@ -360,7 +378,7 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
             if (dataMap && dataMap instanceof Map) {
                 for (const [key, value] of dataMap) {
                     if (value && Array.isArray(value.data)) {
-                        totalBytes += this.EstimateArraySize(value.data);
+                        totalBytes += this.estimateArraySize(value.data);
                     }
                 }
             }
@@ -374,7 +392,7 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
                 if (propName && propName in engineObj) {
                     const propValue = engineObj[propName];
                     if (Array.isArray(propValue)) {
-                        totalBytes += this.EstimateArraySize(propValue);
+                        totalBytes += this.estimateArraySize(propValue);
                     }
                 }
             }
@@ -386,7 +404,7 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
     /**
      * Count the number of data items in an engine
      */
-    private CountEngineItems(engine: unknown): number {
+    private countEngineItems(engine: unknown): number {
         if (!engine || typeof engine !== 'object') return 0;
 
         let totalItems = 0;
@@ -416,18 +434,18 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
      * Estimate the size of an array in bytes by sampling the first row.
      * Uses a cache to avoid re-sampling the same entity type multiple times.
      */
-    private EstimateArraySize(arr: unknown[]): number {
+    private estimateArraySize(arr: unknown[]): number {
         if (arr.length === 0) return 0;
 
         const firstItem = arr[0];
-        const bytesPerRow = this.GetBytesPerRow(firstItem);
+        const bytesPerRow = this.getBytesPerRow(firstItem);
         return arr.length * bytesPerRow;
     }
 
     /**
      * Get the estimated bytes per row for an item, using cache when possible.
      */
-    private GetBytesPerRow(item: unknown): number {
+    private getBytesPerRow(item: unknown): number {
         if (!item || typeof item !== 'object') {
             return BaseEngineRegistry.DEFAULT_BYTES_PER_ROW;
         }
@@ -444,7 +462,7 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
         }
 
         // Sample this item to estimate size
-        const estimatedSize = this.SampleItemSize(item);
+        const estimatedSize = this.sampleItemSize(item);
 
         // Cache the result if we have an entity name
         if (entityName) {
@@ -458,7 +476,7 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
      * Sample a single item to estimate its size in bytes.
      * For BaseEntity objects, uses GetAll() to get plain field values.
      */
-    private SampleItemSize(item: unknown): number {
+    private sampleItemSize(item: unknown): number {
         if (!item || typeof item !== 'object') {
             return BaseEngineRegistry.DEFAULT_BYTES_PER_ROW;
         }
@@ -478,7 +496,7 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
                 // Key name size (UTF-16)
                 totalBytes += key.length * 2;
                 // Value size
-                totalBytes += this.EstimateValueSize(obj[key]);
+                totalBytes += this.estimateValueSize(obj[key]);
             }
 
             // Minimum of 100 bytes per object for overhead
@@ -491,7 +509,7 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
     /**
      * Estimate the size of a single value in bytes.
      */
-    private EstimateValueSize(value: unknown): number {
+    private estimateValueSize(value: unknown): number {
         if (value === null || value === undefined) {
             return 8;
         }
@@ -642,6 +660,9 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
      * - The returned `records` is the engine's *live* array — read it, don't
      *   mutate it. For `'simple'` configs the rows are plain objects, not
      *   `BaseEntity` instances (check `config.ResultType` if you need ORM rows).
+     * - A `BaseEngine`'s configs are read through `ReadonlyConfigs`, without the
+     *   copy `Configs` makes, so `config` is the engine's own object. This runs for
+     *   every record an IsA parent with an opted-in `SubtypeSelector` loads.
      *
      * @param entityName     Entity to look up (case-insensitive, whitespace-trimmed).
      * @param options.unfilteredOnly  When true, omit any cache that has a `Filter`
@@ -661,13 +682,13 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
             const engine = info.instance;
             if (!engine || typeof engine !== 'object') continue;
             // Only loaded engines have data to offer.
-            if (!this.CheckEngineLoaded(engine)) continue;
+            if (!this.checkEngineLoaded(engine)) continue;
 
             const engineObj = engine as Record<string, unknown>;
-            const configs = engineObj['Configs'];
-            if (!Array.isArray(configs)) continue;
+            const configs = this.readEngineConfigs(engineObj);
+            if (!configs) continue;
 
-            for (const cfg of configs as BaseEnginePropertyConfig[]) {
+            for (const cfg of configs) {
                 // Only entity configs (Type defaults to 'entity') with a matching EntityName.
                 if ((cfg.Type ?? 'entity') !== 'entity') continue;
                 if (!cfg.EntityName || cfg.EntityName.trim().toLowerCase() !== target) continue;

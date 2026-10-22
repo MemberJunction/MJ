@@ -193,6 +193,15 @@ dynamicPackages: {
 `--verbose` prints what loaded on stderr. Full model:
 [`guides/DYNAMIC_PACKAGE_LOADING_GUIDE.md`](../../guides/DYNAMIC_PACKAGE_LOADING_GUIDE.md).
 
+### Keeping the machine awake
+
+`mj install`, `mj app install`, `mj app upgrade` and `mj migrate` run for many minutes against the
+database. If the machine sleeps mid-run, every in-flight request times out on wake and the step is
+rolled back. On macOS these commands therefore hold a `caffeinate` assertion for as long as the
+CLI process lives (it ends with the command). Set `MJ_ALLOW_SLEEP=1` to opt out. Nothing holds
+Windows or Linux machines awake, so on every platform these commands start with a one-line warning
+not to let the machine sleep (or, on a Mac, close the lid) until they finish.
+
 ## Commands
 
 ### mj install
@@ -524,15 +533,48 @@ mj app remove <name> --keep-data
 mj app check-updates
 ```
 
+#### Private repositories
+
+Some BizApp repositories are private or internal (`bizapps-ats` is one). GitHub answers **404, not 403**, for a repository
+it will not show you, so an install without a credential fails as though the app or the version
+did not exist. Supply a token one of three ways:
+
+```bash
+# 1. Environment variable
+GITHUB_TOKEN=$(gh auth token) mj app install https://github.com/MemberJunction/bizapps-ats
+
+# 2. mj.config.cjs — per-repository tokens, keyed by repo URL
+#    openApps: { github: { tokens: { 'https://github.com/MemberJunction/bizapps-ats': process.env.ATS_TOKEN } } }
+
+# 3. mj.config.cjs — one token for every Open App repo
+#    openApps: { github: { token: process.env.GITHUB_TOKEN } }
+```
+
+If more than one is set, the per-repo `tokens` entry wins, then `token`, then `GITHUB_TOKEN` — so a
+stale `token` left in `mj.config.cjs` silently shadows a freshly exported `GITHUB_TOKEN`.
+
+The token needs `repo` scope for the repositories you install from.
+
 #### Internal / dangerous flags
 
-Intentionally omitted from `--help`. Only for MJ-internal apps that own a
-reserved-looking schema (e.g. `__bcsaas`). Do not use on third-party apps.
+Intentionally omitted from `--help`. Almost never needed: MJ's own Open Apps use the
+`__mj_<AppName>` schema namespace (`__mj_BizAppsCommon`, `__mj_BizAppsForms`, …), which
+installs on the default path with no flag at all.
 
-- `--dangerously-ignore-dbl-underscore-schema-rule` — available on `mj app install`
-  and `mj app upgrade`. Bypasses the rule that blocks schema names starting with
-  `__` (reserved for MJ internals). Exact-match reserved names (`__mj`, `dbo`,
-  `sys`, `guest`, `INFORMATION_SCHEMA`) remain hard-blocked regardless.
+- `--dangerously-ignore-dbl-underscore-schema-rule` — available on `mj app install`,
+  `mj app upgrade` and `mj app remove`. Allows a `__`-prefixed schema name *outside* the
+  `__mj_` app namespace (e.g. `__bcsaas`). Reserved schemas remain hard-blocked regardless,
+  on both supported platforms: every schema the **database** owns — `dbo`, `sys`, `guest`,
+  SQL Server's nine `db_*` fixed database-role schemas, `public`, anything starting `pg_`,
+  and `information_schema` — plus every schema **MJ** owns: `__mj` and `__mj_UDT`. Each of
+  these already exists in a stock database, so naming one would not create it, it would
+  *adopt* it — and `mj app remove` would then drop it.
+
+  Removing an app installed under one of those `__`-outside-namespace names (e.g. `__bcsaas`)
+  needs the same flag again: `mj app remove <app> --dangerously-ignore-dbl-underscore-schema-rule`
+  drops the schema. `--keep-data` is the exit for the platform- and MJ-reserved names above, which MJ
+  must never drop: `mj app remove <app> --keep-data` unregisters the app and leaves the
+  schema in place.
 
 ```bash
 mj app install https://github.com/BlueCypress/SaaS \

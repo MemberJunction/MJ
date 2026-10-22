@@ -21,11 +21,11 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { Client } from 'pg';
 import {
-    resolveViewOid,
-    captureDependentViews,
-    captureDependentFunctions,
-    captureGrants,
-    captureMetadata,
+    ResolveViewOid,
+    CaptureDependentViews,
+    CaptureDependentFunctions,
+    CaptureGrants,
+    CaptureMetadata,
 } from '../../Database/providers/postgresql/viewDependencyCapture';
 
 const PG_URL = process.env.MJ_TEST_PG_URL;
@@ -107,7 +107,7 @@ describeIfPG('PG view dependency capture — integration', () => {
 
     describe('resolveViewOid', () => {
         it('returns null for a nonexistent view', async () => {
-            const oid = await resolveViewOid(client, TEST_SCHEMA, 'NoSuchView');
+            const oid = await ResolveViewOid(client, TEST_SCHEMA, 'NoSuchView');
             expect(oid).toBeNull();
         });
 
@@ -116,7 +116,7 @@ describeIfPG('PG view dependency capture — integration', () => {
                 CREATE VIEW ${TEST_SCHEMA}."vwWidgets" AS
                 SELECT "ID", "Name" FROM ${TEST_SCHEMA}."Widget"
             `);
-            const oid = await resolveViewOid(client, TEST_SCHEMA, 'vwWidgets');
+            const oid = await ResolveViewOid(client, TEST_SCHEMA, 'vwWidgets');
             expect(oid).toBeTypeOf('number');
             expect(oid).toBeGreaterThan(0);
         });
@@ -126,7 +126,7 @@ describeIfPG('PG view dependency capture — integration', () => {
                 CREATE MATERIALIZED VIEW ${TEST_SCHEMA}."mvWidgets" AS
                 SELECT "ID", "Name" FROM ${TEST_SCHEMA}."Widget"
             `);
-            const oid = await resolveViewOid(client, TEST_SCHEMA, 'mvWidgets');
+            const oid = await ResolveViewOid(client, TEST_SCHEMA, 'mvWidgets');
             expect(oid).toBeTypeOf('number');
         });
     });
@@ -137,8 +137,8 @@ describeIfPG('PG view dependency capture — integration', () => {
                 CREATE VIEW ${TEST_SCHEMA}."vwWidgets" AS
                 SELECT "ID", "Name" FROM ${TEST_SCHEMA}."Widget"
             `);
-            const oid = await resolveViewOid(client, TEST_SCHEMA, 'vwWidgets');
-            const deps = await captureDependentViews(client, oid!);
+            const oid = await ResolveViewOid(client, TEST_SCHEMA, 'vwWidgets');
+            const deps = await CaptureDependentViews(client, oid!);
             expect(deps).toEqual([]);
         });
 
@@ -151,8 +151,8 @@ describeIfPG('PG view dependency capture — integration', () => {
                 CREATE VIEW ${TEST_SCHEMA}."vwWidgetsUpper" AS
                 SELECT "ID", UPPER("Name") AS "U" FROM ${TEST_SCHEMA}."vwWidgets"
             `);
-            const oid = await resolveViewOid(client, TEST_SCHEMA, 'vwWidgets');
-            const deps = await captureDependentViews(client, oid!);
+            const oid = await ResolveViewOid(client, TEST_SCHEMA, 'vwWidgets');
+            const deps = await CaptureDependentViews(client, oid!);
             expect(deps).toHaveLength(1);
             expect(deps[0].schema).toBe(TEST_SCHEMA);
             expect(deps[0].name).toBe('vwWidgetsUpper');
@@ -176,8 +176,8 @@ describeIfPG('PG view dependency capture — integration', () => {
                 CREATE VIEW ${TEST_SCHEMA}."vwC" AS
                 SELECT "ID" FROM ${TEST_SCHEMA}."vwB"
             `);
-            const oid = await resolveViewOid(client, TEST_SCHEMA, 'vwWidgets');
-            const deps = await captureDependentViews(client, oid!);
+            const oid = await ResolveViewOid(client, TEST_SCHEMA, 'vwWidgets');
+            const deps = await CaptureDependentViews(client, oid!);
             // Both dependents present, ordered by depth.
             const byName = new Map(deps.map(d => [d.name, d]));
             expect(byName.has('vwB')).toBe(true);
@@ -200,8 +200,8 @@ describeIfPG('PG view dependency capture — integration', () => {
                 CREATE MATERIALIZED VIEW ${TEST_SCHEMA}."mvWidgets" AS
                 SELECT "ID" FROM ${TEST_SCHEMA}."vwWidgets"
             `);
-            const oid = await resolveViewOid(client, TEST_SCHEMA, 'vwWidgets');
-            const deps = await captureDependentViews(client, oid!);
+            const oid = await ResolveViewOid(client, TEST_SCHEMA, 'vwWidgets');
+            const deps = await CaptureDependentViews(client, oid!);
             const mv = deps.find(d => d.name === 'mvWidgets');
             expect(mv).toBeDefined();
             expect(mv!.relkind).toBe('m');
@@ -226,8 +226,8 @@ describeIfPG('PG view dependency capture — integration', () => {
                 SELECT l."ID" FROM ${TEST_SCHEMA}."vwLeft" l
                 JOIN ${TEST_SCHEMA}."vwRight" r ON l."ID" = r."ID"
             `);
-            const oid = await resolveViewOid(client, TEST_SCHEMA, 'vwWidgets');
-            const deps = await captureDependentViews(client, oid!);
+            const oid = await ResolveViewOid(client, TEST_SCHEMA, 'vwWidgets');
+            const deps = await CaptureDependentViews(client, oid!);
             const diamondCount = deps.filter(d => d.name === 'vwDiamond').length;
             expect(diamondCount).toBe(1);
             expect(deps.find(d => d.name === 'vwDiamond')!.depth).toBe(2);
@@ -240,8 +240,8 @@ describeIfPG('PG view dependency capture — integration', () => {
                 CREATE VIEW ${TEST_SCHEMA}."vwWidgets" AS
                 SELECT "ID", "Name" FROM ${TEST_SCHEMA}."Widget"
             `);
-            const oid = await resolveViewOid(client, TEST_SCHEMA, 'vwWidgets');
-            const fns = await captureDependentFunctions(client, oid!);
+            const oid = await ResolveViewOid(client, TEST_SCHEMA, 'vwWidgets');
+            const fns = await CaptureDependentFunctions(client, oid!);
             expect(fns).toEqual([]);
         });
 
@@ -256,8 +256,8 @@ describeIfPG('PG view dependency capture — integration', () => {
                 AS $$ SELECT * FROM ${TEST_SCHEMA}."vwWidgets" WHERE "Name" = p_name $$
                 LANGUAGE sql
             `);
-            const oid = await resolveViewOid(client, TEST_SCHEMA, 'vwWidgets');
-            const fns = await captureDependentFunctions(client, oid!);
+            const oid = await ResolveViewOid(client, TEST_SCHEMA, 'vwWidgets');
+            const fns = await CaptureDependentFunctions(client, oid!);
             expect(fns).toHaveLength(1);
             expect(fns[0].schema).toBe(TEST_SCHEMA);
             expect(fns[0].name).toBe('fn_get_widgets');
@@ -283,8 +283,8 @@ describeIfPG('PG view dependency capture — integration', () => {
                 RETURNS SETOF ${TEST_SCHEMA}."vwWidgets"
                 AS $$ SELECT * FROM ${TEST_SCHEMA}."vwWidgets" $$ LANGUAGE sql
             `);
-            const oid = await resolveViewOid(client, TEST_SCHEMA, 'vwWidgets');
-            const fns = await captureDependentFunctions(client, oid!);
+            const oid = await ResolveViewOid(client, TEST_SCHEMA, 'vwWidgets');
+            const fns = await CaptureDependentFunctions(client, oid!);
             expect(fns).toHaveLength(2);
             // Sorted by (schema, name) for deterministic ordering.
             expect(fns.map(f => f.name)).toEqual(['fn_a', 'fn_b']);
@@ -297,7 +297,7 @@ describeIfPG('PG view dependency capture — integration', () => {
                 CREATE VIEW ${TEST_SCHEMA}."vwWidgets" AS
                 SELECT "ID", "Name" FROM ${TEST_SCHEMA}."Widget"
             `);
-            const grants = await captureGrants(client, TEST_SCHEMA, 'vwWidgets');
+            const grants = await CaptureGrants(client, TEST_SCHEMA, 'vwWidgets');
             expect(grants).toEqual([]);
         });
 
@@ -308,7 +308,7 @@ describeIfPG('PG view dependency capture — integration', () => {
             `);
             // Use PUBLIC as a built-in grantee so we don't need to create roles.
             await client.query(`GRANT SELECT ON ${TEST_SCHEMA}."vwWidgets" TO PUBLIC`);
-            const grants = await captureGrants(client, TEST_SCHEMA, 'vwWidgets');
+            const grants = await CaptureGrants(client, TEST_SCHEMA, 'vwWidgets');
             const selectToPublic = grants.find(
                 g => g.grantee === 'PUBLIC' && g.privilege === 'SELECT'
             );
@@ -325,7 +325,7 @@ describeIfPG('PG view dependency capture — integration', () => {
             await client.query(
                 `GRANT SELECT ON ${TEST_SCHEMA}."vwWidgets" TO ${TEST_ROLE} WITH GRANT OPTION`
             );
-            const grants = await captureGrants(client, TEST_SCHEMA, 'vwWidgets');
+            const grants = await CaptureGrants(client, TEST_SCHEMA, 'vwWidgets');
             const grant = grants.find(
                 g => g.grantee === TEST_ROLE && g.privilege === 'SELECT'
             );
@@ -340,8 +340,8 @@ describeIfPG('PG view dependency capture — integration', () => {
                 CREATE VIEW ${TEST_SCHEMA}."vwWidgets" AS
                 SELECT "ID", "Name" FROM ${TEST_SCHEMA}."Widget"
             `);
-            const oid = await resolveViewOid(client, TEST_SCHEMA, 'vwWidgets');
-            const meta = await captureMetadata(client, oid!);
+            const oid = await ResolveViewOid(client, TEST_SCHEMA, 'vwWidgets');
+            const meta = await CaptureMetadata(client, oid!);
             expect(meta.owner).toBeTruthy();
             expect(typeof meta.owner).toBe('string');
             expect(meta.comment).toBeNull();
@@ -355,13 +355,13 @@ describeIfPG('PG view dependency capture — integration', () => {
             await client.query(
                 `COMMENT ON VIEW ${TEST_SCHEMA}."vwWidgets" IS 'a test view'`
             );
-            const oid = await resolveViewOid(client, TEST_SCHEMA, 'vwWidgets');
-            const meta = await captureMetadata(client, oid!);
+            const oid = await ResolveViewOid(client, TEST_SCHEMA, 'vwWidgets');
+            const meta = await CaptureMetadata(client, oid!);
             expect(meta.comment).toBe('a test view');
         });
 
         it('throws for a nonexistent oid', async () => {
-            await expect(captureMetadata(client, 999_999_999)).rejects.toThrow(/not found/);
+            await expect(CaptureMetadata(client, 999_999_999)).rejects.toThrow(/not found/);
         });
     });
 });

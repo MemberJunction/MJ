@@ -1,0 +1,76 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "dbresearch-stored-query-reuse-01 [claude-sonnet-5 · Anthropic · native-implicit]",
+    "Description": "The catalog already has a query that answers this. Reusing it beats writing ad-hoc SQL — a case where two actions are both plausible and one is better.",
+    "InputDefinition": {
+      "payload": {
+        "queryCatalog": [
+          {
+            "name": "Active Agents By Type",
+            "id": "Q-100"
+          }
+        ]
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Break down active agents by type."
+        },
+        {
+          "role": "user",
+          "content": "[Action Result] Search Query Catalog succeeded. Found stored query 'Active Agents By Type' (ID Q-100) which groups active agents by their type."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "dbresearch-stored-query-reuse-01",
+      "expect": {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Run Stored Query"
+          }
+        ],
+        "allowAdditionalActions": false
+      }
+    },
+    "Configuration": {
+      "agentName": "Database Research Agent",
+      "modelId": "31280CE6-5EFC-4407-BEFB-339322D0CC2E",
+      "vendorId": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "native",
+      "nativeControlFlow": "implicit",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Run Stored Query"
+              }
+            ],
+            "allowAdditionalActions": false
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "648B63FF-476E-46C0-A048-6E6D93496E6F"
+  }
+}

@@ -171,7 +171,7 @@ export class OAuthErrorMessages {
      * @param errorCode - The OAuth error code or error message
      * @returns Error information with user message and retry guidance
      */
-    public static mapError(errorCode: string): OAuthErrorMapping {
+    public static MapError(errorCode: string): OAuthErrorMapping {
         // Normalize the error code to lowercase
         const normalizedCode = errorCode.toLowerCase().trim();
 
@@ -191,14 +191,24 @@ export class OAuthErrorMessages {
         return { ...this.defaultMapping, technicalDetails: errorCode };
     }
 
+    /** @deprecated Use {@link MapError}. */
+    public static mapError(errorCode: string): OAuthErrorMapping {
+        return this.MapError(errorCode);
+    }
+
     /**
      * Gets a user-friendly message for an OAuth error.
      *
      * @param errorCode - The OAuth error code or error message
      * @returns User-friendly error message
      */
+    public static GetUserMessage(errorCode: string): string {
+        return this.MapError(errorCode).userMessage;
+    }
+
+    /** @deprecated Use {@link GetUserMessage}. */
     public static getUserMessage(errorCode: string): string {
-        return this.mapError(errorCode).userMessage;
+        return this.GetUserMessage(errorCode);
     }
 
     /**
@@ -207,8 +217,13 @@ export class OAuthErrorMessages {
      * @param errorCode - The OAuth error code or error message
      * @returns true if re-authorization is required
      */
+    public static RequiresReauthorization(errorCode: string): boolean {
+        return this.MapError(errorCode).requiresReauthorization;
+    }
+
+    /** @deprecated Use {@link RequiresReauthorization}. */
     public static requiresReauthorization(errorCode: string): boolean {
-        return this.mapError(errorCode).requiresReauthorization;
+        return this.RequiresReauthorization(errorCode);
     }
 
     /**
@@ -217,8 +232,13 @@ export class OAuthErrorMessages {
      * @param errorCode - The OAuth error code or error message
      * @returns true if the operation can be retried
      */
+    public static IsRetryable(errorCode: string): boolean {
+        return this.MapError(errorCode).isRetryable;
+    }
+
+    /** @deprecated Use {@link IsRetryable}. */
     public static isRetryable(errorCode: string): boolean {
-        return this.mapError(errorCode).isRetryable;
+        return this.IsRetryable(errorCode);
     }
 
     /**
@@ -228,8 +248,8 @@ export class OAuthErrorMessages {
      * @param description - Optional error description from server
      * @returns Combined error message for logging
      */
-    public static formatErrorForLogging(error: string, description?: string): string {
-        const mapped = this.mapError(error);
+    public static FormatErrorForLogging(error: string, description?: string): string {
+        const mapped = this.MapError(error);
         let message = `OAuth Error [${error}]: ${mapped.userMessage}`;
 
         if (description) {
@@ -241,5 +261,10 @@ export class OAuthErrorMessages {
         }
 
         return message;
+    }
+
+    /** @deprecated Use {@link FormatErrorForLogging}. */
+    public static formatErrorForLogging(error: string, description?: string): string {
+        return this.FormatErrorForLogging(error, description);
     }
 }

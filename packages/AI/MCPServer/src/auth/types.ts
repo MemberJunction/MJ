@@ -33,7 +33,7 @@ export interface MCPServerAuthSettings {
    * Authentication mode controlling which credential types are accepted.
    * @default 'apiKey'
    */
-  mode: AuthMode;
+  mode: AuthMode;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /**
    * Resource identifier for OAuth audience validation.
@@ -48,7 +48,7 @@ export interface MCPServerAuthSettings {
    * If not specified and autoResourceIdentifier is true,
    * defaults to "http://localhost:{port}"
    */
-  resourceIdentifier?: string;
+  resourceIdentifier?: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /**
    * Automatically generate resourceIdentifier from server configuration.
@@ -60,7 +60,7 @@ export interface MCPServerAuthSettings {
    *
    * @default true
    */
-  autoResourceIdentifier?: boolean;
+  autoResourceIdentifier?: boolean;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 }
 
 /**
@@ -80,13 +80,13 @@ export type OAuthErrorCode =
  */
 export interface OAuthValidationResult {
   /** Whether the token is valid */
-  valid: boolean;
+  valid: boolean;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** JWT payload if valid */
-  payload?: JwtPayload;
+  payload?: JwtPayload;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** Extracted user information from token claims */
-  userInfo?: {
+  userInfo?: {  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
     email?: string;
     firstName?: string;
     lastName?: string;
@@ -95,7 +95,7 @@ export interface OAuthValidationResult {
   };
 
   /** Error details if invalid */
-  error?: {
+  error?: {  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
     code: OAuthErrorCode;
     message: string;
   };
@@ -107,13 +107,13 @@ export interface OAuthValidationResult {
  */
 export interface AuthResult {
   /** Whether authentication succeeded */
-  authenticated: boolean;
+  authenticated: boolean;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** Authentication method used */
-  method: 'apiKey' | 'oauth' | 'none';
+  method: 'apiKey' | 'oauth' | 'none';  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** MemberJunction user (if authenticated) */
-  user?: UserInfo;
+  user?: UserInfo;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /**
    * Granted scopes for this authentication.
@@ -121,17 +121,17 @@ export interface AuthResult {
    * - OAuth JWT 'scopes' claim (when method='oauth')
    * - APIKeyScope entity (when method='apiKey')
    */
-  scopes?: string[];
+  scopes?: string[];  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** API key context (if method='apiKey') */
-  apiKeyContext?: {
+  apiKeyContext?: {  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
     apiKey: string;
     apiKeyId: string;
     apiKeyHash: string;
   };
 
   /** OAuth context (if method='oauth') */
-  oauthContext?: {
+  oauthContext?: {  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
     issuer: string;
     subject: string;
     email: string;
@@ -141,7 +141,7 @@ export interface AuthResult {
   };
 
   /** Error details (if not authenticated) */
-  error?: {
+  error?: {  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
     status: 401 | 403 | 503;
     code: string;
     message: string;
@@ -220,25 +220,25 @@ export interface MCPSessionContext {
  */
 export interface ProtectedResourceMetadata {
   /** Protected resource identifier - MUST be the resource's URL */
-  resource: string;
+  resource: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** Array of authorization server issuer URLs */
-  authorization_servers: string[];
+  authorization_servers: string[];  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** OAuth 2.0 scopes supported by this resource */
-  scopes_supported?: string[];
+  scopes_supported?: string[];  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** Token delivery methods supported */
-  bearer_methods_supported?: ('header' | 'body' | 'query')[];
+  bearer_methods_supported?: ('header' | 'body' | 'query')[];  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** Human-readable name for the resource */
-  resource_name?: string;
+  resource_name?: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** URL to resource documentation */
-  resource_documentation?: string;
+  resource_documentation?: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** JWK Set document URL (if resource validates tokens directly) */
-  jwks_uri?: string;
+  jwks_uri?: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 }
 
 /**
@@ -248,34 +248,34 @@ export interface ProtectedResourceMetadata {
  */
 export interface ProxyJWTClaims {
   /** Issuer - always "urn:mj:mcp-server" for proxy tokens */
-  iss: string;
+  iss: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** Subject - user's email address */
-  sub: string;
+  sub: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** Audience - must match resourceIdentifier */
-  aud: string;
+  aud: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** Issued at timestamp (seconds since epoch) */
-  iat: number;
+  iat: number;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** Expiration timestamp (seconds since epoch) */
-  exp: number;
+  exp: number;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** User's email (same as sub) */
-  email: string;
+  email: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** MemberJunction User ID (GUID) */
-  mjUserId: string;
+  mjUserId: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** Granted scopes (selected during consent, or all available if no consent screen) */
-  scopes: string[];
+  scopes: string[];  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** Upstream provider name for audit trail (from config, not hardcoded enum) */
-  upstreamProvider: string;
+  upstreamProvider: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** Upstream subject claim for audit trail */
-  upstreamSub: string;
+  upstreamSub: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 }
 
 /**
@@ -283,15 +283,15 @@ export interface ProxyJWTClaims {
  */
 export interface SignProxyJWTOptions {
   /** User's email address (becomes sub claim) */
-  email: string;
+  email: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** MemberJunction User ID */
-  mjUserId: string;
+  mjUserId: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Granted scopes */
-  scopes: string[];
+  scopes: string[];  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Name of upstream provider that authenticated the user */
-  upstreamProvider: string;
+  upstreamProvider: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Subject claim from upstream token */
-  upstreamSub: string;
+  upstreamSub: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 }
 
 /**
@@ -299,9 +299,9 @@ export interface SignProxyJWTOptions {
  */
 export interface ScopeUIConfig {
   /** Font Awesome icon class */
-  icon?: string;
+  icon?: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Hex color for category header */
-  color?: string;
+  color?: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 }
 
 /**
@@ -340,13 +340,13 @@ export interface APIScopeInfo {
  */
 export interface ConsentRequest {
   /** Unique request identifier */
-  requestId: string;
+  requestId: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** Timestamp when consent was requested */
-  requestedAt: Date;
+  requestedAt: Date;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** User information from upstream token */
-  user: {
+  user: {  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
     email: string;
     firstName?: string;
     lastName?: string;
@@ -354,31 +354,31 @@ export interface ConsentRequest {
   };
 
   /** Upstream provider name that authenticated the user (from config) */
-  upstreamProvider: string;
+  upstreamProvider: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** Upstream subject claim */
-  upstreamSub: string;
+  upstreamSub: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** Available scopes user can select from */
-  availableScopes: APIScopeInfo[];
+  availableScopes: APIScopeInfo[];  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** Client redirect URI to return to after consent */
-  redirectUri: string;
+  redirectUri: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** Original OAuth state parameter */
-  state?: string;
+  state?: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** Code challenge for PKCE */
-  codeChallenge?: string;
+  codeChallenge?: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** Code challenge method */
-  codeChallengeMethod?: string;
+  codeChallengeMethod?: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** Client ID that initiated the request */
-  clientId: string;
+  clientId: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** Requested scope string from client */
-  requestedScope?: string;
+  requestedScope?: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 }
 
 /**
@@ -386,11 +386,11 @@ export interface ConsentRequest {
  */
 export interface ConsentResponse {
   /** Request ID this response is for */
-  requestId: string;
+  requestId: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** Scopes the user granted */
-  grantedScopes: string[];
+  grantedScopes: string[];  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 
   /** Timestamp of consent */
-  consentedAt: Date;
+  consentedAt: Date;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 }

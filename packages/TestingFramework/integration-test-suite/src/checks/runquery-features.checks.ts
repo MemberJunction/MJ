@@ -38,6 +38,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
+import { FixtureQuerySaveOptions } from './query-fixture-save-options';
 
 /** The saved query the paging + cache checks (QF5/QF6/QF7) reuse. */
 interface RunQueryFeatureFixtures {
@@ -69,7 +70,7 @@ const ADHOC_SIX_ROWS =
  * Create the self-contained Category + paging Query. Publishes the handle up-front so a
  * mid-Setup crash still leaves Teardown a reference to whatever was created (partial-safe).
  */
-export async function createRunQueryFeatureFixtures(ctx: IntegrationCheckContext): Promise<void> {
+export async function CreateRunQueryFeatureFixtures(ctx: IntegrationCheckContext): Promise<void> {
     const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
     const schema = ctx.Schema ?? '__mj';
     const user = ctx.User;
@@ -90,7 +91,7 @@ export async function createRunQueryFeatureFixtures(ctx: IntegrationCheckContext
     pageQuery.CategoryID = category.ID;
     pageQuery.SQL = `SELECT ID FROM ${schema}.vwEntities ORDER BY ID`;
     pageQuery.Status = 'Approved';
-    if (!await pageQuery.Save()) {
+    if (!await pageQuery.Save(FixtureQuerySaveOptions())) {
         throw new Error(`Fixture page query save failed: ${pageQuery.LatestResult?.CompleteMessage}`);
     }
     featureFixtures.PageQuery = pageQuery;
@@ -99,8 +100,13 @@ export async function createRunQueryFeatureFixtures(ctx: IntegrationCheckContext
     await QueryEngine.Instance.Config(true, user);
 }
 
+/** @deprecated Use {@link CreateRunQueryFeatureFixtures}. */
+export async function createRunQueryFeatureFixtures(ctx: IntegrationCheckContext): Promise<void> {
+    return CreateRunQueryFeatureFixtures(ctx);
+}
+
 /** Best-effort teardown — delete the query then the category (FK-safe), partial-safe. */
-export async function teardownRunQueryFeatureFixtures(): Promise<void> {
+export async function TeardownRunQueryFeatureFixtures(): Promise<void> {
     try {
         if (featureFixtures?.PageQuery) {
             await featureFixtures.PageQuery.Delete();
@@ -113,6 +119,11 @@ export async function teardownRunQueryFeatureFixtures(): Promise<void> {
     } finally {
         featureFixtures = undefined;
     }
+}
+
+/** @deprecated Use {@link TeardownRunQueryFeatureFixtures}. */
+export async function teardownRunQueryFeatureFixtures(): Promise<void> {
+    return TeardownRunQueryFeatureFixtures();
 }
 
 /** Build a transient, TYPED MJ: Query Parameters row (never saved) for the unit-style checks. */
@@ -377,7 +388,7 @@ export const RunQueryFeatureChecks: NamedCheck[] = [
                 twin.CategoryID = child.ID;
                 twin.SQL = 'SELECT 1 AS TwinMarker';
                 twin.Status = 'Approved';
-                Assert(await twin.Save(), `QF12 twin query save: ${twin.LatestResult?.CompleteMessage}`);
+                Assert(await twin.Save(FixtureQuerySaveOptions()), `QF12 twin query save: ${twin.LatestResult?.CompleteMessage}`);
                 await QueryEngine.Instance.Config(true, ctx.User);
 
                 const rq = new RunQuery();
@@ -416,7 +427,7 @@ export const RunQueryFeatureChecks: NamedCheck[] = [
                 q.SQL = `SELECT COUNT(*) AS Cnt FROM ${schema}.vwEntities WHERE Name = {{ nameParam | sqlString }}`;
                 q.UsesTemplate = true;
                 q.Status = 'Approved';
-                Assert(await q.Save(), `QF13 query save: ${q.LatestResult?.CompleteMessage}`);
+                Assert(await q.Save(FixtureQuerySaveOptions()), `QF13 query save: ${q.LatestResult?.CompleteMessage}`);
                 // MJQueryEntityServer auto-extracts the Query Parameter row from the template on save.
                 await QueryEngine.Instance.Config(true, ctx.User);
 
@@ -454,7 +465,7 @@ export const RunQueryFeatureChecks: NamedCheck[] = [
                 q.SQL = `SELECT COUNT(*) AS Cnt FROM ${schema}.vwEntities WHERE Name = {{ pat | sqlString }}`;
                 q.UsesTemplate = true;
                 q.Status = 'Approved';
-                Assert(await q.Save(), `QF14 query save: ${q.LatestResult?.CompleteMessage}`);
+                Assert(await q.Save(FixtureQuerySaveOptions()), `QF14 query save: ${q.LatestResult?.CompleteMessage}`);
                 // MJQueryEntityServer auto-extracts the Query Parameter row from the template on save.
                 await QueryEngine.Instance.Config(true, ctx.User);
 
@@ -487,7 +498,7 @@ export const RunQueryFeatureChecks: NamedCheck[] = [
                 q.SQL = `SELECT {{ col | sqlIdentifier }} FROM ${schema}.vwEntities WHERE 1=0`;
                 q.UsesTemplate = true;
                 q.Status = 'Approved';
-                Assert(await q.Save(), `QF15 query save: ${q.LatestResult?.CompleteMessage}`);
+                Assert(await q.Save(FixtureQuerySaveOptions()), `QF15 query save: ${q.LatestResult?.CompleteMessage}`);
                 // MJQueryEntityServer auto-extracts the Query Parameter row from the template on save.
                 await QueryEngine.Instance.Config(true, ctx.User);
 
@@ -530,6 +541,6 @@ for (const check of RunQueryFeatureChecks) {
 // The bundle's shared Query/Category fixtures, run through the generic bundle-lifecycle hook so the
 // driver and any dispatcher create/tear them down identically inside one Setup → run → Teardown.
 IntegrationCheckRegistry.Instance.RegisterLifecycle('runquery-features', {
-    Setup: async ctx => { await createRunQueryFeatureFixtures(ctx); },
-    Teardown: async () => { await teardownRunQueryFeatureFixtures(); }
+    Setup: async ctx => { await CreateRunQueryFeatureFixtures(ctx); },
+    Teardown: async () => { await TeardownRunQueryFeatureFixtures(); }
 });

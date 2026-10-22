@@ -5,10 +5,10 @@ import { RegisterClass } from '@memberjunction/global';
 import type { MJListDetailEntity } from '@memberjunction/core-entities';
 
 import {
-  addOutputParam,
-  getJsonParam,
-  getStringParam,
-  missingParam,
+  AddOutputParam,
+  GetJsonParam,
+  GetStringParam,
+  MissingParam,
 } from './_action-helpers';
 
 /**
@@ -28,11 +28,11 @@ type ListDetailStatus = (typeof ALLOWED_STATUSES)[number];
 @RegisterClass(BaseAction, 'Bulk Update List Item Status')
 export class BulkUpdateListItemStatusAction extends BaseAction {
   protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-    const listId = getStringParam(params, 'ListID');
-    const recordIds = getJsonParam<string[]>(params, 'RecordIDs');
-    const newStatus = getStringParam(params, 'NewStatus') as ListDetailStatus | undefined;
+    const listId = GetStringParam(params, 'ListID');
+    const recordIds = GetJsonParam<string[]>(params, 'RecordIDs');
+    const newStatus = GetStringParam(params, 'NewStatus') as ListDetailStatus | undefined;
 
-    if (!listId) return missingParam('ListID');
+    if (!listId) return MissingParam('ListID');
     if (!recordIds || !Array.isArray(recordIds) || recordIds.length === 0) {
       return {
         Success: false,
@@ -79,9 +79,9 @@ export class BulkUpdateListItemStatusAction extends BaseAction {
       }
     }
 
-    addOutputParam(params, 'Updated', updated);
-    addOutputParam(params, 'Failed', failed);
-    addOutputParam(params, 'Errors', errors);
+    AddOutputParam(params, 'Updated', updated);
+    AddOutputParam(params, 'Failed', failed);
+    AddOutputParam(params, 'Errors', errors);
 
     return {
       Success: failed === 0,

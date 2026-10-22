@@ -21,7 +21,7 @@ import {
   MJCredentialEntity,
   MJRoleEntity,
 } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
+import { CountByUUID, IndexByUUID, UUIDsEqual } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CredentialDialogService } from '@memberjunction/ng-credentials';
 
@@ -159,11 +159,15 @@ export class StorageAdminDialogComponent implements OnInit {
 
   public get FilteredAccountRows(): StorageAccountRow[] {
     const term = (this.SearchTerm || '').toLowerCase().trim();
+    // Indexed once per evaluation: this getter re-runs on every change-detection pass.
+    const providersByID = IndexByUUID(this.Providers);
+    const credentialsByID = IndexByUUID(this.Credentials);
+    const roleCounts = CountByUUID(this.AccountPermissions, (p) => p.FileStorageAccountID);
 
     return this.Accounts.filter((a) => {
       if (!term) return true;
-      const prov = this.Providers.find((p) => UUIDsEqual(p.ID, a.ProviderID));
-      const cred = this.Credentials.find((c) => UUIDsEqual(c.ID, a.CredentialID));
+      const prov = providersByID.Get(a.ProviderID);
+      const cred = credentialsByID.Get(a.CredentialID);
       const credName = cred?.Name || '';
       return (
         a.Name.toLowerCase().includes(term) ||
@@ -172,10 +176,10 @@ export class StorageAdminDialogComponent implements OnInit {
         credName.toLowerCase().includes(term)
       );
     }).map((account) => {
-      const provider = this.Providers.find((p) => UUIDsEqual(p.ID, account.ProviderID));
-      const credential = this.Credentials.find((c) => UUIDsEqual(c.ID, account.CredentialID));
+      const provider = providersByID.Get(account.ProviderID);
+      const credential = credentialsByID.Get(account.CredentialID);
       const credentialName = credential?.Name;
-      const roleCount = this.AccountPermissions.filter((p) => UUIDsEqual(p.FileStorageAccountID, account.ID)).length;
+      const roleCount = roleCounts.Get(account.ID) ?? 0;
       return { account, provider, credentialName, roleCount };
     });
   }
@@ -300,7 +304,7 @@ export class StorageAdminDialogComponent implements OnInit {
       }
 
       // Sync Role Permissions
-      await this.SyncAccountPermissions(accountEntity.ID, this.EditingAccountSelectedRoleIDs);
+      await this.syncAccountPermissions(accountEntity.ID, this.EditingAccountSelectedRoleIDs);
 
       // Force engine refresh
       await FileStorageEngineBase.Instance.Config(true);
@@ -320,7 +324,7 @@ export class StorageAdminDialogComponent implements OnInit {
     }
   }
 
-  private async SyncAccountPermissions(accountId: string, desiredRoleIds: string[]): Promise<void> {
+  private async syncAccountPermissions(accountId: string, desiredRoleIds: string[]): Promise<void> {
     const md = this.ProviderToUse;
     const user = md.CurrentUser;
 

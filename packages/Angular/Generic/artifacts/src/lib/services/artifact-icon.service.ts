@@ -19,7 +19,7 @@ export class ArtifactIconService {
      * @param pluginIcon Optional icon provided by a viewer plugin (highest priority)
      * @returns Font Awesome icon class (e.g., 'fa-file-code', 'fa-chart-line')
      */
-    public getArtifactIcon(artifact: MJConversationArtifactEntity | MJArtifactEntity, pluginIcon?: string): string {
+    public GetArtifactIcon(artifact: MJConversationArtifactEntity | MJArtifactEntity, pluginIcon?: string): string {
         if (!artifact) {
             return 'fa-file';
         }
@@ -39,6 +39,21 @@ export class ArtifactIconService {
         return this.getHardcodedIcon(artifact);
     }
 
+    /** @deprecated Use {@link GetArtifactIcon}. */
+    public getArtifactIcon(artifact: MJConversationArtifactEntity | MJArtifactEntity, pluginIcon?: string): string {
+        return this.GetArtifactIcon(artifact, pluginIcon);
+    }
+
+    /**
+     * Maps Font Awesome Pro-only or non-existent icon names that may be stored
+     * in older `MJ: Artifact Types` database rows to Font Awesome 6 Free equivalents.
+     */
+    private static readonly NON_FREE_ICON_FALLBACKS: Readonly<Record<string, string>> = {
+        'fa-brackets-curly': 'fa-solid fa-file-code',
+        'fa-chart-mixed': 'fa-solid fa-chart-line',
+        'fa-ts': 'fa-solid fa-file-code',
+    };
+
     /**
      * Attempts to retrieve icon from artifact type metadata.
      */
@@ -48,12 +63,26 @@ export class ArtifactIconService {
             const typeName = 'ArtifactType' in artifact ? artifact.ArtifactType : artifact.Type;
             const artifactType = ArtifactMetadataEngine.Instance.FindArtifactType(typeName);
             if (artifactType?.Icon) {
-                return artifactType.Icon;
+                return this.NormalizeMetadataIcon(artifactType.Icon);
             }
         } catch (error) {
             console.warn('Failed to load artifact type metadata for icon:', error);
         }
         return null;
+    }
+
+    /**
+     * Replaces known Font Awesome Pro-only / invalid icon tokens with Font Awesome Free icons
+     * so artifacts always display a visible glyph even before metadata is re-synced to the DB.
+     */
+    public NormalizeMetadataIcon(icon: string): string {
+        const trimmed = icon.trim();
+        for (const [nonFreeToken, replacement] of Object.entries(ArtifactIconService.NON_FREE_ICON_FALLBACKS)) {
+            if (trimmed === nonFreeToken || trimmed.split(/\s+/).includes(nonFreeToken)) {
+                return replacement;
+            }
+        }
+        return trimmed;
     }
 
     /**
@@ -66,8 +95,8 @@ export class ArtifactIconService {
         const typeName = 'ArtifactType' in artifact ? artifact.ArtifactType : artifact.Type;
         const type = typeName?.toLowerCase() || '';
 
-        // Code artifacts
-        if (type.includes('code')) {
+        // Code or JSON artifacts
+        if (type.includes('code') || type === 'json') {
             return 'fa-file-code';
         }
 

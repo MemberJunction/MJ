@@ -10,6 +10,15 @@
  * eases the script→library move. Every symbol forwarded here is DEFINED in
  * @memberjunction/testing-integration (not re-exported from a third package). It is
  * slated for deletion once the scripts import the package directly.
+ *
+ * FORWARD ONLY WHAT THE PACKAGE STILL EXPORTS. A named re-export of a binding the source module
+ * does not provide is an ESM *link-time* error, so it does not fail where it is written — it takes
+ * down every script that imports this file, before a line of their own code runs. That happened:
+ * `createRunQueryFixtures` / `teardownRunQueryFixtures` moved into this package's own
+ * `src/checks/runquery-cache.checks.ts`, the two lines here were left behind, and all six rigs
+ * importing this shim died with `does not provide an export named 'createRunQueryFixtures'`. No rig
+ * ever used them. Nothing in the type-check catches it either: `rigs/` is outside the package's
+ * tsconfig `include`, so the only signal is running a rig.
  */
 export {
     LoadEnv,

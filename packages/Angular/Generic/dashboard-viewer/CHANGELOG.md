@@ -1,5 +1,587 @@
 # @memberjunction/ng-dashboard-viewer
 
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- a750fa5: Security hardening across three surfaces.
+  - **TestQuerySQL authorizes the read** (critical). The resolver ran caller-supplied raw SQL on the read-only pool with only the `query:test` API-key scope check, which is a no-op for JWT users. It now applies the same two guards as `ExecuteAdhocQuery`: scope-limited principals (magic-link sessions) are refused outright, and the RENDERED SQL — composition, inline dependencies and Nunjucks templates resolved with the same inputs the execution spec will use — must read only entity base views the caller can read unscoped (CanRead, no row-level filter, no denied fields) via `assertFullQueryUsesReadableEntityViews`, with `RequireReadStatement` enforced at render time.
+  - **Integration webhook goes through the SSRF guard.** `IntegrationDiscoveryResolver.sendWebhook` posted to the caller-supplied webhook URL with bare `fetch`; it now uses `SafeFetch` from `@memberjunction/network-utils`, which validates the URL and every redirect hop resolves to a public address.
+  - **Dashboard WebURL panels embed http(s) only.** The WebURL part handed any stored URL to `bypassSecurityTrustResourceUrl`, so a `javascript:` URL in a shared dashboard panel would execute in viewers' browsers (the iframes use `allow-same-origin`). The URL is now parsed and must be `http:` or `https:`; anything else renders the part's error state instead of an iframe.
+
+- d1b1958: Follow-up hardening and unit tests for TestQuerySQL and dashboard WebURL panels:
+  - **SQLParser niladic user functions (`@memberjunction/sql-parser`)**: Support standard SQL niladic user functions (`CURRENT_USER`, `SESSION_USER`, `SYSTEM_USER`) without parentheses in both `TransactSQL` and `PostgresQL` dialects and round-trip via `ToSQL()` without `()`, fixing `TestQuerySQL` read-only authorization (`RRC5`) on queries selecting `CURRENT_USER`.
+  - **TestQuerySQLResolver (`@memberjunction/server`)**: Pass `OriginalSQL: input.SQL` to `RenderPipeline.Run`, use `context.userPayload?.userRecord`, and add unit tests covering read-only authorization and niladic user functions.
+  - **WebURLPartComponent (`@memberjunction/ng-dashboard-viewer`)**: Reset `ErrorMessage` on reload, clear `loadCheckTimeout` in `cleanup()`, add `rel="noopener noreferrer"` on external panel links, and add unit test coverage.
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [5465489]
+- Updated dependencies [83486cf]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [8b62f8c]
+- Updated dependencies [c7418dc]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [2274f42]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [7e72c86]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [8420f36]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [5f707d1]
+- Updated dependencies [dc38250]
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/ng-shared-generic@6.2.0-edge.5
+  - @memberjunction/ng-ui-components@6.2.0-edge.5
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.5
+  - @memberjunction/ng-artifacts@6.2.0-edge.5
+  - @memberjunction/ng-base-types@6.2.0-edge.5
+  - @memberjunction/ng-map-view@6.2.0-edge.5
+  - @memberjunction/ng-query-viewer@6.2.0-edge.5
+  - @memberjunction/ng-trees@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Minor Changes
+
+- 7384dd6: Conversation forks: a conversation is Main (the messages with no branch) plus forks (`MJ: Conversation Branches`). A fork starts at a message and shows as a chip under it (kind icon, up to three avatars, message count, name, last activity); it opens as a full view where the inherited history sits faded behind a dashed rail, up to a fork marker, and the fork's own messages behind a solid rail. "Fork from here" on one of your own messages opens a new fork that replaces that message at once (it starts from the message before it, the composer starts with the message's text, the fork is created on the first send and named from that message, and leaving without sending creates nothing), Edit ("Save as fork"; the original message stays) and Regenerate (the first answer stays) each start a fork. A Forks button lists every fork, nested under its parent, with All and Mine filters. Everyone who can see a conversation sees its forks and who started each one. What a person is looking at is per person and in memory; nothing about the view is stored on the conversation, and changing the view ends an active voice session.
+  - New entity `MJ: Conversation Branches` with `Kind` (Fork, Edit, Regenerate; default Fork), `SourceDetailID` and `UserID`; new columns `ConversationDetail.BranchID` and `ConversationDetail.ReplacedAt` (migration, so `minor`).
+  - New authorization `Conversations: Fork`, granted to the UI role. The server refuses to create a fork for a person without it; deny it to a role to turn forking off for that role's members. Each person can also switch forking off in My Profile ("Fork when I edit or regenerate"; user setting `mj.conversations.forking.v1`).
+  - When forking is off for a person, Edit and Regenerate change the latest turn in place: Regenerate (latest answer) and "Save and resend" (latest user message) hide the current answer and run the agent again; earlier user messages can still be edited ("Save", shown as edited). A replaced answer keeps its row (`ReplacedAt` and `HiddenToUser` set) and is left out of the chat, export, pins, the mobile transcript, rubric subjects, the returning-visitor recap and every agent context read (`ConversationEngine.LiveRowsFilter` and `IsReplacedRow`). A turn a fork depends on is not changed in place.
+  - Every writer sets `BranchID` itself (null is Main): the composer and its agent turns, `AgentRunner`, the task-graph deliverer, an agent request resumed from the Agent Requests dashboard or API (the fork of the message that started the run) and realtime transcripts (a voice session's fork is fixed when it starts). The server no longer stamps it and refuses a `BranchID` that names a fork of another conversation.
+  - A fork that still has its own messages or child forks cannot be deleted on its own (its messages would move into Main); deleting the conversation deletes its forks and messages.
+  - `ConversationEngine` gains `CreateFork`, `ForkPointFrom`, `EditForkPoint`, `RegenerateForkPoint`, `SourceRowsFilter`, `BuildForkSummaries`, `LoadForkSummaries`, `ForkDisplayName`, `LiveRowsFilter` and `IsReplacedRow`.
+  - **Removed public Angular API** (the ParentID-based thread panel; a host app that binds any of these must drop the binding): `ConversationChatAreaComponent`'s `ThreadId` input and `ThreadOpened`/`ThreadClosed` outputs; the `ThreadPanelComponent` export; `ConversationWorkspaceComponent`'s `OpenThread`, `CloseThread` and `SelectedThreadId`; `ChatConversationsResource`'s `SelectedThreadId`, `OnThreadOpened` and `OnThreadClosed`; `MessageListComponent`'s `ReplyInThread` and `ViewThread` outputs. Their deprecated camelCase aliases (`threadId`, `threadOpened`, `threadClosed`, `openThread`, `closeThread`, `selectedThreadId`, `onThreadOpened`, `onThreadClosed`, `replyInThread`, `viewThread`) are removed with them.
+
+  Message-anchored scope: every reader of one conversation reads one path through `ConversationScope` (`LoadScope`, `TrunkScope`, `ScopeFilter`, `ScopeSubquery`, `IsInScope`, `FilterToScope`, `ArtifactVersionScopeFilter`): the open view in the chat (window, pins, artifacts, agent polling, export, voice start), and Main for the mobile app, the realtime widget, meeting transcripts, the conversation overview, rubric subjects and the returning-visitor recap. Artifact history is path-aware: the viewer takes a `Scope` input and lists only the versions a message on the path links (any direction) or that no message links, labels a gap as `v4 · from v2`, and falls back to the newest visible version with a notice. Search results carry the fork of each hit; opening one opens that fork, or Main. Skip requests carry `conversationBranchID` from the reply's fork, so Skip Brain keeps one mirror record per path.
+
+- 6dc3aa9: feat(explorer): Dashboards is its own application
+
+  Dashboards move out of Data Explorer into a first-class Dashboards app, and Home, the command palette and recents reach them directly. There is no schema change: the new application is metadata, shipped in the release's metadata sync.
+  - **Dashboards app** (`metadata/applications/.dashboards-application.json`: App Switcher navigation, default for new users) with two pages. **Library**, the default page, lists every dashboard the user can see in one flat list: favorites first, then the dashboards the user opened last, then the rest by last update. Its rail has the Library filters (All dashboards, My dashboards, Shared with me, Favorites, Recently opened) and the category tree with an Uncategorized list; a category shows as a folder. A card shows the dashboard's screenshot (else a miniature of its layout, and "Not set up yet" for a dashboard with no parts), its owner ("You", else the owner's name), a Shared marker, its category and its last update, and a star that adds or removes a favorite. **Categories** shows the category tree with counts, creates categories, and deletes empty ones that the user owns after a confirm. New dashboard asks for a name first, and Cancel creates nothing. Existing users get the app once, automatically, the next time Home loads; a user who later removes it keeps it removed. `@memberjunction/ng-bootstrap` registers the new Categories page class.
+  - **Data Explorer** keeps Data and Queries. A dismissible banner on the Data tab points to the Dashboards app (`DataExplorerDashboardComponent` adds `ShowDashboardsMovedBanner`, `DismissDashboardsMovedBanner()` and `OpenDashboardsApp()`). For a user who has the Dashboards app, a link to Data Explorer's old Dashboards page (`/app/data-explorer/Dashboards`, query params kept) and an old Home pin to that page open the Library, and a saved workspace tab of that page becomes a Library tab (or gives way to an open Library tab) when the workspace loads or the user's apps change.
+  - **A dashboard opens in a workspace tab**, titled with the dashboard's name. Like any link, it replaces the current preview tab, so Back returns to the page it replaced (for example Home, a Dashboards app page or another dashboard) and Forward shows the dashboard again; Shift-click opens it in a separate tab, and so does a Ctrl or Cmd click on the Library list. A dashboard opened from a Dashboards app page is a tab of that app, so the app's header and pages stay in view; one opened from anywhere else (the command palette, recents, Home's Quick Access, a pinned Code dashboard) is a tab of Home. A new dashboard, and a card's Edit action, open the dashboard in edit mode.
+  - **Viewing and editing a dashboard.** The dashboard tab and Home show a Config dashboard in one editor. Its header shows the name and description, a Shared marker and the Favorite star; in the tab it also has the AI assistant toggle, a Share button and an Add to menu (Pin card, Share). Edit enters edit mode: name and description fields, an Editing badge, and Add part, Save and Cancel. Parts are MJ-styled tabs in tab groups, with a menu for the tabs that do not fit. In edit mode each tab group's header has Edit part and Remove for its active part, and a tab can be dragged to an edge to put parts side by side; in view mode tabs do not move. Add part and Edit part open one part dialog: the part type tiles, the type's source settings, a title that defaults to the source's name, and for a query its parameter controls and a refresh interval of 30, 60, 300 or 600 seconds; Edit part cannot change a part's type. Remove asks first and says that the view, query, artifact or page itself is kept. An empty dashboard offers Add part, also in view mode, to a user who can edit it. Save stores the changes and Cancel discards them. A dashboard that is not being edited reloads when it is saved elsewhere, Edit starts from the latest saved layout, and Save asks first when the dashboard was saved elsewhere after the edit began. Each Save also stores a small screenshot of the dashboard in `MJ: Dashboards.Thumbnail`, for the dashboard cards.
+  - **Home** stays a launcher: a greeting, Pinned and My applications. The Pinned header has Add Pin, a **Dashboards** switcher (`mj-home-dashboard-switcher`, internal to `CoreDashboardsModule`) and Edit. The switcher filters the pinned Config dashboards and offers Home, New dashboard and Manage pins; its `HeadingLevel` input (`1`, `2` or `null`) puts the trigger of its title look, not its menu, in an `h1` or `h2`, and Home's dashboard view uses `1`. A pinned Config dashboard opens full size inside Home (`?dashboard=<id>`, so links, Back and Forward work) in the same editor, with a breadcrumb and the switcher as its title: the user edits it in place, Open in Dashboards opens it in the Dashboards app, and leaving it with unsaved changes asks first. Quick Access is hidden while a dashboard shows. New dashboard asks for a name, pins the new dashboard and opens it in Home in edit mode. A dashboard pin shows its dashboard's name, and renaming the pin renames the dashboard for a user who can edit it; other pins keep their own names. Pin cards show an icon tile for every pin except Action pins, app cards drop their nav chips, and the pin options menu works from the keyboard. The Pinned section collapses, and Home remembers the choice for each user (`HomeApp.PinnedCollapsed`).
+  - **`mj-accordion-panel`** (`@memberjunction/ng-ui-components`): `Bare` now also drops the body fill and the row hover fill; on a device that can hover, pointing at the title or chevron gives both the brand color. A new `HeadingLevel` input wraps the toggle in a heading. Fix: the toggle's keyboard focus ring is drawn inside the header, so the panel no longer clips it; on a brand-colored header (the `primary` Variant, and the open sections of the Queries and Templates forms in `@memberjunction/ng-core-entity-forms`) the ring uses the inverse text color.
+  - **The command palette** lists matching dashboards (by name, description or category) in a Dashboards group; Enter opens the dashboard in place of the preview tab (Shift-click on a row opens a separate tab). `OmnibarNavPayload` (`@memberjunction/ng-explorer-core`) gains a `dashboard` kind.
+  - **Recents include dashboards.** Opening one logs `MJ: Dashboards` access, and `RecentAccessService` maps prefixed entity names with the new `ResourceTypeForEntity` and its `RecentResourceType` type (`@memberjunction/ng-shared-generic`).
+  - **`mj-dashboard-browser`** (`@memberjunction/ng-dashboard-viewer`) gains `[FlatMode]`: one flat list of every dashboard it is given, with no folder scoping. Outside selection mode, a Shift, Ctrl or Cmd click on a dashboard now opens it with `OpenInNewTab: true` instead of selecting it; in selection mode those clicks still select, and a Shift range starts from the last dashboard clicked in selection mode. Its cards are the new `mj-dashboard-card`, filled by the new inputs `FavoriteIds`, `ShowFavorites` and `OwnerLabels`; `FlatEmptyIcon`, `FlatEmptyTitle`, `FlatEmptyMessage` and `FlatEmptyWelcome` set the empty state of a flat list, and the new `DashboardFavoriteToggle` output (`DashboardFavoriteToggleEvent`) reports a star click. Its template uses the new public members `IsFavorite()`, `OnToggleFavorite()`, `OwnerLabel()`, `CardCategoryPath()` and `ShowWelcome`. Delete, from a card, a list row or the selection toolbar, asks first through the shared `MJConfirmService` and then emits `DashboardDelete`, so the host does not ask again. `OnDeleteDashboard()` and `OnDeleteSelected()` return a `Promise`, `OnEditDashboard()` and `OnDeleteDashboard()` take the click event as an optional argument, and `ShowDeleteConfirm`, `DashboardsPendingDelete`, `ConfirmDelete()` and `CloseDeleteConfirm()` are removed. The constructor takes `MJConfirmService` (root-provided), so a subclass or a direct `new` must pass it.
+  - **`mj-dashboard-card`** (`DashboardCardComponent`, `@memberjunction/ng-dashboard-viewer`) is one dashboard as a presentational card, with `DashboardCardClickEvent` and the helpers `IsDashboardNotSetUp()`, `FormatDashboardDate()` and `DashboardCategoryPath()`. The package also adds `mj-dashboard-layout-preview`, a miniature of a dashboard's saved panel layout: `DashboardLayoutPreviewComponent`, `DashboardLayoutPreviewNodeComponent`, and `BuildDashboardLayoutPreview()` with its types `DashboardLayoutPreviewNode`, `DashboardLayoutPreviewGroup` and `DashboardLayoutPreviewPanel`.
+  - **`mj-dashboard-viewer`** (`@memberjunction/ng-dashboard-viewer`) gains `HasNewerSavedLayout()`, `ReloadFromSaved()` and `UseSavedCopy()`: they compare with and show the dashboard's saved layout, and take a new copy of the dashboard without rebuilding. A new `CanEdit` input offers Add part on an empty dashboard in view mode. In edit mode, the Edit part and Remove buttons of each tab group ask the host through `PanelInteraction` (`configure-part-requested`, `remove-part-requested`), and the remove request carries `partTypeName`; edit mode draws no title bar above each part. `RemovePartConfirmOptions()` builds the Remove part confirm for `MJConfirmService.ConfirmDelete`. `GoldenLayoutWrapperService.OnStackAction` emits a `StackActionEvent` (a `StackAction`, `'edit'` or `'remove'`, and the active part's `PanelId`) in edit mode. The wrapper writes `DASHBOARD_STACK_HEADER_HEIGHT` (44) and `DASHBOARD_TAB_CONTROL_OFFSET` (78) into every layout it loads, so the layouts it saves carry them. Tabs can be dragged only in edit mode, and the keyboard reaches each tab (a tab list with `aria-selected`).
+  - **Part and name dialogs** (`@memberjunction/ng-dashboard-viewer`): `DashboardPartDialogComponent` (`mj-dashboard-part-dialog`, with `DashboardPartDialogMode`, `DashboardPartDialogResult` and `QUERY_REFRESH_SECONDS`) adds or edits a part in one `mj-dialog`, and the new `BaseConfigPanel.ShowCommonFields` input (default `true`) lets it hide a settings panel's own title and query fields. The standalone `DashboardNameDialogComponent` (`mj-dashboard-name-dialog`, with `DASHBOARD_NAME_MAX_LENGTH`) asks for a new dashboard's name and stays open while the host creates it.
+  - **Deprecated in `@memberjunction/ng-dashboard-viewer`** (still exported and working): `AddPanelDialogComponent` and `EditPartDialogComponent` (use `DashboardPartDialogComponent`); `AddPanelResult`, now a type alias of `DashboardPartDialogResult`, and `EditPartDialogResult`, now `DashboardPartDialogResult` without `PartType`; and `ConfirmDialogComponent` and `ConfirmDialogType` (use `MJConfirmService`, `MJConfirmDialogComponent` and `MJConfirmDialogType` from `@memberjunction/ng-ui-components`). The dashboard tab's two Dashboard Studio confirms still render `ConfirmDialogComponent`.
+  - **`mj-dashboard-editor`** (`DashboardEditorComponent`, `@memberjunction/ng-dashboards`, declared and exported by `CoreDashboardsModule`) is that editor. A host sets `DashboardId` (and optionally `TitleTemplate`, `ShowOpenInDashboards`, `ShowFavorite`, `BodyStyle` and `StartInEditMode`, two-way with `StartInEditModeChange`), puts its own buttons in the `[headerTools]` and `[viewActions]` slots, and handles `Loaded`, `LoadFailed`, `EditingChange`, `Saved`, `NameChanged`, `ConfigChanged`, `ReloadedFromSaved`, `FavoriteChange`, `NavigationRequested` and `OpenInDashboardsRequested`. A host can read the state `Dashboard`, `Viewer`, `BodyElement`, `IsEditing`, `IsSaving`, `EditingName`, `EditingDescription`, `Permissions`, `CanEdit`, `PartTypes`, `IsSharedWithUser`, `IsFavorite`, `HasUnsavedChanges`, `PartDialogMode`, `EditPartPanel` and `IsFill`, and call `EnterEditMode()`, `ToggleEditMode()`, `CancelEdit()`, `SaveDashboard()`, `Save()`, `ToggleFavorite()`, `RefreshPermissions()`, `OpenAddPartDialog()`, `OnPartDialogSaved()`, `ClosePartDialog()` and `OnNameBlur()`. The package also exports `DashboardViewerFactory` (`Create()`), `DashboardEditorBodyStyle`, `DashboardEditorLoadError`, `DashboardSaveOverrides`, `DashboardEditorTitleContext` and `DASHBOARD_SAVE_IN_PROGRESS`.
+  - **More in `@memberjunction/ng-dashboards`:** `DashboardsCategoriesResourceComponent` (the Categories page, with `LoadDashboardsCategoriesResource()`) and the Dashboards app helpers `DASHBOARDS_APP_NAME`, `DASHBOARDS_LIBRARY_NAV_ITEM`, `FindDashboardsApp()`, `DashboardsAppOpenOptions()`, `DashboardNameMaxLength()`, `CreateBlankDashboard(md, name, categoryId?)`, `AutoInstallDashboardsApp()` and `EnsureDashboardsApp()`.
+  - **`DashboardBrowserResourceComponent`** (`@memberjunction/ng-dashboards`) is the Library page; its tab is titled Library. It adds `LibraryFilter`, `LibraryCounts`, `VisibleDashboards`, `IsFlatView`, `EmptyState`, `FavoriteIds`, `OwnerLabels` and `OnDashboardFavoriteToggle()`; the rail's `RailSections`, `RailActiveId`, `RailCollapsed`, `RailExpandedIds`, `OnRailItemClicked()`, `OnRailItemToggled()` and `OnRailCollapsedChange()`; and the name dialog's `ShowNewDashboardDialog`, `IsCreatingDashboard`, `NewDashboardNameMaxLength`, `OpenNewDashboardDialog()`, `OnNewDashboardNamed()` and `OnNewDashboardCancelled()`. `CreateDashboard()` and `createDashboard()` are deprecated: they open the name dialog and no longer create a dashboard themselves. The Library no longer shows or edits a dashboard itself (a click opens the dashboard's tab), so these members and their camelCase aliases are removed: the in-page viewer (`Mode`, `SelectedDashboard`, `DashboardViewer`, `SelectedDashboardPermissions`, `OpenDashboard()`, `EditDashboard()`, `BackToList()`, `OnNavigationRequested()`, `OnPanelInteraction()`, `OnBreadcrumbNavigate()`), edit mode (`ToggleEditMode()`, `SaveDashboard()`, `CancelEdit()`, `EditingName`, `EditingDescription`, `OnNameBlur()`), the add part dialog (`OpenAddPartDialog()`, `ShowAddPanelDialog`, `OnPanelAdded()`, `OnAddPanelCancelled()`), the part settings dialog (`ShowConfigDialog`, `ConfigDialogPanel`, `ConfigDialogPartType`, `ConfigDialogClass`, `OpenConfigDialog()`, `OnConfigDialogSaved()`, `OnConfigDialogCancelled()`), the remove confirm (`ShowConfirmDialog`, `ConfirmPanelId`, `ConfirmPanelTitle`, `OpenRemoveConfirmDialog()`, `OnRemoveConfirmed()`, `OnRemoveCancelled()`) and the share dialog (`ShowShareDialog`, `OpenShareDialog()`, `CloseShareDialog()`, `OnShareDialogResult()`). `openInNewTab()` is removed too.
+  - **`HomeDashboardComponent`** (`@memberjunction/ng-dashboards`) adds the methods `OpenDashboardInHome()`, `GoHome()`, `OnSwitcherPick()`, `ManagePins()`, `OpenNewDashboardDialog()`, `OnNewDashboardNamed()`, `OnNewDashboardCancelled()`, `OpenDashboardInDashboardsApp()`, `PinName()`, `OnPinNameEnter()`, `OnPinMenuKeydown()`, `OnPinnedExpandedChange()`, `OnDashboardNavigationRequested()`, `OnDashboardEditingChange()`, `OnDashboardSaved()`, `OnDashboardViewLoaded()` and `OnDashboardViewLoadFailed()`, and the state `CurrentDashboard`, `CurrentDashboardId`, `CurrentDashboardName`, `DashboardStartsInEditMode`, `IsDashboardEditing`, `PinnedDashboards`, `PinnedExpanded`, `ShowOverview` (false while a dashboard shows), `ShowDashboardView`, `ShowQuickAccess`, `ShowNewDashboardDialog`, `IsCreatingDashboard`, `NewDashboardNameMaxLength`, `PinSections`, `GreetingName`, `PinMenuGroupLabelId` and `PinMenuMaxHeight`. Its `IsEditing()` is true while that dashboard is being edited, and `CurrentUser` has an optional `FirstName`.
+  - **`DashboardResource`** (`@memberjunction/ng-explorer-core`, the dashboard tab) shows a Config dashboard in `mj-dashboard-editor`. It adds `ConfigDashboardId`, `CanShare`, `IsPinnedToHome` and `PinToHome()`, and the editor event handlers `OnEditorLoaded()`, `OnEditorLoadFailed()`, `OnEditorEditingChange()`, `OnEditorNameChanged()`, `OnEditorConfigChanged()`, `OnEditorReloaded()`, `OnEditorFavoriteChange()` and `OnEditorNavigationRequested()`. `ToggleEditMode()`, `CancelEdit()`, `SaveDashboard()`, `OpenAddPartDialog()`, `EditingName`, `EditingDescription` and `DashboardPermissions`, and their camelCase aliases, are deprecated and call the editor. `ConfigDashboard`, `IsEditMode` and `DashboardPermissions` are read-only, and the `configDashboard`, `isEditMode` and `dashboardPermissions` setters are removed, so a subclass that writes them no longer compiles. Before a dashboard loads, `DashboardPermissions` allows nothing.
+  - **New in `@memberjunction/ng-shared`:** `DashboardFavoritesService` (dashboard favorites in `MJ: User Favorites`, with `IsDashboardEntity()` and `DashboardFavoriteIds()`); `BuildDashboardPinInput()` and `DASHBOARD_PIN_RESOURCE_TYPE`, the Home pin that the dashboard tab and Home store for a dashboard; and `MOVED_NAV_ITEMS` with `MovedNavItem`, `FindMovedNavItem()`, `FindMovedNavItemApp()`, `ResolveMovedNavItem()`, `MovedNavItemApp` and `ResolvedMovedNavItem`. `NavigationService.SwitchToApp` opens a moved nav item in its new app, and the new `NavigationService.RetargetMovedNavItemTabs()` and `WatchMovedNavItemTabs()` move the saved tabs of a moved nav item. `HomeAppPinService` matches a dashboard pin by its `dashboardId` or `recordId`, in any letter case, and `CaptureThumbnail()` takes an optional timeout.
+  - **`NavigationService.OpenDashboard` options** (`DashboardNavigationOptions`, `@memberjunction/ng-shared`): `applicationId` names the application the dashboard's tab belongs to (default: Home), and `openInEditMode` opens the dashboard in edit mode on the usual tab path (no forced new tab): the tab it opens in (the replaced preview tab, or a new tab) starts in edit mode, and a tab already open for the dashboard is focused and enters edit mode. The tab's component is also told through `DashboardEditModeRequested$`. The tab takes the request once with `TakeDashboardEditModeRequest(tabId, dashboardId, applicationId)`; the application check keeps a cached component of the same dashboard from another application's tab from taking it.
+  - **Agent context:** the Library, the Categories page, the dashboard tab and Home report their state to the agent. The Library reports its filter with per-filter counts (`LibraryCounts`) and the dashboards opened last (`RecentlyOpenedNames`), and Categories opens a category in the Library (`OpenCategoryInLibrary`). Home reports its view (`HomeView`: Overview or Dashboard), the dashboard it shows (`CurrentDashboardName`, `CurrentDashboardID`, `IsEditingDashboard`) and the pinned dashboards the switcher lists (`PinnedDashboardNames`, plus `PinnedDashboardNameCount` when the list is capped). Home's new `SwitchHomeDashboard` tool shows a pinned dashboard by name or id, or the overview for "Home", and asks the user first when the open dashboard has unsaved changes; `OpenPin` opens a pinned Config dashboard inside Home and leaves pin edit mode. The tools of the Library, Categories and Home read, search, filter or navigate; none creates, renames, edits, shares or deletes a dashboard or a category. The dashboard tab reports the open dashboard; its read tools read it, and its Dashboard Studio tools ask the user before a save or a pin.
+  - **Fix: saving a dashboard no longer reloads its tab in a loop.** The save froze the page, because each tab reload started the next one. The dashboard tab now reports a save as the dashboard's new name (the tab keeps its dashboard id and takes the saved name as its title), not as a record save, which rewrote the component's record id to `ID|<uuid>`. The tab container's reload check also accepts that form: the new `TabContainerComponent.IsSameRecordId` treats a single-field URL segment and its bare value as the same record. The loop was already on `next`.
+  - **Fix: `mj-dashboard-viewer` (`@memberjunction/ng-dashboard-viewer`) fills its box in a scaled host.** The viewer sizes Golden Layout to the layout container's layout size (`offsetWidth` / `offsetHeight`, which Golden Layout also reads when it resizes with the container), not its on-screen size, so a dashboard shown scaled (with CSS `zoom` or a transform) no longer lays out at the scaled size and leaves an empty band.
+  - **Fix: the panels of a dashboard in a tab no longer grow from zero height after Edit or Save.** The shell's stack animation now applies only to the shell's own layouts.
+  - **Fix: a dashboard loaded into DashboardEngine's cache (or any `MJ: Dashboards` object built with `GetEntityObject()` then `LoadFromData()`) now has the loaded values as its old values.** Before, its `UIConfigDetails` and `UserID` kept the defaults of a new dashboard. That made a clean dashboard look changed and made `Revert()` put back the defaults.
+
+### Patch Changes
+
+- bb3028a: A Config dashboard's tab has an AI assistant: a resizable side pane that chats, in text or in a Gemini 3.8 Live voice session, with the new **Dashboards Expert** agent, which the Dashboards application pins through its `AgentSettings`.
+  - **Client tools.** The tab gives the agent client tools: `GetDashboardState`, `GetDashboardScreenshot` and `SearchSources` read the dashboard and find views, queries, entities and artifacts; `AddPanel`, `RemovePanel`, `MovePanel`, `ResizePanel` and `UpdatePanelSettings` make in-memory edits, one at a time, that put the tab in edit mode and that Cancel discards; and `RequestSaveDashboard` and `RequestPinToHome` ask the user in a confirm dialog, so a save or a Home pin happens only when the user confirms it. The edit and request tools take the `dashboardId` that `GetDashboardState` returns and refuse a call for a dashboard that is no longer open.
+  - **`DashboardResource`** (`@memberjunction/ng-explorer-core`, the dashboard tab) adds the AI pane's members: the pane state `ChatOpen`, `CopilotExpanded`, `MainSizePct`, `CopilotSizePct`, `CopilotMinPct`, `CopilotMaxPct` and `ShowCloseChatConfirm`; the chat state `ChatAgentId`, `ChatAgentName`, `ChatAgentError`, `ChatConversation`, `ChatConversationId`, `ChatIsNewConversation`, `ChatPendingMessage`, `ChatPendingAttachments`, `ChatAppContext`, `ChatApplicationId` and `ChatEnvironmentId`; the open save or pin confirm, `AgentConfirm`, with `OnAgentConfirm()`; and the methods `ToggleChat()`, `CloseChat()`, `OnCloseChatConfirmed()`, `OnCloseChatCancelled()`, `ToggleCopilotExpanded()`, `OnCopilotSplitDragEnd()`, `OnChatConversationCreated()`, `OnChatRealtimeConversationReady()`, `OnChatPendingMessageConsumed()`, `OnChatNavigationRequest()` and `OnChatOpenEntityRecord()`.
+  - **Layout editor** (`@memberjunction/ng-dashboard-viewer`). The package exports the pure layout editor behind the tab's edit tools (`InsertPanel`, `MovePanel`, `ResizePanel`, `RemovePanelFromLayout`, `SimplifyLayout`, `FindPanelPath`, `DescribePath`, `LayoutEditError`, `PANEL_PLACEMENTS`) and its types `PanelPlacement`, `PanelPosition`, `LayoutPathStep` and `SimplifiedLayoutNode`. `DashboardViewerComponent` adds `ApplyLayout()`, which shows a layout that these functions built, and `GetPanelPath()`, which gives a panel's address in the layout. The viewer's `AddPanel` returns the new panel's ID and honours its position: its optional `location` argument is now a `PanelPosition`, not a `LayoutLocation`, so a caller that passes a `LayoutLocation` must change, and a position that is not valid throws `LayoutEditError`. `UpdatePanelConfig()` now returns a `Promise` that settles when the layout is rebuilt (it rejects when the rebuild fails). A subclass that overrides `AddPanel()` or `addPanel()` must take a `PanelPosition` and return `Promise<string | null>`, and one that overrides `UpdatePanelConfig()` or `updatePanelConfig()` must return `Promise<void>`. Each panel's content element has a `data-panel-id` attribute.
+  - **Screenshots** (`@memberjunction/ng-shared`). The package adds `CaptureElementJpeg`, with the types `ElementCaptureOptions` and `ElementCapture`, the defaults `ELEMENT_CAPTURE_DEFAULTS`, and the helpers `ComputePixelRatio()` and `StripDataUrlPrefix()`.
+  - **Client tool results.** A client tool result now reaches the model in full: the results of one `ClientTools` step go into one message that expires after 3 turns, and the optional Loop prompt parameter `clientToolResultMaxChars` truncates them with a visible note. In `@memberjunction/ai-agents` it is `LoopAgentTypePromptParams.clientToolResultMaxChars`, and `DEFAULT_LOOP_AGENT_PROMPT_PARAMS` sets it to `-1` (no cap); code that builds its own `Required<LoopAgentTypePromptParams>` must add it.
+  - **Images in tool results.** A result can also carry images (`Media`: JPEG, PNG or WebP, at most 4 items of at most 2,000,000 decoded bytes each), which `ParseClientToolMedia` (`@memberjunction/ai-core-plus`) checks in `RespondToClientToolRequest`, a bad item giving a failed tool result; the agent client sends them, and the agent and prompt runner pass them to the model as image blocks that expire after 2 turns, while the step output keeps only their metadata. `@memberjunction/ai-core-plus` adds `ClientToolMediaItem` (`MimeType`, `Base64`, optional `Width` and `Height`), `ClientToolMediaParse` and `CLIENT_TOOL_MEDIA_LIMITS`, and an optional `Media` on `ClientToolResponse` and `ClientToolResultSummary`; `@memberjunction/ai-agent-client` adds an optional `Media` on `ClientToolResult`.
+  - **`RespondToClientToolRequest`** (`@memberjunction/server`) takes a new optional GraphQL argument, `media`: a string that holds the images as a JSON array. In TypeScript, `ClientToolRequestResolver.RespondToClientToolRequest()` has the new parameter before the context, so a direct caller that passes the context by position, or a subclass that overrides the method, must change. The agent client's mutation always names the `media` argument, so it needs a server from this release: an older server rejects every client tool response (`Unknown argument "media"`), and each client tool call then fails when it times out. A `result` that is not valid JSON now also gives a failed tool result, so the agent no longer waits for the request to time out.
+  - **Media in the agent and prompt runner.** `BaseAgent`'s protected `contentToString()` now turns an image, audio, video or file block into a short stub (for example `[image omitted]`), not its base64 text, and its protected `estimateTokens()` counts each such block as 1,600 tokens. The prompt runner keeps the content blocks that a user message already has when it adds file blocks, and it no longer changes the caller's message objects when it replaces media that the model cannot read.
+  - **Voice.** Voice tool results stay text, since the Explorer shell strips `Media` before a realtime session sees them (`WithoutMedia()`, `@memberjunction/ng-explorer-app`). A voice session's delegated run (`invoke-target-agent`) receives the browser session ID and the app context from the session start (`ExecuteRelayedToolInput.BrowserSessionID` and `AppContext`, `@memberjunction/ai-agents`), so the delegated agent can call the page's client tools; a scoped anonymous caller's run, which executes as the system user, gets no app context. The server does not store an app context whose JSON is longer than 256,000 characters, and the delegated runs then get none. A voice session also keeps its direct actions when a delegated run pauses for the user's answer. In `@memberjunction/realtime-runtime`, a surface client tool whose handler returns `Success: false` gives the voice model a failed result, and `RealtimeSessionRuntime.SendVideoFrame` returns whether the frame was sent; a subclass that overrides it must return a `boolean`.
+  - **Agent context.** The sub-agent catalog lists only Active relationship targets. The Explorer shell keeps the page's additional context when it rebuilds the app-context snapshot while the page's tab is attached, clears it when the tab is detached, and restores it when the tab is reattached. The client tools a page registered now follow the same rule: only the detach of that page's own tab clears them, so the detach of another tab no longer takes the open dashboard's tools away from the agent. In `@memberjunction/ng-shared`, `AgentContextUpdate` gains `Lifecycle` (`'Detached'` or `'Reattached'`), which `NavigationService.NotifyResourceDetached()` and `NotifyResourceReattached()` set; the detach of another tab now sends an update with only `Caller` and `Lifecycle`, not an empty `AgentClientTools` list.
+  - **Chat area** (`@memberjunction/ng-conversations`). The chat area's empty-state composer now receives the host's default agent, application and app context, so a voice call can start before the first message, and the dashboard tab adopts the conversation that call created when it ends.
+
+- e8258a1: `@memberjunction/global` gains set-based UUID helpers, so matching one list against another no longer means a nested `UUIDsEqual` scan (#4719).
+  - **Collections:** `UUIDSet` and `UUIDMap` normalize on every insert and lookup, so upper-case and lower-case IDs match without anyone having to remember `NormalizeUUID` on both sides.
+  - **Helpers:** `FilterByUUIDs`, `ExcludeByUUIDs`, `CountByUUID` and `IndexByUUID` cover keeping matches, dropping matches, counting per ID and looking up by ID in one linear pass. Each takes an optional ID selector.
+  - **Faster `UUIDsEqual`:** it now compares without allocating. It produces exactly the old result, falling back to the old path for non-ASCII input.
+  - **New guard:** the UUID compliance scan fails on new nested `UUIDsEqual` scans. The check is AST-based, and a per-file baseline records the sites that predate it.
+  - **Adopted:** the sites fixed in #4716 now use the helpers.
+  - **Guide:** `guides/UUID_COMPARISON_GUIDE.md` Patterns 5 and 8 are rewritten around the new API.
+
+- Updated dependencies [a709bb6]
+- Updated dependencies [432cb73]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [49f26d9]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [490cd8d]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [7316ac3]
+- Updated dependencies [fc24fc4]
+- Updated dependencies [1403d04]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [1ea4085]
+- Updated dependencies [aee2d53]
+- Updated dependencies [5e1e343]
+- Updated dependencies [25f7b82]
+- Updated dependencies [90829e3]
+- Updated dependencies [aac148b]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [e7b2ebc]
+- Updated dependencies [e0cf9ed]
+- Updated dependencies [57fea6a]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/ng-artifacts@6.2.0-edge.4
+  - @memberjunction/ng-shared-generic@6.2.0-edge.4
+  - @memberjunction/ng-ui-components@6.2.0-edge.4
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/ng-base-types@6.2.0-edge.4
+  - @memberjunction/ng-map-view@6.2.0-edge.4
+  - @memberjunction/ng-query-viewer@6.2.0-edge.4
+  - @memberjunction/ng-trees@6.2.0-edge.4
+
+## 6.2.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [25bb295]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [131f3c4]
+- Updated dependencies [0f04590]
+- Updated dependencies [41c2c08]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [66fd011]
+- Updated dependencies [196160a]
+- Updated dependencies [60bd774]
+- Updated dependencies [35da130]
+- Updated dependencies [28c92e0]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/core-entities@6.2.0-edge.3
+  - @memberjunction/global@6.2.0-edge.3
+  - @memberjunction/core@6.2.0-edge.3
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.3
+  - @memberjunction/ng-artifacts@6.2.0-edge.3
+  - @memberjunction/ng-ui-components@6.2.0-edge.3
+  - @memberjunction/ng-base-types@6.2.0-edge.3
+  - @memberjunction/ng-map-view@6.2.0-edge.3
+  - @memberjunction/ng-query-viewer@6.2.0-edge.3
+  - @memberjunction/ng-shared-generic@6.2.0-edge.3
+  - @memberjunction/ng-trees@6.2.0-edge.3
+
+## 6.2.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [e97d95c]
+- Updated dependencies [2552b1e]
+- Updated dependencies [5114c10]
+- Updated dependencies [21f9e15]
+- Updated dependencies [a3d6182]
+- Updated dependencies [4248fb3]
+- Updated dependencies [0adaf76]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [705ab4e]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [369e229]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [2854a2e]
+- Updated dependencies [8766e99]
+  - @memberjunction/core@6.2.0-edge.2
+  - @memberjunction/core-entities@6.2.0-edge.2
+  - @memberjunction/ng-artifacts@6.2.0-edge.2
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.2
+  - @memberjunction/ng-query-viewer@6.2.0-edge.2
+  - @memberjunction/global@6.2.0-edge.2
+  - @memberjunction/ng-ui-components@6.2.0-edge.2
+  - @memberjunction/ng-base-types@6.2.0-edge.2
+  - @memberjunction/ng-map-view@6.2.0-edge.2
+  - @memberjunction/ng-shared-generic@6.2.0-edge.2
+  - @memberjunction/ng-trees@6.2.0-edge.2
+
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- e2fa695: Five nested `UUIDsEqual` scans, each over two lists that grow with the data, now match against a normalized `Set` (or a first-index `Map`) built once. The affected sites are:
+  - the message placeholder getter
+  - the user-row role lookup
+  - the entity-permission fill-in (in Role mode, every entity × every saved row)
+  - the dashboard drop handlers
+  - the flow editor's `HighlightPath` and delete-selection
+
+  Results, ordering and case-insensitive matching are unchanged. New tests pin each one and pass against the old code as well.
+
+- Updated dependencies [a50948e]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [a3539d2]
+- Updated dependencies [41274aa]
+- Updated dependencies [67f6c85]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [beacbb2]
+- Updated dependencies [2d4bf8d]
+- Updated dependencies [307da67]
+- Updated dependencies [d67c8c0]
+- Updated dependencies [a7da50b]
+- Updated dependencies [17cc774]
+- Updated dependencies [80905a1]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [920bef8]
+  - @memberjunction/core-entities@6.2.0-edge.1
+  - @memberjunction/ng-query-viewer@6.2.0-edge.1
+  - @memberjunction/core@6.2.0-edge.1
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.1
+  - @memberjunction/global@6.2.0-edge.1
+  - @memberjunction/ng-artifacts@6.2.0-edge.1
+  - @memberjunction/ng-shared-generic@6.2.0-edge.1
+  - @memberjunction/ng-trees@6.2.0-edge.1
+  - @memberjunction/ng-ui-components@6.2.0-edge.1
+  - @memberjunction/ng-base-types@6.2.0-edge.1
+  - @memberjunction/ng-map-view@6.2.0-edge.1
+
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [50241c8]
+- Updated dependencies [6207578]
+- Updated dependencies [e225ece]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [2c590b0]
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.0
+  - @memberjunction/ng-shared-generic@6.2.0-edge.0
+  - @memberjunction/ng-artifacts@6.2.0-edge.0
+  - @memberjunction/ng-base-types@6.2.0-edge.0
+  - @memberjunction/ng-map-view@6.2.0-edge.0
+  - @memberjunction/ng-query-viewer@6.2.0-edge.0
+  - @memberjunction/ng-trees@6.2.0-edge.0
+  - @memberjunction/ng-ui-components@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
+## 6.1.0
+
+### Patch Changes
+
+- b915983: Align the Angular toolchain on the current 21.x patch line: framework packages 21.1.3 → 21.2.22,
+  CLI/builders 21.1.3 → 21.2.23, CDK 21.1.3 → 21.2.14, ng-packagr → 21.2.7, PrimeNG 21.1.1 → 21.1.9.
+
+  This is a patch-level move inside the supported Angular 21 LTS line, not a framework migration.
+  It closes every open Angular security advisory on the repository — fifteen distinct GHSAs
+  (i18n and template-sanitizer XSS bypasses, service-worker header leakage and credential
+  stripping, HttpTransferCache cross-request leakage, and formatDate/number-format DoS), all fixed
+  in 21.2.19 or earlier — which together accounted for 438 of the 749 open Dependabot alerts.
+
+  Every published `@memberjunction/ng-*` package's `@angular/*` peer range moves from `^21.1.3`
+  (or `^21.0.0`) to `^21.2.22`, so consumers must be on at least that patch. The era-6 platform
+  manifest in `release-lines.json` records the new pin; era 5 (the certified 5.51 line) is
+  unchanged.
+
+  Also moves the exact `@angular/*` runtime pins that 23 libraries carried in `dependencies`
+  into caret `peerDependencies` (adding the missing peers on `ng-react`), so a consumer on any
+  in-range Angular 21.2.x build gets a single Angular copy instead of a nested second runtime, and
+  drops the unused `primeng` peer from `ng-base-forms` (nothing in the repo imports PrimeNG).
+
+- 92f2ac9: Repo-wide sweep of code that assumed an entity's primary key is a single column named `ID`, plus a `PrimaryKeyCompliance` gate in `@memberjunction/core` so the pattern cannot come back.
+
+  MJ supports primary keys with any column name(s) and type(s). Every MJ core entity happens to use `ID`, so hardcoding it works across the whole core product and silently breaks on customer entities mapped from external schemas — `Load()` rejects the invented field name, or a composite key is truncated to its first column. #4179 (search result click-through) was one instance; this sweep found the same shape in ~90 files and fixes all of it on top of the `CompositeKey.FromURLSegment` / `FromEntityRecord` / `ToCompactURLSegment` primitives introduced with that fix.
+
+  **What changed, by kind**
+  - **Literal `ID` key construction** (`{ FieldName: 'ID', Value: x }`, `LoadFromSingleKeyValuePair('ID', …)`, `FromKeyValuePair('ID', …)`) — ~135 sites. Where the entity is a literal MJ core entity the key is now `CompositeKey.FromID(x)`, the one sanctioned way to say "this entity's key is `ID`". Where the entity is a variable (an event's `EntityName`, an `entityInfo`, a configured entity) the key is `CompositeKey.FromURLSegment(entityInfo, recordId)`, which reads a bare value or a `F1|v1||F2|v2` segment against the entity's real primary key(s).
+  - **`PrimaryKeys[0]` → `FirstPrimaryKey`** — 39 sites. Same semantics, a named accessor the gate can track. IS-A shared-key and keyset uses are annotated `// first-pk-ok`.
+  - **Real defects fixed** (arbitrary entity keyed as `ID`): Mobile app record load/edit/offline sync; the generic form overlay; the ERD "open record" path; version-history label/diff/micro-view links (which stripped `ID|` off a stored key and re-wrapped the value as `ID`); `RestoreEngine` and `buildPrimaryKeyForLoad`; the Apollo enrichment connector (six `GetEntityObject(configuredEntity, FromID(record.ID))` calls); geocoding record reload; List Detail record-open (composite keys now open instead of showing a notice); `EmbeddedRecord`; `DatabaseReferenceScanner`; hardcoded `ID` filters on a variable entity in Data Explorer's record load, Predictive Studio's label lookup, the realtime-widget visitor identity lookup, `DuplicateRecordDetector.LoadRecordsByListID`, and MetadataSync's `@lookup` GUID conversion.
+  - **REST API**: `EntityCRUDHandler` / `RESTEndpointHandler` built the key from the `:id` segment for single-column keys only and threw "Composite primary keys are not supported". Both now accept a bare value or a URL-encoded `Field1|Value1||Field2|Value2` segment. Single-column behavior is unchanged.
+  - **One serializer instead of eight**: `ListOperations.serializeRecordId`, `list-set-operations.serializeRecordId`, RecordSetProcessor's `serializeRecordId`, `GetListRecordsAction`'s inline copy, `MJListDetailEntityExtended.BuildRecordID` / `GetCompositeKey`, `record.util.buildCompositeKey`, `VersionHistory.buildCompositeKeyFromRecord` and `ChangeDetector.buildDeleteItem` all delegate to `CompositeKey.FromEntityRecord(...).ToCompactURLSegment()` / `FromURLSegment(...)`. Output is byte-identical for single-column keys.
+
+  **`FirstPrimaryKey` triage** — every one of the ~390 `FirstPrimaryKey` / `FromID` uses in the repo was read in context and either rewritten or annotated with a reason (154 annotations). Real defects found and fixed along the way, all of the shape "first key column used as the whole key" on an entity that can be composite-keyed:
+  - **Data providers**: the deterministic `ORDER BY` fallback for row-limited queries ordered by the first key column only, leaving composite-key pages in undefined order; it now orders by every key column. Saved-view run logging / exclusion and the `{%UserView%}` template subquery, whose persisted `RecordID` cannot hold a composite key, now refuse loudly instead of excluding wrong rows. The dependency-link subquery now predicates on the full key. Single-column SQL is byte-identical.
+  - **CodeGen**: generated cascade delete/update procs bound the child FK to `@<firstPK>` regardless of which parent key column the FK references; a composite key containing an identity column dropped the other key columns from the generated INSERT (both providers); the PostgreSQL JSON-arg `spCreate` inserted only the first key column; the generated join-grid/timeline filters and the GraphQL audit-log `RecordID` truncated composite keys. Single-key generator output verified byte-identical against `HEAD` (168 shapes).
+  - **Smart cache** (`ProviderBase` differential merge): keyed rows on the first PK, so composite-key deletes never applied and rows sharing the first column collapsed.
+  - **Integration push sync**: composed record identity from the first key column while the record map stores all columns joined, so every already-synced composite-key row was re-created externally as a duplicate on each full push; the changed-record path silently dropped rows.
+  - **Scheduled geocoding orphan cleanup** (destructive): compared a cast of the first key column to a `RecordID` holding all columns, so every geocode row for a composite-key entity was deleted on each run.
+  - **Lists**: list membership, export and add-record paths filtered on the first key column and wrote only its value into `ListDetail.RecordID`; Explorer "open record" paths on user-selected entities, duplicate detection, omnibar record search, Data Explorer deep links, the sharing center revoke, recent-access, tree dropdowns, the mobile app's record ids and offline queue.
+  - **AI**: duplicate detection, vector sync record ids, Predictive Studio list scope and write-back; the Recommendations engine also wrote a record id into `SourceEntityID` (an FK to Entities) and never set `SourceEntityRecordID`.
+  - **Apollo enrichment**: `Accounts` (a customer entity) loaded by literal `ID`; the contacts path read its key off an entity that had never been loaded.
+  - Every `entityInfo.FirstPrimaryKey?.Name ?? 'ID'` fallback is gone; where the entity can be missing the code now fails loudly instead of inventing `ID`.
+
+  **The gate** — `packages/MJCore/src/__tests__/PrimaryKeyCompliance.test.ts`, modelled on `MultiProviderCompliance` / `UUIDCompliance`:
+  1. _Strict_: a key built with a literal `ID` field name. Marker `// pk-literal-ok: <reason>`.
+  2. _Strict_: `PrimaryKeys[0]` / `PrimaryKeys.at(0)`.
+  3. _Strict_: `FirstPrimaryKey` and `CompositeKey.FromID(`. These are legitimate only where MJ is single-column by design (foreign-key targets, keyset `ORDER BY` / `AfterKey`, IS-A shared keys, core entities), so every use must be self-evidently on a core entity or say why: `FromID` is exempt when a `'MJ: …'` entity literal is on the same line or within 8 lines above (the `GetEntityObject` / `OpenEntityRecord` naming the core entity); everything else carries `// first-pk-ok: <reason>` on the same line, reason mandatory.
+  4. _Strict_: an `ID = …` / `ID IN (…)` `ExtraFilter` or `Fields: ['ID']` within eight lines of an `EntityName:` that is a variable rather than a string literal or ALL_CAPS constant. Marker `// pk-filter-ok: <reason>`.
+
+  Generated code, tests, `dist/`, and the `TestingFramework` / `UnitTesting` packages are not scanned. The rule is written up in `.claude/rules/data-access.md` § "Primary keys: never assume a column named ID". There is no baseline file: all four gates are strict.
+
+  No public signatures change; every edit is additive or a same-shape substitution, so this is `patch` throughout.
+
+- 394d276: Declare @angular/\* peer dependencies as ranges (^21.1.3) instead of exact pins across all Angular library packages. Peer declarations are compatibility claims, not install instructions: the exact pins falsely claimed incompatibility with every other Angular 21.x build, produced 502 peer-resolution errors under strict pnpm workspaces, and structurally blocked Angular security patches behind a full republish. Installed versions remain pinned by consuming apps and the era platform manifest; dependencies/devDependencies keep their exact pins.
+- Updated dependencies [4273317]
+- Updated dependencies [394d276]
+- Updated dependencies [634aa8c]
+- Updated dependencies [834f8d7]
+- Updated dependencies [a987913]
+- Updated dependencies [e533ce5]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [2c826f7]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [b915983]
+- Updated dependencies [b895f92]
+- Updated dependencies [b895f92]
+- Updated dependencies [1bced7c]
+- Updated dependencies [05b4cb5]
+- Updated dependencies [b7819d2]
+- Updated dependencies [394d276]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [4586215]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [4c1de04]
+- Updated dependencies [0d3094c]
+- Updated dependencies [255d506]
+- Updated dependencies [0ec1980]
+- Updated dependencies [1940a4d]
+- Updated dependencies [07cb22e]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [c09c818]
+- Updated dependencies [711c208]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [e9c5b90]
+- Updated dependencies [2412415]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [9699d0e]
+- Updated dependencies [394d276]
+- Updated dependencies [78ea840]
+- Updated dependencies [43f9133]
+- Updated dependencies [469461a]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [2d14c62]
+- Updated dependencies [394d276]
+- Updated dependencies [c996a56]
+- Updated dependencies [de6eb14]
+- Updated dependencies [38d4482]
+- Updated dependencies [052b4c7]
+- Updated dependencies [8ec1515]
+- Updated dependencies [9a905e8]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [c996a56]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [8d880cc]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [cefc302]
+- Updated dependencies [841e6ea]
+- Updated dependencies [394d276]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [080f4cd]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [d66a26a]
+- Updated dependencies [c643ba3]
+- Updated dependencies [e9e9873]
+- Updated dependencies [1d88e00]
+- Updated dependencies [647bd71]
+- Updated dependencies [8288711]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [5f33ca8]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [d26e202]
+- Updated dependencies [48ff99f]
+- Updated dependencies [076fa5d]
+- Updated dependencies [9f73528]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [27e4d09]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [23c2521]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [98841bb]
+- Updated dependencies [53c341c]
+- Updated dependencies [394d276]
+- Updated dependencies [b46330e]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [53d256f]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [cf2484c]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [0967ba7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [de343b5]
+- Updated dependencies [5fc861f]
+- Updated dependencies [1748491]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fefca2]
+- Updated dependencies [a1a8989]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [905820a]
+- Updated dependencies [394d276]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [d078c54]
+- Updated dependencies [7fcdc2d]
+- Updated dependencies [15319b4]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [b46330e]
+- Updated dependencies [4b1257f]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/ng-shared-generic@6.1.0
+  - @memberjunction/ng-ui-components@6.1.0
+  - @memberjunction/ng-entity-viewer@6.1.0
+  - @memberjunction/ng-artifacts@6.1.0
+  - @memberjunction/global@6.1.0
+  - @memberjunction/core@6.1.0
+  - @memberjunction/core-entities@6.1.0
+  - @memberjunction/ng-base-types@6.1.0
+  - @memberjunction/ng-map-view@6.1.0
+  - @memberjunction/ng-query-viewer@6.1.0
+  - @memberjunction/ng-trees@6.1.0
+
+## 6.1.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [a987913]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [076fa5d]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core-entities@6.1.0-edge.7
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.7
+  - @memberjunction/ng-ui-components@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+  - @memberjunction/ng-artifacts@6.1.0-edge.7
+  - @memberjunction/ng-base-types@6.1.0-edge.7
+  - @memberjunction/ng-map-view@6.1.0-edge.7
+  - @memberjunction/ng-query-viewer@6.1.0-edge.7
+  - @memberjunction/ng-shared-generic@6.1.0-edge.7
+  - @memberjunction/ng-trees@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Patch Changes

@@ -1,0 +1,100 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "codesmith-execute-code-01 [claude-sonnet-5 · Anthropic · native-implicit-results]",
+    "Description": "A calculation the agent must do by writing code, not by inference. One action, one required param.",
+    "InputDefinition": {
+      "payload": {
+        "task": "Compute the mean and median of the provided values",
+        "inputData": {
+          "values": [
+            4,
+            8,
+            15,
+            16,
+            23,
+            42
+          ]
+        }
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Compute the mean and median of input.values."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "codesmith-execute-code-01",
+      "expect": {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Execute Code",
+            "params": {
+              "code": {
+                "matcher": "nonEmpty"
+              },
+              "language": {
+                "matcher": "oneOf",
+                "values": [
+                  "javascript"
+                ],
+                "optional": true
+              }
+            }
+          }
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Codesmith Agent",
+      "modelId": "31280CE6-5EFC-4407-BEFB-339322D0CC2E",
+      "vendorId": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "native",
+      "nativeControlFlow": "implicit",
+      "nativeToolResults": true,
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Execute Code",
+                "params": {
+                  "code": {
+                    "matcher": "nonEmpty"
+                  },
+                  "language": {
+                    "matcher": "oneOf",
+                    "values": [
+                      "javascript"
+                    ],
+                    "optional": true
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "7C654C8B-5F77-4806-A460-7781F7617783"
+  }
+}

@@ -96,10 +96,11 @@ export class MJSearchScopeFormComponentExtended extends MJSearchScopeFormCompone
      * inline ("82% similar to last run"). Authors use this to immediately
      * see how much a reranker swap or fusion-weight tweak shifted the ranking.
      */
-    private PreviousRunRecordIDs: string[] = [];
+    private previousRunRecordIDs: string[] = [];
     public LastRunSimilarityPercent: number | null = null;
 
     public override ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.previewSubscription?.unsubscribe();
         this.previewSubscription = null;
     }
@@ -107,9 +108,9 @@ export class MJSearchScopeFormComponentExtended extends MJSearchScopeFormCompone
     /**
      * P4.1 — run a streaming preview against this scope. Uses the same
      * SearchService.StreamSearch path the production search UI uses, scoped
-     * to just this scope's ID. Renders progressively as each provider
-     * reports back so authors can see chip-by-chip what each tuning change
-     * actually affects.
+     * to just this scope's ID. Each provider's chip shows its count as it
+     * reports back, so authors can see chip-by-chip what each tuning change
+     * actually affects; the result rows arrive with the 'final' event.
      */
     public RunPreview(): void {
         if (!this.record?.ID || this.PreviewIsRunning) return;
@@ -133,18 +134,16 @@ export class MJSearchScopeFormComponentExtended extends MJSearchScopeFormCompone
         }).subscribe({
             next: (event) => {
                 if (event.Phase === 'provider' && event.ProviderName) {
+                    // Progress only: the count, never the rows (they precede the permission pass).
                     this.PreviewProviders = [
                         ...this.PreviewProviders,
                         {
                             Name: event.ProviderName,
-                            Count: event.Results?.length ?? 0,
+                            Count: event.ResultCount ?? 0,
                             ElapsedMs: event.ElapsedMs ?? 0,
                             State: 'Completed',
                         },
                     ];
-                    if (event.Results) {
-                        this.PreviewResults = [...this.PreviewResults, ...event.Results].sort((a, b) => b.Score - a.Score);
-                    }
                 } else if (event.Phase === 'final' && event.Results) {
                     this.PreviewResults = [...event.Results].sort((a, b) => b.Score - a.Score);
                     this.PreviewElapsedMs = event.ElapsedMs ?? null;
@@ -159,9 +158,9 @@ export class MJSearchScopeFormComponentExtended extends MJSearchScopeFormCompone
                 // Compute Kendall-tau against the prior run, then capture this
                 // run's order as the next baseline.
                 const currentIDs = this.PreviewResults.map(r => r.RecordID);
-                if (this.PreviousRunRecordIDs.length > 0 && currentIDs.length > 0) {
+                if (this.previousRunRecordIDs.length > 0 && currentIDs.length > 0) {
                     const tau = MJSearchScopeFormComponentExtended.kendallTauOnSharedItems(
-                        this.PreviousRunRecordIDs,
+                        this.previousRunRecordIDs,
                         currentIDs,
                     );
                     if (tau !== null) {
@@ -171,7 +170,7 @@ export class MJSearchScopeFormComponentExtended extends MJSearchScopeFormCompone
                         this.LastRunSimilarityPercent = Math.round((tau + 1) * 50);
                     }
                 }
-                this.PreviousRunRecordIDs = currentIDs;
+                this.previousRunRecordIDs = currentIDs;
             },
         });
     }

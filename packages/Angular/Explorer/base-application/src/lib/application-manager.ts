@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { MJGlobal, MJEventType, UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID, MJGlobal, MJEventType, UUIDsEqual } from '@memberjunction/global';
 import { Metadata, ApplicationInfo, LogError, LogStatus, StartupManager, IMetadataProvider, PermissionConstrainedError } from '@memberjunction/core';
 import { MJUserApplicationEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseApplication } from './base-application';
@@ -152,7 +152,11 @@ export class ApplicationManager {
     MJGlobal.Instance.GetEventListener(true).subscribe(async (event) => {
       if (event.event === MJEventType.LoggedIn) {
         await StartupManager.Instance.Startup() // make sure this is done
-        this.loadApplications();
+        // Fire-and-forget from an event callback: loadApplications() already logs its failure
+        // and resolves WhenReady() waiters before rethrowing (for callers that await it), so
+        // the rethrow has nobody to land on here — catch it rather than leave an unhandled
+        // rejection on the page.
+        this.loadApplications().catch(() => { /* logged inside loadApplications */ });
         this.subscribeToEngineChanges();
       }
     });
@@ -309,7 +313,13 @@ export class ApplicationManager {
       // Attempt one recovery by force-refreshing UserInfoEngine before giving up.
       const activeApps = this.applications$.value;
       const hasMetadataApps = md.Applications.some(a => a.Status === 'Active');
-      if (activeApps.length === 0 && hasMetadataApps && !ApplicationManager._recoveryAttempted) {
+      // A permission-constrained session (e.g. an external magic-link user holding only
+      // 'Magic Link Baseline' plus a granted role) has zero user apps BY DESIGN — that is
+      // not cache corruption, and a forced engine refresh cannot grant read access. Without
+      // this guard the recovery log below read UserApplications, which throws
+      // PermissionConstrainedError, and loadApplications() rejected unhandled at every boot.
+      if (activeApps.length === 0 && hasMetadataApps && !ApplicationManager._recoveryAttempted
+          && !UserInfoEngine.Instance.IsPermissionConstrained) {
         ApplicationManager._recoveryAttempted = true;
         const activeAppCount = md.Applications.filter(a => a.Status === 'Active').length;
         const engineHealthy = UserInfoEngine.Instance.AllPropertiesLoadedSuccessfully;
@@ -355,9 +365,10 @@ export class ApplicationManager {
     // If the engine can't read user application data, skip the self-healing path —
     // a permission-denied user is NOT the same as a new user with no records.
     if (engine.IsPermissionConstrained) {
-      LogStatus(`${this.constructor.name}: UserInfoEngine is permission-constrained, skipping application config load`);
+      const sessionApps = this.permissionConstrainedSessionApps(allApps);
+      LogStatus(`${this.constructor.name}: UserInfoEngine is permission-constrained, skipping application config load; ${sessionApps.length} default app(s) offered for this session`);
       this.userAppConfigs$.next([]);
-      this.applications$.next([]);
+      this.applications$.next(sessionApps);
       return;
     }
 
@@ -388,6 +399,51 @@ export class ApplicationManager {
 
     this.userAppConfigs$.next(userAppConfigs);
     this.applications$.next(activeApps);
+  }
+
+  /**
+   * The apps a permission-constrained session (e.g. an external magic-link user) is offered when it
+   * cannot read its own `MJ: User Applications` rows: what a brand-new user would get —
+   * DefaultForNewUser apps the user may access, in DefaultSequence order — but held in memory
+   * only, never saved as records. When the session cannot read application roles either, access
+   * cannot be judged (an unreadable role list reads as "open to everyone"), so nothing is offered;
+   * an app-locked session still reaches its scoped app through {@link AdoptSessionApplication}.
+   */
+  private permissionConstrainedSessionApps(allApps: readonly BaseApplication[]): BaseApplication[] {
+    const engine = UserInfoEngine.Instance;
+    if (engine.IsPropertyPermissionConstrained('_applicationRoles')) {
+      return [];
+    }
+    const defaults = this.Provider.Applications
+      .filter(a => a.DefaultForNewUser && a.Status === 'Active' && engine.UserHasApplicationAccess(a.ID))
+      .sort((a, b) => (a.DefaultSequence ?? 100) - (b.DefaultSequence ?? 100));
+    const appsByID = IndexByUUID(allApps);
+    return defaults
+      .map(info => appsByID.Get(info.ID))
+      .filter((app): app is BaseApplication => !!app);
+  }
+
+  /**
+   * Makes an application the SESSION is scoped to available in {@link Applications} when the
+   * user's own app list does not include it — an app-locked session (a magic-link invite scoped
+   * to one app) whose user cannot read, or has no, `MJ: User Applications` rows. In memory only:
+   * no record is created. The scope comes from the server-signed session, and the server still
+   * enforces every entity permission inside the app.
+   *
+   * @param appId - the application the session is restricted to
+   * @returns true when the app was added (so {@link Applications} re-emits); false when it was
+   *   already available or is not an active application at all
+   */
+  AdoptSessionApplication(appId: string): boolean {
+    if (!appId || this.GetAppById(appId)) {
+      return false;
+    }
+    const app = this.allApplications$.value.find(a => UUIDsEqual(a.ID, appId));
+    if (!app) {
+      return false;
+    }
+    this.applications$.next([...this.applications$.value, app]);
+    return true;
   }
 
   /**

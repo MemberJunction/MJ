@@ -6,19 +6,19 @@ import { SQLClassification } from './classifier.js';
  */
 export interface TranslationReportItem {
     /** Source identifier (e.g., "Query: User Activity Report") */
-    source: string;
+    Source: string;
     /** The original SQL fragment */
-    originalSQL: string;
+    OriginalSQL: string;
     /** How the SQL was classified */
-    classification: SQLClassification;
+    Classification: SQLClassification;
     /** The translated SQL (null if not translated) */
-    translatedSQL: string | null;
+    TranslatedSQL: string | null;
     /** Translation method used */
-    method: 'rule-based' | 'llm' | 'skipped' | 'flagged';
+    Method: 'rule-based' | 'llm' | 'skipped' | 'flagged';
     /** Dialect markers found */
-    markers: string[];
+    Markers: string[];
     /** Any error or note */
-    note?: string;
+    Note?: string;
 }
 
 /**
@@ -55,48 +55,48 @@ export function GenerateTranslationReport(
         lines.push(`## Translations`);
         lines.push('');
         const translated = items.filter(i =>
-            i.method === 'rule-based' || i.method === 'llm'
+            i.Method === 'rule-based' || i.Method === 'llm'
         );
         for (const item of translated) {
-            lines.push(`### ${item.source}`);
-            lines.push(`**Method:** ${item.method} | **Markers:** ${item.markers.join(', ') || 'none'}`);
+            lines.push(`### ${item.Source}`);
+            lines.push(`**Method:** ${item.Method} | **Markers:** ${item.Markers.join(', ') || 'none'}`);
             lines.push('');
             lines.push('**Original:**');
             lines.push('```sql');
-            lines.push(item.originalSQL);
+            lines.push(item.OriginalSQL);
             lines.push('```');
             lines.push('');
             lines.push('**Translated:**');
             lines.push('```sql');
-            lines.push(item.translatedSQL || '-- Translation failed');
+            lines.push(item.TranslatedSQL || '-- Translation failed');
             lines.push('```');
-            if (item.note) {
-                lines.push(`> ${item.note}`);
+            if (item.Note) {
+                lines.push(`> ${item.Note}`);
             }
             lines.push('');
         }
     }
 
     // Flagged items
-    const flagged = items.filter(i => i.method === 'flagged');
+    const flagged = items.filter(i => i.Method === 'flagged');
     if (flagged.length > 0) {
         lines.push(`## Flagged for Human Review`);
         lines.push('');
         for (const item of flagged) {
-            lines.push(`### ${item.source}`);
-            lines.push(`**Markers:** ${item.markers.join(', ')}`);
+            lines.push(`### ${item.Source}`);
+            lines.push(`**Markers:** ${item.Markers.join(', ')}`);
             lines.push('```sql');
-            lines.push(item.originalSQL);
+            lines.push(item.OriginalSQL);
             lines.push('```');
-            if (item.note) {
-                lines.push(`> ${item.note}`);
+            if (item.Note) {
+                lines.push(`> ${item.Note}`);
             }
             lines.push('');
         }
     }
 
     // Standard SQL items (collapsed)
-    const standard = items.filter(i => i.classification === 'standard');
+    const standard = items.filter(i => i.Classification === 'standard');
     if (standard.length > 0) {
         lines.push(`## Standard SQL (No Translation Needed)`);
         lines.push('');
@@ -118,9 +118,9 @@ interface ReportSummary {
 function buildSummary(items: TranslationReportItem[]): ReportSummary {
     return {
         total: items.length,
-        standard: items.filter(i => i.classification === 'standard').length,
-        ruleBased: items.filter(i => i.method === 'rule-based').length,
-        llm: items.filter(i => i.method === 'llm').length,
-        flagged: items.filter(i => i.method === 'flagged').length,
+        standard: items.filter(i => i.Classification === 'standard').length,
+        ruleBased: items.filter(i => i.Method === 'rule-based').length,
+        llm: items.filter(i => i.Method === 'llm').length,
+        flagged: items.filter(i => i.Method === 'flagged').length,
     };
 }

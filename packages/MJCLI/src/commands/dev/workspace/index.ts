@@ -1,5 +1,5 @@
 import { confirm } from '@inquirer/prompts';
-import { isInteractiveRun } from '../../../lib/interactive-guard.js';
+import { IsInteractiveRun } from '../../../lib/interactive-guard.js';
 import { Command, Flags } from '@oclif/core';
 import chalk from 'chalk';
 import path from 'node:path';
@@ -9,8 +9,7 @@ import {
   BuildSentinel,
   BuildShellPeerGuidance,
   BuildWorkspaceYaml,
-  PickTurboJson,
-} from '../../../lib/dev-workspace/build.js';
+  PickTurboJson, AssertAppPackageNamesUnique } from '../../../lib/dev-workspace/build.js';
 import { DetectCandidates, LoadRepo } from '../../../lib/dev-workspace/detect.js';
 import { WORKSPACE_DIR_ENV_VAR } from '../../../lib/dev-workspace/dir-flag.js';
 import { FindMemberInstallTrees, IsInsideDirectory, RemoveMemberInstallTrees } from '../../../lib/dev-workspace/member-installs.js';
@@ -35,6 +34,28 @@ function describeConflict(conflict: DevDepConflict): string {
  * keeping them in step as repos come and go.
  * Linking only — app REGISTRATION into a running host is deliberately phase 2.
  */
+
+/** Parses repeatable `--apps <member>=<glob>[,<glob>]` values into member -> globs (later entries for a member append). */
+export function ParseAppsFlag(values: readonly string[]): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  for (const value of values) {
+    const eq = value.indexOf('=');
+    if (eq <= 0 || eq === value.length - 1) {
+      throw new Error(`--apps '${value}': expected <member>=<glob>[,<glob>] (e.g. Skip-Brain=apps/API,apps/MJAPI)`);
+    }
+    const member = value.slice(0, eq).trim();
+    const globs = value.slice(eq + 1).split(',').map((g) => g.trim()).filter((g) => g.length > 0);
+    if (globs.length === 0) throw new Error(`--apps '${value}': no globs after '='`);
+    out.set(member, [...(out.get(member) ?? []), ...globs]);
+  }
+  return out;
+}
+
+/** @deprecated Use {@link ParseAppsFlag}. */
+export function parseAppsFlag(values: readonly string[]): Map<string, string[]> {
+  return ParseAppsFlag(values);
+}
+
 export default class DevWorkspace extends Command {
   static description =
     'Join sibling repo clones into one pnpm workspace: writes pnpm-workspace.yaml, .npmrc, package.json, ' +
@@ -65,6 +86,12 @@ export default class DevWorkspace extends Command {
       multiple: true,
       description: 'Repo directory name to exclude from the members (repeatable)',
     }),
+    apps: Flags.string({
+      multiple: true,
+      description:
+        "Admit a member's app-shell packages, which the packages-rooted rule drops by default: <member>=<glob>[,<glob>] " +
+        '(e.g. Skip-Brain=apps/API,apps/MJAPI). The member must be detected or --include\'d; names must be unique across the workspace.',
+    }),
     install: Flags.boolean({
       description: 'Run `pnpm install` at the parent after generating (disable with --no-install)',
       default: true,
@@ -89,7 +116,9 @@ export default class DevWorkspace extends Command {
 
     try {
       AssertParentDirSafe(parentDir);
-      const members = this.selectMembers(parentDir, flags.include ?? [], flags.exclude ?? []);
+      const members = this.selectMembers(parentDir, flags.include ?? [], flags.exclude ?? [], ParseAppsFlag(flags.apps ?? []));
+      const admittedApps = AssertAppPackageNamesUnique(members);
+      if (admittedApps.length > 0) this.log(chalk.green('apps admitted') + ` ${admittedApps.join(', ')}`);
       await this.handleStandaloneInstalls(parentDir, members, flags['clean-members']);
       const files = this.buildFiles(parentDir, members, flags.verbose);
       const result = WriteWorkspaceFiles(parentDir, files, flags.force);
@@ -123,7 +152,7 @@ export default class DevWorkspace extends Command {
   }
 
   /** Resolves the member set: detected candidates plus --include, minus --exclude. */
-  private selectMembers(parentDir: string, include: string[], exclude: string[]): CandidateRepo[] {
+  private selectMembers(parentDir: string, include: string[], exclude: string[], apps: ReadonlyMap<string, string[]> = new Map()): CandidateRepo[] {
     const members = new Map<string, CandidateRepo>();
     for (const candidate of DetectCandidates(parentDir)) {
       members.set(candidate.Name, candidate);
@@ -139,6 +168,16 @@ export default class DevWorkspace extends Command {
     }
     for (const name of exclude) {
       if (!members.delete(name)) this.warn(`--exclude ${name}: not in the member set, ignoring`);
+    }
+    // --apps: reload the named member with its app-shell globs admitted (validated in SelectAppGlobs).
+    for (const [name, globs] of apps) {
+      if (!members.has(name)) {
+        throw new Error(`--apps ${name}: not a member — add --include ${name} (or check the directory name)`);
+      }
+      const repo = LoadRepo(parentDir, name, { AppGlobs: globs });
+      if (repo === null) throw new Error(`--apps ${name}: ${path.join(parentDir, name)} has no package.json`);
+      members.set(name, repo);
+      this.log(`${chalk.green('apps')} ${name}: ${globs.join(', ')}`);
     }
     if (members.size === 0) {
       throw new Error(`No member repos at ${parentDir}. Candidates are sibling dirs with an mj-app.json, @mj-biz-apps packages, or the MJ monorepo; use --include to add others.`);
@@ -170,7 +209,7 @@ export default class DevWorkspace extends Command {
     }
     this.reportManifestAssembly(rootPkg.Report, verbose);
     const workspaceFiles: GeneratedFile[] = [
-      { Name: 'pnpm-workspace.yaml', Content: BuildWorkspaceYaml(members) },
+      { Name: 'pnpm-workspace.yaml', Content: BuildWorkspaceYaml(members, rootPkg.PnpmSettings) },
       { Name: '.npmrc', Content: BuildNpmrc() },
       { Name: 'package.json', Content: rootPkg.Content },
       { Name: 'turbo.json', Content: turbo.Content },
@@ -246,7 +285,7 @@ export default class DevWorkspace extends Command {
     // Non-interactive by default (see lib/interactive-guard). This one skips loudly rather
     // than failing: leaving a standalone install in place is a safe no-op, and the warning
     // names the flags. Destructive prompts elsewhere fail fast instead.
-    if (!isInteractiveRun()) {
+    if (!IsInteractiveRun()) {
       this.warn(
         `${name} has a standalone install (${treeCount} node_modules tree(s)) and this run is non-interactive ` +
           `with no --clean-members/--no-clean-members given — leaving it in place. ` +
@@ -272,12 +311,15 @@ export default class DevWorkspace extends Command {
   private reportManifestAssembly(report: ParentManifestReport, verbose: boolean): void {
     this.log(
       chalk.dim(
-        `pnpm.overrides: ${report.LockfilePinCount} lockfile-derived pin(s), ${report.HoistedOverrideCount} hoisted ` +
+        `pnpm-workspace.yaml overrides: ${report.LockfilePinCount} lockfile-derived pin(s), ${report.HoistedOverrideCount} hoisted ` +
           `member override(s), ${report.FamilyOverrideCount} workspace:* family override(s); ${report.Patches.length} patch(es) hoisted`
       )
     );
     for (const patch of report.Patches) {
       this.log(chalk.dim(`  patch ${patch.Package} -> ${patch.Path} (from ${patch.Repo})`));
+    }
+    if (report.PatchPins.length > 0) {
+      this.log(chalk.dim(`  ${report.PatchPins.length} override(s) pinned to the patched version so the patch applies: ${report.PatchPins.join(', ')}`));
     }
     for (const conflict of [...report.PinConflicts, ...report.BlockConflicts]) {
       this.warn(`override conflict on ${conflict.Package}: ${describeConflict(conflict)}`);
@@ -289,9 +331,59 @@ export default class DevWorkspace extends Command {
       );
     }
     for (const dup of report.DuplicateFamilyPackages) {
-      this.warn(`package ${dup.Package} is provided by ${dup.Repos.join(' AND ')} — the link target is decided by sort order; use --exclude to drop one`);
+      const links = report.DuplicateProviderLinks.filter((l) => l.Package === dup.Package);
+      this.log(
+        chalk.dim(
+          `package ${dup.Package} is provided by ${dup.Repos.join(' AND ')} — ${links.length} consumer-scoped link override(s) keep each ` +
+            `provider's own consumers on its own copy; any other consumer gets ${dup.Repos[0]} (sort order)`
+        )
+      );
+      for (const link of links) {
+        this.log(chalk.dim(`  ${link.Consumer} -> ${link.Target}`));
+      }
     }
+    for (const unlinked of report.UnlinkedDuplicateConsumers) {
+      const why =
+        unlinked.Reason === 'ambiguous-consumer'
+          ? `its own name is duplicated too, so a scoped override would hit every copy of it`
+          : `${unlinked.Repo} provides no copy of its own`;
+      this.warn(`${unlinked.Consumer} (${unlinked.Repo}) depends on duplicated ${unlinked.Package} but cannot be linked to its own copy — ${why}; it gets the sort-order provider`);
+    }
+    this.reportOpenAppClientPackages(report, verbose);
     this.reportManifestDrops(report, verbose);
+  }
+
+  /**
+   * The Open App half of the assembly report: which client-side packages were registered at
+   * the parent, and which were declared but cannot be. Nothing in the tree DEPENDS on these, so
+   * without this line a developer has no way to tell whether the generator saw their app at all.
+   */
+  private reportOpenAppClientPackages(report: ParentManifestReport, verbose: boolean): void {
+    const registered = report.OpenAppClientPackages.filter((c) => c.Provided);
+    if (registered.length > 0) {
+      const detail = verbose ? `: ${registered.map((c) => c.Package).join(', ')}` : '';
+      this.log(chalk.dim(`dependencies: ${registered.length} Open App client-side package(s) registered at the parent${detail}`));
+    }
+    for (const dup of report.DuplicateClientPackages) {
+      this.warn(
+        `client package ${dup.Package} is declared by ${dup.Repos.join(' AND ')} — the link target is ` +
+          `decided by sort order (${dup.Repos[0]} wins); use --exclude to drop one`
+      );
+    }
+    for (const missing of report.OpenAppClientPackages.filter((c) => !c.Provided)) {
+      this.warn(
+        `${missing.Repo}/mj-app.json declares client package ${missing.Package} but NO member provides it — not ` +
+          `registered; an app shell that loads it will fail to resolve it at page load`
+      );
+    }
+    for (const gap of report.ShellPeerGaps) {
+      const pin = gap.Pin === null ? 'nothing in the parent pins it' : `the parent already pins ${gap.Pin}`;
+      this.warn(
+        `shell ${gap.Shell} does not declare ${gap.Peer} (${gap.Range}), needed by client package ${gap.Package} — ` +
+          `${pin}. Add it to that shell's own package.json: an Angular dev server resolves @angular/* from the ` +
+          `shell, so a copy in the library's own tree is never used, and the page fails to load with a green build`
+      );
+    }
   }
 
   /** The dropped/skipped half of the assembly report: @types, workspace: drops, superseded pins, lockfile skips. */

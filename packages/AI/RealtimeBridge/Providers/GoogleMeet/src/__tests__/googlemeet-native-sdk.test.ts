@@ -11,12 +11,12 @@ import { describe, it, expect, vi } from 'vitest';
 import {
     GoogleMeetNativeMeetingSdk,
     BindGoogleMeetNative,
-    readNativeConfig,
-    mapNativeAudioFrame,
-    mapNativeParticipant,
-    mapNativeRole,
-    toArrayBuffer,
-    defaultNativeLoader,
+    ReadNativeConfig,
+    MapNativeAudioFrame,
+    MapNativeParticipant,
+    MapNativeRole,
+    ToArrayBuffer,
+    DefaultNativeLoader,
     NativeMeetingModule,
     NativeMeetClient,
     NativeMeetAudioFrame,
@@ -99,15 +99,15 @@ const cfg = { NativeModuleSpecifier: '@acme/meet-native-addon', ProjectId: 'proj
 
 describe('GoogleMeetNativeMeetingSdk — pure mappings', () => {
     it('mapNativeRole normalizes host/cohost/participant', () => {
-        expect(mapNativeRole('host')).toBe('Host');
-        expect(mapNativeRole('co-host')).toBe('CoHost');
-        expect(mapNativeRole('cohost')).toBe('CoHost');
-        expect(mapNativeRole('attendee')).toBe('Participant');
-        expect(mapNativeRole(undefined)).toBe('Participant');
+        expect(MapNativeRole('host')).toBe('Host');
+        expect(MapNativeRole('co-host')).toBe('CoHost');
+        expect(MapNativeRole('cohost')).toBe('CoHost');
+        expect(MapNativeRole('attendee')).toBe('Participant');
+        expect(MapNativeRole(undefined)).toBe('Participant');
     });
 
     it('mapNativeParticipant coerces numeric ids and maps role + self flag', () => {
-        const p: GoogleMeetParticipant = mapNativeParticipant({
+        const p: GoogleMeetParticipant = MapNativeParticipant({
             participantId: 42,
             displayName: 'Dana',
             role: 'host',
@@ -118,7 +118,7 @@ describe('GoogleMeetNativeMeetingSdk — pure mappings', () => {
 
     it('mapNativeAudioFrame copies PCM, resolves label, defaults timestamp', () => {
         const view = new Uint8Array([1, 2, 3]);
-        const frame: GoogleMeetAudioFrame = mapNativeAudioFrame({
+        const frame: GoogleMeetAudioFrame = MapNativeAudioFrame({
             data: view,
             participantId: 7,
             displayName: 'Lee',
@@ -133,7 +133,7 @@ describe('GoogleMeetNativeMeetingSdk — pure mappings', () => {
     it('toArrayBuffer copies a Uint8Array view (not aliasing the underlying buffer window)', () => {
         const backing = new Uint8Array([9, 8, 7, 6]).buffer;
         const view = new Uint8Array(backing, 1, 2); // [8,7]
-        const out = toArrayBuffer(view);
+        const out = ToArrayBuffer(view);
         expect(out.byteLength).toBe(2);
         expect(new Uint8Array(out)).toEqual(new Uint8Array([8, 7]));
     });
@@ -142,7 +142,7 @@ describe('GoogleMeetNativeMeetingSdk — pure mappings', () => {
 describe('GoogleMeetNativeMeetingSdk — join + two-way audio', () => {
     it('join() loads the addon, joins with the resolved access token, and returns bot/meeting ids', async () => {
         const client = new FakeNativeClient();
-        const sdk = new GoogleMeetNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new GoogleMeetNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         const result = await sdk.join(baseArgs);
         expect(result).toEqual({ BotParticipantId: 'bot-1', MeetingId: 'abc-defg-hij' });
         expect(client.joined?.accessToken).toBe('tok');
@@ -151,7 +151,7 @@ describe('GoogleMeetNativeMeetingSdk — join + two-way audio', () => {
 
     it('sendAudioFrame forwards the agent voice to the native audio-contribution path', async () => {
         const client = new FakeNativeClient();
-        const sdk = new GoogleMeetNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new GoogleMeetNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         await sdk.join(baseArgs);
         const pcm = new Uint8Array([5, 5, 5]).buffer;
         sdk.sendAudioFrame(pcm);
@@ -160,13 +160,13 @@ describe('GoogleMeetNativeMeetingSdk — join + two-way audio', () => {
     });
 
     it('sendAudioFrame before join is a safe no-op (no throw)', () => {
-        const sdk = new GoogleMeetNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(new FakeNativeClient()));
+        const sdk = new GoogleMeetNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(new FakeNativeClient()));
         expect(() => sdk.sendAudioFrame(new ArrayBuffer(2))).not.toThrow();
     });
 
     it('inbound native audio is mapped to a diarized GoogleMeetAudioFrame and delivered to the handler', async () => {
         const client = new FakeNativeClient();
-        const sdk = new GoogleMeetNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new GoogleMeetNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         const heard: GoogleMeetAudioFrame[] = [];
         sdk.onAudioFrame((f) => heard.push(f));
         await sdk.join(baseArgs);
@@ -180,7 +180,7 @@ describe('GoogleMeetNativeMeetingSdk — join + two-way audio', () => {
 describe('GoogleMeetNativeMeetingSdk — roster, signals, host controls', () => {
     it('participant join/leave + hand-raise events map and reach the handlers', async () => {
         const client = new FakeNativeClient();
-        const sdk = new GoogleMeetNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new GoogleMeetNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         const joined: GoogleMeetParticipant[] = [];
         const left: string[] = [];
         const hands: Array<[string, boolean]> = [];
@@ -201,7 +201,7 @@ describe('GoogleMeetNativeMeetingSdk — roster, signals, host controls', () => 
     it('getParticipants maps the native roster', async () => {
         const client = new FakeNativeClient();
         client.roster = [{ participantId: 1, displayName: 'Host', role: 'host', isSelf: false }];
-        const sdk = new GoogleMeetNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new GoogleMeetNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         await sdk.join(baseArgs);
         expect(await sdk.getParticipants()).toEqual([
             { ParticipantId: '1', DisplayName: 'Host', Role: 'Host', IsSelf: false },
@@ -210,7 +210,7 @@ describe('GoogleMeetNativeMeetingSdk — roster, signals, host controls', () => 
 
     it('muteParticipant reaches the native client (real host control)', async () => {
         const client = new FakeNativeClient();
-        const sdk = new GoogleMeetNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new GoogleMeetNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         await sdk.join(baseArgs);
         await sdk.muteParticipant('11');
         expect(client.muted).toEqual(['11']);
@@ -218,7 +218,7 @@ describe('GoogleMeetNativeMeetingSdk — roster, signals, host controls', () => 
 
     it('meeting-ended fires the handler; leave() releases the client', async () => {
         const client = new FakeNativeClient();
-        const sdk = new GoogleMeetNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new GoogleMeetNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         const ended = vi.fn();
         sdk.onMeetingEnded(ended);
         await sdk.join(baseArgs);
@@ -231,7 +231,7 @@ describe('GoogleMeetNativeMeetingSdk — roster, signals, host controls', () => 
 
 describe('GoogleMeetNativeMeetingSdk — config + errors', () => {
     it('readNativeConfig extracts typed fields and ignores wrong types', () => {
-        const out = readNativeConfig({
+        const out = ReadNativeConfig({
             ProjectId: 'proj',
             AccessToken: 'tok',
             BotDisplayName: 'Bot',
@@ -251,19 +251,19 @@ describe('GoogleMeetNativeMeetingSdk — config + errors', () => {
     });
 
     it('readNativeConfig drops non-finite / non-string values', () => {
-        const out = readNativeConfig({ SampleRate: NaN, Channels: 'two', ProjectId: 42 });
+        const out = ReadNativeConfig({ SampleRate: NaN, Channels: 'two', ProjectId: 42 });
         expect(out.SampleRate).toBeUndefined();
         expect(out.Channels).toBeUndefined();
         expect(out.ProjectId).toBeUndefined();
     });
 
     it('join() throws an actionable error when no NativeModuleSpecifier is configured', async () => {
-        const sdk = new GoogleMeetNativeMeetingSdk(readNativeConfig({}), async () => fakeModule(new FakeNativeClient()));
+        const sdk = new GoogleMeetNativeMeetingSdk(ReadNativeConfig({}), async () => fakeModule(new FakeNativeClient()));
         await expect(sdk.join(baseArgs)).rejects.toThrow(/NativeModuleSpecifier/);
     });
 
     it('defaultNativeLoader throws an actionable error when the addon specifier cannot be resolved', async () => {
-        await expect(defaultNativeLoader('@nonexistent/meet-native-addon-xyz')).rejects.toThrow(
+        await expect(DefaultNativeLoader('@nonexistent/meet-native-addon-xyz')).rejects.toThrow(
             /could not load the native Meet media bot addon/,
         );
     });

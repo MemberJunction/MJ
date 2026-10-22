@@ -35,17 +35,44 @@ export class EntityListDemoComponent implements OnInit {
    * When used as a web component, this becomes a standard DOM event.
    * The event data contains the selected EntityInfo object.
    */
-  @Output() rowClicked = new EventEmitter();
+  @Output() RowClicked = new EventEmitter();
+
+  /**
+   * @deprecated Use {@link RowClicked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (rowClicked) keeps working. Must stay AFTER RowClicked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() rowClicked = this.RowClicked;
 
   /**
    * The list of entities loaded from MemberJunction's metadata
    */
-  public entityList: EntityInfo[] = [];
+  public EntityList: EntityInfo[] = [];
+
+  /** @deprecated Use {@link EntityList}. */
+  public get entityList(): EntityInfo[] {
+    return this.EntityList;
+  }
+  /** @deprecated Use {@link EntityList}. */
+  public set entityList(value: EntityInfo[]) {
+    this.EntityList = value;
+  }
   
   /**
    * The currently selected entity in the list
    */
-  public selectedRow: EntityInfo;
+  public SelectedRow: EntityInfo;
+
+  /** @deprecated Use {@link SelectedRow}. */
+  public get selectedRow(): EntityInfo {
+    return this.SelectedRow;
+  }
+  /** @deprecated Use {@link SelectedRow}. */
+  public set selectedRow(value: EntityInfo) {
+    this.SelectedRow = value;
+  }
 
   /**
    * @param cdr Angular's ChangeDetectorRef for manually triggering change detection
@@ -65,7 +92,7 @@ export class EntityListDemoComponent implements OnInit {
       if (event.event === MJEventType.LoggedIn) { 
         // Load entity metadata
         const md = new Metadata(); // global-provider-ok: test/demo harness, single-provider context
-        this.entityList = md.Entities;
+        this.EntityList = md.Entities;
         
         // Need to manually trigger change detection when used as a web component
         // because we're operating outside Angular's change detection "Zone"
@@ -83,12 +110,17 @@ export class EntityListDemoComponent implements OnInit {
    * 
    * @param entity The EntityInfo object for the clicked row
    */
-  handleRowClicked(entity: EntityInfo) {
+  HandleRowClicked(entity: EntityInfo) {
     // Update the selected row
-    this.selectedRow = entity;
+    this.SelectedRow = entity;
     
     // Emit the event with the entity data
     // This will become a standard DOM event when used as a web component
-    this.rowClicked.emit(entity);
+    this.RowClicked.emit(entity);
+  }
+
+  /** @deprecated Use {@link HandleRowClicked}. */
+  handleRowClicked(entity: EntityInfo) {
+    return this.HandleRowClicked(entity);
   }
 }

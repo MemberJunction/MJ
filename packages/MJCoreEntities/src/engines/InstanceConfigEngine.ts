@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, RegisterForStartup, UserInfo } from "@memberjunction/core";
 import { MJInstanceConfigurationEntity } from "../generated/entity_subclasses";
 
 /**
@@ -27,6 +27,7 @@ import { MJInstanceConfigurationEntity } from "../generated/entity_subclasses";
  * await engine.Set('Shell.SearchBar.Enabled', 'true', contextUser);
  * ```
  */
+@RegisterForStartup()
 export class InstanceConfigEngine extends BaseEngine<InstanceConfigEngine> {
     /**
      * Returns the global instance of the class. This is a singleton class, so there
@@ -104,7 +105,7 @@ export class InstanceConfigEngine extends BaseEngine<InstanceConfigEngine> {
     public Get(featureKey: string): string | undefined {
         const config = this.GetConfigByKey(featureKey);
         if (!config) return undefined;
-        return this.ResolveValue(config);
+        return this.resolveValue(config);
     }
 
     /**
@@ -194,7 +195,7 @@ export class InstanceConfigEngine extends BaseEngine<InstanceConfigEngine> {
      * Resolve the effective value for a configuration record. Returns Value if
      * it is non-empty, otherwise falls back to DefaultValue.
      */
-    private ResolveValue(config: MJInstanceConfigurationEntity): string {
+    private resolveValue(config: MJInstanceConfigurationEntity): string {
         const val = config.Value;
         if (val != null && val.trim().length > 0) {
             return val;

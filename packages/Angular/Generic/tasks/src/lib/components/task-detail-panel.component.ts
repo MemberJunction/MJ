@@ -23,10 +23,17 @@ import { UUIDsEqual } from '@memberjunction/global';
       </div>
     
       <div class="detail-content">
-        @if (task.Description) {
+        @if (TaskInstructions) {
           <div class="detail-field">
             <label>Description</label>
-            <p>{{ task.Description }}</p>
+            <p class="detail-pre-text">{{ TaskInstructions }}</p>
+          </div>
+        }
+
+        @if (TaskOutput) {
+          <div class="detail-field">
+            <label>{{ IsErrorOutput ? 'Error Details' : 'Agent Output' }}</label>
+            <div class="detail-output-box" [class.error-output]="IsErrorOutput">{{ TaskOutput }}</div>
           </div>
         }
     
@@ -88,7 +95,7 @@ import { UUIDsEqual } from '@memberjunction/global';
         }
     
         <!-- Agent Run Information -->
-        @if (agentRunId) {
+        @if (EffectiveAgentRunId) {
           <div class="detail-field">
             <label>Agent Run</label>
             <div class="agent-run-link" (click)="openAgentRun()">
@@ -181,6 +188,30 @@ import { UUIDsEqual } from '@memberjunction/global';
       line-height: 1.5;
     }
 
+    .detail-pre-text {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .detail-output-box {
+      padding: 12px;
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--mj-text-primary);
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 280px;
+      overflow-y: auto;
+    }
+
+    .detail-output-box.error-output {
+      border-color: var(--mj-status-error);
+      color: var(--mj-status-error);
+    }
+
     .detail-progress {
       display: flex;
       align-items: center;
@@ -196,7 +227,7 @@ import { UUIDsEqual } from '@memberjunction/global';
     }
 
     .progress-fill-detail {
-      height: calc(100% - 69px);
+      height: 100%;
       background: var(--mj-brand-primary);
       transition: width 0.3s ease;
     }
@@ -264,12 +295,48 @@ import { UUIDsEqual } from '@memberjunction/global';
   `]
 })
 export class TaskDetailPanelComponent implements OnInit, OnChanges {
-  @Input() task!: MJTaskEntity;
-  @Input() agentRunId: string | null = null;
-  @Output() closePanel = new EventEmitter<void>();
-  @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
+  @Input() Task!: MJTaskEntity;
 
-  public agent: MJAIAgentEntityExtended | null = null;
+  /** @deprecated Use {@link Task}. */
+  @Input() set task(value: MJTaskEntity) {
+    this.Task = value;
+  }
+  /** @deprecated Use {@link Task}. */
+  get task(): MJTaskEntity {
+    return this.Task;
+  }
+  @Input() agentRunId: string | null = null;
+  @Output() ClosePanel = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link ClosePanel}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (closePanel) keeps working. Must stay AFTER ClosePanel: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() closePanel = this.ClosePanel;
+  @Output() OpenEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
+
+  /**
+   * @deprecated Use {@link OpenEntityRecord}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (openEntityRecord) keeps working. Must stay AFTER OpenEntityRecord: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() openEntityRecord = this.OpenEntityRecord;
+
+  public Agent: MJAIAgentEntityExtended | null = null;
+
+  /** @deprecated Use {@link Agent}. */
+  public get agent(): MJAIAgentEntityExtended | null {
+    return this.Agent;
+  }
+  /** @deprecated Use {@link Agent}. */
+  public set agent(value: MJAIAgentEntityExtended | null) {
+    this.Agent = value;
+  }
 
   ngOnInit(): void {
     this.loadAgentInfo();
@@ -280,18 +347,18 @@ export class TaskDetailPanelComponent implements OnInit, OnChanges {
   }
 
   private async loadAgentInfo(): Promise<void> {
-    if (!this.task?.AgentID) {
-      this.agent = null;
+    if (!this.Task?.AgentID) {
+      this.Agent = null;
       return;
     }
 
     // AIEngineBase is deferred at startup; ensure loaded before reading .Agents.
     await AIEngineBase.Instance.EnsureLoaded();
     const agents = AIEngineBase.Instance.Agents;
-    this.agent = agents.find((a: MJAIAgentEntityExtended) => UUIDsEqual(a.ID, this.task.AgentID)) || null;
+    this.Agent = agents.find((a: MJAIAgentEntityExtended) => UUIDsEqual(a.ID, this.Task.AgentID)) || null;
   }
 
-  public formatDateTime(date: Date | null): string {
+  public FormatDateTime(date: Date | null): string {
     if (!date) return '';
     const d = new Date(date);
     return d.toLocaleDateString('en-US', {
@@ -303,21 +370,76 @@ export class TaskDetailPanelComponent implements OnInit, OnChanges {
     });
   }
 
-  public openAgent(): void {
-    if (this.task.AgentID) {
-      this.openEntityRecord.emit({
+  /** @deprecated Use {@link FormatDateTime}. */
+  public formatDateTime(date: Date | null): string {
+    return this.FormatDateTime(date);
+  }
+
+  public OpenAgent(): void {
+    if (this.Task.AgentID) {
+      this.OpenEntityRecord.emit({
         entityName: 'MJ: AI Agents',
-        recordId: this.task.AgentID
+        recordId: this.Task.AgentID
       });
     }
   }
 
-  public openAgentRun(): void {
-    if (this.agentRunId) {
-      this.openEntityRecord.emit({
+  /** @deprecated Use {@link OpenAgent}. */
+  public openAgent(): void {
+    return this.OpenAgent();
+  }
+
+  public get EffectiveAgentRunId(): string | null {
+    return this.agentRunId || this.Task?.AgentRunID || null;
+  }
+
+  public get TaskInstructions(): string {
+    const desc = this.Task?.Description || '';
+    const outputMarker = '\n\n--- Output ---\n';
+    const errorMarker = '\n\n--- Error ---\n';
+    const outIdx = desc.indexOf(outputMarker);
+    if (outIdx >= 0) {
+      return desc.substring(0, outIdx).trim();
+    }
+    const errIdx = desc.indexOf(errorMarker);
+    if (errIdx >= 0) {
+      return desc.substring(0, errIdx).trim();
+    }
+    return desc.trim();
+  }
+
+  public get TaskOutput(): string | null {
+    const desc = this.Task?.Description || '';
+    const outputMarker = '\n\n--- Output ---\n';
+    const errorMarker = '\n\n--- Error ---\n';
+    const outIdx = desc.indexOf(outputMarker);
+    if (outIdx >= 0) {
+      return desc.substring(outIdx + outputMarker.length).trim();
+    }
+    const errIdx = desc.indexOf(errorMarker);
+    if (errIdx >= 0) {
+      return desc.substring(errIdx + errorMarker.length).trim();
+    }
+    return null;
+  }
+
+  public get IsErrorOutput(): boolean {
+    const desc = this.Task?.Description || '';
+    return desc.includes('\n\n--- Error ---\n');
+  }
+
+  public OpenAgentRun(): void {
+    const runId = this.EffectiveAgentRunId;
+    if (runId) {
+      this.OpenEntityRecord.emit({
         entityName: 'MJ: AI Agent Runs',
-        recordId: this.agentRunId
+        recordId: runId
       });
     }
+  }
+
+  /** @deprecated Use {@link OpenAgentRun}. */
+  public openAgentRun(): void {
+    return this.OpenAgentRun();
   }
 }
