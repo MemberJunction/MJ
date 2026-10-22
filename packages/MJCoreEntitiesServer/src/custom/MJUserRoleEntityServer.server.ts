@@ -18,6 +18,9 @@ import { IsRestrictingFieldRuleAnyCase } from './fieldPermissionAccess';
 import {
     GuardedTransactionGroupRefusal,
     IsSystemUserID,
+    PendingGuardedGroupWrite,
+    PendingGuardedGroupWriteFor,
+    RecordGuardedTransactionGroupWrite,
     StoredRestrictingFieldIDsForRole,
     StoredRoleRemovalViolations,
 } from './systemUserGuardState';
@@ -162,6 +165,9 @@ const UNDETERMINED_PRIOR_ASSIGNMENT_MESSAGE =
  */
 @RegisterClass(BaseEntity, 'MJ: User Roles')
 export class MJUserRoleEntityServer extends MJUserRoleEntity {
+    /** This write's place in its transaction group, held from guard B's group check until the write enrols. */
+    private pendingGroupWrite: PendingGuardedGroupWrite | null = null;
+
     public override Validate(): ValidationResult {
         const result = super.Validate();
 
@@ -215,7 +221,19 @@ export class MJUserRoleEntityServer extends MJUserRoleEntity {
         if (rejection) {
             return this.refuse(this.IsSaved ? 'update' : 'create', rejection);
         }
-        return super.Save(options);
+        const pending = this.takePendingGroupWrite();
+        const saved = await super.Save(options);
+        if (saved) {
+            RecordGuardedTransactionGroupWrite(pending);
+        }
+        return saved;
+    }
+
+    /** The write guard B's group check passed, cleared so a later save cannot reuse it. */
+    private takePendingGroupWrite(): PendingGuardedGroupWrite | null {
+        const pending = this.pendingGroupWrite;
+        this.pendingGroupWrite = null;
+        return pending;
     }
 
     /**
@@ -228,7 +246,7 @@ export class MJUserRoleEntityServer extends MJUserRoleEntity {
     private async systemUserSaveRejection(): Promise<string | null> {
         const priorUserID = this.priorValue('UserID', this.UserID);
         const concernsSystemUser = IsSystemUserID(this.UserID) || priorUserID === undefined || IsSystemUserID(priorUserID);
-        const groupRefusal = GuardedTransactionGroupRefusal(this.TransactionGroup, concernsSystemUser);
+        const groupRefusal = this.groupRefusal(concernsSystemUser);
         if (groupRefusal || !concernsSystemUser) {
             return groupRefusal;
         }
@@ -363,14 +381,32 @@ export class MJUserRoleEntityServer extends MJUserRoleEntity {
             return this.refuse('delete', rejection);
         }
 
-        return super.Delete(options);
+        const pending = this.takePendingGroupWrite();
+        const deleted = await super.Delete(options);
+        if (deleted) {
+            RecordGuardedTransactionGroupWrite(pending);
+        }
+        return deleted;
+    }
+
+    /**
+     * Guard B's transaction-group rule for this write. When it passes, the write is held as pending
+     * and counted only once it enrols, so a write refused later, by any check, does not count.
+     */
+    private groupRefusal(concernsSystemUser: boolean): string | null {
+        this.pendingGroupWrite = null;
+        const refusal = GuardedTransactionGroupRefusal(this.TransactionGroup, concernsSystemUser);
+        if (!refusal) {
+            this.pendingGroupWrite = PendingGuardedGroupWriteFor(this.TransactionGroup, concernsSystemUser);
+        }
+        return refusal;
     }
 
     /** Guard B for a delete: the transaction-group rule, then the removal check on stored state. */
     private async systemUserDeleteRejection(): Promise<string | null> {
         const priorUserID = this.priorValue('UserID', this.UserID);
         const concernsSystemUser = priorUserID === undefined || IsSystemUserID(priorUserID);
-        const groupRefusal = GuardedTransactionGroupRefusal(this.TransactionGroup, concernsSystemUser);
+        const groupRefusal = this.groupRefusal(concernsSystemUser);
         if (groupRefusal) {
             return groupRefusal;
         }

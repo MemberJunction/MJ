@@ -699,9 +699,6 @@ export class TokenManager {
         return this.HandleRefreshFailure(errorMessage);
     }
 
-    /**
-     * Sleep helper for retry delays.
-     */
     /** The cache key for `connectionId` as loaded by `contextUser`, or null when there is no user to key on. */
     private cacheKey(connectionId: string, contextUser: UserInfo | undefined): string | null {
         return UserScopedCacheKey(contextUser?.ID, connectionId);
@@ -725,6 +722,9 @@ export class TokenManager {
         }
     }
 
+    /**
+     * Sleep helper for retry delays.
+     */
     private sleep(ms: number): Promise<void> {
         return new Promise(resolve => setTimeout(resolve, ms));
     }

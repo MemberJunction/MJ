@@ -11,9 +11,10 @@ import { EntityOperations, OperationResult } from './EntityOperations.js';
 import { AgentOperations } from './AgentOperations.js';
 import { AIEngine } from "@memberjunction/aiengine";
 import { MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
-import { ShutdownRegistry, UUIDsEqual } from "@memberjunction/global";
+import { ShutdownRegistry } from "@memberjunction/global";
 import { TaskStore, Task, TaskStatus, Message, Artifact, Part } from "./TaskStore.js";
 import { AgentCard, AgentCardAgentCapability, AgentCardEntityCapability, BuildAgentCard, ResolveAgentCardIdentity } from "./AgentCard.js";
+import { ResolveTaskCaller } from "./TaskCaller.js";
 
 // A2A Server Configuration
 const a2aServerPort = a2aServerSettings?.port || 3200;
@@ -383,22 +384,6 @@ function warnMinimalAgentCardOnce(): void {
     console.warn('A2A Server: a2aServerSettings.userEmail is not set, so the public agent card lists no entities or agents. Set it to a service user to advertise what that user may see.');
 }
 
-/**
- * The user a task runs as: the authenticated caller, taken from the user cache so that it carries
- * the caller's roles, which the API key's own user record does not. Throws rather than running a
- * task as anyone else.
- */
-function resolveTaskCaller(authenticatedUser?: UserInfo): UserInfo {
-    if (!authenticatedUser) {
-        throw new Error("No authenticated caller available for processing task");
-    }
-    const cached = UserCache.Instance.Users.find((u: UserInfo) => UUIDsEqual(u.ID, authenticatedUser.ID));
-    if (!cached) {
-        throw new Error("The authenticated caller is not an active user");
-    }
-    return cached;
-}
-
 async function generateAgentCard(): Promise<AgentCard> {
     const identity = ResolveAgentCardIdentity(a2aServerSettings, UserCache.Instance.Users);
     if (identity.Kind === 'unresolved') {
@@ -721,7 +706,7 @@ async function processTask(task: Task, authenticatedUser?: UserInfo, authContext
         }
 
         // Work on behalf of the caller runs as the caller: never as a fallback user.
-        const contextUser = resolveTaskCaller(authenticatedUser);
+        const contextUser = ResolveTaskCaller(authenticatedUser, UserCache.Instance.Users);
 
         // Initialize operations handlers with the authenticated user and the request's
         // metadata provider so every downstream entity operation routes through the right

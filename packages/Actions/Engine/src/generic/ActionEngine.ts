@@ -916,7 +916,8 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       logEntity.NewRecord();
       logEntity.ActionID = params.Action.ID;
       logEntity.StartedAt = new Date();
-      logEntity.UserID = this.ContextUser.ID;
+      // The user the action ran for, the same principal ProjectParamsForLog projects the values for.
+      logEntity.UserID = (params.ContextUser ?? this.ContextUser).ID;
       // The as-called inputs. Written once and never overwritten — EndActionLog writes the final
       // merged set to ResultParams instead. `inputSnapshot` is supplied by RunAction; the fallback
       // covers callers that reach StartActionLog directly.

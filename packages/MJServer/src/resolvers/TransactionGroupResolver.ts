@@ -358,7 +358,8 @@ export class TransactionResolver extends ResolverBase {
         const rawDataObj: Record<string, unknown> | null = typeof entity.GetDataObject === 'function'
             // fls-guard: projected by project() below
             ? (await entity.GetDataObject() as Record<string, unknown>)
-            : SafeJSONParse<Record<string, unknown>>(await entity.GetDataObjectJSON()); // fls-guard: projected by project() below
+            // fls-guard: projected by project() below
+            : SafeJSONParse<Record<string, unknown>>(await entity.GetDataObjectJSON());
         if (!rawDataObj || typeof rawDataObj !== 'object') {
             return JSON.stringify(rawDataObj);
         }

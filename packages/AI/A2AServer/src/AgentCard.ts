@@ -2,8 +2,10 @@
  * The A2A agent card: the public discovery document served at `/a2a/agent-card`.
  *
  * The card is served without authentication, so its reader is anonymous. Entity and agent names
- * are listed only when a service identity is configured (`a2aServerSettings.userEmail`), and then
- * only what that service user may see. Without one the card is minimal: name, description,
+ * are listed only when a service identity is configured (`a2aServerSettings.userEmail`). The names
+ * listed are the ones the `entityCapabilities` and `agentCapabilities` settings match; they are not
+ * filtered by the service user's permissions, so those settings must name only what may be
+ * advertised publicly. Without a service identity the card is minimal: name, description,
  * protocol capabilities and how to authenticate.
  */
 import type { UserInfo } from '@memberjunction/core';

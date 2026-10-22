@@ -915,7 +915,8 @@ export function CreateSessionToolRegistrar(
             config.name,
             {
                 description: config.description,
-                inputSchema: (config.parametersForUser ? config.parametersForUser(sessionContext.user) : config.parameters).shape
+                // The schema object itself, not its shape, so a tool's unknown-key policy holds.
+                inputSchema: config.parametersForUser ? config.parametersForUser(sessionContext.user) : config.parameters
             },
             async (params: Record<string, unknown>) => {
                 // Check authorization if scopeInfo is provided
@@ -2193,7 +2194,8 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
                 return JSON.stringify({ error: result.ErrorMessage });
             }
 
-            return JSON.stringify(result.Results); // fls-guard: RunView as the session user; the provider drops the columns it is denied
+            // fls-guard: RunView as the session user; the provider drops the columns it is denied
+            return JSON.stringify(result.Results);
         }
     });
 

@@ -150,21 +150,24 @@ async function readRows<T>(
 /** Guarded writes already enrolled in each transaction group, and whether each concerns the system user. */
 const guardedWritesByGroup = new WeakMap<object, boolean[]>();
 
+/** A guarded write that passed its checks, held until it enrols in its transaction group. */
+export type PendingGuardedGroupWrite = { Group: object; ConcernsSystemUser: boolean };
+
 /**
- * Records a guarded write enrolling in `group` and returns why it may not, or null. Refused when
- * the group would hold two or more guarded writes and any of them concerns the system user: each
- * is checked against the database before any is written, so none can see what the others change.
- * A write outside a group is never refused here.
+ * Why a guarded write may not enrol in `group`, or null. Refused when the group already holds a
+ * guarded write and this one or any earlier one concerns the system user: each is checked against
+ * the database before any is written, so none can see what the others change. A write outside a
+ * group is never refused here.
+ *
+ * Only writes that actually enrolled count as earlier ones; a write is counted by
+ * {@link RecordGuardedTransactionGroupWrite} once it has enrolled, so a save refused for any
+ * reason, and then retried, is not mistaken for a second write.
  *
  * @param group the write's transaction group, if any
  * @param concernsSystemUser whether this write touches the system user's roles or a rule bound to one of them
  */
 export function GuardedTransactionGroupRefusal(group: object | null | undefined, concernsSystemUser: boolean): string | null {
-    if (!group) {
-        return null;
-    }
-    const earlier = guardedWritesByGroup.get(group) ?? [];
-    guardedWritesByGroup.set(group, [...earlier, concernsSystemUser]);
+    const earlier = group ? (guardedWritesByGroup.get(group) ?? []) : [];
     if (earlier.length === 0 || !(concernsSystemUser || earlier.some(Boolean))) {
         return null;
     }
@@ -174,4 +177,18 @@ export function GuardedTransactionGroupRefusal(group: object | null | undefined,
         "so together they could remove the system user's field access without any one check seeing it. Save these " +
         'changes one at a time instead.'
     );
+}
+
+/** Counts a guarded write that has enrolled in its transaction group. A null `write` records nothing. */
+export function RecordGuardedTransactionGroupWrite(write: PendingGuardedGroupWrite | null): void {
+    if (!write) {
+        return;
+    }
+    const earlier = guardedWritesByGroup.get(write.Group) ?? [];
+    guardedWritesByGroup.set(write.Group, [...earlier, write.ConcernsSystemUser]);
+}
+
+/** The pending write for a guarded write that passed the group check, or null outside a group. */
+export function PendingGuardedGroupWriteFor(group: object | null | undefined, concernsSystemUser: boolean): PendingGuardedGroupWrite | null {
+    return group ? { Group: group, ConcernsSystemUser: concernsSystemUser } : null;
 }

@@ -17,6 +17,10 @@ describe('A2A Server identity', () => {
         expect(source).not.toMatch(/Users\s*\[\s*0\s*\]/);
     });
 
+    it('runs a task as the caller resolved from the user cache', () => {
+        expect(source).toMatch(/const contextUser = ResolveTaskCaller\(\s*authenticatedUser\s*,\s*UserCache\.Instance\.Users\s*\)/);
+    });
+
     it('hands the task caller to the entity operations', () => {
         expect(source).toMatch(/new EntityOperations\(\s*provider\s*,\s*contextUser\s*\)/);
     });

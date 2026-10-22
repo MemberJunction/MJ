@@ -924,6 +924,33 @@ describe('ActionEngineServer', () => {
             await vi.waitFor(() => expect(mockEntity.Save).toHaveBeenCalled());
         });
 
+        it("REGRESSION: stamps UserID with the run's user, not the engine's", async () => {
+            let stampedUserID = '';
+            const mockEntity = {
+                NewRecord: vi.fn(),
+                Save: vi.fn().mockResolvedValue(true),
+                set ActionID(_v: string) {},
+                set StartedAt(_v: Date) {},
+                set UserID(v: string) { stampedUserID = v; },
+                set Params(_v: string) {},
+            };
+            (Metadata as unknown as ReturnType<typeof vi.fn>).mockImplementation(function() {
+                return { GetEntityObject: vi.fn().mockResolvedValue(mockEntity) };
+            });
+            const engineUser = engine.ContextUser;
+            engine.ContextUser = { ID: 'alice-id', Name: 'Alice' } as never;
+            try {
+                const params = { Action: { ID: 'a1', Name: 'Test' }, Params: [], ContextUser: { ID: 'bob-id', Name: 'Bob' } };
+                await (engine as unknown as Record<string, Function>)['StartActionLog'](params as never, false);
+                expect(stampedUserID).toBe('bob-id');
+
+                await (engine as unknown as Record<string, Function>)['StartActionLog']({ Action: { ID: 'a1', Name: 'Test' }, Params: [] } as never, false);
+                expect(stampedUserID).toBe('alice-id');
+            } finally {
+                engine.ContextUser = engineUser;
+            }
+        });
+
         it('should not save when saveRecord is false', async () => {
             const mockEntity = {
                 NewRecord: vi.fn(),

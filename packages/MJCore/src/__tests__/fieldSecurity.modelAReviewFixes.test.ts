@@ -29,7 +29,7 @@ import { UserInfo, UserRoleInfo } from '../generic/securityInfo';
 import { IEntityDataProvider, IMetadataProvider } from '../generic/interfaces';
 import { AssertClientInputWritableForUser } from '../generic/entityValueFieldSecurity';
 import { SaveEntityGraphInput, SaveEntityGraphOperation, SaveEntityGraphOutput } from '../generic/saveEntityGraphOperation';
-import type { RelatedRecordCollectionWire } from '../generic/relatedRecordCollection';
+import { RelatedRecordCollection, type RelatedRecordCollectionWire } from '../generic/relatedRecordCollection';
 import type { EmbeddedRecordWire } from '../generic/embeddedRecord';
 import { DatabaseProviderBase, DeleteSQLResult, SaveSQLResult } from '../generic/databaseProviderBase';
 import { RunQueryResult } from '../generic/runQuery';
@@ -395,6 +395,54 @@ describe('assigning the user after hydration re-narrows the object', () => {
 
         expect(manager.ContextCurrentUser).toBe(intern);
         expect(keysOf(manager.GetAll() as Record<string, unknown>)).not.toContain('salary');
+    });
+
+    it('REGRESSION: the user reaches the loaded children of a related-records collection, which are narrowed too', async () => {
+        const provider = makeProvider({ transactions: true });
+        const owner = await newEntity(provider, null);
+        const child = await newEntity(provider, null);
+        await child.LoadFromData(fullRow());
+        owner.Reports.SetLoadedItems([child]);
+        expect(child.Get('Salary')).toBe(SECRET);
+
+        owner.ContextCurrentUser = intern;
+
+        expect(child.ContextCurrentUser).toBe(intern);
+        expect(keysOf(child.GetAll() as Record<string, unknown>)).not.toContain('salary');
+        expect(await child.GetDataObjectJSON()).not.toContain(String(SECRET));
+    });
+
+    it('REGRESSION: a child pending removal from the collection is narrowed too', async () => {
+        const provider = makeProvider({ transactions: true });
+        const owner = await newEntity(provider, null);
+        const child = await newEntity(provider, null);
+        await child.LoadFromData(fullRow());
+        Object.defineProperty(child, 'IsSaved', { get: () => true });
+        owner.Reports.SetLoadedItems([child]);
+        owner.Reports.Remove(child);
+        expect(owner.Reports.Removed).toEqual([child]);
+
+        owner.ContextCurrentUser = intern;
+
+        expect(child.ContextCurrentUser).toBe(intern);
+        expect(keysOf(child.GetAll() as Record<string, unknown>)).not.toContain('salary');
+    });
+
+    it("leaves a read-only cache collection's shared engine instances alone", async () => {
+        const provider = makeProvider({ transactions: true });
+        const owner = await newEntity(provider, null);
+        const engineRow = await newEntity(provider, null);
+        await engineRow.LoadFromData({ ...fullRow(), ID: 'report-1', Notes: String(owner.Get('ID')) });
+        const collection = new RelatedRecordCollection<BaseEntity>(owner, {
+            Name: 'CachedReports', RelatedEntity: 'Employees', RelatedEntityJoinField: 'Notes', Source: 'cache',
+        });
+        // The cache-hit path hands the engine's own instances to a read-only collection.
+        (collection as unknown as { adoptEngineInstances(items: BaseEntity[]): void }).adoptEngineInstances([engineRow]);
+
+        collection.OnOwnerContextUserChanged(intern);
+
+        expect(engineRow.ContextCurrentUser).not.toBe(intern);
+        expect(engineRow.Get('Salary')).toBe(SECRET);
     });
 
     it('switching to an unrestricted user changes nothing it holds', async () => {

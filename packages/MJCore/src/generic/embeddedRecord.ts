@@ -179,7 +179,7 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
      * Called when the owner is given a different user: the embedded record gets the same one,
      * which narrows what it already holds to that user (see `BaseEntity.ContextCurrentUser`).
      */
-    public OnOwnerContextUserChanged(user: UserInfo): void {
+    public override OnOwnerContextUserChanged(user: UserInfo): void {
         if (this.instance) {
             this.instance.ContextCurrentUser = user;
         }

@@ -1063,7 +1063,8 @@ const setupComplete$ = new ReplaySubject(1);
           // the ones no browser session asked for.
           recordData:
             beEvent.type === 'save' && MayBroadcastRecordData(entityName, beEvent.baseEntity.EntityInfo)
-              ? JSON.stringify(beEvent.baseEntity.GetAll()) // fls-guard: MayBroadcastRecordData refuses FLS entities and Record Changes
+              // fls-guard: MayBroadcastRecordData refuses FLS entities and Record Changes
+              ? JSON.stringify(beEvent.baseEntity.GetAll())
               : undefined,
         });
       }

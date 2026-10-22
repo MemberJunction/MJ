@@ -139,7 +139,8 @@ export class AdhocQueryResolver extends ResolverBase {
             QueryID: '',
             QueryName: 'Ad-Hoc Query',
             Success: true,
-            Results: JSON.stringify(result.Results), // fls-guard: query rows; the SQL is refused before it runs if it reads a field the caller is denied
+            // fls-guard: query rows; the SQL is refused before it runs if it reads a field the caller is denied
+            Results: JSON.stringify(result.Results),
             RowCount: result.RowCount,
             TotalRowCount: result.TotalRowCount,
             PageNumber: paged ? Math.floor(startRow / maxRows!) + 1 : undefined,

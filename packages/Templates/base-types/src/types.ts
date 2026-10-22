@@ -12,9 +12,10 @@ export interface TemplateRenderOptions {
     autoescape?: boolean;
     /**
      * The user this render runs as. Template extensions (an AI prompt, an embedded template) act for this user. When
-     * unset, a render nested inside another render inherits the outer render's user, and a top-level render uses the
-     * engine's context user at the moment of the call. Server code rendering on behalf of a user should always pass it,
-     * because the engine is shared by every request in the process.
+     * unset, a render nested inside another render inherits the outer render's user, and a top-level render runs with
+     * no user: it never falls back to the engine's context user, which is whoever last configured the shared engine.
+     * An extension that needs a user then fails the render (an `{% AIPrompt %}` tag does). Server code rendering on
+     * behalf of a user should always pass it, because the engine is shared by every request in the process.
      */
     ContextUser?: UserInfo;
 }

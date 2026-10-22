@@ -21,8 +21,9 @@
  *
  * ## Allow comments
  *
- * A flagged line passes when it, or the line immediately above it, carries
- * `// fls-guard: <reason>`. Keep the reason short and specific, for example:
+ * A flagged line passes when the `//` comment directly above it carries `// fls-guard: <reason>`
+ * on a line of its own (the comment may run over several `//` lines). A marker trailing code does
+ * not count. Keep the reason short and specific, for example:
  *   - `// fls-guard: projected by ProjectEntityValuesForUser below`
  *   - `// fls-guard: loaded as the caller; width follows its user`
  *   - `// fls-guard: system-user-only resolver`
@@ -141,9 +142,23 @@ function lineSerializesEntity(line: string): boolean {
     return [ACCESSOR_PATTERN, STRINGIFY_ENTITY_PATTERN, FIELD_VALUES_PATTERN, RESULTS_RESPONSE_PATTERN].some(p => p.test(line));
 }
 
-/** True when line `index` of `lines`, or the line above it, carries the allow marker. */
+/** True when `line` is a `//` comment and nothing else. */
+function isCommentOnlyLine(line: string): boolean {
+    return line.trim().startsWith('//');
+}
+
+/**
+ * True when the `//` comment lines directly above line `index` of `lines` carry the allow marker.
+ * A marker that trails code does not count, on the flagged line or above it: it would otherwise
+ * also shield the line after it.
+ */
 function isAllowed(lines: string[], index: number): boolean {
-    return ALLOW_COMMENT.test(lines[index]) || (index > 0 && ALLOW_COMMENT.test(lines[index - 1]));
+    for (let i = index - 1; i >= 0 && isCommentOnlyLine(lines[i]); i--) {
+        if (ALLOW_COMMENT.test(lines[i])) {
+            return true;
+        }
+    }
+    return false;
 }
 
 function scanLines(lines: string[], file: string): Violation[] {
@@ -198,11 +213,18 @@ describe('Field-Security Egress Compliance', () => {
             expect(lineSerializesEntity('// entity.GetAll() is projected below')).toBe(false);
         });
 
-        it('accepts an allow comment with a reason on the line or the line above', () => {
-            expect(scanLines(['x = e.GetAll(); // fls-guard: system user only'], 'f')).toHaveLength(0);
+        it('accepts an allow comment with a reason on a comment line directly above', () => {
             expect(scanLines(['// fls-guard: projected below', 'x = e.GetAll();'], 'f')).toHaveLength(0);
-            expect(scanLines(['x = e.GetAll(); // fls-guard:'], 'f')).toHaveLength(1);
+            expect(scanLines(['    // fls-guard: indented', '    x = e.GetAll();'], 'f')).toHaveLength(0);
+            expect(scanLines(['// fls-guard: a reason that', '// runs over two lines', 'x = e.GetAll();'], 'f')).toHaveLength(0);
+            expect(scanLines(['// fls-guard:', 'x = e.GetAll();'], 'f')).toHaveLength(1);
             expect(scanLines(['// fls-guard: two lines up', '', 'x = e.GetAll();'], 'f')).toHaveLength(1);
+        });
+
+        it('REGRESSION: does not accept a marker that trails code, on the line or the line above', () => {
+            expect(scanLines(['x = e.GetAll(); // fls-guard: system user only'], 'f')).toHaveLength(1);
+            expect(scanLines(['a = b.GetAll(); // fls-guard: system user only', 'x = e.GetAll();'], 'f')).toHaveLength(2);
+            expect(scanLines(['a = 1; // fls-guard: not a comment line', 'x = e.GetAll();'], 'f')).toHaveLength(1);
         });
     });
 

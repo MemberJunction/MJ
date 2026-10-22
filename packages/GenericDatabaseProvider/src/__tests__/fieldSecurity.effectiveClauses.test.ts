@@ -26,6 +26,7 @@ import {
     CompositeKey,
     FieldSecurityDenialMessage,
     FieldSecurityError,
+    FieldSecurityWholeRowMessage,
     UserInfo,
     type DatasetResultType,
     type DatasetStatusResultType,
@@ -224,6 +225,38 @@ describe('InternalRunView checks the clauses it runs', () => {
         const result = await provider.RunViewAs({ EntityName: ENTITY_NAME, ExtraFilter: "BankAccount LIKE '1%' AND CHECKSUM(*) <> 0" }, user);
         expect(result.Success).toBe(true);
         expect(provider.ExecutedSQL.length).toBeGreaterThan(0);
+    });
+});
+
+describe('a sort by column position, for a caller denied a column', () => {
+    // An entity_object read selects every column, so `ORDER BY 4` sorts by whatever the fourth
+    // column is (here BankAccount) without naming it.
+    it.each([
+        ['4', 'sqlserver'],
+        ['4 DESC', 'sqlserver'],
+        ['Name, 4 DESC', 'sqlserver'],
+        ['(4)', 'sqlserver'],
+        ['4 DESC NULLS LAST', 'postgresql'],
+    ] as const)('refuses OrderBy %j (%s) before any SQL runs', async (orderBy, platform) => {
+        const provider = new ClauseTestProvider(platform, [widgetsEntity(['BankAccount'])]);
+        const error = await rejection(() => provider.RunViewAs({ EntityName: ENTITY_NAME, OrderBy: orderBy, ResultType: 'entity_object' }, user));
+        expect(error?.name).toBe(FieldSecurityError.ErrorName);
+        expect(error?.message).toBe(FieldSecurityWholeRowMessage('ORDER BY 4', ENTITY_NAME));
+        expect(provider.ExecutedSQL).toEqual([]);
+    });
+
+    it('still runs a sort that names its columns', async () => {
+        const provider = new ClauseTestProvider('sqlserver', [widgetsEntity(['BankAccount'])]);
+        const result = await provider.RunViewAs({ EntityName: ENTITY_NAME, OrderBy: 'Name DESC, Sequence', ResultType: 'entity_object' }, user);
+        expect(result.Success).toBe(true);
+        expect(provider.ExecutedSQL.join('\n')).toContain('ORDER BY Name DESC, Sequence');
+    });
+
+    it('runs a sort by column position for a caller denied nothing', async () => {
+        const provider = new ClauseTestProvider('sqlserver', [widgetsEntity()]);
+        const result = await provider.RunViewAs({ EntityName: ENTITY_NAME, OrderBy: '4 DESC', ResultType: 'entity_object' }, user);
+        expect(result.Success).toBe(true);
+        expect(provider.ExecutedSQL.join('\n')).toContain('ORDER BY 4 DESC');
     });
 });
 

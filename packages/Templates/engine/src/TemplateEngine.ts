@@ -468,8 +468,8 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      * The user a render runs as: the one the caller passed, else the user of the render this one is
      * nested in. There is no fallback to this engine's context user: that is whoever last configured
      * the process-wide engine, so it may be another request's user. A render with no user runs its
-     * extensions with no user, and an extension that needs one (for example to run a prompt) fails
-     * or runs as the provider runs a call with no user. Every server caller should pass `ContextUser`.
+     * extensions with no user, and an extension that needs one fails the render with an error rather
+     * than run as nobody (an `{% AIPrompt %}` tag does). Every server caller should pass `ContextUser`.
      */
     private resolveRenderUser(options?: TemplateRenderOptions): UserInfo | undefined {
         return options?.ContextUser ?? CurrentTemplateRenderUser();

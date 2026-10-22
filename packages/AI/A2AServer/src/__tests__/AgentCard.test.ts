@@ -1,7 +1,7 @@
 /**
  * The public agent card is served to unauthenticated callers. Under the principal rule its reader
  * is anonymous, so with no configured service identity it carries no entity or agent names; with
- * one, it lists what that service user may see.
+ * one, it lists the entities and agents the capability settings name.
  */
 import { describe, it, expect } from 'vitest';
 import type { UserInfo } from '@memberjunction/core';
