@@ -111,7 +111,9 @@ describe('streaming introspect + persist', () => {
         CompanyIntegration: { ID: 'CI-1', IntegrationID: 'INT-1', Integration: 'Synthetic' },
         Connector: connector,
         ContextUser: {},
-        Provider: {},
+        // The catalog scope and the classify stage read through the catalog writer, which queries per
+        // call; this connection's catalog is empty, so every read succeeds with no rows.
+        Provider: { RunView: async () => ({ Success: true, Results: [] }) },
         ArtifactRootDir: rootDir,
         DeactivateAbsent: deactivateAbsent,
     } as unknown as ConnectorCreationPipelineOptions);
