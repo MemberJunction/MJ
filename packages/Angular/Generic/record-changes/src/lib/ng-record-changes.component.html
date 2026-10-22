@@ -240,69 +240,25 @@
           </div>
         </mj-empty-state>
       } @else {
-        <!-- Activity Over Time Burst-Aware Cluster Strip (Time-Gap Compression) -->
-        @if (ActivityBuckets.length > 0) {
-          <div class="rc-activity-chart" role="region" aria-label="Change activity bursts over time">
-            <div class="rc-activity-chart-header">
-              <span class="rc-activity-chart-title">
-                <i class="fa-solid fa-wave-square" aria-hidden="true"></i>
-                {{ ActivityChartGranularityLabel }}
-              </span>
-              <div class="rc-activity-chart-meta">
-                @if (SelectedBucketLabel; as activeBucketLabel) {
-                  <button
-                    type="button"
-                    class="rc-activity-bucket-pill"
-                    (click)="ClearBucketFilter()"
-                    title="Clear burst filter">
-                    <span>{{ activeBucketLabel }}</span>
-                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
-                  </button>
-                }
-                <div class="rc-activity-legend">
-                  <span class="rc-legend-item"><span class="rc-legend-dot rc-legend-dot--update"></span>Update</span>
-                  <span class="rc-legend-item"><span class="rc-legend-dot rc-legend-dot--create"></span>Create</span>
-                  <span class="rc-legend-item"><span class="rc-legend-dot rc-legend-dot--restore"></span>Restore</span>
-                </div>
-              </div>
-            </div>
-            <div class="rc-burst-track">
-              @for (bucket of ActivityBuckets; track bucket.Key) {
-                <button
-                  type="button"
-                  class="rc-burst-node"
-                  [class.rc-burst-node--selected]="SelectedBucketKey === bucket.Key"
-                  [attr.aria-pressed]="SelectedBucketKey === bucket.Key"
-                  [attr.aria-label]="bucket.Tooltip"
-                  [title]="bucket.Tooltip"
-                  (click)="ToggleBucketFilter(bucket.Key)">
-                  <div class="rc-burst-pips">
-                    @for (pip of bucket.Pips; track pip.ID) {
-                      <span
-                        class="rc-burst-pip"
-                        [class.rc-burst-pip--create]="pip.Type === 'create'"
-                        [class.rc-burst-pip--update]="pip.Type === 'update'"
-                        [class.rc-burst-pip--restore]="pip.Type === 'restore'"
-                        [title]="pip.Tooltip"></span>
-                    }
-                    @if (bucket.OverflowPipCount > 0) {
-                      <span class="rc-burst-pip-overflow">+{{ bucket.OverflowPipCount }}</span>
-                    }
-                  </div>
-                  <span class="rc-burst-count">{{ bucket.TotalCount }} {{ bucket.TotalCount === 1 ? 'change' : 'changes' }}</span>
-                  <span class="rc-burst-date">{{ bucket.Label }}</span>
-                  <span class="rc-burst-sub">{{ bucket.Subtitle }}</span>
-                </button>
-                @if (bucket.GapAfterLabel) {
-                  <div class="rc-gap-connector" [attr.aria-label]="bucket.GapAfterLabel + ' with no changes'">
-                    <div class="rc-gap-line"></div>
-                    <span class="rc-gap-pill">{{ bucket.GapAfterLabel }}</span>
-                  </div>
-                }
-              }
-            </div>
-          </div>
-        }
+        <!-- Activity Over Time Burst-Aware Cluster Strip (Powered by @memberjunction/ng-ui-components) -->
+        <mj-burst-cluster-strip
+          Title="Editing sessions"
+          TitleIcon="fa-solid fa-wave-square"
+          AriaLabel="Change activity bursts over time"
+          ItemSingularNoun="change"
+          ItemPluralNoun="changes"
+          [Items]="BurstClusterItems"
+          [Categories]="BurstClusterCategories"
+          [Resolution]="BurstResolution"
+          [CoalesceStrategy]="BurstCoalesceStrategy"
+          [SessionGapHours]="BurstSessionGapHours"
+          [MaxClusters]="BurstMaxClusters"
+          [EraZoomThreshold]="BurstEraZoomThreshold"
+          [AllowZoom]="AllowBurstZoom"
+          [(SelectedClusterKey)]="SelectedBucketKey"
+          (AfterClustersRebuild)="OnBurstClustersRebuilt($event)"
+          (FilterChanged)="OnBurstFilterChanged($event)">
+        </mj-burst-cluster-strip>
 
         <!-- Filter Bar — chips render only for change types/sources actually present in loaded data.
              When more than 2 conditional chips would render, they collapse into a "More filters" popover. -->

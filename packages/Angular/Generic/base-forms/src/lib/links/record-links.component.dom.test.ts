@@ -1,10 +1,14 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { BaseEntity, CompositeKey, EntityFieldTSType, EntityInfo, IMetadataProvider, KeyValuePair, Metadata, RecordDependency, RunView } from '@memberjunction/core';
+import { MJGlobal } from '@memberjunction/global';
 import { renderComponentFixture, query, queryAll, capture } from '@memberjunction/ng-test-utils';
 import { MjRecordLinksComponent } from './record-links.component';
 import { MjRecordLinksDrawerComponent } from './record-links-drawer.component';
 import { MjRecordLinkDirective } from './record-link.directive';
-import { MjRecordPreviewPopoverComponent } from '../preview-popover/record-preview-popover.component';
+import {
+    MjRecordPreviewPopoverComponent,
+    ResolveRecordPreviewPopoverType
+} from '../preview-popover/record-preview-popover.component';
 import { FormNavigationEvent } from '../types/navigation-events';
 
 const CONTACT_PK = new CompositeKey([new KeyValuePair('ID', 'contact-1')]);
@@ -454,5 +458,136 @@ describe('MjRecordLinksComponent', () => {
         expect(updatedEvents).toHaveLength(1);
         expect(updatedEvents[0].EntityName).toBe('Orders');
         expect(updatedEvents[0].UpdatedFields).toEqual({ Status: 'Shipped' });
+    });
+
+    it('renders Option A header actions, auto-spans wide fields (Email/Title), hides footer in read mode, and honors BeforeQuickEditSave.Cancel', async () => {
+        const personEntityInfo = {
+            Name: 'MJ_BizApps_Common: People',
+            DisplayNameOrName: 'People',
+            Icon: 'fa-solid fa-user',
+            CanRead: true,
+            AllowUpdateAPI: true,
+            NameField: { Name: 'DisplayName' },
+            FirstPrimaryKey: { Name: 'ID' },
+            PrimaryKeys: [{ Name: 'ID' }],
+            Fields: [
+                { Name: 'ID', DisplayNameOrName: 'ID', IsPrimaryKey: true, ReadOnly: true, AllowUpdateAPI: false, TSType: EntityFieldTSType.String, MaxLength: 36 },
+                { Name: 'DisplayName', DisplayNameOrName: 'Display Name', IsPrimaryKey: false, ReadOnly: false, AllowUpdateAPI: true, TSType: EntityFieldTSType.String, MaxLength: 100 },
+                { Name: 'Email', DisplayNameOrName: 'Email', IsPrimaryKey: false, ReadOnly: false, AllowUpdateAPI: true, DefaultInView: true, TSType: EntityFieldTSType.String, MaxLength: 255 },
+                { Name: 'Status', DisplayNameOrName: 'Status', IsPrimaryKey: false, ReadOnly: false, AllowUpdateAPI: true, DefaultInView: true, TSType: EntityFieldTSType.String, MaxLength: 50 },
+                { Name: 'PersonType', DisplayNameOrName: 'Person Type', IsPrimaryKey: false, ReadOnly: false, AllowUpdateAPI: true, DefaultInView: true, TSType: EntityFieldTSType.String, MaxLength: 50 }
+            ]
+        } as unknown as EntityInfo;
+
+        const mockProvider = {
+            Entities: [personEntityInfo],
+            EntityByName: (name: string) => (name === 'MJ_BizApps_Common: People' ? personEntityInfo : undefined),
+            GetEntityObject: vi.fn(),
+            RunView: vi.fn().mockResolvedValue({
+                Success: true,
+                Results: [{
+                    ID: '9FAF6011-0000-0000-0000-00000000C577',
+                    DisplayName: 'Mathieu Grantham',
+                    Email: 'jerome.grantham.2004@creamery.org',
+                    Status: 'Active',
+                    PersonType: 'Staff'
+                }],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            })
+        } as unknown as IMetadataProvider;
+
+        vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue(mockProvider);
+        vi.spyOn(RunView.prototype, 'RunView').mockResolvedValue({
+            Success: true,
+            Results: [{
+                ID: '9FAF6011-0000-0000-0000-00000000C577',
+                DisplayName: 'Mathieu Grantham',
+                Email: 'jerome.grantham.2004@creamery.org',
+                Status: 'Active',
+                PersonType: 'Staff'
+            }],
+            RowCount: 1,
+            TotalRowCount: 1,
+            ExecutionTime: 1,
+            ErrorMessage: ''
+        });
+
+        const fixture = renderComponentFixture(MjRecordPreviewPopoverComponent, {
+            declarations: [MjRecordPreviewPopoverComponent],
+            inputs: {
+                EntityName: 'MJ_BizApps_Common: People',
+                RecordID: '9FAF6011-0000-0000-0000-00000000C577',
+                AnchorRect: { top: 100, bottom: 124, left: 100, right: 220, width: 120, height: 24 },
+                Provider: mockProvider,
+                Visible: true,
+                AllowQuickEdit: true
+            }
+        });
+
+        await flushPromises();
+        fixture.detectChanges();
+
+        const pop = fixture.componentInstance;
+        expect(pop.Summary).not.toBeNull();
+        const emailField = pop.Summary!.Fields.find(f => f.FieldName === 'Email');
+        expect(emailField?.IsWide).toBe(true);
+
+        // Read mode: no bottom footer bar; header actions and clickable title link are rendered
+        expect(query(fixture, '.mj-record-preview-footer')).toBeNull();
+        expect(query(fixture, '.mj-record-preview-quick-edit-btn')).not.toBeNull();
+        expect(query(fixture, '.mj-record-preview-new-tab-btn')).not.toBeNull();
+
+        const navEvents = capture(pop.Navigate);
+        const titleLink = query(fixture, '.mj-record-preview-title-link') as HTMLButtonElement;
+        expect(titleLink).not.toBeNull();
+        titleLink.click();
+        expect(navEvents).toHaveLength(1);
+        expect(navEvents[0].OpenInNewTab).toBe(false);
+
+        // Enter Edit mode -> contextual footer bar appears
+        pop.OnStartEdit(new MouseEvent('click'));
+        fixture.detectChanges();
+        expect(query(fixture, '.mj-record-preview-footer')).not.toBeNull();
+
+        // Cancel save via BeforeQuickEditSave
+        const sub = pop.BeforeQuickEditSave.subscribe(args => {
+            args.Cancel = true;
+        });
+        await pop.OnSaveEdit(new MouseEvent('click'));
+        expect(mockProvider.GetEntityObject).not.toHaveBeenCalled();
+        expect(pop.IsEditing).toBe(true);
+        sub.unsubscribe();
+    });
+
+    it('resolves custom MjRecordPreviewPopoverComponent subclasses registered in ClassFactory (entity-specific, wildcard, and global)', () => {
+        class GlobalCustomPreviewPopover extends MjRecordPreviewPopoverComponent {}
+        class SchemaWildcardPreviewPopover extends MjRecordPreviewPopoverComponent {}
+        class PersonSpecificPreviewPopover extends MjRecordPreviewPopoverComponent {}
+
+        const cf = MJGlobal.Instance.ClassFactory;
+        const regs = (cf as unknown as { _registrations: Array<unknown> })._registrations;
+        const initialLen = regs.length;
+
+        try {
+            cf.Register(MjRecordPreviewPopoverComponent, GlobalCustomPreviewPopover, null, 1);
+            cf.Register(MjRecordPreviewPopoverComponent, SchemaWildcardPreviewPopover, 'MJ_BizApps_Common:*', 1);
+            cf.Register(MjRecordPreviewPopoverComponent, PersonSpecificPreviewPopover, 'MJ_BizApps_Common: People', 1);
+
+            // 1. Exact entity key match wins for MJ_BizApps_Common: People
+            expect(ResolveRecordPreviewPopoverType('MJ_BizApps_Common: People')).toBe(PersonSpecificPreviewPopover);
+
+            // 2. Wildcard pattern match wins for other MJ_BizApps_Common entities
+            expect(ResolveRecordPreviewPopoverType('MJ_BizApps_Common: Organizations')).toBe(SchemaWildcardPreviewPopover);
+
+            // 3. Global unkeyed registration wins for other entities
+            expect(ResolveRecordPreviewPopoverType('Orders')).toBe(GlobalCustomPreviewPopover);
+        } finally {
+            regs.splice(initialLen);
+            (cf as unknown as { _registrationCache?: Map<string, unknown>; _indexedRegistrationsRef?: unknown })._registrationCache?.clear();
+            (cf as unknown as { _indexedRegistrationsRef: unknown })._indexedRegistrationsRef = null;
+        }
     });
 });

@@ -212,6 +212,34 @@ Renders an inline hyperlink, pill chip (`Variant="chip"`), or link box (`Variant
 </mj-record-link>
 ```
 
+### 4. Pluggable Hover Preview Card (`MjRecordPreviewPopoverComponent` & `@RegisterClass`)
+
+The singleton `MjRecordPreviewPopoverService` mounts a single `<mj-record-preview-popover>` at `document.body` featuring the **Option A** UX:
+- **Header action micro-cluster**: Copyable compact Record ID (`9FAF60…C577`), Quick Edit (`[✎]`), and Open in New Tab (`[↗]`) sit in the top-right header.
+- **Clickable record title**: Clicking the record title (`Mathieu Grantham →`) navigates directly to the record (`Ctrl`/`Cmd`-click or middle-click opens in a new tab), eliminating redundant bottom buttons in Read mode.
+- **Auto-spanning wide fields**: Wide values (`Email`, `URL`, `Title`, or values `> 22` characters) automatically span both columns (`grid-column: 1 / -1`) so they never truncate prematurely.
+- **Contextual Quick Edit footer & cancellable save event**: Entering Quick Edit reveals a slim `Cancel` / `Save` footer bar and emits `BeforeQuickEditSave` (cancellable via `args.Cancel = true`) and `AfterQuickEditSaved` / `RecordUpdated`.
+
+You can subclass `MjRecordPreviewPopoverComponent` and register your custom preview card with `@RegisterClass` so `MjRecordPreviewPopoverService` instantiates your subclass dynamically via `MJGlobal.Instance.ClassFactory`:
+
+- **Global override (all entities)**: `@RegisterClass(MjRecordPreviewPopoverComponent)`
+- **Schema or wildcard override**: `@RegisterClass(MjRecordPreviewPopoverComponent, 'MJ_BizApps_Common:*')` or `@RegisterClass(MjRecordPreviewPopoverComponent, 'schema:mj_bizapps_common')`
+- **Entity-specific override**: `@RegisterClass(MjRecordPreviewPopoverComponent, 'MJ_BizApps_Common: People')`
+
+```typescript
+import { RegisterClass } from '@memberjunction/global';
+import { EntityFieldInfo, EntityInfo } from '@memberjunction/core';
+import { MjRecordPreviewPopoverComponent } from '@memberjunction/ng-base-forms';
+
+@RegisterClass(MjRecordPreviewPopoverComponent, 'MJ_BizApps_Common: People')
+export class CustomPersonPreviewPopoverComponent extends MjRecordPreviewPopoverComponent {
+  protected override selectPreviewFields(entityInfo: EntityInfo): EntityFieldInfo[] {
+    // Customize which summary fields appear on the People hover card
+    return super.selectPreviewFields(entityInfo);
+  }
+}
+```
+
 ## Related docs
 
 - **Architecture (read first):** [/guides/FORMS_ARCHITECTURE_GUIDE.md](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md)

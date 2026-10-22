@@ -6,6 +6,7 @@ import {
     Input,
     OnDestroy,
     Output,
+    Type,
     inject
 } from '@angular/core';
 import {
@@ -16,7 +17,9 @@ import {
     EntityInfo,
     RunView
 } from '@memberjunction/core';
+import { ClassRegistration, MJGlobal, OptionalKeyedSpecialization } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { CancellableFormEvent } from '../types/form-events';
 import { FormNavigationEvent } from '../types/navigation-events';
 
 /**
@@ -28,6 +31,8 @@ export interface RecordPreviewFieldItem {
     Value: string;
     RawValue?: unknown;
     IsStatusField: boolean;
+    /** When true, spans both columns (`grid-column: 1 / -1`) in the 2-column preview grid. */
+    IsWide?: boolean;
     IsEditable?: boolean;
     InputType?: 'text' | 'number' | 'boolean' | 'select';
     PossibleValues?: string[];
@@ -60,6 +65,30 @@ export interface RecordPreviewUpdatedEvent {
 }
 
 /**
+ * Cancellable event args emitted before inline Quick Edit saves changes to the target entity record.
+ * Set `Cancel = true` to prevent the save operation.
+ */
+export class BeforeRecordPreviewSaveEventArgs extends CancellableFormEvent {
+    public readonly EntityName: string;
+    public readonly PrimaryKey: CompositeKey;
+    public readonly Summary: RecordPreviewSummary;
+    public readonly Drafts: Record<string, string | undefined>;
+
+    constructor(
+        entityName: string,
+        primaryKey: CompositeKey,
+        summary: RecordPreviewSummary,
+        drafts: Record<string, string | undefined>
+    ) {
+        super();
+        this.EntityName = entityName;
+        this.PrimaryKey = primaryKey;
+        this.Summary = summary;
+        this.Drafts = drafts;
+    }
+}
+
+/**
  * Anchor rectangle used to position {@link MjRecordPreviewPopoverComponent} in viewport coordinates.
  */
 export interface RecordPreviewAnchorRect {
@@ -74,7 +103,22 @@ export interface RecordPreviewAnchorRect {
 /**
  * Lightweight hover preview card (`<mj-record-preview-popover>`) that displays key metadata
  * and summary fields (`DefaultInView`) for any foreign-key or polymorphic-FK linked record.
+ *
+ * ### Pluggable via `@RegisterClass` and `MJGlobal.Instance.ClassFactory`
+ * Applications and domain packages can subclass `MjRecordPreviewPopoverComponent` and register
+ * their custom hover card with `@RegisterClass`:
+ * - **Global replacement (all entities)**:
+ *   `@RegisterClass(MjRecordPreviewPopoverComponent)` or `@RegisterClass(MjRecordPreviewPopoverComponent, '*')`
+ * - **Schema or wildcard replacement**:
+ *   `@RegisterClass(MjRecordPreviewPopoverComponent, 'MJ_BizApps_Common:*')` or
+ *   `@RegisterClass(MjRecordPreviewPopoverComponent, 'schema:mj_bizapps_common')`
+ * - **Entity-specific replacement**:
+ *   `@RegisterClass(MjRecordPreviewPopoverComponent, 'MJ_BizApps_Common: People')`
+ *
+ * {@link MjRecordPreviewPopoverService} calls {@link ResolveRecordPreviewPopoverType} at runtime
+ * to instantiate the highest-priority matching subclass via Angular's `createComponent()`.
  */
+@OptionalKeyedSpecialization()
 @Component({
     standalone: false,
     selector: 'mj-record-preview-popover',
@@ -83,18 +127,18 @@ export interface RecordPreviewAnchorRect {
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implements OnDestroy {
-    private static readonly CACHE_TTL_MS = 60_000;
-    private static readonly summaryCache = new Map<string, { LoadedAt: number; Summary: RecordPreviewSummary }>();
+    protected static readonly CACHE_TTL_MS = 60_000;
+    protected static readonly summaryCache = new Map<string, { LoadedAt: number; Summary: RecordPreviewSummary }>();
 
-    private cdr = inject(ChangeDetectorRef);
-    private _destroyed = false;
-    private _visible = false;
-    private _entityName: string | null = null;
-    private _recordID: string | null = null;
-    private _primaryKey: CompositeKey | null = null;
-    private _displayName: string | null = null;
-    private _anchorRect: RecordPreviewAnchorRect | null = null;
-    private _loadSeq = 0;
+    protected cdr = inject(ChangeDetectorRef);
+    protected _destroyed = false;
+    protected _visible = false;
+    protected _entityName: string | null = null;
+    protected _recordID: string | null = null;
+    protected _primaryKey: CompositeKey | null = null;
+    protected _displayName: string | null = null;
+    protected _anchorRect: RecordPreviewAnchorRect | null = null;
+    protected _loadSeq = 0;
 
     @Input()
     public get EntityName(): string | null {
@@ -177,6 +221,11 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
     @Output() public Navigate = new EventEmitter<FormNavigationEvent>();
     @Output() public MouseEnterCard = new EventEmitter<void>();
     @Output() public MouseLeaveCard = new EventEmitter<void>();
+    /** Cancellable event emitted before Quick Edit saves field changes to the target entity. */
+    @Output() public BeforeQuickEditSave = new EventEmitter<BeforeRecordPreviewSaveEventArgs>();
+    /** Emitted after Quick Edit successfully saves field changes to the target entity. */
+    @Output() public AfterQuickEditSaved = new EventEmitter<RecordPreviewUpdatedEvent>();
+    /** Emitted after Quick Edit saves field changes (alias/companion to `AfterQuickEditSaved`). */
     @Output() public RecordUpdated = new EventEmitter<RecordPreviewUpdatedEvent>();
 
     public IsLoading = false;
@@ -201,7 +250,7 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
         }
     }
 
-    private resetEditState(): void {
+    protected resetEditState(): void {
         this.IsEditing = false;
         this.IsSavingEdit = false;
         this.EditErrorMessage = null;
@@ -246,8 +295,8 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
         if (!rect || typeof window === 'undefined') {
             return { display: 'none' };
         }
-        const cardWidth = 320;
-        const estimatedHeight = 220;
+        const cardWidth = 328;
+        const estimatedHeight = 200;
         const gap = 8;
         const viewportW = window.innerWidth || 1024;
         const viewportH = window.innerHeight || 768;
@@ -342,6 +391,18 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
         if (!summary || this.IsSavingEdit) {
             return;
         }
+
+        const beforeArgs = new BeforeRecordPreviewSaveEventArgs(
+            summary.EntityName,
+            summary.PrimaryKey,
+            summary,
+            this.EditDrafts
+        );
+        this.BeforeQuickEditSave.emit(beforeArgs);
+        if (beforeArgs.Cancel) {
+            return;
+        }
+
         const md = this.ProviderToUse;
         const entityInfo = md?.EntityByName(summary.EntityName);
         if (!md || !entityInfo) {
@@ -390,11 +451,13 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
             MjRecordPreviewPopoverComponent.summaryCache.delete(cacheKey);
             this.resetEditState();
             await this.loadSummary(true);
-            this.RecordUpdated.emit({
+            const updatedEvent: RecordPreviewUpdatedEvent = {
                 EntityName: summary.EntityName,
                 PrimaryKey: summary.PrimaryKey,
                 UpdatedFields: updatedFields
-            });
+            };
+            this.AfterQuickEditSaved.emit(updatedEvent);
+            this.RecordUpdated.emit(updatedEvent);
             this.cdr.markForCheck();
         } catch (err: unknown) {
             if (!this._destroyed) {
@@ -405,7 +468,7 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
         }
     }
 
-    private coerceDraftValue(draft: string, field?: EntityFieldInfo): unknown {
+    protected coerceDraftValue(draft: string, field?: EntityFieldInfo): unknown {
         if (!field) {
             return draft;
         }
@@ -420,6 +483,24 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
             return Number.isNaN(parsed) ? draft : parsed;
         }
         return draft;
+    }
+
+    /**
+     * Handles primary click on the record title link in the Option A header.
+     * Supports Ctrl/Cmd/Shift-click to open in a new tab.
+     */
+    public OnTitleClick(event: MouseEvent): void {
+        const openInNewTab = Boolean(event.ctrlKey || event.metaKey || event.shiftKey);
+        this.OnOpenRecord(openInNewTab, event);
+    }
+
+    /**
+     * Handles middle-click (`auxclick` button 1) on the record title link to open in a new tab.
+     */
+    public OnTitleAuxClick(event: MouseEvent): void {
+        if (event.button === 1) {
+            this.OnOpenRecord(true, event);
+        }
     }
 
     public OnOpenRecord(openInNewTab: boolean, event: MouseEvent): void {
@@ -442,7 +523,7 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
         });
     }
 
-    private resolveCompositeKey(entityInfo?: EntityInfo): CompositeKey | null {
+    protected resolveCompositeKey(entityInfo?: EntityInfo): CompositeKey | null {
         if (this._primaryKey && this._primaryKey.KeyValuePairs?.length > 0) {
             return this._primaryKey;
         }
@@ -450,11 +531,10 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
         if (!rawId) {
             return null;
         }
-        // Reads both a bare id and a delimited multi-column segment for any entity.
         return CompositeKey.FromURLSegment(entityInfo, rawId);
     }
 
-    private async loadSummary(forceRefresh = false): Promise<void> {
+    protected async loadSummary(forceRefresh = false): Promise<void> {
         const entityName = this._entityName?.trim();
         if (!entityName) {
             this.Summary = null;
@@ -548,7 +628,7 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
         }
     }
 
-    private selectPreviewFields(entityInfo: EntityInfo): EntityFieldInfo[] {
+    protected selectPreviewFields(entityInfo: EntityInfo): EntityFieldInfo[] {
         const nameFieldLower = entityInfo.NameField?.Name?.toLowerCase() ?? '';
         const eligible = entityInfo.Fields.filter(f => {
             if (f.IsPrimaryKey) return false;
@@ -564,7 +644,22 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
         return pool.slice(0, 5);
     }
 
-    private isFieldQuickEditable(field: EntityFieldInfo | null | undefined, canEditEntity: boolean): boolean {
+    /**
+     * Determines whether a summary field should span the full 2-column width (`grid-column: 1 / -1`)
+     * so long values like emails, URLs, titles, or addresses never truncate unnecessarily.
+     * Subclasses can override this hook to customize column spanning.
+     */
+    protected isFieldWide(field: EntityFieldInfo, formattedValue: string): boolean {
+        if (/(email|url|website|uri|address|street|description|notes|summary|title|subject|headline|path)/i.test(field.Name)) {
+            return true;
+        }
+        if (formattedValue.includes('@') || formattedValue.startsWith('http://') || formattedValue.startsWith('https://')) {
+            return true;
+        }
+        return formattedValue.length > 22;
+    }
+
+    protected isFieldQuickEditable(field: EntityFieldInfo | null | undefined, canEditEntity: boolean): boolean {
         if (!field || !canEditEntity) return false;
         if (field.IsPrimaryKey || field.ReadOnly || field.IsVirtual || field.AllowUpdateAPI === false) {
             return false;
@@ -579,7 +674,7 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
         );
     }
 
-    private resolveFieldInputType(field: EntityFieldInfo): {
+    protected resolveFieldInputType(field: EntityFieldInfo): {
         InputType: 'text' | 'number' | 'boolean' | 'select';
         PossibleValues?: string[];
     } {
@@ -599,7 +694,7 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
         return { InputType: 'text' };
     }
 
-    private buildSummaryFromRow(
+    protected buildSummaryFromRow(
         entityInfo: EntityInfo,
         pk: CompositeKey,
         recordIdStr: string,
@@ -662,11 +757,27 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
                         Value: formatted,
                         RawValue: row[f.Name],
                         IsStatusField: isStatus,
+                        IsWide: this.isFieldWide(f, formatted),
                         IsEditable: editable,
                         InputType: inputMeta?.InputType,
                         PossibleValues: inputMeta?.PossibleValues
                     });
                 }
+            }
+        }
+
+        // Balance 2-column grid layout so a narrow field followed by a wide field (or at the end of an odd row) spans cleanly
+        let colCursor = 0;
+        for (let i = 0; i < fields.length; i++) {
+            const item = fields[i];
+            const next = i + 1 < fields.length ? fields[i + 1] : null;
+            if (item.IsWide) {
+                colCursor = 0;
+            } else if (colCursor === 0 && (!next || next.IsWide)) {
+                item.IsWide = true;
+                colCursor = 0;
+            } else {
+                colCursor = (colCursor + 1) % 2;
             }
         }
 
@@ -690,7 +801,7 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
         };
     }
 
-    private formatPreviewValue(val: unknown, field: EntityFieldInfo): string {
+    protected formatPreviewValue(val: unknown, field: EntityFieldInfo): string {
         if (val === null || val === undefined || val === '') {
             return '';
         }
@@ -709,4 +820,112 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
         const str = String(val).trim();
         return str.length > 80 ? `${str.slice(0, 77)}…` : str;
     }
+}
+
+function isStrictSubclassOf(subCtor: unknown, superCtor: unknown): boolean {
+    if (typeof subCtor !== 'function' || typeof superCtor !== 'function' || subCtor === superCtor) {
+        return false;
+    }
+    return Boolean(
+        subCtor.prototype &&
+        superCtor.prototype &&
+        subCtor.prototype instanceof (superCtor as new (...args: unknown[]) => unknown)
+    );
+}
+
+function selectWinningRegistration(candidates: ClassRegistration[]): ClassRegistration | null {
+    if (candidates.length === 0) {
+        return null;
+    }
+    let winner = candidates[0];
+    for (let i = 1; i < candidates.length; i++) {
+        const candidate = candidates[i];
+        if (isStrictSubclassOf(candidate.SubClass, winner.SubClass)) {
+            winner = candidate;
+            continue;
+        }
+        if (isStrictSubclassOf(winner.SubClass, candidate.SubClass)) {
+            continue;
+        }
+        if (candidate.Priority >= winner.Priority) {
+            winner = candidate;
+        }
+    }
+    return winner;
+}
+
+/**
+ * Resolves the concrete {@link MjRecordPreviewPopoverComponent} class to instantiate for a given
+ * entity via `MJGlobal.Instance.ClassFactory`.
+ *
+ * Resolution precedence:
+ * 1. **Exact entity key match** — e.g. `@RegisterClass(MjRecordPreviewPopoverComponent, 'MJ_BizApps_Common: People')`
+ * 2. **Wildcard or schema pattern key match** — e.g. `@RegisterClass(MjRecordPreviewPopoverComponent, 'MJ_BizApps_Common:*')`
+ *    or `@RegisterClass(MjRecordPreviewPopoverComponent, 'schema:mj_bizapps_common')`
+ * 3. **Global unkeyed or `'*'` registration** — e.g. `@RegisterClass(MjRecordPreviewPopoverComponent)`
+ * 4. **Default built-in component** — {@link MjRecordPreviewPopoverComponent}
+ */
+export function ResolveRecordPreviewPopoverType(
+    entityName?: string | null,
+    schemaName?: string | null
+): Type<MjRecordPreviewPopoverComponent> {
+    const cf = MJGlobal.Instance?.ClassFactory;
+    if (!cf) {
+        return MjRecordPreviewPopoverComponent;
+    }
+
+    const byRoot = cf.GetRegistrationsByRootClass(MjRecordPreviewPopoverComponent);
+    const byBase = cf.GetAllRegistrations(MjRecordPreviewPopoverComponent);
+    const allRegs = Array.from(new Set([...byRoot, ...byBase])).filter(
+        r => typeof r.SubClass === 'function' && r.SubClass !== MjRecordPreviewPopoverComponent
+    );
+
+    if (allRegs.length === 0) {
+        return MjRecordPreviewPopoverComponent;
+    }
+
+    const normEntity = (entityName ?? '').trim().toLowerCase();
+    const normSchema = (schemaName ?? '').trim().toLowerCase();
+
+    if (normEntity) {
+        // 1. Exact entity name match
+        const exactMatches = allRegs.filter(
+            r => typeof r.Key === 'string' && r.Key.trim().toLowerCase() === normEntity
+        );
+        const exactWinner = selectWinningRegistration(exactMatches);
+        if (exactWinner) {
+            return exactWinner.SubClass as Type<MjRecordPreviewPopoverComponent>;
+        }
+
+        // 2. Wildcard / schema pattern match
+        const patternMatches = allRegs.filter(r => {
+            if (typeof r.Key !== 'string') return false;
+            const key = r.Key.trim().toLowerCase();
+            if (!key || key === '*') return false;
+            if (key.startsWith('schema:')) {
+                const targetSchema = key.slice('schema:'.length).trim();
+                return Boolean(targetSchema && normSchema && normSchema === targetSchema);
+            }
+            if (key.includes('*')) {
+                const escaped = key.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+                return new RegExp(`^${escaped}$`, 'i').test(normEntity);
+            }
+            return false;
+        });
+        const patternWinner = selectWinningRegistration(patternMatches);
+        if (patternWinner) {
+            return patternWinner.SubClass as Type<MjRecordPreviewPopoverComponent>;
+        }
+    }
+
+    // 3. Global unkeyed or '*' registration
+    const globalMatches = allRegs.filter(
+        r => r.Key === null || r.Key === undefined || r.Key.trim() === '' || r.Key.trim() === '*'
+    );
+    const globalWinner = selectWinningRegistration(globalMatches);
+    if (globalWinner) {
+        return globalWinner.SubClass as Type<MjRecordPreviewPopoverComponent>;
+    }
+
+    return MjRecordPreviewPopoverComponent;
 }

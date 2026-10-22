@@ -4,17 +4,20 @@ import {
     EnvironmentInjector,
     Injectable,
     OnDestroy,
+    Type,
     createComponent,
     inject
 } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
-import { CompositeKey, IMetadataProvider } from '@memberjunction/core';
+import { CompositeKey, IMetadataProvider, Metadata } from '@memberjunction/core';
 import { Subscription } from 'rxjs';
 import { FormNavigationEvent } from '../types/navigation-events';
 import {
+    BeforeRecordPreviewSaveEventArgs,
     MjRecordPreviewPopoverComponent,
     RecordPreviewAnchorRect,
-    RecordPreviewUpdatedEvent
+    RecordPreviewUpdatedEvent,
+    ResolveRecordPreviewPopoverType
 } from './record-preview-popover.component';
 
 /**
@@ -39,8 +42,10 @@ export interface RecordPreviewOpenRequest {
     Provider?: IMetadataProvider | null;
     /** Hover intent delay in milliseconds before opening (defaults to `260`). */
     HoverDelayMs?: number;
-    /** Callback invoked when the user clicks "Open Record" inside the popover. */
+    /** Callback invoked when the user clicks the record title or New Tab inside the popover. */
     OnNavigate?: (event: FormNavigationEvent) => void;
+    /** Optional cancellable callback invoked before inline Quick Edit saves changes inside the popover. */
+    OnBeforeRecordSave?: (event: BeforeRecordPreviewSaveEventArgs) => void;
     /** Callback invoked when the user saves inline Quick Edit changes inside the popover. */
     OnRecordUpdated?: (event: RecordPreviewUpdatedEvent) => void;
 }
@@ -49,13 +54,16 @@ export interface RecordPreviewOpenRequest {
  * Root-scoped singleton service that manages a single body-mounted `<mj-record-preview-popover>`
  * overlay across the entire application.
  *
- * Benefits:
- * - **Zero idle DOM overhead**: No `<mj-record-preview-popover>` DOM nodes are created until the user
- *   actually hovers a record link.
- * - **Escapes `overflow: hidden` containers**: Mounting at `document.body` ensures preview cards on
- *   hero banners, table cells, and compact chips are never clipped.
- * - **100% DRY hover intent & quick-edit coordination**: Shared by `<mj-form-field>`, `<mj-record-links>`,
- *   `[mjRecordLink]`, and `<mj-record-link>`.
+ * ### Runtime Pluggability via `MJGlobal.Instance.ClassFactory`
+ * Before mounting or reusing the overlay component for a target entity, `MjRecordPreviewPopoverService`
+ * calls {@link ResolveRecordPreviewPopoverType} to look up any registered subclass of
+ * {@link MjRecordPreviewPopoverComponent} in `MJGlobal.Instance.ClassFactory`:
+ * - Entity-specific subclass: `@RegisterClass(MjRecordPreviewPopoverComponent, 'MJ_BizApps_Common: People')`
+ * - Schema/wildcard subclass: `@RegisterClass(MjRecordPreviewPopoverComponent, 'MJ_BizApps_Common:*')`
+ * - Global replacement subclass: `@RegisterClass(MjRecordPreviewPopoverComponent)`
+ *
+ * When a different subclass is registered for the hovered entity, the service transparently swaps
+ * the mounted component instance while reusing the same instance when the resolved class is unchanged.
  */
 @Injectable({ providedIn: 'root' })
 export class MjRecordPreviewPopoverService implements OnDestroy {
@@ -78,6 +86,7 @@ export class MjRecordPreviewPopoverService implements OnDestroy {
     private readonly doc = inject(DOCUMENT);
 
     private popoverRef: ComponentRef<MjRecordPreviewPopoverComponent> | null = null;
+    private currentPopoverType: Type<MjRecordPreviewPopoverComponent> | null = null;
     private popoverSubs: Subscription[] = [];
     private activeRequest: RecordPreviewOpenRequest | null = null;
     private pendingSourceId: string | null = null;
@@ -93,6 +102,23 @@ export class MjRecordPreviewPopoverService implements OnDestroy {
     /** True when the singleton popover is currently visible. */
     public get IsVisible(): boolean {
         return Boolean(this.popoverRef?.instance?.Visible);
+    }
+
+    /** Returns the currently mounted popover component class (or null if not yet mounted). */
+    public get ActiveComponentType(): Type<MjRecordPreviewPopoverComponent> | null {
+        return this.currentPopoverType;
+    }
+
+    /**
+     * Resolves the runtime component type for the given entity via `MJGlobal.Instance.ClassFactory`.
+     */
+    public ResolvePopoverComponentType(
+        entityName?: string | null,
+        provider?: IMetadataProvider | null
+    ): Type<MjRecordPreviewPopoverComponent> {
+        const md = provider ?? Metadata.Provider;
+        const entityInfo = entityName && md ? md.EntityByName(entityName) : undefined;
+        return ResolveRecordPreviewPopoverType(entityName, entityInfo?.SchemaName);
     }
 
     /**
@@ -173,6 +199,10 @@ export class MjRecordPreviewPopoverService implements OnDestroy {
         this.clearOpenTimer();
         this.clearCloseTimer();
         this.removeDocumentListener();
+        this.destroyPopoverRef();
+    }
+
+    private destroyPopoverRef(): void {
         for (const sub of this.popoverSubs) {
             sub.unsubscribe();
         }
@@ -182,6 +212,7 @@ export class MjRecordPreviewPopoverService implements OnDestroy {
             this.popoverRef.destroy();
             this.popoverRef = null;
         }
+        this.currentPopoverType = null;
     }
 
     private openNow(request: RecordPreviewOpenRequest): void {
@@ -191,7 +222,7 @@ export class MjRecordPreviewPopoverService implements OnDestroy {
             return;
         }
 
-        const ref = this.ensurePopoverComponent();
+        const ref = this.ensurePopoverComponent(request.EntityName, request.Provider);
         this.activeRequest = request;
 
         const inst = ref.instance;
@@ -223,14 +254,23 @@ export class MjRecordPreviewPopoverService implements OnDestroy {
         return request.AnchorRect ?? null;
     }
 
-    private ensurePopoverComponent(): ComponentRef<MjRecordPreviewPopoverComponent> {
-        if (this.popoverRef) {
+    private ensurePopoverComponent(
+        entityName?: string | null,
+        provider?: IMetadataProvider | null
+    ): ComponentRef<MjRecordPreviewPopoverComponent> {
+        const resolvedType = this.ResolvePopoverComponentType(entityName, provider);
+        if (this.popoverRef && this.currentPopoverType === resolvedType) {
             return this.popoverRef;
         }
 
-        const ref = createComponent(MjRecordPreviewPopoverComponent, {
+        if (this.popoverRef) {
+            this.destroyPopoverRef();
+        }
+
+        const ref = createComponent(resolvedType, {
             environmentInjector: this.envInjector
         });
+        this.currentPopoverType = resolvedType;
         this.appRef.attachView(ref.hostView);
         const domElem = (ref.hostView as unknown as { rootNodes: HTMLElement[] }).rootNodes?.[0];
         if (domElem && this.doc?.body) {
@@ -251,6 +291,12 @@ export class MjRecordPreviewPopoverService implements OnDestroy {
                     req.OnNavigate(navEvent);
                 } else if (MjRecordPreviewPopoverService._fallbackNavigationHandler) {
                     MjRecordPreviewPopoverService._fallbackNavigationHandler(navEvent);
+                }
+            }),
+            ref.instance.BeforeQuickEditSave.subscribe((beforeEvent: BeforeRecordPreviewSaveEventArgs) => {
+                const req = this.activeRequest;
+                if (req?.OnBeforeRecordSave) {
+                    req.OnBeforeRecordSave(beforeEvent);
                 }
             }),
             ref.instance.RecordUpdated.subscribe((updatedEvent: RecordPreviewUpdatedEvent) => {

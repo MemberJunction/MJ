@@ -7,7 +7,7 @@ import { EntityFieldTSType } from '@memberjunction/core';
 import type { EntityInfo } from '@memberjunction/core';
 import type { MJRecordChangeEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import { MJEmptyStateComponent, MJBurstClusterStripComponent } from '@memberjunction/ng-ui-components';
 import { query, queryAll, text, click, capture, createFakeProvider, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { RecordChangesComponent, RestoreVersionEvent } from './ng-record-changes.component';
 
@@ -141,7 +141,7 @@ function provider(changes = CHANGES) {
 
 async function render(inputs: Record<string, unknown>): Promise<ComponentFixture<RecordChangesComponent>> {
   TestBed.configureTestingModule({
-    imports: [CommonModule, FormsModule, MJEmptyStateComponent, StubLoadingComponent],
+    imports: [CommonModule, FormsModule, MJEmptyStateComponent, MJBurstClusterStripComponent, StubLoadingComponent],
     declarations: [RecordChangesComponent, StubSlidePanel, StubRestorePreview, StubLabelCreate],
     providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: () => {} } }],
   });

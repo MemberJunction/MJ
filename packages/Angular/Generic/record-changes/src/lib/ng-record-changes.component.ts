@@ -25,6 +25,14 @@ import { MJRecordChangeEntity } from '@memberjunction/core-entities';
 import { FormatChangeValue } from './format-change-value';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import {
+  MJBurstClusterItem,
+  MJBurstClusterCategory,
+  MJBurstClusterResolution,
+  MJBurstClusterCoalesceStrategy,
+  MJAfterBurstClustersRebuildEventArgs,
+  MJBurstFilterChangedEventArgs,
+} from '@memberjunction/ng-ui-components';
 import { diffChars, diffWords, Change } from 'diff';
 import { RestoreCommitEvent } from './restore-preview-panel/restore-preview-panel.component';
 
@@ -272,7 +280,21 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
   /** Controls whether the compact version labels tray is expanded in the header. */
   ShowLabelsTray = false;
 
-  // Activity spark-bar chart state
+  // Activity spark-bar chart state (powered by <mj-burst-cluster-strip> from @memberjunction/ng-ui-components)
+  @Input() BurstResolution: MJBurstClusterResolution = 'auto';
+  @Input() BurstCoalesceStrategy: MJBurstClusterCoalesceStrategy = 'adaptive-era';
+  @Input() BurstSessionGapHours = 6;
+  @Input() BurstMaxClusters = 5;
+  @Input() BurstEraZoomThreshold = 10;
+  @Input() AllowBurstZoom = true;
+
+  BurstClusterItems: MJBurstClusterItem<MJRecordChangeEntity>[] = [];
+  readonly BurstClusterCategories: MJBurstClusterCategory[] = [
+    { Key: 'update', Label: 'Update', SingularLabel: 'edit', PluralLabel: 'edits', Color: 'var(--mj-brand-primary)', CssModifier: 'update' },
+    { Key: 'create', Label: 'Create', SingularLabel: 'create', PluralLabel: 'creates', Color: 'var(--mj-status-success)', CssModifier: 'create' },
+    { Key: 'restore', Label: 'Restore', SingularLabel: 'restore', PluralLabel: 'restores', Color: '#8b5cf6', CssModifier: 'restore' },
+  ];
+  ActiveBurstFilteredIDs: Set<string> | null = null;
   ActivityBuckets: ActivityChartBucket[] = [];
   SelectedBucketKey: string | null = null;
   ActivityChartGranularityLabel = '';
@@ -505,6 +527,7 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
   public ClearFilters(): void {
     this.SearchTerm = '';
     this.SelectedBucketKey = null;
+    this.ActiveBurstFilteredIDs = null;
     for (const k of Object.keys(this.ChipSelections)) this.ChipSelections[k] = false;
     this.applyFilters();
   }
@@ -518,12 +541,55 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
     const bucket = this.ActivityBuckets.find(b => b.Key === bucketKey);
     if (!bucket || bucket.TotalCount === 0) return;
     this.SelectedBucketKey = this.SelectedBucketKey === bucketKey ? null : bucketKey;
+    this.ActiveBurstFilteredIDs = this.SelectedBucketKey ? new Set(bucket.ChangeIDs) : null;
     this.applyFilters();
   }
 
   public ClearBucketFilter(): void {
-    if (!this.SelectedBucketKey) return;
+    if (!this.SelectedBucketKey && !this.ActiveBurstFilteredIDs) return;
     this.SelectedBucketKey = null;
+    this.ActiveBurstFilteredIDs = null;
+    this.applyFilters();
+  }
+
+  public OnBurstClustersRebuilt(event: MJAfterBurstClustersRebuildEventArgs<MJRecordChangeEntity>): void {
+    this.ActivityChartGranularityLabel = event.GranularityLabel;
+    this.ActivityBuckets = event.Clusters.map(c => {
+      const updateCount = c.CategoryCounts['update'] ?? 0;
+      const createCount = c.CategoryCounts['create'] ?? 0;
+      const restoreCount = c.CategoryCounts['restore'] ?? 0;
+      const otherCount = Math.max(0, c.TotalCount - updateCount - createCount - restoreCount);
+      return {
+        Key: c.Key,
+        Label: c.Label,
+        Subtitle: c.Subtitle,
+        GapAfterLabel: c.GapAfterLabel,
+        Pips: c.Pips.map(p => ({
+          ID: p.ID,
+          Type: (p.Category === 'create' || p.Category === 'restore' ? p.Category : 'update') as 'create' | 'update' | 'restore',
+          Tooltip: p.Tooltip,
+        })),
+        OverflowPipCount: c.OverflowPipCount,
+        Tooltip: c.Tooltip,
+        StartTime: c.StartTime,
+        EndTime: c.EndTime,
+        TotalCount: c.TotalCount,
+        UpdateCount: updateCount,
+        CreateCount: createCount,
+        RestoreCount: restoreCount,
+        OtherCount: otherCount,
+        HeightPercent: c.HeightPercent,
+        UpdateSharePercent: c.CategoryShares.find(s => s.Key === 'update')?.SharePercent ?? 0,
+        CreateSharePercent: c.CategoryShares.find(s => s.Key === 'create')?.SharePercent ?? 0,
+        RestoreSharePercent: c.CategoryShares.find(s => s.Key === 'restore')?.SharePercent ?? 0,
+        ChangeIDs: new Set(c.ItemIDs),
+      };
+    });
+  }
+
+  public OnBurstFilterChanged(event: MJBurstFilterChangedEventArgs<MJRecordChangeEntity>): void {
+    this.SelectedBucketKey = event.ActiveCluster?.Key ?? null;
+    this.ActiveBurstFilteredIDs = event.FilteredIDs ? new Set(event.FilteredIDs) : null;
     this.applyFilters();
   }
 
@@ -663,9 +729,11 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
    */
   private rebuildActivityChart(): void {
     if (!this.ViewData || this.ViewData.length === 0) {
+      this.BurstClusterItems = [];
       this.ActivityBuckets = [];
       this.ActivityChartGranularityLabel = '';
       this.SelectedBucketKey = null;
+      this.ActiveBurstFilteredIDs = null;
       return;
     }
 
@@ -675,14 +743,40 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
       .sort((a, b) => a.time - b.time);
 
     if (datedChanges.length === 0) {
+      this.BurstClusterItems = [];
       this.ActivityBuckets = [];
       this.ActivityChartGranularityLabel = '';
+      this.ActiveBurstFilteredIDs = null;
       return;
     }
 
+    this.BurstClusterItems = datedChanges.map(({ change, time }) => {
+      const normId = NormalizeUUID(change.ID);
+      let category: 'create' | 'update' | 'restore' = 'update';
+      if (this.isRestoreChange(change)) {
+        category = 'restore';
+      } else if (change.Type === 'Create') {
+        category = 'create';
+      }
+      const userLabel = this.getUserDisplayName(change.User);
+      const dateLabel = new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      }).format(new Date(time));
+      return {
+        ID: normId,
+        Timestamp: time,
+        Category: category,
+        Tooltip: `${category === 'create' ? 'Created' : category === 'restore' ? 'Restored' : 'Updated'} by ${userLabel} · ${dateLabel}`,
+        Data: change,
+      };
+    });
+
     const hourMs = 3600 * 1000;
-    const sessionGapThresholdMs = 6 * hourMs;
-    const maxClusters = 5;
+    const sessionGapThresholdMs = this.BurstSessionGapHours * hourMs;
+    const maxClusters = this.BurstMaxClusters;
 
     interface RawCluster {
       items: Array<{ change: MJRecordChangeEntity; time: number }>;
@@ -908,7 +1002,9 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
   private applyFilters(): void {
     let filtered = [...this.ViewData];
 
-    if (this.SelectedBucketKey) {
+    if (this.ActiveBurstFilteredIDs && this.ActiveBurstFilteredIDs.size > 0) {
+      filtered = filtered.filter(change => this.ActiveBurstFilteredIDs!.has(NormalizeUUID(change.ID)));
+    } else if (this.SelectedBucketKey) {
       const activeBucket = this.ActivityBuckets.find(b => b.Key === this.SelectedBucketKey);
       if (activeBucket) {
         filtered = filtered.filter(change => activeBucket.ChangeIDs.has(NormalizeUUID(change.ID)));
