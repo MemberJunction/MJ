@@ -60,8 +60,10 @@ import type { RunArtifactAuthorizationResult } from "../integration/RunArtifactA
 import type { IntegrationRunSnapshot, IntegrationRunKind } from "@memberjunction/integration-progress-artifacts";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IntegrationCustomColumnPromoter } from "../integration/CustomColumnPromoter.js";
-import { ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, DecideFieldMapReconcile, DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
+import { ClearRekeyedObjectData, ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, DecideFieldMapReconcile, DecideRekeyed, DisableUnselectedEntityMaps, IdentityKeyFields, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
 import { ComputeInactiveRowWarnings } from "../integration/InactiveRowWarnings.js";
+import { FieldsForBuild, LoadScopedFieldsForBuild, type ScopedBuildFields } from "../integration/ScopedFieldsForBuild.js";
+import { LookupObjectNamesByID } from "../integration/ObjectNamesByID.js";
 import { BuildCreateConnectionMessage, BuildDetachedRefreshMessage, BuildReactivateMessage, BuildUpdateConnectionMessage } from "../integration/SchemaRefreshLaunch.js";
 // Type-only: the registered runtime class for 'MJ: Company Integrations'. Lets the create path name the
 // server subclass it actually gets back from GetEntityObject with a real type rather than a cast.
@@ -179,7 +181,11 @@ class ApplyAllBatchConnectorInput {
 class ApplyAllBatchInput {
     @Field(() => [ApplyAllBatchConnectorInput]) Connectors: ApplyAllBatchConnectorInput[];
     @Field(() => Boolean, { nullable: true, defaultValue: true, description: 'If false, skips sync after schema + entity maps' }) StartSync?: boolean;
-    @Field(() => Boolean, { nullable: true, defaultValue: false, description: 'If true, ignores watermarks and does a full re-fetch' }) FullSync?: boolean;
+    // NO defaultValue. It must stay UNDEFINED when the caller says nothing, so the resolver can
+    // tell "not specified" from "explicitly incremental" and apply the first-apply rule
+    // (everything.txt: "always full generally as the default" for a connector's first RSU).
+    // A defaultValue of false made that determination dead code on this path for its whole life.
+    @Field(() => Boolean, { nullable: true, description: 'Ignore watermarks and do a full re-fetch. Omit to let the server choose: FULL on a connection first apply, incremental after.' }) FullSync?: boolean;
     @Field({ nullable: true, defaultValue: 'created', description: 'Sync scope: "created" = only newly created entity maps, "all" = all maps for the connector' }) SyncScope?: string;
     @Field({ nullable: true, description: 'Override sync direction for the initial sync: Pull | Push | Bidirectional. Defaults to entity map SyncDirection.' }) SyncDirection?: string;
     @Field({ nullable: true, description: 'Override sync direction stored in the created schedule: Pull | Push | Bidirectional.' }) ScheduleSyncDirection?: string;
@@ -245,6 +251,12 @@ class SchemaEvolutionOutput {
     @Field(() => [String], { nullable: true }) ChangedObjects?: string[];
     /** U10 — objects whose Pull watermark was reset so the next sync backfills the schema change. */
     @Field(() => [String], { nullable: true }) WatermarksReset?: string[];
+    /**
+     * Objects whose stored rows were CLEARED because the connector changed what identifies a row.
+     * Reported separately from WatermarksReset: a reset means "fetch it all again", this means
+     * "what was here could not be reconciled with the source and has been rebuilt from it".
+     */
+    @Field(() => [String], { nullable: true }) RekeyedObjects?: string[];
 }
 
 // ─── Connector Capabilities Output Type ─────────────────────────────────────
@@ -1981,21 +1993,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             .filter(so => !so.SourceObjectName && so.SourceObjectID)
             .map(so => so.SourceObjectID!);
 
-        const idToName = new Map<string, string>();
-        if (idsToLookup.length > 0) {
-            const rv = new RunView();
-            const result = await rv.RunView<{ ID: string; Name: string }>({
-                EntityName: 'MJ: Integration Objects',
-                ExtraFilter: idsToLookup.map(id => `ID='${id}'`).join(' OR '),
-                ResultType: 'simple',
-                Fields: ['ID', 'Name'],
-            }, user);
-            if (result.Success) {
-                for (const row of result.Results) {
-                    idToName.set(row.ID.toUpperCase(), row.Name);
-                }
-            }
-        }
+        // Per-connection ids first (the picker's ids inside a catalog scope), then the shared catalog.
+        const idToName = await LookupObjectNamesByID(idsToLookup, user);
 
         const plan: Array<{ Name: string; Fields?: string[] }> = [];
         for (const so of sourceObjects) {
@@ -2034,16 +2033,12 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         // newly-discovered objects with no persisted row).
         void integrationID;
         if (ids && ids.length > 0) {
-            const rv = new RunView();
-            const result = await rv.RunView<{ ID: string; Name: string }>({
-                EntityName: 'MJ: Integration Objects',
-                ExtraFilter: ids.map(id => `ID='${id}'`).join(' OR '),
-                ResultType: 'simple',
-                Fields: ['ID', 'Name'],
-            }, user);
-            if (result.Success) {
-                return result.Results.map(r => r.Name);
-            }
+            // Through the connection's catalog first, and in INPUT order: the batch flow zips these
+            // names back onto its id cursor, which a database-ordered result did not match.
+            const idToName = await LookupObjectNamesByID(ids, user);
+            return ids
+                .map(id => idToName.get(String(id).toUpperCase()))
+                .filter((n): n is string => !!n);
         }
         if (names && names.length > 0) {
             const nameMap = new Map(sourceSchema.Objects.map(o => [o.ExternalName.toLowerCase(), o.ExternalName]));
@@ -2085,19 +2080,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         const idsToLookup = sourceObjects
             .map(so => so.SourceObjectID)
             .filter((id): id is string => typeof id === 'string' && id.length > 0);
-        const idToName = new Map<string, string>();
-        if (idsToLookup.length > 0) {
-            const rv = new RunView();
-            const result = await rv.RunView<{ ID: string; Name: string }>({
-                EntityName: 'MJ: Integration Objects',
-                ExtraFilter: idsToLookup.map(id => `ID='${id}'`).join(' OR '),
-                ResultType: 'simple',
-                Fields: ['ID', 'Name'],
-            }, user);
-            if (result.Success) {
-                for (const r of result.Results) idToName.set(r.ID, r.Name);
-            }
-        }
+        // Per-connection ids first (the picker's ids inside a catalog scope), then the shared catalog.
+        const idToName = await LookupObjectNamesByID(idsToLookup, user);
 
         const schemaNameMap = new Map(sourceSchema.Objects.map(o => [o.ExternalName.toLowerCase(), o.ExternalName]));
         const resolvedNames: string[] = [];
@@ -2105,8 +2089,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         const dropped: SourceObjectInput[] = [];
         for (const so of sourceObjects) {
             let name: string | undefined;
-            if (so.SourceObjectID && idToName.has(so.SourceObjectID)) {
-                name = idToName.get(so.SourceObjectID);
+            if (so.SourceObjectID && idToName.has(so.SourceObjectID.toUpperCase())) {
+                name = idToName.get(so.SourceObjectID.toUpperCase());
             } else if (so.SourceObjectName) {
                 // Normalize case against the schema when the connector reports it
                 name = schemaNameMap.get(so.SourceObjectName.toLowerCase()) ?? so.SourceObjectName;
@@ -2140,20 +2124,11 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     ): Promise<void> {
         const idsToResolve = objects.filter(o => o.SourceObjectID && !o.SourceObjectName).map(o => o.SourceObjectID!);
         if (idsToResolve.length > 0) {
-            const rv = new RunView();
-            const result = await rv.RunView<{ ID: string; Name: string }>({
-                EntityName: 'MJ: Integration Objects',
-                ExtraFilter: idsToResolve.map(id => `ID='${id}'`).join(' OR '),
-                ResultType: 'simple',
-                Fields: ['ID', 'Name'],
-            }, user);
-            if (result.Success) {
-                const idToName = new Map(result.Results.map(r => [r.ID.toUpperCase(), r.Name]));
-                for (const obj of objects) {
-                    if (obj.SourceObjectID) {
-                        const resolved = idToName.get(obj.SourceObjectID.toUpperCase());
-                        if (resolved) obj.SourceObjectName = resolved;
-                    }
+            const idToName = await LookupObjectNamesByID(idsToResolve, user);
+            for (const obj of objects) {
+                if (obj.SourceObjectID) {
+                    const resolved = idToName.get(obj.SourceObjectID.toUpperCase());
+                    if (resolved) obj.SourceObjectName = resolved;
                 }
             }
         }
@@ -2367,11 +2342,16 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      *     `IsPrimaryKey=true`.
      *   - Foreign-key relationships are reconstructed from
      *     `RelatedIntegrationObjectID` lookups against the same cache.
+     *   - Under a per-connection catalog the FIELD rows come from `scopedFields`
+     *     (`LoadScopedFieldsForBuild`), never from the engine: a connection's field rows
+     *     are warmed on demand by the sync loop only, so the engine answers `[]` for them
+     *     during an apply and every object would build with no columns.
      */
     private buildSourceSchemaFromPersistedRows(
         integrationID: string,
         requestedNames?: string[],
         warningsOut?: string[],
+        scopedFields?: ScopedBuildFields | null,
     ): SourceSchemaInfo {
         const engine = IntegrationEngineBase.Instance;
         // ACTIVE-only materialization: an object/field a given tenant doesn't expose is marked
@@ -2394,7 +2374,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         for (const io of ios) {
             if (filter && !filter.has(io.Name.toLowerCase())) continue;
             // Active fields only — an inactive (source-absent / deactivated) field is not materialized.
-            const allFields = engine.GetIntegrationObjectFields(io.ID);
+            const allFields = FieldsForBuild(io.ID, scopedFields, engine);
             const iofs = allFields.filter(iof => iof.Status === 'Active');
             // Remember what this object declared, active or not — the caller's warning collector
             // turns the difference into the one message that explains a column that never appeared.
@@ -3438,6 +3418,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 companyIntegration.IntegrationID,
                 Array.from(requestedNames),
                 inactiveWarnings,
+                await LoadScopedFieldsForBuild(companyIntegration.IntegrationID, user),
             );
             if (sourceSchema.Objects.length === 0) {
                 LogError(`[IntegrationApplySchema] Persisted IO cache empty for ${companyIntegration.Integration}; falling back to live introspect.`);
@@ -3618,7 +3599,12 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // (already freshened by the Phase 0 v5.39.x MJCompanyIntegrationEntityServer
             // Save hook on IsActive false→true).  Avoids the duplicate vendor-API
             // introspect that used to fire here.
-            let sourceSchema: SourceSchemaInfo = this.buildSourceSchemaFromPersistedRows(companyIntegration.IntegrationID);
+            let sourceSchema: SourceSchemaInfo = this.buildSourceSchemaFromPersistedRows(
+                companyIntegration.IntegrationID,
+                undefined,
+                undefined,
+                await LoadScopedFieldsForBuild(companyIntegration.IntegrationID, user),
+            );
             if (sourceSchema.Objects.length === 0) {
                 // Fallback: the engine cache is empty (Save hook didn't run, or this
                 // is a direct-API caller bypassing the wizard).  Do a one-time live
@@ -3686,6 +3672,16 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
             const resolved = await this.resolveSourceObjectsToNames(input.SourceObjects, sourceSchema, user);
             const resolvedNames = resolved.names;
+            // An apply that resolved nothing builds nothing: refuse it here, before the migration,
+            // CodeGen and the restart, which otherwise all run for a Success with 0 tables.
+            if (input.SourceObjects.length > 0 && resolvedNames.length === 0) {
+                return {
+                    Success: false,
+                    Message: `Apply refused: none of the ${input.SourceObjects.length} selected object(s) resolved to this ` +
+                        `connection's catalog (${resolved.droppedCount} dropped) — nothing was built. Re-open the table ` +
+                        `picker and select the tables again.`,
+                };
+            }
 
             // Build SchemaPreviewObjectInput with Fields from the matching
             // SourceObjectInput (resolved.sourceObjects is order-aligned with names).
@@ -4217,6 +4213,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 companyIntegration.IntegrationID,
                 requestedNamesForReuse,
                 inactiveWarnings,
+                await LoadScopedFieldsForBuild(companyIntegration.IntegrationID, user),
             );
             if (sourceSchema.Objects.length === 0) {
                 LogError(`[buildSchemaForConnector] Persisted IO cache empty for ${companyIntegration.Integration}; falling back to live introspect.`);
@@ -5552,7 +5549,12 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         // persisted rows instead.
                         //
                         // Persist is also skipped here — the Save hook already did it.
-                        sourceSchema = this.buildSourceSchemaFromPersistedRows(companyIntegration.IntegrationID);
+                        sourceSchema = this.buildSourceSchemaFromPersistedRows(
+                            companyIntegration.IntegrationID,
+                            undefined,
+                            undefined,
+                            await LoadScopedFieldsForBuild(companyIntegration.IntegrationID, user),
+                        );
                         if (sourceSchema.Objects.length === 0) {
                             // Defensive fallback: if the engine cache is empty (hook
                             // didn't run, or this is a direct-API caller that bypasses
@@ -5607,6 +5609,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         for (let i = 0; i < resolvedNames.length; i++) {
                             fieldsByName.set(resolvedNames[i].toLowerCase(), orderedSources[i].Fields);
                         }
+                        // Mirror the filtered flow: nothing resolved means nothing to build.
+                        if (connInput.SourceObjects.length > 0 && resolvedNames.length === 0) {
+                            throw new Error(
+                                `No source objects resolved — none of the ${connInput.SourceObjects.length} selection(s) ` +
+                                `matched this connection's catalog or the shared catalog; nothing was built`
+                            );
+                        }
                     }
 
                     const objects = resolvedNames.map(name => {
@@ -5630,6 +5639,22 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     }
 
                     // Inject post-restart pending work payload
+                    // everything.txt: "for the very first RSU of a connector, the sync afterwards
+                    // should be chosen to be full/incremental, but always full generally as the
+                    // default." The single-connector path has always done this; the batch path did
+                    // not, and its input default of false made the null-coalesce below dead. So a
+                    // re-apply that the caller left unspecified ran INCREMENTAL against objects
+                    // whose watermark had just been reset by the schema change.
+                    const priorMapsResult = await new RunView().RunView<{ ID: string }>({
+                        EntityName: 'MJ: Company Integration Entity Maps',
+                        ExtraFilter: `CompanyIntegrationID='${connInput.CompanyIntegrationID.replace(/'/g, "''")}'`,
+                        Fields: ['ID'],
+                        MaxRows: 1,
+                        ResultType: 'simple',
+                        BypassCache: true,
+                    }, user);
+                    const hadPriorMaps = priorMapsResult.Success && priorMapsResult.Results.length > 0;
+
                     const pendingPayload: RSUPendingWork = {
                         CompanyIntegrationID: connInput.CompanyIntegrationID,
                         SourceObjectNames: resolvedNames,
@@ -5638,7 +5663,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         CronExpression: connInput.CronExpression,
                         ScheduleTimezone: connInput.ScheduleTimezone,
                         StartSync: input.StartSync,
-                        FullSync: input.FullSync ?? false,
+                        FullSync: input.FullSync ?? !hadPriorMaps,
                         SyncScope: input.SyncScope === 'all' ? 'all' : 'created',
                         // Unrecognized directions fall back to undefined = "use the entity map's own SyncDirection"
                         SyncDirection: input.SyncDirection && isValidSyncDirection(input.SyncDirection) ? input.SyncDirection : undefined,
@@ -5657,6 +5682,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         objects,
                         schemaOutput,
                         rsuInput,
+                        // carried so the skipRestart branch can apply remove-as-disable
+                        resolvedNames,
                     };
                 }))
             );
@@ -5666,6 +5693,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 connInput: ApplyAllBatchConnectorInput;
                 connector: BaseIntegrationConnector;
                 companyIntegration: MJCompanyIntegrationEntity;
+                resolvedNames: string[];
                 schemaName: string;
                 objects: SchemaPreviewObjectInput[];
                 schemaOutput: SchemaBuilderOutput;
@@ -5745,6 +5773,20 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         build.connInput.DefaultSyncDirection ?? 'Pull'
                     );
                     connResult.EntityMapsCreated = entityMapsCreated;
+
+                    // Remove-as-disable, same rule the single-connector path applies. Without this
+                    // the batch path silently ignored UnselectedAction: a user who deselected a
+                    // table and applied with skipRestart kept syncing it. Not reachable while the
+                    // surfaces used different mutations; it becomes reachable the moment one of
+                    // them moves onto the batch path, which is exactly what the shared adapter does.
+                    if ((input.UnselectedAction ?? 'disable') !== 'ignore') {
+                        const disabledObjects = await DisableUnselectedEntityMaps(
+                            build.connInput.CompanyIntegrationID, build.resolvedNames, user, provider
+                        );
+                        if (disabledObjects.length > 0) {
+                            console.log(`[IntegrationApplyAllBatch] Disabled ${disabledObjects.length} unselected entity map(s): ${disabledObjects.join(', ')}`);
+                        }
+                    }
 
                     const createdMapIDs = entityMapsCreated.map(em => em.EntityMapID).filter(Boolean);
                     const scopedMapIDs = input.SyncScope === 'all' ? undefined : createdMapIDs;
@@ -6271,7 +6313,12 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
             // Source of truth for the evolution = the PERSISTED post-resolution rows (the refresh in
             // Phase 1 just wrote them via the overlay) — no duplicate vendor introspect.
-            const sourceSchema = this.buildSourceSchemaFromPersistedRows(companyIntegration.IntegrationID);
+            const sourceSchema = this.buildSourceSchemaFromPersistedRows(
+                companyIntegration.IntegrationID,
+                undefined,
+                undefined,
+                await LoadScopedFieldsForBuild(companyIntegration.IntegrationID, user),
+            );
 
             // Normalize names to match source schema casing
             const nameMap = new Map(sourceSchema.Objects.map(o => [o.ExternalName.toLowerCase(), o.ExternalName]));
@@ -6380,6 +6427,58 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     changedObjects.push(em.ExternalObjectName);
                 }
             }
+
+            // ── Phase 6b — RE-KEYED objects: the identity of every stored row just changed ──
+            //
+            // A connector upgrade can change an object's primary key (PheedLoop 1.4.6 makes
+            // Attendees `code + eventCode`, because it is fetched once per event and an attendee at
+            // two events returns twice with the same `code`). `ToExternalRecord` joins every
+            // IsPrimaryKey field with '|' in Sequence order, so changing the key — its members OR
+            // their order — re-identifies every record the source will send from now on. Nothing can
+            // match a stored row again: the RecordMap is keyed `EntityID|ExternalID`, and
+            // `MatchEngine.FindByKeyFields` queries the destination table by key fields that are
+            // NULL on rows written before the change. Left alone, the next sync inserts the entire
+            // source ALONGSIDE what is there.
+            //
+            // Compared against the key the TABLES were built with (the entity's registered fields),
+            // not against the previous catalog — the built key is what the stored rows were actually
+            // written under, and it is the only side that cannot drift from them.
+            const rekeyTargets: Array<{
+                ExternalObjectName: string; EntityMapID: string; EntityID: string;
+                SchemaName: string; BaseTable: string;
+            }> = [];
+            for (const em of continuingMaps) {
+                const io = iosByLowerName.get((em.ExternalObjectName ?? '').toLowerCase());
+                if (!io || !em.EntityID) continue;
+                const entity = md.EntityByID(em.EntityID);
+                if (!entity) continue;
+                const builtKey = IdentityKeyFields(entity.Fields.map(ef => ({
+                    Name: ef.Name, IsPrimaryKey: ef.IsPrimaryKey, Sequence: ef.Sequence,
+                })));
+                const catalogKey = IdentityKeyFields(
+                    IntegrationEngineBase.Instance.GetIntegrationObjectFields(io.ID)
+                        .filter(iof => iof.Status === 'Active')
+                        .map(iof => ({
+                            Name: iof.Name, IsPrimaryKey: iof.IsPrimaryKey, Sequence: iof.Sequence,
+                        }))
+                );
+                if (!DecideRekeyed(builtKey, catalogKey)) continue;
+                rekeyTargets.push({
+                    ExternalObjectName: em.ExternalObjectName as string,
+                    EntityMapID: em.ID,
+                    EntityID: em.EntityID,
+                    SchemaName: entity.SchemaName,
+                    BaseTable: entity.BaseTable,
+                });
+                // A re-key is a change even when no column moved — a pure reorder alters no DDL,
+                // and without this the object would not reach the watermark reset below.
+                if (em.ExternalObjectName && !changedObjects.includes(em.ExternalObjectName)) {
+                    changedObjects.push(em.ExternalObjectName);
+                }
+            }
+            const rekeyedObjects = await ClearRekeyedObjectData(
+                rekeyTargets, companyIntegrationID, user, md
+            );
 
             // ── Phase 7 — U10: reset the Pull watermark of every CHANGED object so the next sync
             // full-fetches + backfills the schema change (content-hash bounds the rewrite cost).
@@ -6506,6 +6605,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 CascadeRemovedObjects: cascadeRemoved.length > 0 ? cascadeRemoved : undefined,
                 ChangedObjects: changedObjects.length > 0 ? changedObjects : undefined,
                 WatermarksReset: watermarksReset.length > 0 ? watermarksReset : undefined,
+                RekeyedObjects: rekeyedObjects.length > 0 ? rekeyedObjects : undefined,
                 Warnings: (dagRemovalWarnings.length + schemaOutput.Warnings.length) > 0
                     ? [...dagRemovalWarnings, ...schemaOutput.Warnings]
                     : undefined,
@@ -6542,7 +6642,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         integrationObjectID: string,
         user: UserInfo,
         md: IMetadataProvider,
-        autoEnableNewColumns = true
+        // see decideFieldMapReconcile — an omitted argument must not silently adopt
+        autoEnableNewColumns = false
     ): Promise<{ Added: number; Disabled: number }> {
         const result = { Added: 0, Disabled: 0 };
         const activeFields = IntegrationEngineBase.Instance
