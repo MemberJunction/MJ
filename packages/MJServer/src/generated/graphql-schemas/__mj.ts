@@ -45334,6 +45334,10 @@ export class MJDuplicateRun_ {
     @Field(() => Boolean, {nullable: true, description: "When set to 1, duplicate detection stops after the current batch. Used for pause/cancel."}) 
     CancellationRequested?: boolean;
         
+    @Field({nullable: true, description: "The Entity Document this run used: its template, vectors, match thresholds and LLM reasoning settings produced the run's matches."}) 
+    @MaxLength(36)
+    EntityDocumentID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Entity?: string;
@@ -45349,6 +45353,10 @@ export class MJDuplicateRun_ {
     @Field({nullable: true}) 
     @MaxLength(100)
     ApprovedByUser?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(250)
+    EntityDocument?: string;
         
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
@@ -45408,6 +45416,9 @@ export class CreateMJDuplicateRunInput {
     @Field(() => Boolean, { nullable: true })
     CancellationRequested?: boolean;
 
+    @Field({ nullable: true })
+    EntityDocumentID?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -45465,6 +45476,9 @@ export class UpdateMJDuplicateRunInput {
 
     @Field(() => Boolean, { nullable: true })
     CancellationRequested?: boolean;
+
+    @Field({ nullable: true })
+    EntityDocumentID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

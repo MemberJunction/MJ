@@ -10,7 +10,9 @@
       "MJ: Entity Fields": [
         {
           "fields": {
-            "EntityIDFieldName": "EntityID"
+            "EntityIDFieldName": "EntityID",
+            "IsNameField": false,
+            "AutoUpdateIsNameField": false
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Access Control Rules&Name=RecordID"
@@ -148,7 +150,9 @@
       "MJ: Entity Fields": [
         {
           "fields": {
-            "EntityIDFieldName": "EntityID"
+            "EntityIDFieldName": "EntityID",
+            "IsNameField": false,
+            "AutoUpdateIsNameField": false
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Archive Run Details&Name=RecordID"
@@ -204,6 +208,29 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Company Integration Record Maps"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Company Integration Run Details: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Company Integration Run Details"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Company Integration Run Details&Name=RecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Company Integration Run Details"
     }
   },
   {
@@ -447,7 +474,9 @@
       "MJ: Entity Fields": [
         {
           "fields": {
-            "EntityIDFieldName": "DestinationEntityID"
+            "EntityIDFieldName": "DestinationEntityID",
+            "IsNameField": false,
+            "AutoUpdateIsNameField": false
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Recommendation Items&Name=DestinationEntityRecordID"
@@ -578,7 +607,9 @@
       "MJ: Entity Fields": [
         {
           "fields": {
-            "EntityIDFieldName": "EntityID"
+            "EntityIDFieldName": "EntityID",
+            "IsNameField": false,
+            "AutoUpdateIsNameField": false
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Geo Codes&Name=RecordID"
@@ -655,7 +686,9 @@
       "MJ: Entity Fields": [
         {
           "fields": {
-            "EntityIDFieldName": "EntityID"
+            "EntityIDFieldName": "EntityID",
+            "IsNameField": false,
+            "AutoUpdateIsNameField": false
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Process Watermarks&Name=RecordID"
@@ -870,7 +903,9 @@
       "MJ: Entity Fields": [
         {
           "fields": {
-            "EntityIDFieldName": "EntityID"
+            "EntityIDFieldName": "EntityID",
+            "IsNameField": false,
+            "AutoUpdateIsNameField": false
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: User Favorites&Name=RecordID"
@@ -880,6 +915,78 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: User Favorites"
+    }
+  },
+  {
+    "_comments": [
+      "Prevent RecordID/MatchRecordID/DeletedRecordID columns from being treated as IsNameField."
+    ],
+    "fields": {
+      "Name": "MJ: Duplicate Run Detail Matches"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "IsNameField": false,
+            "AutoUpdateIsNameField": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Duplicate Run Detail Matches&Name=MatchRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Duplicate Run Detail Matches"
+    }
+  },
+  {
+    "_comments": [
+      "Prevent DeletedRecordID column from being treated as IsNameField."
+    ],
+    "fields": {
+      "Name": "MJ: Record Merge Deletion Logs"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "IsNameField": false,
+            "AutoUpdateIsNameField": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Merge Deletion Logs&Name=DeletedRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Record Merge Deletion Logs"
+    }
+  },
+  {
+    "_comments": [
+      "Prevent RecordID column from being treated as IsNameField."
+    ],
+    "fields": {
+      "Name": "MJ: User View Run Details"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "IsNameField": false,
+            "AutoUpdateIsNameField": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: User View Run Details&Name=RecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: User View Run Details"
     }
   },
   {

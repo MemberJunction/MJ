@@ -9,6 +9,7 @@
  */
 import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
+import { gunzipSync } from 'node:zlib';
 import { Octokit } from '@octokit/rest';
 // Already a dependency of this package (package.json) and already used by
 // install/install-orchestrator.ts. Version parsing, precedence and prerelease detection all come
@@ -108,16 +109,56 @@ function SubpathOrUndefined(value: string | undefined): string | undefined {
  * @param repoUrl - GitHub URL, optionally with a trailing in-repo path
  * @returns Parsed owner, repo, and optional subpath, or null if invalid
  */
+function TrimLeadingSlashes(value: string): string {
+    let start = 0;
+    while (start < value.length && value.charCodeAt(start) === 47) {
+        start++;
+    }
+    return value.slice(start);
+}
+
+function TrimSlashes(value: string): string {
+    let start = 0;
+    let end = value.length;
+    while (start < end && value.charCodeAt(start) === 47) {
+        start++;
+    }
+    while (end > start && value.charCodeAt(end - 1) === 47) {
+        end--;
+    }
+    return value.slice(start, end);
+}
+
 export function ParseGitHubUrl(repoUrl: string): { Owner: string; Repo: string; Subpath?: string } | null {
     // Capture owner, repo (stopping at the next slash / query / fragment), then any
     // remaining path segments as the subpath. No `$` anchor so query/fragment are tolerated.
-    const match = repoUrl.match(/github\.com\/([^/?#]+)\/([^/?#]+)((?:\/[^?#]+)*)/);
-    if (!match) {
+    const hostIdx = repoUrl.indexOf('github.com/');
+    if (hostIdx < 0) {
         return null;
     }
-    const owner = match[1];
-    const repo = match[2].replace(/\.git$/, '');
-    const rawSubpath = trimSlashes(match[3] ?? '');
+    const afterHost = repoUrl.slice(hostIdx + 'github.com/'.length);
+    let endIdx = afterHost.length;
+    const qIdx = afterHost.indexOf('?');
+    if (qIdx >= 0 && qIdx < endIdx) endIdx = qIdx;
+    const hIdx = afterHost.indexOf('#');
+    if (hIdx >= 0 && hIdx < endIdx) endIdx = hIdx;
+    const pathPart = TrimSlashes(afterHost.slice(0, endIdx));
+    const firstSlash = pathPart.indexOf('/');
+    if (firstSlash <= 0) {
+        return null;
+    }
+    const owner = pathPart.slice(0, firstSlash);
+    const remainder = pathPart.slice(firstSlash + 1);
+    const secondSlash = remainder.indexOf('/');
+    const rawRepo = secondSlash >= 0 ? remainder.slice(0, secondSlash) : remainder;
+    if (!rawRepo) {
+        return null;
+    }
+    const repo = rawRepo.endsWith('.git') ? rawRepo.slice(0, -4) : rawRepo;
+    if (!repo) {
+        return null;
+    }
+    const rawSubpath = secondSlash >= 0 ? TrimSlashes(remainder.slice(secondSlash + 1)) : '';
     const subpath = rawSubpath.length > 0 ? rawSubpath : undefined;
     return { Owner: owner, Repo: repo, Subpath: subpath };
 }
@@ -436,7 +477,7 @@ async function ListDirectory(octokit: Octokit, owner: string, repo: string, path
  * own independent tag line (`CRM-HubSpot@1.2.0`). undefined for single-app repos (repo-wide `vX.Y.Z`).
  */
 function ScopedTagPrefix(subpath: string | undefined): string | undefined {
-    const s = subpath === undefined ? undefined : trimSlashes(subpath);
+    const s = SubpathOrUndefined(subpath);
     return s ? s.replace(/\//g, '-') : undefined;
 }
 
@@ -484,7 +525,7 @@ function ResolveRef(version: string | undefined, subpath?: string): string {
  * path, trimming stray slashes.
  */
 function ComposeRepoPath(effectiveSubpath: string | undefined, relativePath: string): string {
-    return [effectiveSubpath, relativePath.replace(/^\/|\/$/g, '')].filter(Boolean).join('/');
+    return [effectiveSubpath, TrimSlashes(relativePath)].filter(Boolean).join('/');
 }
 
 /**
@@ -622,12 +663,226 @@ async function listSqlFilesRecursive(
             // Relative to the ORIGINAL root, however deep — this is the on-disk path, so nested
             // structure survives and two same-named migrations in different subdirectories land in
             // different places instead of silently overwriting each other.
-            out.push({ path: item.path, relativePath: item.path.slice(root.length).replace(/^\/+/, '') });
+            out.push({ path: item.path, relativePath: TrimLeadingSlashes(item.path.slice(root.length)) });
         } else if (item.type === 'dir') {
             out.push(...await listSqlFilesRecursive(octokit, owner, repo, root, ref, item.path, depth + 1));
         }
     }
     return out;
+}
+
+/**
+ * Checks whether a 512-byte tar block is all zeros (end-of-archive marker).
+ */
+function IsZeroBlock(block: Buffer): boolean {
+    for (let i = 0; i < block.length; i++) {
+        if (block[i] !== 0) return false;
+    }
+    return true;
+}
+
+/**
+ * Reads a null-terminated UTF-8 string from a fixed-size tar header field.
+ */
+function ReadNullTerminatedString(buf: Buffer): string {
+    const nulIdx = buf.indexOf(0);
+    return buf.subarray(0, nulIdx >= 0 ? nulIdx : buf.length).toString('utf-8');
+}
+
+/**
+ * Reads the entry path from a standard POSIX ustar 512-byte tar header (`prefix` + `name`).
+ */
+function ReadUstarPath(header: Buffer): string {
+    const name = ReadNullTerminatedString(header.subarray(0, 100));
+    const prefix = ReadNullTerminatedString(header.subarray(345, 500));
+    return prefix ? `${prefix}/${name}` : name;
+}
+
+/**
+ * Parses the 12-byte size field from a tar header (supports both standard octal and
+ * GNU/POSIX base-256 binary encoding for large files).
+ */
+function ParseTarSize(sizeField: Buffer): number {
+    if ((sizeField[0] & 0x80) !== 0) {
+        let value = 0;
+        for (let i = 1; i < sizeField.length; i++) {
+            value = value * 256 + sizeField[i];
+        }
+        if (!Number.isSafeInteger(value) || value < 0) {
+            throw new Error(`Corrupt tar archive: invalid binary entry size ${value}`);
+        }
+        return value;
+    }
+    const octal = ReadNullTerminatedString(sizeField).trim();
+    if (!octal) return 0;
+    if (!/^[0-7]+$/.test(octal)) {
+        throw new Error(`Corrupt tar archive: invalid octal size '${octal}'`);
+    }
+    const parsed = parseInt(octal, 8);
+    if (!Number.isSafeInteger(parsed) || parsed < 0) {
+        throw new Error(`Corrupt tar archive: invalid entry size ${parsed}`);
+    }
+    return parsed;
+}
+
+/**
+ * Parses a POSIX PAX extended header block (`<byte_length> <key>=<value>\n` records).
+ */
+function ParsePaxHeader(paxBuf: Buffer): { Path?: string; Size?: number } {
+    const result: { Path?: string; Size?: number } = {};
+    let pos = 0;
+    while (pos < paxBuf.length) {
+        const spaceIdx = paxBuf.indexOf(0x20, pos);
+        if (spaceIdx < 0) break;
+        const recordLen = parseInt(paxBuf.subarray(pos, spaceIdx).toString('ascii'), 10);
+        if (!Number.isFinite(recordLen) || recordLen <= 0 || pos + recordLen > paxBuf.length) break;
+        const body = paxBuf.subarray(spaceIdx + 1, pos + recordLen - 1).toString('utf-8');
+        const eqIdx = body.indexOf('=');
+        if (eqIdx > 0) {
+            const key = body.slice(0, eqIdx);
+            const val = body.slice(eqIdx + 1);
+            if (key === 'path') {
+                result.Path = val;
+            } else if (key === 'size') {
+                const trimmedVal = val.trim();
+                if (!/^\d+$/.test(trimmedVal)) {
+                    throw new Error(`Corrupt tar archive: invalid PAX size '${val}'`);
+                }
+                const parsedSize = parseInt(trimmedVal, 10);
+                if (!Number.isSafeInteger(parsedSize) || parsedSize < 0) {
+                    throw new Error(`Corrupt tar archive: invalid PAX size ${parsedSize}`);
+                }
+                result.Size = parsedSize;
+            }
+        }
+        pos += recordLen;
+    }
+    return result;
+}
+
+/**
+ * Converts an Octokit `downloadTarballArchive` response payload into a Node.js `Buffer`.
+ */
+function ToTarballBuffer(data: unknown): Buffer {
+    if (Buffer.isBuffer(data)) return data;
+    if (data instanceof ArrayBuffer) return Buffer.from(data);
+    if (ArrayBuffer.isView(data)) return Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+    if (typeof data === 'string') return Buffer.from(data, 'binary');
+    throw new Error('Unexpected tarball response data type from GitHub API');
+}
+
+/**
+ * Extracts all `.sql` files under `cleanPath` from a `.tar.gz` repository archive buffer
+ * and writes them into `localDir`, preserving subdirectory structure relative to `cleanPath`.
+ *
+ * GitHub tarballs wrap all files in a single top-level `<owner>-<repo>-<sha>/` directory,
+ * which is stripped before matching against `cleanPath`.
+ */
+export function ExtractSqlFilesFromTarGz(
+    tarGzBuffer: Buffer,
+    cleanPath: string,
+    localDir: string,
+): string[] {
+    const tarBuffer = gunzipSync(tarGzBuffer, { maxOutputLength: 512 * 1024 * 1024 });
+    const normalizedRoot = TrimSlashes(cleanPath);
+    const rootPrefix = normalizedRoot ? `${normalizedRoot}/` : '';
+    const extractedFiles: string[] = [];
+
+    let offset = 0;
+    let paxPathOverride: string | undefined;
+    let paxSizeOverride: number | undefined;
+    let gnuLongPathOverride: string | undefined;
+
+    while (offset + 512 <= tarBuffer.length) {
+        const header = tarBuffer.subarray(offset, offset + 512);
+        offset += 512;
+
+        if (IsZeroBlock(header)) {
+            break;
+        }
+
+        const typeFlagByte = header[156];
+        const typeFlag = typeFlagByte === 0 ? '0' : String.fromCharCode(typeFlagByte);
+        const entrySize = paxSizeOverride ?? ParseTarSize(header.subarray(124, 136));
+        if (!Number.isSafeInteger(entrySize) || entrySize < 0) {
+            throw new Error(`Corrupt tar archive: invalid entry size ${entrySize}`);
+        }
+        const dataOffset = offset;
+        const paddedSize = Math.ceil(entrySize / 512) * 512;
+        offset += paddedSize;
+
+        if (dataOffset + entrySize > tarBuffer.length) {
+            throw new Error('Corrupt tar archive: entry extends past end of buffer');
+        }
+
+        // PAX extended header for the next entry ('x')
+        if (typeFlag === 'x') {
+            const parsedPax = ParsePaxHeader(tarBuffer.subarray(dataOffset, dataOffset + entrySize));
+            if (parsedPax.Path !== undefined) paxPathOverride = parsedPax.Path;
+            if (parsedPax.Size !== undefined) paxSizeOverride = parsedPax.Size;
+            continue;
+        }
+
+        // GNU long path header for the next entry ('L')
+        if (typeFlag === 'L') {
+            gnuLongPathOverride = ReadNullTerminatedString(tarBuffer.subarray(dataOffset, dataOffset + entrySize));
+            continue;
+        }
+
+        // Global PAX header ('g') or GNU long linkname ('K') — skip without clearing next-entry path overrides
+        if (typeFlag === 'g' || typeFlag === 'K') {
+            continue;
+        }
+
+        const rawEntryPath = paxPathOverride ?? gnuLongPathOverride ?? ReadUstarPath(header);
+        paxPathOverride = undefined;
+        paxSizeOverride = undefined;
+        gnuLongPathOverride = undefined;
+
+        if (typeFlag !== '0') {
+            continue;
+        }
+
+        const firstSlash = rawEntryPath.indexOf('/');
+        if (firstSlash < 0) {
+            continue;
+        }
+        const repoRelativePath = rawEntryPath.slice(firstSlash + 1);
+        if (!repoRelativePath.startsWith(rootPrefix) || !repoRelativePath.endsWith('.sql')) {
+            continue;
+        }
+
+        const relativePath = TrimLeadingSlashes(repoRelativePath.slice(rootPrefix.length));
+        if (!relativePath) {
+            continue;
+        }
+        if (relativePath.includes('\\')) {
+            throw new Error(`Refusing to extract migration path with backslash separator: '${relativePath}'`);
+        }
+
+        const segments = relativePath.split('/').filter(Boolean);
+        if (segments.some(seg => seg === '..' || seg === '.')) {
+            throw new Error(`Refusing to extract migration path with traversal segment: '${relativePath}'`);
+        }
+
+        const depth = segments.length - 1;
+        if (depth > MAX_MIGRATION_DIRECTORY_DEPTH) {
+            throw new Error(
+                `Migration directory nesting exceeds ${MAX_MIGRATION_DIRECTORY_DEPTH} levels under '${normalizedRoot}' — `
+                + `refusing to walk further. No real migration layout is this deep.`,
+            );
+        }
+
+        const target = join(localDir, ...segments);
+        const targetDir = dirname(target);
+        if (!existsSync(targetDir)) {
+            mkdirSync(targetDir, { recursive: true });
+        }
+        writeFileSync(target, tarBuffer.subarray(dataOffset, dataOffset + entrySize));
+        extractedFiles.push(segments.join('/'));
+    }
+
+    return extractedFiles;
 }
 
 /**
@@ -664,37 +919,40 @@ export async function DownloadMigrations(
     const octokit = CreateOctokit(repoUrl, options);
 
     try {
-        // RECURSIVE (#3858): skyway's scanner globs recursively, so a migration in a subdirectory
-        // is applied by a local `mj migrate` and looks correct — and was never downloaded and never
-        // ran on a host, with both sides reporting success. The walk mirrors what the scanner
-        // sees, and relative paths are PRESERVED on disk: flattening `file.name` would let two
-        // same-named migrations in different subdirectories silently overwrite each other.
-        const sqlFiles = await listSqlFilesRecursive(octokit, parsed.Owner, parsed.Repo, cleanPath, ref);
-        if (sqlFiles.length === 0) {
+        let downloadedFiles: string[];
+        const canDownloadTarball = typeof (octokit.repos as { downloadTarballArchive?: unknown }).downloadTarballArchive === 'function';
+
+        if (canDownloadTarball) {
+            // Single-tarball download: fetches the entire repo@ref archive in ONE HTTP call and
+            // extracts all `.sql` files under `cleanPath` locally. Avoids 60+ per-file Contents/Blob
+            // API calls (which hit unauthenticated rate limits and fail on >30-95 MB seed SQL files).
+            const tarGzBuffer = await FetchRepoTarball(octokit, repoUrl, parsed, ref, options);
+            downloadedFiles = ExtractSqlFilesFromTarGz(tarGzBuffer, cleanPath, localDir);
+        } else {
+            // Fallback for test harnesses that stub only `octokit.repos.getContent`.
+            const sqlFiles = await listSqlFilesRecursive(octokit, parsed.Owner, parsed.Repo, cleanPath, ref);
+            downloadedFiles = [];
+            for (const file of sqlFiles) {
+                const content = await FetchFileContent(octokit, parsed.Owner, parsed.Repo, file.path, ref);
+                const target = join(localDir, file.relativePath);
+                const targetDir = dirname(target);
+                if (!existsSync(targetDir)) {
+                    mkdirSync(targetDir, { recursive: true });
+                }
+                writeFileSync(target, content, 'utf-8');
+                downloadedFiles.push(file.relativePath);
+            }
+        }
+
+        if (downloadedFiles.length === 0) {
             // ZERO FILES IS A FAILURE (#3858). This function is only called because a manifest
             // declared migrations; an app that says it has migrations and ships none is a defect.
-            // The old `Success: true, Files: []` let an install proceed past the migration phase,
-            // record the app as installed, and leave the host with an EMPTY schema and a green
-            // result — the one path where the migration phase failed soft.
             return {
                 Success: false,
                 ErrorMessage: `No .sql files found under '${cleanPath}' (ref: ${ref ?? 'default branch'}). `
                     + `The manifest declares a migrations directory, so an empty download is a defect — `
                     + `check 'migrations.directory' in mj-app.json and that the tag's tree contains it.`,
             };
-        }
-
-        const downloadedFiles: string[] = [];
-        for (const file of sqlFiles) {
-            const content = await FetchFileContent(octokit, parsed.Owner, parsed.Repo, file.path, ref);
-            // file.relativePath, not file.name — see the header note on same-named migrations.
-            const target = join(localDir, file.relativePath);
-            const targetDir = dirname(target);
-            if (!existsSync(targetDir)) {
-                mkdirSync(targetDir, { recursive: true });
-            }
-            writeFileSync(target, content, 'utf-8');
-            downloadedFiles.push(file.relativePath);
         }
 
         return { Success: true, LocalPath: localDir, Files: downloadedFiles };
@@ -945,6 +1203,15 @@ const tagListCache = new Map<string, FetchCacheEntry<string[]>>();
 const releaseListCache = new Map<string, FetchCacheEntry<GitHubRelease[]>>();
 
 /**
+ * Cached tarball buffers keyed by `(owner/repo, token, ref)`. Bounded to 2 entries so
+ * multiple `DownloadMigrations` calls during the same operation (e.g. `migrations/` +
+ * `migrations-teardown/` or `ExtractDeclaredApplicationIds` + `HandleTeardown`) share
+ * a single tarball HTTP download without holding old tarballs in memory.
+ */
+const tarballCache = new Map<string, FetchCacheEntry<Buffer>>();
+const TARBALL_CACHE_MAX_ENTRIES = 2;
+
+/**
  * Upper bound on distinct (repo, token) pairs held per cache.
  *
  * The caches are only swept on write, so without a bound they grow for the life of the process —
@@ -955,15 +1222,58 @@ const releaseListCache = new Map<string, FetchCacheEntry<GitHubRelease[]>>();
 const FETCH_CACHE_MAX_ENTRIES = 64;
 
 /**
- * Drops every cached tag AND release list. Exported for tests and for any caller that has just
- * pushed a tag or published a release and needs the next lookup to reflect it immediately.
+ * Drops every cached tag, release, and tarball entry. Exported for tests and for any caller that
+ * has just pushed a tag or published a release and needs the next lookup to reflect it immediately.
  *
- * Named for tags because that is what it originally cleared; it clears both, because a "clear" that
- * left stale releases behind would be a trap.
+ * Named for tags because that is what it originally cleared; it clears all caches, because a "clear"
+ * that left stale releases or tarballs behind would be a trap.
  */
 export function ClearGitHubTagCache(): void {
     tagListCache.clear();
     releaseListCache.clear();
+    tarballCache.clear();
+}
+
+/**
+ * Downloads (or returns a recently cached) repository tarball `.tar.gz` buffer for `owner/repo` at `ref`.
+ */
+async function FetchRepoTarball(
+    octokit: Octokit,
+    repoUrl: string,
+    parsed: { Owner: string; Repo: string },
+    ref: string,
+    options: GitHubClientOptions,
+): Promise<Buffer> {
+    const cacheKey = `${FetchCacheKey(repoUrl, parsed, options)}\u0000${ref}`;
+    const now = Date.now();
+
+    const cached = tarballCache.get(cacheKey);
+    if (cached && cached.ExpiresAt > now) {
+        return await cached.Value;
+    }
+
+    for (const [key, entry] of tarballCache) {
+        if (entry.ExpiresAt <= now) tarballCache.delete(key);
+    }
+    while (tarballCache.size >= TARBALL_CACHE_MAX_ENTRIES) {
+        const oldest = tarballCache.keys().next();
+        if (oldest.done) break;
+        tarballCache.delete(oldest.value);
+    }
+
+    const inFlight = (async (): Promise<Buffer> => {
+        const response = await octokit.repos.downloadTarballArchive({
+            owner: parsed.Owner,
+            repo: parsed.Repo,
+            ref,
+        });
+        return ToTarballBuffer(response.data);
+    })();
+
+    tarballCache.set(cacheKey, { ExpiresAt: now + TAG_CACHE_TTL_MS, Value: inFlight });
+    inFlight.catch(() => { tarballCache.delete(cacheKey); });
+
+    return await inFlight;
 }
 
 /**

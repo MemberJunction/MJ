@@ -1437,19 +1437,45 @@
   opacity: 0.85;
 }
 
-.mj-forms-poly-id-badge {
+.mj-forms-copy-id-btn {
   display: inline-flex;
   align-items: center;
-  padding: 1px 7px;
+  gap: 4px;
+  padding: 2px 6px;
   border-radius: var(--mj-radius-sm, 4px);
-  background: var(--mj-bg-surface-sunken, rgba(148, 163, 184, 0.12));
-  border: 1px solid var(--mj-border-subtle, rgba(148, 163, 184, 0.25));
+  background: transparent;
+  border: 1px solid transparent;
   color: var(--mj-text-muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 11px;
-  line-height: 1.4;
-  letter-spacing: 0.01em;
-  cursor: help;
+  line-height: 1.2;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 140ms ease, background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.mj-forms-field:hover .mj-forms-copy-id-btn,
+.mj-forms-copy-id-btn:focus-visible,
+.mj-forms-copy-id-btn.is-copied {
+  opacity: 0.75;
+}
+
+.mj-forms-copy-id-btn:hover {
+  opacity: 1;
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface-sunken);
+  border-color: var(--mj-border-subtle);
+}
+
+.mj-forms-copy-id-btn.is-copied {
+  opacity: 1;
+  color: var(--mj-status-success);
+  background: color-mix(in srgb, var(--mj-status-success) 10%, var(--mj-bg-surface));
+  border-color: color-mix(in srgb, var(--mj-status-success) 35%, var(--mj-border-subtle));
+}
+
+.mj-forms-copy-id-btn__feedback {
+  font-size: 10px;
+  font-weight: 600;
 }
 
 @keyframes mj-field-remote-pulse {
@@ -1471,3 +1497,332 @@ mj-form-field.mj-forms-field--remotely-updated .mj-forms-field {
   border-radius: var(--mj-radius-sm, 6px);
   animation: mj-field-remote-pulse 2.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
+
+/* ============================================
+   FIELD LABEL ROW & QUIET ORIGINAL-VALUE POPOVER
+   ============================================ */
+.mj-forms-field-label-row {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mj-forms-field__history-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.mj-forms-field__history-trigger {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--mj-status-warning, #f59e0b);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.mj-forms-field__history-trigger:hover,
+.mj-forms-field__history-trigger:focus-visible {
+  background: color-mix(in srgb, var(--mj-status-warning, #f59e0b) 14%, transparent);
+  border-color: color-mix(in srgb, var(--mj-status-warning, #f59e0b) 35%, transparent);
+}
+
+.mj-forms-field__history-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 200px;
+  max-width: 300px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--mj-bg-surface, #ffffff);
+  border: 1px solid var(--mj-border-default, #cbd5e1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mj-forms-field__history-popover-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--mj-text-muted, #64748b);
+}
+
+.mj-forms-field__history-popover-value {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--mj-text-primary, #0f172a);
+  word-break: break-word;
+  padding: 4px 8px;
+  border-radius: 5px;
+  background: var(--mj-bg-surface-card, #f8fafc);
+  border: 1px solid var(--mj-border-default, #e2e8f0);
+}
+
+.mj-forms-field__restore-btn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--mj-border-default, #cbd5e1);
+  background: var(--mj-bg-surface, #ffffff);
+  color: var(--mj-brand-primary, #3b82f6);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.mj-forms-field__restore-btn:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary, #3b82f6) 10%, transparent);
+  border-color: var(--mj-brand-primary, #3b82f6);
+}
+
+/* ============================================
+   AUTO-MERGED CLEAN FIELD BADGE
+   ============================================ */
+.mj-forms-field__auto-merged-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--mj-status-success, #10b981) 14%, transparent);
+  color: var(--mj-status-success-text, #059669);
+  border: 1px solid color-mix(in srgb, var(--mj-status-success, #10b981) 30%, transparent);
+  flex: 0 0 auto;
+}
+
+.mj-forms-field__auto-merged-tooltip {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--mj-bg-surface, #ffffff);
+  color: var(--mj-text-secondary, #475569);
+  border: 1px solid var(--mj-border-default, #cbd5e1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+}
+
+.mj-forms-field__auto-merged-badge:hover .mj-forms-field__auto-merged-tooltip {
+  display: block;
+}
+
+/* ============================================
+   INLINE CONFLICT RESOLUTION CARD
+   ============================================ */
+.mj-forms-field--conflict {
+  background: color-mix(in srgb, var(--mj-status-warning, #f59e0b) 6%, transparent);
+  border-radius: 8px;
+  padding: 8px;
+  margin: 2px -8px;
+}
+
+.mj-forms-field__conflict-card {
+  grid-column: 2;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--mj-bg-surface, #ffffff);
+  border: 1px solid color-mix(in srgb, var(--mj-status-warning, #f59e0b) 45%, transparent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mj-forms-field--no-label .mj-forms-field__conflict-card {
+  grid-column: 1;
+}
+
+.mj-forms-field__conflict-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mj-status-warning-text, #b45309);
+}
+
+.mj-forms-field__conflict-comparison {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.mj-forms-field__conflict-col {
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--mj-bg-surface-card, #f8fafc);
+  border: 1px solid var(--mj-border-default, #e2e8f0);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mj-forms-field__conflict-col--remote {
+  border-color: color-mix(in srgb, var(--mj-brand-primary, #3b82f6) 35%, transparent);
+  background: color-mix(in srgb, var(--mj-brand-primary, #3b82f6) 5%, var(--mj-bg-surface, #ffffff));
+}
+
+.mj-forms-field__conflict-col-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--mj-text-muted, #64748b);
+}
+
+.mj-forms-field__conflict-col-value {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--mj-text-primary, #0f172a);
+  word-break: break-word;
+}
+
+.mj-forms-field__conflict-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mj-forms-field__conflict-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--mj-border-default, #cbd5e1);
+  background: var(--mj-bg-surface, #ffffff);
+  color: var(--mj-text-primary, #0f172a);
+  transition: all 0.15s ease;
+}
+
+.mj-forms-field__conflict-btn--keep {
+  background: var(--mj-brand-primary, #3b82f6);
+  border-color: var(--mj-brand-primary, #3b82f6);
+  color: var(--mj-text-inverse);
+}
+
+.mj-forms-field__conflict-btn--use-remote:hover {
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary);
+}
+
+/* ============================================
+   IN-FORM TIME-TRAVEL VERSION PREVIEW
+   ============================================ */
+.mj-forms-field--time-travel-diff {
+  background: color-mix(in srgb, var(--mj-status-warning) 8%, var(--mj-bg-surface));
+  border-left: 3px solid var(--mj-status-warning);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin: 2px -10px;
+}
+
+.mj-forms-time-travel-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: color-mix(in srgb, var(--mj-status-warning) 16%, var(--mj-bg-surface));
+  color: var(--mj-status-warning-text, var(--mj-status-warning));
+  border: 1px solid color-mix(in srgb, var(--mj-status-warning) 35%, transparent);
+}
+
+.mj-forms-time-travel-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--mj-bg-surface-sunken) 85%, var(--mj-bg-surface));
+  border: 1px dashed var(--mj-border-default);
+  font-size: 11px;
+}
+
+.mj-forms-time-travel-current {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--mj-text-secondary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mj-forms-time-travel-current i {
+  color: var(--mj-status-warning);
+  font-size: 10px;
+}
+
+.mj-forms-time-travel-current strong {
+  color: var(--mj-text-primary);
+  font-weight: 600;
+}
+
+.mj-forms-time-travel-restore-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  color: var(--mj-brand-primary);
+  background: var(--mj-bg-surface);
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.mj-forms-time-travel-restore-btn:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  border-color: var(--mj-brand-primary);
+}
+
+.mj-forms-time-travel-restore-btn:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: 1px;
+}
+
+
