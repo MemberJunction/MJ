@@ -1,6 +1,7 @@
 @if (Visible && Summary; as summary) {
     <div
         class="mj-record-preview-popover"
+        [class.mj-record-preview-popover--editing]="IsEditing"
         [ngStyle]="PopoverPositionStyle"
         role="dialog"
         [attr.aria-label]="summary.EntityDisplayName + ' preview: ' + summary.Title"
@@ -27,7 +28,17 @@
                     </button>
                 }
             </div>
-            <div class="mj-record-preview-title">{{ summary.Title }}</div>
+            @if (IsEditing && summary.NameFieldEditable && summary.NameFieldName; as nameField) {
+                <input
+                    type="text"
+                    class="mj-record-preview-title-input"
+                    [attr.aria-label]="'Edit ' + summary.EntityDisplayName + ' name'"
+                    [value]="EditDrafts[nameField] ?? summary.Title"
+                    [disabled]="IsSavingEdit"
+                    (input)="OnEditDraftInput(nameField, $event)" />
+            } @else {
+                <div class="mj-record-preview-title">{{ summary.Title }}</div>
+            }
         </div>
 
         <div class="mj-record-preview-body">
@@ -41,7 +52,32 @@
                     @for (item of summary.Fields; track item.FieldName) {
                         <div class="mj-record-preview-field">
                             <span class="mj-record-preview-field-label">{{ item.Label }}</span>
-                            <span class="mj-record-preview-field-value" [title]="item.Value">{{ item.Value }}</span>
+                            @if (IsEditing && item.IsEditable) {
+                                @if (item.InputType === 'select' || item.InputType === 'boolean') {
+                                    <select
+                                        class="mj-record-preview-input"
+                                        [attr.aria-label]="'Edit ' + item.Label"
+                                        [value]="EditDrafts[item.FieldName] ?? ''"
+                                        [disabled]="IsSavingEdit"
+                                        (change)="OnEditDraftInput(item.FieldName, $event)">
+                                        @for (opt of item.PossibleValues ?? []; track opt) {
+                                            <option [value]="opt" [selected]="(EditDrafts[item.FieldName] ?? '') === opt">
+                                                {{ item.InputType === 'boolean' ? (opt === 'true' ? 'Yes' : 'No') : opt }}
+                                            </option>
+                                        }
+                                    </select>
+                                } @else {
+                                    <input
+                                        [type]="item.InputType === 'number' ? 'number' : 'text'"
+                                        class="mj-record-preview-input"
+                                        [attr.aria-label]="'Edit ' + item.Label"
+                                        [value]="EditDrafts[item.FieldName] ?? item.Value"
+                                        [disabled]="IsSavingEdit"
+                                        (input)="OnEditDraftInput(item.FieldName, $event)" />
+                                }
+                            } @else {
+                                <span class="mj-record-preview-field-value">{{ item.Value }}</span>
+                            }
                         </div>
                     }
                 </div>
@@ -51,24 +87,59 @@
                     <span class="mj-record-preview-field-value mj-record-preview-field-value--mono">{{ summary.RecordID }}</span>
                 </div>
             }
+
+            @if (EditErrorMessage) {
+                <div class="mj-record-preview-error" role="alert">
+                    <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+                    <span>{{ EditErrorMessage }}</span>
+                </div>
+            }
         </div>
 
         <div class="mj-record-preview-footer">
-            <button
-                type="button"
-                class="mj-record-preview-btn mj-record-preview-btn--primary"
-                (click)="OnOpenRecord(false, $event)">
-                <i class="fa-solid fa-arrow-right-to-bracket" aria-hidden="true"></i>
-                <span>Open Record</span>
-            </button>
-            <button
-                type="button"
-                class="mj-record-preview-btn mj-record-preview-btn--secondary"
-                (click)="OnOpenRecord(true, $event)"
-                title="Open in new tab">
-                <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
-                <span>New Tab</span>
-            </button>
+            @if (IsEditing) {
+                <button
+                    type="button"
+                    class="mj-record-preview-btn mj-record-preview-btn--primary"
+                    [disabled]="IsSavingEdit"
+                    (click)="OnSaveEdit($event)">
+                    <i [class]="IsSavingEdit ? 'fa-solid fa-circle-notch fa-spin' : 'fa-solid fa-check'" aria-hidden="true"></i>
+                    <span>{{ IsSavingEdit ? 'Saving…' : 'Save' }}</span>
+                </button>
+                <button
+                    type="button"
+                    class="mj-record-preview-btn mj-record-preview-btn--secondary"
+                    [disabled]="IsSavingEdit"
+                    (click)="OnCancelEdit($event)">
+                    <span>Cancel</span>
+                </button>
+            } @else {
+                <button
+                    type="button"
+                    class="mj-record-preview-btn mj-record-preview-btn--primary"
+                    (click)="OnOpenRecord(false, $event)">
+                    <i class="fa-solid fa-arrow-right-to-bracket" aria-hidden="true"></i>
+                    <span>Open Record</span>
+                </button>
+                <button
+                    type="button"
+                    class="mj-record-preview-btn mj-record-preview-btn--secondary"
+                    (click)="OnOpenRecord(true, $event)"
+                    aria-label="Open in new tab">
+                    <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                    <span>New Tab</span>
+                </button>
+                @if (AllowQuickEdit && summary.CanEditRecord) {
+                    <button
+                        type="button"
+                        class="mj-record-preview-btn mj-record-preview-btn--ghost"
+                        (click)="OnStartEdit($event)"
+                        aria-label="Quick edit summary fields">
+                        <i class="fa-solid fa-pen" aria-hidden="true"></i>
+                        <span>Quick Edit</span>
+                    </button>
+                }
+            }
         </div>
     </div>
 }

@@ -8,7 +8,15 @@ import {
     Output,
     inject
 } from '@angular/core';
-import { CompositeKey, EntityFieldInfo, EntityFieldTSType, EntityInfo, KeyValuePair, RunView } from '@memberjunction/core';
+import {
+    BaseEntity,
+    CompositeKey,
+    EntityFieldInfo,
+    EntityFieldTSType,
+    EntityInfo,
+    KeyValuePair,
+    RunView
+} from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { FormNavigationEvent } from '../types/navigation-events';
 
@@ -19,7 +27,11 @@ export interface RecordPreviewFieldItem {
     FieldName: string;
     Label: string;
     Value: string;
+    RawValue?: unknown;
     IsStatusField: boolean;
+    IsEditable?: boolean;
+    InputType?: 'text' | 'number' | 'boolean' | 'select';
+    PossibleValues?: string[];
 }
 
 /**
@@ -34,6 +46,18 @@ export interface RecordPreviewSummary {
     Title: string;
     StatusValue: string | null;
     Fields: RecordPreviewFieldItem[];
+    CanEditRecord?: boolean;
+    NameFieldName?: string | null;
+    NameFieldEditable?: boolean;
+}
+
+/**
+ * Event emitted when inline quick-edit saves updated field values on the previewed target record.
+ */
+export interface RecordPreviewUpdatedEvent {
+    EntityName: string;
+    PrimaryKey: CompositeKey;
+    UpdatedFields: Record<string, unknown>;
 }
 
 /**
@@ -80,6 +104,7 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
     public set EntityName(value: string | null) {
         if (value !== this._entityName) {
             this._entityName = value;
+            this.resetEditState();
             if (this._visible) {
                 void this.loadSummary();
             }
@@ -93,6 +118,7 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
     public set RecordID(value: string | null) {
         if (value !== this._recordID) {
             this._recordID = value;
+            this.resetEditState();
             if (this._visible) {
                 void this.loadSummary();
             }
@@ -106,6 +132,7 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
     public set PrimaryKey(value: CompositeKey | null) {
         if (value !== this._primaryKey) {
             this._primaryKey = value;
+            this.resetEditState();
             if (this._visible) {
                 void this.loadSummary();
             }
@@ -138,18 +165,28 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
             this._visible = value;
             if (value) {
                 void this.loadSummary();
+            } else {
+                this.resetEditState();
             }
             this.cdr.markForCheck();
         }
     }
 
+    /** Whether inline quick-edit of summary fields is allowed inside the popover. */
+    @Input() public AllowQuickEdit = true;
+
     @Output() public Navigate = new EventEmitter<FormNavigationEvent>();
     @Output() public MouseEnterCard = new EventEmitter<void>();
     @Output() public MouseLeaveCard = new EventEmitter<void>();
+    @Output() public RecordUpdated = new EventEmitter<RecordPreviewUpdatedEvent>();
 
     public IsLoading = false;
     public Summary: RecordPreviewSummary | null = null;
     public CopiedID = false;
+    public IsEditing = false;
+    public IsSavingEdit = false;
+    public EditErrorMessage: string | null = null;
+    public EditDrafts: Record<string, string | undefined> = {};
     private _copyTimer: ReturnType<typeof setTimeout> | null = null;
 
     /** Clear the static summary cache (useful in unit tests). */
@@ -163,6 +200,13 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
             clearTimeout(this._copyTimer);
             this._copyTimer = null;
         }
+    }
+
+    private resetEditState(): void {
+        this.IsEditing = false;
+        this.IsSavingEdit = false;
+        this.EditErrorMessage = null;
+        this.EditDrafts = {};
     }
 
     public get CompactRecordID(): string {
@@ -239,7 +283,144 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
     }
 
     public OnCardMouseLeave(): void {
+        if (this.IsEditing || this.IsSavingEdit) {
+            return;
+        }
         this.MouseLeaveCard.emit();
+    }
+
+    public OnStartEdit(event: MouseEvent): void {
+        event.preventDefault();
+        event.stopPropagation();
+        const summary = this.Summary;
+        if (!summary || !summary.CanEditRecord || !this.AllowQuickEdit) {
+            return;
+        }
+        const drafts: Record<string, string> = {};
+        if (summary.NameFieldEditable && summary.NameFieldName) {
+            drafts[summary.NameFieldName] = summary.Title;
+        }
+        for (const item of summary.Fields) {
+            if (!item.IsEditable) continue;
+            if (item.InputType === 'boolean') {
+                drafts[item.FieldName] =
+                    item.RawValue === true || item.RawValue === 1 || item.RawValue === 'true' || item.Value === 'Yes'
+                        ? 'true'
+                        : 'false';
+            } else {
+                drafts[item.FieldName] = item.RawValue != null ? String(item.RawValue) : item.Value;
+            }
+        }
+        this.EditDrafts = drafts;
+        this.EditErrorMessage = null;
+        this.IsEditing = true;
+        this.cdr.markForCheck();
+    }
+
+    public OnCancelEdit(event?: MouseEvent): void {
+        event?.preventDefault();
+        event?.stopPropagation();
+        this.resetEditState();
+        this.cdr.markForCheck();
+    }
+
+    public OnEditDraftInput(fieldName: string, eventOrValue: Event | string): void {
+        if (typeof eventOrValue === 'string') {
+            this.EditDrafts[fieldName] = eventOrValue;
+            this.cdr.markForCheck();
+            return;
+        }
+        const target = eventOrValue.target as HTMLInputElement | HTMLSelectElement | null;
+        if (!target) return;
+        this.EditDrafts[fieldName] = target.value;
+        this.cdr.markForCheck();
+    }
+
+    public async OnSaveEdit(event?: MouseEvent): Promise<void> {
+        event?.preventDefault();
+        event?.stopPropagation();
+        const summary = this.Summary;
+        if (!summary || this.IsSavingEdit) {
+            return;
+        }
+        const md = this.ProviderToUse;
+        const entityInfo = md?.EntityByName(summary.EntityName);
+        if (!md || !entityInfo) {
+            this.EditErrorMessage = 'Entity metadata is unavailable.';
+            this.cdr.markForCheck();
+            return;
+        }
+
+        this.IsSavingEdit = true;
+        this.EditErrorMessage = null;
+        this.cdr.markForCheck();
+
+        try {
+            const record = await md.GetEntityObject<BaseEntity>(summary.EntityName, md.CurrentUser);
+            const loaded = await record.InnerLoad(summary.PrimaryKey);
+            if (!loaded) {
+                this.EditErrorMessage = record.LatestResult?.Message || 'Could not load target record for editing.';
+                this.IsSavingEdit = false;
+                this.cdr.markForCheck();
+                return;
+            }
+
+            const updatedFields: Record<string, unknown> = {};
+            for (const [fieldName, draftValue] of Object.entries(this.EditDrafts)) {
+                if (draftValue === undefined) continue;
+                const fieldInfo = entityInfo.Fields.find(f => f.Name === fieldName);
+                const coerced = this.coerceDraftValue(draftValue, fieldInfo);
+                const currentVal = record.Get(fieldName);
+                if (String(currentVal ?? '') !== String(coerced ?? '')) {
+                    record.Set(fieldName, coerced);
+                    updatedFields[fieldName] = coerced;
+                }
+            }
+
+            const saved = await record.Save();
+            if (this._destroyed) return;
+
+            if (!saved) {
+                this.EditErrorMessage = record.LatestResult?.Message || 'Failed to save changes.';
+                this.IsSavingEdit = false;
+                this.cdr.markForCheck();
+                return;
+            }
+
+            const cacheKey = `${summary.EntityName.toLowerCase()}::${summary.RecordID.toLowerCase()}`;
+            MjRecordPreviewPopoverComponent.summaryCache.delete(cacheKey);
+            this.resetEditState();
+            await this.loadSummary(true);
+            this.RecordUpdated.emit({
+                EntityName: summary.EntityName,
+                PrimaryKey: summary.PrimaryKey,
+                UpdatedFields: updatedFields
+            });
+            this.cdr.markForCheck();
+        } catch (err: unknown) {
+            if (!this._destroyed) {
+                this.EditErrorMessage = err instanceof Error ? err.message : 'Unexpected error while saving.';
+                this.IsSavingEdit = false;
+                this.cdr.markForCheck();
+            }
+        }
+    }
+
+    private coerceDraftValue(draft: string, field?: EntityFieldInfo): unknown {
+        if (!field) {
+            return draft;
+        }
+        if (field.TSType === EntityFieldTSType.Boolean) {
+            const norm = draft.trim().toLowerCase();
+            return norm === 'true' || norm === '1' || norm === 'yes';
+        }
+        if (field.TSType === EntityFieldTSType.Number) {
+            const trimmed = draft.trim();
+            if (trimmed === '') return null;
+            const parsed = Number(trimmed);
+            return Number.isNaN(parsed) ? draft : parsed;
+        }
+        return draft;
     }
 
     public OnOpenRecord(openInNewTab: boolean, event: MouseEvent): void {
@@ -277,7 +458,7 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
         return new CompositeKey([new KeyValuePair(pkField, rawId)]);
     }
 
-    private async loadSummary(): Promise<void> {
+    private async loadSummary(forceRefresh = false): Promise<void> {
         const entityName = this._entityName?.trim();
         if (!entityName) {
             this.Summary = null;
@@ -292,12 +473,14 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
 
         const recordIdStr = this._recordID?.trim() || pk.Values();
         const cacheKey = `${entityName.toLowerCase()}::${recordIdStr.toLowerCase()}`;
-        const cached = MjRecordPreviewPopoverComponent.summaryCache.get(cacheKey);
-        if (cached && Date.now() - cached.LoadedAt < MjRecordPreviewPopoverComponent.CACHE_TTL_MS) {
-            this.Summary = cached.Summary;
-            this.IsLoading = false;
-            this.cdr.markForCheck();
-            return;
+        if (!forceRefresh) {
+            const cached = MjRecordPreviewPopoverComponent.summaryCache.get(cacheKey);
+            if (cached && Date.now() - cached.LoadedAt < MjRecordPreviewPopoverComponent.CACHE_TTL_MS) {
+                this.Summary = cached.Summary;
+                this.IsLoading = false;
+                this.cdr.markForCheck();
+                return;
+            }
         }
 
         const seq = ++this._loadSeq;
@@ -310,7 +493,10 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
             PrimaryKey: pk,
             Title: this._displayName || recordIdStr,
             StatusValue: null,
-            Fields: []
+            Fields: [],
+            CanEditRecord: false,
+            NameFieldName: null,
+            NameFieldEditable: false
         };
         this.cdr.markForCheck();
 
@@ -382,6 +568,41 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
         return pool.slice(0, 5);
     }
 
+    private isFieldQuickEditable(field: EntityFieldInfo | null | undefined, canEditEntity: boolean): boolean {
+        if (!field || !canEditEntity) return false;
+        if (field.IsPrimaryKey || field.ReadOnly || field.IsVirtual || field.AllowUpdateAPI === false) {
+            return false;
+        }
+        if (field.RelatedEntity || field.EntityIDFieldName) {
+            return false;
+        }
+        return (
+            field.TSType === EntityFieldTSType.String ||
+            field.TSType === EntityFieldTSType.Number ||
+            field.TSType === EntityFieldTSType.Boolean
+        );
+    }
+
+    private resolveFieldInputType(field: EntityFieldInfo): {
+        InputType: 'text' | 'number' | 'boolean' | 'select';
+        PossibleValues?: string[];
+    } {
+        if (field.TSType === EntityFieldTSType.Boolean) {
+            return { InputType: 'boolean', PossibleValues: ['true', 'false'] };
+        }
+        const values = (field as EntityFieldInfo & { EntityFieldValues?: Array<{ Value: string }> }).EntityFieldValues;
+        if (Array.isArray(values) && values.length > 0) {
+            return {
+                InputType: 'select',
+                PossibleValues: values.map(v => v.Value)
+            };
+        }
+        if (field.TSType === EntityFieldTSType.Number) {
+            return { InputType: 'number' };
+        }
+        return { InputType: 'text' };
+    }
+
     private buildSummaryFromRow(
         entityInfo: EntityInfo,
         pk: CompositeKey,
@@ -389,6 +610,14 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
         candidateFields: EntityFieldInfo[],
         row: Record<string, unknown> | null
     ): RecordPreviewSummary {
+        const entityWithPerm = entityInfo as EntityInfo & {
+            AllowUpdateAPI?: boolean;
+            UserPermissions?: { CanUpdate?: boolean };
+        };
+        const canEditEntity =
+            entityWithPerm.AllowUpdateAPI !== false &&
+            (entityWithPerm.UserPermissions?.CanUpdate ?? true);
+
         let title = this._displayName || recordIdStr;
         if (row && entityInfo.NameField) {
             const rawTitle = row[entityInfo.NameField.Name];
@@ -396,12 +625,21 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
                 title = String(rawTitle).trim();
             }
         }
-        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(title.trim())) {
+        const isUuidTitle = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(title.trim());
+        if (isUuidTitle) {
             const rawUuid = recordIdStr && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(recordIdStr.trim())
                 ? recordIdStr.trim()
                 : title.trim();
             title = `${entityInfo.DisplayNameOrName} · ${rawUuid.slice(0, 6)}…${rawUuid.slice(-4)}`;
         }
+
+        const nameField =
+            (entityInfo.NameField
+                ? entityInfo.Fields.find(f => f.Name === entityInfo.NameField?.Name)
+                : undefined) ?? entityInfo.NameField;
+        const nameFieldEditable = Boolean(
+            row && !isUuidTitle && this.isFieldQuickEditable(nameField, canEditEntity)
+        );
 
         let statusValue: string | null = null;
         const fields: RecordPreviewFieldItem[] = [];
@@ -418,18 +656,28 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
                 const isStatus = /^(status|state|stage|priority|health)$/i.test(f.Name);
                 if (isStatus && !statusValue) {
                     statusValue = formatted;
-                    continue;
                 }
                 if (fields.length < 4) {
+                    const editable = this.isFieldQuickEditable(f, canEditEntity);
+                    const inputMeta = editable ? this.resolveFieldInputType(f) : undefined;
                     fields.push({
                         FieldName: f.Name,
                         Label: f.DisplayNameOrName,
                         Value: formatted,
-                        IsStatusField: isStatus
+                        RawValue: row[f.Name],
+                        IsStatusField: isStatus,
+                        IsEditable: editable,
+                        InputType: inputMeta?.InputType,
+                        PossibleValues: inputMeta?.PossibleValues
                     });
                 }
             }
         }
+
+        const canEditRecord =
+            Boolean(row) &&
+            canEditEntity &&
+            (nameFieldEditable || fields.some(item => item.IsEditable));
 
         return {
             EntityName: entityInfo.Name,
@@ -439,7 +687,10 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
             PrimaryKey: pk,
             Title: title,
             StatusValue: statusValue,
-            Fields: fields
+            Fields: fields,
+            CanEditRecord: canEditRecord,
+            NameFieldName: nameField?.Name ?? null,
+            NameFieldEditable: nameFieldEditable
         };
     }
 

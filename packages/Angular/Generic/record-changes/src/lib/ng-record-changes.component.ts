@@ -259,6 +259,11 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
   SelectedBucketKey: string | null = null;
   ActivityChartGranularityLabel = '';
 
+  // Cross-version comparison (vA <-> vB) state
+  CompareMode = false;
+  CompareBaseChangeID: string | null = null;
+  CompareTargetChangeID: string | null = null;
+
   // Filter properties
   SearchTerm = '';
 
@@ -988,6 +993,185 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
    */
   public GetPreviewableChanges(): MJRecordChangeEntity[] {
     return this.ViewData.filter(c => c.Type !== 'Delete' && !!c.FullRecordJSON);
+  }
+
+  /**
+   * Toggles Cross-Version Diff Comparison (`vA ↔ vB`) mode.
+   * When entering Compare Mode with no versions selected, defaults `vB` to the
+   * latest version and `vA` to the immediately preceding snapshot (or live state).
+   */
+  public ToggleCompareMode(): void {
+    this.CompareMode = !this.CompareMode;
+    if (this.CompareMode && !this.CompareBaseChangeID && !this.CompareTargetChangeID) {
+      const previewable = this.GetPreviewableChanges();
+      if (previewable.length >= 2) {
+        this.CompareTargetChangeID = previewable[0].ID;
+        this.CompareBaseChangeID = previewable[1].ID;
+      } else if (previewable.length === 1) {
+        this.CompareBaseChangeID = previewable[0].ID;
+        this.CompareTargetChangeID = '__CURRENT__';
+      }
+    }
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Assigns a historical change ID (or `'__CURRENT__'`) to either the `base` (`vA`)
+   * or `target` (`vB`) comparison slot.
+   */
+  public SelectForComparison(slot: 'base' | 'target', changeId: string | null, event?: Event): void {
+    event?.stopPropagation();
+    if (slot === 'base') {
+      this.CompareBaseChangeID = changeId;
+    } else {
+      this.CompareTargetChangeID = changeId;
+    }
+    if (!this.CompareMode) {
+      this.CompareMode = true;
+    }
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Handles `<select>` change events for the `vA` and `vB` version selectors.
+   */
+  public OnComparisonSelectChange(slot: 'base' | 'target', event: Event): void {
+    const selectEl = event.target as HTMLSelectElement | null;
+    if (!selectEl) return;
+    this.SelectForComparison(slot, selectEl.value || null);
+  }
+
+  /**
+   * Swaps the selected `vA` (base) and `vB` (target) comparison versions.
+   */
+  public SwapComparisonVersions(): void {
+    const prevBase = this.CompareBaseChangeID;
+    this.CompareBaseChangeID = this.CompareTargetChangeID;
+    this.CompareTargetChangeID = prevBase;
+    this.cdr.markForCheck();
+  }
+
+  public IsChangeSelectedAsCompareBase(change: MJRecordChangeEntity): boolean {
+    return (
+      this.CompareBaseChangeID != null &&
+      this.CompareBaseChangeID !== '__CURRENT__' &&
+      UUIDsEqual(this.CompareBaseChangeID, change.ID)
+    );
+  }
+
+  public IsChangeSelectedAsCompareTarget(change: MJRecordChangeEntity): boolean {
+    return (
+      this.CompareTargetChangeID != null &&
+      this.CompareTargetChangeID !== '__CURRENT__' &&
+      UUIDsEqual(this.CompareTargetChangeID, change.ID)
+    );
+  }
+
+  public get CompareBaseChange(): MJRecordChangeEntity | null {
+    if (!this.CompareBaseChangeID || this.CompareBaseChangeID === '__CURRENT__') {
+      return null;
+    }
+    return this.viewDataById.get(NormalizeUUID(this.CompareBaseChangeID)) ?? null;
+  }
+
+  public get CompareTargetChange(): MJRecordChangeEntity | null {
+    if (!this.CompareTargetChangeID || this.CompareTargetChangeID === '__CURRENT__') {
+      return null;
+    }
+    return this.viewDataById.get(NormalizeUUID(this.CompareTargetChangeID)) ?? null;
+  }
+
+  public GetComparisonSlotLabel(slot: 'base' | 'target'): string {
+    const id = slot === 'base' ? this.CompareBaseChangeID : this.CompareTargetChangeID;
+    if (!id) return 'Select version…';
+    if (id === '__CURRENT__') return 'Current Live Record';
+    const change = this.viewDataById.get(NormalizeUUID(id));
+    if (!change) return 'Selected version';
+    return `${this.FormatRelativeTime(change.ChangedAt)} (${this.GetUserDisplayName(change.User)})`;
+  }
+
+  private extractSnapshotObject(changeId: string | null): Record<string, unknown> | null {
+    if (!changeId) return null;
+    if (changeId === '__CURRENT__') {
+      const rec = this.record as (BaseEntity & {
+        GetAll?: () => Record<string, unknown>;
+        Fields?: Array<{ Name: string; Value: unknown }>;
+      }) | undefined;
+      if (!rec) return null;
+      if (typeof rec.GetAll === 'function') {
+        return rec.GetAll();
+      }
+      if (Array.isArray(rec.Fields)) {
+        const snapshot: Record<string, unknown> = {};
+        for (const f of rec.Fields) {
+          snapshot[f.Name] = f.Value;
+        }
+        return snapshot;
+      }
+      return null;
+    }
+    const change = this.viewDataById.get(NormalizeUUID(changeId));
+    if (!change?.FullRecordJSON) return null;
+    try {
+      return JSON.parse(change.FullRecordJSON) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Computes the field-by-field diff between the selected `vA` (`CompareBaseChangeID`)
+   * and `vB` (`CompareTargetChangeID`) snapshots.
+   */
+  public GetComparisonDiffs(): FieldChangeInfo[] {
+    const baseSnap = this.extractSnapshotObject(this.CompareBaseChangeID);
+    const targetSnap = this.extractSnapshotObject(this.CompareTargetChangeID);
+    if (!baseSnap || !targetSnap) {
+      return [];
+    }
+
+    const entityFields = this.record?.EntityInfo?.Fields ?? [];
+    const candidateNames = new Set<string>();
+    for (const f of entityFields) {
+      if (!f.IsPrimaryKey && !f.Name.startsWith('__mj_')) {
+        candidateNames.add(f.Name);
+      }
+    }
+    for (const key of Object.keys(baseSnap)) {
+      if (!key.startsWith('__mj_') && key.toLowerCase() !== 'id') {
+        candidateNames.add(key);
+      }
+    }
+    for (const key of Object.keys(targetSnap)) {
+      if (!key.startsWith('__mj_') && key.toLowerCase() !== 'id') {
+        candidateNames.add(key);
+      }
+    }
+
+    const diffs: FieldChangeInfo[] = [];
+    for (const fieldName of candidateNames) {
+      const fieldInfo = entityFields.find(
+        (f: EntityFieldInfo) => f.Name.trim().toLowerCase() === fieldName.trim().toLowerCase(),
+      );
+      if (fieldInfo?.IsPrimaryKey || fieldName.startsWith('__mj_')) {
+        continue;
+      }
+      const oldVal = baseSnap[fieldName];
+      const newVal = targetSnap[fieldName];
+      const formattedOld = FormatChangeValue(oldVal, fieldInfo);
+      const formattedNew = FormatChangeValue(newVal, fieldInfo);
+      if (formattedOld === formattedNew) {
+        continue;
+      }
+      diffs.push(
+        this.buildFieldChangeInfo({
+          field: fieldInfo?.Name || fieldName,
+          oldValue: oldVal,
+          newValue: newVal,
+        }),
+      );
+    }
+    return diffs;
   }
 
   /**

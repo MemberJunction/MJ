@@ -392,4 +392,67 @@ describe('RecordChangesComponent (DOM) — date fields', () => {
     f.componentInstance.ClearBucketFilter();
     expect(f.componentInstance.FilteredData.length).toBe(2);
   });
+
+  it('compares any two arbitrary historical snapshots (vA ↔ vB) and supports comparing against live Current Record', async () => {
+    const f = await renderExpanded([
+      change({
+        ID: 'v3',
+        ChangedAt: new Date('2026-10-15T14:00:00.000Z'),
+        User: 'Alice',
+        FullRecordJSON: JSON.stringify({ ID: 'rec-1', DueDate: '2026-10-15T00:00:00.000Z', ApprovedAt: '2026-10-15T14:00:00.000Z' }),
+      }),
+      change({
+        ID: 'v2',
+        ChangedAt: new Date('2026-10-10T12:00:00.000Z'),
+        User: 'Bob',
+        FullRecordJSON: JSON.stringify({ ID: 'rec-1', DueDate: '2026-10-10T00:00:00.000Z', ApprovedAt: '2026-10-10T12:00:00.000Z' }),
+      }),
+      change({
+        ID: 'v1',
+        Type: 'Create',
+        ChangedAt: new Date('2026-10-01T09:00:00.000Z'),
+        User: 'Carol',
+        FullRecordJSON: JSON.stringify({ ID: 'rec-1', DueDate: '2026-10-01T00:00:00.000Z', ApprovedAt: null }),
+      }),
+    ]);
+
+    const comp = f.componentInstance;
+    expect(comp.CompareMode).toBe(false);
+
+    comp.ToggleCompareMode();
+    f.detectChanges();
+
+    expect(comp.CompareMode).toBe(true);
+    expect(query(f, '.rc-compare-panel')).not.toBeNull();
+    // Defaults to previous version (v2) as Base A and newest (v3) as Target B
+    expect(comp.CompareBaseChangeID).toBe('v2');
+    expect(comp.CompareTargetChangeID).toBe('v3');
+
+    // Select oldest version (v1) as Base A to compare non-adjacent versions (v1 ↔ v3)
+    comp.SelectForComparison('base', 'v1');
+    f.detectChanges();
+    expect(comp.CompareBaseChangeID).toBe('v1');
+
+    const diffsV1ToV3 = comp.GetComparisonDiffs();
+    expect(diffsV1ToV3.length).toBe(2);
+    const dueDateDiff = diffsV1ToV3.find((d) => d.field === 'DueDate')!;
+    expect(dueDateDiff.oldValue).toBe('Oct 1, 2026');
+    expect(dueDateDiff.newValue).toBe('Oct 15, 2026');
+    const approvedDiff = diffsV1ToV3.find((d) => d.field === 'ApprovedAt')!;
+    expect(approvedDiff.oldValue).toBe('');
+    expect(approvedDiff.newValue).toBe('Oct 15, 2026, 9:00 AM');
+
+    // Select v2 as Target B via timeline pill
+    comp.SelectForComparison('target', 'v2');
+    f.detectChanges();
+    expect(comp.CompareTargetChangeID).toBe('v2');
+    const diffsV1ToV2 = comp.GetComparisonDiffs();
+    expect(diffsV1ToV2.find((d) => d.field === 'DueDate')!.newValue).toBe('Oct 10, 2026');
+
+    // Swap A and B
+    comp.SwapComparisonVersions();
+    f.detectChanges();
+    expect(comp.CompareBaseChangeID).toBe('v2');
+    expect(comp.CompareTargetChangeID).toBe('v1');
+  });
 });
