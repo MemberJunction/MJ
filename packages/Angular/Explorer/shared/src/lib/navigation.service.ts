@@ -2,7 +2,7 @@ import { Injectable, OnDestroy } from '@angular/core';
 import { WorkspaceStateManager, NavItem, DynamicNavItem, TabRequest, ApplicationManager } from '@memberjunction/ng-base-application';
 import type { WorkspaceTab } from '@memberjunction/ng-base-application';
 import { DashboardNavigationOptions, NavigationOptions } from './navigation.interfaces';
-import { IsRecordTabsStyle, RECORDS_RESOURCE_TYPE, IsRecordsTabConfiguration, RecordSourceContext, GetRecordSourceContext, TruncateRecordOriginChain } from './record-open-style';
+import { IsRecordTabsStyle, RECORDS_RESOURCE_TYPE, FORM_MODE_QUERY_PARAM, IsRecordsTabConfiguration, RecordSourceContext, GetRecordSourceContext, TruncateRecordOriginChain } from './record-open-style';
 import { CompositeKey, Metadata, IsNewEntityRecordUrlId, LogError } from '@memberjunction/core';
 import { fromEvent, BehaviorSubject, Subject, Subscription, Observable, combineLatest } from 'rxjs';
 import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
@@ -11,6 +11,7 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import type { ResourceData } from '@memberjunction/core-entities';
 import { BaseResourceComponent } from './base-resource-component';
 import { ResolveMovedNavItem } from './moved-nav-items';
+import { RecordTabShowsRecord } from './record-delete';
 
 /**
  * Event emitted when query params change on a tab (e.g., from browser back/forward).
@@ -561,6 +562,9 @@ export class NavigationService implements OnDestroy {
         // THIS open, not wherever they were when the tab was first created
         // (possibly days ago, possibly under an older origin schema).
         this.refreshSourceContext(existing.id, options);
+        // Before activation, so the URL synced for the focused tab already
+        // carries it; the mounted record switches via OnQueryParamsChanged.
+        this.applyFormMode(existing.id, options);
         // The activation assert applies to RE-opens too — the same-click
         // stale-stomp that motivated it for fresh opens is equally possible
         // here, and without it the symptom is maddening: opening a record
@@ -614,6 +618,7 @@ export class NavigationService implements OnDestroy {
     } else {
       tabId = this.workspaceManager.OpenTab(request, appColor);
     }
+    this.applyFormMode(tabId, options);
 
     // If the friendly record name was not already in the LRU cache, fire-and-forget
     // an async lookup so the tab title upgrades smoothly once resolved without stalling tab open.
@@ -654,14 +659,15 @@ export class NavigationService implements OnDestroy {
     }, 0);
   }
 
-  /** Find an already-open tab showing this exact record (records-style dedup) */
+  /**
+   * Find an already-open tab showing this exact record (records-style dedup). Matched through
+   * RecordTabShowsRecord, not string equality: a tab opened from a URL keeps the URL's bare id
+   * while `recordId` here is `ToURLSegment()` ("ID|<id>"), so an exact compare missed the open
+   * tab and opened a second one for the same record.
+   */
   private findOpenRecordTab(entityName: string, recordId: string): { id: string } | null {
     const config = this.workspaceManager.GetConfiguration();
-    const match = config?.tabs.find(t =>
-      t.resourceRecordId === recordId &&
-      t.configuration?.['resourceType'] === RECORDS_RESOURCE_TYPE &&
-      t.configuration?.['Entity'] === entityName
-    );
+    const match = config?.tabs.find(t => RecordTabShowsRecord(t, { EntityName: entityName, RecordId: recordId }));
     return match ? { id: match.id } : null;
   }
 
@@ -826,6 +832,21 @@ export class NavigationService implements OnDestroy {
       this.applyQueryParamsToTab(tabId, clear);
     }
     this.NotifyQueryParamsChanged(tabId, {}, true);
+  }
+
+  /**
+   * Go to the Home app's landing dashboard. Used where there is nowhere more
+   * specific to return to — e.g. a record loaded straight from a URL is
+   * deleted. Returns false when the deployment has no Home app (or the user
+   * cannot see it), so the caller can choose its own fallback.
+   */
+  async OpenHomeDashboard(): Promise<boolean> {
+    const homeApp = this.appManager.GetAppByName('Home');
+    if (!homeApp) {
+      return false;
+    }
+    await this.SwitchToAppHome(homeApp.ID);
+    return true;
   }
 
   /**
@@ -1238,12 +1259,29 @@ export class NavigationService implements OnDestroy {
     } else {
       tabId = this.workspaceManager.OpenTab(request, appColor);
     }
+    // The open may have focused an EXISTING new-record tab (forced opens and
+    // classic OpenTab both dedup on entity + empty id) — often the dead-end
+    // custom form the user is escaping. The param reaches it either way.
+    this.applyFormMode(tabId, options);
 
     if (tabsMode) {
       this.assertRecordActivation(tabId);
     }
 
     return tabId;
+  }
+
+  /**
+   * Land a standard-form request (MJ#4755) on the tab an open reached. The
+   * mode lives ONLY in the tab's `form` query param: the shell mirrors it into
+   * the URL, and BaseResourceComponent delivers it live to a mounted record —
+   * including one on a tab that dedup focused rather than created. A plain
+   * open leaves the tab's current mode alone.
+   */
+  private applyFormMode(tabId: string, options?: NavigationOptions): void {
+    if (options?.formMode) {
+      this.applyQueryParamsToTab(tabId, { [FORM_MODE_QUERY_PARAM]: options.formMode });
+    }
   }
 
   /**
@@ -1757,16 +1795,45 @@ export class NavigationService implements OnDestroy {
     };
 
     const currentDriverClass = (config['resourceTypeDriverClass'] || config['driverClass']) as string | undefined;
-    const currentRecordId = tab.resourceRecordId || (config['recordId'] as string | undefined) || '';
-    const currentEntity = (config['Entity'] || config['entity']) as string | undefined;
+    const { Entity: currentEntity, RecordId: currentRecordId } = this.recordIdentityOf(tab);
 
-    // Resource type and entity names can vary by casing/metadata spelling; class names,
-    // record IDs, and nav labels are canonical tab identity fields and stay exact-match.
+    // Resource type and entity names can vary by casing/metadata spelling; class names
+    // and nav labels are canonical tab identity fields and stay exact-match. Record IDs
+    // compare like UUIDs (UUIDsEqual: trimmed, case-insensitive — see
+    // guides/UUID_COMPARISON_GUIDE.md): a save rewrites the component's id from
+    // PrimaryKey.ToURLSegment() in the server's casing while the tab keeps the casing it
+    // was opened with, and an exact match then dropped every later write (MJ#4755).
+    //
+    // The driver class is compared only when the TAB records one. Record tabs never
+    // persist it, yet the tab container injects it into the component's
+    // Data.Configuration — where the guard is built — so requiring a match would drop
+    // every record resource's writes (MJ#4755). Identity is still held by resource
+    // type, record, nav item and entity; a tab that records a DIFFERENT class still fails.
     return matches(guard.resourceType, config['resourceType'], true) &&
-      matches(guard.driverClass, currentDriverClass) &&
-      matches(guard.recordId, currentRecordId) &&
+      (currentDriverClass == null || matches(guard.driverClass, currentDriverClass)) &&
+      (guard.recordId == null || UUIDsEqual(guard.recordId, currentRecordId)) &&
       matches(guard.navItemName, config['navItemName']) &&
       matches(guard.entity, currentEntity, true);
+  }
+
+  /**
+   * The record a tab hosts right now — entity and record id, read from the
+   * live workspace — or null when the tab no longer exists. Lets a component
+   * that may be cached (detached, tab id since reused) check it still owns
+   * its tab before reacting to that tab's query params.
+   */
+  public GetTabRecordIdentity(tabId: string): { Entity: string | undefined; RecordId: string } | null {
+    const tab = this.workspaceManager.GetTab(tabId);
+    return tab ? this.recordIdentityOf(tab) : null;
+  }
+
+  /** Entity + record id from a tab, with the legacy key spellings. Shared by the write guard and {@link GetTabRecordIdentity}. */
+  private recordIdentityOf(tab: { resourceRecordId?: string; configuration?: Record<string, unknown> }): { Entity: string | undefined; RecordId: string } {
+    const config = tab.configuration || {};
+    return {
+      Entity: (config['Entity'] || config['entity']) as string | undefined,
+      RecordId: tab.resourceRecordId || (config['recordId'] as string | undefined) || ''
+    };
   }
 
   /**

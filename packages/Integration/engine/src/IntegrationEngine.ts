@@ -2767,7 +2767,16 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const ctx: FetchContext = {
                 CompanyIntegration: config.companyIntegration,
                 ObjectName: entityMap.ExternalObjectName,
-                WatermarkValue: currentWatermark,
+                // The fetch filter is the RUN's start boundary, never the running max.
+                //
+                // `currentWatermark` advances every page for connectors that emit a per-page running
+                // max (netsuite@1.4.1+ does, for resume-friendliness); feeding it back into the next
+                // page's query ratchets the incremental predicate forward MID-SCAN, so every row whose
+                // modstamp trails the max seen so far is silently excluded even though the walk never
+                // visited it. Observed live (ACR dev, 2026-09-07): a Vendor Bill full scan collapsed
+                // to 707 of 23,558 rows — an id-ascending-AND-modstamp-ascending subsequence — with
+                // the run still reporting success. `currentWatermark` remains persistence bookkeeping.
+                WatermarkValue: initialWatermark,
                 BatchSize: this.MaxBatchSize,
                 ContextUser: contextUser,
                 CurrentPage: currentPage,
@@ -5878,7 +5887,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // below well-defined.
                 OrderBy: 'ID ASC',
                 AfterKey: afterID ? CompositeKey.FromID(afterID) : undefined,
-                IgnoreMaxRows: true, // the entity-level cap is exactly what we're defeating here
+                // An explicit MaxRows already overrides the entity-level UserViewMaxRows cap on a keyset
+                // read. Do NOT add IgnoreMaxRows: it drops MaxRows too, so the first "page" becomes the
+                // whole record map.
                 MaxRows: PAGE_SIZE,
                 ResultType: 'simple',
                 BypassCache: true, // sync decisions must reflect committed record-map state
@@ -5888,7 +5899,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 return { Rows: rows, Complete: false, Error: page.ErrorMessage ?? 'RunView failed' };
             }
 
-            rows.push(...page.Results);
+            // No spread: push(...rows) passes every row as a call argument and throws
+            // "Maximum call stack size exceeded" past ~100k rows if a provider returns an oversized page.
+            for (const row of page.Results) rows.push(row);
             if (page.Results.length < PAGE_SIZE) return { Rows: rows, Complete: true };
             afterID = page.Results[page.Results.length - 1].ID;
         }

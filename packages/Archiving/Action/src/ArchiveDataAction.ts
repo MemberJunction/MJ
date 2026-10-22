@@ -34,7 +34,7 @@ export class ArchiveDataAction extends BaseAction {
                     ResultCode: 'ARCHIVE_COMPLETE',
                     Message:
                         `Archive run ${result.ArchiveRunId} completed successfully. ` +
-                        `Archived: ${result.ArchivedRecords}, Skipped: ${result.SkippedRecords}, ` +
+                        `${result.StorageMode === 'Purge' ? 'Purged' : 'Archived'}: ${result.ArchivedRecords}, Skipped: ${result.SkippedRecords}, ` +
                         `Failed: ${result.FailedRecords}, Bytes: ${result.TotalBytesArchived}`,
                 };
             }

@@ -16,6 +16,7 @@
  */
 
 import { BehaviorSubject, Subject, Subscription } from 'rxjs';
+import { LogStatusEx } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { NormalizeUUID } from '@memberjunction/global';
 
@@ -32,6 +33,23 @@ export interface CompletionEvent {
     success?: boolean;
     /** Error message if the agent execution failed. */
     errorMessage?: string;
+}
+
+/**
+ * Live task-graph frame event bridged from `TaskGraphFrameBroadcaster` over `PUSH_STATUS_UPDATES_TOPIC`.
+ */
+export interface TaskGraphStreamEvent {
+    Kind?: string;
+    ParentTaskID?: string;
+    TaskID?: string;
+    TaskName?: string;
+    Status?: string;
+    ErrorMessage?: string;
+    ProgressMessage?: string;
+    ProgressPercent?: number;
+    CompletedCount?: number;
+    TotalCount?: number;
+    conversationDetailId?: string;
 }
 
 /** Metadata structure for message progress updates. */
@@ -173,6 +191,11 @@ export class ConversationStreaming {
      * Emits enriched completion data once per agent finish.
      */
     public readonly CompletionEvents$ = new Subject<CompletionEvent>();
+
+    /**
+     * Observable for components to subscribe to durable task-graph step & workflow frames in real-time.
+     */
+    public readonly TaskGraphEvents$ = new Subject<TaskGraphStreamEvent>();
 
     /** @deprecated Use {@link CompletionEvents$}. */
     public get completionEvents$() {
@@ -439,6 +462,7 @@ export class ConversationStreaming {
         this.lastHeardAtByRunId.clear();
         this.lastHeardAtByDetailId.clear();
         this.CompletionEvents$.complete();
+        this.TaskGraphEvents$.complete();
         this.connectionStatus$.complete();
         this.initialized = false;
     }
@@ -482,7 +506,7 @@ export class ConversationStreaming {
 
     /**
      * Route a TaskOrchestrator progress update to the message-scoped callback set,
-     * keyed by `conversationDetailId`.
+     * keyed by `conversationDetailId`, and emit on `TaskGraphEvents$`.
      */
     private async routeTaskProgress(statusObj: Record<string, unknown>): Promise<void> {
         try {
@@ -493,15 +517,34 @@ export class ConversationStreaming {
             const metadata = data.metadata as MessageProgressMetadata | undefined;
             const conversationDetailId = data.conversationDetailId as string | undefined;
 
+            this.TaskGraphEvents$.next({
+                Kind: (data.Kind as string | undefined) ?? (statusObj.type as string | undefined),
+                ParentTaskID: data.ParentTaskID as string | undefined,
+                TaskID: data.TaskID as string | undefined,
+                TaskName: (data.TaskName as string | undefined) ?? taskName,
+                Status: data.Status as string | undefined,
+                ErrorMessage: data.ErrorMessage as string | undefined,
+                ProgressMessage: (data.ProgressMessage as string | undefined) ?? message,
+                ProgressPercent: (data.ProgressPercent as number | undefined) ?? percentComplete,
+                CompletedCount: data.CompletedCount as number | undefined,
+                TotalCount: data.TotalCount as number | undefined,
+                conversationDetailId,
+            });
+
             if (!message) {
-                console.warn('[ConversationStreaming] No message content in TaskOrchestrator update');
+                if (!data.ParentTaskID) {
+                    LogStatusEx({ message: '[ConversationStreaming] No message content in TaskOrchestrator update', verboseOnly: true });
+                }
                 return;
             }
             if (!conversationDetailId) {
-                console.warn('[ConversationStreaming] TaskOrchestrator update missing conversationDetailId', {
-                    taskName,
-                    message,
-                });
+                if (!data.ParentTaskID) {
+                    LogStatusEx({
+                        message: '[ConversationStreaming] TaskOrchestrator update missing conversationDetailId',
+                        verboseOnly: true,
+                        additionalArgs: [{ taskName, message }],
+                    });
+                }
                 return;
             }
 
@@ -555,9 +598,10 @@ export class ConversationStreaming {
                 if (agentRunId) {
                     const removed = this.context.Tasks.RemoveByAgentRunId(agentRunId);
                     if (removed) {
-                        console.log(
-                            `[ConversationStreaming] Agent run ${agentRunId} completed, removed from active tasks`
-                        );
+                        LogStatusEx({
+                            message: `[ConversationStreaming] Agent run ${agentRunId} completed, removed from active tasks`,
+                            verboseOnly: true,
+                        });
                     }
                 }
 
@@ -580,9 +624,10 @@ export class ConversationStreaming {
 
                     this.cleanupOldCompletions();
 
-                    console.log(
-                        `[ConversationStreaming] Completion broadcast for message ${conversationDetailId} (success: ${String(success)})`
-                    );
+                    LogStatusEx({
+                        message: `[ConversationStreaming] Completion broadcast for message ${conversationDetailId} (success: ${String(success)})`,
+                        verboseOnly: true,
+                    });
                 } else {
                     console.warn(
                         `[ConversationStreaming] Completion received without conversationDetailId for agentRunId: ${agentRunId}`
@@ -599,7 +644,7 @@ export class ConversationStreaming {
             const stepCount = progress?.stepCount as number | undefined;
 
             if (!message) {
-                console.warn('[ConversationStreaming] No message content in agent progress update');
+                LogStatusEx({ message: '[ConversationStreaming] No message content in agent progress update', verboseOnly: true });
                 return;
             }
             if (!conversationDetailId) {
@@ -767,7 +812,10 @@ export class ConversationStreaming {
         this.reconnecting = true;
         this.connectionStatus$.next('reconnecting');
         this.reconnectionTimeout = setTimeout(() => {
-            console.log(`[ConversationStreaming] Attempting to reconnect (attempt ${this.reconnectionAttempts})...`);
+            LogStatusEx({
+                message: `[ConversationStreaming] Attempting to reconnect (attempt ${this.reconnectionAttempts})...`,
+                verboseOnly: true,
+            });
             this.initialized = false;
             this.Initialize();
         }, delay);

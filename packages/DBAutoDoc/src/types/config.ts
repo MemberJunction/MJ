@@ -3,6 +3,30 @@ import type { AutoDocPluginConfigEntry } from '../plugins/types.js';
 /**
  * Configuration types for DBAutoDoc
  */
+
+/** Bounds and thresholds for key verification. Every field has a documented default. */
+export interface KeyVerificationConfig {
+    /** Run the probe at all. Default true — `false` makes every key Unprobed, not Verified. */
+    enabled?: boolean;
+    /** Distinct child values sampled per probe. Default 1000. */
+    sampleSize?: number;
+    /** Hard cap on probes per run. Default 500. Past it, candidates are Unprobed. */
+    maxProbes?: number;
+    /** Per-probe timeout in ms. Default 5000. A slow probe is Unprobed, not Refuted. */
+    probeTimeoutMs?: number;
+    /**
+     * Containment floor for Verified. Default 0.05.
+     *
+     * Deliberately far below FKDetector's 75% GATE 6: that gate decides whether a
+     * *statistically discovered* FK is real, where near-perfect containment is the
+     * evidence. This floor answers a much weaker question — "does this join match
+     * anything at all?" — whose whole point is to catch the 0% case (a namespaced
+     * parent key, a type-mismatched cross-schema guess) without discarding a
+     * genuinely sparse soft key in a connector schema full of orphans.
+     */
+    minContainment?: number;
+}
+
 export interface DBAutoDocConfig {
   version: string;
   database: DatabaseConfig;
@@ -25,10 +49,17 @@ export interface DBAutoDocConfig {
  * This is injected into prompts to guide analysis but does NOT override AI output.
  */
 export interface SeedContextConfig {
+  file?: string;
+  files?: string[];
   overallPurpose?: string;
   businessDomains?: string[];
   customInstructions?: string;
   industryContext?: string;
+  /**
+   * Cap, in characters, on the customInstructions text sent to each PK/FK inference prompt. A per-table
+   * prompt gets only the paragraphs that name its table. Default 6000; 0 sends none.
+   */
+  keyPassMaxChars?: number;
 }
 
 /**
@@ -88,6 +119,20 @@ export interface AIConfig {
   apiKey: string;
   temperature?: number;
   maxTokens?: number;
+  /**
+   * Wall-clock ceiling, in milliseconds, on EACH model call. `0` disables the bound.
+   * Default: 120000 (two minutes).
+   *
+   * Every LLM call in this package was previously unbounded. The retry machinery below cannot
+   * help: it only engages once a promise settles, and a provider that accepts the socket and then
+   * stops sending never settles one. `maxTokens` bounds the RESPONSE, not the wait.
+   *
+   * The bound is applied two ways at once, mirroring how `AIPromptRunner` bounds its own calls:
+   * the request is aborted through `ChatParams.cancellationToken` (which the provider drivers
+   * forward to their SDKs, so the socket is torn down rather than abandoned) AND the awaited
+   * promise is rejected, so a driver that ignores the signal still cannot park a caller forever.
+   */
+  callTimeoutMs?: number;
   /** @deprecated Use rateLimits.requestsPerMinute instead */
   requestsPerMinute?: number;
   effortLevel?: number; // Optional effort level 1-100 (1=lowest, 100=highest). Not all models support this.
@@ -157,6 +202,7 @@ export interface AnalysisConfig {
   sampleSize: number;
   includeStatistics: boolean;
   includePatternAnalysis: boolean;
+  skipSampling?: boolean;
   convergence: ConvergenceConfig;
   backpropagation: BackpropagationConfig;
   sanityChecks: SanityCheckConfig;
@@ -164,6 +210,13 @@ export interface AnalysisConfig {
   relationshipDiscovery?: RelationshipDiscoveryConfig;
   sampleQueryGeneration?: SampleQueryGenerationConfig;
   organicKeyDetection?: OrganicKeyDetectionConfig;
+  /**
+   * Bounds and thresholds for verifying a proposed key against the data before it is
+   * emitted. See `KeyVerificationConfig` in `discovery/JoinProbe.ts` for the defaults
+   * and the reasoning behind each one. Omitted means "use the defaults" — NOT "skip
+   * verification"; set `keyVerification.enabled: false` for that.
+   */
+  keyVerification?: KeyVerificationConfig;
   /**
    * Read the existing indexes on every table and show them to the LLM as evidence for keys and
    * important columns (default true). Indexes often exist where no PK/FK is declared.
@@ -218,6 +271,14 @@ export interface OrganicKeyDetectionConfig {
   minDistinctTables?: number;
   /** Number of sample values per column to include in the embedding input and refiner prompt. Default: 5. */
   sampleValueCount?: number;
+  /**
+   * Set `AutoCreateRelatedViewOnForm` on every emitted organic key. Default FALSE.
+   *
+   * Was a hardcoded `true`: each emitted key auto-created one related-record grid per
+   * spoke — around 22 per key on a real run — each grid a value-join on a column the
+   * detector had never verified. A machine-proposed key should be opted into.
+   */
+  autoCreateRelatedViewOnForm?: boolean;
 
   // ─── LLM Refinement ──────────────────────────────────────────────────
   /** Concurrency for per-cluster LLM refinement calls. Default: 4. */
@@ -228,17 +289,31 @@ export interface OrganicKeyDetectionConfig {
   onRefinementError?: 'fail' | 'skip';
 
   // ─── Budget / Cost ───────────────────────────────────────────────────
-  /** Soft token budget for the entire detection pass (warns when exceeded). Default: 0 = unlimited. */
+  /**
+   * Token budget for the normalization pass. Default: 0 = unlimited.
+   *
+   * Enforced by NOT SCHEDULING further tables once the running total exceeds it; calls already in
+   * flight are allowed to finish, so the recorded total may overshoot by up to `concurrency`
+   * tables' worth. The result reports `BudgetExhausted` and how many tables were skipped, because
+   * normalizing 300 of 500 tables and reporting success is its own defect.
+   *
+   * This was declared and read nowhere, so the pass had no token, cost or call-count cap at all.
+   */
   tokenBudget?: number;
 
   // ─── Embeddings ──────────────────────────────────────────────────────
   /**
    * Embedding provider override. Maps to a MemberJunction `BaseEmbeddings` driver
-   * (resolved via the ClassFactory). Defaults to `openai` when absent. The API key
-   * is taken from the top-level `ai` config.
+   * (resolved via the ClassFactory). The API key is taken from the top-level `ai` config.
+   *
+   * When absent this defaults to the embedding driver of the SAME vendor as the configured LLM
+   * provider, because that is the one credential the operator has definitely supplied. It used to
+   * default to the literal `openai`, which meant the shipped default configuration handed a Gemini
+   * key to `OpenAIEmbedding`. A vendor with no embedding driver (anthropic, groq, openrouter, …)
+   * is a named error asking for an explicit choice; `local` needs no key at all.
    */
   embedding?: {
-    provider?: 'openai' | 'mistral' | 'azure' | 'bedrock' | 'ollama' | 'local';
+    provider?: 'openai' | 'gemini' | 'mistral' | 'azure' | 'bedrock' | 'ollama' | 'local';
     model?: string;
     dimensions?: number;
     batchSize?: number;
@@ -379,6 +454,48 @@ export interface OutputConfig {
   outputDir?: string; // Base output directory for numbered runs
   sqlFile: string;
   markdownFile: string;
+  /** Entity-relationship diagram options for `export --mermaid` (see ErdConfig). */
+  erd?: ErdConfig;
+}
+
+/**
+ * How `export --mermaid` draws the schema. The default (`full`) is one diagram of every table,
+ * which Mermaid refuses above ~50,000 characters of source; `clusters` splits the FK graph into
+ * hub-centred subject areas that each fit. Every value can be overridden per run by an export flag.
+ */
+/** `full`: one schema-wide diagram. `clusters`: one diagram per subject area. `both`: write both. */
+export type ErdMode = 'full' | 'clusters' | 'both';
+
+/** Columns drawn in each ERD entity: every column, primary and foreign keys only, or none. */
+export type ErdColumnMode = 'all' | 'keys' | 'none';
+
+/** Defaults for the numeric `ErdConfig` settings; the single source the CLI flag help and the docs quote. */
+export const ERD_DEFAULTS = {
+  hubMinInbound: 8,
+  lookupMaxRows: 5000,
+  pageSize: 50,
+  minClusterSize: 4,
+} as const;
+
+export interface ErdConfig {
+  /** Default `full`. */
+  mode?: ErdMode;
+  /** Default `all` for the full diagram and `keys` for subject-area diagrams. */
+  columns?: ErdColumnMode;
+  /** A table referenced by at least this many other tables becomes a cluster hub (default `ERD_DEFAULTS.hubMinInbound`). */
+  hubMinInbound?: number;
+  /** A table that references nothing and has fewer rows than this is a reference (lookup) table, listed rather than drawn (default `ERD_DEFAULTS.lookupMaxRows`). */
+  lookupMaxRows?: number;
+  /** Tables per diagram page beyond the hub; a larger cluster is paginated (default `ERD_DEFAULTS.pageSize`). */
+  pageSize?: number;
+  /** A hub whose cluster is smaller than this is folded into the neighbouring cluster it links to most (default `ERD_DEFAULTS.minClusterSize`). */
+  minClusterSize?: number;
+  /** Table names always treated as hubs, in addition to those found by hubMinInbound. */
+  hubs?: string[];
+  /** Table names left out of every diagram (still listed on the index). */
+  excludeTables?: string[];
+  /** Table names always treated as reference tables regardless of row count. */
+  lookupTables?: string[];
 }
 
 export interface SchemaFilterConfig {

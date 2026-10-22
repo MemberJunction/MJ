@@ -643,11 +643,56 @@ Re-run discovery if analysis reveals new relationships:
 | `outputDir` | string | Base directory for numbered run outputs |
 | `sqlFile` | string | Path for generated SQL script |
 | `markdownFile` | string | Path for generated Markdown documentation |
+| `erd` | object | Entity-relationship diagram options for `export --mermaid` (below) |
 
 **Notes:**
 - `outputDir` enables numbered runs: `./output/run-1/`, `./output/run-2/`, etc.
 - State file tracks complete analysis history
 - Use for resuming interrupted analysis
+
+#### ERD Options (`output.erd`)
+
+Mermaid refuses a diagram whose source exceeds about 50,000 characters, and a schema of a few hundred
+tables passes that long before the diagram becomes readable. `output.erd` controls whether `export --mermaid`
+draws one schema-wide diagram or splits the foreign-key graph into hub-centred **subject areas**, each small
+enough to render.
+
+```json
+{
+  "output": {
+    "erd": {
+      "mode": "clusters",
+      "columns": "keys",
+      "hubMinInbound": 8,
+      "lookupMaxRows": 5000,
+      "pageSize": 50,
+      "minClusterSize": 4,
+      "hubs": ["Invoice"],
+      "lookupTables": ["StateProvince"],
+      "excludeTables": ["Customer.bak"]
+    }
+  }
+}
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `mode` | `full` \| `clusters` \| `both` | `full` | `full` is one diagram of every table (`erd.mmd` / `erd.html`); `clusters` is one diagram per subject area under `erd/`; `both` writes both |
+| `columns` | `all` \| `keys` \| `none` | `all` for `full`, `keys` for clusters | Columns drawn in each entity: every column, primary and foreign keys only, or none |
+| `hubMinInbound` | number | 8 | A table referenced by at least this many other tables becomes a subject-area hub |
+| `lookupMaxRows` | number | 5000 | A table that references nothing and has fewer rows than this is a *reference table* (status codes, types, flags): listed beside each diagram, not drawn |
+| `pageSize` | number | 50 | Tables per diagram page beyond the hub; a larger area is paginated with the hub on every page |
+| `minClusterSize` | number | 4 | An area smaller than this folds into the neighbouring area its members link to most |
+| `hubs` | string[] | — | Table names always treated as hubs, whatever their inbound count |
+| `lookupTables` | string[] | — | Table names always treated as reference tables, whatever their row count |
+| `excludeTables` | string[] | — | Table names left out of every diagram (still listed on the index) |
+
+How the areas are chosen: reference tables are set aside first (left in, a yes/no flag referenced by sixty
+tables links every area to every other); hubs are found; every other connected table joins its nearest hub;
+undersized areas fold into a neighbour; oversized areas are paginated. `erd/index.md` names every area's
+members, the reference tables, the tables with no foreign keys and any connected tables that reached no
+hub, so an odd placement can be traced to a threshold or pinned with `hubs`, `lookupTables` or
+`excludeTables`. Each of these settings can be overridden per run by an `--erd-*` export flag.
 
 ### Schema and Table Filters
 
@@ -795,6 +840,7 @@ db-auto-doc analyze [OPTIONS]
 |------|-------|-------------|---------|
 | `--resume` | `-r` | Resume from state file | - |
 | `--config` | `-c` | Path to config file | `./config.json` |
+| `--skip-sampling` | - | Skip the table data sampling pass (same as `analysis.skipSampling`); organic-key detection is skipped when no table has statistics, so a fresh run loses it but a `--resume` of a sampled run keeps it | false |
 
 **Examples:**
 
@@ -858,10 +904,24 @@ db-auto-doc export [OPTIONS]
 | `--output-dir` | `-o` | Output directory | From config |
 | `--sql` | - | Generate SQL script | false |
 | `--markdown` | - | Generate Markdown docs | false |
+| `--html` | - | Generate interactive HTML documentation | false |
+| `--csv` | - | Generate `tables.csv` and `columns.csv` | false |
+| `--mermaid` | - | Generate Mermaid ERD files | false |
 | `--report` | - | Generate analysis report | false |
+| `--schema-info` | - | Generate `additionalSchemaInfo.json` for CodeGen soft FK/PK support | false |
 | `--apply` | - | Apply SQL to database | false |
 | `--approved-only` | - | Only export approved items | false |
 | `--confidence-threshold` | - | Minimum confidence (0-1) | 0 |
+| `--erd-mode` | - | `full`, `clusters` or `both` — overrides `output.erd.mode` | From config |
+| `--erd-columns` | - | `all`, `keys` or `none` — overrides `output.erd.columns` | From config |
+| `--erd-hub-min-inbound` | - | Overrides `output.erd.hubMinInbound` | From config |
+| `--erd-lookup-max-rows` | - | Overrides `output.erd.lookupMaxRows` | From config |
+| `--erd-page-size` | - | Overrides `output.erd.pageSize` | From config |
+| `--erd-min-cluster-size` | - | Overrides `output.erd.minClusterSize` | From config |
+
+With no format flag, `export` generates SQL and Markdown. The `--erd-*` flags only matter together with
+`--mermaid` (and `--html`, whose Subject Areas section links to the cluster pages); see
+[ERD Options](#erd-options-outputerd) for what each setting does.
 
 **Examples:**
 
@@ -892,6 +952,12 @@ db-auto-doc export --output-dir=/path/to/output --sql --markdown
 
 # All together
 db-auto-doc export --sql --markdown --report --confidence-threshold=0.75
+
+# Large schema: one diagram per subject area, linked from documentation.html
+db-auto-doc export --html --mermaid --erd-mode clusters
+
+# Try a different split without editing config.json
+db-auto-doc export --mermaid --erd-mode clusters --erd-hub-min-inbound 12 --erd-page-size 40
 ```
 
 **Output Files:**
@@ -913,6 +979,20 @@ db-auto-doc export --sql --markdown --report --confidence-threshold=0.75
    - Convergence details
    - Token usage and cost
    - Relationship discovery results (if enabled)
+
+4. **documentation.html** (with `--html`)
+   - Interactive, searchable single-file documentation
+   - With `--erd-mode clusters`, a Subject Areas section linking to the cluster diagrams replaces
+     the inline schema-wide ERD, which cannot render for large schemas
+
+5. **erd.mmd / erd.html** (with `--mermaid`, mode `full` or `both`)
+   - The schema-wide Mermaid ERD and a standalone page that renders it
+
+6. **erd/** (with `--mermaid`, mode `clusters` or `both`)
+   - `index.html` and `index.md`: every subject area with its hub, table count and description, plus
+     the reference tables, the tables with no foreign keys and the tables outside every area
+   - `cluster-<Hub>.mmd` / `.html` per area (`cluster-<Hub>-1`, `-2`, … when paginated): the diagram,
+     the hub's description, the reference tables the area uses and the areas it links to
 
 **Confidence Threshold:**
 
@@ -1200,6 +1280,14 @@ Confidence = (
   }
 }
 ```
+
+`seedContext.file` (one path) and `seedContext.files` (several) read context documents and append their
+contents to `customInstructions`, separated by `---`. Paths are relative to the config file. A file that
+cannot be read fails configuration loading with the setting name and resolved path in the error.
+
+The key-inference passes also receive this text: the discovery validator and the per-table PK/FK pruning
+prompts get the paragraphs that name their table, and the holistic pruning prompts get the full text, each
+capped at `seedContext.keyPassMaxChars` characters (default 6000; `0` disables it).
 
 ### Iteration Tracking
 
@@ -2054,6 +2142,11 @@ The `--resume` flag:
 - Continues from where analysis stopped
 - Uses same configuration as original run
 - Much faster than starting over
+
+A resumed run also finishes an interrupted data-sampling pass: state is saved every 25 tables during
+sampling, and on resume only the tables whose columns have no statistics yet are sampled (the log reports
+how many). A run that was analyzed with `--skip-sampling` stays unsampled on resume; `--pruning-only`
+never samples.
 
 ### Out of Memory
 

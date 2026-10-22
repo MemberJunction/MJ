@@ -81,6 +81,7 @@ import { RecordCloneSlideInComponent } from '@memberjunction/ng-record-clone';
     FormsModule,
     MJEmptyStateComponent,
     MJAlertComponent,
+    MJButtonDirective,
     RecordChangesModule,
     ListManagementModule,
     EntityViewerModule,

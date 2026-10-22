@@ -1,9 +1,10 @@
-import { Component, EventEmitter, inject, Input, OnDestroy, Output, ViewChild } from '@angular/core';
+import { ChangeDetectorRef, Component, EventEmitter, inject, Input, OnDestroy, Output, ViewChild } from '@angular/core';
 import { CompositeKey, BaseEntity } from '@memberjunction/core';
-import { FormNavigationEvent, FormNotificationEvent, MJFormPresenterService, MjEntityFormHostComponent } from '@memberjunction/ng-base-forms';
+import { EntityFormMode, FormNavigationEvent, FormNotificationEvent, MJFormPresenterService, MjEntityFormHostComponent } from '@memberjunction/ng-base-forms';
 import type { BaseFormComponent, FormCompositionSnapshot } from '@memberjunction/ng-base-forms';
 import { Subscription } from 'rxjs';
-import { NavigationService, RecentAccessService, SharedService } from '@memberjunction/ng-shared';
+import { GetDeletedRecordFromEvent, NavigationService, RecentAccessService, RecordIdentityMatches, SafeDetectChanges, SharedService } from '@memberjunction/ng-shared';
+import { MJEvent, MJGlobal } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 /**
@@ -30,6 +31,19 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnDes
   @Input() public PrimaryKey: CompositeKey = new CompositeKey();
   @Input() public entityName: string | null = '';
   @Input() public NewRecordValues: string | Record<string, unknown> | null = '';
+  /**
+   * `'standard'` asks the host for the CodeGen form even when a custom form is
+   * registered (MJ#4755). The mount-time mode; later changes go through
+   * {@link SwitchFormMode} so the host's unsaved-work guard applies.
+   */
+  @Input() public FormMode: EntityFormMode = 'default';
+
+  /**
+   * Re-emitted host `FormModeChange`: the mode changed inside the host — the
+   * strip, a {@link SwitchFormMode} call, or an interactive-variant pick
+   * (which returns to `'default'`).
+   */
+  @Output() public FormModeChange: EventEmitter<EntityFormMode> = new EventEmitter<EntityFormMode>();
 
   /** @deprecated Use {@link NewRecordValues}. */
   @Input() public set newRecordValues(value: string | Record<string, unknown> | null) {
@@ -91,6 +105,15 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnDes
   @ViewChild(MjEntityFormHostComponent) private formHost?: MjEntityFormHostComponent;
 
   /**
+   * Switch the mounted form between custom and standard (MJ#4755) through the
+   * host's guarded switch. False when refused (unsaved work — the host has
+   * already raised a warning) or when no host is mounted yet.
+   */
+  public SwitchFormMode(mode: EntityFormMode): boolean {
+    return this.formHost?.SwitchFormMode(mode) ?? false;
+  }
+
+  /**
    * True while the hosted form is in edit mode. The host already exposes the
    * live form instance, so this is a read, not a new event pipeline.
    *
@@ -106,6 +129,37 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnDes
   private sharedService = inject(SharedService);
   private formPresenter = inject(MJFormPresenterService);
   private recentAccessService = new RecentAccessService();
+  private cdr = inject(ChangeDetectorRef);
+
+  /**
+   * True once another user (another session) has deleted the record shown here.
+   * The tab is NOT closed under the user — they may be reading it — so a banner
+   * says so and offers to close it. Deletes in this session are handled by the
+   * shell, which closes the tab outright.
+   */
+  public DeletedRemotely = false;
+
+  private remoteDeleteSub: Subscription | null = MJGlobal.Instance.GetEventListener()
+    .subscribe((event: MJEvent) => this.onGlobalEvent(event));
+
+  /** Close this record's tab (the remote-delete banner's Close button). */
+  OnCloseDeletedRecord(): void {
+    this.RecordDismissed.emit();
+  }
+
+  private onGlobalEvent(event: MJEvent): void {
+    if (this.DeletedRemotely) {
+      return;
+    }
+    const deleted = GetDeletedRecordFromEvent(event);
+    if (!deleted?.Remote || !this.PrimaryKey?.HasValue) {
+      return;
+    }
+    if (RecordIdentityMatches(this.entityName, this.PrimaryKey.ToURLSegment(), deleted)) {
+      this.DeletedRemotely = true;
+      SafeDetectChanges(this.cdr);
+    }
+  }
 
   /** Unblock the shell's first-resource-load gate (success or error). */
   OnLoadComplete(): void {
@@ -139,6 +193,8 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnDes
   ngOnDestroy(): void {
     this.compositionSub?.unsubscribe();
     this.compositionSub = null;
+    this.remoteDeleteSub?.unsubscribe();
+    this.remoteDeleteSub = null;
   }
 
   /** Log access for existing records once the form's record is ready. */

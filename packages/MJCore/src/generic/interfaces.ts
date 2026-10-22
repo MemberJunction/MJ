@@ -11,6 +11,7 @@ import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
 import { EntityTransactionScope } from "./entityTransactionScope";
+import type { EntitySaveReturnMode } from "./entityConfiguration";
 
 /**
  * Base configuration class for data providers.
@@ -336,7 +337,7 @@ export class EntitySaveOptions {
     /**
      * If set to true, the record will be saved to the database even if nothing is detected to be "dirty" or changed since the prior load.
      */
-    IgnoreDirtyState: boolean = false;
+    IgnoreDirtyState?: boolean = false;
     /**
      * If set to true, an AI actions associated with the entity will be skipped during the save operation
      */
@@ -460,6 +461,16 @@ export class EntitySaveOptions {
      * is legal does not depend on who is saving it.
      */
     OriginatingEntityActionIDs?: string[];
+    /**
+     * Optional per-save override for which columns the database save operation returns.
+     * When omitted, defaults to `entity.EntityInfo.SaveReturnMode` (`'full'` unless the entity's
+     * `Configuration.SaveReturnMode` is set to `'datestamps_only'`).
+     *
+     * - `'full'`: Re-queries all columns from the entity's `BaseView`.
+     * - `'datestamps_only'`: Returns only the primary key(s) and `__mj_CreatedAt`/`__mj_UpdatedAt`,
+     *   merging those database-generated values over the entity's current in-memory field values.
+     */
+    SaveReturnMode?: EntitySaveReturnMode;
 }
 
 /**

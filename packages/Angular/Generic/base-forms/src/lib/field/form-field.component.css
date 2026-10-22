@@ -17,6 +17,12 @@
   transition: all var(--mj-transition-base) ease;
 }
 
+/* No label (e.g. a generated section holding a single field, whose section title names it):
+   the control takes the whole row instead of falling into the label column. */
+.mj-forms-field--no-label {
+  grid-template-columns: 1fr;
+}
+
 /* Subtle row hover in edit mode */
 .mj-forms-field--editing:hover {
   background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
@@ -1389,6 +1395,11 @@
 /* ============================================
    RESPONSIVE
    ============================================ */
+/* With no label column, validation messages sit under the control in the only column. */
+.mj-forms-field--no-label .mj-forms-field-validation {
+  grid-column: 1;
+}
+
 @media (max-width: 640px) {
   .mj-forms-field {
     grid-template-columns: 1fr;
@@ -1402,4 +1413,61 @@
   .mj-forms-field-validation {
     grid-column: 1;
   }
+}
+
+/* ============================================
+   POLYMORPHIC FK SMART LINK & REMOTE UPDATE HIGHLIGHT
+   ============================================ */
+.mj-forms-poly-fk-read {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mj-forms-field-link--poly {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mj-forms-poly-entity-icon {
+  font-size: 12px;
+  color: var(--mj-brand-primary);
+  opacity: 0.85;
+}
+
+.mj-forms-poly-id-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: var(--mj-radius-sm, 4px);
+  background: var(--mj-bg-surface-sunken, rgba(148, 163, 184, 0.12));
+  border: 1px solid var(--mj-border-subtle, rgba(148, 163, 184, 0.25));
+  color: var(--mj-text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+  cursor: help;
+}
+
+@keyframes mj-field-remote-pulse {
+  0% {
+    background-color: color-mix(in srgb, var(--mj-brand-primary) 18%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 28%, transparent);
+  }
+  70% {
+    background-color: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+}
+
+mj-form-field.mj-forms-field--remotely-updated .mj-forms-field {
+  border-radius: var(--mj-radius-sm, 6px);
+  animation: mj-field-remote-pulse 2.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
