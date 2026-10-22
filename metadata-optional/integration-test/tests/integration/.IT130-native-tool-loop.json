@@ -1,0 +1,31 @@
+[
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+      "Name": "IT130 - Native Tool Loop (scripted model)",
+      "Description": "DETERMINISTIC — no network, no credentials. Runs real Loop agents through AgentRunner and the prompt runner's native tool-calling gate against a scripted stand-in model (ITScriptedToolLLM) served by fixture AI Model / Vendor / Model Vendor rows whose catalog declares native tool calling with implicit control flow and native tool results. Each check scripts the model's turns and asserts on what the framework sent the model (history adjacency, tools, tool choice, system prompt) and on what it persisted (run status, final step, payload, run steps, prompt-run modes). NTL1 a Retry on a native turn is answered in the protocol, directly after the call turn. NTL2 reasoning blocks are replayed on the call turn. NTL3 agent-local tools compose the payload as Tool steps, with a failed edit returned as an error. NTL4 a text-terminal agent's last turn asks for text. NTL5 native-only mode renders a tools-only prompt and applies a scratchpad write made beside another call. NTL6 an agent without NativeOnly keeps the hybrid prompt. NTL7 several payload writes apply in order. NTL8 complete_task after a write completes in one turn. NTL9 an Action plus ask_user runs the Action, then asks. NTL10 failure guidance rides in the is_error result. NTL11 a rejected tool call becomes a corrective retry. NTL12 a tools-payload rejection retries without tools, keeping calls as text. NTL13 older large tool-call arguments are compacted on opt-in. Self-cleaning.",
+      "MaxExecutionTimeMS": 600000,
+      "InputDefinition": {},
+      "ExpectedOutcomes": {
+        "summary": "The Loop agent runs as a provider-native tool loop: provider-valid history after every turn shape, reasoning carried across tool turns, agent-local tools and framework tools answered in the protocol, and the configured terminal and prompt honoured."
+      },
+      "Configuration": {
+        "tier": "deterministic",
+        "transport": "server",
+        "checks": [
+          {
+            "type": "native-tool-loop"
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "A2B5E1B9-7375-4509-8E3B-8AE10C5CCE70"
+    },
+    "sync": {
+      "lastModified": "2026-10-21T03:42:27.044Z",
+      "checksum": "68812bec61f8760a00ff3c3f5b7d2818f6be5b0dd0ac8de8e6504756b0e4baa3"
+    }
+  }
+]

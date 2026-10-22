@@ -24,6 +24,8 @@ import { RemoteOpWireProgressChecks } from '../checks/remote-op-wire-progress.ch
 import { PromptRunnerChecks } from '../checks/prompt-runner.checks';
 import { AiVendorEffortChecks } from '../checks/ai-vendor-effort.checks';
 import { NativeToolCallingLiveChecks } from '../checks/native-tool-calling-live.checks';
+import { NativeToolLoopChecks } from '../checks/native-tool-loop.checks';
+import { NativeToolLoopLiveChecks } from '../checks/native-tool-loop-live.checks';
 import { ConcurrentChecks } from '../checks/concurrent.checks';
 import { AgentRunnerChecks } from '../checks/agent-runner.checks';
 import { RemoteOpAiAuthoringChecks } from '../checks/remote-op-ai-authoring.checks';
@@ -149,6 +151,8 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['prompt-runner', PromptRunnerChecks, 1],
         ['ai-vendor-effort', AiVendorEffortChecks, 2],
         ['native-tool-calling-live', NativeToolCallingLiveChecks, 4],
+        ['native-tool-loop', NativeToolLoopChecks, 13],
+        ['native-tool-loop-live', NativeToolLoopLiveChecks, 3],
         ['concurrent', ConcurrentChecks, 2],
         ['agent-runner', AgentRunnerChecks, 1],
         ['remote-op-ai-authoring', RemoteOpAiAuthoringChecks, 3],
@@ -332,6 +336,8 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'metadata-sync-push': 10,
         'metadata-sync': 9,
         'native-tool-calling-live': 4,
+        'native-tool-loop': 13,
+        'native-tool-loop-live': 3,
         'nested-transactions': 11,
         'open-app-teardown': 2,
         'performance-benchmark': 14,
@@ -413,7 +419,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(131);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(133);
     });
 });
 
@@ -768,6 +774,9 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'native-tool-calling-live.NTC2',
         'native-tool-calling-live.NTC3',
         'native-tool-calling-live.NTC4',
+        'native-tool-loop-live.NTLL1',
+        'native-tool-loop-live.NTLL2',
+        'native-tool-loop-live.NTLL3',
         'performance-benchmark.PB10',
         'performance-benchmark.PB11',
         'performance-benchmark.PB12',
