@@ -1,11 +1,50 @@
 @if (StripMode && Compact) {
-  <!-- COMPACT (Calm Orb · overlay): the lean dock — a "•••" that blooms a small sheet with the secondary actions
-       (Details / Type), a first-class Captions toggle (text stays ONE TAP in the overlay), the call's media controls
-       (the microphone with its device chevron, and the camera and Share when offered) and a red End. Circles from the
-       design system. -->
+  <!-- COMPACT / ORB (Calm Orb · overlay): the lean dock — primary bar keeps only the microphone,
+       Captions, active Camera/Share (while on), a "•••" that blooms a small sheet with secondary
+       actions (inactive Camera/Share, Details, Type), and a red End. Circles from the design system. -->
   <div class="dock-lean" role="group" aria-label="Call controls">
+    <mj-media-controls class="lean__media"
+                       Size="lg"
+                       [MicrophoneOn]="!IsMuted"
+                       [ShowCamera]="ShowCamera && CameraOn"
+                       [ShowShare]="ShowShare && Sharing"
+                       [CameraOn]="CameraOn"
+                       [Sharing]="Sharing"
+                       [SharePanels]="SharePanels"
+                       [CameraOptional]="true"
+                       [ShowDeviceMenu]="true"
+                       [Devices]="Devices"
+                       [SelectedMicrophoneID]="SelectedMicrophoneID"
+                       [SelectedCameraID]="SelectedCameraID"
+                       (MicrophoneToggled)="ToggleMute()"
+                       (CameraToggled)="CameraToggled.emit($event)"
+                       (ShareRequested)="ShareRequested.emit($event)"
+                       (StopShareRequested)="StopShareRequested.emit()"
+                       (DeviceSelected)="DeviceSelected.emit($event)"></mj-media-controls>
+
+    <!-- Captions: first-class in the lean dock (the overlay's only text toggle now). -->
+    <button type="button" mjButton Shape="circle" [Toggleable]="true" [Selected]="CaptionsOn"
+            AriaLabel="Captions" [title]="CaptionsTitle"
+            (click)="ToggleCaptions()">
+      <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
+    </button>
+
     <div class="lean-more" [class.lean-more--open]="MoreOpen">
-      <div class="lean-sheet" (click)="$event.stopPropagation()" role="menu" aria-label="More call controls">
+      <div class="lean-sheet" (click)="$event.stopPropagation()" role="group" aria-label="More call controls">
+        @if ((ShowCamera && !CameraOn) || (ShowShare && !Sharing)) {
+          <mj-media-controls class="lean-sheet__media"
+                             Size="md"
+                             [ShowMicrophone]="false"
+                             [ShowCamera]="ShowCamera && !CameraOn"
+                             [ShowShare]="ShowShare && !Sharing"
+                             [CameraOn]="CameraOn"
+                             [Sharing]="Sharing"
+                             [SharePanels]="SharePanels"
+                             [CameraOptional]="true"
+                             (CameraToggled)="CameraToggled.emit($event); MoreOpen = false"
+                             (ShareRequested)="ShareRequested.emit($event); MoreOpen = false"
+                             (StopShareRequested)="StopShareRequested.emit()"></mj-media-controls>
+        }
         @if (ShowDetails) {
           <button type="button" class="lean-sheet__btn" [class.lean-sheet__btn--on]="DetailsOn"
                   (click)="DetailsToggled.emit(); MoreOpen = false"
@@ -29,32 +68,6 @@
         <i class="fa-solid fa-ellipsis" aria-hidden="true"></i>
       </button>
     </div>
-
-    <!-- Captions: first-class in the lean dock (the overlay's only text toggle now). -->
-    <button type="button" mjButton Shape="circle" [Toggleable]="true" [Selected]="CaptionsOn"
-            AriaLabel="Captions" [title]="CaptionsTitle"
-            (click)="ToggleCaptions()">
-      <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
-    </button>
-
-    <mj-media-controls class="lean__media"
-                       Size="lg"
-                       [MicrophoneOn]="!IsMuted"
-                       [ShowCamera]="ShowCamera"
-                       [ShowShare]="ShowShare"
-                       [CameraOn]="CameraOn"
-                       [Sharing]="Sharing"
-                       [SharePanels]="SharePanels"
-                       [CameraOptional]="true"
-                       [ShowDeviceMenu]="true"
-                       [Devices]="Devices"
-                       [SelectedMicrophoneID]="SelectedMicrophoneID"
-                       [SelectedCameraID]="SelectedCameraID"
-                       (MicrophoneToggled)="ToggleMute()"
-                       (CameraToggled)="CameraToggled.emit($event)"
-                       (ShareRequested)="ShareRequested.emit($event)"
-                       (StopShareRequested)="StopShareRequested.emit()"
-                       (DeviceSelected)="DeviceSelected.emit($event)"></mj-media-controls>
 
     <button type="button" mjButton Shape="circle" Size="lg" Variant="danger"
             AriaLabel="End call" title="End call" (click)="EndRequested.emit()">
