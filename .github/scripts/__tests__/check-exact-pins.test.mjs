@@ -154,6 +154,30 @@ describe('check-exact-pins fixture suite', () => {
         expect(runCli().status).toBe(1);
     });
 
+    it('fails on a non-X.Y.Z range even when the lockfile specifier and version echo it exactly', () => {
+        // Only the exactness rule can catch this: version and specifier both equal the declared string.
+        writeManifest('packages/flow-editor', {
+            name: '@memberjunction/ng-flow-editor',
+            dependencies: {
+                '@foblex/flow': '18.0.0-edge.1',
+            },
+        });
+        writeLockfile(
+            `  packages/flow-editor:\n    dependencies:\n      '@foblex/flow':\n        specifier: 18.0.0-edge.1\n        version: 18.0.0-edge.1(@angular/core@21.2.22)`
+        );
+
+        expect(findPinViolations(tempRoot)).toEqual([
+            {
+                manifestPath: 'packages/flow-editor/package.json',
+                dep: '@foblex/flow',
+                declaredRange: '18.0.0-edge.1',
+                lockfileVersion: '18.0.0-edge.1',
+                lockfileSpecifier: '18.0.0-edge.1',
+            },
+        ]);
+        expect(runCli().status).toBe(1);
+    });
+
     it('fails when a pinned-scope dependency in devDependencies or peerDependencies uses a range or is missing from lockfile', () => {
         writeManifest('packages/flow-editor', {
             name: '@memberjunction/ng-flow-editor',
