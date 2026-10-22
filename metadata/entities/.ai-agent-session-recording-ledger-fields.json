@@ -1,0 +1,73 @@
+[
+  {
+    "_comments": [
+      "The recording ledger's columns are owned by its stored procedures (spRecordAIAgentSessionRecordingShard, spStampAIAgentSessionRecordingTerminal, spClaim/spFinishAIAgentSessionRecordingAssembly, spStampAIAgentSessionRecordingFile). A stale entity save must never write or clear them (#6010): a session copy loaded before the terminal stamp and saved as the close sent _Clear=1 for each NULL column and wiped the stamp. AllowUpdateAPI=false makes CodeGen leave them out of spUpdateAIAgentSession, so no entity class (an app's own subclass included) can write them. RecordingStartedAt is not here: it stays updatable."
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Sessions"
+    },
+    "fields": {
+      "Name": "MJ: AI Agent Sessions"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "AllowUpdateAPI": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Sessions&Name=RecordingStatus"
+          }
+        },
+        {
+          "fields": {
+            "AllowUpdateAPI": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Sessions&Name=RecordingExpectedShards"
+          }
+        },
+        {
+          "fields": {
+            "AllowUpdateAPI": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Sessions&Name=RecordingCapturedSamples"
+          }
+        },
+        {
+          "fields": {
+            "AllowUpdateAPI": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Sessions&Name=RecordingGaps"
+          }
+        },
+        {
+          "fields": {
+            "AllowUpdateAPI": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Sessions&Name=RecordingAssemblyVersion"
+          }
+        },
+        {
+          "fields": {
+            "AllowUpdateAPI": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Sessions&Name=RecordingFileID"
+          }
+        },
+        {
+          "fields": {
+            "AllowUpdateAPI": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Sessions&Name=RecordingMedia"
+          }
+        }
+      ]
+    }
+  }
+]
