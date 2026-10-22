@@ -8,7 +8,6 @@ export * from './gates/results';
 export * from './gates/define-gate';
 export * from './harness/types';
 export * from './harness/run-fixtures';
-export * from './harness/cleanup';
 export * from './data/seeds';
 export * from './data/cache';
 export * from './data/catalog';

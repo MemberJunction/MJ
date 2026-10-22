@@ -17,7 +17,7 @@ export type AlgorithmKey = 'logistic_regression' | 'xgboost' | 'lightgbm' | 'ran
 export interface LoadedDataset { Ref: DatasetRef; Dir: string; Entity: EntityInfo; RowCount: number; RowsSha256: string }
 
 export interface PipelineSpec {
-  Name: string;                       // always prefixed "PSTruth:" (cleanup key)
+  Name: string;                       // always prefixed "PSTruth:" (marks suite fixtures)
   Dataset: LoadedDataset;
   Target: string;
   ProblemType: ProblemType;
