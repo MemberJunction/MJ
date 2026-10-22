@@ -29,6 +29,30 @@ export type FieldChange = {
 };
 
 /**
+ * Options controlling how {@link Metadata.GetRecordDependencies} discovers dependent records.
+ */
+export interface GetRecordDependenciesOptions {
+    /**
+     * Which category of foreign-key links to inspect:
+     * - `'both'` (default): Both hard database foreign keys (`EntityField.RelatedEntityID`) and
+     *   polymorphic / soft foreign keys (`EntityField.EntityIDFieldName`).
+     * - `'hard'`: Only direct foreign-key relationships (`RelatedEntityID` is set and `EntityIDFieldName` is empty).
+     * - `'soft'`: Only polymorphic foreign-key relationships (`EntityIDFieldName` is set).
+     */
+    LinkType?: 'both' | 'hard' | 'soft';
+    /**
+     * Whether to include high-volume system audit/telemetry entities (`MJ: Record Changes`,
+     * `MJ: Audit Logs`, `MJ: User Record Logs`, `MJ: User RecordAccess`).
+     * Defaults to `true` for delete/merge safety checks; UI record-link viewers pass `false`.
+     */
+    IncludeSystemEntities?: boolean;
+    /**
+     * Optional allow-list of entity names to restrict the dependency scan to.
+     */
+    EntityNames?: string[];
+}
+
+/**
  * Result of save SQL generation. Subclasses populate this from their dialect-specific
  * SQL generators (stored procedure calls, function calls, etc.).
  */
@@ -498,18 +522,32 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     /**
      * Builds SQL for hard-link (foreign key) dependency queries.
      * Returns a UNION ALL query across all dependent entities.
-     * @param entityDependencies The entity-level dependency metadata
+     * @param entityDependencies The entity-level dependency metadata (or entity name to resolve dependencies for)
      * @param compositeKey The primary key of the record being checked
+     * @param options Optional filtering options for dependency discovery
+     * @param contextUser Optional user context for permission filtering
      */
-    protected abstract BuildHardLinkDependencySQL(entityDependencies: EntityDependency[], compositeKey: CompositeKey): string;
+    protected abstract BuildHardLinkDependencySQL(
+        entityDependencies: EntityDependency[] | string,
+        compositeKey: CompositeKey,
+        options?: GetRecordDependenciesOptions,
+        contextUser?: UserInfo
+    ): string;
 
     /**
      * Builds SQL for soft-link dependency queries (entities using EntityIDFieldName pattern).
      * Returns a UNION ALL query across all soft-linked entities.
      * @param entityName The entity name being checked for dependencies
      * @param compositeKey The primary key of the record
+     * @param options Optional filtering options for dependency discovery
+     * @param contextUser Optional user context for permission filtering
      */
-    protected abstract BuildSoftLinkDependencySQL(entityName: string, compositeKey: CompositeKey): string;
+    protected abstract BuildSoftLinkDependencySQL(
+        entityName: string,
+        compositeKey: CompositeKey,
+        options?: GetRecordDependenciesOptions,
+        contextUser?: UserInfo
+    ): string;
 
     /**
      * Generates the SQL (and optional parameters) for a Save (Create or Update) operation.
@@ -988,16 +1026,149 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     /**************************************************************************/
 
     /**
+     * High-volume system audit/telemetry entities excluded when `options.IncludeSystemEntities === false`.
+     */
+    private static readonly _systemDependencyEntityNames: ReadonlySet<string> = new Set([
+        'mj: record changes',
+        'mj: audit logs',
+        'mj: user record logs',
+        'mj: user recordaccess',
+        'mj: entity record documents',
+    ]);
+
+    /**
+     * Normalizes `(contextUserOrOptions, options)` so callers can invoke `GetRecordDependencies`
+     * with either `(entityName, key, options)` or `(entityName, key, contextUser, options)`.
+     */
+    protected resolveRecordDependencyArgs(
+        contextUserOrOptions?: UserInfo | GetRecordDependenciesOptions,
+        options?: GetRecordDependenciesOptions
+    ): { contextUser?: UserInfo; options?: GetRecordDependenciesOptions } {
+        if (options !== undefined) {
+            return { contextUser: contextUserOrOptions as UserInfo | undefined, options };
+        }
+        if (!contextUserOrOptions) {
+            return { contextUser: undefined, options: undefined };
+        }
+        if (
+            contextUserOrOptions instanceof UserInfo ||
+            'UserRoles' in contextUserOrOptions ||
+            'Email' in contextUserOrOptions
+        ) {
+            return { contextUser: contextUserOrOptions as UserInfo, options: undefined };
+        }
+        return { contextUser: undefined, options: contextUserOrOptions as GetRecordDependenciesOptions };
+    }
+
+    /**
+     * Determines whether `relatedEntity` should be included in a record dependency scan
+     * based on `options` (`IncludeSystemEntities`, `EntityNames`) and `contextUser` read permissions.
+     */
+    protected shouldIncludeDependencyEntity(
+        relatedEntity: EntityInfo,
+        options?: GetRecordDependenciesOptions,
+        contextUser?: UserInfo
+    ): boolean {
+        if (!this.shouldIncludeDependencyEntityName(relatedEntity.Name, options)) {
+            return false;
+        }
+        if (contextUser && typeof relatedEntity.CheckPermissions === 'function') {
+            if (!relatedEntity.CheckPermissions(contextUser, EntityPermissionType.Read, false)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Checks name-based dependency filters (`IncludeSystemEntities` and `EntityNames`)
+     * when only the entity name is available.
+     */
+    protected shouldIncludeDependencyEntityName(
+        relatedEntityName: string,
+        options?: GetRecordDependenciesOptions
+    ): boolean {
+        const normalizedName = relatedEntityName.trim().toLowerCase();
+        if (options?.IncludeSystemEntities === false) {
+            if (DatabaseProviderBase._systemDependencyEntityNames.has(normalizedName)) {
+                return false;
+            }
+        }
+        if (options?.EntityNames && options.EntityNames.length > 0) {
+            const allowed = options.EntityNames.some(n => n.trim().toLowerCase() === normalizedName);
+            if (!allowed) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Resolves an `EntityDependency[] | string` argument to an `EntityDependency[]` array.
+     * Supports passing either a pre-resolved `EntityDependency[]` list or an `entityName` string.
+     */
+    protected resolveEntityDependencies(entityDependenciesOrName: EntityDependency[] | string): EntityDependency[] {
+        if (Array.isArray(entityDependenciesOrName)) {
+            return entityDependenciesOrName;
+        }
+        const eName = entityDependenciesOrName.trim().toLowerCase();
+        const result: EntityDependency[] = [];
+        for (const re of this.Entities) {
+            const relatedFields = re.Fields.filter(
+                f => f.RelatedEntity?.trim().toLowerCase() === eName && (!f.EntityIDFieldName || f.EntityIDFieldName.trim().length === 0)
+            );
+            for (const f of relatedFields) {
+                result.push({
+                    EntityName: entityDependenciesOrName,
+                    RelatedEntityName: re.Name,
+                    FieldName: f.Name,
+                });
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Selects `relatedEntity.BaseTable` when `BaseTable` is defined, the entity is not virtual,
+     * and all referenced columns (`PrimaryKeys` plus `referencedFieldNames`) are physical (`!f.IsVirtual`).
+     * Falls back to `relatedEntity.BaseView` when any referenced column is virtual or `BaseTable` is absent.
+     */
+    protected resolveDependencySourceObject(relatedEntity: EntityInfo, referencedFieldNames: string[]): string {
+        if (!relatedEntity.BaseTable || relatedEntity.BaseTable.trim().length === 0 || relatedEntity.VirtualEntity) {
+            return relatedEntity.BaseView;
+        }
+        if (relatedEntity.PrimaryKeys?.some(pk => pk.IsVirtual === true)) {
+            return relatedEntity.BaseView;
+        }
+        for (const fieldName of referencedFieldNames) {
+            const field = relatedEntity.Fields?.find(
+                f => f.Name?.trim().toLowerCase() === fieldName?.trim().toLowerCase()
+            );
+            if (field?.IsVirtual === true) {
+                return relatedEntity.BaseView;
+            }
+        }
+        return relatedEntity.BaseTable;
+    }
+
+    /**
      * Returns a list of record-level dependencies — records in other entities linked to
      * the specified entity/record via foreign keys (hard links) or EntityIDFieldName
      * soft links. Uses abstract SQL builders for dialect-specific query generation.
      *
      * @param entityName The entity name to check
      * @param compositeKey The primary key(s) of the record
-     * @param contextUser Optional context user
+     * @param contextUser Optional context user (or options when called with 3 args)
+     * @param options Optional filtering options (`LinkType`, `IncludeSystemEntities`, `EntityNames`)
      */
-    public async GetRecordDependencies(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo): Promise<RecordDependency[]> {
+    public async GetRecordDependencies(
+        entityName: string,
+        compositeKey: CompositeKey,
+        contextUser?: UserInfo | GetRecordDependenciesOptions,
+        options?: GetRecordDependenciesOptions
+    ): Promise<RecordDependency[]> {
         try {
+            const { contextUser: resolvedUser, options: resolvedOptions } = this.resolveRecordDependencyArgs(contextUser, options);
             const recordDependencies: RecordDependency[] = [];
 
             // Validate up front. Reporting "no dependencies" for an entity we cannot resolve would be
@@ -1007,21 +1178,44 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 throw new Error(`Entity ${entityName} not found in metadata`);
             }
 
-            const entityDependencies: EntityDependency[] = await this.GetEntityDependencies(entityName);
+            const linkType = resolvedOptions?.LinkType ?? 'both';
 
-            // Deliberately NO early return when there are no hard (foreign key) dependents. An entity
-            // whose only dependents are polymorphic EntityID/RecordID links is precisely the case the
-            // soft-link query exists to serve, and returning here skipped building it entirely.
-            const hardSQL = entityDependencies.length > 0 ? this.BuildHardLinkDependencySQL(entityDependencies, compositeKey) : '';
-            const softSQL = this.BuildSoftLinkDependencySQL(entityName, compositeKey);
+            let hardSQL = '';
+            if (linkType === 'both' || linkType === 'hard') {
+                const rawEntityDependencies: EntityDependency[] = await this.GetEntityDependencies(entityName);
+                const entityDependencies = rawEntityDependencies.filter((dep) => {
+                    const relEntity = this.EntityByName(dep.RelatedEntityName);
+                    if (relEntity) {
+                        return this.shouldIncludeDependencyEntity(relEntity, resolvedOptions, resolvedUser);
+                    }
+                    return this.shouldIncludeDependencyEntityName(dep.RelatedEntityName, resolvedOptions);
+                });
+                // Deliberately NO early return when there are no hard (foreign key) dependents. An entity
+                // whose only dependents are polymorphic EntityID/RecordID links is precisely the case the
+                // soft-link query exists to serve, and returning here skipped building it entirely.
+                hardSQL = entityDependencies.length > 0
+                    ? this.BuildHardLinkDependencySQL(entityDependencies, compositeKey, resolvedOptions, resolvedUser)
+                    : '';
+            }
+
+            const softSQL =
+                linkType === 'both' || linkType === 'soft'
+                    ? this.BuildSoftLinkDependencySQL(entityName, compositeKey, resolvedOptions, resolvedUser)
+                    : '';
             const sSQL = [hardSQL, softSQL].filter(s => s.length > 0).join(' UNION ALL ');
 
             if (!sSQL) return recordDependencies;
 
-            const result = await this.ExecuteSQL<Record<string, unknown>>(sSQL, undefined, undefined, contextUser);
+            const result = await this.ExecuteSQL<Record<string, unknown>>(sSQL, undefined, undefined, resolvedUser);
             if (!result || result.length === 0) return recordDependencies;
 
-            return this.parseRecordDependencyResults(result);
+            return this.parseRecordDependencyResults(result).filter((dep) => {
+                const relEntity = this.EntityByName(dep.RelatedEntityName);
+                if (relEntity) {
+                    return this.shouldIncludeDependencyEntity(relEntity, resolvedOptions, resolvedUser);
+                }
+                return this.shouldIncludeDependencyEntityName(dep.RelatedEntityName, resolvedOptions);
+            });
         } catch (e) {
             LogError(e);
             throw e;
@@ -1071,10 +1265,19 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             });
             depCompositeKey.LoadFromEntityInfoAndRecord(relatedEntityInfo, pkeys);
 
+            const fieldName = r.FieldName as string;
+            const fieldInfo = relatedEntityInfo.Fields?.find(
+                (f) => f.Name?.trim().toLowerCase() === fieldName?.trim().toLowerCase()
+            );
+            const fieldDisplayName = fieldInfo
+                ? (fieldInfo.DisplayNameOrName || fieldInfo.DisplayName || fieldInfo.Name)
+                : undefined;
+
             recordDependencies.push({
                 EntityName: r.EntityName as string,
                 RelatedEntityName: r.RelatedEntityName as string,
-                FieldName: r.FieldName as string,
+                FieldName: fieldName,
+                FieldDisplayName: fieldDisplayName,
                 PrimaryKey: depCompositeKey,
                 // Both dialects emit this literal on every row of the union: 1/true for the polymorphic
                 // branch, 0/false for the foreign key branch.

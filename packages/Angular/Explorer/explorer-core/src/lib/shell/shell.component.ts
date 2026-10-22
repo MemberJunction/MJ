@@ -16,7 +16,7 @@ import {
 } from '@memberjunction/ng-base-application';
 import { Metadata, EntityInfo, LogStatus, LogError, StartupManager, CompositeKey, EncodeNewRecordValuesForURL, IsNewEntityRecordUrlId, NEW_ENTITY_RECORD_URL_ID, NEW_RECORD_VALUES_QUERY_PARAM, RecordUrlMatchesTab, ResourceUrlsEquivalent } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
-import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem, SetRecordOpenStyle, RecordOpenStyle, IsRecordsRegionTab, IsRecordsTabConfiguration, NormalizeRecordIdForMatch, FORM_MODE_QUERY_PARAM, ReadStandardFormQuery } from '@memberjunction/ng-shared';
+import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem, SetRecordOpenStyle, RecordOpenStyle, IsRecordsRegionTab, IsRecordsTabConfiguration, NormalizeRecordIdForMatch, FormatEntityRecordDisplayTitle, ResolveRecordTabDisplayTitle, FORM_MODE_QUERY_PARAM, ReadStandardFormQuery } from '@memberjunction/ng-shared';
 import { StartupValidationService } from '../services/startup-validation.service';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
@@ -1318,10 +1318,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       return;
     }
 
+    const resolvedTabTitle = ResolveRecordTabDisplayTitle(activeTab, this.ProviderToUse);
+
     // Get the tab's application ID
     const tabAppId = activeTab.applicationId;
     if (!tabAppId) {
-      this.titleService.setResourceName(activeTab.title || null);
+      this.titleService.setResourceName(resolvedTabTitle);
       return;
     }
 
@@ -1332,7 +1334,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
       // Don't try to set active app - SYSTEM_APP_ID has no registered app
       // Update browser title with just the tab title (no app context)
-      this.titleService.setContext(null, activeTab.title || 'Explorer');
+      this.titleService.setContext(null, resolvedTabTitle || 'Explorer');
       return;
     }
 
@@ -1348,7 +1350,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // stays wherever the user is. Records DOCKED to the workspace fall
     // through: they are ordinary main-layout tabs and DO flip app context.
     if (this.RecordTabsStyle && IsRecordsRegionTab(activeTab.configuration)) {
-      this.titleService.setContext(this.ActiveApp?.Name || null, activeTab.title || null);
+      this.titleService.setContext(this.ActiveApp?.Name || null, resolvedTabTitle);
       return;
     }
 
@@ -1364,7 +1366,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // (which can be stale when switching between apps in single-resource mode).
     const app = this.appManager.GetAppById(tabAppId);
     const appName = app?.Name || null;
-    const tabTitle = (activeTab.configuration?.['navItemName'] as string) || activeTab.title || null;
+    const tabTitle = (activeTab.configuration?.['navItemName'] as string) || resolvedTabTitle || null;
     this.titleService.setContext(appName, tabTitle);
   }
 
@@ -3260,9 +3262,8 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       if (compositeKey.KeyValuePairs.length === 0) return null;
 
       const results = await md.GetEntityRecordNames([{ EntityName: entityName, CompositeKey: compositeKey }]);
-      if (results.length > 0 && results[0].Success && results[0].RecordName) {
-        return results[0].RecordName;
-      }
+      const rawName = results.length > 0 && results[0].Success ? results[0].RecordName : null;
+      return FormatEntityRecordDisplayTitle(entityInfo, entityName, compositeKey, rawName);
     } catch {
       // Fall through to null
     }
@@ -3475,7 +3476,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // Get resource name from active tab
     let resourceName: string | null = null;
     if (activeTab) {
-      resourceName = activeTab.title || null;
+      resourceName = ResolveRecordTabDisplayTitle(activeTab, this.ProviderToUse);
     }
 
     // Update title via TitleService

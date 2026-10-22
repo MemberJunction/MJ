@@ -496,6 +496,8 @@ const setupComplete$ = new ReplaySubject(1);
     // Every API pool carries the statement and idle-in-transaction timeouts from connection #1.
     const pgConnectionConfig = BuildPostgreSQLConnectionConfig(pgEndpoint, configInfo.databaseSettings, 'api');
     const pgPool = new pg.default.Pool(ToPGPoolConfig(pgConnectionConfig));
+    // An idle connection the server drops is emitted on the pool; without a listener Node exits.
+    pgPool.on('error', (err) => console.error('[PostgreSQL pool] Idle connection error (connection evicted):', err.message));
 
     // Verify connection
     const testClient = await pgPool.connect();
@@ -513,6 +515,7 @@ const setupComplete$ = new ReplaySubject(1);
         ...ToPGPoolConfig(BuildPostgreSQLConnectionConfig({ ...pgEndpoint, ...pgReadOnlyCredentials }, configInfo.databaseSettings, 'read-only')),
         types: MJPostgresTypes,
       });
+      readOnlyPgPool.on('error', (err) => console.error('[PostgreSQL read-only pool] Idle connection error (connection evicted):', err.message));
       const readOnlyTestClient = await readOnlyPgPool.connect();
       try {
         for (const warning of await DescribeReadOnlyLoginOverreach(readOnlyTestClient, mj_core_schema)) {
@@ -599,6 +602,7 @@ const setupComplete$ = new ReplaySubject(1);
           'codegen',
         );
         const codegenPgPool = new pg.default.Pool(ToPGPoolConfig(codegenPgConnectionConfig));
+        codegenPgPool.on('error', (err) => console.error('[PostgreSQL CodeGen pool] Idle connection error (connection evicted):', err.message));
         const codegenTestClient = await codegenPgPool.connect();
         await codegenTestClient.query('SELECT 1');
         codegenTestClient.release();
