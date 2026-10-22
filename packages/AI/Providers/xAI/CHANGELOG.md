@@ -1,5 +1,27 @@
 # @memberjunction/ai-xai
 
+## 6.2.0-edge.5
+
+### Minor Changes
+
+- 04fec10: Grok Build 0.1 no longer fails when a prompt or agent sets an effort level. Metadata only, no code change.
+
+  xAI rejects `reasoning_effort` for this model with a 400 (`Model grok-build-0.1 does not support parameter reasoningEffort.`), but its x.ai rows were flagged `SupportsEffortLevel`, so `AIPromptRunner` sent the effort level and every such run failed. Both x.ai rows (model developer and inference provider) are now `SupportsEffortLevel: false`; the runner drops the effort level for the model and logs that it is ignored, and the call succeeds. Verified live against xAI: Grok 4.5, 4.6 and 4.7 accept `reasoning_effort` and keep the flag. The OpenRouter row is unchanged: OpenRouter's handling of the parameter for this model was not verified.
+
+### Patch Changes
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [3080e83]
+- Updated dependencies [81aea34]
+- Updated dependencies [2274f42]
+- Updated dependencies [230cdad]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [72dd65c]
+- Updated dependencies [17a4137]
+  - @memberjunction/ai@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/ai-openai@6.2.0-edge.5
+
 ## 6.2.0-edge.4
 
 ### Patch Changes

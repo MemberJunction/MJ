@@ -2,7 +2,7 @@
 
 ## Critical Rules for Metadata Creation
 
-### 1. System-Generated Fields: `sync` NEVER, `primaryKey` via CLI uuidgen
+### 1. `primaryKey` on Every Record; `sync` Never
 When creating or editing metadata JSON files, **NEVER** include the following fields - they are automatically managed by the MetadataSync tool:
 
 - **sync**: This object (containing lastModified and checksum) is auto-managed — populated when the build engineer runs `mj sync push` at release time (see "Release-Time Metadata Sync" below). Never author or hand-compute it.
@@ -11,7 +11,9 @@ When creating or editing metadata JSON files, **NEVER** include the following fi
 - **CreatedAt**: System timestamp
 - **UpdatedAt**: System timestamp
 
-- **primaryKey**: New records SHOULD include a `primaryKey` with a hardcoded UUID **generated at the CLI with `uuidgen`** (`uuidgen | tr '[:lower:]' '[:upper:]'` for uppercase) so the record gets the same deterministic ID in every environment. Never invent/infer a UUID by hand — always run `uuidgen`.
+- **primaryKey**: **Every record MUST have a `primaryKey`**, at the top level and on every nested `relatedEntities` child. `mj sync push` creates a new row for any record without one, so an omitted `primaryKey` inserts a duplicate (or, when the table already holds the row, fails). It takes one of two forms:
+  - **A row this file creates**: a hardcoded UUID **generated at the CLI with `uuidgen`** (`uuidgen | tr '[:lower:]' '[:upper:]'` for uppercase), so the record gets the same ID in every environment. Never invent or infer a UUID by hand.
+  - **A row that already exists**, created by the migration stack or by CodeGen (an `MJ: Entities` or `MJ: Entity Fields` row, whose ID differs per database): an `@lookup` that resolves to it, e.g. `"ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=<Entity>&Name=<Field>"`.
 
 The `sync` blocks will be automatically added/updated when `mj sync push` runs.
 
@@ -20,7 +22,7 @@ The `sync` blocks will be automatically added/updated when `mj sync push` runs.
 
 **Do NOT hand-author `*__Metadata_Sync.sql` migrations for metadata changes** (new AI models, prompts, agents, etc.). The release workflow is:
 
-1. PRs contribute ONLY the declarative metadata JSON changes (fields + `@lookup` refs + `uuidgen` primaryKey, no `sync`).
+1. PRs contribute ONLY the declarative metadata JSON changes (fields + `@lookup` refs + a `primaryKey` on every record, no `sync`).
 2. At build time, the build engineer starts from a clean DB at the last released version, runs `mj migrate` to apply every migration merged to `next` since that release, then runs `mj sync push`. CodeGen is not needed to generate the seed: `mj migrate` on a fresh database already replays every `CodeGen_Run_*.sql`. Running `mj codegen` afterwards is an optional drift check that should produce nothing. Full steps: [`DEPLOYMENT.md`](../DEPLOYMENT.md) Step 3.
 3. That push generates ONE consolidated metadata-sync migration for the release (SQL Server + PostgreSQL) and writes the `sync` blocks back into the JSON files.
 4. **Post-Sync Verification**: After applying a new `Metadata_Sync` migration to a from-nothing database, verify that `SELECT COUNT(*) FROM [__mj].[EntityField] WHERE ID IN (<ids in file>)` matches the count of `-- Save MJ: Entity Fields` blocks. `spUpdateEntityField` is a full-row procedure that silently no-ops when an ID is absent rather than throwing a SQL error.
@@ -93,6 +95,33 @@ Nest under the agent as `relatedEntities["MJ: AI Agent Rubrics"]`.
 - Its paired cost row (`MJ: AI Model Costs`): `Status: "Expired"` plus an `EndedAt` ISO timestamp.
 - `"Inactive"` is **not** a valid cost `Status` — the CHECK constraint allows only `Active`, `Pending`, `Expired`, `Invalid`, and a bad value fails `mj sync push` in CI.
 - Run `mj sync validate --dir=metadata` before opening a PR.
+
+#### Polymorphic Foreign Keys (`EntityField.EntityIDFieldName`)
+Whenever an entity has a polymorphic foreign-key pair (a column storing a record ID paired with a sibling column on the same table that identifies the target entity by `EntityID` or entity name — e.g., `EntityID` + `RecordID`, `SourceEntityID` + `SourceRecordID`, `TargetEntityID` + `TargetRecordID`, `AssigneeEntityID` + `AssigneeRecordID`), you **MUST** set `EntityIDFieldName` on the record-ID field's `MJ: Entity Fields` metadata record in `metadata/entities/.polymorphic-fk-entity-fields.json`:
+```json
+{
+  "fields": {
+    "Name": "MJ: Tagged Items"
+  },
+  "relatedEntities": {
+    "MJ: Entity Fields": [
+      {
+        "fields": {
+          "EntityIDFieldName": "EntityID"
+        },
+        "primaryKey": {
+          "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tagged Items&Name=RecordID"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "@lookup:MJ: Entities.Name=MJ: Tagged Items"
+  }
+}
+```
+- **Why**: Forms (`<mj-form-field>`), grids (`<mj-entity-data-grid>`), cards (`<mj-entity-cards>`), and record detail panels (`<mj-entity-record-detail-panel>`) rely strictly on the hard metadata link `EntityField.EntityIDFieldName` (never heuristics) to resolve target record names, render clickable record links, and scope edit-mode FK search pickers.
+- **Remember**: CodeGen already created both rows, so each record's `primaryKey` is an `@lookup` to it (rule 1): the entity by `Name`, the field by `EntityID` + `Name`. Without the field's `primaryKey`, push tries to insert a second `RecordID` field instead of updating this one. Do not add `sync` blocks.
 
 ### 5. Template Variable Conventions
 Agent prompt templates receive these standard variables:
@@ -191,7 +220,7 @@ metadata/
 - Don't include timestamp fields - they're auto-managed
 - Don't forget to set Status fields to "Active"
 - Don't create agent types - use existing "Loop" type
-- Don't include `sync` objects in any records; new-record `primaryKey` UUIDs must come from CLI `uuidgen` (see rule 1)
+- Don't include `sync` objects in any records, and don't leave any record (nested ones included) without a `primaryKey`: CLI `uuidgen` for a new row, an `@lookup` for an existing one (see rule 1)
 - Don't hand-author `*__Metadata_Sync.sql` migrations — one consolidated sync migration is generated per release by the build engineer (see rule 1b)
 - `metadata/scheduled-jobs/.memory-cleanup-job.json` is **deprecated as of v5.30.x** — Memory Cleanup Agent has been folded into Memory Manager's consolidation pipeline. Don't author new scheduled jobs that reference it; trigger memory maintenance through the Memory Manager agent instead. See `packages/AI/Agents/README.md` and `specs/001-memory-consolidation/spec.md`.
 
@@ -323,7 +352,7 @@ When a migration creates a new lookup or reference table (e.g., `AIAgentRequestT
      }
    }
    ```
-3. Create the seed data file (e.g., `.agent-request-types.json`) as a JSON array of records. Each record has a `"fields"` object with the column values. **Omit `primaryKey` and `sync`** — see rule 1.
+3. Create the seed data file (e.g., `.agent-request-types.json`) as a JSON array of records. Each record has a `"fields"` object with the column values and a `primaryKey` UUID from CLI `uuidgen`; omit `sync` — see rule 1.
 4. Push with: `pnpm mj sync push --dir=metadata --include="agent-request-types"`
 
 **Why metadata files over SQL INSERTs:**

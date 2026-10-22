@@ -1072,6 +1072,13 @@ export class RealtimeSessionRuntime {
    */
   private userSpeechStartSuperseded = false;
   /**
+   * Recording-relative ms offsets of user speech onsets keyed by the provider's conversation item id
+   * (`input_audio_buffer.speech_started.item_id`), paired with the matching final user transcript
+   * (`RealtimeClientTranscript.ItemId`) so a late user transcript never claims a later turn's onset
+   * (MJ#5902). Unkeyed drivers continue to use {@link userSpeechStartMs}.
+   */
+  private readonly userSpeechStartByItemId = new Map<string, number>();
+  /**
    * Wall-anchor of the SESSION clock (#3832): `performance.now()` at the moment the call went
    * live, or `null` before any call has. Read only through {@link nowTurnOffsetMs}.
    */
@@ -2357,6 +2364,7 @@ export class RealtimeSessionRuntime {
       this.turnAudioStartCaptured = false;
       this.userSpeechStartMs = null;
       this.userSpeechStartSuperseded = false;
+      this.userSpeechStartByItemId.clear();
       if (this.recorder) {
         // WebRTC drivers (OpenAI): the agent's track usually lands AFTER Connect() resolves, so
         // `remoteStream` above is null here and this handler attaches it later. PCM-playback
@@ -2863,6 +2871,7 @@ export class RealtimeSessionRuntime {
     this.turnAudioStartCaptured = false;
     this.userSpeechStartMs = null;
     this.userSpeechStartSuperseded = false;
+    this.userSpeechStartByItemId.clear();
     if (!recorder || !pipeline) {
       this.recorder = null;
       this.recordingShards = null;
@@ -4088,9 +4097,10 @@ export class RealtimeSessionRuntime {
     });
     // The provider VAD saw the user start speaking. Final-only user-transcript drivers (OpenAI,
     // HuggingFace, xAI) emit no user interim, so this is their only real user-turn start. It goes
-    // to its own slot, not the shared turn slot: the user transcript arrives asynchronously, so the
-    // assistant's reply may already be streaming and must keep its own start.
-    client.OnUserSpeechStart(() => this.markUserSpeechStart());
+    // to its own slot (or item-keyed map entry when `itemId` is present), not the shared turn slot:
+    // the user transcript arrives asynchronously, so the assistant's reply may already be streaming
+    // and must keep its own start.
+    client.OnUserSpeechStart((itemId?: string) => this.markUserSpeechStart(itemId));
     client.OnRemoteVideo((video: MediaVideoSource) => this.onAgentVideo(client, video));
   }
 
@@ -4203,7 +4213,7 @@ export class RealtimeSessionRuntime {
     if (transcript.Role === 'User' && transcript.Text.trim().length === 0) {
       // An empty final user transcript (a VAD false positive, an empty transcription) never reaches
       // relayTranscript, so release its onset here: it must not become the next real turn's start.
-      this.releaseUserSpeechStart();
+      this.releaseUserSpeechStart(transcript.ItemId);
     }
     if (transcript.Role === 'Assistant') {
       this.hasActiveInterimUserCaption = false;
@@ -4243,7 +4253,7 @@ export class RealtimeSessionRuntime {
       if (this.firstUserTranscript === null) {
         this.firstUserTranscript = transcript.Text;
       }
-      await this.relayTranscript('user', transcript.Text);
+      await this.relayTranscript('user', transcript.Text, false, 'speech', transcript.ItemId);
     } else if (transcript.ReplacesPrevious) {
       // STREAMING user transcription: providers like Grok and OpenAI Live emit the growing utterance as repeated
       // events (each the full text so far), flagging all but the first ReplacesPrevious. Update the
@@ -4253,9 +4263,9 @@ export class RealtimeSessionRuntime {
         return;
       }
       this.replaceLastCaption('User', transcript.Text);
-      await this.relayTranscript('user', transcript.Text, true);
+      await this.relayTranscript('user', transcript.Text, true, 'speech', transcript.ItemId);
     } else {
-      await this.onUserTranscript(transcript.Text);
+      await this.onUserTranscript(transcript.Text, 'speech', transcript.ItemId);
     }
   }
 
@@ -4292,13 +4302,24 @@ export class RealtimeSessionRuntime {
   }
 
   /**
-   * Stamps {@link userSpeechStartMs} when the client signals that the user began to speak. Keeps
-   * the FIRST onset since the last final user transcript: the VAD fires again after a
-   * mid-sentence pause, and that second onset is not where the utterance began. An onset that an
-   * assistant turn which began after it has since superseded ({@link userSpeechStartSuperseded}) is
-   * replaced instead.
+   * Stamps the user speech onset when the client signals that the user began to speak. When the
+   * driver supplies a conversation `itemId`, records the FIRST onset for that item in
+   * {@link userSpeechStartByItemId} so a mid-sentence pause that re-fires with the same id keeps the
+   * original start. When no `itemId` is supplied, stamps the single-slot {@link userSpeechStartMs}
+   * fallback (keeping the first onset unless {@link userSpeechStartSuperseded} is set).
    */
-  private markUserSpeechStart(): void {
+  private markUserSpeechStart(itemId?: string): void {
+    if (itemId !== undefined && itemId.length > 0) {
+      if (this.userSpeechStartByItemId.has(itemId)) {
+        return;
+      }
+      const offset = this.nowTurnOffsetMs();
+      if (offset === null) {
+        return;
+      }
+      this.userSpeechStartByItemId.set(itemId, offset);
+      return;
+    }
     if (this.userSpeechStartMs !== null && !this.userSpeechStartSuperseded) {
       return;
     }
@@ -4310,10 +4331,36 @@ export class RealtimeSessionRuntime {
     this.userSpeechStartSuperseded = false;
   }
 
-  /** Ends the held user onset: a final user transcript (empty or not) closed the utterance it began. */
-  private releaseUserSpeechStart(): void {
+  /**
+   * Ends the held user onset: a final user transcript (empty or not) closed the utterance it began.
+   * When `itemId` is supplied, deletes only that item's entry in {@link userSpeechStartByItemId};
+   * otherwise clears the unkeyed single slot.
+   */
+  private releaseUserSpeechStart(itemId?: string): void {
+    if (itemId !== undefined && itemId.length > 0) {
+      this.userSpeechStartByItemId.delete(itemId);
+      return;
+    }
     this.userSpeechStartMs = null;
     this.userSpeechStartSuperseded = false;
+  }
+
+  /**
+   * Consumes and deletes the onset recorded for `itemId` in {@link userSpeechStartByItemId}. When a
+   * matching onset is found, also deletes any remaining map entry with an earlier offset so a VAD
+   * false positive whose transcription never arrived cannot accumulate in the map.
+   */
+  private takeKeyedUserSpeechStart(itemId: string): number | null {
+    const onset = this.userSpeechStartByItemId.get(itemId) ?? null;
+    this.userSpeechStartByItemId.delete(itemId);
+    if (onset !== null) {
+      for (const [otherId, otherOnset] of this.userSpeechStartByItemId) {
+        if (otherOnset < onset) {
+          this.userSpeechStartByItemId.delete(otherId);
+        }
+      }
+    }
+    return onset;
   }
 
   /**
@@ -4356,8 +4403,13 @@ export class RealtimeSessionRuntime {
    *
    * @param source `'typed'` for a {@link SendText} turn: it has no speech onset, so it neither takes
    *   nor clears the held one (a spoken transcript may still be pending for it).
+   * @param itemId Provider conversation item id (`RealtimeClientTranscript.ItemId`) when present.
    */
-  private async onUserTranscript(transcript: string, source: 'speech' | 'typed' = 'speech'): Promise<void> {
+  private async onUserTranscript(
+    transcript: string,
+    source: 'speech' | 'typed' = 'speech',
+    itemId?: string,
+  ): Promise<void> {
     if (transcript.trim().length === 0) {
       return;
     }
@@ -4366,7 +4418,7 @@ export class RealtimeSessionRuntime {
       this.firstUserTranscript = transcript;
     }
     this.appendCaption({ Role: 'User', Text: transcript });
-    await this.relayTranscript('user', transcript, false, source);
+    await this.relayTranscript('user', transcript, false, source, itemId);
   }
 
   // ── Tool calling ───────────────────────────────────────────────────────────
@@ -4749,21 +4801,28 @@ export class RealtimeSessionRuntime {
    *   recent persisted turn of this role IN PLACE instead of appending (e.g. ElevenLabs'
    *   post-barge-in `agent_response_correction`).
    * @param source `'typed'` for a user turn sent with {@link SendText}: it does not read or clear
-   *   {@link userSpeechStartMs}, which belongs to the user's speech.
+   *   {@link userSpeechStartMs} or {@link userSpeechStartByItemId}, which belong to the user's speech.
+   * @param itemId Provider conversation item id (`RealtimeClientTranscript.ItemId`) when present.
    */
   private async relayTranscript(
     role: 'user' | 'assistant',
     text: string,
     replacesPrevious: boolean = false,
     source: 'speech' | 'typed' = 'speech',
+    itemId?: string,
   ): Promise<void> {
     if (!this.agentSessionId) {
       return;
     }
     // Every final user transcript closes the signalled onset — a correction too, since it ends the
     // same utterance — so a later onset (an xAI mid-sentence resume) can't leak into the next turn.
+    // When the transcript carries a provider itemId, consume its keyed onset from the map without
+    // touching the unkeyed single slot or falling back to currentTurnStartMs.
+    const hasItemId = role === 'user' && source === 'speech' && itemId !== undefined && itemId.length > 0;
     let userSpeechStartMs: number | null = null;
-    if (role === 'user' && source === 'speech') {
+    if (hasItemId) {
+      userSpeechStartMs = this.takeKeyedUserSpeechStart(itemId);
+    } else if (role === 'user' && source === 'speech') {
       userSpeechStartMs = this.userSpeechStartMs;
       this.releaseUserSpeechStart();
     }
@@ -4774,9 +4833,10 @@ export class RealtimeSessionRuntime {
     const utteranceEndMs = this.nowTurnOffsetMs();
     const opensTurn = utteranceEndMs !== null && !replacesPrevious;
     let utteranceStartMs: number | null = null;
-    if (opensTurn && userSpeechStartMs !== null) {
-      // A user turn with a signalled onset. Leave the shared slot alone: the user transcript
-      // arrives asynchronously, so it may already hold the in-flight assistant reply's start.
+    if (opensTurn && (hasItemId || userSpeechStartMs !== null)) {
+      // A user turn with a signalled onset (or a keyed user turn whose itemId was not in the map,
+      // which relays null). Leave the shared slot alone: the user transcript arrives asynchronously,
+      // so it may already hold the in-flight assistant reply's start.
       utteranceStartMs = userSpeechStartMs;
       if (!this.turnAudioStartCaptured) {
         // No turn has captured a start, so the slot holds only the recording-start seed (0). This
@@ -5402,6 +5462,7 @@ export class RealtimeSessionRuntime {
     this.turnAudioStartCaptured = false;
     this.userSpeechStartMs = null;
     this.userSpeechStartSuperseded = false;
+    this.userSpeechStartByItemId.clear();
     this.usedChannelNames.clear();
     this.microphoneMuted = false;
   }

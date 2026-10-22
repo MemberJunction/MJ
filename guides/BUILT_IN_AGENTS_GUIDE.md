@@ -139,4 +139,4 @@ flowchart TD
    - Because `bizapps-issues` sits at the leaf of the dependency graph (`MJ` → `bizapps-common` → `bizapps-tasks` → `bizapps-issues`), the comprehensive end-to-end guide for the Chief of Staff Agent lives in the `bizapps-issues` repository.
 
 > [!IMPORTANT]
-> **Full Chief of Staff Documentation**: See **[`Chief-Of-Staff-Agent.md`](../../bizapps-issues/docs/Chief-Of-Staff-Agent.md)** in `bizapps-issues/docs/Chief-Of-Staff-Agent.md` for the complete Chief of Staff architecture, onboarding flow, Enterprise Mailbox Security Gates, Calendar/Availability/HubSpot/Calendly integration, 3-Tier Wake Gate reference, `AIAgentUserPolicy` JSON schemas, and cross-app operational playbooks.
+> **Full Chief of Staff Documentation**: See **`docs/Chief-Of-Staff-Agent.md` in the `bizapps-issues` repository** for the complete Chief of Staff architecture, onboarding flow, Enterprise Mailbox Security Gates, Calendar/Availability/HubSpot/Calendly integration, 3-Tier Wake Gate reference, `AIAgentUserPolicy` JSON schemas, and cross-app operational playbooks.
