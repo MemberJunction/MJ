@@ -1,5 +1,6 @@
 import { Args, Command, Flags } from '@oclif/core';
 import { existsSync, mkdirSync, cpSync, copyFileSync, readFileSync, writeFileSync } from 'node:fs';
+import * as net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execSync } from 'node:child_process';
@@ -105,6 +106,15 @@ export default class AgentInit extends Command {
         // drift onto whatever npm's `latest` or the newest GitHub release happens to be.
         this.upsertEnvValue(envPath, 'MJ_VERSION', this.cliVersion());
 
+        // Set a workspace-unique COMPOSE_PROJECT_NAME so multiple Citizen Builder workspaces on one
+        // machine don't collide on Docker container/volume names.
+        const slug = path
+          .basename(targetDir)
+          .toLowerCase()
+          .replace(/[^a-z0-9_-]+/g, '-')
+          .replace(/^-+|-+$/g, '') || 'citizen';
+        this.upsertEnvValue(envPath, 'COMPOSE_PROJECT_NAME', `mj-${slug}`);
+
         // If a custom app URL was supplied, point the workspace at it
         if (flags.app) {
           this.upsertEnvValue(envPath, 'OPEN_APP_INSTALL_URL', flags.app);
@@ -119,6 +129,13 @@ export default class AgentInit extends Command {
     }
 
     // 6. Start Docker and bootstrap if requested and available
+    if (!flags['skip-docker-check']) {
+      if (dockerAvailable) {
+        this.checkDockerMemory();
+      }
+      await this.checkPortsAvailable(targetDir);
+    }
+
     if (flags.start && dockerAvailable) {
       this.startEnvironment(targetDir);
     } else {
@@ -127,6 +144,114 @@ export default class AgentInit extends Command {
       }
       this.printNextSteps(targetDir, dockerAvailable);
     }
+  }
+
+  private checkDockerMemory(): void {
+    try {
+      const memBytesRaw = execSync("docker info --format '{{.MemTotal}}'", {
+        stdio: ['ignore', 'pipe', 'ignore'],
+      })
+        .toString()
+        .trim();
+      const memBytes = Number(memBytesRaw);
+      const minRecommendedBytes = 6 * 1024 * 1024 * 1024; // 6 GB
+      if (Number.isFinite(memBytes) && memBytes > 0 && memBytes < minRecommendedBytes) {
+        const memGb = (memBytes / (1024 * 1024 * 1024)).toFixed(1);
+        this.log(
+          chalk.yellow(
+            `⚠️  Docker has ${memGb} GB RAM allocated. SQL Server + MJExplorer recommend at least 8 GB RAM in Docker Desktop settings.`
+          )
+        );
+      }
+    } catch {
+      // Ignore if docker info format is unsupported
+    }
+  }
+
+  private async checkPortsAvailable(targetDir: string): Promise<void> {
+    let apiPort = 4000;
+    let dbPort = 1433;
+    let explorerPort = 4202;
+    const envPath = path.join(targetDir, '.env');
+    if (existsSync(envPath)) {
+      const content = readFileSync(envPath, 'utf8');
+      const apiMatch = content.match(/^API_PORT=(\d+)/m);
+      if (apiMatch) apiPort = Number(apiMatch[1]);
+      const dbMatch = content.match(/^DB_PORT=(\d+)/m);
+      if (dbMatch) dbPort = Number(dbMatch[1]);
+      const explorerMatch = content.match(/^EXPLORER_PORT=(\d+)/m);
+      if (explorerMatch) explorerPort = Number(explorerMatch[1]);
+    }
+
+    const portsToCheck: Array<{ port: number; envVar: string; label: string }> = [
+      { port: dbPort, envVar: 'DB_PORT', label: 'SQL Server' },
+      { port: apiPort, envVar: 'API_PORT', label: 'MJAPI' },
+      { port: explorerPort, envVar: 'EXPLORER_PORT', label: 'MJExplorer' },
+    ];
+
+    for (const item of portsToCheck) {
+      const available = await this.isPortAvailable(item.port);
+      if (!available) {
+        const replacement = await this.findAvailablePort(item.port + 1);
+        if (replacement && existsSync(envPath)) {
+          this.upsertEnvValue(envPath, item.envVar, String(replacement));
+          this.log(
+            chalk.yellow(
+              `⚠️  Port ${item.port} (${item.label}) is already in use on localhost. Automatically set ${item.envVar}=${replacement} in .env.`
+            )
+          );
+        } else {
+          this.log(
+            chalk.yellow(
+              `⚠️  Port ${item.port} (${item.label}) is already in use on localhost. Update ${item.envVar} in .env before starting Docker if needed.`
+            )
+          );
+        }
+      }
+    }
+  }
+
+  private async findAvailablePort(startPort: number): Promise<number | null> {
+    for (let port = startPort; port < startPort + 50; port++) {
+      if (await this.isPortAvailable(port)) {
+        return port;
+      }
+    }
+    return null;
+  }
+
+  private isPortAvailable(port: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      // 1. First probe whether anything is already accepting connections on 127.0.0.1:port.
+      //    On macOS/Windows, Docker Desktop's port proxy binds wildcard/IPv6 in a way that
+      //    can allow net.createServer().listen(port, '127.0.0.1') to succeed even when
+      //    Docker has already allocated the port.
+      const socket = net.createConnection({ port, host: '127.0.0.1' });
+      socket.setTimeout(250);
+      socket.once('connect', () => {
+        socket.destroy();
+        resolve(false);
+      });
+      socket.once('timeout', () => {
+        socket.destroy();
+        this.canBindPort(port).then(resolve);
+      });
+      socket.once('error', () => {
+        socket.destroy();
+        this.canBindPort(port).then(resolve);
+      });
+    });
+  }
+
+  private canBindPort(port: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      const server = net.createServer();
+      server.once('error', () => resolve(false));
+      server.once('listening', () => {
+        server.close(() => resolve(true));
+      });
+      server.listen(port, '0.0.0.0');
+    });
   }
 
   /**
