@@ -360,7 +360,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ps-gate-w7-s4-2': 1,
         'ps-truth-datasets': 68,
         'queue': 7,
-        'realtime-deterministic': 18,
+        'realtime-deterministic': 20,
         'realtime-session-guard': 2,
         'realtime-session-verification': 6,
         'record-cloning': 13,
