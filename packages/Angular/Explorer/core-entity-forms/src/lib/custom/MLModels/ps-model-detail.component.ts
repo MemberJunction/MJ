@@ -17,13 +17,14 @@ import {
   PredictiveStudioPromoteModelOperation,
   PredictiveStudioModelTargetStatus,
 } from '@memberjunction/core-entities';
-import { AtRiskRules, ImportanceDisplay } from '@memberjunction/predictive-studio-core';
+import { ImportanceDisplay } from '@memberjunction/predictive-studio-core';
 
 import {
   PSFeatureBar,
   PSMetricDisplay,
   PS_FEATURE_DOMINANCE_THRESHOLD,
   FormatMetricValue,
+  HumanizeFeatureName,
   MaxFeatureImportance,
   MetricsToDisplay,
   ModelImportanceView,
@@ -304,7 +305,7 @@ export class PSModelDetailComponent {
 
   // ── Feature Importance & Leakage Gate ──
 
-  /** Cached parsed and displayed importance bars for the last (algorithm, importance JSON) pair. */
+  /** Cached parsed and displayed importance bars for the last (Lineage JSON, importance JSON) pair. */
   private importanceCache: { key: string; allBars: PSFeatureBar[]; displayedBars: PSFeatureBar[] } | null = null;
 
   private get cachedImportance(): { allBars: PSFeatureBar[]; displayedBars: PSFeatureBar[] } {
@@ -313,11 +314,11 @@ export class PSModelDetailComponent {
     if (this.importanceCache?.key !== key) {
       const allBars = ParseFeatureImportance(this.Model.FeatureImportance, 6).map((b) => ({
         ...b,
-        name: AtRiskRules.HumanizeFeatureName(b.name),
+        name: HumanizeFeatureName(b.name),
       }));
       const displayedBars = ModelImportanceView.DisplayedFeatureImportance(this.Model.Lineage, this.Model.FeatureImportance, 6).map((b) => ({
         ...b,
-        name: AtRiskRules.HumanizeFeatureName(b.name),
+        name: HumanizeFeatureName(b.name),
       }));
       this.importanceCache = { key, allBars, displayedBars };
     }
@@ -335,7 +336,8 @@ export class PSModelDetailComponent {
 
   /**
    * The importance bars shown in the Feature Importance card (empty for split / impurity importance). Cached on the
-   * algorithm and importance JSON, so the parse runs once per model and again whenever either value changes
+   * Lineage JSON (which holds the stored importance kind) and the importance JSON, so the parse runs once per model and
+   * again whenever either value changes
    * (coding standards §7: getters Angular bindings hit).
    */
   public get DisplayedImportance(): PSFeatureBar[] {

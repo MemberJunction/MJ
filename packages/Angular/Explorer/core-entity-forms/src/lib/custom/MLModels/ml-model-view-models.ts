@@ -80,10 +80,20 @@ const METRIC_ALIASES: Record<string, PSMetricKey> = {
 
 export const PS_FEATURE_DOMINANCE_THRESHOLD = 0.6;
 
-/** @deprecated Use {@link AtRiskRules.HumanizeFeatureName} from `@memberjunction/predictive-studio-core`. Kept: a published export. */
+/**
+ * The ML Model form's label for a feature column: drops a leading `Is` before a capital, splits camelCase, turns `_`
+ * into spaces and title-cases every word (`IsActive` → `Active`, `membership_type` → `Membership Type`). A published
+ * export whose output is fixed; the dashboards' at-risk drivers use {@link AtRiskRules.HumanizeFeatureName}, which
+ * keeps an `Is` prefix and sentence-cases snake_case names.
+ */
 export function HumanizeFeatureName(name: string): string {
   if (!name) return '';
-  return AtRiskRules.HumanizeFeatureName(name);
+  return name
+    .replace(/^Is([A-Z])/, '$1')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/_/g, ' ')
+    .trim()
+    .replace(/\b[a-z]/g, (c) => c.toUpperCase());
 }
 
 /** @deprecated Use {@link HumanizeFeatureName}. */

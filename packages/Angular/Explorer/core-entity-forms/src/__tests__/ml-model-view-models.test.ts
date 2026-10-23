@@ -7,6 +7,7 @@ import {
   MetricsToDisplay,
   OverfitGap,
   HumanizeFeatureName,
+  humanizeFeatureName,
   FormatMetricValue,
   PS_FEATURE_DOMINANCE_THRESHOLD,
 } from '../lib/custom/MLModels/ml-model-view-models';
@@ -108,10 +109,22 @@ describe('ml-model-view-models', () => {
   });
 
   describe('humanizeFeatureName', () => {
-    it('delegates to AtRiskRules.HumanizeFeatureName for camelCase, snake_case, and one-hot =', () => {
+    // Pins the published export's output as it is on next: an `Is` prefix is dropped and every word is title-cased.
+    it('turns camelCase and snake_case into clean Title Case', () => {
       expect(HumanizeFeatureName('daysUntilExpiration')).toBe('Days Until Expiration');
-      expect(HumanizeFeatureName('total_spend_amount')).toBe('Total spend amount');
-      expect(HumanizeFeatureName('IsAutoRenew=1')).toBe('Is Auto Renew = 1');
+      expect(HumanizeFeatureName('total_spend_amount')).toBe('Total Spend Amount');
+    });
+
+    it('drops a leading Is before a capital and title-cases snake_case words', () => {
+      expect(HumanizeFeatureName('IsActive')).toBe('Active');
+      expect(HumanizeFeatureName('membership_type')).toBe('Membership Type');
+      expect(HumanizeFeatureName('IsAutoRenew=1')).toBe('Auto Renew=1');
+      expect(HumanizeFeatureName('')).toBe('');
+    });
+
+    it('keeps the deprecated camelCase twin identical', () => {
+      expect(humanizeFeatureName('IsActive')).toBe('Active');
+      expect(humanizeFeatureName('membership_type')).toBe('Membership Type');
     });
   });
 

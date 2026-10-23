@@ -166,7 +166,9 @@ Rename `CatalogEntry.ID` to `Code` (§1) and revert the two `UUIDCompliance.test
 helpers and `SupportedMinors`; one README holds the setup block.
 
 ### 5.4 Angular
-- Dashboards call `AtRiskRules` statics; `HumanizeFeatureName` wrappers in `ml-model-view-models.ts` deleted.
+- Dashboards call `AtRiskRules` statics. Amended by controller ruling R20: `HumanizeFeatureName` in `ml-model-view-models.ts`
+  is a published export on next, so it and its deprecated twin keep next's body and output (drop an `Is` prefix, title-case
+  every word); the model-detail importance labels keep using it.
 - `ps-pipeline-wizard` / `ps-pipelines`: delete dead as-of state, setters and camelCase twins; replace the one-choice
   select with read-only text.
 - `ps-experiments`: bind to an engine-exposed "sessions enabled" flag and reason (§4 capability flags) instead of copied text.
