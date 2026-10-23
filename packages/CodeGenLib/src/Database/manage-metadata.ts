@@ -8933,7 +8933,35 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
     */
    protected isFieldEligibleForNameField(field: Record<string, unknown>): boolean {
       if (field.IsVirtual === true && !this.isInheritedISAField(field)) return false;
+      if (this.isForeignKeyOrPolymorphicRecordIDField(field)) return false;
       return this.isNameFieldTypeSafe(field);
+   }
+
+   /**
+    * Rejects foreign-key columns (`RelatedEntityID`) and polymorphic record-ID
+    * payload columns (`EntityIDFieldName` populated, or named `*RecordID` /
+    * `*RecordPrimaryKey` such as `RecordID`, `SourceRecordID`, `TargetRecordID`,
+    * `LinkedRecordID`, `SurvivingRecordID`) from being selected as `IsNameField`.
+    *
+    * Polymorphic `RecordID` columns use `nvarchar(450)` / `nvarchar(750)` so they
+    * can hold composite primary keys or non-UUID strings, which previously tricked
+    * Smart Field Identification into treating them as human-readable text names
+    * and displaying raw UUIDs in tab headers, breadcrumbs, and link cards.
+    */
+   protected isForeignKeyOrPolymorphicRecordIDField(field: Record<string, unknown>): boolean {
+      const relatedEntityId = field.RelatedEntityID as string | undefined | null;
+      if (relatedEntityId && String(relatedEntityId).trim().length > 0) {
+         return true;
+      }
+      const entityIdFieldName = field.EntityIDFieldName as string | undefined | null;
+      if (entityIdFieldName && String(entityIdFieldName).trim().length > 0) {
+         return true;
+      }
+      const name = ((field.Name as string | undefined) ?? '').trim();
+      if (/^(?:[A-Z][A-Za-z0-9]*?)?Record(?:ID|PrimaryKey)$/.test(name)) {
+         return true;
+      }
+      return false;
    }
 
    /**

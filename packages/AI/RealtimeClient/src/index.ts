@@ -11,5 +11,6 @@ export * from './drivers/geminiEnterpriseRealtimeClient';
 export * from './drivers/elevenLabsRealtimeClient';
 export * from './drivers/assemblyAIRealtimeClient';
 export * from './drivers/xaiRealtimeClient';
+export * from './drivers/elevenRealtimeClient';
 export * from './drivers/huggingFaceRealtimeClient';
 export * from './drivers/openAILiveClient';
