@@ -37,9 +37,8 @@
  * a real column when it needs a foreign key or becomes a first-class platform concept.
  */
 
-import { IsPlainObject } from '@memberjunction/global';
+import { IsPlainObject, SafeDeepMerge } from '@memberjunction/global';
 
-import { JSONObject, JSONValue } from './baseRealtime';
 import type { RealtimeTrackDescriptor } from './realtimeTracks';
 
 /**
@@ -516,14 +515,14 @@ function parseConfigurationBag<T>(json: string | null | undefined, caller: strin
 
 /**
  * Resolves the EFFECTIVE model configuration by deep-merging the catalog layers, base first —
- * type default < model < vendor default < model-vendor. Merge semantics are identical to the realtime config
- * cascade (`DeepMergeConfigs` in `@memberjunction/ai-agents` — duplicated here because package
- * layering runs the other way):
+ * type default < model < vendor default < model-vendor, via `SafeDeepMerge` in `@memberjunction/global`
+ * (the same merge the realtime config cascade, `DeepMergeConfigs` in `@memberjunction/ai-agents`, uses):
  *
  * - plain object vs plain object → recursive per-key merge (a vendor row overriding ONE
  *   `Realtime.TurnDetection` knob does not wipe the model's other sections);
  * - anything else (arrays, strings, numbers, booleans, `null`) → the later value REPLACES;
- * - `null`/`undefined` LAYERS are skipped entirely; inputs are never mutated.
+ * - `null`/`undefined` LAYERS are skipped entirely; inputs are never mutated;
+ * - `__proto__`, `constructor` and `prototype` keys are skipped at every depth.
  *
  * @param layers The catalog layers, base first (type, model, vendor).
  * @returns The merged configuration, or `null` when every layer is absent/empty.
@@ -531,36 +530,8 @@ function parseConfigurationBag<T>(json: string | null | undefined, caller: strin
 export function ResolveEffectiveModelConfiguration(
     ...layers: Array<AIModelConfiguration | null | undefined>
 ): AIModelConfiguration | null {
-    const result: JSONObject = {};
-    for (const layer of layers) {
-        if (!IsPlainObject(layer)) {
-            continue;
-        }
-        mergeInto(result, layer as unknown as JSONObject);
-    }
+    const result = SafeDeepMerge(...layers);
     return Object.keys(result).length > 0 ? (result as AIModelConfiguration) : null;
-}
-
-/** Recursive worker for {@link ResolveEffectiveModelConfiguration} — merges `source` into `target`. */
-function mergeInto(target: JSONObject, source: JSONObject): void {
-    for (const key of Object.keys(source)) {
-        const incoming = source[key];
-        if (incoming === undefined) {
-            continue;
-        }
-        const existing = target[key];
-        if (IsPlainObject(existing) && IsPlainObject(incoming)) {
-            mergeInto(existing, incoming);
-        } else if (IsPlainObject(incoming)) {
-            const copy: JSONObject = {};
-            mergeInto(copy, incoming);
-            target[key] = copy;
-        } else if (Array.isArray(incoming)) {
-            target[key] = incoming.slice() as JSONValue[];
-        } else {
-            target[key] = incoming;
-        }
-    }
 }
 
 /**
