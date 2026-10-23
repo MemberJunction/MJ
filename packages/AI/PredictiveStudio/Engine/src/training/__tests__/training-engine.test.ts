@@ -478,7 +478,7 @@ describe('TrainingEngine — evaluation record and the time-index containment (T
     const { model, run } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
     expect(EvaluationLineage.Read(model.Lineage)?.WithheldReason).toBe(EvaluationLineage.NotEvaluatedAsForecast);
     expect(run.Notes).toContain('Trust withheld — not evaluated as a forecast');
-    expect(TrustVerdicts.DeriveTrustVerdict(model)).toMatchObject({ grade: 'Poor', canAct: false, withheldReason: EvaluationLineage.NotEvaluatedAsForecast });
+    expect(TrustVerdicts.DeriveTrustVerdict(model)).toMatchObject({ grade: 'Poor', canAct: false, WithheldReason: EvaluationLineage.NotEvaluatedAsForecast });
   });
 
   it('records ValidationOutOfSample=false when the sidecar response does not confirm out-of-sample scoring', async () => {

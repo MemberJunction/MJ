@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { TrustVerdicts, TrustDots } from '../trust';
+import { TrustVerdicts, DeriveTrustVerdict, deriveTrustVerdict, TrustEvidenceLine, trustEvidenceLine, TrustDots, trustDots } from '../trust';
 import { EvaluationLineage, type EvaluationRecord } from '../evaluation-record';
 import type { MajorityBaselineRule } from '../pipeline-spec';
 
@@ -111,7 +111,7 @@ describe('TrustVerdicts.DeriveTrustVerdict', () => {
       expect(v.grade).toBe('Poor');
       expect(v.canAct).toBe(false);
       expect(v.gateReason).toMatch(/most common outcome/);
-      expect(v.majorityBaseline).toMatchObject({ rule: 'enforce', enforced: true });
+      expect(v.MajorityBaseline).toMatchObject({ Rule: 'enforce', Enforced: true });
     }
   });
 
@@ -124,7 +124,7 @@ describe('TrustVerdicts.DeriveTrustVerdict', () => {
     const v = TrustVerdicts.DeriveTrustVerdict({ HoldoutMetrics: JSON.stringify({ auc: 0.78, accuracy: 0.85, baseline_accuracy: 0.8, predicted_classes: 2 }), ProblemType: 'classification' });
     expect(v.grade).toBe('Good');
     expect(v.canAct).toBe(true);
-    expect(v.majorityBaseline).toBeNull();
+    expect(v.MajorityBaseline).toBeNull();
   });
 
   // The W1-signal s42 logistic model (§9 risk R-b): holdout accuracy = the holdout renewal rate, AUC 0.723.
@@ -136,9 +136,9 @@ describe('TrustVerdicts.DeriveTrustVerdict', () => {
     for (const lineage of [null, ruleLineage('enforce')]) {
       const v = TrustVerdicts.DeriveTrustVerdict({ HoldoutMetrics: w1Logistic, ProblemType: 'classification', Lineage: lineage });
       expect(v).toMatchObject({ grade: 'Poor', canAct: false });
-      expect(v.majorityBaseline).toEqual({
-        rule: 'enforce', enforced: true, accuracy: 0.7957, baselineAccuracy: 0.7957, predictedClasses: 2,
-        note: 'Right 79.6% of the time; always guessing the most common outcome is right 79.6% of the time.',
+      expect(v.MajorityBaseline).toEqual({
+        Rule: 'enforce', Enforced: true, Accuracy: 0.7957, BaselineAccuracy: 0.7957, PredictedClasses: 2,
+        Note: 'Right 79.6% of the time; always guessing the most common outcome is right 79.6% of the time.',
       });
     }
   });
@@ -146,7 +146,7 @@ describe('TrustVerdicts.DeriveTrustVerdict', () => {
   it('warn grades the same model by AUC and keeps the finding visible (D2-C5d)', () => {
     const v = TrustVerdicts.DeriveTrustVerdict({ HoldoutMetrics: w1Logistic, ProblemType: 'classification', Lineage: ruleLineage('warn') });
     expect(v).toMatchObject({ grade: 'Good', canAct: true, gateReason: null, headlineMetric: { key: 'AUC', value: 0.723 } });
-    expect(v.majorityBaseline).toMatchObject({ rule: 'warn', enforced: false, accuracy: 0.7957, baselineAccuracy: 0.7957 });
+    expect(v.MajorityBaseline).toMatchObject({ Rule: 'warn', Enforced: false, Accuracy: 0.7957, BaselineAccuracy: 0.7957 });
   });
 
   it('warn never rescues an accuracy-only verdict (F-TR-1 stays contained)', () => {
@@ -155,7 +155,7 @@ describe('TrustVerdicts.DeriveTrustVerdict', () => {
       Lineage: ruleLineage('warn'),
     });
     expect(v).toMatchObject({ grade: 'Poor', canAct: false });
-    expect(v.majorityBaseline).toMatchObject({ rule: 'warn', enforced: true, note: 'Predicts the same outcome for every record.' });
+    expect(v.MajorityBaseline).toMatchObject({ Rule: 'warn', Enforced: true, Note: 'Predicts the same outcome for every record.' });
   });
 
   it('withholds a time-indexed model and returns the stored reason (T4 → S6.5)', () => {
@@ -163,8 +163,16 @@ describe('TrustVerdicts.DeriveTrustVerdict', () => {
       HoldoutMetrics: JSON.stringify({ r2: 0.7775 }), ProblemType: 'regression',
       Lineage: withEvaluation({ ValidationOutOfSample: true, TimeIndexColumn: 'MonthIndex', EvaluatedAsForecast: false, WithheldReason: EvaluationLineage.NotEvaluatedAsForecast }),
     });
-    expect(v).toMatchObject({ grade: 'Poor', canAct: false, withheldReason: EvaluationLineage.NotEvaluatedAsForecast });
+    expect(v).toMatchObject({ grade: 'Poor', canAct: false, WithheldReason: EvaluationLineage.NotEvaluatedAsForecast });
     expect(v.gateReason).toMatch(/later/);
+  });
+});
+
+describe('TrustVerdict members this PR added', () => {
+  it('exposes the new verdict members in PascalCase', () => {
+    const v = TrustVerdicts.DeriveTrustVerdict({ Metrics: '{}', HoldoutMetrics: '{}', Lineage: null });
+    expect(v).toHaveProperty('WithheldReason');
+    expect(v).toHaveProperty('MajorityBaseline');
   });
 });
 
@@ -175,9 +183,19 @@ describe('TrustVerdicts.TrustEvidenceLine / TrustDots', () => {
   });
 
   it('maps grades to filled dots', () => {
-    expect(TrustDots('Excellent')).toBe(5);
+    expect(TrustVerdicts.TrustDots('Excellent')).toBe(5);
+    expect(TrustVerdicts.TrustDots('Good')).toBe(4);
+    expect(TrustVerdicts.TrustDots('Fair')).toBe(3);
+    expect(TrustVerdicts.TrustDots('Poor')).toBe(1);
+  });
+
+  it('keeps the deprecated free functions forwarding to the statics', () => {
+    const model = { HoldoutMetrics: JSON.stringify({ AUC: 0.78 }), ProblemType: 'classification' };
+    expect(DeriveTrustVerdict(model)).toEqual(TrustVerdicts.DeriveTrustVerdict(model));
+    expect(deriveTrustVerdict(model)).toEqual(TrustVerdicts.DeriveTrustVerdict(model));
+    expect(TrustEvidenceLine({ count: 5 })).toBe(TrustVerdicts.TrustEvidenceLine({ count: 5 }));
+    expect(trustEvidenceLine()).toBe(TrustVerdicts.TrustEvidenceLine());
     expect(TrustDots('Good')).toBe(4);
-    expect(TrustDots('Fair')).toBe(3);
-    expect(TrustDots('Poor')).toBe(1);
+    expect(trustDots('Fair')).toBe(3);
   });
 });

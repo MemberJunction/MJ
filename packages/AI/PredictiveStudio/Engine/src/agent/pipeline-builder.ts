@@ -5,7 +5,7 @@
  * of Database Designer's schema builder and Agent Manager's `AgentSpecSync`. It takes an approved,
  * strongly-typed {@link ModelingPlanSpec} and, in pure code (NO LLM), crafts the actual metadata:
  * creates the `MJ: ML Training Pipelines` row, kicks off training, then **publishes the model only
- * if the trust verdict clears the bar** — the same `deriveTrustVerdict` gate the business UI uses, so
+ * if the trust verdict clears the bar** — the same `TrustVerdicts.DeriveTrustVerdict` gate the business UI uses, so
  * a coin-flip / unmeasured / leakage-flagged model is never silently published into the catalog.
  *
  * Used by the agent's builder sub-agent AND directly callable from a headless script/test, so the
@@ -15,7 +15,7 @@
 import { UUIDsEqual } from '@memberjunction/global';
 import { RunView, type IMetadataProvider, type UserInfo, type EntityInfo, LogError } from '@memberjunction/core';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity } from '@memberjunction/core-entities';
-import { type ModelingPlanSpec, deriveTrustVerdict, type TrustVerdict, type FeatureStepWarning } from '@memberjunction/predictive-studio-core';
+import { type ModelingPlanSpec, TrustVerdicts, type TrustVerdict, type FeatureStepWarning } from '@memberjunction/predictive-studio-core';
 
 import { ModelingPlanToPipelineConfig, type PipelineConfig } from './modeling-plan-to-pipeline';
 import { trainModelViaEngine, wasTrainingLeakageFlagged } from '../operations/delegation';
@@ -152,7 +152,7 @@ export class PredictiveStudioPipelineBuilder {
         const pipeline = await this.createPipeline(config, provider, user);
         const trainResult = await trainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
         const model = trainResult.model;
-        const trust = deriveTrustVerdict(model);
+        const trust = TrustVerdicts.DeriveTrustVerdict(model);
         const leakageFlagged = wasTrainingLeakageFlagged(trainResult);
         const { published, heldReason } = await this.maybePublish(model, trust, leakageFlagged, autoPublish);
         const scoreVal = extractModelScore(model, config.problemType);
@@ -205,7 +205,7 @@ export class PredictiveStudioPipelineBuilder {
           const pipeline = await this.createPipeline(config, provider, user);
           const trainResult = await trainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
           const model = trainResult.model;
-          const trust = deriveTrustVerdict(model);
+          const trust = TrustVerdicts.DeriveTrustVerdict(model);
           const leakageFlagged = wasTrainingLeakageFlagged(trainResult);
           const score = extractModelScore(model, config.problemType);
           trained.push({

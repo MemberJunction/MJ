@@ -3,7 +3,7 @@ import { NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global
 import { CompositeKey, LogError, RunView, UserInfo } from '@memberjunction/core';
 import { MJConversationEntity, MJEnvironmentEntityExtended, MJMLModelEntity, MJProcessRunDetailEntity, MJListEntity, MJListDetailEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { TrustDots, TrustVerdicts, AtRiskRules, ImportanceDisplay, type AtRiskRow } from '@memberjunction/predictive-studio-core';
+import { TrustVerdicts, AtRiskRules, ImportanceDisplay, type AtRiskRow } from '@memberjunction/predictive-studio-core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { PSResourceBase } from './ps-resource-base';
 import { buildBusinessCatalog, type BusinessPredictionCard } from '../business-predictions.view-models';
@@ -532,7 +532,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
     return this.Cards;
   }
 
-  public Dots(c: BusinessPredictionCard): number { return TrustDots(c.trust.grade); }
+  public Dots(c: BusinessPredictionCard): number { return TrustVerdicts.TrustDots(c.trust.grade); }
 
   /** @deprecated Use {@link Dots}. */
   public dots(c: BusinessPredictionCard): number {

@@ -35,7 +35,7 @@ describe('toBusinessPredictionCard', () => {
     const lineage = JSON.stringify({ evaluation: { ValidationOutOfSample: true, TimeIndexColumn: 'MonthIndex', EvaluatedAsForecast: false, WithheldReason: 'not evaluated as a forecast' } });
     const c = ToBusinessPredictionCard({ modelId: 'm9', name: 'Monthly volume', HoldoutMetrics: JSON.stringify({ r2: 0.8 }), ProblemType: 'regression', Lineage: lineage });
     expect(c.canOpen).toBe(false);
-    expect(c.trust.withheldReason).toBe('not evaluated as a forecast');
+    expect(c.trust.WithheldReason).toBe('not evaluated as a forecast');
   });
 });
 
