@@ -8,7 +8,8 @@
  * leaderboard.
  *
  * Experiment sessions are switched off ({@link ExperimentSessions.Enabled}): the
- * action refuses with `EXPERIMENT_UNAVAILABLE` before reading any parameter.
+ * action refuses with `EXPERIMENT_SESSIONS_UNAVAILABLE` (the same refusal code the
+ * `PredictiveStudio.StartExperimentSession` operation returns) before reading any parameter.
  *
  * Per CLAUDE.md "Actions are boundaries": this action does NOT do any experiment
  * orchestration. It validates that an **approved** `PlanSpec` is supplied (and an
@@ -25,7 +26,7 @@ import type { ActionResultSimple, RunActionParams } from '@memberjunction/action
 import { RegisterClass } from '@memberjunction/global';
 import { LogError } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
-import type { Budget } from '@memberjunction/predictive-studio-core';
+import type { Budget, PredictiveStudioRefusalCode } from '@memberjunction/predictive-studio-core';
 import { validateModelingPlanSpec, validateBudget, ExperimentSessions } from '@memberjunction/predictive-studio-core';
 
 import { ExperimentOrchestrator } from '../experiment/experiment-orchestrator';
@@ -83,7 +84,9 @@ export class PredictiveStudioRunExperimentAction extends BasePredictiveStudioAct
       return this.mapResult(params, result);
     } catch (e) {
       if (e instanceof ExperimentSessionsUnavailableError) {
-        return this.fail('EXPERIMENT_UNAVAILABLE', e.message);
+        // The typed refusal code, so the action and the StartExperimentSession operation report one code.
+        const code: PredictiveStudioRefusalCode = 'EXPERIMENT_SESSIONS_UNAVAILABLE';
+        return this.fail(code, e.message);
       }
       LogError(e);
       return this.fail('EXPERIMENT_FAILED', `Experiment session failed: ${e instanceof Error ? e.message : String(e)}`);

@@ -545,6 +545,17 @@
             "lastModified": "2026-07-01T17:33:34.223Z",
             "checksum": "394b48a26dab19517dc7881cac75b3b2a45a59c747ec5c199d8bd54ffadfa50c"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EXPERIMENT_SESSIONS_UNAVAILABLE",
+            "IsSuccess": false,
+            "Description": "Experiment sessions are switched off; the action refuses before reading any parameter. The same code the PredictiveStudio.StartExperimentSession operation returns."
+          },
+          "primaryKey": {
+            "ID": "FDC52D3E-68A6-476B-9F80-9F2E149271D2"
+          }
         }
       ]
     },
