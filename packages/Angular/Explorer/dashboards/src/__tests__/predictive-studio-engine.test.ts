@@ -87,7 +87,7 @@ class PagedDetailProvider {
     const count = Math.max(0, Math.min(params.MaxRows ?? this.total, this.total - after));
     const rows: PSRunDetailRow[] = Array.from({ length: count }, (_, i) => {
       const n = after + i + 1;
-      return { ID: String(n), RecordID: `r${n}`, ResultPayload: '{}', Status: 'Complete', CompletedAt: null, __mj_CreatedAt: new Date(0) };
+      return { ID: String(n), RecordID: `r${n}`, ResultPayload: '{}', Status: 'Succeeded', CompletedAt: null, __mj_CreatedAt: new Date(0) };
     });
     return { Success: true, Results: rows as T[], RowCount: rows.length, TotalRowCount: this.total, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
   }
