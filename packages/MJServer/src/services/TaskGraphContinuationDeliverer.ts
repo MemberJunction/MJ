@@ -432,17 +432,29 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
         IsLatest: boolean;
     } | null> {
         const initialUser = this.resolveActingUser(fallbackOwnerUserId);
-        const detail = await provider.GetEntityObject<MJConversationDetailEntityExtended>('MJ: Conversation Details', initialUser);
+        let detail = await provider.GetEntityObject<MJConversationDetailEntityExtended>('MJ: Conversation Details', initialUser);
         if (!(await detail.Load(conversationDetailID))) {
             return null;
         }
-        // Every originating detail is the workflow status or planning AI reply the server itself created at submission.
-        detail.MarkServerAuthoredReply();
         let ownerUserId = fallbackOwnerUserId || detail.UserID || null;
         if (!ownerUserId && detail.ConversationID) {
             ownerUserId = await this.lookupConversationOwnerId(detail.ConversationID, provider);
         }
         const resolvedOwnerUserId = ownerUserId || this.contextUser.ID;
+        if (!fallbackOwnerUserId && !UUIDsEqual(resolvedOwnerUserId, initialUser.ID)) {
+            const ownerUser = this.resolveActingUser(resolvedOwnerUserId);
+            if (!UUIDsEqual(ownerUser.ID, initialUser.ID)) {
+                const reloaded = await provider.GetEntityObject<MJConversationDetailEntityExtended>('MJ: Conversation Details', ownerUser);
+                if (await reloaded.Load(conversationDetailID)) {
+                    detail = reloaded;
+                }
+            }
+        }
+        // Mark the originating detail as server-authored when it is the workflow status or planning AI/error reply.
+        const role = detail.Role?.trim().toLowerCase();
+        if (!role || role === 'ai' || role === 'error') {
+            detail.MarkServerAuthoredReply();
+        }
         const branchId = detail.BranchID ?? null;
         const isLatest = detail.ConversationID
             ? await this.isLatestConversationMessage(detail.ConversationID, branchId, conversationDetailID, provider)

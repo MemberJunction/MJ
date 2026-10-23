@@ -997,9 +997,6 @@ export class RunAIAgentResolver extends ResolverBase {
          *  Checked to be a branch of the conversation whose path holds `userMessageId`. */
         @Arg('replyBranchId', { nullable: true }) replyBranchId?: string
     ): Promise<AIAgentRunResult> {
-        // Check API key scope authorization for agent execution
-        await this.CheckAPIKeyScopeAuthorization('agent:execute', agentId, userPayload);
-
         const p = GetReadWriteProvider(providers);
         const currentUser = this.GetUserFromPayload(userPayload);
 
@@ -1021,6 +1018,8 @@ export class RunAIAgentResolver extends ResolverBase {
         // as the guest too, never as the elevated principal, which owns no guest's conversation.
         const widgetElevation = await ResolveWidgetGuestRunContext(userPayload, p);
         const effectiveAgentId = widgetElevation ? widgetElevation.PinnedAgentId : agentId;
+        // Check API key scope authorization for agent execution against the resolved agent id.
+        await this.CheckAPIKeyScopeAuthorization('agent:execute', effectiveAgentId, userPayload);
         // A widget guest has one pinned agent and never posts a continuation announcement as another agent;
         // an API-key caller must hold agent:execute for the announcing agent as well as the running agent.
         const effectiveAnnouncedByAgentId = widgetElevation ? undefined : announcedByAgentId;
@@ -1185,13 +1184,15 @@ export class RunAIAgentResolver extends ResolverBase {
         if (!await message.Load(messageId)) {
             throw new Error(`Conversation detail ${messageId} not found`);
         }
-        return { ConversationId: message.ConversationID, BranchId: message.BranchID ?? null, Sequence: message.Sequence ?? 0 };
+        return { ConversationId: message.ConversationID, BranchId: message.BranchID ?? null, Sequence: message.Sequence ?? -1 };
     }
 
     /**
      * When a turn forks from an earlier message (such as Regenerate), the reply and history run on the fork while the
      * user's message stays on the branch it was written on. Checks that `replyBranchId` is a branch of the turn's
-     * conversation whose path holds the user's message; returns `replyBranchId`, or throws before any row is created.
+     * conversation whose path holds the user's message (`IsRowOnBranchPath` rather than exact `ForkFromSequence`
+     * equality is deliberate: `ConversationEngine.ForkPointFrom` sets `ForkFromSequence = message.Sequence` and the
+     * fork belongs to this conversation); returns `replyBranchId`, or throws before any row is created.
      */
     private async validateReplyBranch(
         p: DatabaseProviderBase,
@@ -1202,6 +1203,9 @@ export class RunAIAgentResolver extends ResolverBase {
     ): Promise<string> {
         if (UUIDsEqual(replyBranchId, userMessage.BranchId)) {
             return replyBranchId;
+        }
+        if (userMessage.Sequence < 0) {
+            throw new Error(`Conversation detail is not on branch ${replyBranchId}'s path, so the reply cannot be written on that branch`);
         }
         const branches = await ConversationEngine.LoadBranchesFresh(conversationId, user, p);
         const chain = ConversationEngine.BuildBranchChain(branches, replyBranchId);

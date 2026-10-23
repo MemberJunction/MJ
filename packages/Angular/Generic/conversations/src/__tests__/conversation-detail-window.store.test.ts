@@ -175,6 +175,16 @@ describe('ConversationDetailWindowStore', () => {
         expect(snapshot.Details.map(d => d.ID)).toEqual(['d-18', 'd-19', 'd-20', 'd-21', 'd-22', 'placeholder-1']);
         expect(snapshot.Cursor.OldestSequence).toBe(18);
         expect(snapshot.Cursor.NewestSequence).toBe(22);
+
+        // Refreshing the tail while paged up (applyRefreshedTail) must also compute NewestSequence
+        // from the newest assigned row, not the trailing unassigned placeholder (Sequence 0).
+        load.mockResolvedValueOnce(pageOf([21, 22, 23], true));
+        await store.RefreshLatest(contextUser);
+
+        snapshot = store.GetSnapshot();
+        expect(snapshot.Details.map(d => d.ID)).toEqual(['d-18', 'd-19', 'd-20', 'd-21', 'd-22', 'd-23', 'placeholder-1']);
+        expect(snapshot.Cursor.OldestSequence).toBe(18);
+        expect(snapshot.Cursor.NewestSequence).toBe(23);
     });
 
     it('slices an over-read page down to one page of timeline items', async () => {

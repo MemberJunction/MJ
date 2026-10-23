@@ -685,6 +685,57 @@ describe('Reinvoke — on the fork of the message that started the graph', () =>
         expect(sentContent).toContain('- ⏭️ **Analyze Results** — Skipped: branch condition `output.rowCount > 0` on "Run Query" evaluated to false');
         expect(sentContent).toContain('briefly explaining any conditional steps that were skipped');
     });
+
+    it('logs an error and does not publish completion when an in-place (IsLatest = true) PostMessage save fails', async () => {
+        const { LogError, RunView } = await import('@memberjunction/core');
+        vi.mocked(RunView.FromMetadataProvider).mockReturnValue({
+            RunView: vi.fn().mockResolvedValue({
+                Success: true,
+                Results: [{ ID: 'detail-1' }],
+            }),
+        } as never);
+
+        const h = harness({ saves: false });
+        await h.deliverer.PostMessage(params());
+
+        expect(h.rows[0].Save).toHaveBeenCalledOnce();
+        expect(LogError).toHaveBeenCalledWith(expect.stringContaining('Could not update in-place outcome of "Weekly digest"'));
+        expect(h.pubSub.publish).not.toHaveBeenCalled();
+    });
+
+    it('loads the originating detail as SubmittedByUserID in Reinvoke when both run UserIDs are null', async () => {
+        const runRow = {
+            ID: 'run-1',
+            AgentID: 'agent-1',
+            ParentRunID: null as string | null,
+            UserID: null as string | null,
+            Load: vi.fn().mockResolvedValue(true),
+        };
+        const agentRow = {
+            ID: 'agent-1',
+            Name: 'Sage',
+            Load: vi.fn().mockResolvedValue(true),
+        };
+        const detail = detailRow();
+        const detailUsers: Array<UserInfo | undefined> = [];
+        const provider = {
+            GetEntityObject: vi.fn().mockImplementation(async (name: string, user?: UserInfo) => {
+                if (name === 'MJ: AI Agent Runs') return runRow;
+                if (name === 'MJ: AI Agents') return agentRow;
+                detailUsers.push(user);
+                return detail;
+            }),
+        };
+        const deliverer = new TaskGraphContinuationDeliverer(
+            { CreateProvider: vi.fn().mockResolvedValue(provider) } as never,
+            { ID: 'system-user' } as UserInfo,
+        );
+
+        await deliverer.Reinvoke(params({ SubmittedByUserID: SUBMITTER.ID }));
+
+        expect(detailUsers[0]).toBe(SUBMITTER);
+        expect(runAgent.mock.calls[0][0].contextUser).toBe(SUBMITTER);
+    });
 });
 
 

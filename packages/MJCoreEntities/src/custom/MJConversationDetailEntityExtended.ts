@@ -44,7 +44,10 @@ const PLACEMENT_FIELDS = ['ConversationID', 'BranchID'];
  */
 const ACCESS_GATED_FIELDS = ['ID', 'ConversationID', 'Role', ...OWNER_ONLY_RATING_FIELDS];
 
-/** {@link ACCESS_GATED_FIELDS} plus the fields the authorship rules decide on, which the system user skips. */
+/**
+ * {@link ACCESS_GATED_FIELDS} plus `BranchID` (placement on a fork) and the remaining {@link AUTHORED_FIELDS}
+ * (`Role` is already in {@link ACCESS_GATED_FIELDS}), which the authorship rules decide on and the system user skips.
+ */
 const GATED_FIELDS = [
     ...ACCESS_GATED_FIELDS,
     'BranchID',

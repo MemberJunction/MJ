@@ -1,11 +1,12 @@
 /**
  * @fileoverview The conversation branch on `RunAIAgentFromConversationDetail`.
  *
- * The branch comes from the person's message the mutation is given, never from a request argument.
- * These tests pin that the mutation loads history along that branch's path, creates the reply on that
- * branch, hands the branch to the agent run on both the synchronous and fire-and-forget paths, and reads
- * the trunk when the message has no branch; and that `executeAIAgent` puts the branch on the run's params
- * only when there is one.
+ * The branch defaults to the person's message the mutation is given, or — when `replyBranchId` is supplied
+ * (such as Regenerate forking from an earlier message) — is validated to be a branch of the conversation
+ * whose path holds the person's message. These tests pin that the mutation loads history along that branch's
+ * path, creates the reply on that branch, hands the branch to the agent run on both the synchronous and
+ * fire-and-forget paths, and reads the trunk when the message has no branch; and that `executeAIAgent` puts
+ * the branch on the run's params only when there is one.
  */
 import 'reflect-metadata'; // must precede any type-graphql decorator evaluation
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';

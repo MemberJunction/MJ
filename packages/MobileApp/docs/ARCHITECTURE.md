@@ -147,7 +147,7 @@ Plain async functions over the MJ object model. They pick the right primitive:
   creates and fills** the `Role='AI'` reply row (returning its ID in the
   fire-and-forget acknowledgement via `onAccepted`). Because the push WebSocket
   is unreliable on RN, a failed WS wait is **not** a hard error — the UI polls
-  the acknowledged reply detail's `Status` for completion.
+  the acknowledged reply detail's `Status` (via `GetConversationDetailStatus(replyId)`) for completion.
 
 Entities touched (all via the strongly-typed generated classes): `MJ:
 Conversations`, `MJ: Conversation Details`, `MJ: Conversation Artifacts`, `MJ:

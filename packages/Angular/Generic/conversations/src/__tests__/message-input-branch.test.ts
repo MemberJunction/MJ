@@ -359,6 +359,42 @@ describe('MessageInputComponent — overlapping turns keep their own branch', ()
         expect(h.findPreset.mock.calls.map(call => call[2])).toEqual(['T1', null]);
         expect(h.invokeSubAgent.mock.calls.map(call => call[15]?.ReplyBranchId ?? null)).toEqual([null, 'T1']);
     });
+
+    it('handleSilentObservation and invokeAgentDirectly pass ReplyBranchId on a fork', async () => {
+        vi.spyOn(AIEngineBase.Instance, 'ReadableAgents', 'get').mockReturnValue([MANAGER, RESEARCH] as never);
+        const earlier = new TurnRow('reply-earlier');
+        earlier.AgentID = RESEARCH.ID;
+        const h = buildTurnHarness([earlier]);
+        Object.assign(h.open, {
+            findLastNonSageReply: vi.fn(() => earlier),
+            updateConversationDetail: vi.fn(async () => undefined),
+            showDelegateReply: vi.fn(async () => undefined),
+            loadPreviousPayloadForAgent: vi.fn(async () => ({ payload: null, artifactInfo: null })),
+            emitAfterAgentTurn: vi.fn(),
+            settleReply: vi.fn(async () => undefined),
+        });
+
+        const userRow = new TurnRow('user-1');
+        userRow.Role = 'User';
+        userRow.BranchID = 'T1';
+
+        const silent = (MessageInputComponent.prototype as unknown as {
+            handleSilentObservation(u: TurnRow, c: string, b: string | null): Promise<void>;
+        }).handleSilentObservation;
+        await silent.call(h.component, userRow, 'conv-1', 'T1');
+        expect(h.invokeSubAgent.mock.calls[0][15]).toEqual({
+            AnnouncedByAgentId: MANAGER.ID,
+            ReplyBranchId: 'T1',
+        });
+
+        const direct = (MessageInputComponent.prototype as unknown as {
+            invokeAgentDirectly(u: TurnRow, m: { name: string; configurationId?: string }, c: string, b: string | null): Promise<void>;
+        }).invokeAgentDirectly;
+        await direct.call(h.component, userRow, { name: RESEARCH.Name }, 'conv-1', 'T1');
+        expect(h.invokeSubAgent.mock.calls[1][15]).toEqual({
+            ReplyBranchId: 'T1',
+        });
+    });
 });
 
 describe('message-input.component.ts — every created row is either a user row or a turn row', () => {

@@ -227,6 +227,20 @@ describe('RunAIAgentFromConversationDetail — the server creates the reply row'
         });
     });
 
+    it('hands agentResponseDetail through the real executeAgentInBackground into executeAIAgent', async () => {
+        const { resolver, seams } = makeResolver();
+        seams.executeAgentInBackground = (
+            RunAIAgentResolver.prototype as unknown as { executeAgentInBackground: ResolverSeams['executeAgentInBackground'] }
+        ).executeAgentInBackground.bind(resolver);
+
+        await runMutation(resolver, makeContext().ctx, true);
+
+        expect(seams.executeAIAgent).toHaveBeenCalledOnce();
+        const bgToExecArgs = seams.executeAIAgent.mock.calls[0];
+        expect(bgToExecArgs[13]).toBe('reply-1');
+        expect(bgToExecArgs.at(-1)).toBe(REPLY);
+    });
+
     it("loads the user's message as the caller, and creates nothing when they can't read it", async () => {
         const { resolver, seams } = makeResolver();
         const { ctx, loads } = makeContext(false);
