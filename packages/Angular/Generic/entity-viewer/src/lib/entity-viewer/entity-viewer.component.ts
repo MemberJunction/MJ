@@ -160,6 +160,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   private _filterText: string | null = null;
   private _sortState: SortState | null = null;
   private _viewEntity: MJUserViewEntityExtended | null = null;
+  private _alternateBaseView: string | null = null;
   private _initialized = false;
 
   /**
@@ -196,6 +197,9 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     if (entityChanged) {
       if (this._viewEntity && value && !UUIDsEqual(this._viewEntity.EntityID, value.ID)) {
         this._viewEntity = null;
+      }
+      if (this._alternateBaseView && value && !value.GetAlternateBaseView(this._alternateBaseView)) {
+        this._alternateBaseView = null;
       }
       this.viewTypeConfigById.clear();
       this.InternalSortState = null;
@@ -451,6 +455,37 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       this.resetPaginationState();
       this.deferReload();
     }
+  }
+
+  /**
+   * Optional semantic `Name` of a registered alternate base view on the entity (`MJ: Entity Alternate Base Views.Name`).
+   * When provided, takes precedence over `ViewEntity.AlternateBaseView` for all `RunView` / `RunViews` queries.
+   */
+  @Input()
+  get AlternateBaseView(): string | null {
+    return this._alternateBaseView;
+  }
+  set AlternateBaseView(value: string | null) {
+    const normalized = value?.trim() || null;
+    const previous = this._alternateBaseView;
+    this._alternateBaseView = normalized;
+
+    if (this._initialized && normalized !== previous) {
+      this.pushDynamicRendererInputs();
+      if (this._entity && !this._records) {
+        this.resetPaginationState(false);
+        this.deferReload();
+      }
+    }
+  }
+
+  /**
+   * Effective alternate base view semantic name: explicit `[AlternateBaseView]` input wins over
+   * `ViewEntity.AlternateBaseView`.
+   */
+  public get EffectiveAlternateBaseView(): string | null {
+    const raw = this._alternateBaseView ?? this.ViewEntity?.AlternateBaseView ?? null;
+    return raw?.trim() || null;
   }
 
   private _gridState: ViewGridState | null = null;
@@ -1245,6 +1280,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
           .join(', ');
       }
 
+      const altBaseView = this.EffectiveAlternateBaseView || undefined;
       const result = await rv.RunView<Record<string, unknown>>({
         EntityName: entity.Name,
         ResultType: 'simple',
@@ -1254,6 +1290,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
         StartRow: 0,
         OrderBy: orderBy,
         ExtraFilter: this.ViewEntity?.WhereClause || undefined,
+        AlternateBaseView: altBaseView,
         UserSearchString: config.serverSideFiltering && !this.ViewEntity?.SmartFilterEnabled
           ? this.DebouncedFilterText || undefined
           : undefined
@@ -1341,6 +1378,8 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
         ? this.DebouncedFilterText || undefined
         : undefined;
 
+      const altBaseView = this.EffectiveAlternateBaseView || undefined;
+
       // Page of rows + a count_only query (IgnoreMaxRows so UserViewMaxRows=1000 cannot
       // cap the total). One RunViews round trip. TotalRowCount on the paged call is the
       // page length whenever the server skipped COUNT.
@@ -1352,12 +1391,14 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
           StartRow: startRow,
           OrderBy: orderBy,
           ExtraFilter: extraFilter,
+          AlternateBaseView: altBaseView,
           UserSearchString: userSearchString,
         },
         {
           EntityName: entity.Name,
           ResultType: 'count_only',
           ExtraFilter: extraFilter,
+          AlternateBaseView: altBaseView,
           UserSearchString: userSearchString,
           IgnoreMaxRows: true,
         },
@@ -2084,6 +2125,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     this.setDynamicInput(ref, 'page', this.Pagination.currentPage + 1);
     this.setDynamicInput(ref, 'pageSize', this.Pagination.pageSize);
     this.setDynamicInput(ref, 'isLoading', this.IsLoading);
+    this.setDynamicInput(ref, 'alternateBaseView', this.EffectiveAlternateBaseView);
   }
 
   // ========================================

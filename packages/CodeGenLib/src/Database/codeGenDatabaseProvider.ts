@@ -1,7 +1,50 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, EntityAlternateBaseViewInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 import { TrimTrailingStatementTerminators } from '../Misc/sql_text';
+
+/**
+ * Topologically orders an entity's alternate base views by `ParentID` so parent
+ * alternate views are always refreshed/rebound before derived child alternate views.
+ * Preserves the input order (`Sequence, Name`) among siblings and roots, and safely
+ * terminates if a cycle is encountered.
+ */
+export function OrderAlternateBaseViewsTopologically(
+    views: readonly EntityAlternateBaseViewInfo[]
+): EntityAlternateBaseViewInfo[] {
+    if (views.length <= 1) {
+        return [...views];
+    }
+    const byId = new Map<string, EntityAlternateBaseViewInfo>();
+    for (const v of views) {
+        byId.set(v.ID.toLowerCase(), v);
+    }
+    const visited = new Set<string>();
+    const visiting = new Set<string>();
+    const result: EntityAlternateBaseViewInfo[] = [];
+
+    const visit = (v: EntityAlternateBaseViewInfo): void => {
+        const key = v.ID.toLowerCase();
+        if (visited.has(key) || visiting.has(key)) {
+            return;
+        }
+        visiting.add(key);
+        if (v.ParentID) {
+            const parent = byId.get(v.ParentID.toLowerCase());
+            if (parent) {
+                visit(parent);
+            }
+        }
+        visiting.delete(key);
+        visited.add(key);
+        result.push(v);
+    };
+
+    for (const v of views) {
+        visit(v);
+    }
+    return result;
+}
 
 // ─── CONNECTION ABSTRACTION ──────────────────────────────────────────────────
 
@@ -1077,6 +1120,19 @@ export abstract class CodeGenDatabaseProvider {
     abstract generateViewPermissions(entity: EntityInfo): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
+     * Generates GRANT SELECT (and on SQL Server, managed-scope REVOKEs and column-level
+     * FLS DENY SELECTs) for a specific target view belonging to `entity` (e.g. a registered
+     * alternate base view). Defaults to `generateViewPermissions(entity)`.
+     */
+    GenerateViewPermissionsForTarget(
+        entity: EntityInfo,
+        _targetSchemaName: string,
+        _targetViewName: string,
+    ): string {
+        return this.generateViewPermissions(entity);
+    }
+
+    /**
      * Generates GRANT EXECUTE permission for a CRUD routine.
      */
     abstract generateCRUDPermissions(entity: EntityInfo, routineName: string, type: CRUDType): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
@@ -1715,6 +1771,29 @@ export abstract class CodeGenDatabaseProvider {
      * view existing (bootstrap pass).
      */
     generateLayeredOuterRebindSQL(_entity: EntityInfo): string {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
+        return '';
+    }
+
+    /**
+     * SQL that rebinds an alternate base view after its entity's base view (or parent
+     * alternate view) has been regenerated. SQL Server: empty here — the alternate view
+     * is refreshed via {@link generateViewRefreshSQL}. PostgreSQL: invokes
+     * `__mj.spRebindLayeredOuterView` against the immediate inner view.
+     */
+    GenerateAlternateBaseViewRebindSQL(
+        _entity: EntityInfo,
+        _altViewSchema: string,
+        _altViewName: string,
+        _innerViewName: string,
+    ): string {
+        return '';
+    }
+
+    /**
+     * Returns SQL to query catalog dependencies of a view (`ReferencedSchema`, `ReferencedObject`, `ReferencedType`).
+     * Used by alternate base view parity/safety checks.
+     */
+    getViewDependenciesSQL(_schema: string, _viewName: string): string {  // case-violation-ok-legacy-back-compat: a subclass overrides this
         return '';
     }
 

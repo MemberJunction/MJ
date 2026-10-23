@@ -243,6 +243,28 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   /** Partial {@link EntityViewerConfig} forwarded to the inner viewer (toolbar/pagination/etc.). */
   @Input() ViewerConfig: Partial<EntityViewerConfig> | null = null;
 
+  private _alternateBaseView: string | null = null;
+
+  /**
+   * Optional semantic name (`EntityAlternateBaseView.Name`) of an alternate base view to read from
+   * when no saved view is active or to override the active view's `AlternateBaseView`.
+   */
+  @Input()
+  get AlternateBaseView(): string | null {
+    return this._alternateBaseView;
+  }
+  set AlternateBaseView(value: string | null) {
+    this._alternateBaseView = value || null;
+  }
+
+  /**
+   * Effective alternate base view passed to `<mj-entity-viewer>`:
+   * explicit `@Input() AlternateBaseView` overrides the selected view's `AlternateBaseView`.
+   */
+  public get EffectiveAlternateBaseView(): string | null {
+    return this._alternateBaseView ?? this.CurrentViewEntity?.AlternateBaseView ?? null;
+  }
+
   // ========================================
   // OUTPUTS — routing / host concerns (this component never routes)
   // ========================================
@@ -622,6 +644,9 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
 
   /** Smart-filter prompt carried from quick-save dialog back into the config panel. */
   public PendingNewViewSmartFilterPrompt: string = '';
+
+  /** Alternate base view carried from quick-save dialog back into the config panel. */
+  public PendingNewViewAlternateBaseView: string | null = null;
 
   // ----- Filter dialog (rendered at workspace level for full width) -----
 
@@ -1139,6 +1164,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     this.PendingNewViewFilterState = null;
     this.PendingNewViewSmartFilterEnabled = false;
     this.PendingNewViewSmartFilterPrompt = '';
+    this.PendingNewViewAlternateBaseView = null;
     this.DefaultSaveAsNew = false;
     this.pendingDefaultViewSave = null;
     this.QuickSaveSuggestedName = '';
@@ -1256,6 +1282,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     newView.SmartFilterEnabled = event.SmartFilterEnabled;
     newView.SmartFilterPrompt = event.SmartFilterPrompt;
     newView.FilterState = this.buildFilterStateJson(event);
+    newView.AlternateBaseView = event.AlternateBaseView || null;
 
     const before: WorkspaceCancelableEvent<ViewSaveOperation> = { Data: { View: newView, IsNew: true }, Cancel: false };
     this.BeforeViewSave.emit(before);
@@ -1300,6 +1327,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     view.SmartFilterEnabled = event.SmartFilterEnabled;
     view.SmartFilterPrompt = event.SmartFilterPrompt;
     view.FilterState = this.buildFilterStateJson(event);
+    view.AlternateBaseView = event.AlternateBaseView || null;
 
     const before: WorkspaceCancelableEvent<ViewSaveOperation> = { Data: { View: view, IsNew: false }, Cancel: false };
     this.BeforeViewSave.emit(before);
@@ -1508,7 +1536,8 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
       SmartFilterEnabled: staged?.SmartFilterEnabled ?? false,
       SmartFilterPrompt: staged?.SmartFilterPrompt ?? '',
       FilterState: staged?.FilterState ?? this.FilterDialogState ?? null,
-      AggregatesConfig: staged?.AggregatesConfig ?? null
+      AggregatesConfig: staged?.AggregatesConfig ?? null,
+      AlternateBaseView: staged?.AlternateBaseView ?? this._alternateBaseView ?? null
     };
     const saved = await this.OnSaveView(viewSaveEvent);
     if (!saved && staged) {
@@ -1579,6 +1608,9 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
       this.PendingNewViewFilterState = staged.FilterState;
       this.PendingNewViewSmartFilterEnabled = staged.SmartFilterEnabled;
       this.PendingNewViewSmartFilterPrompt = staged.SmartFilterPrompt;
+      this.PendingNewViewAlternateBaseView = staged.AlternateBaseView ?? null;
+    } else if (this._alternateBaseView) {
+      this.PendingNewViewAlternateBaseView = this._alternateBaseView;
     }
 
     this.DefaultSaveAsNew = true;
@@ -1710,6 +1742,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     newView.GridState = sourceView.GridState;
     newView.FilterState = sourceView.FilterState;
     newView.SortState = sourceView.SortState;
+    newView.DisplayState = sourceView.DisplayState;
     newView.SmartFilterEnabled = sourceView.SmartFilterEnabled || false;
     newView.SmartFilterPrompt = sourceView.SmartFilterPrompt || '';
 
@@ -1867,7 +1900,8 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   private eventHasFilter(event: ViewSaveEvent): boolean {
     const hasSmartFilter = event.SmartFilterEnabled && !!event.SmartFilterPrompt?.trim();
     const hasTraditionalFilter = (event.FilterState?.filters?.length ?? 0) > 0;
-    return hasSmartFilter || hasTraditionalFilter;
+    const hasAlternateBaseView = !!event.AlternateBaseView?.trim();
+    return hasSmartFilter || hasTraditionalFilter || hasAlternateBaseView;
   }
 
   /** Longest suggested name we will build before eliding the smart prompt. */
@@ -1882,6 +1916,10 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     const entityName = this._entity?.DisplayNameOrName ?? this._entity?.Name ?? 'View';
     const prompt = event.SmartFilterEnabled ? event.SmartFilterPrompt?.trim() : '';
     if (!prompt) {
+      if (event.AlternateBaseView?.trim()) {
+        const abv = this._entity?.GetAlternateBaseView(event.AlternateBaseView.trim());
+        return `${entityName} — ${abv?.EffectiveDisplayName ?? event.AlternateBaseView.trim()}`;
+      }
       return `${entityName} — Filtered`;
     }
 

@@ -1,5 +1,5 @@
 import { MJGlobal, RegisterClass, UUIDsEqual } from "@memberjunction/global";
-import { Metadata, BaseEntity, BaseInfo, EntityInfo, EntityFieldInfo,RunView, UserInfo, EntitySaveOptions, LogError, EntityFieldTSType, EntityPermissionType, BaseEntityResult, IMetadataProvider, ParseFilterField } from "@memberjunction/core";
+import { Metadata, BaseEntity, BaseInfo, EntityInfo, EntityFieldInfo,RunView, UserInfo, EntitySaveOptions, LogError, EntityFieldTSType, EntityPermissionType, BaseEntityResult, IMetadataProvider, ParseFilterField, ExtractAlternateBaseViewFromDisplayState } from "@memberjunction/core";
 import {
     MJUserViewEntity,
     MJUserViewEntity_IColumnFormat as ColumnFormat,
@@ -190,6 +190,30 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
     public setTimelineConfig(config: ViewTimelineState): void {
         const current = this.ParsedDisplayState || { defaultMode: 'grid' as const };
         current.timeline = config;
+        this.setDisplayState(current);
+    }
+
+    /**
+     * Semantic `Name` of the alternate base view (`MJ: Entity Alternate Base Views.Name`)
+     * pinned in `DisplayState.alternateBaseView`, or `null` when this view reads from the
+     * entity's canonical `BaseView`.
+     */
+    public get AlternateBaseView(): string | null {
+        const val = this.ParsedDisplayState?.alternateBaseView?.trim();
+        return val && val.length > 0 ? val : null;
+    }
+
+    /**
+     * Updates or clears the pinned `alternateBaseView` in `DisplayState`.
+     */
+    public set AlternateBaseView(value: string | null) {
+        const trimmed = value?.trim() || undefined;
+        const current = this.ParsedDisplayState || { defaultMode: 'grid' as const };
+        if (trimmed) {
+            current.alternateBaseView = trimmed;
+        } else {
+            delete current.alternateBaseView;
+        }
         this.setDisplayState(current);
     }
 
@@ -446,6 +470,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
             if (!this.IsSaved ||
                 options?.IgnoreDirtyState || 
                 this.smartFilterPending ||
+                this.alternateBaseViewDirty ||
                 filterStateField?.Dirty ||
                 smartFilterEnabledField?.Dirty ||
                 smartFilterPromptField?.Dirty) {
@@ -548,7 +573,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
                 // A new record (IsSaved === false — see the note in Save() on why the ID can't be used for this) or a
                 // record whose SmartFilterWhereClause is missing or blank (see smartFilterWhereClauseBlank) also needs the AI pass.
                 const smartFilterPromptDirty = this.Fields.find(c => c.Name.toLowerCase() == 'smartfilterprompt')?.Dirty === true;
-                if (!this.IsSaved || ignoreDirtyState || smartFilterPromptDirty || this.smartFilterWhereClauseBlank) {
+                if (!this.IsSaved || ignoreDirtyState || smartFilterPromptDirty || this.alternateBaseViewDirty || this.smartFilterWhereClauseBlank) {
                     // the prompt has changed (or is newly populated, either way it is dirty) so use the AI to figure this out
                     const result = await this.GenerateSmartFilterWhereClause(this.SmartFilterPrompt, this.ViewEntityInfo);
                     this.SmartFilterWhereClause = result.whereClause;
@@ -609,6 +634,21 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
     private get smartFilterPending(): boolean {
         const hasPrompt = (this.SmartFilterPrompt ?? '').trim().length > 0;
         return !!this.SmartFilterEnabled && hasPrompt && this.smartFilterWhereClauseBlank;
+    }
+
+    /**
+     * True when `DisplayState.alternateBaseView` changed compared to the persisted `DisplayState` OldValue.
+     * Used to re-evaluate SmartFilterWhereClause against the new base view context on Save.
+     */
+    private get alternateBaseViewDirty(): boolean {
+        const displayStateField = this.Fields.find(c => c.Name.toLowerCase() === 'displaystate');
+        if (!displayStateField?.Dirty) {
+            return false;
+        }
+        const oldVal = ExtractAlternateBaseViewFromDisplayState(
+            typeof displayStateField.OldValue === 'string' ? displayStateField.OldValue : null
+        );
+        return (oldVal ?? null) !== (this.AlternateBaseView ?? null);
     }
 
     public override Set(FieldName: string, Value: any): void {

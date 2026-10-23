@@ -1,5 +1,5 @@
 import { BaseEntity, UserInfo, QueryCacheConfig, IMetadataProvider } from "@memberjunction/core";
-import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
+import { IndexByUUID, RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import {
     MJQueryEntity,
     MJQueryFieldEntity,
@@ -170,6 +170,14 @@ export class MJQueryEntityExtended extends MJQueryEntity {
                 const perms = entityInfo.GetUserPermisions(user);
                 if (!perms || !perms.CanRead) {
                     deniedEntities.push(entityInfo.Name);
+                    continue;
+                }
+
+                if (qe.AlternateBaseViewID) {
+                    const abv = IndexByUUID(entityInfo.AlternateBaseViews ?? []).Get(qe.AlternateBaseViewID);
+                    if (!abv || !abv.IsUsable) {
+                        deniedEntities.push(`${entityInfo.Name} (${abv?.Name ?? qe.AlternateBaseView ?? qe.AlternateBaseViewID})`);
+                    }
                 }
             }
         }

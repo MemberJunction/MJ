@@ -511,6 +511,18 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
   }
 
   /**
+   * Get display label for the alternate base view configured on a view, if any.
+   */
+  GetViewAlternateBaseViewLabel(view: ViewListItem): string {
+    const abvName = view.entity.AlternateBaseView;
+    if (!abvName) {
+      return '';
+    }
+    const abvInfo = this.Entity?.GetAlternateBaseView(abvName);
+    return abvInfo?.EffectiveDisplayName ?? abvName;
+  }
+
+  /**
    * Select a specific view and open the config panel for it
    */
   OnConfigureViewById(viewId: string, event: MouseEvent): void {

@@ -27,6 +27,8 @@ interface SmartFilterTemplateData extends Record<string, unknown> {
     listsSchema: string;
     listsFields: string;
     listDetailsFields: string;
+    alternateBaseViewName?: string;
+    alternateBaseViewDescription?: string;
 }
 
 @RegisterClass(BaseEntity, 'MJ: User Views')
@@ -41,9 +43,41 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.validateCustomWhereClauseAuthorization(result);
+        this.validatePinnedAlternateBaseView(result);
         this.validateStoredClauses(result);
         result.Success = result.Success && result.Errors.length === 0;
         return result;
+    }
+
+    /**
+     * Validates that a pinned `DisplayState.alternateBaseView` (if set) corresponds to a
+     * registered, usable alternate base view on the view's target entity.
+     */
+    private validatePinnedAlternateBaseView(result: ValidationResult): void {
+        const pinnedName = this.AlternateBaseView;
+        if (!pinnedName || !this.ViewEntityInfo) {
+            return;
+        }
+        const abv = this.ViewEntityInfo.GetAlternateBaseView(pinnedName);
+        if (!abv) {
+            result.Errors.push(
+                new ValidationErrorInfo(
+                    'DisplayState',
+                    `Alternate Base View '${pinnedName}' is not registered on entity '${this.ViewEntityInfo.Name}'.`,
+                    pinnedName,
+                    ValidationErrorType.Failure
+                )
+            );
+        } else if (!abv.IsUsable) {
+            result.Errors.push(
+                new ValidationErrorInfo(
+                    'DisplayState',
+                    `Alternate Base View '${pinnedName}' on entity '${this.ViewEntityInfo.Name}' has status '${abv.Status}' and cannot be used.`,
+                    pinnedName,
+                    ValidationErrorType.Failure
+                )
+            );
+        }
     }
 
     /**
@@ -240,19 +274,33 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
      * This data is used to populate the Nunjucks template variables.
      */
     protected BuildTemplateData(entityInfo: EntityInfo): SmartFilterTemplateData {
+        const pinnedAbv = this.AlternateBaseView
+            ? entityInfo.GetAlternateBaseView(this.AlternateBaseView)
+            : undefined;
+        const effectiveBaseView = pinnedAbv && pinnedAbv.IsUsable ? pinnedAbv.ViewName : entityInfo.BaseView;
+
         const processedViews: string[] = [entityInfo.BaseView];
+        if (effectiveBaseView !== entityInfo.BaseView) {
+            processedViews.push(effectiveBaseView);
+        }
         const md: IMetadataProvider = this.ProviderToUse as unknown as IMetadataProvider;
         const listsEntity = md.EntityByName("MJ: Lists");
         const listDetailsEntity = md.EntityByName("MJ: List Details");
 
         // Build fields description
-        const fieldsDescription = entityInfo.Fields.map(f => {
+        let fieldsDescription = entityInfo.Fields.map(f => {
             let ret: string = `${f.Name} (${f.Type})`;
             if (f.RelatedEntity) {
                 ret += ` (fkey to ${f.RelatedEntityBaseView})`;
             }
             return ret;
         }).join(',');
+
+        if (pinnedAbv && pinnedAbv.IsUsable) {
+            fieldsDescription +=
+                `\n[Base View Context: Reading from alternate base view '${pinnedAbv.EffectiveDisplayName}' (${pinnedAbv.ViewName}): ${pinnedAbv.Description}. ` +
+                `Do NOT duplicate conditions already enforced by this base view unless the user explicitly asks to refine them.]`;
+        }
 
         // Build related views description
         const relatedViewsDescription = this.BuildRelatedViewsDescription(entityInfo, md, processedViews);
@@ -267,16 +315,21 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
             return f.Name + ' (' + f.SQLFullType + ')';
         }).join(', ') : '';
 
-        return {
+        const templateData: SmartFilterTemplateData = {
             entityName: entityInfo.Name,
             entityId: entityInfo.ID,
-            baseView: entityInfo.BaseView,
+            baseView: effectiveBaseView,
             fieldsDescription,
             relatedViewsDescription: processedViews.length > 1 ? relatedViewsDescription : '',
             listsSchema: listsEntity?.SchemaName || '__mj',
             listsFields,
-            listDetailsFields
+            listDetailsFields,
         };
+        if (pinnedAbv && pinnedAbv.IsUsable) {
+            templateData.alternateBaseViewName = pinnedAbv.Name;
+            templateData.alternateBaseViewDescription = pinnedAbv.Description;
+        }
+        return templateData;
     }
 
     /**

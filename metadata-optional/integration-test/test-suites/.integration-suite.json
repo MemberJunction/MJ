@@ -1540,6 +1540,17 @@
           "primaryKey": {
             "ID": "19516008-6F25-49C0-BEAA-59762CC20B21"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT132 - Alternate Base Views",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C855524F-A408-4F8B-BD04-4BE96B59C3C1"
+          }
         }
       ]
     },

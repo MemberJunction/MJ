@@ -37,6 +37,12 @@ export interface RestarLayeredOuterViewArgs {
 
 const IDENT = String.raw`(?:"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*)`;
 
+const SQL_CLAUSE_KEYWORDS = new Set([
+    'where', 'group', 'order', 'limit', 'offset', 'join', 'left', 'inner', 'right',
+    'full', 'cross', 'natural', 'lateral', 'on', 'using', 'having', 'window',
+    'union', 'intersect', 'except', 'fetch', 'for',
+]);
+
 export function RestarLayeredOuterView(args: RestarLayeredOuterViewArgs): string {
     const innerCols = new Set(args.innerColumns.map((c) => c));
     if (innerCols.size === 0) {
@@ -58,21 +64,26 @@ export function RestarLayeredOuterView(args: RestarLayeredOuterViewArgs): string
 
     const selectList = def.slice('select'.length, fromPos).trim();
     const fromAndRest = def.slice(fromPos).trim();
-    const alias = detectInnerAlias(fromAndRest, args.innerViewName) ?? 'g';
+    const fromInfo = detectInnerRelationAndAlias(fromAndRest, args.innerViewName);
+    const alias: string | null = fromInfo.matchedRelation ? fromInfo.alias : 'g';
 
     const items = SplitTopLevelCommaList(selectList);
     if (items.length === 0) {
         throw new LayeredOuterRestarError('outer view SELECT list is empty');
     }
 
-    if (isStarOfAlias(items[0], alias) || isBareStar(items[0])) {
+    if (
+        isBareStar(items[0]) ||
+        (alias !== null && isStarOfAlias(items[0], alias)) ||
+        (alias === null && isStarOfAlias(items[0], args.innerViewName))
+    ) {
         const extras = items.slice(1);
         return rebuildSelect(alias, extras, fromAndRest);
     }
 
     let consumed = 0;
     for (const item of items) {
-        if (isSimpleInnerColumnRef(item, alias, innerCols)) {
+        if (isSimpleInnerColumnRef(item, alias, args.innerViewName, innerCols)) {
             consumed++;
         } else {
             break;
@@ -109,8 +120,8 @@ export function buildCreateOrReplaceLayeredOuterViewSQL(
     return BuildCreateOrReplaceLayeredOuterViewSQL(schema, outerView, restarredSelect);
 }
 
-function rebuildSelect(alias: string, extras: string[], fromAndRest: string): string {
-    const star = `SELECT ${quoteIdent(alias)}.*`;
+function rebuildSelect(alias: string | null, extras: string[], fromAndRest: string): string {
+    const star = alias ? `SELECT ${quoteIdent(alias)}.*` : 'SELECT *';
     if (extras.length === 0) {
         return `${star}\n${fromAndRest}`;
     }
@@ -236,16 +247,30 @@ function isKeywordEnd(sql: string, index: number): boolean {
     return !/[A-Za-z0-9_$]/.test(sql[index]);
 }
 
-function detectInnerAlias(fromAndRest: string, innerViewName: string): string | null {
-    const fromMatch = fromAndRest.match(new RegExp(String.raw`^from\s+(${IDENT}(?:\.${IDENT})?)(?:\s+as)?\s+(${IDENT})\b`, 'i'));
+function detectInnerRelationAndAlias(fromAndRest: string, innerViewName: string): { matchedRelation: boolean; alias: string | null } {
+    const fromMatch = fromAndRest.match(
+        new RegExp(String.raw`^from\s+(${IDENT}(?:\.${IDENT})?)(?:\s+as\s+(${IDENT})\b|\s+(${IDENT})\b)?`, 'i')
+    );
     if (!fromMatch) {
-        return null;
+        return { matchedRelation: false, alias: null };
     }
     const relation = unquoteIdent(fromMatch[1].includes('.') ? fromMatch[1].slice(fromMatch[1].lastIndexOf('.') + 1) : fromMatch[1]);
-    if (relation !== innerViewName) {
-        return null;
+    if (relation !== innerViewName && relation.toLowerCase() !== innerViewName.toLowerCase()) {
+        return { matchedRelation: false, alias: null };
     }
-    return unquoteIdent(fromMatch[2]);
+    if (fromMatch[2]) {
+        return { matchedRelation: true, alias: unquoteIdent(fromMatch[2]) };
+    }
+    if (fromMatch[3]) {
+        const rawCandidate = fromMatch[3].trim();
+        const isQuoted = rawCandidate.startsWith('"') && rawCandidate.endsWith('"');
+        const unquoted = unquoteIdent(rawCandidate);
+        if (!isQuoted && SQL_CLAUSE_KEYWORDS.has(unquoted.toLowerCase())) {
+            return { matchedRelation: true, alias: null };
+        }
+        return { matchedRelation: true, alias: unquoted };
+    }
+    return { matchedRelation: true, alias: null };
 }
 
 function unquoteIdent(raw: string): string {
@@ -266,7 +291,12 @@ function isStarOfAlias(item: string, alias: string): boolean {
     return new RegExp(String.raw`^(?:${escapeRegExp(aliasQ)}|${escapeRegExp(alias)})\.\*$`, 'i').test(t);
 }
 
-function isSimpleInnerColumnRef(item: string, alias: string, innerCols: Set<string>): boolean {
+function isSimpleInnerColumnRef(
+    item: string,
+    alias: string | null,
+    innerViewName: string,
+    innerCols: Set<string>,
+): boolean {
     let t = item.trim();
     t = t.replace(/\s*::[\w\s."()]+$/i, '').trim();
     t = stripWrappingParens(t);
@@ -282,8 +312,13 @@ function isSimpleInnerColumnRef(item: string, alias: string, innerCols: Set<stri
     if (!colMatch) {
         return false;
     }
-    if (colMatch[1] && unquoteIdent(colMatch[1]) !== alias) {
-        return false;
+    if (colMatch[1]) {
+        const qualifier = unquoteIdent(colMatch[1]);
+        if (alias !== null) {
+            if (qualifier !== alias) return false;
+        } else {
+            if (qualifier.toLowerCase() !== innerViewName.toLowerCase()) return false;
+        }
     }
     const col = unquoteIdent(colMatch[2]);
     if (asName && asName !== col) {

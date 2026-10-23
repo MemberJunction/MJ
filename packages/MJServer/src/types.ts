@@ -133,6 +133,11 @@ export type RunViewGenericParams = {
    * Propagated to `RunViewParams.IncludeBinaryFields`.
    */
   includeBinaryFields?: boolean;
+  /**
+   * Optional registered Alternate Base View logical Name (from `EntityAlternateBaseView.Name`)
+   * for this entity. Propagated to `RunViewParams.AlternateBaseView`.
+   */
+  alternateBaseView?: string;
 };
 
 

@@ -35,6 +35,11 @@ import {
     RunView,
     RunViewParams,
     IsMaterializedDataSource,
+    GetEffectiveAlternateBaseViewName,
+    GetPinnedAlternateBaseViewFromViewEntity,
+    IsValidSQLIdentifier,
+    NormalizeAlternateBaseViewName,
+    ResolveAlternateBaseView,
     RunViewResult,
     RunViewWithCacheCheckParams,
     RunViewDatabaseStatus,
@@ -1755,31 +1760,44 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         entityInfo: EntityInfo,
         usingPagination: boolean,
         maxRowsForQuery: number,
-        baseViewOverride?: string
+        baseViewOverride?: string,
+        schemaNameOverride?: string
     ): string | null {
         const rowsAreLimited = usingPagination || maxRowsForQuery > 0;
         if (!rowsAreLimited) return null;
-        return `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRowCount')} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, baseViewOverride ?? entityInfo.BaseView)}`;
+        return `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRowCount')} FROM ${this.QuoteSchemaAndView(schemaNameOverride ?? entityInfo.SchemaName, baseViewOverride ?? entityInfo.BaseView)}`;
     }
 
     /**
-     * Resolves the view a RunView reads from: the entity's live base view by default, or its materialized
-     * wrapper view when the caller opts into the snapshot via `DataSource: 'Materialized'` (plan §7). The
-     * choice is explicit (never silent), so the same RLS/paging/field-selection apply against the identical shape.
-     *
-     * Two materialization shapes:
-     *  - **Base-view materialization** reuses the SOURCE entity, whose `BaseView` stays the LIVE view; the
-     *    snapshot lives beside it as `materialized_vw<CodeName>` (the name CodeGen's base-view path emits).
-     *    `'Materialized'` swaps the live view for that snapshot.
-     *  - **Query materialization** mints a NEW entity whose `BaseView` ALREADY IS the materialized wrapper
-     *    view (`materialized_vw<...>`), so there is no separate live source to swap — `'Materialized'` is a
-     *    no-op and we return the entity's own base view. (Deriving `materialized_vw<CodeName>` here would be
-     *    wrong: the minted entity's CodeName need not match the query-derived view name.)
-     *
-     * Convention-based for the base-view case: if the entity has no such materialization the wrapper view
-     * won't exist and the read will error — opting into `'Materialized'` asserts the snapshot exists.
+     * Resolves the view a RunView reads from: an explicit or pinned `AlternateBaseView` when present,
+     * the entity's materialized wrapper view when `DataSource: 'Materialized'`, or the entity's live
+     * `BaseView` by default.
      */
-    protected GetEffectiveBaseView(entityInfo: EntityInfo, params: RunViewParams): string {
+    protected GetEffectiveBaseView(
+        entityInfo: EntityInfo,
+        params: RunViewParams,
+        viewEntity?: MJUserViewEntityExtended | null
+    ): string {
+        const pinnedName = viewEntity?.AlternateBaseView ?? GetPinnedAlternateBaseViewFromViewEntity(params?.ViewEntity);
+        const effectiveAbvName = params?.AlternateBaseView?.trim() || pinnedName;
+        if (effectiveAbvName) {
+            if (IsMaterializedDataSource(params?.DataSource)) {
+                throw new Error(
+                    `AlternateBaseView '${effectiveAbvName}' on entity '${entityInfo.Name}' cannot be combined with DataSource: 'Materialized'.`
+                );
+            }
+            const resolution = ResolveAlternateBaseView({
+                entity: entityInfo,
+                alternateBaseViewName: effectiveAbvName,
+                callerName: 'GetEffectiveBaseView',
+            });
+            if (!IsValidSQLIdentifier(resolution.effectiveSchemaName) || !IsValidSQLIdentifier(resolution.effectiveViewName)) {
+                throw new Error(
+                    `Invalid SQL identifier for alternate base view '${resolution.view.Name}' on entity '${entityInfo.Name}'.`
+                );
+            }
+            return resolution.effectiveViewName;
+        }
         // Case-INSENSITIVE prefix test (matches the sibling guard in providerBase.IsServerCacheAllowedForEntity):
         // a BaseView returned with non-lowercase casing (e.g. 'Materialized_vwFoo' from a case-insensitive SQL
         // Server, or a hand-authored entity) is still an already-materialized view — a case-sensitive check
@@ -1792,18 +1810,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
     /**
      * Async status-aware wrapper around {@link GetEffectiveBaseView} for the BASE-VIEW materialization case.
-     * `GetEffectiveBaseView` name-swaps unconditionally, which (a) serves a `Building`/`DriftHold`/`Disabled`
-     * snapshot — defeating "flag and hold" (§13/§17.2), since a base-view materialization reuses the source
-     * entity and thus has no read-permission revoke to fall back on the way a minted query entity does — and
-     * (b) hard-errors on a `Materialized` read of a non-materialized entity (missing view). This gates the swap
-     * on an ACTIVE `MaterializedResult` and otherwise returns the LIVE base view (graceful fallback). The status
-     * read uses `BypassCache` because DriftHold/Disabled are written by CodeGen via direct SQL (no BaseEntity
-     * cache-invalidation event), so a cached status could otherwise be stale. Non-materialized reads and minted
-     * query virtual entities (BaseView already `materialized_vw…`) skip the lookup entirely (no extra query).
      */
-    protected async resolveEffectiveBaseView(entityInfo: EntityInfo, params: RunViewParams, contextUser?: UserInfo): Promise<string> {
+    protected async resolveEffectiveBaseView(
+        entityInfo: EntityInfo,
+        params: RunViewParams,
+        contextUser?: UserInfo,
+        viewEntity?: MJUserViewEntityExtended | null
+    ): Promise<string> {
+        const pinnedName = viewEntity?.AlternateBaseView ?? GetPinnedAlternateBaseViewFromViewEntity(params?.ViewEntity);
+        if (params?.AlternateBaseView || pinnedName) {
+            return this.GetEffectiveBaseView(entityInfo, params, viewEntity);
+        }
         if (!IsMaterializedDataSource(params.DataSource) || entityInfo.BaseView?.toLowerCase().startsWith('materialized_vw')) {
-            return this.GetEffectiveBaseView(entityInfo, params);
+            return this.GetEffectiveBaseView(entityInfo, params, viewEntity);
         }
         const rv = new RunView(this);
         const res = await rv.RunView<{ Status: string; ViewName: string | null }>(
@@ -1832,6 +1851,58 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         // Fall back to the convention only if the row somehow lacks a ViewName. (SchemaName stays the entity's —
         // base-view materialization always mints into the source entity's own schema.)
         return row.ViewName?.trim() || `materialized_vw${entityInfo.CodeName}`;
+    }
+
+    /**
+     * Resolves both the effective `{ schemaName, viewName }` for a RunView call, honoring:
+     * 1. Explicit `params.AlternateBaseView`
+     * 2. Saved `UserView.DisplayState.alternateBaseView` (from `viewEntity`, `params.ViewEntity`, or loaded by `ViewID`/`ViewName`)
+     * 3. `DataSource: 'Materialized'`
+     * 4. `entityInfo.BaseView`
+     */
+    protected async resolveEffectiveBaseViewTarget(
+        entityInfo: EntityInfo,
+        params: RunViewParams,
+        contextUser?: UserInfo,
+        viewEntity?: MJUserViewEntityExtended | null
+    ): Promise<{ schemaName: string; viewName: string }> {
+        let resolvedViewEntity = viewEntity ?? (params?.ViewEntity as MJUserViewEntityExtended | null | undefined) ?? null;
+        if (!resolvedViewEntity && !params?.AlternateBaseView) {
+            try {
+                if (params?.ViewID && params.ViewID.length > 0) {
+                    resolvedViewEntity = (await ViewInfo.GetViewEntity(params.ViewID, contextUser)) ?? null;
+                } else if (params?.ViewName && params.ViewName.length > 0) {
+                    resolvedViewEntity = (await ViewInfo.GetViewEntityByName(params.ViewName, contextUser)) ?? null;
+                }
+            } catch {
+                resolvedViewEntity = null;
+            }
+        }
+
+        const pinnedName = resolvedViewEntity?.AlternateBaseView ?? GetPinnedAlternateBaseViewFromViewEntity(params?.ViewEntity);
+        const effectiveAbvName = params?.AlternateBaseView?.trim() || pinnedName;
+        if (effectiveAbvName) {
+            if (IsMaterializedDataSource(params?.DataSource)) {
+                throw new Error(
+                    `AlternateBaseView '${effectiveAbvName}' on entity '${entityInfo.Name}' cannot be combined with DataSource: 'Materialized'.`
+                );
+            }
+            const resolution = ResolveAlternateBaseView({
+                entity: entityInfo,
+                alternateBaseViewName: effectiveAbvName,
+                contextUser,
+                callerName: 'resolveEffectiveBaseViewTarget',
+            });
+            if (!IsValidSQLIdentifier(resolution.effectiveSchemaName) || !IsValidSQLIdentifier(resolution.effectiveViewName)) {
+                throw new Error(
+                    `Invalid SQL identifier for alternate base view '${resolution.view.Name}' on entity '${entityInfo.Name}'.`
+                );
+            }
+            return { schemaName: resolution.effectiveSchemaName, viewName: resolution.effectiveViewName };
+        }
+
+        const viewName = await this.resolveEffectiveBaseView(entityInfo, params, contextUser, resolvedViewEntity);
+        return { schemaName: entityInfo.SchemaName, viewName };
     }
 
     /**
@@ -2114,6 +2185,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         _whereSQL: string,
         _orderBySQL: string,
         _user: UserInfo,
+        _schemaNameOverride?: string,
     ): Promise<{ executeViewSQL: string; runID: string } | null> {
         return null;
     }
@@ -2212,8 +2284,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             const afterKey = params.AfterKey ? params.AfterKey.ToConcatenatedString() : '';
             const ve = params.ViewEntity as MJUserViewEntityExtended | undefined;
             const viewEntityKey = ve
-                ? `${ve.ID ?? ''}:${ve.WhereClause ?? ''}:${ve.SmartFilterWhereClause ?? ''}`
+                ? `${ve.ID ?? ''}:${ve.WhereClause ?? ''}:${ve.SmartFilterWhereClause ?? ''}:${ve.AlternateBaseView ?? ''}`
                 : '';
+            const abvKey = NormalizeAlternateBaseViewName(GetEffectiveAlternateBaseViewName(params)) ?? '';
             return [
                 baseFingerprint,
                 `f:${fieldsKey}`,
@@ -2230,6 +2303,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 `start:${params.StartRow ?? ''}`,
                 `after:${afterKey}`,
                 `ds:${params.DataSource ?? ''}`,
+                `abv:${abvKey}`,
                 `agg:${aggregatesKey}`,
                 `roles:${roleKey}`,
                 `rls:${rlsClause}`,
@@ -2365,7 +2439,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 this.assertExternalReadAllowedUnderRLS(entityInfo, user);
                 // Refuse params we can't honor remotely rather than silently dropping them — most
                 // importantly AfterKey, which would otherwise return the same page on every call.
-                this.assertExternalRunViewParamsSupported(params, entityInfo.Name);
+                this.assertExternalRunViewParamsSupported(params, entityInfo.Name, viewEntity);
                 // A saved view's stored WhereClause/OrderBy live on viewEntity, not params, and the
                 // normal SQL path that applies them runs below this early return — so fold them in
                 // here, else a UserView over an external entity silently returns unfiltered rows.
@@ -2435,16 +2509,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
             // ── Build SELECT and COUNT SQL ──
             // DataSource:'Materialized' routes the read to the entity's materialized wrapper view
-            // (same shape, so RLS/paging/fields all apply identically); default stays the live base view.
-            const effectiveBaseView = await this.resolveEffectiveBaseView(entityInfo, params, contextUser);
+            // (same shape, so RLS/paging/fields all apply identically); AlternateBaseView routes to
+            // a registered alternate base view (which may also live in a custom schema); default stays the live base view.
+            const effectiveTarget = await this.resolveEffectiveBaseViewTarget(entityInfo, params, contextUser, viewEntity);
+            const effectiveBaseView = effectiveTarget.viewName;
+            const effectiveSchemaName = effectiveTarget.schemaName;
             const topFragment = topSQL ? topSQL + ' ' : '';
-            let viewSQL = `SELECT ${topFragment}${fields} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, effectiveBaseView)}`;
+            let viewSQL = `SELECT ${topFragment}${fields} FROM ${this.QuoteSchemaAndView(effectiveSchemaName, effectiveBaseView)}`;
             // count_only ALWAYS needs the count query — BuildTotalRowCountSQL only emits
             // it when rows are limited (its pagination purpose), which previously left
             // count_only with no COUNT at all (silently returned TotalRowCount 0).
             let countSQL: string | null = params.ResultType === 'count_only'
-                ? `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRowCount')} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, effectiveBaseView)}`
-                : this.BuildTotalRowCountSQL(entityInfo, usingPagination, maxRowsForQuery, effectiveBaseView);
+                ? `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRowCount')} FROM ${this.QuoteSchemaAndView(effectiveSchemaName, effectiveBaseView)}`
+                : this.BuildTotalRowCountSQL(entityInfo, usingPagination, maxRowsForQuery, effectiveBaseView, effectiveSchemaName);
 
             // ── WHERE clause assembly ──
             let whereSQL = '';
@@ -2619,7 +2696,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 // (reads the snapshot). effectiveBaseView === entityInfo.BaseView on the default live path,
                 // so non-materialized reads are unchanged.
                 const logResult = await this.executeSQLForUserViewRunLogging(
-                    Number(viewEntity.ID), entityInfo, effectiveBaseView, whereSQL, orderBy, user,
+                    Number(viewEntity.ID), entityInfo, effectiveBaseView, whereSQL, orderBy, user, effectiveSchemaName,
                 );
                 if (logResult) {
                     viewSQL = logResult.executeViewSQL;
@@ -2658,7 +2735,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 // Aggregate over the SAME source the rows/count came from — effectiveBaseView, so a caller
                 // asking for DataSource:'Materialized' gets aggregates over the snapshot, not the live view.
                 const aggregateBuild = this.BuildAggregateSQL(
-                    params.Aggregates, entityInfo, entityInfo.SchemaName, effectiveBaseView, whereSQL,
+                    params.Aggregates, entityInfo, effectiveSchemaName, effectiveBaseView, whereSQL,
                 );
                 aggregateSQL = aggregateBuild.aggregateSQL;
                 aggregateValidationErrors = aggregateBuild.validationErrors;
@@ -3384,7 +3461,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                                 // takes a one-column subquery — an entity with a composite key has no single column to return.
                                 const innerEntityInfo = innerViewEntity.ViewEntityInfo;
                                 this.assertSingleColumnPrimaryKey(innerEntityInfo, `The {%UserView%} template variable ${match}`);
-                                const innerSQL = `SELECT ${this.QuoteIdentifier(innerEntityInfo.FirstPrimaryKey.Name)} FROM ${this.QuoteSchemaAndView(innerEntityInfo.SchemaName, innerEntityInfo.BaseView)} WHERE (${innerWhere})`; // first-pk-ok: guarded above — IN (subquery) takes one column, PrimaryKeys.length === 1 enforced
+                                const innerTarget = await this.resolveEffectiveBaseViewTarget(
+                                    innerEntityInfo,
+                                    { EntityName: innerEntityInfo.Name, ViewEntity: innerViewEntity } as RunViewParams,
+                                    user,
+                                    innerViewEntity,
+                                );
+                                const innerSQL = `SELECT ${this.QuoteIdentifier(innerEntityInfo.FirstPrimaryKey.Name)} FROM ${this.QuoteSchemaAndView(innerTarget.schemaName, innerTarget.viewName)} WHERE (${innerWhere})`; // first-pk-ok: guarded above — IN (subquery) takes one column, PrimaryKeys.length === 1 enforced
                                 // Function replacement — `innerSQL` is generated SQL that can
                                 // legitimately contain `$`. See issue #3171.
                                 sWhere = sWhere.replace(match, () => innerSQL);
@@ -3951,8 +4034,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * entity whose view does not carry it, instead of comparing by count alone the way
      * `BaseEngine.SweepAgainstDatabase` documents.
      */
-    protected BuildCacheStatusSQL(entityInfo: EntityInfo, effectiveView: string, whereSQL: string): string {
-        const from = `FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, effectiveView)}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
+    protected BuildCacheStatusSQL(
+        entityInfo: EntityInfo,
+        effectiveView: string,
+        whereSQL: string,
+        schemaNameOverride?: string
+    ): string {
+        const from = `FROM ${this.QuoteSchemaAndView(schemaNameOverride ?? entityInfo.SchemaName, effectiveView)}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
         const count = `COUNT(*) AS ${this.QuoteIdentifier('TotalRows')}`;
         // `Fields` absent (a partial EntityInfo) degrades to the count-only probe rather than
         // throwing: a freshness check must not be the thing that breaks a sweep.
@@ -3982,8 +4070,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 // snapshot cache against an unrelated source, yielding a meaningless current/stale verdict.
                 // (Materialized reads are normally kept out of the client cache by runViewCacheEligible; this
                 // matches the SQL Server override and is defense-in-depth on the PG/default path.)
-                const effectiveView = await this.resolveEffectiveBaseView(entityInfo, item.params, contextUser);
-                const statusSQL = this.BuildCacheStatusSQL(entityInfo, effectiveView, whereSQL);
+                const effectiveTarget = await this.resolveEffectiveBaseViewTarget(entityInfo, item.params, contextUser);
+                const statusSQL = this.BuildCacheStatusSQL(entityInfo, effectiveTarget.viewName, whereSQL, effectiveTarget.schemaName);
                 const rows = await this.ExecuteSQL<Record<string, unknown>>(statusSQL, undefined, undefined, contextUser);
                 if (rows && rows.length > 0) {
                     const row = rows[0];
@@ -4128,7 +4216,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * infinite loop / duplicate processing in deep-pagination jobs. Aggregates and a non-empty
      * UserSearchString likewise can't be evaluated remotely. Throws a clear error naming the param.
      */
-    protected assertExternalRunViewParamsSupported(params: RunViewParams, entityName: string): void {
+    protected assertExternalRunViewParamsSupported(
+        params: RunViewParams,
+        entityName: string,
+        viewEntity?: MJUserViewEntityExtended | null
+    ): void {
+        if (GetEffectiveAlternateBaseViewName(params) || viewEntity?.AlternateBaseView) {
+            throw new Error(`AlternateBaseView is not supported for external-data-source entity '${entityName}'.`);
+        }
         if (params.AfterKey) {
             throw new Error(`Keyset pagination (AfterKey) is not supported for external-data-source entity '${entityName}'. Use StartRow/MaxRows offset paging instead.`);
         }
@@ -4437,7 +4532,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 ? params.Fields.map(f => this.QuoteIdentifier(f)).join(', ')
                 : '*';
 
-            let sql = `SELECT ${fields} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)} WHERE ${combinedWhere}`;
+            const effectiveTarget = await this.resolveEffectiveBaseViewTarget(entityInfo, params, contextUser);
+            let sql = `SELECT ${fields} FROM ${this.QuoteSchemaAndView(effectiveTarget.schemaName, effectiveTarget.viewName)} WHERE ${combinedWhere}`;
 
             const orderBy = this.TransformExternalSQLClause((params.OrderBy as string) || '', entityInfo);
             if (orderBy.length > 0) {

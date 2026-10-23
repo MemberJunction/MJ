@@ -326,17 +326,32 @@ export class ClientClauseScreen {
         return !schema;
     }
 
-    /** Builds the base-view allow-list for a set of entities. */
+    /**
+     * Builds the base-view allow-list for a set of entities, including both each entity's
+     * canonical `BaseView` and any registered, usable `AlternateBaseViews` (D13).
+     * Disabled alternate base views (`!abv.IsUsable`) are excluded.
+     */
     public static BuildEntityBaseViewAllowList(entities: readonly EntityInfo[]): EntityBaseViewAllowList {
         const qualified = new Map<string, EntityInfo>();
         const bare = new Map<string, EntityInfo | null>();
         for (const e of entities) {
             const view = ClientClauseScreen.StripIdentifierQuotes(e.BaseView);
-            if (!view) continue;
-            const schema = ClientClauseScreen.StripIdentifierQuotes(e.SchemaName);
-            const bareKey = view.toLowerCase();
-            bare.set(bareKey, bare.has(bareKey) ? null : e);
-            if (schema) qualified.set(`${schema}.${view}`.toLowerCase(), e);
+            if (view) {
+                const schema = ClientClauseScreen.StripIdentifierQuotes(e.SchemaName);
+                const bareKey = view.toLowerCase();
+                bare.set(bareKey, bare.has(bareKey) ? null : e);
+                if (schema) qualified.set(`${schema}.${view}`.toLowerCase(), e);
+            }
+            for (const abv of e.AlternateBaseViews ?? []) {
+                if (!abv.IsUsable) continue;
+                const altView = ClientClauseScreen.StripIdentifierQuotes(abv.ViewName);
+                if (!altView) continue;
+                const altSchema = ClientClauseScreen.StripIdentifierQuotes(abv.EffectiveSchemaName || e.SchemaName);
+                const altBareKey = altView.toLowerCase();
+                const existingBare = bare.get(altBareKey);
+                bare.set(altBareKey, existingBare === undefined || existingBare === e ? e : null);
+                if (altSchema) qualified.set(`${altSchema}.${altView}`.toLowerCase(), e);
+            }
         }
         return { Qualified: qualified, Bare: bare };
     }

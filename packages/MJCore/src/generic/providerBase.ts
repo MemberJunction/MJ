@@ -1,5 +1,6 @@
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 import { EntityDependency, EntityDocumentTypeInfo, EntityFieldTSType, EntityInfo, EntityPermissionType, FieldSecurityDenialMessage, FieldSecurityError, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
+import { GetEffectiveAlternateBaseViewName, ResolveAlternateBaseView } from "./alternateBaseViews";
 import { IEntityDataProvider, IMetadataProvider, MetadataSweepResult, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, GetRecordDependenciesOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem, SearchEntityParams, SearchEntitiesOptions, EntitySearchResult, IRemoteOperationProvider, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
 import { RecordChangeFieldSecurityProjector } from "./recordChangeFieldSecurity";
 import { ComputeRRF, ScoredCandidate } from "./scoring/ReciprocalRankFusion";
@@ -174,6 +175,7 @@ export type EntityMetadataRow = BaseMetadataRow & {
     EntityRelationships?: unknown[];
     EntitySettings?: unknown[];
     EntityOrganicKeys?: unknown[];
+    EntityAlternateBaseViews?: unknown[];
 };
 export type EntityFieldMetadataRow = BaseMetadataRow & {
     ID: string;
@@ -1871,11 +1873,35 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         return !param.BypassCache &&
             !param.AfterKey &&
             !IsMaterializedDataSource(param.DataSource) &&
+            !this.isAlternateBaseViewCacheBypassed(param) &&
             param.ResultType !== 'count_only' &&
             (param.CacheLocal === true || this.TrustLocalCacheCompletely) &&
             this.IsServerCacheAllowedForEntity(param);
         // Deliberately not user-dependent: server slots are full-width and shared, so field
         // security never changes whether a query is cacheable, only what is projected out of it.
+    }
+
+    /**
+     * True when the request targets an `AlternateBaseView` (explicitly on `param.AlternateBaseView`
+     * or pinned on `param.ViewEntity`) whose `CachePolicy` (or an ancestor's `CachePolicy` in its
+     * `ParentID` chain) is `'Bypass'` (`IsBypassCache === true`), or when the requested alternate
+     * base view does not resolve to a usable view on the entity (fail-closed: never cache or serve
+     * from cache an unknown/disabled alternate base view).
+     */
+    protected isAlternateBaseViewCacheBypassed(param: RunViewParams): boolean {
+        const effectiveAbv = GetEffectiveAlternateBaseViewName(param);
+        if (!effectiveAbv) {
+            return false;
+        }
+        const entity = this.ResolveRunViewEntitySync(param);
+        if (!entity) {
+            return true; // Fail closed when entity cannot be resolved synchronously
+        }
+        const abv = entity.GetAlternateBaseView(effectiveAbv);
+        if (!abv || !abv.IsUsable) {
+            return true;
+        }
+        return abv.IsBypassCache;
     }
 
     /** True when the entity is a CodeGen materialized-query wrapper (materialized_vw*) whose snapshot is
@@ -1905,6 +1931,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         return !param.BypassCache &&
             !param.AfterKey &&
             !IsMaterializedDataSource(param.DataSource) &&
+            !this.isAlternateBaseViewCacheBypassed(param) &&
             param.ResultType !== 'count_only' &&
             param.CacheLocal === true &&
             !this.isMaterializedWrapperEntity(param);
@@ -2785,6 +2812,21 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             throw new Error(`Entity ${entityName} not found in metadata`);
         }
         EntityInfo.AssertEntityActiveStatus(entity, callerName);
+
+        const effectiveAbv = GetEffectiveAlternateBaseViewName(params);
+        if (effectiveAbv) {
+            if (IsMaterializedDataSource(params.DataSource)) {
+                throw new Error(
+                    `Cannot combine DataSource: 'Materialized' with AlternateBaseView '${effectiveAbv}' on entity '${entity.Name}'.`,
+                );
+            }
+            ResolveAlternateBaseView({
+                entity,
+                alternateBaseViewName: effectiveAbv,
+                contextUser,
+                callerName,
+            });
+        }
     }
 
     // ========================================================================
@@ -4508,10 +4550,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
         // Only auto-cache unfiltered, unsorted queries — these are safe for
         // in-place upsert because LocalCacheManager doesn't need to evaluate
-        // SQL predicates or sort expressions.
+        // SQL predicates or sort expressions. AlternateBaseView queries apply
+        // a canonical SQL WHERE/JOIN and must not be auto-cached as unfiltered.
         const filter = typeof params.ExtraFilter === 'string' ? params.ExtraFilter.trim() : '';
         const orderBy = typeof params.OrderBy === 'string' ? params.OrderBy.trim() : '';
         if (filter.length > 0 || orderBy.length > 0) return false;
+        if (GetEffectiveAlternateBaseViewName(params)) return false;
 
         return true;
     }
@@ -5680,7 +5724,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 }
 
                 // Post Process Entities because there's some special handling of the sub-objects
-                simpleMetadata.AllEntities = this.PostProcessEntityMetadata(simpleMetadata.Entities, simpleMetadata.EntityFields, simpleMetadata.EntityFieldValues, simpleMetadata.EntityPermissions, simpleMetadata.EntityRelationships, simpleMetadata.EntitySettings, simpleMetadata.EntityOrganicKeys, simpleMetadata.EntityOrganicKeyRelatedEntities, simpleMetadata.EntityFieldPermissions);
+                simpleMetadata.AllEntities = this.PostProcessEntityMetadata(
+                    simpleMetadata.Entities,
+                    simpleMetadata.EntityFields,
+                    simpleMetadata.EntityFieldValues,
+                    simpleMetadata.EntityPermissions,
+                    simpleMetadata.EntityRelationships,
+                    simpleMetadata.EntitySettings,
+                    simpleMetadata.EntityOrganicKeys,
+                    simpleMetadata.EntityOrganicKeyRelatedEntities,
+                    simpleMetadata.EntityFieldPermissions,
+                    simpleMetadata.EntityAlternateBaseViews,
+                );
 
                 // Post Process the Applications, because we want to handle the sub-objects properly.
                 simpleMetadata.AllApplications = simpleMetadata.Applications.map((a: any) => {
@@ -5791,7 +5846,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         settings: EntityChildMetadataRow[],
         organicKeys?: OrganicKeyMetadataRow[],
         organicKeyRelatedEntities?: OrganicKeyRelatedEntityMetadataRow[],
-        fieldPermissions?: EntityFieldPermissionMetadataRow[]
+        fieldPermissions?: EntityFieldPermissionMetadataRow[],
+        alternateBaseViews?: EntityChildMetadataRow[],
     ): EntityInfo[] {
         const result: EntityInfo[] = [];
 
@@ -5835,6 +5891,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const activeOrganicKeysByEntityId = organicKeys
             ? this.groupByNormalizedUUID(organicKeys.filter(ok => ok.Status === 'Active'), ok => ok.EntityID)
             : new Map<string, OrganicKeyMetadataRow[]>();
+        const alternateBaseViewsByEntityId = alternateBaseViews && alternateBaseViews.length > 0
+            ? this.groupByNormalizedUUID(alternateBaseViews, abv => abv.EntityID)
+            : new Map<string, EntityChildMetadataRow[]>();
 
         for (const e of sortedEntities) {
             const entityIdKey = NormalizeUUID(e.ID);
@@ -5848,6 +5907,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // Link active organic keys to the entity
             if (organicKeys) {
                 e.EntityOrganicKeys = activeOrganicKeysByEntityId.get(entityIdKey) || [];
+            }
+            if (alternateBaseViews) {
+                e.EntityAlternateBaseViews = alternateBaseViewsByEntityId.get(entityIdKey) || [];
             }
             result.push(new EntityInfo(e, this));
         }

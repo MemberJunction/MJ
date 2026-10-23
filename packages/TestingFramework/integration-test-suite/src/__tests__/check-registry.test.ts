@@ -289,6 +289,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ai-providers': 3,
         'ai-skills': 21,
         'ai-vendor-effort': 2,
+        'alternate-base-views': 6,
         'api-keys': 3,
         'app-behavioral': 3,
         'app-wiring': 10,
@@ -419,7 +420,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(133);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(134);
     });
 });
 

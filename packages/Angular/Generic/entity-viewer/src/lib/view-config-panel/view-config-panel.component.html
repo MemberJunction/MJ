@@ -872,6 +872,24 @@
               rows="3"
             ></textarea>
           </div>
+          @if (AvailableAlternateBaseViews.length > 0) {
+            <div class="form-group">
+              <label for="AlternateBaseView">Base View</label>
+              <select
+                id="AlternateBaseView"
+                class="form-input"
+                [(ngModel)]="AlternateBaseView"
+                [disabled]="!CanEdit"
+              >
+                <option [ngValue]="null">Default ({{ Entity?.BaseView }})</option>
+                @for (abv of AvailableAlternateBaseViews; track abv.ID) {
+                  <option [ngValue]="abv.Name">
+                    {{ abv.EffectiveDisplayName }} ({{ abv.ViewName }}){{ abv.Status === 'Deprecated' ? ' [Deprecated]' : '' }}
+                  </option>
+                }
+              </select>
+            </div>
+          }
         </div>
 
         <!-- Sharing -->

@@ -820,6 +820,31 @@ describe('MJUserViewEntityExtended', () => {
     });
 
     // ----------------------------------------------------------------
+    // AlternateBaseView getter & setter
+    // ----------------------------------------------------------------
+    describe('AlternateBaseView', () => {
+        it('should return null when DisplayState is null or has no alternateBaseView', () => {
+            view.DisplayState = null;
+            expect(view.AlternateBaseView).toBeNull();
+            view.DisplayState = JSON.stringify({ defaultMode: 'grid' });
+            expect(view.AlternateBaseView).toBeNull();
+        });
+
+        it('should set and clear alternateBaseView in DisplayState while preserving other fields', () => {
+            view.DisplayState = JSON.stringify({ defaultMode: 'cards', enabledModes: { grid: true } });
+            view.AlternateBaseView = '  Active  ';
+            expect(view.AlternateBaseView).toBe('Active');
+            const parsed = JSON.parse(view.DisplayState as string);
+            expect(parsed.defaultMode).toBe('cards');
+            expect(parsed.alternateBaseView).toBe('Active');
+
+            view.AlternateBaseView = null;
+            expect(view.AlternateBaseView).toBeNull();
+            expect(JSON.parse(view.DisplayState as string).alternateBaseView).toBeUndefined();
+        });
+    });
+
+    // ----------------------------------------------------------------
     // isViewModeEnabled
     // ----------------------------------------------------------------
     describe('isViewModeEnabled', () => {

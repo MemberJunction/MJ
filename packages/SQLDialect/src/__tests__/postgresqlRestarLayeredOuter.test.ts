@@ -152,6 +152,45 @@ describe('restarLayeredOuterView', () => {
             }),
         ).toThrow(LayeredOuterRestarError);
     });
+
+    it('restars an unaliased alternate base view with a WHERE clause without treating WHERE as an alias', () => {
+        const def = `
+ SELECT "ID",
+    "Name",
+    "Status"
+   FROM __mj."vwOrganizations"
+  WHERE (("Status")::text = 'Active'::text)
+        `.trim();
+
+        const result = RestarLayeredOuterView({
+            viewDefinition: def,
+            innerViewName: 'vwOrganizations',
+            innerColumns: ORG_INNER,
+        });
+
+        expect(result.startsWith('SELECT *\nFROM __mj."vwOrganizations"')).toBe(true);
+        expect(result).toContain('WHERE (("Status")::text = \'Active\'::text)');
+        expect(result).not.toContain('"WHERE".*');
+    });
+
+    it('restars an aliased alternate base view with a WHERE clause and preserves the alias', () => {
+        const def = `
+ SELECT v."ID",
+    v."Name",
+    v."Status"
+   FROM __mj."vwOrganizations" v
+  WHERE ((v."Status")::text = 'Active'::text)
+        `.trim();
+
+        const result = RestarLayeredOuterView({
+            viewDefinition: def,
+            innerViewName: 'vwOrganizations',
+            innerColumns: ORG_INNER,
+        });
+
+        expect(result.startsWith('SELECT "v".*\nFROM __mj."vwOrganizations" v')).toBe(true);
+        expect(result).toContain('WHERE ((v."Status")::text = \'Active\'::text)');
+    });
 });
 
 describe('buildCreateOrReplaceLayeredOuterViewSQL', () => {

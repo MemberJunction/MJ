@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChanges, ChangeDetectorRef, HostListener } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { EntityInfo, EntityFieldInfo, Metadata, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityAlternateBaseViewInfo, Metadata, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
 import {
   MJUserViewEntityExtended,
   ViewColumnInfo,
@@ -69,6 +69,8 @@ export interface ViewSaveEvent {
   FilterState: CompositeFilterDescriptor | null;
   /** Aggregates configuration */
   AggregatesConfig: ViewGridAggregatesConfig | null;
+  /** Optional semantic name of the alternate base view selected for this view */
+  AlternateBaseView?: string | null;
 }
 
 /**
@@ -190,6 +192,11 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   @Input() PendingNewViewSmartFilterPrompt: string = '';
 
   /**
+   * Pre-populated alternate base view from the quick save dialog or workspace (used when DefaultSaveAsNew is true)
+   */
+  @Input() PendingNewViewAlternateBaseView: string | null = null;
+
+  /**
    * Emitted when user wants to duplicate the current view (F-005)
    */
   @Output() Duplicate = new EventEmitter<void>();
@@ -198,6 +205,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   public ViewName: string = '';
   public ViewDescription: string = '';
   public IsShared: boolean = false;
+  public AlternateBaseView: string | null = null;
   public Columns: ColumnConfig[] = [];
   /** @deprecated Use sortItems instead */
   public SortField: string | null = null;
@@ -531,6 +539,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       this.ViewName = this.ViewEntity.Name;
       this.ViewDescription = this.ViewEntity.Description || '';
       this.IsShared = this.ViewEntity.IsShared;
+      this.AlternateBaseView = this.ViewEntity.AlternateBaseView || null;
 
       // Apply view's smart filter configuration
       this.SmartFilterEnabled = this.ViewEntity.SmartFilterEnabled || false;
@@ -556,6 +565,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       this.ViewName = this.DefaultSaveAsNew ? this.PendingNewViewName : '';
       this.ViewDescription = this.DefaultSaveAsNew ? this.PendingNewViewDescription : '';
       this.IsShared = this.DefaultSaveAsNew ? this.PendingNewViewIsShared : false;
+      this.AlternateBaseView = this.DefaultSaveAsNew ? (this.PendingNewViewAlternateBaseView || null) : null;
       if (!this.CurrentGridState?.sortSettings?.length) {
         this.SortField = null;
         this.SortDirection = 'asc';
@@ -795,6 +805,19 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   get CanDelete(): boolean {
     if (!this.ViewEntity) return false; // Can't delete default
     return this.ViewEntity.UserCanDelete;
+  }
+
+  /**
+   * Get available alternate base views for this entity (Active, plus any Deprecated one currently selected)
+   */
+  get AvailableAlternateBaseViews(): EntityAlternateBaseViewInfo[] {
+    if (!this.Entity?.AlternateBaseViews?.length) {
+      return [];
+    }
+    const currentLower = this.AlternateBaseView?.trim().toLowerCase() ?? '';
+    return this.Entity.AlternateBaseViews.filter(v =>
+      v.Status === 'Active' || (v.Status === 'Deprecated' && v.Name.trim().toLowerCase() === currentLower)
+    );
   }
 
   /**
@@ -1484,7 +1507,8 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       SmartFilterEnabled: this.SmartFilterEnabled,
       SmartFilterPrompt: this.SmartFilterPrompt,
       FilterState: this.hasActiveFilters() ? this.FilterState : null,
-      AggregatesConfig: this.buildAggregatesConfig()
+      AggregatesConfig: this.buildAggregatesConfig(),
+      AlternateBaseView: this.AlternateBaseView || null
     });
   }
 
@@ -1510,7 +1534,8 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       SmartFilterEnabled: this.SmartFilterEnabled,
       SmartFilterPrompt: this.SmartFilterPrompt,
       FilterState: this.hasActiveFilters() ? this.FilterState : null,
-      AggregatesConfig: this.buildAggregatesConfig()
+      AggregatesConfig: this.buildAggregatesConfig(),
+      AlternateBaseView: this.AlternateBaseView || null
     });
   }
 
@@ -1535,7 +1560,8 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       SmartFilterEnabled: this.SmartFilterEnabled,
       SmartFilterPrompt: this.SmartFilterPrompt,
       FilterState: this.hasActiveFilters() ? this.FilterState : null,
-      AggregatesConfig: this.buildAggregatesConfig()
+      AggregatesConfig: this.buildAggregatesConfig(),
+      AlternateBaseView: this.AlternateBaseView || null
     });
   }
 

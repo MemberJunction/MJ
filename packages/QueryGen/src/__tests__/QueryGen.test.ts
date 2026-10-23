@@ -25,9 +25,10 @@ vi.mock('@memberjunction/aiengine', () => ({
 // ---------------------------------------------------------------------------
 
 import { GenerateRelationshipGraph, FormatEntitiesForPrompt, GenerateMermaidDiagram } from '../utils/graph-helpers';
+import { FormatEntityMetadataForPrompt } from '../utils/entity-helpers';
 import { ExtractErrorMessage, RequireValue, GetPropertyOrDefault } from '../utils/error-handlers';
 import { BuildQueryCategory, ExtractUniqueCategories } from '../utils/category-builder';
-import type { EntityInfo, EntityRelationshipInfo } from '@memberjunction/core';
+import type { EntityInfo, EntityRelationshipInfo, EntityAlternateBaseViewInfo } from '@memberjunction/core';
 
 // ---------------------------------------------------------------------------
 // Helper to create mock EntityInfo objects
@@ -270,5 +271,63 @@ describe('extractUniqueCategories', () => {
     const sorted = ExtractUniqueCategories(cats);
     expect(sorted[0].name).toBe('Alpha');
     expect(sorted[1].name).toBe('Zeta');
+  });
+});
+
+describe('FormatEntityMetadataForPrompt — alternateBaseViews', () => {
+  it('includes usable Active alternate base views and omits Disabled/Deprecated ones', () => {
+    const entity = createMockEntity('Members', 'crm');
+    const parentAlt: Partial<EntityAlternateBaseViewInfo> = {
+      Name: 'Active',
+      EffectiveDisplayName: 'Active Members',
+      EffectiveSchemaName: 'crm',
+      ViewName: 'vwMembersActive',
+      Description: 'Members where Status = Active',
+      Status: 'Active',
+      IsUsable: true,
+    };
+    const childAlt: Partial<EntityAlternateBaseViewInfo> = {
+      Name: 'ActiveAutoRenew',
+      EffectiveDisplayName: 'Active Auto-Renew Members',
+      EffectiveSchemaName: 'crm',
+      ViewName: 'vwMembersActiveAutoRenew',
+      Description: 'Active members with AutoRenew enabled',
+      Status: 'Active',
+      IsUsable: true,
+      ParentView: parentAlt as EntityAlternateBaseViewInfo,
+    };
+    const deprecatedAlt: Partial<EntityAlternateBaseViewInfo> = {
+      Name: 'OldActive',
+      EffectiveDisplayName: 'Old Active',
+      EffectiveSchemaName: 'crm',
+      ViewName: 'vwMembersOldActive',
+      Description: 'Deprecated',
+      Status: 'Deprecated',
+      IsUsable: true,
+    };
+    (entity as unknown as { AlternateBaseViews: EntityAlternateBaseViewInfo[] }).AlternateBaseViews = [
+      parentAlt as EntityAlternateBaseViewInfo,
+      childAlt as EntityAlternateBaseViewInfo,
+      deprecatedAlt as EntityAlternateBaseViewInfo,
+    ];
+
+    const formatted = FormatEntityMetadataForPrompt(entity, [entity]);
+    expect(formatted.alternateBaseViews).toEqual([
+      {
+        name: 'Active',
+        displayName: 'Active Members',
+        schemaName: 'crm',
+        viewName: 'vwMembersActive',
+        description: 'Members where Status = Active',
+      },
+      {
+        name: 'ActiveAutoRenew',
+        displayName: 'Active Auto-Renew Members',
+        schemaName: 'crm',
+        viewName: 'vwMembersActiveAutoRenew',
+        description: 'Active members with AutoRenew enabled',
+        parentName: 'Active',
+      },
+    ]);
   });
 });

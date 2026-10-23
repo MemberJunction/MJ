@@ -98,8 +98,18 @@ class TestGenericProvider extends GenericDatabaseProvider {
     public testBuildTotalRowCountSQL(entityInfo: EntityInfo, usingPagination: boolean, maxRowsForQuery: number): string | null {
         return this.BuildTotalRowCountSQL(entityInfo, usingPagination, maxRowsForQuery);
     }
-    public testGetEffectiveBaseView(entityInfo: EntityInfo, params: { DataSource?: 'Live' | 'Materialized' }): string {
+    public testGetEffectiveBaseView(entityInfo: EntityInfo, params: { DataSource?: 'Live' | 'Materialized'; AlternateBaseView?: string }): string {
         return this.GetEffectiveBaseView(entityInfo, params as unknown as RunViewParams);
+    }
+    public async testResolveEffectiveBaseViewTarget(
+        entityInfo: EntityInfo,
+        params: RunViewParams,
+        user?: UserInfo
+    ): Promise<{ schemaName: string; viewName: string }> {
+        return this.resolveEffectiveBaseViewTarget(entityInfo, params, user);
+    }
+    public testAssertExternalRunViewParamsSupported(params: RunViewParams, entityName: string): void {
+        this.assertExternalRunViewParamsSupported(params, entityName);
     }
 
     // Expose protected methods for testing
@@ -393,6 +403,64 @@ describe('GenericDatabaseProvider', () => {
             // Regression: previously derived materialized_vw<CodeName> (= materialized_vwMJE2ESalesByRegion),
             // which does not exist — the minted CodeName differs from the query-derived view name.
             expect(provider.testGetEffectiveBaseView(queryMatEntity, { DataSource: 'Materialized' })).toBe('materialized_vwE2E_Sales_By_Region');
+        });
+
+        it('AlternateBaseView routes to the registered alternate view (including custom schema) and rejects Disabled/Materialized', async () => {
+            const abvEntity = new EntityInfo({
+                ID: '11111111-1111-4111-8111-111111111111',
+                Name: 'Customers',
+                SchemaName: '__mj',
+                BaseTable: 'Customer',
+                BaseView: 'vwCustomers',
+                EntityAlternateBaseViews: [
+                    {
+                        ID: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+                        EntityID: '11111111-1111-4111-8111-111111111111',
+                        Name: 'Active',
+                        ViewName: 'vwActiveCustomers',
+                        SchemaName: 'crm_ext',
+                        Description: 'Active customers only',
+                        Status: 'Active',
+                        CachePolicy: 'Default',
+                        Sequence: 1,
+                    },
+                    {
+                        ID: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+                        EntityID: '11111111-1111-4111-8111-111111111111',
+                        Name: 'Legacy',
+                        ViewName: 'vwLegacyCustomers',
+                        SchemaName: null,
+                        Description: 'Disabled legacy view',
+                        Status: 'Disabled',
+                        CachePolicy: 'Default',
+                        Sequence: 2,
+                    },
+                ],
+            });
+
+            expect(provider.testGetEffectiveBaseView(abvEntity, { AlternateBaseView: 'Active' })).toBe('vwActiveCustomers');
+
+            const target = await provider.testResolveEffectiveBaseViewTarget(abvEntity, {
+                EntityName: 'Customers',
+                AlternateBaseView: 'active',
+            });
+            expect(target).toEqual({ schemaName: 'crm_ext', viewName: 'vwActiveCustomers' });
+
+            // Disabled fails loudly
+            expect(() => provider.testGetEffectiveBaseView(abvEntity, { AlternateBaseView: 'Legacy' })).toThrow(/disabled/i);
+
+            // Materialized + AlternateBaseView fails loudly
+            expect(() =>
+                provider.testGetEffectiveBaseView(abvEntity, { AlternateBaseView: 'Active', DataSource: 'Materialized' })
+            ).toThrow(/Materialized/);
+
+            // External data source rejects AlternateBaseView
+            expect(() =>
+                provider.testAssertExternalRunViewParamsSupported(
+                    { EntityName: 'Customers', AlternateBaseView: 'Active' },
+                    'Customers'
+                )
+            ).toThrow(/AlternateBaseView is not supported for external-data-source/);
         });
     });
 

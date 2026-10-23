@@ -107,4 +107,31 @@ describe('ViewConfigPanelComponent — carrying a staged filter back from the na
     expect(panel.FilterState.filters).toHaveLength(0);
     expect(panel.FilterMode).toBe('smart');
   });
+
+  it('exposes Active and currently-selected Deprecated alternate base views, and emits AlternateBaseView on save', () => {
+    const panel = makePanel();
+    panel.Entity = {
+      ...makeEntity(),
+      AlternateBaseViews: [
+        { ID: 'abv-1', Name: 'Active', EffectiveDisplayName: 'Active Only', ViewName: 'vwAccountsActive', Status: 'Active' },
+        { ID: 'abv-2', Name: 'Legacy', EffectiveDisplayName: 'Legacy Accounts', ViewName: 'vwAccountsLegacy', Status: 'Deprecated' },
+        { ID: 'abv-3', Name: 'Disabled', EffectiveDisplayName: 'Disabled View', ViewName: 'vwAccountsDisabled', Status: 'Disabled' },
+      ],
+    } as unknown as EntityInfo;
+
+    panel.DefaultSaveAsNew = true;
+    panel.PendingNewViewName = 'Legacy View';
+    panel.PendingNewViewAlternateBaseView = 'Legacy';
+    open(panel);
+
+    expect(panel.AlternateBaseView).toBe('Legacy');
+    expect(panel.AvailableAlternateBaseViews.map(v => v.Name)).toEqual(['Active', 'Legacy']);
+
+    const emitted: Array<{ AlternateBaseView?: string | null }> = [];
+    panel.Save.subscribe(e => emitted.push(e));
+    panel.OnSaveAsNew();
+
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0].AlternateBaseView).toBe('Legacy');
+  });
 });

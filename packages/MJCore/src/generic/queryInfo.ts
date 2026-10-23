@@ -867,6 +867,10 @@ export class QueryEntityInfo extends BaseInfo implements IQueryEntityInfoBase {
      */
     public EntityID: string = null
     /**
+     * Optional foreign key to the specific EntityAlternateBaseView referenced in the query SQL
+     */
+    public AlternateBaseViewID: string | null = null
+    /**
      * How this entity association was detected: AI (automatic) or Manual (user-specified)
      */
     public DetectionMethod: 'AI' | 'Manual' = 'Manual'
@@ -892,6 +896,10 @@ export class QueryEntityInfo extends BaseInfo implements IQueryEntityInfoBase {
      * Entity name from the related entity
      */
     Entity: string = null
+    /**
+     * Alternate base view name when AlternateBaseViewID is set
+     */
+    AlternateBaseView: string | null = null
     
     constructor(initData: any = null, md?: IMetadataProvider) {
         super();
