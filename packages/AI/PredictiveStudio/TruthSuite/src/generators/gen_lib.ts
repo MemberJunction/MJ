@@ -2,7 +2,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { SafeJSONParse } from '@memberjunction/global';
-import { TruthSuite } from '../registry/load';
+import { TruthSuite } from '../truth-suite';
 import { Loom, type LoomIdentityService, type LoomRng } from './loom';
 import type { CsvRow, CsvValue, WorldDomain, WorldSpecBase } from './types';
 

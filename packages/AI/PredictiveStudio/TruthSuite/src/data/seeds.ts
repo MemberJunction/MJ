@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { SafeJSONParse } from '@memberjunction/global';
-import { TruthSuite } from '../registry/load';
+import { TruthSuite } from '../truth-suite';
 
 export type SeedSetName = 'base' | 't2' | 'n400';
 interface WorldSpecSeeds { seeds: number[]; freshSeed: number }

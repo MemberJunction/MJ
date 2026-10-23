@@ -1296,7 +1296,7 @@ It exercises the real `FeatureAssemblyExecutor`, `TrainingEngine`, `MLSidecar` (
 
 ### 19.5 Planted-truth suite (`packages/AI/PredictiveStudio/TruthSuite`)
 
-The planted-truth suite (`@memberjunction/predictive-studio-truth-suite`) verifies Predictive Studio end-to-end against seeded worlds (`W1`–`W9`, `C1`–`C3`) and time-series scenarios (`T1`–`T6`, `D1`–`D5`, `M1`–`M3`) with known ground-truth parameters (`TrueP`, structural coefficients, censoring dates, and regime shifts), an isolated `pstruth` SQL Server schema, a single-threaded Python sidecar, and a 111-gate registry (`gates/gates.json`). See [`packages/AI/PredictiveStudio/TruthSuite/README.md`](../packages/AI/PredictiveStudio/TruthSuite/README.md) for the local workflow and CI lanes (`pr`, `nightly`, `weekly`).
+The planted-truth suite (`@memberjunction/predictive-studio-truth-suite`) holds 68 seeded datasets (worlds `W1`–`W9` and scenarios such as `C2`, `R1`, `T1p`–`T4`) whose ground truth (`TrueP`, structural coefficients, censoring dates, regime shifts) is known before any model is fit. It loads them into an isolated `pstruth` SQL Server schema and provides the harness the Predictive Studio containment gates run on. The gates are MJ Tests in the integration test suite: run them with `mj test suite "Predictive Studio Gates — Containment"`. See [`packages/AI/PredictiveStudio/TruthSuite/README.md`](../packages/AI/PredictiveStudio/TruthSuite/README.md) for setup.
 
 ---
 

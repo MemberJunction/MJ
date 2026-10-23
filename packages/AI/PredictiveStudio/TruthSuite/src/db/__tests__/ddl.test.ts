@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { TruthSuite } from '../../registry/load';
+import { TruthSuite } from '../../truth-suite';
 
 const root = TruthSuite.Root();
 const migration = readFileSync(path.join(root, 'migrations', 'V202610130001__pstruth_tables.sql'), 'utf8');

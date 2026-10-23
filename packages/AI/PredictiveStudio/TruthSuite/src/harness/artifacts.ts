@@ -1,10 +1,10 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { TruthSuite } from '../registry/load';
+import { TruthSuite } from '../truth-suite';
 
 /** Where the harness writes run output. */
 export class HarnessPaths {
-  /** `$TRUTH_RESULTS_DIR` (scripts/run-truth.mjs sets it), else `<TruthSuite>/.run/results`. */
+  /** `$TRUTH_RESULTS_DIR` when set, else `<TruthSuite>/.run/results`. */
   public static ResultsDir(): string {
     return process.env.TRUTH_RESULTS_DIR || path.join(TruthSuite.Root(), '.run', 'results');
   }

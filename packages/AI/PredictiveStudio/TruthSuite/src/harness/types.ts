@@ -65,7 +65,10 @@ export interface RecordProcessScoring {
 
 export interface AgentStepResult {
   AgentRunID: string | null; AgentSuccess: boolean; AgentErrorMessage: string | null;
-  BuildModelID: string | null; BuildSuccess: boolean; BuildErrorMessage: string | null; WallMs: number;
+  BuildModelID: string | null; BuildSuccess: boolean; BuildErrorMessage: string | null;
+  /** The pipelines the run created (whether or not it succeeded), so cleanup can delete them. */
+  PipelineIDs: string[];
+  WallMs: number;
 }
 
 /** What a gate body returns: whether its threshold is met, the measured values and one plain sentence. */

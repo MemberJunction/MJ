@@ -1,101 +1,69 @@
 # `@memberjunction/predictive-studio-truth-suite`
 
-Predictive Studio planted-truth test suite: the 111-gate registry, seeded world and scenario generators, `pstruth` test schema loaders, harness, Python judges, and reference pipeline. Repo-local test content (`private: true`); never published.
+Predictive Studio planted-truth datasets and the harness the containment gate checks use. Repo-local test content (`private: true`); never published.
 
-## 1. What the Suite Proves
+The gates themselves are MJ Tests in the integration test suite (`packages/TestingFramework/integration-test-suite/src/checks/ps-gate-*.checks.ts`). This package supplies what they run on: seeded datasets whose true data-generating process is known before any model is fit, loaded into an isolated `pstruth` SQL Server schema, and a harness that drives Predictive Studio through MJAPI the way the browser does.
 
-Every gate in `gates/gates.json` tests a specific Predictive Studio contract against a planted-truth world (`W1`–`W9`, `C1`–`C3`) or time-series scenario (`T1`–`T6`, `D1`–`D5`, `M1`–`M3`) where the true data-generating process (`TrueP`, structural coefficients, censoring dates, and regime shifts) is known before any model is fit.
+## 1. What the package holds
 
-**Division of labor with the integration-test-suite rigs:** The existing ten Predictive Studio rigs under `packages/TestingFramework/integration-test-suite/rigs/ps-*.ts` (gated by `PS_INTEGRATION=1`: operate flow, scheduled scoring, scored query, agent builder, agent run, and five live lifecycle flows) prove in-process engine seams under `PS_INTEGRATION=1`. This truth suite judges planted-truth gates end-to-end over a running MJAPI and sidecar. Do not introduce a third test surface. Test-only metadata for the `pstruth` schema (`AllowDirectSQLInsert`/`Update`/`Delete` opt-ins) intentionally lives package-local under `TruthSuite/metadata/` (plan decisions `D2-05` and `D2-40`) rather than `metadata-optional/`. The suite does not tear down its `PSTruth:`-prefixed fixtures: each run gets a throwaway database (plan decision `D2-06`), so there is nothing to clean.
+### Datasets
 
-## 2. Registry and Outcomes
+The catalog (`src/data/catalog.ts`) has 24 entries. With their base seeds that makes 68 datasets.
 
-All 111 gates live in `gates/gates.json` from day one:
-- **`Status: "required"`** — must pass (`pass`); failing (`fail`) fails the CI job.
-- **`Status: "expected-fail"`** — a gate whose product fix has not yet landed (`xfail` when it fails as expected, `xpass` once its milestone lands before its final flip to `required`, `not-implemented` when still a stub).
-- **`error`** — harness, sidecar, or database error; always fails the CI job regardless of gate status.
-- **`not-run`** — skipped because its lane (`nightly` / `weekly`) or prerequisite (`live-model`, `bizapps-common`) is not active.
+| Kind | IDs | Base seeds |
+|---|---|---|
+| Worlds | `W1-signal`, `W3-leak-row`, `W4-pit`, `W5-censor`, `W6-drift`, `W7-small-imbalanced`, `W8-highcard`, `W9-multiclass` | 42, 43, 44 and the fresh seed 9042 (4 each) |
+| Worlds | `W2-noise` | 100–119 and the fresh seed 9100 (21) |
+| Scenarios | `C2`, `C4`, `D1c`, `D1r`, `D2`, `N1c`, `N1r`, `R1`, `R2p`, `R3`, `T1p`, `T2p`, `T3`, `T4` | one seed each, from the spec file |
+| Derived scenario | `T3-lag` (generated from `T3`'s output) | `T3`'s seed |
 
-Validate the registry locally (and against `origin/next` to verify no gate is deleted, downgraded, or silently edited):
+- World specs are in `fixtures/worlds/` and scenario specs in `fixtures/scenarios/specs/`.
+- The generators are in `src/generators/`. `fixtures/golden-hashes.json` pins their output byte for byte.
+- `pnpm run truth:data` generates datasets into the cache (`.data/`, or `$TRUTH_DATA_DIR`).
+
+### Harness
+
+`src/harness/` is the `TruthHarness` the gate checks get from `RunFixtures.HarnessFor(provider, user)`. It does the following:
+- loads datasets into `pstruth`
+- creates pipelines and trains them
+- runs the Pipeline Builder and Model Development agents through MJAPI
+- promotes and scores models
+- runs the `holdout_rebuild` Python judge
+
+It records the ID of every pipeline and model it creates, including the pipelines of an agent run that failed. `RunFixtures.CleanupRun` deletes exactly those rows.
+
+### Python
+
+`python/truthsuite/` holds `judges/holdout_rebuild.py` (G0.12's holdout reconstruction), `paths.py` and `scenarios/manifest.py`. Their tests are in `python/tests/`.
+
+## 2. Setup
+
+Your `.env` in the repository root must define `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`, `CODEGEN_DB_USERNAME`, `CODEGEN_DB_PASSWORD`, `GRAPHQL_PORT` and `MJ_API_KEY`. The database must be a private one (`MJ_PS_PR<n>_<agent>`) with the core schema migrated.
 
 ```bash
-pnpm --filter @memberjunction/predictive-studio-truth-suite run truth:registry -- --against origin/next
+cd packages/AI/PredictiveStudio/TruthSuite
+pnpm run build
+pnpm run truth:loom        # clone the Loom pin (fixtures/loom.json) under .loom/
+pnpm run setup:python      # create .venv from python/requirements.txt
+pnpm run truth:provision   # create the pstruth schema, register its entities, push their direct-SQL opt-ins
+pnpm run truth:sidecar     # start the single-threaded sidecar; writes its URL to .run/sidecar.url
 ```
 
-## 3. Lanes
+Start MJAPI with `PREDICTIVE_STUDIO_SIDECAR_URL` set to the URL in `.run/sidecar.url`. After `truth:provision`, restart MJAPI so it loads the `pstruth` entities.
 
-- **`pr`** — runs on PRs touching Predictive Studio or TruthSuite: Phase-0 `pr` gates + every stub.
-- **`nightly`** — runs `pr` + `nightly` gates (including the 60-seed `W2 → C1.1` noise gate and bridged Feature Pipeline gates against `bizapps-common`).
-- **`weekly`** — runs all gates, including 400-seed statistical gates, `W8`, and live-model story gates (`G0.6`).
+## 3. Running the gates
 
-## 4. End-to-End Local Loop
-
-Assuming your `.env` in the repository root defines `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`, `CODEGEN_DB_USERNAME`, `CODEGEN_DB_PASSWORD`, `DB_TRUST_SERVER_CERTIFICATE`, `GRAPHQL_PORT`, and `MJ_API_KEY`:
-
-### Step 1: Create the isolated database
-
-```bash readme-step
-sqlcmd -S "$DB_HOST,$DB_PORT" -U "$DB_USERNAME" -P "$DB_PASSWORD" -C -Q "IF DB_ID(N'$DB_DATABASE') IS NULL CREATE DATABASE [$DB_DATABASE];"
+```bash
+MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Containment"
 ```
 
-### Step 2: Install dependencies and build packages
+The suite loads and verifies the 68 datasets first, then runs the ten PR 2 gates. G0.6 also needs `RUN_AGENT_TESTS=1` and `AI_VENDOR_API_KEY__GeminiLLM`. G0.2 and G0.3 are in the separate suite "Predictive Studio Gates — Pending (PR 4)".
 
-```bash readme-step
-pnpm install --frozen-lockfile
-npx turbo build --filter=@memberjunction/cli --filter=mj_api --filter=@memberjunction/predictive-studio-truth-suite... --filter=@memberjunction/ng-dashboards --filter=@memberjunction/integration-test-suite
+## 4. Package tests
+
+```bash
+pnpm test                    # unit tests
+pnpm run test:db             # dataset loading and pstruth isolation against the database
+pnpm run test:regeneration   # every base seed regenerates byte-identically against fixtures/golden-hashes.json
+pnpm run test:python         # pytest, then mypy --strict over python/
 ```
-
-### Step 3: Migrate core schema, push metadata, and provision `pstruth`
-
-```bash readme-step
-MJ_MIGRATION_REQUEST_TIMEOUT=120000 node packages/MJCLI/bin/run.js migrate
-node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
-node packages/MJCLI/bin/run.js sync push --dir=metadata-optional/integration-test --ci
-node packages/AI/PredictiveStudio/TruthSuite/scripts/provision.mjs
-```
-
-### Step 4: Set up Python virtual environments and fetch the Loom pin
-
-```bash readme-step
-pnpm --filter @memberjunction/predictive-studio-sidecar run setup:python
-pnpm --filter @memberjunction/predictive-studio-truth-suite run setup:python
-pnpm --filter @memberjunction/predictive-studio-truth-suite run truth:loom
-```
-
-### Step 5: Start the single-threaded truth sidecar and MJAPI
-
-```bash readme-step
-rm -f packages/AI/PredictiveStudio/TruthSuite/.run/sidecar.url
-(cd packages/AI/PredictiveStudio/TruthSuite && nohup pnpm run truth:sidecar > /tmp/truth-sidecar-$GRAPHQL_PORT.log 2>&1 &)
-for i in $(seq 1 60); do [ -s packages/AI/PredictiveStudio/TruthSuite/.run/sidecar.url ] && break; sleep 2; done
-export PREDICTIVE_STUDIO_SIDECAR_URL=$(cat packages/AI/PredictiveStudio/TruthSuite/.run/sidecar.url)
-export MJ_DISABLE_TASK_GRAPH_DISPATCHER=1
-(cd packages/MJAPI && nohup node dist/index.js > /tmp/mjapi-$GRAPHQL_PORT.log 2>&1 &)
-for i in $(seq 1 36); do curl -fsS "http://localhost:$GRAPHQL_PORT/healthcheck" >/dev/null 2>&1 && break; sleep 5; done
-curl -fsS "http://localhost:$GRAPHQL_PORT/healthcheck"
-```
-
-### Step 6: Run the `pr` truth-suite lane
-
-```bash readme-step
-cd packages/AI/PredictiveStudio/TruthSuite && pnpm run truth:run -- --mode pr
-```
-
-## 5. Adding a Gate Body
-
-1. Replace the gate's `Implementation` in `gates/gates.json` from `{ "Kind": "stub" }` to `{ "Kind": "body" }` (or `{ "Kind": "mj-test", "TestName": "..." }`).
-2. Add `TruthGate.Define('<TestName>', async (h) => { ... })` in `gates/*.gates.test.ts`.
-3. Verify the gate reports `xfail` before the product fix and `xpass` after the product fix.
-4. Flip `"Status"` from `"expected-fail"` to `"required"` in `gates/gates.json` once the gate passes in CI.
-
-## 6. Data, Loom Pin, and Python Judges
-
-- **Loom pin**: `fixtures/loom.json` pins `MemberJunction/loom` by commit SHA. `pnpm run truth:loom` clones and verifies the pin under `.loom/`.
-- **Regeneration check**: `pnpm run test:regeneration` verifies that all 9 worlds and 14 scenario specs regenerate byte-identically against `fixtures/golden-hashes.json`.
-- **Python judges & reference pipeline**: `pnpm run test:python` runs the fast pytest suite; `pnpm run test:python -- -m slow` reproduces the 20 reference numbers from the assessment.
-
-## 7. Troubleshooting
-
-- **`error` outcomes**: Inspect `results/<run>/gates/<GateID>.json` (`Error` field) and `/tmp/mjapi-*.log` / `/tmp/truth-sidecar-*.log`.
-- **`pstruth` entities missing**: Run `pnpm run truth:provision` and restart MJAPI so the server reloads metadata.
-- **Determinism mismatch (`W1 → S5.4`)**: Ensure MJAPI was booted with `PREDICTIVE_STUDIO_SIDECAR_URL` pointing to `pnpm run truth:sidecar` (`OMP_NUM_THREADS=1`).

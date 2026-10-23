@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { SafeJSONParse } from '@memberjunction/global';
-import { TruthSuite } from '../registry/load';
+import { TruthSuite } from '../truth-suite';
 import type { CsvRow, WorldDomain } from './types';
 
 /** A Loom named RNG stream (the subset of Loom's `RngStream` the generators call). */

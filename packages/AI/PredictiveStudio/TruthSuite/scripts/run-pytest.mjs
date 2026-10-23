@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
  * run-pytest.mjs — run TruthSuite's Python tests using its bundled .venv.
+ * `--mypy` type-checks the Python package and its tests (`mypy --strict`, python/mypy.ini) instead.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -30,9 +31,15 @@ if (process.platform === 'darwin') {
 
 const rawArgs = process.argv.slice(2);
 const args = rawArgs[0] === '--' ? rawArgs.slice(1) : rawArgs;
-const result = spawnSync(venvPython, ['-m', 'pytest', ...args], {
-  cwd: pythonDir,
-  stdio: 'inherit',
-  env,
-});
+const result = args[0] === '--mypy'
+  ? spawnSync(venvPython, ['-m', 'mypy', '--config-file', 'python/mypy.ini', 'python/truthsuite', 'python/tests'], {
+      cwd: root,
+      stdio: 'inherit',
+      env,
+    })
+  : spawnSync(venvPython, ['-m', 'pytest', ...args], {
+      cwd: pythonDir,
+      stdio: 'inherit',
+      env,
+    });
 process.exit(result.status ?? 1);

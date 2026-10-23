@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { SafeJSONParse } from '@memberjunction/global';
 import { MLSidecar } from '@memberjunction/predictive-studio-sidecar';
-import { TruthSuite } from '../registry/load';
+import { TruthSuite } from '../truth-suite';
 import { HarnessProcess } from './process';
 
 /** Subprocess bridge from TypeScript gate bodies to `truthsuite.judges.<module>`. */

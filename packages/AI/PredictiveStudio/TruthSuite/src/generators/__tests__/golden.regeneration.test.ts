@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { TruthSuite } from '../../registry/load';
+import { TruthSuite } from '../../truth-suite';
 import { CATALOG, DatasetCatalog } from '../../data/catalog';
 import { DatasetSeeds } from '../../data/seeds';
 

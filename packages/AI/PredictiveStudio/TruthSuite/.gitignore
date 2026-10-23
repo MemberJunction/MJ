@@ -4,8 +4,7 @@
 .run/
 results/
 dist/
+.mypy_cache/
 python/.scratch/
-python/.mypy_cache/
 python/.pytest_cache/
 **/__pycache__/
-

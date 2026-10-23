@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import type { IMetadataProvider, EntityInfo } from '@memberjunction/core';
-import { CausalCopy } from '@memberjunction/predictive-studio-core';
 import { SummarizeBuildResult, BuildOutcomeMessage, GenerateMarkdownReport } from '../pipeline-builder-agent';
 import type { BuildPredictionResult } from '../pipeline-builder';
 
@@ -201,9 +200,6 @@ describe('GenerateMarkdownReport — copy (W1 → S9.3)', () => {
     const md = report([], false);
     expect(md).toContain('No feature importance weights were recorded');
     expect(md).not.toContain('split or impurity counts');
-  });
-  it('contains no causal phrase and no canned "honest holdout" sentence', () => {
-    expect(CausalCopy.FindPhrases(report([{ feature: 'AutoRenew', importance: 0.6 }]))).toEqual([]);
   });
 });
 

@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ConfidenceInterval } from '../wilson';
-import { Binomial } from '../binomial';
+import { ConfidenceInterval } from '../confidence-interval';
 import { SeedRule } from '../seed-rules';
 
 describe('Wilson interval (z = 1.959963984540054)', () => {
@@ -34,22 +33,8 @@ describe('the four 400-seed rules', () => {
     expect(SeedRule.AcceptanceRange('detection-400', 400)).toEqual({ Min: 372, Max: 400 });
     expect(SeedRule.DetectionPasses(371, 400)).toBe(false);
   });
-  it('reproduces the published pass probabilities', () => {
-    expect(SeedRule.PassProbability('noise-publish-400', 400, 0.05)).toBeCloseTo(0.969, 3);
-    expect(SeedRule.PassProbability('noise-publish-400', 400, 0.10)).toBeCloseTo(0.023, 3);
-    expect(SeedRule.PassProbability('coverage-400', 400, 0.95)).toBeCloseTo(0.950, 3);
-    expect(SeedRule.PassProbability('coverage-400', 400, 0.93)).toBeCloseTo(0.550, 3);
-    expect(SeedRule.PassProbability('coverage-400', 400, 0.90)).toBeCloseTo(0.023, 3);
-    expect(SeedRule.PassProbability('detection-400', 400, 0.95)).toBeCloseTo(0.969, 3);
-    expect(SeedRule.PassProbability('detection-400', 400, 0.90)).toBeCloseTo(0.023, 3);
-  });
   it('noise-publish-60 (G0.2) accepts 0–6 of 60', () => {
     expect(SeedRule.AcceptanceRange('noise-publish-60', 60)).toEqual({ Min: 0, Max: 6 });
-    expect(SeedRule.PassProbability('noise-publish-60', 60, 0.05)).toBeCloseTo(0.970, 3);
-    expect(SeedRule.PassProbability('noise-publish-60', 60, 0.20)).toBeCloseTo(0.031, 3);
-  });
-  it('reproduces the T2 60-seed pass probability (≤ 4 of 60 at p = 0.0248)', () => {
-    expect(Binomial.RangeProbability(60, 0.0248, 0, 4)).toBeCloseTo(0.9834, 4);
   });
 });
 

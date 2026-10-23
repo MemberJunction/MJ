@@ -1,7 +1,7 @@
 import { RunView, type BaseEntity, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJMLModelEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString, UUIDSet } from '@memberjunction/global';
-import type { TruthHarness } from './types';
+import type { AgentStepResult, TruthHarness } from './types';
 
 /**
  * The pipelines and models one harness created or observed, by ID: the pipelines it created, the models its trainings
@@ -21,6 +21,12 @@ export class RunRecords {
     this.ModelIDs.Add(id);
   }
 
+  /** Record what a builder-agent run created: its pipelines (a failed run's too) and the model it built, if any. */
+  public RecordAgentRun(run: Pick<AgentStepResult, 'PipelineIDs' | 'BuildModelID'>): void {
+    for (const id of run.PipelineIDs) this.RecordPipeline(id);
+    if (run.BuildModelID) this.RecordModel(run.BuildModelID);
+  }
+
   /** `h` with every member that creates or reads back run pipelines/models recording their IDs here. */
   public Recording(h: TruthHarness): TruthHarness {
     return {
@@ -37,7 +43,7 @@ export class RunRecords {
       },
       RunBuilderAgent: async (plan) => {
         const r = await h.RunBuilderAgent(plan);
-        if (r.BuildModelID) this.RecordModel(r.BuildModelID);
+        this.RecordAgentRun(r);
         return r;
       },
       ModelsForPipelineNamePrefix: async (prefix) => {
@@ -120,11 +126,12 @@ export class HarnessCleanup {
   /** Delete each row (one stage of the FK order, so the rows are independent and run in parallel); the failures. */
   private static async deleteAll(entityName: string, rows: CleanupRow[], onDeleted: (id: string) => void = () => undefined): Promise<string[]> {
     const failures = await Promise.all(rows.map(async (row) => {
+      const id = row.ID; // read before Delete(): a deleted entity object no longer carries its field values
       if (await row.Delete()) {
-        onDeleted(row.ID);
+        onDeleted(id);
         return null;
       }
-      return `${entityName} ${row.ID}: ${row.LatestResult?.CompleteMessage || 'Delete() returned false'}`;
+      return `${entityName} ${id}: ${row.LatestResult?.CompleteMessage || 'Delete() returned false'}`;
     }));
     return failures.filter((f): f is string => f !== null);
   }

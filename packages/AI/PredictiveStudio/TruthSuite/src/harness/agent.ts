@@ -1,76 +1,129 @@
-import { randomUUID } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import path from 'node:path';
-import { SafeJSONParse } from '@memberjunction/global';
+import { RunView } from '@memberjunction/core';
+import type { MJMLModelEntity } from '@memberjunction/core-entities';
+import { EscapeSQLString, SafeJSONParse } from '@memberjunction/global';
+import { GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
+import type { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import type { ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
-import { TruthSuite } from '../registry/load';
-import { HarnessPaths } from './artifacts';
-import { HarnessProcess } from './process';
+import { TrustVerdicts } from '@memberjunction/predictive-studio-core';
+import type { PredictiveStudioBuilderPayload } from '@memberjunction/predictive-studio';
 import type { RunContext } from './run-fixtures';
 import type { AgentStepResult } from './types';
 
-/** Out-of-process agent runner wrappers for the truth harness. */
+/**
+ * Agent runs for the truth harness, in process over the harness's client provider: `GraphQLAIClient.RunAIAgent` runs
+ * the agent on MJAPI and, for a headless client, returns the finished run (payload and agent run) as its result.
+ */
 export class HarnessAgent {
-  /** `<results dir>/agent`, created on first use. */
-  private static agentWorkDir(): string {
-    const dir = path.join(HarnessPaths.ResultsDir(), 'agent');
-    mkdirSync(dir, { recursive: true });
-    return dir;
-  }
+  /** Pipeline names longer than this are cut by the builder (`ModelingPlanToPipelineConfig`'s name rule). */
+  private static readonly maxPipelineNameLength = 80;
 
-  /** `raw` reduced to a short file-name-safe tag. */
-  private static safeTag(raw: string): string {
-    return raw.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 80);
-  }
-
-  /** Write `plan` to disk and run `agent-step.ts` in a child process without blocking the event loop. */
+  /**
+   * Run the Pipeline Builder agent on `plan` and report the run, its build, and every pipeline the run created — read
+   * back by the exact names the builder gives them, so a failed run's pipelines are reported too.
+   */
   public static async RunBuilderAgent(ctx: RunContext, plan: ModelingPlanSpec): Promise<AgentStepResult> {
-    const root = TruthSuite.Root();
-    const dir = HarnessAgent.agentWorkDir();
-    const slug = `${HarnessAgent.safeTag(plan.Name || 'plan')}-${randomUUID().slice(0, 8)}`;
-    const planFile = path.join(dir, `${slug}.plan.json`);
-    const outFile = path.join(dir, `${slug}.out.json`);
-    const logFile = path.join(dir, `${slug}.log`);
-    writeFileSync(planFile, JSON.stringify(plan, null, 2));
-
-    const script = path.join(root, 'src', 'harness', 'agent-step.ts');
-    const child = await HarnessProcess.Run('npx', ['tsx', script, '--plan', planFile, '--out', outFile], { Cwd: root });
-    writeFileSync(logFile, `${child.Stdout}\n--- stderr ---\n${child.Stderr}`);
-    if (child.Code !== 0) {
-      throw new Error(`agent-step.ts exited ${child.Code}: ${child.Stderr.trim() || child.Stdout.trim()}`);
+    const agent = await HarnessAgent.loadAgent(ctx, 'Pipeline Builder');
+    if (agent.DriverClass !== 'PredictiveStudioPipelineBuilderAgent') {
+      throw new Error(`'Pipeline Builder' agent has DriverClass '${agent.DriverClass || 'none'}'`);
     }
-    const parsed = SafeJSONParse<AgentStepResult>(readFileSync(outFile, 'utf8'));
-    if (!parsed) {
-      throw new Error(`Invalid AgentStepResult JSON at ${outFile}`);
-    }
-    return parsed;
+    const t0 = Date.now();
+    const result: ExecuteAgentResult<PredictiveStudioBuilderPayload> = await new GraphQLAIClient(ctx.Provider).RunAIAgent({
+      agent,
+      conversationMessages: [{ role: 'user', content: 'build it' }],
+      payload: plan,
+    });
+    const wallMs = Date.now() - t0;
+    const build = result.payload?.BuildResult || null;
+    const pipelineIds = await HarnessAgent.builderPipelineIDs(ctx, plan);
+    if (build?.pipelineId && !pipelineIds.includes(build.pipelineId)) pipelineIds.push(build.pipelineId);
+    return {
+      AgentRunID: result.agentRun?.ID || null,
+      AgentSuccess: result.success,
+      AgentErrorMessage: result.agentRun?.ErrorMessage || result.errorMessage || null,
+      BuildModelID: build?.modelId || null,
+      BuildSuccess: build?.success === true,
+      BuildErrorMessage: build?.errorMessage || null,
+      PipelineIDs: pipelineIds,
+      WallMs: wallMs,
+    };
   }
 
-  private static readonly storyQueues = new Map<string, Array<string | null>>();
-
-  /** Run `story-step.ts` in a child process and return the generated story string (or null). */
+  /** One Model Development Agent report for `modelId` (the user-facing text of the run's final step); null if none. */
   public static async GenerateStory(ctx: RunContext, modelId: string): Promise<string | null> {
-    const key = `${ctx.RunID}:${modelId}`;
-    const existing = HarnessAgent.storyQueues.get(key);
-    if (existing && existing.length > 0) {
-      return existing.shift() ?? null;
-    }
-    const root = TruthSuite.Root();
-    const dir = HarnessAgent.agentWorkDir();
-    const slug = `story-${HarnessAgent.safeTag(modelId)}-${randomUUID().slice(0, 8)}`;
-    const outFile = path.join(dir, `${slug}.out.json`);
-    const logFile = path.join(dir, `${slug}.log`);
+    const agent = await HarnessAgent.loadAgent(ctx, 'Model Development Agent');
+    const model = await ctx.Provider.GetEntityObject<MJMLModelEntity>('MJ: ML Models', ctx.User);
+    if (!(await model.Load(modelId))) throw new Error(`ML Model ${modelId} not found`);
+    const result = await new GraphQLAIClient(ctx.Provider).RunAIAgent({
+      agent,
+      conversationMessages: [{ role: 'user', content: HarnessAgent.StoryRequest(model) }],
+    });
+    // A run that ended without a final message counts as "no story".
+    return result.success && result.agentRun?.Message ? result.agentRun.Message : null;
+  }
 
-    const script = path.join(root, 'src', 'harness', 'story-step.ts');
-    const child = await HarnessProcess.Run('npx', ['tsx', script, '--model', modelId, '--count', '10', '--out', outFile], { Cwd: root });
-    writeFileSync(logFile, `${child.Stdout}\n--- stderr ---\n${child.Stderr}`);
-    if (child.Code !== 0) {
-      throw new Error(`story-step.ts exited ${child.Code}: ${child.Stderr.trim() || child.Stdout.trim()}`);
-    }
-    const parsed = SafeJSONParse<{ story: string | null; stories?: Array<string | null> }>(readFileSync(outFile, 'utf8'));
-    const batch = parsed?.stories && parsed.stories.length > 0 ? [...parsed.stories] : [parsed?.story ?? null];
-    const first = batch.shift() ?? null;
-    HarnessAgent.storyQueues.set(key, batch);
-    return first;
+  /** The facts a user would have after a build, in the words the Model Development Agent receives them. */
+  public static StoryRequest(model: MJMLModelEntity): string {
+    const trust = TrustVerdicts.DeriveTrustVerdict(model);
+    const weights = Object.entries(SafeJSONParse<Record<string, number>>(model.FeatureImportance || '{}') || {})
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([f, w]) => `${f} (${(w * 100).toFixed(1)}%)`)
+      .join(', ');
+    return [
+      `Our model predicting ${model.TargetVariable} is already built and trained (ML Model ${model.ID}, version ${model.Version}).`,
+      `Holdout metrics: ${model.HoldoutMetrics || 'none'}. Trust: ${trust.grade} — ${trust.oneLiner}`,
+      `Feature weights recorded for it: ${weights || 'none'}.`,
+      'Do not call any sub-agent or action and do not train anything. Give me the summary you give after a build',
+      '(your "Report" step): what it predicts, how good it is with the metric explained, and which features it weighted most.',
+    ].join('\n');
+  }
+
+  /**
+   * The names the builder gives `plan`'s pipelines: the plan name, and `<name> (<algorithm>)` per experiment when the
+   * plan proposes more than one (`ModelingPlanToPipelineConfig`). Empty when the plan has no name (the gates name all).
+   */
+  public static BuilderPipelineNames(plan: ModelingPlanSpec): string[] {
+    const custom = (plan.Name || '').trim();
+    if (!custom) return [];
+    const max = HarnessAgent.maxPipelineNameLength;
+    const base = custom.length <= max ? custom : `${custom.slice(0, max - 3)}…`;
+    const experiments = plan.ProposedExperiments || [];
+    if (experiments.length <= 1) return [base];
+    return [base, ...experiments.map((e) => `${base} (${e.AlgorithmName.trim()})`)];
+  }
+
+  /** The IDs of the pipelines named as the builder names `plan`'s pipelines (exact names, never a pattern). */
+  private static async builderPipelineIDs(ctx: RunContext, plan: ModelingPlanSpec): Promise<string[]> {
+    const names = HarnessAgent.BuilderPipelineNames(plan);
+    if (names.length === 0) return [];
+    const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>(
+      {
+        EntityName: 'MJ: ML Training Pipelines',
+        ExtraFilter: `Name IN (${names.map((n) => `'${EscapeSQLString(n)}'`).join(',')})`,
+        Fields: ['ID'],
+        ResultType: 'simple',
+        BypassCache: true,
+      },
+      ctx.User,
+    );
+    if (!res.Success) throw new Error(`read the builder's pipelines for "${plan.Name}": ${res.ErrorMessage}`);
+    return res.Results.map((p) => p.ID);
+  }
+
+  /** The `MJ: AI Agents` row named `name`, as the agent entity `RunAIAgent` takes. */
+  private static async loadAgent(ctx: RunContext, name: string): Promise<MJAIAgentEntityExtended> {
+    const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJAIAgentEntityExtended>(
+      {
+        EntityName: 'MJ: AI Agents',
+        ExtraFilter: `Name='${EscapeSQLString(name)}'`,
+        ResultType: 'entity_object',
+        MaxRows: 1,
+      },
+      ctx.User,
+    );
+    if (!res.Success) throw new Error(`read the '${name}' agent: ${res.ErrorMessage}`);
+    const agent = res.Results[0];
+    if (!agent) throw new Error(`'${name}' is not in the agent metadata`);
+    return agent;
   }
 }

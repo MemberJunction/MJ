@@ -1,8 +1,10 @@
-import { ConfidenceInterval } from './wilson';
-import { Binomial } from './binomial';
-import type { StatRule } from '../registry/types';
+import { ConfidenceInterval } from './confidence-interval';
 
-/** The P11 statistical gate rules over n seeds (§3.3), and their acceptance ranges and power. */
+/** The P11 statistical rules a gate can count seeds against. */
+export type StatRule = 'noise-publish-400' | 'coverage-400' | 'detection-400' | 'false-alarm-400'
+  | 'noise-publish-60'; // G0.2's publication count at n = 60
+
+/** The P11 statistical gate rules over n seeds (§3.3), and their acceptance ranges. */
 export class SeedRule {
   public static NoisePublishPasses(published: number, n: number): boolean {
     return ConfidenceInterval.Wilson(published, n).Lower <= 0.05;
@@ -36,11 +38,5 @@ export class SeedRule {
     // Defensive: none of the five rules accepts nothing at n ≥ 1, so no test reaches this throw (PR description lists it).
     if (accepted.length === 0) throw new Error(`${rule} accepts no count at n = ${n}`);
     return { Min: Math.min(...accepted), Max: Math.max(...accepted) };
-  }
-
-  /** Probability the rule passes when each seed independently "succeeds" with probability trueRate. */
-  public static PassProbability(rule: StatRule, n: number, trueRate: number): number {
-    const { Min, Max } = SeedRule.AcceptanceRange(rule, n);
-    return Binomial.RangeProbability(n, trueRate, Min, Max);
   }
 }

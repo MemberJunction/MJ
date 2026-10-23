@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { Canonicalize } from '@memberjunction/global';
-import { TruthSuite } from '../registry/load';
+import { TruthSuite } from '../truth-suite';
 
 /** A JSON value as the specs hold it. */
 export type Json = string | number | boolean | null | Json[] | { [k: string]: Json };

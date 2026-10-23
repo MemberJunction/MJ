@@ -12,20 +12,24 @@ class FakeStore implements CleanupStore {
   public readonly Filters: string[] = [];
   public readonly Deleted: string[] = [];
   constructor(private readonly fail: ReadonlySet<string> = new Set()) {}
-  private row(entity: string, id: string): CleanupRow {
+  /** A row whose ID reads empty once deleted, as a deleted entity object's fields do. */
+  private row(entity: string, id: string, pipelineId = ''): CleanupModelRow {
+    let deleted = false;
     return {
-      ID: id,
+      get ID(): string { return deleted ? '' : id; },
+      PipelineID: pipelineId,
       LatestResult: new BaseEntityResult(false, `${id} is still referenced`, 'delete'),
       Delete: async () => {
         if (this.fail.has(id)) return false;
         this.Deleted.push(`${entity}:${id}`);
+        deleted = true;
         return true;
       },
     };
   }
   public async Models(filter: string): Promise<CleanupModelRow[]> {
     this.Filters.push(`MJ: ML Models | ${filter}`);
-    return [{ ...this.row('MJ: ML Models', M1), PipelineID: AGENT_P }, { ...this.row('MJ: ML Models', M2), PipelineID: P1 }];
+    return [this.row('MJ: ML Models', M1, AGENT_P), this.row('MJ: ML Models', M2, P1)];
   }
   public async Rows(entityName: string, filter: string): Promise<CleanupRow[]> {
     this.Filters.push(`${entityName} | ${filter}`);
@@ -68,5 +72,20 @@ describe('HarnessCleanup.DeleteRecorded', () => {
     const failures = await HarnessCleanup.DeleteRecorded(new FakeStore(new Set([P1])), records);
     expect(failures).toEqual([`MJ: ML Training Pipelines ${P1}: ${P1} is still referenced`]);
     expect(records.PipelineIDs.Has(P1)).toBe(true);
+  });
+});
+
+describe('RunRecords.RecordAgentRun', () => {
+  it("records a failed run's pipelines even though it built no model", () => {
+    const records = new RunRecords();
+    records.RecordAgentRun({ PipelineIDs: [P1, AGENT_P], BuildModelID: null });
+    expect([...records.PipelineIDs].sort()).toEqual([P1, AGENT_P].sort());
+    expect(records.ModelIDs.Size).toBe(0);
+  });
+  it("records a successful run's pipeline and model", () => {
+    const records = new RunRecords();
+    records.RecordAgentRun({ PipelineIDs: [AGENT_P], BuildModelID: M1 });
+    expect([...records.PipelineIDs]).toEqual([AGENT_P]);
+    expect([...records.ModelIDs]).toEqual([M1]);
   });
 });

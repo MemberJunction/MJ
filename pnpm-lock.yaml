@@ -1520,12 +1520,9 @@ importers:
 
   packages/AI/PredictiveStudio/TruthSuite:
     dependencies:
-      '@memberjunction/ai-agents':
+      '@memberjunction/ai-core-plus':
         specifier: 6.2.0-edge.5
-        version: link:../../Agents
-      '@memberjunction/aiengine':
-        specifier: 6.2.0-edge.5
-        version: link:../../Engine
+        version: link:../../CorePlus
       '@memberjunction/core':
         specifier: 6.2.0-edge.5
         version: link:../../../MJCore
@@ -1547,12 +1544,6 @@ importers:
       '@memberjunction/predictive-studio-sidecar':
         specifier: 6.2.0-edge.5
         version: link:../Sidecar
-      '@memberjunction/server-bootstrap-lite':
-        specifier: 6.2.0-edge.5
-        version: link:../../../ServerBootstrapLite
-      '@memberjunction/testing-engine-base':
-        specifier: 6.2.0-edge.5
-        version: link:../../../TestingFramework/EngineBase
       '@memberjunction/testing-integration':
         specifier: 6.2.0-edge.5
         version: link:../../../TestingFramework/testing-integration
