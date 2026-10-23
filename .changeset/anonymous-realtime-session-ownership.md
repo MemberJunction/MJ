@@ -4,6 +4,8 @@
 "@memberjunction/server": patch
 "@memberjunction/ng-realtime-widget": patch
 "@memberjunction/realtime-widget": patch
+"@memberjunction/server-bootstrap": patch
+"@memberjunction/server-bootstrap-lite": patch
 ---
 
 Anonymous realtime sessions are now isolated per visitor (#4931). Before, every anonymous visitor (a web-widget guest or an anonymous magic-link invitee) authenticated as the one shared Anonymous user, and the realtime session write gates compared only that user id, so a visitor who learned another visitor's session id could relay into it, close it, heartbeat it, drive its remote browser, or restore its state into a new session.
