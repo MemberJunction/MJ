@@ -355,7 +355,7 @@ export class WidgetSessionService {
   /**
    * Verifies the caller's current widget guest JWT for `RefreshGuestSession` and returns its
    * `mj_sid` when valid, or `null` when missing, tampered, expired past {@link REFRESH_GRACE_SECONDS},
-   * non-anonymous, or minted for a different widget.
+   * non-anonymous, minted for a different widget, or issued by another deployment.
    */
   private verifyRefreshBearerToken(bearerToken: string | undefined, widgetId: string): string | null {
     const token = (bearerToken ?? '').trim();
@@ -371,6 +371,7 @@ export class WidgetSessionService {
       const verified = jwt.verify(token, publicKey, {
         algorithms: ['RS256'],
         audience: this.config.audience,
+        issuer: this.publicUrl,
         ignoreExpiration: true,
       });
       if (typeof verified !== 'object' || verified === null) {

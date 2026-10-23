@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import jwt from 'jsonwebtoken';
 import { createPublicKey } from 'node:crypto';
 
@@ -62,6 +62,10 @@ vi.mock('../realtimeWidget/visitorIdentity.js', () => ({
 }));
 
 import { WidgetSessionService, REFRESH_GRACE_SECONDS } from '../realtimeWidget/WidgetSessionService.js';
+import { CreateWidgetHandler } from '../realtimeWidget/WidgetRouter.js';
+import express from 'express';
+import type { Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { MagicLinkKeyManager } from '../auth/magicLink/MagicLinkKeys.js';
 import type { WidgetConfig } from '../config.js';
 
@@ -187,7 +191,7 @@ describe('WidgetSessionService — RefreshGuestSession preserves mj_sid (#4931)'
     const refreshed = await service.RefreshGuestSession({
       widgetKey: 'pk_live_test',
       origin: 'https://acme.com',
-      bearerToken: minted.token,
+      BearerToken: minted.token,
     });
     expect(refreshed.success).toBe(true);
     expect(refreshed.sessionId).toBe(minted.sessionId);
@@ -221,7 +225,7 @@ describe('WidgetSessionService — RefreshGuestSession preserves mj_sid (#4931)'
     const refreshed = await service.RefreshGuestSession({
       widgetKey: 'pk_live_test',
       origin: 'https://acme.com',
-      bearerToken: recentlyExpiredToken,
+      BearerToken: recentlyExpiredToken,
     });
     expect(refreshed.success).toBe(true);
     expect(refreshed.sessionId).toBe('sid-recent-exp');
@@ -246,7 +250,7 @@ describe('WidgetSessionService — RefreshGuestSession preserves mj_sid (#4931)'
     const tampered = await service.RefreshGuestSession({
       widgetKey: 'pk_live_test',
       origin: 'https://acme.com',
-      bearerToken: minted.token!.slice(0, -4) + 'AAAA',
+      BearerToken: minted.token!.slice(0, -4) + 'AAAA',
     });
     expect(tampered).toMatchObject({ success: false, errorCode: 'not_found' });
 
@@ -268,7 +272,7 @@ describe('WidgetSessionService — RefreshGuestSession preserves mj_sid (#4931)'
     const expiredBeyondGrace = await service.RefreshGuestSession({
       widgetKey: 'pk_live_test',
       origin: 'https://acme.com',
-      bearerToken: tooOldToken,
+      BearerToken: tooOldToken,
     });
     expect(expiredBeyondGrace).toMatchObject({ success: false, errorCode: 'not_found' });
 
@@ -290,7 +294,7 @@ describe('WidgetSessionService — RefreshGuestSession preserves mj_sid (#4931)'
     const wrongWidget = await service.RefreshGuestSession({
       widgetKey: 'pk_live_test',
       origin: 'https://acme.com',
-      bearerToken: wrongWidgetToken,
+      BearerToken: wrongWidgetToken,
     });
     expect(wrongWidget).toMatchObject({ success: false, errorCode: 'not_found' });
 
@@ -312,8 +316,164 @@ describe('WidgetSessionService — RefreshGuestSession preserves mj_sid (#4931)'
     const nonAnon = await service.RefreshGuestSession({
       widgetKey: 'pk_live_test',
       origin: 'https://acme.com',
-      bearerToken: nonAnonToken,
+      BearerToken: nonAnonToken,
     });
     expect(nonAnon).toMatchObject({ success: false, errorCode: 'not_found' });
+  });
+});
+
+describe('WidgetSessionService — RefreshGuestSession re-applies every mint check (#4931)', () => {
+  const WIDGET_ID = '11111111-1111-4111-8111-111111111111';
+  const APP_ID = '33333333-3333-4333-8333-333333333333';
+  const ROLE_ID = '00000000-0000-4000-8000-000000000099';
+  const ISSUER = 'https://mj.example.com';
+  const ORIGIN = 'https://acme.com';
+  const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15';
+  let widgetOverrides: Record<string, unknown> = {};
+
+  function makeWidgetRow() {
+    return {
+      ID: WIDGET_ID,
+      PublicKey: 'pk_live_test',
+      Status: 'Active',
+      AllowedOrigins: `["${ORIGIN}"]`,
+      Modality: 'Both',
+      GuestRoleID: ROLE_ID,
+      ApplicationID: APP_ID,
+      PinnedAgentID: '44444444-4444-4444-8444-444444444444',
+      AuthStrategy: 'Anonymous',
+      SessionTTLMinutes: 15,
+      RateLimitPerMinute: 30,
+      RememberReturningVisitors: false,
+      EnabledChannels: null,
+      VoiceMaxSessionMinutes: 10,
+      ...widgetOverrides,
+    };
+  }
+
+  /** A live widget guest token for WIDGET_ID; each claim can be overridden (or removed with `undefined`). */
+  function signGuestToken(overrides: Record<string, unknown> = {}): string {
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const claims: Record<string, unknown> = {
+      iss: ISSUER,
+      aud: 'mj-magic-link',
+      sub: 'magic-link|sid-live',
+      email: 'anonymous@magic-link.local',
+      iat: nowSeconds,
+      exp: nowSeconds + 900,
+      mj_magic_link: true,
+      mj_anon: true,
+      mj_sid: 'sid-live',
+      mj_widget_id: WIDGET_ID,
+      mj_app_id: APP_ID,
+      mj_role: 'Widget Guest',
+      ...overrides,
+    };
+    for (const key of Object.keys(claims)) {
+      if (claims[key] === undefined) {
+        delete claims[key];
+      }
+    }
+    return MagicLinkKeyManager.Instance.Sign(claims);
+  }
+
+  function refresh(service: WidgetSessionService, bearerToken: string, origin = ORIGIN) {
+    return service.RefreshGuestSession({ widgetKey: 'pk_live_test', origin, BearerToken: bearerToken });
+  }
+
+  beforeEach(() => {
+    widgetOverrides = {};
+    MagicLinkKeyManager.Instance.Initialize();
+    mockUsers.length = 0;
+    mockUsers.push({ ID: 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E', Email: 'system@system.org', IsActive: true });
+    runViewMock.mockReset();
+    runViewMock.mockImplementation(async (params: { ExtraFilter?: string }) =>
+      params.ExtraFilter?.includes('pk_live_test') ? { Success: true, Results: [makeWidgetRow()] } : { Success: true, Results: [] },
+    );
+  });
+
+  it('accepts a valid token passed as BearerToken and keeps its mj_sid', async () => {
+    const service = new WidgetSessionService(ISSUER, makeConfig());
+    const refreshed = await refresh(service, signGuestToken());
+    expect(refreshed).toMatchObject({ success: true, sessionId: 'sid-live' });
+  });
+
+  it('refuses a valid token from an origin the widget does not allow', async () => {
+    const service = new WidgetSessionService(ISSUER, makeConfig());
+    const refreshed = await refresh(service, signGuestToken(), 'https://evil.example');
+    expect(refreshed.success).toBe(false);
+    expect(refreshed.errorCode).toBe('origin_not_allowed');
+  });
+
+  it('refuses a HostIdentity widget refresh that carries no host assertion', async () => {
+    widgetOverrides = { AuthStrategy: 'HostIdentity', HostPublicKey: null };
+    const service = new WidgetSessionService(ISSUER, makeConfig());
+    const refreshed = await refresh(service, signGuestToken());
+    expect(refreshed).toMatchObject({ success: false, errorCode: 'host_assertion_invalid' });
+  });
+
+  it('refuses when the widget guest role cannot be resolved', async () => {
+    widgetOverrides = { GuestRoleID: '99999999-9999-4999-8999-999999999999' };
+    const service = new WidgetSessionService(ISSUER, makeConfig());
+    const refreshed = await refresh(service, signGuestToken());
+    expect(refreshed).toMatchObject({ success: false, errorCode: 'server_error' });
+  });
+
+  it('refuses a token without the mj_magic_link claim', async () => {
+    const service = new WidgetSessionService(ISSUER, makeConfig());
+    const refreshed = await refresh(service, signGuestToken({ mj_magic_link: undefined }));
+    expect(refreshed).toMatchObject({ success: false, errorCode: 'not_found' });
+  });
+
+  it('refuses a token signed with the right key for another audience', async () => {
+    const service = new WidgetSessionService(ISSUER, makeConfig());
+    const refreshed = await refresh(service, signGuestToken({ aud: 'some-other-audience' }));
+    expect(refreshed).toMatchObject({ success: false, errorCode: 'not_found' });
+  });
+
+  it('refuses a token signed with the right key by another issuer', async () => {
+    const service = new WidgetSessionService(ISSUER, makeConfig());
+    const refreshed = await refresh(service, signGuestToken({ iss: 'https://other-deployment.example' }));
+    expect(refreshed).toMatchObject({ success: false, errorCode: 'not_found' });
+  });
+
+  describe('through the real POST /session/refresh route', () => {
+    let server: Server | undefined;
+
+    async function startRouter(): Promise<string> {
+      const app = express();
+      app.use('/widget', CreateWidgetHandler(ISSUER, makeConfig()).publicRouter);
+      await new Promise<void>((resolve) => {
+        server = app.listen(0, '127.0.0.1', resolve);
+      });
+      return `http://127.0.0.1:${(server!.address() as AddressInfo).port}/widget/session/refresh`;
+    }
+
+    function post(url: string, body: Record<string, unknown>, authorization?: string) {
+      const headers: Record<string, string> = { 'content-type': 'application/json', origin: ORIGIN, 'user-agent': BROWSER_UA };
+      if (authorization) {
+        headers.authorization = authorization;
+      }
+      return fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+    }
+
+    afterEach(async () => {
+      await new Promise<void>((resolve) => (server ? server.close(() => resolve()) : resolve()));
+      server = undefined;
+    });
+
+    it('reads the token from the Authorization header and keeps its mj_sid', async () => {
+      const url = await startRouter();
+      const res = await post(url, { widgetKey: 'pk_live_test' }, `Bearer ${signGuestToken()}`);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ success: true, sessionId: 'sid-live' });
+    });
+
+    it('returns 403 without an Authorization header, even when the body carries a token', async () => {
+      const url = await startRouter();
+      const res = await post(url, { widgetKey: 'pk_live_test', BearerToken: signGuestToken(), bearerToken: signGuestToken() });
+      expect(res.status).toBe(403);
+      expect(await res.json()).toMatchObject({ success: false, errorCode: 'not_found' });
+    });
   });
 });
