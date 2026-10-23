@@ -19,6 +19,7 @@ import {
     MJMLModelEntity,
     MJMLModelScoringBindingEntity,
 } from '@memberjunction/core-entities';
+import type { MJActionEntity } from '@memberjunction/core-entities';
 import {
     RecordProcessorRegistry,
     type RecordProcessorBuildContext,
@@ -176,11 +177,17 @@ export const PredictiveStudioChecks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             await ActionEngineServer.Instance.Config(false, ctx.User);
             const engine = ActionEngineServer.Instance;
-            const expected = ['Train ML Model', 'Score Record Set', 'Run Experiment Session', 'Promote ML Model'];
-            for (const name of expected) {
+            // Experiment sessions are switched off (no production session runner), so that action ships Disabled.
+            const expected: ReadonlyArray<{ Name: string; Status: MJActionEntity['Status'] }> = [
+                { Name: 'Train ML Model', Status: 'Active' },
+                { Name: 'Score Record Set', Status: 'Active' },
+                { Name: 'Run Experiment Session', Status: 'Disabled' },
+                { Name: 'Promote ML Model', Status: 'Active' },
+            ];
+            for (const { Name: name, Status: status } of expected) {
                 const action = engine.GetActionByName(name);
                 Assert(!!action, `PS action '${name}' is not registered in metadata`);
-                AssertEqual(String(action!.Status), 'Active', `PS action '${name}' Status`);
+                AssertEqual(action!.Status, status, `PS action '${name}' Status`);
             }
 
             // Spot-check the Train action's param + result-code contract (the wiring agents/UI depend on).
