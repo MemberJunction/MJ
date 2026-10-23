@@ -411,16 +411,46 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession', () => {
             return { createdSession, result };
         }
 
-        it('saves RecordingStartedAt through the entity and stamps RecordingMedia through the ledger proc', async () => {
+        /** The one stamp-proc call the start made, with its positional params. */
+        function onlyStamp(sqlCalls: { Sql: string; Params: unknown[] }[]): unknown[] {
+            const stamps = sqlCalls.filter((c) => c.Sql.includes('spStampAIAgentSessionRecordingFile'));
+            expect(stamps).toHaveLength(1);
+            return stamps[0].Params;
+        }
+
+        it('saves RecordingStartedAt through the entity and stamps RecordingMedia and t0 through the ledger proc', async () => {
             const { provider, sqlCalls } = makeSqlProvider();
             const { createdSession } = await startWithConsent(provider);
 
             expect((createdSession.RecordingStartedAt as Date).toISOString()).toBe(STARTED_AT);
             expect(createdSession.Save).toHaveBeenCalled();
-            const stamps = sqlCalls.filter((c) => c.Sql.includes('spStampAIAgentSessionRecordingFile'));
-            expect(stamps).toHaveLength(1);
-            expect(stamps[0].Params).toEqual([RECORDING_SESSION_ID, null, 'Audio', null]);
+            const [sessionID, fileID, media, startedAt] = onlyStamp(sqlCalls);
+            expect([sessionID, fileID, media]).toEqual([RECORDING_SESSION_ID, null, 'Audio']);
+            expect((startedAt as Date).toISOString()).toBe(STARTED_AT);
             expect(createdSession.RecordingMedia).toBeUndefined();
+        });
+
+        it('still stamps t0 through the ledger proc when the entity save fails (the janitor recovers only sessions with a t0)', async () => {
+            errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const { provider, sqlCalls } = makeSqlProvider();
+            createSessionMock.mockReset();
+            const failing = makeSessionEntity({
+                ID: RECORDING_SESSION_ID,
+                Save: vi.fn(async () => false),
+                LatestResult: { CompleteMessage: 'save refused' },
+            });
+            createSessionMock.mockResolvedValue(failing);
+            currentProvider = provider;
+            prepareClientSessionMock.mockResolvedValue({
+                Success: true,
+                ClientConfig: { Provider: 'openai', Model: 'gpt-realtime', EphemeralToken: 'ek', ExpiresAt: '2026-01-01T00:00:00Z', SessionConfig: {} },
+            });
+            await makeResolver().StartRealtimeClientSession(
+                'target-1', makeCtx(), undefined, undefined, undefined, undefined, undefined, undefined, STARTED_AT, true,
+            );
+
+            const [, , , startedAt] = onlyStamp(sqlCalls);
+            expect((startedAt as Date).toISOString()).toBe(STARTED_AT);
         });
 
         it('does not fail the session start when the media stamp throws, and logs it with the session id', async () => {

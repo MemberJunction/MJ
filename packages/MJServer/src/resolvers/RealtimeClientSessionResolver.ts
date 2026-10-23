@@ -2854,8 +2854,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * just-started session when the browser captured WITH consent. `RecordingStartedAt` goes through
      * the entity save (and stays set on the in-memory session, so a later save of it cannot clear it);
      * `RecordingMedia` is a recording-ledger column that an entity save cannot write (#6010), so it goes
-     * through the ledger's `spStampAIAgentSessionRecordingFile` proc. Best-effort: a parse/save/stamp
-     * failure is logged and swallowed — a recording-metadata problem must never fail the session start.
+     * through the ledger's `spStampAIAgentSessionRecordingFile` proc. The proc stamps `t0` as well, so it
+     * lands even when the entity save fails: the janitor recovers only sessions that carry a
+     * `RecordingStartedAt`. Best-effort: a parse/save/stamp failure is logged and swallowed — a
+     * recording-metadata problem must never fail the session start.
      *
      * @param session The freshly created/loaded session.
      * @param recordingConsent Whether the user consented to recording — only `true` stamps anything.
@@ -2885,7 +2887,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             );
         }
         try {
-            await new SqlRealtimeRecordingLedger(provider, contextUser).StampFile(session.ID, { media: 'Audio' });
+            await new SqlRealtimeRecordingLedger(provider, contextUser).StampFile(session.ID, { media: 'Audio', startedAt });
         } catch (error) {
             LogError(
                 `RealtimeClientSessionResolver.stampRecordingStart media stamp failed for session ${session.ID}: ` +
