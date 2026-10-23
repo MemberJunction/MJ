@@ -208,3 +208,14 @@ stays, and the PR description says which and why.
 
 ## 7. Out of scope
 New gate implementations for PR 3–5; CI scheduling; PostgreSQL; any migration in `migrations/`.
+
+## 8. Spec amendments (2026-10-23, from planning)
+
+| # | Amends | Change | Why |
+|---|---|---|---|
+| A1 | §3.1, §4 | The harness stays in the truth-suite package (`src/harness`); `checks/ps-gates/` holds only a thin adapter. | Both packages are private, so `integration-test-suite` can depend on the truth suite; moving ~1,000 lines across packages adds diff without changing behaviour (§13). |
+| A2 | §4.2 | Per-dataset tables stay; only the five never-loaded tables are dropped. | The loader deletes and reloads one table per dataset; sharing W1–W8 tables would change which rows an already-trained fixture model scores between gates. With CodeGen at provision the tables add no committed lines. |
+| A3 | §4.2 | `provision.mjs` keeps regenerating `.pstruth-entities.json` after `mj sync push`. | The generator is the file's source of truth; committing sync blocks would dirty the tree on every provision. |
+| A4 | §5.1 | Polarity comes from `ResolveOutcomeConfig(model).Polarity` (explicit config in Lineage first, its existing default otherwise). | `ResolveOutcomeConfig` already exists on `next`; this removes the second, divergent rule (§3 "unify divergent predicates"). Replacing the existing resolver's default is outside this PR. |
+| A5 | §3.1 | G0.2/G0.3 join a second suite, "Predictive Studio Gates — Pending (PR 4)". | `sibling-parity.test.ts` requires every `tests/gates/` record to be in a `.ps-gates-*` suite. Status stays `Pending`. |
+| A6 | §5.2 | Refusal codes travel as `RemoteOpResult.ResultCode`, set by a shared `ExecuteServer` override in the two PS operations. | `BaseRemotableOperation.ExecuteServer` maps every throw to `EXECUTION_ERROR`; changing MJCore is outside the PR's scope. `ResultCode` already crosses GraphQL (`graphQLDataProvider.ts:2044`). |
