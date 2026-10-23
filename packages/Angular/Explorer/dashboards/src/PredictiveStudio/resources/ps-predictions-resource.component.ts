@@ -1,8 +1,9 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, inject } from '@angular/core';
 import { NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { CompositeKey, LogError, RunView, UserInfo } from '@memberjunction/core';
-import { MJConversationEntity, MJEnvironmentEntityExtended, MJMLModelEntity, MJProcessRunDetailEntity, MJListEntity, MJListDetailEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJEnvironmentEntityExtended, MJMLModelEntity, MJListEntity, MJListDetailEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import { TrustVerdicts, AtRiskRules, ImportanceDisplay, type AtRiskRow } from '@memberjunction/predictive-studio-core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { PSResourceBase } from './ps-resource-base';
@@ -147,6 +148,7 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
                         <div class="ps-action-locked"><i class="fa-solid fa-lock"></i> {{ selected.trust.gateReason }}</div>
                       }
                     </div>
+                    @if (selected.canOpen && AtRiskCapped) { <div class="ps-list-result muted" data-testid="ps-atrisk-capped">The latest run has more than {{ AtRiskCapLabel }} predictions; the list, export and "Send to a list" cover the first {{ AtRiskCapLabel }}.</div> }
                     @if (listResult) { <div class="ps-list-result muted" data-testid="ps-list-result">{{ listResult }}</div> }
                   </div>
                 }
@@ -450,6 +452,17 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   public set drivers(value: string[]) {
     this.Drivers = value;
   }
+  /**
+   * True when the latest run has more predictions than {@link PredictiveStudioEngine.MaxRunDetailRows}: the at-risk
+   * list, its export and "Send to a list" cover only the first ones, and the workspace says so.
+   */
+  public AtRiskCapped = false;
+
+  /** The run-detail cap, formatted for the capped notice. */
+  public get AtRiskCapLabel(): string {
+    return PredictiveStudioEngine.MaxRunDetailRows.toLocaleString('en-US');
+  }
+
   /** Whether the at-risk list is loading for the open prediction. */
   public AtRiskLoading = false;
 
@@ -557,6 +570,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
       Selected: this.Selected ? { Name: this.Selected.title, TrustGrade: this.Selected.trust.grade, CanOpen: this.Selected.canOpen } : null,
       AtRiskLoaded: this.View === 'workspace' && !this.AtRiskLoading && !this.AtRiskError,
       AtRiskCount: this.AtRiskRows.length,
+      AtRiskCapped: this.AtRiskCapped,
       HighRiskCount: this.AtRiskRows.filter((r) => r.Band === 'high').length,
       MediumRiskCount: this.AtRiskRows.filter((r) => r.Band === 'medium').length,
       LowRiskCount: this.AtRiskRows.filter((r) => r.Band === 'low').length,
@@ -640,6 +654,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
     this.Selected = c;
     this.View = 'workspace';
     this.AtRiskRows = [];
+    this.AtRiskCapped = false;
     this.Drivers = [];
     this.AtRiskError = null;
     this.ListResult = null;
@@ -670,12 +685,13 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
       const latest = runs[0];
       this.LatestRunId = latest?.ID ?? null;
       if (latest?.ID) {
-        const res = await RunView.FromMetadataProvider(provider).RunView<MJProcessRunDetailEntity>(
-          { EntityName: 'MJ: Process Run Details', ExtraFilter: `ProcessRunID='${latest.ID}'`, MaxRows: 2137, ResultType: 'entity_object' },
-          user,
-        );
-        if (res.Success && this.Selected?.modelId === c.modelId) {
-          const details = (res.Results || []).map((d) => ({ RecordID: d.RecordID, ResultPayload: d.ResultPayload }));
+        const read = await this.engine.LoadRunDetails(latest.ID, provider, user);
+        if (!read) {
+          throw new Error(`Could not load the predictions of run ${latest.ID}.`);
+        }
+        if (this.Selected?.modelId === c.modelId) {
+          this.AtRiskCapped = read.Capped;
+          const details = read.Rows.map((d) => ({ RecordID: d.RecordID, ResultPayload: d.ResultPayload }));
           this.AtRiskRows = AtRiskRules.ParseAtRiskRows(details, AtRiskRules.BuildAtRiskOptions(model));
           await this.resolveAtRiskLabels(model);
         }
@@ -780,6 +796,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
     this.Selected = null;
     this.LatestRunId = null;
     this.AtRiskRows = [];
+    this.AtRiskCapped = false;
     this.Drivers = [];
     this.AtRiskError = null;
     this.publishAgentContext();

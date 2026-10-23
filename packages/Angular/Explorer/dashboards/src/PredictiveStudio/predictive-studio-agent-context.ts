@@ -115,6 +115,8 @@ export interface PredictionsAgentContextInput {
   AtRiskLoaded?: boolean;
   /** Ranked at-risk row count (when loaded). */
   AtRiskCount?: number;
+  /** True when the latest run had more predictions than the read cap, so the counts cover only the first ones. */
+  AtRiskCapped?: boolean;
   /** Band breakdown of the at-risk rows (when loaded). */
   HighRiskCount?: number;
   MediumRiskCount?: number;
@@ -145,6 +147,9 @@ export function BuildPredictionsAgentContext(input: PredictionsAgentContextInput
       context['HighRiskCount'] = input.HighRiskCount ?? 0;
       context['MediumRiskCount'] = input.MediumRiskCount ?? 0;
       context['LowRiskCount'] = input.LowRiskCount ?? 0;
+      if (input.AtRiskCapped) {
+        context['AtRiskCapped'] = true;
+      }
     }
     if (input.Drivers && input.Drivers.length > 0) {
       context['Drivers'] = CapPSNames(input.Drivers);

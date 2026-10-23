@@ -1,12 +1,13 @@
 import {
   BaseEngine,
   BaseEnginePropertyConfig,
+  CompositeKey,
   IMetadataProvider,
   Metadata,
   RunView,
   UserInfo,
 } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import {
   MJMLAlgorithmEntity,
   MJMLAlgorithmUseCaseEntity,
@@ -18,10 +19,20 @@ import {
   MJExperimentEntity,
   MJExperimentSessionEntity,
   MJExperimentSessionIterationEntity,
+  MJProcessRunDetailEntity,
   MJProcessRunEntity,
   MJRecordProcessEntity,
 } from '@memberjunction/core-entities';
 import { PSIterationRow, PSProcessRunRow } from '../predictive-studio.view-models';
+
+/** The columns of a scored Process Run Detail the Predictive Studio surfaces read; `ID` is the keyset paging cursor. */
+export type PSRunDetailRow = Pick<MJProcessRunDetailEntity, 'ID' | 'RecordID' | 'ResultPayload' | 'Status' | 'CompletedAt' | '__mj_CreatedAt'>;
+
+/** A run's details as read by {@link PredictiveStudioEngine.LoadRunDetails}; `Capped` is true when the run has more. */
+export interface PSRunDetails {
+  Rows: PSRunDetailRow[];
+  Capped: boolean;
+}
 
 /**
  * Recommendation levels used by the Algorithm Use Case Rankings matrix, ordered weakest → strongest.
@@ -313,6 +324,48 @@ export class PredictiveStudioEngine extends BaseEngine<PredictiveStudioEngine> {
     options?: { sinceDays?: number; maxRows?: number },
   ): Promise<PSProcessRunRow[]> {
     return this.loadRunsForProcessIds(this.RecordProcessIDsForModel(modelId), provider, user, options);
+  }
+
+  /** The most run details one read returns; a larger run is read up to this many and reported {@link PSRunDetails.Capped}. */
+  public static readonly MaxRunDetailRows = 50_000;
+  private static readonly runDetailPageSize = 1000;
+
+  /**
+   * Reads a run's process run details one keyset page at a time (read-only, only the columns the surfaces use), up to
+   * {@link PredictiveStudioEngine.MaxRunDetailRows}. Returns null when a page fails to load.
+   */
+  public async LoadRunDetails(runId: string, provider: IMetadataProvider, user: UserInfo | undefined): Promise<PSRunDetails | null> {
+    const entityInfo = provider.EntityByName('MJ: Process Run Details');
+    if (!entityInfo) {
+      return null;
+    }
+    const rv = RunView.FromMetadataProvider(provider);
+    const rows: PSRunDetailRow[] = [];
+    let lastKey: CompositeKey | undefined;
+    while (true) {
+      const page = await rv.RunView<PSRunDetailRow>(
+        {
+          EntityName: 'MJ: Process Run Details',
+          ExtraFilter: `ProcessRunID = '${EscapeSQLString(runId)}'`,
+          Fields: ['ID', 'RecordID', 'ResultPayload', 'Status', 'CompletedAt', '__mj_CreatedAt'],
+          MaxRows: PredictiveStudioEngine.runDetailPageSize,
+          AfterKey: lastKey,
+          ResultType: 'simple',
+        },
+        user,
+      );
+      if (!page.Success || !page.Results) {
+        return null;
+      }
+      rows.push(...page.Results);
+      if (page.Results.length < PredictiveStudioEngine.runDetailPageSize) {
+        return { Rows: rows, Capped: false };
+      }
+      if (rows.length >= PredictiveStudioEngine.MaxRunDetailRows) {
+        return { Rows: rows, Capped: true };
+      }
+      lastKey = CompositeKey.FromEntityRecord(entityInfo, page.Results[page.Results.length - 1]);
+    }
   }
 
   /** Shared run-loader: recent `MJ: Process Runs` for a set of Record-Process ids (capped, newest-first). */

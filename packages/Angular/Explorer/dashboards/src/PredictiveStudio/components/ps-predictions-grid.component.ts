@@ -19,9 +19,9 @@ import {
   MjSlidePanelComponent,
 } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { CompositeKey, LogError, RunView, type IMetadataProvider, type UserInfo, EntityRecordNameInput, EntityRecordNameResult } from '@memberjunction/core';
-import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
-import { MJProcessRunDetailEntity, MJMLModelEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { CompositeKey, LogError, RunView, EntityRecordNameInput, EntityRecordNameResult } from '@memberjunction/core';
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { MJMLModelEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { AgGridModule } from 'ag-grid-angular';
 import {
   AllCommunityModule,
@@ -53,7 +53,7 @@ import {
   PredictiveStudioScoreHistoryService,
   type ModelScoreHistoryPoint,
 } from '../predictive-studio-score-history.service';
-import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
+import { PredictiveStudioEngine, type PSRunDetailRow } from '../engine/predictive-studio.engine';
 import { PSRowDriversComponent } from './ps-row-drivers.component';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -116,8 +116,6 @@ interface TrendlinePlotPoint {
   color: string;
 }
 
-/** The columns of a scored Process Run Detail the grid reads (a read-only `simple` load); `ID` is the keyset paging cursor. */
-type PredictionDetailRow = Pick<MJProcessRunDetailEntity, 'ID' | 'RecordID' | 'ResultPayload' | 'Status' | 'CompletedAt' | '__mj_CreatedAt'>;
 
 /**
  * **PSPredictionsGridComponent** — Unified enterprise grid and analytics component for
@@ -191,18 +189,14 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
 
   public readonly Math = Math;
 
-  /** Most predictions the grid loads for one run. */
-  private static readonly maxDetailRows = 50_000;
-  private static readonly detailPageSize = 1000;
-
-  /** The cap, formatted for the footer notice. */
+  /** The run-detail cap, formatted for the footer notice. */
   public get DetailRowCapLabel(): string {
-    return PSPredictionsGridComponent.maxDetailRows.toLocaleString('en-US');
+    return PredictiveStudioEngine.MaxRunDetailRows.toLocaleString('en-US');
   }
 
   public isLoading = false;
   public loadError: string | null = null;
-  /** True when the run has more predictions than {@link PSPredictionsGridComponent.maxDetailRows}; only the first are shown. */
+  /** True when the run has more predictions than {@link PredictiveStudioEngine.MaxRunDetailRows}; only the first are shown. */
   public DetailRowsCapped = false;
 
   public AllRows: PredictionGridRow[] = [];
@@ -763,14 +757,16 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       await this.resolveTargetEntity(model);
 
       // 3. Load the run's process run details by keyset paging, read-only and only the columns the grid uses
-      const details = await this.loadDetailRows(provider, effectiveRunId, user);
-      if (!details) {
+      const read = await PredictiveStudioEngine.Instance.LoadRunDetails(effectiveRunId, provider, user);
+      this.DetailRowsCapped = read?.Capped ?? false;
+      if (!read) {
         this.AllRows = [];
         this.applyFilter();
         this.isLoading = false;
         this.cdr.markForCheck();
         return;
       }
+      const details = read.Rows;
 
       // 4. Resolve OutcomeConfig and polarity: one rule (the model's outcome config), shared with the resource and the gate probe
       if (model?.ProblemType) {
@@ -789,7 +785,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       );
 
       // Map details into indexed lookup for scoredAt timestamp
-      const detailByRecord = new Map<string, PredictionDetailRow>();
+      const detailByRecord = new Map<string, PSRunDetailRow>();
       for (const d of details) {
         detailByRecord.set(NormalizeUUID(d.RecordID), d);
       }
@@ -832,46 +828,6 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     } finally {
       this.isLoading = false;
       this.cdr.markForCheck();
-    }
-  }
-
-  /**
-   * Reads a run's process run details one keyset page at a time, up to {@link PSPredictionsGridComponent.maxDetailRows}.
-   * Sets {@link DetailRowsCapped} when the run has more. Returns null when a page fails to load.
-   */
-  private async loadDetailRows(provider: IMetadataProvider, runId: string, user: UserInfo | undefined): Promise<PredictionDetailRow[] | null> {
-    const entityInfo = provider.EntityByName('MJ: Process Run Details');
-    if (!entityInfo) {
-      return null;
-    }
-    const rv = RunView.FromMetadataProvider(provider);
-    const rows: PredictionDetailRow[] = [];
-    let lastKey: CompositeKey | undefined;
-    this.DetailRowsCapped = false;
-    while (true) {
-      const page = await rv.RunView<PredictionDetailRow>(
-        {
-          EntityName: 'MJ: Process Run Details',
-          ExtraFilter: `ProcessRunID = '${EscapeSQLString(runId)}'`,
-          Fields: ['ID', 'RecordID', 'ResultPayload', 'Status', 'CompletedAt', '__mj_CreatedAt'],
-          MaxRows: PSPredictionsGridComponent.detailPageSize,
-          AfterKey: lastKey,
-          ResultType: 'simple',
-        },
-        user,
-      );
-      if (!page.Success || !page.Results) {
-        return null;
-      }
-      rows.push(...page.Results);
-      if (page.Results.length < PSPredictionsGridComponent.detailPageSize) {
-        return rows;
-      }
-      if (rows.length >= PSPredictionsGridComponent.maxDetailRows) {
-        this.DetailRowsCapped = true;
-        return rows;
-      }
-      lastKey = CompositeKey.FromEntityRecord(entityInfo, page.Results[page.Results.length - 1]);
     }
   }
 
