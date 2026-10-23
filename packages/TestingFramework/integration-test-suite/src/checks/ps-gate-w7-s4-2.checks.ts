@@ -28,6 +28,7 @@ export const PsGateW7S42Checks: NamedCheck[] = [
       const h = await PsGate.Harness(ctx);
       let qualifying = 0;
       let violations = 0;
+      let noModel = 0;
       const out: Record<string, number | string | boolean | null> = {};
       for (const seed of [42, 43, 44]) {
         const w7 = await h.EnsureLoaded({ Kind: 'world', ID: 'W7-small-imbalanced', Seed: seed });
@@ -35,8 +36,10 @@ export const PsGateW7S42Checks: NamedCheck[] = [
           Name: `PSTruth: G0.12 W7 s${seed} ${h.RunID}`, Entity: w7.Entity, Target: 'Renewed', Features: [...W_WORLD_FEATURES],
           Algorithms: [...PsGateSpecs.Algorithms], DenyFields: [...W_WORLD_DENY_FIELDS],
         }));
+        if (!r.AgentSuccess) throw new Error(`G0.12 W7 s${seed}: builder agent run ${r.AgentRunID || '(none)'} failed: ${r.AgentErrorMessage || 'no error message'}`);
         if (!r.BuildModelID) {
-          out[`s${seed}`] = `no winner: ${r.BuildErrorMessage || r.AgentErrorMessage || 'unknown'}`;
+          noModel += 1;
+          out[`s${seed}`] = `no winner: ${r.BuildErrorMessage || 'the build produced no model'}`;
           continue;
         }
         const m = await h.ReadModel(r.BuildModelID);
@@ -48,10 +51,14 @@ export const PsGateW7S42Checks: NamedCheck[] = [
           if (ContainmentProbe.GradedAbovePoorOrActionable(m)) violations += 1;
         }
       }
+      // "0 of 0" is not a pass when runs produced no model: nothing was measured for those seeds.
+      const unmeasured = qualifying === 0 && noModel > 0;
       PsGate.Assert({
-        Passed: violations === 0,
-        Measured: { ...out, qualifying, violations },
-        Detail: `${violations} of ${qualifying} at-or-below-majority models graded above Poor or actionable`,
+        Passed: violations === 0 && !unmeasured,
+        Measured: { ...out, qualifying, violations, runsWithoutModel: noModel },
+        Detail: unmeasured
+          ? `0 models qualified: ${noModel} of 3 agent runs produced no model`
+          : `${violations} of ${qualifying} at-or-below-majority models graded above Poor or actionable`,
       });
     },
   },

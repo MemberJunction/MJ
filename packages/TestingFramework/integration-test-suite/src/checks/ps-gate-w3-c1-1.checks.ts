@@ -20,10 +20,12 @@ export const PsGateW3C11Checks: NamedCheck[] = [
         ['lr-last', [...PsGateSpecs.Algorithms].reverse()],
       ] as const) {
         const name = `PSTruth: G0.3 W3 s42 ${order} ${h.RunID}`;
-        await h.RunBuilderAgent(AgentPlans.Build({
+        const run = await h.RunBuilderAgent(AgentPlans.Build({
           Name: name, Entity: w3.Entity, Target: 'Renewed', Features: features,
           Algorithms: [...algorithms], DenyFields: [...W_WORLD_DENY_FIELDS],
         }));
+        // A crashed run publishes nothing, so counting it would pass the gate: it is an error, not a measurement.
+        if (!run.AgentSuccess) throw new Error(`G0.3 W3 s42 ${order}: builder agent run ${run.AgentRunID || '(none)'} failed: ${run.AgentErrorMessage || 'no error message'}`);
         if ((await h.ModelsForPipelineNamePrefix(name)).some((m) => ContainmentProbe.ReachedPublishedUnattended(m))) {
           published.push(order);
         }

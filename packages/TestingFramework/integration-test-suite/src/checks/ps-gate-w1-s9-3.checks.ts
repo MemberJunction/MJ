@@ -1,11 +1,11 @@
 /**
- * Gate G0.6 "W1 → S9.3": Predictive Studio's UI text, its Core strings and the story prompt make no causal claims, and
- * 10 of 10 stories generated for the W1-signal s42 model make none. An LLM judge (MJ's llm-judge oracle) grades both
- * against PsGateJudge.Criteria; the story generator and the judge run on live models.
+ * Gate G0.6 "W1 → S9.3": Predictive Studio's UI text, Core's copy and the story prompt make no causal claims, and
+ * 10 of 10 stories generated for the W1-signal s42 model make none. An LLM judge (MJ's llm-judge oracle), told what the
+ * texts are, grades them against PsGateJudge.Criteria one source file (at most 50 texts) per judgment, the stories in
+ * their own chunk, after a causal control it must fail. The story generator and the judge run on live models.
  */
-import path from 'node:path';
 import { IntegrationCheckRegistry, type NamedCheck } from '@memberjunction/testing-integration';
-import { ContainmentProbe, RunFixtures } from '@memberjunction/predictive-studio-truth-suite';
+import { RunFixtures, type TruthHarness } from '@memberjunction/predictive-studio-truth-suite';
 import { PsGate } from './ps-gates/ps-gate-fixture';
 import { PsGateJudge } from './ps-gates/ps-gate-judge';
 import { PsGateSpecs } from './ps-gates/ps-gate-specs';
@@ -13,17 +13,17 @@ import { PsGateSpecs } from './ps-gates/ps-gate-specs';
 /** The MJ: Tests row the judge grades under (its Name). */
 const TEST_NAME = 'W1 -> S9.3';
 
-/** The sources G0.6 judges. */
-class CausalCopySources {
-  /** The PS sources whose strings a person reads: the dashboard UI, Core, and the story prompt templates. */
-  public static ScannedFiles(): string[] {
-    const root = PsGateSpecs.MJRoot;
-    return [
-      ...PsGateSpecs.Walk(path.join(root, 'packages/Angular/Explorer/dashboards/src/PredictiveStudio'),
-        (f) => /\.(ts|html)$/.test(f) && !/\.test\.ts$/.test(f)),
-      ...PsGateSpecs.Walk(path.join(root, 'packages/AI/PredictiveStudio/Core/src'), (f) => f.endsWith('.ts') && !f.includes('__tests__')),
-      ...ContainmentProbe.StoryPromptFiles(root),
-    ];
+/** The stories G0.6 judges. */
+class StorySteps {
+  /** Ten stories for the Validated W1 s42 fixture model (a story the generator returns as null is not counted). */
+  public static async Generate(h: TruthHarness): Promise<string[]> {
+    const model = await RunFixtures.W1S42ValidatedModel(h);
+    const stories: string[] = [];
+    for (let i = 0; i < 10; i++) {
+      const story = await h.GenerateStory(model.ModelID);
+      if (story !== null) stories.push(story);
+    }
+    return stories;
   }
 }
 
@@ -35,20 +35,18 @@ export const PsGateW1S93Checks: NamedCheck[] = [
         throw new Error('G0.6 needs AI_VENDOR_API_KEY__GeminiLLM: the story generator runs on GeminiLLM (D2-33)');
       }
       const h = await PsGate.Harness(ctx);
-      const files = CausalCopySources.ScannedFiles();
-      const model = await RunFixtures.W1S42ValidatedModel(h);
-      const stories: string[] = [];
-      for (let i = 0; i < 10; i++) {
-        const story = await h.GenerateStory(model.ModelID);
-        if (story !== null) stories.push(story);
-      }
-      const uiTexts = PsGateSpecs.UserFacingStrings(files); // string literals from the scanned .ts/.html files
-      const ui = PsGateJudge.Verdict(await PsGateJudge.NoCausalClaims(ctx, uiTexts, TEST_NAME));
-      const st = PsGateJudge.Verdict(await PsGateJudge.NoCausalClaims(ctx, stories, TEST_NAME));
+      const files = PsGateSpecs.ScannedFiles();
+      const stories = await StorySteps.Generate(h);
+      const groups = PsGateSpecs.UserFacingTexts(files);
+      const chunks = PsGateJudge.Chunks([...groups, { Label: 'generated stories (W1 s42)', Texts: stories }]);
+      const judged = await PsGateJudge.JudgeAll(chunks, await PsGateJudge.ForContext(ctx, TEST_NAME));
       PsGate.Assert({
-        Passed: ui.Passed && st.Passed && stories.length === 10,
-        Measured: { filesScanned: files.length, textsJudged: uiTexts.length, storiesGenerated: stories.length, uiJudge: ui.Detail, storiesJudge: st.Detail },
-        Detail: `UI text: ${ui.Detail}; stories: ${st.Detail}`,
+        Passed: judged.Passed && stories.length === 10,
+        Measured: {
+          filesScanned: files.length, filesWithText: groups.length, textsJudged: groups.reduce((n, g) => n + g.Texts.length, 0),
+          storiesGenerated: stories.length, chunksJudged: judged.ChunksJudged, chunksFailed: judged.FailedChunks.length,
+        },
+        Detail: `${stories.length} of 10 stories generated; ${judged.Detail}`,
       });
     },
   },

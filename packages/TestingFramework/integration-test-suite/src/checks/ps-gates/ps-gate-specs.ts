@@ -8,6 +8,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { UUIDMap } from '@memberjunction/global';
 import type { OutcomeModelLike, RunDetailLike } from '@memberjunction/predictive-studio-core';
 import {
+  ContainmentProbe,
   DatasetCatalog,
   RunFixtures,
   TruthSuite,
@@ -39,8 +40,8 @@ export class PsGateSpecs {
   /** The write-back mapping G0.7 scores with (the score lands in the dataset's `TruthScore` column). */
   public static readonly WriteBack = { OutputMapping: { fields: { TruthScore: '$.score' } } };
 
-  /** The file whose labels are the forbidden phrases themselves (Core's causal-copy list); G0.6 never judges it. */
-  private static readonly causalPhraseListFile = 'causal-copy.ts';
+  /** Core's modules whose strings a person reads (verdict copy, outcome labels, importance notes, the withheld reason). */
+  public static readonly CoreCopyModules: readonly string[] = ['trust.ts', 'outcome-config.ts', 'importance-display.ts', 'evaluation-record.ts'];
 
   private static w1RecordProcessPromise: Promise<W1RecordProcessScoring> | null = null;
 
@@ -76,24 +77,45 @@ export class PsGateSpecs {
   }
 
   /**
-   * The user-facing text of `files`, deduplicated in first-seen order: the string and template literals of TS/JS files
-   * (comments skipped, template literals across lines kept whole), the text nodes and quoted attribute values of HTML
-   * (an .html file, or an inline Angular template literal), and the whole of Markdown files (the story prompt). Inline
-   * CSS is dropped, and only prose is kept (two or more plain words), so identifiers, CSS classes, icon names, paths and
-   * template control flow do not reach the judge.
+   * The files G0.6 judges: the dashboard's Predictive Studio UI (.ts and .html, tests excluded), Core's copy modules and
+   * the story prompt templates.
    */
-  public static UserFacingStrings(files: readonly string[]): string[] {
+  public static ScannedFiles(): string[] {
+    const root = PsGateSpecs.MJRoot;
+    const core = path.join(root, 'packages/AI/PredictiveStudio/Core/src');
+    return [
+      ...PsGateSpecs.Walk(path.join(root, 'packages/Angular/Explorer/dashboards/src/PredictiveStudio'),
+        (f) => /\.(ts|html)$/.test(f) && !/\.test\.ts$/.test(f)),
+      ...PsGateSpecs.CoreCopyModules.map((f) => path.join(core, f)),
+      ...ContainmentProbe.StoryPromptFiles(root),
+    ];
+  }
+
+  /**
+   * The user-facing text of each file (label: its path from the repository root), de-duplicated across files in
+   * first-seen order; files with none are left out. TS/JS gives its string and template literals (comments and regex
+   * literals skipped, template literals across lines kept whole, and no thrown errors, console/log text, type unions or
+   * tool descriptions); HTML (an .html file, or an inline Angular template literal) gives its text nodes and quoted
+   * attribute values; a Markdown prompt is one text. Inline CSS is dropped, and only prose is kept (two or more plain
+   * words), so identifiers, CSS classes, icon names, paths and template control flow do not reach the judge.
+   */
+  public static UserFacingTexts(files: readonly string[]): Array<{ Label: string; Texts: string[] }> {
     const seen = new Set<string>();
+    const groups: Array<{ Label: string; Texts: string[] }> = [];
     for (const file of files) {
-      if (path.basename(file) === PsGateSpecs.causalPhraseListFile) continue;
+      const texts: string[] = [];
       for (const text of PsGateSpecs.fileTexts(file, readFileSync(file, 'utf8'))) {
         for (const piece of PsGateSpecs.pieces(text)) {
           const t = piece.replace(/\s+/g, ' ').trim();
-          if (PsGateSpecs.isProse(t)) seen.add(t);
+          if (PsGateSpecs.isProse(t) && !seen.has(t)) {
+            seen.add(t);
+            texts.push(t);
+          }
         }
       }
+      if (texts.length > 0) groups.push({ Label: path.relative(PsGateSpecs.MJRoot, file), Texts: texts });
     }
-    return [...seen];
+    return groups;
   }
 
   /** The texts of one file, by its kind. */
@@ -102,10 +124,14 @@ export class PsGateSpecs {
     return /\.(ts|js)$/.test(file) ? SourceLiterals.Extract(source) : [source];
   }
 
-  /** One extracted text split into what a person reads: HTML into its texts, CSS into nothing, anything else whole. */
+  /**
+   * One extracted text split into what a person reads: HTML into its texts, a stylesheet into nothing, anything else
+   * whole. A stylesheet starts with a selector and a `{` holding a `property: value;` declaration, so prose that
+   * contains a JSON example (`{"Name": …}`) is kept.
+   */
   private static pieces(text: string): string[] {
     if (/<[A-Za-z][^>]*>/.test(text)) return PsGateSpecs.htmlTexts(text);
-    if (/[.#:]?[\w-]+\s*\{[^}]*:[^}]*;[^}]*\}/.test(text)) return [];
+    if (/^\s*[:.#@a-zA-Z][^{}"']*\{\s*[a-z-]+\s*:\s*[^;{}"]+;/.test(text)) return [];
     return [text];
   }
 
@@ -166,9 +192,13 @@ class SourceLiterals {
   public static Extract(source: string): string[] {
     const out: string[] = [];
     let i = 0;
+    let statementStart = 0; // after the last top-level `;`, `{` or `}` (literal contents are skipped, so theirs never count)
     while (i < source.length) {
       const ch = source[i];
-      if (ch === '/' && source[i + 1] === '/') {
+      if (ch === ';' || ch === '{' || ch === '}') {
+        statementStart = i + 1;
+        i += 1;
+      } else if (ch === '/' && source[i + 1] === '/') {
         i = SourceLiterals.endOfLine(source, i);
       } else if (ch === '/' && source[i + 1] === '*') {
         const end = source.indexOf('*/', i + 2);
@@ -177,17 +207,39 @@ class SourceLiterals {
         i = SourceLiterals.regexEnd(source, i);
       } else if (ch === "'" || ch === '"') {
         const q = SourceLiterals.quoted(source, i);
-        if (q.Text !== null) out.push(q.Text);
+        if (q.Text !== null) SourceLiterals.emit(out, source, statementStart, i, q.End, q.Text);
         i = q.End;
       } else if (ch === '`') {
-        const t = SourceLiterals.template(source, i, out);
-        out.push(t.Text);
+        const t = SourceLiterals.template(source, i, out, statementStart);
+        SourceLiterals.emit(out, source, statementStart, i, t.End, t.Text);
         i = t.End;
       } else {
         i += 1;
       }
     }
     return out;
+  }
+
+  /**
+   * Add `text` (the literal spanning `start`..`end`) unless its context says no person reads it: a thrown or
+   * constructed error (or an Error subclass's `super(…)` message), console or log output, a member of a type union, or a tool/property description for a model.
+   */
+  private static emit(out: string[], source: string, statementStart: number, start: number, end: number, text: string): void {
+    const statement = source.slice(statementStart, start);
+    if (/\bthrow\b|\bnew\s+\w*Error\s*\(|\bconsole\.\w+\s*\(|\bLog(Error|Status|Warning)\w*\s*\(/.test(statement)) return;
+    if (/\bsuper\s*\(/.test(statement) && /\bextends\s+\w*Error\b/.test(source.slice(Math.max(0, start - 600), start))) return;
+    if (/(^|[^|])\|\s*$|\btype\s+\w+(<[^>]*>)?\s*=\s*$/.test(statement) || /^\s*\|(?!\|)/.test(source.slice(end, end + 8))) return;
+    if (SourceLiterals.isToolDescription(statement, source.slice(end, end + 600))) return;
+    out.push(text);
+  }
+
+  /**
+   * A description written for a model, not a person: a JSON-schema `description:`, or a `Description:` of a tool
+   * definition (an object that also declares a `ParameterSchema`). Other `Description:` values (outcome band copy) stay.
+   */
+  private static isToolDescription(statement: string, after: string): boolean {
+    if (/\bdescription['"]?\s*:\s*$/.test(statement)) return true;
+    return /\bDescription['"]?\s*:\s*$/.test(statement) && /^[^}]*\bParameterSchema\b/.test(after);
   }
 
   /** A `/` starts a regex literal (not a division) when the previous significant character cannot end an operand. */
@@ -241,8 +293,11 @@ class SourceLiterals {
     return { Text: null, End: start + 1 };
   }
 
-  /** A template literal starting at `start`; literals nested inside its `${…}` expressions are pushed to `out`. */
-  private static template(source: string, start: number, out: string[]): { Text: string; End: number } {
+  /**
+   * A template literal starting at `start`; literals nested inside its `${…}` expressions are pushed to `out`, judged
+   * by the enclosing statement (from `statementStart`).
+   */
+  private static template(source: string, start: number, out: string[], statementStart: number): { Text: string; End: number } {
     let buf = '';
     let i = start + 1;
     while (i < source.length) {
@@ -253,7 +308,7 @@ class SourceLiterals {
       } else if (c === '`') {
         return { Text: buf, End: i + 1 };
       } else if (c === '$' && source[i + 1] === '{') {
-        i = SourceLiterals.expressionEnd(source, i + 2, out);
+        i = SourceLiterals.expressionEnd(source, i + 2, out, statementStart);
         buf += '{…}';
       } else {
         buf += c;
@@ -264,7 +319,7 @@ class SourceLiterals {
   }
 
   /** The index after the `}` closing a `${…}` expression whose body starts at `from` (nested braces and literals skipped). */
-  private static expressionEnd(source: string, from: number, out: string[]): number {
+  private static expressionEnd(source: string, from: number, out: string[], statementStart: number): number {
     let depth = 1;
     let i = from;
     while (i < source.length) {
@@ -280,11 +335,11 @@ class SourceLiterals {
         i = SourceLiterals.regexEnd(source, i);
       } else if (c === "'" || c === '"') {
         const q = SourceLiterals.quoted(source, i);
-        if (q.Text !== null) out.push(q.Text);
+        if (q.Text !== null) SourceLiterals.emit(out, source, statementStart, i, q.End, q.Text);
         i = q.End;
       } else if (c === '`') {
-        const t = SourceLiterals.template(source, i, out);
-        out.push(t.Text);
+        const t = SourceLiterals.template(source, i, out, statementStart);
+        SourceLiterals.emit(out, source, statementStart, i, t.End, t.Text);
         i = t.End;
       } else {
         i += 1;

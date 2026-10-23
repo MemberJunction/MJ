@@ -19,10 +19,12 @@ export const PsGateW2C11Checks: NamedCheck[] = [
       for (let seed = 100; seed <= 159; seed++) {
         const w2 = await h.EnsureLoaded({ Kind: 'world', ID: 'W2-noise', Seed: seed });
         const name = `PSTruth: G0.2 W2 s${seed} ${h.RunID}`;
-        await h.RunBuilderAgent(AgentPlans.Build({
+        const run = await h.RunBuilderAgent(AgentPlans.Build({
           Name: name, Entity: w2.Entity, Target: 'Renewed', Features: [...W_WORLD_FEATURES],
           Algorithms: [...PsGateSpecs.Algorithms], DenyFields: [...W_WORLD_DENY_FIELDS],
         }));
+        // A crashed run publishes nothing, so counting it would pass the gate: it is an error, not a measurement.
+        if (!run.AgentSuccess) throw new Error(`G0.2 W2 s${seed}: builder agent run ${run.AgentRunID || '(none)'} failed: ${run.AgentErrorMessage || 'no error message'}`);
         const models = await h.ModelsForPipelineNamePrefix(name);
         const published = models.filter((m) => ContainmentProbe.ReachedPublishedUnattended(m));
         if (published.length > 0) publishedSeeds.push(seed);

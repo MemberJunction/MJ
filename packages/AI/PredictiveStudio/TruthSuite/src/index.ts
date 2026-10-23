@@ -8,6 +8,7 @@ export * from './gates/results';
 export * from './gates/define-gate';
 export * from './harness/types';
 export * from './harness/run-fixtures';
+export * from './harness/cleanup';
 export * from './harness/containment-probe';
 export * from './harness/datasets';
 export * from './harness/agent-plan';

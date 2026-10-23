@@ -5,6 +5,7 @@ import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity
   PredictiveStudioTrainAsOf, PredictiveStudioModelTargetStatus } from '@memberjunction/core-entities';
 import type { ModelingPlanSpec, TrustVerdict, ValidationStrategy, AsOfStrategy, ProblemType,
   PredictiveStudioRefusalCode } from '@memberjunction/predictive-studio-core';
+import type { RunRecords } from './cleanup';
 
 export type WorldID = 'W1-signal' | 'W2-noise' | 'W3-leak-row' | 'W4-pit' | 'W5-censor' | 'W6-drift'
   | 'W7-small-imbalanced' | 'W8-highcard' | 'W9-multiclass';
@@ -84,6 +85,8 @@ export interface TruthHarness {
   readonly Provider: GraphQLDataProvider;
   readonly User: UserInfo;
   readonly RunID: string;
+  /** The pipelines and models this harness created or observed (what `RunFixtures.CleanupRun` deletes). */
+  readonly Created: RunRecords;
   EnsureLoaded(ref: DatasetRef): Promise<LoadedDataset>;
   CreatePipeline(spec: PipelineSpec): Promise<MJMLTrainingPipelineEntity>;
   /** Never throws for a failed operation: Ok false, ModelID null, ErrorMessage set. */

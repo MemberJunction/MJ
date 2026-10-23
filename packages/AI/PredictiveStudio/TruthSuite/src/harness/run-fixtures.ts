@@ -10,7 +10,7 @@ import { HarnessModels } from './promote';
 import { HarnessAgent } from './agent';
 import { JudgeBridge } from './judge-bridge';
 import { HarnessArtifacts } from './artifacts';
-import { HarnessCleanup } from './cleanup';
+import { HarnessCleanup, RunRecords } from './cleanup';
 import { W_WORLD_FEATURES, W_WORLD_DENY_FIELDS } from './w-world';
 import type { CandidateModel, LoadedDataset, TruthHarness } from './types';
 
@@ -54,9 +54,10 @@ export class RunFixtures {
   }
 
   /**
-   * Delete this run's `PSTruth: … <RunID>` pipelines and models (with their training runs and scoring bindings) through
-   * the entity layer, and forget the fixture models they held. Every row is attempted; throws one error naming each row
-   * whose `Delete()` failed. No-op when no harness was bound in this process.
+   * Delete the pipelines and models the bound harness recorded (`TruthHarness.Created`: those it created, and those of
+   * the agent runs it observed), with their training runs and scoring bindings, through the entity layer, and forget
+   * the fixture models they held. Every row is attempted; throws one error naming each row whose `Delete()` failed.
+   * No-op when no harness was bound in this process.
    */
   public static async CleanupRun(user: UserInfo): Promise<void> {
     const bound = RunFixtures.bound;
@@ -64,7 +65,7 @@ export class RunFixtures {
     RunFixtures.w1Draft = null;
     RunFixtures.w1Validated = null;
     const h = await bound.Harness;
-    const failures = await HarnessCleanup.DeleteRunRecords(h.Provider, user, h.RunID);
+    const failures = await HarnessCleanup.DeleteRecorded(HarnessCleanup.EntityStore(h.Provider, user), h.Created);
     if (failures.length > 0) {
       throw new Error(`cleanup of run ${h.RunID} left ${failures.length} row(s): ${failures.join('; ')}`);
     }
@@ -131,10 +132,12 @@ export class RunFixtures {
       Algorithms: await HarnessPipelines.LoadAlgorithms(provider, user),
       RunID: process.env.TRUTH_RUN_ID || randomUUID(),
     };
-    return {
+    const created = new RunRecords();
+    return created.Recording({
       Provider: provider,
       User: user,
       RunID: ctx.RunID,
+      Created: created,
       EnsureLoaded: (ref) => HarnessDatasets.EnsureLoaded(ctx, ref),
       CreatePipeline: (spec) => HarnessPipelines.CreatePipeline(ctx.Provider, ctx.User, ctx.Algorithms, spec),
       Train: (pipeline, opts) => HarnessTraining.Train(ctx, pipeline, opts),
@@ -150,6 +153,6 @@ export class RunFixtures {
       GenerateStory: (modelId) => HarnessAgent.GenerateStory(ctx, modelId),
       Judge: (module, args) => JudgeBridge.Judge(module, args),
       WriteArtifact: (name, data) => HarnessArtifacts.WriteArtifact(name, data),
-    };
+    });
   }
 }
