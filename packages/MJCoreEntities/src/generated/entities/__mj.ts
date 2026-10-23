@@ -18929,6 +18929,12 @@ export const MJEntitySchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When 1, field-level (column-level) security is enforced for this entity and every enforcement point consults EntityFieldPermission rows. When 0 (the default), field-level security is off entirely and any existing permission rows are retained but inactive. Enabling snapshots the entity's current entity-level permissions into per-field rows, so turning it on changes no behavior until an administrator tightens a field; disabling preserves the rows so re-enabling does not lose the configuration.`),
+    AutoUpdateDisplayName: z.boolean().describe(`
+        * * Field Name: AutoUpdateDisplayName
+        * * Display Name: Auto Update Display Name
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1 (the default), CodeGen may auto-update this entity's DisplayName — currently via the optional EntityDisplayNames advanced-generation feature, which asks an LLM to expand opaque table-derived names (ACCT_STAT_CD) into readable ones (Account Status Codes). When 0, the DisplayName is locked and CodeGen will not change it, whatever any generator proposes. Mirrors EntityField.AutoUpdateDisplayName. Note this flag governs only AUTOMATIC updates: a user editing the DisplayName directly is unaffected either way.`),
     CodeName: z.string().nullable().describe(`
         * * Field Name: CodeName
         * * Display Name: Code Name
@@ -94139,6 +94145,20 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     }
     set EnableFieldLevelSecurity(value: boolean) {
         this.Set('EnableFieldLevelSecurity', value);
+    }
+
+    /**
+    * * Field Name: AutoUpdateDisplayName
+    * * Display Name: Auto Update Display Name
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1 (the default), CodeGen may auto-update this entity's DisplayName — currently via the optional EntityDisplayNames advanced-generation feature, which asks an LLM to expand opaque table-derived names (ACCT_STAT_CD) into readable ones (Account Status Codes). When 0, the DisplayName is locked and CodeGen will not change it, whatever any generator proposes. Mirrors EntityField.AutoUpdateDisplayName. Note this flag governs only AUTOMATIC updates: a user editing the DisplayName directly is unaffected either way.
+    */
+    get AutoUpdateDisplayName(): boolean {
+        return this.Get('AutoUpdateDisplayName');
+    }
+    set AutoUpdateDisplayName(value: boolean) {
+        this.Set('AutoUpdateDisplayName', value);
     }
 
     /**
