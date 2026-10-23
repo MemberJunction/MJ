@@ -176,7 +176,7 @@ describe('AgentRunStatusPublisher', () => {
 });
 
 describe('AgentRunStatusPublisher — a widget guest elevated to the system user (#4931)', () => {
-    const GUEST = { ID: 'anonymous-user', IsMagicLinkAnonymous: true };
+    const GUEST = { ID: 'anonymous-user', IsMagicLinkAnonymous: true, AnonymousVisitorID: 'sid-a', MagicLinkScope: { ResourceID: 'sid-a' } };
     const SYSTEM = { ID: 'system-user' };
 
     it("stamps the guest (ElevatedFrom), not the elevated user, so the guest's own socket receives the run's events", () => {
@@ -189,7 +189,8 @@ describe('AgentRunStatusPublisher — a widget guest elevated to the system user
 
         const owners = publish.mock.calls.map((call) => (call[1] as { ownerUserId: string }).ownerUserId);
         expect(owners.length).toBeGreaterThan(0);
-        expect(owners.every((owner) => owner === GUEST.ID)).toBe(true);
+        // An anonymous visitor's owner key carries its scope identity, so another visitor cannot receive these events.
+        expect(owners.every((owner) => owner === 'anonymous-user|sid-a')).toBe(true);
         const guestConnection = { userPayload: { sessionId: 'session-1', userRecord: GUEST } as unknown as UserPayload };
         for (const call of publish.mock.calls) {
             expect(StatusUpdatesFilter({ payload: call[1] as PushStatusNotificationPayload, args: { sessionId: 'session-1' }, context: guestConnection })).toBe(true);

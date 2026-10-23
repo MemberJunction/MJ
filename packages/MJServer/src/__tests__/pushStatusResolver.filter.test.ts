@@ -69,3 +69,24 @@ describe('StatusUpdateOwnerID (#4931)', () => {
         expect(StatusUpdateOwnerID(undefined)).toBe('');
     });
 });
+
+describe('statusUpdatesFilter — anonymous visitors share one user id (#4931)', () => {
+    const ANON = 'AAAAAAAA-0000-4000-8000-0000000000A0';
+    const visitor = (sid: string) => ({ ID: ANON, IsMagicLinkAnonymous: true, AnonymousVisitorID: sid, MagicLinkScope: { ResourceID: sid } });
+    const connection = (user: object): StatusUpdatesFilterContext => ({ userPayload: { sessionId: 'same-session', email: 'anonymous@magic-link.local', userRecord: user } as unknown as UserPayload });
+    // Visitor A's run, elevated to the system user: the event's owner comes from ElevatedFrom.
+    const aRun = { sessionId: 'same-session', email: 'system@example.com', userRecord: { ID: 'system' }, ElevatedFrom: visitor('sid-a') } as unknown as UserPayload;
+    const event = (): PushStatusNotificationPayload => ({ sessionId: 'same-session', ownerUserId: StatusUpdateOwnerID(aRun), message: 'complete' });
+
+    it("delivers visitor A's run events to visitor A's connection", () => {
+        expect(StatusUpdatesFilter({ payload: event(), args: { sessionId: 'same-session' }, context: connection(visitor('sid-a')) })).toBe(true);
+    });
+
+    it('does not deliver them to visitor B, even with the same (client-chosen) session id', () => {
+        expect(StatusUpdatesFilter({ payload: event(), args: { sessionId: 'same-session' }, context: connection(visitor('sid-b')) })).toBe(false);
+    });
+
+    it('does not deliver them to an anonymous connection with no scope identity (fail closed)', () => {
+        expect(StatusUpdatesFilter({ payload: event(), args: { sessionId: 'same-session' }, context: connection({ ID: ANON, IsMagicLinkAnonymous: true }) })).toBe(false);
+    });
+});
