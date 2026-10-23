@@ -3566,6 +3566,24 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         expect(deleteSegmentsMock).not.toHaveBeenCalled();
     });
 
+    it('reports a file that uploaded but was not stamped on the session as a failure and keeps the shards', async () => {
+        // The store returns the uploaded file id together with the stamp failure (#6010): the session does not
+        // point at the file, so the crash-recovery shards are the only copy the janitor can still recover.
+        currentProvider = makeRecordingProvider();
+        storeRecordingMock.mockResolvedValue({
+            FileID: 'file-unstamped',
+            ErrorMessage: 'file file-unstamped uploaded and linked, but not stamped on session session-1: proc missing',
+        });
+        const resolver = makeAnonResolver();
+
+        const result = await resolver.UploadRealtimeRecording('session-1', AUDIO_B64, 'audio/wav', makeCtx(), 1000, true);
+
+        expect(result.Success).toBe(false);
+        expect(result.FileID).toBe('file-unstamped');
+        expect(result.ErrorMessage).toContain('not stamped on session session-1');
+        expect(deleteSegmentsMock).not.toHaveBeenCalled();
+    });
+
     it('falls back to the generic message only when no layer supplied a reason', async () => {
         currentProvider = makeRecordingProvider();
         storeRecordingMock.mockResolvedValue({ FileID: null, ErrorMessage: null });
