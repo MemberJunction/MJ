@@ -156,6 +156,27 @@ describe('ConversationDetailWindowStore', () => {
         expect(load).toHaveBeenCalledTimes(1); // local path — no query
     });
 
+    it('keeps an unsaved local placeholder (Sequence 0) at the tail without corrupting OldestSequence or NewestSequence', async () => {
+        load.mockResolvedValueOnce(pageOf([20, 21, 22], true));
+        await store.LoadLatest('conv-a', contextUser);
+
+        const placeholder = detail(0, { ID: 'placeholder-1', Status: 'In-Progress' });
+        store.ApplyLocalDetail(placeholder);
+
+        let snapshot = store.GetSnapshot();
+        expect(snapshot.Details.map(d => d.ID)).toEqual(['d-20', 'd-21', 'd-22', 'placeholder-1']);
+        expect(snapshot.Cursor.OldestSequence).toBe(20);
+        expect(snapshot.Cursor.NewestSequence).toBe(22);
+
+        load.mockResolvedValueOnce(pageOf([18, 19], true));
+        await store.LoadOlder(contextUser);
+
+        snapshot = store.GetSnapshot();
+        expect(snapshot.Details.map(d => d.ID)).toEqual(['d-18', 'd-19', 'd-20', 'd-21', 'd-22', 'placeholder-1']);
+        expect(snapshot.Cursor.OldestSequence).toBe(18);
+        expect(snapshot.Cursor.NewestSequence).toBe(22);
+    });
+
     it('slices an over-read page down to one page of timeline items', async () => {
         // REGRESSION: the engine deliberately OVER-READS raw rows (RawOverread defaults to
         // 3x the page size) because a page of rows can collapse to a single session card.

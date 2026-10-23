@@ -24,6 +24,7 @@ vi.mock('type-graphql', () => {
 
 const hoisted = vi.hoisted(() => ({
     createReply: vi.fn(),
+    runAgentInConversation: vi.fn(),
     widgetContext: vi.fn(),
     agents: new Map<string, { ID: string; Name: string; Status: string }>(),
 }));
@@ -42,6 +43,9 @@ vi.mock('@memberjunction/ai-agents', () => ({
     AgentRunner: class {
         CreateAgentReplyDetail(args: unknown) {
             return hoisted.createReply(args);
+        }
+        RunAgentInConversation(...args: unknown[]) {
+            return hoisted.runAgentInConversation(...args);
         }
     },
     ArtifactToolManager: class {},
@@ -68,6 +72,8 @@ interface ResolverSeams {
     loadConversationHistoryWithAttachments: Fn;
     executeAIAgent: Fn;
     executeAgentInBackground: Fn;
+    validateAgent: Fn;
+    persistInFlightAgentFailure: Fn;
 }
 
 /** The order the turn's steps happened in. */
@@ -197,6 +203,30 @@ describe('RunAIAgentFromConversationDetail — the server creates the reply row'
         expect(syncArgs.at(-1)).toBe(REPLY);
     });
 
+    it('hands agentResponseDetail through the real executeAIAgent into RunAgentInConversation', async () => {
+        const resolver = new RunAIAgentResolver();
+        const seams = resolver as unknown as ResolverSeams;
+        seams.validateAgent = vi.fn().mockResolvedValue({ ID: 'agent-1', Name: 'Research' });
+        seams.persistInFlightAgentFailure = vi.fn().mockResolvedValue(undefined);
+        hoisted.runAgentInConversation.mockReset().mockRejectedValue(new Error('stop here'));
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+        const execute = (resolver as unknown as { executeAIAgent(...args: unknown[]): Promise<unknown> }).executeAIAgent.bind(resolver);
+        const userPayload = { sessionId: 'session-1', userRecord: USER };
+        await execute(
+            {}, {}, 'agent-1', userPayload, '[{"role":"user","content":"hi"}]', 'session-1', pubSub,
+            undefined, undefined, undefined, undefined, undefined, undefined, 'reply-1', false, false,
+            undefined, undefined, 'conv-1', undefined, undefined, undefined, undefined, undefined,
+            false, null, REPLY
+        );
+
+        expect(hoisted.runAgentInConversation).toHaveBeenCalledOnce();
+        expect(hoisted.runAgentInConversation.mock.calls[0][1]).toMatchObject({
+            conversationDetailId: 'reply-1',
+            agentResponseDetail: REPLY,
+        });
+    });
+
     it("loads the user's message as the caller, and creates nothing when they can't read it", async () => {
         const { resolver, seams } = makeResolver();
         const { ctx, loads } = makeContext(false);
@@ -261,13 +291,14 @@ describe('RunAIAgentFromConversationDetail — where the reply sits', () => {
     });
 
     it("posts the announcing agent's fixed line first, threads the reply under it, and names it in the ack", async () => {
-        const { resolver } = makeResolver();
+        const { resolver, seams } = makeResolver();
         hoisted.createReply.mockImplementation(async (args: { message?: string }) => (
             args.message ? { ID: 'announcement-1', ConversationID: 'conv-1', __mj_CreatedAt: CREATED_AT } : REPLY
         ));
 
         const result = await runMutation(resolver, makeContext().ctx, true, { announcedByAgentId: 'manager-1' });
 
+        expect(seams.CheckAPIKeyScopeAuthorization).toHaveBeenCalledWith('agent:execute', 'manager-1', expect.anything());
         expect(hoisted.createReply.mock.calls[0][0]).toMatchObject({
             agentId: 'manager-1',
             contextUser: USER,
@@ -277,6 +308,18 @@ describe('RunAIAgentFromConversationDetail — where the reply sits', () => {
         });
         expect(hoisted.createReply.mock.calls[1][0]).toMatchObject({ agentId: 'agent-1', parentId: 'announcement-1' });
         expect(JSON.parse(result.result)).toMatchObject({ conversationDetailId: 'reply-1', announcementDetailId: 'announcement-1' });
+    });
+
+    it('ignores announcedByAgentId when elevated under a widget guest token', async () => {
+        hoisted.widgetContext.mockResolvedValue({ ElevatedUser: SYSTEM, PinnedAgentId: 'pinned-agent' });
+        const { resolver } = makeResolver();
+
+        const result = await runMutation(resolver, makeContext().ctx, true, { announcedByAgentId: 'manager-1' });
+
+        expect(result.success).toBe(true);
+        expect(hoisted.createReply).toHaveBeenCalledOnce();
+        expect(hoisted.createReply.mock.calls[0][0]).toMatchObject({ agentId: 'pinned-agent', parentId: 'user-msg-1' });
+        expect(JSON.parse(result.result)).not.toHaveProperty('announcementDetailId');
     });
 
     it('refuses an announcement by an agent that is not active, and creates nothing', async () => {

@@ -59,6 +59,7 @@ import type { PubSubEngine } from 'type-graphql';
 /** A conversation-detail row that can be loaded (the source) and saved (the reply). */
 function detailRow(over: Partial<{ loads: boolean; saves: boolean; conversationID: string; branchID: string | null }> = {}) {
     const { loads = true, saves = true, conversationID = 'conv-1', branchID = null } = over;
+    let marked = false;
     return {
         ID: 'reply-detail-1',
         ConversationID: conversationID,
@@ -67,9 +68,10 @@ function detailRow(over: Partial<{ loads: boolean; saves: boolean; conversationI
         Role: '', Status: '', HiddenToUser: true, Message: '',
         AgentID: null as string | null,
         NewRecord: vi.fn(),
-        MarkServerAuthoredReply: vi.fn(),
+        MarkServerAuthoredReply: vi.fn(() => { marked = true; }),
         Load: vi.fn().mockResolvedValue(loads),
-        Save: vi.fn().mockResolvedValue(saves),
+        // Like MJConversationDetailEntityExtended, refuses to save an unmarked AI reply.
+        Save: vi.fn().mockImplementation(async () => saves && marked),
         LatestResult: { CompleteMessage: 'FK violation' },
     };
 }
@@ -146,15 +148,41 @@ describe('posting the outcome', () => {
         const h = harness();
         await h.deliverer.PostMessage(params());
 
+        expect(h.provider.GetEntityObject.mock.calls[0]).toEqual(['MJ: Conversation Details', SUBMITTER]);
         expect(h.provider.GetEntityObject.mock.calls[1]).toEqual(['MJ: Conversation Details', SUBMITTER]);
         expect(h.provider.GetEntityObject.mock.calls.some((call) => call[1] === OWNER)).toBe(false);
+        expect(h.rows[0].MarkServerAuthoredReply).toHaveBeenCalledOnce();
         expect(h.reply().MarkServerAuthoredReply).toHaveBeenCalledOnce();
+    });
+
+    it("updates the originating message in-place as the graph's submitter, marked as the server's reply, when IsLatest is true", async () => {
+        const { RunView } = await import('@memberjunction/core');
+        vi.mocked(RunView.FromMetadataProvider).mockReturnValue({
+            RunView: vi.fn().mockImplementation(async (rvParams: { EntityName: string }) => {
+                if (rvParams.EntityName === 'MJ: Conversation Details') {
+                    return { Success: true, Results: [{ ID: 'detail-1' }] };
+                }
+                return { Success: false, Results: [] };
+            }),
+        } as never);
+
+        const h = harness();
+        await h.deliverer.PostMessage(params());
+
+        expect(h.rows.length).toBe(1);
+        expect(h.provider.GetEntityObject.mock.calls[0]).toEqual(['MJ: Conversation Details', SUBMITTER]);
+        expect(h.rows[0].MarkServerAuthoredReply).toHaveBeenCalledOnce();
+        expect(h.rows[0].Save).toHaveBeenCalledOnce();
+        expect(h.rows[0].Status).toBe('Complete');
+        expect(h.rows[0].Message).toContain('Weekly digest');
+        expect(h.pubSub.publish).toHaveBeenCalledTimes(1);
     });
 
     it("falls back to the deliverer's own user when the graph records no submitter it knows", async () => {
         for (const submitter of [null, 'stranger-1']) {
             const h = harness();
             await h.deliverer.PostMessage(params({ SubmittedByUserID: submitter }));
+            expect(h.provider.GetEntityObject.mock.calls[0]).toEqual(['MJ: Conversation Details', { ID: 'user-1' }]);
             expect(h.provider.GetEntityObject.mock.calls[1]).toEqual(['MJ: Conversation Details', { ID: 'user-1' }]);
         }
     });
@@ -436,6 +464,8 @@ describe('Reinvoke — on the fork of the message that started the graph', () =>
         // Only the originating detail was loaded and updated in-place — no second detail row created!
         expect(createdDetails.length).toBe(1);
         expect(originDetail.NewRecord).not.toHaveBeenCalled();
+        expect(originDetail.MarkServerAuthoredReply).toHaveBeenCalledOnce();
+        expect(originDetail.Save).toHaveBeenCalledOnce();
         expect(originDetail.Message).toBe('Synthesized workflow outcome');
         expect(originDetail.Status).toBe('Complete');
         expect(runAgent.mock.calls[0][0].conversationDetailId).toBe('detail-1');
@@ -487,8 +517,11 @@ describe('Reinvoke — on the fork of the message that started the graph', () =>
         await deliverer.Reinvoke(params());
 
         expect(replyDetail.NewRecord).toHaveBeenCalledTimes(1);
+        expect(replyDetail.MarkServerAuthoredReply).toHaveBeenCalledOnce();
         expect(replyDetail.ParentID).toBe('detail-1');
         expect(replyDetail.Message).toBe('Synthesized workflow outcome');
+        expect(originDetail.MarkServerAuthoredReply).toHaveBeenCalledOnce();
+        expect(originDetail.Save).toHaveBeenCalledOnce();
         expect(originDetail.Message).toContain('*(✅ **Weekly digest** completed — synthesized results posted below.)*');
         expect(originDetail.Message).not.toContain("I'll follow up when it finishes");
         expect(pubSub.publish).toHaveBeenCalledTimes(2);

@@ -329,9 +329,12 @@ describe('MessageInputComponent — overlapping turns keep their own branch', ()
         expect([userB.Role, userB.Message, userB.BranchID]).toEqual(['User', 'second, in Main', null]);
         expect([placeholderB.ParentID, placeholderB.BranchID]).toEqual([userB.ID, null]);
         expect([delegateA.ParentID, delegateA.AgentID, delegateA.BranchID]).toEqual([placeholderA.ID, RESEARCH.ID, 'T1']);
-        // The delegate's history reads stay on turn A's fork too.
+        // The delegate's history reads and server reply placement stay on turn A's fork too.
         expect(h.findLatestOutput).toHaveBeenCalledWith('conv-1', RESEARCH.ID, null, 'T1');
         expect(h.findPreset).toHaveBeenLastCalledWith('conv-1', RESEARCH.ID, 'T1');
+        expect(h.processMessage.mock.calls[0].at(-1)).toBe('T1');
+        expect(h.processMessage.mock.calls[1].at(-1)).toBeNull();
+        expect(h.invokeSubAgent.mock.calls[0].at(-1)).toMatchObject({ ReplyBranchId: 'T1' });
     });
 
     it("a continuation's reply row stays on its fork when Main sends before the reply row exists", async () => {
@@ -354,6 +357,7 @@ describe('MessageInputComponent — overlapping turns keep their own branch', ()
         expect([replyB.ParentID, replyB.AgentID, replyB.BranchID]).toEqual([userB.ID, RESEARCH.ID, null]);
         expect([replyA.ParentID, replyA.AgentID, replyA.BranchID]).toEqual([userA.ID, RESEARCH.ID, 'T1']);
         expect(h.findPreset.mock.calls.map(call => call[2])).toEqual(['T1', null]);
+        expect(h.invokeSubAgent.mock.calls.map(call => (call.at(-1) as { ReplyBranchId?: string | null } | null)?.ReplyBranchId ?? null)).toEqual([null, 'T1']);
     });
 });
 

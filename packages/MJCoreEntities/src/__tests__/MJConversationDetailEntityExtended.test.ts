@@ -555,9 +555,9 @@ describe('MJConversationDetailEntityExtended: who a message is from (A19)', () =
         );
     });
 
-    it('holds the system user to the variable rule for the row, conversation and rating, not for authorship', async () => {
+    it('holds the system user to the variable rule for the row, conversation, role and rating, not for authorship', async () => {
         mocks.isSystemUser.mockReturnValue(true);
-        for (const field of ['ID', 'ConversationID', 'UserRating']) {
+        for (const field of ['ID', 'ConversationID', 'Role', 'UserRating']) {
             const entity = await messageWithVariable(field);
             entity.ContextCurrentUser = { ID: 'system-account' };
             expect(await entity.Save()).toBe(false);
@@ -684,14 +684,32 @@ describe('MJConversationDetailEntityExtended: only the server writes an agent re
             expect(mocks.superSave).not.toHaveBeenCalled();
         });
 
-        it("refuses a person changing what a reply says, the owner's own conversation included", async () => {
-            for (const field of ['Message', 'Status', 'Error', 'AgentID', 'AutomaticCommands', 'ResponseForm', 'ConversationID']) {
-                const entity = await savedReplyAs(OWNER, [field]);
+        it.each([
+            'UserID',
+            'Role',
+            'Message',
+            'ArtifactID',
+            'ArtifactVersionID',
+            'MediaType',
+            'ParentID',
+            'ConversationID',
+            'BranchID',
+            'AgentID',
+            'Status',
+            'Error',
+            'ResponseForm',
+            'ActionableCommands',
+            'AutomaticCommands',
+            'SuggestedResponses',
+            'ReflectionInsights',
+            'CompletionTime',
+            'ExternalID',
+        ])("refuses a person changing reply field %s, the owner's own conversation included", async (field) => {
+            const entity = await savedReplyAs(OWNER, [field]);
 
-                expect(await entity.Save()).toBe(false);
-                expect(entity.LatestResult?.CompleteMessage).toBe(REPLY_REFUSAL);
-                expect(entity.LatestResult?.Type).toBe('update');
-            }
+            expect(await entity.Save()).toBe(false);
+            expect(entity.LatestResult?.CompleteMessage).toBe(REPLY_REFUSAL);
+            expect(entity.LatestResult?.Type).toBe('update');
         });
 
         it("lets the owner rate a reply, and keeps the rating the owner's alone", async () => {

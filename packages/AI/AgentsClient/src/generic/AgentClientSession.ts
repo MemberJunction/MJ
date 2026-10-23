@@ -399,6 +399,7 @@ export class AgentClientSession {
                 onAccepted: params.OnAccepted,
                 replyParentId: params.ReplyParentId,
                 announcedByAgentId: params.AnnouncedByAgentId,
+                replyBranchId: params.ReplyBranchId ?? undefined,
                 agentId: params.AgentId,
                 maxHistoryMessages: params.MaxHistoryMessages,
                 data: params.Data,

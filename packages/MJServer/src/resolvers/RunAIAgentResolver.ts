@@ -40,6 +40,7 @@ interface ConversationTurnRequest {
     HistoryFrom?: Date;
     ReplyParentId?: string;
     AnnouncedByAgentId?: string;
+    ReplyBranchId?: string | null;
 }
 
 @ObjectType()
@@ -991,7 +992,10 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('replyParentId', { nullable: true }) replyParentId?: string,
         /** An active agent (MJ's chat passes its conversation manager) whose fixed line "Continuing with
          *  **{agent}** for refinement..." the server posts before the reply, which then threads under it. */
-        @Arg('announcedByAgentId', { nullable: true }) announcedByAgentId?: string
+        @Arg('announcedByAgentId', { nullable: true }) announcedByAgentId?: string,
+        /** The fork the reply and history run on, when the turn forks from `userMessageId` (such as Regenerate).
+         *  Checked to be a branch of the conversation whose path holds `userMessageId`. */
+        @Arg('replyBranchId', { nullable: true }) replyBranchId?: string
     ): Promise<AIAgentRunResult> {
         // Check API key scope authorization for agent execution
         await this.CheckAPIKeyScopeAuthorization('agent:execute', agentId, userPayload);
@@ -1017,6 +1021,12 @@ export class RunAIAgentResolver extends ResolverBase {
         // as the guest too, never as the elevated principal, which owns no guest's conversation.
         const widgetElevation = await ResolveWidgetGuestRunContext(userPayload, p);
         const effectiveAgentId = widgetElevation ? widgetElevation.PinnedAgentId : agentId;
+        // A widget guest has one pinned agent and never posts a continuation announcement as another agent;
+        // an API-key caller must hold agent:execute for the announcing agent as well as the running agent.
+        const effectiveAnnouncedByAgentId = widgetElevation ? undefined : announcedByAgentId;
+        if (effectiveAnnouncedByAgentId) {
+            await this.CheckAPIKeyScopeAuthorization('agent:execute', effectiveAnnouncedByAgentId, userPayload);
+        }
         const effectiveUserPayload = widgetElevation ? ElevateUserPayload(userPayload, widgetElevation.ElevatedUser) : userPayload;
         // Only the system user or an API key holding the agent:trusted scope may set a run's scope and agent-type
         // params through data (ExecuteAgentParams.TrustReservedRunData). Judged on the caller's own payload: a widget
@@ -1034,10 +1044,12 @@ export class RunAIAgentResolver extends ResolverBase {
                 MaxHistoryMessages: maxHistoryMessages || 20,
                 HistoryFrom: historyFrom,
                 ReplyParentId: replyParentId,
-                AnnouncedByAgentId: announcedByAgentId
+                AnnouncedByAgentId: effectiveAnnouncedByAgentId,
+                ReplyBranchId: replyBranchId
             });
             const reply = turn.Reply;
-            // The branch the person's message was posted on decides which path the run reads.
+            // The turn's branch (the message's own branch, or a validated fork whose path holds the message)
+            // decides which path the run reads.
             const branchId = turn.BranchId;
 
             // A turn that follows a run the user STOPPED continues that run rather than starting
@@ -1139,7 +1151,11 @@ export class RunAIAgentResolver extends ResolverBase {
     ): Promise<{ ConversationId: string; BranchId: string | null; MessagesJson: string; Reply: MJConversationDetailEntityExtended; Announcement?: MJConversationDetailEntityExtended }> {
         // LATENCY OPTIMIZATION (Opt #2 + #3): the user's message is loaded once here for its conversation and
         // branch, which are threaded through the call chain rather than reloaded downstream.
-        const { ConversationId: conversationId, BranchId: branchId } = await this.loadPlacementOf(p, user, request.UserMessageId);
+        const placement = await this.loadPlacementOf(p, user, request.UserMessageId);
+        const conversationId = placement.ConversationId;
+        const branchId = request.ReplyBranchId
+            ? await this.validateReplyBranch(p, user, conversationId, placement, request.ReplyBranchId)
+            : placement.BranchId;
         const parentId = request.ReplyParentId
             ? await this.validateReplyParent(p, user, request.ReplyParentId, conversationId)
             : request.UserMessageId;
@@ -1159,13 +1175,40 @@ export class RunAIAgentResolver extends ResolverBase {
         return { ConversationId: conversationId, BranchId: branchId, MessagesJson: JSON.stringify(messages), Reply: reply, Announcement: announcement };
     }
 
-    /** The conversation and branch (null is Main) a message sits on, read as `user`; throws when they can't read it. */
-    private async loadPlacementOf(p: DatabaseProviderBase, user: UserInfo, messageId: string): Promise<{ ConversationId: string; BranchId: string | null }> {
+    /** The conversation, branch (null is Main) and sequence of a message, read as `user`; throws when they can't read it. */
+    private async loadPlacementOf(
+        p: DatabaseProviderBase,
+        user: UserInfo,
+        messageId: string
+    ): Promise<{ ConversationId: string; BranchId: string | null; Sequence: number }> {
         const message = await p.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', user);
         if (!await message.Load(messageId)) {
             throw new Error(`Conversation detail ${messageId} not found`);
         }
-        return { ConversationId: message.ConversationID, BranchId: message.BranchID ?? null };
+        return { ConversationId: message.ConversationID, BranchId: message.BranchID ?? null, Sequence: message.Sequence ?? 0 };
+    }
+
+    /**
+     * When a turn forks from an earlier message (such as Regenerate), the reply and history run on the fork while the
+     * user's message stays on the branch it was written on. Checks that `replyBranchId` is a branch of the turn's
+     * conversation whose path holds the user's message; returns `replyBranchId`, or throws before any row is created.
+     */
+    private async validateReplyBranch(
+        p: DatabaseProviderBase,
+        user: UserInfo,
+        conversationId: string,
+        userMessage: { BranchId: string | null; Sequence: number },
+        replyBranchId: string
+    ): Promise<string> {
+        if (UUIDsEqual(replyBranchId, userMessage.BranchId)) {
+            return replyBranchId;
+        }
+        const branches = await ConversationEngine.LoadBranchesFresh(conversationId, user, p);
+        const chain = ConversationEngine.BuildBranchChain(branches, replyBranchId);
+        if (!ConversationEngine.IsRowOnBranchPath({ BranchID: userMessage.BranchId, Sequence: userMessage.Sequence }, chain)) {
+            throw new Error(`Conversation detail is not on branch ${replyBranchId}'s path, so the reply cannot be written on that branch`);
+        }
+        return replyBranchId;
     }
 
     /**

@@ -179,6 +179,7 @@ describe('GraphQLAIClient.RunAIAgentFromConversationDetail — the server names 
             agentId: 'agent-1',
             replyParentId: 'manager-reply-1',
             announcedByAgentId: 'manager-1',
+            replyBranchId: 'branch-regen-1',
             onAccepted: (reply) => { accepted = reply; },
         } as RunParams);
         releaseAck();
@@ -186,8 +187,15 @@ describe('GraphQLAIClient.RunAIAgentFromConversationDetail — the server names 
         stream.next(completion(REPLY));
         await p;
 
-        const [, variables] = executeGQL.mock.calls[0] as unknown as [string, Record<string, unknown>];
-        expect(variables).toMatchObject({ replyParentId: 'manager-reply-1', announcedByAgentId: 'manager-1' });
+        const [document, variables] = executeGQL.mock.calls[0] as unknown as [string, Record<string, unknown>];
+        const operation = parse(document).definitions[0] as OperationDefinitionNode;
+        const args = ((operation.selectionSet.selections[0] as FieldNode).arguments ?? []).map((a) => a.name.value);
+        expect(args).toContain('replyBranchId');
+        expect(variables).toMatchObject({
+            replyParentId: 'manager-reply-1',
+            announcedByAgentId: 'manager-1',
+            replyBranchId: 'branch-regen-1',
+        });
         expect(accepted).toMatchObject({ ConversationDetailId: REPLY, AnnouncementDetailId: 'ANNOUNCEMENT-1' });
     });
 
@@ -199,8 +207,12 @@ describe('GraphQLAIClient.RunAIAgentFromConversationDetail — the server names 
         stream.next(completion(REPLY));
         await p;
 
-        const [, variables] = executeGQL.mock.calls[0] as unknown as [string, Record<string, unknown>];
+        const [document, variables] = executeGQL.mock.calls[0] as unknown as [string, Record<string, unknown>];
+        const operation = parse(document).definitions[0] as OperationDefinitionNode;
+        const args = ((operation.selectionSet.selections[0] as FieldNode).arguments ?? []).map((a) => a.name.value);
+        expect(args).not.toContain('replyBranchId');
         expect(variables).not.toHaveProperty('replyParentId');
         expect(variables).not.toHaveProperty('announcedByAgentId');
+        expect(variables).not.toHaveProperty('replyBranchId');
     });
 });

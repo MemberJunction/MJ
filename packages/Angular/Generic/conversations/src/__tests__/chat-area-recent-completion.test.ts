@@ -109,6 +109,19 @@ describe('OnMessageSent applies a completion that landed first (MJ#4885)', () =>
     expect((component as unknown as Open)['followTranscript']).toHaveBeenCalledWith('new', message);
   });
 
+  it('replaces the local placeholder ID in InProgressMessageIds when the row adopts the server reply ID', async () => {
+    const message = hostRow();
+    message.ID = 'local-placeholder-1';
+    const component = createComponent(undefined);
+
+    await component.OnMessageSent(message as never);
+    expect(component.InProgressMessageIds).toEqual(['local-placeholder-1']);
+
+    message.ID = 'reply-1';
+    await component.OnMessageSent(message as never);
+    expect(component.InProgressMessageIds).toEqual(['reply-1']);
+  });
+
   it('a completion that also arrives through the live callback is handled once', async () => {
     const message = hostRow();
     const component = createComponent({ agentRunId: 'run-1' });

@@ -75,11 +75,12 @@ function makeResolver(): { resolver: RunAIAgentResolver; seams: ResolverSeams } 
     return { resolver, seams };
 }
 
-function makeContext(branchId: string | null): AppContext {
+function makeContext(branchId: string | null, sequence = 3): AppContext {
     const provider = {
         GetEntityObject: vi.fn().mockResolvedValue({
             ConversationID: 'conv-1',
             BranchID: branchId,
+            Sequence: sequence,
             Load: vi.fn().mockResolvedValue(true),
         }),
     };
@@ -92,11 +93,18 @@ function makeContext(branchId: string | null): AppContext {
 
 const pubSub = { publish: vi.fn() } as unknown as PubSubEngine;
 
-async function runMutation(resolver: RunAIAgentResolver, branchId: string | null, fireAndForget?: boolean) {
+async function runMutation(
+    resolver: RunAIAgentResolver,
+    branchId: string | null,
+    fireAndForget?: boolean,
+    replyBranchId?: string,
+    sequence = 3
+) {
     return resolver.RunAIAgentFromConversationDetail(
-        'detail-1', 'agent-1', makeContext(branchId), 'session-1', pubSub,
+        'detail-1', 'agent-1', makeContext(branchId, sequence), 'session-1', pubSub,
         undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
-        undefined, undefined, fireAndForget, undefined, undefined, undefined
+        undefined, undefined, fireAndForget, undefined, undefined, undefined,
+        undefined, undefined, replyBranchId
     );
 }
 
@@ -134,6 +142,43 @@ describe('RunAIAgentFromConversationDetail — branch', () => {
         expect(seams.loadConversationHistoryWithAttachments.mock.calls[0][6]).toBeNull();
         expect(hoisted.createAgentReplyDetail).toHaveBeenCalledWith(expect.objectContaining({ branchId: null }));
         expect(seams.executeAIAgent.mock.calls[0].at(-2)).toBeNull();
+    });
+
+    it('places the reply and history on replyBranchId when a regeneration forks from a message on its ancestor path', async () => {
+        vi.spyOn(ConversationEngine, 'LoadBranchesFresh').mockResolvedValue([
+            {
+                ID: 'branch-regen',
+                ConversationID: 'conv-1',
+                ParentBranchID: null,
+                ForkFromSequence: 5,
+            } as never,
+        ]);
+
+        const result = await runMutation(resolver, null, false, 'branch-regen', 3);
+
+        expect(result.success).toBe(true);
+        expect(seams.loadConversationHistoryWithAttachments.mock.calls[0][6]).toBe('branch-regen');
+        expect(hoisted.createAgentReplyDetail).toHaveBeenCalledWith(expect.objectContaining({ branchId: 'branch-regen' }));
+        expect(seams.executeAIAgent.mock.calls[0].at(-2)).toBe('branch-regen');
+    });
+
+    it('refuses a replyBranchId whose path does not include the user message, and creates nothing', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        vi.spyOn(ConversationEngine, 'LoadBranchesFresh').mockResolvedValue([
+            {
+                ID: 'branch-regen',
+                ConversationID: 'conv-1',
+                ParentBranchID: null,
+                ForkFromSequence: 5,
+            } as never,
+        ]);
+
+        const result = await runMutation(resolver, null, false, 'branch-regen', 8);
+
+        expect(result.success).toBe(false);
+        expect(result.errorMessage).toContain('branch-regen');
+        expect(hoisted.createAgentReplyDetail).not.toHaveBeenCalled();
+        expect(seams.executeAIAgent).not.toHaveBeenCalled();
     });
 });
 

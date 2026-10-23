@@ -1,16 +1,16 @@
 ---
-"@memberjunction/core-entities": patch
-"@memberjunction/ai-agents": patch
-"@memberjunction/ai-core-plus": patch
-"@memberjunction/task-graph": patch
-"@memberjunction/server": patch
-"@memberjunction/graphql-dataprovider": patch
-"@memberjunction/ai-agent-client": patch
-"@memberjunction/conversations-runtime": patch
-"@memberjunction/ng-conversations": patch
-"@memberjunction/realtime-widget": patch
-"@memberjunction/mobile-app": patch
-"@memberjunction/integration-test-suite": patch
+"@memberjunction/core-entities": minor
+"@memberjunction/ai-agents": minor
+"@memberjunction/ai-core-plus": minor
+"@memberjunction/task-graph": minor
+"@memberjunction/server": minor
+"@memberjunction/graphql-dataprovider": minor
+"@memberjunction/ai-agent-client": minor
+"@memberjunction/conversations-runtime": minor
+"@memberjunction/ng-conversations": minor
+"@memberjunction/realtime-widget": minor
+"@memberjunction/mobile-app": minor
+"@memberjunction/integration-test-suite": minor
 ---
 
 Only the server writes an agent's reply (A19, second half). In `MJ: Conversation Details`, a reply (`Role` `AI` or
@@ -25,15 +25,18 @@ The owner's rating, pinning, hiding and other bookkeeping keep the conversation-
 of `conversationDetailId` (a reply row the caller created). The server creates the reply row (`ParentID` the user's
 message) before the run and names it in the fire-and-forget acknowledgement, `result` =
 `{ accepted, fireAndForget, conversationDetailId, createdAt }`; every progress, streaming and partial-result message
-now carries `conversationDetailId` too. Two optional arguments say where the reply sits: `replyParentId` (a message of
-the same conversation the caller can read; checked by the server) and `announcedByAgentId` (an active agent whose fixed
+now carries `conversationDetailId` too. Three optional arguments say where the reply sits: `replyParentId` (a message of
+the same conversation the caller can read; checked by the server), `announcedByAgentId` (an active agent whose fixed
 line "Continuing with **{agent}** for refinement..." the server posts first; the ack then names it as
-`announcementDetailId`). `GraphQLAIClient.RunAIAgentFromConversationDetail` takes `userMessageId` and an
-`onAccepted` callback; `AgentClientSession.RunAgentFromConversationDetail` takes `UserMessageId` and `OnAccepted`
+`announcementDetailId`), and `replyBranchId` (a fork of the conversation whose path contains the user's message, used
+when Regenerate or a forked turn runs on a newly created branch while the user's message remains on its original
+branch). `GraphQLAIClient.RunAIAgentFromConversationDetail` takes `userMessageId`, `onAccepted`, and optional
+`replyParentId` / `announcedByAgentId` / `replyBranchId`; `AgentClientSession.RunAgentFromConversationDetail` takes
+`UserMessageId`, `OnAccepted`, and optional `ReplyParentId` / `AnnouncedByAgentId` / `ReplyBranchId`
 (`RunAgentParams.ConversationDetailId` is now `UserMessageId`); `ConversationAgentRunner.ProcessMessage` drops
-`conversationDetailId` for `onReplyAccepted`. `AgentRunner.CreateAgentReplyDetail()` creates a reply row and
-`RunAgentInConversation` takes it as `agentResponseDetail`. `FireAndForgetHelper` gains an opt-in
-`deferMessagesUntilAck`.
+`conversationDetailId` for `onReplyAccepted` and optional `ReplyBranchID`. `AgentRunner.CreateAgentReplyDetail()`
+creates a reply row and `RunAgentInConversation` takes it as `agentResponseDetail`. `FireAndForgetHelper` gains an
+opt-in `deferMessagesUntilAck`.
 
 MJ's chat no longer creates or saves reply rows: it shows an unsaved "Starting…" placeholder until the
 acknowledgement, keys the turn's task and completion by the acknowledged ID, starts the reply's timer at the row's
@@ -47,3 +50,33 @@ whether the submission was accepted, never the spec's name or reasoning), binds 
 session's transcript, tool and anchor rows, the task-graph outcome (now written as the conversation's owner), the
 orphaned-reply reconciler, bridge transcripts and realtime agent transcripts all write as marked server code. The
 web widget and the mobile app stop creating reply rows.
+
+### Migration Guide
+
+Clients must stop pre-creating `Role = 'AI'` / `'Error'` `MJ: Conversation Details` rows (which `Validate()` now
+refuses unless authored on the server with `MarkServerAuthoredReply()`) and pass the saved `Role = 'User'` message ID
+instead:
+
+```ts
+// Before
+const aiReply = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details');
+aiReply.ConversationID = conversationId;
+aiReply.ParentID = userMessage.ID;
+aiReply.Role = 'AI';
+aiReply.Status = 'In-Progress';
+await aiReply.Save();
+
+const result = await session.RunAgentFromConversationDetail({
+    ConversationDetailId: aiReply.ID,
+    AgentId: agentId,
+});
+
+// After
+const result = await session.RunAgentFromConversationDetail({
+    UserMessageId: userMessage.ID,
+    AgentId: agentId,
+    OnAccepted: ({ ConversationDetailId, CreatedAt }) => {
+        // Key streaming progress and completion tracking by ConversationDetailId
+    },
+});
+```

@@ -705,7 +705,7 @@ export class GraphQLAIClient {
         // completion, relevance and reconciliation. Messages that beat the ack are held until it arrives.
         let replyId = '';
         try {
-            const mutation = this.buildConversationDetailMutation(params.agentHistoryFrom != null);
+            const mutation = this.buildConversationDetailMutation(params.agentHistoryFrom != null, params.replyBranchId != null);
             const variables = this.prepareConversationDetailVariables(params);
 
             return await FireAndForgetHelper.Execute<ExecuteAgentResult>({
@@ -759,10 +759,14 @@ export class GraphQLAIClient {
      * of the document unless the caller set it: GraphQL validates every argument a document names,
      * so a server that predates the argument would reject the whole mutation even with the
      * variable unset.
+     * @param includeReplyBranchId Whether to declare and pass `replyBranchId`, omitted when unset for
+     * the same reason.
      */
-    private buildConversationDetailMutation(includeAgentHistoryFrom: boolean): string {
+    private buildConversationDetailMutation(includeAgentHistoryFrom: boolean, includeReplyBranchId = false): string {
         const historyFromVariable = includeAgentHistoryFrom ? ',\n                $agentHistoryFrom: String' : '';
         const historyFromArgument = includeAgentHistoryFrom ? ',\n                    agentHistoryFrom: $agentHistoryFrom' : '';
+        const replyBranchVariable = includeReplyBranchId ? ',\n                $replyBranchId: String' : '';
+        const replyBranchArgument = includeReplyBranchId ? ',\n                    replyBranchId: $replyBranchId' : '';
         return gql`
             mutation RunAIAgentFromConversationDetail(
                 $userMessageId: String!,
@@ -782,7 +786,7 @@ export class GraphQLAIClient {
                 $sourceArtifactVersionId: String,
                 $replyParentId: String,
                 $announcedByAgentId: String,
-                $fireAndForget: Boolean${historyFromVariable}
+                $fireAndForget: Boolean${historyFromVariable}${replyBranchVariable}
             ) {
                 RunAIAgentFromConversationDetail(
                     userMessageId: $userMessageId,
@@ -802,7 +806,7 @@ export class GraphQLAIClient {
                     sourceArtifactVersionId: $sourceArtifactVersionId,
                     replyParentId: $replyParentId,
                     announcedByAgentId: $announcedByAgentId,
-                    fireAndForget: $fireAndForget${historyFromArgument}
+                    fireAndForget: $fireAndForget${historyFromArgument}${replyBranchArgument}
                 ) {
                     success
                     errorMessage
@@ -845,6 +849,7 @@ export class GraphQLAIClient {
         if (params.agentHistoryFrom != null) variables.agentHistoryFrom = params.agentHistoryFrom.toISOString();
         if (params.replyParentId) variables.replyParentId = params.replyParentId;
         if (params.announcedByAgentId) variables.announcedByAgentId = params.announcedByAgentId;
+        if (params.replyBranchId) variables.replyBranchId = params.replyBranchId;
 
         return variables;
     }
@@ -2402,6 +2407,13 @@ export interface RunAIAgentFromConversationDetailParams {
      * reply; the reply then threads under it, and {@link onAccepted} names it as `AnnouncementDetailId`.
      */
     announcedByAgentId?: string; // case-violation-ok-legacy-back-compat: mirrors the mutation's argument, like every other member of this interface
+
+    /**
+     * The branch the turn runs on when it forks off an earlier message on another branch (such as Regenerate, which
+     * creates a new fork before running the agent while the user's message stays on its original branch). The server
+     * verifies the user's message is on this branch's path before reading history or writing the reply on it.
+     */
+    replyBranchId?: string | null; // case-violation-ok-legacy-back-compat: mirrors the mutation's argument, like every other member of this interface
 
     /**
      * The ID of the AI agent to run

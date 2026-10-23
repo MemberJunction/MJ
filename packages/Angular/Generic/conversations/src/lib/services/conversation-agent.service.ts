@@ -91,6 +91,11 @@ export interface SubAgentThreading {
    * before the reply; the reply threads under it.
    */
   AnnouncedByAgentId?: string | null;
+  /**
+   * The branch the turn runs on when it forks off an earlier message on another branch (such as Regenerate, which
+   * creates a new fork before running the agent while the user's message stays on its original branch).
+   */
+  ReplyBranchId?: string | null;
 }
 
 /**
@@ -262,7 +267,9 @@ export class ConversationAgentService {
     /** The agents the conversation manager may delegate to. Null or omitted allows every agent. */
     allowedAgentIDs?: readonly string[] | null,
     /** The first moment of the conversation the run may read. Null or omitted reads all of it. */
-    agentHistoryFrom?: Date | null
+    agentHistoryFrom?: Date | null,
+    /** The branch the turn runs on when it forks off an earlier message on another branch. */
+    replyBranchId?: string | null
   ): Promise<ExecuteAgentResult | null> {
     // Warm the cached default-agent name for any synchronous consumers
     // before the runtime resolves on its own.
@@ -279,6 +286,7 @@ export class ConversationAgentService {
       ...(requestedSkillIDs?.length ? { requestedSkillIDs } : {}),
       ...(allowedAgentIDs != null ? { AllowedAgentIDs: allowedAgentIDs } : {}),
       ...(agentHistoryFrom ? { AgentHistoryFrom: agentHistoryFrom } : {}),
+      ...(replyBranchId ? { ReplyBranchID: replyBranchId } : {}),
     });
   }
 
@@ -293,9 +301,10 @@ export class ConversationAgentService {
     planMode?: boolean,
     requestedSkillIDs?: string[],
     allowedAgentIDs?: readonly string[] | null,
-    agentHistoryFrom?: Date | null
+    agentHistoryFrom?: Date | null,
+    replyBranchId?: string | null
   ): Promise<ExecuteAgentResult | null> {
-    return this.ProcessMessage(conversationId, message, conversationHistory, onReplyAccepted, onProgress, appContext, planMode, requestedSkillIDs, allowedAgentIDs, agentHistoryFrom);
+    return this.ProcessMessage(conversationId, message, conversationHistory, onReplyAccepted, onProgress, appContext, planMode, requestedSkillIDs, allowedAgentIDs, agentHistoryFrom, replyBranchId);
   }
 
   /**
@@ -474,6 +483,7 @@ export class ConversationAgentService {
         OnAccepted: onReplyAccepted,
         ...(threading?.ReplyParentId ? { ReplyParentId: threading.ReplyParentId } : {}),
         ...(threading?.AnnouncedByAgentId ? { AnnouncedByAgentId: threading.AnnouncedByAgentId } : {}),
+        ...(threading?.ReplyBranchId ? { ReplyBranchId: threading.ReplyBranchId } : {}),
         AgentId: agent.ID,
         MaxHistoryMessages: 20,
         Data: {

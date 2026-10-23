@@ -316,6 +316,11 @@ export interface RunAgentFromConversationDetailParams {
      * reply, which then threads under it. {@link OnAccepted} names the line as `AnnouncementDetailId`.
      */
     AnnouncedByAgentId?: string;
+    /**
+     * The fork the reply and history run on, when the turn forks from {@link UserMessageId} (such as Regenerate).
+     * Checked by the server to be a branch of the conversation whose path holds {@link UserMessageId}.
+     */
+    ReplyBranchId?: string | null;
     /** The ID of the agent to run */
     AgentId: string;
     /** Maximum number of history messages to include */

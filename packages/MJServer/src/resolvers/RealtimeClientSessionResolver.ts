@@ -905,15 +905,15 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     ): Promise<boolean> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
         const session = await this.loadOwnedActiveSession(agentSessionId, contextUser, provider);
-        if (this.mapTranscriptRole(role) !== 'User' && !(await this.callerOwnsConversation(session, contextUser, provider))) {
-            return false;
-        }
-
-        const saved = replacesPrevious
-            ? await this.replacePreviousTranscriptTurn(session, role, text, contextUser, provider, utteranceStartMs, utteranceEndMs)
-            : await this.persistTranscriptTurn(session, role, text, contextUser, provider, utteranceStartMs, utteranceEndMs);
-        if (!saved) {
-            return false;
+        const persistDetail =
+            this.mapTranscriptRole(role) === 'User' || (await this.callerOwnsConversation(session, contextUser, provider));
+        if (persistDetail) {
+            const saved = replacesPrevious
+                ? await this.replacePreviousTranscriptTurn(session, role, text, contextUser, provider, utteranceStartMs, utteranceEndMs)
+                : await this.persistTranscriptTurn(session, role, text, contextUser, provider, utteranceStartMs, utteranceEndMs);
+            if (!saved) {
+                return false;
+            }
         }
         // Mirror the turn onto the co-agent's long-lived prompt run so its Messages capture the full
         // conversation (run-viewer observability parity). Best-effort — never fails the transcript relay.
@@ -932,7 +932,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             );
         }
         await this.sessionManager.Heartbeat(agentSessionId, contextUser, provider);
-        return true;
+        return persistDetail;
     }
 
     /**

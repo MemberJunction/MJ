@@ -104,6 +104,11 @@ export interface ProcessMessageInput {
      * messages.
      */
     AgentHistoryFrom?: Date | null;
+    /**
+     * The fork the reply and history run on, when the turn forks from `message` (such as Regenerate).
+     * Null or omitted uses `message.BranchID`.
+     */
+    ReplyBranchID?: string | null;
 }
 
 /**
@@ -247,6 +252,7 @@ export class ConversationAgentRunner {
                 ...(input.planMode ? { PlanMode: true } : {}),
                 ...(input.requestedSkillIDs?.length ? { RequestedSkillIDs: input.requestedSkillIDs } : {}),
                 ...(input.AgentHistoryFrom ? { AgentHistoryFrom: input.AgentHistoryFrom } : {}),
+                ...(input.ReplyBranchID ? { ReplyBranchId: input.ReplyBranchID } : {}),
                 CreateArtifacts: true,
                 CreateNotification: true,
                 OnProgress: input.onProgress

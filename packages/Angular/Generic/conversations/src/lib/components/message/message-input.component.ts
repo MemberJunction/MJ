@@ -2942,6 +2942,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         this._pendingRequestedSkillIDs, // user-requested skills (/skill mentions)
         this.AllowedAgentIDs, // the agents the manager may delegate to
         this.AgentHistoryFrom, // the first moment of the conversation the run may read
+        branchId,
       );
 
       // Emit afterAgentTurn on the happy path only — the error/failure branch
@@ -3246,7 +3247,10 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         : undefined;
 
       // The delegate's reply threads under the delegating reply, as it always has; the server checks and sets it.
-      const threading: SubAgentThreading = { ReplyParentId: delegatingReply.ID };
+      const threading: SubAgentThreading = {
+        ReplyParentId: delegatingReply.ID,
+        ...(branchId ? { ReplyBranchId: branchId } : {}),
+      };
       const invoke = async (label: string): Promise<{ reply: MJConversationDetailEntity; result: ExecuteAgentResult | null }> => {
         const reply = await this.createReplyPlaceholder(conversationId, branchId, delegatingReply.ID, agent?.ID ?? null);
         agentResponseMessage = reply;
@@ -3382,7 +3386,13 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       ? await this.createReplyPlaceholder(conversationId, branchId, userMessage.ID, managerId, { Message: ContinuationAnnouncementText(agentName), Status: 'Complete' })
       : undefined;
     const reply = await this.createReplyPlaceholder(conversationId, branchId, announcement?.ID ?? userMessage.ID, lastAIMessage.AgentID);
-    const threading: SubAgentThreading | null = managerId ? { AnnouncedByAgentId: managerId } : null;
+    const threading: SubAgentThreading | null =
+      managerId || branchId
+        ? {
+            ...(managerId ? { AnnouncedByAgentId: managerId } : {}),
+            ...(branchId ? { ReplyBranchId: branchId } : {}),
+          }
+        : null;
 
     try {
       // Invoke the agent with the previous payload
@@ -3475,6 +3485,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         this.PlanModeEnabled, // per-request Plan Mode toggle
         this._pendingRequestedSkillIDs, // user-requested skills (/skill mentions)
         this.AgentHistoryFrom, // the first moment of the conversation the run may read
+        branchId ? { ReplyBranchId: branchId } : null,
       );
 
       if (result && result.success) {
@@ -3679,6 +3690,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         this.PlanModeEnabled, // per-request Plan Mode toggle
         this._pendingRequestedSkillIDs, // user-requested skills (/skill mentions)
         this.AgentHistoryFrom, // the first moment of the conversation the run may read
+        branchId ? { ReplyBranchId: branchId } : null,
       );
 
       if (result && result.success) {

@@ -36,20 +36,28 @@ const AUTHORED_FIELDS = ['UserID', 'Role', 'Message', 'ArtifactID', 'ArtifactVer
 const PLACEMENT_FIELDS = ['ConversationID', 'BranchID'];
 
 /**
- * The fields the access rule, which holds for everyone, decides on: which row is written (`ID`; an update's SQL is
- * rebuilt with the variable's value at submit, so it would write another row), its conversation, and the owner's
- * rating. A transaction variable sets its field at submit, after the gate has run, so none of these may take its
- * value from one.
+ * The fields the access and reply-authorship rules, which hold for everyone (including the system user unless
+ * explicitly marked), decide on: which row is written (`ID`; an update's SQL is rebuilt with the variable's value at
+ * submit, so it would write another row), its conversation, its role (`Role` — a transaction variable setting `AI` or
+ * `Error` at submit would bypass the unmarked reply check), and the owner's rating. A transaction variable sets its
+ * field at submit, after the gate has run, so none of these may take its value from one.
  */
-const ACCESS_GATED_FIELDS = ['ID', 'ConversationID', ...OWNER_ONLY_RATING_FIELDS];
+const ACCESS_GATED_FIELDS = ['ID', 'ConversationID', 'Role', ...OWNER_ONLY_RATING_FIELDS];
 
 /** {@link ACCESS_GATED_FIELDS} plus the fields the authorship rules decide on, which the system user skips. */
-const GATED_FIELDS = [...ACCESS_GATED_FIELDS, 'BranchID', ...AUTHORED_FIELDS];
+const GATED_FIELDS = [
+    ...ACCESS_GATED_FIELDS,
+    'BranchID',
+    ...AUTHORED_FIELDS.filter(field => field !== 'Role')
+];
 
 /**
- * The fields of an agent's reply (`Role` `AI` or `Error`) that say what the agent said and who said it: the authored
- * fields, plus its conversation and fork, its agent, its status and error, the form, commands and suggested replies it
- * offers, and the turn bookkeeping that identifies it. Only a server write marked with
+ * The fields of an agent's reply (`Role` `AI` or `Error`) that say what the agent said, who said it, and where it sits:
+ * the authored fields ({@link AUTHORED_FIELDS}: `UserID`, `Role`, `Message`, `ArtifactID`, `ArtifactVersionID`,
+ * `MediaType`, `ParentID`), plus its conversation (`ConversationID`) and fork (`BranchID`), its agent (`AgentID`),
+ * its status (`Status`) and error (`Error`), the form (`ResponseForm`), commands (`ActionableCommands`,
+ * `AutomaticCommands`), suggested replies (`SuggestedResponses`) and reflection (`ReflectionInsights`) it offers, and
+ * the turn timing and external reference (`CompletionTime`, `ExternalID`). Only a server write marked with
  * {@link MJConversationDetailEntityExtended.MarkServerAuthoredReply} changes them. Pinning, hiding, the owner's rating
  * and the other bookkeeping keep the conversation-level rules.
  */

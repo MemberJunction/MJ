@@ -143,10 +143,11 @@ Plain async functions over the MJ object model. They pick the right primitive:
   and dashboard "query" parts).
 - **`GraphQLDataProvider.Instance.AI.RunAIAgentFromConversationDetail`** — the
   agent runner. `agents.ts#sendMessage` writes a `Role='User'`
-  `Conversation Detail`, pre-creates a `Role='AI' Status='In-Progress'`
-  placeholder detail, then triggers the run; the **server owns** filling the AI
-  detail. Because the push WebSocket is unreliable on RN, a failed WS wait is
-  **not** a hard error — the UI polls the detail's `Status` for completion.
+  `Conversation Detail`, then triggers the run with `userMessageId`; the **server
+  creates and fills** the `Role='AI'` reply row (returning its ID in the
+  fire-and-forget acknowledgement via `onAccepted`). Because the push WebSocket
+  is unreliable on RN, a failed WS wait is **not** a hard error — the UI polls
+  the acknowledged reply detail's `Status` for completion.
 
 Entities touched (all via the strongly-typed generated classes): `MJ:
 Conversations`, `MJ: Conversation Details`, `MJ: Conversation Artifacts`, `MJ:

@@ -2189,6 +2189,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.syncSendSlot();
   }
   private _inProgressMessageIds: string[] = [];
+  /** Tracks the ID each in-progress reply entity was last registered under so adopting the server's row ID drops the local placeholder UUID. */
+  private inProgressIdByEntity?: WeakMap<MJConversationDetailEntity, string>;
 
   // ── The composer's send slot as the stop control ──────────────────────────────────────
   // While replies are in flight the composer's send slot is the stop control (one run: "Stop
@@ -4350,8 +4352,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // row does not stay In-Progress until the conversation is opened again. Register the row
     // for the live callback either way — an update of an existing In-Progress row included.
     if (message.Status === 'In-Progress' && message.ID) {
-      if (!this.InProgressMessageIds.some((id) => UUIDsEqual(id, message.ID))) {
-        this.InProgressMessageIds = [...this.InProgressMessageIds, message.ID];
+      const entityMap = (this.inProgressIdByEntity ??= new WeakMap());
+      const previousId = entityMap.get(message);
+      entityMap.set(message, message.ID);
+      const withoutPrevious =
+        previousId && !UUIDsEqual(previousId, message.ID)
+          ? this.InProgressMessageIds.filter((id) => !UUIDsEqual(id, previousId))
+          : this.InProgressMessageIds;
+      if (!withoutPrevious.some((id) => UUIDsEqual(id, message.ID))) {
+        this.InProgressMessageIds = [...withoutPrevious, message.ID];
+      } else if (withoutPrevious !== this.InProgressMessageIds) {
+        this.InProgressMessageIds = withoutPrevious;
       }
       const recentCompletion = this.streamingService.GetRecentCompletion(message.ID);
       if (recentCompletion) {
