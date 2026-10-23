@@ -590,25 +590,8 @@
               <span>Base View</span>
             </div>
             <div class="form-group">
-              <label for="FilterTabAlternateBaseView">Canonical Base View</label>
-              <select
-                id="FilterTabAlternateBaseView"
-                class="form-input"
-                [(ngModel)]="AlternateBaseView"
-                [disabled]="!CanEdit"
-              >
-                <option [ngValue]="null">Default ({{ Entity?.BaseView }})</option>
-                @if (IsCurrentAlternateBaseViewUnavailable && AlternateBaseView) {
-                  <option [ngValue]="AlternateBaseView">
-                    {{ AlternateBaseView }} [Unavailable — select Default or another view]
-                  </option>
-                }
-                @for (abv of AvailableAlternateBaseViews; track abv.ID) {
-                  <option [ngValue]="abv.Name">
-                    {{ abv.EffectiveDisplayName }} ({{ abv.ViewName }}){{ abv.IsDeprecated ? ' [Deprecated]' : '' }}
-                  </option>
-                }
-              </select>
+              <label>Canonical Base View</label>
+              <ng-container [ngTemplateOutlet]="baseViewSelector"></ng-container>
             </div>
           </div>
         }
@@ -905,25 +888,8 @@
             </div>
             @if (AvailableAlternateBaseViews.length > 0 || IsCurrentAlternateBaseViewUnavailable) {
               <div class="form-group">
-                <label for="AlternateBaseView">Base View</label>
-                <select
-                  id="AlternateBaseView"
-                  class="form-input"
-                  [(ngModel)]="AlternateBaseView"
-                  [disabled]="!CanEdit"
-                >
-                  <option [ngValue]="null">Default ({{ Entity?.BaseView }})</option>
-                  @if (IsCurrentAlternateBaseViewUnavailable && AlternateBaseView) {
-                    <option [ngValue]="AlternateBaseView">
-                      {{ AlternateBaseView }} [Unavailable — select Default or another view]
-                    </option>
-                  }
-                  @for (abv of AvailableAlternateBaseViews; track abv.ID) {
-                    <option [ngValue]="abv.Name">
-                      {{ abv.EffectiveDisplayName }} ({{ abv.ViewName }}){{ abv.IsDeprecated ? ' [Deprecated]' : '' }}
-                    </option>
-                  }
-                </select>
+                <label>Canonical Base View</label>
+                <ng-container [ngTemplateOutlet]="baseViewSelector"></ng-container>
               </div>
             }
           </div>
@@ -953,25 +919,8 @@
               <span>Base View</span>
             </div>
             <div class="form-group">
-              <label for="AlternateBaseView">Canonical Base View</label>
-              <select
-                id="AlternateBaseView"
-                class="form-input"
-                [(ngModel)]="AlternateBaseView"
-                [disabled]="!CanEdit"
-              >
-                <option [ngValue]="null">Default ({{ Entity?.BaseView }})</option>
-                @if (IsCurrentAlternateBaseViewUnavailable && AlternateBaseView) {
-                  <option [ngValue]="AlternateBaseView">
-                    {{ AlternateBaseView }} [Unavailable — select Default or another view]
-                  </option>
-                }
-                @for (abv of AvailableAlternateBaseViews; track abv.ID) {
-                  <option [ngValue]="abv.Name">
-                    {{ abv.EffectiveDisplayName }} ({{ abv.ViewName }}){{ abv.IsDeprecated ? ' [Deprecated]' : '' }}
-                  </option>
-                }
-              </select>
+              <label>Canonical Base View</label>
+              <ng-container [ngTemplateOutlet]="baseViewSelector"></ng-container>
             </div>
             <mj-alert Variant="info" Size="sm" class="view-config-alert-pos">Selecting an Alternate Base View and clicking Save will prompt you to save a named view.</mj-alert>
           </div>
@@ -1087,3 +1036,134 @@
   (Confirmed)="OnFilterModeSwitchConfirmed()"
   (Cancelled)="OnFilterModeSwitchCancelled()">
 </mj-ev-confirm-dialog>
+
+<!-- Reusable Custom Alternate Base View Dropdown -->
+<ng-template #baseViewSelector>
+  <div class="abv-custom-select" [class.open]="IsBaseViewDropdownOpen" [class.disabled]="!CanEdit">
+    <button
+      type="button"
+      class="abv-select-trigger"
+      [class.open]="IsBaseViewDropdownOpen"
+      [class.has-abv]="!!AlternateBaseView"
+      [class.is-warning]="IsCurrentAlternateBaseViewUnavailable"
+      [disabled]="!CanEdit"
+      [attr.aria-expanded]="IsBaseViewDropdownOpen"
+      aria-haspopup="listbox"
+      (click)="ToggleBaseViewDropdown($event)">
+      <div class="abv-trigger-main">
+        <div class="abv-trigger-icon" [class.active]="!!AlternateBaseView && !IsCurrentAlternateBaseViewUnavailable" [class.warning]="IsCurrentAlternateBaseViewUnavailable">
+          @if (IsCurrentAlternateBaseViewUnavailable) {
+            <i class="fa-solid fa-triangle-exclamation"></i>
+          } @else if (AlternateBaseView) {
+            <i class="fa-solid fa-layer-group"></i>
+          } @else {
+            <i class="fa-solid fa-database"></i>
+          }
+        </div>
+        <div class="abv-trigger-content">
+          <div class="abv-trigger-header">
+            <span class="abv-trigger-title">{{ SelectedBaseViewLabel }}</span>
+            @if (SelectedBaseViewSqlName) {
+              <code class="abv-sql-badge">{{ SelectedBaseViewSqlName }}</code>
+            }
+            @if (IsCurrentAlternateBaseViewUnavailable) {
+              <span class="abv-status-badge error">Unavailable</span>
+            } @else if (SelectedAlternateBaseViewInfo?.IsDeprecated) {
+              <span class="abv-status-badge warning">Deprecated</span>
+            }
+          </div>
+          @if (SelectedBaseViewDescription) {
+            <div class="abv-trigger-desc">{{ SelectedBaseViewDescription }}</div>
+          }
+        </div>
+      </div>
+      <i class="fa-solid fa-chevron-down abv-trigger-chevron" [class.rotated]="IsBaseViewDropdownOpen"></i>
+    </button>
+
+    @if (IsBaseViewDropdownOpen) {
+      <div class="abv-dropdown-menu" role="listbox">
+        <!-- Default Base View Option -->
+        <button
+          type="button"
+          class="abv-option"
+          role="option"
+          [class.selected]="IsAlternateBaseViewSelected(null)"
+          [attr.aria-selected]="IsAlternateBaseViewSelected(null)"
+          (click)="SelectBaseView(null, $event)">
+          <div class="abv-option-icon">
+            <i class="fa-solid fa-database"></i>
+          </div>
+          <div class="abv-option-body">
+            <div class="abv-option-header">
+              <span class="abv-option-title">Default Base View</span>
+              @if (Entity?.BaseView) {
+                <code class="abv-sql-badge">{{ Entity?.BaseView }}</code>
+              }
+            </div>
+            <div class="abv-option-desc">
+              Includes all records from the entity's canonical base view without pre-filtering.
+            </div>
+          </div>
+          @if (IsAlternateBaseViewSelected(null)) {
+            <i class="fa-solid fa-check abv-option-check"></i>
+          }
+        </button>
+
+        <!-- Unavailable Currently Pinned Option -->
+        @if (IsCurrentAlternateBaseViewUnavailable && AlternateBaseView) {
+          <button
+            type="button"
+            class="abv-option unavailable"
+            role="option"
+            [class.selected]="true"
+            aria-selected="true"
+            (click)="SelectBaseView(AlternateBaseView, $event)">
+            <div class="abv-option-icon warning">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <div class="abv-option-body">
+              <div class="abv-option-header">
+                <span class="abv-option-title">{{ AlternateBaseView }}</span>
+                <span class="abv-status-badge error">Unavailable</span>
+              </div>
+              <div class="abv-option-desc">
+                This alternate base view is disabled or no longer registered on this entity. Select Default or another view.
+              </div>
+            </div>
+            <i class="fa-solid fa-check abv-option-check"></i>
+          </button>
+        }
+
+        <!-- Available Alternate Base Views -->
+        @for (abv of AvailableAlternateBaseViews; track abv.ID) {
+          <button
+            type="button"
+            class="abv-option"
+            role="option"
+            [class.selected]="IsAlternateBaseViewSelected(abv.Name)"
+            [attr.aria-selected]="IsAlternateBaseViewSelected(abv.Name)"
+            (click)="SelectBaseView(abv.Name, $event)">
+            <div class="abv-option-icon abv">
+              <i class="fa-solid fa-layer-group"></i>
+            </div>
+            <div class="abv-option-body">
+              <div class="abv-option-header">
+                <span class="abv-option-title">{{ abv.EffectiveDisplayName }}</span>
+                <code class="abv-sql-badge">{{ abv.ViewName }}</code>
+                @if (abv.IsDeprecated) {
+                  <span class="abv-status-badge warning">Deprecated</span>
+                }
+              </div>
+              @if (abv.Description) {
+                <div class="abv-option-desc">{{ abv.Description }}</div>
+              }
+            </div>
+            @if (IsAlternateBaseViewSelected(abv.Name)) {
+              <i class="fa-solid fa-check abv-option-check"></i>
+            }
+          </button>
+        }
+      </div>
+    }
+  </div>
+</ng-template>

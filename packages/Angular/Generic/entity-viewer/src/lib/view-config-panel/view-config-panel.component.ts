@@ -266,6 +266,9 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   // Column format editing state
   public FormatEditingColumn: ColumnConfig | null = null;
 
+  // Custom Alternate Base View dropdown state
+  public IsBaseViewDropdownOpen: boolean = false;
+
   // Panel resize state
   public IsResizing: boolean = false;
   public PanelWidth: number = 520;
@@ -292,14 +295,32 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
 
   /**
    * Handle keyboard shortcuts
-   * Escape: Close the panel or format sub-panel
+   * Escape: Close open dropdown, format sub-panel, or the panel itself
    */
   @HostListener('document:keydown.escape')
   HandleEscape(): void {
-    if (this.FormatEditingColumn) {
+    if (this.IsBaseViewDropdownOpen) {
+      this.IsBaseViewDropdownOpen = false;
+      this.cdr.detectChanges();
+    } else if (this.FormatEditingColumn) {
       this.CloseFormatEditor();
     } else if (this.IsOpen) {
       this.OnClose();
+    }
+  }
+
+  /**
+   * Close the custom Base View dropdown when clicking outside
+   */
+  @HostListener('document:click', ['$event'])
+  HandleDocumentClick(event: MouseEvent): void {
+    if (!this.IsBaseViewDropdownOpen) {
+      return;
+    }
+    const target = event.target as HTMLElement | null;
+    if (!target?.closest('.abv-custom-select')) {
+      this.IsBaseViewDropdownOpen = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -394,6 +415,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       this.ActiveTab = this.DefaultSaveAsNew ? 'settings' : 'columns';
       this.ColumnSearchText = '';
       this.FormatEditingColumn = null;
+      this.IsBaseViewDropdownOpen = false;
       this._localSaving = false;
       // Also close any open aggregate dialog
       this.ShowAggregateDialog = false;
@@ -836,6 +858,91 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     }
     const match = this.Entity.GetAlternateBaseView(current);
     return !match || !match.IsUsable;
+  }
+
+  /**
+   * Toggle the custom Alternate Base View dropdown
+   */
+  ToggleBaseViewDropdown(event?: MouseEvent): void {
+    if (!this.CanEdit) return;
+    event?.stopPropagation();
+    this.IsBaseViewDropdownOpen = !this.IsBaseViewDropdownOpen;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Select a base view option from the custom dropdown
+   */
+  SelectBaseView(name: string | null, event?: MouseEvent): void {
+    if (!this.CanEdit) return;
+    event?.stopPropagation();
+    this.AlternateBaseView = name;
+    this.IsBaseViewDropdownOpen = false;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Check if a given alternate base view name matches the current selection (case-insensitive)
+   */
+  IsAlternateBaseViewSelected(name: string | null): boolean {
+    const current = this.AlternateBaseView?.trim() || null;
+    const target = name?.trim() || null;
+    if (!current && !target) {
+      return true;
+    }
+    if (!current || !target) {
+      return false;
+    }
+    return current.toLowerCase() === target.toLowerCase();
+  }
+
+  /**
+   * Currently selected EntityAlternateBaseViewInfo (if an available alternate base view is selected)
+   */
+  get SelectedAlternateBaseViewInfo(): EntityAlternateBaseViewInfo | null {
+    const current = this.AlternateBaseView?.trim();
+    if (!current || !this.Entity) {
+      return null;
+    }
+    const match = this.Entity.GetAlternateBaseView(current);
+    return match && match.IsUsable ? match : null;
+  }
+
+  /**
+   * Primary label shown in the custom Base View dropdown trigger
+   */
+  get SelectedBaseViewLabel(): string {
+    if (!this.AlternateBaseView?.trim()) {
+      return 'Default Base View';
+    }
+    const match = this.SelectedAlternateBaseViewInfo;
+    if (match) {
+      return match.EffectiveDisplayName;
+    }
+    return this.AlternateBaseView;
+  }
+
+  /**
+   * Physical SQL view name shown as a monospace badge in the trigger
+   */
+  get SelectedBaseViewSqlName(): string | null {
+    if (!this.AlternateBaseView?.trim()) {
+      return this.Entity?.BaseView || null;
+    }
+    return this.SelectedAlternateBaseViewInfo?.ViewName || null;
+  }
+
+  /**
+   * Description for the currently selected Base View shown below the trigger
+   */
+  get SelectedBaseViewDescription(): string {
+    if (!this.AlternateBaseView?.trim()) {
+      return "Includes all records from the entity's canonical base view without pre-filtering.";
+    }
+    if (this.IsCurrentAlternateBaseViewUnavailable) {
+      return 'This alternate base view is disabled or no longer registered on this entity. Select Default or another view.';
+    }
+    return this.SelectedAlternateBaseViewInfo?.Description || '';
   }
 
   /**
@@ -1447,6 +1554,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    * Close the panel
    */
   OnClose(): void {
+    this.IsBaseViewDropdownOpen = false;
     this.Close.emit();
   }
 
@@ -1623,6 +1731,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   SetActiveTab(tab: 'columns' | 'sorting' | 'filters' | 'aggregates' | 'settings'): void {
     this.ActiveTab = tab;
     this.FormatEditingColumn = null; // Close format editor when switching tabs
+    this.IsBaseViewDropdownOpen = false;
     this.cdr.detectChanges();
   }
 

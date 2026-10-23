@@ -134,4 +134,52 @@ describe('ViewConfigPanelComponent — carrying a staged filter back from the na
     expect(emitted).toHaveLength(1);
     expect(emitted[0].AlternateBaseView).toBe('Legacy');
   });
+
+  it('drives the custom Base View dropdown state, labels, SQL badges, and descriptions', () => {
+    const panel = makePanel();
+    const abvList = [
+      {
+        ID: 'abv-1',
+        Name: 'DueNow',
+        EffectiveDisplayName: 'Scheduled Jobs Due Now',
+        ViewName: 'vwScheduledJobsDueNow',
+        Description: 'Active scheduled jobs whose NextRunAt timestamp is at or before the current UTC time.',
+        Status: 'Active',
+        IsUsable: true,
+        IsDeprecated: false,
+      },
+    ];
+    panel.Entity = {
+      ...makeEntity(),
+      BaseView: 'vwScheduledJobs',
+      AlternateBaseViews: abvList,
+      GetAlternateBaseView: (name: string) =>
+        abvList.find(v => v.Name.toLowerCase() === name.trim().toLowerCase()),
+    } as unknown as EntityInfo;
+
+    open(panel);
+
+    // Default state
+    expect(panel.IsBaseViewDropdownOpen).toBe(false);
+    expect(panel.SelectedBaseViewLabel).toBe('Default Base View');
+    expect(panel.SelectedBaseViewSqlName).toBe('vwScheduledJobs');
+    expect(panel.SelectedBaseViewDescription).toContain('canonical base view');
+    expect(panel.IsAlternateBaseViewSelected(null)).toBe(true);
+    expect(panel.IsAlternateBaseViewSelected('DueNow')).toBe(false);
+
+    // Open dropdown and select DueNow
+    panel.ToggleBaseViewDropdown();
+    expect(panel.IsBaseViewDropdownOpen).toBe(true);
+
+    panel.SelectBaseView('DueNow');
+    expect(panel.IsBaseViewDropdownOpen).toBe(false);
+    expect(panel.AlternateBaseView).toBe('DueNow');
+    expect(panel.SelectedBaseViewLabel).toBe('Scheduled Jobs Due Now');
+    expect(panel.SelectedBaseViewSqlName).toBe('vwScheduledJobsDueNow');
+    expect(panel.SelectedBaseViewDescription).toBe(
+      'Active scheduled jobs whose NextRunAt timestamp is at or before the current UTC time.'
+    );
+    expect(panel.IsAlternateBaseViewSelected('DueNow')).toBe(true);
+    expect(panel.IsAlternateBaseViewSelected(null)).toBe(false);
+  });
 });
