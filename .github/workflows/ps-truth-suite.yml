@@ -63,6 +63,10 @@ jobs:
       # bizapps-common for PR 1's bridged gates (nightly/weekly only). PR 1 companion #354 head — re-pin to its merge commit when it merges.
       BIZAPPS_COMMON_REPO: https://github.com/MemberJunction/bizapps-common.git
       BIZAPPS_COMMON_REF: 76809d340e450905f1c80730a62ad3485aabeca0
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
     steps:
       - uses: actions/checkout@v4
         with: { persist-credentials: false }
