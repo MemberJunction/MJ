@@ -469,6 +469,32 @@
             "lastModified": "2026-09-09T14:31:44.166Z",
             "checksum": "22a316ed9e0cb808317054f3f62ee6827d2acd78d442edc32b0e0839d142af48"
           }
+        },
+        {
+          "fields": {
+            "Code": "EntityAlternateBaseViews",
+            "DatasetID": "@parent:ID",
+            "Sequence": 33,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Alternate Base Views",
+            "DateFieldToCheck": "__mj_UpdatedAt",
+            "Description": "Registered alternate base views (same columns, canonical row subset) for entities"
+          },
+          "primaryKey": {
+            "ID": "05FCCBE7-74AE-44F4-B3A0-ECC731320E35"
+          }
+        },
+        {
+          "fields": {
+            "Code": "EntityAlternateBaseViewPermissions",
+            "DatasetID": "@parent:ID",
+            "Sequence": 34,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Alternate Base View Permissions",
+            "DateFieldToCheck": "__mj_UpdatedAt",
+            "Description": "Role-based restrictions on alternate base views, linked to their parent alternate views during metadata post-processing"
+          },
+          "primaryKey": {
+            "ID": "D305D73A-E179-4EFD-A136-13441889A1DB"
+          }
         }
       ]
     },

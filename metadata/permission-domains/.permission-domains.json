@@ -199,6 +199,24 @@
   },
   {
     "fields": {
+      "Name": "Entity Alternate Base View Permissions",
+      "Description": "Role-based Read/Execute permission narrowing on MJ entity alternate base views. Alternate views with no permission rows inherit entity CanRead; rows restrict use of the lens to the listed roles (on top of entity CanRead, RLS, and FLS).",
+      "ProviderClassName": "MJEntityAlternateBaseViewPermissionProvider",
+      "SupportedGranteeTypes": "Role",
+      "SupportedActions": "Read",
+      "SupportsDeny": false,
+      "SupportsExpiration": false,
+      "SupportsHierarchyInheritance": true,
+      "IsActive": true,
+      "DisplayOrder": 85,
+      "Icon": "fa-solid fa-layer-group"
+    },
+    "primaryKey": {
+      "ID": "724465F0-437D-4F17-A8C5-96FA57A41088"
+    }
+  },
+  {
+    "fields": {
       "Name": "Access Control Rules",
       "Description": "Record-level permissions with User/Role/Everyone/Public grantees, full CRUD+Share actions, and optional time-bound expiration.",
       "ProviderClassName": "MJAccessControlRuleProvider",

@@ -35,7 +35,8 @@ export class MJRoleFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAISkillPermissions', sectionName: 'AI Skill Permissions', isExpanded: false },
             { sectionKey: 'mJConversationWidgetInstances', sectionName: 'Conversation Widget Instances', isExpanded: false },
             { sectionKey: 'mJEntityFieldPermissions', sectionName: 'Entity Field Permissions', isExpanded: false },
-            { sectionKey: 'mJEntityFormContributions', sectionName: 'Entity Form Contributions', isExpanded: false }
+            { sectionKey: 'mJEntityFormContributions', sectionName: 'Entity Form Contributions', isExpanded: false },
+            { sectionKey: 'mJEntityAlternateBaseViewPermissions', sectionName: 'Entity Alternate Base View Permissions', isExpanded: false }
         ]);
     }
 }

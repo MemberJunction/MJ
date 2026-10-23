@@ -177,17 +177,20 @@ Alternate-view checks run on every RunView, so they need the cached helper.
 | D7 | Alternate-view reads are cached by default, isolated by an `abv:` fingerprint segment, with a per-view `CachePolicy = 'Bypass'` opt-out | Alternate views are live, so saves on the entity invalidate their slots. Predicates that read the clock or other tables change with no event on this entity; those views declare `Bypass`. |
 | D8 | Precedence: explicit `AlternateBaseView` → User View pin → `BaseView` | The most specific source wins. |
 | D9 | One resolver, called once per request | Mirrors `IsMaterializedDataSource`: validation, permission gate, fingerprint, single-flight key and FROM clause all consume one resolved value. |
-| D10 | Authoring contract: `CREATE VIEW <alt> AS SELECT * FROM <BaseView> WHERE …` | Selecting from the base view inherits its joins and soft-delete handling and makes the alternate view a row subset of it. CodeGen keeps it refreshed (Phase 4). |
-| D11 | **Per-view permissions only narrow.** No rows means anyone who can read the entity may use the view; rows mean only those roles may. | A role that can read the entity can express the same rows with `ExtraFilter`, so this is governance over which canonical lenses a role uses and sees, not a security boundary. "Role X may only see active members" is a row-level security filter, which already exists; the guide will say so. |
+| D10 | Authoring contract: `CREATE VIEW <alt> AS SELECT * FROM <BaseView or ParentAltView> WHERE …` | Selecting from the base view (or a parent alternate base view) inherits its joins and soft-delete handling and makes the alternate view a row subset of it. CodeGen keeps it refreshed in topological `ParentID` order (Phase 4). |
+| D11 | **Per-view permissions only narrow (0 rows = inherit entity `CanRead`, with RLS and FLS always enforced).** | Entity `CanRead`, Row-Level Security (RLS), and Field-Level Security (FLS) **always** apply when reading through an alternate view. When `EntityAlternateBaseViewPermission` has **no rows** (the default), any user with `CanRead` on the owning entity may use the view. When rows exist, only users holding at least one listed role (and satisfying any parent view's role restrictions via `ParentID`) may use the lens. |
 | D12 | A Query Entities row for an alternate-view reference keeps `EntityID` = **owning entity** and adds `AlternateBaseViewID` | Query permission and cache semantics key on `EntityID` and stay exactly as they are; the lens is recorded alongside for impact analysis and the canon graph. |
 | D13 | `ClientClauseScreen` and the full-SQL screen behind ad-hoc queries accept a `FROM` over a registered, usable alternate view, applying `AssertUnscopedRead` to its owning entity | Lets client filters reuse canonical definitions without opening any object that is not already readable as the base view. |
 | D14 | `ViewName`/`SchemaName` are validated as identifiers on save (`ValidateIdentifier`, `@memberjunction/schema-engine`) and again before splicing into SQL | They become SQL text. Quoting alone is not the control. |
+| D15 | **`ParentID` hierarchy on `EntityAlternateBaseView` + deterministic AST auto-population** | Derived alternate views (e.g. `ActiveAutoRenew` selecting from `vwActiveMembers`) link to their parent alternate view on the same entity (`ParentID`). When `ParentID` is unset on save, `MJEntityAlternateBaseViewEntityServer` inspects the SQL view definition via AST (`extractTableRefsFromSQL`) and automatically populates `ParentID` if the `FROM` clause references another registered alternate view on the same entity. Gives CodeGen topological refresh order, parent-chain permission inheritance, and direct `NarrowerThan`/`Subsets` edges for the canon graph. |
+| D16 | **No LLM "Smart Filter" on `EntityAlternateBaseView`; User View Smart Filters receive the pinned view's description** | Alternate Base Views are governed SQL canon (`CREATE VIEW` in migrations), not runtime LLM-generated `WHERE` strings. However, when a **User View** pins an alternate base view and uses User View Smart Filters (`MJUserViewEntityServer`), the pinned alternate view's `Name`, `DisplayName`, and `Description` are passed to the Smart Filter prompt so the LLM generates only the incremental predicate on top of the canonical lens. |
 
 ### Data model
 
 ```mermaid
 erDiagram
     Entity ||--o{ EntityAlternateBaseView : "registers"
+    EntityAlternateBaseView |o--o{ EntityAlternateBaseView : "derives from (ParentID)"
     EntityAlternateBaseView ||--o{ EntityAlternateBaseViewPermission : "restricted to"
     Role ||--o{ EntityAlternateBaseViewPermission : ""
     Query ||--o{ QueryEntity : "reads"
@@ -196,6 +199,7 @@ erDiagram
     EntityAlternateBaseView {
         uniqueidentifier ID PK
         uniqueidentifier EntityID FK
+        uniqueidentifier ParentID FK "nullable, same entity"
         nvarchar Name "logical, unique per entity"
         nvarchar DisplayName "nullable"
         nvarchar Description "required"
@@ -221,6 +225,7 @@ table, CodeGen output appended below, no literal `Sequence` on generated `Entity
 CREATE TABLE ${flyway:defaultSchema}.EntityAlternateBaseView (
     ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
     EntityID UNIQUEIDENTIFIER NOT NULL,
+    ParentID UNIQUEIDENTIFIER NULL,
     Name NVARCHAR(100) NOT NULL,
     DisplayName NVARCHAR(255) NULL,
     Description NVARCHAR(MAX) NOT NULL,
@@ -231,7 +236,9 @@ CREATE TABLE ${flyway:defaultSchema}.EntityAlternateBaseView (
     Sequence INT NOT NULL DEFAULT 0,
     CONSTRAINT PK_EntityAlternateBaseView PRIMARY KEY (ID),
     CONSTRAINT FK_EntityAlternateBaseView_Entity FOREIGN KEY (EntityID) REFERENCES ${flyway:defaultSchema}.Entity(ID),
+    CONSTRAINT FK_EntityAlternateBaseView_Parent FOREIGN KEY (ParentID) REFERENCES ${flyway:defaultSchema}.EntityAlternateBaseView(ID),
     CONSTRAINT UQ_EntityAlternateBaseView_EntityID_Name UNIQUE (EntityID, Name),
+    CONSTRAINT CK_EntityAlternateBaseView_NoSelfParent CHECK (ParentID <> ID),
     CONSTRAINT CK_EntityAlternateBaseView_CachePolicy CHECK (CachePolicy IN ('Default', 'Bypass')),
     CONSTRAINT CK_EntityAlternateBaseView_Status CHECK (Status IN ('Active', 'Deprecated', 'Disabled'))
 );
@@ -289,13 +296,15 @@ flowchart TD
 ```typescript
 // packages/MJCore/src/generic/entityInfo.ts
 export class EntityAlternateBaseViewInfo extends BaseInfo {
-    ID: string; EntityID: string; Name: string; DisplayName: string | null; Description: string;
+    ID: string; EntityID: string; ParentID: string | null; Name: string; DisplayName: string | null; Description: string;
     SchemaName: string | null; ViewName: string;
     CachePolicy: 'Default' | 'Bypass'; Status: 'Active' | 'Deprecated' | 'Disabled'; Sequence: number;
     get Permissions(): EntityAlternateBaseViewPermissionInfo[];
+    get Parent(): EntityAlternateBaseViewInfo | null;
+    get Children(): EntityAlternateBaseViewInfo[];
     get EffectiveSchemaName(): string;            // SchemaName ?? owning entity's SchemaName
-    get IsUsable(): boolean;                       // Status !== 'Disabled'
-    UserCanUse(user: UserInfo): boolean;           // no Permissions rows → true; else user holds one of the roles
+    get IsUsable(): boolean;                       // Status !== 'Disabled' (and Parent.IsUsable when ParentID is set)
+    UserCanUse(user: UserInfo): boolean;           // no Permissions rows → true; else user holds one of the roles (and Parent.UserCanUse when ParentID is set)
 }
 // on EntityInfo, built in the constructor from initData.EntityAlternateBaseViews
 get AlternateBaseViews(): EntityAlternateBaseViewInfo[];                     // ordered by Sequence, Name
@@ -390,6 +399,8 @@ before any entity whose base view CodeGen regenerates ships an alternate view.
    - case-insensitive `Name` uniqueness per entity
    - `ViewName`/`SchemaName` identifier validation (D14)
    - `ViewName` ≠ the entity's `BaseView`
+   - `ParentID` validation: must belong to the same `EntityID` and must not form a cycle
+   - deterministic AST auto-population of `ParentID` in `Save()`: when `ParentID` is unset, inspect the SQL view definition and if its `FROM` clause references another registered alternate base view on the same entity, set `ParentID` to that view's `ID` (D15)
 7. **`IDisplayState.alternateBaseView`**. Run `mj sync push` **then** `mj codegen --skipdb`; CodeGen reads JSONType definitions from the database, so the reverse order silently deletes properties.
 8. **Polymorphic-FK and form metadata.** Nothing polymorphic here. Confirm the generated `MJ: Entities` form shows "Alternate Base Views" as a related section, and order the new `metadata/` directories after `entities` in `.mj-sync.json`.
 
@@ -420,9 +431,9 @@ before any entity whose base view CodeGen regenerates ships an alternate view.
 ### Phase 4 — CodeGen upkeep
 Without this, a SQL Server `SELECT *` alternate view keeps its creation-time column list after
 CodeGen recreates the base view, and PostgreSQL freezes `*` at `CREATE VIEW`.
-1. **Refresh/rebind** each registered alternate view after its entity's base view is regenerated. Reuse the layered-view machinery in `sql_codegen.ts`:
+1. **Refresh/rebind** each registered alternate view after its entity's base view is regenerated, ordered topologically by `ParentID` (parent alternate views refreshed before derived child alternate views). Reuse the layered-view machinery in `sql_codegen.ts`:
    - SQL Server: `generateViewRefreshSQL`.
-   - PostgreSQL: `RestarLayeredOuterView` (`packages/SQLDialect/src/postgresqlRestarLayeredOuter.ts`) with the base view as the inner. Verify it keeps the `WHERE`, or add a sibling for that shape.
+   - PostgreSQL: `RestarLayeredOuterView` (`packages/SQLDialect/src/postgresqlRestarLayeredOuter.ts`) with the base view (or parent alternate view) as the inner. Verify it keeps the `WHERE`, or add a sibling for that shape.
    - Guard each with `generateIfViewExistsSQL`.
 2. **Permissions**: emit the base view's permission set on each alternate view (role GRANTs plus SQL Server column-level FLS `DENY SELECT`), inside the wipe-and-reassert scope. Read [`guides/FIELD_LEVEL_SECURITY_GUIDE.md`](../guides/FIELD_LEVEL_SECURITY_GUIDE.md) first.
 3. **Parity and safety warnings**:
@@ -444,7 +455,7 @@ CodeGen recreates the base view, and PostgreSQL freezes `*` at `CREATE VIEW`.
 
 ### Phase 6 — User Views, BaseEngine, other consumers
 1. **`MJUserViewEntityExtended`** (beside `ParsedDisplayState`, `:150`): a typed `AlternateBaseView` get/set over `DisplayStateObject`. It supplies `defaultMode` when creating `DisplayState`; `null` removes the key.
-2. **`MJUserViewEntityServer`**: `Validate()` refuses a pin naming no usable alternate view of the view's entity. Runs of a view whose pin is later disabled fail loudly per D5.
+2. **`MJUserViewEntityServer`**: `Validate()` refuses a pin naming no usable alternate view of the view's entity. Runs of a view whose pin is later disabled fail loudly per D5. When generating a User View Smart Filter (`GenerateSmartFilterWhereClause`), include the pinned alternate view's `Name`, `DisplayName`, and `Description` in the prompt context so the LLM emits only the incremental filter on top of the canonical lens (D16).
 3. **BaseEngine** (`baseEngine.ts`): `BaseEnginePropertyConfig.AlternateBaseView?: string`; passed in `BuildRunViewParamsForConfig` (`:2119`); `canUseImmediateMutation` (`:1611`) returns false when set.
 4. **BaseEngineRegistry** `FindCachedEntity` (`baseEngineRegistry.ts:699`): `unfiltered = !cfg.Filter && !cfg.AlternateBaseView`, with a unit test.
 5. **Lists** (`packages/Lists/server/src/ListOperations.ts:852–880`): pass the pin when re-running a view's clause. `resolveViewSource` (`:425`) runs by ViewID and inherits it already.
@@ -547,11 +558,12 @@ Gate: `pnpm run test:integration`; `check:guards` and `check:standards` before e
 - **Disabling a view breaks saved views that pin it.** Intentional (D5); the picker offers "reset to all records".
 - **A `ViewEntity`-passed request keyed on an old pin.** If a server-internal caller holds a stale `ViewEntity`, the `abv:` segment follows that object, the same semantics `WhereClause` has today. ViewID-only client requests skip the cache entirely.
 
-**Open questions**
-1. **May an Open App register alternate views on entities it doesn't own** (e.g. a BizApps app adding `vwCompaniesWithOpenDeals` on `MJ: Companies`)? The table makes it technically clean, since the app's rows are its own and teardown removes them. Proposed: allowed, with the guide requiring the app's own schema for the SQL view.
-2. **Overriding a pin back to the base view per call** needs a sentinel (`null`/`undefined` collapse over GraphQL). Proposed: skip until needed.
-3. **IT fixture vs a shipped core adopter.** The plan uses a Setup fixture. A real core adopter, e.g. `MJ: Users` → `Active` (`vwUsersActive`), could follow as a demo in its own PR.
-4. **Smart filters.** Should smart-filter generation (`MJUserViewEntityServer.server.ts:242–279`) receive the pinned view's Description as context?
+**Resolved design questions**
+1. **May an Open App register alternate views on entities it doesn't own** (e.g. a BizApps app adding `vwCompaniesWithOpenDeals` on `MJ: Companies`)? **Yes** — allowed, with the guide requiring the app's own schema (`SchemaName`) for the SQL view.
+2. **Overriding a pin back to the base view per call:** deferred until needed.
+3. **IT fixture vs shipped core & BizApps adopters:** we build both the deterministic `IT132` Setup fixture AND real canonical alternate base views in MJ Core (`MJ: Users`, `MJ: AI Models`, `MJ: Scheduled Jobs`) and downstream BizApps (`bizapps-common`, `bizapps-orders`, `bizapps-sales`).
+4. **Smart filters (D16):** `EntityAlternateBaseView` itself does not have an LLM-generated `WhereClause` (alternate views are governed physical SQL views in migrations). User View Smart Filters (`MJUserViewEntityServer`) receive the pinned alternate view's `Name`, `DisplayName`, and `Description` as context so the LLM writes only the incremental filter.
+5. **Hierarchy of alternate views (D15):** `EntityAlternateBaseView.ParentID` supports derived alternate views (e.g. `ActiveAutoRenew` built on `Active`), auto-populated deterministically via SQL AST inspection when unset on save, and refreshed in topological order by CodeGen.
 
 **Pre-existing issues found during review** (file separately unless a phase fixes them):
 - `BaseEngine.classifyEventForConfig` (`baseEngine.ts:1415–1441`) returns `'notify'` with no refresh when the saved object is the engine's own instance, so a row that leaves a `Filter` set stays in the array.

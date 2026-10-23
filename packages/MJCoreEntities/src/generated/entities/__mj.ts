@@ -19375,6 +19375,144 @@ export const MJEntityActionSchema = z.object({
 export type MJEntityActionEntityType = z.infer<typeof MJEntityActionSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Entity Alternate Base View Permissions
+ */
+export const MJEntityAlternateBaseViewPermissionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EntityAlternateBaseViewID: z.string().describe(`
+        * * Field Name: EntityAlternateBaseViewID
+        * * Display Name: Entity Alternate Base View
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entity Alternate Base Views (vwEntityAlternateBaseViews.ID)
+        * * Description: The alternate base view being restricted.`),
+    RoleID: z.string().describe(`
+        * * Field Name: RoleID
+        * * Display Name: Role
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+        * * Description: Role permitted to read through the alternate base view (provided the role can also read the owning entity).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    EntityAlternateBaseView: z.string().describe(`
+        * * Field Name: EntityAlternateBaseView
+        * * Display Name: Entity Alternate Base View Name
+        * * SQL Data Type: nvarchar(100)`),
+    Role: z.string().describe(`
+        * * Field Name: Role
+        * * Display Name: Role Name
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type MJEntityAlternateBaseViewPermissionEntityType = z.infer<typeof MJEntityAlternateBaseViewPermissionSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Entity Alternate Base Views
+ */
+export const MJEntityAlternateBaseViewSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Owning entity whose column contract this alternate base view shares.`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entity Alternate Base Views (vwEntityAlternateBaseViews.ID)
+        * * Description: Optional parent alternate base view on the same entity that this view derives from (e.g. an Active Auto-Renew Members view built on top of Active Members). NULL when the view selects directly from the entity's BaseView. Automatically populated on save via SQL AST extraction when the view's FROM clause references another registered alternate base view.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Logical name of the alternate base view, unique per entity (case-insensitive). Callers pass this name via RunViewParams.AlternateBaseView or pin it on a User View.`),
+    DisplayName: z.string().nullable().describe(`
+        * * Field Name: DisplayName
+        * * Display Name: Display Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Human-friendly label shown in UI pickers and badges. Falls back to Name when NULL.`),
+    Description: z.string().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Plain-language definition of which rows this alternate base view includes. Surfaced as help text in pickers and in agent and QueryGen discovery context.`),
+    SchemaName: z.string().nullable().describe(`
+        * * Field Name: SchemaName
+        * * Display Name: Schema Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Database schema of ViewName. When NULL, defaults to the owning entity's SchemaName. Cross-schema views allow an Open App to register an alternate view in its own schema on an upstream entity.`),
+    ViewName: z.string().describe(`
+        * * Field Name: ViewName
+        * * Display Name: View Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Physical SQL view name in the database. Must select all columns from the owning entity's BaseView.`),
+    CachePolicy: z.union([z.literal('Bypass'), z.literal('Default')]).describe(`
+        * * Field Name: CachePolicy
+        * * Display Name: Cache Policy
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Default
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Bypass
+    *   * Default
+        * * Description: Controls RunView caching for this alternate view: Default caches results under an isolated abv: fingerprint segment and invalidates on entity writes; Bypass disables caching for views whose predicates depend on the clock or other tables.`),
+    Status: z.union([z.literal('Active'), z.literal('Deprecated'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
+        * * Description: Lifecycle status of the alternate view: Active (selectable and shown in pickers and agent context), Deprecated (executable with a warning, hidden from pickers and agents), or Disabled (rejected at runtime).`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Display ordering of this alternate view within its owning entity (lower numbers appear first).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity Name
+        * * SQL Data Type: nvarchar(255)`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJEntityAlternateBaseViewEntityType = z.infer<typeof MJEntityAlternateBaseViewSchema>;
+
+/**
  * zod schema definition for the entity MJ: Entity Communication Fields
  */
 export const MJEntityCommunicationFieldSchema = z.object({
@@ -28796,6 +28934,12 @@ export const MJQueryEntitySchema = z.object({
         * * Display Name: Auto Detect Confidence Score
         * * SQL Data Type: decimal(3, 2)
         * * Description: Confidence score (0.00-1.00) indicating how certain the AI was that this entity is actually used in the query. Only populated when DetectionMethod="AI". Considers factors like: direct table references vs indirect joins, clear entity names vs ambiguous aliases, and context from the query purpose. Lower scores might indicate the entity is only peripherally involved or the detection was uncertain.`),
+    AlternateBaseViewID: z.string().nullable().describe(`
+        * * Field Name: AlternateBaseViewID
+        * * Display Name: Alternate Base View
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entity Alternate Base Views (vwEntityAlternateBaseViews.ID)
+        * * Description: When this query references an alternate base view rather than the entity's primary BaseView, records the specific MJ: Entity Alternate Base Views row while EntityID continues to reference the owning entity.`),
     Query: z.string().describe(`
         * * Field Name: Query
         * * Display Name: Query
@@ -28804,6 +28948,10 @@ export const MJQueryEntitySchema = z.object({
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
+    AlternateBaseView: z.string().nullable().describe(`
+        * * Field Name: AlternateBaseView
+        * * Display Name: Alternate Base View Name
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJQueryEntityEntityType = z.infer<typeof MJQueryEntitySchema>;
@@ -95251,6 +95399,344 @@ export class MJEntityActionEntity extends BaseEntity<MJEntityActionEntityType> {
 
 
 /**
+ * MJ: Entity Alternate Base View Permissions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: EntityAlternateBaseViewPermission
+ * * Base View: vwEntityAlternateBaseViewPermissions
+ * * @description Optional role-based restrictions on an alternate base view. When an alternate view has no permission rows, any user who can read the owning entity may use it; when rows exist, only users holding at least one listed role may use it.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Entity Alternate Base View Permissions')
+export class MJEntityAlternateBaseViewPermissionEntity extends BaseEntity<MJEntityAlternateBaseViewPermissionEntityType> {
+    /**
+    * Loads the MJ: Entity Alternate Base View Permissions record from the database
+    * @param ID: string - primary key value to load the MJ: Entity Alternate Base View Permissions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJEntityAlternateBaseViewPermissionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityAlternateBaseViewID
+    * * Display Name: Entity Alternate Base View
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entity Alternate Base Views (vwEntityAlternateBaseViews.ID)
+    * * Description: The alternate base view being restricted.
+    */
+    get EntityAlternateBaseViewID(): string {
+        return this.Get('EntityAlternateBaseViewID');
+    }
+    set EntityAlternateBaseViewID(value: string) {
+        this.Set('EntityAlternateBaseViewID', value);
+    }
+
+    /**
+    * * Field Name: RoleID
+    * * Display Name: Role
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+    * * Description: Role permitted to read through the alternate base view (provided the role can also read the owning entity).
+    */
+    get RoleID(): string {
+        return this.Get('RoleID');
+    }
+    set RoleID(value: string) {
+        this.Set('RoleID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: EntityAlternateBaseView
+    * * Display Name: Entity Alternate Base View Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get EntityAlternateBaseView(): string {
+        return this.Get('EntityAlternateBaseView');
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Role(): string {
+        return this.Get('Role');
+    }
+}
+
+
+/**
+ * MJ: Entity Alternate Base Views - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: EntityAlternateBaseView
+ * * Base View: vwEntityAlternateBaseViews
+ * * @description Registers alternate base views for an entity: SQL views that expose the same columns as the entity's BaseView while returning a canonical row subset (such as Active Members or Open Orders).
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Entity Alternate Base Views')
+export class MJEntityAlternateBaseViewEntity extends BaseEntity<MJEntityAlternateBaseViewEntityType> {
+    /**
+    * Loads the MJ: Entity Alternate Base Views record from the database
+    * @param ID: string - primary key value to load the MJ: Entity Alternate Base Views record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJEntityAlternateBaseViewEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Owning entity whose column contract this alternate base view shares.
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entity Alternate Base Views (vwEntityAlternateBaseViews.ID)
+    * * Description: Optional parent alternate base view on the same entity that this view derives from (e.g. an Active Auto-Renew Members view built on top of Active Members). NULL when the view selects directly from the entity's BaseView. Automatically populated on save via SQL AST extraction when the view's FROM clause references another registered alternate base view.
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Logical name of the alternate base view, unique per entity (case-insensitive). Callers pass this name via RunViewParams.AlternateBaseView or pin it on a User View.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: DisplayName
+    * * Display Name: Display Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-friendly label shown in UI pickers and badges. Falls back to Name when NULL.
+    */
+    get DisplayName(): string | null {
+        return this.Get('DisplayName');
+    }
+    set DisplayName(value: string | null) {
+        this.Set('DisplayName', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Plain-language definition of which rows this alternate base view includes. Surfaced as help text in pickers and in agent and QueryGen discovery context.
+    */
+    get Description(): string {
+        return this.Get('Description');
+    }
+    set Description(value: string) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: SchemaName
+    * * Display Name: Schema Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Database schema of ViewName. When NULL, defaults to the owning entity's SchemaName. Cross-schema views allow an Open App to register an alternate view in its own schema on an upstream entity.
+    */
+    get SchemaName(): string | null {
+        return this.Get('SchemaName');
+    }
+    set SchemaName(value: string | null) {
+        this.Set('SchemaName', value);
+    }
+
+    /**
+    * * Field Name: ViewName
+    * * Display Name: View Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Physical SQL view name in the database. Must select all columns from the owning entity's BaseView.
+    */
+    get ViewName(): string {
+        return this.Get('ViewName');
+    }
+    set ViewName(value: string) {
+        this.Set('ViewName', value);
+    }
+
+    /**
+    * * Field Name: CachePolicy
+    * * Display Name: Cache Policy
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Default
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Bypass
+    *   * Default
+    * * Description: Controls RunView caching for this alternate view: Default caches results under an isolated abv: fingerprint segment and invalidates on entity writes; Bypass disables caching for views whose predicates depend on the clock or other tables.
+    */
+    get CachePolicy(): 'Bypass' | 'Default' {
+        return this.Get('CachePolicy');
+    }
+    set CachePolicy(value: 'Bypass' | 'Default') {
+        this.Set('CachePolicy', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
+    * * Description: Lifecycle status of the alternate view: Active (selectable and shown in pickers and agent context), Deprecated (executable with a warning, hidden from pickers and agents), or Disabled (rejected at runtime).
+    */
+    get Status(): 'Active' | 'Deprecated' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Deprecated' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display ordering of this alternate view within its owning entity (lower numbers appear first).
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
+    }
+}
+
+
+/**
  * MJ: Entity Communication Fields - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: EntityCommunicationField
@@ -119981,6 +120467,20 @@ export class MJQueryEntityEntity extends BaseEntity<MJQueryEntityEntityType> {
     }
 
     /**
+    * * Field Name: AlternateBaseViewID
+    * * Display Name: Alternate Base View
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entity Alternate Base Views (vwEntityAlternateBaseViews.ID)
+    * * Description: When this query references an alternate base view rather than the entity's primary BaseView, records the specific MJ: Entity Alternate Base Views row while EntityID continues to reference the owning entity.
+    */
+    get AlternateBaseViewID(): string | null {
+        return this.Get('AlternateBaseViewID');
+    }
+    set AlternateBaseViewID(value: string | null) {
+        this.Set('AlternateBaseViewID', value);
+    }
+
+    /**
     * * Field Name: Query
     * * Display Name: Query
     * * SQL Data Type: nvarchar(255)
@@ -119996,6 +120496,15 @@ export class MJQueryEntityEntity extends BaseEntity<MJQueryEntityEntityType> {
     */
     get Entity(): string {
         return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: AlternateBaseView
+    * * Display Name: Alternate Base View Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get AlternateBaseView(): string | null {
+        return this.Get('AlternateBaseView');
     }
 }
 
@@ -145673,6 +146182,12 @@ export interface MJUserViewEntity_IDisplayState {
     cards?: MJUserViewEntity_IDisplayCardState;
     /** Grid-specific configuration */
     grid?: MJUserViewEntity_IGridDisplayState;
+    /**
+     * Logical name of an alternate base view (`MJ: Entity Alternate Base Views.Name`)
+     * that this view reads from. When omitted or null, the view reads from the
+     * entity's primary `BaseView`.
+     */
+    alternateBaseView?: string;
     /**
      * Per-view-type configuration, one entry per view type the user has configured.
      * Keyed by the `MJ: View Types` row ID so each type (Grid, Cards, Timeline, Map,
