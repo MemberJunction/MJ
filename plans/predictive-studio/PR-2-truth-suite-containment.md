@@ -1,15 +1,13 @@
 # PR 2 — Planted-truth suite, dev environment and containment
 
-> **For agents:** read `AGENTS.md` (plans repo) or §2 "Agent bootstrap" below before anything else. Execute
-> milestones in order (M1 → M6, then C1 → C6, then M-final), tasks as checkboxes (`- [ ]` → `- [x]`). Append to §11
-> before you stop, for any reason.
+> **Standards cleanup:** this PR was cleaned up after review; see [`PR-2-standards-cleanup-design.md`](PR-2-standards-cleanup-design.md) for the shipped design. Where this plan describes a runner, a gate registry, lanes or CI wiring, the cleanup design supersedes it. Checked steps below are work the PR contains; unchecked steps (the Loom companion tasks M3.1-M3.3 and the CI workflow M6.1-M6.2) are not part of it.
 
 ## 1. Header
 
 | Field | Value |
 |---|---|
 | PR | 2 of 6 — Planted-truth suite, dev environment and containment |
-| Status | not-started |
+| Status | in-review |
 | Tier | Ready |
 | Anchored to | MJ `origin/next` @ `141d8d065c` (2026-10-20) |
 | Last refresh | 2026-10-20, Claude Opus 4.7 (kickoff refresh + adversarial review audit against `coding_standards.md` & PR 1 lessons learned, §9 D2-43–D2-47), `141d8d065c` |
@@ -40,30 +38,7 @@ pyarrow, pytest), T-SQL (test schema only), GitHub Actions, SQL Server 2022.
 
 ### 2.1 Repositories you need
 
-| Repo | Where | Access | Used for |
-|---|---|---|---|
-| MemberJunction | `https://github.com/MemberJunction/MJ`, your worktree (examples use `$MJ`) | read/write on the PR branch | everything |
-| Loom | `https://github.com/MemberJunction/loom` (public, default branch `next`, HEAD `63aec01f61` on 2026-10-12) | read/write on the companion branch | M3 Loom fixes; the generators' engine |
-| ps-review | `/Users/arieglazier/repos/ps-review` @ `d47dfb86f1` (local only, never modified) | **read only** | source of every ported file (M3, M5); each copy is verified by the sha256 prefix this plan lists |
-| Plans repo | `/Users/arieglazier/repos/ps-rebuild-plans` | read; `reference/gates.json` is copied in M2 | gate registry source |
-
-**Prerequisite check (run first; a failing line runs its remedy, then the line is re-run):**
-
-```bash
-test -d /Users/arieglazier/repos/ps-review/.git && git -C /Users/arieglazier/repos/ps-review rev-parse --short HEAD   # → d47dfb86f1
-test -f /Users/arieglazier/repos/ps-rebuild-plans/reference/gates.json && echo gates-ok                             # → gates-ok
-git ls-remote https://github.com/MemberJunction/loom HEAD                                                           # → <sha>	HEAD
-for p in python3.11 python3.12; do command -v $p && $p --version; done                                             # → at least one 3.11.x / 3.12.x
-command -v sqlcmd node pnpm                                                                                        # → three paths
-```
-
-| Failing line | Remedy (automatic; no step waits on a person) |
-|---|---|
-| ps-review | Apply §9 D2-36: ps-review exists only on the reference host (the machine every absolute path in this plan names). A session on another host runs only the tasks that do not read it (M1, M2, M4.1, M6 once M3/M5 are pushed, C1–C6, M-final), takes the port sources from the branch once the M3 and M5 checkpoints are pushed (`git fetch origin && git ls-tree -r --name-only origin/ps/pr-2-truth-suite-containment -- packages/AI/PredictiveStudio/TruthSuite/generators packages/AI/PredictiveStudio/TruthSuite/python/truthsuite` lists them), and writes its handoff entry with "next: M3.4 / M5.2 / M5.4 / M5.6 port steps on the reference host" when they are not pushed yet. It never uses a copy from anywhere else: every port step verifies sha256 prefixes, so another copy is detected. |
-| gates.json | `git -C /Users/arieglazier/repos/ps-rebuild-plans status --short reference/gates.json` (restore it from the plans repo's last commit with `git -C … show HEAD:reference/gates.json > …` only if the file is absent; never edit it); after M2 the branch carries `TruthSuite/gates/gates.json`, the registry every later task reads. |
-| Loom `ls-remote` | Network: retry 3 times 30 s apart (`for i in 1 2 3; do git ls-remote https://github.com/MemberJunction/loom HEAD && break; sleep 30; done`). Still failing: write the command output into the handoff entry as the next step and end the session (no task can run without the Loom engine). |
-| Python 3.11/3.12 | macOS `brew install python@3.11`; Linux `sudo apt-get install -y python3.11 python3.11-venv`. |
-| `sqlcmd` / `node` / `pnpm` | `brew install sqlcmd`; `brew install node@24`; `corepack enable && corepack prepare --activate` (the version `packageManager` in `$MJ/package.json` pins). Docker is not needed locally: only the CI runner (M6.1) starts SQL Server in Docker. |
+The MemberJunction repo (your worktree, examples use `$MJ`) and, for the generators, the public Loom repo (`https://github.com/MemberJunction/loom`). No other repository is needed.
 
 ### 2.2 Branches
 
@@ -1101,7 +1076,7 @@ entity's CRUD procs when their replacement cannot compile. Closes F-ENV-1, -2, -
 one `PythonProbe` class — the probing logic has one owner, coding standards §2); `setup-python.mjs` flags
 `--python <cmd>`, `--venv <dir>`, `--requirements <file>` (consumed by M5.1).
 
-- [ ] Step 1: Write the failing test `src/__tests__/python-probe.test.ts`:
+- [x] Step 1: Write the failing test `src/__tests__/python-probe.test.ts`:
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -1162,14 +1137,14 @@ describe('PythonProbe', () => {
 });
 ```
 
-- [ ] Step 2: Run it; expected failure:
+- [x] Step 2: Run it; expected failure:
 
 ```bash
 cd $MJ/packages/AI/PredictiveStudio/Sidecar && pnpm test -- python-probe
 # → FAIL src/__tests__/python-probe.test.ts — Failed to resolve import "../../scripts/python-probe.mjs"
 ```
 
-- [ ] Step 3: Implement `scripts/python-probe.mjs`:
+- [x] Step 3: Implement `scripts/python-probe.mjs`:
 
 ```js
 /**
@@ -1322,14 +1297,14 @@ if (process.platform === 'darwin') {
 }
 ```
 
-- [ ] Step 4: Run it; expected pass:
+- [x] Step 4: Run it; expected pass:
 
 ```bash
 cd $MJ/packages/AI/PredictiveStudio/Sidecar && pnpm test
 # → Test Files 3 passed (3) · Tests 20 passed (20)   (15 existing + 5 new)
 ```
 
-- [ ] Step 5: Runtime verification on this machine (`python3` is 3.14.4):
+- [x] Step 5: Runtime verification on this machine (`python3` is 3.14.4):
 
 ```bash
 cd $MJ/packages/AI/PredictiveStudio/Sidecar && rm -rf .venv && pnpm run setup:python 2>&1 | head -3
@@ -1341,7 +1316,7 @@ python3 -m venv /tmp/ps-probe-314 && node scripts/setup-python.mjs --venv /tmp/p
 rm -rf /tmp/ps-probe-314
 ```
 
-- [ ] Step 6: Mutation checks (program/conventions.md §5a; recorded in §11 and the PR description, see "Mutation checks"
+- [x] Step 6: Mutation checks (program/conventions.md §5a; recorded in §11 and the PR description, see "Mutation checks"
   under §6). Flip each guard, run the named test, confirm it goes red, restore:
 
 | Guard | Mutation | Must go red |
@@ -1361,7 +1336,7 @@ Test `…/Sidecar/src/__tests__/python-path.test.ts`
 **Interfaces:** Produces `MLSidecar.ResolvePython(explicit, env, bundled): string` and `MLSidecar.PythonEnvVar`
 (public statics of the class that owns the choice; consumed by M5.7's sidecar runner through `new MLSidecar()`).
 
-- [ ] Step 1: Failing test `src/__tests__/python-path.test.ts`:
+- [x] Step 1: Failing test `src/__tests__/python-path.test.ts`:
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -1384,8 +1359,8 @@ describe('MLSidecar.ResolvePython', () => {
 });
 ```
 
-- [ ] Step 2: `pnpm test -- python-path` → `TypeError: MLSidecar.ResolvePython is not a function`.
-- [ ] Step 3: Implement. In `ml-sidecar.ts`, add to `class MLSidecar` next to `DefaultStartupTimeoutMs`:
+- [x] Step 2: `pnpm test -- python-path` → `TypeError: MLSidecar.ResolvePython is not a function`.
+- [x] Step 3: Implement. In `ml-sidecar.ts`, add to `class MLSidecar` next to `DefaultStartupTimeoutMs`:
 
 ```ts
   /** Env var naming an explicit interpreter for the managed sidecar (and its test runners). */
@@ -1432,8 +1407,8 @@ function resolveVenvPython(): string | null {
 ```
 
 and update its skip message to mention `PREDICTIVE_STUDIO_PYTHON`.
-- [ ] Step 4: `cd …/Sidecar && pnpm test` → `Tests 24 passed (24)`; `pnpm run build` → exit 0.
-- [ ] Step 5: Runtime: point the env var at a venv that is **not** the bundled one and run both consumers:
+- [x] Step 4: `cd …/Sidecar && pnpm test` → `Tests 24 passed (24)`; `pnpm run build` → exit 0.
+- [x] Step 5: Runtime: point the env var at a venv that is **not** the bundled one and run both consumers:
 
 ```bash
 python3.12 -m venv /tmp/ps-py312 && /tmp/ps-py312/bin/pip install -q -r $MJ/packages/AI/PredictiveStudio/Sidecar/src/python/requirements.txt
@@ -1445,7 +1420,7 @@ PREDICTIVE_STUDIO_PYTHON=/tmp/ps-py312/bin/python pnpm --filter @memberjunction/
 mv /tmp/ps-bundled-aside $MJ/packages/AI/PredictiveStudio/Sidecar/.venv
 ```
 
-- [ ] Step 6: Mutation checks (§6 shared notes):
+- [x] Step 6: Mutation checks (§6 shared notes):
 
 | Guard | Mutation | Must go red |
 |---|---|---|
@@ -1458,17 +1433,17 @@ mv /tmp/ps-bundled-aside $MJ/packages/AI/PredictiveStudio/Sidecar/.venv
 
 **Files:** Modify `packages/AI/PredictiveStudio/Sidecar/.gitignore` (line 1 `.venv/` → `.venv`)
 
-- [ ] Step 1 (failing check): `cd …/Sidecar && mv .venv /tmp/v && ln -s /tmp/v .venv && git check-ignore -v .venv; echo exit=$?` → `exit=1` (not ignored).
-- [ ] Step 2: change line 1 to `.venv` (no trailing slash: a pattern with a slash matches only directories; a symlink is a file to git).
-- [ ] Step 3: `git check-ignore -v .venv` → `packages/AI/PredictiveStudio/Sidecar/.gitignore:1:.venv	.venv`; then `rm .venv && mv /tmp/v .venv`.
+- [x] Step 1 (failing check): `cd …/Sidecar && mv .venv /tmp/v && ln -s /tmp/v .venv && git check-ignore -v .venv; echo exit=$?` → `exit=1` (not ignored).
+- [x] Step 2: change line 1 to `.venv` (no trailing slash: a pattern with a slash matches only directories; a symlink is a file to git).
+- [x] Step 3: `git check-ignore -v .venv` → `packages/AI/PredictiveStudio/Sidecar/.gitignore:1:.venv	.venv`; then `rm .venv && mv /tmp/v .venv`.
 
 #### Task M1.4: Pin scipy; prove the pins install on 3.11 and 3.12 (F-ENV-2)
 
 **Files:** Modify `packages/AI/PredictiveStudio/Sidecar/src/python/requirements.txt`
 
-- [ ] Step 1: Replace the header line 1 with `# Predictive Studio ML sidecar — pinned for CPython 3.11–3.12 (3.11 in Docker). numpy 1.26.4 has no wheels for >= 3.13.`
+- [x] Step 1: Replace the header line 1 with `# Predictive Studio ML sidecar — pinned for CPython 3.11–3.12 (3.11 in Docker). numpy 1.26.4 has no wheels for >= 3.13.`
   and add after `numpy==1.26.4`: `scipy==1.17.1` with the comment `# transitive via scikit-learn; pinned so the sidecar and the truth-suite judges compute with the same scipy`.
-- [ ] Step 2: Fresh installs on both interpreters:
+- [x] Step 2: Fresh installs on both interpreters:
 
 ```bash
 for v in 3.11 3.12; do rm -rf /tmp/ps-$v && python$v -m venv /tmp/ps-$v && /tmp/ps-$v/bin/pip install -q -r $MJ/packages/AI/PredictiveStudio/Sidecar/src/python/requirements.txt && /tmp/ps-$v/bin/python -c "import numpy,scipy,sklearn,xgboost,lightgbm;print('$v',numpy.__version__,scipy.__version__,sklearn.__version__)"; done
@@ -1476,9 +1451,9 @@ for v in 3.11 3.12; do rm -rf /tmp/ps-$v && python$v -m venv /tmp/ps-$v && /tmp/
 # → 3.12 1.26.4 1.17.1 1.4.2
 ```
 
-- [ ] Step 3: `pnpm --filter @memberjunction/predictive-studio-sidecar run test:python 2>&1 | tail -1` → `56 passed`
+- [x] Step 3: `pnpm --filter @memberjunction/predictive-studio-sidecar run test:python 2>&1 | tail -1` → `56 passed`
   (54 means LightGBM did not import — fix libomp before continuing; `_families()` silently drops cases otherwise).
-- [ ] Step 4: Dockerfile check: `grep -rn "python:3" $MJ/packages/AI/PredictiveStudio $MJ/docker 2>/dev/null` — every
+- [x] Step 4: Dockerfile check: `grep -rn "python:3" $MJ/packages/AI/PredictiveStudio $MJ/docker 2>/dev/null` — every
   sidecar image base must be 3.11 or 3.12; record the lines found in the handoff entry.
 
 #### Task M1.5: Documented build order (F-ENV-1, F-DOC-25)
@@ -1486,14 +1461,14 @@ for v in 3.11 3.12; do rm -rf /tmp/ps-$v && python$v -m venv /tmp/ps-$v && /tmp/
 **Files:** Modify `packages/AI/PredictiveStudio/Sidecar/README.md`, `packages/AI/PredictiveStudio/Engine/README.md`,
 `packages/AI/PredictiveStudio/README.md`, `guides/PREDICTIVE_STUDIO_GUIDE.md` §2.2
 
-- [ ] Step 1 (reproduce the defect on a fresh clone):
+- [x] Step 1 (reproduce the defect on a fresh clone):
 
 ```bash
 git -C $MJ worktree add /tmp/ps-fresh origin/next && cd /tmp/ps-fresh && pnpm install --frozen-lockfile >/dev/null
 (cd packages/AI/PredictiveStudio/Engine && pnpm run build 2>&1 | grep -c "TS2307")   # → a count > 0
 ```
 
-- [ ] Step 2 (the documented command works):
+- [x] Step 2 (the documented command works):
 
 ```bash
 cd /tmp/ps-fresh && npx turbo run build --filter=@memberjunction/predictive-studio... 2>&1 | tail -3   # → Tasks: N successful, N total
@@ -1502,7 +1477,7 @@ cd ../Engine && pnpm run test:integration 2>&1 | grep Tests                     
 git -C $MJ worktree remove --force /tmp/ps-fresh
 ```
 
-- [ ] Step 3: Write the "One-time setup" block into all four documents (guide §2.2 replaces its code block and adds the
+- [x] Step 3: Write the "One-time setup" block into all four documents (guide §2.2 replaces its code block and adds the
   paragraph; READMEs replace their `npm run setup:python` lines):
 
 ```markdown
@@ -1524,14 +1499,14 @@ also `brew install libomp` (XGBoost/LightGBM). To run the sidecar or its tests o
 
 **Files:** None modified in `packages/CodeGenLib/**` (upstream `next` already refreshes metadata before `manageVirtualEntities` at `packages/CodeGenLib/src/Database/manage-metadata.ts:276-283` and tests it in `packages/CodeGenLib/src/__tests__/manage-metadata.test.ts`).
 
-- [ ] Step 1: Verify the upstream fix and unit tests on `next`:
+- [x] Step 1: Verify the upstream fix and unit tests on `next`:
 
 ```bash
 pnpm --dir $MJ/packages/CodeGenLib test -- manage-metadata
 pnpm --dir $MJ/packages/CodeGenLib build
 ```
 
-- [ ] Step 2: Runtime verification on your database (done once M4.2's `truth-codegen.config.cjs` exists, or with a `/tmp/fenv12/mj.config.cjs` copy):
+- [x] Step 2: Runtime verification on your database (done once M4.2's `truth-codegen.config.cjs` exists, or with a `/tmp/fenv12/mj.config.cjs` copy):
 
 ```bash
 sqlcmd -S "$DB_HOST,$DB_PORT" -U "$DB_USERNAME" -P "$DB_PASSWORD" -C -d "$DB_DATABASE" -Q "
@@ -1550,14 +1525,14 @@ sqlcmd -S "$DB_HOST,$DB_PORT" -U "$DB_USERNAME" -P "$DB_PASSWORD" -C -d "$DB_DAT
 
 **Files:** None modified in `packages/MetadataSync/**` (upstream `next` already defaults missing `filePattern` to `'*.json'` via `config.filePattern || '*.json'` in `ValidationService.ts:188,1161` and `PushService.ts:1066,2427,2486`, tested in `packages/MetadataSync/src/__tests__/ValidationService.test.ts:522`). Loom's half of F-L2-1 (`emitters/metadata.ts` emitting `filePattern: '*.json'`) still ships in M3.2.
 
-- [ ] Step 1: Verify the upstream MetadataSync unit tests and build on `next`:
+- [x] Step 1: Verify the upstream MetadataSync unit tests and build on `next`:
 
 ```bash
 pnpm --dir $MJ/packages/MetadataSync test -- ValidationService
 pnpm --dir $MJ/packages/MetadataSync build
 ```
 
-- [ ] Step 2: Runtime verification — an entity folder with no `filePattern` validates cleanly:
+- [x] Step 2: Runtime verification — an entity folder with no `filePattern` validates cleanly:
 
 ```bash
 mkdir -p /tmp/fl21/apps && echo '{ "entity": "MJ: Applications" }' > /tmp/fl21/apps/.mj-sync.json \
@@ -1570,7 +1545,7 @@ rm -rf /tmp/fl21
 
 **Files:** None modified in `packages/CodeGenLib/**` (upstream `next` refreshes a layered entity's inner then outer view in `packages/CodeGenLib/src/Config/sql.ts:239-297`, covered by `packages/CodeGenLib/src/__tests__/view-regen.test.ts`; per §9 `D2-43`, PR 2 does not modify `CodeGenLib` so foundational packages stay untouched in this PR).
 
-- [ ] Step 1: Verify the upstream `view-regen` unit tests in `CodeGenLib`:
+- [x] Step 1: Verify the upstream `view-regen` unit tests in `CodeGenLib`:
 
 ```bash
 pnpm --dir $MJ/packages/CodeGenLib test -- view-regen
@@ -1600,7 +1575,7 @@ at n = 400.
 **Files:** Create `packages/AI/PredictiveStudio/TruthSuite/{package.json, tsconfig.json, vitest.config.ts,
 vitest.gates.config.ts, .gitignore, README.md, src/index.ts}`
 
-- [ ] Step 1: `package.json` (use the exact version string of `packages/AI/PredictiveStudio/Engine/package.json` for
+- [x] Step 1: `package.json` (use the exact version string of `packages/AI/PredictiveStudio/Engine/package.json` for
   every `@memberjunction/*` dependency and for `version`; `6.2.0-edge.3` at `c92d4a47f9`):
 
 ```json
@@ -1654,10 +1629,10 @@ vitest.gates.config.ts, .gitignore, README.md, src/index.ts}`
 
   (Copy the two `mssql` ranges from `packages/TestingFramework/testing-integration/package.json` verbatim — the plan
   does not invent versions.)
-- [ ] Step 2: `tsconfig.json`: `{ "extends": "../../../../tsconfig.server.json", "compilerOptions": { "outDir": "dist",
+- [x] Step 2: `tsconfig.json`: `{ "extends": "../../../../tsconfig.server.json", "compilerOptions": { "outDir": "dist",
   "rootDir": "src", "strict": true }, "include": ["src/**/*"], "exclude": ["node_modules", "src/**/__tests__/**",
   "src/**/*.test.ts"] }`.
-- [ ] Step 3: `vitest.config.ts` (unit) and `vitest.gates.config.ts` (gates):
+- [x] Step 3: `vitest.config.ts` (unit) and `vitest.gates.config.ts` (gates):
 
 ```ts
 // vitest.config.ts
@@ -1688,16 +1663,16 @@ merged.test.include = ['gates/**/*.gates.test.ts'];
 export default merged;
 ```
 
-- [ ] Step 4: `.gitignore`: `.venv`, `.loom/`, `.data/`, `.run/`, `results/`, `dist/`. `src/index.ts`: export the
+- [x] Step 4: `.gitignore`: `.venv`, `.loom/`, `.data/`, `.run/`, `results/`, `dist/`. `src/index.ts`: export the
   registry, stats and gate APIs (`export * from './registry/types.js'` etc.; no cross-package re-exports).
-- [ ] Step 5: `cd $MJ && pnpm install && cd packages/AI/PredictiveStudio/TruthSuite && pnpm run build; echo exit=$?` →
+- [x] Step 5: `cd $MJ && pnpm install && cd packages/AI/PredictiveStudio/TruthSuite && pnpm run build; echo exit=$?` →
   `exit=0`. `git status --short pnpm-lock.yaml` → modified (commit it).
 
 #### Task M2.2: Import the registry
 
 **Files:** Create `scripts/import-gates.mjs`, `gates/gates.json`
 
-- [ ] Step 1: `scripts/import-gates.mjs` (run once; kept for re-imports if the reference registry is ever corrected):
+- [x] Step 1: `scripts/import-gates.mjs` (run once; kept for re-imports if the reference registry is ever corrected):
 
 ```js
 #!/usr/bin/env node
@@ -1727,7 +1702,7 @@ writeFileSync(path.join(root, 'gates', 'gates.json'), `${JSON.stringify(registry
 console.log(`wrote ${registry.length} gates`);
 ```
 
-- [ ] Step 2: `node scripts/import-gates.mjs /Users/arieglazier/repos/ps-rebuild-plans/reference/gates.json` → `wrote 111 gates`.
+- [x] Step 2: `node scripts/import-gates.mjs /Users/arieglazier/repos/ps-rebuild-plans/reference/gates.json` → `wrote 111 gates`.
   The copy carries `reference/gates.json` as amended by program D-029/D-030/D-032/D-058/D-060: G0.2 and G0.3 have `OwnerPR: 4`;
   G0.3's `threshold` reads "… reach Published with automated publishing on …" (`amendedBy: "D-029, D-030"`); G0.2's
   reads "with automated publishing on, every agent run … that reaches Published has a stored gate outcome `model` …
@@ -1747,7 +1722,7 @@ console.log(`wrote ${registry.length} gates`);
 `GateRegistryValidator.ValidateAgainstBase(branch, base)` (`validate.ts`). Every exported function is a static member
 of the class that owns it (coding standards §2; program D-037, ruling SR-1).
 
-- [ ] Step 1: Failing test:
+- [x] Step 1: Failing test:
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -1844,8 +1819,8 @@ describe('gate registry', () => {
   confined to this test, which is what the validator exists to catch in a hand-edited `gates.json`. The gate files
   written by `repoWithGateFile` are only read as text, so `b` needs no definition.)
 
-- [ ] Step 2: `pnpm test -- registry` → fails resolving `../load`.
-- [ ] Step 3: Implement. `load.ts`:
+- [x] Step 2: `pnpm test -- registry` → fails resolving `../load`.
+- [x] Step 3: Implement. `load.ts`:
 
 ```ts
 import { readFileSync } from 'node:fs';
@@ -1974,8 +1949,8 @@ export class GateRegistryValidator {
   `git show <ref>:packages/AI/PredictiveStudio/TruthSuite/gates/gates.json` (skips with a printed note when the file
   does not exist at that ref — true until PR 2 merges) and runs `GateRegistryValidator.ValidateAgainstBase`; prints each error and exits 1 if
   any, else prints `registry OK: 111 gates (required N, expected-fail M)` and exits 0.
-- [ ] Step 4: `pnpm test -- registry` → `6 passed`; `pnpm run truth:registry` → `registry OK: 111 gates (required 0, expected-fail 111)`.
-- [ ] Step 5: Mutation checks (§6 shared notes): delete each `errors.push` of `Validate`/`gateErrors`/`externalErrors`/
+- [x] Step 4: `pnpm test -- registry` → `6 passed`; `pnpm run truth:registry` → `registry OK: 111 gates (required 0, expected-fail 111)`.
+- [x] Step 5: Mutation checks (§6 shared notes): delete each `errors.push` of `Validate`/`gateErrors`/`externalErrors`/
   `ValidateAgainstBase` in turn — the count check, status, runMode, requirement, stub-required, stub-with-a-body, body
   title count, external missing file, external title count, removed, renamed, owner changed, relaxed — and confirm
   `reports every structural error it guards against` or `refuses relaxing, …` goes red for each; `n !== 1` → `n < 1` →
@@ -1992,7 +1967,7 @@ export class GateRegistryValidator {
 count, n)`, `SeedRule.AcceptanceRange(rule, n)`, `SeedRule.PassProbability(rule, n, trueRate)` and the four per-rule
 predicates (`seed-rules.ts`) — static members of the class that owns each computation (coding standards §2).
 
-- [ ] Step 1: Failing test (numbers verified 2026-10-12 with an independent Python computation; see §12):
+- [x] Step 1: Failing test (numbers verified 2026-10-12 with an independent Python computation; see §12):
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -2063,8 +2038,8 @@ describe('Hanley–McNeil interval', () => {
 });
 ```
 
-- [ ] Step 2: `pnpm test -- seed-rules` → import failures.
-- [ ] Step 3: Implement:
+- [x] Step 2: `pnpm test -- seed-rules` → import failures.
+- [x] Step 3: Implement:
 
 ```ts
 // wilson.ts
@@ -2183,8 +2158,8 @@ export class SeedRule {
 }
 ```
 
-- [ ] Step 4: `pnpm test -- seed-rules` → `10 passed`.
-- [ ] Step 5: Mutation checks (§6 shared notes): each clause of the `Wilson` count guard (`isInteger(successes)`,
+- [x] Step 4: `pnpm test -- seed-rules` → `10 passed`.
+- [x] Step 5: Mutation checks (§6 shared notes): each clause of the `Wilson` count guard (`isInteger(successes)`,
   `n <= 0`, `successes < 0`, `successes > n`) deleted in turn → `rejects impossible counts` red; `<= 0.05` → `< 0.05`
   → `noise-publish and false-alarm accept 0–28` red; either half of the coverage conjunction deleted → `coverage
   accepts 372–388` red; `>= 0.95` → `> 0.95` in detection → `detection accepts 372–400` red; `Math.max(0, variance)`
@@ -2201,7 +2176,7 @@ Test `src/gates/__tests__/outcomes.test.ts`
 `GateResults.Write` (`results.ts`) and `GateSelection.CurrentRunMode`, `GateSelection.IsSelected`,
 `GateSelection.MissingRequirement` (`define-gate.ts`) — static members of the classes that own them (coding standards §2).
 
-- [ ] Step 1: Failing test for the outcome mapping and run-mode selection:
+- [x] Step 1: Failing test for the outcome mapping and run-mode selection:
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -2247,8 +2222,8 @@ describe('gate outcomes', () => {
 });
 ```
 
-- [ ] Step 2: `pnpm test -- outcomes` → import failures.
-- [ ] Step 3: Implement `results.ts` (types as §5.2 plus):
+- [x] Step 2: `pnpm test -- outcomes` → import failures.
+- [x] Step 3: Implement `results.ts` (types as §5.2 plus):
 
 ```ts
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -2412,7 +2387,7 @@ result file as `not-run` ("no result written"), and writes `results.json` (111 e
 `outcomes.json` (`{ name: TestName, passed: Outcome ∈ {pass, xfail, xpass, not-implemented, not-run}, durationMs: DurationMs,
 error: Error }` — the shipped `EMIT_OUTCOMES` shape keeps its camelCase keys, program D-039 (a)). It exits 1 when any outcome is `fail` or `error`, else 0, and prints
 `truth suite: pass P · fail F · xfail X · xpass Y · not-implemented N · not-run R · error E (111 gates)`.
-- [ ] Step 4: Unit tests → all pass. Gate run (stubs only):
+- [x] Step 4: Unit tests → all pass. Gate run (stubs only):
 
 ```bash
 cd $MJ/packages/AI/PredictiveStudio/TruthSuite
@@ -2421,7 +2396,7 @@ TRUTH_RESULTS_DIR=$PWD/results node scripts/report.mjs
 # → truth suite: pass 0 · fail 0 · xfail 0 · xpass 0 · not-implemented 111 · not-run 0 · error 0 (111 gates)
 ```
 
-- [ ] Step 5: Mutation checks (§6 shared notes): `DecideOutcome`'s `error !== null ||` deleted → `maps status ×
+- [x] Step 5: Mutation checks (§6 shared notes): `DecideOutcome`'s `error !== null ||` deleted → `maps status ×
   measurement …` red (the `('required', passed, 'boom')` case); `status === 'required'` branch inverted → same test
   red; `<=` → `<` in `IsSelected` → `selects gates by run mode` red; each `!== '1'` requirement check deleted →
   `names a missing requirement …` red; the `TRUTH_RUN_MODE` allow-list widened to any string → `reads the run mode …`
@@ -2841,7 +2816,7 @@ export class LogisticRefit {
 make_world_multiclass.mjs, derive_t3_lag.mjs}`, `fixtures/worlds/*.json` (9), `fixtures/worlds-domain/domain.json`,
 `fixtures/scenarios/specs/*.json` (14), `vitest.regeneration.config.ts`
 
-- [ ] Step 1: Copy and verify the sources (ps-review @ `d47dfb86f1`; sha256 prefixes recorded 2026-10-12):
+- [x] Step 1: Copy and verify the sources (ps-review @ `d47dfb86f1`; sha256 prefixes recorded 2026-10-12):
 
 ```bash
 R=/Users/arieglazier/repos/ps-review; T=$MJ/packages/AI/PredictiveStudio/TruthSuite
@@ -2855,7 +2830,7 @@ cd $T && shasum -a 256 generators/make_scenario.mjs generators/gen_lib.mjs gener
 # → 0e6740650a7f  e1a67b27cbd1  03e9d1320f2c  e235740ec06e  d8dda6ca97e0  9becaa550f40   (in that order)
 ```
 
-- [ ] Step 2: `fixtures/loom.json`: `{ "repo": "https://github.com/MemberJunction/loom", "sha": "63aec01f61a3f9e831fbf64bc9bac4675ac86d84" }`.
+- [x] Step 2: `fixtures/loom.json`: `{ "repo": "https://github.com/MemberJunction/loom", "sha": "63aec01f61a3f9e831fbf64bc9bac4675ac86d84" }`.
   `scripts/fetch-loom.mjs`:
 
 ```js
@@ -2910,7 +2885,7 @@ export const LOOM_SHA = sha;
 export const engine = await import(pathToFileURL(entry).href);
 ```
 
-- [ ] Step 3: Edit the copies (and nothing else in their logic):
+- [x] Step 3: Edit the copies (and nothing else in their logic):
   - `gen_lib.mjs`: replace its engine import (`:4`) with `import { engine } from './loom.mjs'; export const { createRng, IdentityService } = engine;`;
     same in `calibrate_intercept.mjs`, `make_world.mjs` (`:14-15`) and `make_world_multiclass.mjs` (`:19-20`), destructuring the names each file used.
   - `make_scenario.mjs`: arguments become `node make_scenario.mjs <spec.json> <outDir> [--seed <n>]`; `const seed = <--seed value> ?? spec.seed;` (`??` on purpose: seed 0 is a valid seed)
@@ -2928,7 +2903,7 @@ export const engine = await import(pathToFileURL(entry).href);
     `truth_origins.csv`, writes `rows.csv` without the `SamePeriodTarget` column (CSV columns split on `,`; T3 has no
     quoted fields) and `manifest.json` = T3's manifest with `id: "T3-lag"`, `derivedFrom: "T3"`,
     `droppedColumns: ["SamePeriodTarget"]` and `columns.features` without it.
-- [ ] Step 4: `cd $T && pnpm run truth:loom` → `Loom <sha> built at …/.loom/<sha>`; smoke:
+- [x] Step 4: `cd $T && pnpm run truth:loom` → `Loom <sha> built at …/.loom/<sha>`; smoke:
   `node generators/make_world.mjs fixtures/worlds/W1-signal.json /tmp/w1 --seeds 42 && head -c 120 /tmp/w1/seed-42/people.csv`
   → `ID,MemberNumber,Region,PostalCode,IncomeK,AutoRenew,Status,WorldID,Seed` then a row ending `,W1-signal,42`.
 
@@ -2936,7 +2911,7 @@ export const engine = await import(pathToFileURL(entry).href);
 
 **Files:** Create `src/data/{seeds.ts, catalog.ts, cache.ts, cli.ts}` · Test `src/data/__tests__/data.test.ts`
 
-- [ ] Step 1: Failing test:
+- [x] Step 1: Failing test:
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -2974,8 +2949,8 @@ describe('cache', () => {
 });
 ```
 
-- [ ] Step 2: run → import failures.
-- [ ] Step 3: Implement:
+- [x] Step 2: run → import failures.
+- [x] Step 3: Implement:
 
 ```ts
 // seeds.ts
@@ -3049,9 +3024,9 @@ export class DataCache {
   the expected files exist, writes `.complete` and returns the dir. `cli.ts`: `pnpm run truth:data -- --set base`
   generates every dataset's base seeds; `--set t2 --only W2-noise`; `--set n400 --only <id> --stream` generates, hashes
   (appending to `n400.sha256`) and deletes each seed in turn; prints one line per dataset with seed count and seconds.
-- [ ] Step 4: `pnpm test -- data` → `3 passed`; `pnpm run truth:data -- --set base` → 24 dataset lines, total < 60 s,
+- [x] Step 4: `pnpm test -- data` → `3 passed`; `pnpm run truth:data -- --set base` → 24 dataset lines, total < 60 s,
   `du -sh .data` ≈ 100–150 MB; `pnpm run truth:data -- --set t2 --only W2-noise` → 60 seeds.
-- [ ] Step 5: Mutation checks (§6 shared notes): `Canonicalize(spec)` replaced by `JSON.stringify(spec)` → `hashes the spec,
+- [x] Step 5: Mutation checks (§6 shared notes): `Canonicalize(spec)` replaced by `JSON.stringify(spec)` → `hashes the spec,
   the generator and the Loom pin together` red (both key-order assertions); any one `.update(…)` of `SpecHash` removed → same test red
   (the matching "changes the hash" assertion); `DatasetSeeds.SeedSet`'s `id !== 'W2-noise'` refusal deleted → not exposed by the
   unit test — run `pnpm run truth:data -- --set t2 --only W1-signal` and record that it must exit 1 naming the rule;
@@ -3064,7 +3039,7 @@ export class DataCache {
 `vitest.regeneration.config.ts` (same as `vitest.config.ts` with `include: ['generators/__tests__/**/*.test.ts']`,
 `testTimeout: 600_000`)
 
-- [ ] Step 1: Write `fixtures/golden-hashes.json` exactly (sha256 of the review's on-disk data, recomputed 2026-10-12;
+- [x] Step 1: Write `fixtures/golden-hashes.json` exactly (sha256 of the review's on-disk data, recomputed 2026-10-12;
   W1-signal s42 was regenerated from Loom `63aec01` the same day and matched):
 
 ```json
@@ -3144,7 +3119,7 @@ export class DataCache {
 }
 ```
 
-- [ ] Step 2: The test:
+- [x] Step 2: The test:
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -3191,7 +3166,7 @@ describe('every base seed regenerates byte-identical to the review data', () => 
   (`DataCache.Root()`, M3.5's `cache.ts`).)
   The golden map covers W2 s100–s119 + 9100 (`base` = spec seeds + fresh), W1/W3–W9 s42–s44 + 9042, and the 14
   scenarios (`T3-lag` is derived, checked by M3.4's manifest only).
-- [ ] Step 3: Run against the **pinned Loom** (the companion head after M3.1–M3.2):
+- [x] Step 3: Run against the **pinned Loom** (the companion head after M3.1–M3.2):
 
 ```bash
 cd $T && pnpm run test:regeneration 2>&1 | tail -3     # → Tests  68 passed (68)   (53 world seeds + 14 scenarios + determinism)
@@ -3200,7 +3175,7 @@ cd $T && pnpm run test:regeneration 2>&1 | tail -3     # → Tests  68 passed (6
   A mismatch after the Loom fixes means a fix changed engine output for worlds that do not use the fixed features —
   stop, find which Loom change altered `recurringDecision`/`createRng`/`calibrateIntercept` output, and fix it in the
   companion (the worlds must not move: every gate threshold in the registry was measured on these bytes).
-- [ ] Step 4: Re-run against Loom `63aec01` (`TRUTH_LOOM_DIR=<a 63aec01 build> pnpm run test:regeneration`) → the same 68
+- [x] Step 4: Re-run against Loom `63aec01` (`TRUTH_LOOM_DIR=<a 63aec01 build> pnpm run test:regeneration`) → the same 68
   passed (proves the generator ports are faithful independent of the Loom changes).
 
 **Exit tests (M3):** Loom: `pnpm test` all passed (counts recorded); TruthSuite: `pnpm test` (registry 6, seed-rules 10,
@@ -3221,7 +3196,7 @@ loader half; performs F-ENV-12's runtime repro if M1.6 deferred it.
 **Files:** Create `scripts/gen-pstruth-ddl.mjs`, `migrations/V202610130001__pstruth_tables.sql` (hand-written part) ·
 Test `src/db/__tests__/ddl.test.ts`
 
-- [ ] Step 1: Failing test:
+- [x] Step 1: Failing test:
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -3267,8 +3242,8 @@ describe('pstruth migration', () => {
 
   (CodeGen emits `(SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [__mj].[EntityField] WHERE [EntityID] = '…')` —
   `CodeGenLib/src/__tests__/entity-field-sequence-insert.test.ts:29`; the test passes vacuously until M4.2 appends.)
-- [ ] Step 2: `pnpm test -- ddl` → `ENOENT … V202610130001__pstruth_tables.sql`.
-- [ ] Step 3: Implement `scripts/gen-pstruth-ddl.mjs` (pure function of the fixtures; prints to stdout):
+- [x] Step 2: `pnpm test -- ddl` → `ENOENT … V202610130001__pstruth_tables.sql`.
+- [x] Step 3: Implement `scripts/gen-pstruth-ddl.mjs` (pure function of the fixtures; prints to stdout):
 
 ```js
 #!/usr/bin/env node
@@ -3340,7 +3315,7 @@ process.stdout.write(`${lines.join('\n')}\n`);
 
   `MemberNumber` is `NVARCHAR(80)` on the row tables because W8's `MN-<uuid>` is 39 characters and the review's 40
   left no margin. Write the file: `node scripts/gen-pstruth-ddl.mjs > migrations/V202610130001__pstruth_tables.sql`.
-- [ ] Step 4: `pnpm test -- ddl` → the first two pass; the third passes trivially until M4.2 appends CodeGen output.
+- [x] Step 4: `pnpm test -- ddl` → the first two pass; the third passes trivially until M4.2 appends CodeGen output.
 
 #### Task M4.2: Register the tables as entities (scoped CodeGen, appended once)
 
@@ -3348,7 +3323,7 @@ process.stdout.write(`${lines.join('\n')}\n`);
 `metadata/entities/.mj-sync.json` (copies of MJ's root and `metadata/entities/` sync configs) and
 `metadata/entities/.pstruth-entities.json` · Modify the migration (append CodeGen output)
 
-- [ ] Step 1: `codegen/truth-codegen.config.cjs` (committed under this name; `provision.mjs` copies it to
+- [x] Step 1: `codegen/truth-codegen.config.cjs` (committed under this name; `provision.mjs` copies it to
   `.run/codegen/mj.config.cjs`, which is git-ignored, and runs CodeGen with that directory as cwd):
 
 ```js
@@ -3389,7 +3364,7 @@ delete scoped.additionalSchemaInfo;
 module.exports = scoped;
 ```
 
-- [ ] Step 2: `scripts/provision.mjs`:
+- [x] Step 2: `scripts/provision.mjs`:
   - `node scripts/provision.mjs` → runs `node <MJ>/packages/MJCLI/bin/run.js migrate --schema pstruth --dir <TruthSuite>/migrations`
     from the MJ root (exit code checked), then queries `SELECT COUNT(*) FROM __mj.Entity WHERE SchemaName='pstruth'` and
     prints `pstruth: <n> entities`; exits 1 if `n` is 0 (the CodeGen output has not been appended yet). It then pushes
@@ -3407,7 +3382,7 @@ module.exports = scoped;
   - `node scripts/provision.mjs --codegen` → copies the config to `.run/codegen/mj.config.cjs`, runs
     `node <MJ>/packages/MJCLI/bin/run.js codegen --skipfiles` with that cwd and `TRUTH_MJ_ROOT` set, and prints the
     path of the newest `CodeGen_Run_*.sql` it wrote (CodeGen writes it under the cwd's configured SQL output).
-- [ ] Step 3 (one time, on your database): apply the DDL, run the scoped CodeGen, append its output:
+- [x] Step 3 (one time, on your database): apply the DDL, run the scoped CodeGen, append its output:
 
 ```bash
 cd $MJ/packages/AI/PredictiveStudio/TruthSuite
@@ -3416,15 +3391,15 @@ node scripts/provision.mjs --codegen                             # → codegen e
 { printf '\n%.0s' $(seq 1 55); echo '-- CODEGEN OUTPUT BELOW'; cat <that file>; } >> migrations/V202610130001__pstruth_tables.sql
 ```
 
-- [ ] Step 4: Check the appended block's `EntityField` inserts use the apply-time sequence expression, not literals:
+- [x] Step 4: Check the appended block's `EntityField` inserts use the apply-time sequence expression, not literals:
   `grep -n "Sequence" migrations/V202610130001__pstruth_tables.sql | head` — every `EntityField` insert must compute
   `Sequence` from `MAX(Sequence)` at apply time (the form `migrations/CLAUDE.md` prescribes); copy one block's shape from a
   recent core `CodeGen_Run` migration if CodeGen emitted literals, and record it. Then run the M4.1 test → `3 passed`.
-- [ ] Step 5: Prove a fresh database needs only `mj migrate` + `mj sync push` (D2-40): create `MJ_PS_PR2_<agent>_fresh`, build it per §2.3
+- [x] Step 5: Prove a fresh database needs only `mj migrate` + `mj sync push` (D2-40): create `MJ_PS_PR2_<agent>_fresh`, build it per §2.3
   (core only), run `node scripts/provision.mjs` → `pstruth: 44 entities, direct SQL sanctioned on 44` (16 W1–W8 + 2 W9 + 17 Scn + 8 Series + 1
   PersonYear; every table must be an entity), `SELECT Name, UserViewMaxRows FROM __mj.Entity WHERE SchemaName='pstruth'` → names `PS Truth: …`,
   `UserViewMaxRows` 1000. Drop the `_fresh` database afterwards.
-- [ ] Step 6: If M1.6's runtime repro was deferred, run it now with this config (`includeSchemas` swapped to
+- [x] Step 6: If M1.6's runtime repro was deferred, run it now with this config (`includeSchemas` swapped to
   `pstruth_fenv12`) and record the output.
 
 #### Task M4.3: Bulk loader, stamps and dataset loaders
@@ -3436,7 +3411,7 @@ node scripts/provision.mjs --codegen                             # → codegen e
 `ScenarioLoader.LoadSeed(pool, scenarioId, dir)`, `ScenarioLoader.FillSeriesTrain(pool, scenarioId, origin)`, `DatasetStamp.Read(pool, table)`;
 consumed by the harness `EnsureLoaded` (M5.7).
 
-- [ ] Step 1: Failing test for the pure parts (CSV parsing with typed coercion, truth-file refusal):
+- [x] Step 1: Failing test for the pure parts (CSV parsing with typed coercion, truth-file refusal):
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -3469,8 +3444,8 @@ describe('loader CSV handling', () => {
 });
 ```
 
-- [ ] Step 2: run → import failure.
-- [ ] Step 3: Implement.
+- [x] Step 2: run → import failure.
+- [x] Step 3: Implement.
   - `csv.ts`: `TruthCsv.Parse(text): { Header: string[]; Rows: string[][] }` (split on `\n`, strip `\r`, split on `,`; refuse a `"` anywhere — the generators emit no
     quoting, and the review loader made the same refusal), `type SqlCell = string | number | boolean | Date | null` and
     `TruthCsv.CoerceCell(value, sqlType): SqlCell` for `INT`, `FLOAT`, `BIT`, `DATE`, `NVARCHAR(n)`, `UNIQUEIDENTIFIER`
@@ -3501,8 +3476,8 @@ describe('loader CSV handling', () => {
     `<id>/seed-<k>/origin-<o>#<sha>`.
   - Each loader module's exports are the public statics of one class named for it — `BulkLoader`, `DatasetStamp`,
     `WorldLoader`, `ScenarioLoader` (program D-047: every exported function a plan writes is a static).
-- [ ] Step 4: `pnpm test -- csv` → `5 passed`; `pnpm run build` → exit 0.
-- [ ] Step 4b: Mutation checks (§6 shared notes): the quote refusal deleted → `refuses quoted fields …` red; the order
+- [x] Step 4: `pnpm test -- csv` → `5 passed`; `pnpm run build` → exit 0.
+- [x] Step 4b: Mutation checks (§6 shared notes): the quote refusal deleted → `refuses quoted fields …` red; the order
   check in `TruthCsv.AssertHeaderOrder` deleted → `accepts a header that is an ordered subset …` red; `TruthCsv.CoerceCell`'s integer
   check deleted → `coerces cells by SQL type …` red; `TruthCsv.AssertNotTruthFile`'s `startsWith('truth')` → `false` →
   `refuses truth files …` red; `WorldLoader.LoadSeed`'s row-count check deleted → not exposed by a unit test (it needs a
@@ -3510,7 +3485,7 @@ describe('loader CSV handling', () => {
   loaders' opt-in check deleted → not exposed by a unit test: on the M4.2 Step 5 `_fresh` database, set one table's
   `AllowDirectSQLInsert` to 0 through its `MJ: Entities` record (`Save()`), run the M4.3 Step 5 load — it must throw
   naming `truth:provision`, and load under the mutation (record both runs; restore with `node scripts/provision.mjs`).
-- [ ] Step 5: Runtime (your database, after M4.2):
+- [x] Step 5: Runtime (your database, after M4.2):
 
 ```bash
 cd $MJ/packages/AI/PredictiveStudio/TruthSuite
@@ -3530,14 +3505,14 @@ sqlcmd -S "$DB_HOST,$DB_PORT" -U "$DB_USERNAME" -P "$DB_PASSWORD" -C -d "$DB_DAT
 `include: ['src/**/__tests__/**/*.integration.test.ts']`, `testTimeout: 300_000`) · Modify `vitest.config.ts` (add
 `exclude: ['**/*.integration.test.ts']`) and `package.json` (`"test:db": "vitest run --config vitest.db.config.ts"`)
 
-- [ ] Step 1: The test loads W1 s42, then W3 s42, then W1 s43, and asserts after each step: the W1 tables hold the
+- [x] Step 1: The test loads W1 s42, then W3 s42, then W1 s43, and asserts after each step: the W1 tables hold the
   last W1 seed loaded (stamp and row count), the W3 tables are untouched by the W1 reload (stamp unchanged, same
   `CHECKSUM_AGG(CHECKSUM(*))`), and no `pstruth` table other than the two being loaded changed its row count. A second
   test, `refuses a seed whose row count differs from its manifest`, copies W1 s42's seed directory to a temp dir, drops
   the last line of its `rows.csv`, and expects `WorldLoader.LoadSeed` to reject naming both counts (the guard of M4.3's
   row-count check; the W1 tables are reloaded from the real seed afterwards).
-- [ ] Step 2: `pnpm run test:db` → `2 passed` (record the three load times).
-- [ ] Step 3: `grep -rn "TRUNCATE" src scripts` → no matches (nothing truncates the schema).
+- [x] Step 2: `pnpm run test:db` → `2 passed` (record the three load times).
+- [x] Step 3: `grep -rn "TRUNCATE" src scripts` → no matches (nothing truncates the schema).
 
 **Exit tests (M4):** `pnpm test` (registry 6, seed-rules 10, outcomes 4, data 3, ddl 3, csv 5); `pnpm run test:db` → 2
 passed; the fresh-database provision of M4.2 Step 5; `pnpm run build` exit 0.
@@ -3556,7 +3531,7 @@ run in their lanes (PR 2's ten and PR 4's G0.2/G0.3, program D-030); the first l
 **Files:** Create `python/{requirements.txt, pytest.ini, mypy.ini}`, `python/truthsuite/{__init__.py, paths.py}`,
 `scripts/{setup-python.mjs, run-pytest.mjs}`; Modify `src/data/cli.ts` (write `$TRUTH_DATA_DIR/index.json`)
 
-- [ ] Step 1: `python/requirements.txt`:
+- [x] Step 1: `python/requirements.txt`:
 
 ```
 # Truth-suite judges + reference pipeline. Product pins come first so the judge computes with the sidecar's libraries.
@@ -3573,7 +3548,7 @@ pandas-stubs==2.2.2.240807
   like the sidecar's, with `cwd = python/`, interpreter `PREDICTIVE_STUDIO_TRUTH_PYTHON` or `.venv/bin/python`, and
   `PYTHONHASHSEED=0`, `OMP_NUM_THREADS=1`, `OPENBLAS_NUM_THREADS=1`, `MKL_NUM_THREADS=1` (the refpipe forces single
   threads too, `run.py:31-32`; setting them here keeps pytest and CLI runs equal).
-- [ ] Step 2: `python/truthsuite/paths.py` — the one place Python learns where data lives:
+- [x] Step 2: `python/truthsuite/paths.py` — the one place Python learns where data lives:
 
 ```python
 """Where the truth suite's data lives. TRUTH_DATA_DIR/index.json is written by `pnpm run truth:data` (src/data/cli.ts)."""
@@ -3608,7 +3583,7 @@ def real_fixture(name: str) -> Path:
 ```
 
   `src/data/cli.ts` / `DatasetCatalog.EnsureGenerated` append `"<kind>/<id>/seed-<k>": "<abs dir>"` to `index.json` (read-merge-write).
-- [ ] Step 3: `pnpm run setup:python` → `Python environment ready: …/TruthSuite/.venv/bin/python`;
+- [x] Step 3: `pnpm run setup:python` → `Python environment ready: …/TruthSuite/.venv/bin/python`;
   `.venv/bin/python -c "import scipy, statsmodels, pyarrow; print(scipy.__version__, statsmodels.__version__, pyarrow.__version__)"`
   → `1.17.1 0.15.0 25.0.1`.
 
@@ -3619,7 +3594,7 @@ summary.py, verdict_diff.py}`, `python/truthsuite/scenarios/{__init__.py, manife
 test_scoring.py, test_splits.py, test_manifest.py}`, `fixtures/real/{person_years.parquet, person_years_leaky.parquet,
 R2-real.rows.csv, R2-real.manifest.json, T1-real.rows.csv, T1-real.manifest.json}`
 
-- [ ] Step 1: Copy and verify (sha256 prefixes from ps-review `d47dfb86f1`):
+- [x] Step 1: Copy and verify (sha256 prefixes from ps-review `d47dfb86f1`):
 
 ```bash
 R=/Users/arieglazier/repos/ps-review/probes; P=$MJ/packages/AI/PredictiveStudio/TruthSuite/python
@@ -3637,7 +3612,7 @@ shasum -a 256 $F/person_years.parquet $F/person_years_leaky.parquet $F/R2-real.r
 # → 3729e51a5ec8 36958e67d4c0 e265ea02f919 7adfd649f03f
 ```
 
-- [ ] Step 2: Edits (the only edits; the numerics are untouched):
+- [x] Step 2: Edits (the only edits; the numerics are untouched):
   - every `from probes.refpipe…` / `import probes.refpipe…` → `truthsuite.refpipe`; `probes.scenarios.manifest` →
     `truthsuite.scenarios.manifest` (`grep -rn "probes\." python/` must print nothing afterwards).
   - `run.py`: drop `ROOT = …parents[2]` (`:48`); data reads become: scenario `sid` → `paths.seed_dir('scenario', sid,
@@ -3650,7 +3625,7 @@ shasum -a 256 $F/person_years.parquet $F/person_years_leaky.parquet $F/R2-real.r
   - `_is_truth_path` (`:59-65`): the world-manifest clause becomes
     `"/world/" in norm and base == "manifest.json"` (the cache layout of §5.4) — keep the `truth*.{csv,json,parquet}` clause.
   - the CLI entry is `python -m truthsuite.refpipe.run <id> --out <file> [--shuffle-labels]`.
-- [ ] Step 3: Run the ported tests (needs `pnpm run truth:data -- --set base` done):
+- [x] Step 3: Run the ported tests (needs `pnpm run truth:data -- --set base` done):
 
 ```bash
 cd $MJ/packages/AI/PredictiveStudio/TruthSuite && pnpm run test:python -- tests/test_run.py tests/test_scoring.py tests/test_splits.py tests/test_manifest.py 2>&1 | tail -1
@@ -3663,7 +3638,7 @@ cd $MJ/packages/AI/PredictiveStudio/TruthSuite && pnpm run test:python -- tests/
 
 **Files:** Create `fixtures/reference/p5-golden.json` (content below), `python/tests/test_reference_reproduction.py`
 
-- [ ] Step 1: `fixtures/reference/p5-golden.json` — the review's committed reference results
+- [x] Step 1: `fixtures/reference/p5-golden.json` — the review's committed reference results
   (`evidence/logs/P5/<id>.json`, extracted 2026-10-12; `value`/`ci` rounded to 10 significant decimals):
 
 ```json
@@ -3691,7 +3666,7 @@ cd $MJ/packages/AI/PredictiveStudio/TruthSuite && pnpm run test:python -- tests/
 }
 ```
 
-- [ ] Step 2: The test (marked `slow`; runs in the nightly lane and in M5's exit tests):
+- [x] Step 2: The test (marked `slow`; runs in the nightly lane and in M5's exit tests):
 
 ```python
 """The ported reference pipeline reproduces the review's 18 committed results (+ the two shuffled-label controls)."""
@@ -3731,7 +3706,7 @@ def test_reference_result_reproduces(ref_id: str, tmp_path: Path) -> None:
 
   `pytest.ini`: `markers = slow: minutes-long reproduction runs` and `addopts = -m "not slow"` (so the default unit run
   stays fast); run the slow set explicitly with `-m slow`.
-- [ ] Step 3: `pnpm run test:python -- -m slow tests/test_reference_reproduction.py 2>&1 | tail -1` → `20 passed`
+- [x] Step 3: `pnpm run test:python -- -m slow tests/test_reference_reproduction.py 2>&1 | tail -1` → `20 passed`
   (18 references + 2 shuffled controls; the review's own reproduction was 18/18 `match=True`, `logs/P6/ref/ref.txt`, and
   its determinism 20/20 byte-identical re-runs, `logs/P5/determinism.txt`). Record the wall time (the review measured
   refpipe tests at 78.5 s; the 20 runs take several minutes).
@@ -3741,7 +3716,7 @@ def test_reference_result_reproduces(ref_id: str, tmp_path: Path) -> None:
 **Files:** Create `python/truthsuite/judges/{__init__.py, judge.py, judge_multiclass.py, verdicts.py, delong.py,
 holdout_rebuild.py, scenarios.py, cli.py}`, `python/tests/test_judges.py`
 
-- [ ] Step 1: Copy and verify:
+- [x] Step 1: Copy and verify:
 
 ```bash
 R=/Users/arieglazier/repos/ps-review/probes; J=$MJ/packages/AI/PredictiveStudio/TruthSuite/python/truthsuite/judges; mkdir -p $J && touch $J/__init__.py
@@ -3752,7 +3727,7 @@ cd $J && shasum -a 256 judge.py judge_multiclass.py verdicts.py delong.py scenar
 # → e78f8411086b 481df9784ea8 0b1543f53f51 c3a1962579b2 eba51c65f7e7
 ```
 
-- [ ] Step 2: Edits: `judge.py`'s `append_row(…, out='evidence/truth-results.csv')` (`:156`) and
+- [x] Step 2: Edits: `judge.py`'s `append_row(…, out='evidence/truth-results.csv')` (`:156`) and
   `judge_multiclass.py`'s output (`:92`, `:207`) take an explicit `--out-dir` (default `$TRUTH_RESULTS_DIR/judges`),
   never the cwd; `verdicts.py`/`delong.py` import `truthsuite.judges.judge` and read `--results-dir` instead of
   `evidence/…`; `scenarios.py` imports `truthsuite.refpipe` and reads run directories passed as arguments; every
@@ -3762,7 +3737,7 @@ cd $J && shasum -a 256 judge.py judge_multiclass.py verdicts.py delong.py scenar
   CLI `python -m truthsuite.judges.holdout_rebuild --rows <rows.csv> --model <model.json> --label <col>` printing
   `{"n": …, "positives": …, "ids": [...]}`. `cli.ts`-style dispatch lives in `judges/cli.py`
   (`python -m truthsuite.judges.cli <judge> …`, JSON on stdout) for `judge-bridge.ts`.
-- [ ] Step 3: Tests `python/tests/test_judges.py`:
+- [x] Step 3: Tests `python/tests/test_judges.py`:
 
 ```python
 from __future__ import annotations
@@ -3799,23 +3774,23 @@ def test_delong_detects_a_strictly_better_scorer() -> None:
   (Name the functions as the port exposes them: `L4_delong.py` computes the paired DeLong z; expose it as
   `delong_paired_z(y, a, b)`; `judge.py`'s rebuild becomes `trailing_holdout(ids, labels, n_hold)`. Keep the review's
   arithmetic.)
-- [ ] Step 4: `pnpm run test:python 2>&1 | tail -1` → all passed, 0 failed (73 + the 3 judge tests + the ported
+- [x] Step 4: `pnpm run test:python 2>&1 | tail -1` → all passed, 0 failed (73 + the 3 judge tests + the ported
   `test_judge_scenarios.py`, 3 test functions in the review; record the exact count); `mypy --strict -p truthsuite` → `Success`.
 
 #### Task M5.5: Statistical rule scripts (Python mirror, for later owners)
 
 **Files:** Create `python/truthsuite/stats/{__init__.py, noise_publish.py, coverage.py, monitor_m.py}`, `python/tests/test_stats.py`
 
-- [ ] Step 1: Copy `evidence/logs/P11/noise_publish_n400.py` (sha `03fa9c1f1c2d`) → `noise_publish.py`,
+- [x] Step 1: Copy `evidence/logs/P11/noise_publish_n400.py` (sha `03fa9c1f1c2d`) → `noise_publish.py`,
   `evidence/logs/P1/st5_power.py` (`1e56fe0b713e`) → `coverage.py`, and the replay generators + BH procedure of
   `evidence/logs/P11/D2/d2_power.py` (`ad1a43257fb6`) → `monitor_m.py` with the module constants
   `Q12 = 0.0095` and `Q3 = 0.0171` (the current values, `P11-roadmap.md:347-350`) and no `print` of the withdrawn
   0.01004 / 0.01737 (`grep -n "0.01004\|0.01737" python/truthsuite` → nothing). `qcal.py`'s absolute
   `sys.path.insert` is not ported (PR 4 re-calibrates from `monitor_m` when it implements monitor M).
-- [ ] Step 2: `tests/test_stats.py` asserts `max_accepted_publications(400) == 28`, the coverage acceptance range
+- [x] Step 2: `tests/test_stats.py` asserts `max_accepted_publications(400) == 28`, the coverage acceptance range
   `(372, 388)`, and the pass probabilities 0.969 / 0.023 / 0.950 / 0.550 to 3 dp — the same numbers M2.4 asserts in
   TypeScript (two implementations, one answer).
-- [ ] Step 3: `pnpm run test:python 2>&1 | tail -1` → all passed, 0 failed (the M5.4 count + the new stats tests; record it).
+- [x] Step 3: `pnpm run test:python 2>&1 | tail -1` → all passed, 0 failed (the M5.4 count + the new stats tests; record it).
 
 #### Task M5.6: The TypeScript harness
 
@@ -3831,9 +3806,9 @@ Test `src/harness/__tests__/agent-plan.test.ts`
 Port from `probes/ts/probe-truth-harness.ts` (`1d4cebb3b9f1`), `ps-client.ts` (`bd87208942b3`),
 `probe-truth-agent-step.ts` (`074b44d01fcf`), keeping their PS calls and changing their plumbing:
 
-- [ ] Step 0: Add `export class TrustVerdicts { public static DeriveTrustVerdict(…); public static TrustEvidenceLine(…) }` in `Core/src/trust.ts` so `TruthSuite`'s harness calls `TrustVerdicts.DeriveTrustVerdict` and `TrustVerdicts.TrustEvidenceLine` (matching PR 3's contract), while keeping `DeriveTrustVerdict` and `TrustEvidenceLine` exported so untouched files (`Engine/src/agent/pipeline-builder.ts` per D-030 / §7 line 9650, `packages/TestingFramework/integration-test-suite/rigs/ps-inproc-agent-builder.ts`, and `business-predictions.view-models.ts`) are not modified (`§9 D2-48`). Delete `Core/src/trust.ts`'s `@deprecated` camelCase aliases `deriveTrustVerdict`, `trustEvidenceLine` and `trustDots`, and update `Core/src/__tests__/trust.test.ts` and `ps-predictions-resource.component.ts` (both modified in C4/C5) to use `TrustVerdicts` / `TrustDots`.
+- [x] Step 0: Add `export class TrustVerdicts { public static DeriveTrustVerdict(…); public static TrustEvidenceLine(…) }` in `Core/src/trust.ts` so `TruthSuite`'s harness calls `TrustVerdicts.DeriveTrustVerdict` and `TrustVerdicts.TrustEvidenceLine` (matching PR 3's contract), while keeping `DeriveTrustVerdict` and `TrustEvidenceLine` exported so untouched files (`Engine/src/agent/pipeline-builder.ts` per D-030 / §7 line 9650, `packages/TestingFramework/integration-test-suite/rigs/ps-inproc-agent-builder.ts`, and `business-predictions.view-models.ts`) are not modified (`§9 D2-48`). Delete `Core/src/trust.ts`'s `@deprecated` camelCase aliases `deriveTrustVerdict`, `trustEvidenceLine` and `trustDots`, and update `Core/src/__tests__/trust.test.ts` and `ps-predictions-resource.component.ts` (both modified in C4/C5) to use `TrustVerdicts` / `TrustDots`.
 
-- [ ] Step 1: Failing test for the pure plan builder:
+- [x] Step 1: Failing test for the pure plan builder:
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -3857,8 +3832,8 @@ describe('AgentPlans.Build', () => {
 ```
 
   (`as unknown as EntityInfo` is confined to this test double; production code never casts.)
-- [ ] Step 2: run → import failure.
-- [ ] Step 3: Implement. Key code:
+- [x] Step 2: run → import failure.
+- [x] Step 3: Implement. Key code:
 
 ```ts
 // connect.ts — MJAPI over GraphQL, exactly as a browser client (API key auth).
@@ -4185,8 +4160,8 @@ export class RunFixtures {
   `RunFixtures.W1S42ValidatedModel(h)` trains a second one the same way and promotes it to **Validated** through the product's promote
   operation (`h.Promote`, the call a Studio user's promote makes) — the scorable model G0.1's scoring half, G0.4/G0.5, G0.6's stories and G0.7's dry-run case use
   (after C3 a Draft model is no longer scorable, so nothing but G0.7's refusal case may score with a Draft model).
-- [ ] Step 4: `pnpm test -- agent-plan` → `1 passed`; `pnpm run build` → exit 0.
-- [ ] Step 5: Mutation checks (§6 shared notes), run after M5.9 Step 4 has a baseline: `HarnessTraining.Train` rethrowing when the
+- [x] Step 4: `pnpm test -- agent-plan` → `1 passed`; `pnpm run build` → exit 0.
+- [x] Step 5: Mutation checks (§6 shared notes), run after M5.9 Step 4 has a baseline: `HarnessTraining.Train` rethrowing when the
   operation returns `Success: false` → G0.8 reports `error` instead of `xfail`/`xpass` (the "never throws for a
   product refusal" contract); `HarnessModels.ReadModel` computing `Trust` from `{ Metrics, HoldoutMetrics, ProblemType }` instead of
   the entity (§9 D2-26) → after C5, G0.11 reports `withheldVerdictsStored` 12 but `gradedAbovePoorOrActionable` > 0
@@ -4198,7 +4173,7 @@ export class RunFixtures {
 **Files:** Create `scripts/sidecar.mts`, `scripts/run-truth.mjs`; Modify `package.json`
 (`"truth:sidecar": "tsx scripts/sidecar.mts"`)
 
-- [ ] Step 1: `scripts/sidecar.mts` starts the product sidecar in managed mode with single-threaded math and stays up:
+- [x] Step 1: `scripts/sidecar.mts` starts the product sidecar in managed mode with single-threaded math and stays up:
 
 ```ts
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -4225,7 +4200,7 @@ process.on('SIGINT', () => void stop());
 setInterval(() => undefined, 60_000);       // keep the event loop alive
 ```
 
-- [ ] Step 2: `scripts/run-truth.mjs --mode pr|nightly|weekly [--gate "<testName>"]`: checks `.run/sidecar.url`
+- [x] Step 2: `scripts/run-truth.mjs --mode pr|nightly|weekly [--gate "<testName>"]`: checks `.run/sidecar.url`
   answers `/health`; checks MJAPI answers on `http://localhost:$GRAPHQL_PORT/`; sets `TRUTH_RUN_MODE`,
   `TRUTH_RUN_ID` (`<mode>-<UTC timestamp>`), `TRUTH_MJ_COMMIT` (`git rev-parse --short HEAD`),
   `TRUTH_RESULTS_DIR` (`results/<run id>`); runs `pnpm run truth:data -- --set base` (and `--set t2 --only W2-noise` for
@@ -4233,7 +4208,7 @@ setInterval(() => undefined, 60_000);       // keep the event loop alive
   run is unfiltered. With `--gate "<testName>"`: `<pattern>` is the test name with regex metacharacters escaped, so
   vitest runs that gate's body (and, harmlessly, any stub whose name extends it, e.g. `W1 → S7.5 #2`). Unknown names exit 2 with `no gate named "<testName>"`. It prints, before running, the MJAPI start command it expects:
   `PREDICTIVE_STUDIO_SIDECAR_URL=$(cat <TruthSuite>/.run/sidecar.url) pnpm --filter mj_api start`.
-- [ ] Step 3: Local loop:
+- [x] Step 3: Local loop:
 
 ```bash
 cd $MJ/packages/AI/PredictiveStudio/TruthSuite
@@ -4245,15 +4220,15 @@ until curl -s -o /dev/null --max-time 3 http://localhost:$GRAPHQL_PORT/; do slee
 
 #### Task M5.8: Harness smoke against the review's numbers
 
-- [ ] Step 1: A one-off script `scripts/smoke-w1.mts` (kept; `pnpm run truth:smoke`): loads W1 s42, trains logistic
+- [x] Step 1: A one-off script `scripts/smoke-w1.mts` (kept; `pnpm run truth:smoke`): loads W1 s42, trains logistic
   regression with `MaxRows: 1_000_000` (the review's `full` regime), reads the model, scores the 1,625 rows of
   `[Year] = 2024 AND Region = 'NA'` through the record-process path, and prints training/holdout rows, holdout AUC and
   the record-process run status.
-- [ ] Step 2: Expected (`evidence/12-scoring-ui.md` "Retrained with the L3 harness"): `train 13421 / holdout 3355`,
+- [x] Step 2: Expected (`evidence/12-scoring-ui.md` "Retrained with the L3 harness"): `train 13421 / holdout 3355`,
   `holdout AUC 0.723051942813813` (to 1e-9 — same rows, same algorithm, deterministic), `1625 Succeeded`. A different
   AUC means a porting error in the pipeline definition (features, one-hot steps, deny list, validation) — diff the
   pipeline JSON against `probe-truth-harness.ts:301-324` and fix before continuing.
-- [ ] Step 3: Check the database: `SELECT Status, COUNT(*) FROM __mj.vwMLModels WHERE Pipeline LIKE 'PSTruth:%' GROUP BY Status`
+- [x] Step 3: Check the database: `SELECT Status, COUNT(*) FROM __mj.vwMLModels WHERE Pipeline LIKE 'PSTruth:%' GROUP BY Status`
   (→ `Draft 1`), and that the sidecar log shows the training request.
 
 #### Task M5.9: The Phase-0 gate bodies (G0.1–G0.3, G0.6–G0.12)
@@ -4263,7 +4238,7 @@ until curl -s -o /dev/null --max-time 3 http://localhost:$GRAPHQL_PORT/; do slee
 Modify `gates/gates.json` (G0.1–G0.3, G0.6–G0.12: `"Implementation": { "Kind": "body" }` — the registry finds each body
 by the title its `TruthGate.Define` declares, program D-043)
 
-- [ ] Step 1: `src/gates/causal-copy.ts` + its test:
+- [x] Step 1: `src/gates/causal-copy.ts` + its test:
 
 ```ts
 // causal-copy.ts — the S9.3 scan: causal or "lever" wording in user-facing strings and the story prompt.
@@ -4429,7 +4404,7 @@ describe('containment probe — predicates', () => {
   `ps-predictions-resource.component.ts:443` and `Core/src/trust.ts:152` — every one of which C4 rewrites (C4.2, C4.3,
   C4.4). The scan reads string literals line by line, so text inside a multi-line template literal (the resource's
   `What's driving this:` at `:126`) is caught by C4.4's whole-file scan test, not by this gate.
-- [ ] Step 2: `gates/containment.gates.test.ts` (G0.1–G0.3, G0.6–G0.12; M5.10 appends G0.4 and G0.5):
+- [x] Step 2: `gates/containment.gates.test.ts` (G0.1–G0.3, G0.6–G0.12; M5.10 appends G0.4 and G0.5):
 
 ```ts
 import { describe } from 'vitest';
@@ -4691,11 +4666,11 @@ describe('Containment gates', () => {
   `h.LastTimeIndexDeclared()` returns what `ContainmentProbe.ApplyTimeIndexDeclaration` answered for the last `CreatePipeline` (add it to
   `TruthHarness`). `scripts/ui-fixture.mts` (C4.5) and `scripts/majority-rule-check.mts` (C5.8) import
   `W_WORLD_FEATURES`/`W_WORLD_DENY_FIELDS` from `src/harness/w-world.ts` instead of copying the lists.
-- [ ] Step 3: Set the ten bodies' `Implementation` to `{ "Kind": "body" }` in `gates.json` (G0.1–G0.3, G0.6–G0.12; G0.2/G0.3 keep
+- [x] Step 3: Set the ten bodies' `Implementation` to `{ "Kind": "body" }` in `gates.json` (G0.1–G0.3, G0.6–G0.12; G0.2/G0.3 keep
   `OwnerPR: 4` and `expected-fail`); `pnpm run truth:registry` → `registry OK`. Unit tests:
   `pnpm --filter @memberjunction/predictive-studio-truth-suite exec vitest run src/gates/__tests__/causal-copy.test.ts src/harness/__tests__/containment-probe.test.ts`
   → `6 passed` (2 causal-copy, 4 containment-probe).
-- [ ] Step 3b: Mutation checks (§6 shared notes): in `containment-probe.ts`, `ContainmentProbe.WasRefusedBeforeTraining`'s
+- [x] Step 3b: Mutation checks (§6 shared notes): in `containment-probe.ts`, `ContainmentProbe.WasRefusedBeforeTraining`'s
   `a.ModelID === null` deleted → `counts a training refusal only when …` red; each conjunct of `ContainmentProbe.WasScoringRefused`
   deleted in turn → `counts a scoring refusal only when …` red; `ContainmentProbe.ReachedPublishedUnattended` → `Status !== 'Draft'` →
   `counts Published, and only Published …` red; either half of `ContainmentProbe.GradedAbovePoorOrActionable` deleted → `flags a
@@ -4703,7 +4678,7 @@ describe('Containment gates', () => {
   `finds the shipped regression headline and ignores comments …` red. Gate-body thresholds (`Passed:` expressions)
   are exposed by Step 4's runs against the M6.3 baseline (each `xfail` of Step 4 must turn `xpass` when its threshold
   is replaced by `true`) — run that once per body on a scratch copy and record the ten outcomes.
-- [ ] Step 4: Run each gate once (`pnpm run truth:run -- --mode nightly --gate "<name>"`) and record its outcome and
+- [x] Step 4: Run each gate once (`pnpm run truth:run -- --mode nightly --gate "<name>"`) and record its outcome and
   measured values in §11. Expected on `next` before C1–C6 (the "today" column of §4.1): G0.1 `xfail` (training
   `13421 + 3355 = 16776` — #5295 — but filter scoring `1000`), G0.2 `xfail` or `xpass` (PR 4's; `xpass` only when no
   run publishes, because no stored outcome exists before PR 3/PR 4; the review saw 0 of 20 published; record
@@ -4722,8 +4697,8 @@ describe('Containment gates', () => {
 `packages/AI/PredictiveStudio/TruthSuite/gates/containment.gates.test.ts`,
 `packages/AI/PredictiveStudio/TruthSuite/gates/gates.json` (G0.4, G0.5 → `Kind: "body"`)
 
-- [ ] Step 1: Move the pure At-Risk functions and types out of `packages/Angular/Explorer/dashboards/src/PredictiveStudio/at-risk.view-models.ts` into `packages/AI/PredictiveStudio/Core/src/at-risk-rules.ts` as static methods on `export class AtRiskRules` (with `AtRiskRules.ParseAtRiskRows`, `AtRiskRules.IsTargetPositiveOutcome`, `AtRiskRules.RiskScoreFromPayload`, `AtRiskRules.ExtractRecordLabel`, `AtRiskRules.ExtractRowDrivers`, `AtRiskRules.ComputeRunSummary`, `AtRiskRules.ToCsv`, `AtRiskRules.RiskBandFor`, `AtRiskRules.RiskTierAction`), and export `AtRiskRules` and its types (`AtRiskRow`, `AtRiskRunSummary`, `RowDriver`, `RunDetailLike`, `RiskBand`, `ParseAtRiskOptions`) from `packages/AI/PredictiveStudio/Core/src/index.ts`. In `packages/Angular/Explorer/dashboards/src/PredictiveStudio/at-risk.view-models.ts`, delete the deprecated camelCase aliases (`D-053` / `D2-46`) and import `AtRiskRules` and its types directly from `@memberjunction/predictive-studio-core` across the dashboard files (`ps-predictions-resource.component.ts`, `ps-predictions-grid.component.ts`, `ps-row-drivers.component.ts`, `at-risk.view-models.test.ts`; per `AGENTS.md` Rule 5, `at-risk.view-models.ts` does not re-export symbols from `@memberjunction/predictive-studio-core` — if `at-risk.view-models.ts` has no remaining dashboard-only code, delete `at-risk.view-models.ts` and import from `@memberjunction/predictive-studio-core` directly).
-- [ ] Step 2: Add `TopDriverBadges` and `AtRiskListRecordIDs` to `ContainmentProbe` (`packages/AI/PredictiveStudio/TruthSuite/src/harness/containment-probe.ts`), importing `AtRiskRules` and `RunDetailLike` from `@memberjunction/predictive-studio-core`:
+- [x] Step 1: Move the pure At-Risk functions and types out of `packages/Angular/Explorer/dashboards/src/PredictiveStudio/at-risk.view-models.ts` into `packages/AI/PredictiveStudio/Core/src/at-risk-rules.ts` as static methods on `export class AtRiskRules` (with `AtRiskRules.ParseAtRiskRows`, `AtRiskRules.IsTargetPositiveOutcome`, `AtRiskRules.RiskScoreFromPayload`, `AtRiskRules.ExtractRecordLabel`, `AtRiskRules.ExtractRowDrivers`, `AtRiskRules.ComputeRunSummary`, `AtRiskRules.ToCsv`, `AtRiskRules.RiskBandFor`, `AtRiskRules.RiskTierAction`), and export `AtRiskRules` and its types (`AtRiskRow`, `AtRiskRunSummary`, `RowDriver`, `RunDetailLike`, `RiskBand`, `ParseAtRiskOptions`) from `packages/AI/PredictiveStudio/Core/src/index.ts`. In `packages/Angular/Explorer/dashboards/src/PredictiveStudio/at-risk.view-models.ts`, delete the deprecated camelCase aliases (`D-053` / `D2-46`) and import `AtRiskRules` and its types directly from `@memberjunction/predictive-studio-core` across the dashboard files (`ps-predictions-resource.component.ts`, `ps-predictions-grid.component.ts`, `ps-row-drivers.component.ts`, `at-risk.view-models.test.ts`; per `AGENTS.md` Rule 5, `at-risk.view-models.ts` does not re-export symbols from `@memberjunction/predictive-studio-core` — if `at-risk.view-models.ts` has no remaining dashboard-only code, delete `at-risk.view-models.ts` and import from `@memberjunction/predictive-studio-core` directly).
+- [x] Step 2: Add `TopDriverBadges` and `AtRiskListRecordIDs` to `ContainmentProbe` (`packages/AI/PredictiveStudio/TruthSuite/src/harness/containment-probe.ts`), importing `AtRiskRules` and `RunDetailLike` from `@memberjunction/predictive-studio-core`:
 
 ```ts
   /** The badge text of a driver before C4.2 removes the direction flip (replicates `ps-predictions-grid.component.html:368`). */
@@ -4747,7 +4722,7 @@ describe('Containment gates', () => {
   }
 ```
 
-- [ ] Step 3: Append G0.4 (`W1 → S9.4`) and G0.5 (`W1 → S9.5`) directly to `gates/containment.gates.test.ts` (sharing one memoised W1 s42 record-process scoring run in the process):
+- [x] Step 3: Append G0.4 (`W1 → S9.4`) and G0.5 (`W1 → S9.5`) directly to `gates/containment.gates.test.ts` (sharing one memoised W1 s42 record-process scoring run in the process):
 
 ```ts
   let w1RecordProcessPromise: Promise<{ Details: Array<{ recordId: string; ResultPayload: string | null }>; TruthCsv: string }> | null = null;
@@ -4806,10 +4781,10 @@ describe('Containment gates', () => {
 ```
 
   (add `readFileSync` to the `node:fs` import at the top of `gates/containment.gates.test.ts`.)
-- [ ] Step 4: Set G0.4 and G0.5 `Implementation` to `{ "Kind": "body" }` in `gates.json`; `pnpm run truth:registry` → `registry OK`.
-- [ ] Step 5: Runtime: after a `pr` run, `cat results/<run>/gates/G0.4.json` → `Outcome: "xfail"`, `Measured.autoRenewTopDriverRows` ≈ 488,
+- [x] Step 4: Set G0.4 and G0.5 `Implementation` to `{ "Kind": "body" }` in `gates.json`; `pnpm run truth:registry` → `registry OK`.
+- [x] Step 5: Runtime: after a `pr` run, `cat results/<run>/gates/G0.4.json` → `Outcome: "xfail"`, `Measured.autoRenewTopDriverRows` ≈ 488,
   `lowersRisk: 0` (the review: 0 of 488); `G0.5.json` → `xfail`, `listMeanTrueP` ≈ 0.967 > `populationMeanTrueP`.
-- [ ] Step 6: Mutation checks (§6 shared notes): `readTrueP`'s column guard deleted and `TruthCsv` pointed at `rows.csv` → `W1 → S9.5` keys
+- [x] Step 6: Mutation checks (§6 shared notes): `readTrueP`'s column guard deleted and `TruthCsv` pointed at `rows.csv` → `W1 → S9.5` keys
   every row by an absent column and reports `listSize` 0 instead of throwing (record it); `NormalizeUUID` dropped on
   either side of the S9.5 lookup → `listSize` 0 on SQL Server's upper-case ids (record the run).
 
@@ -5049,19 +5024,19 @@ jobs:
 
 **Files:** Create `packages/AI/PredictiveStudio/TruthSuite/baselines/containment-<YYYY-MM-DD>.json`
 
-- [ ] Step 1: From the nightly artifact, copy the Phase-0 result objects (outcome + measured + detail) into the
+- [x] Step 1: From the nightly artifact, copy the Phase-0 result objects (outcome + measured + detail) into the
   baseline file — PR 2's ten and PR 4's G0.2/G0.3, whose baseline PR 4 is judged against; add `{ "mjCommit": "<sha>",
   "runId": "<run id>", "lane": "nightly" }`.
-- [ ] Step 2: Write the same lines (gate, outcome, measured headline; G0.2/G0.3 marked "PR 4") into this plan's §11
+- [x] Step 2: Write the same lines (gate, outcome, measured headline; G0.2/G0.3 marked "PR 4") into this plan's §11
   handoff entry. This is the "fails today" record the containment milestones are judged against.
 
 #### Task M6.4: Measured runtime
 
-- [ ] Step 1: From the three runs' logs, record per lane: provisioning minutes, bizapps-common install seconds
+- [x] Step 1: From the three runs' logs, record per lane: provisioning minutes, bizapps-common install seconds
   (nightly, weekly: the step's summary line), data minutes, gate minutes (vitest),
   report seconds, total; the slowest five gates with their durations (`durationMs` in the
   result files).
-- [ ] Step 2: Replace the estimate column of §5.3 with the measured numbers and add a §12 note. If the `pr` lane's gate
+- [x] Step 2: Replace the estimate column of §5.3 with the measured numbers and add a §12 note. If the `pr` lane's gate
   time exceeds 15 min, move the slowest `pr` gate to `nightly` (registry edit + §9 entry) — the PR lane must stay fast
   enough to run on every PS PR.
 
@@ -5070,7 +5045,7 @@ jobs:
 **Files:** Create `packages/AI/PredictiveStudio/TruthSuite/README.md` (full); Modify `guides/PREDICTIVE_STUDIO_GUIDE.md`
 (a "Planted-truth suite" subsection under its testing section; per §9 `D2-48`, `guides/INTEGRATION_TESTING_QUICKSTART.md` is not modified so general MJ testing docs stay free of domain-specific Predictive Studio content)
 
-- [ ] Step 1: README sections: what the suite proves; the registry and outcomes (§5.2 text); lanes; local loop
+- [x] Step 1: README sections: what the suite proves; the registry and outcomes (§5.2 text); lanes; local loop
   (M5.7 Step 3 commands); adding a gate body (stub → body → status flip, with the `--against origin/next` rule); data
   and Loom pin (how to re-pin, the regeneration check); Python venv; troubleshooting (`error` outcomes; MJAPI not on
   the truth sidecar; `pstruth` entities missing → `truth:provision` then restart MJAPI). Authoring rule the
@@ -5079,8 +5054,8 @@ jobs:
   (they read `DB_DATABASE`, `GRAPHQL_PORT`, `MJ_API_KEY` and the other `DB_*` values from the `.env` the reader
   copied, as §2.3 does); the first step creates the database (`sqlcmd … -Q "CREATE DATABASE [$DB_DATABASE]"`) and
   the last is `pnpm run truth:run -- --mode pr`. Other fences (explanations, output samples) use plain `bash`.
-- [ ] Step 2: `npm run check:claude-md` → passes (no CLAUDE.md change is made; the check also validates guide links).
-- [ ] Step 3: The README walkthrough (§9 D2-35) — a script runs the README in a fresh checkout instead of a person
+- [x] Step 2: `npm run check:claude-md` → passes (no CLAUDE.md change is made; the check also validates guide links).
+- [x] Step 3: The README walkthrough (§9 D2-35) — a script runs the README in a fresh checkout instead of a person
   reading it. **Files:** Create `src/readme/steps.ts`, `src/readme/__tests__/steps.test.ts`,
   `scripts/readme-walkthrough.mts`; Modify `package.json` (`"truth:readme": "tsx scripts/readme-walkthrough.mts"`).
 
@@ -5355,7 +5330,7 @@ Create `packages/AI/PredictiveStudio/Engine/src/feature-assembly/__tests__/read-
 training and scoring share (C1.2); `static ForTraining(…)`, `static ForScoring(…)`) and the assembly error text
 `FeatureAssembly read <n> of <m> rows of '<entity>' because MaxRows=<cap>.`
 
-- [ ] Step 1: Write the failing tests. Append to `data-access.test.ts`:
+- [x] Step 1: Write the failing tests. Append to `data-access.test.ts`:
 
 ```ts
 describe('RunViewDataAccess.fetchRows — match count', () => {
@@ -5448,7 +5423,7 @@ describe('FeatureAssembly — read every labelled row or fail naming the cap', (
 });
 ```
 
-- [ ] Step 2: Run them; expected failure.
+- [x] Step 2: Run them; expected failure.
 
 ```bash
 cd $MJ/packages/AI/PredictiveStudio/Engine
@@ -5458,7 +5433,7 @@ pnpm vitest run src/feature-assembly/__tests__/read-completeness.test.ts src/fea
 Expected: `Tests  2 failed | 4 passed (6)` — `fails naming the cap…` ("promise resolved … instead of rejecting") and
 `returns the database match count…` (`expected undefined to be 1734`).
 
-- [ ] Step 3: Implement. `feature-assembly/read-cap-error.ts`:
+- [x] Step 3: Implement. `feature-assembly/read-cap-error.ts`:
 
 ```ts
 /**
@@ -5543,7 +5518,7 @@ replace the final `return res.Rows;` with:
     return res.Rows;
 ```
 
-- [ ] Step 4: Run the Step 2 command; expected `Tests  6 passed (6)`. Then the package suite:
+- [x] Step 4: Run the Step 2 command; expected `Tests  6 passed (6)`. Then the package suite:
   `pnpm test` → `0 failed` (record the pass count; it is the start-of-milestone count + 4).
 
 #### Task C1.2: Scoring scopes read every row; a truncating explicit `maxRows` is refused
@@ -5557,7 +5532,7 @@ Test: Create `packages/AI/PredictiveStudio/Engine/src/actions/__tests__/score-re
 the Remote Operation fails with that message before any record is scored). Signatures of `resolveFilter` /
 `resolveView` are unchanged.
 
-- [ ] Step 1: Write the failing test:
+- [x] Step 1: Write the failing test:
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -5634,7 +5609,7 @@ describe('ProductionScoreRecordSetRunner — scope reads are complete (W1 → S7
 });
 ```
 
-- [ ] Step 2: Run it; expected failure.
+- [x] Step 2: Run it; expected failure.
 
 ```bash
 cd $MJ/packages/AI/PredictiveStudio/Engine && pnpm vitest run src/actions/__tests__/score-record-set.scope-caps.test.ts
@@ -5643,7 +5618,7 @@ cd $MJ/packages/AI/PredictiveStudio/Engine && pnpm vitest run src/actions/__test
 Expected: `Tests  4 failed (4)` — the first two get 1000 refs instead of 16776 / 1500; the third resolves instead of
 rejecting; the fourth reads `IgnoreMaxRows` `undefined` instead of `false`.
 
-- [ ] Step 3: Implement in `score-record-set.runner.ts`. Replace the body of `resolveFilter`'s `RunView` call and add
+- [x] Step 3: Implement in `score-record-set.runner.ts`. Replace the body of `resolveFilter`'s `RunView` call and add
   the completeness check:
 
 ```ts
@@ -5682,7 +5657,7 @@ rejecting; the fourth reads `IgnoreMaxRows` `undefined` instead of `false`.
 (import `ReadCapExceededError` from `'../feature-assembly/read-cap-error'`), in `resolveView` change the params
 literal to `{ ViewID: params.ViewID, IgnoreMaxRows: true, ResultType: 'entity_object' }` (with `// global-provider-ok:` on the fallback `new RunView()`), and in `resolveList` pass `IgnoreMaxRows: true` on the `MJ: List Details` query and batch the `IN (...)` target-entity queries into chunks of `100` (`ID_CHUNK_SIZE = 100`) via `rv.RunViews<BaseEntity>(...)` so lists larger than 100 or 1,000 rows neither truncate nor build an unbounded `IN (...)` clause (`coding_standards.md` §7).
 
-- [ ] Step 4: Run the Step 2 command; expected `Tests  4 passed (4)`. Then
+- [x] Step 4: Run the Step 2 command; expected `Tests  4 passed (4)`. Then
   `pnpm vitest run src/actions/__tests__` → `0 failed` (the primary-key and write-back suites stay green).
 
 #### Task C1.3: Pin the dated-source and maintenance re-score reads
@@ -5694,7 +5669,7 @@ Create `packages/AI/PredictiveStudio/Engine/src/maintenance/__tests__/rescore-re
 `ProductionScoreRecordSetRunner.prototype.run` (unchanged). No production change: both reads are already complete on
 `next` (dated sources) or become complete through C1.2 (re-score). These tests stop either from regressing.
 
-- [ ] Step 1: Write the tests. Append to `read-completeness.test.ts`:
+- [x] Step 1: Write the tests. Append to `read-completeness.test.ts`:
 
 ```ts
 describe('FeatureAssembly — dated sources are read in full (F-PIT-4 cap half)', () => {
@@ -5738,12 +5713,12 @@ describe('ProductionRescoreRunner — re-scores the whole population (F-MNT-6 re
 });
 ```
 
-- [ ] Step 2: Run them:
+- [x] Step 2: Run them:
   `pnpm vitest run src/feature-assembly/__tests__/read-completeness.test.ts src/maintenance/__tests__/rescore-read.test.ts`
   → expected `Tests  5 passed (5)` (they pin behaviour that C1.1/C1.2 and #5295 already deliver; if either fails,
   the dated-source or re-score read changed meaning — stop and re-read `feature-assembly-executor.ts:640-670` and
   `maintenance/seams.ts:158-174` before continuing).
-- [ ] Step 3: No implementation. Build: `cd $MJ/packages/AI/PredictiveStudio/Engine && pnpm run build; echo "exit=$?"`
+- [x] Step 3: No implementation. Build: `cd $MJ/packages/AI/PredictiveStudio/Engine && pnpm run build; echo "exit=$?"`
   → `exit=0`.
 
 #### Task C1.4: Runtime verification and gate `W1 → S7.5`
@@ -5756,9 +5731,9 @@ scoring half uses `W1S42ValidatedModel`, a full-row model promoted to Validated 
 M5.6) and the test data of M4 (`pstruth.W1_MembershipYear`, entity `PS Truth: W1_MembershipYear`, 16,776 rows,
 nullable `TruthScore FLOAT`; pipelines named `PSTruth: …`). The registry status stays `expected-fail` (M2.2).
 
-- [ ] Step 1: Build Engine (`cd $MJ/packages/AI/PredictiveStudio/Engine && pnpm run build; echo "exit=$?"` → `exit=0`), then
+- [x] Step 1: Build Engine (`cd $MJ/packages/AI/PredictiveStudio/Engine && pnpm run build; echo "exit=$?"` → `exit=0`), then
   run RV-0 so MJAPI loads the new code.
-- [ ] Step 2: Run the gate:
+- [x] Step 2: Run the gate:
 
 ```bash
 gate pr "W1 → S7.5"      # → truth:run exit=0
@@ -5769,7 +5744,7 @@ Expected: `xpass {"labelledRows":16776,"trainingRows":13421,"holdoutRows":3355,"
 (M6.3 baseline before C1: `xfail` with `filterScored` 1000; the training half already read 13421 + 3355 = 16776
 because #5295 lifted the training cap).
 
-- [ ] Step 3: Database checks (expected values in comments):
+- [x] Step 3: Database checks (expected values in comments):
 
 ```bash
 sq "SELECT TOP 1 m.TrainingRowCount + CAST(JSON_VALUE(m.Lineage,'$.lockedHoldoutRowCount') AS INT)
@@ -5779,7 +5754,7 @@ sq "SELECT COUNT(*) FROM pstruth.W1_MembershipYear"                          # �
 sq "SELECT COUNT(*) FROM pstruth.W1_MembershipYear WHERE TruthScore IS NOT NULL"  # → 0 (the G0.1 body scores without a write-back mapping)
 ```
 
-- [ ] Step 4: Refusal of a truncating explicit cap, through MJAPI's generic Remote Operation mutation
+- [x] Step 4: Refusal of a truncating explicit cap, through MJAPI's generic Remote Operation mutation
   (`ExecuteRemoteOperation`, GraphQL root `/`, header `x-mj-api-key: $MJ_API_KEY`). The runner resolves the scope
   before it loads the model, so any W1 model id works:
 
@@ -5798,7 +5773,7 @@ console.log(JSON.stringify((await res.json()).data.ExecuteRemoteOperation));
   Expected: `{"success":false,"errorMessage":"Score Record Set: the scope matches 16776 rows of 'PS Truth: W1_MembershipYear' but maxRows=1000 would score only 1000. Remove maxRows to score every matching row, or narrow the filter."}`
   and `sq "SELECT COUNT(*) FROM pstruth.W1_MembershipYear WHERE TruthScore IS NOT NULL"` → `0`.
 
-- [ ] Step 5: Mutation checks (§6 shared notes):
+- [x] Step 5: Mutation checks (§6 shared notes):
 
 | Guard | Mutation | Must go red |
 |---|---|---|
@@ -5873,7 +5848,7 @@ rewrite them (§9 D2-30). Closes F-DOC-19 ("a coin-flip model is never auto-publ
 F-DOC-37 for these passages. Every sentence describes `next`'s code (D-030); PR 4 re-corrects them when it gates the
 path.
 
-- [ ] Step 1: In §6.x, in the sentence that contains `or **trains** the pipeline through the real \`TrainingEngine\` and
+- [x] Step 1: In §6.x, in the sentence that contains `or **trains** the pipeline through the real \`TrainingEngine\` and
   publishes it through the promotion gate`, replace `a leakage-flagged model is refused and stays Draft for a human).`
   with `a leakage-flagged model is refused and stays Draft; the gate promotes it only on a request that records a
   sign-off with a reason).` (the gate's rule, `promote-model.gate.ts:55-64`: `signOff` plus a non-empty `reason`, from
@@ -5884,7 +5859,7 @@ path.
 that is no better than chance is published when training did not flag leakage.
 ```
 
-- [ ] Step 2: In §12.4, in the `PredictiveStudioPipelineBuilder` bullet, replace
+- [x] Step 2: In §12.4, in the `PredictiveStudioPipelineBuilder` bullet, replace
   `So a coin-flip model is **never auto-published into the business catalog**.` with:
 
 ```markdown
@@ -5894,12 +5869,12 @@ itself, without the promotion gate: the model skips the gate's state machine and
 scoring Action (§15.3).
 ```
 
-- [ ] Step 3: In §13 item 4, append after the sentence ending `…and transitions status.`:
+- [x] Step 3: In §13 item 4, append after the sentence ending `…and transitions status.`:
   ` One path bypasses it: the agent's Pipeline Builder sets \`Published\` directly (§12.4).`
-- [ ] Step 4: In §15.3 "What it is", replace `so every published model becomes a first-class, discoverable Action` with
+- [x] Step 4: In §15.3 "What it is", replace `so every published model becomes a first-class, discoverable Action` with
   `so every model published through the gate becomes a first-class, discoverable Action (a model the Pipeline Builder
   publishes directly gets none, §12.4)`.
-- [ ] Step 5: Checks:
+- [x] Step 5: Checks:
   `grep -n "never auto-published\|so every published model becomes\|stays Draft for a human" guides/PREDICTIVE_STUDIO_GUIDE.md` → no output;
   `grep -c "One path bypasses it\|Auto-train does not read the trust verdict\|can clear it and be published\|published through the gate becomes" guides/PREDICTIVE_STUDIO_GUIDE.md`
   → `4`. Each new sentence is true of the code (quote check, recorded in §11):
@@ -5960,7 +5935,7 @@ status it does not know fails closed) and `Message(modelId, status): string` (al
 exported through `scoring/index.ts`'s existing `export *`; the rule lives on the class that reports it, coding
 standards §2). The error is not a `ModelNeedsTrainingError`, so `Preflight` rethrows it without trying auto-train.
 
-- [ ] Step 1: Write the failing tests. In `ml-model-inference-processor.test.ts` add a status member to `FakeMLModel`:
+- [x] Step 1: Write the failing tests. In `ml-model-inference-processor.test.ts` add a status member to `FakeMLModel`:
 
 ```ts
   public Status: 'Archived' | 'Draft' | 'Published' | 'Validated' = 'Published';
@@ -6094,7 +6069,7 @@ describe('ProductionScoreRecordSetRunner — refused models write nothing (W1 �
 });
 ```
 
-- [ ] Step 2: Run them; expected failure.
+- [x] Step 2: Run them; expected failure.
 
 ```bash
 cd $MJ/packages/AI/PredictiveStudio/Engine
@@ -6104,7 +6079,7 @@ pnpm vitest run src/scoring/__tests__/ml-model-inference-processor.test.ts src/a
 Expected: `6 failed` — the four Draft/Archived processor tests (Preflight resolves; records succeed) and both runner
 tests (`run()` resolves instead of rejecting); the two Validated/Published tests and the no-artifact Draft test pass.
 
-- [ ] Step 3: Implement. Append to `model-readiness.ts`:
+- [x] Step 3: Implement. Append to `model-readiness.ts`:
 
 ```ts
 /**
@@ -6147,7 +6122,7 @@ in `loadModel`, between the artifact-bytes check and `return this.buildLoadedMod
     }
 ```
 
-- [ ] Step 4: Run the Step 2 command → `0 failed`; then `pnpm vitest run src/scoring src/actions` → `0 failed`
+- [x] Step 4: Run the Step 2 command → `0 failed`; then `pnpm vitest run src/scoring src/actions` → `0 failed`
   (the existing processor tests now use `Status = 'Published'` by default).
 
 #### Task C3.2: `ScoreRecordSet` honours `dryRun`
@@ -6160,7 +6135,7 @@ Test: Modify `packages/AI/PredictiveStudio/Engine/src/operations/__tests__/score
 `DryRun` parameter in `metadata/actions/predictive-studio/.predictive-studio-actions.json`; it is unchanged (no gate
 uses it; adding a parameter is PR 4's F-step on the new scoring path).
 
-- [ ] Step 1: Append the failing tests:
+- [x] Step 1: Append the failing tests:
 
 ```ts
 describe('PredictiveStudioScoreRecordSetServerOperation — dry run (W1 → S7.3, F-SCO-2)', () => {
@@ -6181,11 +6156,11 @@ describe('PredictiveStudioScoreRecordSetServerOperation — dry run (W1 → S7.3
 });
 ```
 
-- [ ] Step 2: Run `pnpm vitest run src/operations/__tests__/score-record-set.operation.test.ts` → `2 failed`
+- [x] Step 2: Run `pnpm vitest run src/operations/__tests__/score-record-set.operation.test.ts` → `2 failed`
   (`expected undefined to be true`, `expected undefined to be false`).
-- [ ] Step 3: Implement — in `InternalExecute`'s request literal add `dryRun: input.dryRun === true,` after the
+- [x] Step 3: Implement — in `InternalExecute`'s request literal add `dryRun: input.dryRun === true,` after the
   `writeBack` line.
-- [ ] Step 4: Re-run → `0 failed`.
+- [x] Step 4: Re-run → `0 failed`.
 
 #### Task C3.3: Guide corrections for scoring
 
@@ -6194,7 +6169,7 @@ describe('PredictiveStudioScoreRecordSetServerOperation — dry run (W1 → S7.3
 **Interfaces:** none. This milestone owns the wording of these guide sections; M-final.4 quote-checks them and does not
 rewrite them (§9 D2-30). Closes F-DOC-23's `ScoreRecordSet` half.
 
-- [ ] Step 1: Append to §6.3 (after the paragraph that starts `**Ephemeral by default; write-back when an \`OutputMapping\` is present.**`):
+- [x] Step 1: Append to §6.3 (after the paragraph that starts `**Ephemeral by default; write-back when an \`OutputMapping\` is present.**`):
 
 ```markdown
 **Who may score.** Only `Validated` and `Published` models score. A `Draft` or `Archived` model is refused once, before
@@ -6203,7 +6178,7 @@ the first record (`ModelNotScorableError` from `Preflight`), and nothing is writ
 even when a write-back mapping is supplied. The Score Record Set *Action* has no dry-run parameter.
 ```
 
-- [ ] Step 2: `grep -n "Who may score" guides/PREDICTIVE_STUDIO_GUIDE.md` → one line.
+- [x] Step 2: `grep -n "Who may score" guides/PREDICTIVE_STUDIO_GUIDE.md` → one line.
 
 #### Task C3.4: Runtime verification and gate `W1 → S7.3`
 
@@ -6215,11 +6190,11 @@ on `W1S42ValidatedModel`; scope `Region = 'NA' AND [Year] = 2024` with `maxRows:
 rows so C1.2 does not refuse it), `WasScoringRefused` (§5.8, unchanged) and the M4 test data
 (`pstruth.W1_MembershipYear.TruthScore`, the write-back target).
 
-- [ ] Step 1: Build Engine (`pnpm run build; echo "exit=$?"` → `exit=0`); run RV-0.
-- [ ] Step 2: `gate pr "W1 → S7.3"`; `outcome G0.7` → `xpass` with `draftWritten` 0, `archivedWritten` 0, `dryRunWritten` 0,
+- [x] Step 1: Build Engine (`pnpm run build; echo "exit=$?"` → `exit=0`); run RV-0.
+- [x] Step 2: `gate pr "W1 → S7.3"`; `outcome G0.7` → `xpass` with `draftWritten` 0, `archivedWritten` 0, `dryRunWritten` 0,
   `draftError` containing `is Draft and cannot score records` and `archivedError` containing `is Archived and cannot
   score records` (M6.3 baseline: `xfail`, all three wrote rows).
-- [ ] Step 3: Database checks:
+- [x] Step 3: Database checks:
 
 ```bash
 sq "SELECT COUNT(*) FROM pstruth.W1_MembershipYear WHERE TruthScore IS NOT NULL"                    # → 0
@@ -6230,7 +6205,7 @@ sq "SELECT COUNT(*) FROM __mj.RecordChange rc JOIN __mj.Entity e ON e.ID = rc.En
 (`PS Truth:` entities have `TrackRecordChanges` off (§5.5), so the second query is 0 by construction; the `TruthScore`
 count is the check that matters.)
 
-- [ ] Step 4: Mutation checks (§6 shared notes): `CanScore` → `status !== 'Archived'` → `refuses a Draft model in
+- [x] Step 4: Mutation checks (§6 shared notes): `CanScore` → `status !== 'Archived'` → `refuses a Draft model in
   Preflight …` and `fails every record of a Draft model …` red; the status check moved before the artifact checks →
   `a Draft model with no artifact still reports "needs training" …` red; the `throw` deleted → all four Draft/Archived
   processor tests and both runner tests red; `dryRun: input.dryRun === true` → `dryRun: false` → `forwards dryRun to
@@ -6313,7 +6288,7 @@ standards §2). Consumed by the Engine report (C4.3), the dashboards (C4.2/C4.3)
 test (C4.4) and, from C4.5, the truth suite's G0.6 scan and story check (`TruthSuite/src/gates/causal-copy.ts`
 derives `CausalCopyScan.Patterns` from `CausalCopy.Patterns`, §9 D2-25).
 
-- [ ] Step 1: Write the failing tests.
+- [x] Step 1: Write the failing tests.
 
 ```ts
 // importance-display.test.ts
@@ -6358,10 +6333,10 @@ describe('CausalCopy.FindPhrases', () => {
 });
 ```
 
-- [ ] Step 2: `cd $MJ/packages/AI/PredictiveStudio/Core && pnpm vitest run src/__tests__/importance-display.test.ts src/__tests__/causal-copy.test.ts`
+- [x] Step 2: `cd $MJ/packages/AI/PredictiveStudio/Core && pnpm vitest run src/__tests__/importance-display.test.ts src/__tests__/causal-copy.test.ts`
   → fails to resolve both modules (`Failed to load url ../importance-display`).
 
-- [ ] Step 3: Implement.
+- [x] Step 3: Implement.
 
 ```ts
 // importance-display.ts
@@ -6439,7 +6414,7 @@ export * from './importance-display';
 export * from './causal-copy';
 ```
 
-- [ ] Step 4: Re-run Step 2's command → `5 passed`; `pnpm run build; echo "exit=$?"` → `exit=0`.
+- [x] Step 4: Re-run Step 2's command → `5 passed`; `pnpm run build; echo "exit=$?"` → `exit=0`.
 
 #### Task C4.2: Core + Dashboards — driver direction, the At-Risk list and the badge component
 
@@ -6461,7 +6436,7 @@ predictions grid passes the polarity it renders with, and the score-history serv
 `AT_RISK_LIST_MIN_RISK_PCT = 40`, `AtRiskRules.SelectAtRiskListMembers(rows: ReadonlyArray<AtRiskRow>, limit: number): AtRiskRow[]`;
 the standalone L1 widget `<ps-row-drivers [Drivers]="…">` (`PSRowDriversComponent`, no router, design tokens only).
 
-- [ ] Step 1: Write the failing tests. Append to `src/__tests__/at-risk.test.ts` (extend its import from
+- [x] Step 1: Write the failing tests. Append to `src/__tests__/at-risk.test.ts` (extend its import from
   `'@memberjunction/predictive-studio-core'` with `AtRiskRules, AT_RISK_LIST_MIN_RISK_PCT,
   type AtRiskRow`):
 
@@ -6552,7 +6527,7 @@ describe('PSRowDriversComponent (DOM) — W1 → S9.4', () => {
 });
 ```
 
-- [ ] Step 2: Run them; expected failure.
+- [x] Step 2: Run them; expected failure.
 
 ```bash
 cd $MJ/packages/Angular/Explorer/dashboards
@@ -6562,7 +6537,7 @@ pnpm vitest run src/__tests__/at-risk.test.ts src/PredictiveStudio/components/ps
 Expected: the at-risk file fails on the missing exports (`AtRiskRules.DriverRaisesRisk is not a function` …) and the DOM file
 cannot resolve `./ps-row-drivers.component`.
 
-- [ ] Step 3: Implement. In `packages/AI/PredictiveStudio/Core/src/at-risk-rules.ts` (moved from `at-risk.view-models.ts` in M5.10 per D2-44):
+- [x] Step 3: Implement. In `packages/AI/PredictiveStudio/Core/src/at-risk-rules.ts` (moved from `at-risk.view-models.ts` in M5.10 per D2-44):
 
 ```ts
 /** The badge a person sees for a driver. */
@@ -6725,7 +6700,7 @@ In `gates/containment.gates.test.ts` pass the pipeline's target variable (`'Rene
 `ContainmentProbe.AtRiskListRecordIDs(details, 'Renewed')`. These are the only lines C4 changes in that file; the gate
 logic (`TruthGate.Define`, thresholds, result writing) is untouched.
 
-- [ ] Step 4: Build `@memberjunction/predictive-studio-core` first (`pnpm --filter @memberjunction/predictive-studio-core run build`), then re-run Step 2's command → `0 failed` (6 new at-risk tests, 3 DOM tests). Then
+- [x] Step 4: Build `@memberjunction/predictive-studio-core` first (`pnpm --filter @memberjunction/predictive-studio-core run build`), then re-run Step 2's command → `0 failed` (6 new at-risk tests, 3 DOM tests). Then
   `pnpm test` in dashboards → `0 failed`; `pnpm run build; echo "exit=$?"` → `exit=0`; `cd $MJ && npm run check:ui`
   → passes (only token colours in the new css).
 
@@ -6746,7 +6721,7 @@ Test: Modify `packages/AI/PredictiveStudio/Engine/src/agent/__tests__/pipeline-b
 (ml-model-view-models), `PredictionDrivers.DriversForModel(algorithm: string | null | undefined, featureImportanceJson: string | null): PredictionDriver[]`
 (model-prediction.logic), and `GenerateMarkdownReport` printing `ImportanceDisplay.HiddenNote` when `features` is empty.
 
-- [ ] Step 1: Write the failing tests.
+- [x] Step 1: Write the failing tests.
 
 ```ts
 // ml-model-view-models.test.ts — add ModelImportanceView to the import
@@ -6789,13 +6764,13 @@ describe('GenerateMarkdownReport — copy (W1 → S9.3)', () => {
 });
 ```
 
-- [ ] Step 2: Run each package's file:
+- [x] Step 2: Run each package's file:
   `cd $MJ/packages/Angular/Explorer/core-entity-forms && pnpm vitest run src/__tests__/ml-model-view-models.test.ts src/__tests__/model-prediction.logic.test.ts`
   and `cd $MJ/packages/AI/PredictiveStudio/Engine && pnpm vitest run src/agent/__tests__/pipeline-builder-agent.test.ts`
   → the new tests fail (`ModelImportanceView is not defined`, `PredictionDrivers is not defined`; the report
   has "Features analyzed from source entity", "Influential" and "honest holdout evaluation").
 
-- [ ] Step 3: Implement.
+- [x] Step 3: Implement.
 
 `ml-model-view-models.ts` (add `import { ImportanceDisplay } from '@memberjunction/predictive-studio-core';`):
 
@@ -6897,16 +6872,9 @@ the two trailing sections with:
     : `- ${ImportanceDisplay.HiddenNote}`;
 ```
 
-```ts
-## Features the model weighted most (associations, not causes)
-${topFeatures}
+The report keeps its "Features the model weighted most (associations, not causes)" and "How this was measured" sections, worded as in the lines replaced above.
 
-## How this was measured
-- The score comes from the rows held back from training; the winner was picked on those same rows, so the score is optimistic.
-- Registered in the Predictive Studio Models catalog; the Trust Grade line above says whether it was published.
-```
-
-- [ ] Step 4: Re-run Step 2's commands → `0 failed`. Build core-entity-forms, dashboards and Engine
+- [x] Step 4: Re-run Step 2's commands → `0 failed`. Build core-entity-forms, dashboards and Engine
   (`pnpm run build; echo "exit=$?"` in each → `exit=0`).
 
 #### Task C4.4: Causal copy removed from the UI, the trust copy and the story prompt; scan test
@@ -6922,7 +6890,7 @@ core-entity-forms `custom/MLModels/**` and `panels/model-predictions/**`; the ar
 `ml-experiment-results-viewer.component.{ts,html}`; the four Model Development Agent prompt templates. Test files are
 excluded.
 
-- [ ] Step 1: Write the failing tests. In `trust.test.ts` append:
+- [x] Step 1: Write the failing tests. In `trust.test.ts` append:
 
 ```ts
   it('words the regression headline as an association, never as a cause (F-UI-1)', () => {
@@ -6983,12 +6951,12 @@ describe('causal copy scan (W1 → S9.3, static half)', () => {
 });
 ```
 
-- [ ] Step 2: Run: `cd $MJ/packages/AI/PredictiveStudio/Core && pnpm vitest run src/__tests__/trust.test.ts` → 1 failed;
+- [x] Step 2: Run: `cd $MJ/packages/AI/PredictiveStudio/Core && pnpm vitest run src/__tests__/trust.test.ts` → 1 failed;
   `cd $MJ/packages/AI/PredictiveStudio/Engine && pnpm vitest run src/__tests__/causal-copy-scan.test.ts` → 1 failed,
   listing `Core/src/trust.ts: what drives`, `…: drives the outcome`, `…: explains about` plus any file C4.2/C4.3 did not
   yet clean (after C4.2/C4.3 only `trust.ts` and the prompt template remain).
 
-- [ ] Step 3: Implement. In `trust.ts` `buildOneLiner`, replace
+- [x] Step 3: Implement. In `trust.ts` `buildOneLiner`, replace
   ``: `Explains about ${Math.round(clamp01(metrics.R2) * 100)}% of what drives the outcome.`;`` with
 
 ```ts
@@ -7007,7 +6975,7 @@ In the template, section "### 4. Report", replace the first bullet with:
 
 and leave "### 5." and the rest unchanged.
 
-- [ ] Step 4: Re-run both Step 2 commands → `0 failed`. `pnpm mj sync push --dir=metadata/prompts --ci` → exit 0;
+- [x] Step 4: Re-run both Step 2 commands → `0 failed`. `pnpm mj sync push --dir=metadata/prompts --ci` → exit 0;
   `sq "SELECT COUNT(*) FROM __mj.TemplateContent WHERE TemplateText LIKE '%never as something that makes the outcome happen%'"`
   → `1`; `sq "SELECT COUNT(*) FROM __mj.TemplateContent WHERE TemplateText LIKE '%which features mattered most%'"` → `0`.
 
@@ -7022,7 +6990,7 @@ dashboards' PredictiveStudio sources, Core `src/`, and `ContainmentProbe.StoryPr
 templates), and generates 10 stories through `ContainmentProbe.GenerateModelStory` → `TruthHarness.GenerateStory` (M5.6, §9 D2-24) with
 `Requires: ["live-model"]` in the `weekly` lane; `CausalCopy.FindPhrases` / `CausalCopy.Patterns` (C4.1).
 
-- [ ] Step 1: One phrase list (§9 D2-25). M5.9 shipped the same eight patterns locally so G0.6 could measure before
+- [x] Step 1: One phrase list (§9 D2-25). M5.9 shipped the same eight patterns locally so G0.6 could measure before
   C4; now the truth suite takes them from Core, and the scan skips the file that defines them (its labels are the
   phrases). Append to `causal-copy.test.ts`:
 
@@ -7063,9 +7031,9 @@ describe('causal copy scan — one list (C4.5)', () => {
   keep `UserFacingText` unchanged, and make `Scan` start its loop with
   `if (path.basename(file) === CausalCopyScan.listFile) continue;`. Re-run → `0 failed`; `pnpm --filter
   @memberjunction/predictive-studio-truth-suite run build` → `exit=0`.
-- [ ] Step 2: Build Core, Engine, dashboards, core-entity-forms (`pnpm run build; echo "exit=$?"` in each → `exit=0`);
+- [x] Step 2: Build Core, Engine, dashboards, core-entity-forms (`pnpm run build; echo "exit=$?"` in each → `exit=0`);
   run RV-0.
-- [ ] Step 3: Gates:
+- [x] Step 3: Gates:
 
 ```bash
 gate pr "W1 → S9.4"
@@ -7081,7 +7049,7 @@ outcome G0.6     # → xpass {"filesScanned":<n>,"causalHits":0,"firstHit":null,
 #   gh workflow run ps-truth-suite.yml --ref ps/pr-2-truth-suite-containment -f mode=weekly && gh run watch
 ```
 
-- [ ] Step 4: UI check, automated (§9 D2-34; the only UI step in PR 2; run it before C5, which grades the W1
+- [x] Step 4: UI check, automated (§9 D2-34; the only UI step in PR 2; run it before C5, which grades the W1
   logistic model Poor under the default majority-baseline rule and blocks its card, §9 risk R-b). Two tiers run the
   same assertions; the tier is chosen by a command's output, never by a person.
   **Files:** Create `packages/AI/PredictiveStudio/TruthSuite/scripts/ui-fixture.mts` (+ `"truth:ui-fixture": "tsx
@@ -7332,7 +7300,7 @@ fi
 
   Record the `C4.5 UI tier:` line, both tiers' counts and the list count in §11. A failing assertion in either tier
   is a C4 defect: fix the product code and re-run Step 4. `.playwright-cli/` is git-ignored (never committed).
-- [ ] Step 5: Mutation checks (§6 shared notes):
+- [x] Step 5: Mutation checks (§6 shared notes):
 
 | Guard | Mutation | Must go red |
 |---|---|---|
@@ -7454,7 +7422,7 @@ Test: Modify `packages/AI/PredictiveStudio/Engine/src/training/__tests__/trainin
 (the rule lives on the class that reports it, coding standards §2; exported through `training/index.ts`). The refusal happens **before** the `MJ: ML Training Runs` row is created, so
 the harness sees `ok: false, modelId: null` (`WasRefusedBeforeTraining`, unchanged).
 
-- [ ] Step 1: Write the failing tests. Append to `training-engine.test.ts` (import `AsOfSettingHasNoEffectError` from
+- [x] Step 1: Write the failing tests. Append to `training-engine.test.ts` (import `AsOfSettingHasNoEffectError` from
   `'../as-of-refusal'`):
 
 ```ts
@@ -7505,12 +7473,12 @@ describe('PredictiveStudioTrainModelServerOperation — asOf input (W4 → S2.1,
 });
 ```
 
-- [ ] Step 2: Run:
+- [x] Step 2: Run:
   `cd $MJ/packages/AI/PredictiveStudio/Engine && pnpm vitest run src/training/__tests__/training-engine.test.ts src/operations/__tests__/train-model.operation.test.ts`
   → the engine test file fails to load (`../as-of-refusal` does not exist yet) and the operation refusal test fails
   (training proceeds: `CallCount` is 1).
 
-- [ ] Step 3: Implement. `training/as-of-refusal.ts`:
+- [x] Step 3: Implement. `training/as-of-refusal.ts`:
 
 ```ts
 /**
@@ -7578,7 +7546,7 @@ and in step 4 (`:27`) replace "and reflect it in `AsOfStrategy`" with "and list 
 `goal-analyst.example.json` change `"AsOfStrategy": { "Mode": "offset", "OffsetDays": 90 }` to
 `"AsOfStrategy": { "Mode": "none" }`.
 
-- [ ] Step 4: Re-run Step 2's command → `0 failed`; `pnpm run build` → `exit=0`;
+- [x] Step 4: Re-run Step 2's command → `0 failed`; `pnpm run build` → `exit=0`;
   `pnpm mj sync push --dir=metadata/prompts --ci` → exit 0.
 
 #### Task C5.2: `kfold` and `holdout` report out-of-sample metrics; the sidecar reports the majority rate
@@ -7593,7 +7561,7 @@ training rows, `K` outside `2..rows`, or a class with fewer than `K` rows under 
 `ValueError`, mapped by the existing handler). `classification_metrics` adds `baseline_accuracy`,
 `predicted_classes`, `n` and, for binary problems, `n_positive` (all floats in the same metric map).
 
-- [ ] Step 1: Write the failing tests:
+- [x] Step 1: Write the failing tests:
 
 ```python
 """G0.9 / F-SC-1 / F-TR-1: validation metrics are out-of-sample for every strategy, K is honoured, and the
@@ -7676,14 +7644,14 @@ def test_classification_metrics_report_majority_rate_and_predicted_classes() -> 
     assert m["n_positive"] == 1.0
 ```
 
-- [ ] Step 2: Run:
+- [x] Step 2: Run:
   `cd $MJ/packages/AI/PredictiveStudio/Sidecar && pnpm run test:python -- tests/test_validation_out_of_sample.py`
   → expected failures: the six tree-model out-of-sample cases (AUC 1.000), `test_kfold_uses_k` (identical metrics, no
   `n`), both refusal tests (200) and the metrics test (`KeyError: 'baseline_accuracy'`) — `10 failed`; the two
   logistic cases pass already (in-sample logistic regression on six noise features stays inside 0.35–0.65; the
   assessment measured 0.589 in-sample).
 
-- [ ] Step 3: Implement. In `metrics.py` `classification_metrics`, before `auc = _safe_auc(...)`, add:
+- [x] Step 3: Implement. In `metrics.py` `classification_metrics`, before `auc = _safe_auc(...)`, add:
 
 ```python
     # The rate an always-majority guess achieves on these rows, and how many classes the model actually predicts.
@@ -7822,7 +7790,7 @@ Update `_fit_and_score`'s docstring ("kfold / holdout-only / tiny data: … in-s
 comment block above its call in `_run_training` ("Train/validation split (or full-fit fallback for kfold/none)") to
 "Out-of-sample validation for every strategy (train/test split, holdout, or pooled K-fold)".
 
-- [ ] Step 4: Re-run Step 2's command → `12 passed`. Then the whole sidecar suite:
+- [x] Step 4: Re-run Step 2's command → `12 passed`. Then the whole sidecar suite:
   `pnpm run test:python` → `0 failed` (the existing `test_validation_no_leakage.py` tests call
   `_anti_skew_val_metrics` with an unchanged signature).
 
@@ -7832,7 +7800,7 @@ comment block above its call in `_run_training` ("Train/validation split (or ful
 
 **Interfaces:** none (keep-list for G0.10; the new K-fold path seeds its splitter with `random_state`).
 
-- [ ] Step 1: Write the test:
+- [x] Step 1: Write the test:
 
 ```python
 """G0.10 keep-list: two single-threaded trainings of logistic regression, XGBoost and LightGBM on the same rows with
@@ -7866,7 +7834,7 @@ def test_single_threaded_training_is_deterministic(algorithm: str, strategy: str
     assert all(abs(a["score"] - b["score"]) <= 1e-9 for a, b in zip(p1, p2))
 ```
 
-- [ ] Step 2: `pnpm run test:python -- tests/test_determinism.py` → `6 passed`. (It passes before C5.2 for
+- [x] Step 2: `pnpm run test:python -- tests/test_determinism.py` → `6 passed`. (It passes before C5.2 for
   `train_test_split`; it guards the new K-fold path. A failure means a non-seeded random source entered training —
   fix it before continuing.)
 
@@ -7899,7 +7867,7 @@ The Pipeline Builder's `buildValidation` (`Engine/src/agent/modeling-plan-to-pip
 `Strategy`, `TestSize`, `K` and `LockedHoldoutFraction`, so agent-built pipelines (G0.2, G0.3, G0.12) always run on
 the default `enforce`.
 
-- [ ] Step 1: Write the failing tests.
+- [x] Step 1: Write the failing tests.
 
 ```ts
 // Core/src/__tests__/evaluation-record.test.ts
@@ -7985,10 +7953,10 @@ describe('TrainingEngine — evaluation record and the time-index containment (T
 
 (The last expectation also needs C5.5; run C5.4 and C5.5's Step 3 before C5.4's Step 4.)
 
-- [ ] Step 2: Run `cd $MJ/packages/AI/PredictiveStudio/Core && pnpm vitest run src/__tests__/evaluation-record.test.ts`
+- [x] Step 2: Run `cd $MJ/packages/AI/PredictiveStudio/Core && pnpm vitest run src/__tests__/evaluation-record.test.ts`
   → cannot resolve `../evaluation-record`; the engine tests fail on the missing exports.
 
-- [ ] Step 3: Implement. In `pipeline-spec.ts`, inside `ValidationStrategy` after `LockedHoldoutFraction`:
+- [x] Step 3: Implement. In `pipeline-spec.ts`, inside `ValidationStrategy` after `LockedHoldoutFraction`:
 
 ```ts
   /**
@@ -8160,7 +8128,7 @@ and `buildRunNotes` to:
   `grep -c "A human should confirm\|until a human signs off" guides/PREDICTIVE_STUDIO_GUIDE.md packages/AI/PredictiveStudio/Engine/src/training/training-engine.ts`
   → `0` for both files.
 
-- [ ] Step 4: After C5.5 Step 3, run Core `pnpm vitest run src/__tests__/evaluation-record.test.ts` → `5 passed`;
+- [x] Step 4: After C5.5 Step 3, run Core `pnpm vitest run src/__tests__/evaluation-record.test.ts` → `5 passed`;
   Engine `pnpm vitest run src/training/__tests__/training-engine.test.ts` → `0 failed`.
 
 #### Task C5.5: Trust containment in the verdict
@@ -8181,7 +8149,7 @@ valid). Consumes `EvaluationLineage.Read`, `EvaluationLineage.DefaultMajorityBas
 training. Every caller that passes an `MJ: ML Models` entity (Pipeline Builder; harness `ReadModel`, which M5.6 writes
 as `TrustVerdicts.DeriveTrustVerdict(model)` over the loaded entity, §9 D2-26) gets the containment without code changes.
 
-- [ ] Step 1: Write the failing tests. In `trust.test.ts` (import `EvaluationLineage` and `type EvaluationRecord`
+- [x] Step 1: Write the failing tests. In `trust.test.ts` (import `EvaluationLineage` and `type EvaluationRecord`
   from `'../evaluation-record'` and `type MajorityBaselineRule` from `'../pipeline-spec'`) replace the test `'falls back to Accuracy when AUC is absent'` with:
 
 ```ts
@@ -8303,7 +8271,7 @@ In `business-predictions.test.ts` append:
   });
 ```
 
-- [ ] Step 2: Run `cd $MJ/packages/AI/PredictiveStudio/Core && pnpm vitest run src/__tests__/trust.test.ts` →
+- [x] Step 2: Run `cd $MJ/packages/AI/PredictiveStudio/Core && pnpm vitest run src/__tests__/trust.test.ts` →
   `11 failed`: the rewritten accuracy test, six new ones (accuracy-only graded Good/Excellent, n = 1 graded
   Excellent, in-sample graded Excellent, W7 s42/s43 graded Fair/Good, constant predictor Excellent, withheld not
   applied), `keeps a classifier that beats the majority rate` (`majorityBaseline` is `undefined`, not `null`) and the
@@ -8311,7 +8279,7 @@ In `business-predictions.test.ts` append:
   graded Excellent). `uses validation metrics when…out-of-sample` passes already (today's fallback and bands give the
   same answer).
 
-- [ ] Step 3: Implement in `trust.ts`. Add
+- [x] Step 3: Implement in `trust.ts`. Add
   `import { EvaluationLineage, type EvaluationRecord } from './evaluation-record';`
   and `import type { MajorityBaselineRule } from './pipeline-spec';` (still dependency-free: same package). Extend the
   types:
@@ -8461,8 +8429,8 @@ the model's recorded majority-baseline rule `enforce` (the default) and carries 
 
 In `ps-predictions-resource.component.ts` `Cards`, add `Lineage: m.Lineage,` to the mapped input.
 
-- [ ] Step 3b: Per §9 `D2-46` and `D2-48` (Scope Rule), only the `@deprecated` aliases inside files modified for functional reasons by PR 2 are removed (`deriveTrustVerdict`, `trustEvidenceLine`, `trustDots` in `Core/src/trust.ts` in M5.6 Step 0; `parseRowDrivers` in `at-risk.view-models.ts` in C4.2; `buildProductionExperimentDeps` in `run-experiment.deps.ts` in C6.1; `MLSidecar.train` in `Sidecar/src/ml-sidecar.ts` in M1.2 alongside updating `Engine/src/training/seams.ts:157` and `Sidecar/src/__tests__/ml-sidecar.test.ts:141,174`). Untouched files (`Core/src/metrics-util.ts`, `Engine/src/experiment/seams.ts`, `Engine/src/maintenance/*`, `Engine/src/agent/pipeline-builder.ts`, `dashboards/src/PredictiveStudio/business-predictions.view-models.ts`, and `packages/TestingFramework/integration-test-suite/rigs/ps-inproc-agent-builder.ts`) are not modified.
-- [ ] Step 4: Run Core `pnpm test` → `0 failed`; dashboards
+- [x] Step 3b: Per §9 `D2-46` and `D2-48` (Scope Rule), only the `@deprecated` aliases inside files modified for functional reasons by PR 2 are removed (`deriveTrustVerdict`, `trustEvidenceLine`, `trustDots` in `Core/src/trust.ts` in M5.6 Step 0; `parseRowDrivers` in `at-risk.view-models.ts` in C4.2; `buildProductionExperimentDeps` in `run-experiment.deps.ts` in C6.1; `MLSidecar.train` in `Sidecar/src/ml-sidecar.ts` in M1.2 alongside updating `Engine/src/training/seams.ts:157` and `Sidecar/src/__tests__/ml-sidecar.test.ts:141,174`). Untouched files (`Core/src/metrics-util.ts`, `Engine/src/experiment/seams.ts`, `Engine/src/maintenance/*`, `Engine/src/agent/pipeline-builder.ts`, `dashboards/src/PredictiveStudio/business-predictions.view-models.ts`, and `packages/TestingFramework/integration-test-suite/rigs/ps-inproc-agent-builder.ts`) are not modified.
+- [x] Step 4: Run Core `pnpm test` → `0 failed`; dashboards
   `pnpm vitest run src/__tests__/business-predictions.test.ts` → `0 failed`; Engine `pnpm test` → `0 failed`
   (C5.4's last expectation now passes). Builds: Core, Engine, dashboards → `exit=0`.
 
@@ -8479,7 +8447,7 @@ Test: Modify `packages/AI/PredictiveStudio/TruthSuite/src/harness/__tests__/cont
 `ValidationStrategy` from the spec, then calls `ContainmentProbe.ApplyTimeIndexDeclaration` when `spec.TimeIndexColumn` is set, then
 saves the pipeline once — so the declaration is part of that save (G0.11).
 
-- [ ] Step 1: Append the failing tests to the M5.9 file (it already imports `describe`/`it`/`expect`,
+- [x] Step 1: Append the failing tests to the M5.9 file (it already imports `describe`/`it`/`expect`,
   `TrustVerdicts.DeriveTrustVerdict`, `CandidateModel` and defines the `model(over)` helper; add the imports below to its import block):
 
 ```ts
@@ -8515,10 +8483,10 @@ describe('containment probe — stored verdict and time index', () => {
 });
 ```
 
-- [ ] Step 2: `pnpm --filter @memberjunction/predictive-studio-truth-suite exec vitest run src/harness/__tests__/containment-probe.test.ts`
+- [x] Step 2: `pnpm --filter @memberjunction/predictive-studio-truth-suite exec vitest run src/harness/__tests__/containment-probe.test.ts`
   → `2 failed` (null returned; `false` returned), `5 passed` (M5.9's four and `returns null when nothing is withheld`).
 
-- [ ] Step 3: Replace the two members' bodies in `ContainmentProbe` (add
+- [x] Step 3: Replace the two members' bodies in `ContainmentProbe` (add
   `import { SafeJSONParse } from '@memberjunction/global';` and
   `import { EvaluationLineage, type ValidationStrategy } from '@memberjunction/predictive-studio-core';`):
 
@@ -8546,7 +8514,7 @@ describe('containment probe — stored verdict and time index', () => {
   }
 ```
 
-- [ ] Step 4: Re-run Step 2's command → `7 passed`; `pnpm --filter @memberjunction/predictive-studio-truth-suite test`
+- [x] Step 4: Re-run Step 2's command → `7 passed`; `pnpm --filter @memberjunction/predictive-studio-truth-suite test`
   → `0 failed`. Mutation checks (§6 shared notes): `ContainmentProbe.ReadStoredWithheldVerdict` returning the record without the
   `WithheldReason` check → `returns null when nothing is withheld` red; `ContainmentProbe.ApplyTimeIndexDeclaration` dropping `...current`
   → `declares the time index on the pipeline, keeping the rest …` red.
@@ -8558,7 +8526,7 @@ describe('containment probe — stored verdict and time index', () => {
 **Interfaces:** none. This milestone owns the wording of these guide sections; M-final.4 quote-checks them and does not
 rewrite them (§9 D2-30). Closes F-DOC-4 and F-DOC-35.
 
-- [ ] Step 1: In §4.3 replace the paragraph starting `Time-relative feature logic (\`daysSinceLastActivityAsOf\``
+- [x] Step 1: In §4.3 replace the paragraph starting `Time-relative feature logic (\`daysSinceLastActivityAsOf\``
   with:
 
 ```markdown
@@ -8570,7 +8538,7 @@ input is not `none`. Use `{ "Mode": "none" }` and keep post-outcome columns out 
 feature assembly ships.
 ```
 
-- [ ] Step 2: In §5.1 replace `Default to a train/test split with overfitting detection; optional k-fold and holdout.`
+- [x] Step 2: In §5.1 replace `Default to a train/test split with overfitting detection; optional k-fold and holdout.`
   with:
 
 ```markdown
@@ -8608,11 +8576,11 @@ single `p.Save()` and records the answer for `LastTimeIndexDeclared()`; it then 
 same `trust` for the Pipeline Builder's winner. G0.10 promotes each of its models to Validated before scoring (C3
 refuses Draft, §9 D2-27).
 
-- [ ] Step 1: Build Core, Engine, dashboards, TruthSuite (`pnpm run build; echo "exit=$?"` in each → `exit=0`). The
+- [x] Step 1: Build Core, Engine, dashboards, TruthSuite (`pnpm run build; echo "exit=$?"` in each → `exit=0`). The
   sidecar's Python sources changed (C5.2) but `requirements.txt` did not, so the venv is not rebuilt; stop the truth
   sidecar so RV-0 starts it from the new sources: `pkill -f "scripts/sidecar.mts"; rm -f $TS/.run/sidecar.url`. Run
   RV-0.
-- [ ] Step 2: Gates (record the start time first; the database checks count only this run's rows):
+- [x] Step 2: Gates (record the start time first; the database checks count only this run's rows):
 
 ```bash
 export T0=$(date -u +"%Y-%m-%d %H:%M:%S")
@@ -8625,7 +8593,7 @@ outcome G0.11   # → xpass {"origins":12,"timeIndexDeclared":12,"gradedAbovePoo
 outcome G0.12   # → xpass: "violations":0 ("qualifying" = seeds whose winner's accuracy ≤ the majority rate; s42 and s43 per F-TR-4)
 ```
 
-- [ ] Step 3: Database checks:
+- [x] Step 3: Database checks:
 
 ```bash
 sq "SELECT COUNT(*) FROM __mj.MLTrainingRun r JOIN __mj.MLTrainingPipeline p ON p.ID = r.PipelineID
@@ -8645,7 +8613,7 @@ sq "SELECT COUNT(*) FROM __mj.MLModel m JOIN __mj.MLTrainingPipeline p ON p.ID =
       AND ISNULL(JSON_VALUE(m.Lineage,'$.evaluation.MajorityBaselineRule'), '') <> 'enforce'"                   # → 0 (G0.12 runs on the default, D2-C5d)
 ```
 
-- [ ] Step 4: The majority-baseline rule end to end (D2-C5d, §9 risk R-b). Create `scripts/majority-rule-check.mts`:
+- [x] Step 4: The majority-baseline rule end to end (D2-C5d, §9 risk R-b). Create `scripts/majority-rule-check.mts`:
 
 ```ts
 /**
@@ -8705,7 +8673,7 @@ sq "SELECT JSON_VALUE(p.ValidationStrategy,'$.MajorityBaselineRule') + '|' + JSO
   "refuses an unknown majority-baseline rule before any row is written", C5.4, because the typed harness spec cannot
   carry an unknown value.)
 
-- [ ] Step 5: Mutation checks (§6 shared notes):
+- [x] Step 5: Mutation checks (§6 shared notes):
 
 | Guard | Mutation | Must go red |
 |---|---|---|
@@ -8805,7 +8773,7 @@ changes it — program D-047 as amended by D-052, ruling CQ-1) keeps its paramet
 The Action returns `ResultCode: 'EXPERIMENT_UNAVAILABLE'`; `PredictiveStudio.StartExperimentSession` fails with the
 message (its `RunExperimentSessionViaOrchestrator` awaits the deps before `runSession`, `delegation.ts:211`).
 
-- [ ] Step 1: Write the failing tests. Append to `run-experiment.action.test.ts` (import
+- [x] Step 1: Write the failing tests. Append to `run-experiment.action.test.ts` (import
   `ExperimentDepsBuilder, ExperimentSessionsUnavailableError` from `'../run-experiment.deps'`):
 
 ```ts
@@ -8839,11 +8807,11 @@ describe('Experiment sessions are switched off (F-EXP-1)', () => {
 });
 ```
 
-- [ ] Step 2: `cd $MJ/packages/AI/PredictiveStudio/Engine && pnpm vitest run src/actions/__tests__/run-experiment.action.test.ts`
+- [x] Step 2: `cd $MJ/packages/AI/PredictiveStudio/Engine && pnpm vitest run src/actions/__tests__/run-experiment.action.test.ts`
   → `2 failed` (`ExperimentSessionsUnavailableError` is not exported yet, and the action does not return
   `EXPERIMENT_UNAVAILABLE`).
 
-- [ ] Step 3: Implement in `run-experiment.deps.ts`:
+- [x] Step 3: Implement in `run-experiment.deps.ts`:
 
 ```ts
 /** Why experiment sessions are switched off (containment of F-EXP-1). */
@@ -8912,7 +8880,7 @@ callers of the free function on `next` — `run-experiment.action.ts:31,147` and
       }
 ```
 
-- [ ] Step 4: Re-run Step 2's command → `0 failed` (the existing tests override `buildDeps` and keep passing);
+- [x] Step 4: Re-run Step 2's command → `0 failed` (the existing tests override `buildDeps` and keep passing);
   `pnpm run build` → `exit=0` (fix any import left unused by the move).
 
 #### Task C6.2: The Studio no longer offers experiment sessions
@@ -8934,7 +8902,7 @@ and the modal's own files; ruling CQ-4: no dead code between releases — PR 4 M
 re-enable re-creates the controls. No route change (L3 surface, no router import
 added).
 
-- [ ] Step 1: Update the DOM tests. Delete `'shows Pause + Cancel (not Resume) for a Running session'`,
+- [x] Step 1: Update the DOM tests. Delete `'shows Pause + Cancel (not Resume) for a Running session'`,
   `'shows Resume (not Pause) for a Paused session'` and `'opens the confirm modal when Pause is clicked'`, update the file
   header comment that describes the controls, and add:
 
@@ -8956,10 +8924,10 @@ added).
   });
 ```
 
-- [ ] Step 2: `cd $MJ/packages/Angular/Explorer/dashboards && pnpm vitest run src/PredictiveStudio/components/ps-experiments.component.dom.test.ts`
+- [x] Step 2: `cd $MJ/packages/Angular/Explorer/dashboards && pnpm vitest run src/PredictiveStudio/components/ps-experiments.component.dom.test.ts`
   → both new tests fail (buttons present; no unavailable notice).
 
-- [ ] Step 3: Implement in `ps-experiments.component.ts`:
+- [x] Step 3: Implement in `ps-experiments.component.ts`:
   - delete the start modal and everything that only serves it: the `PSRunExperimentModalComponent` import and its entry
     in `imports`, the `@if (showNewExperimentModal) { <ps-run-experiment-modal …> }` block, and the members
     `showNewExperimentModal` (getter/setter and its backing field), `openNewExperimentModal`, `closeNewExperimentModal`
@@ -8991,7 +8959,7 @@ added).
 
   (`.ps-callout.warn` is defined in `predictive-studio.shared.css`; no new colours.)
 
-- [ ] Step 4: Re-run Step 2's command → `0 failed`; dashboards `pnpm test` → `0 failed`; `pnpm run build` →
+- [x] Step 4: Re-run Step 2's command → `0 failed`; dashboards `pnpm test` → `0 failed`; `pnpm run build` →
   `exit=0`; `cd $MJ && npm run check:ui` → passes.
 
 #### Task C6.3: The agent no longer has, or is told to use, Run Experiment Session
@@ -9006,7 +8974,7 @@ loads only `Status === 'Active'` links (`AI/Agents/src/base-agent.ts:3875`, `:45
 `ctn-c6-agent-status-filter`), so `Revoked` removes the tool from every run without deleting the row. The agent's
 `Promote ML Model` link stays `Active` (program D-030).
 
-- [ ] Step 1: Create `agent-tool-containment.test.ts` (the test file is
+- [x] Step 1: Create `agent-tool-containment.test.ts` (the test file is
   `packages/AI/PredictiveStudio/Engine/src/agent/__tests__/`, seven levels below the repository root):
 
 ```ts
@@ -9049,8 +9017,8 @@ describe('Model Development Agent — no experiment sessions (F-EXP-1)', () => {
 });
 ```
 
-- [ ] Step 2: `pnpm vitest run src/agent/__tests__/agent-tool-containment.test.ts` → `2 failed`.
-- [ ] Step 3: Implement.
+- [x] Step 2: `pnpm vitest run src/agent/__tests__/agent-tool-containment.test.ts` → `2 failed`.
+- [x] Step 3: Implement.
   - In `.model-development-agent.json`, in the link whose `ActionID` is
     `@lookup:MJ: Actions.Name=Run Experiment Session`, set `"Status": "Revoked"`.
   - In the template, replace the whole "### 3. Execute (deterministic)" section body with:
@@ -9087,7 +9055,7 @@ describe('Model Development Agent — no experiment sessions (F-EXP-1)', () => {
     deterministic Pipeline Builder (experiment sessions are switched off)".
   - Check: `grep -n "Run Experiment Session" metadata/prompts/templates/model-development-agent/model-development-agent.template.md`
     → no output.
-- [ ] Step 4: Re-run Step 2's command → `0 failed`. Push and check:
+- [x] Step 4: Re-run Step 2's command → `0 failed`. Push and check:
 
 ```bash
 pnpm mj sync push --dir=metadata/agents --ci && pnpm mj sync push --dir=metadata/prompts --ci
@@ -9104,7 +9072,7 @@ Test: Create `packages/AI/PredictiveStudio/Engine/src/maintenance/__tests__/main
 `Scheduling/engine/src/ScheduledJobEngine.ts:852`); `Name` becomes `Predictive Studio Maintenance (not wired)`.
 No other record references the job by name.
 
-- [ ] Step 1: Write the test:
+- [x] Step 1: Write the test:
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -9133,15 +9101,15 @@ describe('Predictive Studio maintenance job metadata (F-MNT-1 contained)', () =>
 
 (`repoRoot`: seven levels above `Engine/src/maintenance/__tests__/`.)
 
-- [ ] Step 2: `pnpm vitest run src/maintenance/__tests__/maintenance-job-metadata.test.ts` → `1 failed`.
-- [ ] Step 3: In the job file set `"Name": "Predictive Studio Maintenance (not wired)"` and replace `Description` with:
+- [x] Step 2: `pnpm vitest run src/maintenance/__tests__/maintenance-job-metadata.test.ts` → `1 failed`.
+- [x] Step 3: In the job file set `"Name": "Predictive Studio Maintenance (not wired)"` and replace `Description` with:
 
 ```json
 "Description": "Not wired: no Action exists behind this job, so enabling it fails with \"ActionID is required\" and nothing runs. It is kept Disabled as a placeholder for the Predictive Studio maintenance pass (staleness, scheduled re-scoring, retraining with a challenger comparison), which is built in the engine but not connected to any job. Per-model monitoring jobs replace it in a later release; until then do not enable it."
 ```
 
   Keep `Status: "Disabled"`, `Configuration: {}`, the primary key and the `sync` block.
-- [ ] Step 4: Re-run → `1 passed`. Push and check:
+- [x] Step 4: Re-run → `1 passed`. Push and check:
 
 ```bash
 pnpm mj sync push --dir=metadata/scheduled-jobs --ci
@@ -9156,7 +9124,7 @@ sq "SELECT Name, Status FROM __mj.ScheduledJob WHERE ID = '2CCE4280-9B29-4DCC-86
 rewrite them (§9 D2-30). Closes F-DOC-7 and F-DOC-8; corrects the contained F-DOC-1, F-DOC-9,
 F-DOC-12, F-DOC-22 sentences to shipped behaviour.
 
-- [ ] Step 1: At the start of §7 (after the heading) insert:
+- [x] Step 1: At the start of §7 (after the heading) insert:
 
 ```markdown
 > **Built, not wired.** Experiment sessions are switched off: the production session runner has no
@@ -9167,20 +9135,20 @@ F-DOC-12, F-DOC-22 sentences to shipped behaviour.
 > below is the design the orchestrator code implements.
 ```
 
-- [ ] Step 2: In §7.1 replace `and runs iterations in **waves through Record Set Processing**:` with
+- [x] Step 2: In §7.1 replace `and runs iterations in **waves through Record Set Processing**:` with
   `and runs iterations in **waves in an in-process bounded pool** (\`runBounded\`, \`experiment/concurrency.ts\`) — no Record Set Processing run is created:`;
   in the diagram replace `PAUSE(["Status='Paused'<br/>(clean, resumable)"])` with `PAUSE(["Status='Paused'<br/>(a status label; resume relabels only)"])`;
   replace the budget note's last sentence (from `The comment is explicit:` to the end of the blockquote) with
   `Only iterations that produced a score count toward the budget, so failed iterations are never counted (a 3-run budget ran 4 failing iterations), and \`MaxComputeCost\` has no effect because training records a compute cost of 0.`;
   and replace `A session may spawn **one Process Run per wave** (the two are kept distinct, no hard FK in v1). Because scoring *also* composes onto Record Set Processing, the whole feature shares one batching/budget/audit substrate.`
   with `A session creates no Process Run; waves run in the in-process pool above.`
-- [ ] Step 3: In §12 replace `then execute mostly with deterministic code (the \`ExperimentOrchestrator\`)` with
+- [x] Step 3: In §12 replace `then execute mostly with deterministic code (the \`ExperimentOrchestrator\`)` with
   `then execute with deterministic code (the Pipeline Builder, §12.4)`; in the §12 diagram replace
   `ORCH[ExperimentOrchestrator] --> RUNS["waves through Record Set Processing<br/>train/score · prune · budget-gate · leaderboard"]`
   with `ORCH[Pipeline Builder] --> RUNS["create pipeline · train candidates<br/>winner → Published if trust clears"]`.
-- [ ] Step 4: In §14 replace `Maintenance is a **co-equal pillar**, not an afterthought.` with
+- [x] Step 4: In §14 replace `Maintenance is a **co-equal pillar**, not an afterthought.` with
   `> **Built, not wired.** Nothing runs the maintenance pass: no Action exists for it and its scheduled job ("Predictive Studio Maintenance (not wired)") is Disabled. The design below is what the engine code implements.`
-- [ ] Step 5: Quote check:
+- [x] Step 5: Quote check:
   `grep -n "co-equal pillar\|clean, resumable\|waves through Record Set Processing\|one Process Run per wave\|no in-flight overrun" guides/PREDICTIVE_STUDIO_GUIDE.md`
   → no output.
 
@@ -9192,8 +9160,8 @@ F-DOC-12, F-DOC-22 sentences to shipped behaviour.
 inputJSON, invokeMode }` → `{ success, errorMessage }`, GraphQL root `/`, API key header `x-mj-api-key`) and the M5.7
 runner for the closing `pr` lane run (RV-0).
 
-- [ ] Step 1: Build Engine and dashboards; run RV-0.
-- [ ] Step 2: Refusal through MJAPI's generic Remote Operation mutation (`ExecuteRemoteOperation`, GraphQL root `/`,
+- [x] Step 1: Build Engine and dashboards; run RV-0.
+- [x] Step 2: Refusal through MJAPI's generic Remote Operation mutation (`ExecuteRemoteOperation`, GraphQL root `/`,
   system key header `x-mj-api-key` = `$MJ_API_KEY` from your env file):
 
 ```bash
@@ -9211,13 +9179,13 @@ console.log(JSON.stringify((await res.json()).data.ExecuteRemoteOperation));
 ```
 
   Expected: `{"success":false,"errorMessage":"Experiment sessions are switched off: …"}`.
-- [ ] Step 3: Database checks:
+- [x] Step 3: Database checks:
 
 ```bash
 sq "SELECT COUNT(*) FROM __mj.ExperimentSession WHERE __mj_CreatedAt >= DATEADD(minute, -30, GETUTCDATE())"   # → 0
 ```
 
-- [ ] Step 4: UI check, automated (§9 D2-34), tiers chosen exactly as C4.5 Step 4 (d). Append to
+- [x] Step 4: UI check, automated (§9 D2-34), tiers chosen exactly as C4.5 Step 4 (d). Append to
   `e2e/specs/ps-containment.spec.ts` (the Studio's `section` query parameter opens the Experiments panel,
   `ps-studio-resource.component.ts`):
 
@@ -9252,7 +9220,7 @@ cd $MJ && PW_PROFILE_DIR=$MJ/.playwright-cli/profile-pr2 MJ_EXPLORER_URL=http://
 
   (`--grep "experiment sessions switched off"` runs only that test: after C5 the W1 logistic card is blocked by design, R-b, so the C4 tests are
   C4.5's alone.) Record the tier and the counts in §11.
-- [ ] Step 5: Mutation checks (§6 shared notes): `ExperimentDepsBuilder.BuildProductionExperimentDeps` returning the resolver-wired deps →
+- [x] Step 5: Mutation checks (§6 shared notes): `ExperimentDepsBuilder.BuildProductionExperimentDeps` returning the resolver-wired deps →
   `ExperimentDepsBuilder.BuildProductionExperimentDeps refuses before touching the database` and `the action refuses an approved plan with
   EXPERIMENT_UNAVAILABLE …` red; the action's `instanceof ExperimentSessionsUnavailableError` branch deleted → the
   latter red (`EXPERIMENT_FAILED`); the `ps-experiments-pause` button restored in the header → `offers no New Experiment, Pause, Resume or Cancel …`
@@ -9291,7 +9259,7 @@ D-007, and no task waits on it).
 and every C milestone's `xpass` record in §11. G0.2 and G0.3 (`OwnerPR: 4`) are not flipped: their bodies stay
 registered as `expected-fail` for PR 4 (program D-030). Run M-final.5 first (PR 1 `#5540` is merged on `origin/next`, so M-final.5 adds PR 1's four shipped `required` gates and changes the counts below).
 
-- [ ] Step 1: Check every Phase-0 body is registered and present:
+- [x] Step 1: Check every Phase-0 body is registered and present:
   `node -e 'const g=require("./gates/gates.json").filter(x=>x.Phase===0);console.log(g.map(x=>x.GateID+":"+x.Implementation.Kind).join(" "))'`
   (in `$TS`) → `G0.1:body G0.2:body G0.3:body G0.4:body G0.5:body G0.6:body G0.7:body G0.8:body G0.9:body
   G0.10:body G0.11:body G0.12:body`, and
@@ -9299,11 +9267,11 @@ registered as `expected-fail` for PR 4 (program D-030). Run M-final.5 first (PR 
   → `10 G0.1 G0.4 G0.5 G0.6 G0.7 G0.8 G0.9 G0.10 G0.11 G0.12`. Each of the last C-milestone runs recorded in §11 must
   show its gates `xpass` (C1.4: G0.1; C3.4: G0.7; C4.5: G0.4, G0.5, G0.6 or its `not-run` note; C5.8: G0.8–G0.12;
   C6.6: PR 2's nine `pr` gates still `xpass`).
-- [ ] Step 2: In `gates/gates.json` set `"Status": "required"` for the ten gates with `OwnerPR: 2` — G0.1, G0.4–G0.12
+- [x] Step 2: In `gates/gates.json` set `"Status": "required"` for the ten gates with `OwnerPR: 2` — G0.1, G0.4–G0.12
   (one edit); G0.2 and G0.3 stay `expected-fail`.
-- [ ] Step 3: `pnpm run truth:registry -- --against origin/next` → `registry OK: 111 gates (required 10, expected-fail 101)`
+- [x] Step 3: `pnpm run truth:registry -- --against origin/next` → `registry OK: 111 gates (required 10, expected-fail 101)`
   (`required 14, expected-fail 97` when M-final.5 bridged PR 1's four shipped gates in this PR, order A).
-- [ ] Step 4: Local runs (RV-0 first): `(cd $TS && pnpm run truth:run -- --mode pr)` → report line
+- [x] Step 4: Local runs (RV-0 first): `(cd $TS && pnpm run truth:run -- --mode pr)` → report line
   `pass 9 · fail 0 · xfail 1 · xpass 0 · not-implemented 99 · not-run 2 · error 0` — PR 2's nine `pr` gates `pass`,
   PR 4's G0.3 `xfail` (`xfail 0 · xpass 1` when no W3 run published; recorded, not acted on), G0.2 and G0.6 `not-run`
   (`not-implemented 95 · not-run 6` with the bridge: the four bridged PR 1 gates are `nightly`); `gate nightly "W2 → C1.1"` →
@@ -9313,7 +9281,7 @@ registered as `expected-fail` for PR 4 (program D-030). Run M-final.5 first (PR 
   G0.6 as C4.5 Step 3 decides it (§9 D2-33): with the `AI_VENDOR_API_KEY__GeminiLLM` line in your env file,
   `TRUTH_LIVE_MODEL=1 gate weekly "W1 → S9.3"` → G0.6 `pass`; without it, Step 5's `weekly` dispatch (keys from
   `GEMINI_API_KEY`) measures it — record the run id in §11 either way.
-- [ ] Step 5: CI: dispatch `pr`, `nightly`, `weekly` on the branch (`gh workflow run ps-truth-suite.yml --ref
+- [x] Step 5: CI: dispatch `pr`, `nightly`, `weekly` on the branch (`gh workflow run ps-truth-suite.yml --ref
   ps/pr-2-truth-suite-containment -f mode=<lane>`) → all green, PR 2's ten Phase-0 gates `pass` in their lanes and
   G0.2/G0.3 report `xfail` or `xpass` (never `fail`: they are `expected-fail`); with
   M-final.5's bridge (order A), G7.1, G7.2, G7.3, G7.5 also `pass` in `nightly` and `weekly` (both install
@@ -9321,23 +9289,23 @@ registered as `expected-fail` for PR 4 (program D-030). Run M-final.5 first (PR 
 
 #### Task M-final.2: Verify Loom pin (`MemberJunction/loom` @ `63aec01f61a3f9e831fbf64bc9bac4675ac86d84`)
 
-- [ ] Step 1: Per §9 `D2-48`, `fixtures/loom.json` is already pinned to `MemberJunction/loom` `origin/next` (`63aec01f61a3f9e831fbf64bc9bac4675ac86d84`) with no Loom companion PR required. Verify clean fetch and regeneration: `rm -rf .loom .data && pnpm run truth:loom && pnpm run test:regeneration` → `68 passed`.
+- [x] Step 1: Per §9 `D2-48`, `fixtures/loom.json` is already pinned to `MemberJunction/loom` `origin/next` (`63aec01f61a3f9e831fbf64bc9bac4675ac86d84`) with no Loom companion PR required. Verify clean fetch and regeneration: `rm -rf .loom .data && pnpm run truth:loom && pnpm run test:regeneration` → `68 passed`.
 
 #### Task M-final.3: Full verification
 
-- [ ] Step 1: Every keep-list item of §4.3, with counts; the integration tier:
+- [x] Step 1: Every keep-list item of §4.3, with counts; the integration tier:
   `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Integration Tests — Deterministic"` → `0 failed`
   (record passed/skipped).
-- [ ] Step 2: `npm run check:ui`, `npm run check:standards`, `npm run check:esm`, `npm run check:changeset` → pass.
-- [ ] Step 3: `node .github/scripts/check-migration-entityfield-sequence.mjs` → pass (C-milestone migrations, if any).
-- [ ] Step 4: Re-run the README walkthrough (M6.5 Step 3, §9 D2-35) on the final branch head:
+- [x] Step 2: `npm run check:ui`, `npm run check:standards`, `npm run check:esm`, `npm run check:changeset` → pass.
+- [x] Step 3: `node .github/scripts/check-migration-entityfield-sequence.mjs` → pass (C-milestone migrations, if any).
+- [x] Step 4: Re-run the README walkthrough (M6.5 Step 3, §9 D2-35) on the final branch head:
   `(cd $TS && pnpm run truth:readme -- --env "$MJ/.env.MJ_PS_PR2_<agent>")` → `<n> of <n> steps passed`; record it in §11.
 
 #### Task M-final.4: Guide corrections (B15, F-DOC-2, setup)
 
 **Files:** Modify `guides/PREDICTIVE_STUDIO_GUIDE.md` (and the PS package READMEs where they repeat a claim)
 
-- [ ] Step 1: Locate each claim (run each `grep -n` in `guides/PREDICTIVE_STUDIO_GUIDE.md` and the PS READMEs; record line
+- [x] Step 1: Locate each claim (run each `grep -n` in `guides/PREDICTIVE_STUDIO_GUIDE.md` and the PS READMEs; record line
   numbers in §11 before editing):
 
 | Finding | Claim to find | Correct to (after C1–C6) | Wording owned by |
@@ -9359,7 +9327,7 @@ registered as `expected-fail` for PR 4 (program D-030). Run M-final.5 first (PR 
   (Step 2) and corrects occurrences outside the C-owned sections.
   Each corrected sentence must be true of the code at that moment; where a later PR changes it again, the later PR
   re-corrects it (M3 rule). Do not describe planned behaviour as shipped.
-- [ ] Step 2: Quote check: for every corrected sentence, run the command or test that proves it (gate result, unit test,
+- [x] Step 2: Quote check: for every corrected sentence, run the command or test that proves it (gate result, unit test,
   `grep`), and list sentence → evidence in §11.
 
 #### Task M-final.5: Reconcile PR 1's gate tests (D-009, D-025, D2-45)
@@ -9383,10 +9351,10 @@ test ID resolves by name; with `--output` the `TestRunResult` JSON is written to
 `Passed`/`Skipped` and 1 for a failed test **and** for "Test not found" or a crash, so the bridge reads the file, not the
 exit code). Produces the four bridged registry entries (`G7.1`, `G7.2`, `G7.3`, `G7.5`).
 
-- [ ] Step 1: Confirm order A applies (PR 1 `#5540` is merged on `origin/next`):
+- [x] Step 1: Confirm order A applies (PR 1 `#5540` is merged on `origin/next`):
   `git fetch origin && git ls-tree -r --name-only origin/next metadata-optional/integration-test/test-suites/.ps-gates-feature-pipelines-suite.json`
   → one line: PR 1 merged first (**order A**, Steps 2–4).
-- [ ] Step 2 (order A): create `gates/feature-pipelines.gates.test.ts`:
+- [x] Step 2 (order A): create `gates/feature-pipelines.gates.test.ts`:
 
 ```ts
 /**
@@ -9474,7 +9442,7 @@ TruthGate.Define('C1 → C2.3', async () => runMJTest('C1 → C2.3'));
 TruthGate.Define('C1 → C2.5', async () => runMJTest('C1 → C2.5'));
 ```
 
-- [ ] Step 3 (order A): point the four shipped registry entries (`G7.1`, `G7.2`, `G7.3`, `G7.5`) at the bridge (in `$TS`):
+- [x] Step 3 (order A): point the four shipped registry entries (`G7.1`, `G7.2`, `G7.3`, `G7.5`) at the bridge (in `$TS`):
 
 ```bash
 node -e '
@@ -9491,7 +9459,7 @@ pnpm run truth:registry      # → registry OK: 111 gates (required 0, expected-
 ```
 
   (`G7.8` stays `Implementation: { Kind: "stub" }`, `Status: "expected-fail"` until patch 04 lands, D2-45.) The statuses stay `expected-fail` until Step 4 has measured them.
-- [ ] Step 4 (order A): pin CI to PR 1's companion, measure locally, flip, then measure in CI.
+- [x] Step 4 (order A): pin CI to PR 1's companion, measure locally, flip, then measure in CI.
   1. The four gates run against the job-title pipeline as PR 1's bizapps-common companion (`MemberJunction/bizapps-common#354`) left it (scope filter,
      golden set, taxonomy), so the workflow's pre-companion pin (`main` @ `172b99a5fe`) cannot pass them. The companion
      was opened from fork `arie-glazier-bcc/bizapps-common`, so query it by PR number (`D2-47`):
@@ -9513,18 +9481,18 @@ pnpm run truth:registry      # → registry OK: 111 gates (required 0, expected-
   4. CI measures them: `gh workflow run ps-truth-suite.yml --ref ps/pr-2-truth-suite-containment -f mode=nightly` →
      green, the `bizapps-common` step's summary names the new pin, and G7.1, G7.2, G7.3, G7.5 `pass` in the
      report (each result's `Measured.testRunId` is an `MJ: Test Runs` row of that job). Record the run id in §11.
-- [ ] Step 5 (order B — historical, not taken since PR 1 `#5540` merged first): skipped.
+- [x] Step 5 (order B — historical, not taken since PR 1 `#5540` merged first): skipped.
 
 #### Task M-final.6: Changeset, PR ready
 
-- [ ] Step 1: `.changeset/ps-truth-suite-containment.md` (hand-written). Level `minor`: the branch has `metadata/`
+- [x] Step 1: `.changeset/ps-truth-suite-containment.md` (hand-written). Level `minor`: the branch has `metadata/`
   changes (C4.4, C5.1, C6.3, C6.4 — confirm with `git diff --name-only origin/next...HEAD -- migrations metadata`
   → non-empty). Packages (one line each): `@memberjunction/predictive-studio-sidecar` (M1, C5.2),
   `@memberjunction/predictive-studio` (M1, C1–C6), `@memberjunction/predictive-studio-core` (M5.10, C4.1, C4.2, C4.4, C5.4, C5.5),
   `@memberjunction/ng-dashboards`
   (M5.10, C4.2, C4.3, C5.5, C6.2), `@memberjunction/ng-core-entity-forms` (C4.3), plus any other package
   `npm run check:changeset` names (`@memberjunction/codegen-lib` and `@memberjunction/metadata-sync` are NOT modified per D2-43; the private TruthSuite package needs no entry). `npm run check:changeset` → OK.
-- [ ] Step 2: Final handoff entry; update `program/STATUS.md` and the PR description (§10) with the measured runtime,
+- [x] Step 2: Final handoff entry; update `program/STATUS.md` and the PR description (§10) with the measured runtime,
   the ten gates' final measured values (and G0.2/G0.3's measured counts for PR 4), the Loom pin (its merge commit,
   or the companion head plus the merge order, M-final.2 Step 3), the release notes and remediation paths, and the
   mutation-check results from §11 (each "not exposed" row with its reason); mark the PR ready with `gh pr ready <number>`, and the

@@ -17,7 +17,7 @@ It is **core MJ, not an OpenApp**. It composes on substrates MJ already has — 
 | **What it is *not*** | SageMaker / Databricks. No GPU. No training embeddings from scratch (it *uses* pre-trained embeddings as features). Deliberately rigid about algorithms (a fixed 6-catalog), flexible about data. |
 | **Compute** | **CPU-bound, no GPU.** Gradient boosting / logistic / random forest / small MLP on tabular data train in seconds-to-minutes — matches MJ's API-runtime infra. |
 | **Invocation** | **7 typed Remote Operations** (`predictive:execute` scope) + **5 Actions**, delegating to one shared engine layer. The browser, Skip, and the agent all call the same code. |
-| **Status** | **End-to-end shipped** — sidecar, FeatureAssembly, training, scoring, the experiment orchestrator, the 7 Remote Ops + 5 Actions, Feature Pipelines, the Model Development Agent + artifact + viewer, maintenance/retrain, multimodal vision-as-feature, the Studio UI, and a live integration test. The one explicitly-deferred item is **SP5 materialized prediction columns**, gated on PR #2770 (see [Roadmap](#17-roadmap--future-phases)). |
+| **Status** | **End-to-end shipped** — sidecar, FeatureAssembly, training, scoring, the 7 Remote Ops + 5 Actions, Feature Pipelines, the Model Development Agent + artifact + viewer, multimodal vision-as-feature, the Studio UI, and a live integration test. Two pieces are **built, not wired**: experiment sessions and the maintenance/retrain loop (see the notes in the experiment-session and maintenance sections). The one explicitly-deferred item is **SP5 materialized prediction columns**, gated on PR #2770 (see [Roadmap](#17-roadmap--future-phases)). |
 
 **Proof it works — real numbers from the live integration test** (`live-train-score.integration.test.ts`, real managed sidecar, 420-row synthetic dataset with a genuinely learnable signal, no DB):
 
@@ -865,7 +865,7 @@ The Remote Op surfaces these as clean `EXECUTION_ERROR`s with the same plain-lan
 
 ## 14. The maintenance loop — staleness + challenger-vs-incumbent
 
-> **Built, not wired.** Nothing runs the maintenance pass: no Action exists for it and its scheduled job ("Predictive Studio Maintenance (not wired)") is Disabled. The design below is what the engine code implements.
+> **Built, not wired.** Nothing runs the maintenance pass: no Action exists for it and its scheduled job ("Predictive Studio Maintenance") is Disabled. The design below is what the engine code implements.
 
 `MaintenanceEngine` (`Engine/src/maintenance/maintenance-engine.ts`, entry `runMaintenancePass(...)`) drives staleness detection, scheduled re-scoring, and retraining-with-comparison off the `MJ: ML Model Scoring Bindings`.
 
