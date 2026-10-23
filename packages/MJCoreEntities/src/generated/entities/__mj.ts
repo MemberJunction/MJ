@@ -49475,9 +49475,6 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     get RecordingMedia(): 'Audio' | 'AudioVideo' | 'None' | null {
         return this.Get('RecordingMedia');
     }
-    set RecordingMedia(value: 'Audio' | 'AudioVideo' | 'None' | null) {
-        this.Set('RecordingMedia', value);
-    }
 
     /**
     * * Field Name: RecordingStartedAt
@@ -49500,9 +49497,6 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     */
     get RecordingFileID(): string | null {
         return this.Get('RecordingFileID');
-    }
-    set RecordingFileID(value: string | null) {
-        this.Set('RecordingFileID', value);
     }
 
     /**
@@ -49548,9 +49542,6 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     get RecordingStatus(): 'Assembling' | 'Complete' | 'Failed' | 'Partial' | 'Pending' | null {
         return this.Get('RecordingStatus');
     }
-    set RecordingStatus(value: 'Assembling' | 'Complete' | 'Failed' | 'Partial' | 'Pending' | null) {
-        this.Set('RecordingStatus', value);
-    }
 
     /**
     * * Field Name: RecordingExpectedShards
@@ -49560,9 +49551,6 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     */
     get RecordingExpectedShards(): number | null {
         return this.Get('RecordingExpectedShards');
-    }
-    set RecordingExpectedShards(value: number | null) {
-        this.Set('RecordingExpectedShards', value);
     }
 
     /**
@@ -49574,9 +49562,6 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     get RecordingCapturedSamples(): number | null {
         return this.Get('RecordingCapturedSamples');
     }
-    set RecordingCapturedSamples(value: number | null) {
-        this.Set('RecordingCapturedSamples', value);
-    }
 
     /**
     * * Field Name: RecordingGaps
@@ -49586,9 +49571,6 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     */
     get RecordingGaps(): string | null {
         return this.Get('RecordingGaps');
-    }
-    set RecordingGaps(value: string | null) {
-        this.Set('RecordingGaps', value);
     }
 
     /**
@@ -49600,9 +49582,6 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     */
     get RecordingAssemblyVersion(): number {
         return this.Get('RecordingAssemblyVersion');
-    }
-    set RecordingAssemblyVersion(value: number) {
-        this.Set('RecordingAssemblyVersion', value);
     }
 
     /**

@@ -4027,10 +4027,11 @@ export class BaseAgent {
                 Provider: md,
                 Peaks: peaks.length > 0 ? peaks : undefined
             });
-            if (stored.FileID) {
+            if (stored.FileID && !stored.ErrorMessage) {
                 this.logStatus(`🎬 Realtime recording stored (${Math.round(encoded.DurationMs / 1000)}s, file ${stored.FileID}).`, true, params);
             } else {
-                // The store never throws, so its reason only reaches an operator if we log it here.
+                // The store never throws, so its reason only reaches an operator if we log it here. A
+                // FileID alongside an ErrorMessage is an uploaded file the session was not stamped with.
                 this.logError(`Failed to store realtime recording for session ${sessionID}: ${stored.ErrorMessage ?? 'no reason reported'}`, {
                     agent: params.agent, category: 'RealtimeSession'
                 });

@@ -8350,34 +8350,13 @@ export class CreateMJAIAgentSessionInput {
     CloseReason: string | null;
 
     @Field({ nullable: true })
-    RecordingMedia: string | null;
-
-    @Field({ nullable: true })
     RecordingStartedAt: Date | null;
-
-    @Field({ nullable: true })
-    RecordingFileID: string | null;
 
     @Field({ nullable: true })
     LinkedEntityID: string | null;
 
     @Field({ nullable: true })
     LinkedRecordID: string | null;
-
-    @Field({ nullable: true })
-    RecordingStatus: string | null;
-
-    @Field(() => Int, { nullable: true })
-    RecordingExpectedShards: number | null;
-
-    @Field(() => Int, { nullable: true })
-    RecordingCapturedSamples: number | null;
-
-    @Field({ nullable: true })
-    RecordingGaps: string | null;
-
-    @Field(() => Int, { nullable: true })
-    RecordingAssemblyVersion?: number;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -8423,34 +8402,13 @@ export class UpdateMJAIAgentSessionInput {
     CloseReason?: string | null;
 
     @Field({ nullable: true })
-    RecordingMedia?: string | null;
-
-    @Field({ nullable: true })
     RecordingStartedAt?: Date | null;
-
-    @Field({ nullable: true })
-    RecordingFileID?: string | null;
 
     @Field({ nullable: true })
     LinkedEntityID?: string | null;
 
     @Field({ nullable: true })
     LinkedRecordID?: string | null;
-
-    @Field({ nullable: true })
-    RecordingStatus?: string | null;
-
-    @Field(() => Int, { nullable: true })
-    RecordingExpectedShards?: number | null;
-
-    @Field(() => Int, { nullable: true })
-    RecordingCapturedSamples?: number | null;
-
-    @Field({ nullable: true })
-    RecordingGaps?: string | null;
-
-    @Field(() => Int, { nullable: true })
-    RecordingAssemblyVersion?: number;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

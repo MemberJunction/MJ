@@ -27,13 +27,6 @@ interface StubConfigField {
     OldValue: unknown;
 }
 
-/** The slice of an entity field the ledger-column rule reads and marks. */
-interface StubLedgerField {
-    Dirty: boolean;
-    NotLoaded: boolean;
-    MarkNotLoaded(): void;
-}
-
 // Declared INSIDE the factory because `vi.mock` is hoisted above every top-level declaration here.
 vi.mock('@memberjunction/core-entities', () => {
     /** Minimal stand-in for the generated MJAIAgentSessionEntity. */
@@ -46,18 +39,8 @@ vi.mock('@memberjunction/core-entities', () => {
             return { Success: true, Errors: [] };
         }
 
-        /** Ledger-owned fields by name; a test fills it. */
-        public LedgerFields = new Map<string, { Dirty: boolean; NotLoaded: boolean; MarkNotLoaded(): void }>();
-        /** NotLoaded state of every ledger field at the moment the base Save ran. */
-        public NotLoadedAtSave: Record<string, boolean> | null = null;
-
         public GetFieldByName(name: string): unknown {
-            return name === 'Config' ? this.ConfigField : (this.LedgerFields.get(name) ?? null);
-        }
-
-        public async Save(): Promise<boolean> {
-            this.NotLoadedAtSave = Object.fromEntries([...this.LedgerFields].map(([name, f]) => [name, f.NotLoaded]));
-            return true;
+            return name === 'Config' ? this.ConfigField : null;
         }
     }
     return { MJAIAgentSessionEntity: StubSessionEntity };
@@ -252,47 +235,5 @@ describe('MJAIAgentSessionEntityServer.Validate', () => {
         } finally {
             base.Validate = original;
         }
-    });
-});
-
-describe('MJAIAgentSessionEntityServer.Save leaves the recording ledger\'s columns alone (#5294)', () => {
-    const LEDGER = [
-        'RecordingStatus', 'RecordingExpectedShards', 'RecordingCapturedSamples', 'RecordingGaps',
-        'RecordingAssemblyVersion', 'RecordingFileID', 'RecordingMedia',
-    ];
-
-    function withLedgerFields(saved: boolean, dirty: string[] = []): MJAIAgentSessionEntityServer {
-        const entity = session({ saved, previous: null, next: null, dirty: false });
-        const stub = entity as unknown as { LedgerFields: Map<string, StubLedgerField> };
-        for (const name of LEDGER) {
-            const field: StubLedgerField = { Dirty: dirty.includes(name), NotLoaded: false, MarkNotLoaded: () => { field.NotLoaded = true; } };
-            stub.LedgerFields.set(name, field);
-        }
-        return entity;
-    }
-
-    function notLoadedAtSave(entity: MJAIAgentSessionEntityServer): Record<string, boolean> | null {
-        return (entity as unknown as { NotLoadedAtSave: Record<string, boolean> | null }).NotLoadedAtSave;
-    }
-
-    it('omits every ledger column the caller did not change from an update (a stale copy would rewind the ledger)', async () => {
-        const entity = withLedgerFields(true);
-        expect(await entity.Save()).toBe(true);
-        expect(notLoadedAtSave(entity)).toEqual(Object.fromEntries(LEDGER.map(name => [name, true])));
-    });
-
-    it('still saves a ledger column the caller set explicitly (the legacy upload stamps RecordingFileID)', async () => {
-        const entity = withLedgerFields(true, ['RecordingFileID', 'RecordingMedia']);
-        await entity.Save();
-        const state = notLoadedAtSave(entity);
-        expect(state?.['RecordingFileID']).toBe(false);
-        expect(state?.['RecordingMedia']).toBe(false);
-        expect(state?.['RecordingStatus']).toBe(true);
-    });
-
-    it('leaves a new record alone: an insert takes every column', async () => {
-        const entity = withLedgerFields(false);
-        await entity.Save();
-        expect(Object.values(notLoadedAtSave(entity) ?? {}).every(v => v === false)).toBe(true);
     });
 });
