@@ -41,6 +41,13 @@ export class WidgetSessionError extends Error {
 const REFRESH_LEAD_MS = 60_000;
 
 /**
+ * The shortest wait before a refresh. A token already inside the lead (the client's clock ahead of the server's)
+ * would otherwise be refreshed in a tight loop that trips the rate limiter's 429 instead of reaching the server's 403
+ * that starts a new session.
+ */
+const MIN_REFRESH_DELAY_MS = 5_000;
+
+/**
  * Talks to the widget guest-session endpoints. One instance per mounted widget.
  */
 export class WidgetSessionClient {
@@ -156,9 +163,9 @@ export class WidgetSessionClient {
         }
     }
 
-    /** Milliseconds until the given session should be refreshed (never negative). */
+    /** Milliseconds until the given session should be refreshed (at least {@link MIN_REFRESH_DELAY_MS}). */
     public static MsUntilRefresh(session: WidgetSession, nowMs: number): number {
-        return Math.max(0, session.expiresAtMs - nowMs - REFRESH_LEAD_MS);
+        return Math.max(MIN_REFRESH_DELAY_MS, session.expiresAtMs - nowMs - REFRESH_LEAD_MS);
     }
 
     /**

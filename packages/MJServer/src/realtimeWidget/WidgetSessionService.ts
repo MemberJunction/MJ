@@ -48,6 +48,14 @@ export const REFRESH_GRACE_SECONDS = 300;
  */
 export const MAX_GUEST_SESSION_SECONDS = 12 * 3600;
 
+/**
+ * The least lifetime a refreshed token may have. Refresh is refused once less than this remains before the hard end,
+ * so the last refresh gets the 403 that makes the widget start a new session. It must exceed the widget's refresh
+ * lead (60 s before `exp`): a token issued with less would be due for refresh at once, every time, until the rate
+ * limiter answered 429 instead. It also keeps a re-minted token's `exp` after its `iat`.
+ */
+export const MIN_REFRESHED_TOKEN_SECONDS = 120;
+
 /** The refresh route's path under the widget mount; the refresh proof must name it (`htu`). */
 export const WIDGET_REFRESH_PATH = '/session/refresh';
 
@@ -462,7 +470,7 @@ export class WidgetSessionService {
         return null;
       }
       const startedAt = payload.mj_sid_iat;
-      if (typeof startedAt !== 'number' || !Number.isFinite(startedAt) || nowSeconds - startedAt > MAX_GUEST_SESSION_SECONDS) {
+      if (typeof startedAt !== 'number' || !Number.isFinite(startedAt) || startedAt + MAX_GUEST_SESSION_SECONDS - nowSeconds < MIN_REFRESHED_TOKEN_SECONDS) {
         return null;
       }
       const keyThumbprint = typeof payload.cnf?.jkt === 'string' ? payload.cnf.jkt : '';

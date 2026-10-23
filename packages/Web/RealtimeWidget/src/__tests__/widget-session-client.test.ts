@@ -213,6 +213,14 @@ describe('WidgetSessionClient.MsUntilRefresh', () => {
             sessionId: 'sess-1',
         };
         expect(WidgetSessionClient.MsUntilRefresh(session, 900_000)).toBe(40_000);
-        expect(WidgetSessionClient.MsUntilRefresh(session, 1_000_000)).toBe(0);
+        expect(WidgetSessionClient.MsUntilRefresh(session, 1_000_000)).toBe(5_000);
+    });
+
+    it('waits at least 5 s even when the token is already inside the refresh lead (#4931)', () => {
+        // A token due at once (a client clock ahead of the server's, or the session's last minutes) must not be
+        // refreshed in a tight loop that trips the rate limiter's 429 instead of the server's 403.
+        const session = { expiresAtMs: 1_000_000 } as WidgetSession;
+        expect(WidgetSessionClient.MsUntilRefresh(session, 990_000)).toBe(5_000);
+        expect(WidgetSessionClient.MsUntilRefresh(session, 2_000_000)).toBe(5_000);
     });
 });

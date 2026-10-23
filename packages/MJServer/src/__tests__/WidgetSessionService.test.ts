@@ -61,7 +61,7 @@ vi.mock('../realtimeWidget/visitorIdentity.js', () => ({
     get forgetVisitor() { return this.ForgetVisitor; },
 }));
 
-import { WidgetSessionService, REFRESH_GRACE_SECONDS, MAX_GUEST_SESSION_SECONDS } from '../realtimeWidget/WidgetSessionService.js';
+import { WidgetSessionService, REFRESH_GRACE_SECONDS, MAX_GUEST_SESSION_SECONDS, MIN_REFRESHED_TOKEN_SECONDS } from '../realtimeWidget/WidgetSessionService.js';
 import { CreateWidgetHandler } from '../realtimeWidget/WidgetRouter.js';
 import express from 'express';
 import type { Server } from 'node:http';
@@ -496,11 +496,28 @@ describe('WidgetSessionService — RefreshGuestSession re-applies every mint che
 
     it('never issues a token that outlives the hard end', async () => {
       vi.useFakeTimers();
-      vi.setSystemTime(START + (MAX_GUEST_SESSION_SECONDS - 60) * 1000);
+      vi.setSystemTime(START + (MAX_GUEST_SESSION_SECONDS - 300) * 1000);
       const service = new WidgetSessionService(ISSUER, makeConfig());
       const refreshed = await refresh(service, signGuestToken({ mj_sid_iat: START / 1000 }));
       expect(refreshed.success).toBe(true);
       expect(decode(refreshed.token!).exp).toBe(START / 1000 + MAX_GUEST_SESSION_SECONDS);
+    });
+
+    it('refuses a refresh whose token would expire inside the client refresh lead (no storm of instant refreshes before the end)', async () => {
+      vi.useFakeTimers();
+      // The widget refreshes 60 s before exp; a token issued with less life than MIN_REFRESHED_TOKEN_SECONDS would
+      // be due for refresh at once, every time, until the rate limiter answered 429 instead of the 403 that restarts.
+      vi.setSystemTime(START + (MAX_GUEST_SESSION_SECONDS - 60) * 1000);
+      const service = new WidgetSessionService(ISSUER, makeConfig());
+      expect(await refresh(service, signGuestToken({ mj_sid_iat: START / 1000 }))).toMatchObject({ success: false, errorCode: 'not_found' });
+      expect(MIN_REFRESHED_TOKEN_SECONDS).toBeGreaterThan(60);
+    });
+
+    it('refuses a refresh exactly at the hard end (never signs a token with exp <= iat)', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(START + MAX_GUEST_SESSION_SECONDS * 1000);
+      const service = new WidgetSessionService(ISSUER, makeConfig());
+      expect(await refresh(service, signGuestToken({ mj_sid_iat: START / 1000 }))).toMatchObject({ success: false, errorCode: 'not_found' });
     });
 
     it('refuses a refresh past the hard end', async () => {
