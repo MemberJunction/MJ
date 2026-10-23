@@ -111,6 +111,8 @@
     "check:esm:test": "vitest run --config .github/scripts/vitest.config.mts",
     "check:claude-md": "node .github/scripts/check-claude-md.mjs",
     "check:codegen-tail": "node .github/scripts/check-codegen-tail.mjs",
+    "check:manifest-registrations": "node .github/scripts/check-manifest-registrations.mjs",
+    "check:manifest-registrations:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-manifest-registrations",
     "check:release-notes": "node .github/scripts/check-release-notes-shape.mjs",
     "check:release-notes:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-release-notes-shape",
     "check:app-token-no-merge": "node .github/scripts/check-app-token-no-merge.mjs",
