@@ -113,9 +113,9 @@ describe('ViewConfigPanelComponent — carrying a staged filter back from the na
     panel.Entity = {
       ...makeEntity(),
       AlternateBaseViews: [
-        { ID: 'abv-1', Name: 'Active', EffectiveDisplayName: 'Active Only', ViewName: 'vwAccountsActive', Status: 'Active' },
-        { ID: 'abv-2', Name: 'Legacy', EffectiveDisplayName: 'Legacy Accounts', ViewName: 'vwAccountsLegacy', Status: 'Deprecated' },
-        { ID: 'abv-3', Name: 'Disabled', EffectiveDisplayName: 'Disabled View', ViewName: 'vwAccountsDisabled', Status: 'Disabled' },
+        { ID: 'abv-1', Name: 'Active', EffectiveDisplayName: 'Active Only', ViewName: 'vwAccountsActive', Status: 'Active', IsUsable: true, IsDeprecated: false },
+        { ID: 'abv-2', Name: 'Legacy', EffectiveDisplayName: 'Legacy Accounts', ViewName: 'vwAccountsLegacy', Status: 'Deprecated', IsUsable: true, IsDeprecated: true },
+        { ID: 'abv-3', Name: 'Disabled', EffectiveDisplayName: 'Disabled View', ViewName: 'vwAccountsDisabled', Status: 'Disabled', IsUsable: false, IsDeprecated: false },
       ],
     } as unknown as EntityInfo;
 

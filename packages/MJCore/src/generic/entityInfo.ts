@@ -400,22 +400,24 @@ export class EntityAlternateBaseViewInfo extends BaseInfo {
     RootParentID: string | null = null;
 
     private _entitySchemaName: string | null = null;
-    private _parentView: EntityAlternateBaseViewInfo | undefined = undefined;
-    private _childViews: EntityAlternateBaseViewInfo[] = [];
+    // Named without matching `ParentView` / `ChildViews` getter names so `BaseInfo.toJSON()`
+    // does not serialize parent<->child object references into a circular JSON graph.
+    private _resolvedParentViewRef: EntityAlternateBaseViewInfo | undefined = undefined;
+    private _resolvedChildViewsList: EntityAlternateBaseViewInfo[] = [];
 
     /**
      * The parent alternate base view on the same entity when {@link ParentID} is set,
      * or `undefined` for a top-level alternate base view.
      */
     get ParentView(): EntityAlternateBaseViewInfo | undefined {
-        return this._parentView;
+        return this._resolvedParentViewRef;
     }
 
     /**
      * Direct child alternate base views on the same entity that derive from this view via {@link ParentID}.
      */
     get ChildViews(): EntityAlternateBaseViewInfo[] {
-        return this._childViews;
+        return this._resolvedChildViewsList;
     }
 
     /**
@@ -458,7 +460,7 @@ export class EntityAlternateBaseViewInfo extends BaseInfo {
         if (!this.ParentID) {
             return true;
         }
-        if (!this._parentView) {
+        if (!this._resolvedParentViewRef) {
             return false; // ParentID is set but parent view was not found on the entity
         }
         const key = NormalizeUUID(this.ID);
@@ -468,7 +470,7 @@ export class EntityAlternateBaseViewInfo extends BaseInfo {
         if (key) {
             visited.add(key);
         }
-        return this._parentView.checkIsUsable(visited);
+        return this._resolvedParentViewRef.checkIsUsable(visited);
     }
 
     /**
@@ -484,7 +486,7 @@ export class EntityAlternateBaseViewInfo extends BaseInfo {
         if (this.Status === 'Deprecated') {
             return true;
         }
-        if (!this._parentView) {
+        if (!this._resolvedParentViewRef) {
             return false;
         }
         const key = NormalizeUUID(this.ID);
@@ -494,7 +496,7 @@ export class EntityAlternateBaseViewInfo extends BaseInfo {
         if (key) {
             visited.add(key);
         }
-        return this._parentView.checkIsDeprecated(visited);
+        return this._resolvedParentViewRef.checkIsDeprecated(visited);
     }
 
     /**
@@ -511,7 +513,7 @@ export class EntityAlternateBaseViewInfo extends BaseInfo {
         if (this.CachePolicy === 'Bypass') {
             return true;
         }
-        if (!this._parentView) {
+        if (!this._resolvedParentViewRef) {
             return false;
         }
         const key = NormalizeUUID(this.ID);
@@ -521,7 +523,7 @@ export class EntityAlternateBaseViewInfo extends BaseInfo {
         if (key) {
             visited.add(key);
         }
-        return this._parentView.checkIsBypassCache(visited);
+        return this._resolvedParentViewRef.checkIsBypassCache(visited);
     }
 
     /**
@@ -534,8 +536,8 @@ export class EntityAlternateBaseViewInfo extends BaseInfo {
             if (entitySchemaName !== undefined) {
                 v._entitySchemaName = entitySchemaName;
             }
-            v._parentView = undefined;
-            v._childViews = [];
+            v._resolvedParentViewRef = undefined;
+            v._resolvedChildViewsList = [];
             if (v.ID) {
                 byId.set(NormalizeUUID(v.ID), v);
             }
@@ -544,8 +546,8 @@ export class EntityAlternateBaseViewInfo extends BaseInfo {
             if (v.ParentID && !UUIDsEqual(v.ParentID, v.ID)) {
                 const parent = byId.get(NormalizeUUID(v.ParentID));
                 if (parent) {
-                    v._parentView = parent;
-                    parent._childViews.push(v);
+                    v._resolvedParentViewRef = parent;
+                    parent._resolvedChildViewsList.push(v);
                 }
             }
         }

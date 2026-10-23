@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, ResolveStartupMode, SetProvider, StartupManager } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, IsValidSQLIdentifier, ResolveStartupMode, SetProvider, StartupManager } from '@memberjunction/core';
 import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     CodeGenDatabaseProvider,
@@ -1628,6 +1628,19 @@ $$ LANGUAGE sql STABLE;
     }
 
     /** @inheritdoc */
+    override GenerateDisabledViewRevokePermissionsForTarget(
+        entity: EntityInfo,
+        targetSchemaName: string,
+        targetViewName: string,
+    ): string {
+        const roles = this.collectPermissionRoles(entity.Permissions);
+        if (roles.length === 0) return '';
+        return roles.map((role: string) =>
+            `REVOKE SELECT ON ${pgDialect.QuoteSchema(targetSchemaName, targetViewName)} FROM ${pgDialect.QuoteIdentifier(role)};`
+        ).join('\n');
+    }
+
+    /** @inheritdoc */
     generateViewPermissions(entity: EntityInfo): string {
         const viewName = this.getBaseViewName(entity);
         return this.GenerateViewPermissionsForTarget(entity, entity.SchemaName, viewName);
@@ -2216,33 +2229,48 @@ WHERE vns.nspname = '${escapedSchema}'
     }
 
     /**
-     * Rebinds each registered usable alternate base view on `entity` in topological
+     * Rebinds each registered alternate base view on `entity` in topological
      * `ParentID` order so `SELECT *` / `alias.*` re-expands after the entity's
-     * `BaseView` (or parent alternate view) is regenerated.
+     * `BaseView` (or parent alternate view) is regenerated. Wrapped per-view in
+     * `try/catch` so a single broken alternate view logs a warning without
+     * failing the owning entity's view phase.
      */
     private async rebindAlternateBaseViewsIfPresent(
         client: PGQueryable,
         entity: EntityInfo,
         willRegenerate?: Set<string>,
     ): Promise<void> {
-        const usableAltViews = OrderAlternateBaseViewsTopologically(
-            (entity.AlternateBaseViews ?? []).filter((v) => v.Status !== 'Disabled')
-        );
-        if (usableAltViews.length === 0) {
+        const orderedAltViews = OrderAlternateBaseViewsTopologically(entity.AlternateBaseViews ?? []);
+        if (orderedAltViews.length === 0) {
             return;
         }
-        for (const altView of usableAltViews) {
+        const defaultInnerName = this.getBaseViewName(entity);
+        for (const altView of orderedAltViews) {
+            if (!IsValidSQLIdentifier(altView.EffectiveSchemaName) || !IsValidSQLIdentifier(altView.ViewName)) {
+                logError(
+                    `[AlternateBaseView] Skipping rebind for alternate view '${altView.Name}' on '${entity.Name}': invalid SQL identifier '${altView.EffectiveSchemaName}.${altView.ViewName}'.`
+                );
+                continue;
+            }
             const parentView = altView.ParentView;
             const innerSchema = parentView ? parentView.EffectiveSchemaName : entity.SchemaName;
-            const innerName = parentView ? parentView.ViewName : entity.BaseView;
-            await this.rebindOuterViewAgainstInnerIfPresent(
-                client,
-                altView.EffectiveSchemaName,
-                altView.ViewName,
-                innerSchema,
-                innerName,
-                willRegenerate,
-            );
+            const innerName = parentView ? parentView.ViewName : defaultInnerName;
+            try {
+                await this.rebindOuterViewAgainstInnerIfPresent(
+                    client,
+                    altView.EffectiveSchemaName,
+                    altView.ViewName,
+                    innerSchema,
+                    innerName,
+                    willRegenerate,
+                );
+            } catch (e) {
+                LogWarning(
+                    `   ⚠️  [AlternateBaseView] Failed to rebind alternate view '${altView.Name}' (${altView.EffectiveSchemaName}.${altView.ViewName}) on '${entity.Name}': ${
+                        e instanceof Error ? e.message : String(e)
+                    }`,
+                );
+            }
         }
     }
 

@@ -8,6 +8,7 @@ import {
     FindAlternateBaseViewByPhysicalName,
     GetEffectiveAlternateBaseViewName,
     GetPinnedAlternateBaseViewFromViewEntity,
+    IsExplicitBaseViewOverride,
     IsValidAlternateBaseViewName,
     IsValidSQLIdentifier,
     ResolveAlternateBaseView,
@@ -122,7 +123,7 @@ describe('Alternate Base Views — MJCore', () => {
             expect(IsValidSQLIdentifier('a'.repeat(129))).toBe(false);
         });
 
-        it('forbids pipe and colon delimiters in semantic alternate base view names', () => {
+        it('forbids pipe, colon, and leading // delimiters in semantic alternate base view names', () => {
             expect(IsValidAlternateBaseViewName('Active')).toBe(true);
             expect(IsValidAlternateBaseViewName('Active Members 2026')).toBe(true);
             expect(IsValidAlternateBaseViewName('')).toBe(false);
@@ -130,6 +131,8 @@ describe('Alternate Base Views — MJCore', () => {
             expect(IsValidAlternateBaseViewName('Active|imr:1')).toBe(false);
             expect(IsValidAlternateBaseViewName('Active: Bypass')).toBe(false);
             expect(IsValidAlternateBaseViewName('x://host')).toBe(false);
+            expect(IsValidAlternateBaseViewName('//host')).toBe(false);
+            expect(IsValidAlternateBaseViewName('  //host')).toBe(false);
             expect(IsValidAlternateBaseViewName('a'.repeat(101))).toBe(false);
         });
     });
@@ -202,6 +205,20 @@ describe('Alternate Base Views — MJCore', () => {
             expect(match?.entity).toBe(entity);
             expect(match?.alternateView.Name).toBe('ActiveAutoRenew');
         });
+
+        it('round-trips through JSON.stringify and new EntityInfo(JSON.parse(...)) without circular reference errors', () => {
+            const entity = createTestEntity();
+            const serialized = JSON.stringify(entity);
+            const rehydrated = new EntityInfo(JSON.parse(serialized) as Record<string, unknown>);
+
+            const active = rehydrated.GetAlternateBaseView('Active');
+            const derived = rehydrated.GetAlternateBaseView('ActiveAutoRenew');
+            expect(active).toBeDefined();
+            expect(derived).toBeDefined();
+            expect(derived!.ParentView).toBe(active);
+            expect(active!.ChildViews.map(c => c.Name)).toEqual(['ActiveAutoRenew']);
+            expect(derived!.EffectiveSchemaName).toBe('crm');
+        });
     });
 
     describe('ResolveAlternateBaseView', () => {
@@ -261,7 +278,7 @@ describe('Alternate Base Views — MJCore', () => {
     });
 
     describe('DisplayState extraction, RunViewParams.Equals, and LocalCacheManager fingerprint isolation', () => {
-        it('prioritizes explicit params.AlternateBaseView over ViewEntity DisplayState', () => {
+        it('prioritizes explicit params.AlternateBaseView (including "" BaseView override) over ViewEntity DisplayState', () => {
             const fakeViewEntity = {
                 Get: (field: string) =>
                     field === 'DisplayState' ? JSON.stringify({ alternateBaseView: 'Active' }) : null,
@@ -275,18 +292,30 @@ describe('Alternate Base Views — MJCore', () => {
                     AlternateBaseView: 'ActiveAutoRenew',
                 }),
             ).toBe('ActiveAutoRenew');
+            expect(
+                GetEffectiveAlternateBaseViewName({
+                    ViewEntity: fakeViewEntity,
+                    AlternateBaseView: '',
+                }),
+            ).toBeUndefined();
+            expect(IsExplicitBaseViewOverride({ AlternateBaseView: '' })).toBe(true);
+            expect(IsExplicitBaseViewOverride({ AlternateBaseView: '   ' })).toBe(true);
+            expect(IsExplicitBaseViewOverride({ AlternateBaseView: 'Active' })).toBe(false);
+            expect(IsExplicitBaseViewOverride({})).toBe(false);
             expect(ExtractAlternateBaseViewFromDisplayState({ AlternateBaseView: 'Active' })).toBe('Active');
         });
 
-        it('compares AlternateBaseView case-insensitively in RunViewParams.Equals', () => {
+        it('compares AlternateBaseView case-insensitively in RunViewParams.Equals while distinguishing undefined from "" override', () => {
             const a: RunViewParams = { EntityName: 'Members', AlternateBaseView: 'Active' };
             const b: RunViewParams = { EntityName: 'Members', AlternateBaseView: '  active ' };
             const c: RunViewParams = { EntityName: 'Members' };
             const d: RunViewParams = { EntityName: 'Members', AlternateBaseView: '' };
+            const e: RunViewParams = { EntityName: 'Members', AlternateBaseView: '   ' };
 
             expect(RunViewParams.Equals(a, b)).toBe(true);
             expect(RunViewParams.Equals(a, c)).toBe(false);
-            expect(RunViewParams.Equals(c, d)).toBe(true);
+            expect(RunViewParams.Equals(c, d)).toBe(false);
+            expect(RunViewParams.Equals(d, e)).toBe(true);
             expect(NormalizeAlternateBaseViewName(' Active ')).toBe('active');
         });
 

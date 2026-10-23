@@ -131,11 +131,10 @@ import {
     DeepInfraLLM,
 } from '@memberjunction/ai-deepinfra';
 
-// @memberjunction/ai-elevenlabs (3 classes)
+// @memberjunction/ai-elevenlabs (2 classes)
 import {
     ElevenLabsAudioGenerator,
     ElevenLabsRealtime,
-    ElevenRealtime,
 } from '@memberjunction/ai-elevenlabs';
 
 // @memberjunction/ai-inception (2 classes)
@@ -222,7 +221,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (456 classes)
+// @memberjunction/core-entities (457 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -440,6 +439,7 @@ import {
     MJEntityActionInvocationEntity,
     MJEntityActionInvocationTypeEntity,
     MJEntityActionParamEntity,
+    MJEntityAlternateBaseViewEntity,
     MJEntityCommunicationFieldEntity,
     MJEntityCommunicationMessageTypeEntity,
     MJEntityDocumentEntity,
@@ -1152,7 +1152,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (62 classes)
+// @memberjunction/core-entities-server (63 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1180,6 +1180,7 @@ import {
     MJConversationDetailEntityServer,
     MJDataContextItemEntityServer,
     MJDuplicateRunEntityServer,
+    MJEntityAlternateBaseViewEntityServer,
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
@@ -1482,7 +1483,6 @@ const CLASS_REGISTRATIONS_0: any[] = [
     DeepInfraLLM,
     ElevenLabsAudioGenerator,
     ElevenLabsRealtime,
-    ElevenRealtime,
     InceptionDecision,
     InceptionLLM,
     LlamaCppLLM,
@@ -1644,11 +1644,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCommunicationProviderMessageTypeEntity,
     MJCommunicationRunEntity,
     MJCompanyEntity,
+    MJCompanyIntegrationEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
-    MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
     MJCompanyIntegrationFieldMapEntity,
     MJCompanyIntegrationObjectEntity,
@@ -1727,6 +1727,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJEntityActionInvocationEntity,
     MJEntityActionInvocationTypeEntity,
     MJEntityActionParamEntity,
+    MJEntityAlternateBaseViewEntity,
     MJEntityCommunicationFieldEntity,
     MJEntityCommunicationMessageTypeEntity,
     MJEntityDocumentEntity,
@@ -2323,6 +2324,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJConversationDetailEntityServer,
     MJDataContextItemEntityServer,
     MJDuplicateRunEntityServer,
+    MJEntityAlternateBaseViewEntityServer,
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
@@ -2459,11 +2461,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     LoopAction,
     MCPToolAction,
     ManageMyCalendarEventAction,
-    ManageMyEmailInboxAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ManageMyEmailInboxAction,
     MaterializeListFromViewAction,
     ModifyDocumentSectionAction,
     ModifyFormContributionAction,
@@ -2572,7 +2574,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1092;
+export const CLASS_REGISTRATIONS_COUNT = 1093;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -1133,6 +1133,18 @@ export abstract class CodeGenDatabaseProvider {
     }
 
     /**
+     * Generates REVOKE SELECT statements for a disabled alternate base view belonging to `entity`
+     * so disabling a previously active alternate base view revokes its database read grants.
+     */
+    GenerateDisabledViewRevokePermissionsForTarget(
+        _entity: EntityInfo,
+        _targetSchemaName: string,
+        _targetViewName: string,
+    ): string {
+        return '';
+    }
+
+    /**
      * Generates GRANT EXECUTE permission for a CRUD routine.
      */
     abstract generateCRUDPermissions(entity: EntityInfo, routineName: string, type: CRUDType): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to

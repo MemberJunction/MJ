@@ -296,10 +296,22 @@ export class DataContextItem {
                     this.RecordName = v.Name;
                     this.EntityID = v.ViewEntityInfo.ID; // if we get here, we overwrite whateer we had above because we have the actual view metadata.
                     this.ViewEntity = v;
-                    const candidateAltView = v.AlternateBaseView
-                        ? v.ViewEntityInfo.GetAlternateBaseView(v.AlternateBaseView)
-                        : undefined;
-                    const altView = candidateAltView?.IsUsable ? candidateAltView : undefined;
+                    const pinnedAbvName = v.AlternateBaseView?.trim();
+                    let altView: ReturnType<typeof v.ViewEntityInfo.GetAlternateBaseView>;
+                    if (pinnedAbvName) {
+                        const candidateAltView = v.ViewEntityInfo.GetAlternateBaseView(pinnedAbvName);
+                        if (!candidateAltView) {
+                            throw new Error(
+                                `User View "${v.Name}" pins AlternateBaseView "${pinnedAbvName}", which is not registered on entity "${v.ViewEntityInfo.Name}".`,
+                            );
+                        }
+                        if (!candidateAltView.IsUsable) {
+                            throw new Error(
+                                `User View "${v.Name}" pins AlternateBaseView "${candidateAltView.Name}", which is disabled and cannot be used.`,
+                            );
+                        }
+                        altView = candidateAltView;
+                    }
                     const targetSchema = altView ? altView.EffectiveSchemaName : v.ViewEntityInfo.SchemaName;
                     const targetView = altView ? altView.ViewName : v.ViewEntityInfo.BaseView;
                     this.SQL =  `SELECT * FROM [${targetSchema}].[${targetView}]${v.WhereClause && v.WhereClause.length > 0 ? ' WHERE ' + v.WhereClause : ''}`;

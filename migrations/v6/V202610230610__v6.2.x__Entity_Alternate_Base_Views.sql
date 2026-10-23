@@ -37,7 +37,25 @@ CREATE TABLE [${flyway:defaultSchema}].[EntityAlternateBaseView] (
         REFERENCES [${flyway:defaultSchema}].[EntityAlternateBaseView]([ID]),
     CONSTRAINT [UQ_EntityAlternateBaseView_EntityID_Name] UNIQUE ([EntityID], [Name]),
     CONSTRAINT [CK_EntityAlternateBaseView_NoSelfParent] CHECK ([ParentID] <> [ID]),
-    CONSTRAINT [CK_EntityAlternateBaseView_Name] CHECK (LEN(LTRIM(RTRIM([Name]))) > 0 AND [Name] NOT LIKE N'%|%' AND [Name] NOT LIKE N'%:%'),
+    CONSTRAINT [CK_EntityAlternateBaseView_Name] CHECK (
+        LEN(LTRIM(RTRIM([Name]))) > 0
+        AND [Name] NOT LIKE N'%|%'
+        AND [Name] NOT LIKE N'%:%'
+        AND LTRIM([Name]) NOT LIKE N'//%'
+    ),
+    CONSTRAINT [CK_EntityAlternateBaseView_ViewName] CHECK (
+        LEN(LTRIM(RTRIM([ViewName]))) > 0
+        AND [ViewName] NOT LIKE N'%[^A-Za-z0-9_@#$]%'
+        AND [ViewName] LIKE N'[A-Za-z_@#]%'
+    ),
+    CONSTRAINT [CK_EntityAlternateBaseView_SchemaName] CHECK (
+        [SchemaName] IS NULL
+        OR (
+            LEN(LTRIM(RTRIM([SchemaName]))) > 0
+            AND [SchemaName] NOT LIKE N'%[^A-Za-z0-9_@#$]%'
+            AND [SchemaName] LIKE N'[A-Za-z_@#]%'
+        )
+    ),
     CONSTRAINT [CK_EntityAlternateBaseView_CachePolicy] CHECK ([CachePolicy] IN (N'Default', N'Bypass')),
     CONSTRAINT [CK_EntityAlternateBaseView_Status] CHECK ([Status] IN (N'Active', N'Deprecated', N'Disabled'))
 );
@@ -49,7 +67,8 @@ GO
 ALTER TABLE [${flyway:defaultSchema}].[QueryEntity]
     ADD [AlternateBaseViewID] UNIQUEIDENTIFIER NULL
         CONSTRAINT [FK_QueryEntity_EntityAlternateBaseView] FOREIGN KEY
-        REFERENCES [${flyway:defaultSchema}].[EntityAlternateBaseView]([ID]);
+        REFERENCES [${flyway:defaultSchema}].[EntityAlternateBaseView]([ID])
+        ON DELETE SET NULL;
 GO
 
 -- -------------------------------------------------------------------------------------

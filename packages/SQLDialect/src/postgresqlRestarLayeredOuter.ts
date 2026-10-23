@@ -66,6 +66,8 @@ export function RestarLayeredOuterView(args: RestarLayeredOuterViewArgs): string
     const fromAndRest = def.slice(fromPos).trim();
     const fromInfo = detectInnerRelationAndAlias(fromAndRest, args.innerViewName);
     const alias: string | null = fromInfo.matchedRelation ? fromInfo.alias : 'g';
+    const hasJoin = /\bjoin\b/i.test(fromAndRest);
+    const starQualifier: string | null = alias ?? (fromInfo.matchedRelation && hasJoin ? args.innerViewName : null);
 
     const items = SplitTopLevelCommaList(selectList);
     if (items.length === 0) {
@@ -78,7 +80,7 @@ export function RestarLayeredOuterView(args: RestarLayeredOuterViewArgs): string
         (alias === null && isStarOfAlias(items[0], args.innerViewName))
     ) {
         const extras = items.slice(1);
-        return rebuildSelect(alias, extras, fromAndRest);
+        return rebuildSelect(starQualifier, extras, fromAndRest);
     }
 
     let consumed = 0;
@@ -95,7 +97,7 @@ export function RestarLayeredOuterView(args: RestarLayeredOuterViewArgs): string
         );
     }
 
-    return rebuildSelect(alias, items.slice(consumed), fromAndRest);
+    return rebuildSelect(starQualifier, items.slice(consumed), fromAndRest);
 }
 
 /** @deprecated Use {@link RestarLayeredOuterView}. */
@@ -249,7 +251,7 @@ function isKeywordEnd(sql: string, index: number): boolean {
 
 function detectInnerRelationAndAlias(fromAndRest: string, innerViewName: string): { matchedRelation: boolean; alias: string | null } {
     const fromMatch = fromAndRest.match(
-        new RegExp(String.raw`^from\s+(${IDENT}(?:\.${IDENT})?)(?:\s+as\s+(${IDENT})\b|\s+(${IDENT})\b)?`, 'i')
+        new RegExp(String.raw`^from\s+\(*\s*(${IDENT}(?:\.${IDENT})?)(?:\s+as\s+(${IDENT})\b|\s+(${IDENT})\b)?`, 'i')
     );
     if (!fromMatch) {
         return { matchedRelation: false, alias: null };

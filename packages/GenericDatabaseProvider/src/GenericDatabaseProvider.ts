@@ -37,6 +37,7 @@ import {
     IsMaterializedDataSource,
     GetEffectiveAlternateBaseViewName,
     GetPinnedAlternateBaseViewFromViewEntity,
+    IsExplicitBaseViewOverride,
     IsValidSQLIdentifier,
     NormalizeAlternateBaseViewName,
     ResolveAlternateBaseView,
@@ -1769,6 +1770,28 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * Resolves the effective semantic `AlternateBaseView` name for a `RunViewParams` object and
+     * optional loaded `MJUserViewEntityExtended`. An explicit empty string (`""`) on
+     * `params.AlternateBaseView` overrides any saved view pin back to `BaseView` (`undefined`).
+     */
+    protected resolveEffectiveAbvNameFromParams(
+        params: RunViewParams | undefined,
+        viewEntity?: MJUserViewEntityExtended | null,
+    ): string | undefined {
+        if (IsExplicitBaseViewOverride(params)) {
+            return undefined;
+        }
+        if (typeof params?.AlternateBaseView === 'string') {
+            return params.AlternateBaseView.trim();
+        }
+        const pinned = viewEntity?.AlternateBaseView?.trim();
+        if (pinned && pinned.length > 0) {
+            return pinned;
+        }
+        return GetPinnedAlternateBaseViewFromViewEntity(params?.ViewEntity);
+    }
+
+    /**
      * Resolves the view a RunView reads from: an explicit or pinned `AlternateBaseView` when present,
      * the entity's materialized wrapper view when `DataSource: 'Materialized'`, or the entity's live
      * `BaseView` by default.
@@ -1776,10 +1799,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     protected GetEffectiveBaseView(
         entityInfo: EntityInfo,
         params: RunViewParams,
-        viewEntity?: MJUserViewEntityExtended | null
+        viewEntity?: MJUserViewEntityExtended | null,
+        suppressDeprecationWarning = false,
     ): string {
-        const pinnedName = viewEntity?.AlternateBaseView ?? GetPinnedAlternateBaseViewFromViewEntity(params?.ViewEntity);
-        const effectiveAbvName = params?.AlternateBaseView?.trim() || pinnedName;
+        const effectiveAbvName = this.resolveEffectiveAbvNameFromParams(params, viewEntity);
         if (effectiveAbvName) {
             if (IsMaterializedDataSource(params?.DataSource)) {
                 throw new Error(
@@ -1789,13 +1812,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             const resolution = ResolveAlternateBaseView({
                 entity: entityInfo,
                 alternateBaseViewName: effectiveAbvName,
+                suppressDeprecationWarning,
                 callerName: 'GetEffectiveBaseView',
             });
-            if (!IsValidSQLIdentifier(resolution.effectiveSchemaName) || !IsValidSQLIdentifier(resolution.effectiveViewName)) {
-                throw new Error(
-                    `Invalid SQL identifier for alternate base view '${resolution.view.Name}' on entity '${entityInfo.Name}'.`
-                );
-            }
             return resolution.effectiveViewName;
         }
         // Case-INSENSITIVE prefix test (matches the sibling guard in providerBase.IsServerCacheAllowedForEntity):
@@ -1817,8 +1836,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         contextUser?: UserInfo,
         viewEntity?: MJUserViewEntityExtended | null
     ): Promise<string> {
-        const pinnedName = viewEntity?.AlternateBaseView ?? GetPinnedAlternateBaseViewFromViewEntity(params?.ViewEntity);
-        if (params?.AlternateBaseView || pinnedName) {
+        const effectiveAbvName = this.resolveEffectiveAbvNameFromParams(params, viewEntity);
+        if (effectiveAbvName) {
             return this.GetEffectiveBaseView(entityInfo, params, viewEntity);
         }
         if (!IsMaterializedDataSource(params.DataSource) || entityInfo.BaseView?.toLowerCase().startsWith('materialized_vw')) {
@@ -1855,7 +1874,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
     /**
      * Resolves both the effective `{ schemaName, viewName }` for a RunView call, honoring:
-     * 1. Explicit `params.AlternateBaseView`
+     * 1. Explicit `params.AlternateBaseView` (including `""` to force `BaseView` over a saved view pin)
      * 2. Saved `UserView.DisplayState.alternateBaseView` (from `viewEntity`, `params.ViewEntity`, or loaded by `ViewID`/`ViewName`)
      * 3. `DataSource: 'Materialized'`
      * 4. `entityInfo.BaseView`
@@ -1867,20 +1886,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         viewEntity?: MJUserViewEntityExtended | null
     ): Promise<{ schemaName: string; viewName: string }> {
         let resolvedViewEntity = viewEntity ?? (params?.ViewEntity as MJUserViewEntityExtended | null | undefined) ?? null;
-        if (!resolvedViewEntity && !params?.AlternateBaseView) {
+        if (!resolvedViewEntity && typeof params?.AlternateBaseView !== 'string') {
             try {
                 if (params?.ViewID && params.ViewID.length > 0) {
                     resolvedViewEntity = (await ViewInfo.GetViewEntity(params.ViewID, contextUser)) ?? null;
                 } else if (params?.ViewName && params.ViewName.length > 0) {
                     resolvedViewEntity = (await ViewInfo.GetViewEntityByName(params.ViewName, contextUser)) ?? null;
                 }
-            } catch {
-                resolvedViewEntity = null;
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                LogError(
+                    `GenericDatabaseProvider.resolveEffectiveBaseViewTarget: failed to load User View (${params?.ViewID || params?.ViewName}) on entity "${entityInfo.Name}": ${msg}`,
+                );
+                throw e;
             }
         }
 
-        const pinnedName = resolvedViewEntity?.AlternateBaseView ?? GetPinnedAlternateBaseViewFromViewEntity(params?.ViewEntity);
-        const effectiveAbvName = params?.AlternateBaseView?.trim() || pinnedName;
+        const effectiveAbvName = this.resolveEffectiveAbvNameFromParams(params, resolvedViewEntity);
         if (effectiveAbvName) {
             if (IsMaterializedDataSource(params?.DataSource)) {
                 throw new Error(
@@ -1893,11 +1915,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 contextUser,
                 callerName: 'resolveEffectiveBaseViewTarget',
             });
-            if (!IsValidSQLIdentifier(resolution.effectiveSchemaName) || !IsValidSQLIdentifier(resolution.effectiveViewName)) {
-                throw new Error(
-                    `Invalid SQL identifier for alternate base view '${resolution.view.Name}' on entity '${entityInfo.Name}'.`
-                );
-            }
             return { schemaName: resolution.effectiveSchemaName, viewName: resolution.effectiveViewName };
         }
 
@@ -3843,15 +3860,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             const noCacheStatusNeedsDB: Array<{ index: number; item: RunViewWithCacheCheckParams }> = [];
 
             for (const entry of itemsWithoutCacheCheck) {
-                // A param carrying BypassCache lands here because it is ineligible for a cache status,
+                // A param carrying BypassCache (or any cache-ineligible request such as an AlternateBaseView
+                // with CachePolicy === 'Bypass', an unknown/disabled AlternateBaseView, or a view-only request
+                // denied by the read-permission gate) lands here because it is ineligible for a cache status,
                 // NOT because the caller has nothing cached — and those two must not be treated alike.
-                // Serving it from the server cache is precisely what it asked not to happen: its
-                // documented contract is "the query always hits the database", and it is the only way a
-                // client can escape a server slot that a missed invalidation left stale. The write side
-                // already refuses to store such a result (runViewCacheEligible starts with
-                // !param.BypassCache); this is the matching read-side gate.
-                if (entry.item.params.BypassCache) {
-                    LogStatusEx({ message: `    🚫 [SmartCache BYPASS] "${entry.item.params.EntityName || 'unknown'}" — BypassCache requested, going to the database`, verboseOnly: true });
+                if (
+                    entry.item.params.BypassCache ||
+                    !this.runViewCacheEligible(entry.item.params) ||
+                    this.cacheDeniedForViewOnlyRequest(entry.item.params, contextUser)
+                ) {
+                    LogStatusEx({ message: `    🚫 [SmartCache BYPASS] "${entry.item.params.EntityName || 'unknown'}" — cache ineligible or BypassCache requested, going to the database`, verboseOnly: true });
                     noCacheStatusNeedsDB.push(entry);
                     continue;
                 }
@@ -4307,6 +4325,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         | null
     > {
         if (!LocalCacheManager.Instance.IsInitialized) return null;
+        if (!this.runViewCacheEligible(item.params) || this.cacheDeniedForViewOnlyRequest(item.params, contextUser)) {
+            return null;
+        }
 
         const rlsWhereClause = this.ComputeRunViewRLSWhereClause(item.params, contextUser);
         const flsFieldsKey = this.ComputeRunViewFLSFingerprintKey(item.params);

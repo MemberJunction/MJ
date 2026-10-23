@@ -21,16 +21,23 @@ export function IsValidSQLIdentifier(name: string | null | undefined): boolean {
 
 /**
  * Validates that `name` is a valid semantic `EntityAlternateBaseView.Name`:
- * non-empty after trimming, at most 100 characters, and containing neither `|` nor `:`
- * (the cache-fingerprint segment and prefix delimiters used by `LocalCacheManager` and
- * `GenericDatabaseProvider`). Mirrors `CK_EntityAlternateBaseView_Name` in SQL.
+ * non-empty after trimming, at most 100 characters, not starting with `//` (so `abv:` + `Name`
+ * can never form `abv://...`), and containing neither `|` nor `:` (the cache-fingerprint segment
+ * and prefix delimiters used by `LocalCacheManager` and `GenericDatabaseProvider`). Mirrors
+ * `CK_EntityAlternateBaseView_Name` in SQL.
  */
 export function IsValidAlternateBaseViewName(name: string | null | undefined): boolean {
     if (typeof name !== 'string') {
         return false;
     }
     const trimmed = name.trim();
-    return trimmed.length > 0 && trimmed.length <= 100 && !name.includes('|') && !name.includes(':');
+    return (
+        trimmed.length > 0 &&
+        trimmed.length <= 100 &&
+        !trimmed.startsWith('//') &&
+        !name.includes('|') &&
+        !name.includes(':')
+    );
 }
 
 /**
@@ -53,6 +60,11 @@ export interface ResolveAlternateBaseViewOptions {
      * has `Status === 'Deprecated'`. Defaults to `true` (allows deprecated views with a log warning).
      */
     allowDeprecated?: boolean;
+    /**
+     * When `true`, suppresses the `[Deprecated]` log warning while still honoring `allowDeprecated`.
+     * Used by internal call sites that delegate after a caller has already logged deprecation.
+     */
+    suppressDeprecationWarning?: boolean;
     /** Optional caller label included in deprecation warnings and error messages. */
     callerName?: string;
 }
@@ -81,12 +93,33 @@ export interface AlternateBaseViewResolution {
  * (never silently falls back to `entity.BaseView`, preventing filtered-row disclosure).
  */
 export function ResolveAlternateBaseView(options: ResolveAlternateBaseViewOptions): AlternateBaseViewResolution {
-    const { entity, contextUser, enforcePermissions = true, allowDeprecated = true, callerName } = options;
+    const {
+        entity,
+        contextUser,
+        enforcePermissions = true,
+        allowDeprecated = true,
+        suppressDeprecationWarning = false,
+        callerName,
+    } = options;
     const rawName = typeof options.alternateBaseViewName === 'string' ? options.alternateBaseViewName.trim() : '';
     if (!rawName) {
         throw new Error(`AlternateBaseView name cannot be empty on entity '${entity.Name}'.`);
     }
 
+    const view = findRegisteredAlternateBaseViewOrThrow(entity, rawName);
+    assertAlternateBaseViewUsableAndIdentifiersValid(entity, view);
+    checkAlternateBaseViewDeprecation(entity, view, allowDeprecated, suppressDeprecationWarning, callerName);
+    assertAlternateBaseViewReadPermission(entity, contextUser, enforcePermissions);
+
+    return {
+        view,
+        entity,
+        effectiveViewName: view.ViewName,
+        effectiveSchemaName: view.EffectiveSchemaName,
+    };
+}
+
+function findRegisteredAlternateBaseViewOrThrow(entity: EntityInfo, rawName: string): EntityAlternateBaseViewInfo {
     const view = entity.GetAlternateBaseView(rawName);
     if (!view) {
         const available = entity.AlternateBaseViews
@@ -98,13 +131,15 @@ export function ResolveAlternateBaseView(options: ResolveAlternateBaseViewOption
             `Available alternate base views: ${available || '(none)'}`,
         );
     }
+    return view;
+}
 
+function assertAlternateBaseViewUsableAndIdentifiersValid(entity: EntityInfo, view: EntityAlternateBaseViewInfo): void {
     if (!view.IsUsable) {
         throw new Error(
             `AlternateBaseView '${view.Name}' on entity '${entity.Name}' is disabled and cannot be used.`,
         );
     }
-
     if (!IsValidSQLIdentifier(view.ViewName)) {
         throw new Error(
             `AlternateBaseView '${view.Name}' on entity '${entity.Name}' has an invalid SQL ViewName '${view.ViewName}'.`,
@@ -115,19 +150,36 @@ export function ResolveAlternateBaseView(options: ResolveAlternateBaseViewOption
             `AlternateBaseView '${view.Name}' on entity '${entity.Name}' has an invalid SQL SchemaName '${view.EffectiveSchemaName}'.`,
         );
     }
+}
 
-    if (view.IsDeprecated) {
-        if (!allowDeprecated) {
-            throw new Error(
-                `AlternateBaseView '${view.Name}' on entity '${entity.Name}' is deprecated and cannot be used.`,
-            );
-        }
+function checkAlternateBaseViewDeprecation(
+    entity: EntityInfo,
+    view: EntityAlternateBaseViewInfo,
+    allowDeprecated: boolean,
+    suppressDeprecationWarning: boolean,
+    callerName?: string,
+): void {
+    if (!view.IsDeprecated) {
+        return;
+    }
+    if (!allowDeprecated) {
+        throw new Error(
+            `AlternateBaseView '${view.Name}' on entity '${entity.Name}' is deprecated and cannot be used.`,
+        );
+    }
+    if (!suppressDeprecationWarning) {
         LogStatusEx({
             message: `[Deprecated] AlternateBaseView '${view.Name}' on entity '${entity.Name}' is deprecated${callerName ? ` (called from ${callerName})` : ''}.`,
             verboseOnly: false,
         });
     }
+}
 
+function assertAlternateBaseViewReadPermission(
+    entity: EntityInfo,
+    contextUser: UserInfo | undefined,
+    enforcePermissions: boolean,
+): void {
     if (enforcePermissions && contextUser && entity.Permissions && entity.Permissions.length > 0) {
         const entityPerms = entity.GetUserPermisions(contextUser);
         if (!entityPerms?.CanRead) {
@@ -136,13 +188,6 @@ export function ResolveAlternateBaseView(options: ResolveAlternateBaseViewOption
             );
         }
     }
-
-    return {
-        view,
-        entity,
-        effectiveViewName: view.ViewName,
-        effectiveSchemaName: view.EffectiveSchemaName,
-    };
 }
 
 /**
@@ -171,10 +216,16 @@ export function FindAlternateBaseViewByPhysicalName(
     return undefined;
 }
 
+const _viewEntityPinnedAbvCache = new WeakMap<BaseEntity, { raw: unknown; value: string | undefined }>();
+
 /**
  * Extracts a pinned `alternateBaseView` semantic name from a loaded User View `BaseEntity`
  * (`DisplayState` JSON column) without introducing a dependency from `@memberjunction/core`
  * to `@memberjunction/core-entities`.
+ *
+ * Memoizes the parsed result per `(viewEntity, rawDisplayState)` in a `WeakMap` so hot paths
+ * (`GetEffectiveAlternateBaseViewName` across cache eligibility, fingerprinting, dedup, and
+ * telemetry) do not `JSON.parse(DisplayState)` on every call.
  *
  * Mirrors the `ViewEntity.Get('EntityID')` / `ViewEntity.Get('WhereClause')` access pattern
  * in `RunView.GetEntityNameFromRunViewParams` and `ProviderBase.ResolveRunViewEntitySync`.
@@ -187,7 +238,15 @@ export function GetPinnedAlternateBaseViewFromViewEntity(
     }
     // Weak-typing accessor on ViewEntity is deliberate in MJCore to avoid circular dependency on core-entities
     const rawDisplayState: unknown = viewEntity.Get('DisplayState');
-    return ExtractAlternateBaseViewFromDisplayState(rawDisplayState);
+    const cached = _viewEntityPinnedAbvCache.get(viewEntity);
+    if (cached && cached.raw === rawDisplayState) {
+        return cached.value;
+    }
+    const value = ExtractAlternateBaseViewFromDisplayState(rawDisplayState);
+    if (typeof viewEntity === 'object') {
+        _viewEntityPinnedAbvCache.set(viewEntity, { raw: rawDisplayState, value });
+    }
+    return value;
 }
 
 /**
@@ -233,9 +292,22 @@ function extractFromDisplayStateObject(record: Record<string, unknown> | null | 
 }
 
 /**
+ * True when `params.AlternateBaseView` is explicitly set to `""` (or whitespace-only),
+ * meaning the caller is explicitly overriding any saved User View `DisplayState.alternateBaseView`
+ * pin back to the entity's canonical `BaseView`.
+ */
+export function IsExplicitBaseViewOverride(params: RunViewParams | undefined | null): boolean {
+    return typeof params?.AlternateBaseView === 'string' && params.AlternateBaseView.trim().length === 0;
+}
+
+/**
  * Returns the effective semantic `AlternateBaseView` name for a `RunViewParams` object:
- * an explicit `params.AlternateBaseView` takes precedence over a saved User View's pinned
- * `DisplayState.alternateBaseView` on `params.ViewEntity`.
+ * - An explicit non-empty `params.AlternateBaseView` takes precedence over a saved User View's
+ *   pinned `DisplayState.alternateBaseView` on `params.ViewEntity`.
+ * - An explicit empty `params.AlternateBaseView: ""` overrides a saved User View's pin back to
+ *   `BaseView` (returns `undefined` without falling back to `params.ViewEntity`).
+ * - When `params.AlternateBaseView` is `undefined`, falls back to `params.ViewEntity`'s pinned
+ *   `DisplayState.alternateBaseView`.
  */
 export function GetEffectiveAlternateBaseViewName(params: RunViewParams | undefined | null): string | undefined {
     if (!params) {
@@ -243,9 +315,7 @@ export function GetEffectiveAlternateBaseViewName(params: RunViewParams | undefi
     }
     if (typeof params.AlternateBaseView === 'string') {
         const trimmed = params.AlternateBaseView.trim();
-        if (trimmed.length > 0) {
-            return trimmed;
-        }
+        return trimmed.length > 0 ? trimmed : undefined;
     }
     return GetPinnedAlternateBaseViewFromViewEntity(params.ViewEntity);
 }

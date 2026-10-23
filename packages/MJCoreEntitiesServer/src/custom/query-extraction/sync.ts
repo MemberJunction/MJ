@@ -422,11 +422,95 @@ function updateFieldIfChanged(
 // SyncEntities
 // ---------------------------------------------------------------------------
 
+interface ResolvedQueryEntityMapping {
+    extracted: EntityMetadataEntry;
+    entityID: string;
+    entityName: string;
+    alternateBaseViewID: string | null;
+}
+
 function queryEntityPairKey(
     entityID: string | null | undefined,
     alternateBaseViewID: string | null | undefined
 ): string {
     return `${NormalizeUUID(entityID ?? '')}|${alternateBaseViewID ? NormalizeUUID(alternateBaseViewID) : ''}`;
+}
+
+function mapExtractedEntitiesToMetadata(
+    entityMetadata: EntityMetadataEntry[],
+    metadataProvider: IMetadataProvider
+): ResolvedQueryEntityMapping[] {
+    const rawMappings = entityMetadata
+        .map(extracted => {
+            const matchingEntity = metadataProvider.Entities.find(
+                e => e.Name === extracted.name &&
+                     (e.SchemaName.toLowerCase() === extracted.SchemaName.toLowerCase() ||
+                      (extracted.AlternateBaseViewID != null &&
+                       IndexByUUID(e.AlternateBaseViews ?? []).Has(extracted.AlternateBaseViewID)))
+            );
+            return matchingEntity
+                ? {
+                      extracted,
+                      entityID: matchingEntity.ID,
+                      entityName: matchingEntity.Name,
+                      alternateBaseViewID: extracted.AlternateBaseViewID ?? null,
+                  }
+                : null;
+        })
+        .filter((m): m is ResolvedQueryEntityMapping => m !== null);
+
+    const seenPairKeys = new Set<string>();
+    return rawMappings.filter(m => {
+        const pairKey = queryEntityPairKey(m.entityID, m.alternateBaseViewID);
+        if (seenPairKeys.has(pairKey)) {
+            return false;
+        }
+        seenPairKeys.add(pairKey);
+        return true;
+    });
+}
+
+function partitionQueryEntityDiff(
+    entityMappings: ResolvedQueryEntityMapping[],
+    existingEntities: MJQueryEntityEntity[]
+): {
+    entitiesToAdd: ResolvedQueryEntityMapping[];
+    entitiesToUpdate: Array<{ record: MJQueryEntityEntity; alternateBaseViewID: string | null }>;
+    entitiesToRemove: MJQueryEntityEntity[];
+} {
+    const matchedExisting = new Set<MJQueryEntityEntity>();
+    const matchedMappings = new Set<ResolvedQueryEntityMapping>();
+
+    for (const mapping of entityMappings) {
+        const mappingKey = queryEntityPairKey(mapping.entityID, mapping.alternateBaseViewID);
+        const exact = existingEntities.find(
+            ee => !matchedExisting.has(ee) && queryEntityPairKey(ee.EntityID, ee.AlternateBaseViewID) === mappingKey
+        );
+        if (exact) {
+            matchedExisting.add(exact);
+            matchedMappings.add(mapping);
+        }
+    }
+
+    const entitiesToUpdate: Array<{ record: MJQueryEntityEntity; alternateBaseViewID: string | null }> = [];
+    for (const mapping of entityMappings) {
+        if (matchedMappings.has(mapping)) continue;
+        const normalizedEntityID = NormalizeUUID(mapping.entityID);
+        const sameEntityRecord = existingEntities.find(
+            ee => !matchedExisting.has(ee) && NormalizeUUID(ee.EntityID) === normalizedEntityID
+        );
+        if (sameEntityRecord) {
+            matchedExisting.add(sameEntityRecord);
+            matchedMappings.add(mapping);
+            entitiesToUpdate.push({ record: sameEntityRecord, alternateBaseViewID: mapping.alternateBaseViewID });
+        }
+    }
+
+    return {
+        entitiesToAdd: entityMappings.filter(m => !matchedMappings.has(m)),
+        entitiesToUpdate,
+        entitiesToRemove: existingEntities.filter(ee => !matchedExisting.has(ee)),
+    };
 }
 
 /**
@@ -445,78 +529,11 @@ export async function SyncEntities(
         const existingEntities = await loadExistingRecords<MJQueryEntityEntity>(
             'MJ: Query Entities', queryID, runViewProvider, contextUser, isSaved
         );
-
-        // Map extracted entries to MJ entity IDs + optional AlternateBaseViewID, deduplicated by pair
-        const rawMappings = entityMetadata
-            .map(extracted => {
-                const matchingEntity = metadataProvider.Entities.find(
-                    e => e.Name === extracted.name &&
-                         (e.SchemaName.toLowerCase() === extracted.SchemaName.toLowerCase() ||
-                          (extracted.AlternateBaseViewID != null &&
-                           IndexByUUID(e.AlternateBaseViews ?? []).Has(extracted.AlternateBaseViewID)))
-                );
-                if (matchingEntity) {
-                    return {
-                        extracted,
-                        entityID: matchingEntity.ID,
-                        entityName: matchingEntity.Name,
-                        alternateBaseViewID: extracted.AlternateBaseViewID ?? null,
-                    };
-                }
-                return null;
-            })
-            .filter((m): m is NonNullable<typeof m> => m !== null);
-
-        const seenPairKeys = new Set<string>();
-        const entityMappings = rawMappings.filter(m => {
-            const pairKey = queryEntityPairKey(m.entityID, m.alternateBaseViewID);
-            if (seenPairKeys.has(pairKey)) {
-                return false;
-            }
-            seenPairKeys.add(pairKey);
-            return true;
-        });
-
-        const matchedExisting = new Set<MJQueryEntityEntity>();
-        const matchedMappings = new Set<typeof entityMappings[number]>();
-
-        // Pass 1: exact (EntityID, AlternateBaseViewID) matches
-        for (const mapping of entityMappings) {
-            const mappingKey = queryEntityPairKey(mapping.entityID, mapping.alternateBaseViewID);
-            const exact = existingEntities.find(
-                ee =>
-                    !matchedExisting.has(ee) &&
-                    queryEntityPairKey(ee.EntityID, ee.AlternateBaseViewID) === mappingKey
-            );
-            if (exact) {
-                matchedExisting.add(exact);
-                matchedMappings.add(mapping);
-            }
-        }
-
-        // Pass 2: same-EntityID in-place updates when a query changed its view for that entity
-        const entitiesToUpdate: Array<{ record: MJQueryEntityEntity; alternateBaseViewID: string | null }> = [];
-        for (const mapping of entityMappings) {
-            if (matchedMappings.has(mapping)) {
-                continue;
-            }
-            const normalizedEntityID = NormalizeUUID(mapping.entityID);
-            const sameEntityRecord = existingEntities.find(
-                ee => !matchedExisting.has(ee) && NormalizeUUID(ee.EntityID) === normalizedEntityID
-            );
-            if (sameEntityRecord) {
-                matchedExisting.add(sameEntityRecord);
-                matchedMappings.add(mapping);
-                entitiesToUpdate.push({
-                    record: sameEntityRecord,
-                    alternateBaseViewID: mapping.alternateBaseViewID,
-                });
-            }
-        }
-
-        const entitiesToAdd = entityMappings.filter(m => !matchedMappings.has(m));
-        const entitiesToRemove = existingEntities.filter(ee => !matchedExisting.has(ee));
-
+        const entityMappings = mapExtractedEntitiesToMetadata(entityMetadata, metadataProvider);
+        const { entitiesToAdd, entitiesToUpdate, entitiesToRemove } = partitionQueryEntityDiff(
+            entityMappings,
+            existingEntities
+        );
         const factories: (() => Promise<boolean>)[] = [];
 
         for (const mapping of entitiesToAdd) {
@@ -530,12 +547,10 @@ export async function SyncEntities(
             newEntity.AutoDetectConfidenceScore = 1.0;
             factories.push(() => newEntity.Save());
         }
-
         for (const updateItem of entitiesToUpdate) {
             updateItem.record.AlternateBaseViewID = updateItem.alternateBaseViewID;
             factories.push(() => updateItem.record.Save());
         }
-
         for (const entityToRemove of entitiesToRemove) {
             factories.push(() => entityToRemove.Delete());
         }

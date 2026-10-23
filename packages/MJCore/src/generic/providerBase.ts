@@ -1,6 +1,6 @@
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 import { EntityDependency, EntityDocumentTypeInfo, EntityFieldTSType, EntityInfo, EntityPermissionType, FieldSecurityDenialMessage, FieldSecurityError, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
-import { GetEffectiveAlternateBaseViewName, ResolveAlternateBaseView } from "./alternateBaseViews";
+import { GetEffectiveAlternateBaseViewName, IsExplicitBaseViewOverride } from "./alternateBaseViews";
 import { IEntityDataProvider, IMetadataProvider, MetadataSweepResult, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, GetRecordDependenciesOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem, SearchEntityParams, SearchEntitiesOptions, EntitySearchResult, IRemoteOperationProvider, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
 import { RecordChangeFieldSecurityProjector } from "./recordChangeFieldSecurity";
 import { ComputeRRF, ScoredCandidate } from "./scoring/ReciprocalRankFusion";
@@ -1884,14 +1884,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /**
      * True when the request targets an `AlternateBaseView` (explicitly on `param.AlternateBaseView`
      * or pinned on `param.ViewEntity`) whose `CachePolicy` (or an ancestor's `CachePolicy` in its
-     * `ParentID` chain) is `'Bypass'` (`IsBypassCache === true`), or when the requested alternate
-     * base view does not resolve to a usable view on the entity (fail-closed: never cache or serve
-     * from cache an unknown/disabled alternate base view).
+     * `ParentID` chain) is `'Bypass'` (`IsBypassCache === true`), when the requested alternate
+     * base view does not resolve to a usable view on the entity, or when a saved User View is
+     * referenced only by `ViewID`/`ViewName` without a loaded `ViewEntity` (fail-closed: we cannot
+     * synchronously inspect `DisplayState.alternateBaseView` until the view is loaded).
      */
     protected isAlternateBaseViewCacheBypassed(param: RunViewParams): boolean {
+        if (IsExplicitBaseViewOverride(param)) {
+            return false;
+        }
         const effectiveAbv = GetEffectiveAlternateBaseViewName(param);
         if (!effectiveAbv) {
-            return false;
+            return !param.ViewEntity && Boolean(param.ViewID || param.ViewName);
         }
         const entity = this.ResolveRunViewEntitySync(param);
         if (!entity) {
@@ -2812,19 +2816,24 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             throw new Error(`Entity ${entityName} not found in metadata`);
         }
         EntityInfo.AssertEntityActiveStatus(entity, callerName);
+    }
 
+    /**
+     * Emits a `[Deprecated]` warning when a cache-hit RunView served rows for a deprecated
+     * `AlternateBaseView` (or an alternate view whose ancestor in `ParentID` is deprecated).
+     * Cache misses log deprecation once inside `ResolveAlternateBaseView` during execution.
+     */
+    protected logDeprecatedAlternateBaseViewIfAny(params: RunViewParams, callerName: string): void {
         const effectiveAbv = GetEffectiveAlternateBaseViewName(params);
-        if (effectiveAbv) {
-            if (IsMaterializedDataSource(params.DataSource)) {
-                throw new Error(
-                    `Cannot combine DataSource: 'Materialized' with AlternateBaseView '${effectiveAbv}' on entity '${entity.Name}'.`,
-                );
-            }
-            ResolveAlternateBaseView({
-                entity,
-                alternateBaseViewName: effectiveAbv,
-                contextUser,
-                callerName,
+        if (!effectiveAbv) {
+            return;
+        }
+        const entity = this.ResolveRunViewEntitySync(params);
+        const abv = entity?.GetAlternateBaseView(effectiveAbv);
+        if (entity && abv?.IsDeprecated) {
+            LogStatusEx({
+                message: `[Deprecated] AlternateBaseView '${abv.Name}' on entity '${entity.Name}' is deprecated (called from ${callerName}).`,
+                verboseOnly: false,
             });
         }
     }
@@ -3329,6 +3338,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 EntityName: params.EntityName,
                 ViewID: params.ViewID,
                 ViewName: params.ViewName,
+                AlternateBaseView: GetEffectiveAlternateBaseViewName(params),
                 ExtraFilter: params.ExtraFilter as string,
                 OrderBy: params.OrderBy as string,
                 ResultType: params.ResultType,
@@ -3445,6 +3455,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     AggregateResults: LocalCacheManager.Instance.ReorderAggregateResultsToRequest(cached.aggregateResults, params.Aggregates)
                 };
                 cacheStatus = 'hit';
+                this.logDeprecatedAlternateBaseViewIfAny(params, 'PreRunView');
                 if (!params.CacheLocal && this.TrustLocalCacheCompletely) {
                     LogStatusEx({ message: `  ✅ [Server Cache HIT] RunView "${params.EntityName || params.ViewName || 'unknown'}" — ${results.length} rows served from server cache (no DB query)`, verboseOnly: true });
                 }
@@ -3516,6 +3527,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // client), which is exactly what a keyset sweep does on every page.
                 StartRows: params.map(p => p.StartRow),
                 AfterKeys: params.map(p => p.AfterKey?.ToConcatenatedString()),
+                AlternateBaseViews: params.map(p => GetEffectiveAlternateBaseViewName(p)),
                 // Exemption was threaded through the DEPRECATED batch twin but not this one, so
                 // RunViewParams.Telemetry.Exempt was silently ineffective for every batch RunView —
                 // and, because RunView() delegates here whenever BypassCache or AfterKey is set,
@@ -3629,6 +3641,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     // if needed this will transform each result into an entity object
                     await this.TransformSimpleObjectToEntityObject(param, cachedViewResult, contextUser);
 
+                    this.logDeprecatedAlternateBaseViewIfAny(param, 'PreRunViews');
                     if (!param.CacheLocal && this.TrustLocalCacheCompletely) {
                         LogStatusEx({ message: `    ✅ [Server Cache HIT] RunViews "${param.EntityName || param.ViewName || 'unknown'}" — ${cached.results.length} rows served from server cache (no DB query)`, verboseOnly: true });
                     }
@@ -4556,6 +4569,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const orderBy = typeof params.OrderBy === 'string' ? params.OrderBy.trim() : '';
         if (filter.length > 0 || orderBy.length > 0) return false;
         if (GetEffectiveAlternateBaseViewName(params)) return false;
+        if (Boolean(params.ViewID || params.ViewName || params.ViewEntity)) return false;
 
         return true;
     }

@@ -241,7 +241,7 @@ export class ExploreDatabaseSchemaAction extends BaseAction {
             UserViewMaxRows: entity.UserViewMaxRows,
             ScopeDefault: entity.ScopeDefault,
             AlternateBaseViews: (entity.AlternateBaseViews ?? [])
-                .filter(abv => abv.IsUsable)
+                .filter(abv => (abv.IsUsable ?? abv.Status !== 'Disabled') && !(abv.IsDeprecated ?? abv.Status === 'Deprecated'))
                 .map(abv => ({
                     ID: abv.ID,
                     Name: abv.Name,

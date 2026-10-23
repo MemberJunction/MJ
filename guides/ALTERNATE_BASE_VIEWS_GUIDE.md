@@ -38,6 +38,7 @@ flowchart LR
 Every registered Alternate Base View **must project the exact same column set and column types** as the parent entity's canonical `BaseView`:
 
 ```sql
+-- Note: because this view uses GETUTCDATE(), register it with CachePolicy = 'Bypass'
 CREATE VIEW [__mj_BizAppsCommon].[vwActiveMembers] AS
 SELECT m.*
 FROM [__mj_BizAppsCommon].[vwMembers] m
@@ -48,7 +49,7 @@ WHERE m.[Status] = N'Active'
 Why this matters:
 - **Zero duplicate entities**: Records loaded from an alternate base view instantiate the exact same `BaseEntity` subclass, form, and permissions as records loaded from `BaseView`.
 - **Single-record CRUD is unaffected**: `BaseEntity.Load()`, `Save()`, and `Delete()` always operate against the entity's canonical `BaseView` and `spCreate` / `spUpdate` / `spDelete`. Alternate base views are strictly a **collection-read (`RunView` / SQL query) lens**.
-- **CodeGen column parity audit**: During `mj codegen`, `ManageMetadataBase.validateAlternateBaseViewsColumnParity` compares `INFORMATION_SCHEMA.COLUMNS` for every `Active` and `Deprecated` alternate base view against its parent `BaseView` and logs a warning whenever columns are missing, extra, or mismatched in data type.
+- **CodeGen column parity & cache safety audit**: During `mj codegen`, `SQLCodeGenBase.validateAlternateBaseViews` (via `EvaluateAlternateBaseViewParityAndSafety`) compares every `Active` and `Deprecated` alternate base view against its parent `BaseView` after view DDL and `sp_refreshview` / `spRebindLayeredOuterView` execute, logging warnings whenever columns are missing or when a `CachePolicy = 'Default'` view references clock functions or external tables.
 
 ---
 
@@ -98,6 +99,8 @@ GO
 GRANT SELECT ON [${flyway:defaultSchema}].[vwUsersActive] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
 GO
 ```
+
+**PostgreSQL Dialect Note**: On PostgreSQL, `CREATE OR REPLACE VIEW` expands `SELECT u.*` at view creation time. During `mj codegen`, `PostgreSQLCodeGenProvider` automatically invokes `__mj."spRebindLayeredOuterView"` (in topological `ParentID` order) after regenerating `BaseView` so `u.*` is re-expanded to include any newly added columns on `BaseView` or `ParentView`. Similarly, `MJEntityAlternateBaseViewEntityServer` uses `pg_get_viewdef(to_regclass(...), true)` on PostgreSQL to auto-populate `ParentID` via the PostgreSQL SQL AST dialect.
 
 ### Step 2: Register Metadata in `metadata/entities/.alternate-base-views.json`
 
@@ -230,11 +233,11 @@ const result = await rv.RunView<MJUserEntity>({
 ```
 
 **Precedence order**:
-1. Explicit `params.AlternateBaseView`
-2. Saved User View's pinned `DisplayState.alternateBaseView` (when running via `ViewID` / `ViewName` / `ViewEntity`)
+1. Explicit `params.AlternateBaseView` (passing `AlternateBaseView: ""` explicitly overrides a saved User View's pin and forces execution against the entity's canonical `BaseView`)
+2. Saved User View's pinned `DisplayState.alternateBaseView` (when running via `ViewID` / `ViewName` / `ViewEntity` and `params.AlternateBaseView` is `undefined`)
 3. Entity's canonical `BaseView`
 
-**Fail-closed guarantee**: If `AlternateBaseView` names an unknown or `Disabled` view, `ResolveAlternateBaseView` throws an error and **never** falls back to `entity.BaseView`.
+**Fail-closed guarantee**: If `AlternateBaseView` names an unknown or `Disabled` view (or is combined with `DataSource: 'Materialized'`), `ResolveAlternateBaseView` fails closed and **never** falls back to `entity.BaseView`.
 
 ### 2. `BaseEngine` Property Configs
 

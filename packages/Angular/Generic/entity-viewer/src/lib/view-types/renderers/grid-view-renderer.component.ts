@@ -499,7 +499,9 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
    */
   get EffectiveParams(): RunViewParams | null {
     if (this.config.params) {
-      return this.config.params;
+      return this.alternateBaseView && !this.config.params.AlternateBaseView
+        ? { ...this.config.params, AlternateBaseView: this.alternateBaseView }
+        : this.config.params;
     }
     if (this.entity) {
       return {

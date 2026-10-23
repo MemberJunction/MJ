@@ -1,5 +1,5 @@
 import { RegisterClass, CleanAndParseJSON } from "@memberjunction/global";
-import { BaseEntity, EntityInfo, LogError, IMetadataProvider, Metadata, ValidationErrorInfo, ValidationErrorType, ValidationResult } from "@memberjunction/core";
+import { BaseEntity, EntityInfo, ExtractAlternateBaseViewFromDisplayState, LogError, IMetadataProvider, Metadata, ValidationErrorInfo, ValidationErrorType, ValidationResult } from "@memberjunction/core";
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities'
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
 import { AIEngine } from "@memberjunction/aiengine";
@@ -50,12 +50,17 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
     }
 
     /**
-     * Validates that a pinned `DisplayState.alternateBaseView` (if set) corresponds to a
-     * registered, usable alternate base view on the view's target entity.
+     * Validates that a pinned `DisplayState.alternateBaseView` (if newly set or changed)
+     * corresponds to a registered, usable alternate base view on the view's target entity.
+     * Existing saved views whose pinned alternate base view did not change are allowed to save
+     * other edits (e.g. renaming or clearing the pin after an admin disabled the alternate view).
      */
     private validatePinnedAlternateBaseView(result: ValidationResult): void {
         const pinnedName = this.AlternateBaseView;
         if (!pinnedName || !this.ViewEntityInfo) {
+            return;
+        }
+        if (this.IsSaved && !this.hasAlternateBaseViewChanged()) {
             return;
         }
         const abv = this.ViewEntityInfo.GetAlternateBaseView(pinnedName);
@@ -78,6 +83,17 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
                 )
             );
         }
+    }
+
+    private hasAlternateBaseViewChanged(): boolean {
+        const displayStateField = this.GetFieldByName('DisplayState');
+        if (!displayStateField?.Dirty) {
+            return false;
+        }
+        const oldPinned = ExtractAlternateBaseViewFromDisplayState(
+            typeof displayStateField.OldValue === 'string' ? displayStateField.OldValue : null,
+        );
+        return (oldPinned ?? null) !== (this.AlternateBaseView ?? null);
     }
 
     /**
@@ -189,6 +205,12 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
      */
     public async GenerateSmartFilterWhereClause(prompt: string, entityInfo: EntityInfo): Promise<{whereClause: string, userExplanation: string}> {
         try {
+            if (this.AlternateBaseView && entityInfo) {
+                const pinnedAbv = entityInfo.GetAlternateBaseView(this.AlternateBaseView);
+                if (!pinnedAbv || !pinnedAbv.IsUsable) {
+                    return { whereClause: '', userExplanation: '' };
+                }
+            }
             // Ensure AIEngine is configured
             await AIEngine.Instance.Config(false, this.ContextCurrentUser);
 
@@ -320,7 +342,7 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
             entityId: entityInfo.ID,
             baseView: effectiveBaseView,
             fieldsDescription,
-            relatedViewsDescription: processedViews.length > 1 ? relatedViewsDescription : '',
+            relatedViewsDescription: relatedViewsDescription.length > 0 ? relatedViewsDescription : '',
             listsSchema: listsEntity?.SchemaName || '__mj',
             listsFields,
             listDetailsFields,

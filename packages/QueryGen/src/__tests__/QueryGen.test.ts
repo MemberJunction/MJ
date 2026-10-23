@@ -304,6 +304,7 @@ describe('FormatEntityMetadataForPrompt — alternateBaseViews', () => {
       Description: 'Deprecated',
       Status: 'Deprecated',
       IsUsable: true,
+      IsDeprecated: true,
     };
     (entity as unknown as { AlternateBaseViews: EntityAlternateBaseViewInfo[] }).AlternateBaseViews = [
       parentAlt as EntityAlternateBaseViewInfo,

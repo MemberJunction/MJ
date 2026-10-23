@@ -3340,3 +3340,82 @@ describe('GenericDatabaseProvider RunViewCore single-batch execution (MJ-CORE-6)
         expect(batchSpy).not.toHaveBeenCalled();
     });
 });
+
+describe('GenericDatabaseProvider AlternateBaseView resolution and ClientClauseScreen collisions', () => {
+    it('resolves AlternateBaseView target, honors "" BaseView override over ViewEntity pin, and rejects Materialized + AlternateBaseView', async () => {
+        const p = new TestGenericProvider();
+        const entityInfo = new EntityInfo({
+            ID: '11111111-1111-4111-8111-111111111111',
+            Name: 'Widgets',
+            CodeName: 'Widgets',
+            SchemaName: '__mj',
+            BaseView: 'vwWidgets',
+            BaseTable: 'Widget',
+            Status: 'Active',
+            EntityAlternateBaseViews: [
+                {
+                    ID: '22222222-2222-4222-8222-222222222222',
+                    EntityID: '11111111-1111-4111-8111-111111111111',
+                    Name: 'Active',
+                    ViewName: 'vwWidgetsActive',
+                    SchemaName: 'analytics',
+                    CachePolicy: 'Default',
+                    Status: 'Active',
+                    Sequence: 10,
+                },
+                {
+                    ID: '33333333-3333-4333-8333-333333333333',
+                    EntityID: '11111111-1111-4111-8111-111111111111',
+                    Name: 'Archived',
+                    ViewName: 'vwWidgetsArchived',
+                    SchemaName: null,
+                    CachePolicy: 'Default',
+                    Status: 'Disabled',
+                    Sequence: 20,
+                },
+            ],
+        });
+
+        const resolveTarget = (params: RunViewParams) =>
+            (
+                p as unknown as {
+                    resolveEffectiveBaseViewTarget: (
+                        e: EntityInfo,
+                        prm: RunViewParams,
+                        u?: UserInfo,
+                    ) => Promise<{ schemaName: string; viewName: string }>;
+                }
+            ).resolveEffectiveBaseViewTarget(entityInfo, params, mockUser);
+
+        // 1. Explicit AlternateBaseView with custom SchemaName
+        await expect(resolveTarget({ EntityName: 'Widgets', AlternateBaseView: 'Active' })).resolves.toEqual({
+            schemaName: 'analytics',
+            viewName: 'vwWidgetsActive',
+        });
+
+        // 2. Pinned ViewEntity DisplayState vs explicit "" override back to BaseView
+        const pinnedViewEntity = {
+            AlternateBaseView: 'Active',
+            Get: (f: string) => (f === 'DisplayState' ? JSON.stringify({ alternateBaseView: 'Active' }) : null),
+        } as unknown as RunViewParams['ViewEntity'];
+
+        await expect(resolveTarget({ EntityName: 'Widgets', ViewEntity: pinnedViewEntity })).resolves.toEqual({
+            schemaName: 'analytics',
+            viewName: 'vwWidgetsActive',
+        });
+        await expect(
+            resolveTarget({ EntityName: 'Widgets', ViewEntity: pinnedViewEntity, AlternateBaseView: '' }),
+        ).resolves.toEqual({
+            schemaName: '__mj',
+            viewName: 'vwWidgets',
+        });
+
+        // 3. Disabled or Materialized + AlternateBaseView throws
+        await expect(resolveTarget({ EntityName: 'Widgets', AlternateBaseView: 'Archived' })).rejects.toThrow(
+            /is disabled and cannot be used/,
+        );
+        await expect(
+            resolveTarget({ EntityName: 'Widgets', AlternateBaseView: 'Active', DataSource: 'Materialized' }),
+        ).rejects.toThrow(/cannot be combined with DataSource: 'Materialized'/);
+    });
+});

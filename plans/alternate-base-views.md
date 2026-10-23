@@ -1,7 +1,7 @@
 # Alternate Base Views (MJ Canon, layer 1)
 
 ## Status
-- **Status**: Draft, for review before implementation
+- **Status**: Implemented
 - **Created**: 2026-10-23. **Revised** the same day after review (`@rkihm-BC`): a metadata table replaces the JSON column; per-view permissions dropped from v1 (entity `CanRead` + RLS + FLS govern access); `ParentID` hierarchy with AST auto-population added; `Name` constrained for `abv:` cache-key safety; cross-entity `ViewName` collision checks, `QueryEntity` sync keying on `(EntityID, AlternateBaseViewID)`, external-data-source refusal, and `BaseEngine.classifyEventForConfig` reload semantics added.
 - **Author**: Claude (Claude Code session), for review
 - **Branch**: `claude/alternate-base-views`

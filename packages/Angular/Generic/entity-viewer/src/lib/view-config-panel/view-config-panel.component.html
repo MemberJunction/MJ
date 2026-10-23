@@ -872,7 +872,7 @@
               rows="3"
             ></textarea>
           </div>
-          @if (AvailableAlternateBaseViews.length > 0) {
+          @if (AvailableAlternateBaseViews.length > 0 || IsCurrentAlternateBaseViewUnavailable) {
             <div class="form-group">
               <label for="AlternateBaseView">Base View</label>
               <select
@@ -882,9 +882,14 @@
                 [disabled]="!CanEdit"
               >
                 <option [ngValue]="null">Default ({{ Entity?.BaseView }})</option>
+                @if (IsCurrentAlternateBaseViewUnavailable && AlternateBaseView) {
+                  <option [ngValue]="AlternateBaseView">
+                    {{ AlternateBaseView }} [Unavailable — select Default or another view]
+                  </option>
+                }
                 @for (abv of AvailableAlternateBaseViews; track abv.ID) {
                   <option [ngValue]="abv.Name">
-                    {{ abv.EffectiveDisplayName }} ({{ abv.ViewName }}){{ abv.Status === 'Deprecated' ? ' [Deprecated]' : '' }}
+                    {{ abv.EffectiveDisplayName }} ({{ abv.ViewName }}){{ abv.IsDeprecated ? ' [Deprecated]' : '' }}
                   </option>
                 }
               </select>

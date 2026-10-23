@@ -1131,6 +1131,9 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   /** Handle the selector's "save view" request — open the config panel in the requested mode. */
   public OnSaveViewRequested(event: SaveViewRequestedEvent): void {
     this.DefaultSaveAsNew = event.SaveAsNew || false;
+    if (!this.PendingNewViewAlternateBaseView && this.EffectiveAlternateBaseView) {
+      this.PendingNewViewAlternateBaseView = this.EffectiveAlternateBaseView;
+    }
     this.IsConfigPanelOpen = true;
     this.cdr.detectChanges();
   }
@@ -1742,7 +1745,9 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     newView.GridState = sourceView.GridState;
     newView.FilterState = sourceView.FilterState;
     newView.SortState = sourceView.SortState;
+    newView.CardState = sourceView.CardState;
     newView.DisplayState = sourceView.DisplayState;
+    newView.ViewTypeID = sourceView.ViewTypeID;
     newView.SmartFilterEnabled = sourceView.SmartFilterEnabled || false;
     newView.SmartFilterPrompt = sourceView.SmartFilterPrompt || '';
 

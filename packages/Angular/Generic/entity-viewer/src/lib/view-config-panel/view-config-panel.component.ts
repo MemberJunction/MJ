@@ -565,7 +565,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       this.ViewName = this.DefaultSaveAsNew ? this.PendingNewViewName : '';
       this.ViewDescription = this.DefaultSaveAsNew ? this.PendingNewViewDescription : '';
       this.IsShared = this.DefaultSaveAsNew ? this.PendingNewViewIsShared : false;
-      this.AlternateBaseView = this.DefaultSaveAsNew ? (this.PendingNewViewAlternateBaseView || null) : null;
+      this.AlternateBaseView = this.PendingNewViewAlternateBaseView || null;
       if (!this.CurrentGridState?.sortSettings?.length) {
         this.SortField = null;
         this.SortDirection = 'asc';
@@ -815,9 +815,27 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       return [];
     }
     const currentLower = this.AlternateBaseView?.trim().toLowerCase() ?? '';
-    return this.Entity.AlternateBaseViews.filter(v =>
-      v.Status === 'Active' || (v.Status === 'Deprecated' && v.Name.trim().toLowerCase() === currentLower)
-    );
+    return this.Entity.AlternateBaseViews.filter(v => {
+      const isUsable = v.IsUsable ?? v.Status !== 'Disabled';
+      if (!isUsable) {
+        return false;
+      }
+      const isDeprecated = v.IsDeprecated ?? v.Status === 'Deprecated';
+      return !isDeprecated || v.Name.trim().toLowerCase() === currentLower;
+    });
+  }
+
+  /**
+   * True when the view currently pins an AlternateBaseView that is disabled or no longer registered
+   * on the entity, so the UI can show it and let the user reset to Default.
+   */
+  get IsCurrentAlternateBaseViewUnavailable(): boolean {
+    const current = this.AlternateBaseView?.trim();
+    if (!current || !this.Entity) {
+      return false;
+    }
+    const match = this.Entity.GetAlternateBaseView(current);
+    return !match || !match.IsUsable;
   }
 
   /**

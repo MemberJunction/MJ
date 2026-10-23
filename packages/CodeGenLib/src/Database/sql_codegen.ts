@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, EntityAlternateBaseViewInfo, Metadata, UserInfo, ShouldJoinRecordGeoCodes, HasNativeLatLngFields, NativeLatitudeField, NativeLongitudeField, ListEmbeddedGeoSpecs } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, EntityAlternateBaseViewInfo, IsValidSQLIdentifier, Metadata, UserInfo, ShouldJoinRecordGeoCodes, HasNativeLatLngFields, NativeLatitudeField, NativeLongitudeField, ListEmbeddedGeoSpecs } from '@memberjunction/core';
 import { logError, logStatus, LogWarning, StartSpinner, UpdateSpinner, SucceedSpinner, FailSpinner } from '../Misc/status_logging';
 import * as fs from 'fs';
 import path from 'path';
@@ -41,7 +41,12 @@ export function EntitiesNotInExcludedSchemas<T extends { SchemaName: string }>(
 }
 
 /** @deprecated Use {@link EntitiesNotInExcludedSchemas}. */
-export { OrderAlternateBaseViewsTopologically } from './codeGenDatabaseProvider';
+export function entitiesNotInExcludedSchemas<T extends { SchemaName: string }>(
+    entities: T[],
+    excludeSchemas: string[],
+): T[] {
+    return EntitiesNotInExcludedSchemas(entities, excludeSchemas);
+}
 
 export interface AlternateBaseViewDependencyEntry {
     ReferencedSchema: string;
@@ -79,13 +84,79 @@ function stripSQLCommentsAndStringsForAudit(sql: string): string {
         .replace(/'(?:''|[^'])*'/g, "''");
 }
 
+function escapeRegExpForAudit(s: string): string {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function checkAlternateViewExpectedDependency(input: AlternateBaseViewAuditInput): boolean {
+    const alt = input.alternateView;
+    const expectedSchema = alt.ParentView ? alt.ParentView.EffectiveSchemaName : input.entitySchemaName;
+    const expectedObject = alt.ParentView ? alt.ParentView.ViewName : input.baseViewName;
+    if (input.dependencies.length > 0) {
+        return input.dependencies.some(
+            (d) =>
+                d.ReferencedObject.toLowerCase() === expectedObject.toLowerCase() &&
+                (!d.ReferencedSchema || d.ReferencedSchema.toLowerCase() === expectedSchema.toLowerCase())
+        );
+    }
+    if (!input.viewDefinition) {
+        return false;
+    }
+    const stripped = stripSQLCommentsAndStringsForAudit(input.viewDefinition);
+    const identBoundary = new RegExp(
+        `(?:^|[^A-Za-z0-9_])[\\[""]?${escapeRegExpForAudit(expectedObject)}[\\]""]?(?=$|[^A-Za-z0-9_])`,
+        'i'
+    );
+    return identBoundary.test(stripped);
+}
+
+function findClockExpressionsInViewDefinition(viewDefinition: string | null): string[] {
+    if (!viewDefinition) {
+        return [];
+    }
+    const stripped = stripSQLCommentsAndStringsForAudit(viewDefinition);
+    const clockMatches = new Set<string>();
+    const fnCallRegex = /\b(GETDATE|GETUTCDATE|SYSDATETIME|SYSDATETIMEOFFSET|SYSUTCDATETIME|NOW|CLOCK_TIMESTAMP|STATEMENT_TIMESTAMP|TRANSACTION_TIMESTAMP)\s*\(/gi;
+    let m: RegExpExecArray | null;
+    while ((m = fnCallRegex.exec(stripped)) !== null) {
+        clockMatches.add(m[1].toUpperCase() + '()');
+    }
+    const kwClockRegex = /\b(CURRENT_TIMESTAMP|LOCALTIMESTAMP|CURRENT_DATE|CURRENT_TIME)\b/gi;
+    while ((m = kwClockRegex.exec(stripped)) !== null) {
+        clockMatches.add(m[1].toUpperCase());
+    }
+    return [...clockMatches];
+}
+
+function isEntityHierarchyFunction(objectName: string): boolean {
+    return /^fn_?[a-z0-9_]+_get_(?:root_id|hierarchy_meta|descendants|ancestors)$/i.test(objectName);
+}
+
+function findExternalDependenciesForDefaultCache(input: AlternateBaseViewAuditInput): string[] {
+    if (input.dependencies.length === 0) {
+        return [];
+    }
+    const allowedRelations = new Set<string>([
+        `${input.entitySchemaName}.${input.baseViewName}`.toLowerCase(),
+        ...input.registeredAlternateViewNames,
+    ]);
+    const externalRelations: string[] = [];
+    for (const dep of input.dependencies) {
+        const depType = (dep.ReferencedType ?? '').toUpperCase();
+        if (depType.includes('FUNCTION') && isEntityHierarchyFunction(dep.ReferencedObject)) {
+            continue;
+        }
+        const depSchema = dep.ReferencedSchema || input.entitySchemaName;
+        const depKey = `${depSchema}.${dep.ReferencedObject}`.toLowerCase();
+        if (!allowedRelations.has(depKey) && !externalRelations.includes(`${depSchema}.${dep.ReferencedObject}`)) {
+            externalRelations.push(`${depSchema}.${dep.ReferencedObject}`);
+        }
+    }
+    return externalRelations;
+}
+
 /**
  * Pure parity and safety evaluator for a registered alternate base view (Phase 4.3).
- * Checks:
- *  1. View absent in the database.
- *  2. Missing `BaseView` columns (violates D10 column-parity contract).
- *  3. View not dependent on `BaseView` (or its `ParentView`) in the catalog (`sys.sql_expression_dependencies` / `pg_depend`).
- *  4. View definition references non-deterministic clock functions (`GETDATE`, `CURRENT_TIMESTAMP`, `NOW()`, etc.) or external tables/views while `CachePolicy === 'Default'`.
  */
 export function EvaluateAlternateBaseViewParityAndSafety(
     input: AlternateBaseViewAuditInput
@@ -101,7 +172,6 @@ export function EvaluateAlternateBaseViewParityAndSafety(
         return warnings;
     }
 
-    // 1. Missing BaseView columns
     const altColSet = new Set(input.viewColumns.map((c) => c.toLowerCase()));
     const missingCols = input.baseViewColumns.filter((c) => !altColSet.has(c.toLowerCase()));
     if (missingCols.length > 0) {
@@ -110,71 +180,27 @@ export function EvaluateAlternateBaseViewParityAndSafety(
         );
     }
 
-    // 2. Dependency on BaseView (or ParentView)
-    const expectedSchema = alt.ParentView ? alt.ParentView.EffectiveSchemaName : input.entitySchemaName;
-    const expectedObject = alt.ParentView ? alt.ParentView.ViewName : input.baseViewName;
-    const expectedLabel = alt.ParentView ? `parent alternate view '${alt.ParentView.Name}'` : 'BaseView';
-
-    let dependsOnExpected = false;
-    if (input.dependencies.length > 0) {
-        dependsOnExpected = input.dependencies.some(
-            (d) =>
-                d.ReferencedObject.toLowerCase() === expectedObject.toLowerCase() &&
-                (!d.ReferencedSchema || d.ReferencedSchema.toLowerCase() === expectedSchema.toLowerCase())
-        );
-    } else if (input.viewDefinition) {
-        dependsOnExpected = input.viewDefinition.toLowerCase().includes(expectedObject.toLowerCase());
-    }
-
-    if (!dependsOnExpected) {
+    if (!checkAlternateViewExpectedDependency(input)) {
+        const expectedSchema = alt.ParentView ? alt.ParentView.EffectiveSchemaName : input.entitySchemaName;
+        const expectedObject = alt.ParentView ? alt.ParentView.ViewName : input.baseViewName;
+        const expectedLabel = alt.ParentView ? `parent alternate view '${alt.ParentView.Name}'` : 'BaseView';
         warnings.push(
             `[AlternateBaseView] Entity '${input.entityName}' alternate view '${alt.Name}' (${qualifiedAlt}) does not depend on ${expectedLabel} '${expectedSchema}.${expectedObject}' (breaks D10).`
         );
     }
 
-    // 3. CachePolicy = 'Default' safety checks (clock functions & external table dependencies)
     if (alt.CachePolicy === 'Default') {
-        if (input.viewDefinition) {
-            const stripped = stripSQLCommentsAndStringsForAudit(input.viewDefinition);
-            const clockMatches = new Set<string>();
-            const fnCallRegex = /\b(GETDATE|GETUTCDATE|SYSDATETIME|SYSDATETIMEOFFSET|SYSUTCDATETIME|NOW|CLOCK_TIMESTAMP|STATEMENT_TIMESTAMP|TRANSACTION_TIMESTAMP)\s*\(/gi;
-            let m: RegExpExecArray | null;
-            while ((m = fnCallRegex.exec(stripped)) !== null) {
-                clockMatches.add(m[1].toUpperCase() + '()');
-            }
-            const kwClockRegex = /\b(CURRENT_TIMESTAMP|LOCALTIMESTAMP|CURRENT_DATE|CURRENT_TIME)\b/gi;
-            while ((m = kwClockRegex.exec(stripped)) !== null) {
-                clockMatches.add(m[1].toUpperCase());
-            }
-            if (clockMatches.size > 0) {
-                warnings.push(
-                    `[AlternateBaseView] Entity '${input.entityName}' alternate view '${alt.Name}' (${qualifiedAlt}) references clock expression(s) (${[...clockMatches].join(', ')}) while CachePolicy = 'Default'. Set CachePolicy = 'Bypass' so time-sensitive predicates do not serve stale cached results.`
-                );
-            }
+        const clockMatches = findClockExpressionsInViewDefinition(input.viewDefinition);
+        if (clockMatches.length > 0) {
+            warnings.push(
+                `[AlternateBaseView] Entity '${input.entityName}' alternate view '${alt.Name}' (${qualifiedAlt}) references clock expression(s) (${clockMatches.join(', ')}) while CachePolicy = 'Default'. Set CachePolicy = 'Bypass' so time-sensitive predicates do not serve stale cached results.`
+            );
         }
-
-        if (input.dependencies.length > 0) {
-            const allowedRelations = new Set<string>([
-                `${input.entitySchemaName}.${input.baseViewName}`.toLowerCase(),
-                ...input.registeredAlternateViewNames,
-            ]);
-            const externalRelations: string[] = [];
-            for (const dep of input.dependencies) {
-                const depType = (dep.ReferencedType ?? '').toUpperCase();
-                if (depType.includes('FUNCTION')) {
-                    continue;
-                }
-                const depSchema = dep.ReferencedSchema || input.entitySchemaName;
-                const depKey = `${depSchema}.${dep.ReferencedObject}`.toLowerCase();
-                if (!allowedRelations.has(depKey) && !externalRelations.includes(`${depSchema}.${dep.ReferencedObject}`)) {
-                    externalRelations.push(`${depSchema}.${dep.ReferencedObject}`);
-                }
-            }
-            if (externalRelations.length > 0) {
-                warnings.push(
-                    `[AlternateBaseView] Entity '${input.entityName}' alternate view '${alt.Name}' (${qualifiedAlt}) depends on external relation(s) (${externalRelations.join(', ')}) while CachePolicy = 'Default'. Cache invalidation only tracks saves to '${input.entityName}'; consider setting CachePolicy = 'Bypass'.`
-                );
-            }
+        const externalRelations = findExternalDependenciesForDefaultCache(input);
+        if (externalRelations.length > 0) {
+            warnings.push(
+                `[AlternateBaseView] Entity '${input.entityName}' alternate view '${alt.Name}' (${qualifiedAlt}) depends on external relation(s) (${externalRelations.join(', ')}) while CachePolicy = 'Default'. Cache invalidation only tracks saves to '${input.entityName}'; consider setting CachePolicy = 'Bypass'.`
+            );
         }
     }
 
@@ -607,6 +633,7 @@ export class SQLCodeGenBase {
             // STEP 4.5 - Emit sp_refreshview for modified custom base view entities into the
             // migration log file so other environments pick up schema changes automatically.
             this.emitCustomBaseViewRefreshes();
+            await this.validateAlternateBaseViewsForEntities(pool, includedEntities);
 
             // STEP 5 - execute any custom SQL scripts that should run afterwards
             StartSpinner('Running post-generation SQL scripts...');
@@ -1070,13 +1097,18 @@ export class SQLCodeGenBase {
                     );
                     return { Success: false, Files: files };
                 }
+                await this.validateAlternateBaseViews(options.pool, options.entity);
                 return { Success: true, Files: files };
             }
 
             // Fallback: original monolithic path (SQL Server; also the path when
             // `onlyPermissions` is set — then we just want the permissions SQL).
+            const execSuccess = await this.SQLUtilityObject.executeSQLScript(options.pool, sql + "\n\nGO\n\n" + permissionsSQL, true);
+            if (execSuccess && !options.onlyPermissions) {
+                await this.validateAlternateBaseViews(options.pool, options.entity);
+            }
             return {
-                Success: await this.SQLUtilityObject.executeSQLScript(options.pool, sql + "\n\nGO\n\n" + permissionsSQL, true),
+                Success: execSuccess,
                 Files: files
             }
         }
@@ -1655,9 +1687,6 @@ export class SQLCodeGenBase {
             // inside SQL Server's sp_executesql literal, but on PostgreSQL the inner
             // `DO $if_view_exists$` reuses the outer dollar-quote tag and the script fails to parse.
             if (!options.entity.BaseViewGenerated) {
-                if (!options.onlyPermissions && !options.entity.HasLayeredBaseView && !options.entity.VirtualEntity) {
-                    await this.validateAlternateBaseViews(options.pool, options.entity);
-                }
                 sRet += this.generateCustomBaseViewRefreshAndPermissions(options.entity, permHeader, rawPermBody);
             }
 
@@ -2473,7 +2502,6 @@ export class SQLCodeGenBase {
                 viewSQL += separator + altRefreshStatements.join(separator);
             }
         }
-        await this.validateAlternateBaseViews(pool, entity);
         return {
             viewSQL,
             viewPermSQL: permissions,
@@ -2493,23 +2521,53 @@ export class SQLCodeGenBase {
     }
 
     /**
-     * Returns usable (`Status !== 'Disabled'`) alternate base views for `entity`,
-     * ordered topologically by `ParentID` so parent views precede derived child views.
+     * Validates that an alternate base view's `EffectiveSchemaName` and `ViewName`
+     * (and its `ParentView`'s when present) are valid SQL identifiers before splicing
+     * into generated DDL or catalog queries.
      */
-    protected getOrderedAlternateBaseViews(entity: EntityInfo): EntityAlternateBaseViewInfo[] {
-        const views = (entity.AlternateBaseViews ?? []).filter((v) => v.Status !== 'Disabled');
+    protected hasValidAlternateViewIdentifiers(entity: EntityInfo, altView: EntityAlternateBaseViewInfo): boolean {
+        if (!IsValidSQLIdentifier(altView.EffectiveSchemaName) || !IsValidSQLIdentifier(altView.ViewName)) {
+            logError(
+                `[AlternateBaseView] Skipping alternate view '${altView.Name}' on entity '${entity.Name}': invalid SQL identifier '${altView.EffectiveSchemaName}.${altView.ViewName}'.`
+            );
+            return false;
+        }
+        if (altView.ParentView && (!IsValidSQLIdentifier(altView.ParentView.EffectiveSchemaName) || !IsValidSQLIdentifier(altView.ParentView.ViewName))) {
+            logError(
+                `[AlternateBaseView] Skipping alternate view '${altView.Name}' on entity '${entity.Name}': parent view has invalid SQL identifier '${altView.ParentView.EffectiveSchemaName}.${altView.ParentView.ViewName}'.`
+            );
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Returns all registered alternate base views with valid SQL identifiers for `entity`
+     * (including `Status === 'Disabled'`), ordered topologically by `ParentID`.
+     */
+    protected getOrderedAllAlternateBaseViews(entity: EntityInfo): EntityAlternateBaseViewInfo[] {
+        const views = (entity.AlternateBaseViews ?? []).filter((v) => this.hasValidAlternateViewIdentifiers(entity, v));
         return OrderAlternateBaseViewsTopologically(views);
     }
 
     /**
+     * Returns usable (`Status !== 'Disabled'`) alternate base views for `entity`,
+     * ordered topologically by `ParentID` so parent views precede derived child views.
+     */
+    protected getOrderedAlternateBaseViews(entity: EntityInfo): EntityAlternateBaseViewInfo[] {
+        return this.getOrderedAllAlternateBaseViews(entity).filter((v) => v.Status !== 'Disabled');
+    }
+
+    /**
      * Builds guarded refresh/rebind statements for each registered alternate base view on `entity`
-     * in topological `ParentID` order.
+     * (including `Disabled` views so `Active` children of a `Disabled` parent and re-enabled views
+     * never hold stale column metadata) in topological `ParentID` order.
      */
     protected getAlternateBaseViewRefreshStatements(entity: EntityInfo): string[] {
         if (entity.VirtualEntity) {
             return [];
         }
-        const ordered = this.getOrderedAlternateBaseViews(entity);
+        const ordered = this.getOrderedAllAlternateBaseViews(entity);
         if (ordered.length === 0) {
             return [];
         }
@@ -2533,21 +2591,28 @@ export class SQLCodeGenBase {
     }
 
     /**
-     * Generates guarded permission statements (REVOKE + GRANT SELECT + SQL Server FLS DENY SELECT)
-     * for each usable alternate base view on `entity` in topological order.
+     * Generates guarded permission statements for each registered alternate base view on `entity`:
+     *  - Usable (`Active` / `Deprecated`) views receive `GenerateViewPermissionsForTarget` (REVOKE + GRANT SELECT + FLS DENY SELECT).
+     *  - `Disabled` views receive `GenerateDisabledViewRevokePermissionsForTarget` (REVOKE SELECT) so disabling a view revokes database read grants.
      */
     protected generateAlternateBaseViewsPermissionsSQL(entity: EntityInfo): string {
-        const ordered = this.getOrderedAlternateBaseViews(entity);
+        const ordered = this.getOrderedAllAlternateBaseViews(entity);
         if (ordered.length === 0) {
             return '';
         }
         let sOutput = '';
         for (const altView of ordered) {
-            const rawPerm = this._dbProvider.GenerateViewPermissionsForTarget(
-                entity,
-                altView.EffectiveSchemaName,
-                altView.ViewName
-            );
+            const rawPerm = altView.Status === 'Disabled'
+                ? this._dbProvider.GenerateDisabledViewRevokePermissionsForTarget(
+                    entity,
+                    altView.EffectiveSchemaName,
+                    altView.ViewName
+                )
+                : this._dbProvider.GenerateViewPermissionsForTarget(
+                    entity,
+                    altView.EffectiveSchemaName,
+                    altView.ViewName
+                );
             if (rawPerm.trim().length > 0) {
                 sOutput += '\n' + this._dbProvider.generateIfViewExistsSQL(
                     altView.EffectiveSchemaName,
@@ -2557,6 +2622,18 @@ export class SQLCodeGenBase {
             }
         }
         return sOutput;
+    }
+
+    protected async validateAlternateBaseViewsForEntities(
+        pool: CodeGenConnection | null | undefined,
+        entities: readonly EntityInfo[],
+    ): Promise<void> {
+        if (!pool || typeof pool.query !== 'function') {
+            return;
+        }
+        for (const entity of entities) {
+            await this.validateAlternateBaseViews(pool, entity);
+        }
     }
 
     /**
@@ -2574,78 +2651,104 @@ export class SQLCodeGenBase {
         }
         const baseViewColumns = entity.Fields.map((f) => f.Name);
         const registeredAltNames = new Set<string>(
-            (entity.AlternateBaseViews ?? []).map(
+            this.getOrderedAllAlternateBaseViews(entity).map(
                 (v) => `${v.EffectiveSchemaName}.${v.ViewName}`.toLowerCase()
             )
         );
-
         for (const altView of ordered) {
+            await this.auditSingleAlternateBaseView(pool, entity, altView, baseViewColumns, registeredAltNames);
+        }
+    }
+
+    private async auditSingleAlternateBaseView(
+        pool: CodeGenConnection,
+        entity: EntityInfo,
+        altView: EntityAlternateBaseViewInfo,
+        baseViewColumns: readonly string[],
+        registeredAltNames: ReadonlySet<string>,
+    ): Promise<void> {
+        try {
+            const facts = await this.fetchAlternateViewCatalogFacts(pool, entity, altView);
+            const parentView = altView.ParentView;
+            const warnings = EvaluateAlternateBaseViewParityAndSafety({
+                entityName: entity.Name,
+                entitySchemaName: entity.SchemaName,
+                baseViewName: entity.BaseView,
+                baseViewColumns,
+                registeredAlternateViewNames: registeredAltNames,
+                alternateView: {
+                    Name: altView.Name,
+                    EffectiveSchemaName: altView.EffectiveSchemaName,
+                    ViewName: altView.ViewName,
+                    CachePolicy: altView.CachePolicy,
+                    ParentView: parentView
+                        ? {
+                              Name: parentView.Name,
+                              EffectiveSchemaName: parentView.EffectiveSchemaName,
+                              ViewName: parentView.ViewName,
+                          }
+                        : undefined,
+                },
+                viewExists: facts.viewExists,
+                viewColumns: facts.viewColumns,
+                viewDefinition: facts.viewDefinition,
+                dependencies: facts.dependencies,
+            });
+            for (const warning of warnings) {
+                LogWarning(`   ⚠️  ${warning}`);
+            }
+        } catch (e) {
+            LogIf(configInfo.verboseOutput, `Could not audit alternate base view ${altView.Name} on ${entity.Name}: ${e}`);
+        }
+    }
+
+    private async fetchAlternateViewCatalogFacts(
+        pool: CodeGenConnection,
+        entity: EntityInfo,
+        altView: EntityAlternateBaseViewInfo,
+    ): Promise<{
+        viewExists: boolean;
+        viewColumns: string[];
+        viewDefinition: string | null;
+        dependencies: AlternateBaseViewDependencyEntry[];
+    }> {
+        const colSQL = this._dbProvider.getViewColumnsSQL(altView.EffectiveSchemaName, altView.ViewName);
+        const colResult = await pool.query(colSQL);
+        const viewColumns = (colResult.recordset ?? [])
+            .map((r: Record<string, unknown>) => String(r.FieldName ?? r.fieldname ?? ''))
+            .filter((n) => n.length > 0);
+        const viewExists = viewColumns.length > 0;
+        let viewDefinition: string | null = null;
+        let dependencies: AlternateBaseViewDependencyEntry[] = [];
+        if (viewExists) {
             try {
-                const colSQL = this._dbProvider.getViewColumnsSQL(altView.EffectiveSchemaName, altView.ViewName);
-                const colResult = await pool.query(colSQL);
-                const viewColumns = (colResult.recordset ?? []).map((r: Record<string, unknown>) =>
-                    String(r.FieldName ?? r.fieldname ?? '')
-                ).filter((n) => n.length > 0);
-                const viewExists = viewColumns.length > 0;
-
-                let viewDefinition: string | null = null;
-                let dependencies: AlternateBaseViewDependencyEntry[] = [];
-                if (viewExists) {
-                    try {
-                        const defSQL = this._dbProvider.getViewDefinitionSQL(altView.EffectiveSchemaName, altView.ViewName);
-                        const defRes = await pool.query(defSQL);
-                        viewDefinition = defRes.recordset?.[0]?.ViewDefinition ?? defRes.recordset?.[0]?.viewdefinition ?? null;
-                    } catch {
-                        viewDefinition = null;
-                    }
-                    try {
-                        const depSQL = this._dbProvider.getViewDependenciesSQL(altView.EffectiveSchemaName, altView.ViewName);
-                        if (depSQL && depSQL.trim().length > 0) {
-                            const depRes = await pool.query(depSQL);
-                            dependencies = (depRes.recordset ?? []).map((r: Record<string, unknown>) => ({
-                                ReferencedSchema: String(r.ReferencedSchema ?? r.referencedschema ?? ''),
-                                ReferencedObject: String(r.ReferencedObject ?? r.referencedobject ?? ''),
-                                ReferencedType: r.ReferencedType != null ? String(r.ReferencedType) : undefined,
-                            })).filter((d) => d.ReferencedObject.length > 0);
-                        }
-                    } catch {
-                        dependencies = [];
-                    }
+                const defSQL = this._dbProvider.getViewDefinitionSQL(altView.EffectiveSchemaName, altView.ViewName);
+                const defRes = await pool.query(defSQL);
+                viewDefinition = defRes.recordset?.[0]?.ViewDefinition ?? defRes.recordset?.[0]?.viewdefinition ?? null;
+            } catch (err) {
+                LogWarning(
+                    `   ⚠️  [AlternateBaseView] Could not inspect view definition for ${altView.EffectiveSchemaName}.${altView.ViewName} on '${entity.Name}': ${err instanceof Error ? err.message : String(err)}`
+                );
+            }
+            try {
+                const depSQL = this._dbProvider.getViewDependenciesSQL(altView.EffectiveSchemaName, altView.ViewName);
+                if (depSQL && depSQL.trim().length > 0) {
+                    const depRes = await pool.query(depSQL);
+                    dependencies = (depRes.recordset ?? [])
+                        .map((r: Record<string, unknown>) => ({
+                            ReferencedSchema: String(r.ReferencedSchema ?? r.referencedschema ?? ''),
+                            ReferencedObject: String(r.ReferencedObject ?? r.referencedobject ?? ''),
+                            ReferencedType: r.ReferencedType != null ? String(r.ReferencedType) : undefined,
+                        }))
+                        .filter((d) => d.ReferencedObject.length > 0);
                 }
-
-                const parentView = altView.ParentView;
-                const warnings = EvaluateAlternateBaseViewParityAndSafety({
-                    entityName: entity.Name,
-                    entitySchemaName: entity.SchemaName,
-                    baseViewName: entity.BaseView,
-                    baseViewColumns,
-                    registeredAlternateViewNames: registeredAltNames,
-                    alternateView: {
-                        Name: altView.Name,
-                        EffectiveSchemaName: altView.EffectiveSchemaName,
-                        ViewName: altView.ViewName,
-                        CachePolicy: altView.CachePolicy,
-                        ParentView: parentView
-                            ? {
-                                  Name: parentView.Name,
-                                  EffectiveSchemaName: parentView.EffectiveSchemaName,
-                                  ViewName: parentView.ViewName,
-                              }
-                            : undefined,
-                    },
-                    viewExists,
-                    viewColumns,
-                    viewDefinition,
-                    dependencies,
-                });
-
-                for (const warning of warnings) {
-                    LogWarning(`   ⚠️  ${warning}`);
-                }
-            } catch (e) {
-                LogIf(configInfo.verboseOutput, `Could not audit alternate base view ${altView.Name} on ${entity.Name}: ${e}`);
+            } catch (err) {
+                LogWarning(
+                    `   ⚠️  [AlternateBaseView] Could not inspect catalog dependencies for ${altView.EffectiveSchemaName}.${altView.ViewName} on '${entity.Name}': ${err instanceof Error ? err.message : String(err)}`
+                );
             }
         }
+        return { viewExists, viewColumns, viewDefinition, dependencies };
     }
 
     /**

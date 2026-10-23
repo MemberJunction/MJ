@@ -166,7 +166,7 @@ export class GetEntityDetailsAction extends BaseAction {
             }
 
             const alternateBaseViews = (entity.AlternateBaseViews ?? [])
-                .filter(abv => abv.IsUsable)
+                .filter(abv => (abv.IsUsable ?? abv.Status !== 'Disabled') && !(abv.IsDeprecated ?? abv.Status === 'Deprecated'))
                 .map(abv => ({
                     ID: abv.ID,
                     Name: abv.Name,

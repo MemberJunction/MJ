@@ -151,6 +151,29 @@ export class MJQueryEntityExtended extends MJQueryEntity {
             return { canRun: false, deniedEntities: [] };
         }
 
+        const deniedEntities: string[] = [];
+        const queryEntities = this.QueryEntities;
+        const md = this.ProviderToUse as unknown as IMetadataProvider;
+
+        // Step 1b: Any referenced AlternateBaseView that is disabled or missing cannot execute
+        // regardless of whether the query has explicit QueryPermissions (stored-procedure semantics
+        // do not re-enable a disabled SQL view whose SELECT grant was revoked).
+        if (queryEntities && queryEntities.length > 0) {
+            for (const qe of queryEntities) {
+                if (!qe.AlternateBaseViewID) continue;
+                const entityInfo = md.EntityByID(qe.EntityID);
+                if (!entityInfo) continue;
+                const abv = IndexByUUID(entityInfo.AlternateBaseViews ?? []).Get(qe.AlternateBaseViewID);
+                if (!abv || !abv.IsUsable) {
+                    const label = abv?.Name ?? qe.AlternateBaseView ?? qe.AlternateBaseViewID;
+                    deniedEntities.push(`${entityInfo.Name} (AlternateBaseView '${label}' is unavailable)`);
+                }
+            }
+            if (deniedEntities.length > 0) {
+                return { canRun: false, deniedEntities };
+            }
+        }
+
         // Step 2: Explicit Query Permissions override entity checks for this query
         // and all its dependencies (stored-procedure semantics)
         const permissions = this.QueryPermissions;
@@ -159,10 +182,7 @@ export class MJQueryEntityExtended extends MJQueryEntity {
         }
 
         // Step 3: No explicit permissions — check entity read access
-        const deniedEntities: string[] = [];
-        const queryEntities = this.QueryEntities;
         if (queryEntities && queryEntities.length > 0) {
-            const md = this.ProviderToUse as unknown as IMetadataProvider;
             for (const qe of queryEntities) {
                 const entityInfo = md.EntityByID(qe.EntityID);
                 if (!entityInfo) continue;  // Stale reference — skip
@@ -170,14 +190,6 @@ export class MJQueryEntityExtended extends MJQueryEntity {
                 const perms = entityInfo.GetUserPermisions(user);
                 if (!perms || !perms.CanRead) {
                     deniedEntities.push(entityInfo.Name);
-                    continue;
-                }
-
-                if (qe.AlternateBaseViewID) {
-                    const abv = IndexByUUID(entityInfo.AlternateBaseViews ?? []).Get(qe.AlternateBaseViewID);
-                    if (!abv || !abv.IsUsable) {
-                        deniedEntities.push(`${entityInfo.Name} (${abv?.Name ?? qe.AlternateBaseView ?? qe.AlternateBaseViewID})`);
-                    }
                 }
             }
         }

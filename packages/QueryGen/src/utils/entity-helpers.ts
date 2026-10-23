@@ -25,7 +25,7 @@ import {
  */
 export function FormatEntityMetadataForPrompt(entity: EntityInfo, allEntities: EntityInfo[]): EntityMetadataForPrompt {
   const usableAlternateViews = (entity.AlternateBaseViews ?? []).filter(
-    (v) => v.IsUsable && v.Status === 'Active'
+    (v) => (v.IsUsable ?? v.Status !== 'Disabled') && !(v.IsDeprecated ?? v.Status === 'Deprecated')
   );
   return {
     entityName: entity.Name,

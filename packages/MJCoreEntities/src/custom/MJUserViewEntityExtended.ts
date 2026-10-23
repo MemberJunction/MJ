@@ -199,7 +199,9 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
      * entity's canonical `BaseView`.
      */
     public get AlternateBaseView(): string | null {
-        const val = this.ParsedDisplayState?.alternateBaseView?.trim();
+        const parsed = this.ParsedDisplayState as (ViewDisplayState & { AlternateBaseView?: string }) | null;
+        const raw = parsed?.alternateBaseView ?? parsed?.AlternateBaseView;
+        const val = typeof raw === 'string' ? raw.trim() : undefined;
         return val && val.length > 0 ? val : null;
     }
 
@@ -208,7 +210,9 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
      */
     public set AlternateBaseView(value: string | null) {
         const trimmed = value?.trim() || undefined;
-        const current = this.ParsedDisplayState || { defaultMode: 'grid' as const };
+        const current: ViewDisplayState & { AlternateBaseView?: string } =
+            this.ParsedDisplayState || { defaultMode: 'grid' as const };
+        delete current.AlternateBaseView;
         if (trimmed) {
             current.alternateBaseView = trimmed;
         } else {
@@ -470,7 +474,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
             if (!this.IsSaved ||
                 options?.IgnoreDirtyState || 
                 this.smartFilterPending ||
-                this.alternateBaseViewDirty ||
+                (Boolean(this.SmartFilterEnabled) && this.alternateBaseViewDirty) ||
                 filterStateField?.Dirty ||
                 smartFilterEnabledField?.Dirty ||
                 smartFilterPromptField?.Dirty) {

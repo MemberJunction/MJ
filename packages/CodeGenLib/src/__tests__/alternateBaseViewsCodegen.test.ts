@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { EntityInfo, EntityAlternateBaseViewInfo } from '@memberjunction/core';
 import { SQLServerCodeGenProvider } from '../Database/providers/sqlserver/SQLServerCodeGenProvider';
 import { PostgreSQLCodeGenProvider } from '../Database/providers/postgresql/PostgreSQLCodeGenProvider';
+import { OrderAlternateBaseViewsTopologically } from '../Database/codeGenDatabaseProvider';
 import {
     SQLCodeGenBase,
-    OrderAlternateBaseViewsTopologically,
     EvaluateAlternateBaseViewParityAndSafety,
 } from '../Database/sql_codegen';
 
@@ -190,21 +190,23 @@ describe('Phase 4 — CodeGen Alternate Base Views Upkeep', () => {
             codegen.DBProvider = provider;
         });
 
-        it('emits topological sp_refreshview guarded by IF OBJECT_ID for usable alternate views only', () => {
+        it('emits topological sp_refreshview guarded by IF OBJECT_ID for all registered alternate views (including Disabled)', () => {
             const entity = createMockEntityWithAlternateViews();
             const statements = (
                 codegen as unknown as { getAlternateBaseViewRefreshStatements(e: EntityInfo): string[] }
             ).getAlternateBaseViewRefreshStatements(entity);
 
-            expect(statements).toHaveLength(2);
+            expect(statements).toHaveLength(3);
             // Parent ('vwMembersActive') must be refreshed before child ('vwMembersActiveAutoRenew')
             expect(statements[0]).toContain("IF OBJECT_ID('[crm].[vwMembersActive]', 'V') IS NOT NULL");
             expect(statements[0]).toContain("sp_refreshview ''crm.vwMembersActive''");
             expect(statements[1]).toContain("IF OBJECT_ID('[crm].[vwMembersActiveAutoRenew]', 'V') IS NOT NULL");
             expect(statements[1]).toContain("sp_refreshview ''crm.vwMembersActiveAutoRenew''");
+            expect(statements[2]).toContain("IF OBJECT_ID('[crm].[vwMembersLegacy]', 'V') IS NOT NULL");
+            expect(statements[2]).toContain("sp_refreshview ''crm.vwMembersLegacy''");
         });
 
-        it('emits REVOKE, GRANT SELECT, and column-level FLS DENY SELECT on each alternate view', () => {
+        it('emits REVOKE, GRANT SELECT, and column-level FLS DENY SELECT on usable alternate views and REVOKE on Disabled views', () => {
             const entity = createMockEntityWithAlternateViews();
             const permSQL = (
                 codegen as unknown as { generateAlternateBaseViewsPermissionsSQL(e: EntityInfo): string }
@@ -215,7 +217,36 @@ describe('Phase 4 — CodeGen Alternate Base Views Upkeep', () => {
             expect(permSQL).toContain('GRANT SELECT ON [crm].[vwMembersActive] TO [cdp_UI], [role_RestrictedAnalyst]');
             expect(permSQL).toContain('DENY SELECT ([SSN]) ON [crm].[vwMembersActive] TO [role_RestrictedAnalyst]');
             expect(permSQL).toContain('DENY SELECT ([SSN]) ON [crm].[vwMembersActiveAutoRenew] TO [role_RestrictedAnalyst]');
-            expect(permSQL).not.toContain('vwMembersLegacy');
+            expect(permSQL).toContain('REVOKE SELECT ON [crm].[vwMembersLegacy] FROM [cdp_UI], [role_RestrictedAnalyst]');
+            expect(permSQL).not.toContain('GRANT SELECT ON [crm].[vwMembersLegacy]');
+        });
+
+        it('skips alternate base views whose SchemaName or ViewName is not a valid SQL identifier', () => {
+            const entity = new EntityInfo({
+                ...createMockEntityWithAlternateViews().InitData,
+                EntityAlternateBaseViews: [
+                    {
+                        ID: 'abv-bad',
+                        EntityID: '11111111-1111-1111-1111-111111111111',
+                        ParentID: null,
+                        Name: 'BadView',
+                        SchemaName: 'crm',
+                        ViewName: "vwBad']; DROP TABLE [crm].[Member]; --",
+                        CachePolicy: 'Default',
+                        Status: 'Active',
+                        Sequence: 1,
+                    },
+                ],
+            });
+            const statements = (
+                codegen as unknown as { getAlternateBaseViewRefreshStatements(e: EntityInfo): string[] }
+            ).getAlternateBaseViewRefreshStatements(entity);
+            const permSQL = (
+                codegen as unknown as { generateAlternateBaseViewsPermissionsSQL(e: EntityInfo): string }
+            ).generateAlternateBaseViewsPermissionsSQL(entity);
+
+            expect(statements).toEqual([]);
+            expect(permSQL).toBe('');
         });
     });
 
@@ -235,15 +266,17 @@ describe('Phase 4 — CodeGen Alternate Base Views Upkeep', () => {
                 codegen as unknown as { getAlternateBaseViewRefreshStatements(e: EntityInfo): string[] }
             ).getAlternateBaseViewRefreshStatements(entity);
 
-            expect(statements).toHaveLength(2);
+            expect(statements).toHaveLength(3);
             // Parent ('vwMembersActive') rebinds against BaseView ('vwMembers')
             expect(statements[0]).toContain('spRebindLayeredOuterView');
             expect(statements[0]).toContain("''crm'', ''vwMembersActive'', ''vwMembers''");
             // Child ('vwMembersActiveAutoRenew') rebinds against parent ('vwMembersActive')
             expect(statements[1]).toContain("''crm'', ''vwMembersActiveAutoRenew'', ''vwMembersActive''");
+            // Disabled ('vwMembersLegacy') is also rebound so re-enabling does not leave stale expansion
+            expect(statements[2]).toContain("''crm'', ''vwMembersLegacy'', ''vwMembers''");
         });
 
-        it('emits guarded GRANT SELECT for each usable alternate view on PostgreSQL', () => {
+        it('emits guarded GRANT SELECT for each usable alternate view and REVOKE SELECT for Disabled views on PostgreSQL', () => {
             const entity = createMockEntityWithAlternateViews();
             const permSQL = (
                 codegen as unknown as { generateAlternateBaseViewsPermissionsSQL(e: EntityInfo): string }
@@ -251,7 +284,8 @@ describe('Phase 4 — CodeGen Alternate Base Views Upkeep', () => {
 
             expect(permSQL).toContain('GRANT SELECT ON "crm"."vwMembersActive" TO "cdp_UI"');
             expect(permSQL).toContain('GRANT SELECT ON "crm"."vwMembersActiveAutoRenew" TO "role_RestrictedAnalyst"');
-            expect(permSQL).not.toContain('vwMembersLegacy');
+            expect(permSQL).toContain('REVOKE SELECT ON "crm"."vwMembersLegacy" FROM "cdp_UI"');
+            expect(permSQL).not.toContain('GRANT SELECT ON "crm"."vwMembersLegacy"');
         });
     });
 

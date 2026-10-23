@@ -198,7 +198,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       if (this._viewEntity && value && !UUIDsEqual(this._viewEntity.EntityID, value.ID)) {
         this._viewEntity = null;
       }
-      if (this._alternateBaseView && value && !value.GetAlternateBaseView(this._alternateBaseView)) {
+      if (this._alternateBaseView && value && !value.GetAlternateBaseView(this._alternateBaseView)?.IsUsable) {
         this._alternateBaseView = null;
       }
       this.viewTypeConfigById.clear();
@@ -1436,18 +1436,22 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
           totalCount: total
         });
       } else {
-        if (this.isInitialLoad) {
-          this.InternalRecords = [];
-        }
+        this.InternalRecords = [];
         this.TotalRecordCount = 0;
         this.FilteredRecordCount = 0;
+        this.Pagination.totalRecords = 0;
+        if (result.ErrorMessage) {
+          LogError(`[EntityViewer] Failed to load data for "${entity.Name}": ${result.ErrorMessage}`);
+          MJNotificationService.Instance.CreateSimpleNotification(result.ErrorMessage, 'error', 5000);
+        }
       }
     } catch (error) {
-      if (this.isInitialLoad) {
-        this.InternalRecords = [];
-      }
+      this.InternalRecords = [];
       this.TotalRecordCount = 0;
       this.FilteredRecordCount = 0;
+      this.Pagination.totalRecords = 0;
+      const errMsg = error instanceof Error ? error.message : String(error);
+      LogError(`[EntityViewer] Exception loading data for "${entity.Name}": ${errMsg}`);
     } finally {
       // Use ngZone.run() to ensure state changes trigger change detection.
       // With es2022 native async/await + zone.js 0.16, the await resumes

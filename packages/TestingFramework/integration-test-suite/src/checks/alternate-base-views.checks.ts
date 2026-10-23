@@ -71,35 +71,23 @@ async function checkMetadataAndValidators(ctx: IntegrationCheckContext): Promise
     Assert(IsValidAlternateBaseViewName('Active Subscribers') === true, 'Active Subscribers is a valid ABV name');
     Assert(IsValidAlternateBaseViewName('Bad|Name') === false, 'Pipe character must be rejected in ABV name');
     Assert(IsValidAlternateBaseViewName('Bad:Name') === false, 'Colon character must be rejected in ABV name');
+    Assert(IsValidAlternateBaseViewName('//LeadingSlashes') === false, 'Leading // must be rejected in ABV name');
+}
+
+interface CatalogQueryProvider {
+    PlatformKey?: string;
+    ExecuteSQL?<T>(query: string): Promise<T[]>;
 }
 
 /**
- * ABV2: Verify physical constraints on `EntityAlternateBaseView` in the database catalog.
+ * ABV2: Verify physical constraints on `EntityAlternateBaseView` in the database catalog
+ * across both SQL Server (`sys.objects`) and PostgreSQL (`pg_constraint`).
  */
 async function checkPhysicalCatalogConstraints(ctx: IntegrationCheckContext): Promise<void> {
-    if (!ctx.Pool) {
-        return;
-    }
-    const result = await ctx.Pool.request().query<{ name: string }>(`
-        SELECT o.name
-          FROM sys.objects o
-          JOIN sys.objects parent ON o.parent_object_id = parent.object_id
-          JOIN sys.schemas s ON parent.schema_id = s.schema_id
-         WHERE s.name = '__mj'
-           AND parent.name = 'EntityAlternateBaseView'
-           AND o.name IN (
-               'CK_EntityAlternateBaseView_Name',
-               'CK_EntityAlternateBaseView_NoSelfParent',
-               'CK_EntityAlternateBaseView_CachePolicy',
-               'CK_EntityAlternateBaseView_Status',
-               'UQ_EntityAlternateBaseView_EntityID_Name',
-               'FK_EntityAlternateBaseView_Entity',
-               'FK_EntityAlternateBaseView_Parent'
-           )
-    `);
-    const found = new Set(result.recordset.map(r => r.name));
     const expected = [
         'CK_EntityAlternateBaseView_Name',
+        'CK_EntityAlternateBaseView_ViewName',
+        'CK_EntityAlternateBaseView_SchemaName',
         'CK_EntityAlternateBaseView_NoSelfParent',
         'CK_EntityAlternateBaseView_CachePolicy',
         'CK_EntityAlternateBaseView_Status',
@@ -107,8 +95,36 @@ async function checkPhysicalCatalogConstraints(ctx: IntegrationCheckContext): Pr
         'FK_EntityAlternateBaseView_Entity',
         'FK_EntityAlternateBaseView_Parent',
     ];
+    let foundLower: Set<string>;
+    if (ctx.Pool) {
+        const result = await ctx.Pool.request().query<{ name: string }>(`
+            SELECT o.name
+              FROM sys.objects o
+              JOIN sys.objects parent ON o.parent_object_id = parent.object_id
+              JOIN sys.schemas s ON parent.schema_id = s.schema_id
+             WHERE s.name = '__mj'
+               AND parent.name = 'EntityAlternateBaseView'
+        `);
+        foundLower = new Set(result.recordset.map(r => r.name.toLowerCase()));
+    } else {
+        const provider = ctx.Provider as unknown as CatalogQueryProvider;
+        if (provider?.PlatformKey === 'postgresql' && typeof provider.ExecuteSQL === 'function') {
+            const rows = await provider.ExecuteSQL<{ name: string }>(`
+                SELECT con.conname AS "name"
+                  FROM pg_constraint con
+                  JOIN pg_class rel ON rel.oid = con.conrelid
+                  JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+                 WHERE nsp.nspname = '__mj'
+                   AND LOWER(rel.relname) = 'entityalternatebaseview'
+            `);
+            foundLower = new Set(rows.map(r => String(r.name).toLowerCase()));
+        } else {
+            console.log(`      → ABV2 SKIPPED (no assertions ran): no catalog access on this run path`);
+            return;
+        }
+    }
     for (const name of expected) {
-        Assert(found.has(name), `Constraint "${name}" must exist on __mj.EntityAlternateBaseView`);
+        Assert(foundLower.has(name.toLowerCase()), `Constraint "${name}" must exist on __mj.EntityAlternateBaseView`);
     }
 }
 
@@ -213,25 +229,88 @@ async function checkRunViewExecutionWithAlternateBaseView(ctx: IntegrationCheckC
         Assert(countRes.Success === true, `AlternateBaseView count_only RunView failed: ${countRes.ErrorMessage}`);
         AssertEqual(countRes.TotalRowCount, 1, 'AlternateBaseView count_only TotalRowCount must be 1');
     });
+
+    await verifyNarrowingPhysicalAlternateView(ctx);
 }
 
 /**
- * Helper: runs a `RunView` expected to fail closed (either by throwing from `PreRunView` /
- * `ResolveAlternateBaseView` or by returning `{ Success: false, ErrorMessage }`) and returns
- * the failure message.
+ * Verifies a real physical narrowing SQL view (`vwUsersActive` on `MJ: Users`) returns only
+ * `IsActive = 1` rows and can be referenced in an `ExtraFilter` subquery via `clientClauseScreen`.
+ */
+async function verifyNarrowingPhysicalAlternateView(ctx: IntegrationCheckContext): Promise<void> {
+    const usersEntity = ctx.Provider.Entities.find(e => e.Name === 'MJ: Users');
+    Assert(usersEntity !== undefined, 'MJ: Users must exist');
+
+    const activeUsersAbv = new EntityAlternateBaseViewInfo(
+        {
+            ID: '00000000-0000-4000-8000-00000000AB03',
+            EntityID: usersEntity!.ID,
+            ParentID: null,
+            Name: 'ActiveUsersCheck',
+            DisplayName: 'Active Users',
+            Description: 'Users where IsActive = 1',
+            SchemaName: usersEntity!.SchemaName,
+            ViewName: 'vwUsersActive',
+            CachePolicy: 'Default',
+            Status: 'Active',
+            Sequence: 1,
+        },
+        usersEntity!.SchemaName,
+    );
+
+    await withTemporaryAlternateBaseView(usersEntity!, activeUsersAbv, async () => {
+        const rv = new RunView();
+        const activeRes = await rv.RunView<{ ID: string; IsActive: boolean }>(
+            {
+                EntityName: 'MJ: Users',
+                AlternateBaseView: 'ActiveUsersCheck',
+                Fields: ['ID', 'IsActive'],
+                MaxRows: 25,
+                ResultType: 'simple',
+            },
+            ctx.User,
+        );
+        Assert(activeRes.Success === true, `vwUsersActive RunView failed: ${activeRes.ErrorMessage}`);
+        for (const row of activeRes.Results) {
+            Assert(Boolean(row.IsActive) === true, `vwUsersActive returned inactive user row ${row.ID}`);
+        }
+
+        const subqueryRes = await rv.RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ: Users',
+                ExtraFilter: `ID IN (SELECT ID FROM [${usersEntity!.SchemaName}].[vwUsersActive])`,
+                Fields: ['ID'],
+                MaxRows: 5,
+                ResultType: 'simple',
+            },
+            ctx.User,
+        );
+        Assert(subqueryRes.Success === true, `Subquery over registered ABV failed: ${subqueryRes.ErrorMessage}`);
+    });
+}
+
+/**
+ * Helper: runs a `RunView` expected to fail closed (either by throwing or by returning
+ * `{ Success: false, ErrorMessage }`) and asserts OUTSIDE `try/catch` that it failed.
  */
 async function expectRunViewToFailClosed(fn: () => Promise<{ Success: boolean; ErrorMessage?: string }>): Promise<string> {
+    let didFail = false;
+    let errorMessage = '';
     try {
         const res = await fn();
-        Assert(res.Success === false, 'RunView with invalid/disabled AlternateBaseView must fail closed');
-        return res.ErrorMessage ?? '';
+        didFail = res.Success === false;
+        errorMessage = res.ErrorMessage ?? '';
     } catch (err) {
-        return err instanceof Error ? err.message : String(err);
+        didFail = true;
+        errorMessage = err instanceof Error ? err.message : String(err);
     }
+    Assert(didFail === true, 'RunView with invalid/disabled AlternateBaseView must fail closed');
+    return errorMessage;
 }
 
 /**
- * ABV4: Prove `RunView` fails closed when `AlternateBaseView` is unknown or `Disabled`.
+ * ABV4: Prove `RunView` fails closed when `AlternateBaseView` is unknown, `Disabled`, or combined
+ * with `DataSource: 'Materialized'`, and honors `AlternateBaseView: ""` to override a `ViewEntity` pin.
  */
 async function checkRunViewFailsClosedOnInvalidOrDisabledAbv(ctx: IntegrationCheckContext): Promise<void> {
     const entity = ctx.Provider.Entities.find(e => e.Name === 'MJ: Entities');
@@ -283,8 +362,25 @@ async function checkRunViewFailsClosedOnInvalidOrDisabledAbv(ctx: IntegrationChe
             ),
         );
         Assert(
-            disabledMessage.toLowerCase().includes('disabled'),
-            `Error message must explain the view is disabled, got: ${disabledMessage}`,
+            disabledMessage.includes('is disabled and cannot be used'),
+            `Error message must state 'is disabled and cannot be used', got: ${disabledMessage}`,
+        );
+
+        const materializedMsg = await expectRunViewToFailClosed(() =>
+            rv.RunView(
+                {
+                    EntityName: 'MJ: Entities',
+                    AlternateBaseView: 'DisabledTestView',
+                    DataSource: 'Materialized',
+                    MaxRows: 1,
+                    ResultType: 'simple',
+                },
+                ctx.User,
+            ),
+        );
+        Assert(
+            materializedMsg.includes('Materialized'),
+            `Error message must reject Materialized + AlternateBaseView, got: ${materializedMsg}`,
         );
     });
 }
@@ -377,6 +473,10 @@ async function checkHierarchyAndEntityLookups(ctx: IntegrationCheckContext): Pro
 
             const byViewName = entity!.GetAlternateBaseViewByViewName('vwEntitiesActiveTrackRecord', 'custom');
             Assert(UUIDsEqual(byViewName?.ID, childAbv.ID), 'GetAlternateBaseViewByViewName must resolve by view and schema');
+
+            // Verify JSON serialization round-trip does not throw on circular ParentView/ChildViews
+            const serialized = JSON.stringify(entity);
+            Assert(serialized.length > 0, 'JSON.stringify(entity) with linked ABV hierarchy must succeed');
         });
     });
 }

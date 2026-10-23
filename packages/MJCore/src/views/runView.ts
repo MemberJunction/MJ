@@ -571,8 +571,12 @@ export class RunViewParams {
         // IsMaterializedDataSource so undefined/'Live' are treated as equal (no spurious reload) while a switch to
         // (or from) 'Materialized' is not — matching the read-routing decision everywhere else.
         if (IsMaterializedDataSource(a.DataSource) !== IsMaterializedDataSource(b.DataSource)) return false;
-        // Switching AlternateBaseView (case-insensitive, trimmed; undefined/'' treated as equal) changes the
-        // underlying SQL view and MUST trigger a reload.
+        // Switching AlternateBaseView (case-insensitive, trimmed) changes the underlying SQL view and MUST trigger
+        // a reload. An explicit empty string (`""`) overrides a saved User View's pinned `DisplayState.alternateBaseView`
+        // back to `BaseView` and therefore differs from `undefined` (which inherits the saved view's pin).
+        const aExplicitBaseOverride = typeof a.AlternateBaseView === 'string' && a.AlternateBaseView.trim().length === 0;
+        const bExplicitBaseOverride = typeof b.AlternateBaseView === 'string' && b.AlternateBaseView.trim().length === 0;
+        if (aExplicitBaseOverride !== bExplicitBaseOverride) return false;
         if (NormalizeAlternateBaseViewName(a.AlternateBaseView) !== NormalizeAlternateBaseViewName(b.AlternateBaseView)) return false;
 
         // Compare ViewEntity by reference (deep comparison would be expensive)
