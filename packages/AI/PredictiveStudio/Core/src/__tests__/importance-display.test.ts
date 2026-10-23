@@ -1,18 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { ImportanceDisplay } from '../importance-display';
 
+const lineage = (kind: string | undefined): string => JSON.stringify({ evaluation: kind === undefined ? {} : { ImportanceKind: kind } });
+
 describe('ImportanceDisplay.GlobalDriversShowable', () => {
-  it('shows coefficient importance (display names and driver keys)', () => {
-    for (const name of ['Logistic Regression', 'logistic_regression', 'Ridge Regression', 'ridge']) {
-      expect(ImportanceDisplay.GlobalDriversShowable(name)).toBe(true);
-    }
-  });
-  it('hides split / impurity importance and models with none', () => {
-    for (const name of ['Random Forest', 'random_forest', 'LightGBM', 'lightgbm', 'XGBoost', 'xgboost', 'Multilayer Perceptron', 'mlp', '', null, undefined]) {
-      expect(ImportanceDisplay.GlobalDriversShowable(name)).toBe(false);
-    }
-  });
-  it('explains why a list is hidden without causal words', () => {
-    expect(ImportanceDisplay.HiddenNote).toMatch(/split or impurity counts/);
+  it('shows coefficient importance', () => expect(ImportanceDisplay.GlobalDriversShowable(lineage('coefficient'))).toBe(true));
+  it('hides split/impurity importance', () => expect(ImportanceDisplay.GlobalDriversShowable(lineage('split_or_impurity'))).toBe(false));
+  it('hides a model with no stored kind (trained before the kind was recorded)', () => {
+    expect(ImportanceDisplay.GlobalDriversShowable(lineage(undefined))).toBe(false);
+    expect(ImportanceDisplay.GlobalDriversShowable(null)).toBe(false);
   });
 });

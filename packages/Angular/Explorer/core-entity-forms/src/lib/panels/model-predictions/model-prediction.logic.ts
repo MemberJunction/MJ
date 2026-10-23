@@ -191,8 +191,8 @@ export function parseDrivers(featureImportanceJson: string | null): PredictionDr
 /** The global drivers a prediction card may show. */
 export class PredictionDrivers {
     /** Global drivers for a model's card: coefficient models only (split / impurity counts are hidden, C4 / F-SC-11). */
-    public static DriversForModel(algorithm: string | null | undefined, featureImportanceJson: string | null): PredictionDriver[] {
-        return ImportanceDisplay.GlobalDriversShowable(algorithm) ? ParseDrivers(featureImportanceJson) : [];
+    public static DriversForModel(lineageJSON: string | null | undefined, featureImportanceJson: string | null): PredictionDriver[] {
+        return ImportanceDisplay.GlobalDriversShowable(lineageJSON) ? ParseDrivers(featureImportanceJson) : [];
     }
 }
 

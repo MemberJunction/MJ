@@ -659,7 +659,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   /** Load the open prediction's plain-language drivers + its latest run's ranked at-risk rows. */
   private async loadAtRisk(c: BusinessPredictionCard): Promise<void> {
     const model = this.engine.PublishedModels.find((m) => UUIDsEqual(m.ID, c.modelId));
-    this.Drivers = ImportanceDisplay.GlobalDriversShowable(model?.Algorithm) ? TopGlobalDrivers(model?.FeatureImportance || null, 3) : [];
+    this.Drivers = ImportanceDisplay.GlobalDriversShowable(model?.Lineage) ? TopGlobalDrivers(model?.FeatureImportance || null, 3) : [];
     this.AtRiskLoading = true;
     this.AtRiskError = null;
     this.cdrLocal.detectChanges();

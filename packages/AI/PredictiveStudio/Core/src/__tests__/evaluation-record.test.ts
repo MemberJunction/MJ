@@ -4,13 +4,13 @@ import { EvaluationLineage, InvalidMajorityBaselineRuleError } from '../evaluati
 describe('evaluation record', () => {
   it('records out-of-sample validation and no withheld reason for an ordinary pipeline', () => {
     expect(EvaluationLineage.Build({ Strategy: 'kfold', K: 5, LockedHoldoutFraction: 0.1 })).toEqual({
-      ValidationOutOfSample: true, TimeIndexColumn: null, EvaluatedAsForecast: false, WithheldReason: null, MajorityBaselineRule: 'enforce',
+      ValidationOutOfSample: true, TimeIndexColumn: null, EvaluatedAsForecast: false, WithheldReason: null, MajorityBaselineRule: 'enforce', ImportanceKind: null,
     });
     expect(EvaluationLineage.Build({ Strategy: 'kfold', K: 5, LockedHoldoutFraction: 0.1 }, { ValidationOutOfSample: false }).ValidationOutOfSample).toBe(false);
   });
   it('withholds the verdict when a time index is declared (not evaluated as a forecast)', () => {
     const record = EvaluationLineage.Build({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex' });
-    expect(record).toEqual({ ValidationOutOfSample: true, TimeIndexColumn: 'MonthIndex', EvaluatedAsForecast: false, WithheldReason: EvaluationLineage.NotEvaluatedAsForecast, MajorityBaselineRule: 'enforce' });
+    expect(record).toEqual({ ValidationOutOfSample: true, TimeIndexColumn: 'MonthIndex', EvaluatedAsForecast: false, WithheldReason: EvaluationLineage.NotEvaluatedAsForecast, MajorityBaselineRule: 'enforce', ImportanceKind: null });
   });
   it('round-trips through the Lineage JSON and tolerates lineage without it', () => {
     const record = EvaluationLineage.Build({ Strategy: 'holdout', LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex', MajorityBaselineRule: 'warn' });

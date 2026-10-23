@@ -122,6 +122,7 @@ export class TrainingEngine {
       const response = await deps.sidecar.train(trainRequest, split.lockedHoldout);
       const evaluation = EvaluationLineage.Build(resolved.validation, {
         ValidationOutOfSample: response.validation_out_of_sample === true,
+        ImportanceKind: response.feature_importance_kind || null,
       });
 
       const dominance = this.checkLeakage(response, resolved.leakageGuard);

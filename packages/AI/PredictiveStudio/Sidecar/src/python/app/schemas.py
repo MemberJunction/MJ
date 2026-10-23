@@ -13,7 +13,7 @@ entry (``Name`` / ``Kind``) and **snake_case** for everything else (``problem_ty
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -21,6 +21,8 @@ from pydantic import BaseModel, Field
 Cell = Union[str, float, int, bool, None]
 
 FeatureKind = str  # 'numeric' | 'categorical' | 'embedding' | 'llm-derived'
+# Which kind of number a feature-importance map holds.
+ImportanceKind = Literal["coefficient", "split_or_impurity", "none"]
 ProblemType = str  # 'classification' | 'regression'
 
 
@@ -93,6 +95,7 @@ class TrainResponse(BaseModel):
     fitted_preprocessing: Dict[str, Any]
     metrics: Dict[str, float]
     feature_importance: Dict[str, float]
+    feature_importance_kind: ImportanceKind = "none"
     training_row_count: int
     duration_sec: float
     holdout_metrics: Optional[Dict[str, float]] = None

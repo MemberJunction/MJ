@@ -105,6 +105,9 @@ export type ModelMetrics = Record<string, number>;
  */
 export type FeatureImportance = Record<string, number>;
 
+/** Which kind of number a `FeatureImportance` map holds: |coefficient|, tree split/impurity counts, or none. */
+export type ImportanceKind = 'coefficient' | 'split_or_impurity' | 'none';
+
 /**
  * Inline data payload — the assembled feature matrix in columnar header +
  * row-array form. The sidecar contract also allows a shared-storage handle
@@ -177,6 +180,8 @@ export interface TrainResponse {
   metrics: ModelMetrics;
   /** Per-feature importance/contribution. */
   feature_importance: FeatureImportance;
+  /** Which kind of number `feature_importance` holds. Absent on sidecars that predate it. */
+  feature_importance_kind?: ImportanceKind;
   /** Number of training rows the model was fit on. */
   training_row_count: number;
   /** Wall-clock training time in seconds. */

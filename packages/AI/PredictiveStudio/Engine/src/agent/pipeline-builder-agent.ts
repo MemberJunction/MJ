@@ -257,9 +257,8 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
       // No measured headline means no number: never stand in a made-up score for an unmeasured model.
       const scoreVal = result.trust?.headlineMetric?.value ?? null;
 
-      const winnerAlgorithm = (result.leaderboard || []).find((r) => r.isWinner)?.algorithm || payload.ProposedExperiments?.[0]?.AlgorithmName || null;
       const rawFeatures = ParseFeatureImportance(result.model?.FeatureImportance).sort((a, b) => b.importance - a.importance);
-      const showable = ImportanceDisplay.GlobalDriversShowable(winnerAlgorithm);
+      const showable = ImportanceDisplay.GlobalDriversShowable(result.model?.Lineage);
       const featureBars = showable ? rawFeatures : [];
       const importanceHidden = rawFeatures.length > 0 && !showable;
 

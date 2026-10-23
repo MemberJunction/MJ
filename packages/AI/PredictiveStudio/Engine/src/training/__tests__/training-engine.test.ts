@@ -235,6 +235,7 @@ const cleanResponse: TrainResponse = {
   fitted_preprocessing: { 'standardize.tenure': { mean: 5, std: 2.5 } },
   metrics: { auc: 0.82, f1: 0.78 },
   feature_importance: { tenure: 0.3, events_at_signup: 0.25, city: 0.2, emb_0: 0.25 },
+  feature_importance_kind: 'split_or_impurity',
   training_row_count: 8,
   duration_sec: 1.4,
   holdout_metrics: { auc: 0.79 },
@@ -448,7 +449,7 @@ describe('TrainingEngine — evaluation record and the time-index containment (T
   it('stores an out-of-sample evaluation record with no withheld reason by default', async () => {
     const { deps } = buildDeps();
     const { model, run } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
-    expect(EvaluationLineage.Read(model.Lineage)).toEqual({ ValidationOutOfSample: true, TimeIndexColumn: null, EvaluatedAsForecast: false, WithheldReason: null, MajorityBaselineRule: 'enforce' });
+    expect(EvaluationLineage.Read(model.Lineage)).toEqual({ ValidationOutOfSample: true, TimeIndexColumn: null, EvaluatedAsForecast: false, WithheldReason: null, MajorityBaselineRule: 'enforce', ImportanceKind: 'split_or_impurity' });
     expect(run.Notes).not.toContain('Trust withheld');
   });
 

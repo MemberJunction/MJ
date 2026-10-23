@@ -451,7 +451,7 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
             StatusLabel: statusLabel,
             BadgeColor: badgeColor,
             BadgeIcon: badgeIcon,
-            Drivers: PredictionDrivers.DriversForModel(model.Algorithm, model.FeatureImportance),
+            Drivers: PredictionDrivers.DriversForModel(model.Lineage, model.FeatureImportance),
             Provenance: `${model.Pipeline} v${model.Version}`,
             LastScored: FormatLastScored(binding.LastScoredAt),
         };

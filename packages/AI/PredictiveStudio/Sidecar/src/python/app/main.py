@@ -20,6 +20,7 @@ from fastapi import FastAPI, HTTPException
 
 from . import algorithms, artifacts, metrics, preprocessing
 from .schemas import (
+    ImportanceKind,
     HealthResponse,
     PredictRequest,
     PredictResponse,
@@ -102,6 +103,7 @@ def train(req: TrainRequest) -> TrainResponse:
         fitted_preprocessing=result["fitted"],
         metrics=result["metrics"],
         feature_importance=result["feature_importance"],
+        feature_importance_kind=result["feature_importance_kind"],
         training_row_count=result["training_row_count"],
         duration_sec=round(duration, 4),
         holdout_metrics=result.get("holdout_metrics"),
@@ -257,13 +259,14 @@ def _run_training(req: TrainRequest) -> Dict[str, Any]:
     if is_classification:
         estimator.mj_label_classes_ = label_classes
 
-    feature_importance = _extract_importance(estimator, output_columns)
+    feature_importance, importance_kind = _extract_importance(estimator, output_columns)
 
     result: Dict[str, Any] = {
         "estimator": estimator,
         "fitted": fitted,
         "metrics": train_metrics,
         "feature_importance": feature_importance,
+        "feature_importance_kind": importance_kind,
         "training_row_count": int(len(rows)),
         "validation_out_of_sample": True,
     }
@@ -527,27 +530,29 @@ def _positive_scores(estimator: Any, X: np.ndarray) -> np.ndarray:
     return np.asarray(estimator.predict(X), dtype=float)
 
 
-def _extract_importance(estimator: Any, columns: List[str]) -> Dict[str, float]:
-    """Build a ``feature_name -> importance`` map from a fitted estimator.
+def _extract_importance(estimator: Any, columns: List[str]) -> Tuple[Dict[str, float], ImportanceKind]:
+    """Build a ``(feature_name -> importance map, kind)`` pair from a fitted estimator.
 
     Prefers ``feature_importances_`` (tree models); falls back to the absolute,
-    class-summed ``coef_`` magnitude (linear models). Returns ``{}`` when the
-    estimator exposes neither. The map drives the leakage guard's single-feature-
+    class-summed ``coef_`` magnitude (linear models). Returns ``({}, "none")`` when the
+    estimator exposes neither. The kind says which of the two numbers the map holds. The map drives the leakage guard's single-feature-
     dominance check (plan §6.4).
     """
     if hasattr(estimator, "feature_importances_"):
         values = np.asarray(estimator.feature_importances_, dtype=float)
+        kind: ImportanceKind = "split_or_impurity"
     elif hasattr(estimator, "coef_"):
         raw = np.asarray(estimator.coef_, dtype=float)
         # Multi-class linear models produce (n_classes, n_features); sum magnitudes across classes
         values = np.sum(np.abs(raw), axis=0) if raw.ndim > 1 else np.abs(raw)
+        kind = "coefficient"
     else:
-        return {}
+        return {}, "none"
     total = float(np.sum(np.abs(values)))
     if total > 0:
         values = values / total
     n = min(len(columns), len(values))
-    return {columns[i]: float(values[i]) for i in range(n)}
+    return {columns[i]: float(values[i]) for i in range(n)}, kind
 
 
 # ---------------------------------------------------------------------------

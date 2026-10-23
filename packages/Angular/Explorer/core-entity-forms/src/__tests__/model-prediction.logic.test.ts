@@ -150,8 +150,8 @@ describe('model-prediction.logic', () => {
     describe('PredictionDrivers.DriversForModel', () => {
         const json = JSON.stringify({ tenure_years: 0.8, nondues_lines_y: 1.7 });
         it('returns drivers for coefficient models only', () => {
-            expect(PredictionDrivers.DriversForModel('Logistic Regression', json).length).toBeGreaterThan(0);
-            expect(PredictionDrivers.DriversForModel('XGBoost', json)).toEqual([]);
+            expect(PredictionDrivers.DriversForModel(JSON.stringify({ evaluation: { ImportanceKind: 'coefficient' } }), json).length).toBeGreaterThan(0);
+            expect(PredictionDrivers.DriversForModel(JSON.stringify({ evaluation: { ImportanceKind: 'split_or_impurity' } }), json)).toEqual([]);
         });
     });
 

@@ -309,13 +309,13 @@ export class PSModelDetailComponent {
 
   private get cachedImportance(): { allBars: PSFeatureBar[]; displayedBars: PSFeatureBar[] } {
     if (!this.Model) return { allBars: [], displayedBars: [] };
-    const key = `${this.Model.Algorithm}\u0000${this.Model.FeatureImportance}`;
+    const key = `${this.Model.Lineage}\u0000${this.Model.FeatureImportance}`;
     if (this.importanceCache?.key !== key) {
       const allBars = ParseFeatureImportance(this.Model.FeatureImportance, 6).map((b) => ({
         ...b,
         name: HumanizeFeatureName(b.name),
       }));
-      const displayedBars = ImportanceDisplay.GlobalDriversShowable(this.Model.Algorithm) ? allBars : [];
+      const displayedBars = ImportanceDisplay.GlobalDriversShowable(this.Model.Lineage) ? allBars : [];
       this.importanceCache = { key, allBars, displayedBars };
     }
     return this.importanceCache;

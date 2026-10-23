@@ -5,7 +5,9 @@
  * by the trust verdict. Pure; no dependencies beyond the pipeline spec types.
  */
 import type { MajorityBaselineRule, ValidationStrategy } from './pipeline-spec';
+import type { ImportanceKind } from './sidecar-contract';
 
+/** How a model's stored numbers were measured; training writes it into `MLModel.Lineage` under `evaluation`. */
 export interface EvaluationRecord {
   /** True when `Metrics` were measured on rows the fitted model did not train on (every strategy that writes this record). */
   ValidationOutOfSample: boolean;
@@ -17,6 +19,8 @@ export interface EvaluationRecord {
   WithheldReason: string | null;
   /** The majority-baseline rule in force when the model was trained (D2-C5d). */
   MajorityBaselineRule: MajorityBaselineRule;
+  /** Which kind of number the stored feature importance is; null for models trained before it was recorded. */
+  ImportanceKind: ImportanceKind | null;
 }
 
 /** Thrown before any training row is written when `ValidationStrategy.MajorityBaselineRule` is not a known value. */
@@ -50,7 +54,7 @@ export class EvaluationLineage {
   }
 
   /** The record training writes for a pipeline's validation strategy. Throws `InvalidMajorityBaselineRuleError`. */
-  public static Build(validation: ValidationStrategy, options?: { ValidationOutOfSample?: boolean }): EvaluationRecord {
+  public static Build(validation: ValidationStrategy, options?: { ValidationOutOfSample?: boolean; ImportanceKind?: ImportanceKind | null }): EvaluationRecord {
     const timeIndex = validation.TimeIndexColumn?.trim() || null;
     return {
       ValidationOutOfSample: options?.ValidationOutOfSample ?? true,
@@ -58,6 +62,7 @@ export class EvaluationLineage {
       EvaluatedAsForecast: false,
       WithheldReason: timeIndex ? EvaluationLineage.NotEvaluatedAsForecast : null,
       MajorityBaselineRule: EvaluationLineage.ParseMajorityBaselineRule(validation.MajorityBaselineRule),
+      ImportanceKind: options?.ImportanceKind || null,
     };
   }
 
@@ -81,7 +86,12 @@ export class EvaluationLineage {
       WithheldReason: typeof raw.WithheldReason === 'string' && raw.WithheldReason.length > 0 ? raw.WithheldReason : null,
       // Stored by training, so it was valid when written; anything else (a record from before D2-C5d) is the default.
       MajorityBaselineRule: raw.MajorityBaselineRule === 'warn' ? 'warn' : EvaluationLineage.DefaultMajorityBaselineRule,
+      ImportanceKind: EvaluationLineage.isImportanceKind(raw.ImportanceKind) ? raw.ImportanceKind : null,
     };
+  }
+
+  private static isImportanceKind(value: unknown): value is ImportanceKind {
+    return value === 'coefficient' || value === 'split_or_impurity' || value === 'none';
   }
 
   private static isMajorityBaselineRule(value: string): value is MajorityBaselineRule {

@@ -128,12 +128,13 @@ describe('ml-model-view-models', () => {
 
   describe('ModelImportanceView.DisplayedFeatureImportance', () => {
     const raw = JSON.stringify({ AutoRenew: 1.13, IncomeK: 0.01, Noise1: 0.002 });
+    const lineage = (kind: string): string => JSON.stringify({ evaluation: { ImportanceKind: kind } });
     it('shows coefficient importance for logistic regression', () => {
-      expect(ModelImportanceView.DisplayedFeatureImportance('Logistic Regression', raw).map((b) => b.name)).toEqual(['AutoRenew', 'IncomeK', 'Noise1']);
+      expect(ModelImportanceView.DisplayedFeatureImportance(lineage('coefficient'), raw).map((b) => b.name)).toEqual(['AutoRenew', 'IncomeK', 'Noise1']);
     });
     it('hides split / impurity importance', () => {
-      expect(ModelImportanceView.DisplayedFeatureImportance('Random Forest', raw)).toEqual([]);
-      expect(ModelImportanceView.DisplayedFeatureImportance('LightGBM', raw)).toEqual([]);
+      expect(ModelImportanceView.DisplayedFeatureImportance(lineage('split_or_impurity'), raw)).toEqual([]);
+      expect(ModelImportanceView.DisplayedFeatureImportance(null, raw)).toEqual([]);
     });
   });
 });
