@@ -89,3 +89,33 @@ describe('RunRecords.RecordAgentRun', () => {
     expect([...records.ModelIDs]).toEqual([M1]);
   });
 });
+
+describe('RunRecords.RecordObservedModels (a name-prefix read only observes)', () => {
+  const OTHER_P = 'aaaaaaaa-0000-0000-0000-000000000003'; // a pipeline the LIKE read matched but this run never recorded
+  const OTHER_M = 'bbbbbbbb-0000-0000-0000-000000000003';
+
+  it('records a model only when its pipeline was already recorded, and never records a pipeline', () => {
+    const records = new RunRecords();
+    records.RecordAgentRun({ PipelineIDs: [AGENT_P], BuildModelID: null });
+    records.RecordObservedModels([
+      { ModelID: M1, PipelineID: AGENT_P.toUpperCase() }, // SQL Server spelling of a recorded pipeline
+      { ModelID: OTHER_M, PipelineID: OTHER_P },
+    ]);
+    expect([...records.ModelIDs]).toEqual([M1]);
+    expect([...records.PipelineIDs]).toEqual([AGENT_P]);
+  });
+
+  it('records nothing when no pipeline was recorded', () => {
+    const records = new RunRecords();
+    records.RecordObservedModels([{ ModelID: OTHER_M, PipelineID: OTHER_P }]);
+    expect(records.ModelIDs.Size + records.PipelineIDs.Size).toBe(0);
+  });
+
+  it('so cleanup never reads or deletes by an unrecorded pipeline', async () => {
+    const records = new RunRecords();
+    records.RecordObservedModels([{ ModelID: OTHER_M, PipelineID: OTHER_P }]);
+    const store = new FakeStore();
+    expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
+    expect(store.Deleted).toEqual([]);
+  });
+});

@@ -1,11 +1,12 @@
 import { RunView, type BaseEntity, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJMLModelEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString, UUIDSet } from '@memberjunction/global';
-import type { AgentStepResult, TruthHarness } from './types';
+import type { AgentStepResult, CandidateModel, TruthHarness } from './types';
 
 /**
- * The pipelines and models one harness created or observed, by ID: the pipelines it created, the models its trainings
- * produced, and the pipelines and models of the agent runs it read back. Cleanup deletes exactly these.
+ * The pipelines and models one harness created, by ID: the pipelines it created, the models its trainings produced, and
+ * the pipelines (found by exact name) and models of its agent runs. Cleanup deletes exactly these. A read by name
+ * prefix (`LIKE`) only observes: it never adds a pipeline, and adds a model only when its pipeline is already recorded.
  */
 export class RunRecords {
   public readonly PipelineIDs = new UUIDSet();
@@ -25,6 +26,17 @@ export class RunRecords {
   public RecordAgentRun(run: Pick<AgentStepResult, 'PipelineIDs' | 'BuildModelID'>): void {
     for (const id of run.PipelineIDs) this.RecordPipeline(id);
     if (run.BuildModelID) this.RecordModel(run.BuildModelID);
+  }
+
+  /**
+   * Record the models a name-prefix read observed, but only those whose pipeline this run already recorded (by creation
+   * or by exact name). A `LIKE` read can match another run's or a person's pipelines, so nothing it alone found is ever
+   * recorded for deletion; its pipelines are never recorded.
+   */
+  public RecordObservedModels(models: ReadonlyArray<Pick<CandidateModel, 'ModelID' | 'PipelineID'>>): void {
+    for (const m of models) {
+      if (this.PipelineIDs.Has(m.PipelineID)) this.RecordModel(m.ModelID);
+    }
   }
 
   /** `h` with every member that creates or reads back run pipelines/models recording their IDs here. */
@@ -48,10 +60,7 @@ export class RunRecords {
       },
       ModelsForPipelineNamePrefix: async (prefix) => {
         const models = await h.ModelsForPipelineNamePrefix(prefix);
-        for (const m of models) {
-          this.RecordModel(m.ModelID);
-          this.RecordPipeline(m.PipelineID);
-        }
+        this.RecordObservedModels(models);
         return models;
       },
     };
