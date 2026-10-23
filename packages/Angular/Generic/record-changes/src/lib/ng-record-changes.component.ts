@@ -25,6 +25,14 @@ import { MJRecordChangeEntity } from '@memberjunction/core-entities';
 import { FormatChangeValue } from './format-change-value';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import {
+  MJBurstClusterItem,
+  MJBurstClusterCategory,
+  MJBurstClusterResolution,
+  MJBurstClusterCoalesceStrategy,
+  MJAfterBurstClustersRebuildEventArgs,
+  MJBurstFilterChangedEventArgs,
+} from '@memberjunction/ng-ui-components';
 import { diffChars, diffWords, Change } from 'diff';
 import { RestoreCommitEvent } from './restore-preview-panel/restore-preview-panel.component';
 
@@ -96,37 +104,55 @@ export interface FilterPill {
   Variant: 'type' | 'restore';
 }
 
-/** A single time bucket in the change history activity spark-bar chart. */
+/** Individual change pip rendered inside a burst cluster card. */
+export interface ActivityBurstPip {
+  /** Normalized RecordChange ID. */
+  ID: string;
+  /** Visual category of the change ('create' | 'update' | 'restore'). */
+  Type: 'create' | 'update' | 'restore';
+  /** Hover tooltip for this specific change pip. */
+  Tooltip: string;
+}
+
+/** A single active editing session / burst cluster in the Burst-Aware Cluster Strip (Option A). */
 export interface ActivityChartBucket {
   /** Stable bucket key for selection and track-by. */
   Key: string;
-  /** Short axis label (e.g. 'Oct 22', '2 PM', 'Jan \'26'). */
+  /** Short session date label (e.g. 'Today', 'Oct 15', 'Apr 12 \'24'). */
   Label: string;
-  /** Detailed tooltip text describing the bucket range and breakdown. */
+  /** Concise session summary subtitle (e.g. 'Initial creation', '4 edits', '1 restore, 2 edits'). */
+  Subtitle: string;
+  /** Non-linear quiet time gap label between this burst and the next burst (e.g. '11 mos quiet', '8d quiet'), or null on the final burst. */
+  GapAfterLabel: string | null;
+  /** Up to 12 individual change pips in chronological order within this burst. */
+  Pips: ActivityBurstPip[];
+  /** Number of additional changes in this burst beyond the 12 rendered pips. */
+  OverflowPipCount: number;
+  /** Detailed tooltip text describing the burst range and breakdown. */
   Tooltip: string;
-  /** Inclusive bucket start timestamp (ms). */
+  /** Inclusive burst start timestamp (ms). */
   StartTime: number;
-  /** Exclusive bucket end timestamp (ms). */
+  /** Inclusive burst end timestamp (ms). */
   EndTime: number;
-  /** Total changes in this bucket. */
+  /** Total changes in this burst. */
   TotalCount: number;
-  /** Count of standard updates in this bucket. */
+  /** Count of standard updates in this burst. */
   UpdateCount: number;
-  /** Count of create events in this bucket. */
+  /** Count of create events in this burst. */
   CreateCount: number;
-  /** Count of restore events in this bucket. */
+  /** Count of restore events in this burst. */
   RestoreCount: number;
-  /** Count of delete/other events in this bucket. */
+  /** Count of delete/other events in this burst. */
   OtherCount: number;
-  /** Normalized bar height percentage (14..100 for non-empty, 8 for empty). */
+  /** Normalized bar height percentage (22..100). */
   HeightPercent: number;
-  /** Proportion of bar height for Updates (0..100). */
+  /** Proportion of changes for Updates (0..100). */
   UpdateSharePercent: number;
-  /** Proportion of bar height for Creates (0..100). */
+  /** Proportion of changes for Creates (0..100). */
   CreateSharePercent: number;
-  /** Proportion of bar height for Restores (0..100). */
+  /** Proportion of changes for Restores (0..100). */
   RestoreSharePercent: number;
-  /** Set of normalized RecordChange IDs falling into this bucket. */
+  /** Set of normalized RecordChange IDs falling into this burst. */
   ChangeIDs: Set<string>;
 }
 
@@ -254,10 +280,29 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
   /** Controls whether the compact version labels tray is expanded in the header. */
   ShowLabelsTray = false;
 
-  // Activity spark-bar chart state
+  // Activity spark-bar chart state (powered by <mj-burst-cluster-strip> from @memberjunction/ng-ui-components)
+  @Input() BurstResolution: MJBurstClusterResolution = 'auto';
+  @Input() BurstCoalesceStrategy: MJBurstClusterCoalesceStrategy = 'adaptive-era';
+  @Input() BurstSessionGapHours = 6;
+  @Input() BurstMaxClusters = 5;
+  @Input() BurstEraZoomThreshold = 10;
+  @Input() AllowBurstZoom = true;
+
+  BurstClusterItems: MJBurstClusterItem<MJRecordChangeEntity>[] = [];
+  readonly BurstClusterCategories: MJBurstClusterCategory[] = [
+    { Key: 'update', Label: 'Update', SingularLabel: 'edit', PluralLabel: 'edits', Color: 'var(--mj-brand-primary)', CssModifier: 'update' },
+    { Key: 'create', Label: 'Create', SingularLabel: 'create', PluralLabel: 'creates', Color: 'var(--mj-status-success)', CssModifier: 'create' },
+    { Key: 'restore', Label: 'Restore', SingularLabel: 'restore', PluralLabel: 'restores', Color: '#8b5cf6', CssModifier: 'restore' },
+  ];
+  ActiveBurstFilteredIDs: Set<string> | null = null;
   ActivityBuckets: ActivityChartBucket[] = [];
   SelectedBucketKey: string | null = null;
   ActivityChartGranularityLabel = '';
+
+  // Cross-version comparison (vA <-> vB) state
+  CompareMode = false;
+  CompareBaseChangeID: string | null = null;
+  CompareTargetChangeID: string | null = null;
 
   // Filter properties
   SearchTerm = '';
@@ -482,6 +527,7 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
   public ClearFilters(): void {
     this.SearchTerm = '';
     this.SelectedBucketKey = null;
+    this.ActiveBurstFilteredIDs = null;
     for (const k of Object.keys(this.ChipSelections)) this.ChipSelections[k] = false;
     this.applyFilters();
   }
@@ -495,12 +541,55 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
     const bucket = this.ActivityBuckets.find(b => b.Key === bucketKey);
     if (!bucket || bucket.TotalCount === 0) return;
     this.SelectedBucketKey = this.SelectedBucketKey === bucketKey ? null : bucketKey;
+    this.ActiveBurstFilteredIDs = this.SelectedBucketKey ? new Set(bucket.ChangeIDs) : null;
     this.applyFilters();
   }
 
   public ClearBucketFilter(): void {
-    if (!this.SelectedBucketKey) return;
+    if (!this.SelectedBucketKey && !this.ActiveBurstFilteredIDs) return;
     this.SelectedBucketKey = null;
+    this.ActiveBurstFilteredIDs = null;
+    this.applyFilters();
+  }
+
+  public OnBurstClustersRebuilt(event: MJAfterBurstClustersRebuildEventArgs<MJRecordChangeEntity>): void {
+    this.ActivityChartGranularityLabel = event.GranularityLabel;
+    this.ActivityBuckets = event.Clusters.map(c => {
+      const updateCount = c.CategoryCounts['update'] ?? 0;
+      const createCount = c.CategoryCounts['create'] ?? 0;
+      const restoreCount = c.CategoryCounts['restore'] ?? 0;
+      const otherCount = Math.max(0, c.TotalCount - updateCount - createCount - restoreCount);
+      return {
+        Key: c.Key,
+        Label: c.Label,
+        Subtitle: c.Subtitle,
+        GapAfterLabel: c.GapAfterLabel,
+        Pips: c.Pips.map(p => ({
+          ID: p.ID,
+          Type: (p.Category === 'create' || p.Category === 'restore' ? p.Category : 'update') as 'create' | 'update' | 'restore',
+          Tooltip: p.Tooltip,
+        })),
+        OverflowPipCount: c.OverflowPipCount,
+        Tooltip: c.Tooltip,
+        StartTime: c.StartTime,
+        EndTime: c.EndTime,
+        TotalCount: c.TotalCount,
+        UpdateCount: updateCount,
+        CreateCount: createCount,
+        RestoreCount: restoreCount,
+        OtherCount: otherCount,
+        HeightPercent: c.HeightPercent,
+        UpdateSharePercent: c.CategoryShares.find(s => s.Key === 'update')?.SharePercent ?? 0,
+        CreateSharePercent: c.CategoryShares.find(s => s.Key === 'create')?.SharePercent ?? 0,
+        RestoreSharePercent: c.CategoryShares.find(s => s.Key === 'restore')?.SharePercent ?? 0,
+        ChangeIDs: new Set(c.ItemIDs),
+      };
+    });
+  }
+
+  public OnBurstFilterChanged(event: MJBurstFilterChangedEventArgs<MJRecordChangeEntity>): void {
+    this.SelectedBucketKey = event.ActiveCluster?.Key ?? null;
+    this.ActiveBurstFilteredIDs = event.FilteredIDs ? new Set(event.FilteredIDs) : null;
     this.applyFilters();
   }
 
@@ -632,141 +721,290 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
     return c.Source === 'Restore' || withLineage.RestoredFromID != null;
   }
 
+  /**
+   * Builds the Burst-Aware Cluster Strip (Option A) with non-linear time-gap compression.
+   * Instead of dividing wall-clock time into 12 fixed equal buckets (which leaves mostly empty
+   * columns when a record has irregular bursts separated by weeks or months), changes are grouped
+   * into active editing sessions separated by compact quiet-gap connectors (`⋯ 11 mos quiet ⋯`).
+   */
   private rebuildActivityChart(): void {
     if (!this.ViewData || this.ViewData.length === 0) {
+      this.BurstClusterItems = [];
       this.ActivityBuckets = [];
       this.ActivityChartGranularityLabel = '';
       this.SelectedBucketKey = null;
+      this.ActiveBurstFilteredIDs = null;
       return;
     }
 
-    const timestamps = this.ViewData
-      .map(c => new Date(c.ChangedAt).getTime())
-      .filter(t => Number.isFinite(t));
+    const datedChanges = this.ViewData
+      .map(c => ({ change: c, time: new Date(c.ChangedAt).getTime() }))
+      .filter(item => Number.isFinite(item.time))
+      .sort((a, b) => a.time - b.time);
 
-    if (timestamps.length === 0) {
+    if (datedChanges.length === 0) {
+      this.BurstClusterItems = [];
       this.ActivityBuckets = [];
+      this.ActivityChartGranularityLabel = '';
+      this.ActiveBurstFilteredIDs = null;
       return;
     }
 
-    const minTime = Math.min(...timestamps);
-    const maxTime = Math.max(...timestamps, Date.now());
-    const spanMs = Math.max(0, maxTime - minTime);
-    const bucketCount = 12;
+    this.BurstClusterItems = datedChanges.map(({ change, time }) => {
+      const normId = NormalizeUUID(change.ID);
+      let category: 'create' | 'update' | 'restore' = 'update';
+      if (this.isRestoreChange(change)) {
+        category = 'restore';
+      } else if (change.Type === 'Create') {
+        category = 'create';
+      }
+      const userLabel = this.getUserDisplayName(change.User);
+      const dateLabel = new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      }).format(new Date(time));
+      return {
+        ID: normId,
+        Timestamp: time,
+        Category: category,
+        Tooltip: `${category === 'create' ? 'Created' : category === 'restore' ? 'Restored' : 'Updated'} by ${userLabel} · ${dateLabel}`,
+        Data: change,
+      };
+    });
 
     const hourMs = 3600 * 1000;
-    const dayMs = 24 * hourMs;
+    const sessionGapThresholdMs = this.BurstSessionGapHours * hourMs;
+    const maxClusters = this.BurstMaxClusters;
 
-    let stepMs: number;
-    let windowStart: number;
-    let mode: 'hour' | 'day' | 'week' | 'month';
-
-    if (spanMs <= 36 * hourMs) {
-      mode = 'hour';
-      this.ActivityChartGranularityLabel = 'Recent activity (by 2h window)';
-      stepMs = Math.max(hourMs, Math.ceil(Math.max(spanMs, 12 * hourMs) / bucketCount));
-      windowStart = maxTime - stepMs * bucketCount;
-    } else if (spanMs <= 21 * dayMs) {
-      mode = 'day';
-      this.ActivityChartGranularityLabel = 'Daily change activity';
-      stepMs = Math.max(dayMs, Math.ceil(spanMs / (bucketCount - 1)));
-      windowStart = maxTime - stepMs * bucketCount;
-    } else if (spanMs <= 120 * dayMs) {
-      mode = 'week';
-      this.ActivityChartGranularityLabel = 'Weekly change activity';
-      stepMs = Math.max(7 * dayMs, Math.ceil(spanMs / (bucketCount - 1)));
-      windowStart = maxTime - stepMs * bucketCount;
-    } else {
-      mode = 'month';
-      this.ActivityChartGranularityLabel = 'History over time';
-      stepMs = Math.ceil(spanMs / (bucketCount - 1));
-      windowStart = minTime - Math.floor(stepMs * 0.25);
+    interface RawCluster {
+      items: Array<{ change: MJRecordChangeEntity; time: number }>;
+      startTime: number;
+      endTime: number;
     }
 
-    const buckets: ActivityChartBucket[] = [];
-    for (let i = 0; i < bucketCount; i++) {
-      const start = windowStart + i * stepMs;
-      const end = i === bucketCount - 1 ? maxTime + 1000 : windowStart + (i + 1) * stepMs;
-      const midDate = new Date(Math.floor((start + end) / 2));
-      const label = this.formatBucketAxisLabel(midDate, mode);
-      buckets.push({
-        Key: `b-${i}-${start}`,
-        Label: label,
-        Tooltip: '',
-        StartTime: start,
-        EndTime: end,
-        TotalCount: 0,
-        UpdateCount: 0,
-        CreateCount: 0,
-        RestoreCount: 0,
-        OtherCount: 0,
-        HeightPercent: 10,
-        UpdateSharePercent: 0,
-        CreateSharePercent: 0,
-        RestoreSharePercent: 0,
-        ChangeIDs: new Set<string>(),
+    // 1. Group chronologically adjacent changes into initial session clusters (same calendar day or <= 6h apart)
+    const clusters: RawCluster[] = [];
+    for (const entry of datedChanges) {
+      const prev = clusters[clusters.length - 1];
+      if (!prev) {
+        clusters.push({ items: [entry], startTime: entry.time, endTime: entry.time });
+        continue;
+      }
+      const prevDate = new Date(prev.endTime);
+      const currDate = new Date(entry.time);
+      const sameDay =
+        prevDate.getUTCFullYear() === currDate.getUTCFullYear() &&
+        prevDate.getUTCMonth() === currDate.getUTCMonth() &&
+        prevDate.getUTCDate() === currDate.getUTCDate();
+      const withinSessionGap = (entry.time - prev.endTime) <= sessionGapThresholdMs;
+
+      if (sameDay || withinSessionGap) {
+        prev.items.push(entry);
+        prev.endTime = entry.time;
+      } else {
+        clusters.push({ items: [entry], startTime: entry.time, endTime: entry.time });
+      }
+    }
+
+    // 2. If more than maxClusters exist, iteratively merge the closest adjacent pair so the strip stays compact
+    while (clusters.length > maxClusters) {
+      let minGap = Infinity;
+      let mergeIdx = 0;
+      for (let i = 0; i < clusters.length - 1; i++) {
+        const gap = clusters[i + 1].startTime - clusters[i].endTime;
+        if (gap < minGap) {
+          minGap = gap;
+          mergeIdx = i;
+        }
+      }
+      const left = clusters[mergeIdx];
+      const right = clusters[mergeIdx + 1];
+      clusters.splice(mergeIdx, 2, {
+        items: [...left.items, ...right.items],
+        startTime: left.startTime,
+        endTime: right.endTime,
       });
     }
 
-    for (const c of this.ViewData) {
-      const t = new Date(c.ChangedAt).getTime();
-      if (!Number.isFinite(t)) continue;
-      let idx = Math.floor((t - windowStart) / stepMs);
-      if (idx < 0) idx = 0;
-      if (idx >= bucketCount) idx = bucketCount - 1;
-      const b = buckets[idx];
-      b.TotalCount++;
-      b.ChangeIDs.add(NormalizeUUID(c.ID));
-      if (this.isRestoreChange(c)) {
-        b.RestoreCount++;
-      } else if (c.Type === 'Create') {
-        b.CreateCount++;
-      } else if (c.Type === 'Update' || !c.Type) {
-        b.UpdateCount++;
-      } else {
-        b.OtherCount++;
-      }
-    }
+    const minTime = datedChanges[0].time;
+    const maxTime = datedChanges[datedChanges.length - 1].time;
+    const totalSpanMs = Math.max(0, maxTime - minTime);
+    const maxCount = Math.max(1, ...clusters.map(c => c.items.length));
 
-    const maxCount = Math.max(1, ...buckets.map(b => b.TotalCount));
-    for (const b of buckets) {
-      if (b.TotalCount === 0) {
-        b.HeightPercent = 10;
-        b.Tooltip = `${b.Label} · No changes`;
-      } else {
-        b.HeightPercent = Math.max(22, Math.round((b.TotalCount / maxCount) * 100));
-        b.UpdateSharePercent = Math.round(((b.UpdateCount + b.OtherCount) / b.TotalCount) * 100);
-        b.CreateSharePercent = Math.round((b.CreateCount / b.TotalCount) * 100);
-        b.RestoreSharePercent = Math.max(0, 100 - b.UpdateSharePercent - b.CreateSharePercent);
-        const parts: string[] = [];
-        if (b.UpdateCount > 0) parts.push(`${b.UpdateCount} update${b.UpdateCount !== 1 ? 's' : ''}`);
-        if (b.CreateCount > 0) parts.push(`${b.CreateCount} create`);
-        if (b.RestoreCount > 0) parts.push(`${b.RestoreCount} restore${b.RestoreCount !== 1 ? 's' : ''}`);
-        if (b.OtherCount > 0) parts.push(`${b.OtherCount} other`);
-        b.Tooltip = `${b.Label} · ${b.TotalCount} change${b.TotalCount !== 1 ? 's' : ''} (${parts.join(', ')})`;
-      }
-    }
+    const buckets: ActivityChartBucket[] = clusters.map((cluster, idx) => {
+      let updateCount = 0;
+      let createCount = 0;
+      let restoreCount = 0;
+      let otherCount = 0;
+      const changeIds = new Set<string>();
+      const pips: ActivityBurstPip[] = [];
 
+      for (const { change, time } of cluster.items) {
+        const normId = NormalizeUUID(change.ID);
+        changeIds.add(normId);
+        let pipType: 'create' | 'update' | 'restore' = 'update';
+        if (this.isRestoreChange(change)) {
+          restoreCount++;
+          pipType = 'restore';
+        } else if (change.Type === 'Create') {
+          createCount++;
+          pipType = 'create';
+        } else if (change.Type === 'Update' || !change.Type) {
+          updateCount++;
+          pipType = 'update';
+        } else {
+          otherCount++;
+          pipType = 'update';
+        }
+
+        if (pips.length < 12) {
+          const userLabel = this.getUserDisplayName(change.User);
+          const dateLabel = new Intl.DateTimeFormat('en-US', {
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+          }).format(new Date(time));
+          pips.push({
+            ID: normId,
+            Type: pipType,
+            Tooltip: `${pipType === 'create' ? 'Created' : pipType === 'restore' ? 'Restored' : 'Updated'} by ${userLabel} · ${dateLabel}`,
+          });
+        }
+      }
+
+      const totalCount = cluster.items.length;
+      const label = this.formatBurstClusterLabel(cluster.startTime, cluster.endTime, maxTime, totalSpanMs);
+      const subtitle = this.formatBurstSubtitle(totalCount, createCount, updateCount + otherCount, restoreCount);
+      const nextCluster = idx < clusters.length - 1 ? clusters[idx + 1] : null;
+      const gapAfterLabel = nextCluster
+        ? this.formatQuietGapLabel(Math.max(0, nextCluster.startTime - cluster.endTime))
+        : null;
+
+      const updateShare = Math.round(((updateCount + otherCount) / totalCount) * 100);
+      const createShare = Math.round((createCount / totalCount) * 100);
+      const restoreShare = Math.max(0, 100 - updateShare - createShare);
+
+      const parts: string[] = [];
+      if (updateCount > 0) parts.push(`${updateCount} update${updateCount !== 1 ? 's' : ''}`);
+      if (createCount > 0) parts.push(`${createCount} create`);
+      if (restoreCount > 0) parts.push(`${restoreCount} restore${restoreCount !== 1 ? 's' : ''}`);
+      if (otherCount > 0) parts.push(`${otherCount} other`);
+
+      return {
+        Key: `burst-${idx}-${cluster.startTime}`,
+        Label: label,
+        Subtitle: subtitle,
+        GapAfterLabel: gapAfterLabel,
+        Pips: pips,
+        OverflowPipCount: Math.max(0, totalCount - pips.length),
+        Tooltip: `${label} · ${totalCount} change${totalCount !== 1 ? 's' : ''} (${parts.join(', ')})`,
+        StartTime: cluster.startTime,
+        EndTime: cluster.endTime + 1,
+        TotalCount: totalCount,
+        UpdateCount: updateCount,
+        CreateCount: createCount,
+        RestoreCount: restoreCount,
+        OtherCount: otherCount,
+        HeightPercent: Math.max(22, Math.round((totalCount / maxCount) * 100)),
+        UpdateSharePercent: updateShare,
+        CreateSharePercent: createShare,
+        RestoreSharePercent: restoreShare,
+        ChangeIDs: changeIds,
+      };
+    });
+
+    this.ActivityChartGranularityLabel =
+      buckets.length === 1
+        ? '1 active editing session'
+        : `Editing sessions (${buckets.length} active bursts · quiet gaps compressed)`;
     this.ActivityBuckets = buckets;
     if (this.SelectedBucketKey && !buckets.some(b => b.Key === this.SelectedBucketKey)) {
       this.SelectedBucketKey = null;
     }
   }
 
-  private formatBucketAxisLabel(date: Date, mode: 'hour' | 'day' | 'week' | 'month'): string {
-    if (mode === 'hour') {
-      return new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: true }).format(date);
+  private formatBurstClusterLabel(startMs: number, endMs: number, maxTimeMs: number, totalSpanMs: number): string {
+    const start = new Date(startMs);
+    const end = new Date(endMs);
+    const now = new Date();
+    const dayMs = 24 * 3600 * 1000;
+    const includeYear = start.getFullYear() !== new Date(maxTimeMs).getFullYear() || totalSpanMs > 240 * dayMs;
+
+    const sameDay =
+      start.getFullYear() === end.getFullYear() &&
+      start.getMonth() === end.getMonth() &&
+      start.getDate() === end.getDate();
+
+    if (sameDay) {
+      const isToday =
+        start.getFullYear() === now.getFullYear() &&
+        start.getMonth() === now.getMonth() &&
+        start.getDate() === now.getDate();
+      if (isToday) {
+        return 'Today';
+      }
+      return new Intl.DateTimeFormat('en-US', includeYear
+        ? { month: 'short', day: 'numeric', year: '2-digit' }
+        : { month: 'short', day: 'numeric' }
+      ).format(start);
     }
-    if (mode === 'month') {
-      return new Intl.DateTimeFormat('en-US', { month: 'short', year: '2-digit' }).format(date);
+
+    if (start.getFullYear() === end.getFullYear() && start.getMonth() === end.getMonth()) {
+      const monthStr = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(start);
+      const yrSuffix = includeYear ? ` '${String(start.getFullYear()).slice(-2)}` : '';
+      return `${monthStr} ${start.getDate()}–${end.getDate()}${yrSuffix}`;
     }
-    return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date);
+
+    const fmt = new Intl.DateTimeFormat('en-US', includeYear
+      ? { month: 'short', day: 'numeric', year: '2-digit' }
+      : { month: 'short', day: 'numeric' }
+    );
+    return `${fmt.format(start)} – ${fmt.format(end)}`;
+  }
+
+  private formatBurstSubtitle(total: number, creates: number, updates: number, restores: number): string {
+    if (creates > 0 && total === 1) {
+      return 'Initial creation';
+    }
+    if (restores > 0 && updates > 0) {
+      return `${restores} restore${restores !== 1 ? 's' : ''}, ${updates} edit${updates !== 1 ? 's' : ''}`;
+    }
+    if (restores > 0) {
+      return `${restores} restore${restores !== 1 ? 's' : ''}`;
+    }
+    if (creates > 0 && updates > 0) {
+      return `Created + ${updates} edit${updates !== 1 ? 's' : ''}`;
+    }
+    return `${total} edit${total !== 1 ? 's' : ''}`;
+  }
+
+  private formatQuietGapLabel(gapMs: number): string {
+    const hourMs = 3600 * 1000;
+    const dayMs = 24 * hourMs;
+    const gapDays = gapMs / dayMs;
+    if (gapDays >= 540) {
+      const yrs = (gapDays / 365).toFixed(1).replace(/\.0$/, '');
+      return `${yrs} yrs quiet`;
+    }
+    if (gapDays >= 45) {
+      return `${Math.round(gapDays / 30)} mos quiet`;
+    }
+    if (gapDays >= 1) {
+      return `${Math.max(1, Math.round(gapDays))}d quiet`;
+    }
+    const gapHours = Math.max(1, Math.round(gapMs / hourMs));
+    return `${gapHours}h quiet`;
   }
 
   private applyFilters(): void {
     let filtered = [...this.ViewData];
 
-    if (this.SelectedBucketKey) {
+    if (this.ActiveBurstFilteredIDs && this.ActiveBurstFilteredIDs.size > 0) {
+      filtered = filtered.filter(change => this.ActiveBurstFilteredIDs!.has(NormalizeUUID(change.ID)));
+    } else if (this.SelectedBucketKey) {
       const activeBucket = this.ActivityBuckets.find(b => b.Key === this.SelectedBucketKey);
       if (activeBucket) {
         filtered = filtered.filter(change => activeBucket.ChangeIDs.has(NormalizeUUID(change.ID)));
@@ -988,6 +1226,185 @@ export class RecordChangesComponent extends BaseAngularComponent implements OnIn
    */
   public GetPreviewableChanges(): MJRecordChangeEntity[] {
     return this.ViewData.filter(c => c.Type !== 'Delete' && !!c.FullRecordJSON);
+  }
+
+  /**
+   * Toggles Cross-Version Diff Comparison (`vA ↔ vB`) mode.
+   * When entering Compare Mode with no versions selected, defaults `vB` to the
+   * latest version and `vA` to the immediately preceding snapshot (or live state).
+   */
+  public ToggleCompareMode(): void {
+    this.CompareMode = !this.CompareMode;
+    if (this.CompareMode && !this.CompareBaseChangeID && !this.CompareTargetChangeID) {
+      const previewable = this.GetPreviewableChanges();
+      if (previewable.length >= 2) {
+        this.CompareTargetChangeID = previewable[0].ID;
+        this.CompareBaseChangeID = previewable[1].ID;
+      } else if (previewable.length === 1) {
+        this.CompareBaseChangeID = previewable[0].ID;
+        this.CompareTargetChangeID = '__CURRENT__';
+      }
+    }
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Assigns a historical change ID (or `'__CURRENT__'`) to either the `base` (`vA`)
+   * or `target` (`vB`) comparison slot.
+   */
+  public SelectForComparison(slot: 'base' | 'target', changeId: string | null, event?: Event): void {
+    event?.stopPropagation();
+    if (slot === 'base') {
+      this.CompareBaseChangeID = changeId;
+    } else {
+      this.CompareTargetChangeID = changeId;
+    }
+    if (!this.CompareMode) {
+      this.CompareMode = true;
+    }
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Handles `<select>` change events for the `vA` and `vB` version selectors.
+   */
+  public OnComparisonSelectChange(slot: 'base' | 'target', event: Event): void {
+    const selectEl = event.target as HTMLSelectElement | null;
+    if (!selectEl) return;
+    this.SelectForComparison(slot, selectEl.value || null);
+  }
+
+  /**
+   * Swaps the selected `vA` (base) and `vB` (target) comparison versions.
+   */
+  public SwapComparisonVersions(): void {
+    const prevBase = this.CompareBaseChangeID;
+    this.CompareBaseChangeID = this.CompareTargetChangeID;
+    this.CompareTargetChangeID = prevBase;
+    this.cdr.markForCheck();
+  }
+
+  public IsChangeSelectedAsCompareBase(change: MJRecordChangeEntity): boolean {
+    return (
+      this.CompareBaseChangeID != null &&
+      this.CompareBaseChangeID !== '__CURRENT__' &&
+      UUIDsEqual(this.CompareBaseChangeID, change.ID)
+    );
+  }
+
+  public IsChangeSelectedAsCompareTarget(change: MJRecordChangeEntity): boolean {
+    return (
+      this.CompareTargetChangeID != null &&
+      this.CompareTargetChangeID !== '__CURRENT__' &&
+      UUIDsEqual(this.CompareTargetChangeID, change.ID)
+    );
+  }
+
+  public get CompareBaseChange(): MJRecordChangeEntity | null {
+    if (!this.CompareBaseChangeID || this.CompareBaseChangeID === '__CURRENT__') {
+      return null;
+    }
+    return this.viewDataById.get(NormalizeUUID(this.CompareBaseChangeID)) ?? null;
+  }
+
+  public get CompareTargetChange(): MJRecordChangeEntity | null {
+    if (!this.CompareTargetChangeID || this.CompareTargetChangeID === '__CURRENT__') {
+      return null;
+    }
+    return this.viewDataById.get(NormalizeUUID(this.CompareTargetChangeID)) ?? null;
+  }
+
+  public GetComparisonSlotLabel(slot: 'base' | 'target'): string {
+    const id = slot === 'base' ? this.CompareBaseChangeID : this.CompareTargetChangeID;
+    if (!id) return 'Select version…';
+    if (id === '__CURRENT__') return 'Current Live Record';
+    const change = this.viewDataById.get(NormalizeUUID(id));
+    if (!change) return 'Selected version';
+    return `${this.FormatRelativeTime(change.ChangedAt)} (${this.GetUserDisplayName(change.User)})`;
+  }
+
+  private extractSnapshotObject(changeId: string | null): Record<string, unknown> | null {
+    if (!changeId) return null;
+    if (changeId === '__CURRENT__') {
+      const rec = this.record as (BaseEntity & {
+        GetAll?: () => Record<string, unknown>;
+        Fields?: Array<{ Name: string; Value: unknown }>;
+      }) | undefined;
+      if (!rec) return null;
+      if (typeof rec.GetAll === 'function') {
+        return rec.GetAll();
+      }
+      if (Array.isArray(rec.Fields)) {
+        const snapshot: Record<string, unknown> = {};
+        for (const f of rec.Fields) {
+          snapshot[f.Name] = f.Value;
+        }
+        return snapshot;
+      }
+      return null;
+    }
+    const change = this.viewDataById.get(NormalizeUUID(changeId));
+    if (!change?.FullRecordJSON) return null;
+    try {
+      return JSON.parse(change.FullRecordJSON) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Computes the field-by-field diff between the selected `vA` (`CompareBaseChangeID`)
+   * and `vB` (`CompareTargetChangeID`) snapshots.
+   */
+  public GetComparisonDiffs(): FieldChangeInfo[] {
+    const baseSnap = this.extractSnapshotObject(this.CompareBaseChangeID);
+    const targetSnap = this.extractSnapshotObject(this.CompareTargetChangeID);
+    if (!baseSnap || !targetSnap) {
+      return [];
+    }
+
+    const entityFields = this.record?.EntityInfo?.Fields ?? [];
+    const candidateNames = new Set<string>();
+    for (const f of entityFields) {
+      if (!f.IsPrimaryKey && !f.Name.startsWith('__mj_')) {
+        candidateNames.add(f.Name);
+      }
+    }
+    for (const key of Object.keys(baseSnap)) {
+      if (!key.startsWith('__mj_') && key.toLowerCase() !== 'id') {
+        candidateNames.add(key);
+      }
+    }
+    for (const key of Object.keys(targetSnap)) {
+      if (!key.startsWith('__mj_') && key.toLowerCase() !== 'id') {
+        candidateNames.add(key);
+      }
+    }
+
+    const diffs: FieldChangeInfo[] = [];
+    for (const fieldName of candidateNames) {
+      const fieldInfo = entityFields.find(
+        (f: EntityFieldInfo) => f.Name.trim().toLowerCase() === fieldName.trim().toLowerCase(),
+      );
+      if (fieldInfo?.IsPrimaryKey || fieldName.startsWith('__mj_')) {
+        continue;
+      }
+      const oldVal = baseSnap[fieldName];
+      const newVal = targetSnap[fieldName];
+      const formattedOld = FormatChangeValue(oldVal, fieldInfo);
+      const formattedNew = FormatChangeValue(newVal, fieldInfo);
+      if (formattedOld === formattedNew) {
+        continue;
+      }
+      diffs.push(
+        this.buildFieldChangeInfo({
+          field: fieldInfo?.Name || fieldName,
+          oldValue: oldVal,
+          newValue: newVal,
+        }),
+      );
+    }
+    return diffs;
   }
 
   /**

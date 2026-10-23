@@ -13,7 +13,14 @@
         <span class="mj-isa-card__record-name">{{ RecordName }}</span>
       }
     </div>
-    <a href="#" class="mj-isa-card__open-link" (click)="OnOpenClick($event)">Open &rarr;</a>
+    <a href="#"
+       class="mj-isa-card__open-link"
+       mjRecordLink
+       [EntityName]="EntityName"
+       [PrimaryKey]="PrimaryKey"
+       [DisplayName]="RecordName || DisplayName"
+       [HandleClick]="false"
+       (click)="OnOpenClick($event)">Open &rarr;</a>
   </div>
 
   <!-- Loading State -->
