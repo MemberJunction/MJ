@@ -190,7 +190,7 @@ export function parseDrivers(featureImportanceJson: string | null): PredictionDr
 
 /** The global drivers a prediction card may show. */
 export class PredictionDrivers {
-    /** Global drivers for a model's card: coefficient models only (split / impurity counts are hidden, C4 / F-SC-11). */
+    /** Global drivers for a model's card: coefficient models only (split / impurity counts are not comparable across features and read as importance they are not, so they are hidden). */
     public static DriversForModel(lineageJSON: string | null | undefined, featureImportanceJson: string | null): PredictionDriver[] {
         return ImportanceDisplay.GlobalDriversShowable(lineageJSON) ? ParseDrivers(featureImportanceJson) : [];
     }

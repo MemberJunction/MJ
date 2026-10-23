@@ -1,14 +1,25 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { PredictiveStudioScoreHistoryService } from '../PredictiveStudio/predictive-studio-score-history.service';
-import type { IMetadataProvider } from '@memberjunction/core';
-import { RunView } from '@memberjunction/core';
+import type { RunView, RunViewParams, RunViewResult, BaseEntity, UserInfo } from '@memberjunction/core';
+
+/** Returns the fixture rows for every read; stands in for the RunView the service reads through. */
+class FakeRunView implements Pick<RunView, 'RunView' | 'RunViews'> {
+  constructor(private readonly rows: object[]) {}
+
+  public async RunView<T = BaseEntity>(_params: RunViewParams, _contextUser?: UserInfo): Promise<RunViewResult<T>> {
+    return { Success: true, Results: this.rows as T[], RowCount: this.rows.length, TotalRowCount: this.rows.length, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
+  }
+
+  public async RunViews<T = BaseEntity>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+    return Promise.all(params.map((p) => this.RunView<T>(p, contextUser)));
+  }
+}
 
 describe('PredictiveStudioScoreHistoryService', () => {
   it('returns empty array when recordId is missing', async () => {
     const service = new PredictiveStudioScoreHistoryService();
-    const fakeProvider = {} as unknown as IMetadataProvider;
     const res = await service.LoadRecordScoreHistory({
-      provider: fakeProvider,
+      provider: null,
       recordId: '',
       InvertedRisk: false,
     });
@@ -43,17 +54,11 @@ describe('PredictiveStudioScoreHistoryService', () => {
       },
     ];
 
-    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
-      RunView: vi.fn().mockResolvedValue({
-        Success: true,
-        Results: mockDetails,
-      }),
-    } as unknown as RunView);
-
     const service = new PredictiveStudioScoreHistoryService();
-    const fakeProvider = {} as unknown as IMetadataProvider;
+    const runViewer = new FakeRunView(mockDetails);
     const points = await service.LoadRecordScoreHistory({
-      provider: fakeProvider,
+      provider: null,
+      RunViewer: runViewer,
       recordId: 'rec-123',
       modelId: 'm1',
       InvertedRisk: false,
@@ -94,17 +99,11 @@ describe('PredictiveStudioScoreHistoryService', () => {
       },
     ];
 
-    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
-      RunView: vi.fn().mockResolvedValue({
-        Success: true,
-        Results: mockDetails,
-      }),
-    } as unknown as RunView);
-
     const service = new PredictiveStudioScoreHistoryService();
-    const fakeProvider = {} as unknown as IMetadataProvider;
+    const runViewer = new FakeRunView(mockDetails);
     const points = await service.LoadRecordScoreHistory({
-      provider: fakeProvider,
+      provider: null,
+      RunViewer: runViewer,
       recordId: 'rec-123',
       modelId: 'm1',
       InvertedRisk: false,
@@ -130,17 +129,11 @@ describe('PredictiveStudioScoreHistoryService', () => {
       },
     ];
 
-    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
-      RunView: vi.fn().mockResolvedValue({
-        Success: true,
-        Results: mockDetails,
-      }),
-    } as unknown as RunView);
-
     const service = new PredictiveStudioScoreHistoryService();
-    const fakeProvider = {} as unknown as IMetadataProvider;
+    const runViewer = new FakeRunView(mockDetails);
     const points = await service.LoadRecordScoreHistory({
-      provider: fakeProvider,
+      provider: null,
+      RunViewer: runViewer,
       recordId: 'rec-123',
       modelId: 'm1',
       InvertedRisk: true,

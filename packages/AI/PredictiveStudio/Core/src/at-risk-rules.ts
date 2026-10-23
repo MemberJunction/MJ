@@ -105,7 +105,7 @@ export class AtRiskRules {
   }
 
   /** The At-Risk options for a model: its resolved outcome config, and risk inverted when the score is the good outcome. */
-  public static BuildAtRiskOptions(model: OutcomeModelLike): ParseAtRiskOptions {
+  public static BuildAtRiskOptions(model: OutcomeModelLike): ParseAtRiskOptions & { OutcomeConfig: OutcomeConfig } {
     const outcomeConfig = ResolveOutcomeConfig(model);
     return { InvertedRisk: outcomeConfig.Polarity === 'positive' && model?.ProblemType !== 'regression', OutcomeConfig: outcomeConfig };
   }

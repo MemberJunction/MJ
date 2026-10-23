@@ -26,6 +26,7 @@ import {
   FormatMetricValue,
   MaxFeatureImportance,
   MetricsToDisplay,
+  ModelImportanceView,
   OverfitGap,
   ParseFeatureImportance,
   ParseMetrics,
@@ -314,7 +315,10 @@ export class PSModelDetailComponent {
         ...b,
         name: AtRiskRules.HumanizeFeatureName(b.name),
       }));
-      const displayedBars = ImportanceDisplay.GlobalDriversShowable(this.Model.Lineage) ? allBars : [];
+      const displayedBars = ModelImportanceView.DisplayedFeatureImportance(this.Model.Lineage, this.Model.FeatureImportance, 6).map((b) => ({
+        ...b,
+        name: AtRiskRules.HumanizeFeatureName(b.name),
+      }));
       this.importanceCache = { key, allBars, displayedBars };
     }
     return this.importanceCache;

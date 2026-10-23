@@ -6,7 +6,7 @@ export type DriverBadge = 'Increases Risk' | 'Lowers Risk';
 
 /**
  * L1 widget: one scored row's signed drivers with their risk badge. Each driver's `Up` is
- * `AtRiskRules.DriverRaisesRisk`, the rule the truth-suite probe also checks (gate W1 → S9.4); this widget owns only the copy.
+ * `AtRiskRules.DriverRaisesRisk`, the one rule for whether a driver raises risk; this widget owns only the copy.
  */
 @Component({
   standalone: true,

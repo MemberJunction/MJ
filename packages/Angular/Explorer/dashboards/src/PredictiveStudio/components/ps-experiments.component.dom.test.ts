@@ -4,6 +4,7 @@ import { getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
 import type { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
+import { ExperimentSessions } from '@memberjunction/predictive-studio-core';
 import { PSExperimentsComponent } from './ps-experiments.component';
 
 try {
@@ -52,13 +53,15 @@ describe('PSExperimentsComponent (DOM)', () => {
         expect(query(fixture, `[data-testid="${id}"]`)).toBeNull();
       }
       expect(query(fixture, '[data-testid="ps-experiments-unavailable"]')).not.toBeNull();
+      expect(query(fixture, '[data-testid="ps-experiments-unavailable-reason"]')?.textContent?.trim()).toBe(ExperimentSessions.DisabledReason);
     }
   });
 
   it('explains why in the empty state and offers no New Experiment', () => {
     const fixture = render(makeEngine([]));
     expect(query(fixture, '[data-testid="ps-experiments-new-btn-empty"]')).toBeNull();
-    expect(query(fixture, '[data-testid="ps-experiments-empty"]')?.textContent).toContain('switched off');
+    expect(query(fixture, '[data-testid="ps-experiments-empty"]')?.textContent).toContain(ExperimentSessions.DisabledReason);
+    expect(query(fixture, '[data-testid="ps-experiments-disabled-reason"]')?.textContent?.trim()).toBe(ExperimentSessions.DisabledReason);
   });
 
   it('shows the empty-leaderboard note when the session has no scored iterations', () => {

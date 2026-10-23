@@ -21,7 +21,6 @@ import {
     FormatValue,
     GaugePct,
     GetDistinctModelsFromHistory,
-    ParseDrivers,
     ParseHistoryItem,
     ResolveLabel,
     ToNumber,

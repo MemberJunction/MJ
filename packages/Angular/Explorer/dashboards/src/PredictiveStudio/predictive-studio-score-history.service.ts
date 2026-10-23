@@ -27,8 +27,10 @@ export interface ModelScoreHistoryPoint {
 }
 
 export interface LoadScoreHistoryParams {
-  provider: IMetadataProvider;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  provider: IMetadataProvider | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   User?: UserInfo;
+  /** Reads through this instead of a RunView built from `provider`; lets tests inject a fake without a metadata provider. */
+  RunViewer?: Pick<RunView, 'RunView' | 'RunViews'>;
   entityId?: string | null;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
   recordId: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   modelId?: string | null;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
@@ -54,7 +56,7 @@ export class PredictiveStudioScoreHistoryService {
    * Load the history of predictions for a specific record across all runs (ordered oldest to newest).
    */
   public async LoadRecordScoreHistory(params: LoadScoreHistoryParams): Promise<ModelScoreHistoryPoint[]> {
-    const { provider, User: user, entityId, recordId, modelId, MaxRuns: maxRuns = 50, OutcomeConfig: outcomeConfig, ProblemType: problemType, InvertedRisk: invertedRisk } = params;
+    const { provider, RunViewer: runViewer, User: user, entityId, recordId, modelId, MaxRuns: maxRuns = 50, OutcomeConfig: outcomeConfig, ProblemType: problemType, InvertedRisk: invertedRisk } = params;
     if (!recordId) return [];
 
     let extraFilter = `RecordID = '${recordId.replace(/'/g, "''")}'`;
@@ -63,7 +65,8 @@ export class PredictiveStudioScoreHistoryService {
     }
 
     try {
-      const rv = RunView.FromMetadataProvider(provider);
+      const rv = runViewer ?? (provider ? RunView.FromMetadataProvider(provider) : null);
+      if (!rv) return [];
       const res = await rv.RunView<MJProcessRunDetailEntity>(
         {
           EntityName: 'MJ: Process Run Details',
@@ -122,7 +125,7 @@ export class PredictiveStudioScoreHistoryService {
           riskPct: Math.round(score * 100),
           class: p.class ?? null,
           band: resolvedBand?.Key ?? bandForScore(score),
-          status: resolvedBand?.Label ?? d.Status ?? 'Completed',
+          status: resolvedBand?.Label || d.Status || 'Completed',
           DurationMs: d.DurationMs ?? null,
           drivers: AtRiskRules.ParseRowDrivers(p.drivers, invertedRisk) ?? [],
           Delta: delta,

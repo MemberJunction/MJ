@@ -9,7 +9,7 @@ import {
   MJArtifactVersionEntity,
   MJExperimentSessionEntity,
 } from '@memberjunction/core-entities';
-import { type ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
+import { ExperimentSessions, type ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import { PSIterationCard, PSLeaderboardEntry } from '../predictive-studio.types';
@@ -55,7 +55,7 @@ interface BudgetGaugeVM {
         <div class="ps-empty" data-testid="ps-experiments-empty">
           <span class="ps-empty-ico"><i class="fa-solid fa-flask"></i></span>
           <h3>No experiment sessions yet</h3>
-          <p>Experiment sessions are switched off: the session runner cannot yet train the experiments it plans. Build models with the Model Development Agent or from the Pipelines tab.</p>
+          @if (!SessionsEnabled) { <p data-testid="ps-experiments-disabled-reason">{{ SessionsDisabledReason }}</p> }
         </div>
       } @else {
         <!-- session header strip -->
@@ -83,8 +83,7 @@ interface BudgetGaugeVM {
         </div>
         <div class="ps-callout warn" data-testid="ps-experiments-unavailable">
           <i class="fa-solid fa-circle-info"></i>
-          <div>Experiment sessions are switched off: earlier sessions are shown for reference, but new sessions cannot be
-          started, paused or resumed until the session runner can train the experiments it plans.</div>
+          @if (!SessionsEnabled) { <div data-testid="ps-experiments-unavailable-reason">{{ SessionsDisabledReason }}</div> }
         </div>
 
         <!-- Leaderboard strip -->
@@ -205,6 +204,9 @@ interface BudgetGaugeVM {
   `,
 })
 export class PSExperimentsComponent implements OnInit {
+  /** Whether experiment sessions can run, and why not when they cannot: one source shared with the server refusal. */
+  public readonly SessionsEnabled = ExperimentSessions.Enabled;
+  public readonly SessionsDisabledReason = ExperimentSessions.DisabledReason;
   @Input() engine!: PredictiveStudioEngine;
   /** Provider to route the control Remote Op + engine refresh through (multi-provider correctness). */
   @Input() provider: IMetadataProvider | null = null;

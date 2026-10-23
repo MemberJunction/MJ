@@ -14,7 +14,7 @@ try {
 
 const render = (inputs: Pick<PSRowDriversComponent, 'Drivers'>) => renderComponentFixture(PSRowDriversComponent, { inputs });
 
-describe('PSRowDriversComponent (DOM) — W1 → S9.4', () => {
+describe('PSRowDriversComponent (DOM)', () => {
   it('renders "Lowers Risk" for AutoRenew on a P(renew) model', () => {
     const drivers = AtRiskRules.ParseRowDrivers([{ feature: 'AutoRenew', value: 1.135756 }], true) || [];
     const fixture = render({ Drivers: drivers });

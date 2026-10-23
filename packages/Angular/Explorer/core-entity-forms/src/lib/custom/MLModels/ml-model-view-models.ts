@@ -283,7 +283,7 @@ export function overfitGap(model: { Metrics?: string | null; HoldoutMetrics?: st
 
 /** The importance a model view may show. */
 export class ModelImportanceView {
-  /** The importance bars a person may see: coefficient models only (split / impurity counts are hidden, C4 / F-SC-11). */
+  /** The importance bars a person may see: coefficient models only (split / impurity counts are not comparable across features and read as importance they are not, so they are hidden). */
   public static DisplayedFeatureImportance(lineageJSON: string | null | undefined, raw: string | null | undefined, topN: number = 6): PSFeatureBar[] {
     return ImportanceDisplay.GlobalDriversShowable(lineageJSON) ? ParseFeatureImportance(raw, topN) : [];
   }

@@ -744,7 +744,8 @@ const PS_PIPELINES_STARTER_PROMPT =
                   <div class="ps-card">
                     <div class="ps-card-head"><i class="fa-solid fa-clock-rotate-left" style="color:var(--mj-brand-primary)"></i><h3>As-of strategy</h3></div>
                     <div class="ps-card-body">
-                      <div class="ps-field"><label>Mode</label><select class="mj-input" [value]="editAsOf.Mode" (change)="setAsOfMode(inputVal($event))"><option value="none">none</option>@if (editAsOf.Mode !== 'none') { <option [value]="editAsOf.Mode">{{ editAsOf.Mode }} (refused at training)</option> }</select></div>
+                      <div class="ps-field"><label>Mode</label><span data-testid="ps-pipelines-asof-mode">{{ editAsOf.Mode }}</span></div>
+                      @if (editAsOf.Mode !== 'none') { <button mjButton variant="secondary" size="sm" data-testid="ps-pipelines-asof-reset" [disabled]="busy" (click)="resetAsOfToNone()">Reset to none</button> }
                       @if (editAsOf.Mode !== 'none') { <p class="ps-muted">Training refuses this setting: it reads every feature as it stands today, so a cutoff has no effect. Set Mode to none to train this pipeline.</p> }
                     </div>
                   </div>
@@ -2182,23 +2183,16 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
   public setThreshold(v: string): void {
     return this.SetThreshold(v);
   }
-  public SetAsOfMode(v: string): void { this.EditAsOf = { ...this.EditAsOf, Mode: v as AsOfStrategy['Mode'] }; this.Dirty = true; }
-
-  /** @deprecated Use {@link SetAsOfMode}. */
-  public setAsOfMode(v: string): void {
-    return this.SetAsOfMode(v);
+  /** Resets a stored as-of cutoff to `none` (training refuses any other mode) and saves through the pipeline save path. */
+  public async ResetAsOfToNone(): Promise<void> {
+    this.EditAsOf = { Mode: 'none' };
+    this.Dirty = true;
+    await this.save();
   }
-  public SetAsOfColumn(v: string): void { this.EditAsOf.Column = v; this.Dirty = true; }
 
-  /** @deprecated Use {@link SetAsOfColumn}. */
-  public setAsOfColumn(v: string): void {
-    return this.SetAsOfColumn(v);
-  }
-  public SetAsOfOffset(v: string): void { const n = Number(v); if (!Number.isNaN(n)) { this.EditAsOf.OffsetDays = n; this.Dirty = true; } }
-
-  /** @deprecated Use {@link SetAsOfOffset}. */
-  public setAsOfOffset(v: string): void {
-    return this.SetAsOfOffset(v);
+  /** @deprecated Use {@link ResetAsOfToNone}. */
+  public resetAsOfToNone(): Promise<void> {
+    return this.ResetAsOfToNone();
   }
   public SetValStrategy(v: string): void { this.EditValidation = { ...this.EditValidation, Strategy: v as ValidationStrategy['Strategy'] }; this.Dirty = true; }
 

@@ -19,7 +19,7 @@ import {
   MjSlidePanelComponent,
 } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { CompositeKey, LogError, RunView, EntityRecordNameInput, EntityRecordNameResult } from '@memberjunction/core';
+import { CompositeKey, LogError, RunView, type IMetadataProvider, type UserInfo, EntityRecordNameInput, EntityRecordNameResult } from '@memberjunction/core';
 import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { MJProcessRunDetailEntity, MJMLModelEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { AgGridModule } from 'ag-grid-angular';
@@ -45,7 +45,7 @@ import {
   type OutcomeConfig,
   type OutcomeBand,
   resolveOutcomeConfig,
-  resolveScoreBand,
+  ResolveScoreBand,
   resolveOutcomeStyle,
   formatPredictionScore,
 } from '@memberjunction/predictive-studio-core';
@@ -116,6 +116,9 @@ interface TrendlinePlotPoint {
   color: string;
 }
 
+/** The columns of a scored Process Run Detail the grid reads (a read-only `simple` load); `ID` is the keyset paging cursor. */
+type PredictionDetailRow = Pick<MJProcessRunDetailEntity, 'ID' | 'RecordID' | 'ResultPayload' | 'Status' | 'CompletedAt' | '__mj_CreatedAt'>;
+
 /**
  * **PSPredictionsGridComponent** — Unified enterprise grid and analytics component for
  * model predictions. Shared between:
@@ -129,9 +132,6 @@ interface TrendlinePlotPoint {
  *   - Slide-in detail drawer (`mj-slide-panel`) with local explainability and historical trendlines across runs.
  *   - Segmented view toggle (`mj-view-toggle`) between Grid View and Chart View (10-decile histogram + risk tiers).
  */
-/** The columns of a scored Process Run Detail the grid reads (a read-only `simple` load). */
-type PredictionDetailRow = Pick<MJProcessRunDetailEntity, 'RecordID' | 'ResultPayload' | 'Status' | 'CompletedAt' | '__mj_CreatedAt'>;
-
 @Component({
   standalone: true,
   selector: 'ps-predictions-grid',
@@ -191,8 +191,19 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
 
   public readonly Math = Math;
 
+  /** Most predictions the grid loads for one run. */
+  private static readonly MaxDetailRows = 50_000;
+  private static readonly DetailPageSize = 1000;
+
+  /** The cap, formatted for the footer notice. */
+  public get DetailRowCapLabel(): string {
+    return PSPredictionsGridComponent.MaxDetailRows.toLocaleString('en-US');
+  }
+
   public isLoading = false;
   public loadError: string | null = null;
+  /** True when the run has more predictions than {@link PSPredictionsGridComponent.MaxDetailRows}; only the first are shown. */
+  public DetailRowsCapped = false;
 
   public AllRows: PredictionGridRow[] = [];
 
@@ -751,20 +762,9 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       // 2. Resolve target entity
       await this.resolveTargetEntity(model);
 
-      // 3. Load every process run detail (no row cap), read-only and only the columns the grid uses
-      const detailsRes = await RunView.FromMetadataProvider(provider).RunView<PredictionDetailRow>(
-        {
-          EntityName: 'MJ: Process Run Details',
-          ExtraFilter: `ProcessRunID = '${EscapeSQLString(effectiveRunId)}'`,
-          OrderBy: '__mj_CreatedAt ASC',
-          Fields: ['RecordID', 'ResultPayload', 'Status', 'CompletedAt', '__mj_CreatedAt'],
-          IgnoreMaxRows: true,
-          ResultType: 'simple',
-        },
-        user,
-      );
-
-      if (!detailsRes.Success || !detailsRes.Results) {
+      // 3. Load the run's process run details by keyset paging, read-only and only the columns the grid uses
+      const details = await this.loadDetailRows(provider, effectiveRunId, user);
+      if (!details) {
         this.AllRows = [];
         this.applyFilter();
         this.isLoading = false;
@@ -777,20 +777,20 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
         this.ProblemType = model.ProblemType.toLowerCase();
       }
       const atRiskOptions = AtRiskRules.BuildAtRiskOptions(model ?? undefined);
-      this.OutcomeConfig = atRiskOptions.OutcomeConfig || resolveOutcomeConfig(model ?? undefined);
-      this.IsRenewalModel = this.OutcomeConfig.Polarity === 'positive' && !this.IsRegression;
+      this.OutcomeConfig = atRiskOptions.OutcomeConfig;
+      this.IsRenewalModel = atRiskOptions.InvertedRisk === true;
       this.SetupColumnDefs();
       // A positive-polarity score is P(good outcome): risk is 1 - score, while the displayed score stays the model's own.
       this.invertedRisk = atRiskOptions.InvertedRisk === true;
 
       const parsedAtRisk = AtRiskRules.ParseAtRiskRows(
-        detailsRes.Results.map((d) => ({ RecordID: d.RecordID, ResultPayload: d.ResultPayload })),
+        details.map((d) => ({ RecordID: d.RecordID, ResultPayload: d.ResultPayload })),
         atRiskOptions,
       );
 
       // Map details into indexed lookup for scoredAt timestamp
       const detailByRecord = new Map<string, PredictionDetailRow>();
-      for (const d of detailsRes.Results) {
+      for (const d of details) {
         detailByRecord.set(NormalizeUUID(d.RecordID), d);
       }
 
@@ -800,7 +800,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
         const displayScore = r.Score;
 
         const resolved = this.OutcomeConfig
-          ? resolveScoreBand(displayScore, this.OutcomeConfig)
+          ? ResolveScoreBand(displayScore, this.OutcomeConfig)
           : null;
 
         const formatted = formatPredictionScore(displayScore, this.OutcomeConfig, this.ProblemType);
@@ -832,6 +832,46 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     } finally {
       this.isLoading = false;
       this.cdr.markForCheck();
+    }
+  }
+
+  /**
+   * Reads a run's process run details one keyset page at a time, up to {@link PSPredictionsGridComponent.MaxDetailRows}.
+   * Sets {@link DetailRowsCapped} when the run has more. Returns null when a page fails to load.
+   */
+  private async loadDetailRows(provider: IMetadataProvider, runId: string, user: UserInfo | undefined): Promise<PredictionDetailRow[] | null> {
+    const entityInfo = provider.EntityByName('MJ: Process Run Details');
+    if (!entityInfo) {
+      return null;
+    }
+    const rv = RunView.FromMetadataProvider(provider);
+    const rows: PredictionDetailRow[] = [];
+    let lastKey: CompositeKey | undefined;
+    this.DetailRowsCapped = false;
+    while (true) {
+      const page = await rv.RunView<PredictionDetailRow>(
+        {
+          EntityName: 'MJ: Process Run Details',
+          ExtraFilter: `ProcessRunID = '${EscapeSQLString(runId)}'`,
+          Fields: ['ID', 'RecordID', 'ResultPayload', 'Status', 'CompletedAt', '__mj_CreatedAt'],
+          MaxRows: PSPredictionsGridComponent.DetailPageSize,
+          AfterKey: lastKey,
+          ResultType: 'simple',
+        },
+        user,
+      );
+      if (!page.Success || !page.Results) {
+        return null;
+      }
+      rows.push(...page.Results);
+      if (page.Results.length < PSPredictionsGridComponent.DetailPageSize) {
+        return rows;
+      }
+      if (rows.length >= PSPredictionsGridComponent.MaxDetailRows) {
+        this.DetailRowsCapped = true;
+        return rows;
+      }
+      lastKey = CompositeKey.FromEntityRecord(entityInfo, page.Results[page.Results.length - 1]);
     }
   }
 
@@ -1644,7 +1684,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       const height = count === 0 ? 0 : Math.round(14 + Math.pow(count / maxCount, 0.45) * 116);
 
       const centerScore = (binMin + binMax) / 2;
-      const band = resolveScoreBand(centerScore, this.OutcomeConfig);
+      const band = ResolveScoreBand(centerScore, this.OutcomeConfig);
       const color = band ? this.GetBadgeColorVar(band.BadgeColor) : 'var(--mj-brand-primary)';
 
       let label: string;
@@ -1749,7 +1789,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
         ? Math.max(0, Math.min(1, (pt.score - minScore) / range))
         : Math.max(0, Math.min(1, pt.score));
       const y = Math.round(yBottom - clampedScore * ySpan);
-      const band = resolveScoreBand(pt.score, this.OutcomeConfig);
+      const band = ResolveScoreBand(pt.score, this.OutcomeConfig);
       const color = band ? this.GetBadgeColorVar(band.BadgeColor) : 'var(--mj-brand-primary)';
       return {
         runId: pt.runId,

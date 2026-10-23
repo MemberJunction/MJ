@@ -102,6 +102,9 @@
           @if (selectedTier !== 'all' || searchText) {
             <span class="ps-muted">Filtered by {{ selectedTier !== 'all' ? selectedTier + ' risk' : '' }}{{ searchText ? ' query "' + searchText + '"' : '' }}</span>
           }
+          @if (DetailRowsCapped) {
+            <span class="ps-muted" data-testid="ps-predictions-capped">Showing the first {{ DetailRowCapLabel }} predictions</span>
+          }
           <span class="ps-muted">Click any row to inspect details & score history</span>
         </div>
       }
