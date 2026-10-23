@@ -215,7 +215,6 @@ import { MJEntityActionInvocationFormComponent } from "./Entities/MJEntityAction
 import { MJEntityActionInvocationTypeFormComponent } from "./Entities/MJEntityActionInvocationType/mjentityactioninvocationtype.form.component";
 import { MJEntityActionParamFormComponent } from "./Entities/MJEntityActionParam/mjentityactionparam.form.component";
 import { MJEntityAlternateBaseViewFormComponent } from "./Entities/MJEntityAlternateBaseView/mjentityalternatebaseview.form.component";
-import { MJEntityAlternateBaseViewPermissionFormComponent } from "./Entities/MJEntityAlternateBaseViewPermission/mjentityalternatebaseviewpermission.form.component";
 import { MJEntityCommunicationFieldFormComponent } from "./Entities/MJEntityCommunicationField/mjentitycommunicationfield.form.component";
 import { MJEntityCommunicationMessageTypeFormComponent } from "./Entities/MJEntityCommunicationMessageType/mjentitycommunicationmessagetype.form.component";
 import { MJEntityDocumentFormComponent } from "./Entities/MJEntityDocument/mjentitydocument.form.component";
@@ -665,7 +664,6 @@ declarations: [
     MJCollectionFormComponent,
     MJComponentRegistryFormComponent,
     MJDatasetFormComponent,
-    MJEntityAlternateBaseViewPermissionFormComponent,
     MJGeneratedCodeCategoryFormComponent,
     MJQueryFieldFormComponent,
     MJRSUPendingWorkFormComponent,

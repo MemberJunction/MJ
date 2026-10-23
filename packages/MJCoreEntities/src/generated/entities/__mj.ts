@@ -19375,49 +19375,6 @@ export const MJEntityActionSchema = z.object({
 export type MJEntityActionEntityType = z.infer<typeof MJEntityActionSchema>;
 
 /**
- * zod schema definition for the entity MJ: Entity Alternate Base View Permissions
- */
-export const MJEntityAlternateBaseViewPermissionSchema = z.object({
-    ID: z.string().describe(`
-        * * Field Name: ID
-        * * Display Name: ID
-        * * SQL Data Type: uniqueidentifier
-        * * Default Value: newsequentialid()`),
-    EntityAlternateBaseViewID: z.string().describe(`
-        * * Field Name: EntityAlternateBaseViewID
-        * * Display Name: Entity Alternate Base View
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Entity Alternate Base Views (vwEntityAlternateBaseViews.ID)
-        * * Description: The alternate base view being restricted.`),
-    RoleID: z.string().describe(`
-        * * Field Name: RoleID
-        * * Display Name: Role
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
-        * * Description: Role permitted to read through the alternate base view (provided the role can also read the owning entity).`),
-    __mj_CreatedAt: z.date().describe(`
-        * * Field Name: __mj_CreatedAt
-        * * Display Name: Created At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    __mj_UpdatedAt: z.date().describe(`
-        * * Field Name: __mj_UpdatedAt
-        * * Display Name: Updated At
-        * * SQL Data Type: datetimeoffset
-        * * Default Value: getutcdate()`),
-    EntityAlternateBaseView: z.string().describe(`
-        * * Field Name: EntityAlternateBaseView
-        * * Display Name: Entity Alternate Base View Name
-        * * SQL Data Type: nvarchar(100)`),
-    Role: z.string().describe(`
-        * * Field Name: Role
-        * * Display Name: Role Name
-        * * SQL Data Type: nvarchar(50)`),
-});
-
-export type MJEntityAlternateBaseViewPermissionEntityType = z.infer<typeof MJEntityAlternateBaseViewPermissionSchema>;
-
-/**
  * zod schema definition for the entity MJ: Entity Alternate Base Views
  */
 export const MJEntityAlternateBaseViewSchema = z.object({
@@ -19442,7 +19399,7 @@ export const MJEntityAlternateBaseViewSchema = z.object({
         * * Field Name: Name
         * * Display Name: Name
         * * SQL Data Type: nvarchar(100)
-        * * Description: Logical name of the alternate base view, unique per entity (case-insensitive). Callers pass this name via RunViewParams.AlternateBaseView or pin it on a User View.`),
+        * * Description: Logical name of the alternate base view, unique per entity (case-insensitive). Cannot contain pipe (|) or colon (:) characters. Callers pass this name via RunViewParams.AlternateBaseView or pin it on a User View.`),
     DisplayName: z.string().nullable().describe(`
         * * Field Name: DisplayName
         * * Display Name: Display Name
@@ -19502,11 +19459,11 @@ export const MJEntityAlternateBaseViewSchema = z.object({
         * * Default Value: getutcdate()`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity Name
+        * * Display Name: Entity Text
         * * SQL Data Type: nvarchar(255)`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent Name
+        * * Display Name: Parent Text
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -95399,117 +95356,6 @@ export class MJEntityActionEntity extends BaseEntity<MJEntityActionEntityType> {
 
 
 /**
- * MJ: Entity Alternate Base View Permissions - strongly typed entity sub-class
- * * Schema: __mj
- * * Base Table: EntityAlternateBaseViewPermission
- * * Base View: vwEntityAlternateBaseViewPermissions
- * * @description Optional role-based restrictions on an alternate base view. When an alternate view has no permission rows, any user who can read the owning entity may use it; when rows exist, only users holding at least one listed role may use it.
- * * Primary Key: ID
- * @extends {BaseEntity}
- * @class
- * @public
- */
-@RegisterClass(BaseEntity, 'MJ: Entity Alternate Base View Permissions')
-export class MJEntityAlternateBaseViewPermissionEntity extends BaseEntity<MJEntityAlternateBaseViewPermissionEntityType> {
-    /**
-    * Loads the MJ: Entity Alternate Base View Permissions record from the database
-    * @param ID: string - primary key value to load the MJ: Entity Alternate Base View Permissions record.
-    * @param EntityRelationshipsToLoad - (optional) the relationships to load
-    * @returns {Promise<boolean>} - true if successful, false otherwise
-    * @public
-    * @async
-    * @memberof MJEntityAlternateBaseViewPermissionEntity
-    * @method
-    * @override
-    */
-    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
-        const compositeKey: CompositeKey = new CompositeKey();
-        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
-        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
-    }
-
-    /**
-    * * Field Name: ID
-    * * Display Name: ID
-    * * SQL Data Type: uniqueidentifier
-    * * Default Value: newsequentialid()
-    */
-    get ID(): string {
-        return this.Get('ID');
-    }
-    set ID(value: string) {
-        this.Set('ID', value);
-    }
-
-    /**
-    * * Field Name: EntityAlternateBaseViewID
-    * * Display Name: Entity Alternate Base View
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Entity Alternate Base Views (vwEntityAlternateBaseViews.ID)
-    * * Description: The alternate base view being restricted.
-    */
-    get EntityAlternateBaseViewID(): string {
-        return this.Get('EntityAlternateBaseViewID');
-    }
-    set EntityAlternateBaseViewID(value: string) {
-        this.Set('EntityAlternateBaseViewID', value);
-    }
-
-    /**
-    * * Field Name: RoleID
-    * * Display Name: Role
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
-    * * Description: Role permitted to read through the alternate base view (provided the role can also read the owning entity).
-    */
-    get RoleID(): string {
-        return this.Get('RoleID');
-    }
-    set RoleID(value: string) {
-        this.Set('RoleID', value);
-    }
-
-    /**
-    * * Field Name: __mj_CreatedAt
-    * * Display Name: Created At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_CreatedAt(): Date {
-        return this.Get('__mj_CreatedAt');
-    }
-
-    /**
-    * * Field Name: __mj_UpdatedAt
-    * * Display Name: Updated At
-    * * SQL Data Type: datetimeoffset
-    * * Default Value: getutcdate()
-    */
-    get __mj_UpdatedAt(): Date {
-        return this.Get('__mj_UpdatedAt');
-    }
-
-    /**
-    * * Field Name: EntityAlternateBaseView
-    * * Display Name: Entity Alternate Base View Name
-    * * SQL Data Type: nvarchar(100)
-    */
-    get EntityAlternateBaseView(): string {
-        return this.Get('EntityAlternateBaseView');
-    }
-
-    /**
-    * * Field Name: Role
-    * * Display Name: Role Name
-    * * SQL Data Type: nvarchar(50)
-    */
-    get Role(): string {
-        return this.Get('Role');
-    }
-}
-
-
-/**
  * MJ: Entity Alternate Base Views - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: EntityAlternateBaseView
@@ -95584,7 +95430,7 @@ export class MJEntityAlternateBaseViewEntity extends BaseEntity<MJEntityAlternat
     * * Field Name: Name
     * * Display Name: Name
     * * SQL Data Type: nvarchar(100)
-    * * Description: Logical name of the alternate base view, unique per entity (case-insensitive). Callers pass this name via RunViewParams.AlternateBaseView or pin it on a User View.
+    * * Description: Logical name of the alternate base view, unique per entity (case-insensitive). Cannot contain pipe (|) or colon (:) characters. Callers pass this name via RunViewParams.AlternateBaseView or pin it on a User View.
     */
     get Name(): string {
         return this.Get('Name');
@@ -95718,7 +95564,7 @@ export class MJEntityAlternateBaseViewEntity extends BaseEntity<MJEntityAlternat
 
     /**
     * * Field Name: Entity
-    * * Display Name: Entity Name
+    * * Display Name: Entity Text
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
@@ -95727,7 +95573,7 @@ export class MJEntityAlternateBaseViewEntity extends BaseEntity<MJEntityAlternat
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent Name
+    * * Display Name: Parent Text
     * * SQL Data Type: nvarchar(100)
     */
     get Parent(): string | null {

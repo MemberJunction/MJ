@@ -4,9 +4,7 @@
 -- 1. EntityAlternateBaseView: registers additional SQL views for an entity that share
 --    its base view's column contract while returning a canonical row subset (e.g.
 --    Active Members, Open Orders).
--- 2. EntityAlternateBaseViewPermission: optional role restrictions narrowing which
---    roles may read through a registered alternate base view.
--- 3. QueryEntity.AlternateBaseViewID: records which alternate base view a query reads
+-- 2. QueryEntity.AlternateBaseViewID: records which alternate base view a query reads
 --    when a query references an alternate view, while keeping EntityID pointed at the
 --    owning entity for permission and cache invalidation parity.
 --
@@ -39,29 +37,14 @@ CREATE TABLE [${flyway:defaultSchema}].[EntityAlternateBaseView] (
         REFERENCES [${flyway:defaultSchema}].[EntityAlternateBaseView]([ID]),
     CONSTRAINT [UQ_EntityAlternateBaseView_EntityID_Name] UNIQUE ([EntityID], [Name]),
     CONSTRAINT [CK_EntityAlternateBaseView_NoSelfParent] CHECK ([ParentID] <> [ID]),
+    CONSTRAINT [CK_EntityAlternateBaseView_Name] CHECK (LEN(LTRIM(RTRIM([Name]))) > 0 AND [Name] NOT LIKE N'%|%' AND [Name] NOT LIKE N'%:%'),
     CONSTRAINT [CK_EntityAlternateBaseView_CachePolicy] CHECK ([CachePolicy] IN (N'Default', N'Bypass')),
     CONSTRAINT [CK_EntityAlternateBaseView_Status] CHECK ([Status] IN (N'Active', N'Deprecated', N'Disabled'))
 );
 GO
 
 -- -------------------------------------------------------------------------------------
--- 2. EntityAlternateBaseViewPermission
--- -------------------------------------------------------------------------------------
-CREATE TABLE [${flyway:defaultSchema}].[EntityAlternateBaseViewPermission] (
-    [ID]                        UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_EntityAlternateBaseViewPermission_ID] DEFAULT (newsequentialid()),
-    [EntityAlternateBaseViewID] UNIQUEIDENTIFIER NOT NULL,
-    [RoleID]                    UNIQUEIDENTIFIER NOT NULL,
-    CONSTRAINT [PK_EntityAlternateBaseViewPermission] PRIMARY KEY CLUSTERED ([ID]),
-    CONSTRAINT [FK_EntityAlternateBaseViewPermission_EntityAlternateBaseView] FOREIGN KEY ([EntityAlternateBaseViewID])
-        REFERENCES [${flyway:defaultSchema}].[EntityAlternateBaseView]([ID]),
-    CONSTRAINT [FK_EntityAlternateBaseViewPermission_Role] FOREIGN KEY ([RoleID])
-        REFERENCES [${flyway:defaultSchema}].[Role]([ID]),
-    CONSTRAINT [UQ_EntityAlternateBaseViewPermission] UNIQUE ([EntityAlternateBaseViewID], [RoleID])
-);
-GO
-
--- -------------------------------------------------------------------------------------
--- 3. QueryEntity.AlternateBaseViewID
+-- 2. QueryEntity.AlternateBaseViewID
 -- -------------------------------------------------------------------------------------
 ALTER TABLE [${flyway:defaultSchema}].[QueryEntity]
     ADD [AlternateBaseViewID] UNIQUEIDENTIFIER NULL
@@ -70,7 +53,7 @@ ALTER TABLE [${flyway:defaultSchema}].[QueryEntity]
 GO
 
 -- -------------------------------------------------------------------------------------
--- 4. Extended properties (Table & Column descriptions)
+-- 3. Extended properties (Table & Column descriptions)
 -- -------------------------------------------------------------------------------------
 EXEC sp_addextendedproperty @name = N'MS_Description',
     @value = N'Registers alternate base views for an entity: SQL views that expose the same columns as the entity''s BaseView while returning a canonical row subset (such as Active Members or Open Orders).',
@@ -90,7 +73,7 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
     @level2type = N'COLUMN', @level2name = N'ParentID';
 
 EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Logical name of the alternate base view, unique per entity (case-insensitive). Callers pass this name via RunViewParams.AlternateBaseView or pin it on a User View.',
+    @value = N'Logical name of the alternate base view, unique per entity (case-insensitive). Cannot contain pipe (|) or colon (:) characters. Callers pass this name via RunViewParams.AlternateBaseView or pin it on a User View.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = N'EntityAlternateBaseView',
     @level2type = N'COLUMN', @level2name = N'Name';
@@ -136,23 +119,6 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = N'EntityAlternateBaseView',
     @level2type = N'COLUMN', @level2name = N'Sequence';
-
-EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Optional role-based restrictions on an alternate base view. When an alternate view has no permission rows, any user who can read the owning entity may use it; when rows exist, only users holding at least one listed role may use it.',
-    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = N'EntityAlternateBaseViewPermission';
-
-EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'The alternate base view being restricted.',
-    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = N'EntityAlternateBaseViewPermission',
-    @level2type = N'COLUMN', @level2name = N'EntityAlternateBaseViewID';
-
-EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Role permitted to read through the alternate base view (provided the role can also read the owning entity).',
-    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = N'EntityAlternateBaseViewPermission',
-    @level2type = N'COLUMN', @level2name = N'RoleID';
 
 EXEC sp_addextendedproperty @name = N'MS_Description',
     @value = N'When this query references an alternate base view rather than the entity''s primary BaseView, records the specific MJ: Entity Alternate Base Views row while EntityID continues to reference the owning entity.',
@@ -219,8 +185,7 @@ GO
 -- GENERATED BY MemberJunction CodeGen — DO NOT EDIT BY HAND
 -- Contains Entity / EntityField / EntityPermission / EntityRelationship inserts,
 -- regenerated base views, spCreate / spUpdate / spDelete procedures, FK indexes,
--- and permission grants for EntityAlternateBaseView, EntityAlternateBaseViewPermission,
--- and QueryEntity.AlternateBaseViewID.
+-- and permission grants for EntityAlternateBaseView and QueryEntity.AlternateBaseViewID.
 -- If the hand-written DDL above changes, re-run CodeGen and replace this section.
 -- =============================================================================
 
@@ -250,7 +215,7 @@ GO
          , [__mj_UpdatedAt]
       )
       VALUES (
-         '1d11abd5-521b-4134-a998-954335bad19a',
+         '38b82609-4b90-477b-801b-bc4154a8de39',
          'MJ: Entity Alternate Base Views',
          'Entity Alternate Base Views',
          'Registers alternate base views for an entity: SQL views that expose the same columns as the entity''s BaseView while returning a canonical row subset (such as Active Members or Open Orders).',
@@ -276,147 +241,34 @@ GO
 /* SQL generated to add new entity MJ: Entity Alternate Base Views to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                        ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '1d11abd5-521b-4134-a998-954335bad19a', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '38b82609-4b90-477b-801b-bc4154a8de39', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Entity Alternate Base Views for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('1d11abd5-521b-4134-a998-954335bad19a' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('38b82609-4b90-477b-801b-bc4154a8de39' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('1d11abd5-521b-4134-a998-954335bad19a' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('38b82609-4b90-477b-801b-bc4154a8de39' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to add new permission for entity MJ: Entity Alternate Base Views for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('1d11abd5-521b-4134-a998-954335bad19a' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('38b82609-4b90-477b-801b-bc4154a8de39' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('1d11abd5-521b-4134-a998-954335bad19a' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('38b82609-4b90-477b-801b-bc4154a8de39' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to add new permission for entity MJ: Entity Alternate Base Views for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('1d11abd5-521b-4134-a998-954335bad19a' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('38b82609-4b90-477b-801b-bc4154a8de39' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('1d11abd5-521b-4134-a998-954335bad19a' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('38b82609-4b90-477b-801b-bc4154a8de39' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
-
-/* SQL generated to create new entity MJ: Entity Alternate Base View Permissions */
-
-      INSERT INTO [${flyway:defaultSchema}].[Entity] (
-         [ID],
-         [Name],
-         [DisplayName],
-         [Description],
-         [NameSuffix],
-         [BaseTable],
-         [BaseView],
-         [SchemaName],
-         [IncludeInAPI],
-         [AllowUserSearchAPI],
-         [AllowCaching],
-         [TrackRecordChanges],
-         [AuditRecordAccess],
-         [AuditViewRuns],
-         [AllowAllRowsAPI],
-         [AllowCreateAPI],
-         [AllowUpdateAPI],
-         [AllowDeleteAPI],
-         [UserViewMaxRows]
-         , [__mj_CreatedAt]
-         , [__mj_UpdatedAt]
-      )
-      VALUES (
-         '4bf37099-70a9-4947-8fb9-270d72a8feab',
-         'MJ: Entity Alternate Base View Permissions',
-         'Entity Alternate Base View Permissions',
-         'Optional role-based restrictions on an alternate base view. When an alternate view has no permission rows, any user who can read the owning entity may use it; when rows exist, only users holding at least one listed role may use it.',
-         NULL,
-         'EntityAlternateBaseViewPermission',
-         'vwEntityAlternateBaseViewPermissions',
-         '${flyway:defaultSchema}',
-         1,
-         1,
-         1,
-         1,
-         0,
-         0,
-         0,
-         1,
-         1,
-         1,
-         1000
-         , GETUTCDATE()
-         , GETUTCDATE()
-      );
-
-/* SQL generated to add new entity MJ: Entity Alternate Base View Permissions to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
-INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
-                                       ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '4bf37099-70a9-4947-8fb9-270d72a8feab', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
-
-/* SQL generated to add new permission for entity MJ: Entity Alternate Base View Permissions for role UI */
-INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
-                ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('4bf37099-70a9-4947-8fb9-270d72a8feab' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
-              WHERE NOT EXISTS (
-                SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('4bf37099-70a9-4947-8fb9-270d72a8feab' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
-              );
-
-/* SQL generated to add new permission for entity MJ: Entity Alternate Base View Permissions for role Developer */
-INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
-                ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('4bf37099-70a9-4947-8fb9-270d72a8feab' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
-              WHERE NOT EXISTS (
-                SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('4bf37099-70a9-4947-8fb9-270d72a8feab' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
-              );
-
-/* SQL generated to add new permission for entity MJ: Entity Alternate Base View Permissions for role Integration */
-INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
-                ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('4bf37099-70a9-4947-8fb9-270d72a8feab' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
-              WHERE NOT EXISTS (
-                SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('4bf37099-70a9-4947-8fb9-270d72a8feab' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
-              );
-
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.EntityAlternateBaseViewPermission */
-ALTER TABLE [${flyway:defaultSchema}].[EntityAlternateBaseViewPermission] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
-GO
-
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.EntityAlternateBaseViewPermission */
-UPDATE [${flyway:defaultSchema}].[EntityAlternateBaseViewPermission] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
-GO
-
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.EntityAlternateBaseViewPermission */
-ALTER TABLE [${flyway:defaultSchema}].[EntityAlternateBaseViewPermission] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
-GO
-
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.EntityAlternateBaseViewPermission */
-ALTER TABLE [${flyway:defaultSchema}].[EntityAlternateBaseViewPermission] ADD CONSTRAINT [DF___mj_EntityAlternateBaseViewPermission___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
-GO
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.EntityAlternateBaseViewPermission */
-ALTER TABLE [${flyway:defaultSchema}].[EntityAlternateBaseViewPermission] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
-GO
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.EntityAlternateBaseViewPermission */
-UPDATE [${flyway:defaultSchema}].[EntityAlternateBaseViewPermission] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
-GO
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.EntityAlternateBaseViewPermission */
-ALTER TABLE [${flyway:defaultSchema}].[EntityAlternateBaseViewPermission] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
-GO
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.EntityAlternateBaseViewPermission */
-ALTER TABLE [${flyway:defaultSchema}].[EntityAlternateBaseViewPermission] ADD CONSTRAINT [DF___mj_EntityAlternateBaseViewPermission___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
-GO
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.EntityAlternateBaseView */
 ALTER TABLE [${flyway:defaultSchema}].[EntityAlternateBaseView] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
@@ -450,9 +302,9 @@ GO
 ALTER TABLE [${flyway:defaultSchema}].[EntityAlternateBaseView] ADD CONSTRAINT [DF___mj_EntityAlternateBaseView___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
 GO
 
-/* SQL text to insert 19 new entity field(s) */
+/* SQL text to insert 14 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2dbc07d5-9d19-4f1e-874d-e3831ef56fc1' OR (EntityID = '4BF37099-70A9-4947-8FB9-270D72A8FEAB' AND Name = 'ID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '437e22c7-73a2-42a4-964f-50e5ee71e3f7' OR (EntityID = 'EFB0FD56-7AD5-4BFE-BE31-74628FF77265' AND Name = 'AlternateBaseViewID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -485,322 +337,7 @@ GO
          )
          VALUES
          (
-            '2dbc07d5-9d19-4f1e-874d-e3831ef56fc1',
-            '4BF37099-70A9-4947-8FB9-270D72A8FEAB', -- Entity: MJ: Entity Alternate Base View Permissions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '4BF37099-70A9-4947-8FB9-270D72A8FEAB'),
-            'ID',
-            'ID',
-            NULL,
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            'newsequentialid()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            1,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fb63afd7-e207-4e68-ae54-10ea2070f18c' OR (EntityID = '4BF37099-70A9-4947-8FB9-270D72A8FEAB' AND Name = 'EntityAlternateBaseViewID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'fb63afd7-e207-4e68-ae54-10ea2070f18c',
-            '4BF37099-70A9-4947-8FB9-270D72A8FEAB', -- Entity: MJ: Entity Alternate Base View Permissions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '4BF37099-70A9-4947-8FB9-270D72A8FEAB'),
-            'EntityAlternateBaseViewID',
-            'Entity Alternate Base View ID',
-            'The alternate base view being restricted.',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            '1D11ABD5-521B-4134-A998-954335BAD19A',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2e4e0319-d7a2-40af-85c4-e17c301357d0' OR (EntityID = '4BF37099-70A9-4947-8FB9-270D72A8FEAB' AND Name = 'RoleID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '2e4e0319-d7a2-40af-85c4-e17c301357d0',
-            '4BF37099-70A9-4947-8FB9-270D72A8FEAB', -- Entity: MJ: Entity Alternate Base View Permissions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '4BF37099-70A9-4947-8FB9-270D72A8FEAB'),
-            'RoleID',
-            'Role ID',
-            'Role permitted to read through the alternate base view (provided the role can also read the owning entity).',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            'DA238F34-2837-EF11-86D4-6045BDEE16E6',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '81a5c6c5-1160-4122-8907-4ace75e47a7c' OR (EntityID = '4BF37099-70A9-4947-8FB9-270D72A8FEAB' AND Name = '__mj_CreatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '81a5c6c5-1160-4122-8907-4ace75e47a7c',
-            '4BF37099-70A9-4947-8FB9-270D72A8FEAB', -- Entity: MJ: Entity Alternate Base View Permissions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '4BF37099-70A9-4947-8FB9-270D72A8FEAB'),
-            '__mj_CreatedAt',
-            'Created At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            1,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'bf053ab2-0687-4a23-a325-3ff4e6793cc2' OR (EntityID = '4BF37099-70A9-4947-8FB9-270D72A8FEAB' AND Name = '__mj_UpdatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'bf053ab2-0687-4a23-a325-3ff4e6793cc2',
-            '4BF37099-70A9-4947-8FB9-270D72A8FEAB', -- Entity: MJ: Entity Alternate Base View Permissions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '4BF37099-70A9-4947-8FB9-270D72A8FEAB'),
-            '__mj_UpdatedAt',
-            'Updated At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            1,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'aabc250c-69b8-463d-bf3a-addeed5c640d' OR (EntityID = 'EFB0FD56-7AD5-4BFE-BE31-74628FF77265' AND Name = 'AlternateBaseViewID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'aabc250c-69b8-463d-bf3a-addeed5c640d',
+            '437e22c7-73a2-42a4-964f-50e5ee71e3f7',
             'EFB0FD56-7AD5-4BFE-BE31-74628FF77265', -- Entity: MJ: Query Entities
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'EFB0FD56-7AD5-4BFE-BE31-74628FF77265'),
             'AlternateBaseViewID',
@@ -816,7 +353,7 @@ GO
             1,
             0,
             0,
-            '1D11ABD5-521B-4134-A998-954335BAD19A',
+            '38B82609-4B90-477B-801B-BC4154A8DE39',
             'ID',
             0,
             0,
@@ -830,7 +367,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '438cc42f-eae9-49b8-b7a2-ef7ab1ed0dff' OR (EntityID = '1D11ABD5-521B-4134-A998-954335BAD19A' AND Name = 'ID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '362d67eb-0158-48e9-89a7-3d2df8d6c86c' OR (EntityID = '38B82609-4B90-477B-801B-BC4154A8DE39' AND Name = 'ID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -863,9 +400,9 @@ GO
          )
          VALUES
          (
-            '438cc42f-eae9-49b8-b7a2-ef7ab1ed0dff',
-            '1D11ABD5-521B-4134-A998-954335BAD19A', -- Entity: MJ: Entity Alternate Base Views
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '1D11ABD5-521B-4134-A998-954335BAD19A'),
+            '362d67eb-0158-48e9-89a7-3d2df8d6c86c',
+            '38B82609-4B90-477B-801B-BC4154A8DE39', -- Entity: MJ: Entity Alternate Base Views
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '38B82609-4B90-477B-801B-BC4154A8DE39'),
             'ID',
             'ID',
             NULL,
@@ -893,7 +430,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'eeb0c5af-d6c2-4211-aa50-6a9afdfbb9bb' OR (EntityID = '1D11ABD5-521B-4134-A998-954335BAD19A' AND Name = 'EntityID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '531ff067-9622-4fb4-8117-677fa6bb35fb' OR (EntityID = '38B82609-4B90-477B-801B-BC4154A8DE39' AND Name = 'EntityID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -926,9 +463,9 @@ GO
          )
          VALUES
          (
-            'eeb0c5af-d6c2-4211-aa50-6a9afdfbb9bb',
-            '1D11ABD5-521B-4134-A998-954335BAD19A', -- Entity: MJ: Entity Alternate Base Views
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '1D11ABD5-521B-4134-A998-954335BAD19A'),
+            '531ff067-9622-4fb4-8117-677fa6bb35fb',
+            '38B82609-4B90-477B-801B-BC4154A8DE39', -- Entity: MJ: Entity Alternate Base Views
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '38B82609-4B90-477B-801B-BC4154A8DE39'),
             'EntityID',
             'Entity ID',
             'Owning entity whose column contract this alternate base view shares.',
@@ -956,7 +493,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3f05ee04-b5ea-4761-b4e9-0dc5293caf17' OR (EntityID = '1D11ABD5-521B-4134-A998-954335BAD19A' AND Name = 'ParentID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4f8ee735-3e4d-49ee-a543-81e7cc5df95b' OR (EntityID = '38B82609-4B90-477B-801B-BC4154A8DE39' AND Name = 'ParentID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -989,9 +526,9 @@ GO
          )
          VALUES
          (
-            '3f05ee04-b5ea-4761-b4e9-0dc5293caf17',
-            '1D11ABD5-521B-4134-A998-954335BAD19A', -- Entity: MJ: Entity Alternate Base Views
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '1D11ABD5-521B-4134-A998-954335BAD19A'),
+            '4f8ee735-3e4d-49ee-a543-81e7cc5df95b',
+            '38B82609-4B90-477B-801B-BC4154A8DE39', -- Entity: MJ: Entity Alternate Base Views
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '38B82609-4B90-477B-801B-BC4154A8DE39'),
             'ParentID',
             'Parent ID',
             'Optional parent alternate base view on the same entity that this view derives from (e.g. an Active Auto-Renew Members view built on top of Active Members). NULL when the view selects directly from the entity''s BaseView. Automatically populated on save via SQL AST extraction when the view''s FROM clause references another registered alternate base view.',
@@ -1005,7 +542,7 @@ GO
             1,
             0,
             0,
-            '1D11ABD5-521B-4134-A998-954335BAD19A',
+            '38B82609-4B90-477B-801B-BC4154A8DE39',
             'ID',
             0,
             0,
@@ -1019,7 +556,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1186abd9-3f85-4765-a6cf-cabf762078ee' OR (EntityID = '1D11ABD5-521B-4134-A998-954335BAD19A' AND Name = 'Name')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c4879b44-18a3-4648-88dc-c94be3e6db99' OR (EntityID = '38B82609-4B90-477B-801B-BC4154A8DE39' AND Name = 'Name')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1052,12 +589,12 @@ GO
          )
          VALUES
          (
-            '1186abd9-3f85-4765-a6cf-cabf762078ee',
-            '1D11ABD5-521B-4134-A998-954335BAD19A', -- Entity: MJ: Entity Alternate Base Views
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '1D11ABD5-521B-4134-A998-954335BAD19A'),
+            'c4879b44-18a3-4648-88dc-c94be3e6db99',
+            '38B82609-4B90-477B-801B-BC4154A8DE39', -- Entity: MJ: Entity Alternate Base Views
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '38B82609-4B90-477B-801B-BC4154A8DE39'),
             'Name',
             'Name',
-            'Logical name of the alternate base view, unique per entity (case-insensitive). Callers pass this name via RunViewParams.AlternateBaseView or pin it on a User View.',
+            'Logical name of the alternate base view, unique per entity (case-insensitive). Cannot contain pipe (|) or colon (:) characters. Callers pass this name via RunViewParams.AlternateBaseView or pin it on a User View.',
             'nvarchar',
             200,
             0,
@@ -1082,7 +619,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ce952ca5-15a5-4892-ba40-6f8fcd32984e' OR (EntityID = '1D11ABD5-521B-4134-A998-954335BAD19A' AND Name = 'DisplayName')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2a3e6d40-74ce-4b1a-8343-12d0e7d5db9e' OR (EntityID = '38B82609-4B90-477B-801B-BC4154A8DE39' AND Name = 'DisplayName')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1115,9 +652,9 @@ GO
          )
          VALUES
          (
-            'ce952ca5-15a5-4892-ba40-6f8fcd32984e',
-            '1D11ABD5-521B-4134-A998-954335BAD19A', -- Entity: MJ: Entity Alternate Base Views
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '1D11ABD5-521B-4134-A998-954335BAD19A'),
+            '2a3e6d40-74ce-4b1a-8343-12d0e7d5db9e',
+            '38B82609-4B90-477B-801B-BC4154A8DE39', -- Entity: MJ: Entity Alternate Base Views
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '38B82609-4B90-477B-801B-BC4154A8DE39'),
             'DisplayName',
             'Display Name',
             'Human-friendly label shown in UI pickers and badges. Falls back to Name when NULL.',
@@ -1145,7 +682,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1bbc5833-6b0c-477d-98f4-10b98ad1a71b' OR (EntityID = '1D11ABD5-521B-4134-A998-954335BAD19A' AND Name = 'Description')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7d045dea-83b0-4a60-8cb2-7335082ce8b5' OR (EntityID = '38B82609-4B90-477B-801B-BC4154A8DE39' AND Name = 'Description')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1178,9 +715,9 @@ GO
          )
          VALUES
          (
-            '1bbc5833-6b0c-477d-98f4-10b98ad1a71b',
-            '1D11ABD5-521B-4134-A998-954335BAD19A', -- Entity: MJ: Entity Alternate Base Views
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '1D11ABD5-521B-4134-A998-954335BAD19A'),
+            '7d045dea-83b0-4a60-8cb2-7335082ce8b5',
+            '38B82609-4B90-477B-801B-BC4154A8DE39', -- Entity: MJ: Entity Alternate Base Views
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '38B82609-4B90-477B-801B-BC4154A8DE39'),
             'Description',
             'Description',
             'Plain-language definition of which rows this alternate base view includes. Surfaced as help text in pickers and in agent and QueryGen discovery context.',
@@ -1208,7 +745,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0e56c5e6-3903-41ed-80bb-30e2161151ea' OR (EntityID = '1D11ABD5-521B-4134-A998-954335BAD19A' AND Name = 'SchemaName')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3487a094-478c-4920-8c3d-fe0f7cdce862' OR (EntityID = '38B82609-4B90-477B-801B-BC4154A8DE39' AND Name = 'SchemaName')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1241,9 +778,9 @@ GO
          )
          VALUES
          (
-            '0e56c5e6-3903-41ed-80bb-30e2161151ea',
-            '1D11ABD5-521B-4134-A998-954335BAD19A', -- Entity: MJ: Entity Alternate Base Views
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '1D11ABD5-521B-4134-A998-954335BAD19A'),
+            '3487a094-478c-4920-8c3d-fe0f7cdce862',
+            '38B82609-4B90-477B-801B-BC4154A8DE39', -- Entity: MJ: Entity Alternate Base Views
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '38B82609-4B90-477B-801B-BC4154A8DE39'),
             'SchemaName',
             'Schema Name',
             'Database schema of ViewName. When NULL, defaults to the owning entity''s SchemaName. Cross-schema views allow an Open App to register an alternate view in its own schema on an upstream entity.',
@@ -1271,7 +808,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0b074bf8-8e27-4f9f-a564-c689c05449d1' OR (EntityID = '1D11ABD5-521B-4134-A998-954335BAD19A' AND Name = 'ViewName')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ad8f0456-815e-46bf-87c6-945374f44168' OR (EntityID = '38B82609-4B90-477B-801B-BC4154A8DE39' AND Name = 'ViewName')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1304,9 +841,9 @@ GO
          )
          VALUES
          (
-            '0b074bf8-8e27-4f9f-a564-c689c05449d1',
-            '1D11ABD5-521B-4134-A998-954335BAD19A', -- Entity: MJ: Entity Alternate Base Views
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '1D11ABD5-521B-4134-A998-954335BAD19A'),
+            'ad8f0456-815e-46bf-87c6-945374f44168',
+            '38B82609-4B90-477B-801B-BC4154A8DE39', -- Entity: MJ: Entity Alternate Base Views
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '38B82609-4B90-477B-801B-BC4154A8DE39'),
             'ViewName',
             'View Name',
             'Physical SQL view name in the database. Must select all columns from the owning entity''s BaseView.',
@@ -1334,7 +871,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '09b7337b-9d99-4acc-898d-e9b1710e8e1f' OR (EntityID = '1D11ABD5-521B-4134-A998-954335BAD19A' AND Name = 'CachePolicy')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '119bb279-ff18-4cf7-a54f-2513cd2d7f27' OR (EntityID = '38B82609-4B90-477B-801B-BC4154A8DE39' AND Name = 'CachePolicy')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1367,9 +904,9 @@ GO
          )
          VALUES
          (
-            '09b7337b-9d99-4acc-898d-e9b1710e8e1f',
-            '1D11ABD5-521B-4134-A998-954335BAD19A', -- Entity: MJ: Entity Alternate Base Views
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '1D11ABD5-521B-4134-A998-954335BAD19A'),
+            '119bb279-ff18-4cf7-a54f-2513cd2d7f27',
+            '38B82609-4B90-477B-801B-BC4154A8DE39', -- Entity: MJ: Entity Alternate Base Views
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '38B82609-4B90-477B-801B-BC4154A8DE39'),
             'CachePolicy',
             'Cache Policy',
             'Controls RunView caching for this alternate view: Default caches results under an isolated abv: fingerprint segment and invalidates on entity writes; Bypass disables caching for views whose predicates depend on the clock or other tables.',
@@ -1397,7 +934,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '51d419a7-2d65-4e17-baf2-098ae606e9de' OR (EntityID = '1D11ABD5-521B-4134-A998-954335BAD19A' AND Name = 'Status')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '51eb5d80-f53e-46e6-936b-cd12982f6143' OR (EntityID = '38B82609-4B90-477B-801B-BC4154A8DE39' AND Name = 'Status')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1430,9 +967,9 @@ GO
          )
          VALUES
          (
-            '51d419a7-2d65-4e17-baf2-098ae606e9de',
-            '1D11ABD5-521B-4134-A998-954335BAD19A', -- Entity: MJ: Entity Alternate Base Views
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '1D11ABD5-521B-4134-A998-954335BAD19A'),
+            '51eb5d80-f53e-46e6-936b-cd12982f6143',
+            '38B82609-4B90-477B-801B-BC4154A8DE39', -- Entity: MJ: Entity Alternate Base Views
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '38B82609-4B90-477B-801B-BC4154A8DE39'),
             'Status',
             'Status',
             'Lifecycle status of the alternate view: Active (selectable and shown in pickers and agent context), Deprecated (executable with a warning, hidden from pickers and agents), or Disabled (rejected at runtime).',
@@ -1460,7 +997,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '011d455d-afe8-4293-98b4-7a5345953856' OR (EntityID = '1D11ABD5-521B-4134-A998-954335BAD19A' AND Name = 'Sequence')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7ae4e47a-5e9f-4f4c-a150-c88eecb14969' OR (EntityID = '38B82609-4B90-477B-801B-BC4154A8DE39' AND Name = 'Sequence')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1493,9 +1030,9 @@ GO
          )
          VALUES
          (
-            '011d455d-afe8-4293-98b4-7a5345953856',
-            '1D11ABD5-521B-4134-A998-954335BAD19A', -- Entity: MJ: Entity Alternate Base Views
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '1D11ABD5-521B-4134-A998-954335BAD19A'),
+            '7ae4e47a-5e9f-4f4c-a150-c88eecb14969',
+            '38B82609-4B90-477B-801B-BC4154A8DE39', -- Entity: MJ: Entity Alternate Base Views
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '38B82609-4B90-477B-801B-BC4154A8DE39'),
             'Sequence',
             'Sequence',
             'Display ordering of this alternate view within its owning entity (lower numbers appear first).',
@@ -1523,7 +1060,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fbba2854-a026-4ac4-a61f-ba51be9aed44' OR (EntityID = '1D11ABD5-521B-4134-A998-954335BAD19A' AND Name = '__mj_CreatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '00986856-d0ff-48cd-9ddc-6f30c698f717' OR (EntityID = '38B82609-4B90-477B-801B-BC4154A8DE39' AND Name = '__mj_CreatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1556,9 +1093,9 @@ GO
          )
          VALUES
          (
-            'fbba2854-a026-4ac4-a61f-ba51be9aed44',
-            '1D11ABD5-521B-4134-A998-954335BAD19A', -- Entity: MJ: Entity Alternate Base Views
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '1D11ABD5-521B-4134-A998-954335BAD19A'),
+            '00986856-d0ff-48cd-9ddc-6f30c698f717',
+            '38B82609-4B90-477B-801B-BC4154A8DE39', -- Entity: MJ: Entity Alternate Base Views
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '38B82609-4B90-477B-801B-BC4154A8DE39'),
             '__mj_CreatedAt',
             'Created At',
             NULL,
@@ -1586,7 +1123,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b9823038-7d68-4d72-b296-2aa89f08b033' OR (EntityID = '1D11ABD5-521B-4134-A998-954335BAD19A' AND Name = '__mj_UpdatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '68b795ed-bf33-4be6-a036-564812532211' OR (EntityID = '38B82609-4B90-477B-801B-BC4154A8DE39' AND Name = '__mj_UpdatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1619,9 +1156,9 @@ GO
          )
          VALUES
          (
-            'b9823038-7d68-4d72-b296-2aa89f08b033',
-            '1D11ABD5-521B-4134-A998-954335BAD19A', -- Entity: MJ: Entity Alternate Base Views
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '1D11ABD5-521B-4134-A998-954335BAD19A'),
+            '68b795ed-bf33-4be6-a036-564812532211',
+            '38B82609-4B90-477B-801B-BC4154A8DE39', -- Entity: MJ: Entity Alternate Base Views
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '38B82609-4B90-477B-801B-BC4154A8DE39'),
             '__mj_UpdatedAt',
             'Updated At',
             NULL,
@@ -1649,138 +1186,70 @@ GO
          )
       END;
 
-/* SQL text to insert entity field value with ID 87aa1de3-331b-49f4-9893-7d2f26b0c373 */
+/* SQL text to insert entity field value with ID 3359365f-e44b-49ed-b617-20baefda817d */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('87aa1de3-331b-49f4-9893-7d2f26b0c373', '09B7337B-9D99-4ACC-898D-E9B1710E8E1F', 1, 'Bypass', 'Bypass', GETUTCDATE(), GETUTCDATE());
+                                       ('3359365f-e44b-49ed-b617-20baefda817d', '119BB279-FF18-4CF7-A54F-2513CD2D7F27', 1, 'Bypass', 'Bypass', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID bb3f5a3d-bd18-483e-8f9d-4606ab8611a4 */
+/* SQL text to insert entity field value with ID 8cc5408e-917b-4efe-a17e-e909361da93f */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('bb3f5a3d-bd18-483e-8f9d-4606ab8611a4', '09B7337B-9D99-4ACC-898D-E9B1710E8E1F', 2, 'Default', 'Default', GETUTCDATE(), GETUTCDATE());
+                                       ('8cc5408e-917b-4efe-a17e-e909361da93f', '119BB279-FF18-4CF7-A54F-2513CD2D7F27', 2, 'Default', 'Default', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 09B7337B-9D99-4ACC-898D-E9B1710E8E1F */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='09B7337B-9D99-4ACC-898D-E9B1710E8E1F';
+/* SQL text to update ValueListType for entity field ID 119BB279-FF18-4CF7-A54F-2513CD2D7F27 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='119BB279-FF18-4CF7-A54F-2513CD2D7F27';
 
-/* SQL text to insert entity field value with ID 837497c0-3725-41fe-b14d-0fef84f19c32 */
+/* SQL text to insert entity field value with ID e5648c8e-1bf9-4c32-847f-1e001dc54ca1 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('837497c0-3725-41fe-b14d-0fef84f19c32', '51D419A7-2D65-4E17-BAF2-098AE606E9DE', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE());
+                                       ('e5648c8e-1bf9-4c32-847f-1e001dc54ca1', '51EB5D80-F53E-46E6-936B-CD12982F6143', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID aeed46af-9d0a-4cfe-8a4b-ab7029a4b63d */
+/* SQL text to insert entity field value with ID ac6230a2-ecd7-43ad-8aed-c1ddf3ac6ede */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('aeed46af-9d0a-4cfe-8a4b-ab7029a4b63d', '51D419A7-2D65-4E17-BAF2-098AE606E9DE', 2, 'Deprecated', 'Deprecated', GETUTCDATE(), GETUTCDATE());
+                                       ('ac6230a2-ecd7-43ad-8aed-c1ddf3ac6ede', '51EB5D80-F53E-46E6-936B-CD12982F6143', 2, 'Deprecated', 'Deprecated', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID e0fa1b2d-6d42-457a-bb11-fc13e0e863f5 */
+/* SQL text to insert entity field value with ID 212030d9-3d2c-46e4-8691-132efd0a0b56 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('e0fa1b2d-6d42-457a-bb11-fc13e0e863f5', '51D419A7-2D65-4E17-BAF2-098AE606E9DE', 3, 'Disabled', 'Disabled', GETUTCDATE(), GETUTCDATE());
+                                       ('212030d9-3d2c-46e4-8691-132efd0a0b56', '51EB5D80-F53E-46E6-936B-CD12982F6143', 3, 'Disabled', 'Disabled', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 51D419A7-2D65-4E17-BAF2-098AE606E9DE */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='51D419A7-2D65-4E17-BAF2-098AE606E9DE';
-
-/* Deterministic search-flag hygiene — clear AllowUserSearchAPI */
-
-         UPDATE [${flyway:defaultSchema}].[Entity]
-         SET [AllowUserSearchAPI] = 0
-         WHERE [ID] IN (
-            SELECT e.[ID]
-            FROM [${flyway:defaultSchema}].[Entity] e
-            WHERE e.[AllowUserSearchAPI] = 1
-              AND e.[AutoUpdateAllowUserSearchAPI] = 1
-              AND e.[VirtualEntity] = 0
-              AND ISNULL(e.[FullTextSearchEnabled], 0) = 0
-              AND e.[SchemaName] NOT IN ('sys','staging')
-              AND NOT EXISTS (
-               SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] f2
-               WHERE f2.[EntityID] = e.[ID]
-                 AND f2.[IncludeInUserSearchAPI] = 1
-            )
-         );
-
-
-/* Create Entity Relationship: MJ: Roles -> MJ: Entity Alternate Base View Permissions (One To Many via RoleID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'aa15acd8-2f9c-4835-8921-a4779cd82be6'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('aa15acd8-2f9c-4835-8921-a4779cd82be6', 'DA238F34-2837-EF11-86D4-6045BDEE16E6', '4BF37099-70A9-4947-8FB9-270D72A8FEAB', 'RoleID', 'One To Many', 1, 1, 19, GETUTCDATE(), GETUTCDATE())
-   END;
+/* SQL text to update ValueListType for entity field ID 51EB5D80-F53E-46E6-936B-CD12982F6143 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='51EB5D80-F53E-46E6-936B-CD12982F6143';
 
 
 /* Create Entity Relationship: MJ: Entities -> MJ: Entity Alternate Base Views (One To Many via EntityID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'b88e6259-34f0-4551-9415-0496962fa164'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '952dce9c-fdfa-4320-b077-6e5e5c9b35c6'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('b88e6259-34f0-4551-9415-0496962fa164', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '1D11ABD5-521B-4134-A998-954335BAD19A', 'EntityID', 'One To Many', 1, 1, 88, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('952dce9c-fdfa-4320-b077-6e5e5c9b35c6', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '38B82609-4B90-477B-801B-BC4154A8DE39', 'EntityID', 'One To Many', 1, 1, 88, GETUTCDATE(), GETUTCDATE())
    END;
 
 
-/* Create Entity Relationship: MJ: Entity Alternate Base Views -> MJ: Entity Alternate Base View Permissions (One To Many via EntityAlternateBaseViewID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'bfa70903-ef7b-40b9-9ceb-3ae3213a8862'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('bfa70903-ef7b-40b9-9ceb-3ae3213a8862', '1D11ABD5-521B-4134-A998-954335BAD19A', '4BF37099-70A9-4947-8FB9-270D72A8FEAB', 'EntityAlternateBaseViewID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
-   END;
-                    
 /* Create Entity Relationship: MJ: Entity Alternate Base Views -> MJ: Query Entities (One To Many via AlternateBaseViewID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '8bbd747d-5387-46e8-880a-76a073ea1d06'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '0836f8a5-e945-4705-9923-7743b42beb92'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('8bbd747d-5387-46e8-880a-76a073ea1d06', '1D11ABD5-521B-4134-A998-954335BAD19A', 'EFB0FD56-7AD5-4BFE-BE31-74628FF77265', 'AlternateBaseViewID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('0836f8a5-e945-4705-9923-7743b42beb92', '38B82609-4B90-477B-801B-BC4154A8DE39', 'EFB0FD56-7AD5-4BFE-BE31-74628FF77265', 'AlternateBaseViewID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
    END;
                     
 /* Create Entity Relationship: MJ: Entity Alternate Base Views -> MJ: Entity Alternate Base Views (One To Many via ParentID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '74d6357f-b91a-4e32-a587-d9718a2fb06a'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '4780068f-2bf3-45c2-8a45-970fab302fb3'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('74d6357f-b91a-4e32-a587-d9718a2fb06a', '1D11ABD5-521B-4134-A998-954335BAD19A', '1D11ABD5-521B-4134-A998-954335BAD19A', 'ParentID', 'One To Many', 1, 1, 3, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('4780068f-2bf3-45c2-8a45-970fab302fb3', '38B82609-4B90-477B-801B-BC4154A8DE39', '38B82609-4B90-477B-801B-BC4154A8DE39', 'ParentID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
    END;
-
-/* Index for Foreign Keys for EntityAlternateBaseViewPermission */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Entity Alternate Base View Permissions
--- Item: Index for Foreign Keys
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
--- Index for foreign key EntityAlternateBaseViewID in table EntityAlternateBaseViewPermission
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_EntityAlternateBaseViewPermission_EntityAlternateBaseViewID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[EntityAlternateBaseViewPermission]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_EntityAlternateBaseViewPermission_EntityAlternateBaseViewID ON [${flyway:defaultSchema}].[EntityAlternateBaseViewPermission] ([EntityAlternateBaseViewID]);
-
--- Index for foreign key RoleID in table EntityAlternateBaseViewPermission
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_EntityAlternateBaseViewPermission_RoleID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[EntityAlternateBaseViewPermission]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_EntityAlternateBaseViewPermission_RoleID ON [${flyway:defaultSchema}].[EntityAlternateBaseViewPermission] ([RoleID]);
-
-/* SQL text to update entity field related entity name field map for entity field ID FB63AFD7-E207-4E68-AE54-10EA2070F18C */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='FB63AFD7-E207-4E68-AE54-10EA2070F18C', @RelatedEntityNameFieldMap='EntityAlternateBaseView';
 
 /* Index for Foreign Keys for EntityAlternateBaseView */
 -----------------------------------------------------------------
@@ -1809,14 +1278,11 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_EntityAlternateBaseView_ParentID ON [${flyway:defaultSchema}].[EntityAlternateBaseView] ([ParentID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID EEB0C5AF-D6C2-4211-AA50-6A9AFDFBB9BB */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='EEB0C5AF-D6C2-4211-AA50-6A9AFDFBB9BB', @RelatedEntityNameFieldMap='Entity';
+/* SQL text to update entity field related entity name field map for entity field ID 531FF067-9622-4FB4-8117-677FA6BB35FB */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='531FF067-9622-4FB4-8117-677FA6BB35FB', @RelatedEntityNameFieldMap='Entity';
 
-/* SQL text to update entity field related entity name field map for entity field ID 2E4E0319-D7A2-40AF-85C4-E17C301357D0 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='2E4E0319-D7A2-40AF-85C4-E17C301357D0', @RelatedEntityNameFieldMap='Role';
-
-/* SQL text to update entity field related entity name field map for entity field ID 3F05EE04-B5EA-4761-B4E9-0DC5293CAF17 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='3F05EE04-B5EA-4761-B4E9-0DC5293CAF17', @RelatedEntityNameFieldMap='Parent';
+/* SQL text to update entity field related entity name field map for entity field ID 4F8EE735-3E4D-49EE-A543-81E7CC5DF95B */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='4F8EE735-3E4D-49EE-A543-81E7CC5DF95B', @RelatedEntityNameFieldMap='Parent';
 
 /* Base View SQL for MJ: Entity Alternate Base Views */
 -----------------------------------------------------------------
@@ -2120,246 +1586,6 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityAlternateBaseView] TO 
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityAlternateBaseView] TO [cdp_Developer], [cdp_Integration];
 
-/* Base View SQL for MJ: Entity Alternate Base View Permissions */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Entity Alternate Base View Permissions
--- Item: vwEntityAlternateBaseViewPermissions
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ BASE VIEW FOR ENTITY:      MJ: Entity Alternate Base View Permissions
------               SCHEMA:      ${flyway:defaultSchema}
------               BASE TABLE:  EntityAlternateBaseViewPermission
------               PRIMARY KEY: ID
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[vwEntityAlternateBaseViewPermissions]', 'V') IS NOT NULL
-    DROP VIEW [${flyway:defaultSchema}].[vwEntityAlternateBaseViewPermissions];
-GO
-
-CREATE VIEW [${flyway:defaultSchema}].[vwEntityAlternateBaseViewPermissions]
-AS
-SELECT
-    e.*,
-    MJEntityAlternateBaseView_EntityAlternateBaseViewID.[Name] AS [EntityAlternateBaseView],
-    MJRole_RoleID.[Name] AS [Role]
-FROM
-    [${flyway:defaultSchema}].[EntityAlternateBaseViewPermission] AS e
-INNER JOIN
-    [${flyway:defaultSchema}].[EntityAlternateBaseView] AS MJEntityAlternateBaseView_EntityAlternateBaseViewID
-  ON
-    [e].[EntityAlternateBaseViewID] = MJEntityAlternateBaseView_EntityAlternateBaseViewID.[ID]
-INNER JOIN
-    [${flyway:defaultSchema}].[Role] AS MJRole_RoleID
-  ON
-    [e].[RoleID] = MJRole_RoleID.[ID]
-GO
-GRANT SELECT ON [${flyway:defaultSchema}].[vwEntityAlternateBaseViewPermissions] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
-
-/* Base View Permissions SQL for MJ: Entity Alternate Base View Permissions */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Entity Alternate Base View Permissions
--- Item: Permissions for vwEntityAlternateBaseViewPermissions
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-GRANT SELECT ON [${flyway:defaultSchema}].[vwEntityAlternateBaseViewPermissions] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
-
-/* spCreate SQL for MJ: Entity Alternate Base View Permissions */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Entity Alternate Base View Permissions
--- Item: spCreateEntityAlternateBaseViewPermission
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ CREATE PROCEDURE FOR EntityAlternateBaseViewPermission
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateEntityAlternateBaseViewPermission]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateEntityAlternateBaseViewPermission];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateEntityAlternateBaseViewPermission]
-    @ID uniqueidentifier = NULL,
-    @EntityAlternateBaseViewID uniqueidentifier,
-    @RoleID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-
-    IF @ID IS NOT NULL
-    BEGIN
-        -- User provided a value, use it
-        INSERT INTO [${flyway:defaultSchema}].[EntityAlternateBaseViewPermission]
-            (
-                [ID],
-                [EntityAlternateBaseViewID],
-                [RoleID]
-            )
-        OUTPUT INSERTED.[ID] INTO @InsertedRow
-        VALUES
-            (
-                @ID,
-                @EntityAlternateBaseViewID,
-                @RoleID
-            )
-    END
-    ELSE
-    BEGIN
-        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
-        INSERT INTO [${flyway:defaultSchema}].[EntityAlternateBaseViewPermission]
-            (
-                [EntityAlternateBaseViewID],
-                [RoleID]
-            )
-        OUTPUT INSERTED.[ID] INTO @InsertedRow
-        VALUES
-            (
-                @EntityAlternateBaseViewID,
-                @RoleID
-            )
-    END
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [${flyway:defaultSchema}].[vwEntityAlternateBaseViewPermissions] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateEntityAlternateBaseViewPermission] TO [cdp_Developer], [cdp_Integration];
-
-/* spCreate Permissions for MJ: Entity Alternate Base View Permissions */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateEntityAlternateBaseViewPermission] TO [cdp_Developer], [cdp_Integration];
-
-/* spUpdate SQL for MJ: Entity Alternate Base View Permissions */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Entity Alternate Base View Permissions
--- Item: spUpdateEntityAlternateBaseViewPermission
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ UPDATE PROCEDURE FOR EntityAlternateBaseViewPermission
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateEntityAlternateBaseViewPermission]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateEntityAlternateBaseViewPermission];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateEntityAlternateBaseViewPermission]
-    @ID uniqueidentifier,
-    @EntityAlternateBaseViewID uniqueidentifier = NULL,
-    @RoleID uniqueidentifier = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE
-        [${flyway:defaultSchema}].[EntityAlternateBaseViewPermission]
-    SET
-        [EntityAlternateBaseViewID] = ISNULL(@EntityAlternateBaseViewID, [EntityAlternateBaseViewID]),
-        [RoleID] = ISNULL(@RoleID, [RoleID])
-    WHERE
-        [ID] = @ID
-
-    -- Check if the update was successful
-    IF @@ROWCOUNT = 0
-        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
-        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwEntityAlternateBaseViewPermissions] WHERE 1=0
-    ELSE
-        -- Return the updated record so the caller can see the updated values and any calculated fields
-        SELECT
-                                        *
-                                    FROM
-                                        [${flyway:defaultSchema}].[vwEntityAlternateBaseViewPermissions]
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateEntityAlternateBaseViewPermission] TO [cdp_Developer], [cdp_Integration]
-GO
-
-------------------------------------------------------------
------ TRIGGER FOR __mj_UpdatedAt field for the EntityAlternateBaseViewPermission table
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateEntityAlternateBaseViewPermission]', 'TR') IS NOT NULL
-    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateEntityAlternateBaseViewPermission];
-GO
-CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateEntityAlternateBaseViewPermission
-ON [${flyway:defaultSchema}].[EntityAlternateBaseViewPermission]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE
-        [${flyway:defaultSchema}].[EntityAlternateBaseViewPermission]
-    SET
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM
-        [${flyway:defaultSchema}].[EntityAlternateBaseViewPermission] AS _organicTable
-    INNER JOIN
-        INSERTED AS I ON
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-
-/* spUpdate Permissions for MJ: Entity Alternate Base View Permissions */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateEntityAlternateBaseViewPermission] TO [cdp_Developer], [cdp_Integration];
-
-/* spDelete SQL for MJ: Entity Alternate Base View Permissions */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Entity Alternate Base View Permissions
--- Item: spDeleteEntityAlternateBaseViewPermission
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ DELETE PROCEDURE FOR EntityAlternateBaseViewPermission
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteEntityAlternateBaseViewPermission]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteEntityAlternateBaseViewPermission];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteEntityAlternateBaseViewPermission]
-    @ID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM
-        [${flyway:defaultSchema}].[EntityAlternateBaseViewPermission]
-    WHERE
-        [ID] = @ID
-
-
-    -- Check if the delete was successful
-    IF @@ROWCOUNT = 0
-        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
-    ELSE
-        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
-END
-GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityAlternateBaseViewPermission] TO [cdp_Developer], [cdp_Integration];
-
-/* spDelete Permissions for MJ: Entity Alternate Base View Permissions */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityAlternateBaseViewPermission] TO [cdp_Developer], [cdp_Integration];
-
 /* Index for Foreign Keys for QueryEntity */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -2396,8 +1622,8 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_QueryEntity_AlternateBaseViewID ON [${flyway:defaultSchema}].[QueryEntity] ([AlternateBaseViewID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID AABC250C-69B8-463D-BF3A-ADDEED5C640D */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='AABC250C-69B8-463D-BF3A-ADDEED5C640D', @RelatedEntityNameFieldMap='AlternateBaseView';
+/* SQL text to update entity field related entity name field map for entity field ID 437E22C7-73A2-42A4-964F-50E5EE71E3F7 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='437E22C7-73A2-42A4-964F-50E5EE71E3F7', @RelatedEntityNameFieldMap='AlternateBaseView';
 
 /* Base View SQL for MJ: Query Entities */
 -----------------------------------------------------------------
@@ -2926,9 +2152,9 @@ REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteQuery] FROM [cdp_Developer]
 REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteQuery] FROM [cdp_Integration]
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteQuery] TO [cdp_Developer], [cdp_Integration];
 
-/* SQL text to insert 5 new entity field(s) */
+/* SQL text to insert 3 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '77f685ba-f14a-45e9-9fd4-b9f4394ddd7b' OR (EntityID = '4BF37099-70A9-4947-8FB9-270D72A8FEAB' AND Name = 'EntityAlternateBaseView')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '958b20e1-32b7-4750-a48d-6409951aa3a7' OR (EntityID = 'EFB0FD56-7AD5-4BFE-BE31-74628FF77265' AND Name = 'AlternateBaseView')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2961,133 +2187,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteQuery] TO [cdp_Developer], [
          )
          VALUES
          (
-            '77f685ba-f14a-45e9-9fd4-b9f4394ddd7b',
-            '4BF37099-70A9-4947-8FB9-270D72A8FEAB', -- Entity: MJ: Entity Alternate Base View Permissions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '4BF37099-70A9-4947-8FB9-270D72A8FEAB'),
-            'EntityAlternateBaseView',
-            'Entity Alternate Base View',
-            NULL,
-            'nvarchar',
-            200,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3610891f-68eb-4bc6-a0b1-30af2205d7d1' OR (EntityID = '4BF37099-70A9-4947-8FB9-270D72A8FEAB' AND Name = 'Role')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '3610891f-68eb-4bc6-a0b1-30af2205d7d1',
-            '4BF37099-70A9-4947-8FB9-270D72A8FEAB', -- Entity: MJ: Entity Alternate Base View Permissions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '4BF37099-70A9-4947-8FB9-270D72A8FEAB'),
-            'Role',
-            'Role',
-            NULL,
-            'nvarchar',
-            100,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2d2a5a47-201d-41aa-909a-99534ab7363d' OR (EntityID = 'EFB0FD56-7AD5-4BFE-BE31-74628FF77265' AND Name = 'AlternateBaseView')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '2d2a5a47-201d-41aa-909a-99534ab7363d',
+            '958b20e1-32b7-4750-a48d-6409951aa3a7',
             'EFB0FD56-7AD5-4BFE-BE31-74628FF77265', -- Entity: MJ: Query Entities
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'EFB0FD56-7AD5-4BFE-BE31-74628FF77265'),
             'AlternateBaseView',
@@ -3117,7 +2217,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteQuery] TO [cdp_Developer], [
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'af448896-285e-4a0d-b869-f7c9628f2d27' OR (EntityID = '1D11ABD5-521B-4134-A998-954335BAD19A' AND Name = 'Entity')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c8404b7f-5d29-4b16-82f1-10bb42b3f77c' OR (EntityID = '38B82609-4B90-477B-801B-BC4154A8DE39' AND Name = 'Entity')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3150,9 +2250,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteQuery] TO [cdp_Developer], [
          )
          VALUES
          (
-            'af448896-285e-4a0d-b869-f7c9628f2d27',
-            '1D11ABD5-521B-4134-A998-954335BAD19A', -- Entity: MJ: Entity Alternate Base Views
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '1D11ABD5-521B-4134-A998-954335BAD19A'),
+            'c8404b7f-5d29-4b16-82f1-10bb42b3f77c',
+            '38B82609-4B90-477B-801B-BC4154A8DE39', -- Entity: MJ: Entity Alternate Base Views
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '38B82609-4B90-477B-801B-BC4154A8DE39'),
             'Entity',
             'Entity',
             NULL,
@@ -3180,7 +2280,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteQuery] TO [cdp_Developer], [
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f8fdd282-5d66-4fbb-b94a-ce60d959e6cf' OR (EntityID = '1D11ABD5-521B-4134-A998-954335BAD19A' AND Name = 'Parent')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b830b4d3-a481-4011-98a7-a359b7f79b9d' OR (EntityID = '38B82609-4B90-477B-801B-BC4154A8DE39' AND Name = 'Parent')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3213,9 +2313,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteQuery] TO [cdp_Developer], [
          )
          VALUES
          (
-            'f8fdd282-5d66-4fbb-b94a-ce60d959e6cf',
-            '1D11ABD5-521B-4134-A998-954335BAD19A', -- Entity: MJ: Entity Alternate Base Views
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '1D11ABD5-521B-4134-A998-954335BAD19A'),
+            'b830b4d3-a481-4011-98a7-a359b7f79b9d',
+            '38B82609-4B90-477B-801B-BC4154A8DE39', -- Entity: MJ: Entity Alternate Base Views
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '38B82609-4B90-477B-801B-BC4154A8DE39'),
             'Parent',
             'Parent',
             NULL,
@@ -3247,154 +2347,23 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteQuery] TO [cdp_Developer], [
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '77F685BA-F14A-45E9-9FD4-B9F4394DDD7B'
+               WHERE ID = '51EB5D80-F53E-46E6-936B-CD12982F6143'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '3610891F-68EB-4BC6-A0B1-30AF2205D7D1'
-               AND AutoUpdateDefaultInView = 1;
-
-/* Set categories for 2 fields */
-
--- UPDATE Entity Field Category Info MJ: Query Entities.AlternateBaseViewID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Query Mapping',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Alternate Base View'
-WHERE 
-   ID = 'AABC250C-69B8-463D-BF3A-ADDEED5C640D';
-
--- UPDATE Entity Field Category Info MJ: Query Entities.AlternateBaseView 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Query Mapping',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Alternate Base View Name'
-WHERE 
-   ID = '2D2A5A47-201D-41AA-909A-99534AB7363D';
-
-/* Set field properties for entity */
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '0B074BF8-8E27-4F9F-A564-C689C05449D1'
+               WHERE ID = '7AE4E47A-5E9F-4F4C-A150-C88EECB14969'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '51D419A7-2D65-4E17-BAF2-098AE606E9DE'
+               WHERE ID = 'C8404B7F-5D29-4B16-82F1-10BB42B3F77C'
                AND AutoUpdateDefaultInView = 1;
 
             UPDATE [${flyway:defaultSchema}].[Entity]
             SET AllowUserSearchAPI = 0
-            WHERE ID = '1D11ABD5-521B-4134-A998-954335BAD19A'
+            WHERE ID = '38B82609-4B90-477B-801B-BC4154A8DE39'
             AND AutoUpdateAllowUserSearchAPI = 1;
-
-/* Set categories for 7 fields */
-
--- UPDATE Entity Field Category Info MJ: Entity Alternate Base View Permissions.ID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '2DBC07D5-9D19-4F1E-874D-E3831EF56FC1';
-
--- UPDATE Entity Field Category Info MJ: Entity Alternate Base View Permissions.EntityAlternateBaseViewID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'View Permissions',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Entity Alternate Base View'
-WHERE 
-   ID = 'FB63AFD7-E207-4E68-AE54-10EA2070F18C';
-
--- UPDATE Entity Field Category Info MJ: Entity Alternate Base View Permissions.RoleID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'View Permissions',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Role'
-WHERE 
-   ID = '2E4E0319-D7A2-40AF-85C4-E17C301357D0';
-
--- UPDATE Entity Field Category Info MJ: Entity Alternate Base View Permissions.EntityAlternateBaseView 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'View Permissions',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Entity Alternate Base View Name'
-WHERE 
-   ID = '77F685BA-F14A-45E9-9FD4-B9F4394DDD7B';
-
--- UPDATE Entity Field Category Info MJ: Entity Alternate Base View Permissions.Role 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'View Permissions',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Role Name'
-WHERE 
-   ID = '3610891F-68EB-4BC6-A0B1-30AF2205D7D1';
-
--- UPDATE Entity Field Category Info MJ: Entity Alternate Base View Permissions.__mj_CreatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '81A5C6C5-1160-4122-8907-4ACE75E47A7C';
-
--- UPDATE Entity Field Category Info MJ: Entity Alternate Base View Permissions.__mj_UpdatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'BF053AB2-0687-4A23-A325-3FF4E6793CC2';
-
-/* Set entity icon to fa fa-shield-alt */
-
-               UPDATE [${flyway:defaultSchema}].[Entity]
-               SET [Icon] = 'fa fa-shield-alt', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = '4BF37099-70A9-4947-8FB9-270D72A8FEAB';
-
-/* Insert FieldCategoryInfo setting for entity */
-IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '4BF37099-70A9-4947-8FB9-270D72A8FEAB' AND [Name] = 'FieldCategoryInfo'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('bc10a976-e156-5747-a7bf-97a0d39e7c0f', '4BF37099-70A9-4947-8FB9-270D72A8FEAB', 'FieldCategoryInfo', '{
-  "System Metadata": {
-    "description": "System-managed audit and tracking fields",
-    "icon": "fa fa-cog"
-  },
-  "View Permissions": {
-    "description": "Role-based permission mappings for alternate base views",
-    "icon": "fa fa-lock"
-  }
-}', GETUTCDATE(), GETUTCDATE())
-   END;
-
-/* Insert FieldCategoryIcons setting (legacy) */
-IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '4BF37099-70A9-4947-8FB9-270D72A8FEAB' AND [Name] = 'FieldCategoryIcons'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('ec6c70df-c7c3-5e89-9b8a-6cc981146198', '4BF37099-70A9-4947-8FB9-270D72A8FEAB', 'FieldCategoryIcons', '{
-  "System Metadata": "fa fa-cog",
-  "View Permissions": "fa fa-lock"
-}', GETUTCDATE(), GETUTCDATE())
-   END;
-
-/* Set DefaultForNewUser=false for NEW entity (category: junction, confidence: high) */
-
-         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
-         SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = '4BF37099-70A9-4947-8FB9-270D72A8FEAB';
 
 /* Set categories for 15 fields */
 
@@ -3404,89 +2373,107 @@ SET
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '438CC42F-EAE9-49B8-B7A2-EF7AB1ED0DFF';
+   ID = '362D67EB-0158-48E9-89A7-3D2DF8D6C86C';
 
 -- UPDATE Entity Field Category Info MJ: Entity Alternate Base Views.EntityID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Database & Mapping',
+   Category = 'View Configuration',
    GeneratedFormSection = 'Category',
    DisplayName = 'Entity'
 WHERE 
-   ID = 'EEB0C5AF-D6C2-4211-AA50-6A9AFDFBB9BB';
+   ID = '531FF067-9622-4FB4-8117-677FA6BB35FB';
 
 -- UPDATE Entity Field Category Info MJ: Entity Alternate Base Views.ParentID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Database & Mapping',
+   Category = 'View Configuration',
    GeneratedFormSection = 'Category',
    DisplayName = 'Parent'
 WHERE 
-   ID = '3F05EE04-B5EA-4761-B4E9-0DC5293CAF17';
+   ID = '4F8EE735-3E4D-49EE-A543-81E7CC5DF95B';
 
 -- UPDATE Entity Field Category Info MJ: Entity Alternate Base Views.Name 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'View Definition',
+   Category = 'View Configuration',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '1186ABD9-3F85-4765-A6CF-CABF762078EE';
+   ID = 'C4879B44-18A3-4648-88DC-C94BE3E6DB99';
 
 -- UPDATE Entity Field Category Info MJ: Entity Alternate Base Views.DisplayName 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'View Definition',
+   Category = 'View Configuration',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'CE952CA5-15A5-4892-BA40-6F8FCD32984E';
+   ID = '2A3E6D40-74CE-4B1A-8343-12D0E7D5DB9E';
 
 -- UPDATE Entity Field Category Info MJ: Entity Alternate Base Views.Description 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'View Definition',
+   Category = 'View Configuration',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '1BBC5833-6B0C-477D-98F4-10B98AD1A71B';
+   ID = '7D045DEA-83B0-4A60-8CB2-7335082CE8B5';
 
 -- UPDATE Entity Field Category Info MJ: Entity Alternate Base Views.SchemaName 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Database & Mapping',
+   Category = 'Database Properties',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '0E56C5E6-3903-41ED-80BB-30E2161151EA';
+   ID = '3487A094-478C-4920-8C3D-FE0F7CDCE862';
 
 -- UPDATE Entity Field Category Info MJ: Entity Alternate Base Views.ViewName 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Database & Mapping',
+   Category = 'Database Properties',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '0B074BF8-8E27-4F9F-A564-C689C05449D1';
+   ID = 'AD8F0456-815E-46BF-87C6-945374F44168';
 
 -- UPDATE Entity Field Category Info MJ: Entity Alternate Base Views.CachePolicy 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Database & Mapping',
+   Category = 'Behavior and Status',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '09B7337B-9D99-4ACC-898D-E9B1710E8E1F';
+   ID = '119BB279-FF18-4CF7-A54F-2513CD2D7F27';
 
 -- UPDATE Entity Field Category Info MJ: Entity Alternate Base Views.Status 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'View Definition',
+   Category = 'Behavior and Status',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '51D419A7-2D65-4E17-BAF2-098AE606E9DE';
+   ID = '51EB5D80-F53E-46E6-936B-CD12982F6143';
 
 -- UPDATE Entity Field Category Info MJ: Entity Alternate Base Views.Sequence 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'View Definition',
+   Category = 'Behavior and Status',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '011D455D-AFE8-4293-98B4-7A5345953856';
+   ID = '7AE4E47A-5E9F-4F4C-A150-C88EECB14969';
+
+-- UPDATE Entity Field Category Info MJ: Entity Alternate Base Views.Entity 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'View Configuration',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Entity Text'
+WHERE 
+   ID = 'C8404B7F-5D29-4B16-82F1-10BB42B3F77C';
+
+-- UPDATE Entity Field Category Info MJ: Entity Alternate Base Views.Parent 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'View Configuration',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Parent Text'
+WHERE 
+   ID = 'B830B4D3-A481-4011-98A7-A359B7F79B9D';
 
 -- UPDATE Entity Field Category Info MJ: Entity Alternate Base Views.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -3494,7 +2481,7 @@ SET
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'FBBA2854-A026-4AC4-A61F-BA51BE9AED44';
+   ID = '00986856-D0FF-48CD-9DDC-6F30C698F717';
 
 -- UPDATE Entity Field Category Info MJ: Entity Alternate Base Views.__mj_UpdatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -3502,70 +2489,84 @@ SET
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'B9823038-7D68-4D72-B296-2AA89F08B033';
+   ID = '68B795ED-BF33-4BE6-A036-564812532211';
 
--- UPDATE Entity Field Category Info MJ: Entity Alternate Base Views.Entity 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Database & Mapping',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Entity Name'
-WHERE 
-   ID = 'AF448896-285E-4A0D-B869-F7C9628F2D27';
-
--- UPDATE Entity Field Category Info MJ: Entity Alternate Base Views.Parent 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Database & Mapping',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Parent Name'
-WHERE 
-   ID = 'F8FDD282-5D66-4FBB-B94A-CE60D959E6CF';
-
-/* Set entity icon to fa fa-database */
+/* Set entity icon to fa fa-eye */
 
                UPDATE [${flyway:defaultSchema}].[Entity]
-               SET [Icon] = 'fa fa-database', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = '1D11ABD5-521B-4134-A998-954335BAD19A';
+               SET [Icon] = 'fa fa-eye', [__mj_UpdatedAt] = GETUTCDATE()
+               WHERE [ID] = '38B82609-4B90-477B-801B-BC4154A8DE39';
 
 /* Insert FieldCategoryInfo setting for entity */
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '1D11ABD5-521B-4134-A998-954335BAD19A' AND [Name] = 'FieldCategoryInfo'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '38B82609-4B90-477B-801B-BC4154A8DE39' AND [Name] = 'FieldCategoryInfo'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('f840a636-3402-5016-b1e4-49c7e082ef2b', '1D11ABD5-521B-4134-A998-954335BAD19A', 'FieldCategoryInfo', '{
-  "Database & Mapping": {
-    "description": "Physical database schema, view mappings, caching, and entity relationships",
+               VALUES ('5283f6b0-5c08-533f-b9cf-b547f6a02a14', '38B82609-4B90-477B-801B-BC4154A8DE39', 'FieldCategoryInfo', '{
+  "Behavior and Status": {
+    "description": "Runtime caching, status configuration, and display sequence settings",
+    "icon": "fa fa-cog"
+  },
+  "Database Properties": {
+    "description": "Physical database mapping properties including schema and view names",
     "icon": "fa fa-database"
   },
   "System Metadata": {
     "description": "System-managed audit and tracking fields",
-    "icon": "fa fa-cog"
+    "icon": "fa fa-shield-alt"
   },
-  "View Definition": {
-    "description": "Logical naming, descriptions, UI labeling, and status settings for the alternate view",
-    "icon": "fa fa-eye"
+  "View Configuration": {
+    "description": "Core identifying attributes, names, and relationships of the alternate base view",
+    "icon": "fa fa-sliders-h"
   }
 }', GETUTCDATE(), GETUTCDATE())
    END;
 
 /* Insert FieldCategoryIcons setting (legacy) */
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '1D11ABD5-521B-4134-A998-954335BAD19A' AND [Name] = 'FieldCategoryIcons'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '38B82609-4B90-477B-801B-BC4154A8DE39' AND [Name] = 'FieldCategoryIcons'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('4ca9514b-c16f-5863-9137-148e6fcb436d', '1D11ABD5-521B-4134-A998-954335BAD19A', 'FieldCategoryIcons', '{
-  "Database & Mapping": "fa fa-database",
-  "System Metadata": "fa fa-cog",
-  "View Definition": "fa fa-eye"
+               VALUES ('024008df-fd40-5e90-b1a6-ccf89cf53e5b', '38B82609-4B90-477B-801B-BC4154A8DE39', 'FieldCategoryIcons', '{
+  "Behavior and Status": "fa fa-cog",
+  "Database Properties": "fa fa-database",
+  "System Metadata": "fa fa-shield-alt",
+  "View Configuration": "fa fa-sliders-h"
 }', GETUTCDATE(), GETUTCDATE())
    END;
 
-/* Set DefaultForNewUser=false for NEW entity (category: system, confidence: high) */
+/* Set DefaultForNewUser=false for NEW entity (category: supporting, confidence: high) */
 
          UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
          SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = '1D11ABD5-521B-4134-A998-954335BAD19A';
+         WHERE [EntityID] = '38B82609-4B90-477B-801B-BC4154A8DE39';
+
+/* Set field properties for entity */
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '958B20E1-32B7-4750-A48D-6409951AA3A7'
+               AND AutoUpdateDefaultInView = 1;
+
+/* Set categories for 2 fields */
+
+-- UPDATE Entity Field Category Info MJ: Query Entities.AlternateBaseViewID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Identifiers',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Alternate Base View'
+WHERE 
+   ID = '437E22C7-73A2-42A4-964F-50E5EE71E3F7';
+
+-- UPDATE Entity Field Category Info MJ: Query Entities.AlternateBaseView 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Query Mapping',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Alternate Base View Name'
+WHERE 
+   ID = '958B20E1-32B7-4750-A48D-6409951AA3A7';
 

@@ -16,10 +16,10 @@ export class MJEntityAlternateBaseViewFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'databaseMapping', sectionName: 'Database & Mapping', isExpanded: true },
-            { sectionKey: 'viewDefinition', sectionName: 'View Definition', isExpanded: true },
+            { sectionKey: 'viewConfiguration', sectionName: 'View Configuration', isExpanded: true },
+            { sectionKey: 'databaseProperties', sectionName: 'Database Properties', isExpanded: true },
+            { sectionKey: 'behaviorAndStatus', sectionName: 'Behavior and Status', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJEntityAlternateBaseViewPermissions', sectionName: 'Entity Alternate Base View Permissions', isExpanded: false },
             { sectionKey: 'mJQueryEntities', sectionName: 'Query Entities', isExpanded: false },
             { sectionKey: 'mJEntityAlternateBaseViews', sectionName: 'Entity Alternate Base Views', isExpanded: false }
         ]);
