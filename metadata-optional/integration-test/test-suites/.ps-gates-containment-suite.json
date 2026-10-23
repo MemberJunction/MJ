@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Predictive Studio Gates — Containment",
-      "Description": "The ten PR 2 containment gates (G0.1, G0.4–G0.12) and the truth-suite dataset load, datasets first. Needs MJAPI and the truth sidecar running and `pnpm run truth:provision` done; G0.6 also needs RUN_AGENT_TESTS=1 with AI_VENDOR_API_KEY__GeminiLLM set. Run with: MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite \"Predictive Studio Gates — Containment\"",
+      "Description": "The nine deterministic PR 2 containment gates (G0.1, G0.4, G0.5, G0.7–G0.12) and the truth-suite dataset load, datasets first. G0.6 (an LLM judge) is in \"Predictive Studio Gates — Pending\". Needs MJAPI and the truth sidecar running and `pnpm run truth:provision` done. Run with: MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite \"Predictive Studio Gates — Containment\"",
       "Status": "Active"
     },
     "relatedEntities": {
@@ -54,19 +54,8 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=W1 -> S9.3",
-            "Sequence": 5,
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "7A92C508-08AB-4054-90AF-23FF25FB293D"
-          }
-        },
-        {
-          "fields": {
-            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=W1 -> S7.3",
-            "Sequence": 6,
+            "Sequence": 5,
             "Status": "Active"
           },
           "primaryKey": {
@@ -77,7 +66,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=W4 -> S2.1",
-            "Sequence": 7,
+            "Sequence": 6,
             "Status": "Active"
           },
           "primaryKey": {
@@ -88,7 +77,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=W2 -> S5.3",
-            "Sequence": 8,
+            "Sequence": 7,
             "Status": "Active"
           },
           "primaryKey": {
@@ -99,7 +88,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=W1 -> S5.4",
-            "Sequence": 9,
+            "Sequence": 8,
             "Status": "Active"
           },
           "primaryKey": {
@@ -110,7 +99,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=T4 -> S6.5",
-            "Sequence": 10,
+            "Sequence": 9,
             "Status": "Active"
           },
           "primaryKey": {
@@ -121,7 +110,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=W7 -> S4.2",
-            "Sequence": 11,
+            "Sequence": 10,
             "Status": "Active"
           },
           "primaryKey": {

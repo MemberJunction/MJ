@@ -57,7 +57,7 @@ Start MJAPI with `PREDICTIVE_STUDIO_SIDECAR_URL` set to the URL in `.run/sidecar
 MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Containment"
 ```
 
-The suite loads and verifies the 68 datasets first, then runs the ten PR 2 gates. G0.6 also needs `RUN_AGENT_TESTS=1` and `AI_VENDOR_API_KEY__GeminiLLM`. G0.2 and G0.3 are in the separate suite "Predictive Studio Gates — Pending (PR 4)".
+The suite loads and verifies the 68 datasets first, then runs the nine deterministic PR 2 gates. The separate suite "Predictive Studio Gates — Pending" holds the gates that do not block a merge: G0.2 and G0.3 (owned by PR 4), and G0.6, an LLM judge whose verdict can differ between runs on the same text (it needs `RUN_AGENT_TESTS=1` and `AI_VENDOR_API_KEY__GeminiLLM`).
 
 ## 4. Package tests
 
