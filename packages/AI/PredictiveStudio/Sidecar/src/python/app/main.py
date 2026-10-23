@@ -108,7 +108,7 @@ def train(req: TrainRequest) -> TrainResponse:
         training_row_count=result["training_row_count"],
         duration_sec=round(duration, 4),
         holdout_metrics=result.get("holdout_metrics"),
-            )
+    )
 
 
 def _feature_columns(req: TrainRequest) -> List[str]:
