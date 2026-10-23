@@ -1,7 +1,7 @@
 import { BaseEntity, ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJConversationEntity } from '@memberjunction/core-entities';
-import { CheckAnonymousOwnershipKeyChange, OwnershipKeyGuardTarget } from './anonymousOwnershipKeyGuard';
+import { CheckAnonymousOwnershipKeyChange } from './anonymousOwnershipKeyGuard';
 
 /**
  * Server-side `MJ: Conversations` entity.
@@ -14,7 +14,7 @@ import { CheckAnonymousOwnershipKeyChange, OwnershipKeyGuardTarget } from './ano
 export class MJConversationEntityServer extends MJConversationEntity {
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        const violation = CheckAnonymousOwnershipKeyChange(this as unknown as OwnershipKeyGuardTarget, 'ExternalID');
+        const violation = CheckAnonymousOwnershipKeyChange(this, 'ExternalID');
         if (violation) {
             result.Errors.push(violation);
             result.Success = false;

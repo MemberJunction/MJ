@@ -19,7 +19,6 @@
 import { Resolver, Mutation, Query, Arg, Ctx, Float, Int, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { UserInfo, IMetadataProvider, LogError } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentSessionEntity, MJAIAgentEntity } from '@memberjunction/core-entities';
 import { NormalizeInstanceKey, RemoteBrowserEngine } from '@memberjunction/remote-browser-server';
 import { BeginBrowserGoalStep, FinalizeBrowserGoalStep, ExtractCoAgentRunID } from '../agentSessions/remoteBrowserGoalEngine.js';
@@ -45,8 +44,6 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 
-/** Entity name — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
-const SESSION_ENTITY = 'MJ: AI Agent Sessions';
 /** Entity name for the agent whose `TypeConfiguration` carries the remote-browser provider preference. */
 const AGENT_ENTITY = 'MJ: AI Agents';
 /**

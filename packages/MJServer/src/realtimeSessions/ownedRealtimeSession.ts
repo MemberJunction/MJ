@@ -20,7 +20,7 @@ export class RealtimeSessionNotFoundError extends Error {
     }
 }
 
-/** The session exists but belongs to another user. */
+/** The session exists but the caller may not use it: another user owns it, or (for a scoped or anonymous caller) its conversation carries another scope identity. */
 export class RealtimeSessionOwnershipError extends Error {
     constructor(public readonly AgentSessionID: string) {
         super('Not authorized: you do not own this realtime session');
@@ -29,13 +29,15 @@ export class RealtimeSessionOwnershipError extends Error {
 }
 
 /**
- * Loads a session under the caller's identity and enforces ownership (`UserID === contextUser.ID`). It
- * deliberately does NOT reject `Closed` sessions: the final channel-state flush and the recording terminal
- * signal legitimately arrive after the session closed. A scoped-anonymous widget guest owns the session it
- * minted, so the same check covers it; loading as the caller also applies the entity's row-level security.
+ * Loads a session under the caller's identity and enforces ownership: `UserID === contextUser.ID`, then the
+ * scope rule of {@link AuthorizeSessionAccess} (every anonymous visitor shares one Anonymous user, so the
+ * session's conversation `ExternalID` must equal the caller's scope identity). It deliberately does NOT
+ * reject `Closed` sessions: the final channel-state flush and the recording terminal signal legitimately
+ * arrive after the session closed. Loading as the caller also applies the entity's row-level security.
  *
  * @throws RealtimeSessionNotFoundError when the row does not load
- * @throws RealtimeSessionOwnershipError when the caller is not the owner (logged with both user ids)
+ * @throws RealtimeSessionOwnershipError when another user owns the session (logged with both user ids) or
+ *   the scope rule refuses the caller (logged with the refusal reason)
  */
 export async function LoadOwnedRealtimeSession(
     agentSessionId: string,

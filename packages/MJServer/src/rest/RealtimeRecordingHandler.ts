@@ -258,11 +258,11 @@ async function handleTerminal(deps: RealtimeRecordingRouterDeps, req: Request, r
 
 /**
  * Loads the session through the shared ownership gate, then applies the per-session scope rule of
- * {@link AuthorizeSessionAccess}. The gate alone checks `UserID`, which every anonymous widget guest shares
- * (they all authenticate as the one Anonymous user); without the scope rule one guest could write shards to
- * another guest's recording, and a different-bytes shard would mark it Failed. The owner half of the
- * decision repeats the gate's check on purpose: the decision is one rule, applied whole. Named users carry
- * no scope and are unaffected.
+ * {@link AuthorizeSessionAccess}. The production gate (`LoadOwnedRealtimeSession`) already applies the same
+ * rule, so this is a deliberate second check at the HTTP boundary: `LoadOwnedSession` is an injected dependency,
+ * and without the scope rule one anonymous guest could write shards to another guest's recording (every guest
+ * shares the one Anonymous user), and a different-bytes shard would mark it Failed. It costs one extra
+ * conversation read per request. Named users without a scope are unaffected.
  */
 async function loadAuthorizedSession(deps: RealtimeRecordingRouterDeps, sessionID: string, caller: RealtimeRecordingCaller): Promise<MJAIAgentSessionEntity> {
     const session = await deps.LoadOwnedSession(sessionID, caller.ContextUser, caller.Provider);

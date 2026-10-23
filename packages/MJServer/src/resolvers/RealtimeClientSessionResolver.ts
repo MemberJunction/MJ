@@ -104,7 +104,6 @@ const SIGNIFICANT_PROGRESS_STEPS = ['prompt_execution', 'action_execution', 'sub
 const MAX_USAGE_DETAILS_JSON_LENGTH = 4096;
 
 /** Entity name — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
-const SESSION_ENTITY = 'MJ: AI Agent Sessions';
 const CO_AGENT_ENTITY = 'MJ: AI Agent Co Agents';
 const CONVERSATION_DETAIL_ENTITY = 'MJ: Conversation Details';
 const CHANNEL_ENTITY = 'MJ: AI Agent Channels';

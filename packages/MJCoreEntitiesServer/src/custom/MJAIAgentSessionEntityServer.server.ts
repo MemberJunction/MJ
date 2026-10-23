@@ -2,7 +2,7 @@ import { BaseEntity, EntitySaveOptions, ValidationErrorInfo, ValidationErrorType
 import { RegisterClass } from '@memberjunction/global';
 import { MJAIAgentSessionEntity } from '@memberjunction/core-entities';
 import { FindProtectedSessionConfigChanges, IsTrustedSessionConfigWriteActive } from './sessionConfigGuard';
-import { CheckAnonymousOwnershipKeyChange, OwnershipKeyGuardTarget } from './anonymousOwnershipKeyGuard';
+import { CheckAnonymousOwnershipKeyChange } from './anonymousOwnershipKeyGuard';
 
 /**
  * Server-side `MJ: AI Agent Sessions` entity.
@@ -66,7 +66,7 @@ export class MJAIAgentSessionEntityServer extends MJAIAgentSessionEntity {
         const result = super.Validate();
         const violations = [
             this.checkProtectedConfigKeys(),
-            CheckAnonymousOwnershipKeyChange(this as unknown as OwnershipKeyGuardTarget, 'ConversationID'),
+            CheckAnonymousOwnershipKeyChange(this, 'ConversationID'),
         ].filter((v): v is ValidationErrorInfo => v !== null);
         if (violations.length > 0) {
             result.Errors.push(...violations);
