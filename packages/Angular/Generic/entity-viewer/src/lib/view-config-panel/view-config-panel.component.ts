@@ -290,7 +290,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   private _localSaving: boolean = false;
 
   // UI state
-  public ActiveTab: 'columns' | 'sorting' | 'filters' | 'aggregates' | 'settings' = 'columns';
+  public ActiveTab: 'columns' | 'sorting' | 'filters' | 'aggregates' | 'settings' | 'display' = 'columns';
   @Input() IsSaving: boolean = false;
   public ColumnSearchText: string = '';
 
@@ -305,11 +305,13 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   // Custom Alternate Base View dropdown state
   public IsBaseViewDropdownOpen: boolean = false;
 
-  // Panel resize state
+  // Panel resize & full-screen state
   public IsResizing: boolean = false;
+  public IsFullScreen: boolean = false;
+  public HasCustomResizeWidth: boolean = false;
   public PanelWidth: number = 520;
-  private readonly MIN_PANEL_WIDTH = 360;
-  private readonly MAX_PANEL_WIDTH = 800;
+  private readonly MIN_PANEL_WIDTH = 480;
+  private readonly MAX_PANEL_WIDTH = 1400;
   private readonly DEFAULT_PANEL_WIDTH = 520;
   /** Width threshold below which tabs show icons only */
   private readonly ICON_ONLY_THRESHOLD = 440;
@@ -325,17 +327,19 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   /**
-   * Whether the panel is currently in expanded wide mode
+   * Whether the panel is currently in expanded wide / full-screen studio mode
    */
   get IsWideMode(): boolean {
-    return this.PanelWidth >= 680;
+    return this.IsFullScreen || this.PanelWidth >= 680;
   }
 
   /**
-   * Toggle between standard (520px) and wide (740px) studio width
+   * Toggle between Wide Split Sheet (960px) and Full Workspace Takeover (100% width)
    */
   ToggleWideMode(): void {
-    this.PanelWidth = this.IsWideMode ? this.DEFAULT_PANEL_WIDTH : 740;
+    this.IsFullScreen = !this.IsFullScreen;
+    this.HasCustomResizeWidth = false;
+    this.PanelWidth = this.IsFullScreen ? 960 : this.DEFAULT_PANEL_WIDTH;
     void this.savePanelWidth();
     this.cdr.detectChanges();
   }
@@ -386,8 +390,10 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   OnResizeStart(event: MouseEvent): void {
     event.preventDefault();
     this.IsResizing = true;
+    this.IsFullScreen = false;
+    this.HasCustomResizeWidth = true;
     this.resizeStartX = event.clientX;
-    this.resizeStartWidth = this.PanelWidth;
+    this.resizeStartWidth = this.PanelWidth >= 680 ? this.PanelWidth : 940;
 
     // Add document-level listeners for mouse move and up
     document.addEventListener('mousemove', this.onResizeMove);
@@ -776,6 +782,20 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    */
   OnFilterChange(filter: CompositeFilterDescriptor): void {
     this.FilterState = filter;
+    if (!this.ViewEntity && this.GetFilterCount() > 0 && !this.ViewName.trim()) {
+      this.ViewName = this.BuildSuggestedViewName();
+    }
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Handle Smart Filter prompt change and auto-suggest a view name when promoting from (Default)
+   */
+  OnSmartFilterPromptChange(value: string): void {
+    this.SmartFilterPrompt = value;
+    if (!this.ViewEntity && value.trim() && !this.ViewName.trim()) {
+      this.ViewName = this.BuildSuggestedViewName();
+    }
     this.cdr.detectChanges();
   }
 
@@ -938,7 +958,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    * that requires a named view rather than the personal default layout setting.
    */
   get HasActiveFilterOrBaseView(): boolean {
-    const hasSmart = this.SmartFilterEnabled && !!this.SmartFilterPrompt.trim();
+    const hasSmart = (this.FilterMode === 'smart' || this.SmartFilterEnabled) && !!this.SmartFilterPrompt.trim();
     const hasRules = this.GetFilterCount() > 0;
     const hasAbv = !!this.AlternateBaseView?.trim();
     const hasCustomSql = this.CustomWhereClause && !!this.WhereClause.trim();
@@ -954,6 +974,14 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   /**
+   * True when the user opened the Studio on (Default) and it automatically promoted to a Named View
+   * because a filter, Smart Filter prompt, Alternate Base View, or Custom SQL WHERE was added.
+   */
+  get WasAutoPromotedToNamedView(): boolean {
+    return !this.ViewEntity && !this.DefaultSaveAsNew && !this.IsCreatingNewView && this.HasActiveFilterOrBaseView;
+  }
+
+  /**
    * Promote the panel from Personal Default View mode to Creating New Named View mode in-place
    */
   PromoteToNewView(): void {
@@ -965,11 +993,26 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   /**
+   * Switch from "Save as New Named View" back to "Personal Default Layout" mode.
+   * Clears any filter or alternate base view that forced named-view promotion.
+   */
+  SwitchToDefaultLayoutMode(): void {
+    this.IsCreatingNewView = false;
+    this.DefaultSaveAsNew = false;
+    this.SmartFilterPrompt = '';
+    this.FilterState = CreateEmptyFilter();
+    this.AlternateBaseView = null;
+    this.CustomWhereClause = false;
+    this.WhereClause = '';
+    this.cdr.detectChanges();
+  }
+
+  /**
    * Build a smart suggested name based on the entity, alternate base view, or active filter
    */
   BuildSuggestedViewName(): string {
     const entityName = this.Entity?.DisplayNameOrName ?? this.Entity?.Name ?? 'View';
-    const prompt = this.SmartFilterEnabled ? this.SmartFilterPrompt?.trim() : '';
+    const prompt = (this.FilterMode === 'smart' || this.SmartFilterEnabled) ? this.SmartFilterPrompt?.trim() : '';
     if (prompt) {
       const budget = Math.max(60 - entityName.length - 3, 12);
       const suffix = prompt.length > budget ? `${prompt.slice(0, budget - 1).trimEnd()}…` : prompt;
@@ -1017,7 +1060,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     if (this.CustomWhereClause && this.WhereClause.trim()) {
       return 'Custom SQL';
     }
-    if (this.FilterMode === 'smart' && this.SmartFilterEnabled && this.SmartFilterPrompt.trim()) {
+    if (this.FilterMode === 'smart' && this.SmartFilterPrompt.trim()) {
       return 'AI Smart Filter';
     }
     const count = this.GetFilterCount();
@@ -1032,7 +1075,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    */
   get HasActiveFilterChip(): boolean {
     return (this.CustomWhereClause && !!this.WhereClause.trim()) ||
-           (this.FilterMode === 'smart' && this.SmartFilterEnabled && !!this.SmartFilterPrompt.trim()) ||
+           (this.FilterMode === 'smart' && !!this.SmartFilterPrompt.trim()) ||
            this.GetFilterCount() > 0;
   }
 
@@ -1974,7 +2017,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   /**
    * Set the active tab
    */
-  SetActiveTab(tab: 'columns' | 'sorting' | 'filters' | 'aggregates' | 'settings'): void {
+  SetActiveTab(tab: 'columns' | 'sorting' | 'filters' | 'aggregates' | 'settings' | 'display'): void {
     this.ActiveTab = tab === 'settings' ? 'filters' : tab;
     this.FormatEditingColumn = null; // Close format editor when switching tabs
     this.IsBaseViewDropdownOpen = false;

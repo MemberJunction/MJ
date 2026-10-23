@@ -249,4 +249,25 @@ describe('ViewConfigPanelComponent — carrying a staged filter back from the na
     expect(emitted[0].CardDisplayState).toEqual({ cardSize: 'large' });
     expect(emitted[0].Columns[0].pinned).toBe('left');
   });
+
+  it('auto-promotes from Personal Default Layout to Named View when a filter prompt is typed, and can switch back to Default Layout', () => {
+    const panel = makePanel();
+    open(panel);
+
+    expect(panel.IsCreatingNamedView).toBe(false);
+    expect(panel.WasAutoPromotedToNamedView).toBe(false);
+
+    panel.OnSmartFilterPromptChange('People in California');
+    expect(panel.IsCreatingNamedView).toBe(true);
+    expect(panel.WasAutoPromotedToNamedView).toBe(true);
+    expect(panel.ViewName).toBe('Accounts — People in California');
+
+    panel.SetActiveTab('display');
+    expect(panel.ActiveTab).toBe('display');
+
+    panel.SwitchToDefaultLayoutMode();
+    expect(panel.IsCreatingNamedView).toBe(false);
+    expect(panel.WasAutoPromotedToNamedView).toBe(false);
+    expect(panel.SmartFilterPrompt).toBe('');
+  });
 });

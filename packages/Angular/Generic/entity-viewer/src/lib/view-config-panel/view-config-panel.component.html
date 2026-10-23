@@ -1,13 +1,14 @@
 <!-- Backdrop -->
-@if (IsOpen) {
+@if (IsOpen && !IsWideMode) {
   <div class="panel-backdrop" (click)="OnClose()"></div>
 }
 
-<!-- Sliding Panel: Unified View Studio -->
+<!-- Sliding Panel: Unified View Studio (Wide Split Sheet 960px or 100% Full Takeover) -->
 <div class="config-panel"
      [class.open]="IsOpen"
      [class.resizing]="IsResizing"
-     [style.width.px]="PanelWidth">
+     [class.full-takeover]="IsWideMode"
+     [style.width.px]="HasCustomResizeWidth && !IsWideMode ? PanelWidth : null">
   <!-- Resize Handle -->
   <div class="resize-handle"
        (mousedown)="OnResizeStart($event)"
@@ -16,276 +17,302 @@
   </div>
 
   <!-- ============================================================ -->
-  <!-- PINNED IDENTITY HEADER (Always Visible Above Tabs)           -->
+  <!-- PINNED STUDIO HEADER (Intent Switcher / Identity / Actions)  -->
   <!-- ============================================================ -->
   <div class="studio-header">
-    <!-- Top Row: Context Badge + Entity Badge + Studio Actions -->
+    <!-- Top Row: Mode Switcher / Context Badge + Entity Tag + Horizontal Studio Actions -->
     <div class="studio-top-bar">
       <div class="studio-badges">
-        @if (!ViewEntity && IsCreatingNamedView) {
-          <span class="studio-context-badge creating">
-            <i class="fa-solid fa-wand-magic-sparkles"></i>
-            <span>Creating New View</span>
-          </span>
+        @if (!ViewEntity) {
+          <!-- Segmented Intent Switcher when opened from (Default) or Creating New View -->
+          <div class="intent-segmented" role="tablist" aria-label="View configuration mode">
+            <button
+              type="button"
+              class="intent-seg-btn"
+              [class.active]="!IsCreatingNamedView"
+              (click)="SwitchToDefaultLayoutMode()"
+              title="Customize your personal default columns, sort, and summaries for this entity">
+              <i class="fa-solid fa-sliders"></i>
+              <span>Personal Default Layout</span>
+            </button>
+            <button
+              type="button"
+              class="intent-seg-btn"
+              [class.active]="IsCreatingNamedView"
+              [class.new-view-intent]="IsCreatingNamedView"
+              (click)="PromoteToNewView()"
+              title="Create a new named view with filters, base view, and sharing options">
+              <i class="fa-solid fa-plus"></i>
+              <span>Save as New Named View</span>
+            </button>
+          </div>
         } @else if (ViewEntity && CanEdit) {
           <span class="studio-context-badge editing">
             <i class="fa-solid fa-layer-group"></i>
             <span>Editing Saved View</span>
           </span>
-        } @else if (ViewEntity && !CanEdit) {
+        } @else {
           <span class="studio-context-badge readonly">
             <i class="fa-solid fa-lock"></i>
             <span>Shared View (Read-Only)</span>
           </span>
-        } @else {
-          <span class="studio-context-badge default-mode">
-            <i class="fa-solid fa-sliders"></i>
-            <span>Personal Default Layout</span>
-          </span>
         }
+
         @if (Entity) {
-          <span class="studio-entity-badge">{{ Entity.DisplayNameOrName }}</span>
+          <span class="studio-entity-badge">
+            <i class="fa-solid fa-table"></i>
+            <span>{{ Entity.DisplayNameOrName }}</span>
+          </span>
         }
       </div>
 
+      <!-- Horizontal Action Buttons (Never stacked vertically!) -->
       <div class="studio-header-actions">
         <button
           type="button"
-          class="studio-icon-btn"
+          class="studio-action-btn"
           [class.active]="IsWideMode"
           (click)="ToggleWideMode()"
-          [title]="IsWideMode ? 'Standard width' : 'Expand studio width'">
+          [title]="IsWideMode ? 'Switch back to split sheet' : 'Expand to full-screen workspace'">
           <i [class]="IsWideMode ? 'fa-solid fa-compress' : 'fa-solid fa-expand'"></i>
+          <span>{{ IsWideMode ? 'Split Sheet' : 'Full Screen' }}</span>
         </button>
         @if (ViewEntity) {
           <button
             type="button"
-            class="studio-icon-btn"
+            class="studio-action-btn"
             (click)="OnDuplicate()"
             title="Duplicate this view">
             <i class="fa-regular fa-copy"></i>
+            <span>Duplicate</span>
           </button>
         }
         @if (ViewEntity && CanDelete) {
           <button
             type="button"
-            class="studio-icon-btn danger"
+            class="studio-action-btn danger"
             (click)="OnDelete()"
             title="Delete this view">
             <i class="fa-regular fa-trash-can"></i>
+            <span>Delete</span>
           </button>
         }
         <button
           type="button"
-          class="studio-icon-btn"
+          class="studio-action-btn icon-only"
           (click)="OnClose()"
-          title="Close"
+          title="Close Studio"
           aria-label="Close panel">
-          <i class="fa-solid fa-times"></i>
+          <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
     </div>
 
-    <!-- Identity Body: Named View Input & Quick Toggles OR Personal Default Banner -->
-    @if (ViewEntity || IsCreatingNamedView) {
-      <div class="studio-identity-body">
-        <div class="studio-name-row">
-          <input
-            id="ViewName"
-            type="text"
-            class="studio-name-input"
-            [class.invalid]="ViewEntity && (!ViewName || !ViewName.trim())"
-            placeholder="Name your view (e.g., My Active Records)..."
-            [(ngModel)]="ViewName"
-            [disabled]="!CanEdit"
-          />
-        </div>
-        @if (ViewEntity && (!ViewName || !ViewName.trim())) {
-          <span class="validation-error">View name is required</span>
-        }
-
-        <div class="studio-meta-pills">
-          <button
-            type="button"
-            class="meta-pill-btn"
-            [class.shared]="IsShared"
-            (click)="ToggleShared()"
-            [disabled]="!CanEdit"
-            [title]="IsShared ? 'Shared with other users — click to make Private' : 'Private to you — click to share with team'">
-            <i [class]="IsShared ? 'fa-solid fa-globe' : 'fa-solid fa-lock'"></i>
-            <span>{{ IsShared ? 'Shared with Team' : 'Private (My View)' }}</span>
-          </button>
-
-          <button
-            type="button"
-            class="meta-pill-btn"
-            [class.default-active]="IsDefault"
-            (click)="ToggleDefaultView()"
-            [disabled]="!CanEdit"
-            title="Use this view by default when opening this entity">
-            <i [class]="IsDefault ? 'fa-solid fa-star' : 'fa-regular fa-star'"></i>
-            <span>{{ IsDefault ? 'Default View' : 'Set as Default' }}</span>
-          </button>
-
-          <button
-            type="button"
-            class="meta-pill-btn"
-            [class.active]="ShowDescriptionEditor || !!ViewDescription.trim()"
-            (click)="ToggleDescriptionEditor()"
-            title="Add or edit view description">
-            <i class="fa-solid fa-align-left"></i>
-            <span>{{ ViewDescription.trim() ? 'Description' : '+ Description' }}</span>
-          </button>
-        </div>
-
-        @if (ShowDescriptionEditor) {
-          <div class="studio-desc-wrap">
-            <textarea
-              id="ViewDescription"
-              class="studio-desc-textarea"
-              placeholder="Describe what this view shows and when to use it..."
-              [(ngModel)]="ViewDescription"
-              [disabled]="!CanEdit"
-              rows="2"
-            ></textarea>
+    <!-- ============================================================ -->
+    <!-- STATE A: PERSONAL DEFAULT LAYOUT BANNER (NO NAME INPUT!)     -->
+    <!-- ============================================================ -->
+    @if (!ViewEntity && !IsCreatingNamedView) {
+      <div class="default-layout-explainer">
+        <div class="default-explainer-left">
+          <div class="default-explainer-icon">
+            <i class="fa-solid fa-table-columns"></i>
           </div>
-        }
-      </div>
-    } @else {
-      <div class="studio-default-banner">
-        <div class="default-banner-info">
-          <i class="fa-solid fa-user-gear"></i>
-          <span>Customizing your personal default columns & sort</span>
+          <div class="default-explainer-text">
+            <h3>Personal Default Layout for {{ Entity?.DisplayNameOrName || 'Entity' }}</h3>
+            <p>
+              Changes to columns, sorting, and summaries here apply automatically whenever you open
+              <strong>{{ Entity?.DisplayNameOrName || 'Entity' }} (Default)</strong> — no saved view name needed.
+            </p>
+          </div>
         </div>
         <button
           type="button"
-          class="promote-view-btn"
+          class="convert-to-named-btn"
           (click)="PromoteToNewView()"
           title="Create a named, shareable view with filters and base view options">
-          <i class="fa-solid fa-plus"></i>
-          <span>Save as Named View...</span>
+          <i class="fa-solid fa-bookmark"></i>
+          <span>Want filters or sharing? Save as Named View &rarr;</span>
         </button>
       </div>
     }
 
-    <!-- Live Recipe Summary Chips Bar -->
-    <div class="studio-recipe-bar">
-      @if (AvailableAlternateBaseViews.length > 0 || IsCurrentAlternateBaseViewUnavailable || AlternateBaseView) {
+    <!-- ============================================================ -->
+    <!-- STATE B: NAMED VIEW IDENTITY ROW (CREATE NEW OR EDIT SAVED)  -->
+    <!-- ============================================================ -->
+    @if (ViewEntity || IsCreatingNamedView) {
+      <div class="studio-identity-body">
+        @if (WasAutoPromotedToNamedView) {
+          <div class="auto-promoted-banner">
+            <div class="auto-promoted-text">
+              <i class="fa-solid fa-circle-info"></i>
+              <span>
+                <strong>Creating a Named View:</strong> Since filters or alternate base views narrow which records appear,
+                this will be saved as a new named view so your <em>(Default)</em> view stays unfiltered.
+              </span>
+            </div>
+            <button
+              type="button"
+              class="auto-promoted-undo-btn"
+              (click)="SwitchToDefaultLayoutMode()">
+              Clear filter &amp; use Default Layout
+            </button>
+          </div>
+        }
+
+        <div class="named-identity-grid">
+          <div class="identity-input-wrap">
+            <i class="fa-solid fa-bookmark"></i>
+            <input
+              id="ViewName"
+              type="text"
+              class="studio-name-input"
+              [class.invalid]="ViewEntity && (!ViewName || !ViewName.trim())"
+              placeholder="Enter a name for this view (e.g., Active Records)..."
+              [(ngModel)]="ViewName"
+              [disabled]="!CanEdit"
+            />
+          </div>
+
+          <input
+            id="ViewDescription"
+            type="text"
+            class="studio-desc-input"
+            placeholder="Optional description (what this view shows)..."
+            [(ngModel)]="ViewDescription"
+            [disabled]="!CanEdit"
+          />
+
+          <div class="studio-meta-pills">
+            <button
+              type="button"
+              class="meta-pill-btn"
+              [class.active-shared]="IsShared"
+              (click)="ToggleShared()"
+              [disabled]="!CanEdit"
+              [title]="IsShared ? 'Shared with other users — click to make Private' : 'Private to you — click to share with team'">
+              <i [class]="IsShared ? 'fa-solid fa-globe' : 'fa-solid fa-lock'"></i>
+              <span>{{ IsShared ? 'Shared with Team' : 'Private' }}</span>
+            </button>
+
+            <button
+              type="button"
+              class="meta-pill-btn"
+              [class.active-default]="IsDefault"
+              (click)="ToggleDefaultView()"
+              [disabled]="!CanEdit"
+              title="Use this view by default when opening this entity">
+              <i [class]="IsDefault ? 'fa-solid fa-star' : 'fa-regular fa-star'"></i>
+              <span>{{ IsDefault ? 'Default View' : 'Set as Default' }}</span>
+            </button>
+          </div>
+        </div>
+
+        @if (ViewEntity && (!ViewName || !ViewName.trim())) {
+          <span class="validation-error">View name is required</span>
+        }
+      </div>
+    }
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- STUDIO BODY: LEFT NAVIGATION RAIL + WIDE 2-COLUMN WORKBENCH  -->
+  <!-- ============================================================ -->
+  <div class="studio-body">
+    <!-- Left Navigation Rail -->
+    <div class="studio-rail">
+      <div class="rail-nav-list" role="tablist">
         <button
           type="button"
-          class="recipe-chip"
-          [class.active]="!!AlternateBaseView"
-          [class.warning]="IsCurrentAlternateBaseViewUnavailable"
-          (click)="SetActiveTab('filters')"
-          title="Jump to Base View setting">
-          <i class="fa-solid fa-database"></i>
-          <span>{{ SelectedBaseViewLabel }}</span>
+          class="rail-nav-btn"
+          [class.active]="ActiveTab === 'columns'"
+          (click)="SetActiveTab('columns')">
+          <span class="rail-btn-left">
+            <i class="fa-solid fa-table-columns"></i>
+            <span>Columns &amp; Format</span>
+          </span>
+          <span class="rail-badge">{{ VisibleColumns.length }}</span>
         </button>
-      }
-      <button
-        type="button"
-        class="recipe-chip"
-        [class.active]="HasActiveFilterChip"
-        (click)="SetActiveTab('filters')"
-        title="Jump to Filters">
-        <i class="fa-solid fa-filter"></i>
-        <span>{{ FilterChipLabel }}</span>
-      </button>
-      <button
-        type="button"
-        class="recipe-chip"
-        [class.active]="ActiveTab === 'columns'"
-        (click)="SetActiveTab('columns')"
-        title="Jump to Columns">
-        <i class="fa-solid fa-table-columns"></i>
-        <span>{{ VisibleColumns.length }} Col{{ VisibleColumns.length !== 1 ? 's' : '' }}{{ PinnedColumnsCount > 0 ? ' · ' + PinnedColumnsCount + ' pinned' : '' }}</span>
-      </button>
-      <button
-        type="button"
-        class="recipe-chip"
-        [class.active]="SortItems.length > 0"
-        (click)="SetActiveTab('sorting')"
-        title="Jump to Sorting">
-        <i class="fa-solid fa-arrow-up-wide-short"></i>
-        <span>{{ SortSummaryLabel }}</span>
-      </button>
-      @if (EnabledAggregatesCount > 0) {
+
         <button
           type="button"
-          class="recipe-chip active"
-          (click)="SetActiveTab('aggregates')"
-          title="Jump to Aggregates">
-          <i class="fa-solid fa-chart-simple"></i>
-          <span>{{ EnabledAggregatesCount }} Agg{{ EnabledAggregatesCount !== 1 ? 's' : '' }}</span>
+          class="rail-nav-btn"
+          [class.active]="ActiveTab === 'filters'"
+          (click)="SetActiveTab('filters')">
+          <span class="rail-btn-left">
+            <i class="fa-solid fa-filter"></i>
+            <span>Filters &amp; Source</span>
+          </span>
+          @if (HasActiveFilterChip || AlternateBaseView) {
+            <span class="rail-badge active-dot">•</span>
+          }
         </button>
-      }
+
+        <button
+          type="button"
+          class="rail-nav-btn"
+          [class.active]="ActiveTab === 'sorting'"
+          (click)="SetActiveTab('sorting')">
+          <span class="rail-btn-left">
+            <i class="fa-solid fa-arrow-up-wide-short"></i>
+            <span>Sorting</span>
+          </span>
+          @if (SortItems.length > 0) {
+            <span class="rail-badge">{{ SortItems.length }}</span>
+          }
+        </button>
+
+        <button
+          type="button"
+          class="rail-nav-btn"
+          [class.active]="ActiveTab === 'aggregates'"
+          (click)="SetActiveTab('aggregates')">
+          <span class="rail-btn-left">
+            <i class="fa-solid fa-chart-simple"></i>
+            <span>Aggregates</span>
+          </span>
+          @if (EnabledAggregatesCount > 0) {
+            <span class="rail-badge">{{ EnabledAggregatesCount }}</span>
+          }
+        </button>
+
+        <button
+          type="button"
+          class="rail-nav-btn"
+          [class.active]="ActiveTab === 'display'"
+          (click)="SetActiveTab('display')">
+          <span class="rail-btn-left">
+            <i class="fa-solid fa-display"></i>
+            <span>Display &amp; Modes</span>
+          </span>
+        </button>
+      </div>
+
+      <!-- Active View Recipe Box in Bottom of Left Rail -->
+      <div class="rail-recipe-box">
+        <div class="rail-recipe-title">Active View Recipe</div>
+        @if (AvailableAlternateBaseViews.length > 0 || IsCurrentAlternateBaseViewUnavailable || AlternateBaseView) {
+          <button type="button" class="rail-recipe-item" (click)="SetActiveTab('filters')">
+            <i class="fa-solid fa-database"></i>
+            <span>{{ SelectedBaseViewLabel }}</span>
+          </button>
+        }
+        <button type="button" class="rail-recipe-item" (click)="SetActiveTab('filters')">
+          <i class="fa-solid fa-filter"></i>
+          <span>{{ FilterChipLabel }}</span>
+        </button>
+        <button type="button" class="rail-recipe-item" (click)="SetActiveTab('columns')">
+          <i class="fa-solid fa-table-columns"></i>
+          <span>{{ VisibleColumns.length }} Visible{{ PinnedColumnsCount > 0 ? ' (' + PinnedColumnsCount + ' Pinned)' : '' }}</span>
+        </button>
+        <button type="button" class="rail-recipe-item" (click)="SetActiveTab('sorting')">
+          <i class="fa-solid fa-arrow-up-wide-short"></i>
+          <span>{{ SortSummaryLabel }}</span>
+        </button>
+      </div>
     </div>
-  </div>
 
-  <!-- ============================================================ -->
-  <!-- 4 STREAMLINED TABS                                           -->
-  <!-- ============================================================ -->
-  <div class="tab-nav" [class.icon-only]="IsIconOnlyMode">
-    <button
-      type="button"
-      class="tab-btn"
-      [class.active]="ActiveTab === 'filters'"
-      (click)="SetActiveTab('filters')"
-      [title]="IsIconOnlyMode ? 'Filters & Source' : ''">
-      <i class="fa-solid fa-filter"></i>
-      @if (!IsIconOnlyMode) {
-        <span>Filters & Source</span>
-      }
-      @if (HasActiveFilterChip || AlternateBaseView) {
-        <span class="tab-badge-dot"></span>
-      }
-    </button>
-    <button
-      type="button"
-      class="tab-btn"
-      [class.active]="ActiveTab === 'columns'"
-      (click)="SetActiveTab('columns')"
-      [title]="IsIconOnlyMode ? 'Columns (' + VisibleColumns.length + ')' : ''">
-      <i class="fa-solid fa-table-columns"></i>
-      @if (!IsIconOnlyMode) {
-        <span>Columns</span>
-      }
-      <span class="tab-badge muted">{{ VisibleColumns.length }}</span>
-    </button>
-    <button
-      type="button"
-      class="tab-btn"
-      [class.active]="ActiveTab === 'sorting'"
-      (click)="SetActiveTab('sorting')"
-      [title]="IsIconOnlyMode ? 'Sorting' + (SortItems.length > 0 ? ' (' + SortItems.length + ')' : '') : ''">
-      <i class="fa-solid fa-arrow-up-wide-short"></i>
-      @if (!IsIconOnlyMode) {
-        <span>Sorting</span>
-      }
-      @if (SortItems.length > 0) {
-        <span class="tab-badge">{{ SortItems.length }}</span>
-      }
-    </button>
-    <button
-      type="button"
-      class="tab-btn"
-      [class.active]="ActiveTab === 'aggregates'"
-      (click)="SetActiveTab('aggregates')"
-      [title]="IsIconOnlyMode ? 'Aggregates' + (EnabledAggregatesCount > 0 ? ' (' + EnabledAggregatesCount + ')' : '') : ''">
-      <i class="fa-solid fa-chart-simple"></i>
-      @if (!IsIconOnlyMode) {
-        <span>Aggregates</span>
-      }
-      @if (EnabledAggregatesCount > 0) {
-        <span class="tab-badge">{{ EnabledAggregatesCount }}</span>
-      }
-    </button>
-  </div>
-
-  <!-- ============================================================ -->
-  <!-- PANEL CONTENT                                                -->
-  <!-- ============================================================ -->
-  <div class="panel-content">
+    <!-- Right Wide Workbench Content -->
+    <div class="panel-content">
     <!-- ========================================================== -->
     <!-- TAB 1: FILTERS & SOURCE                                    -->
     <!-- ========================================================== -->
@@ -346,7 +373,8 @@
                   id="SmartFilterPrompt"
                   class="smart-filter-textarea"
                   placeholder="Describe the records you want in plain English (e.g., 'Active jobs modified in the last 30 days')..."
-                  [(ngModel)]="SmartFilterPrompt"
+                  [ngModel]="SmartFilterPrompt"
+                  (ngModelChange)="OnSmartFilterPromptChange($event)"
                   [disabled]="!CanEdit"
                   rows="3"
                 ></textarea>
@@ -525,305 +553,136 @@
     }
 
     <!-- ========================================================== -->
-    <!-- TAB 2: COLUMNS                                             -->
+    <!-- TAB 2: COLUMNS & FORMAT (WIDE 2-COLUMN WORKBENCH)          -->
     <!-- ========================================================== -->
-    @if (ActiveTab === 'columns' && !FormatEditingColumn) {
-      <div class="tab-content">
-        <!-- Visible Columns -->
-        <div class="config-section">
-          <div class="section-header">
-            <i class="fa-solid fa-eye"></i>
-            <span>Visible Columns</span>
-            <span class="column-count">{{ VisibleColumns.length }}</span>
-            @if (CanEdit) {
-              <button
-                type="button"
-                class="section-link-btn"
-                (click)="ResetColumnsToDefault()"
-                title="Reset visible columns to entity defaults">
-                <i class="fa-solid fa-rotate-left"></i>
-                Reset Defaults
-              </button>
-            }
-          </div>
-          <div class="column-list visible-columns">
-            @for (column of VisibleColumns; track column.fieldId; let i = $index) {
-              <!-- Drop indicator before -->
-              @if (IsDropBefore(column)) {
-                <div class="drop-indicator"></div>
-              }
-              <div
-                class="column-item"
-                [class.dragging]="DraggedColumn === column"
-                [class.drop-target]="DropTargetColumn === column"
-                [class.is-pinned]="!!column.pinned"
-                draggable="true"
-                (dragstart)="OnDragStart($event, column)"
-                (dragover)="OnDragOver($event, column)"
-                (dragleave)="OnDragLeave($event)"
-                (drop)="OnDrop($event, column)"
-                (dragend)="OnDragEnd($event)">
-                <div class="drag-handle">
-                  <i class="fa-solid fa-grip-vertical"></i>
-                </div>
-                <span class="column-name">
-                  {{ column.userDisplayName || column.displayName }}
-                  @if (column.userDisplayName) {
-                    <i class="fa-solid fa-pen-nib alias-indicator" title="Custom name: {{ column.userDisplayName }}"></i>
-                  }
-                  @if (HasCustomFormat(column)) {
-                    <i class="fa-solid fa-paintbrush format-indicator" title="Custom formatting applied"></i>
-                  }
-                  @if (column.pinned) {
-                    <span class="pin-badge" title="Pinned {{ column.pinned }}">
-                      <i class="fa-solid fa-thumbtack"></i>
-                      {{ column.pinned === 'left' ? 'Left' : 'Right' }}
-                    </span>
-                  }
-                </span>
-                <div class="column-actions">
-                  <button
-                    type="button"
-                    class="action-btn pin-btn"
-                    [class.active]="!!column.pinned"
-                    (click)="ToggleColumnPin(column, $event)"
-                    [disabled]="!CanEdit"
-                    [title]="column.pinned ? 'Pinned ' + column.pinned + ' — click to cycle' : 'Pin column left/right'">
-                    <i class="fa-solid fa-thumbtack"></i>
-                  </button>
-                  <button
-                    type="button"
-                    class="action-btn format-btn"
-                    (click)="OpenFormatEditor(column)"
-                    title="Format column, width & conditional rules">
-                    <i class="fa-solid fa-paintbrush"></i>
-                  </button>
-                  <button
-                    type="button"
-                    class="action-btn"
-                    [disabled]="i === 0"
-                    (click)="MoveColumnUp(column)"
-                    title="Move up">
-                    <i class="fa-solid fa-chevron-up"></i>
-                  </button>
-                  <button
-                    type="button"
-                    class="action-btn"
-                    [disabled]="i === VisibleColumns.length - 1"
-                    (click)="MoveColumnDown(column)"
-                    title="Move down">
-                    <i class="fa-solid fa-chevron-down"></i>
-                  </button>
-                  <button
-                    type="button"
-                    class="action-btn hide-btn"
-                    (click)="ToggleColumnVisibility(column)"
-                    title="Hide column">
-                    <i class="fa-solid fa-eye-slash"></i>
-                  </button>
-                </div>
-              </div>
-              <!-- Drop indicator after (only for last item) -->
-              @if (IsDropAfter(column) && i === VisibleColumns.length - 1) {
-                <div class="drop-indicator"></div>
-              }
-            }
-            @if (VisibleColumns.length === 0) {
-              <mj-empty-state
-                Size="compact"
-                Variant="warning"
-                Title="No columns visible. Add columns from below." />
-            }
-          </div>
-        </div>
-
-        <!-- Hidden Columns -->
-        <div class="config-section">
-          <div class="section-header">
-            <i class="fa-solid fa-eye-slash"></i>
-            <span>Hidden Columns</span>
-            <span class="column-count">{{ HiddenColumns.length }}</span>
-            @if (HiddenColumns.length > 0 && CanEdit) {
-              <button
-                type="button"
-                class="section-link-btn"
-                (click)="ShowAllColumns()"
-                title="Make all columns visible">
-                <i class="fa-solid fa-plus"></i>
-                Show All
-              </button>
-            }
-          </div>
-          @if (HiddenColumns.length > 5) {
-            <div class="column-search">
-              <i class="fa-solid fa-search"></i>
-              <input
-                type="text"
-                placeholder="Search columns..."
-                [(ngModel)]="ColumnSearchText"
-              />
-            </div>
-          }
-          <div class="column-list hidden-columns">
-            @for (column of FilteredHiddenColumns; track column.fieldId) {
-              <div class="column-item hidden">
-                <span class="column-name">{{ column.displayName }}</span>
+    @if (ActiveTab === 'columns') {
+      <div class="tab-content columns-workbench-grid">
+        <!-- LEFT COLUMN: Visible Columns (Order, Pinning, Quick Actions) -->
+        <div class="wb-col">
+          <div class="config-section wb-card">
+            <div class="section-header">
+              <i class="fa-solid fa-eye"></i>
+              <span>Visible Columns</span>
+              <span class="column-count">{{ VisibleColumns.length }}</span>
+              @if (CanEdit) {
                 <button
                   type="button"
-                  class="action-btn show-btn"
-                  (click)="ToggleColumnVisibility(column)"
-                  title="Show column">
-                  <i class="fa-solid fa-plus"></i>
+                  class="section-link-btn"
+                  (click)="ResetColumnsToDefault()"
+                  title="Reset visible columns to entity defaults">
+                  <i class="fa-solid fa-rotate-left"></i>
+                  Reset Defaults
                 </button>
-              </div>
-            }
-            @if (HiddenColumns.length === 0) {
-              <mj-empty-state
-                Size="compact"
-                Variant="success"
-                Title="All columns are visible" />
-            }
-          </div>
-        </div>
-
-        <!-- Progressive Disclosure: Display & View Mode Options (DisplayState) -->
-        <div class="disclosure-card" [class.open]="ShowDisplayOptionsSection">
-          <button
-            type="button"
-            class="disclosure-header"
-            (click)="ShowDisplayOptionsSection = !ShowDisplayOptionsSection">
-            <div class="disclosure-title">
-              <i class="fa-solid fa-display"></i>
-              <span>Display & View Mode Options</span>
-            </div>
-            <i class="fa-solid fa-chevron-down disclosure-chevron" [class.rotated]="ShowDisplayOptionsSection"></i>
-          </button>
-
-          @if (ShowDisplayOptionsSection) {
-            <div class="disclosure-body">
-              <div class="format-row">
-                <label>Grid Row Density</label>
-                <div class="alignment-toggle">
-                  <button
-                    type="button"
-                    class="align-btn"
-                    [class.active]="GridRowHeight === 'compact'"
-                    (click)="GridRowHeight = 'compact'">
-                    Compact
-                  </button>
-                  <button
-                    type="button"
-                    class="align-btn"
-                    [class.active]="GridRowHeight === 'normal'"
-                    (click)="GridRowHeight = 'normal'">
-                    Normal
-                  </button>
-                  <button
-                    type="button"
-                    class="align-btn"
-                    [class.active]="GridRowHeight === 'comfortable'"
-                    (click)="GridRowHeight = 'comfortable'">
-                    Comfortable
-                  </button>
-                </div>
-              </div>
-
-              <div class="format-row">
-                <label>Wrap Long Cell Text</label>
-                <input type="checkbox" [(ngModel)]="GridWrapText" [disabled]="!CanEdit" />
-              </div>
-
-              <div class="format-row">
-                <label>Card View Size</label>
-                <div class="alignment-toggle">
-                  <button
-                    type="button"
-                    class="align-btn"
-                    [class.active]="CardSize === 'small'"
-                    (click)="CardSize = 'small'">
-                    Small
-                  </button>
-                  <button
-                    type="button"
-                    class="align-btn"
-                    [class.active]="CardSize === 'medium'"
-                    (click)="CardSize = 'medium'">
-                    Medium
-                  </button>
-                  <button
-                    type="button"
-                    class="align-btn"
-                    [class.active]="CardSize === 'large'"
-                    (click)="CardSize = 'large'">
-                    Large
-                  </button>
-                </div>
-              </div>
-
-              @if (AvailableDateFields.length > 0) {
-                <div class="disclosure-subsection">
-                  <div class="subsection-label">
-                    <i class="fa-solid fa-timeline"></i>
-                    <span>Timeline Mode Defaults</span>
-                  </div>
-                  <div class="format-row">
-                    <label>Date Axis Field</label>
-                    <select class="format-select" [(ngModel)]="TimelineDateField" [disabled]="!CanEdit">
-                      @for (df of AvailableDateFields; track df.ID) {
-                        <option [value]="df.Name">{{ df.DisplayNameOrName }}</option>
-                      }
-                    </select>
-                  </div>
-                  <div class="format-row">
-                    <label>Segment Grouping</label>
-                    <select class="format-select" [(ngModel)]="TimelineGrouping" [disabled]="!CanEdit">
-                      <option value="none">None</option>
-                      <option value="day">By Day</option>
-                      <option value="week">By Week</option>
-                      <option value="month">By Month</option>
-                      <option value="quarter">By Quarter</option>
-                      <option value="year">By Year</option>
-                    </select>
-                  </div>
-                  <div class="format-row">
-                    <label>Orientation</label>
-                    <div class="alignment-toggle">
-                      <button
-                        type="button"
-                        class="align-btn"
-                        [class.active]="TimelineOrientation === 'vertical'"
-                        (click)="TimelineOrientation = 'vertical'">
-                        Vertical
-                      </button>
-                      <button
-                        type="button"
-                        class="align-btn"
-                        [class.active]="TimelineOrientation === 'horizontal'"
-                        (click)="TimelineOrientation = 'horizontal'">
-                        Horizontal
-                      </button>
-                    </div>
-                  </div>
-                </div>
               }
             </div>
-          }
-        </div>
-      </div>
-    }
-
-    <!-- Column Format Editor Sub-Panel -->
-    @if (ActiveTab === 'columns' && FormatEditingColumn) {
-      <div class="format-editor">
-        <!-- Format Editor Header -->
-        <div class="format-editor-header">
-          <button type="button" class="back-btn" (click)="CloseFormatEditor()">
-            <i class="fa-solid fa-arrow-left"></i>
-          </button>
-          <div class="format-editor-title">
-            <span>Format: {{ FormatEditingColumn.userDisplayName || FormatEditingColumn.displayName }}</span>
+            <div class="column-list visible-columns">
+              @for (column of VisibleColumns; track column.fieldId; let i = $index) {
+                <!-- Drop indicator before -->
+                @if (IsDropBefore(column)) {
+                  <div class="drop-indicator"></div>
+                }
+                <div
+                  class="column-item"
+                  [class.dragging]="DraggedColumn === column"
+                  [class.drop-target]="DropTargetColumn === column"
+                  [class.is-pinned]="!!column.pinned"
+                  [class.is-selected]="FormatEditingColumn === column"
+                  draggable="true"
+                  (dragstart)="OnDragStart($event, column)"
+                  (dragover)="OnDragOver($event, column)"
+                  (dragleave)="OnDragLeave($event)"
+                  (drop)="OnDrop($event, column)"
+                  (dragend)="OnDragEnd($event)">
+                  <div class="drag-handle">
+                    <i class="fa-solid fa-grip-vertical"></i>
+                  </div>
+                  <span class="column-name" (click)="OpenFormatEditor(column)">
+                    {{ column.userDisplayName || column.displayName }}
+                    @if (column.userDisplayName) {
+                      <i class="fa-solid fa-pen-nib alias-indicator" title="Custom name: {{ column.userDisplayName }}"></i>
+                    }
+                    @if (HasCustomFormat(column)) {
+                      <i class="fa-solid fa-paintbrush format-indicator" title="Custom formatting applied"></i>
+                    }
+                    @if (column.pinned) {
+                      <span class="pin-badge" title="Pinned {{ column.pinned }}">
+                        <i class="fa-solid fa-thumbtack"></i>
+                        {{ column.pinned === 'left' ? 'Left' : 'Right' }}
+                      </span>
+                    }
+                  </span>
+                  <div class="column-actions">
+                    <button
+                      type="button"
+                      class="action-btn pin-btn"
+                      [class.active]="!!column.pinned"
+                      (click)="ToggleColumnPin(column, $event)"
+                      [disabled]="!CanEdit"
+                      [title]="column.pinned ? 'Pinned ' + column.pinned + ' — click to cycle' : 'Pin column left/right'">
+                      <i class="fa-solid fa-thumbtack"></i>
+                    </button>
+                    <button
+                      type="button"
+                      class="action-btn format-btn"
+                      [class.active]="FormatEditingColumn === column"
+                      (click)="OpenFormatEditor(column)"
+                      title="Format column, width & conditional rules">
+                      <i class="fa-solid fa-paintbrush"></i>
+                    </button>
+                    <button
+                      type="button"
+                      class="action-btn"
+                      [disabled]="i === 0"
+                      (click)="MoveColumnUp(column)"
+                      title="Move up">
+                      <i class="fa-solid fa-chevron-up"></i>
+                    </button>
+                    <button
+                      type="button"
+                      class="action-btn"
+                      [disabled]="i === VisibleColumns.length - 1"
+                      (click)="MoveColumnDown(column)"
+                      title="Move down">
+                      <i class="fa-solid fa-chevron-down"></i>
+                    </button>
+                    <button
+                      type="button"
+                      class="action-btn hide-btn"
+                      (click)="ToggleColumnVisibility(column)"
+                      title="Hide column">
+                      <i class="fa-solid fa-eye-slash"></i>
+                    </button>
+                  </div>
+                </div>
+                <!-- Drop indicator after (only for last item) -->
+                @if (IsDropAfter(column) && i === VisibleColumns.length - 1) {
+                  <div class="drop-indicator"></div>
+                }
+              }
+              @if (VisibleColumns.length === 0) {
+                <mj-empty-state
+                  Size="compact"
+                  Variant="warning"
+                  Title="No columns visible. Add columns from the right." />
+              }
+            </div>
           </div>
         </div>
+
+        <!-- RIGHT COLUMN: Column Format Inspector + Available / Hidden Fields -->
+        <div class="wb-col">
+          @if (FormatEditingColumn) {
+            <div class="format-editor wb-card">
+              <!-- Format Editor Header -->
+              <div class="format-editor-header">
+                <div class="format-editor-title">
+                  <i class="fa-solid fa-sliders"></i>
+                  <span>Column Inspector: {{ FormatEditingColumn.userDisplayName || FormatEditingColumn.displayName }}</span>
+                </div>
+                <button type="button" class="back-btn" (click)="CloseFormatEditor()" title="Close column inspector">
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              </div>
 
         <!-- Column Alias & Layout Section -->
         <div class="format-section">
@@ -1186,12 +1045,72 @@
           }
         </div>
 
-        <!-- Clear Format Button -->
-        <div class="format-actions">
-          <button type="button" class="clear-format-btn" (click)="ClearColumnFormat(FormatEditingColumn); CloseFormatEditor()">
-            <i class="fa-solid fa-eraser"></i>
-            Clear Formatting
-          </button>
+            <!-- Clear Format Button -->
+            <div class="format-actions">
+              <button type="button" class="clear-format-btn" (click)="ClearColumnFormat(FormatEditingColumn); CloseFormatEditor()">
+                <i class="fa-solid fa-eraser"></i>
+                Clear Formatting
+              </button>
+            </div>
+          </div>
+          } @else {
+            <div class="wb-inspector-placeholder">
+              <i class="fa-solid fa-paintbrush"></i>
+              <div>
+                <strong>Column Inspector</strong>
+                <span>Click any visible column or its paintbrush icon on the left to customize its alias, width, pin position, number/date format, or conditional highlight rules.</span>
+              </div>
+            </div>
+          }
+
+          <!-- Hidden / Available Columns Card -->
+          <div class="config-section wb-card">
+            <div class="section-header">
+              <i class="fa-solid fa-eye-slash"></i>
+              <span>Available / Hidden Columns</span>
+              <span class="column-count">{{ HiddenColumns.length }}</span>
+              @if (HiddenColumns.length > 0 && CanEdit) {
+                <button
+                  type="button"
+                  class="section-link-btn"
+                  (click)="ShowAllColumns()"
+                  title="Make all columns visible">
+                  <i class="fa-solid fa-plus"></i>
+                  Show All
+                </button>
+              }
+            </div>
+            @if (HiddenColumns.length > 3) {
+              <div class="column-search">
+                <i class="fa-solid fa-search"></i>
+                <input
+                  type="text"
+                  placeholder="Search available fields to add..."
+                  [(ngModel)]="ColumnSearchText"
+                />
+              </div>
+            }
+            <div class="column-list hidden-columns">
+              @for (column of FilteredHiddenColumns; track column.fieldId) {
+                <div class="column-item hidden">
+                  <span class="column-name">{{ column.displayName }}</span>
+                  <button
+                    type="button"
+                    class="action-btn show-btn"
+                    (click)="ToggleColumnVisibility(column)"
+                    title="Show column">
+                    <i class="fa-solid fa-plus"></i>
+                  </button>
+                </div>
+              }
+              @if (HiddenColumns.length === 0) {
+                <mj-empty-state
+                  Size="compact"
+                  Variant="success"
+                  Title="All columns are visible" />
+              }
+            </div>
+          </div>
         </div>
       </div>
     }
@@ -1522,6 +1441,128 @@
         </div>
       </div>
     }
+
+    <!-- ========================================================== -->
+    <!-- TAB 5: DISPLAY & VIEW MODE OPTIONS                         -->
+    <!-- ========================================================== -->
+    @if (ActiveTab === 'display') {
+      <div class="tab-content">
+        <div class="config-section wb-card">
+          <div class="section-header">
+            <i class="fa-solid fa-display"></i>
+            <span>Grid & Card Display Preferences</span>
+          </div>
+          <div class="disclosure-body">
+            <div class="format-row">
+              <label>Grid Row Density</label>
+              <div class="alignment-toggle">
+                <button
+                  type="button"
+                  class="align-btn"
+                  [class.active]="GridRowHeight === 'compact'"
+                  (click)="GridRowHeight = 'compact'">
+                  Compact
+                </button>
+                <button
+                  type="button"
+                  class="align-btn"
+                  [class.active]="GridRowHeight === 'normal'"
+                  (click)="GridRowHeight = 'normal'">
+                  Normal
+                </button>
+                <button
+                  type="button"
+                  class="align-btn"
+                  [class.active]="GridRowHeight === 'comfortable'"
+                  (click)="GridRowHeight = 'comfortable'">
+                  Comfortable
+                </button>
+              </div>
+            </div>
+
+            <div class="format-row">
+              <label>Wrap Long Cell Text</label>
+              <input type="checkbox" [(ngModel)]="GridWrapText" [disabled]="!CanEdit" />
+            </div>
+
+            <div class="format-row">
+              <label>Card View Size</label>
+              <div class="alignment-toggle">
+                <button
+                  type="button"
+                  class="align-btn"
+                  [class.active]="CardSize === 'small'"
+                  (click)="CardSize = 'small'">
+                  Small
+                </button>
+                <button
+                  type="button"
+                  class="align-btn"
+                  [class.active]="CardSize === 'medium'"
+                  (click)="CardSize = 'medium'">
+                  Medium
+                </button>
+                <button
+                  type="button"
+                  class="align-btn"
+                  [class.active]="CardSize === 'large'"
+                  (click)="CardSize = 'large'">
+                  Large
+                </button>
+              </div>
+            </div>
+
+            @if (AvailableDateFields.length > 0) {
+              <div class="disclosure-subsection">
+                <div class="subsection-label">
+                  <i class="fa-solid fa-timeline"></i>
+                  <span>Timeline Mode Defaults</span>
+                </div>
+                <div class="format-row">
+                  <label>Date Axis Field</label>
+                  <select class="format-select" [(ngModel)]="TimelineDateField" [disabled]="!CanEdit">
+                    @for (df of AvailableDateFields; track df.ID) {
+                      <option [value]="df.Name">{{ df.DisplayNameOrName }}</option>
+                    }
+                  </select>
+                </div>
+                <div class="format-row">
+                  <label>Segment Grouping</label>
+                  <select class="format-select" [(ngModel)]="TimelineGrouping" [disabled]="!CanEdit">
+                    <option value="none">None</option>
+                    <option value="day">By Day</option>
+                    <option value="week">By Week</option>
+                    <option value="month">By Month</option>
+                    <option value="quarter">By Quarter</option>
+                    <option value="year">By Year</option>
+                  </select>
+                </div>
+                <div class="format-row">
+                  <label>Orientation</label>
+                  <div class="alignment-toggle">
+                    <button
+                      type="button"
+                      class="align-btn"
+                      [class.active]="TimelineOrientation === 'vertical'"
+                      (click)="TimelineOrientation = 'vertical'">
+                      Vertical
+                    </button>
+                    <button
+                      type="button"
+                      class="align-btn"
+                      [class.active]="TimelineOrientation === 'horizontal'"
+                      (click)="TimelineOrientation = 'horizontal'">
+                      Horizontal
+                    </button>
+                  </div>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    }
+    </div>
   </div>
 
   <!-- Validation Errors Banner -->

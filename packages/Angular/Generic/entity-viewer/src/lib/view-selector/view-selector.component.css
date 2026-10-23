@@ -108,14 +108,14 @@
 
 .vs-panel {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 6px);
   left: 0;
-  width: 400px;
+  width: 440px;
   max-width: calc(100vw - 40px);
   background: var(--mj-bg-surface);
-  border: 1px solid var(--mj-border-default);
+  border: 1px solid var(--mj-border-strong);
   border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.16);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.24);
   z-index: 1000;
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -125,66 +125,78 @@
 
 /* Panel Header */
 .vs-panel-header {
-  padding: 16px 20px;
+  padding: 12px 16px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   border-bottom: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
 }
 
 .vs-header-icon {
   color: var(--mj-brand-primary);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .vs-panel-title {
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
   color: var(--mj-text-primary);
 }
 
 .vs-entity-badge {
   font-size: 11px;
-  font-weight: 500;
-  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  font-weight: 600;
+  background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface));
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 35%, var(--mj-border-default));
   color: var(--mj-brand-primary);
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: 999px;
+  max-width: 190px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .vs-close-btn {
   margin-left: auto;
-  background: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: transparent;
   border: none;
   cursor: pointer;
   color: var(--mj-text-muted);
-  font-size: 16px;
-  padding: 4px;
+  font-size: 13px;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: background 0.12s ease, color 0.12s ease;
 }
 
 .vs-close-btn:hover {
+  background: var(--mj-bg-surface-hover);
   color: var(--mj-text-primary);
 }
 
 /* Panel Search */
 .vs-panel-search {
-  padding: 12px 20px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--mj-border-default);
 }
 
 .vs-search-input {
   width: 100%;
-  padding: 6px 12px 6px 32px;
+  padding: 7px 12px 7px 32px;
   border: 1px solid var(--mj-border-default);
-  border-radius: 4px;
+  border-radius: 7px;
   font-size: 13px;
-  background: var(--mj-bg-surface-card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512' fill='%23999'%3E%3Cpath d='M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208z'/%3E%3C/svg%3E") no-repeat 10px center;
-  background-size: 14px;
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface-sunken) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512' fill='%23999'%3E%3Cpath d='M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208z'/%3E%3C/svg%3E") no-repeat 10px center;
+  background-size: 13px;
   box-sizing: border-box;
   font-family: inherit;
+  transition: border-color 0.15s ease;
 }
 
 .vs-search-input:focus {
@@ -198,22 +210,23 @@
 
 /* Panel Body */
 .vs-panel-body {
-  max-height: 400px;
+  max-height: 380px;
   overflow-y: auto;
+  padding: 6px;
 }
 
 /* View Section */
 .vs-section {
-  padding: 8px 0;
+  padding: 2px 0;
 }
 
 .vs-section-header {
-  padding: 6px 20px;
-  font-size: 11px;
+  padding: 8px 10px 4px;
+  font-size: 10px;
   font-weight: 700;
   color: var(--mj-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.06em;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -224,45 +237,49 @@
 }
 
 .vs-section-count {
-  background: var(--mj-border-default);
+  margin-left: auto;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
   padding: 0 6px;
-  border-radius: 8px;
+  border-radius: 999px;
   font-size: 10px;
+  color: var(--mj-text-secondary);
 }
 
 /* View Card */
 .vs-card {
-  padding: 10px 20px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
   cursor: pointer;
-  transition: background 0.1s;
+  transition: background 0.12s ease, border-color 0.12s ease;
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 10px;
 }
 
 .vs-card:hover {
-  background: color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface));
+  background: var(--mj-bg-surface-hover);
 }
 
 .vs-card.active {
-  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
-  border-left: 3px solid var(--mj-brand-primary);
-  padding-left: 17px;
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-border-default));
 }
 
 /* View Card Icon */
 .vs-card-icon {
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
   border-radius: 6px;
   background: var(--mj-bg-surface-card);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--mj-text-muted);
-  font-size: 14px;
+  font-size: 12px;
   flex-shrink: 0;
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
 .vs-card-icon.active {
@@ -275,124 +292,154 @@
   color: var(--mj-text-muted);
 }
 
+.vs-card-icon.shared.active {
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
+}
+
 /* View Card Content */
 .vs-card-content {
   flex: 1;
   min-width: 0;
-  padding-top: 4px;
 }
 
-.vs-card-name {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--mj-text-primary);
+.vs-card-top {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
 }
 
-.vs-card.active .vs-card-name {
+.vs-card-name-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vs-card.active .vs-card-name-text {
   color: var(--mj-brand-primary);
-  font-weight: 600;
 }
 
+/* Non-wrapping status pills — never wraps onto 2 lines */
 .vs-default-badge {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 600;
-  background: var(--mj-status-success-bg);
-  color: var(--mj-status-success-text);
-  padding: 1px 5px;
-  border-radius: 6px;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
+  background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+  padding: 1px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .vs-shared-badge {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 600;
-  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
-  color: var(--mj-brand-primary);
-  padding: 1px 5px;
-  border-radius: 6px;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
+  color: var(--mj-text-muted);
+  padding: 1px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .vs-shared-badge.editable {
   background: var(--mj-status-success-bg);
+  border-color: transparent;
   color: var(--mj-status-success-text);
 }
 
 .vs-card-desc {
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--mj-text-muted);
   margin-top: 2px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .vs-card-meta {
   display: flex;
-  gap: 10px;
-  margin-top: 4px;
-  font-size: 11px;
-  color: var(--mj-text-muted);
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 5px;
 }
 
-.vs-card-meta span {
+.vs-meta-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-muted);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.vs-meta-pill i {
+  font-size: 9.5px;
+  color: var(--mj-brand-primary);
+}
+
+/* Right Action & Checkmark Column */
+.vs-card-right {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
+  flex-shrink: 0;
+  align-self: center;
 }
 
-.vs-card-meta i {
-  font-size: 10px;
-}
-
-/* View Card Check */
 .vs-card-check {
   color: var(--mj-brand-primary);
   font-size: 12px;
-  flex-shrink: 0;
-  margin-top: 2px;
+  padding: 0 6px;
 }
 
 /* View Card Actions (hover reveal) */
 .vs-card-actions {
-  display: flex;
+  display: none;
+  align-items: center;
   gap: 2px;
-  opacity: 0;
-  transition: opacity 0.15s;
-  flex-shrink: 0;
-  margin-top: 2px;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 6px;
+  padding: 2px;
 }
 
-/* :focus-within matters as much as :hover — these buttons (Duplicate, Configure,
-   Open in Tab) were reachable ONLY by pointer. A keyboard user could tab into them
-   and see nothing at opacity 0, and anything driving the page without a hover
-   (assistive tech, automation) could not reach them at all. */
 .vs-card:hover .vs-card-actions,
 .vs-card:focus-within .vs-card-actions {
-  opacity: 1;
+  display: flex;
+}
+
+.vs-card:hover .vs-card-check,
+.vs-card:focus-within .vs-card-check {
+  display: none;
 }
 
 .vs-action-btn {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   border-radius: 4px;
   border: none;
-  background: none;
+  background: transparent;
   cursor: pointer;
-  color: var(--mj-text-muted);
-  font-size: 12px;
+  color: var(--mj-text-secondary);
+  font-size: 11px;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: background 0.12s ease, color 0.12s ease;
 }
 
 .vs-action-btn:hover {
-  background: var(--mj-bg-surface-card);
-  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-brand-primary);
 }
 
 /* Loading */
@@ -409,8 +456,9 @@
 
 /* Panel Footer */
 .vs-panel-footer {
-  padding: 12px 20px;
+  padding: 10px 12px;
   border-top: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
   display: flex;
   gap: 8px;
 }
@@ -418,18 +466,18 @@
 .vs-panel-btn {
   flex: 1;
   padding: 8px 12px;
-  border-radius: 4px;
+  border-radius: 7px;
   border: 1px solid var(--mj-border-default);
   background: var(--mj-bg-surface);
   cursor: pointer;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--mj-text-secondary);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  transition: all 0.15s;
+  transition: all 0.15s ease;
   font-family: inherit;
   text-align: center;
 }

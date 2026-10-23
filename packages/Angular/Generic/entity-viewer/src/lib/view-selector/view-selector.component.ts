@@ -615,4 +615,20 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
   OnResetToDefault(): void {
     this.SelectDefault();
   }
+
+  /**
+   * Switch to the (Default) view if needed and open the View Studio in Personal Default Layout mode.
+   */
+  OnConfigureDefaultLayout(event?: MouseEvent): void {
+    event?.stopPropagation();
+    if (this.SelectedViewID || this.SelectedAlternateBaseView) {
+      this.SelectedView = null;
+      if (this.SelectedAlternateBaseView) {
+        this.AlternateBaseViewSelected.emit(null);
+      }
+      this.ViewSelected.emit({ ViewID: null, View: null });
+    }
+    this.ConfigureViewRequested.emit();
+    this.CloseDropdown();
+  }
 }
