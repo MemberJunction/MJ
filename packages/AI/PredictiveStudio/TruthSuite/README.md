@@ -34,7 +34,7 @@ It records the ID of every pipeline and model it creates, including the pipeline
 
 ### Python
 
-`python/truthsuite/` holds `judges/holdout_rebuild.py` (G0.12's holdout reconstruction), `paths.py` and `scenarios/manifest.py`. Their tests are in `python/tests/`.
+`python/truthsuite/judges/holdout_rebuild.py` is the one Python module a gate calls: G0.12 runs it through `h.Judge('holdout_rebuild', …)` to rebuild Predictive Studio's locked holdout slice. Its tests are in `python/tests/test_judges.py`.
 
 ## 2. Setup
 
