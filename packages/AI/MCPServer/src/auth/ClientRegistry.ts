@@ -119,7 +119,10 @@ export class ClientRegistry {
     // Store client
     this.clients.set(clientId, client);
 
-    console.log(`OAuth Proxy: Registered client ${clientId} (${request.client_name ?? 'unnamed'})`);
+    // client_name comes from an unauthenticated registration body: strip line breaks (CWE-117 log
+    // injection). Kept inline in this exact form so CodeQL's js/log-injection recognizes it.
+    const safeClientName = (request.client_name ?? 'unnamed').replace(/\n|\r/g, '');
+    console.log(`OAuth Proxy: Registered client ${clientId} (${safeClientName})`);
 
     // Build response per RFC 7591 section 3.2.1
     const response: ClientRegistrationResponse = {

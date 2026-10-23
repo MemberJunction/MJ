@@ -1175,7 +1175,9 @@ async function handlePostConsentEndpoint(
   const offeredScopePaths = new Set((consentRequest.availableScopes ?? []).map((s) => s.FullPath));
   const rejectedScopes = grantedScopes.filter((s) => !offeredScopePaths.has(s));
   if (rejectedScopes.length > 0) {
-    console.warn(`[OAuth Proxy] Dropping ${rejectedScopes.length} submitted scope(s) not offered on the consent screen: ${rejectedScopes.join(', ')}`);
+    // Rejected scopes are raw form input: strip line breaks before logging (CWE-117 log injection).
+    const safeRejectedScopes = rejectedScopes.join(', ').replace(/\n|\r/g, '');
+    console.warn(`[OAuth Proxy] Dropping ${rejectedScopes.length} submitted scope(s) not offered on the consent screen: ${safeRejectedScopes}`);
   }
   grantedScopes = grantedScopes.filter((s) => offeredScopePaths.has(s));
 
@@ -1184,7 +1186,9 @@ async function handlePostConsentEndpoint(
   if (grantedScopes.length === 0) {
     console.warn(`[OAuth Proxy] User ${consentRequest.user.email} granted NO SCOPES - token will have empty scopes array`);
   } else {
-    console.log(`[OAuth Proxy] User ${consentRequest.user.email} granted scopes: ${grantedScopes.join(', ')}`);
+    // Already filtered to offered scopes, but still form-derived: strip line breaks before logging.
+    const safeGrantedScopes = grantedScopes.join(', ').replace(/\n|\r/g, '');
+    console.log(`[OAuth Proxy] User ${consentRequest.user.email} granted scopes: ${safeGrantedScopes}`);
   }
 
   // Create authorization code with granted scopes
