@@ -13,6 +13,8 @@ import { AIEngine } from "@memberjunction/aiengine";
 import { MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { ShutdownRegistry } from "@memberjunction/global";
 import { TaskStore, Task, TaskStatus, Message, Artifact, Part } from "./TaskStore.js";
+import { AgentCard, AgentCardAgentCapability, AgentCardEntityCapability, BuildAgentCard, ResolveAgentCardIdentity } from "./AgentCard.js";
+import { ResolveTaskCaller } from "./TaskCaller.js";
 
 // A2A Server Configuration
 const a2aServerPort = a2aServerSettings?.port || 3200;
@@ -39,34 +41,6 @@ if (dbInstanceName !== null && dbInstanceName !== undefined && dbInstanceName.tr
 
 // A2A Server Classes and Types — `TaskStatus`, `Task`, `Message`, `Part`, `Artifact`
 // are imported from `./TaskStore.js` (extracted for testability).
-
-interface AgentCard {
-    name: string;
-    description: string;
-    version: string;
-    endpoints: {
-        tasks: string;
-        agentCard: string;
-    };
-    authentication?: {
-        type: string;
-        scheme: string;
-    };
-    capabilities: {
-        streaming: boolean;
-        asynchronous: boolean;
-        multimedia: boolean;
-        entities: {
-            name: string;
-            schema: string;
-            operations: string[];
-        }[];
-        agents?: {
-            name: string;
-            operations: string[];
-        }[];
-    };
-}
 
 // In-memory storage for tasks. Bounded by the periodic sweep started below;
 // in production you'd swap in a database-backed store. See `./TaskStore.ts`
@@ -121,7 +95,7 @@ async function authorizeOperation(
     scopePath: string,
     resource: string
 ): Promise<{ allowed: boolean; error?: string }> {
-    const systemUser = UserCache.Instance.Users[0];
+    const systemUser = UserCache.Instance.GetSystemUser();
     if (!systemUser) {
         return { allowed: false, error: 'System user not available for authorization' };
     }
@@ -172,7 +146,7 @@ async function authenticateRequest(req: Request, res: Response, next: NextFuncti
 
     try {
         // Get system user for validation context
-        const systemUser = UserCache.Instance.Users[0];
+        const systemUser = UserCache.Instance.GetSystemUser();
         if (!systemUser) {
             LogError('A2A Server: No system user available for API key validation');
             res.status(500).json({
@@ -239,6 +213,11 @@ interface RequestWithUser extends Request {
     apiKeyHash?: string;
 }
 
+/** The authenticated caller's user ID, or an empty string, which owns no task, when there is none. */
+function callerId(req: Request): string {
+    return (req as RequestWithUser).authenticatedUser?.ID ?? '';
+}
+
 /** Process ID this server identifies itself with to the dynamic-package loader (entry `Processes` filters match it). */
 export const A2A_SERVER_PROCESS_ID = 'a2a';
 
@@ -286,8 +265,13 @@ export async function initializeA2AServer() {
 function setupRoutes() {
     // Agent Card endpoint (public - for discovery)
     app.get('/a2a/agent-card', async (req, res) => {
-        const agentCard = await generateAgentCard();
-        res.json(agentCard);
+        try {
+            const agentCard = await generateAgentCard();
+            res.json(agentCard);
+        } catch (error) {
+            LogError('A2A Server: Agent card generation failed', undefined, error);
+            res.status(503).json({ error: { code: 503, message: 'Agent card unavailable' } });
+        }
     });
 
     // Apply authentication middleware to all /a2a/tasks routes
@@ -330,7 +314,7 @@ function setupRoutes() {
     // Get a task's status
     app.get('/a2a/tasks/:taskId', (req: Request, res: Response) => {
         const taskId = req.params.taskId as string;
-        const task = tasks.get(taskId);
+        const task = tasks.GetForUser(taskId, callerId(req));
 
         if (!task) {
             res.status(404).json({
@@ -348,7 +332,7 @@ function setupRoutes() {
     // Cancel a task
     app.post('/a2a/tasks/:taskId/cancel', (req: Request, res: Response) => {
         const taskId = req.params.taskId as string;
-        const task = tasks.get(taskId);
+        const task = tasks.GetForUser(taskId, callerId(req));
 
         if (!task) {
             res.status(404).json({
@@ -391,8 +375,25 @@ export function ClearAgentCardCache(): void {
     cachedAgentCardAgentCount = -1;
 }
 
+let warnedMinimalAgentCard = false;
+
+/** Logs, once per process, that the agent card is minimal because no service identity is configured. */
+function warnMinimalAgentCardOnce(): void {
+    if (warnedMinimalAgentCard) return;
+    warnedMinimalAgentCard = true;
+    console.warn('A2A Server: a2aServerSettings.userEmail is not set, so the public agent card lists no entities or agents. Set it to a service user to advertise what that user may see.');
+}
+
 async function generateAgentCard(): Promise<AgentCard> {
-    const contextUser = UserCache.Instance.Users[0];
+    const identity = ResolveAgentCardIdentity(a2aServerSettings, UserCache.Instance.Users);
+    if (identity.Kind === 'unresolved') {
+        throw new Error('No service user is available to build the agent card; check a2aServerSettings.userEmail.');
+    }
+    if (identity.Kind === 'anonymous') {
+        warnMinimalAgentCardOnce();
+        return BuildAgentCard(a2aServerSettings);
+    }
+    const contextUser = identity.User;
     const md = resolveProviderForRequest();
     const aiEngine = AIEngine.Instance;
     await aiEngine.Config(false, contextUser);
@@ -405,37 +406,18 @@ async function generateAgentCard(): Promise<AgentCard> {
         return cachedAgentCard;
     }
 
-    const entityCapabilities = getEntityCapabilities(md.Entities, contextUser);
-    const agentCapabilities = await getAgentCapabilities(contextUser);
-
-    cachedAgentCard = {
-        name: a2aServerSettings?.agentName || "MemberJunction",
-        description: a2aServerSettings?.agentDescription || "MemberJunction A2A Agent",
-        version: "1.0.0",
-        endpoints: {
-            tasks: `/a2a/tasks`,
-            agentCard: `/a2a/agent-card`
-        },
-        authentication: {
-            type: "apiKey",
-            scheme: "X-API-Key"
-        },
-        capabilities: {
-            streaming: !!a2aServerSettings?.streamingEnabled,
-            asynchronous: false,
-            multimedia: false,
-            entities: entityCapabilities,
-            agents: agentCapabilities
-        }
-    };
+    cachedAgentCard = BuildAgentCard(a2aServerSettings, {
+        entities: getEntityCapabilities(md.Entities, contextUser),
+        agents: await getAgentCapabilities(contextUser)
+    });
     cachedAgentCardEntityCount = md.Entities.length;
     cachedAgentCardAgentCount = aiEngine.Agents.length;
 
     return cachedAgentCard;
 }
 
-function getEntityCapabilities(allEntities: EntityInfo[], contextUser: UserInfo) {
-    const capabilities = [];
+function getEntityCapabilities(allEntities: EntityInfo[], contextUser: UserInfo): AgentCardEntityCapability[] {
+    const capabilities: AgentCardEntityCapability[] = [];
     const entityCapabilitiesConfig = a2aServerSettings?.entityCapabilities || [];
 
     for (const config of entityCapabilitiesConfig) {
@@ -462,8 +444,8 @@ function getEntityCapabilities(allEntities: EntityInfo[], contextUser: UserInfo)
     return capabilities;
 }
 
-async function getAgentCapabilities(contextUser: UserInfo) {
-    const capabilities = [];
+async function getAgentCapabilities(contextUser: UserInfo): Promise<AgentCardAgentCapability[]> {
+    const capabilities: AgentCardAgentCapability[] = [];
     const agentCapabilitiesConfig = a2aServerSettings?.agentCapabilities || [];
 
     // Ensure AIEngine is configured
@@ -601,7 +583,7 @@ function handleTaskSend(requestBody: Record<string, unknown>, authenticatedUser?
             task.messages.push(newMessage);
         }
 
-        tasks.set(newTaskId, task);
+        tasks.Set(newTaskId, task, authenticatedUser?.ID);
 
         // Process the task asynchronously with the authenticated user
         processTask(task, authenticatedUser, authContext);
@@ -611,8 +593,8 @@ function handleTaskSend(requestBody: Record<string, unknown>, authenticatedUser?
             status: task.status
         };
     } else {
-        // Update an existing task
-        const task = tasks.get(taskId);
+        // Update an existing task: only the caller's own, so another user's task reads as missing
+        const task = authenticatedUser ? tasks.GetForUser(taskId, authenticatedUser.ID) : undefined;
 
         if (!task) {
             throw {
@@ -656,7 +638,7 @@ function handleTaskSend(requestBody: Record<string, unknown>, authenticatedUser?
 
 function handleTaskSendSubscribe(requestBody: Record<string, unknown>, res: Response, authenticatedUser?: UserInfo, authContext?: AuthorizationContext) {
     const result = handleTaskSend(requestBody, authenticatedUser, authContext);
-    const task = tasks.get(result.taskId);
+    const task = authenticatedUser ? tasks.GetForUser(result.taskId, authenticatedUser.ID) : undefined;
 
     if (!task) {
         res.write(`data: ${JSON.stringify({ error: { code: 404, message: "Task not found" } })}\n\n`);
@@ -723,17 +705,14 @@ async function processTask(task: Task, authenticatedUser?: UserInfo, authContext
             throw new Error("No user message found");
         }
 
-        // Use authenticated user or fall back to first cached user (for backwards compatibility)
-        const contextUser = authenticatedUser || UserCache.Instance.Users[0];
-        if (!contextUser) {
-            throw new Error("No user context available for processing task");
-        }
+        // Work on behalf of the caller runs as the caller: never as a fallback user.
+        const contextUser = ResolveTaskCaller(authenticatedUser, UserCache.Instance.Users);
 
         // Initialize operations handlers with the authenticated user and the request's
         // metadata provider so every downstream entity operation routes through the right
         // connection (see resolveProviderForRequest for the multi-tenant migration plan).
         const provider = resolveProviderForRequest();
-        const entityOps = new EntityOperations(provider);
+        const entityOps = new EntityOperations(provider, contextUser);
         const agentOps = new AgentOperations(contextUser, provider);
 
         // Extract text content and parse operation

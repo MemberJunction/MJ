@@ -20,6 +20,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { PlanArtifactTarget, IsKnownArtifactBehavior, ArtifactTargetPlan } from './artifact-target-plan';
 import { BaseAgent } from './base-agent';
+import { ActionEngineServer } from '@memberjunction/actions';
 import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJEnvironmentEntityExtended, ArtifactMetadataEngine, ConversationEngine, ExtractBase64FromDataUrl, DecideInlineStorage } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 
@@ -2535,9 +2536,10 @@ export class AgentRunner {
      * `ArtifactToolManager`. No-op for binary content, non-JSON content, or
      * content that already has rows populated.
      *
-     * Security: `RunQuery` uses the same read-only, `SQLExpressionValidator`-
-     * checked execution path that `data-artifact-viewer` already uses at
-     * render time — identical security posture to the existing view path.
+     * Security: the stored SQL runs as ad-hoc SQL for `contextUser`, so the provider
+     * allows only a single read statement over entity views that user may read in
+     * full (no row-level filter, no denied field). It runs on the host's read-only
+     * database login when one is configured, and on the default provider otherwise.
      */
     private async hydrateSqlBackedContent(content: string, contextUser: UserInfo): Promise<string> {
         let parsed: Record<string, unknown>;
@@ -2546,9 +2548,12 @@ export class AgentRunner {
         } catch {
             return content;
         }
+        if (!this.hasUnhydratedSql(parsed)) {
+            return content;
+        }
 
         let changed = false;
-        const rq = new RunQuery();
+        const rq = await this.adhocSqlRunner();
 
         const rootMeta = parsed?.metadata as { sql?: string; rowCount?: number; executionTimeMs?: number } | undefined;
         const rootRows = parsed?.rows as unknown[] | undefined;
@@ -2585,6 +2590,33 @@ export class AgentRunner {
         }
 
         return changed ? JSON.stringify(parsed) : content;
+    }
+
+    /** True when the parsed artifact carries stored SQL whose rows are missing. */
+    private hasUnhydratedSql(parsed: Record<string, unknown>): boolean {
+        const rootMeta = parsed?.metadata as { sql?: string } | undefined;
+        const rootRows = parsed?.rows as unknown[] | undefined;
+        if (rootMeta?.sql && (!rootRows || rootRows.length === 0)) {
+            return true;
+        }
+        const tables = parsed?.tables as Array<{ metadata?: { sql?: string }; rows?: unknown[] }> | undefined;
+        return Array.isArray(tables) && tables.some(t => !!t?.metadata?.sql && (!t.rows || t.rows.length === 0));
+    }
+
+    /**
+     * A RunQuery on the host's read-only database login when one is registered with the action
+     * engine, otherwise on the default provider.
+     */
+    private async adhocSqlRunner(): Promise<RunQuery> {
+        try {
+            const readOnly = await ActionEngineServer.Instance.GetReadOnlyProvider();
+            if (readOnly) {
+                return new RunQuery(readOnly);
+            }
+        } catch (error) {
+            LogError(`[AgentRunner] Could not open the read-only provider; using the default provider: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        return new RunQuery();
     }
 
     /**

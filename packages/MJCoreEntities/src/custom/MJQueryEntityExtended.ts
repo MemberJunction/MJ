@@ -1,5 +1,5 @@
-import { BaseEntity, UserInfo, QueryCacheConfig, IMetadataProvider } from "@memberjunction/core";
-import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
+import { BaseEntity, UserInfo, QueryCacheConfig, IMetadataProvider, EntityInfo, FieldSecuritySQLGate, FieldSecurityViolation } from "@memberjunction/core";
+import { RegisterClass, UUIDsEqual, IndexByUUID, SQLScreeningDialect } from "@memberjunction/global";
 import {
     MJQueryEntity,
     MJQueryFieldEntity,
@@ -191,6 +191,78 @@ export class MJQueryEntityExtended extends MJQueryEntity {
         }
 
         return { canRun: deniedEntities.length === 0, deniedEntities };
+    }
+
+    /**
+     * SECURITY — the run-time half of {@link UserCanRun}: the checks that need the SQL a run will
+     * actually execute, after composition and template rendering. Call it with that SQL in addition
+     * to {@link UserCanRun}, never instead of it.
+     *
+     * 1. A query with `MJ: Query Permissions` rows is authorized by its role list alone: a user who
+     *    holds one of those roles may run it whatever it reads (stored-procedure semantics), and one
+     *    who holds none may not.
+     * 2. Otherwise every entity whose base view or base table the SQL reads as a relation must be
+     *    readable by the user ({@link FieldSecuritySQLGate.RelationEntities}). These come from the
+     *    SQL, so a query whose `QueryEntities` rows are missing or stale is still checked. SQL that
+     *    cannot be read is refused for a user who cannot read every entity in the catalog.
+     * 3. The SQL must not reference a field the user is denied anywhere it could leak one: the
+     *    select list, WHERE, JOIN, GROUP BY, ORDER BY or HAVING, inside expressions and aggregates
+     *    included. A whole-row construct (`SELECT *`, `alias.*`) over an entity the user is denied a
+     *    field on, and SQL that cannot be read, are refused too ({@link FieldSecuritySQLGate.FindViolation}).
+     *    So is a relation that is not a CTE or a catalog entity's base view or base table (a custom
+     *    view, synonym, table-valued function, temp table or cross-database name), whose reads
+     *    cannot be checked. A user denied no field on any entity is not scanned.
+     *
+     * The result never names a denied field, so a refusal says only that the query cannot be run.
+     * `QueryFields` metadata plays no part: it is documentation, not a security source.
+     *
+     * @param user The user the query runs for
+     * @param renderedSQL The SQL the run will execute
+     * @param catalog Every entity the executing provider knows
+     * @param dialect The database dialect the SQL runs under
+     */
+    public UserCanRunRenderedSQL(
+        user: UserInfo,
+        renderedSQL: string,
+        catalog: readonly EntityInfo[],
+        dialect: SQLScreeningDialect,
+    ): { canRun: boolean; deniedEntities: string[]; fieldSecurityViolation?: FieldSecurityViolation } {
+        const permissions = this.QueryPermissions;
+        if (permissions && permissions.length > 0) {
+            return { canRun: this.UserHasRunPermissions(user), deniedEntities: [] };
+        }
+        const read = FieldSecuritySQLGate.RelationEntities(renderedSQL, catalog, dialect);
+        if (read === null && catalog.some(e => !e.GetUserPermisions(user)?.CanRead)) {
+            const unreadable: FieldSecurityViolation = { Kind: 'Unresolvable', Reference: 'the SQL could not be read', Entity: null };
+            return { canRun: false, deniedEntities: [], fieldSecurityViolation: unreadable };
+        }
+        const deniedEntities = (read ?? []).filter(e => !e.GetUserPermisions(user)?.CanRead).map(e => e.Name);
+        if (deniedEntities.length > 0) {
+            return { canRun: false, deniedEntities };
+        }
+        const violation = FieldSecuritySQLGate.FindViolation(renderedSQL, {
+            User: user,
+            Dialect: dialect,
+            Catalog: catalog,
+            ReadEntities: [...this.declaredEntities(catalog), ...(read ?? [])],
+            RefuseUnknownRelations: true,
+        });
+        return violation
+            ? { canRun: false, deniedEntities: [], fieldSecurityViolation: violation }
+            : { canRun: true, deniedEntities: [] };
+    }
+
+    /** The catalog entities this query's `QueryEntities` rows name; stale rows are left out. */
+    private declaredEntities(catalog: readonly EntityInfo[]): EntityInfo[] {
+        const queryEntities = this.QueryEntities ?? [];
+        if (queryEntities.length === 0) return [];
+        const byID = IndexByUUID(catalog);
+        const declared: EntityInfo[] = [];
+        for (const qe of queryEntities) {
+            const entity = byID.Get(qe.EntityID);
+            if (entity) declared.push(entity);
+        }
+        return declared;
     }
 
     // ─── Status Checks ──────────────────────────────────────────────────────────

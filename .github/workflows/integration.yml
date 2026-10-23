@@ -316,6 +316,8 @@ jobs:
           # checks read them as "never ran" (expected 4, got 0). Immediately-eligible root tasks
           # lose this race most often, which is why it presented as an intermittent failure.
           MJ_DISABLE_TASK_GRAPH_DISPATCHER: '1'
+          # REST is off by default; the REST members (IT134 CW7/CW8) skip without it.
+          MJ_REST_API_ENABLED: 'true'
         run: |
           (cd packages/MJAPI && node dist/index.js > /tmp/mjapi.log 2>&1 &)
           echo "Waiting for MJAPI /healthcheck..."

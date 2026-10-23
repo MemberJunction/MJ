@@ -1233,20 +1233,23 @@ export class SQLServerDataProvider
    * @param bNewRecord - Whether this is a new record (create) or existing record (update)
    * @param spName - The stored procedure name to call
    * @param user - The user context for the operation
+   * @param transaction - The transaction the save will run in, when one is already open. A read
+   *   the save's Record Change snapshot needs runs in it, so it sees that transaction's earlier
+   *   writes and never waits on the locks they hold.
    * @returns The full SQL statement for the save operation
    *
    * @security This method handles field-level encryption transparently.
    *           Fields marked with Encrypt=true will have their values encrypted
    *           before being included in the SQL statement.
    */
-  public async GetSaveSQL(entity: BaseEntity, bNewRecord: boolean, _spName: string, user: UserInfo): Promise<string> {
+  public async GetSaveSQL(entity: BaseEntity, bNewRecord: boolean, _spName: string, user: UserInfo, transaction?: sql.Transaction): Promise<string> {
     // SQLServerTransactionGroup-batched saves regenerate per-item SQL when
     // transaction variables get rebound. `_spName` is preserved for back-compat
     // with that caller; the dialect-driven pipeline derives it from entity
     // metadata via `GetCreateUpdateSPName`. Outside a TransactionGroup,
     // `fullSQL` holds `@p$0` parameter placeholders, so return `literalSQL`
     // for standalone callers.
-    const result = await this.GenerateSaveSQL(entity, bNewRecord, user);
+    const result = await this.GenerateSaveSQLReadingOn(entity, bNewRecord, user, transaction);
     return result.literalSQL ?? result.fullSQL;
   }
 
@@ -2131,7 +2134,7 @@ export class SQLServerDataProvider
     let sSQL: string;
     if (entity.EntityInfo.TrackRecordChanges && !skipRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') {
       // don't track changes for the record changes entity
-      const oldData = entity.GetAll(true); // get all the OLD values
+      const oldData = this.RecordChangeDeleteSnapshot(entity, entity.GetAll(true)); // the OLD values, full width
       const sTableDeclare: string = entity.PrimaryKeys.map((pk) => {
         return `${pk.CodeName} ${pk.EntityFieldInfo.SQLFullType}`;
       }).join(', ');

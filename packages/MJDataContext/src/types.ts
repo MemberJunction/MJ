@@ -1,4 +1,4 @@
-import { BaseEntity, DataObjectRelatedEntityParam, EntityInfo, LogError, Metadata, KeyValuePair, RunQuery, RunView, RunViewParams, UserInfo, CompositeKey, IMetadataProvider } from "@memberjunction/core";
+import { BaseEntity, DataObjectRelatedEntityParam, EntityInfo, EntityPermissionType, LogError, Metadata, KeyValuePair, RunQuery, RunView, RunViewParams, UserInfo, CompositeKey, IMetadataProvider } from "@memberjunction/core";
 import { MJDataContextEntity, MJDataContextItemEntity, MJDataContextItemEntityType, MJUserViewEntityExtended, MJQueryEntityExtended, QueryEngine } from "@memberjunction/core-entities";
 import { MJGlobal, RegisterClass, UUIDsEqual } from "@memberjunction/global";
 
@@ -307,9 +307,32 @@ export class DataContextItem {
             if (this.Type === 'full_entity')
                 this.RecordName = this.EntityName;
         }
-        if (dataContextItem.DataJSON && dataContextItem.DataJSON.length > 0) {
+        if (dataContextItem.DataJSON && dataContextItem.DataJSON.length > 0 && this.MaySavedDataBeServedTo(contextUser ?? provider.CurrentUser)) {
             this.Data = JSON.parse(dataContextItem.DataJSON);
         }
+    }
+
+    /**
+     * True when the rows saved in the item record's `DataJSON` may be handed to `user` in place of
+     * re-running the item. Saved rows were captured under the permissions of whoever saved them, not
+     * of the reader, so they are served only when the reader's own run could not be narrower: the item
+     * reads one entity, neither it nor an IS-A ancestor has field-level security, and the reader may read it with no
+     * row-level filter. Query and SQL items can read any number of entities, so their saved rows are
+     * never served. When this returns false the item stays unloaded, and `LoadData` re-runs it for
+     * the reader.
+     * @param user the user the item's data will be served to
+     */
+    protected MaySavedDataBeServedTo(user: UserInfo | null | undefined): boolean {
+        if (this.Type === 'query' || this.Type === 'sql') {
+            return false;
+        }
+        if (!user || !this.Entity || this.Entity.FieldLevelSecurityApplies) {
+            return false;
+        }
+        if (!this.Entity.GetUserPermisions(user)?.CanRead) {
+            return false;
+        }
+        return !this.Entity.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '');
     }
 
     /**

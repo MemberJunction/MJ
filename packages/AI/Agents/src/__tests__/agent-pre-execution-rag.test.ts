@@ -35,7 +35,7 @@ const {
         // Permitted by default, so a test that reaches the search path without stubbing the gate
         // behaves as before this gate existed, instead of tripping on an undefined verdict.
         mockResolvePermission: vi.fn(async (_input: ResolvePermissionInput): Promise<EffectivePermission> => PERMITTED),
-        mockRenderTemplate: vi.fn(async () => ({ Success: true, Output: 'rendered query' })),
+        mockRenderTemplate: vi.fn(async (..._args: unknown[]) => ({ Success: true, Output: 'rendered query' })),
         mockFindTemplate: vi.fn((_id: string): { GetHighestPriorityContent: () => { TemplateText: string } } | undefined => undefined),
         mockLogError: vi.fn((_message: string) => {}),
         mockLogStatusEx: vi.fn((_options: LogStatusOptions | string) => {}),
@@ -203,6 +203,8 @@ describe('AgentPreExecutionRAG', () => {
             await run();
             // Control: permitted, the template renders and its output is the query.
             expect(mockRenderTemplate).toHaveBeenCalledTimes(1);
+            // The render runs as the agent's caller, not as whoever last configured the engine.
+            expect(mockRenderTemplate.mock.calls[0][5]).toEqual({ ContextUser: fakeUser });
             expect(mockSearch.mock.calls[0][0]).toMatchObject({ Query: 'rendered query' });
 
             vi.clearAllMocks();

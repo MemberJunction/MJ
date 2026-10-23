@@ -10,6 +10,7 @@ import { CompositeKey } from "./compositeKey";
 import { EntityTransactionScope } from "./entityTransactionScope";
 import { LogError } from "./logging";
 import { LocalCacheManager } from "./localCacheManager";
+import { AssertClientInputWritableForUser } from "./entityValueFieldSecurity";
 import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunQueryResult } from "./interfaces";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
 import { FormatBinaryChangeValue, ScanSQLForScreening, SQLExpressionValidator, uuidv4 } from "@memberjunction/global";
@@ -1797,7 +1798,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * because there is nobody to check against.
      */
     protected CanUserReadRecordName(entity: EntityInfo, contextUser?: UserInfo): boolean {
-        if (!entity.EnableFieldLevelSecurity) {
+        if (!entity.FieldLevelSecurityApplies) {
             return true;
         }
         if (!contextUser) {
@@ -2806,6 +2807,14 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 if (child)
                     throw new Error(`Record ${key.ToString()} of ${request.EntityName} has a ${child.ChildEntityName} subtype row; merging records another entity extends is not supported yet`);
             }
+        }
+
+        // The field map is client input applied to the surviving record: a caller with any field
+        // denial may name only fields they can read, and a denied name and an unknown name get the
+        // same refusal. Checked before the merge log and the transaction, so a refusal leaves no trace.
+        if (request.FieldMap?.length) {
+            const values = Object.fromEntries(request.FieldMap.map(f => [f.FieldName, f.Value]));
+            AssertClientInputWritableForUser(e, values, contextUser);
         }
 
         const result: RecordMergeResult = {

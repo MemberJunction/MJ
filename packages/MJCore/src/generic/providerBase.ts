@@ -10,7 +10,7 @@ import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, AuthorizationRoleInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { MJGlobal, MJEvent, MJEventType, NormalizeUUID, SafeJSONParse, UUIDsEqual, IndexByUUID, EscapeSQLString, ordinalCompare } from "@memberjunction/global";
-import { FindReferencedIdentifiers } from "@memberjunction/sql-dialect";
+import { FieldSecuritySQLContext, FieldSecuritySQLGate, FieldSecurityViolation } from "./fieldSecuritySQLGate";
 import { TelemetryManager } from "./telemetryManager";
 import { LogDebug, LogError, LogStatus, LogStatusEx, LogWarning } from "./logging";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, QueryDependencyInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
@@ -271,6 +271,22 @@ export function ProjectRowsToFields<T = Record<string, unknown>>(
  * Implements common functionality for metadata caching, refresh, and dataset management.
  * Subclasses must implement abstract methods for provider-specific operations.
  */
+/**
+ * How the field-security row projection treats every row with one key shape: `Keys` is the shape
+ * (the row's own keys, in order), and `Keep` the keys to copy, or null when the shape carries no
+ * denied key and such a row is returned as is.
+ */
+type RowProjectionPlan = {
+    Keys: string[];
+    Keep: string[] | null;
+};
+
+/** The plans one projection pass has built: the last one used, and every one by its joined key list. */
+type RowProjectionPlans = {
+    Last: RowProjectionPlan | null;
+    BySignature: Map<string, RowProjectionPlan>;
+};
+
 export abstract class ProviderBase implements IMetadataProvider, IRunViewProvider, IRunQueryProvider, IRemoteOperationProvider {
     /**
      * Whether this provider can execute a multi-record unit of work atomically, in-process.
@@ -1494,7 +1510,37 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     private async executeRunViewsPipeline<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
         // Pre-processing for batch
         const preResult = await this.PreRunViews(params, contextUser);
+        const refused = preResult.refusedResults;
+        if (!refused) {
+            return this.runAdmittedViews<T>(params, preResult, contextUser);
+        }
+        // Every later stage works on the admitted views only — the same subset, in the same
+        // order, that PreRunViews built its cache maps and smart-cache-check params from.
+        const admitted = params.filter((_, i) => !refused.has(i));
+        const admittedResults = await this.runAdmittedViews<T>(admitted, preResult, contextUser);
+        return ProviderBase.interleaveRefusedResults(admittedResults, refused, params.length);
+    }
 
+    /**
+     * Puts each refused view's result back at its own index of the caller's batch, with the
+     * admitted views' results filling the remaining indexes in order.
+     */
+    private static interleaveRefusedResults<T>(admittedResults: RunViewResult<T>[], refused: Map<number, RunViewResult>, batchSize: number): RunViewResult<T>[] {
+        const merged: RunViewResult<T>[] = [];
+        let next = 0;
+        for (let i = 0; i < batchSize; i++) {
+            const refusal = refused.get(i);
+            merged.push(refusal ? refusal as RunViewResult<T> : admittedResults[next++]);
+        }
+        return merged;
+    }
+
+    /**
+     * The cache, database and post-processing stages of a RunViews batch, for the views the
+     * field-security predicate gate admitted. `params` and every index map in `preResult`
+     * describe the same admitted views.
+     */
+    private async runAdmittedViews<T>(params: RunViewParams[], preResult: typeof this._preRunViewsResultType, contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
         // Check for smart cache check mode
         if (preResult.useSmartCacheCheck && preResult.smartCacheCheckParams) {
             return this.executeSmartCacheCheck<T>(params, preResult, contextUser);
@@ -1874,8 +1920,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             param.ResultType !== 'count_only' &&
             (param.CacheLocal === true || this.TrustLocalCacheCompletely) &&
             this.IsServerCacheAllowedForEntity(param);
-        // Deliberately not user-dependent: server slots are full-width and shared, so field
-        // security never changes whether a query is cacheable, only what is projected out of it.
+        // Deliberately not user-dependent: field security changes which slot a request uses
+        // (the fls: segment), never whether it is cacheable.
     }
 
     /** True when the entity is a CodeGen materialized-query wrapper (materialized_vw*) whose snapshot is
@@ -2040,8 +2086,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (memoized) {
             return memoized;
         }
-        // The signed-in user's row filter (rls:) and allowed field list (fls:, see
-        // ComputeClientFLSAllowedKey) are part of client slot identity, as they are on the server.
+        // The signed-in user's row filter (rls:) and field-security key (fls:, see
+        // ComputeRunViewFLSFingerprintKey) are part of client slot identity, as they are on the server.
         // The browser cache outlives a session — one IndexedDB store per server URL — and the
         // currency check compares only maxUpdatedAt and rowCount, which cannot tell one user's
         // rows from another's, nor notice a column. Without these segments, a different user on
@@ -2049,7 +2095,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // access is tightened would keep seeing a column just taken away. Both are empty for an
         // unrestricted user, whose fingerprints are unchanged.
         const base = LocalCacheManager.Instance.GenerateRunViewFingerprint(
-            param, this.InstanceConnectionString, this.ComputeRunViewRLSWhereClause(param), undefined, this.ComputeClientFLSAllowedKey(param)
+            param, this.InstanceConnectionString, this.ComputeRunViewRLSWhereClause(param), undefined, this.ComputeRunViewFLSFingerprintKey(param)
         );
         // Normalize a FULL-COVERAGE field list to '*' — in the FINGERPRINT only (B44).
         //
@@ -2840,6 +2886,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
          * already-parsed results for 'current' items without a second IndexedDB read.
          */
         preResolvedCache?: Map<string, CachedRunViewResult | null>;
+        /**
+         * Views the field-security predicate gate refused, keyed by their index in the caller's
+         * batch, each with its `Success: false` result. Present only when at least one view was
+         * refused. Every other field of this result — the index maps, `cachedResults`,
+         * `uncachedParams`, `smartCacheCheckParams` — then describes the ADMITTED views only,
+         * indexed by their position among them.
+         */
+        refusedResults?: Map<number, RunViewResult>;
     };
 
     /**
@@ -2936,7 +2990,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
-     * The CLIENT's field-security cache key: a canonical list of the fields this user MAY read.
+     * The field-security cache key for one entity: a canonical list of the fields the user MAY read.
      *
      * Keyed on the ALLOWED set rather than the denied set for two reasons. Once metadata ships
      * to browsers filtered to what a user may see ([#3485](https://github.com/MemberJunction/MJ/issues/3485)),
@@ -2948,16 +3002,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Returns '' when the entity has field security off or the user is denied nothing, so
      * unrestricted users keep byte-identical fingerprints and shared slots.
      *
-     * Only takes effect once the client's metadata refreshes. A client on stale metadata
-     * computes a stale key; the backstop is that the server strips denied columns from every
-     * fresh fetch regardless.
+     * Reads the denied set through {@link ResolveRequestDeniedReadFields}, so the key and the
+     * SELECT list a database provider builds for the same request describe the same columns.
+     *
+     * @param params - The request; also the memo the denied set is shared through
+     * @param contextUser - The request's user; defaults to {@link CurrentUser}
      */
-    protected ComputeClientFLSAllowedKey(params: RunViewParams): string {
-        const user = this.CurrentUser;
-        if (!user || !params.EntityName) return '';
-        const entity = this.EntityByName(params.EntityName);
-        if (!entity?.EnableFieldLevelSecurity) return '';
-        const denied = entity.GetDeniedReadFields(user);
+    protected ComputeClientFLSAllowedKey(params: RunViewParams, contextUser?: UserInfo): string {
+        const user = contextUser ?? this.CurrentUser;
+        if (!user) return '';
+        const entity = this.ResolveRunViewEntitySync(params);
+        if (!entity) return '';
+        const denied = this.ResolveRequestDeniedReadFields(params, entity, user);
         if (denied.size === 0) return '';
         return entity.Fields
             .map(f => f.Name.trim().toLowerCase())
@@ -2967,33 +3023,119 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
-     * The field-security segment for a {@link LocalCacheManager} RunView fingerprint — the one
-     * place the client/server asymmetry is decided, so the two tiers cannot drift.
+     * The field-security segment for a {@link LocalCacheManager} RunView fingerprint, on both
+     * tiers: the slot a request reads and fills belongs to the user's permission class.
      *
-     * **SERVER → no segment.** Its slots are full-width and shared by every user; per-request
-     * narrowing happens at read time in {@link ApplyFieldSecurityProjection}, which runs on
-     * every hit and every miss. A segment here would fragment one shared slot into one per
-     * permission class and protect nothing the projection does not already handle.
+     * - **The entity's allowed columns** ({@link ComputeClientFLSAllowedKey}). A database
+     *   provider selects only the columns the reader may see, so a restricted reader's fill is
+     *   narrower than an unrestricted one's, and the two must never share a slot. A browser
+     *   stores rows exactly as the server returned them and never projects on read, so its
+     *   slots need the same identity. It also keeps user searches apart: which rows match a
+     *   search depends on which columns the reader may search.
+     * - **For a saved view, the user's denials on every entity.** A view's stored clause can
+     *   reach other entities (nested view filters), and those clauses are only screened when the
+     *   database runs them, on a miss. Keying the slot on the whole denial profile means a hit
+     *   is only ever served from a fill by a user whose clauses screen identically.
      *
-     * **CLIENT → the allowed-list key.** Its slots are stored exactly as the server returned
-     * them (already narrowed on the wire) and are not projected on read, so slot identity has to
-     * carry the field set. Without it, a user whose access is tightened keeps being served their
-     * persisted IndexedDB slot: the currency check compares `maxUpdatedAt` and `rowCount` only,
-     * neither of which notices a column, so the server answers "current" and the browser keeps
-     * showing a column that was just taken away.
+     * Empty for a user denied nothing, so unrestricted users keep byte-identical fingerprints
+     * and share slots. Read-time projection ({@link ApplyFieldSecurityProjection}) still runs on
+     * every hit and miss, as a backstop.
      *
-     * Empty/undefined for unrestricted users on both tiers, so their fingerprints stay
-     * byte-identical and keep sharing slots.
+     * @param params - The request
+     * @param contextUser - The request's user; defaults to {@link CurrentUser}. On a server
+     *   this must be the request's user, never the process user.
      */
-    protected ComputeRunViewFLSFingerprintKey(params: RunViewParams): string | undefined {
-        return this.TrustLocalCacheCompletely ? undefined : this.ComputeClientFLSAllowedKey(params);
+    protected ComputeRunViewFLSFingerprintKey(params: RunViewParams, contextUser?: UserInfo): string {
+        const user = contextUser ?? this.CurrentUser;
+        const allowed = this.ComputeClientFLSAllowedKey(params, user);
+        const namesView = !!(params.ViewID || params.ViewName || params.ViewEntity);
+        const profile = namesView && user ? this.ComputeFieldSecurityProfileKey(user) : '';
+        return profile ? `${allowed}#view:${profile}` : allowed;
     }
 
     /**
+     * Every field `user` may not read, across all entities: one `entityID:field,field` entry per
+     * entity on which the user is denied something, sorted. '' for a user denied nothing.
+     *
+     * @param user - The user whose denials to describe
+     */
+    protected ComputeFieldSecurityProfileKey(user: UserInfo): string {
+        // Memoized per (catalog, user) and recomputed whenever field-security configuration or the
+        // user's roles change, so a saved-view RunView does not walk the catalog each time.
+        return FieldSecuritySQLGate.CatalogDenialProfileKey(this.Entities, user);
+    }
+
+    /**
+     * The fingerprint of the server-cache slot a RunView reads and fills for `contextUser`:
+     * the request, this provider's connection, the user's row-level-security clause and the
+     * user's field-security key. Every server path that reads or writes a RunView slot builds
+     * its fingerprint here, so none of them can leave a segment out — a path that omitted the
+     * user's segments would read or fill another permission class's slot.
+     *
+     * @param params - The request
+     * @param contextUser - The request's user; defaults to {@link CurrentUser}
+     */
+    public ComputeRunViewCacheFingerprint(params: RunViewParams, contextUser?: UserInfo): string {
+        return LocalCacheManager.Instance.GenerateRunViewFingerprint(
+            params,
+            this.InstanceConnectionString,
+            this.ComputeRunViewRLSWhereClause(params, contextUser),
+            undefined,
+            this.ComputeRunViewFLSFingerprintKey(params, contextUser),
+        );
+    }
+
+    /**
+     * The field-security key a browser sends with a cached slot's status, and the one a server
+     * compares it with: a hash of {@link ComputeRunViewFLSFingerprintKey}, or '' for a user
+     * denied nothing.
+     *
+     * The currency check otherwise compares only `maxUpdatedAt` and `rowCount`, and neither
+     * changes when a user loses a column. A browser whose metadata has not refreshed yet keeps
+     * its old slot (same fingerprint) and would be told "current" while still showing the
+     * column; with this key the server sees the mismatch and answers "stale" with fresh rows.
+     *
+     * @param params - The request
+     * @param contextUser - The request's user; defaults to {@link CurrentUser}
+     */
+    protected ComputeFieldSecurityCacheStatusKey(params: RunViewParams, contextUser?: UserInfo): string {
+        const key = this.ComputeRunViewFLSFingerprintKey(params, contextUser);
+        return key ? LocalCacheManager.Instance.HashSecuritySegment(key) : '';
+    }
+
+    /**
+     * The fields `user` may not read on `entity` for this one request, resolved once and reused by
+     * everything that asks again for the same request (`params` object), user object and entity.
+     *
+     * The cache key and the SELECT list are built at different moments of a request. Read
+     * independently, a metadata refresh landing between the two would key a slot for one
+     * permission class and fill it with another's columns. Sharing one answer per request rules
+     * that out. Empty when field security does not apply.
+     *
+     * @param params - The request; the memo is keyed on this object
+     * @param entity - The entity being read
+     * @param user - The request's user
+     */
+    protected ResolveRequestDeniedReadFields(params: RunViewParams, entity: EntityInfo, user: UserInfo | undefined): Set<string> {
+        if (!user) {
+            return new Set<string>();
+        }
+        const memo = this._requestDeniedReadFields.get(params);
+        if (memo && memo.User === user && UUIDsEqual(memo.EntityID, entity.ID)) {
+            return memo.Denied;
+        }
+        const denied = entity.FieldLevelSecurityApplies ? entity.GetDeniedReadFields(user) : new Set<string>();
+        this._requestDeniedReadFields.set(params, { User: user, EntityID: entity.ID, Denied: denied });
+        return denied;
+    }
+    private _requestDeniedReadFields = new WeakMap<RunViewParams, { User: UserInfo; EntityID: string; Denied: Set<string> }>();
+
+    /**
      * The fetch-widening field list for a cache-eligible request: always every entity field.
-     * One slot per (entity, filter, order) serves every caller regardless of the field subset
-     * they asked for, and field security narrows per request at read time via
-     * {@link ApplyFieldSecurityProjection}.
+     * One slot per (entity, filter, order, permission class) serves every caller regardless of
+     * the field subset they asked for. Field security is not applied here: a database provider
+     * leaves the user's denied columns out of the SELECT it builds from this list, and the slot
+     * key carries the user's class ({@link ComputeRunViewFLSFingerprintKey}).
      */
     protected ComputeRunViewFetchFields(entity: EntityInfo, params?: RunViewParams): string[] {
         const includeBinary = params?.IncludeBinaryFields === true;
@@ -3050,74 +3192,86 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     // ========================================================================
 
     /**
-     * Rejects a RunView whose `ExtraFilter`, `OrderBy`, or `Aggregates` expressions reference a
-     * field the user cannot read.
+     * Rejects a RunView whose caller-authored SQL reads a field the user cannot read: `ExtraFilter`,
+     * `OrderBy`, `OverrideExcludeFilter`, every `Aggregates[].expression`, and — when the request
+     * carries a loaded `ViewEntity` — that view's stored `WhereClause` and `OrderByClause`.
      *
      * Output projection alone is security theater. A user denied `Salary` can send
      * `ExtraFilter: "Salary > 200000"` or `OrderBy: "Salary DESC"` and reconstruct the values
      * from which rows come back and in what order — the column never appears in a result, so
      * every output-stripping point reports "secure." Aggregates are the same channel in a purer
      * form: `Aggregates: [{expression: 'MIN(Salary)'}]` under a narrow filter returns a denied
-     * field's exact values directly. Predicate validation is a first-class enforcement point,
-     * not a belt-and-braces afterthought. Together these cover every caller-authored expression
-     * surface (`UserSearchString` is handled by excluding denied fields from the searched set,
-     * not by rejection — see below).
+     * field's exact values directly. `UserSearchString` is handled by excluding denied fields from
+     * the searched set, not by rejection.
      *
-     * Lives at the provider layer rather than in the GraphQL resolver (where the plan first
-     * placed it) because every RunView funnels through here — the batch path, server-internal
-     * agents and actions running under a restricted `contextUser`, and the resolver alike. One
-     * gate, no path left uncovered.
+     * Lives at the provider layer because every RunView funnels through here — the batch path,
+     * server-internal agents and actions running under a restricted `contextUser`, and the
+     * resolver alike. A database provider checks the clauses it actually runs a second time, once
+     * a saved view is resolved, so a request that names only a `ViewID` is covered too.
      *
-     * The error deliberately does not say whether the field is missing or merely forbidden —
-     * see {@link ProviderBase.FieldSecurityDenialMessage}.
+     * The reading of each clause, and the error it raises, is {@link FieldSecuritySQLGate}'s.
      */
     protected AssertPredicatesRespectFieldSecurity(params: RunViewParams, contextUser?: UserInfo): void {
-        if (!contextUser || !params.EntityName) {
+        if (!contextUser) {
             return;
         }
-        const entity = this.EntityByName(params.EntityName);
-        if (!entity?.EnableFieldLevelSecurity) {
-            return; // the overwhelmingly common case — one boolean, no allocation
-        }
-        const denied = entity.GetDeniedReadFields(contextUser);
-        if (denied.size === 0) {
+        const entity = this.ResolveRunViewEntitySync(params);
+        if (!entity) {
             return;
         }
-
-        // Map lowercased denied names back to their real casing for the message.
-        const deniedByName = new Map<string, string>();
-        for (const field of entity.Fields) {
-            if (denied.has(field.Name.trim().toLowerCase())) {
-                deniedByName.set(field.Name.trim().toLowerCase(), field.Name);
-            }
-        }
-
-        // Aliases are deliberately not scanned — an alias names the output column, no data
-        // flows through it.
-        const clauses = [
+        const view = params.ViewEntity;
+        this.AssertClausesRespectFieldSecurityForEntity(entity, [
             params.ExtraFilter,
-            params.OrderBy,
+            params.OverrideExcludeFilter,
             ...(params.Aggregates ?? []).map(a => a?.expression),
-        ];
-        for (const clause of clauses) {
-            if (typeof clause !== 'string' || clause.length === 0) {
+            view ? view.Get('WhereClause') : undefined,
+        ], contextUser);
+        this.AssertSortRespectsFieldSecurityForEntity(entity, [
+            params.OrderBy,
+            view ? view.Get('OrderByClause') : undefined,
+        ], contextUser);
+    }
+
+    /**
+     * Throws a {@link FieldSecurityError} when any of `clauses` — SQL fragments that run against
+     * `entity`'s view — reads a field `user` cannot read, reads whole rows of an entity the user is
+     * denied fields on, or cannot be read well enough to tell. Non-string and blank entries are
+     * skipped. A no-op, with nothing scanned, for a user denied nothing on any entity.
+     *
+     * The shared entry point for every clause slot a provider runs: RunView parameters, a saved
+     * view's stored clauses, dataset item filters, user-search text spliced as SQL.
+     */
+    protected AssertClausesRespectFieldSecurityForEntity(entity: EntityInfo, clauses: Iterable<unknown>, user: UserInfo): void {
+        this.assertFragmentsAllowed(entity, clauses, user, (sql, context) => FieldSecuritySQLGate.FindViolation(sql, context));
+    }
+
+    /**
+     * {@link AssertClausesRespectFieldSecurityForEntity} for ORDER BY fragments, which also refuses
+     * a sort by column position for a user denied a field on `entity`
+     * ({@link FieldSecuritySQLGate.FindSortViolation}).
+     */
+    protected AssertSortRespectsFieldSecurityForEntity(entity: EntityInfo, orderBys: Iterable<unknown>, user: UserInfo): void {
+        this.assertFragmentsAllowed(entity, orderBys, user, (sql, context) => FieldSecuritySQLGate.FindSortViolation(sql, context));
+    }
+
+    /** Throws the field-security error for the first of `fragments` that `find` refuses. */
+    private assertFragmentsAllowed(
+        entity: EntityInfo,
+        fragments: Iterable<unknown>,
+        user: UserInfo,
+        find: (sql: string, context: FieldSecuritySQLContext) => FieldSecurityViolation | null,
+    ): void {
+        const context: FieldSecuritySQLContext = { User: user, Dialect: this.PlatformKey, Catalog: this.Entities, TargetEntity: entity };
+        for (const clause of fragments) {
+            if (typeof clause !== 'string' || clause.trim().length === 0) {
                 continue;
             }
-            const hits = FindReferencedIdentifiers(clause, deniedByName.values());
-            if (hits.length > 0) {
-                LogDebug(
-                    `[FieldSecurity] Rejected RunView on '${entity.Name}' for user ${contextUser.Email}: ` +
-                    `predicate references denied field(s) ${hits.join(', ')}`
-                );
-                throw new FieldSecurityError(hits[0], entity.Name);
+            const violation = find(clause, context);
+            if (violation) {
+                LogDebug(`[FieldSecurity] Rejected SQL on '${entity.Name}' for user ${user.Email}: ${violation.Kind} ${violation.Reference}`);
+                throw FieldSecuritySQLGate.ErrorForViolation(violation, entity.Name);
             }
         }
-
-        // UserSearchString is not a predicate the caller authored — it is a search term the
-        // platform expands across IncludeInUserSearchAPI fields. There is nothing to reject;
-        // the correct handling is to not search the denied fields, which the SQL builder does
-        // by consulting the same denied set. Rejecting here would make the search box fail
-        // for a term that merely happens to match a restricted field's name.
     }
 
     /**
@@ -3139,15 +3293,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /**
      * Strips fields the user cannot read from plain-object result rows.
      *
-     * This is the primary read-time control for list results, and it runs on BOTH cache hits
-     * and cache misses — the property the rest of the cache design is arranged around. Because
-     * it reads live metadata, a permission change takes effect on the next metadata refresh
-     * with no result-cache invalidation: the cached full-width superset stays valid and only
-     * the projection changes.
-     *
-     * It composes with two per-request, never-cached narrowings that avoid pulling columns a
-     * restricted service account has no business holding: the `simple`-path SELECT-list
-     * intersection, and `Load()`'s allowed-column SELECT.
+     * The backstop behind slot segmentation: cache slots are keyed by the reader's permission
+     * class ({@link ComputeRunViewFLSFingerprintKey}) and filled with only that class's columns,
+     * and this still runs on BOTH cache hits and cache misses, checking every row. A slot can hold
+     * more than its class may read (an `entity_object` fill selects every column, and a slot keyed
+     * just before a permission change keeps its old width), and this is what keeps such a slot
+     * from reaching a reader. It reads live metadata, so a tightened permission applies here from
+     * the next metadata refresh.
      *
      * NEVER applied to `entity_object` results. Those become `BaseEntity` instances whose
      * fields round-trip through `GenerateSaveSQL`, which iterates ALL `IsSPParameter` fields
@@ -3157,11 +3309,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * output, which the GraphQL layer enforces separately.
      */
     protected ApplyFieldSecurityProjection<T>(rows: T[], params: RunViewParams, contextUser?: UserInfo): T[] {
-        if (!rows?.length || !contextUser || !params.EntityName || params.ResultType === 'entity_object') {
+        if (!rows?.length || !contextUser || params.ResultType === 'entity_object') {
             return rows;
         }
-        const entity = this.EntityByName(params.EntityName);
-        if (!entity?.EnableFieldLevelSecurity) {
+        const entity = this.ResolveRunViewEntitySync(params);
+        if (!entity?.FieldLevelSecurityApplies) {
             return rows;
         }
         const denied = entity.GetDeniedReadFields(contextUser);
@@ -3173,32 +3325,81 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     /**
      * Row-loop half of {@link ApplyFieldSecurityProjection}, split out so the policy above reads
-     * as policy. Mirrors {@link ProjectRowsToFields}' matching semantics (trim + lowercase) and
-     * its no-op probe: when the first row carries none of the denied keys, the whole result is
-     * returned untouched rather than rebuilt row by row.
+     * as policy. Mirrors {@link ProjectRowsToFields}' matching semantics (trim + lowercase).
+     *
+     * Every row is checked on its own: rows in one result need not share a shape (a slot can mix
+     * rows written by different paths), so no row stands in for the others. A row carrying no
+     * denied key is kept as is, and when none do the input array itself is returned.
+     *
+     * The per-key work (trim, lowercase, set lookup) is done once per key SHAPE rather than once
+     * per row: rows with the same keys in the same order share one {@link RowProjectionPlan}. A
+     * result is almost always a single shape, so a restricted user's 10k-row result pays for one
+     * row's worth of key matching plus a copy per row.
      *
      * @param deniedLowercase field names to omit, already lowercased
      */
     private static omitFieldsFromRows<T>(rows: T[], deniedLowercase: Set<string>): T[] {
-        const probe = rows[0] as Record<string, unknown>;
-        if (!probe || typeof probe !== 'object') {
-            return rows;
-        }
-        const keysToOmit = Object.keys(probe).filter(k => deniedLowercase.has(k.trim().toLowerCase()));
-        if (keysToOmit.length === 0) {
-            return rows;
-        }
-        const omit = new Set(keysToOmit);
-        return rows.map((row) => {
-            const source = row as Record<string, unknown>;
-            const filtered: Record<string, unknown> = {};
-            for (const key of Object.keys(source)) {
-                if (!omit.has(key)) {
-                    filtered[key] = source[key];
-                }
-            }
-            return filtered as T;
+        const plans: RowProjectionPlans = { Last: null, BySignature: new Map() };
+        let changed = false;
+        const projected = rows.map((row) => {
+            const narrowed = ProviderBase.omitFieldsFromRow(row, deniedLowercase, plans);
+            changed = changed || narrowed !== row;
+            return narrowed;
         });
+        return changed ? projected : rows;
+    }
+
+    /** One row of {@link omitFieldsFromRows}: the row itself when it carries no denied key, else a copy without them. */
+    private static omitFieldsFromRow<T>(row: T, deniedLowercase: Set<string>, plans: RowProjectionPlans): T {
+        if (!row || typeof row !== 'object') {
+            return row;
+        }
+        const source = row as Record<string, unknown>;
+        const keys = Object.keys(source);
+        const plan = ProviderBase.rowProjectionPlanFor(keys, deniedLowercase, plans);
+        if (!plan.Keep) {
+            return row;
+        }
+        const filtered: Record<string, unknown> = {};
+        for (const key of plan.Keep) {
+            filtered[key] = source[key];
+        }
+        return filtered as T;
+    }
+
+    /**
+     * The plan for a row with exactly these keys, built on first sight of the shape. The last plan
+     * used is tried first; otherwise plans are found by the joined key list. Either way the plan's
+     * own key list is compared with the row's before it is used, so two different shapes can
+     * never share a plan.
+     */
+    private static rowProjectionPlanFor(keys: string[], deniedLowercase: Set<string>, plans: RowProjectionPlans): RowProjectionPlan {
+        if (plans.Last && ProviderBase.sameKeys(plans.Last.Keys, keys)) {
+            return plans.Last; // consecutive rows nearly always share a shape: no signature to build
+        }
+        const signature = keys.join('\u0000');
+        let plan = plans.BySignature.get(signature);
+        if (!plan || !ProviderBase.sameKeys(plan.Keys, keys)) {
+            const keep = keys.some(k => deniedLowercase.has(k.trim().toLowerCase()))
+                ? keys.filter(k => !deniedLowercase.has(k.trim().toLowerCase()))
+                : null;
+            plan = { Keys: keys, Keep: keep };
+            plans.BySignature.set(signature, plan);
+        }
+        plans.Last = plan;
+        return plan;
+    }
+
+    private static sameKeys(a: string[], b: string[]): boolean {
+        if (a.length !== b.length) {
+            return false;
+        }
+        for (let i = 0; i < a.length; i++) {
+            if (a[i] !== b[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -3210,6 +3411,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * params — which here is `MJ: Record Changes`, whose flag is off in every default deployment.
      * Everything about the per-row denied set, the payload treatment, and the fail-closed decision
      * lives in {@link RecordChangeFieldSecurityProjector}; this is only the RunView wiring.
+     *
+     * A request whose entity cannot be resolved without I/O (only a `ViewID` or `ViewName`) is
+     * projected too, so a saved view over Record Changes is not a way around it.
      *
      * Runs at all four RunView projection points, matching the main projection: both cache-hit
      * paths and both cache-miss paths. The cache-hit path is not optional — it is the exact path
@@ -3233,9 +3437,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (!rows?.length || !contextUser || params.ResultType === 'entity_object') {
             return rows;
         }
-        if (!RecordChangeFieldSecurityProjector.IsRecordChangesEntity(this.ResolveRunViewEntitySync(params))) {
+        const entity = this.ResolveRunViewEntitySync(params);
+        if (entity && !RecordChangeFieldSecurityProjector.IsRecordChangesEntity(entity)) {
             return rows;
         }
+        // An entity that does not resolve here (a ViewID/ViewName-only request) may be Record
+        // Changes. The projector decides per row from the row's own EntityID and fails closed on a
+        // row without one; rows that carry no payload column come back untouched.
         return new RecordChangeFieldSecurityProjector(this, contextUser).ProjectRows(rows);
     }
 
@@ -3310,8 +3518,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const entityCheckTime = performance.now() - entityCheckStart;
 
         // Save the caller's original Fields request for post-cache filtering.
-        // We always fetch ALL fields from the DB so the cache entry is a universal superset
-        // that satisfies any future query for the same entity+filter regardless of field subset.
+        // We fetch every field this user's permission class may read, so the cache entry is a
+        // superset for that class: it satisfies any later query for the same entity+filter, by
+        // any user of the same class, regardless of field subset. Slots are keyed per class (the
+        // fls: segment), so no slot is shared between classes at different widths.
         const entityLookupStart = performance.now();
         let callerRequestedFields = params.Fields && params.Fields.length > 0
             ? params.Fields.map(f => f.trim().toLowerCase())
@@ -3320,8 +3530,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Only override Fields to the widened fetch set when caching will actually happen
         // for this call. For non-cached calls we respect the caller's narrow Fields
         // end-to-end — there's no cache-coherence concern to preserve. The widened set is
-        // ALL entity fields, for every user: the server cache holds full-width slots and
-        // narrows per request at read time (ApplyFieldSecurityProjection).
+        // ALL entity fields; a database provider then leaves out the columns this user may
+        // not read, and the slot is keyed by the user's permission class (fls: segment).
         const entity = params.EntityName ? this.EntityByName(params.EntityName) : null;
         const willCache = this.runViewCacheEligible(params);
         // entity_object ALWAYS widens, cache-eligible or not: a BaseEntity must hydrate from
@@ -3363,9 +3573,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             this.cacheDeniedForViewOnlyRequest(params, contextUser);
 
         if (willCache && !cacheReadDenied && LocalCacheManager.Instance.IsInitialized) {
-            const rlsWhereClause = this.ComputeRunViewRLSWhereClause(params, contextUser);
-            const flsFieldsKey = this.ComputeRunViewFLSFingerprintKey(params);
-            fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause, undefined, flsFieldsKey);
+            fingerprint = this.ComputeRunViewCacheFingerprint(params, contextUser);
             const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
             if (cached) {
                 // These rows are the cache's shared, deep-frozen objects — the runtime freeze is
@@ -3378,15 +3586,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
                 // Field-level security MUST be applied here, not only in PostRunView: this path
                 // RETURNS (see RunView) without ever calling PostRunView, and it is the exact
-                // path the cross-user leak runs through — an unrestricted user warms the cache
-                // with every column, then a restricted user hits that same slot. The cache is
-                // column-agnostic by design (one entry serves every field subset), so the
-                // caller's Fields list is unrelated to security and cannot be relied on.
+                // path a cross-user leak would run through. Slots are keyed by permission class,
+                // but a slot can still be wider than its class (an entity_object fill selects
+                // every column), and the caller's Fields list is unrelated to security.
                 results = this.ApplyFieldSecurityProjection(results, params, contextUser);
 
-                // Record Changes payload security, on the same cache-hit path and for the same
-                // reason: the slot is shared and full-width, so whoever warmed it decides nothing
-                // about who may read what out of it.
+                // Record Changes payload security, on the same cache-hit path: its denials belong
+                // to the entity each row is about, which the Record Changes slot key cannot carry.
                 results = this.ApplyRecordChangeFieldSecurityProjection(results, params, contextUser);
 
                 // Reconstruct RunViewResult from cached data
@@ -3431,9 +3637,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /**
      * Pre-processing hook for RunViews (batch).
      * Handles telemetry, validation, and cache lookup for multiple views.
+     * A view the field-security predicate gate refuses is left out of every later stage and
+     * reported in `refusedResults`; the cache status describes the admitted views only.
      * @param params - Array of view parameters
      * @param contextUser - Optional user context
-     * @returns Pre-processing result with cache status for each view
+     * @returns Pre-processing result with cache status for each admitted view
      */
     protected async PreRunViews(params: RunViewParams[], contextUser?: UserInfo): Promise<typeof this._preRunViewsResultType> {
         // Resolve any PlatformSQL values to plain strings for the active platform
@@ -3441,14 +3649,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             this.ResolvePlatformSQLInParams(p);
         }
 
-        // Run registered PreRunView hooks on each param in the batch
-        for (let i = 0; i < params.length; i++) {
-            params[i] = await this.RunPreRunViewHooks(params[i], contextUser);
-            // Field-level security predicate gate, same contract as the single-view path.
-            // One bad view rejects the whole batch — a batch is one caller request, and
-            // silently returning partial results would hide the denial.
-            this.AssertPredicatesRespectFieldSecurity(params[i], contextUser);
-        }
+        // Run registered PreRunView hooks on each param in the batch, then the field-security
+        // predicate gate (after the hooks, so injected filters are scanned too).
+        const refusedResults = await this.runBatchHooksAndPredicateGate(params, contextUser);
 
         // Start telemetry tracking for batch operation
         const fromEngine = params.some(p => p._fromEngine);
@@ -3490,6 +3693,53 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             contextUser?.ID
         );
 
+        // A refused view never reaches a cache lookup, the smart cache check or the database.
+        const admitted = refusedResults ? params.filter((_, i) => !refusedResults.has(i)) : params;
+        const preResult = await this.lookUpAdmittedViews(admitted, telemetryEventId, contextUser);
+        return refusedResults ? { ...preResult, refusedResults } : preResult;
+    }
+
+    /**
+     * Runs each view's PreRunView hooks, replacing `params[i]` with the hooked params, then the
+     * field-security predicate gate — the same contract as the single-view path, except that a
+     * refusal fails only its own view: it becomes that view's `Success: false` result, carrying
+     * the refusal's ambiguous message, so the views batched with it still run. A batch is often
+     * several independent reads (a dashboard's panels), and one unreadable column in one of them
+     * must not blank the rest; the refusal is still reported, at the refused view's index. Any
+     * other error from the gate is thrown and fails the batch.
+     * @returns The refused views' results keyed by batch index, or `undefined` when none was refused.
+     */
+    private async runBatchHooksAndPredicateGate(params: RunViewParams[], contextUser?: UserInfo): Promise<Map<number, RunViewResult> | undefined> {
+        let refused: Map<number, RunViewResult> | undefined;
+        for (let i = 0; i < params.length; i++) {
+            params[i] = await this.RunPreRunViewHooks(params[i], contextUser);
+            try {
+                this.AssertPredicatesRespectFieldSecurity(params[i], contextUser);
+            } catch (error: unknown) {
+                refused ??= new Map<number, RunViewResult>();
+                refused.set(i, ProviderBase.fieldSecurityRefusalAsResult(error));
+            }
+        }
+        return refused;
+    }
+
+    /** `error` as a failed view result when it is a field-security refusal; otherwise rethrows it. */
+    protected static fieldSecurityRefusalAsResult<T = unknown>(error: unknown): RunViewResult<T> {
+        if (!(error instanceof Error) || (!(error instanceof FieldSecurityError) && error.name !== FieldSecurityError.ErrorName)) {
+            throw error;
+        }
+        return { Success: false, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, UserViewRunID: '', ErrorMessage: error.message };
+    }
+
+    /**
+     * The cache stage of PreRunViews for the views the predicate gate admitted. An empty batch
+     * (every view refused) is reported as fully cached, so the pipeline returns without a
+     * database call and still ends the batch's telemetry event.
+     */
+    private async lookUpAdmittedViews(params: RunViewParams[], telemetryEventId: string, contextUser?: UserInfo): Promise<typeof this._preRunViewsResultType> {
+        if (params.length === 0) {
+            return { telemetryEventId, allCached: true, cachedResults: [] };
+        }
         // Client-side providers route any CacheLocal params through smart-cache-check:
         // a single batched GraphQL call sends fingerprints (hashes + counts) per view,
         // the server confirms current vs stale, and only stale views return data.
@@ -3501,7 +3751,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 return this.prepareSmartCacheCheckParams(params, telemetryEventId, contextUser);
             }
         }
+        return this.lookUpBatchCache(params, telemetryEventId, contextUser);
+    }
 
+    /** The server's trusted-cache lookup for a batch: serves hits, and lists the misses to run. */
+    private async lookUpBatchCache(params: RunViewParams[], telemetryEventId: string, contextUser?: UserInfo): Promise<typeof this._preRunViewsResultType> {
         // Traditional caching flow
         const cacheStatusMap = new Map<number, { status: 'hit' | 'miss' | 'disabled' | 'expired'; result?: RunViewResult }>();
         const callerFieldsMap = new Map<number, string[]>();
@@ -3525,7 +3779,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // Only override Fields to the widened fetch set when caching will actually happen
             // for this call. For non-cached calls we respect the caller's narrow Fields
             // end-to-end — there's no cache-coherence concern to preserve. Widened = ALL
-            // fields, for every user (see PreRunView).
+            // fields (see PreRunView).
             const batchEntity = param.EntityName ? this.EntityByName(param.EntityName) : null;
             const batchWillCache = this.runViewCacheEligible(param);
             // Same entity_object-always-widens rule as the single-view path above.
@@ -3554,9 +3808,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 this.cacheDeniedForViewOnlyRequest(param, contextUser);
 
             if (batchWillCache && !batchCacheReadDenied && LocalCacheManager.Instance.IsInitialized) {
-                const rlsWhereClause = this.ComputeRunViewRLSWhereClause(param, contextUser);
-                const flsFieldsKey = this.ComputeRunViewFLSFingerprintKey(param);
-                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString, rlsWhereClause, undefined, flsFieldsKey);
+                const fingerprint = this.ComputeRunViewCacheFingerprint(param, contextUser);
                 fingerprintMap.set(i, fingerprint);
                 const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
                 if (cached) {
@@ -3568,7 +3820,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
                     // Field-level security on the batch cache-hit path — same reasoning as the
                     // single-view path in PreRunView: this result is returned without
-                    // PostRunViews projecting it, and the cached superset is column-agnostic.
+                    // PostRunViews projecting it, and a slot can be wider than its class.
                     results = this.ApplyFieldSecurityProjection(results, param, contextUser);
                     results = this.ApplyRecordChangeFieldSecurityProjection(results, param, contextUser);
 
@@ -3682,6 +3934,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 smartCacheCheckParams[paramIndex].cacheStatus = {
                     maxUpdatedAt: cached.maxUpdatedAt,
                     rowCount: cached.rowCount,
+                    // Lets the server answer "stale" when this user's columns changed but no row did.
+                    fieldSecurityKey: this.ComputeFieldSecurityCacheStatusKey(params[paramIndex], contextUser),
                 };
             }
         }
@@ -4091,7 +4345,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // Server-side auto-cache: small, unfiltered, unsorted results are
             // automatically cached even without explicit CacheLocal. These are
             // safe for in-place upsert on entity changes (no filter to evaluate).
-            const fingerprint = preResult.fingerprint || LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, this.ComputeRunViewRLSWhereClause(params, contextUser), undefined, this.ComputeRunViewFLSFingerprintKey(params));
+            const fingerprint = preResult.fingerprint || this.ComputeRunViewCacheFingerprint(params, contextUser);
             const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
             await LocalCacheManager.Instance.SetRunViewResult(
                 fingerprint,
@@ -4106,8 +4360,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
 
         // Project cache-miss DB results back down to the caller's originally requested
-        // fields. PreRunView widened params.Fields to ALL entity fields so the cache
-        // entry (written above) is a universal superset — but the caller must receive
+        // fields. PreRunView widened params.Fields to ALL entity fields (less the columns this
+        // user's permission class may not read) so the cache entry written above is a superset
+        // for that class — but the caller must receive
         // the same shape on a miss as they do on a hit (which projects from cache).
         // Must run AFTER the cache writes (cache keeps the superset) and only for
         // plain-object results (entity objects need all fields).
@@ -4116,10 +4371,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
 
         // Field-level security on the cache-MISS path (the hit path is enforced in PreRunView,
-        // which returns before this hook ever runs). Must come AFTER the cache write above so
-        // the cache keeps the universal superset — permission changes then take effect on the
-        // next metadata refresh with no result-cache invalidation, because visibility is a pure
-        // read-time projection rather than something baked into the cached rows.
+        // which returns before this hook ever runs). Runs AFTER the cache write above, as on the
+        // hit path: the slot keeps what the database returned for this permission class, and
+        // every reader is projected against live metadata.
         if (result.Success) {
             result.Results = this.ApplyFieldSecurityProjection(result.Results, params, contextUser);
             result.Results = this.ApplyRecordChangeFieldSecurityProjection(result.Results, params, contextUser);
@@ -4192,7 +4446,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // per item. Compute lazily only for indexes PreRunViews skipped (cache
             // was disabled for them but auto-cache/OnDataChanged may still need it).
             const fingerprint = preResult.fingerprintMap?.get(i)
-                ?? LocalCacheManager.Instance.GenerateRunViewFingerprint(params[i], this.InstanceConnectionString, this.ComputeRunViewRLSWhereClause(params[i], contextUser), undefined, this.ComputeRunViewFLSFingerprintKey(params[i]));
+                ?? this.ComputeRunViewCacheFingerprint(params[i], contextUser);
             // CRITICAL: must be the SAME eligibility predicate PreRunViews used to decide
             // whether to widen Fields. Writing a non-widened (narrow or keyset-paged)
             // result here poisons the Fields-agnostic superset slot — this exact gate
@@ -4234,7 +4488,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
         // Project cache-miss DB results back down to each caller's originally
         // requested fields. PreRunViews widened those params' Fields to ALL entity
-        // fields so the cache entries (written above) are universal supersets — but
+        // fields (less what each user's permission class may not read) so the cache entries
+        // written above are supersets for that class — but
         // callers must receive the same shape on a miss as on a hit (which projects
         // from cache). Skip hits (already projected) and entity_object results
         // (need all fields).

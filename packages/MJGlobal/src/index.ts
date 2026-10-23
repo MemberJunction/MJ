@@ -13,6 +13,7 @@ export * from './util/PatternUtils';
 export * from './util/ResourcePatternUtils';
 export * from './util/UUIDUtils';
 export * from './util/UUIDCollections';
+export * from './util/UserScopedCacheKey';
 export * from './util/CronUtils';
 export * from './util/SerializationUtils';
 export * from './util/BinaryEncoding';

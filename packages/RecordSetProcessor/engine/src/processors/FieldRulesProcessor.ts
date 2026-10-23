@@ -10,7 +10,7 @@
  * field-rules engine in `@memberjunction/global` — the same one the integration field-mapping engine uses.
  * @module @memberjunction/record-set-processor
  */
-import { BaseEntity, CompositeKey, EntityFieldRules, type EntityFieldRulesResult } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityFieldRules, type EntityFieldRulesResult, type UserInfo } from '@memberjunction/core';
 import { UUIDsEqual, type FieldRuleSet, type PromptResolver } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
@@ -140,7 +140,7 @@ export class FieldRulesProcessor implements IRecordProcessor {
             if (!(await doc.Load(EntityDocumentID))) {
                 throw new Error(`Entity Document '${EntityDocumentID}' not found`);
             }
-            return this.RenderEntityDocument(doc.TemplateText, Record);
+            return this.RenderEntityDocument(doc.TemplateText, Record, context.ContextUser);
         };
     }
 
@@ -149,9 +149,10 @@ export class FieldRulesProcessor implements IRecordProcessor {
      * without HTML escaping (`Affineur & Owner`, not `Affineur &amp; Owner`).
      * @param templateText the document's template text
      * @param record the record the template reads
+     * @param contextUser the user the render runs as; the template engine is shared, so it is never taken from the engine
      */
-    protected async RenderEntityDocument(templateText: string, record: Record<string, unknown>): Promise<string> {
-        const rendered = await TemplateEngineServer.Instance.RenderTemplateSimple(templateText, record, { autoescape: false });
+    protected async RenderEntityDocument(templateText: string, record: Record<string, unknown>, contextUser?: UserInfo): Promise<string> {
+        const rendered = await TemplateEngineServer.Instance.RenderTemplateSimple(templateText, record, { autoescape: false, ContextUser: contextUser });
         if (!rendered.Success) {
             throw new Error(rendered.Message ?? 'entity document render failed');
         }

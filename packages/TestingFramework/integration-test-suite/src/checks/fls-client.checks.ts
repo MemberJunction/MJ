@@ -146,7 +146,7 @@ async function buildUserKeyProvider(rawKey: string): Promise<IMetadataProvider> 
  * server's CURRENT enforcement state — cache-hit stripping semantics are IT90/FLS11's subject,
  * not this bundle's; here a cached pre-tightening slot would only add noise.
  */
-async function readEmployees(provider: IMetadataProvider, user?: UserInfo): Promise<Record<string, unknown>[]> {
+export async function ReadEmployeesOverWire(provider: IMetadataProvider, user?: UserInfo): Promise<Record<string, unknown>[]> {
     const res = await RunView.FromMetadataProvider(provider).RunView<Record<string, unknown>>(
         { EntityName: SEEDED_FLS_ENTITY, ResultType: 'simple', BypassCache: true }, user);
     Assert(res.Success, `employees read over the wire failed: ${res.ErrorMessage}`);
@@ -166,7 +166,7 @@ async function readEmployees(provider: IMetadataProvider, user?: UserInfo): Prom
  * collide on UQ_EntityFieldPermission_Field_Role. A real browser only ever has the base
  * class, so constructing it directly is what restores client fidelity here.
  */
-function clientEntityRecord(ctx: IntegrationCheckContext): MJEntityEntity {
+export function ClientEntityRecord(ctx: IntegrationCheckContext): MJEntityEntity {
     const info = ctx.Provider.EntityByName('MJ: Entities');
     if (!info) {
         throw new Error("'MJ: Entities' not in client metadata");
@@ -174,17 +174,66 @@ function clientEntityRecord(ctx: IntegrationCheckContext): MJEntityEntity {
     return new MJEntityEntity(info);
 }
 
-/** Enable field security on the target entity through the wire (the snapshot runs inside MJAPI). */
-async function enableOverWire(ctx: IntegrationCheckContext, entityId: string): Promise<void> {
-    const ent = clientEntityRecord(ctx);
+/** Set the target entity's field-security flag through the wire. */
+async function setFlagOverWire(ctx: IntegrationCheckContext, entityId: string, enabled: boolean): Promise<void> {
+    const ent = ClientEntityRecord(ctx);
     if (!(await ent.Load(entityId))) {
         throw new Error(`failed to load '${SEEDED_FLS_ENTITY}' entity record over the wire`);
     }
-    ent.EnableFieldLevelSecurity = true;
+    ent.EnableFieldLevelSecurity = enabled;
     if (!(await ent.Save())) {
-        throw new Error(`enable over the wire failed: ${ent.LatestResult?.CompleteMessage ?? 'Save() returned false'}`);
+        throw new Error(`${enabled ? 'enable' : 'disable'} over the wire failed: ${ent.LatestResult?.CompleteMessage ?? 'Save() returned false'}`);
     }
 }
+
+/** How many times Setup enables the flag before giving up on the snapshot landing. */
+const ENABLE_SNAPSHOT_ATTEMPTS = 6;
+const ENABLE_SNAPSHOT_RETRY_MS = 5_000;
+
+/** True when the reader role's Email rule row exists, read fresh over the wire. */
+async function readerEmailRuleExists(ctx: IntegrationCheckContext): Promise<boolean> {
+    const field = ctx.Provider.EntityByName(SEEDED_FLS_ENTITY)?.Fields.find(f => f.Name === FLS_READER_DENIED_FIELD);
+    const role = ctx.Provider.Roles.find(r => r.Name === FLS_READER_ROLE);
+    if (!field || !role) {
+        return false;
+    }
+    const rows = await new RunView().RunView<{ ID: string }>(
+        { EntityName: 'MJ: Entity Field Permissions', ExtraFilter: `EntityFieldID = '${field.ID}' AND RoleID = '${role.ID}'`,
+          Fields: ['ID'], ResultType: 'simple', BypassCache: true },
+        ctx.User);
+    return rows.Success && rows.Results.length > 0;
+}
+
+/**
+ * Enable field security on the target entity through the wire (the snapshot runs inside MJAPI),
+ * and confirm the snapshot rows landed.
+ *
+ * MJAPI computes the snapshot from its in-memory metadata. The server-transport FLS bundles
+ * remove the entity's permission rows with raw SQL from a process that shares no cache with
+ * MJAPI, so a running MJAPI that held those rows still lists them, and its enable writes
+ * nothing. MJAPI's own save of the entity record schedules a metadata reload, so turning the
+ * flag off and on again reconciles from the rows that actually exist.
+ */
+async function enableOverWire(ctx: IntegrationCheckContext, entityId: string): Promise<void> {
+    for (let attempt = 1; ; attempt++) {
+        await setFlagOverWire(ctx, entityId, true);
+        if (await readerEmailRuleExists(ctx)) {
+            return;
+        }
+        if (attempt >= ENABLE_SNAPSHOT_ATTEMPTS) {
+            throw new Error(`enabling field security over the wire wrote no snapshot rows after ${attempt} attempts — MJAPI's metadata never caught up`);
+        }
+        await setFlagOverWire(ctx, entityId, false);
+        await new Promise(resolve => setTimeout(resolve, ENABLE_SNAPSHOT_RETRY_MS));
+    }
+}
+
+/** The three verbs of one field permission rule. */
+export type FieldRuleAccess = {
+    Read: 'Allow' | 'Deny' | 'No Access';
+    Update: 'Allow' | 'Deny' | 'No Access';
+    Create: 'Allow' | 'Deny' | 'No Access';
+};
 
 /**
  * Set a role's rule for one field through the wire, returning the row ID so teardown can restore
@@ -192,12 +241,25 @@ async function enableOverWire(ctx: IntegrationCheckContext, entityId: string): P
  * (write denial on a READABLE field — the combination FC5/FC6 need, and the one the seeded
  * metadata deliberately leaves to the bundle rather than baking in).
  */
-async function setFieldRuleOverWire(
+export async function SetFieldRuleOverWire(
     ctx: IntegrationCheckContext,
     fieldName: string,
     roleName: string,
-    access: { Read: 'Allow' | 'Deny' | 'No Access'; Update: 'Allow' | 'Deny' | 'No Access'; Create: 'Allow' | 'Deny' | 'No Access' }
+    access: FieldRuleAccess
 ): Promise<string> {
+    return (await ReplaceFieldRuleOverWire(ctx, fieldName, roleName, access)).ID;
+}
+
+/**
+ * {@link SetFieldRuleOverWire}, also returning the rule as it stood before, so teardown can put
+ * back exactly what was there rather than an assumed default.
+ */
+export async function ReplaceFieldRuleOverWire(
+    ctx: IntegrationCheckContext,
+    fieldName: string,
+    roleName: string,
+    access: FieldRuleAccess
+): Promise<{ ID: string; Previous: FieldRuleAccess }> {
     const entity = ctx.Provider.EntityByName(SEEDED_FLS_ENTITY);
     const field = entity?.Fields.find(f => f.Name === fieldName);
     const role = ctx.Provider.Roles.find(r => r.Name === roleName);
@@ -214,13 +276,14 @@ async function setFieldRuleOverWire(
     if (!(await efp.Load(rows.Results[0].ID))) {
         throw new Error(`failed to load the ${fieldName}/${roleName} permission row over the wire`);
     }
+    const previous: FieldRuleAccess = { Read: efp.ReadAccess, Update: efp.UpdateAccess, Create: efp.CreateAccess };
     efp.ReadAccess = access.Read;
     efp.UpdateAccess = access.Update;
     efp.CreateAccess = access.Create;
     if (!(await efp.Save())) {
         throw new Error(`setting ${fieldName}/${roleName} over the wire failed: ${efp.LatestResult?.CompleteMessage ?? ''}`);
     }
-    return rows.Results[0].ID;
+    return { ID: rows.Results[0].ID, Previous: previous };
 }
 
 /** Tighten the reader role's Email rule to Deny through the wire; returns the row ID for restore. */
@@ -289,7 +352,7 @@ export async function MintFullAccessUserKey(ctx: IntegrationCheckContext, fx: Mi
  * Wait (bounded) for MJAPI's asynchronous metadata refresh to start ENFORCING the tightened
  * rule on the reader connection — live coverage of the 5.6 propagation surface.
  */
-async function waitForPropagation(reader: IMetadataProvider, condition: (rows: Record<string, unknown>[]) => boolean, what: string): Promise<void> {
+export async function WaitForWirePropagation(reader: IMetadataProvider, condition: (rows: Record<string, unknown>[]) => boolean, what: string): Promise<void> {
     const deadline = Date.now() + PROPAGATION_TIMEOUT_MS;
     let lastProblem = '';
     let consecutive = 0;
@@ -297,7 +360,7 @@ async function waitForPropagation(reader: IMetadataProvider, condition: (rows: R
         // A FAILED read is 'not yet', not fatal: the freshly-granted scope rule may still be
         // inside MJAPI's scope-cache staleness envelope, which surfaces as denied RunViews.
         try {
-            const rows = await readEmployees(reader);
+            const rows = await ReadEmployeesOverWire(reader);
             if (condition(rows)) {
                 // Require STABILITY, not one lucky read: enforcement can briefly flap while
                 // MJAPI's provider instances converge on the refreshed metadata.
@@ -322,143 +385,158 @@ async function waitForPropagation(reader: IMetadataProvider, condition: (rows: R
     }
 }
 
-IntegrationCheckRegistry.Instance.RegisterLifecycle('fls-enforcement-client', {
-    Setup: async (ctx: IntegrationCheckContext): Promise<void> => {
-        const fx: FlsClientFixture = { Usable: false, EntityName: SEEDED_FLS_ENTITY, CreatedKeyIds: [], CreatedScopeRuleIds: [], CreatedEmployeeIDs: [] };
-        ctx.FlsClientFixture = fx;
+/**
+ * Provisions the shared over-the-wire FLS fixture on `ctx.FlsClientFixture`: enables field
+ * security through the wire, tightens the reader's and denier's rules, mints per-user API keys,
+ * builds the per-user GraphQL connections, creates the fixture employee, and waits until MJAPI
+ * enforces the tightened rule. Shared by every client-transport bundle that needs the seeded FLS
+ * posture over the wire.
+ */
+export async function SetupFlsClientFixture(ctx: IntegrationCheckContext): Promise<void> {
+    const fx: FlsClientFixture = { Usable: false, EntityName: SEEDED_FLS_ENTITY, CreatedKeyIds: [], CreatedScopeRuleIds: [], CreatedEmployeeIDs: [] };
+    ctx.FlsClientFixture = fx;
 
-        const entity = ctx.Provider.EntityByName(SEEDED_FLS_ENTITY);
-        if (!entity) {
-            fx.Reason = `'${SEEDED_FLS_ENTITY}' not in client metadata`;
-            return;
-        }
-        if (entity.EnableFieldLevelSecurity) {
-            fx.Reason = `'${SEEDED_FLS_ENTITY}' already has field security enabled — refusing to mutate a configured entity`;
-            return;
-        }
-        const readerId = await findUserId(ctx, SEEDED_FLS_READER_EMAIL);
-        const writerId = await findUserId(ctx, SEEDED_FLS_WRITER_EMAIL);
-        if (!readerId || !writerId) {
-            fx.Reason = `seeded FLS users (${SEEDED_FLS_READER_EMAIL} / ${SEEDED_FLS_WRITER_EMAIL}) not found over the wire`;
-            return;
-        }
-        // Optional: the write-path checks (FC5/FC6) need an identity that can create and update
-        // the entity AND carries a field-level write denial. Its absence degrades those two
-        // checks to a skip rather than failing the bundle, matching how the seed is treated.
-        const multiId = await findUserId(ctx, SEEDED_FLS_MULTI_EMAIL);
-
-        try {
-            await enableOverWire(ctx, entity.ID);
-            fx.ReaderEfpRowID = await tightenReaderEmail(ctx);
-            const readerKey = await MintFullAccessUserKey(ctx, fx, readerId, 'IT92 FLS reader (mj-integration-test)');
-            const writerKey = await MintFullAccessUserKey(ctx, fx, writerId, 'IT92 FLS writer (mj-integration-test)');
-            fx.ReaderProvider = await BuildUserKeyProviderWithRetry(readerKey);
-            fx.WriterProvider = await BuildUserKeyProviderWithRetry(writerKey);
-            if (multiId) {
-                // Readable, but neither updatable nor creatable — the write-denial shape.
-                fx.DenierEfpRowID = await setFieldRuleOverWire(
-                    ctx, FLS_UPDATE_DENY_FIELD, FLS_DENIER_ROLE, { Read: 'Allow', Update: 'Deny', Create: 'Deny' });
-                const multiKey = await MintFullAccessUserKey(ctx, fx, multiId, 'IT92 FLS multi (mj-integration-test)');
-                fx.MultiProvider = await BuildUserKeyProviderWithRetry(multiKey);
-            }
-
-            // Phase 1: the reader key's scope rule is honored — any successful read proves it
-            // (and the writer key, granted in the same pass, follows the same envelope).
-            await waitForPropagation(fx.ReaderProvider, () => true, 'scope rule honored');
-
-            // The writer identity creates the fixture row the checks read back.
-            const emp = await fx.WriterProvider.GetEntityObject<MJEmployeeEntity>(SEEDED_FLS_ENTITY);
-            emp.NewRecord();
-            emp.FirstName = 'WireFixture';
-            emp.LastName = 'Employee (mj-integration-test)';
-            emp.CompanyID = await firstCompanyId(ctx, fx);
-            emp.Email = `it-fls-wire-${Date.now()}@integration.test`;
-            // The writer key's scope rule may lag the reader's by a few seconds — one retry.
-            if (!(await emp.Save())) {
-                await new Promise(resolve => setTimeout(resolve, 10_000));
-                if (!(await emp.Save())) {
-                    throw new Error(`creating the wire fixture employee failed: ${emp.LatestResult?.CompleteMessage ?? ''}`);
-                }
-            }
-            fx.FixtureEmployeeID = emp.ID;
-
-            // Phase 2: enforcement propagation — the tightened Email rule must actually BITE on
-            // the wire before the checks run. Deliberately after the fixture employee exists, and
-            // with a row-count demand in the condition, so this can never pass vacuously over an
-            // empty table ("no row carries Email" is trivially true over 0 rows — the exact hole
-            // the original leak hid behind). With the event-driven metadata refresh this
-            // converges in about a second; the budget only bounds pathological environments.
-            await waitForPropagation(
-                fx.ReaderProvider,
-                rows => rows.length > 0 && rows.every(r => !(FLS_READER_DENIED_FIELD in r)),
-                'denied column stripped from reader list results');
-
-            fx.Usable = true;
-        } catch (e) {
-            fx.ProvisionError = e instanceof Error ? e.message : String(e);
-        }
-    },
-
-    Teardown: async (ctx: IntegrationCheckContext): Promise<void> => {
-        const fx = ctx.FlsClientFixture;
-        if (!fx || (!fx.Usable && !fx.ProvisionError && !fx.CreatedKeyIds.length)) {
-            return; // nothing was provisioned
-        }
-        // Rows the write-path checks created (FC5), deleted by the writer identity.
-        for (const empId of fx.CreatedEmployeeIDs) {
-            await ctx.Provider.GetEntityObject<MJEmployeeEntity>(SEEDED_FLS_ENTITY, ctx.User)
-                .then(async emp => { if (await emp.Load(empId)) { await emp.Delete(); } })
-                .catch(() => undefined);
-        }
-        // Fixture employee — the writer identity owns delete permission on the entity.
-        if (fx.FixtureEmployeeID && fx.WriterProvider) {
-            await fx.WriterProvider.GetEntityObject<MJEmployeeEntity>(SEEDED_FLS_ENTITY)
-                .then(async emp => { if (await emp.Load(fx.FixtureEmployeeID!)) { await emp.Delete(); } })
-                .catch(() => undefined);
-        }
-        if (fx.CreatedCompanyID) {
-            await ctx.Provider.GetEntityObject<MJCompanyEntity>('MJ: Companies', ctx.User)
-                .then(async company => { if (await company.Load(fx.CreatedCompanyID!)) { await company.Delete(); } })
-                .catch(() => undefined);
-        }
-        // Restore the denier's write-denied field rule to the snapshot default.
-        if (fx.DenierEfpRowID) {
-            await ctx.Provider.GetEntityObject<MJEntityFieldPermissionEntity>('MJ: Entity Field Permissions', ctx.User)
-                .then(async efp => {
-                    if (await efp.Load(fx.DenierEfpRowID!)) {
-                        efp.ReadAccess = 'Allow';
-                        efp.UpdateAccess = 'No Access';
-                        efp.CreateAccess = 'No Access';
-                        await efp.Save();
-                    }
-                })
-                .catch(() => undefined);
-        }
-        // Restore the reader's Email rule to the snapshot default.
-        if (fx.ReaderEfpRowID) {
-            await ctx.Provider.GetEntityObject<MJEntityFieldPermissionEntity>('MJ: Entity Field Permissions', ctx.User)
-                .then(async efp => {
-                    if (await efp.Load(fx.ReaderEfpRowID!)) {
-                        efp.ReadAccess = 'Allow';
-                        efp.UpdateAccess = 'No Access';
-                        efp.CreateAccess = 'No Access';
-                        await efp.Save();
-                    }
-                })
-                .catch(() => undefined);
-        }
-        // Flag off (permission rows stay — inert by the product's own "disable keeps rows" semantic).
-        // Same client-faithful base-class construction as the enable — see clientEntityRecord.
-        try {
-            const entity = ctx.Provider.EntityByName(SEEDED_FLS_ENTITY);
-            const ent = clientEntityRecord(ctx);
-            if (entity && (await ent.Load(entity.ID))) {
-                ent.EnableFieldLevelSecurity = false;
-                await ent.Save();
-            }
-        } catch { /* best-effort */ }
-        await DeleteMintedUserKeys(ctx, fx);
+    const entity = ctx.Provider.EntityByName(SEEDED_FLS_ENTITY);
+    if (!entity) {
+        fx.Reason = `'${SEEDED_FLS_ENTITY}' not in client metadata`;
+        return;
     }
+    if (entity.EnableFieldLevelSecurity) {
+        fx.Reason = `'${SEEDED_FLS_ENTITY}' already has field security enabled — refusing to mutate a configured entity`;
+        return;
+    }
+    const readerId = await findUserId(ctx, SEEDED_FLS_READER_EMAIL);
+    const writerId = await findUserId(ctx, SEEDED_FLS_WRITER_EMAIL);
+    if (!readerId || !writerId) {
+        fx.Reason = `seeded FLS users (${SEEDED_FLS_READER_EMAIL} / ${SEEDED_FLS_WRITER_EMAIL}) not found over the wire`;
+        return;
+    }
+    // Optional: the write-path checks (FC5/FC6) need an identity that can create and update
+    // the entity AND carries a field-level write denial. Its absence degrades those two
+    // checks to a skip rather than failing the bundle, matching how the seed is treated.
+    const multiId = await findUserId(ctx, SEEDED_FLS_MULTI_EMAIL);
+
+    try {
+        await enableOverWire(ctx, entity.ID);
+        fx.ReaderEfpRowID = await tightenReaderEmail(ctx);
+        const readerKey = await MintFullAccessUserKey(ctx, fx, readerId, 'IT92 FLS reader (mj-integration-test)');
+        const writerKey = await MintFullAccessUserKey(ctx, fx, writerId, 'IT92 FLS writer (mj-integration-test)');
+        fx.ReaderProvider = await BuildUserKeyProviderWithRetry(readerKey);
+        fx.WriterProvider = await BuildUserKeyProviderWithRetry(writerKey);
+        if (multiId) {
+            // Readable, but neither updatable nor creatable — the write-denial shape.
+            fx.DenierEfpRowID = await SetFieldRuleOverWire(
+                ctx, FLS_UPDATE_DENY_FIELD, FLS_DENIER_ROLE, { Read: 'Allow', Update: 'Deny', Create: 'Deny' });
+            const multiKey = await MintFullAccessUserKey(ctx, fx, multiId, 'IT92 FLS multi (mj-integration-test)');
+            fx.MultiProvider = await BuildUserKeyProviderWithRetry(multiKey);
+        }
+
+        // Phase 1: the reader key's scope rule is honored — any successful read proves it
+        // (and the writer key, granted in the same pass, follows the same envelope).
+        await WaitForWirePropagation(fx.ReaderProvider, () => true, 'scope rule honored');
+
+        // The writer identity creates the fixture row the checks read back.
+        const emp = await fx.WriterProvider.GetEntityObject<MJEmployeeEntity>(SEEDED_FLS_ENTITY);
+        emp.NewRecord();
+        emp.FirstName = 'WireFixture';
+        emp.LastName = 'Employee (mj-integration-test)';
+        emp.CompanyID = await FirstCompanyIdOverWire(ctx, fx);
+        emp.Email = `it-fls-wire-${Date.now()}@integration.test`;
+        // The writer key's scope rule may lag the reader's by a few seconds — one retry.
+        if (!(await emp.Save())) {
+            await new Promise(resolve => setTimeout(resolve, 10_000));
+            if (!(await emp.Save())) {
+                throw new Error(`creating the wire fixture employee failed: ${emp.LatestResult?.CompleteMessage ?? ''}`);
+            }
+        }
+        fx.FixtureEmployeeID = emp.ID;
+
+        // Phase 2: enforcement propagation — the tightened Email rule must actually BITE on
+        // the wire before the checks run. Deliberately after the fixture employee exists, and
+        // with a row-count demand in the condition, so this can never pass vacuously over an
+        // empty table ("no row carries Email" is trivially true over 0 rows — the exact hole
+        // the original leak hid behind). With the event-driven metadata refresh this
+        // converges in about a second; the budget only bounds pathological environments.
+        await WaitForWirePropagation(
+            fx.ReaderProvider,
+            rows => rows.length > 0 && rows.every(r => !(FLS_READER_DENIED_FIELD in r)),
+            'denied column stripped from reader list results');
+
+        fx.Usable = true;
+    } catch (e) {
+        fx.ProvisionError = e instanceof Error ? e.message : String(e);
+    }
+}
+
+/**
+ * Restores everything {@link SetupFlsClientFixture} changed, over the wire and best-effort:
+ * deletes the rows the checks and the fixture created, restores the tightened rules, turns the
+ * flag off, and deletes the minted keys.
+ */
+export async function TeardownFlsClientFixture(ctx: IntegrationCheckContext): Promise<void> {
+    const fx = ctx.FlsClientFixture;
+    if (!fx || (!fx.Usable && !fx.ProvisionError && !fx.CreatedKeyIds.length)) {
+        return; // nothing was provisioned
+    }
+    // Rows the write-path checks created (FC5), deleted by the writer identity.
+    for (const empId of fx.CreatedEmployeeIDs) {
+        await ctx.Provider.GetEntityObject<MJEmployeeEntity>(SEEDED_FLS_ENTITY, ctx.User)
+            .then(async emp => { if (await emp.Load(empId)) { await emp.Delete(); } })
+            .catch(() => undefined);
+    }
+    // Fixture employee — the writer identity owns delete permission on the entity.
+    if (fx.FixtureEmployeeID && fx.WriterProvider) {
+        await fx.WriterProvider.GetEntityObject<MJEmployeeEntity>(SEEDED_FLS_ENTITY)
+            .then(async emp => { if (await emp.Load(fx.FixtureEmployeeID!)) { await emp.Delete(); } })
+            .catch(() => undefined);
+    }
+    if (fx.CreatedCompanyID) {
+        await ctx.Provider.GetEntityObject<MJCompanyEntity>('MJ: Companies', ctx.User)
+            .then(async company => { if (await company.Load(fx.CreatedCompanyID!)) { await company.Delete(); } })
+            .catch(() => undefined);
+    }
+    // Restore the denier's write-denied field rule to the snapshot default.
+    if (fx.DenierEfpRowID) {
+        await ctx.Provider.GetEntityObject<MJEntityFieldPermissionEntity>('MJ: Entity Field Permissions', ctx.User)
+            .then(async efp => {
+                if (await efp.Load(fx.DenierEfpRowID!)) {
+                    efp.ReadAccess = 'Allow';
+                    efp.UpdateAccess = 'No Access';
+                    efp.CreateAccess = 'No Access';
+                    await efp.Save();
+                }
+            })
+            .catch(() => undefined);
+    }
+    // Restore the reader's Email rule to the snapshot default.
+    if (fx.ReaderEfpRowID) {
+        await ctx.Provider.GetEntityObject<MJEntityFieldPermissionEntity>('MJ: Entity Field Permissions', ctx.User)
+            .then(async efp => {
+                if (await efp.Load(fx.ReaderEfpRowID!)) {
+                    efp.ReadAccess = 'Allow';
+                    efp.UpdateAccess = 'No Access';
+                    efp.CreateAccess = 'No Access';
+                    await efp.Save();
+                }
+            })
+            .catch(() => undefined);
+    }
+    // Flag off (permission rows stay — inert by the product's own "disable keeps rows" semantic).
+    // Same client-faithful base-class construction as the enable — see clientEntityRecord.
+    try {
+        const entity = ctx.Provider.EntityByName(SEEDED_FLS_ENTITY);
+        const ent = ClientEntityRecord(ctx);
+        if (entity && (await ent.Load(entity.ID))) {
+            ent.EnableFieldLevelSecurity = false;
+            await ent.Save();
+        }
+    } catch { /* best-effort */ }
+    await DeleteMintedUserKeys(ctx, fx);
+}
+
+IntegrationCheckRegistry.Instance.RegisterLifecycle('fls-enforcement-client', {
+    Setup: SetupFlsClientFixture,
+    Teardown: TeardownFlsClientFixture
 });
 
 /** Best-effort teardown of keys minted by {@link MintFullAccessUserKey}: scope rules and usage logs first (FKs), then the keys. */
@@ -484,7 +562,7 @@ export async function DeleteMintedUserKeys(ctx: IntegrationCheckContext, fx: Min
 }
 
 /** First company ID over the wire; creates a marker fixture company when the table is empty. */
-async function firstCompanyId(ctx: IntegrationCheckContext, fx: FlsClientFixture): Promise<string> {
+export async function FirstCompanyIdOverWire(ctx: IntegrationCheckContext, fx: FlsClientFixture): Promise<string> {
     const res = await new RunView().RunView<{ ID: string }>(
         { EntityName: 'MJ: Companies', Fields: ['ID'], MaxRows: 1, ResultType: 'simple' }, ctx.User);
     if (!res.Success) {
@@ -513,7 +591,7 @@ async function firstCompanyId(ctx: IntegrationCheckContext, fx: FlsClientFixture
 export async function CheckFc1WireListStripsDeniedColumn(ctx: IntegrationCheckContext): Promise<void> {
     if (!skipIfUnusable(ctx.FlsClientFixture, 'fls-enforcement-client.FC1')) return;
     const fx = ctx.FlsClientFixture!;
-    const rows = await readEmployees(fx.ReaderProvider!);
+    const rows = await ReadEmployeesOverWire(fx.ReaderProvider!);
     Assert(rows.length > 0, 'the wire fixture employee guarantees at least one row');
     for (const row of rows) {
         Assert(!(FLS_READER_DENIED_FIELD in row),
@@ -560,7 +638,7 @@ export async function CheckFc2_WireSingleRecordLoadStripped(ctx: IntegrationChec
 export async function CheckFc3WireUnrestrictedUserUnaffected(ctx: IntegrationCheckContext): Promise<void> {
     if (!skipIfUnusable(ctx.FlsClientFixture, 'fls-enforcement-client.FC3')) return;
     const fx = ctx.FlsClientFixture!;
-    const rows = await readEmployees(fx.WriterProvider!);
+    const rows = await ReadEmployeesOverWire(fx.WriterProvider!);
     const fixtureRow = rows.find(r => UUIDsEqual(String(r.ID), fx.FixtureEmployeeID!));
     Assert(fixtureRow != null, 'fixture employee visible to the unrestricted wire identity');
     const email = fixtureRow![FLS_READER_DENIED_FIELD];
@@ -625,7 +703,7 @@ export async function CheckFc5WireCreateSuppressesDeniedField(ctx: IntegrationCh
     emp.NewRecord();
     emp.FirstName = 'WireCreate';
     emp.LastName = 'Suppressed (mj-integration-test)';
-    emp.CompanyID = await firstCompanyId(ctx, fx);
+    emp.CompanyID = await FirstCompanyIdOverWire(ctx, fx);
     emp.Email = `it-fls-create-${Date.now()}@integration.test`;
     // The value this identity may not supply. Create denial is SILENT by design — rejecting
     // would disclose that the field exists and is restricted (see the guide's denial split).

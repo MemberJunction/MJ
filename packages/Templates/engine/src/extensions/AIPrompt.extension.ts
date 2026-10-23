@@ -82,83 +82,95 @@ export class AIPromptExtension extends TemplateExtensionBase {
      * ```
      */
     public run(context: Context, params: any, body: any, callBack: NunjucksCallback) {
+        // Captured once: the prompt runs as the user of the render that reached this tag.
+        const contextUser = this.ContextUser;
+        if (!contextUser) {
+            callBack(new Error(AIPromptExtension.NoRenderUserMessage));
+            return;
+        }
         const prompt = body();
+        const config = this.parseConfig(params);
+        // Nunjucks calls this synchronously and waits on the callback, so every path of the promise
+        // below must reach the callback: a rejection that skipped it would leave the render waiting forever.
+        this.runPrompt(prompt, config, contextUser).then(
+            (response) => callBack(null, response),
+            (e: unknown) => {
+                LogError(e);
+                callBack(e instanceof Error ? e : new Error(String(e)));
+            }
+        );
+    }
+
+    /** Why an `{% AIPrompt %}` tag fails in a render that has no user. */
+    public static readonly NoRenderUserMessage =
+        'The AIPrompt template tag needs the user the render runs as, and this render has no user. ' +
+        'Pass ContextUser in the render options.';
+
+    /** Maps the tag's parameters onto an {@link AIPromptConfig}, matching names case- and space-insensitively. */
+    protected parseConfig(params: Record<string, unknown>): AIPromptConfig {
         const config: AIPromptConfig = {};
-        // now map each value from params to the config object, and be case INsensitive
         for (const key in params) {
-            if (params.hasOwnProperty(key)) {
-                const value = params[key];
-                // convert the key to lower case and remove any spaces
-                const lowerKey = key.toLowerCase().replace(/\s+/g, '');
-                // now set the value in the config object
-                if (lowerKey === 'aimodel') {
-                    config.AIModel = value;
-                } else if (lowerKey === 'allowformatting') {
-                    // convert the value to a boolean
-                    if (typeof value === 'string') {
-                        config.AllowFormatting = value.toLowerCase() === 'true' || value.toLowerCase() === 'yes';
-                    } else if (typeof value === 'boolean') {
-                        config.AllowFormatting = value;
-                    } else {
-                        // if the value is not a string or boolean, we will just set it to false
-                        config.AllowFormatting = false;
-                    }
-                }
+            if (!params.hasOwnProperty(key)) {
+                continue;
+            }
+            const value = params[key];
+            const lowerKey = key.toLowerCase().replace(/\s+/g, '');
+            if (lowerKey === 'aimodel') {
+                config.AIModel = value as string;
+            } else if (lowerKey === 'allowformatting') {
+                config.AllowFormatting = typeof value === 'string'
+                    ? value.toLowerCase() === 'true' || value.toLowerCase() === 'yes'
+                    : value === true; // any other non-boolean value means no formatting
             }
         }
+        return config;
+    }
 
-        // we now have the LLM prompt in the prompt variable
-        // we can't use async/await here because this is a synchronous function
-        // so instead we will use the callback pattern
-        // we will get the highest power model from the AI Engine
-        // then we will create an instance of the LLM class
-        AIEngine.Instance.Config(false, this.ContextUser).then(async () => {
-            try {
-                let model: MJAIModelEntityExtended = null;
-                if(config.AIModel) {
-                    model = AIEngine.Instance.Models.find(m => 
-                        m.Name.toLowerCase() === config.AIModel.toLowerCase() ||
-                        m.APIName?.toLowerCase() === config.AIModel.toLowerCase() 
-                    );
-                    if (!model) {
-                        throw new Error(`AI model '${config.AIModel}' not found.`);
-                    }
+    /**
+     * Runs the prompt as `contextUser` and returns the model's reply. Rejects when the AI engine cannot be
+     * configured, no model is found, or the model call does not succeed.
+     */
+    protected async runPrompt(prompt: string, config: AIPromptConfig, contextUser: UserInfo): Promise<string> {
+        await AIEngine.Instance.Config(false, contextUser);
+        const model = await this.resolveModel(config, contextUser);
+        const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, GetAIAPIKey(model.DriverClass));
+        const llmResult = await llm.ChatCompletion({
+            messages: [
+                {
+                    role: 'system',
+                    content: `Background: The output from this will be DIRECTLY inserted into a messaging template going to a recipient. For this reason whenever
+                                          you are prompted to provide a result, do not preface it with any text, just provide the result itself. ${config.AllowFormatting ? "" : this.AllowFormattingText }  Assume that the text you are generating will go directly into a message.
+                              <IMPORTANT>ONLY PROVIDE THE RESPONSE REQUESTED FOR THE MESSAGE - **** DO NOT ADD ANYTHING ELSE ****</IMPORTANT>`,
+                },
+                {
+                    role: 'user',
+                    content: `${prompt}`,
                 }
-                else{
-                    model = await AIEngine.Instance.GetHighestPowerModel('Groq', 'llm', this.ContextUser);
-                    if (!model) {
-                        throw new Error(`No AI model found for the vendor 'Groq' and type 'llm'.`);
-                    }
-                }
-                
-                const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, GetAIAPIKey(model.DriverClass))
-                const llmResult = await llm.ChatCompletion({
-                    messages: [
-                        {
-                            role: 'system',
-                            content: `Background: The output from this will be DIRECTLY inserted into a messaging template going to a recipient. For this reason whenever
-                                                  you are prompted to provide a result, do not preface it with any text, just provide the result itself. ${config.AllowFormatting ? "" : this.AllowFormattingText }  Assume that the text you are generating will go directly into a message.
-                                      <IMPORTANT>ONLY PROVIDE THE RESPONSE REQUESTED FOR THE MESSAGE - **** DO NOT ADD ANYTHING ELSE ****</IMPORTANT>`,
-                        },
-                        {
-                            role: 'user',
-                            content: `${prompt}`,
-                        }
-                    ],
-                    model: model.APINameOrName
-                })
-                if (llmResult && llmResult.success) {
-                    let response = llmResult.data.choices[0].message.content;
-                    response = response.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+            ],
+            model: model.APINameOrName
+        });
+        if (!llmResult?.success) {
+            throw new Error(`AIPrompt: the model call did not succeed: ${llmResult?.errorMessage || 'the model returned no result'}`);
+        }
+        const response = llmResult.data.choices[0].message.content;
+        return response.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+    }
 
-                    callBack(null, response);
-                }
+    /** The model the tag names, or the highest-power Groq LLM when it names none. */
+    protected async resolveModel(config: AIPromptConfig, contextUser: UserInfo): Promise<MJAIModelEntityExtended> {
+        if (config.AIModel) {
+            const wanted = config.AIModel.toLowerCase();
+            const model = AIEngine.Instance.Models.find(m => m.Name.toLowerCase() === wanted || m.APIName?.toLowerCase() === wanted);
+            if (!model) {
+                throw new Error(`AI model '${config.AIModel}' not found.`);
             }
-            catch (e) {
-                LogError(e);
-                callBack(null, e);
-            }
-        });        
+            return model;
+        }
+        const model = await AIEngine.Instance.GetHighestPowerModel('Groq', 'llm', contextUser);
+        if (!model) {
+            throw new Error(`No AI model found for the vendor 'Groq' and type 'llm'.`);
+        }
+        return model;
     }
 
 

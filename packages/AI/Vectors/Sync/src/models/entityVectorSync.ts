@@ -4,7 +4,7 @@ import { AIEmbeddingRunner, EmbeddingRunResult } from '@memberjunction/ai-prompt
 import { CredentialEngine } from '@memberjunction/credentials';
 import { BaseResponse, IndexDescription, IndexList, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 import { PageRecordsParams, VectorBase } from '@memberjunction/ai-vectors';
-import { BaseEntity, CompositeKey, EntityField, EntityFieldInfo, EntityInfo, IMetadataProvider, LogError, LogStatus, LogStatusEx, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityField, EntityFieldInfo, EntityInfo, GetIndexRestrictedFieldNames, IMetadataProvider, LogError, LogStatus, LogStatusEx, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
 import { MJAIModelEntity, MJEntityDocumentEntity, MJEntityDocumentTypeEntity, MJEntityRecordDocumentEntity, MJTemplateContentEntity,
   MJTemplateContentTypeEntity, MJTemplateEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJVectorDatabaseEntity, MJVectorIndexEntity } from '@memberjunction/core-entities';
 import { Float32VectorToBase64, IsValidUUID, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
@@ -393,7 +393,9 @@ export class EntityVectorSyncer extends VectorBase {
       // No pre-validation — entity records commonly have null fields (e.g. Bio, State)
       // and the Nunjucks templates handle missing data gracefully via {% if Field %} conditionals.
       // Pass SuppressWarnings=true since entity doc vectorization doesn't need warnings for missing fields.
-      const result: TemplateRenderResult = await TemplateEngineServer.Instance.RenderTemplate(template, templateContent, entityData, true, true);
+      const result: TemplateRenderResult = await TemplateEngineServer.Instance.RenderTemplate(
+        template, templateContent, entityData, true, true, { ContextUser: this.CurrentUser }
+      );
       if (result.Success) {
         validEntries.push({ text: result.Output, record: entityData });
       } else {
@@ -669,8 +671,26 @@ export class EntityVectorSyncer extends VectorBase {
    *   __mj_* fields can be included by name. Only genuinely unstorable binary types are
    *   refused (with a logged warning, never a silent drop).
    * "exclude" strategy: all eligible fields except those listed with included=false.
+   *
+   * Whatever the strategy, a field that field-level security restricts for any role is never
+   * stored: vector metadata is shared by every reader of the index. Naming one explicitly is
+   * refused with a logged warning.
    */
   private getDisplayFields(entityInfo: EntityInfo | undefined, metadataConfig?: EntityDocumentMetadataConfig): EntityFieldInfo[] {
+    const configured = this.getConfiguredDisplayFields(entityInfo, metadataConfig);
+    const restricted = GetIndexRestrictedFieldNames(entityInfo);
+    if (restricted.size === 0) return configured;
+    return configured.filter(f => {
+      if (!restricted.has(f.Name.toLowerCase())) return true;
+      if (metadataConfig?.fields?.[f.Name]?.included === true) {
+        LogError(`Field "${f.Name}" of "${entityInfo?.Name}" is restricted by field-level security for at least one role and cannot be stored in vector metadata — ignoring its explicit inclusion`);
+      }
+      return false;
+    });
+  }
+
+  /** The display fields the entity document's metadata configuration selects, before field-level security is applied. */
+  private getConfiguredDisplayFields(entityInfo: EntityInfo | undefined, metadataConfig?: EntityDocumentMetadataConfig): EntityFieldInfo[] {
     if (!entityInfo) return [];
 
     const strategy = metadataConfig?.fieldStrategy ?? 'all';
@@ -1510,7 +1530,7 @@ export class EntityVectorSyncer extends VectorBase {
   }
 
   private templateDataBuilder(): EntityDocumentTemplateDataBuilder {
-    return new EntityDocumentTemplateDataBuilder(super.RunView, super.CurrentUser);
+    return new EntityDocumentTemplateDataBuilder(super.RunView, super.CurrentUser, super.Provider);
   }
 
   /**

@@ -76,6 +76,9 @@ import { EntityActionChecks } from '../checks/entity-actions.checks';
 import { FlsEnforcementChecks } from '../checks/fls-enforcement.checks';
 import { FlsLifecycleChecks } from '../checks/fls-lifecycle.checks';
 import { FlsClientChecks } from '../checks/fls-client.checks';
+import { FlsCloseoutChecks } from '../checks/fls-closeout.checks';
+import { FlsCloseoutPendingChecks } from '../checks/fls-closeout-pending.checks';
+import { FlsCloseoutClientChecks } from '../checks/fls-closeout-client.checks';
 import { MetadataSyncPushChecks } from '../checks/metadata-sync-push.checks';
 import { TaskGraphExecutionChecks } from '../checks/task-graph-execution.checks';
 import { PerformanceBenchmarkChecks } from '../checks/performance-benchmark.checks';
@@ -207,6 +210,9 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['fls-enforcement', FlsEnforcementChecks, 24], // FLS1-FLS24 field-level security against a live DB (IT90); FLS22/FLS23 cover the Record Changes payload projection, FLS24 record names, FLS21 measures metadata-refresh cost
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT91)
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
+        ['fls-closeout', FlsCloseoutChecks, 19], // CO1-CO19 FLS close-out, server tier: object width, the clause gate, datasets, Record Changes by ViewID and full-width snapshots of restricted saves, config guards (CO14-CO16 mutation-gated), agent data sources, search projection (IT133)
+        ['fls-closeout-client', FlsCloseoutClientChecks, 9], // CW1-CW9 FLS close-out over the wire: client-input rejection (GraphQL, transaction groups, REST), transport projection, wire filter gate (IT134)
+        ['fls-closeout-pending', FlsCloseoutPendingChecks, 7], // PC1-PC3 cache segmentation + PQ1-PQ4 RunQuery FLS, (IT135)
         ['self-avatar-client', SelfAvatarClientChecks, 6], // AV1-AV6 self-service avatar mutation over the wire via per-user API keys (IT106)
         ['conversation-authorship-client', ConversationAuthorshipClientChecks, 10], // CA1-CA10 who a conversation message is from, owner + Edit grantee over the wire via per-user API keys; CA7-CA10 are the bypasses: forged OldValues___, transaction variables, role casing, moving a message (IT115)
         ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)
@@ -316,6 +322,9 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'feature-pipeline-core': 9,
         'feature-value-only': 5,
         'field-rules-bulk-update': 3,
+        'fls-closeout-client': 9,
+        'fls-closeout-pending': 7,
+        'fls-closeout': 19,
         'fls-enforcement-client': 6,
         'fls-enforcement': 24,
         'fls-lifecycle': 9,
@@ -419,7 +428,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(133);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(136);
     });
 });
 
@@ -559,6 +568,9 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'feature-value-only.FV3',
         'feature-value-only.FV4',
         'feature-value-only.FV5',
+        'fls-closeout.CO14',
+        'fls-closeout.CO15',
+        'fls-closeout.CO16',
         'fls-lifecycle.LC1',
         'fls-lifecycle.LC2',
         'fls-lifecycle.LC3',

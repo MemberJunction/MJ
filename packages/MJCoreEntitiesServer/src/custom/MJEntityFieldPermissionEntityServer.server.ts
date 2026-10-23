@@ -9,16 +9,41 @@ import {
     FieldPermissionRuleForRole,
     FieldPermissionRuleVerbs,
     IMetadataProvider,
-    IsRestrictingFieldRule,
     LogError,
     RunView,
+    UserInfo,
     ValidationErrorInfo,
     ValidationErrorType,
     ValidationResult,
 } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJEntityFieldPermissionEntity } from '@memberjunction/core-entities';
-import { SystemUserFieldAccessLossReason, SystemUserHoldsRole, UserCache } from '@memberjunction/generic-database-provider';
+import { SystemUserFieldAccessLossReason, UserCache } from '@memberjunction/generic-database-provider';
+import {
+    FieldPermissionAccessIs,
+    FieldPermissionAccessVerbs,
+    IsRestrictingFieldRuleAnyCase,
+    NormalizeFieldPermissionAccess,
+} from './fieldPermissionAccess';
+import {
+    GuardedTransactionGroupRefusal,
+    LoadStoredSystemUser,
+    PendingGuardedGroupWrite,
+    PendingGuardedGroupWriteFor,
+    RecordGuardedTransactionGroupWrite,
+    UserHoldsRole,
+} from './systemUserGuardState';
+
+/** Where a rule is bound: the (role, field) pair its row occupies. */
+type RuleBinding = { RoleID: string | null; EntityFieldID: string | null };
+
+/** A resolved target field together with the entity that owns it. */
+type RuleTarget = { Entity: EntityInfo; Field: EntityFieldInfo };
+
+const UNDETERMINED_PRIOR_BINDING_MESSAGE =
+    'Could not determine which role and field this permission rule was bound to before the edit, so the ' +
+    "change cannot be checked against the MJ system user's access on the target it is leaving. Refusing to " +
+    'save rather than risk removing access the server depends on. Reload the record and try again.';
 
 /**
  * Server-side `MJ: Entity Field Permissions` entity — the save-time half of the
@@ -52,6 +77,9 @@ import { SystemUserFieldAccessLossReason, SystemUserHoldsRole, UserCache } from 
  */
 @RegisterClass(BaseEntity, 'MJ: Entity Field Permissions')
 export class MJEntityFieldPermissionEntityServer extends MJEntityFieldPermissionEntity {
+    /** This write's place in its transaction group, held from the group check until the write enrols. */
+    private pendingGroupWrite: PendingGuardedGroupWrite | null = null;
+
     public override Validate(): ValidationResult {
         const result = super.Validate();
 
@@ -94,12 +122,18 @@ export class MJEntityFieldPermissionEntityServer extends MJEntityFieldPermission
     }
 
     /**
-     * Refuses an EDIT that would strip the MJ system user's last `Allow` on a field.
+     * Normalizes Access spellings, then refuses an EDIT that would strip the MJ system user's last
+     * `Allow` on a field.
      *
-     * Not in `Validate()` for two reasons. It needs the field's rules as they stand in the
-     * DATABASE — loaded metadata lags recent writes, and reading a stale sibling row as `Allow` is
-     * exactly how three individually-innocent `No Access` edits get through one at a time. And
-     * loading them is asynchronous, which `Validate()` is not.
+     * **Normalization.** The Access columns' CHECK constraint is case-insensitive, so `'deny'` or
+     * `'ALLOW'` would otherwise persist and read one way while enforcing another. Rewriting them to
+     * the canonical value-list spelling keeps the stored data honest; the guards compare
+     * case-insensitively regardless, so normalization is not the only line of defence.
+     *
+     * **The access-loss guard** is not in `Validate()` for two reasons. It needs the field's rules
+     * as they stand in the DATABASE — loaded metadata lags recent writes, and reading a stale
+     * sibling row as `Allow` is exactly how three individually-innocent `No Access` edits get
+     * through one at a time. And loading them is asynchronous, which `Validate()` is not.
      *
      * Inserts are deliberately not checked: adding a rule can only add access, never remove an
      * existing `Allow`, so the `Deny` check in `Validate()` covers them completely. It has to —
@@ -107,29 +141,121 @@ export class MJEntityFieldPermissionEntityServer extends MJEntityFieldPermission
      * the half-built state.
      */
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
-        if (this.IsSaved) {
-            const rejection = await this.systemUserAccessLossReason(false);
-            if (rejection) {
-                return this.refuse(rejection, 'save');
-            }
+        this.normalizeAccessSpellings();
+        const rejection = await this.systemUserSaveRejection();
+        if (rejection) {
+            return this.refuse(rejection, 'save');
         }
-        return super.Save(options);
+        const pending = this.takePendingGroupWrite();
+        const saved = await super.Save(options);
+        if (saved) {
+            RecordGuardedTransactionGroupWrite(pending);
+        }
+        return saved;
+    }
+
+    /** The write the group check passed, cleared so a later save cannot reuse it. */
+    private takePendingGroupWrite(): PendingGuardedGroupWrite | null {
+        const pending = this.pendingGroupWrite;
+        this.pendingGroupWrite = null;
+        return pending;
+    }
+
+    /**
+     * The transaction-group rule for this write. When it passes, the write is held as pending and
+     * counted only once it enrols, so a write refused later, by any check, does not count.
+     */
+    private groupRefusal(concernsSystemUser: boolean): string | null {
+        const refusal = GuardedTransactionGroupRefusal(this.TransactionGroup, concernsSystemUser);
+        if (!refusal) {
+            this.pendingGroupWrite = PendingGuardedGroupWriteFor(this.TransactionGroup, concernsSystemUser);
+        }
+        return refusal;
+    }
+
+    /**
+     * The system-user checks for a save, on the role set as stored in the database (the cached one
+     * lags a role assigned a moment ago): a `Deny` on a role the system user holds; an edit that
+     * strips its last `Allow`; and a transaction group holding this and another guarded write that
+     * concerns it. An insert that restricts nothing needs none of these and reads nothing, which
+     * keeps reconciliation's bulk inserts free. A read that fails refuses the save.
+     */
+    private async systemUserSaveRejection(): Promise<string | null> {
+        this.pendingGroupWrite = null;
+        const restricting = IsRestrictingFieldRuleAnyCase(this);
+        if (!this.IsSaved && !restricting) {
+            return null;
+        }
+        try {
+            const systemUser = await LoadStoredSystemUser(this.RunViewProviderToUse);
+            const prior = this.IsSaved ? this.priorBinding() : null;
+            const concerns = UserHoldsRole(systemUser, this.RoleID) || (prior === null && this.IsSaved) || UserHoldsRole(systemUser, prior?.RoleID);
+            const groupRefusal = this.groupRefusal(concerns);
+            if (groupRefusal) {
+                return groupRefusal;
+            }
+            if (restricting && UserHoldsRole(systemUser, this.RoleID)) {
+                return MJEntityFieldPermissionEntityServer.SystemUserRoleRejectionReason(this.RoleID, this, systemUser);
+            }
+            return this.IsSaved ? await this.systemUserEditLossReason(systemUser) : null;
+        } catch (e) {
+            return MJEntityFieldPermissionEntityServer.unverifiableMessage(e);
+        }
+    }
+
+    /** The refusal when the system user's field access cannot be checked because a read failed. */
+    private static unverifiableMessage(error: unknown): string {
+        const detail = error instanceof Error ? error.message : String(error);
+        return `Could not check this field rule against the MJ system user's field access, so it was not saved. ${detail}`;
     }
 
     /**
      * Refuses a DELETE that would strip the MJ system user's last `Allow` on a field — the other
      * way, besides editing one to `No Access`, to remove access without writing a `Deny`.
      *
-     * Reconciliation's own orphan deletes are unaffected: it only removes rows whose role has lost
-     * entity-level read (so the system user is already denied one level up and the guard stands
-     * down) or whose field became unrestrictable (forced open regardless).
+     * Judged against the row's STORED binding: a delete removes the row by ID, so an unsaved
+     * re-point on this object does not change which target loses it.
+     *
+     * Reconciliation's orphan deletes usually clear this guard — a row whose field became
+     * unrestrictable is forced open regardless — but not always: an orphaned row can be the system
+     * user's last `Allow` on a field while another of its roles still reads the entity. The
+     * reconciler logs and skips such a refusal rather than aborting.
      */
     public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        const rejection = await this.systemUserAccessLossReason(true);
+        const rejection = await this.systemUserDeleteRejection();
         if (rejection) {
             return this.refuse(rejection, 'delete');
         }
-        return super.Delete(options);
+        const pending = this.takePendingGroupWrite();
+        const deleted = await super.Delete(options);
+        if (deleted) {
+            RecordGuardedTransactionGroupWrite(pending);
+        }
+        return deleted;
+    }
+
+    /** The system-user checks for a delete, on the role set as stored in the database. */
+    private async systemUserDeleteRejection(): Promise<string | null> {
+        this.pendingGroupWrite = null;
+        try {
+            const systemUser = await LoadStoredSystemUser(this.RunViewProviderToUse);
+            const prior = this.priorBinding();
+            const concerns = prior === null || UserHoldsRole(systemUser, prior.RoleID);
+            const groupRefusal = this.groupRefusal(concerns);
+            return groupRefusal ?? (await this.systemUserDeleteLossReason(systemUser));
+        } catch (e) {
+            return MJEntityFieldPermissionEntityServer.unverifiableMessage(e);
+        }
+    }
+
+    /** Rewrites each Access value to its canonical spelling; unrecognized values are left for validation to report. */
+    private normalizeAccessSpellings(): void {
+        for (const verb of FieldPermissionAccessVerbs) {
+            const canonical = NormalizeFieldPermissionAccess(this[verb]);
+            if (canonical && canonical !== this[verb]) {
+                this[verb] = canonical;
+            }
+        }
     }
 
     /**
@@ -148,37 +274,103 @@ export class MJEntityFieldPermissionEntityServer extends MJEntityFieldPermission
     }
 
     /**
-     * Why the pending change would leave the system user short of its entity-level access, or null.
+     * Why the pending EDIT would leave the system user short of its entity-level access, or null.
      *
-     * @param removing true when this row is being deleted rather than edited
+     * An edit that changes `RoleID` or `EntityFieldID` MOVES the rule: it is a delete from the
+     * target it leaves as well as an insert into the one it joins. Judging only the destination
+     * let a sequence of saves strip the system user's last `Allow` without writing a `Deny` —
+     * re-point that row at a role the system user does not hold, and the cheap exit on the NEW
+     * role waved it through. So both targets are evaluated:
+     *
+     * - **the destination field**, with this row's new values projected in, whenever the system
+     *   user holds the new role — or, when the field is unchanged, the old one (the row's old
+     *   binding drops out of that same field's aggregate);
+     * - **the vacated field**, with this row removed, whenever the field itself changed and the
+     *   system user holds the old role.
+     *
+     * The cheap exits are what keep the queries off ordinary permission administration: the
+     * aggregation only consults rules bound to roles the user holds, so a change touching no such
+     * role cannot move the system user's access at all.
      */
-    private async systemUserAccessLossReason(removing: boolean): Promise<string | null> {
-        // Cheap exit first: the aggregation only ever consults rules bound to a role the user
-        // holds, so a change to any other role's rule cannot move the system user's access at all.
-        // This is what keeps the query below off the path of ordinary permission administration —
-        // it runs only for edits to the handful of roles the server's own account holds.
-        if (!SystemUserHoldsRole(this.RoleID)) {
+    private async systemUserEditLossReason(systemUser: UserInfo | null): Promise<string | null> {
+        const prior = this.priorBinding();
+        if (!prior) {
+            return UNDETERMINED_PRIOR_BINDING_MESSAGE;
+        }
+        const holds = (roleID: string | null) => UserHoldsRole(systemUser, roleID);
+        const fieldMoved = !UUIDsEqual(prior.EntityFieldID, this.EntityFieldID);
+        const touchesDestination = holds(this.RoleID) || (!fieldMoved && holds(prior.RoleID));
+        if (touchesDestination) {
+            const rejection = await this.projectedLossReason(this.EntityFieldID, true, systemUser);
+            if (rejection) {
+                return rejection;
+            }
+        }
+        if (fieldMoved && holds(prior.RoleID)) {
+            return this.projectedLossReason(prior.EntityFieldID, false, systemUser);
+        }
+        return null;
+    }
+
+    /** Why deleting this row would leave the system user short of its entity-level access, or null. */
+    private async systemUserDeleteLossReason(systemUser: UserInfo | null): Promise<string | null> {
+        const prior = this.priorBinding();
+        if (!prior) {
+            return UNDETERMINED_PRIOR_BINDING_MESSAGE;
+        }
+        if (!UserHoldsRole(systemUser, prior.RoleID)) {
             return null;
         }
-        const target = this.resolveTarget();
+        return this.projectedLossReason(prior.EntityFieldID, false, systemUser);
+    }
+
+    /**
+     * Projects one field's stored rules with this row's change applied and asks whether the
+     * system user keeps its access there.
+     *
+     * @param entityFieldID the field whose aggregate to evaluate
+     * @param includeThisRow true to project this row in with its CURRENT values (it is on this
+     *                       field after the change); false to project it out (it is leaving)
+     * @param systemUser the system user with its role set as stored
+     */
+    private async projectedLossReason(entityFieldID: string | null, includeThisRow: boolean, systemUser: UserInfo | null): Promise<string | null> {
+        const target = this.resolveTargetByFieldID(entityFieldID);
         if (!target) {
             return null;
         }
-
         const current = await this.loadCurrentRules(target.Field.ID);
-        const others = current.filter(r => !UUIDsEqual(r.ID, this.ID));
-        const projected: FieldPermissionRuleForRole[] = removing
-            ? others
-            : [
+        const others: FieldPermissionRuleForRole[] = current.filter((r) => !UUIDsEqual(r.ID, this.ID));
+        const projected = includeThisRow
+            ? [
                   ...others,
-                  {
-                      RoleID: this.RoleID,
-                      ReadAccess: this.ReadAccess,
-                      UpdateAccess: this.UpdateAccess,
-                      CreateAccess: this.CreateAccess,
-                  },
-              ];
-        return SystemUserFieldAccessLossReason(target.Entity, target.Field, projected);
+                  { RoleID: this.RoleID, ReadAccess: this.ReadAccess, UpdateAccess: this.UpdateAccess, CreateAccess: this.CreateAccess },
+              ]
+            : others;
+        return SystemUserFieldAccessLossReason(target.Entity, target.Field, projected, systemUser);
+    }
+
+    /**
+     * The (role, field) pair this row occupies in the database — the dirty fields' old values,
+     * otherwise their current ones. Null when a re-pointed field's prior value cannot be
+     * established, which callers treat as a refusal: an unknown vacated target cannot be shown safe.
+     */
+    private priorBinding(): RuleBinding | null {
+        const roleID = this.priorValue('RoleID', this.RoleID);
+        const entityFieldID = this.priorValue('EntityFieldID', this.EntityFieldID);
+        if (roleID === undefined || entityFieldID === undefined) {
+            return null;
+        }
+        return { RoleID: roleID, EntityFieldID: entityFieldID };
+    }
+
+    /** A column's stored value; undefined when it is dirty and its old value is not a usable ID. */
+    private priorValue(fieldName: 'RoleID' | 'EntityFieldID', current: string | null): string | null | undefined {
+        const field = this.GetFieldByName(fieldName);
+        if (!field?.Dirty) {
+            return current;
+        }
+        const old = field.OldValue;
+        return typeof old === 'string' && old.length > 0 ? old : undefined;
     }
 
     /**
@@ -245,17 +437,20 @@ export class MJEntityFieldPermissionEntityServer extends MJEntityFieldPermission
      * @param roleID the role the rule targets
      * @param rule the rule's three verbs; omitted only by callers that are pre-checking a role
      *             rather than a specific rule, which are answered as though the rule denied
+     * @param storedSystemUser the system user with its role set as stored in the database;
+     *             defaults to the user cache's system user
      */
-    public static SystemUserRoleRejectionReason(roleID: string | null, rule?: FieldPermissionRuleVerbs): string | null {
+    public static SystemUserRoleRejectionReason(roleID: string | null, rule?: FieldPermissionRuleVerbs, storedSystemUser?: UserInfo | null): string | null {
         if (!roleID) {
             return null;
         }
-        if (rule && !IsRestrictingFieldRule(rule)) {
+        if (rule && !IsRestrictingFieldRuleAnyCase(rule)) {
             return null; // grants and neutrals are exactly what keep the system user working
         }
         // UserCache is populated on the server; a client-side save (or a cold cache) simply
-        // skips the check rather than blocking an administrator on missing state.
-        const systemUser = UserCache.Instance?.GetSystemUser?.();
+        // skips the check rather than blocking an administrator on missing state. `Save()` passes
+        // the system user with its role set as stored, which the cache may not show yet.
+        const systemUser = storedSystemUser ?? UserCache.Instance?.GetSystemUser?.();
         if (!systemUser?.UserRoles?.length) {
             return null;
         }
@@ -294,9 +489,10 @@ export class MJEntityFieldPermissionEntityServer extends MJEntityFieldPermission
         if (!field.ReadOnly) {
             return null;
         }
+        // Compared case-insensitively: the column's collation stores 'no access' as the same value.
         const offending: string[] = [];
-        if (rule.UpdateAccess !== FieldPermissionAccess.NoAccess) offending.push('Update');
-        if (rule.CreateAccess !== FieldPermissionAccess.NoAccess) offending.push('Create');
+        if (!FieldPermissionAccessIs(rule.UpdateAccess, FieldPermissionAccess.NoAccess)) offending.push('Update');
+        if (!FieldPermissionAccessIs(rule.CreateAccess, FieldPermissionAccess.NoAccess)) offending.push('Create');
         if (offending.length === 0) {
             return null;
         }
@@ -334,15 +530,6 @@ export class MJEntityFieldPermissionEntityServer extends MJEntityFieldPermission
     }
 
     /**
-     * Resolves `EntityFieldID` to its {@link EntityFieldInfo} from loaded metadata.
-     *
-     * Returns null when metadata cannot resolve it — for instance immediately after a schema
-     * change, before the metadata cache has refreshed. That case passes validation rather than
-     * blocking the administrator: the foreign key already guarantees the row points at a real
-     * field, and the runtime aggregation guards hold regardless of what is stored here. Failing
-     * closed would trade a real, recurring workflow block for no additional protection.
-     */
-    /**
      * Why this role may not carry a field rule on this entity, or null when it may.
      *
      * A field permission REFINES an entity permission — the entity gate decides whether you reach
@@ -377,13 +564,27 @@ export class MJEntityFieldPermissionEntityServer extends MJEntityFieldPermission
         );
     }
 
-    private resolveTarget(): { Entity: EntityInfo; Field: EntityFieldInfo } | null {
-        if (!this.EntityFieldID) {
+    /**
+     * Resolves `EntityFieldID` to its {@link EntityFieldInfo} from loaded metadata.
+     *
+     * Returns null when metadata cannot resolve it — for instance immediately after a schema
+     * change, before the metadata cache has refreshed. That case passes validation rather than
+     * blocking the administrator: the foreign key already guarantees the row points at a real
+     * field, and the runtime aggregation guards hold regardless of what is stored here. Failing
+     * closed would trade a real, recurring workflow block for no additional protection.
+     */
+    private resolveTarget(): RuleTarget | null {
+        return this.resolveTargetByFieldID(this.EntityFieldID);
+    }
+
+    /** The field a given `EntityFieldID` names, so the re-point guard can resolve a row's OLD field too. */
+    private resolveTargetByFieldID(entityFieldID: string | null): RuleTarget | null {
+        if (!entityFieldID) {
             return null; // the NOT NULL column is the base class's problem to report, not ours
         }
         const md = this.ProviderToUse as unknown as IMetadataProvider;
         for (const entity of md?.Entities ?? []) {
-            const match = entity.Fields.find((f) => UUIDsEqual(f.ID, this.EntityFieldID));
+            const match = entity.Fields.find((f) => UUIDsEqual(f.ID, entityFieldID));
             if (match) {
                 return { Entity: entity, Field: match };
             }

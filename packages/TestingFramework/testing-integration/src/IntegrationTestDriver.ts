@@ -48,7 +48,7 @@ import type { IntegrationCheckContext, RlsFixture } from './check';
 import { IntegrationCheckRegistry } from './check-registry';
 import { IntegrationTestConfig, IntegrationCheckSelectionConfig } from './types';
 import { IntegrationTier, TIER_ENV_GATE, IsTierEnabled } from './tiers';
-import { TestOutcome, WriteOutcomesFile } from './test-runner';
+import { IsCheckSkip, TestOutcome, WriteOutcomesFile } from './test-runner';
 import { DiscoverRlsFixture } from './rls-fixture';
 
 const TARGET_TYPE = 'Integration Check Bundle';
@@ -398,6 +398,10 @@ export class IntegrationTestDriver extends BaseTestDriver {
             outcomes.push({ Name: name, Passed: true, DurationMs: durationMs });
             this.logToTestRun(context, 'info', `✓ ${id}`);
         } catch (checkErr) {
+            if (IsCheckSkip(checkErr)) {
+                this.recordSkippedCheck(context, oracleResults, outcomes, id, name, `SKIPPED: ${checkErr.message}`);
+                return;
+            }
             const durationMs = Date.now() - checkStart;
             const message = (checkErr as Error).message;
             oracleResults.push({ oracleType: id, passed: false, score: 0, message, details: { DurationMs: durationMs } });
