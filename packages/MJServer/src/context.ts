@@ -289,11 +289,6 @@ export function BuildMagicLinkSessionUser(userRecord: UserInfo, payload: jwt.Jwt
   return sessionUser;
 }
 
-/** @deprecated Use {@link BuildMagicLinkSessionUser}. */
-export function buildMagicLinkSessionUser(userRecord: UserInfo, payload: jwt.JwtPayload): UserInfo {
-  return BuildMagicLinkSessionUser(userRecord, payload);
-}
-
 /**
  * Extracts the returning-visitor context (RV1/RV2/RV4) from a widget guest token's claims, or
  * undefined when the token carries no VisitorKey (the default, remembering-off case). Used so the
@@ -431,7 +426,7 @@ export const GetUserPayload = async (
         // very often the SHARED UserCache instance, and stamping it in place
         // leaks one session's row-filter bindings / acting context to every
         // concurrent session of the same user (same pattern as
-        // buildMagicLinkSessionUser — see sessionUserClone.ts).
+        // BuildMagicLinkSessionUser — see sessionUserClone.ts).
         const userRecord = CloneUserForSessionContext(resolvedUser);
 
         // Row-filter bindings for this key, rebuilt PER REQUEST from the

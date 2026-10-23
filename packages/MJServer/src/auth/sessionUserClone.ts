@@ -7,7 +7,7 @@
  * concurrent session of the same user THE INSTANT it is written; this is
  * same-moment cross-request aliasing, not a cache-staleness problem. The
  * magic-link path has always cloned for exactly this reason (see
- * buildMagicLinkSessionUser in context.ts); this helper makes that rule a
+ * BuildMagicLinkSessionUser in context.ts); this helper makes that rule a
  * single shared primitive so every per-session stamp goes through the same
  * clone.
  *
@@ -30,7 +30,7 @@ import { Metadata, UserInfo } from '@memberjunction/core';
  * state on the clone; never stamp the input itself.
  */
 export function CloneUserForSessionContext(user: UserInfo): UserInfo {
-  const md = Metadata.Provider; // global-provider-ok: server-side session construction under the server's single default provider, same as buildMagicLinkSessionUser
+  const md = Metadata.Provider; // global-provider-ok: server-side session construction under the server's single default provider, same as BuildMagicLinkSessionUser
   const clone = new UserInfo(md, {
     ...user,
     _UserRoles: undefined,

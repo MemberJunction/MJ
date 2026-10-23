@@ -9,7 +9,7 @@
  * widget guest is ephemeral). Forensics ride the opaque per-session id (`mj_sid`)
  * carried in the token, plus best-effort structured audit logging. The minted
  * token is validated by the SAME `magic-link` auth provider (same issuer/audience/
- * JWKS) and synthesized into a constrained guest principal by `buildMagicLinkSessionUser`.
+ * JWKS) and synthesized into a constrained guest principal by `BuildMagicLinkSessionUser`.
  *
  * @module @memberjunction/server/widget
  */
@@ -81,8 +81,6 @@ export interface MintGuestSessionInput {
    * preserves its `mj_sid` (`sessionId`).
    */
   BearerToken?: string;
-  /** @deprecated Use {@link MintGuestSessionInput.BearerToken}. */
-  bearerToken?: string;
   audit?: WidgetMintAuditContext;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
@@ -333,7 +331,7 @@ export class WidgetSessionService {
         hostIdentity = verified;
       }
 
-      const existingSessionId = this.verifyRefreshBearerToken(input.BearerToken ?? input.bearerToken, widget.ID);
+      const existingSessionId = this.verifyRefreshBearerToken(input.BearerToken, widget.ID);
       if (!existingSessionId) {
         return this.audited({ success: false, errorCode: 'not_found', error: 'Unknown widget key.' }, input, widget);
       }
@@ -456,7 +454,7 @@ export class WidgetSessionService {
    * clicks the emailed link → the existing public `POST /magic-link/redeem` mints a VERIFIED session
    * JWT → the widget swaps it in via `transport.UpdateToken`, preserving the live conversationId.
    *
-   * This converges on the SAME `AuthProviderFactory` + `buildMagicLinkSessionUser` path as the guest
+   * This converges on the SAME `AuthProviderFactory` + `BuildMagicLinkSessionUser` path as the guest
    * mint (D1), so the verified session is just a more-privileged principal on the one pathway. Never
    * throws for business failures — returns a structured result.
    */

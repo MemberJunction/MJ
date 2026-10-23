@@ -20,7 +20,7 @@ vi.mock('../util.js', () => ({
   GetReadWriteDataSource: vi.fn(),
 }));
 
-import { BuildMagicLinkSessionUser, buildMagicLinkSessionUser } from '../context.js';
+import { BuildMagicLinkSessionUser } from '../context.js';
 
 const uuid = (a: string, b: string) =>
   [a.repeat(8), b.repeat(4), '4' + b.repeat(3), '8' + b.repeat(3), b.repeat(12)].join('-');
@@ -38,7 +38,7 @@ function makeUserRecord(id: string, email: string): UserInfo {
   });
 }
 
-describe('buildMagicLinkSessionUser', () => {
+describe('BuildMagicLinkSessionUser', () => {
   it('sets AnonymousVisitorID from mj_sid for an anonymous magic-link token', () => {
     const baseUser = makeUserRecord(ANON_USER_ID, 'anonymous@magic-link.local');
     const payload: jwt.JwtPayload = {
@@ -48,7 +48,7 @@ describe('buildMagicLinkSessionUser', () => {
       mj_scopes: [{ inviteId: 'inv-1', appId: 'app-1', role: 'Widget Guest', resourceId: 'res-shared' }],
     };
 
-    const result = buildMagicLinkSessionUser(baseUser, payload);
+    const result = BuildMagicLinkSessionUser(baseUser, payload);
 
     expect(result).not.toBe(baseUser);
     expect(result.IsMagicLinkAnonymous).toBe(true);
@@ -71,7 +71,7 @@ describe('buildMagicLinkSessionUser', () => {
     };
 
     expect(() => BuildMagicLinkSessionUser(baseUser, missingSid)).toThrow(/mj_sid/);
-    expect(() => buildMagicLinkSessionUser(baseUser, blankSid)).toThrow(/mj_sid/);
+    expect(() => BuildMagicLinkSessionUser(baseUser, blankSid)).toThrow(/mj_sid/);
   });
 
   it('leaves AnonymousVisitorID undefined for a named magic-link token (with or without resource scope)', () => {

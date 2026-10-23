@@ -41,7 +41,7 @@ export interface WidgetGuestRunContext {
  * Returns elevation context when the request is a public web-widget guest, else `null` (the common
  * case — every non-widget request). A widget guest is identified by the synthesized principal's
  * `IsMagicLinkAnonymous` flag plus a `WidgetGuestContext.WidgetID` (sourced from the signed
- * `mj_widget_id` claim by `buildMagicLinkSessionUser`). The widget instance is loaded under the
+ * `mj_widget_id` claim by `BuildMagicLinkSessionUser`). The widget instance is loaded under the
  * SYSTEM principal so resolving the pinned agent does not depend on the guest's narrow grants.
  *
  * Never throws: a resolution failure (no system user, widget not found, read error) returns `null`,
