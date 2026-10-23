@@ -24,6 +24,7 @@ import { BaseAction } from '@memberjunction/actions';
 
 import { BasePredictiveStudioAction, type JsonObject } from './base-predictive-studio.action';
 import { ProductionScoreRecordSetRunner } from './score-record-set.runner';
+import { PredictiveStudioRefusals } from '../operations/refusals';
 
 /** The driver-class key this action registers under (matches the metadata row). */
 export const SCORE_RECORD_SET_DRIVER_CLASS = 'PredictiveStudioScoreRecordSetAction';
@@ -158,7 +159,9 @@ export class PredictiveStudioScoreRecordSetAction extends BasePredictiveStudioAc
       return this.mapResult(params, result);
     } catch (e) {
       LogError(e);
-      return this.fail('SCORING_FAILED', `Scoring failed: ${e instanceof Error ? e.message : String(e)}`);
+      const error = e instanceof Error ? e : new Error(String(e));
+      // A refusal keeps its typed code (the same one the operation returns), so agents never parse the message.
+      return this.fail(PredictiveStudioRefusals.CodeOf(error) || 'SCORING_FAILED', `Scoring failed: ${error.message}`);
     }
   }
 

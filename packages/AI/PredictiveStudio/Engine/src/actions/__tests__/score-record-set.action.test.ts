@@ -5,6 +5,7 @@ import { Metadata, type IMetadataProvider } from '@memberjunction/core';
 
 import { PredictiveStudioScoreRecordSetAction } from '../score-record-set.action';
 import { ProductionScoreRecordSetRunner } from '../score-record-set.runner';
+import { ModelNotScorableError } from '../../scoring/model-readiness';
 import type {
   IScoreRecordSetRunner,
   ScoreRecordSetRequest,
@@ -345,5 +346,23 @@ describe('ProductionScoreRecordSetRunner.summarize — counts + RecordID correla
     expect(summary.failedCount).toBe(1);
     expect(summary.wroteBack).toBe(true);
     expect(summary.predictions).toBeUndefined();
+  });
+});
+
+describe('PredictiveStudioScoreRecordSetAction — refusal codes', () => {
+  it('keeps a refusal\'s typed code instead of SCORING_FAILED', async () => {
+    class RefusingRunner implements IScoreRecordSetRunner {
+      public async run(): Promise<ScoreRecordSetResult> {
+        throw new ModelNotScorableError('model-7', 'Archived');
+      }
+    }
+    const result = await new TestableScoreAction(new RefusingRunner()).run(
+      params([
+        { Name: 'ModelID', Type: 'Input', Value: 'model-7' },
+        { Name: 'Scope', Type: 'Input', Value: { records: [{ ID: 'r1' }] } },
+      ]),
+    );
+    expect(result.Success).toBe(false);
+    expect(result.ResultCode).toBe('MODEL_NOT_SCORABLE');
   });
 });

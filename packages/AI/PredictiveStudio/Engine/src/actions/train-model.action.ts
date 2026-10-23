@@ -24,6 +24,7 @@ import { MetadataEntityFactory, RunViewRecordLoader, MJSidecarTrainer } from '..
 import { ResolveActiveFileStorageProviderId, BuildArtifactStore } from '../training/artifact-store';
 import type { TrainingDeps, TrainModelResult } from '../training/types';
 import { BasePredictiveStudioAction } from './base-predictive-studio.action';
+import { PredictiveStudioRefusals } from '../operations/refusals';
 
 /** The driver-class key this action registers under (matches the metadata row). */
 export const TRAIN_MODEL_DRIVER_CLASS = 'PredictiveStudioTrainModelAction';
@@ -54,7 +55,9 @@ export class PredictiveStudioTrainModelAction extends BasePredictiveStudioAction
       return this.mapResult(params, result);
     } catch (e) {
       LogError(e);
-      return this.fail('TRAINING_FAILED', `Training failed: ${e instanceof Error ? e.message : String(e)}`);
+      const error = e instanceof Error ? e : new Error(String(e));
+      // A refusal keeps its typed code (the same one the operation returns), so agents never parse the message.
+      return this.fail(PredictiveStudioRefusals.CodeOf(error) || 'TRAINING_FAILED', `Training failed: ${error.message}`);
     }
   }
 
