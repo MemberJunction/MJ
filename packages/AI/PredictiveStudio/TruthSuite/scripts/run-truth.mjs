@@ -43,8 +43,14 @@ if (!existsSync(sidecarUrlFile)) {
   console.error(`Sidecar URL file missing at ${sidecarUrlFile}. Start it first: pnpm run truth:sidecar`);
   process.exit(1);
 }
-const sidecarUrl = readFileSync(sidecarUrlFile, 'utf8').trim();
-const healthRes = await fetch(`${sidecarUrl.replace(/\/$/, '')}/health`, { signal: AbortSignal.timeout(5_000) }).catch(() => null);
+// The sidecar always listens on loopback (scripts/sidecar.mts), so take only the port from the file.
+const sidecarPort = Number.parseInt(/:(\d+)\/?$/.exec(readFileSync(sidecarUrlFile, 'utf8').trim())?.[1] ?? '', 10);
+if (!Number.isInteger(sidecarPort) || sidecarPort <= 0 || sidecarPort > 65535) {
+  console.error(`Sidecar URL file at ${sidecarUrlFile} holds no port. Restart it: pnpm run truth:sidecar`);
+  process.exit(1);
+}
+const sidecarUrl = `http://127.0.0.1:${sidecarPort}`;
+const healthRes = await fetch(`${sidecarUrl}/health`, { signal: AbortSignal.timeout(5_000) }).catch(() => null);
 if (!healthRes || !healthRes.ok) {
   console.error(`Truth sidecar at ${sidecarUrl}/health did not answer OK`);
   process.exit(1);

@@ -62,9 +62,19 @@ export class DatasetCatalog {
     return DataCache.SpecHash(spec, genSource, loomPin.sha);
   }
 
+  /** The file's text, or null when it does not exist (read directly rather than checked first, so there is no race). */
+  private static readIfPresent(filePath: string): string | null {
+    try {
+      return readFileSync(filePath, 'utf8');
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
+      throw e;
+    }
+  }
+
   private static updateIndex(dataRoot: string, kind: 'world' | 'scenario', id: string, seed: number, seedDir: string): void {
     const indexPath = path.join(dataRoot, 'index.json');
-    const existing = existsSync(indexPath) ? (SafeJSONParse<Record<string, string>>(readFileSync(indexPath, 'utf8')) || {}) : {};
+    const existing = SafeJSONParse<Record<string, string>>(DatasetCatalog.readIfPresent(indexPath) ?? '{}') || {};
     const key = `${kind}/${id}/seed-${seed}`;
     if (existing[key] !== seedDir) {
       existing[key] = seedDir;
@@ -81,7 +91,7 @@ export class DatasetCatalog {
     const specHash = DatasetCatalog.EntrySpecHash(entry);
     const seedDir = DataCache.Dir(dataRoot, entry.Kind, entry.ID, specHash, seed);
     const completeMarker = path.join(seedDir, '.complete');
-    if (existsSync(completeMarker)) {
+    if (DatasetCatalog.readIfPresent(completeMarker) !== null) {
       DatasetCatalog.updateIndex(dataRoot, entry.Kind, entry.ID, seed, seedDir);
       return seedDir;
     }
