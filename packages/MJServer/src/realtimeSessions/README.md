@@ -68,7 +68,9 @@ share one Anonymous user, so for an anonymous/magic-link principal that is **not
 conversation `ExternalID` must equal the principal's scope identity (`ResolveSessionScopeIdentity`): the
 signed `MagicLinkScope.ResourceID` when the token carries one, else the anonymous visitor's `mj_sid`.
 `SessionManager` stamps that same value when it creates the conversation. An anonymous principal with
-neither is refused outright.
+neither is refused outright. A *named* user with a resource scope must match too, which keeps one person's
+different links apart; but it may also use its own session on a conversation that carries no stamp (one
+started from the Conversations app) when its own row-level security let it read that conversation.
 
 - Refusals are uniform ("session not found") whether the session is missing or simply not yours, so ids
   cannot be probed.

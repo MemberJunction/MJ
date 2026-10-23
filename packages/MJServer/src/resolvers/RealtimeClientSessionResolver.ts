@@ -2078,7 +2078,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 return null;
             }
             const access = AuthorizeSessionAccess(
-                { SessionUserID: loaded.Session.UserID, ConversationExternalID: loaded.ConversationExternalID },
+                { SessionUserID: loaded.Session.UserID, ConversationExternalID: loaded.ConversationExternalID, ConversationReadable: loaded.ConversationReadable },
                 contextUser,
             );
             if (!access.Allowed) {
@@ -2298,7 +2298,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 break;
             }
             const access = AuthorizeSessionAccess(
-                { SessionUserID: loaded.Session.UserID, ConversationExternalID: loaded.ConversationExternalID },
+                { SessionUserID: loaded.Session.UserID, ConversationExternalID: loaded.ConversationExternalID, ConversationReadable: loaded.ConversationReadable },
                 contextUser,
             );
             if (!access.Allowed) {

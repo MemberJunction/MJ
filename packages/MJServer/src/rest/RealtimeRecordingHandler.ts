@@ -34,7 +34,7 @@ import {
     LoadOwnedRealtimeSession, RealtimeSessionNotFoundError, RealtimeSessionOwnershipError,
 } from '../realtimeSessions/ownedRealtimeSession.js';
 import type { IRecordingAssemblyScheduler } from '../realtimeSessions/RecordingAssemblyScheduler.js';
-import { AuthorizeSessionAccess, LoadSessionConversationExternalID } from '../realtimeSessions/sessionAccess.js';
+import { AuthorizeSessionAccess, LoadSessionConversationScope } from '../realtimeSessions/sessionAccess.js';
 
 /** Where {@link CreateRealtimeRecordingRouter} is mounted (under the reserved `/realtime` root). */
 export const REALTIME_RECORDING_MOUNT_PATH = '/realtime/recording';
@@ -76,8 +76,8 @@ export interface RealtimeRecordingRouterDeps {
     /** The authenticated caller, or null (answered 401). */
     ResolveCaller(req: Request): RealtimeRecordingCaller | null;
     LoadOwnedSession: typeof LoadOwnedRealtimeSession;
-    /** The session conversation's per-session scope id, for the anonymous-guest half of the access decision. */
-    LoadConversationExternalID: typeof LoadSessionConversationExternalID;
+    /** The session conversation's scope id and whether the caller could read it: the scope half of the access decision. */
+    LoadConversationScope: typeof LoadSessionConversationScope;
     /** The ledger for one request; `contextUser` is the caller (used for logging by the procs). */
     CreateLedger(provider: DatabaseProviderBase, contextUser: UserInfo): IRealtimeRecordingLedger;
     Scheduler: IRecordingAssemblyScheduler;
@@ -266,8 +266,11 @@ async function handleTerminal(deps: RealtimeRecordingRouterDeps, req: Request, r
  */
 async function loadAuthorizedSession(deps: RealtimeRecordingRouterDeps, sessionID: string, caller: RealtimeRecordingCaller): Promise<MJAIAgentSessionEntity> {
     const session = await deps.LoadOwnedSession(sessionID, caller.ContextUser, caller.Provider);
-    const externalID = await deps.LoadConversationExternalID(session, caller.ContextUser, caller.Provider);
-    const decision = AuthorizeSessionAccess({ SessionUserID: session.UserID, ConversationExternalID: externalID }, caller.ContextUser);
+    const conversation = await deps.LoadConversationScope(session, caller.ContextUser, caller.Provider);
+    const decision = AuthorizeSessionAccess(
+        { SessionUserID: session.UserID, ConversationExternalID: conversation.ExternalID, ConversationReadable: conversation.Readable },
+        caller.ContextUser,
+    );
     if (decision.Allowed === false) {
         LogError(`RealtimeRecordingHandler: refused user ${caller.ContextUser.ID} on session ${sessionID}: ${decision.Reason}`);
         throw new RecordingRequestError(403, 'Not authorized for this realtime session');

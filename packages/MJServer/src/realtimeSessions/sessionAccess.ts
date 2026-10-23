@@ -17,6 +17,9 @@
  *    (`AnonymousVisitorID`). `SessionManager` stamps that same value onto the session's Conversation as
  *    `ExternalID`, so a principal with a scope identity must match it, and an anonymous principal with
  *    none is refused outright — it cannot be told apart from every other anonymous principal.
+ *    One allowance: a NAMED principal with a resource scope may also use its own session whose
+ *    conversation carries no stamp at all, when it could read that conversation (see the comment in
+ *    {@link AuthorizeSessionAccess}).
  *
  * The decision is deliberately pure (no I/O) so it can be applied identically to a freshly loaded
  * row at subscribe time and to the owner/scope snapshot carried inside each published event.
@@ -42,6 +45,12 @@ export interface SessionAccessSubject {
      * could not be loaded.
      */
     ConversationExternalID: string | null | undefined;
+    /**
+     * True when the conversation was loaded under the CALLER's identity (so its row-level security allowed
+     * the read). Only consulted for a named principal with a resource scope on a conversation that carries
+     * no `ExternalID`; omitted means unknown and is treated as unreadable (fail closed).
+     */
+    ConversationReadable?: boolean;
 }
 
 /** What the decision needs to know about the caller (a subset of `UserInfo`). */
@@ -106,7 +115,19 @@ export function AuthorizeSessionAccess(
         return principal.IsMagicLinkAnonymous ? { Allowed: false, Reason: 'scope_missing' } : { Allowed: true };
     }
     // Scope ids are opaque base64url strings (case-significant), so compare exactly — not UUIDsEqual.
-    return subject.ConversationExternalID === scopeId ? { Allowed: true } : { Allowed: false, Reason: 'scope_mismatch' };
+    if (subject.ConversationExternalID === scopeId) {
+        return { Allowed: true };
+    }
+    // A named user is identified by the owner check; its scope only keeps one link's sessions apart from
+    // the same person's other links (magic links resolve the user by email, so one person can hold several).
+    // A conversation with no stamp belongs to no link (one started from the Conversations app), so the owner
+    // may use it when its own row-level security let it read the conversation. `ExternalID` is not stamped
+    // here because other features own that column on their conversations (meeting room names, for example).
+    // An anonymous visitor gets no such allowance: the stamp is the only thing that identifies it.
+    if (!principal.IsMagicLinkAnonymous && subject.ConversationExternalID === null && subject.ConversationReadable === true) {
+        return { Allowed: true };
+    }
+    return { Allowed: false, Reason: 'scope_mismatch' };
 }
 
 /** A session row together with the one fact about its conversation the decision needs. */
@@ -115,6 +136,8 @@ export interface LoadedSessionForAccess {
     Session: MJAIAgentSessionEntity;
     /** The session's conversation `ExternalID` (anonymous scope id), or null. */
     ConversationExternalID: string | null;
+    /** Whether the caller could read the session's conversation (false when there is none). */
+    ConversationReadable: boolean;
 }
 
 /**
@@ -140,31 +163,54 @@ export async function LoadSessionForAccess(
     if (!(await session.Load(agentSessionId))) {
         return null;
     }
-    return { Session: session, ConversationExternalID: await LoadSessionConversationExternalID(session, contextUser, provider) };
+    const conversation = await LoadSessionConversationScope(session, contextUser, provider);
+    return { Session: session, ConversationExternalID: conversation.ExternalID, ConversationReadable: conversation.Readable };
+}
+
+/** What the caller could learn about a session's conversation: the scope half of {@link SessionAccessSubject}. */
+export interface SessionConversationScope {
+    /** The conversation's `ExternalID` (the anonymous scope id), or null when it has none or was not read. */
+    ExternalID: string | null;
+    /** Whether the caller could read the conversation (false when the session has none). */
+    Readable: boolean;
 }
 
 /**
- * Reads an already-loaded session's conversation `ExternalID` (the anonymous scope id) under `contextUser`;
- * null when there is no conversation or it cannot be read (logged). For callers that loaded the session
- * through another gate and only need the scope half of {@link AuthorizeSessionAccess}'s subject.
+ * Reads an already-loaded session's conversation under `contextUser` (so its row-level security applies).
+ * A missing conversation, a refused read and a failed read (logged) all report `Readable: false`. For
+ * callers that loaded the session through another gate and only need the scope half of
+ * {@link AuthorizeSessionAccess}'s subject.
+ */
+export async function LoadSessionConversationScope(
+    session: MJAIAgentSessionEntity,
+    contextUser: UserInfo,
+    provider: IMetadataProvider,
+): Promise<SessionConversationScope> {
+    const unreadable: SessionConversationScope = { ExternalID: null, Readable: false };
+    if (!session.ConversationID) {
+        return unreadable;
+    }
+    try {
+        const conversation = await provider.GetEntityObject<MJConversationEntity>(CONVERSATION_ENTITY, contextUser);
+        if (!(await conversation.Load(session.ConversationID))) {
+            return unreadable;
+        }
+        return { ExternalID: conversation.ExternalID ?? null, Readable: true };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        LogError(`LoadSessionForAccess: could not read conversation ${session.ConversationID} of session ${session.ID}: ${message}`);
+        return unreadable;
+    }
+}
+
+/**
+ * The session conversation's `ExternalID` alone; null when there is none or it cannot be read.
+ * Prefer {@link LoadSessionConversationScope}, which also says whether the read succeeded.
  */
 export async function LoadSessionConversationExternalID(
     session: MJAIAgentSessionEntity,
     contextUser: UserInfo,
     provider: IMetadataProvider,
 ): Promise<string | null> {
-    if (!session.ConversationID) {
-        return null;
-    }
-    try {
-        const conversation = await provider.GetEntityObject<MJConversationEntity>(CONVERSATION_ENTITY, contextUser);
-        if (!(await conversation.Load(session.ConversationID))) {
-            return null;
-        }
-        return conversation.ExternalID ?? null;
-    } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        LogError(`LoadSessionForAccess: could not read conversation ${session.ConversationID} of session ${session.ID}: ${message}`);
-        return null;
-    }
+    return (await LoadSessionConversationScope(session, contextUser, provider)).ExternalID;
 }
