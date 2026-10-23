@@ -6,6 +6,7 @@
     "Status": "Active",
     "Tags": "[\"gate\",\"G0.6\",\"owner:PR2\",\"phase:0\",\"dataset:W1\",\"criterion:S9.3\"]",
     "InputDefinition": {},
+    "MaxExecutionTimeMS": 1200000,
     "ExpectedOutcomes": {
       "summary": "The judge passes the UI/prompt strings and all 10 generated stories against the no-causal-claims criteria."
     },
