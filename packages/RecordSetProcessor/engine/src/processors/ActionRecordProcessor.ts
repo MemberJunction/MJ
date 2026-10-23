@@ -77,6 +77,13 @@ export class ActionRecordProcessor implements IRecordProcessor {
             Filters: [],
         });
 
+        // The detail row the tracker writes from this result carries ActionExecutionLogID, which has a
+        // foreign key to the log row — and the engine writes that row fire-and-forget on its own queue,
+        // which the tracker's queue cannot wait on. Only waits when the action beat the log INSERT.
+        if (result.LogEntryPersisted) {
+            await result.LogEntryPersisted;
+        }
+
         return {
             Status: result.Success ? 'Succeeded' : 'Failed',
             ResultPayload: ActionRecordProcessor.extractOutputs(result.Params),
