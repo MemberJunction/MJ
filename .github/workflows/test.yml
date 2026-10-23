@@ -415,7 +415,7 @@ jobs:
       # static — committed source against committed manifests, no build and no dist — so it belongs
       # with the other pure-file guards and runs on every PR.
       #
-      # Scoped to `BaseEntity` deliberately: measured on `next`, that rule flags 0 of 531 registrations,
+      # Scoped to `BaseEntity` deliberately: measured on `next`, that rule flags 0 of 535 registrations,
       # where looser rules flag 87 and 607. The script header carries the numbers; re-measure before
       # widening it.
       - name: Entity manifest registration gate

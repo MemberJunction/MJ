@@ -23,6 +23,17 @@ describe('extractBaseEntityRegistrations', () => {
       expect(extractBaseEntityRegistrations(src).map((r) => r.className)).toEqual(['MJConversationEntityServer']);
    });
 
+   it('finds a registered entity subclass when the decorator line has a trailing comment', () => {
+      const src = [
+         `@RegisterClass(BaseEntity, 'MJ: Actions') // high priority — ensure this server subclass wins over the generated entity`,
+         `export class MJActionEntityServer extends MJActionEntityExtended {`,
+      ].join('\n');
+      const hits = extractBaseEntityRegistrations(src);
+      expect(hits).toHaveLength(1);
+      expect(hits[0].className).toBe('MJActionEntityServer');
+      expect(hits[0].allowed).toBe(false);
+   });
+
    it('ignores registrations for other base classes', () => {
       const src = [
          `@RegisterClass(BaseAction, 'Send Email')`,
@@ -61,15 +72,23 @@ describe('extractBaseEntityRegistrations', () => {
       expect(extractBaseEntityRegistrations(src)).toEqual([]);
    });
 
-   it('honours the allow marker', () => {
-      const src = [
+   it('honours the allow marker above or on the decorator line', () => {
+      const above = [
          `// manifest-registration-ok: abstract base, never instantiated directly`,
          `@RegisterClass(BaseEntity, 'MJ: Things')`,
          `export abstract class AbstractThingEntity extends BaseEntity {`,
       ].join('\n');
-      const hits = extractBaseEntityRegistrations(src);
-      expect(hits).toHaveLength(1);
-      expect(hits[0].allowed).toBe(true);
+      const hitsAbove = extractBaseEntityRegistrations(above);
+      expect(hitsAbove).toHaveLength(1);
+      expect(hitsAbove[0].allowed).toBe(true);
+
+      const inline = [
+         `@RegisterClass(BaseEntity, 'MJ: Things') // manifest-registration-ok: inline fixture`,
+         `export class InlineAllowedThingEntity extends BaseEntity {`,
+      ].join('\n');
+      const hitsInline = extractBaseEntityRegistrations(inline);
+      expect(hitsInline).toHaveLength(1);
+      expect(hitsInline[0].allowed).toBe(true);
    });
 });
 
@@ -176,6 +195,33 @@ describe('the gate end to end', () => {
       const root = mkdtempSync(join(tmpdir(), 'manifest-guard-empty-'));
       try {
          mkdirSync(join(root, 'packages'), { recursive: true });
+         const r = run(root);
+         expect(r.status).toBe(2);
+         expect(r.stderr).toContain('would check nothing');
+      } finally {
+         rmSync(root, { recursive: true, force: true });
+      }
+   });
+
+   it('exits 2 when manifests exist on disk but none import any package', () => {
+      const root = fixtureRepo({ listed: true });
+      try {
+         writeFileSync(
+            join(root, 'packages', 'ServerBootstrap', 'src', 'generated', 'mj-class-registrations.ts'),
+            `export * from './other.js';\n`
+         );
+         const r = run(root);
+         expect(r.status).toBe(2);
+         expect(r.stderr).toContain('would check nothing');
+      } finally {
+         rmSync(root, { recursive: true, force: true });
+      }
+   });
+
+   it('exits 2 when no @RegisterClass(BaseEntity, …) classes are discovered', () => {
+      const root = fixtureRepo({ listed: true });
+      try {
+         writeFileSync(join(root, 'packages', 'CoreEntities', 'src', 'entities.ts'), `export class PlainHelper {}\n`);
          const r = run(root);
          expect(r.status).toBe(2);
          expect(r.stderr).toContain('would check nothing');

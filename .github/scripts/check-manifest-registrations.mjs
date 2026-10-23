@@ -47,7 +47,7 @@
  *  - scoping to packages a manifest already imports from still flags 87, all of them
  *    `BaseAction` (25), `BaseLintRule` (60), `BaseCLIPlugin` (1) and
  *    `BaseTransportDriverFactory` (1) — families that are loaded by other means;
- *  - restricting to `@RegisterClass(BaseEntity, …)` flags **0 of 531**.
+ *  - restricting to `@RegisterClass(BaseEntity, …)` flags **0 of 535**.
  *
  * So entity subclasses are the one family where the invariant already holds everywhere, which is
  * what lets this be a blocking gate that starts green instead of a 600-line allowlist. It is also
@@ -62,12 +62,12 @@
  *
  *   // manifest-registration-ok: abstract base, never instantiated directly
  *
- * Exit codes: 0 clean, 1 violations found, 2 misconfiguration (no manifests discovered, which
- * would mean this gate silently checks nothing).
+ * Exit codes: 0 clean, 1 violations found, 2 misconfiguration (no populated manifests or no
+ * registered entity classes discovered, which would mean this gate silently checks nothing).
  */
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
-import { join, dirname, relative, resolve } from 'node:path';
+import { basename, join, dirname, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const REPO_ROOT = process.cwd();
@@ -160,7 +160,7 @@ export function extractBaseEntityRegistrations(raw) {
    const text = stripComments(raw);
    const rawLines = raw.split('\n');
    const out = [];
-   const pattern = /@RegisterClass\(\s*BaseEntity\b[^)]*\)\s*export\s+(?:abstract\s+)?class\s+([A-Za-z0-9_$]+)/g;
+   const pattern = /@RegisterClass\(\s*BaseEntity\b[^)]*\)(?:[ \t]*\/\/[^\n]*)?\s*export\s+(?:abstract\s+)?class\s+([A-Za-z0-9_$]+)/g;
    let match;
    while ((match = pattern.exec(text))) {
       const className = match[1];
@@ -173,7 +173,7 @@ export function extractBaseEntityRegistrations(raw) {
 }
 
 function readManifests() {
-   const files = collectSourceFiles(PACKAGES).filter((f) => MANIFEST_BASENAMES.includes(f.split('/').pop()));
+   const files = collectSourceFiles(PACKAGES).filter((f) => MANIFEST_BASENAMES.includes(basename(f)));
    return files.map((file) => {
       const { identifiers, packages } = parseManifestImports(readFileSync(file, 'utf8'));
       return { file, relPath: relative(REPO_ROOT, file), identifiers, packages };
@@ -200,12 +200,12 @@ function main() {
       process.exit(2);
    }
    const manifests = readManifests();
-   if (manifests.length === 0) {
-      console.error('check:manifest-registrations — found no class-registration manifests. This gate would check nothing.');
+   if (!manifests.some((m) => m.packages.size > 0)) {
+      console.error('check:manifest-registrations — found no populated class-registration manifests. This gate would check nothing.');
       process.exit(2);
    }
 
-   const sourceFiles = collectSourceFiles(PACKAGES).filter((f) => !MANIFEST_BASENAMES.includes(f.split('/').pop()));
+   const sourceFiles = collectSourceFiles(PACKAGES).filter((f) => !MANIFEST_BASENAMES.includes(basename(f)));
    const violations = [];
    let scanned = 0;
    let allowed = 0;
@@ -234,6 +234,11 @@ function main() {
             violations.push({ className, pkg, file: relative(REPO_ROOT, file), missing: missing.map((m) => m.relPath) });
          }
       }
+   }
+
+   if (scanned === 0 && allowed === 0) {
+      console.error('check:manifest-registrations — found no @RegisterClass(BaseEntity, …) classes in packages/. This gate would check nothing.');
+      process.exit(2);
    }
 
    if (violations.length === 0) {
