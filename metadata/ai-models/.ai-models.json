@@ -29270,5 +29270,107 @@
       "lastModified": "2026-10-20T23:18:41.903Z",
       "checksum": "d53814d2ca381b20fb9d3f7123ae151824b05143400bb4dbb529a25884230f11"
     }
+  },
+  {
+    "fields": {
+      "Name": "Eleven Realtime v1 Max",
+      "PowerRank": 14,
+      "Description": "ElevenLabs' larger Eleven Realtime model (eleven_realtime_v1_max), launched October 20, 2026. ElevenLabs pitches it as getting spoken reasoning questions right without giving up a fast start: it cites 98.8% on Big Bench Audio and about 0.57 s to first audio, figures it attributes to Artificial Analysis and which are not independently verified here. ElevenLabs positions it for agents that follow a process and call tools (support, lead qualification). Reasoning depth is not a session setting. Cascaded (speech recognition, an LLM, ElevenLabs turn-taking and voice generation) but sold and driven as one speech-to-speech model: ElevenLabs does not let callers choose or configure the stages. The Realtime API follows the OpenAI Realtime spec over a WebSocket (wss://api.elevenlabs.io/v1/convai/realtime, model id as a query parameter, ephemeral client secrets from /v1/convai/realtime/client_secrets authenticated with xi-api-key), so the MJ driver reuses the OpenAI SDK pointed at ElevenLabs' base URL. WebSocket only, no WebRTC. Voices are ElevenLabs voice ids. Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass ElevenRealtime). Separate from the ElevenLabs Agents Platform model, which needs a provisioned server-side agent. ElevenLabs published no API pricing at launch, so no cost row is seeded.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 5,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Eleven Labs",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "0B7047F2-7AE2-446C-94E7-EEF44B46CB66"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Eleven Labs",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "ElevenRealtime",
+            "APIName": "eleven_realtime_v1_max",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "3B95C5DD-3666-4CDD-BD68-A178BDAB5C36"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "7955CA7C-9599-48AB-B62F-519228ECE31E"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Eleven Realtime v1 Mini",
+      "PowerRank": 10,
+      "Description": "ElevenLabs' smaller Eleven Realtime model (eleven_realtime_v1_mini), launched October 20, 2026, for lower-latency conversation where spoken reasoning matters less: ElevenLabs cites 75.9% on Big Bench Audio and about 0.62 s to first audio, figures it attributes to Artificial Analysis and which are not independently verified here. Cascaded (speech recognition, an LLM, ElevenLabs turn-taking and voice generation) but sold and driven as one speech-to-speech model: ElevenLabs does not let callers choose or configure the stages. The Realtime API follows the OpenAI Realtime spec over a WebSocket (wss://api.elevenlabs.io/v1/convai/realtime, model id as a query parameter, ephemeral client secrets from /v1/convai/realtime/client_secrets authenticated with xi-api-key), so the MJ driver reuses the OpenAI SDK pointed at ElevenLabs' base URL. WebSocket only, no WebRTC. Voices are ElevenLabs voice ids. Drives the Realtime agent type / Voice Co-Agent via BaseRealtimeModel (DriverClass ElevenRealtime). Separate from the ElevenLabs Agents Platform model, which needs a provisioned server-side agent. ElevenLabs published no API pricing at launch, so no cost row is seeded.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 5,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Eleven Labs",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "B829C79F-A62A-4AF2-9BB6-25FBCA720FF2"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Eleven Labs",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "ElevenRealtime",
+            "APIName": "eleven_realtime_v1_mini",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "4AC12CCD-1D3C-472E-89FE-B08AFDFE884D"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "841DCD4E-4BB0-431C-B46E-7F5D80D84C7F"
+    }
   }
 ]
