@@ -61,7 +61,7 @@ vi.mock('../realtimeWidget/visitorIdentity.js', () => ({
     get forgetVisitor() { return this.ForgetVisitor; },
 }));
 
-import { WidgetSessionService, REFRESH_GRACE_SECONDS } from '../realtimeWidget/WidgetSessionService.js';
+import { WidgetSessionService, REFRESH_GRACE_SECONDS, MAX_GUEST_SESSION_SECONDS } from '../realtimeWidget/WidgetSessionService.js';
 import { CreateWidgetHandler } from '../realtimeWidget/WidgetRouter.js';
 import express from 'express';
 import type { Server } from 'node:http';
@@ -216,6 +216,7 @@ describe('WidgetSessionService — RefreshGuestSession preserves mj_sid (#4931)'
       mj_magic_link: true,
       mj_anon: true,
       mj_sid: 'sid-recent-exp',
+      mj_sid_iat: nowSeconds - 960,
       mj_widget_id: WIDGET_ID,
       mj_app_id: APP_ID,
       mj_role: 'Widget Guest',
@@ -364,6 +365,7 @@ describe('WidgetSessionService — RefreshGuestSession re-applies every mint che
       mj_magic_link: true,
       mj_anon: true,
       mj_sid: 'sid-live',
+      mj_sid_iat: nowSeconds,
       mj_widget_id: WIDGET_ID,
       mj_app_id: APP_ID,
       mj_role: 'Widget Guest',
@@ -435,6 +437,80 @@ describe('WidgetSessionService — RefreshGuestSession re-applies every mint che
     const service = new WidgetSessionService(ISSUER, makeConfig());
     const refreshed = await refresh(service, signGuestToken({ iss: 'https://other-deployment.example' }));
     expect(refreshed).toMatchObject({ success: false, errorCode: 'not_found' });
+  });
+
+  describe('hard end of a guest session (MAX_GUEST_SESSION_SECONDS)', () => {
+    const START = Date.parse('2026-10-23T00:00:00Z');
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    function decode(token: string): jwt.JwtPayload {
+      return jwt.decode(token) as jwt.JwtPayload;
+    }
+
+    it('is 12 hours', () => {
+      expect(MAX_GUEST_SESSION_SECONDS).toBe(12 * 3600);
+    });
+
+    it('stamps the first mint time as mj_sid_iat and keeps it unchanged on refresh', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(START);
+      const service = new WidgetSessionService(ISSUER, makeConfig());
+      const minted = await service.MintGuestSession({ widgetKey: 'pk_live_test', origin: ORIGIN });
+      expect(decode(minted.token!).mj_sid_iat).toBe(START / 1000);
+
+      vi.setSystemTime(START + 14 * 60_000);
+      const refreshed = await refresh(service, minted.token!);
+      expect(refreshed.success).toBe(true);
+      expect(decode(refreshed.token!).mj_sid_iat).toBe(START / 1000);
+    });
+
+    it('never issues a token that outlives the hard end', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(START + (MAX_GUEST_SESSION_SECONDS - 60) * 1000);
+      const service = new WidgetSessionService(ISSUER, makeConfig());
+      const refreshed = await refresh(service, signGuestToken({ mj_sid_iat: START / 1000 }));
+      expect(refreshed.success).toBe(true);
+      expect(decode(refreshed.token!).exp).toBe(START / 1000 + MAX_GUEST_SESSION_SECONDS);
+    });
+
+    it('refuses a refresh past the hard end', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(START + (MAX_GUEST_SESSION_SECONDS + 1) * 1000);
+      const service = new WidgetSessionService(ISSUER, makeConfig());
+      const refreshed = await refresh(service, signGuestToken({ mj_sid_iat: START / 1000 }));
+      expect(refreshed).toMatchObject({ success: false, errorCode: 'not_found' });
+    });
+
+    it('refuses a token without mj_sid_iat (minted before the hard end existed)', async () => {
+      const service = new WidgetSessionService(ISSUER, makeConfig());
+      const refreshed = await refresh(service, signGuestToken({ mj_sid_iat: undefined }));
+      expect(refreshed).toMatchObject({ success: false, errorCode: 'not_found' });
+    });
+
+    it('stops a token captured once from being renewed past the hard end, however often it is refreshed', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(START);
+      const service = new WidgetSessionService(ISSUER, makeConfig());
+      let token = (await service.MintGuestSession({ widgetKey: 'pk_live_test', origin: ORIGIN })).token!;
+      let accepted = 0;
+      let refusedAtMinute: number | null = null;
+      for (let minute = 14; minute <= 7 * 24 * 60 && refusedAtMinute === null; minute += 14) {
+        vi.setSystemTime(START + minute * 60_000);
+        const r = await refresh(service, token);
+        if (r.success) {
+          token = r.token!;
+          accepted++;
+        } else {
+          refusedAtMinute = minute;
+        }
+      }
+      expect(refusedAtMinute).not.toBeNull();
+      expect(refusedAtMinute!).toBeLessThanOrEqual(MAX_GUEST_SESSION_SECONDS / 60 + REFRESH_GRACE_SECONDS / 60 + 14);
+      expect(accepted).toBeLessThanOrEqual(Math.ceil(MAX_GUEST_SESSION_SECONDS / 60 / 14));
+    });
   });
 
   describe('through the real POST /session/refresh route', () => {

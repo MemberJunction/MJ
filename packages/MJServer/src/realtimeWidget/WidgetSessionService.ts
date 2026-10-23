@@ -41,6 +41,21 @@ const VISITOR_KEY_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
  */
 export const REFRESH_GRACE_SECONDS = 300;
 
+/**
+ * Hard end of a widget guest session (seconds after its first mint, `mj_sid_iat`). Refresh keeps the
+ * visitor's `mj_sid`, so without an end a token captured once could be renewed forever and keep reading
+ * that visitor's conversations; past this point refresh is refused and no token outlives it.
+ */
+export const MAX_GUEST_SESSION_SECONDS = 12 * 3600;
+
+/** The session a valid refresh token belongs to, carried into the re-minted token unchanged. */
+interface RefreshableGuestSession {
+  /** `mj_sid`. */
+  SessionId: string;
+  /** `mj_sid_iat`: when the session was first minted, epoch seconds. */
+  StartedAtSeconds: number;
+}
+
 /** Resolved returning-visitor anchor for a mint: the durable key + the prior conversation to chain from. */
 interface ReturningVisitorResolution {
   /** The durable VisitorKey to persist as a cookie (validated-presented or freshly minted). */
@@ -331,8 +346,8 @@ export class WidgetSessionService {
         hostIdentity = verified;
       }
 
-      const existingSessionId = this.verifyRefreshBearerToken(input.BearerToken, widget.ID);
-      if (!existingSessionId) {
+      const existingSession = this.verifyRefreshBearerToken(input.BearerToken, widget.ID);
+      if (!existingSession) {
         return this.audited({ success: false, errorCode: 'not_found', error: 'Unknown widget key.' }, input, widget);
       }
 
@@ -340,7 +355,7 @@ export class WidgetSessionService {
       const resolvedIdentity = await this.resolveHostIdentityIfApplicable(widget, hostIdentity, returningVisitor, contextUser);
 
       return this.audited(
-        this.mintToken(widget, guestRoleName, hostIdentity, returningVisitor, resolvedIdentity, existingSessionId),
+        this.mintToken(widget, guestRoleName, hostIdentity, returningVisitor, resolvedIdentity, existingSession),
         input,
         widget,
       );
@@ -352,10 +367,11 @@ export class WidgetSessionService {
 
   /**
    * Verifies the caller's current widget guest JWT for `RefreshGuestSession` and returns its
-   * `mj_sid` when valid, or `null` when missing, tampered, expired past {@link REFRESH_GRACE_SECONDS},
+   * `mj_sid` and `mj_sid_iat` when valid, or `null` when missing, tampered, expired past {@link REFRESH_GRACE_SECONDS},
+   * past the session's hard end ({@link MAX_GUEST_SESSION_SECONDS}) or without a session start,
    * non-anonymous, minted for a different widget, or issued by another deployment.
    */
-  private verifyRefreshBearerToken(bearerToken: string | undefined, widgetId: string): string | null {
+  private verifyRefreshBearerToken(bearerToken: string | undefined, widgetId: string): RefreshableGuestSession | null {
     const token = (bearerToken ?? '').trim();
     if (!token) {
       return null;
@@ -387,7 +403,14 @@ export class WidgetSessionService {
         return null;
       }
       const sid = typeof payload.mj_sid === 'string' ? payload.mj_sid.trim() : '';
-      return sid.length > 0 ? sid : null;
+      if (sid.length === 0) {
+        return null;
+      }
+      const startedAt = payload.mj_sid_iat;
+      if (typeof startedAt !== 'number' || !Number.isFinite(startedAt) || nowSeconds - startedAt > MAX_GUEST_SESSION_SECONDS) {
+        return null;
+      }
+      return { SessionId: sid, StartedAtSeconds: startedAt };
     } catch (e) {
       LogError(`[Widget] Refresh token verification failed for widget ${widgetId}: ${e instanceof Error ? e.message : String(e)}`);
       return null;
@@ -523,14 +546,17 @@ export class WidgetSessionService {
     hostIdentity?: HostAssertedIdentity,
     returningVisitor?: ReturningVisitorResolution,
     resolvedIdentity?: ResolvedVisitorIdentity,
-    existingSessionId?: string,
+    existingSession?: RefreshableGuestSession,
   ): MintGuestSessionResult {
     const nowSeconds = Math.floor(Date.now() / 1000);
     const ttlMinutes = widget.SessionTTLMinutes || this.config.defaultSessionTtlMinutes;
     // Generated once on initial mint and preserved across refreshes: the widget (and server-side
     // voice session creation) stamps Conversation.ExternalID with this id so the Widget Guest RLS
     // filters ({{ScopeResourceID}}) and AuthorizeSessionAccess isolate this guest's rows.
-    const sessionId = existingSessionId ?? GenerateSessionId();
+    const sessionId = existingSession?.SessionId ?? GenerateSessionId();
+    const startedAtSeconds = existingSession?.StartedAtSeconds ?? nowSeconds;
+    // No token outlives the session's hard end, so the cap holds for API calls as well as for refresh.
+    const ttlSeconds = Math.min(ttlMinutes * 60, startedAtSeconds + MAX_GUEST_SESSION_SECONDS - nowSeconds);
     const claims = BuildWidgetGuestClaims({
       issuer: this.publicUrl,
       audience: this.config.audience,
@@ -540,7 +566,8 @@ export class WidgetSessionService {
       applicationId: widget.ApplicationID,
       guestRoleName,
       nowSeconds,
-      ttlSeconds: ttlMinutes * 60,
+      ttlSeconds,
+      sessionStartedAtSeconds: startedAtSeconds,
       hostIdentity,
       // RV1/RV2/RV4: carry the returning-visitor anchor + resolved identity as claims so the voice path
       // (server-created conversation) stamps the same fields the text path stamps client-side.
