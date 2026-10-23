@@ -6,6 +6,7 @@
     "Status": "Pending",
     "Tags": "[\"gate\",\"G0.2\",\"owner:PR4\",\"phase:0\",\"dataset:W2\",\"criterion:C1.1\"]",
     "InputDefinition": {},
+    "MaxExecutionTimeMS": 1200000,
     "ExpectedOutcomes": {
       "summary": "At most 6 of 60 noise agent runs reach Published; 60 of 60 runs consistent with their stored gate outcome."
     },
