@@ -17,7 +17,7 @@
 //                                  has the same error variance.
 // Streams: the visible world draws only from the `<id>` stream. C4's hidden period draws from `<id>:hidden` and the
 // trap columns from `<id>:traps`, T3's leak from `<id>:leak`, so the visible world (features, Target, TrueValue) is
-// byte-for-byte the same with or without traps (asserted by test_C4_base_world_independent_of_traps).
+// byte-for-byte the same with or without traps.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { GenLib, type ScenarioIdMinter } from './gen_lib';
