@@ -53,15 +53,22 @@ export class EvaluationLineage {
     return trimmed;
   }
 
-  /** The record training writes for a pipeline's validation strategy. Throws `InvalidMajorityBaselineRuleError`. */
-  public static Build(validation: ValidationStrategy, options?: { ValidationOutOfSample?: boolean; ImportanceKind?: ImportanceKind | null }): EvaluationRecord {
+  /**
+   * The record training writes for a pipeline's validation strategy. Pass `MajorityBaselineRule` when the caller has
+   * already parsed it with {@link ParseMajorityBaselineRule}; otherwise it is parsed here, which throws
+   * `InvalidMajorityBaselineRuleError` for an unknown value.
+   */
+  public static Build(
+    validation: ValidationStrategy,
+    options?: { ValidationOutOfSample?: boolean; ImportanceKind?: ImportanceKind | null; MajorityBaselineRule?: MajorityBaselineRule },
+  ): EvaluationRecord {
     const timeIndex = validation.TimeIndexColumn?.trim() || null;
     return {
       ValidationOutOfSample: options?.ValidationOutOfSample ?? true,
       TimeIndexColumn: timeIndex,
       EvaluatedAsForecast: false,
       WithheldReason: timeIndex ? EvaluationLineage.NotEvaluatedAsForecast : null,
-      MajorityBaselineRule: EvaluationLineage.ParseMajorityBaselineRule(validation.MajorityBaselineRule),
+      MajorityBaselineRule: options?.MajorityBaselineRule || EvaluationLineage.ParseMajorityBaselineRule(validation.MajorityBaselineRule),
       ImportanceKind: options?.ImportanceKind || null,
     };
   }

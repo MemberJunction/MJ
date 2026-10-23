@@ -5,8 +5,8 @@
  *
  * The six Manual-mode Remote Operations and the four Predictive Studio Actions are
  * two thin invocation surfaces over the SAME engine service classes
- * (`TrainingEngine`, `ProductionScoreRecordSetRunner`, `ExperimentOrchestrator` via
- * `ExperimentDepsBuilder.BuildProductionExperimentDeps`, `ProductionModelPromotionGate`). Per CLAUDE.md
+ * (`TrainingEngine`, `ProductionScoreRecordSetRunner`, `ProductionModelPromotionGate`; experiment
+ * sessions are switched off and refuse with `ExperimentSessionsUnavailableError`). Per CLAUDE.md
  * "push improvements to the generic level" and DRY, the production wiring each path
  * needs lives here exactly ONCE, so the Remote Ops and Actions share one delegation
  * path rather than duplicating the deps/seam construction.
@@ -27,7 +27,7 @@ import type { TrainModelInput, TrainModelResult, TrainingDeps } from '../trainin
 
 import { ExperimentOrchestrator } from '../experiment/experiment-orchestrator';
 import type { ExperimentRunOptions, ExperimentSessionResult } from '../experiment/types';
-import { ExperimentDepsBuilder } from '../actions/run-experiment.deps';
+import { ExperimentSessionsUnavailableError } from '../actions/run-experiment.deps';
 
 import { ProductionScoreRecordSetRunner } from '../actions/score-record-set.runner';
 import { RunViewMLModelLoader, MJSidecarPredictor } from '../scoring/seams';
@@ -190,25 +190,26 @@ export function scoreRecordSetViaRunner(
 // ----- Experiment -------------------------------------------------------------
 
 /**
- * Start (run) an experiment session, delegating to
- * {@link ExperimentOrchestrator.runSession} with the SAME production deps the
- * Run-Experiment action builds ({@link ExperimentDepsBuilder.BuildProductionExperimentDeps}). The
- * `orchestrator` is injectable for tests.
+ * Start (run) an experiment session. Experiment sessions are switched off
+ * (`ExperimentSessions.Enabled` in `@memberjunction/predictive-studio-core`): no production
+ * experiment dependencies exist, so this refuses with {@link ExperimentSessionsUnavailableError}
+ * before any Experiment, Session or Iteration row is created. The signature is kept for the
+ * published callers.
  *
- * @param plan the approved modeling plan to execute
- * @param options run tunables (experiment id to attach to, budget override, session name)
- * @param provider the owning provider
- * @param user the acting user
- * @param orchestrator optional orchestrator override (defaults to {@link ExperimentOrchestrator})
+ * @param _plan the approved modeling plan to execute
+ * @param _options run tunables (experiment id to attach to, budget override, session name)
+ * @param _provider the owning provider
+ * @param _user the acting user
+ * @param _orchestrator optional orchestrator override
  */
 export async function RunExperimentSessionViaOrchestrator(
-  plan: ModelingPlanSpec,
-  options: ExperimentRunOptions,
-  provider: IMetadataProvider,
-  user: UserInfo,
-  orchestrator: ExperimentOrchestrator = new ExperimentOrchestrator(),
+  _plan: ModelingPlanSpec,
+  _options: ExperimentRunOptions,
+  _provider: IMetadataProvider,
+  _user: UserInfo,
+  _orchestrator?: ExperimentOrchestrator,
 ): Promise<ExperimentSessionResult> {
-  return orchestrator.runSession(plan, await ExperimentDepsBuilder.BuildProductionExperimentDeps(user, provider), options);
+  throw new ExperimentSessionsUnavailableError();
 }
 
 /** @deprecated Use {@link RunExperimentSessionViaOrchestrator}. */

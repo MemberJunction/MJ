@@ -84,14 +84,6 @@ export class ModelNotScorableError extends Error {
     this.name = 'ModelNotScorableError';
   }
 
-  /**
-   * Whether a model in this lifecycle status may score. An allow-list, so a status this rule does not know (a value
-   * CodeGen adds later) fails closed: a Draft has not passed the promotion gate and an Archived model is retired.
-   */
-  public static CanScore(status: MJMLModelEntity['Status']): boolean {
-    return status === 'Validated' || status === 'Published';
-  }
-
   /** The refusal message for a model whose status may not score. */
   public static Message(modelId: string, status: MJMLModelEntity['Status']): string {
     const next =

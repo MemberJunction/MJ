@@ -68,7 +68,8 @@ export interface ScoreRecordSetRequest {
    */
   dryRun?: boolean;
   contextUser?: UserInfo;
-  provider?: IMetadataProvider;
+  /** The provider every scope read and write-back goes through (required: no fallback to the global provider). */
+  provider: IMetadataProvider;
 }
 
 /** A single ephemeral prediction surfaced when write-back is NOT requested. */

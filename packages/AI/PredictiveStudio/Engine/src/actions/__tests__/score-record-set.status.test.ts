@@ -6,11 +6,12 @@ import type { RecordRef } from '@memberjunction/record-set-processor-base';
 
 import { ProductionScoreRecordSetRunner } from '../score-record-set.runner';
 import { InMemoryArtifactLoader } from '../../scoring/artifact-loader';
+import { ModelNeedsTrainingError, ModelNotScorableError } from '../../scoring/model-readiness';
 import type { IMLModelLoader, ISidecarPredictor, MLInferenceDeps } from '../../scoring/types';
 
 /** The model fields loadModel reads before the status check. */
 class StatusModel {
-  constructor(public readonly Status: 'Draft' | 'Archived', public readonly ID = 'm1', public readonly ArtifactFileID = 'file-1') {}
+  constructor(public readonly Status: MJMLModelEntity['Status'], public readonly ID = 'm1', public readonly ArtifactFileID: string | null = 'file-1') {}
 }
 
 class Loader implements IMLModelLoader {
@@ -71,4 +72,32 @@ describe('ProductionScoreRecordSetRunner — refused models write nothing (W1 �
       expect(runner.Target.Saves).toBe(0);
     });
   }
+});
+
+describe('ProductionScoreRecordSetRunner — status and artifact refusal order', () => {
+  /** Run a no-write-back score against a model with this status and artifact reference. */
+  const scoreWith = (status: MJMLModelEntity['Status'], artifactFileId: string | null) => {
+    const runner = new TestRunner(
+      { modelLoader: new Loader(new StatusModel(status, 'm1', artifactFileId)), artifactLoader: new InMemoryArtifactLoader(), sidecar: new CountingSidecar() },
+      new SaveCounter(),
+    );
+    return runner.run({
+      modelId: 'm1',
+      scope: { records: [{ ID: 'r1' }] },
+      contextUser: { ID: 'u1' } as unknown as UserInfo,          // test doubles: the refusal happens before either is used
+      provider: {} as unknown as IMetadataProvider,
+    });
+  };
+
+  it('a Draft with no artifact needs training (the auto-train path reacts to this)', async () => {
+    await expect(scoreWith('Draft', null)).rejects.toBeInstanceOf(ModelNeedsTrainingError);
+  });
+
+  it('an Archived model with no artifact is refused for its status, not sent to training', async () => {
+    await expect(scoreWith('Archived', null)).rejects.toBeInstanceOf(ModelNotScorableError);
+  });
+
+  it('a Published model with no artifact needs training', async () => {
+    await expect(scoreWith('Published', null)).rejects.toBeInstanceOf(ModelNeedsTrainingError);
+  });
 });

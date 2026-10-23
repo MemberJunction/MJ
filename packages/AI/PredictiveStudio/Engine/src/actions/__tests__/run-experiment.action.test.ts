@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { RunActionParams, ActionParam, ActionResultSimple } from '@memberjunction/actions-base';
-import type { ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
+import { ExperimentSessions, type ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 import type {
   MJExperimentEntity,
   MJExperimentSessionEntity,
@@ -8,7 +8,6 @@ import type {
 } from '@memberjunction/core-entities';
 
 import { PredictiveStudioRunExperimentAction } from '../run-experiment.action';
-import { ExperimentDepsBuilder, ExperimentSessionsUnavailableError } from '../run-experiment.deps';
 import { ExperimentOrchestrator } from '../../experiment/experiment-orchestrator';
 import type { ExperimentDeps, ExperimentRunOptions, ExperimentSessionResult } from '../../experiment/types';
 
@@ -49,10 +48,16 @@ function inertDeps(): ExperimentDeps {
   };
 }
 
-/** Test subclass injecting a mock orchestrator + inert deps, exposing a clean `run`. */
+/**
+ * Test subclass with sessions switched on, injecting a mock orchestrator + inert deps, exposing a clean `run`.
+ * It exercises the validation and delegation path that sits behind the {@link ExperimentSessions} switch.
+ */
 class TestableExperimentAction extends PredictiveStudioRunExperimentAction {
   constructor(private readonly orchestrator: ExperimentOrchestrator) {
     super();
+  }
+  protected override sessionsEnabled(): boolean {
+    return true;
   }
   protected override createOrchestrator(): ExperimentOrchestrator {
     return this.orchestrator;
@@ -210,17 +215,20 @@ class ProductionDepsExperimentAction extends PredictiveStudioRunExperimentAction
 }
 
 describe('Experiment sessions are switched off (F-EXP-1)', () => {
-  it('ExperimentDepsBuilder.BuildProductionExperimentDeps refuses before touching the database', async () => {
-    await expect(ExperimentDepsBuilder.BuildProductionExperimentDeps(undefined, undefined)).rejects.toBeInstanceOf(ExperimentSessionsUnavailableError);
-  });
-
   it('the action refuses an approved plan with EXPERIMENT_UNAVAILABLE and never runs the orchestrator', async () => {
     const orch = new MockOrchestrator(sessionResult());
     const p = params([{ Name: 'PlanSpec', Type: 'Input', Value: approvedPlan() }]);
     const result = await new ProductionDepsExperimentAction(orch).RunAction(p);
     expect(result.Success).toBe(false);
     expect(result.ResultCode).toBe('EXPERIMENT_UNAVAILABLE');
-    expect(result.Message).toMatch(/Experiment sessions are switched off/);
+    expect(result.Message).toBe(ExperimentSessions.DisabledReason);
+    expect(orch.CallCount).toBe(0);
+  });
+
+  it('the action refuses before validating parameters', async () => {
+    const orch = new MockOrchestrator(sessionResult());
+    const result = await new ProductionDepsExperimentAction(orch).RunAction(params([]));
+    expect(result.ResultCode).toBe('EXPERIMENT_UNAVAILABLE');
     expect(orch.CallCount).toBe(0);
   });
 });

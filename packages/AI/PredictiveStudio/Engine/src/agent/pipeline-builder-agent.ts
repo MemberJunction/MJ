@@ -147,19 +147,39 @@ export function parseFeatureImportance(raw: unknown): MLFeatureImportancePayload
   return ParseFeatureImportance(raw);
 }
 
-/** Generate a clean markdown results report for the ML Experiment Results artifact. */
+/**
+ * Generate a clean markdown results report for the ML Experiment Results artifact. A `null` score or
+ * trust grade means the model was not measured; the report says so rather than standing in a number.
+ */
 export function GenerateMarkdownReport(
   name: string,
   goal: string,
   targetVar: string,
   targetMetric: string,
   score: number | null,
-  trustGrade: string,
+  trustGrade: TrustGrade | null,
   oneLiner: string,
   published: boolean,
   features: MLFeatureImportancePayload[],
   leaderboard?: MLLeaderboardEntryPayload[],
   importanceHidden = true,
+): string {
+  const trustGradeLabel = trustGrade || 'Not measured';
+  return renderMarkdownReport(name, targetVar, targetMetric, score, trustGradeLabel, oneLiner, published, features, leaderboard, importanceHidden);
+}
+
+/** The report body, with the trust grade already rendered as its display label. */
+function renderMarkdownReport(
+  name: string,
+  targetVar: string,
+  targetMetric: string,
+  score: number | null,
+  trustGradeLabel: string,
+  oneLiner: string,
+  published: boolean,
+  features: MLFeatureImportancePayload[],
+  leaderboard: MLLeaderboardEntryPayload[] | undefined,
+  importanceHidden: boolean,
 ): string {
   const topFeatures = features.length > 0
     ? features.slice(0, 8).map((f) => `- **${f.feature}**: ${(f.importance * 100).toFixed(1)}% of the model's weight`).join('\n')
@@ -172,7 +192,7 @@ export function GenerateMarkdownReport(
     const rows = leaderboard
       .map(
         (r) =>
-          `| ${r.rank ?? '—'} | ${r.algorithm ?? 'Candidate'} | ${r.score != null ? r.score.toFixed(3) : '—'} | ${r.isWinner ? '🏆 Winner (Selected)' : 'Evaluated'} |`,
+          `| ${r.rank ?? '—'} | ${r.algorithm ?? 'Candidate'} | ${r.score !== null && r.score !== undefined ? r.score.toFixed(3) : '—'} | ${r.isWinner ? '🏆 Winner (Selected)' : 'Evaluated'} |`,
       )
       .join('\n');
     leaderboardSection = `\n## Tournament Leaderboard\n| Rank | Algorithm | Score (${targetMetric}) | Status |\n|---|---|---|---|\n${rows}\n`;
@@ -185,8 +205,8 @@ ${oneLiner}
 
 ## Winning Model Performance
 - **Target Variable**: \`${targetVar}\`
-- **Primary Metric**: **${targetMetric}** = **${score != null ? score.toFixed(3) : 'not measured'}**
-- **Trust Grade**: **${trustGrade}** (${published ? 'Published to Catalog' : 'Held for Review'})
+- **Primary Metric**: **${targetMetric}** = **${score !== null && score !== undefined ? score.toFixed(3) : 'not measured'}**
+- **Trust Grade**: **${trustGradeLabel}** (${published ? 'Published to Catalog' : 'Held for Review'})
 ${leaderboardSection}
 ## Features the model weighted most (associations, not causes)
 ${topFeatures}
@@ -203,15 +223,14 @@ export function generateMarkdownReport(
   goal: string,
   targetVar: string,
   targetMetric: string,
-  score: number | null,
+  score: number,
   trustGrade: string,
   oneLiner: string,
   published: boolean,
   features: MLFeatureImportancePayload[],
   leaderboard?: MLLeaderboardEntryPayload[],
-  importanceHidden = true,
 ): string {
-  return GenerateMarkdownReport(name, goal, targetVar, targetMetric, score, trustGrade, oneLiner, published, features, leaderboard, importanceHidden);
+  return renderMarkdownReport(name, targetVar, targetMetric, score, trustGrade, oneLiner, published, features, leaderboard, true);
 }
 
 @RegisterClass(BaseAgent, 'PredictiveStudioPipelineBuilderAgent')
@@ -265,7 +284,7 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
       const leaderboard: MLLeaderboardEntryPayload[] =
         result.leaderboard && result.leaderboard.length > 0
           ? result.leaderboard
-          : scoreVal == null
+          : scoreVal === null || scoreVal === undefined
             ? []
             : [
               {
@@ -290,7 +309,7 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
         targetVar,
         targetMetric,
         scoreVal,
-        result.trust?.grade ?? 'Not measured',
+        result.trust?.grade ?? null,
         summaryText,
         result.published,
         featureBars,

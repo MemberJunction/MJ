@@ -129,16 +129,15 @@ describe('parseFeatureImportance', () => {
   });
 });
 
-describe('generateMarkdownReport', () => {
-  it('formats a structured markdown report with metrics and features', async () => {
-    const { GenerateMarkdownReport } = await import('../pipeline-builder-agent');
+describe('GenerateMarkdownReport', () => {
+  it('formats a structured markdown report with metrics and features', () => {
     const md = GenerateMarkdownReport(
       'Member Renewal Risk',
       'Predict renewal',
       'Status',
       'AUC',
       0.864,
-      'Great',
+      'Excellent',
       'Accurate and reliable.',
       true,
       [{ feature: 'DuesAmount', importance: 0.45 }]
@@ -183,7 +182,7 @@ describe('resolveEntity', () => {
 
 describe('GenerateMarkdownReport — unmeasured model', () => {
   it('says the metric was not measured instead of printing a number', () => {
-    const md = GenerateMarkdownReport('Renewal', 'Predict renewal', 'Renewed', 'AUC', null, 'Not measured', 'Not measured.', false, [], []);
+    const md = GenerateMarkdownReport('Renewal', 'Predict renewal', 'Renewed', 'AUC', null, null, 'Not measured.', false, [], []);
     expect(md).toContain('**AUC** = **not measured**');
     expect(md).not.toMatch(/0\.850/);
     expect(md).toContain('**Not measured**');

@@ -105,7 +105,7 @@ export class TrainingEngine {
       throw new AsOfSettingHasNoEffectError('pipeline', resolved.asOf.Mode, resolved.pipeline.ID);
     }
     // Validates the evaluation settings (D2-C5d: an unknown MajorityBaselineRule is refused) before any row is written.
-    EvaluationLineage.ParseMajorityBaselineRule(resolved.validation.MajorityBaselineRule);
+    const majorityBaselineRule = EvaluationLineage.ParseMajorityBaselineRule(resolved.validation.MajorityBaselineRule);
     const run = await this.createRunRow(resolved, input, deps);
 
     try {
@@ -123,6 +123,7 @@ export class TrainingEngine {
       const evaluation = EvaluationLineage.Build(resolved.validation, {
         ValidationOutOfSample: response.validation_out_of_sample === true,
         ImportanceKind: response.feature_importance_kind || null,
+        MajorityBaselineRule: majorityBaselineRule,
       });
 
       const dominance = this.checkLeakage(response, resolved.leakageGuard);
@@ -357,7 +358,7 @@ export class TrainingEngine {
       model.HoldoutMetrics = JSON.stringify(response.holdout_metrics);
     }
     model.FeatureImportance = JSON.stringify(response.feature_importance ?? {});
-    model.Lineage = JSON.stringify(this.buildLineage(resolved, input, split, response, evaluation));
+    model.Lineage = JSON.stringify(this.buildLineage(resolved, input, split, evaluation));
     model.TrainedAt = new Date();
     model.TrainingDurationSec = Math.round(response.duration_sec ?? 0);
     model.TrainingRowCount = response.training_row_count ?? split.trainingRowCount;
@@ -381,7 +382,6 @@ export class TrainingEngine {
     resolved: ResolvedPipeline,
     input: TrainModelInput,
     split: HoldoutSplit,
-    _response: TrainResponse,
     evaluation: EvaluationRecord,
   ): Record<string, unknown> {
     return {
