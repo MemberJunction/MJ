@@ -7,7 +7,7 @@ import { DataCache, type Json } from './cache';
 
 export interface CatalogEntry {
   Kind: 'world' | 'scenario';
-  ID: string;
+  Code: string;
   SpecFile: string;
   Generator: string;
 }
@@ -25,19 +25,19 @@ const SCENARIO_IDS = [
 export const CATALOG: readonly CatalogEntry[] = [
   ...WORLD_IDS.map((id): CatalogEntry => ({
     Kind: 'world',
-    ID: id,
+    Code: id,
     SpecFile: `fixtures/worlds/${id}.json`,
     Generator: id === 'W9-multiclass' ? 'generators/make_world_multiclass.mjs' : 'generators/make_world.mjs',
   })),
   ...SCENARIO_IDS.map((id): CatalogEntry => ({
     Kind: 'scenario',
-    ID: id,
+    Code: id,
     SpecFile: `fixtures/scenarios/specs/${id}.json`,
     Generator: 'generators/make_scenario.mjs',
   })),
   {
     Kind: 'scenario',
-    ID: 'T3-lag',
+    Code: 'T3-lag',
     SpecFile: 'fixtures/scenarios/specs/T3.json',
     Generator: 'generators/derive_t3_lag.mjs',
   },
@@ -47,7 +47,7 @@ export const CATALOG: readonly CatalogEntry[] = [
 export class DatasetCatalog {
   /** Find a catalog entry by kind and ID. */
   public static Find(kind: 'world' | 'scenario', id: string): CatalogEntry {
-    const entry = CATALOG.find((e) => e.Kind === kind && e.ID === id);
+    const entry = CATALOG.find((e) => e.Kind === kind && e.Code === id);
     if (!entry) throw new Error(`Dataset ${kind}/${id} not found in CATALOG`);
     return entry;
   }
@@ -58,7 +58,7 @@ export class DatasetCatalog {
     const spec = SafeJSONParse<{ [k: string]: Json }>(readFileSync(path.join(root, entry.SpecFile), 'utf8'));
     const genSource = readFileSync(path.join(root, entry.Generator), 'utf8');
     const loomPin = SafeJSONParse<{ sha: string }>(readFileSync(path.join(root, 'fixtures', 'loom.json'), 'utf8'));
-    if (!spec || !loomPin) throw new Error(`Failed to read spec or loom.json for ${entry.ID}`);
+    if (!spec || !loomPin) throw new Error(`Failed to read spec or loom.json for ${entry.Code}`);
     return DataCache.SpecHash(spec, genSource, loomPin.sha);
   }
 
@@ -89,10 +89,10 @@ export class DatasetCatalog {
   public static async EnsureGenerated(entry: CatalogEntry, seed: number, dataRoot: string = DataCache.Root()): Promise<string> {
     const root = TruthSuite.Root();
     const specHash = DatasetCatalog.EntrySpecHash(entry);
-    const seedDir = DataCache.Dir(dataRoot, entry.Kind, entry.ID, specHash, seed);
+    const seedDir = DataCache.Dir(dataRoot, entry.Kind, entry.Code, specHash, seed);
     const completeMarker = path.join(seedDir, '.complete');
     if (DatasetCatalog.readIfPresent(completeMarker) !== null) {
-      DatasetCatalog.updateIndex(dataRoot, entry.Kind, entry.ID, seed, seedDir);
+      DatasetCatalog.updateIndex(dataRoot, entry.Kind, entry.Code, seed, seedDir);
       return seedDir;
     }
 
@@ -103,7 +103,7 @@ export class DatasetCatalog {
     if (entry.Kind === 'world') {
       const hashRoot = path.dirname(seedDir);
       execFileSync(process.execPath, [genPath, specPath, hashRoot, '--seeds', String(seed)], { stdio: 'pipe' });
-    } else if (entry.ID === 'T3-lag') {
+    } else if (entry.Code === 'T3-lag') {
       const t3Entry = DatasetCatalog.Find('scenario', 'T3');
       const t3Dir = await DatasetCatalog.EnsureGenerated(t3Entry, seed, dataRoot);
       execFileSync(process.execPath, [genPath, t3Dir, seedDir], { stdio: 'pipe' });
@@ -116,11 +116,11 @@ export class DatasetCatalog {
       : ['rows.csv', 'truth.csv', 'manifest.json'];
     for (const f of requiredFiles) {
       if (!existsSync(path.join(seedDir, f))) {
-        throw new Error(`Generator for ${entry.ID} seed ${seed} did not produce ${f} in ${seedDir}`);
+        throw new Error(`Generator for ${entry.Code} seed ${seed} did not produce ${f} in ${seedDir}`);
       }
     }
     writeFileSync(completeMarker, `${specHash}\n`);
-    DatasetCatalog.updateIndex(dataRoot, entry.Kind, entry.ID, seed, seedDir);
+    DatasetCatalog.updateIndex(dataRoot, entry.Kind, entry.Code, seed, seedDir);
     return seedDir;
   }
 }

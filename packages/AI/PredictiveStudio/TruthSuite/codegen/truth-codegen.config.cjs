@@ -1,6 +1,6 @@
 /**
  * Scoped CodeGen config for the pstruth test schema (Predictive Studio truth suite). Copied to
- * .run/codegen/mj.config.cjs by scripts/provision.mjs --codegen; never run against a shared database.
+ * .run/codegen/mj.config.cjs by scripts/provision.mjs (after migrate); never run against a shared database.
  * includeSchemas is CodeGen's positive scope: __mj and every other schema are excluded. No additionalSchemaInfo.
  */
 const path = require('node:path');

@@ -1,11 +1,12 @@
 #!/usr/bin/env node
-// provision.mjs — provision the pstruth test schema and its entity opt-ins (or run scoped CodeGen once with --codegen).
+// provision.mjs — provision the pstruth test schema: apply its DDL, register its entities with a scoped CodeGen run, and
+// push their direct-SQL opt-ins. Run after `pnpm run build` (the pool comes from the built TruthConnection).
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
+import { copyFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LoadDbConfig } from '@memberjunction/testing-integration';
-import sql from 'mssql';
+import { TruthConnection } from '../dist/db/connection.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const mjRoot = path.resolve(root, '..', '..', '..', '..');
@@ -23,52 +24,14 @@ function run(cmd, args, cwd, extraEnv = {}) {
   }
 }
 
-function findNewestCodeGenSql(dir) {
-  const hits = [];
-  const walk = (d) => {
-    for (const entry of readdirSync(d, { withFileTypes: true })) {
-      const full = path.join(d, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else if (/^CodeGen_Run_.*\.sql$/.test(entry.name)) {
-        hits.push({ full, mtimeMs: statSync(full).mtimeMs });
-      }
-    }
-  };
-  walk(dir);
-  hits.sort((a, b) => b.mtimeMs - a.mtimeMs);
-  return hits[0]?.full || null;
-}
-
-async function openPool() {
-  return sql.connect({
-    server: dbCfg.Host,
-    port: dbCfg.Port,
-    user: dbCfg.User,
-    password: dbCfg.Password,
-    database: dbCfg.Database,
-    requestTimeout: 120_000,
-    // Same options as the integration framework's own pool (testing-integration bootstrap.ts).
-    options: { encrypt: false, trustServerCertificate: true },
-  });
-}
-
-if (process.argv.includes('--codegen')) {
-  const codegenDir = path.join(root, '.run', 'codegen');
-  mkdirSync(codegenDir, { recursive: true });
-  copyFileSync(
-    path.join(root, 'codegen', 'truth-codegen.config.cjs'),
-    path.join(codegenDir, 'mj.config.cjs'),
-  );
-  run(process.execPath, [mjCli, 'codegen', '--skipfiles'], codegenDir, {
-    TRUTH_MJ_ROOT: mjRoot,
-  });
-  const sqlFile = findNewestCodeGenSql(codegenDir);
-  if (!sqlFile) {
-    console.error(`No CodeGen_Run_*.sql written under ${codegenDir}`);
-    process.exit(1);
-  }
-  console.log(sqlFile);
-  process.exit(0);
+/** The pstruth entity count, and how many of them sanction direct-SQL insert, update and delete. */
+async function countEntities(pool) {
+  const res = await pool.request().query(`
+    SELECT COUNT(*) AS total,
+           SUM(CASE WHEN AllowDirectSQLInsert = 1 AND AllowDirectSQLUpdate = 1 AND AllowDirectSQLDelete = 1 THEN 1 ELSE 0 END) AS sanctioned
+    FROM __mj.Entity WHERE SchemaName = 'pstruth'`);
+  const row = res.recordset[0];
+  return { total: Number(row?.total ?? 0), sanctioned: Number(row?.sanctioned ?? 0) };
 }
 
 const dbName = dbCfg.Database;
@@ -79,7 +42,7 @@ if (!/^MJ_PS_PR\d+_|^test$/.test(dbName) && process.env.TRUTH_ALLOW_PROVISION_DB
   process.exit(1);
 }
 
-const prePool = await openPool();
+const prePool = await TruthConnection.OpenPool();
 try {
   const preRes = await prePool.request().query(`
     SELECT
@@ -104,44 +67,37 @@ run(
   mjRoot,
 );
 
-const pool = await openPool();
+// Register the tables as entities: CodeGen scoped to pstruth, database work only (--skipfiles), run from a private
+// folder so it never writes into the source tree.
+const codegenDir = path.join(root, '.run', 'codegen');
+mkdirSync(codegenDir, { recursive: true });
+copyFileSync(path.join(root, 'codegen', 'truth-codegen.config.cjs'), path.join(codegenDir, 'mj.config.cjs'));
+run(process.execPath, [mjCli, 'codegen', '--skipfiles'], codegenDir, { TRUTH_MJ_ROOT: mjRoot });
+
+const pool = await TruthConnection.OpenPool();
 try {
-  const totalRes = await pool
-    .request()
-    .query("SELECT COUNT(*) AS cnt FROM __mj.Entity WHERE SchemaName = 'pstruth'");
-  const n = Number(totalRes.recordset[0]?.cnt ?? 0);
+  const { total: n } = await countEntities(pool);
   console.log(`pstruth: ${n} entities`);
   if (n === 0) {
-    await pool.close();
-    process.exit(1);
+    process.exitCode = 1;
+  } else {
+    try {
+      run(
+        process.execPath,
+        [mjCli, 'sync', 'push', '--dir', path.join(root, 'metadata'), '--ci'],
+        mjRoot,
+      );
+    } finally {
+      // Keep metadata/entities/.pstruth-entities.json free of sync blocks in the working tree.
+      spawnSync(process.execPath, [path.join(root, 'scripts', 'gen-pstruth-ddl.mjs'), '--metadata'], {
+        cwd: root,
+        stdio: 'ignore',
+      });
+    }
+    const { sanctioned: m } = await countEntities(pool);
+    console.log(`pstruth: ${n} entities, direct SQL sanctioned on ${m}`);
+    if (m !== n) process.exitCode = 1;
   }
-
-  try {
-    run(
-      process.execPath,
-      [mjCli, 'sync', 'push', '--dir', path.join(root, 'metadata'), '--ci'],
-      mjRoot,
-    );
-  } finally {
-    // Keep metadata/entities/.pstruth-entities.json free of sync blocks in the working tree.
-    spawnSync(process.execPath, [path.join(root, 'scripts', 'gen-pstruth-ddl.mjs'), '--metadata'], {
-      cwd: root,
-      stdio: 'ignore',
-    });
-  }
-
-  const sanctionedRes = await pool
-    .request()
-    .query(
-      "SELECT COUNT(*) AS cnt FROM __mj.Entity WHERE SchemaName = 'pstruth' AND AllowDirectSQLInsert = 1 AND AllowDirectSQLUpdate = 1 AND AllowDirectSQLDelete = 1",
-    );
-  const m = Number(sanctionedRes.recordset[0]?.cnt ?? 0);
-  console.log(`pstruth: ${n} entities, direct SQL sanctioned on ${m}`);
+} finally {
   await pool.close();
-  if (m !== n) {
-    process.exit(1);
-  }
-} catch (err) {
-  await pool.close();
-  throw err;
 }

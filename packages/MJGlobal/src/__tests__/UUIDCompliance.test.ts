@@ -64,8 +64,6 @@ const KNOWN_EXCEPTIONS: Record<string, string[]> = {
     // Add file paths (relative to packages/) and the reason they're excepted
     // Example: 'SomePackage/src/file.ts': ['Uses numeric IDs, not UUIDs'],
     'Angular/Explorer/dashboards/src/Integration/components/mapping-workspace/mapping-workspace.component.ts': ['LocalID is a local string identifier (e.g. "pending-1"), not a UUID'],
-    'AI/PredictiveStudio/TruthSuite/src/data/catalog.ts': ['CatalogEntry.ID is a dataset code (e.g. "W1-signal", "T3-lag"), not a UUID'],
-    'AI/PredictiveStudio/TruthSuite/src/data/cli.ts': ['CatalogEntry.ID is a dataset code (e.g. "W1-signal", "T3-lag"), not a UUID'],
 };
 
 /** Normalize a path to forward slashes so EXCLUDE_PATTERNS and KNOWN_EXCEPTIONS lookups

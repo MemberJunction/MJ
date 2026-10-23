@@ -27,7 +27,7 @@ describe('cache', () => {
   });
   it('catalogs 9 worlds and 15 scenarios (14 specs + T3-lag)', () => {
     expect(CATALOG.filter((d) => d.Kind === 'world')).toHaveLength(9);
-    expect(CATALOG.filter((d) => d.Kind === 'scenario').map((d) => d.ID)).toContain('T3-lag');
+    expect(CATALOG.filter((d) => d.Kind === 'scenario').map((d) => d.Code)).toContain('T3-lag');
     expect(CATALOG.filter((d) => d.Kind === 'scenario')).toHaveLength(15);
   });
 });

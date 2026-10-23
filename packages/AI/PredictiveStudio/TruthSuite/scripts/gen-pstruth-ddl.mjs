@@ -52,29 +52,22 @@ const table = (name, cols) => {
 for (const id of ['C2', 'C4', 'D1c', 'D1r', 'D2', 'N1c', 'N1r', 'R1', 'R2p', 'R3', 'T1p', 'T2p', 'T3', 'T3lag', 'T4']) {
   table(`Scn_${id}`, scenarioColumns(id));
 }
-const REAL_R2 = [['tier', 'NVARCHAR(100)'], ['tenure_years', 'FLOAT'], ['prior_lapse', 'INT'], ['events_attended_y', 'INT'],
-  ['courses_completed_y', 'INT'], ['certs_held_y', 'INT'], ['committee_active_y', 'INT'], ['segment', 'NVARCHAR(100)'],
-  ['region', 'NVARCHAR(100)'], ['nondues_lines_y', 'INT'], ['nondues_spend_y', 'FLOAT']];
-table('Scn_R2real', [['ID', 'UNIQUEIDENTIFIER NOT NULL PRIMARY KEY'], ['EntityKey', 'NVARCHAR(50) NULL'], ['T', 'DATE NULL'], ...REAL_R2, ['Target', 'FLOAT NULL'], ['TruthScore', 'FLOAT NULL']]);
-table('Scn_T1real', [['ID', 'UNIQUEIDENTIFIER NOT NULL PRIMARY KEY'], ['EntityKey', 'NVARCHAR(50) NULL'], ['T', 'DATE NULL'], ['Target', 'FLOAT NULL'], ['TruthScore', 'FLOAT NULL']]);
-for (const id of ['T1p', 'T3', 'T4', 'T1real']) {
-  const base = id === 'T1real'
-    ? [['ID', 'UNIQUEIDENTIFIER NOT NULL PRIMARY KEY'], ['EntityKey', 'NVARCHAR(50) NULL'], ['T', 'DATE NULL'], ['Target', 'FLOAT NULL']]
-    : scenarioColumns(id).filter(([c]) => c !== 'TruthScore');
+for (const id of ['T1p', 'T3', 'T4']) {
+  const base = scenarioColumns(id).filter(([c]) => c !== 'TruthScore');
   const cal = [['MonthIndex', 'INT NOT NULL'], ['MonthOfYear', 'INT NOT NULL'], ['Month', 'NVARCHAR(3) NOT NULL'], ['TruthScore', 'FLOAT NULL']];
   table(`SeriesFrame_${id}`, [...base, ...cal]);
   table(`SeriesTrain_${id}`, [...base, ...cal]);
 }
-table('PersonYear', [['ID', 'UNIQUEIDENTIFIER NOT NULL PRIMARY KEY'], ['person_id', 'NVARCHAR(50) NOT NULL'], ['period_index', 'INT NOT NULL'],
-  ['decision_date', 'DATE NOT NULL'], ['year', 'INT NOT NULL'], ['renewed', 'INT NOT NULL'], ...REAL_R2, ['TruthScore', 'FLOAT NULL']]);
 emit('GO');
 
 if (process.argv.includes('--metadata')) {
   const entitiesDir = path.join(root, 'metadata', 'entities');
   mkdirSync(entitiesDir, { recursive: true });
+  // Looked up by table, not by name: CodeGen (run at provision) picks its own display-style name ("PS Truth: Scn C2s"),
+  // and this push renames each entity to the stable `PS Truth: <table>`.
   const records = tables.map((t) => ({
     primaryKey: {
-      ID: `@lookup:MJ: Entities.Name=PS Truth: ${t}`,
+      ID: `@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=${t}`,
     },
     fields: {
       Name: `PS Truth: ${t}`,

@@ -1,7 +1,7 @@
 [
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: W1_Person"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=W1_Person"
     },
     "fields": {
       "Name": "PS Truth: W1_Person",
@@ -15,7 +15,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: W1_MembershipYear"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=W1_MembershipYear"
     },
     "fields": {
       "Name": "PS Truth: W1_MembershipYear",
@@ -29,7 +29,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: W2_Person"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=W2_Person"
     },
     "fields": {
       "Name": "PS Truth: W2_Person",
@@ -43,7 +43,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: W2_MembershipYear"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=W2_MembershipYear"
     },
     "fields": {
       "Name": "PS Truth: W2_MembershipYear",
@@ -57,7 +57,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: W3_Person"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=W3_Person"
     },
     "fields": {
       "Name": "PS Truth: W3_Person",
@@ -71,7 +71,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: W3_MembershipYear"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=W3_MembershipYear"
     },
     "fields": {
       "Name": "PS Truth: W3_MembershipYear",
@@ -85,7 +85,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: W4_Person"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=W4_Person"
     },
     "fields": {
       "Name": "PS Truth: W4_Person",
@@ -99,7 +99,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: W4_MembershipYear"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=W4_MembershipYear"
     },
     "fields": {
       "Name": "PS Truth: W4_MembershipYear",
@@ -113,7 +113,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: W5_Person"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=W5_Person"
     },
     "fields": {
       "Name": "PS Truth: W5_Person",
@@ -127,7 +127,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: W5_MembershipYear"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=W5_MembershipYear"
     },
     "fields": {
       "Name": "PS Truth: W5_MembershipYear",
@@ -141,7 +141,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: W6_Person"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=W6_Person"
     },
     "fields": {
       "Name": "PS Truth: W6_Person",
@@ -155,7 +155,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: W6_MembershipYear"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=W6_MembershipYear"
     },
     "fields": {
       "Name": "PS Truth: W6_MembershipYear",
@@ -169,7 +169,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: W7_Person"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=W7_Person"
     },
     "fields": {
       "Name": "PS Truth: W7_Person",
@@ -183,7 +183,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: W7_MembershipYear"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=W7_MembershipYear"
     },
     "fields": {
       "Name": "PS Truth: W7_MembershipYear",
@@ -197,7 +197,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: W8_Person"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=W8_Person"
     },
     "fields": {
       "Name": "PS Truth: W8_Person",
@@ -211,7 +211,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: W8_MembershipYear"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=W8_MembershipYear"
     },
     "fields": {
       "Name": "PS Truth: W8_MembershipYear",
@@ -225,7 +225,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: W9_Person"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=W9_Person"
     },
     "fields": {
       "Name": "PS Truth: W9_Person",
@@ -239,7 +239,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: W9_EventRegistration"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=W9_EventRegistration"
     },
     "fields": {
       "Name": "PS Truth: W9_EventRegistration",
@@ -253,7 +253,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_C2"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=Scn_C2"
     },
     "fields": {
       "Name": "PS Truth: Scn_C2",
@@ -267,7 +267,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_C4"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=Scn_C4"
     },
     "fields": {
       "Name": "PS Truth: Scn_C4",
@@ -281,7 +281,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_D1c"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=Scn_D1c"
     },
     "fields": {
       "Name": "PS Truth: Scn_D1c",
@@ -295,7 +295,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_D1r"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=Scn_D1r"
     },
     "fields": {
       "Name": "PS Truth: Scn_D1r",
@@ -309,7 +309,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_D2"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=Scn_D2"
     },
     "fields": {
       "Name": "PS Truth: Scn_D2",
@@ -323,7 +323,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_N1c"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=Scn_N1c"
     },
     "fields": {
       "Name": "PS Truth: Scn_N1c",
@@ -337,7 +337,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_N1r"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=Scn_N1r"
     },
     "fields": {
       "Name": "PS Truth: Scn_N1r",
@@ -351,7 +351,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_R1"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=Scn_R1"
     },
     "fields": {
       "Name": "PS Truth: Scn_R1",
@@ -365,7 +365,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_R2p"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=Scn_R2p"
     },
     "fields": {
       "Name": "PS Truth: Scn_R2p",
@@ -379,7 +379,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_R3"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=Scn_R3"
     },
     "fields": {
       "Name": "PS Truth: Scn_R3",
@@ -393,7 +393,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_T1p"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=Scn_T1p"
     },
     "fields": {
       "Name": "PS Truth: Scn_T1p",
@@ -407,7 +407,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_T2p"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=Scn_T2p"
     },
     "fields": {
       "Name": "PS Truth: Scn_T2p",
@@ -421,7 +421,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_T3"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=Scn_T3"
     },
     "fields": {
       "Name": "PS Truth: Scn_T3",
@@ -435,7 +435,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_T3lag"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=Scn_T3lag"
     },
     "fields": {
       "Name": "PS Truth: Scn_T3lag",
@@ -449,7 +449,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_T4"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=Scn_T4"
     },
     "fields": {
       "Name": "PS Truth: Scn_T4",
@@ -463,35 +463,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_R2real"
-    },
-    "fields": {
-      "Name": "PS Truth: Scn_R2real",
-      "TrackRecordChanges": false,
-      "TrustServerCacheCompletely": false,
-      "DeleteType": "Hard",
-      "AllowDirectSQLInsert": true,
-      "AllowDirectSQLUpdate": true,
-      "AllowDirectSQLDelete": true
-    }
-  },
-  {
-    "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: Scn_T1real"
-    },
-    "fields": {
-      "Name": "PS Truth: Scn_T1real",
-      "TrackRecordChanges": false,
-      "TrustServerCacheCompletely": false,
-      "DeleteType": "Hard",
-      "AllowDirectSQLInsert": true,
-      "AllowDirectSQLUpdate": true,
-      "AllowDirectSQLDelete": true
-    }
-  },
-  {
-    "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: SeriesFrame_T1p"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=SeriesFrame_T1p"
     },
     "fields": {
       "Name": "PS Truth: SeriesFrame_T1p",
@@ -505,7 +477,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: SeriesTrain_T1p"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=SeriesTrain_T1p"
     },
     "fields": {
       "Name": "PS Truth: SeriesTrain_T1p",
@@ -519,7 +491,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: SeriesFrame_T3"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=SeriesFrame_T3"
     },
     "fields": {
       "Name": "PS Truth: SeriesFrame_T3",
@@ -533,7 +505,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: SeriesTrain_T3"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=SeriesTrain_T3"
     },
     "fields": {
       "Name": "PS Truth: SeriesTrain_T3",
@@ -547,7 +519,7 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: SeriesFrame_T4"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=SeriesFrame_T4"
     },
     "fields": {
       "Name": "PS Truth: SeriesFrame_T4",
@@ -561,52 +533,10 @@
   },
   {
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: SeriesTrain_T4"
+      "ID": "@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=SeriesTrain_T4"
     },
     "fields": {
       "Name": "PS Truth: SeriesTrain_T4",
-      "TrackRecordChanges": false,
-      "TrustServerCacheCompletely": false,
-      "DeleteType": "Hard",
-      "AllowDirectSQLInsert": true,
-      "AllowDirectSQLUpdate": true,
-      "AllowDirectSQLDelete": true
-    }
-  },
-  {
-    "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: SeriesFrame_T1real"
-    },
-    "fields": {
-      "Name": "PS Truth: SeriesFrame_T1real",
-      "TrackRecordChanges": false,
-      "TrustServerCacheCompletely": false,
-      "DeleteType": "Hard",
-      "AllowDirectSQLInsert": true,
-      "AllowDirectSQLUpdate": true,
-      "AllowDirectSQLDelete": true
-    }
-  },
-  {
-    "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: SeriesTrain_T1real"
-    },
-    "fields": {
-      "Name": "PS Truth: SeriesTrain_T1real",
-      "TrackRecordChanges": false,
-      "TrustServerCacheCompletely": false,
-      "DeleteType": "Hard",
-      "AllowDirectSQLInsert": true,
-      "AllowDirectSQLUpdate": true,
-      "AllowDirectSQLDelete": true
-    }
-  },
-  {
-    "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=PS Truth: PersonYear"
-    },
-    "fields": {
-      "Name": "PS Truth: PersonYear",
       "TrackRecordChanges": false,
       "TrustServerCacheCompletely": false,
       "DeleteType": "Hard",

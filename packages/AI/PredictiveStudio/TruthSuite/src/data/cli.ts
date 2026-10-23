@@ -24,7 +24,7 @@ if (set !== 'base' && set !== 't2' && set !== 'n400') {
   process.exit(1);
 }
 
-const entries = values.only ? CATALOG.filter((e) => e.ID === values.only) : CATALOG;
+const entries = values.only ? CATALOG.filter((e) => e.Code === values.only) : CATALOG;
 if (entries.length === 0) {
   console.error(`No dataset matches --only ${values.only}`);
   process.exit(1);
@@ -33,9 +33,9 @@ if (entries.length === 0) {
 const dataRoot = DataCache.Root();
 for (const entry of entries) {
   const t0 = performance.now();
-  const seeds = DatasetSeeds.SeedSet(entry.Kind, entry.ID, set);
+  const seeds = DatasetSeeds.SeedSet(entry.Kind, entry.Code, set);
   const specHash = DatasetCatalog.EntrySpecHash(entry);
-  const hashDir = path.join(dataRoot, entry.Kind, entry.ID, specHash.slice(0, 12));
+  const hashDir = path.join(dataRoot, entry.Kind, entry.Code, specHash.slice(0, 12));
   mkdirSync(hashDir, { recursive: true });
   const n400File = path.join(hashDir, 'n400.sha256');
   if (values.stream) rmSync(n400File, { force: true });
@@ -50,5 +50,5 @@ for (const entry of entries) {
     }
   }
   const sec = ((performance.now() - t0) / 1000).toFixed(2);
-  console.log(`${entry.Kind}/${entry.ID}: ${seeds.length} seed(s) in ${sec}s`);
+  console.log(`${entry.Kind}/${entry.Code}: ${seeds.length} seed(s) in ${sec}s`);
 }
