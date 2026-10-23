@@ -20,4 +20,12 @@ describe('@memberjunction/ng-artifacts', () => {
     expect(BaseArtifactViewerPluginComponent).toBeTypeOf('function');
     expect(ArtifactIconService).toBeTypeOf('function');
   });
+
+  it('normalizes Font Awesome Pro-only metadata icons to Font Awesome Free equivalents', () => {
+    const svc = new ArtifactIconService();
+    expect(svc.NormalizeMetadataIcon('fa-solid fa-brackets-curly')).toBe('fa-solid fa-file-code');
+    expect(svc.NormalizeMetadataIcon('fa-solid fa-chart-mixed')).toBe('fa-solid fa-chart-line');
+    expect(svc.NormalizeMetadataIcon('fa-solid fa-ts')).toBe('fa-solid fa-file-code');
+    expect(svc.NormalizeMetadataIcon('fa-solid fa-table')).toBe('fa-solid fa-table');
+  });
 });

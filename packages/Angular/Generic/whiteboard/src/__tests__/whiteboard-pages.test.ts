@@ -578,7 +578,7 @@ describe('item-tool descriptions — the shared active-page sentence', () => {
   ];
 
   it('every ITEM tool carries the note exactly once; page tools never do', () => {
-    expect(WHITEBOARD_TOOL_DEFINITIONS).toHaveLength(14);
+    expect(WHITEBOARD_TOOL_DEFINITIONS).toHaveLength(15);
     for (const def of WHITEBOARD_TOOL_DEFINITIONS) {
       const occurrences = def.Description.split(WHITEBOARD_ACTIVE_PAGE_NOTE.trim()).length - 1;
       if (pageToolNames.includes(def.Name)) {

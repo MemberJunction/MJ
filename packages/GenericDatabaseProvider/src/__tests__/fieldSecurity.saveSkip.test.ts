@@ -82,6 +82,10 @@ class SaveSkipTestProvider extends GenericDatabaseProvider {
         return { sql: '-- test save' } as never;
     }
 
+    protected override ProjectSaveCallToDatestamps(): { sql: string } {
+        return { sql: '-- test save datestamps' } as never;
+    }
+
     protected override WrapSaveCallWithRecordChange(): { sql: string } {
         return { sql: '-- test save+rc' } as never;
     }

@@ -246,8 +246,10 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
                         `Please synthesize ALL workflow steps above into a clear, direct, comprehensive final response for the user (covering every completed step's findings, SQL queries, data tables, strategic analysis, and report summaries, and briefly explaining any conditional steps that were skipped because their prerequisite condition was not met).`,
                 }],
                 // Prevent the continuation synthesis turn from auto-hydrating an unrelated artifact
-                // from an earlier conversation turn into payload.
+                // or prior scratch payload into payload, while still recording LastRunID lineage.
                 inputArtifacts: [],
+                payload: {},
+                lastRunId: targetRun.ID,
                 contextUser: actingUser,
                 conversationId: origin?.ConversationID ?? undefined,
                 conversationDetailId: targetDetailId,
@@ -302,12 +304,19 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
             }
 
             if (origin) {
+                // When updating the originating message in-place (origin.IsLatest === true),
+                // keep the completion event pointed at the primary orchestrating run (targetRun.ID)
+                // so the message's gear icon opens the full workflow-orchestrating run rather than
+                // the 2-step post-workflow synthesis run.
+                const completionRunId = origin.IsLatest
+                    ? (targetRun.ID || result?.agentRun?.ID || params.SubmittedByAgentRunID)
+                    : (result?.agentRun?.ID ?? params.SubmittedByAgentRunID);
                 this.publishCompletion(
                     ownerUserId,
                     targetDetailId ?? params.ConversationDetailID ?? '',
                     params.ConversationDetailID,
                     origin.ConversationID,
-                    result?.agentRun?.ID ?? params.SubmittedByAgentRunID,
+                    completionRunId,
                     result?.success !== false,
                 );
             }
@@ -413,7 +422,7 @@ export class TaskGraphContinuationDeliverer implements TaskContinuationDeliverer
         // `MJConversationDetailEntityExtended.Save()` refuses writes when the entity's context user
         // is not the conversation owner (`this.contextUser` is the server system user). Re-bind
         // `OriginDetail` to `actingUser` whenever `ownerUserId` was discovered after loading `detail`.
-        if (actingUser.ID !== initialUser.ID) {
+        if (!UUIDsEqual(actingUser.ID, initialUser.ID)) {
             const writableDetail = await provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', actingUser);
             if (await writableDetail.Load(conversationDetailID)) {
                 detail = writableDetail;

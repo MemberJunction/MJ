@@ -260,31 +260,56 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
     /**
      * Prefers a structured payload over prose so downstream tasks get data rather than text,
      * while preserving `agentRun.Message` when the payload object has no `message`/`summary`
-     * property (e.g., when a sub-agent returns a clarification question or human-readable summary).
+     * property (e.g., when a sub-agent returns a clarification question or human-readable summary)
+     * and normalizing `results` / `result` / `succeeded` for downstream condition evaluation.
      */
     private extractOutput(result: unknown): unknown {
         const r = result as {
+            success?: boolean;
             payload?: unknown;
             agentRun?: { Message?: string; FinalStep?: string };
         } | null;
         const runMessage = typeof r?.agentRun?.Message === 'string' ? r.agentRun.Message.trim() : '';
+        const isChatStop = r?.agentRun?.FinalStep === 'Chat';
         if (r?.payload != null) {
-            if (
-                runMessage &&
-                typeof r.payload === 'object' &&
-                !Array.isArray(r.payload)
-            ) {
+            if (typeof r.payload === 'object' && !Array.isArray(r.payload)) {
                 const payloadObj = r.payload as Record<string, unknown>;
-                if (payloadObj.message == null && payloadObj.summary == null) {
-                    return {
-                        ...payloadObj,
-                        message: runMessage,
-                        ...(r.agentRun?.FinalStep === 'Chat' ? { finalStep: 'Chat' } : {}),
-                    };
+                const enriched: Record<string, unknown> = { ...payloadObj };
+
+                if (
+                    enriched.results &&
+                    typeof enriched.results === 'object' &&
+                    !Array.isArray(enriched.results)
+                ) {
+                    for (const [k, v] of Object.entries(enriched.results as Record<string, unknown>)) {
+                        if (enriched[k] === undefined) {
+                            enriched[k] = v;
+                        }
+                    }
                 }
+                if (enriched.results !== undefined && enriched.result === undefined) {
+                    enriched.result = enriched.results;
+                } else if (enriched.result !== undefined && enriched.results === undefined) {
+                    enriched.results = enriched.result;
+                }
+
+                if (runMessage && enriched.message == null && enriched.summary == null) {
+                    enriched.message = runMessage;
+                }
+                if (isChatStop) {
+                    enriched.finalStep = 'Chat';
+                } else if (typeof r.success === 'boolean' && enriched.succeeded === undefined) {
+                    enriched.succeeded = r.success;
+                }
+                return enriched;
             }
             return r.payload;
         }
-        return runMessage || null;
+        if (runMessage) {
+            return isChatStop
+                ? { message: runMessage, finalStep: 'Chat' }
+                : { message: runMessage, succeeded: r?.success === true };
+        }
+        return null;
     }
 }

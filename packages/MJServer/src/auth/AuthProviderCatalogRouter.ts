@@ -13,6 +13,7 @@ import { rateLimit } from 'express-rate-limit';
 import { LogError, type PublicAuthProviderCatalog } from '@memberjunction/core';
 import { AuthProviderEngine } from './AuthProviderEngine.js';
 import { EMPTY_PUBLIC_LOGIN_SCREEN, LoginScreenEngine } from './LoginScreenEngine.js';
+import { AttachLocalDevAuthRoutes } from './localDevAuth.js';
 
 /** Mount path for the public catalog router. */
 export const AUTH_CATALOG_MOUNT_PATH = '/auth';
@@ -97,6 +98,8 @@ export function CreateAuthProviderCatalogRouter(): Router {
       res.status(200).json(EMPTY_PUBLIC_LOGIN_SCREEN);
     }
   });
+
+  AttachLocalDevAuthRoutes(router);
 
   return router;
 }

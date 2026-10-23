@@ -312,7 +312,7 @@ export class ArtifactToolManager {
    *        warning telling the agent the model can't process the artifact.
    *        Pass `undefined` to disable the check (legacy callers).
    */
-  ToManifestString(opts?: { supportedMimeTypes?: ReadonlyArray<string> | null }): string {
+  ToManifestString(opts?: { supportedMimeTypes?: ReadonlyArray<string> | null; nativeTools?: boolean }): string {
     if (this.artifacts.size === 0) return '';
 
     const lines: string[] = ['## Available Artifacts\n'];
@@ -360,6 +360,11 @@ export class ArtifactToolManager {
     lines.push('artifact tools below (e.g. `get_full`), or use one as a pipeline source (e.g. `get_full`');
     lines.push('then `where`/`select`/`distinct`). NEVER ask the user to paste, provide, upload, or "send"');
     lines.push('an artifact\'s content, and do NOT request a data snapshot to obtain it — you already have it.');
+    if (opts?.nativeTools) {
+      // Native-only mode: artifact tools are called through the `artifact_tool` tool, and there is no artifactDirective.
+      lines.push('IMPORTANT: Always use the single-letter artifact ID (A, B, C, etc.) as the `artifactId` argument of `artifact_tool` — NOT the artifact name.');
+      return lines.join('\n');
+    }
     lines.push('IMPORTANT: Always use the single-letter artifact ID (A, B, C, etc.) as the `artifactId` value in `artifactToolCalls` — NOT the artifact name.');
     lines.push('When setting `artifactDirective.targetArtifactId` (with `behavior: "version-source"`), you may use either the artifact\'s `artifactId` UUID or its single-letter ID (A, B, C, etc.).');
     return lines.join('\n');
