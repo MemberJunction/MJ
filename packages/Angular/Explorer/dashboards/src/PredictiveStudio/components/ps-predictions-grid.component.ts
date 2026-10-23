@@ -192,17 +192,17 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   public readonly Math = Math;
 
   /** Most predictions the grid loads for one run. */
-  private static readonly MaxDetailRows = 50_000;
-  private static readonly DetailPageSize = 1000;
+  private static readonly maxDetailRows = 50_000;
+  private static readonly detailPageSize = 1000;
 
   /** The cap, formatted for the footer notice. */
   public get DetailRowCapLabel(): string {
-    return PSPredictionsGridComponent.MaxDetailRows.toLocaleString('en-US');
+    return PSPredictionsGridComponent.maxDetailRows.toLocaleString('en-US');
   }
 
   public isLoading = false;
   public loadError: string | null = null;
-  /** True when the run has more predictions than {@link PSPredictionsGridComponent.MaxDetailRows}; only the first are shown. */
+  /** True when the run has more predictions than {@link PSPredictionsGridComponent.maxDetailRows}; only the first are shown. */
   public DetailRowsCapped = false;
 
   public AllRows: PredictionGridRow[] = [];
@@ -836,7 +836,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   }
 
   /**
-   * Reads a run's process run details one keyset page at a time, up to {@link PSPredictionsGridComponent.MaxDetailRows}.
+   * Reads a run's process run details one keyset page at a time, up to {@link PSPredictionsGridComponent.maxDetailRows}.
    * Sets {@link DetailRowsCapped} when the run has more. Returns null when a page fails to load.
    */
   private async loadDetailRows(provider: IMetadataProvider, runId: string, user: UserInfo | undefined): Promise<PredictionDetailRow[] | null> {
@@ -854,7 +854,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
           EntityName: 'MJ: Process Run Details',
           ExtraFilter: `ProcessRunID = '${EscapeSQLString(runId)}'`,
           Fields: ['ID', 'RecordID', 'ResultPayload', 'Status', 'CompletedAt', '__mj_CreatedAt'],
-          MaxRows: PSPredictionsGridComponent.DetailPageSize,
+          MaxRows: PSPredictionsGridComponent.detailPageSize,
           AfterKey: lastKey,
           ResultType: 'simple',
         },
@@ -864,10 +864,10 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
         return null;
       }
       rows.push(...page.Results);
-      if (page.Results.length < PSPredictionsGridComponent.DetailPageSize) {
+      if (page.Results.length < PSPredictionsGridComponent.detailPageSize) {
         return rows;
       }
-      if (rows.length >= PSPredictionsGridComponent.MaxDetailRows) {
+      if (rows.length >= PSPredictionsGridComponent.maxDetailRows) {
         this.DetailRowsCapped = true;
         return rows;
       }

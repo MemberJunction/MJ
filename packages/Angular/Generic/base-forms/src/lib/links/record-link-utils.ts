@@ -192,10 +192,8 @@ export function ResolveRecordLinkTarget(options: ResolveRecordLinkOptions): Reso
             } else {
                 const pkFieldName =
                     fieldInfo.RelatedEntityFieldName ||
-                    relatedEntity?.FirstPrimaryKey?.Name; // first-pk-ok: foreign-key target, single-column by design (polymorphic FKs take the FromURLSegment branch)
-                if (!pkFieldName) {
-                    return null; // no resolvable target key: no link rather than a guessed column name
-                }
+                    relatedEntity?.FirstPrimaryKey?.Name || // first-pk-ok: foreign-key target, single-column by design (polymorphic FKs take the FromURLSegment branch)
+                    'ID';
                 primaryKey = new CompositeKey([new KeyValuePair(pkFieldName, rawFkVal)]);
             }
 

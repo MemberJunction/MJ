@@ -531,10 +531,6 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
         if (!rawId) {
             return null;
         }
-        if (!entityInfo) {
-            return null;
-        }
-        // Reads a bare value (mapped onto the entity's first PK) or a prefixed `F1|v1||F2|v2` segment.
         return CompositeKey.FromURLSegment(entityInfo, rawId);
     }
 

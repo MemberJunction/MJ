@@ -190,7 +190,6 @@ jobs:
             .github/workflows/claude-pack.yml
             .github/workflows/release-test.yml
             .github/workflows/publish.yml
-            .github/workflows/ps-truth-suite.yml
           PATHS
           # Glob -> anchored ERE: escape regex metacharacters, then `**` -> `.*` and `*` -> `[^/]*`.
           RE="$(sed -e 's/^ *//' -e '/^#/d' -e '/^$/d' \
