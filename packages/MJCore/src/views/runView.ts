@@ -217,6 +217,21 @@ export class RunViewParams {
      */
     MaxRows?: number;
     /**
+     * optional - when true, the provider skips the EXTRA count query it would otherwise run to
+     * populate `TotalRowCount` when the returned page comes back exactly full
+     * (`Results.length === MaxRows`); `TotalRowCount` then reports the rows actually returned.
+     * That fallback count is a second, sequential round trip after the data query — and for a
+     * single-row existence/lookup read (`MaxRows: 1`) it fires on every HIT, so a hot lookup path
+     * pays double round trips to compute a total it never reads. Set this on reads that only
+     * consume `Results`. Ignored for `ResultType: 'count_only'`, whose entire point is the count.
+     *
+     * Scope: it also suppresses the up-front count a PAGINATED read (`StartRow` with `MaxRows`)
+     * runs, so a paginated caller that needs "1-100 of N" must leave it unset. With the flag,
+     * `TotalRowCount` is always the number of rows returned. Calls with and without it get
+     * separate cache slots, since their `TotalRowCount` differs.
+     */
+    SkipTotalRowCount?: boolean;
+    /**
      * optional - if provided, this value will be used to offset the rows returned.
      *
      * **Note on deep pagination**: `StartRow` is implemented via SQL `OFFSET` semantics,
@@ -525,6 +540,7 @@ export class RunViewParams {
         if (a.SaveViewResults !== b.SaveViewResults) return false;
         if (a.IgnoreMaxRows !== b.IgnoreMaxRows) return false;
         if (a.MaxRows !== b.MaxRows) return false;
+        if (a.SkipTotalRowCount !== b.SkipTotalRowCount) return false;
         if (a.StartRow !== b.StartRow) return false;
         if (!RunViewParams.afterKeyEqual(a.AfterKey, b.AfterKey)) return false;
         if (a.ForceAuditLog !== b.ForceAuditLog) return false;
