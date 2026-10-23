@@ -396,6 +396,15 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
   }
 
   /**
+   * Create a brand-new view directly in the Unified View Studio slide-over panel
+   * without an intermediate modal dialog.
+   */
+  OnCreateNewView(): void {
+    this.SaveViewRequested.emit({ SaveAsNew: true });
+    this.CloseDropdown();
+  }
+
+  /**
    * Request to manage views
    */
   OnManageViews(): void {

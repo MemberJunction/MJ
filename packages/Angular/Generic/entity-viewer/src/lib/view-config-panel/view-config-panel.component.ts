@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChanges, ChangeDetectorRef, HostListener } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { EntityInfo, EntityFieldInfo, EntityAlternateBaseViewInfo, Metadata, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityAlternateBaseViewInfo, EntityFieldTSType, Metadata, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
 import {
   MJUserViewEntityExtended,
   ViewColumnInfo,
@@ -10,7 +10,11 @@ import {
   MJUserViewEntity_IColumnTextStyle as ColumnTextStyle,
   MJUserViewEntity_IColumnConditionalRule as ColumnConditionalRule,
   MJUserViewEntity_IGridAggregatesConfig as ViewGridAggregatesConfig,
+  MJUserViewEntity_IGridAggregateDisplay as ViewGridAggregateDisplay,
   MJUserViewEntity_IGridAggregate as ViewGridAggregate,
+  MJUserViewEntity_IGridDisplayState as ViewGridDisplayState,
+  MJUserViewEntity_IDisplayCardState as ViewCardState,
+  MJUserViewEntity_ITimelineState as ViewTimelineState,
   DEFAULT_AGGREGATE_DISPLAY,
   UserInfoEngine
 } from '@memberjunction/core-entities';
@@ -38,6 +42,8 @@ export interface ColumnConfig {
   field: EntityFieldInfo;
   /** Column formatting configuration */
   format?: ColumnFormat;
+  /** Optional column pinning position ('left', 'right', or null) */
+  pinned?: 'left' | 'right' | null;
 }
 
 /**
@@ -55,6 +61,8 @@ export interface ViewSaveEvent {
   Name: string;
   Description: string;
   IsShared: boolean;
+  /** Optional flag indicating whether this view is the default view for the entity */
+  IsDefault?: boolean;
   SaveAsNew: boolean;
   Columns: ColumnConfig[];
   /** @deprecated Use SortItems instead for multi-sort support */
@@ -71,6 +79,16 @@ export interface ViewSaveEvent {
   AggregatesConfig: ViewGridAggregatesConfig | null;
   /** Optional semantic name of the alternate base view selected for this view */
   AlternateBaseView?: string | null;
+  /** Optional flag locking WhereClause to a custom SQL expression */
+  CustomWhereClause?: boolean;
+  /** Optional custom SQL WHERE clause when CustomWhereClause is true */
+  WhereClause?: string;
+  /** Optional grid display preferences (rowHeight, wrapText) */
+  GridDisplayState?: ViewGridDisplayState | null;
+  /** Optional card display preferences (cardSize) */
+  CardDisplayState?: ViewCardState | null;
+  /** Optional timeline display preferences (dateFieldName, segmentGrouping, orientation) */
+  TimelineState?: ViewTimelineState | null;
 }
 
 /**
@@ -205,6 +223,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   public ViewName: string = '';
   public ViewDescription: string = '';
   public IsShared: boolean = false;
+  public IsDefault: boolean = false;
   public AlternateBaseView: string | null = null;
   public Columns: ColumnConfig[] = [];
   /** @deprecated Use sortItems instead */
@@ -213,6 +232,23 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   public SortDirection: 'asc' | 'desc' = 'asc';
   /** Multi-column sort configuration (ordered by priority) */
   public SortItems: SortItem[] = [];
+
+  // Unified View Studio: Pinned Identity Header & Progressive Disclosure state
+  public IsCreatingNewView: boolean = false;
+  public ShowDescriptionEditor: boolean = false;
+  public ShowGeneratedSmartSql: boolean = false;
+  public ShowAdvancedSqlSection: boolean = false;
+  public CustomWhereClause: boolean = false;
+  public WhereClause: string = '';
+  public ShowDisplayOptionsSection: boolean = false;
+  public GridRowHeight: 'compact' | 'normal' | 'comfortable' = 'normal';
+  public GridWrapText: boolean = false;
+  public CardSize: 'small' | 'medium' | 'large' = 'medium';
+  public TimelineDateField: string = '';
+  public TimelineGrouping: 'none' | 'day' | 'week' | 'month' | 'quarter' | 'year' = 'month';
+  public TimelineOrientation: 'vertical' | 'horizontal' = 'vertical';
+  public ShowAggregateDisplaySection: boolean = false;
+  public AggregateDisplay: Required<ViewGridAggregateDisplay> = { ...DEFAULT_AGGREGATE_DISPLAY };
 
   // Sort drag state
   public DraggedSortItem: SortItem | null = null;
@@ -286,6 +322,22 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    */
   get IsIconOnlyMode(): boolean {
     return this.PanelWidth < this.ICON_ONLY_THRESHOLD;
+  }
+
+  /**
+   * Whether the panel is currently in expanded wide mode
+   */
+  get IsWideMode(): boolean {
+    return this.PanelWidth >= 680;
+  }
+
+  /**
+   * Toggle between standard (520px) and wide (740px) studio width
+   */
+  ToggleWideMode(): void {
+    this.PanelWidth = this.IsWideMode ? this.DEFAULT_PANEL_WIDTH : 740;
+    void this.savePanelWidth();
+    this.cdr.detectChanges();
   }
 
   private metadata = this.ProviderToUse;
@@ -411,11 +463,14 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   ngOnChanges(changes: SimpleChanges): void {
     // Reset to first tab and clear search when panel opens
     if (changes['IsOpen'] && this.IsOpen) {
-      // BUG-011: If DefaultSaveAsNew is set, open on Settings tab with name focused
-      this.ActiveTab = this.DefaultSaveAsNew ? 'settings' : 'columns';
+      // Unified View Studio: open on Filters & Source when creating a new view, otherwise Columns
+      this.ActiveTab = this.DefaultSaveAsNew ? 'filters' : 'columns';
       this.ColumnSearchText = '';
       this.FormatEditingColumn = null;
       this.IsBaseViewDropdownOpen = false;
+      this.ShowGeneratedSmartSql = false;
+      this.ShowDisplayOptionsSection = false;
+      this.ShowAggregateDisplaySection = false;
       this._localSaving = false;
       // Also close any open aggregate dialog
       this.ShowAggregateDialog = false;
@@ -469,14 +524,6 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       return;
     }
 
-    // Initialize columns from entity fields (including __mj_ fields for audit/timestamp info).
-    //
-    // Field security: a field the user cannot READ is not offered as a column at all. The grid
-    // already refuses to render its values, so listing it here would only advertise the NAME of a
-    // column they can never populate — and invite them to "fix" a column that will always be
-    // blank. This is a rendering surface, so filtering is correct here; the saved view's stored
-    // column preferences are deliberately left alone (see EntityDataGrid.filterToExistingFields —
-    // a denial is reversible, and dropping the preference would not restore it on re-grant).
     const denied = this.deniedReadFields();
     this.Columns = this.Entity.Fields
       .filter(field => !denied.has(field.Name.trim().toLowerCase()))
@@ -489,7 +536,8 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
         width: field.DefaultColumnWidth || null,
         orderIndex: index,
         field,
-        format: undefined
+        format: undefined,
+        pinned: null
       }));
 
     // Priority 1: Use currentGridState if available (reflects live grid state including resizes)
@@ -523,6 +571,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
             column.visible = !vc.hidden;
             column.width = vc.width || null;
             column.orderIndex = vc.orderIndex ?? idx;
+            column.pinned = vc.pinned ?? null;
             // Apply userDisplayName if present
             if (vc.userDisplayName) {
               column.userDisplayName = vc.userDisplayName;
@@ -556,12 +605,28 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     // Initialize filter fields from entity
     this.FilterFields = this.buildFilterFields();
 
+    const defaultTimelineDateField = this.AvailableDateFields[0]?.Name || '';
+
     // Apply view entity metadata (name, description, etc.) if available
     if (this.ViewEntity) {
+      this.IsCreatingNewView = false;
       this.ViewName = this.ViewEntity.Name;
       this.ViewDescription = this.ViewEntity.Description || '';
+      this.ShowDescriptionEditor = !!this.ViewDescription.trim();
       this.IsShared = this.ViewEntity.IsShared;
+      this.IsDefault = Boolean(this.ViewEntity.IsDefault);
       this.AlternateBaseView = this.ViewEntity.AlternateBaseView || null;
+      this.CustomWhereClause = Boolean(this.ViewEntity.CustomWhereClause);
+      this.WhereClause = this.ViewEntity.WhereClause || '';
+      this.ShowAdvancedSqlSection = this.CustomWhereClause;
+
+      const displayState = this.ViewEntity.ParsedDisplayState;
+      this.GridRowHeight = displayState?.grid?.rowHeight || 'normal';
+      this.GridWrapText = Boolean(displayState?.grid?.wrapText);
+      this.CardSize = displayState?.cards?.cardSize || this.ViewEntity.CardStateObject?.cardSize || 'medium';
+      this.TimelineDateField = displayState?.timeline?.dateFieldName || defaultTimelineDateField;
+      this.TimelineGrouping = displayState?.timeline?.segmentGrouping || 'month';
+      this.TimelineOrientation = displayState?.timeline?.orientation || 'vertical';
 
       // Apply view's smart filter configuration
       this.SmartFilterEnabled = this.ViewEntity.SmartFilterEnabled || false;
@@ -584,10 +649,23 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       }
     } else {
       // Default view or pending new view — use pending values if creating a new view
+      this.IsCreatingNewView = this.DefaultSaveAsNew;
       this.ViewName = this.DefaultSaveAsNew ? this.PendingNewViewName : '';
       this.ViewDescription = this.DefaultSaveAsNew ? this.PendingNewViewDescription : '';
+      this.ShowDescriptionEditor = !!this.ViewDescription.trim();
       this.IsShared = this.DefaultSaveAsNew ? this.PendingNewViewIsShared : false;
+      this.IsDefault = false;
       this.AlternateBaseView = this.PendingNewViewAlternateBaseView || null;
+      this.CustomWhereClause = false;
+      this.WhereClause = '';
+      this.ShowAdvancedSqlSection = false;
+      this.GridRowHeight = 'normal';
+      this.GridWrapText = false;
+      this.CardSize = 'medium';
+      this.TimelineDateField = defaultTimelineDateField;
+      this.TimelineGrouping = 'month';
+      this.TimelineOrientation = 'vertical';
+
       if (!this.CurrentGridState?.sortSettings?.length) {
         this.SortField = null;
         this.SortDirection = 'asc';
@@ -616,6 +694,15 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       this.Aggregates = [...this.CurrentGridState.aggregates.expressions];
     } else {
       this.Aggregates = [];
+    }
+
+    if (this.CurrentGridState?.aggregates?.display) {
+      this.AggregateDisplay = {
+        ...DEFAULT_AGGREGATE_DISPLAY,
+        ...this.CurrentGridState.aggregates.display
+      };
+    } else {
+      this.AggregateDisplay = { ...DEFAULT_AGGREGATE_DISPLAY };
     }
 
     this.cdr.detectChanges();
@@ -757,6 +844,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
         column.visible = !gc.hidden;
         column.width = gc.width || null;
         column.orderIndex = gc.orderIndex ?? idx;
+        column.pinned = gc.pinned ?? null;
         if (gc.DisplayName) {
           column.displayName = gc.DisplayName;
         }
@@ -814,6 +902,18 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   /**
+   * Get date/time fields available on the entity for Timeline configuration
+   */
+  get AvailableDateFields(): EntityFieldInfo[] {
+    if (!this.Entity) return [];
+    return this.Entity.Fields.filter(f =>
+      f.TSType === EntityFieldTSType.Date ||
+      f.Type.toLowerCase().includes('date') ||
+      f.Type.toLowerCase().includes('time')
+    );
+  }
+
+  /**
    * Check if the current user can edit the view
    */
   get CanEdit(): boolean {
@@ -827,6 +927,136 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   get CanDelete(): boolean {
     if (!this.ViewEntity) return false; // Can't delete default
     return this.ViewEntity.UserCanDelete;
+  }
+
+  // ========================================
+  // UNIFIED VIEW STUDIO: IDENTITY & RECIPE CHIPS
+  // ========================================
+
+  /**
+   * True when the current configuration has an active filter, alternate base view, or custom SQL
+   * that requires a named view rather than the personal default layout setting.
+   */
+  get HasActiveFilterOrBaseView(): boolean {
+    const hasSmart = this.SmartFilterEnabled && !!this.SmartFilterPrompt.trim();
+    const hasRules = this.GetFilterCount() > 0;
+    const hasAbv = !!this.AlternateBaseView?.trim();
+    const hasCustomSql = this.CustomWhereClause && !!this.WhereClause.trim();
+    return hasSmart || hasRules || hasAbv || hasCustomSql;
+  }
+
+  /**
+   * True when the panel is in "Creating New Named View" mode (either opened with DefaultSaveAsNew,
+   * promoted via "Save as Named View...", or automatically promoted because a filter/ABV was configured).
+   */
+  get IsCreatingNamedView(): boolean {
+    return !this.ViewEntity && (this.DefaultSaveAsNew || this.IsCreatingNewView || this.HasActiveFilterOrBaseView);
+  }
+
+  /**
+   * Promote the panel from Personal Default View mode to Creating New Named View mode in-place
+   */
+  PromoteToNewView(): void {
+    this.IsCreatingNewView = true;
+    if (!this.ViewName.trim()) {
+      this.ViewName = this.BuildSuggestedViewName();
+    }
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Build a smart suggested name based on the entity, alternate base view, or active filter
+   */
+  BuildSuggestedViewName(): string {
+    const entityName = this.Entity?.DisplayNameOrName ?? this.Entity?.Name ?? 'View';
+    const prompt = this.SmartFilterEnabled ? this.SmartFilterPrompt?.trim() : '';
+    if (prompt) {
+      const budget = Math.max(60 - entityName.length - 3, 12);
+      const suffix = prompt.length > budget ? `${prompt.slice(0, budget - 1).trimEnd()}…` : prompt;
+      return `${entityName} — ${suffix}`;
+    }
+    if (this.AlternateBaseView?.trim()) {
+      return `${entityName} — ${this.SelectedBaseViewLabel}`;
+    }
+    if (this.GetFilterCount() > 0 || (this.CustomWhereClause && this.WhereClause.trim())) {
+      return `${entityName} — Filtered`;
+    }
+    return `My ${entityName} View`;
+  }
+
+  /**
+   * Toggle sharing between Private (My View) and Shared with Team
+   */
+  ToggleShared(): void {
+    if (!this.CanEdit) return;
+    this.IsShared = !this.IsShared;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Toggle whether this view is the user's Default View for the entity
+   */
+  ToggleDefaultView(): void {
+    if (!this.CanEdit) return;
+    this.IsDefault = !this.IsDefault;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Toggle the inline description textarea in the Pinned Identity Header
+   */
+  ToggleDescriptionEditor(): void {
+    this.ShowDescriptionEditor = !this.ShowDescriptionEditor;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Label shown in the Filter recipe chip in the header
+   */
+  get FilterChipLabel(): string {
+    if (this.CustomWhereClause && this.WhereClause.trim()) {
+      return 'Custom SQL';
+    }
+    if (this.FilterMode === 'smart' && this.SmartFilterEnabled && this.SmartFilterPrompt.trim()) {
+      return 'AI Smart Filter';
+    }
+    const count = this.GetFilterCount();
+    if (count > 0) {
+      return `${count} Filter Rule${count !== 1 ? 's' : ''}`;
+    }
+    return 'No Filter';
+  }
+
+  /**
+   * Whether the Filter recipe chip should be highlighted as active
+   */
+  get HasActiveFilterChip(): boolean {
+    return (this.CustomWhereClause && !!this.WhereClause.trim()) ||
+           (this.FilterMode === 'smart' && this.SmartFilterEnabled && !!this.SmartFilterPrompt.trim()) ||
+           this.GetFilterCount() > 0;
+  }
+
+  /**
+   * Count of visible columns that are pinned left or right
+   */
+  get PinnedColumnsCount(): number {
+    return this.VisibleColumns.filter(c => c.pinned === 'left' || c.pinned === 'right').length;
+  }
+
+  /**
+   * Summary label for the Sort recipe chip in the header
+   */
+  get SortSummaryLabel(): string {
+    if (this.SortItems.length === 0) {
+      return 'Default Sort';
+    }
+    const first = this.SortItems[0];
+    const name = this.GetFieldDisplayName(first.field);
+    const dir = first.direction === 'desc' ? '↓' : '↑';
+    if (this.SortItems.length === 1) {
+      return `${name} ${dir}`;
+    }
+    return `${name} ${dir} (+${this.SortItems.length - 1})`;
   }
 
   /**
@@ -878,6 +1108,9 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     event?.stopPropagation();
     this.AlternateBaseView = name;
     this.IsBaseViewDropdownOpen = false;
+    if (!this.ViewEntity && name && !this.ViewName.trim()) {
+      this.ViewName = this.BuildSuggestedViewName();
+    }
     this.cdr.detectChanges();
   }
 
@@ -1612,6 +1845,47 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   /**
+   * Build the ViewSaveEvent payload with all Unified View Studio & progressive disclosure settings
+   */
+  private buildSaveEvent(saveAsNew: boolean, overrideName?: string): ViewSaveEvent {
+    const timelineState: ViewTimelineState | null = this.TimelineDateField
+      ? {
+          dateFieldName: this.TimelineDateField,
+          segmentGrouping: this.TimelineGrouping,
+          orientation: this.TimelineOrientation,
+          sortOrder: 'desc'
+        }
+      : null;
+
+    return {
+      Name: overrideName ?? this.ViewName,
+      Description: this.ViewDescription,
+      IsShared: this.IsShared,
+      IsDefault: this.IsDefault,
+      SaveAsNew: saveAsNew,
+      Columns: this.VisibleColumns,
+      SortField: this.SortField,
+      SortDirection: this.SortDirection,
+      SortItems: [...this.SortItems],
+      SmartFilterEnabled: this.SmartFilterEnabled,
+      SmartFilterPrompt: this.SmartFilterPrompt,
+      FilterState: this.hasActiveFilters() ? this.FilterState : null,
+      AggregatesConfig: this.buildAggregatesConfig(),
+      AlternateBaseView: this.AlternateBaseView || null,
+      CustomWhereClause: this.CustomWhereClause,
+      WhereClause: this.CustomWhereClause ? this.WhereClause : undefined,
+      GridDisplayState: {
+        rowHeight: this.GridRowHeight,
+        wrapText: this.GridWrapText
+      },
+      CardDisplayState: {
+        cardSize: this.CardSize
+      },
+      TimelineState: timelineState
+    };
+  }
+
+  /**
    * Save the view
    */
   OnSave(): void {
@@ -1621,21 +1895,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     if (!this.IsValid) return;
 
     this._localSaving = true;
-    this.Save.emit({
-      Name: this.ViewName,
-      Description: this.ViewDescription,
-      IsShared: this.IsShared,
-      SaveAsNew: false,
-      Columns: this.VisibleColumns,
-      SortField: this.SortField,
-      SortDirection: this.SortDirection,
-      SortItems: [...this.SortItems],
-      SmartFilterEnabled: this.SmartFilterEnabled,
-      SmartFilterPrompt: this.SmartFilterPrompt,
-      FilterState: this.hasActiveFilters() ? this.FilterState : null,
-      AggregatesConfig: this.buildAggregatesConfig(),
-      AlternateBaseView: this.AlternateBaseView || null
-    });
+    this.Save.emit(this.buildSaveEvent(false));
   }
 
   /**
@@ -1648,21 +1908,21 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     if (!this.IsValidForSaveAsNew) return;
 
     this._localSaving = true;
-    this.Save.emit({
-      Name: this.ViewName || 'New View',
-      Description: this.ViewDescription,
-      IsShared: this.IsShared,
-      SaveAsNew: true,
-      Columns: this.VisibleColumns,
-      SortField: this.SortField,
-      SortDirection: this.SortDirection,
-      SortItems: [...this.SortItems],
-      SmartFilterEnabled: this.SmartFilterEnabled,
-      SmartFilterPrompt: this.SmartFilterPrompt,
-      FilterState: this.hasActiveFilters() ? this.FilterState : null,
-      AggregatesConfig: this.buildAggregatesConfig(),
-      AlternateBaseView: this.AlternateBaseView || null
-    });
+    const effectiveName = this.ViewName.trim() || 'New View';
+    this.Save.emit(this.buildSaveEvent(true, effectiveName));
+  }
+
+  /**
+   * Save edits to an existing view as a new copy without overwriting the original
+   */
+  OnSaveAsCopy(): void {
+    if (this.IsSaving || this._localSaving) return;
+    if (!this.IsValidForSaveAsNew) return;
+
+    this._localSaving = true;
+    const baseName = this.ViewName.trim() || this.ViewEntity?.Name || 'View';
+    const copyName = baseName === this.ViewEntity?.Name ? `${baseName} (Copy)` : baseName;
+    this.Save.emit(this.buildSaveEvent(true, copyName));
   }
 
   /**
@@ -1674,21 +1934,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     if (this.IsSaving || this._localSaving) return;
 
     this._localSaving = true;
-    this.SaveDefaults.emit({
-      Name: 'Default',
-      Description: '',
-      IsShared: false,
-      SaveAsNew: false,
-      Columns: this.VisibleColumns,
-      SortField: this.SortField,
-      SortDirection: this.SortDirection,
-      SortItems: [...this.SortItems],
-      SmartFilterEnabled: this.SmartFilterEnabled,
-      SmartFilterPrompt: this.SmartFilterPrompt,
-      FilterState: this.hasActiveFilters() ? this.FilterState : null,
-      AggregatesConfig: this.buildAggregatesConfig(),
-      AlternateBaseView: this.AlternateBaseView || null
-    });
+    this.SaveDefaults.emit(this.buildSaveEvent(false, 'Default'));
   }
 
   // Delete confirmation state
@@ -1729,7 +1975,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    * Set the active tab
    */
   SetActiveTab(tab: 'columns' | 'sorting' | 'filters' | 'aggregates' | 'settings'): void {
-    this.ActiveTab = tab;
+    this.ActiveTab = tab === 'settings' ? 'filters' : tab;
     this.FormatEditingColumn = null; // Close format editor when switching tabs
     this.IsBaseViewDropdownOpen = false;
     this.cdr.detectChanges();
@@ -1819,6 +2065,118 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    */
   ApplySmartFilterExample(example: string): void {
     this.SmartFilterPrompt = example;
+    if (!this.ViewEntity && !this.ViewName.trim()) {
+      this.ViewName = this.BuildSuggestedViewName();
+    }
+    this.cdr.detectChanges();
+  }
+
+  // ========================================
+  // COLUMN PINNING, BULK ACTIONS & CONDITIONAL FORMATTING
+  // ========================================
+
+  /**
+   * Cycle a column's pin position: None -> Pin Left -> Pin Right -> None
+   */
+  ToggleColumnPin(column: ColumnConfig, event?: MouseEvent): void {
+    event?.stopPropagation();
+    if (!this.CanEdit) return;
+    if (!column.pinned) {
+      column.pinned = 'left';
+    } else if (column.pinned === 'left') {
+      column.pinned = 'right';
+    } else {
+      column.pinned = null;
+    }
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Explicitly set a column's pin position ('left', 'right', or null)
+   */
+  SetColumnPin(column: ColumnConfig, pinned: 'left' | 'right' | null): void {
+    if (!this.CanEdit) return;
+    column.pinned = pinned;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Reset columns to entity metadata defaults (DefaultInView)
+   */
+  ResetColumnsToDefault(): void {
+    if (!this.Entity || !this.CanEdit) return;
+    this.Columns.forEach((col, idx) => {
+      col.visible = col.field.DefaultInView;
+      col.orderIndex = idx;
+      col.pinned = null;
+    });
+    this.Columns.sort((a, b) => a.orderIndex - b.orderIndex);
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Make all columns visible
+   */
+  ShowAllColumns(): void {
+    if (!this.CanEdit) return;
+    this.Columns.forEach((col, idx) => {
+      col.visible = true;
+      col.orderIndex = idx;
+    });
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Add a new conditional formatting rule to the currently edited column
+   */
+  AddConditionalRule(): void {
+    if (!this.FormatEditingColumn?.format || !this.CanEdit) return;
+    if (!this.FormatEditingColumn.format.conditionalRules) {
+      this.FormatEditingColumn.format.conditionalRules = [];
+    }
+    this.FormatEditingColumn.format.conditionalRules.push({
+      condition: 'equals',
+      value: '',
+      style: {
+        color: '#065f46',
+        backgroundColor: '#d1fae5',
+        bold: true
+      }
+    });
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Remove a conditional formatting rule by index
+   */
+  RemoveConditionalRule(index: number): void {
+    if (!this.FormatEditingColumn?.format?.conditionalRules || !this.CanEdit) return;
+    this.FormatEditingColumn.format.conditionalRules.splice(index, 1);
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Apply a semantic color preset to a conditional formatting rule
+   */
+  ApplyConditionalPreset(rule: ColumnConditionalRule, preset: 'success' | 'warning' | 'danger' | 'info' | 'bold'): void {
+    if (!this.CanEdit) return;
+    switch (preset) {
+      case 'success':
+        rule.style = { color: '#065f46', backgroundColor: '#d1fae5', bold: true };
+        break;
+      case 'warning':
+        rule.style = { color: '#92400e', backgroundColor: '#fef3c7', bold: true };
+        break;
+      case 'danger':
+        rule.style = { color: '#991b1b', backgroundColor: '#fee2e2', bold: true };
+        break;
+      case 'info':
+        rule.style = { color: '#1e40af', backgroundColor: '#dbeafe', bold: true };
+        break;
+      case 'bold':
+        rule.style = { bold: true };
+        break;
+    }
     this.cdr.detectChanges();
   }
 
@@ -2052,7 +2410,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     if (this.Aggregates.length === 0) return null;
 
     return {
-      display: { ...DEFAULT_AGGREGATE_DISPLAY },
+      display: { ...this.AggregateDisplay },
       expressions: [...this.Aggregates]
     };
   }

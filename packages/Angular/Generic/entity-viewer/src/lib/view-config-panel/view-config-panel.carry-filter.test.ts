@@ -182,4 +182,71 @@ describe('ViewConfigPanelComponent — carrying a staged filter back from the na
     expect(panel.IsAlternateBaseViewSelected('DueNow')).toBe(true);
     expect(panel.IsAlternateBaseViewSelected(null)).toBe(false);
   });
+
+  it('promotes the default view into a named view with a smart suggested name and emits progressive-disclosure fields', () => {
+    const panel = makePanel();
+    open(panel);
+
+    expect(panel.ViewEntity).toBeNull();
+    expect(panel.IsCreatingNamedView).toBe(false);
+
+    // Configure smart filter and promote to a new named view in place
+    panel.SmartFilterEnabled = true;
+    panel.SmartFilterPrompt = 'High priority active accounts';
+    panel.PromoteToNewView();
+
+    expect(panel.IsCreatingNamedView).toBe(true);
+    expect(panel.ViewName).toBe('Accounts — High priority active accounts');
+
+    // Toggle metadata pills & progressive disclosure features
+    panel.ToggleShared();
+    panel.ToggleDefaultView();
+    panel.CustomWhereClause = true;
+    panel.WhereClause = '[Revenue] > 100000';
+    panel.GridRowHeight = 'compact';
+    panel.GridWrapText = true;
+    panel.CardSize = 'large';
+
+    // Pin the first column and add a conditional rule
+    const firstCol = panel.VisibleColumns[0];
+    panel.ToggleColumnPin(firstCol);
+    expect(firstCol.pinned).toBe('left');
+    expect(panel.PinnedColumnsCount).toBe(1);
+
+    panel.OpenFormatEditor(firstCol);
+    panel.AddConditionalRule();
+    expect(firstCol.format?.conditionalRules).toHaveLength(1);
+    panel.ApplyConditionalPreset(firstCol.format!.conditionalRules![0], 'green');
+    expect(firstCol.format!.conditionalRules![0].style.backgroundColor).toBe('#d1fae5');
+
+    // Wide mode toggle
+    expect(panel.IsWideMode).toBe(false);
+    panel.ToggleWideMode();
+    expect(panel.IsWideMode).toBe(true);
+
+    const emitted: Array<{
+      Name: string;
+      SaveAsNew: boolean;
+      IsShared: boolean;
+      IsDefault?: boolean;
+      CustomWhereClause?: boolean;
+      WhereClause?: string;
+      GridDisplayState?: { rowHeight?: string; wrapText?: boolean };
+      CardDisplayState?: { cardSize?: string };
+      Columns: Array<{ pinned?: string | null }>;
+    }> = [];
+    panel.Save.subscribe(e => emitted.push(e));
+    panel.OnSaveAsNew();
+
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0].Name).toBe('Accounts — High priority active accounts');
+    expect(emitted[0].SaveAsNew).toBe(true);
+    expect(emitted[0].IsShared).toBe(true);
+    expect(emitted[0].IsDefault).toBe(true);
+    expect(emitted[0].CustomWhereClause).toBe(true);
+    expect(emitted[0].WhereClause).toBe('[Revenue] > 100000');
+    expect(emitted[0].GridDisplayState).toEqual({ rowHeight: 'compact', wrapText: true });
+    expect(emitted[0].CardDisplayState).toEqual({ cardSize: 'large' });
+    expect(emitted[0].Columns[0].pinned).toBe('left');
+  });
 });

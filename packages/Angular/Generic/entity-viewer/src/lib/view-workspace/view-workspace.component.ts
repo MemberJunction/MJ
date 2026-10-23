@@ -17,7 +17,8 @@ import {
   MJUserViewEntity_IGridState,
   MJUserViewEntity_IGridColumnSetting,
   MJUserViewEntity_IGridSortSetting,
-  MJUserViewEntity_ISortStateItem
+  MJUserViewEntity_ISortStateItem,
+  MJUserViewEntity_IDisplayState
 } from '@memberjunction/core-entities';
 import { CompositeFilterDescriptor, FilterFieldInfo } from '@memberjunction/ng-filter-builder';
 import { ExportDialogConfig, ExportDialogResult } from '@memberjunction/ng-export-service';
@@ -1304,7 +1305,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     newView.EntityID = this._entity!.ID;
     newView.UserID = provider.CurrentUser.ID;
     newView.IsShared = event.IsShared;
-    newView.IsDefault = false;
+    newView.IsDefault = event.IsDefault ?? false;
 
     const gridState = this.buildGridState(event);
     if (gridState) {
@@ -1318,6 +1319,19 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     newView.SmartFilterPrompt = event.SmartFilterPrompt;
     newView.FilterState = this.buildFilterStateJson(event);
     newView.AlternateBaseView = event.AlternateBaseView || null;
+    if (event.CustomWhereClause !== undefined) {
+      newView.CustomWhereClause = event.CustomWhereClause;
+      if (event.CustomWhereClause && event.WhereClause !== undefined) {
+        newView.WhereClause = event.WhereClause;
+      }
+    }
+    const displayState = this.buildDisplayState(event, newView);
+    if (displayState) {
+      newView.DisplayStateObject = displayState;
+    }
+    if (event.CardDisplayState?.cardSize) {
+      newView.CardStateObject = { cardSize: event.CardDisplayState.cardSize };
+    }
 
     const before: WorkspaceCancelableEvent<ViewSaveOperation> = { Data: { View: newView, IsNew: true }, Cancel: false };
     this.BeforeViewSave.emit(before);
@@ -1351,6 +1365,9 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     view.Name = event.Name;
     view.Description = event.Description;
     view.IsShared = event.IsShared;
+    if (event.IsDefault !== undefined) {
+      view.IsDefault = event.IsDefault;
+    }
 
     const gridState = this.buildGridState(event);
     if (gridState) {
@@ -1364,6 +1381,19 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     view.SmartFilterPrompt = event.SmartFilterPrompt;
     view.FilterState = this.buildFilterStateJson(event);
     view.AlternateBaseView = event.AlternateBaseView || null;
+    if (event.CustomWhereClause !== undefined) {
+      view.CustomWhereClause = event.CustomWhereClause;
+      if (event.CustomWhereClause && event.WhereClause !== undefined) {
+        view.WhereClause = event.WhereClause;
+      }
+    }
+    const displayState = this.buildDisplayState(event, view);
+    if (displayState) {
+      view.DisplayStateObject = displayState;
+    }
+    if (event.CardDisplayState?.cardSize) {
+      view.CardStateObject = { ...(view.CardStateObject ?? {}), cardSize: event.CardDisplayState.cardSize };
+    }
 
     const before: WorkspaceCancelableEvent<ViewSaveOperation> = { Data: { View: view, IsNew: false }, Cancel: false };
     this.BeforeViewSave.emit(before);
@@ -1867,6 +1897,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
         hidden: false,
         width: col.width || undefined,
         orderIndex: idx,
+        pinned: col.pinned || undefined,
         format: col.format
       }));
     } else if (this.CurrentGridState?.columnSettings && this.CurrentGridState.columnSettings.length > 0) {
@@ -1928,6 +1959,28 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     return event.FilterState
       ? JSON.stringify(event.FilterState)
       : JSON.stringify({ logic: 'and', filters: [] });
+  }
+
+  /**
+   * Build an `MJUserViewEntity_IDisplayState` merging existing display state with
+   * any grid, card, timeline, or alternate base view settings emitted by the Unified View Studio.
+   */
+  private buildDisplayState(
+    event: ViewSaveEvent,
+    view?: MJUserViewEntityExtended | null
+  ): MJUserViewEntity_IDisplayState | null {
+    if (!event.GridDisplayState && !event.CardDisplayState && !event.TimelineState && !event.AlternateBaseView) {
+      return null;
+    }
+    const existing = view?.DisplayStateObject;
+    return {
+      defaultMode: existing?.defaultMode ?? 'grid',
+      enabledModes: existing?.enabledModes,
+      alternateBaseView: event.AlternateBaseView || undefined,
+      timeline: event.TimelineState ?? existing?.timeline,
+      grid: event.GridDisplayState ?? existing?.grid,
+      cards: event.CardDisplayState ?? existing?.cards
+    };
   }
 
   /**
