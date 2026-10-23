@@ -565,6 +565,70 @@
   height: 100%;
 }
 
+/* ========================================
+   Live Updates Floating Pill
+   ======================================== */
+
+.mj-grid-live-pill {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  background: var(--mj-bg-surface);
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 45%, var(--mj-border-default));
+  border-radius: 999px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.16);
+  overflow: hidden;
+}
+
+.mj-grid-live-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 14px;
+  border: none;
+  background: transparent;
+  color: var(--mj-brand-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.mj-grid-live-pill-btn:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+}
+
+.mj-grid-live-pill-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mj-status-success);
+  flex-shrink: 0;
+}
+
+.mj-grid-live-pill-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px 6px 8px;
+  border: none;
+  border-left: 1px solid var(--mj-border-default);
+  background: transparent;
+  color: var(--mj-text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.mj-grid-live-pill-dismiss:hover {
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface-hover);
+}
+
 /* AG Grid v35 uses JS-based theming (colorSchemeVariable) — no CSS variable overrides needed */
 
 /* Selected row styling - left indicator bar only, background handled by AG Grid theme */

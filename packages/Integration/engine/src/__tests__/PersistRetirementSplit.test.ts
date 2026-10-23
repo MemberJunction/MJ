@@ -21,8 +21,16 @@ import type { SourceObjectInfo } from '../types';
 
 type Row = { ID: string; Name: string; Status: string; IntegrationObjectID?: string; [k: string]: unknown };
 
-/** A cached entity row: the overlay mutates it and calls Save(). */
-const row = (r: Row) => ({ ...r, Save: vi.fn(async () => true) });
+/**
+ * A catalog entity row: the overlay mutates it and calls Save(). The catalog writer reads a column
+ * the row does not carry through `Get` (and writes one through `Set`), as a BaseEntity would.
+ */
+const row = (r: Row) => {
+    const o: Record<string, unknown> = { ...r, Save: vi.fn(async () => true) };
+    o.Get = (c: string) => o[c] ?? null;
+    o.Set = (c: string, v: unknown) => { o[c] = v; };
+    return o as Row & { Save: ReturnType<typeof vi.fn> };
+};
 
 const INVOICE = row({ ID: 'o-inv', Name: 'Invoice', DisplayName: 'Invoice', Description: null, Status: 'Active' });
 const GHOST = row({ ID: 'o-ghost', Name: 'Ghost', DisplayName: 'Ghost', Description: null, Status: 'Active' });
@@ -34,9 +42,19 @@ const fieldRow = (ID: string, Name: string) => row({
 const FIELDS = [fieldRow('f-id', 'id'), fieldRow('f-note', 'note'), fieldRow('f-gone', 'gone')];
 const NAME_BY_ID: Record<string, string> = { 'o-inv': 'Invoice', 'o-ghost': 'Ghost', 'f-id': 'id', 'f-note': 'note', 'f-gone': 'gone' };
 
-/** Records which rows the retirement pass disabled. */
+/**
+ * Records which rows the retirement pass disabled. Persist reads the catalog through its writer,
+ * which queries per call (`RunView`) rather than reading the engine cache, so the provider answers
+ * those reads with the same rows the engine stub below serves.
+ */
 function makeProvider(disabled: string[]): IMetadataProvider {
     return {
+        RunView: async (params: { EntityName: string; ExtraFilter?: string }) => ({
+            Success: true,
+            Results: params.EntityName === 'MJ: Integration Objects'
+                ? [INVOICE, GHOST]
+                : (params.ExtraFilter ?? '').includes("'o-inv'") ? FIELDS : [],
+        }),
         GetEntityObject: async () => {
             const e: Record<string, unknown> = {
                 Status: 'Active',
@@ -46,6 +64,8 @@ function makeProvider(disabled: string[]): IMetadataProvider {
                     return true;
                 },
                 Save: async () => { if (e.Status === 'Disabled') disabled.push(String(e.Name)); return true; },
+                Get: (c: string) => e[c] ?? null,
+                Set: (c: string, v: unknown) => { e[c] = v; },
             };
             return e;
         },
@@ -79,6 +99,8 @@ describe('PersistDiscoveredSchema — object and field retirement are separately
         vi.spyOn(console, 'log').mockImplementation(() => undefined);
         vi.spyOn(IntegrationEngineBase, 'Instance', 'get').mockReturnValue({
             GetIntegrationObjectsByIntegrationID: () => [INVOICE, GHOST],
+            // The declared floor persist matches each discovered object against.
+            GetSharedIntegrationObjects: () => [INVOICE, GHOST],
             GetActiveIntegrationObjects: () => [INVOICE, GHOST],
             GetIntegrationObjectFields: (id: string) => (id === 'o-inv' ? FIELDS : []),
             GetIntegrationObjectByID: (id: string) => (id === 'o-inv' ? INVOICE : GHOST),

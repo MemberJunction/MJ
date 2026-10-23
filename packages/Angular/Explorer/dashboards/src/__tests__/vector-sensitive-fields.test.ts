@@ -138,7 +138,7 @@ describe('the component actually uses the guard — wiring, not just the helper'
     const CODE = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
 
     it('layer 1: the field list handed to the model is filtered', () => {
-        expect(CODE).toMatch(/WithoutSensitiveFields\(entity\.Fields\)/);
+        expect(CODE).toMatch(/WithoutSensitiveFields\(entity\.Fields[,)]/);
     });
 
     it('layer 1: the raw field list is NOT what reaches the prompt', () => {
@@ -146,12 +146,12 @@ describe('the component actually uses the guard — wiring, not just the helper'
     });
 
     it('layer 2: the save path checks the template and throws', () => {
-        expect(CODE).toMatch(/SensitiveFieldsInTemplate\(templateText\)/);
+        expect(CODE).toMatch(/SensitiveFieldsInTemplate\(templateText[,)]/);
         expect(CODE).toMatch(/sensitive\.length > 0[\s\S]{0,400}?throw new Error/);
     });
 
     it('layer 2 runs BEFORE anything is written', () => {
-        const check = CODE.indexOf('SensitiveFieldsInTemplate(templateText)');
+        const check = CODE.indexOf('SensitiveFieldsInTemplate(templateText');
         const firstSave = CODE.indexOf('template.Save()');
         expect(check).toBeGreaterThan(0);
         expect(firstSave).toBeGreaterThan(check);
@@ -159,6 +159,49 @@ describe('the component actually uses the guard — wiring, not just the helper'
 
     it('the refusal names the offending fields, so it can be acted on', () => {
         expect(CODE).toMatch(/sensitive\.join\(', '\)/);
+    });
+
+    it('both layers are told the document\'s purpose, so only duplicate detection gets a date of birth', () => {
+        expect(CODE).toMatch(/WithoutSensitiveFields\(entity\.Fields, purpose\)/);
+        expect(CODE).toMatch(/WithoutSensitiveFields\(relatedEntity\.Fields, purpose\)/);
+        expect(CODE).toMatch(/SensitiveFieldsInTemplate\(templateText, this\.vectorFieldPurpose\(this\.SuggestUseCase\)\)/);
+    });
+});
+
+describe('date of birth is refused except for duplicate detection', () => {
+    const birthDates = ['DateOfBirth', 'date_of_birth', 'BirthDate', 'DOB', 'dob', 'PatientDOB'];
+
+    it('refuses every spelling for any other purpose, and by default', () => {
+        for (const name of birthDates) {
+            expect(IsSensitiveFieldName(name), name).toBe(true);
+            expect(IsSensitiveFieldName(name, 'other'), name).toBe(true);
+        }
+    });
+
+    it('allows every spelling for duplicate detection', () => {
+        for (const name of birthDates) {
+            expect(IsSensitiveFieldName(name, 'duplicate-detection'), name).toBe(false);
+        }
+    });
+
+    it('still refuses everything else for duplicate detection', () => {
+        for (const name of ['PasswordHash', 'SSN', 'EmployeeSSN', 'BankAccountNumber', 'Salary', 'EmployeeRace', 'VendorTIN']) {
+            expect(IsSensitiveFieldName(name, 'duplicate-detection'), name).toBe(true);
+        }
+    });
+
+    it('keeps the word-start rule for dob: RecordObject is not a date of birth', () => {
+        expect(IsSensitiveFieldName('RecordObject')).toBe(false);
+    });
+
+    it('applies the purpose to both layers', () => {
+        const fields = [{ Name: 'FirstName' }, { Name: 'DateOfBirth' }, { Name: 'SSN' }];
+        expect(WithoutSensitiveFields(fields).map(f => f.Name)).toEqual(['FirstName']);
+        expect(WithoutSensitiveFields(fields, 'duplicate-detection').map(f => f.Name)).toEqual(['FirstName', 'DateOfBirth']);
+
+        const template = '{{ FirstName }} born {{ DateOfBirth }} ssn {{ SSN }}';
+        expect(SensitiveFieldsInTemplate(template)).toEqual(['DateOfBirth', 'SSN']);
+        expect(SensitiveFieldsInTemplate(template, 'duplicate-detection')).toEqual(['SSN']);
     });
 });
 
@@ -268,7 +311,7 @@ describe('calibration against MJ core entity field names', () => {
         // that goes red if the word boundary is removed from `ssn`.
         const collisions = FIELDS.filter((f) => normalizedForFixture(f).includes('ssn'));
         expect(collisions.length).toBeGreaterThanOrEqual(6);
-        expect(collisions.filter(IsSensitiveFieldName)).toEqual([]);
+        expect(collisions.filter((f) => IsSensitiveFieldName(f))).toEqual([]);
     });
 
     it('drops the whole `tin`-as-substring collision set, derived from the fixture', () => {
@@ -277,7 +320,7 @@ describe('calibration against MJ core entity field names', () => {
         // refused, and it is refused by `routing` on its own merits, not by `tin`.
         const collisions = FIELDS.filter((f) => normalizedForFixture(f).includes('tin'));
         expect(collisions.length).toBeGreaterThanOrEqual(40);
-        expect(collisions.filter(IsSensitiveFieldName)).toEqual(['RoutingOrder']);
+        expect(collisions.filter((f) => IsSensitiveFieldName(f))).toEqual(['RoutingOrder']);
     });
 
     it('accepts every plural `Tokens` field, because a count is not a secret', () => {
@@ -286,7 +329,7 @@ describe('calibration against MJ core entity field names', () => {
         // substring, which would refuse all of them again.
         const counts = FIELDS.filter((f) => normalizedForFixture(f).includes('tokens'));
         expect(counts.length).toBeGreaterThanOrEqual(20);
-        expect(counts.filter(IsSensitiveFieldName)).toEqual([]);
+        expect(counts.filter((f) => IsSensitiveFieldName(f))).toEqual([]);
     });
 
     it('pins the total refusal count as a bracket over the real fixture', () => {
@@ -300,7 +343,7 @@ describe('calibration against MJ core entity field names', () => {
         // or widening `token` back to a bare substring (+35) fails here rather than
         // silently making the guard unusable again. Raise it only with the same kind of
         // evidence that lowered it.
-        const refused = FIELDS.filter(IsSensitiveFieldName);
+        const refused = FIELDS.filter((f) => IsSensitiveFieldName(f));
         expect(refused.length).toBeGreaterThanOrEqual(30);
         expect(refused.length).toBeLessThanOrEqual(55);
         // And as a rate, so the bracket keeps its meaning if the fixture doubles in size.

@@ -8,7 +8,21 @@ import { FormContext } from '../types/form-types';
 import { FormNavigationEvent } from '../types/navigation-events';
 import { FORM_SECTION_FIELD_HOST, SectionRelevantFormContextChanged } from '../section-indicators/form-section-field-host';
 import { FormFieldEditCoordinator } from '../form-field-edit.coordinator';
-import { FormRecordRefreshCoordinator } from '../form-record-refresh.coordinator';
+import {
+  FormRecordRefreshCoordinator,
+  type FormFieldConflict,
+  type FormVersionPreviewFieldDiff,
+  type FormVersionPreviewState
+} from '../form-record-refresh.coordinator';
+import {
+  type RecordPreviewAnchorRect,
+  type RecordPreviewUpdatedEvent
+} from '../preview-popover/record-preview-popover.component';
+import { MjRecordPreviewPopoverService } from '../preview-popover/record-preview-popover.service';
+import {
+  ApplyQuickEditToHostRecord,
+  ResolveRecordLinkTarget
+} from '../links/record-link-utils';
 import { FormatFKCell, FilterCachedFKRows, QuoteSqlIdList } from './fk-search-utils';
 import { LinkedFieldOptionsStore } from './linked-field-options';
 import {
@@ -206,6 +220,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    */
   private fieldEdits = inject(FormFieldEditCoordinator, { optional: true });
   private recordRefresh = inject(FormRecordRefreshCoordinator, { optional: true });
+  private previewPopoverService = inject(MjRecordPreviewPopoverService, { optional: true });
   private _coordinatorSubs: Subscription[] = [];
   private _remoteHighlightTimer: ReturnType<typeof setTimeout> | null = null;
   private _lastPolymorphicEntityRef: string | null | undefined = undefined;
@@ -216,6 +231,47 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    */
   @HostBinding('class.mj-forms-field--remotely-updated')
   public IsRemotelyUpdated = false;
+
+  /**
+   * Host class applied when this field has an unresolved remote edit conflict.
+   */
+  @HostBinding('class.mj-forms-field--conflict')
+  public get HasActiveConflict(): boolean {
+    return this.ActiveConflict !== null;
+  }
+
+  /** Whether the original-value popover is currently open */
+  public ShowOriginalValuePopover = false;
+
+  /** Previous server value when this clean field was auto-merged live during edit mode */
+  public AutoMergedPreviousValue: unknown = undefined;
+
+  /** Active remote edit conflict for this field, if any */
+  public ActiveConflict: FormFieldConflict | null = null;
+
+  /** Active In-Form Time-Travel version preview state, if any */
+  public ActiveVersionPreview: FormVersionPreviewState | null = null;
+
+  /**
+   * Host class applied when this field's value in the previewed historical version
+   * differs from the current live record value.
+   */
+  @HostBinding('class.mj-forms-field--time-travel-diff')
+  public get HasTimeTravelDiff(): boolean {
+    return this.VersionPreviewDiff !== null && this.VersionPreviewDiff.IsChanged !== false;
+  }
+
+  /** Whether the FK record hover preview popover is currently open */
+  public ShowFKHoverPreview = false;
+
+  /** Viewport anchor rectangle for the FK record hover preview popover */
+  public FKHoverAnchorRect: RecordPreviewAnchorRect | null = null;
+
+  /** Target CompositeKey for the FK record hover preview popover */
+  public FKHoverTargetKey: CompositeKey | null = null;
+
+  private _hoverPreviewOpenTimer: ReturnType<typeof setTimeout> | null = null;
+  private _hoverPreviewCloseTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     super();
@@ -236,6 +292,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     }
 
     if (this.recordRefresh) {
+      this.ActiveVersionPreview = this.recordRefresh.ActiveVersionPreview;
       this._coordinatorSubs.push(
         this.recordRefresh.RemoteUpdated$.subscribe(evt => {
           if (!this.Record || evt.record !== this.Record) return;
@@ -248,6 +305,27 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
           const ownFieldLower = (this.FieldName || '').trim().toLowerCase();
           const fieldInfoNameLower = (this.FieldInfo?.Name || '').trim().toLowerCase();
           const siblingEntityFieldLower = (this.FieldInfo?.EntityIDFieldName || '').trim().toLowerCase();
+
+          // Check for auto-merged clean field baseline
+          if (evt.autoMergedPreviousValues) {
+            if (ownFieldLower && evt.autoMergedPreviousValues.has(ownFieldLower)) {
+              this.AutoMergedPreviousValue = evt.autoMergedPreviousValues.get(ownFieldLower);
+            } else if (fieldInfoNameLower && evt.autoMergedPreviousValues.has(fieldInfoNameLower)) {
+              this.AutoMergedPreviousValue = evt.autoMergedPreviousValues.get(fieldInfoNameLower);
+            }
+          }
+
+          // Check for dirty-field conflict
+          if (evt.conflicts) {
+            const conflict =
+              (ownFieldLower ? evt.conflicts.get(ownFieldLower) : undefined) ??
+              (fieldInfoNameLower ? evt.conflicts.get(fieldInfoNameLower) : undefined);
+            if (conflict) {
+              this.ActiveConflict = conflict;
+              this.ShowOriginalValuePopover = false;
+            }
+          }
+
           if (
             (ownFieldLower && evt.changedFieldNames.has(ownFieldLower)) ||
             (fieldInfoNameLower && evt.changedFieldNames.has(fieldInfoNameLower)) ||
@@ -257,6 +335,27 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
           } else {
             this.cdr.detectChanges();
           }
+        }),
+        this.recordRefresh.ConflictsChanged$.subscribe(conflicts => {
+          const ownFieldLower = (this.FieldName || '').trim().toLowerCase();
+          const fieldInfoNameLower = (this.FieldInfo?.Name || '').trim().toLowerCase();
+          const current =
+            (ownFieldLower ? conflicts.get(ownFieldLower) : undefined) ??
+            (fieldInfoNameLower ? conflicts.get(fieldInfoNameLower) : undefined) ??
+            null;
+          if (this.ActiveConflict !== current) {
+            this.ActiveConflict = current;
+            this.cdr.markForCheck();
+          }
+        }),
+        this.recordRefresh.VersionPreviewChanged$.subscribe(preview => {
+          this.ActiveVersionPreview = preview;
+          this._resolvedFKName = undefined;
+          this._resolvedFKValue = undefined;
+          this._resolvedFKEntityRef = undefined;
+          this._detectCacheValue = null;
+          this.sectionHost?.NotifyFieldChanged(this);
+          this.cdr.markForCheck();
         })
       );
     }
@@ -441,26 +540,95 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     return HighlightSearchMatches(this.DisplayName, this.FormContext?.sectionFilter ?? '', 'mj-forms-search-highlight');
   }
 
-  /** Current field value */
+  /** Current field value (or historical snapshot value when in Time-Travel version preview mode) */
   get Value(): unknown {
+    if (this.ActiveVersionPreview) {
+      const snapshot = this.ActiveVersionPreview.SnapshotValues ?? this.ActiveVersionPreview.Snapshot;
+      if (snapshot) {
+        const fieldInfoName = this.FieldInfo?.Name;
+        if (fieldInfoName && Object.prototype.hasOwnProperty.call(snapshot, fieldInfoName)) {
+          return snapshot[fieldInfoName];
+        }
+        if (fieldInfoName && Object.prototype.hasOwnProperty.call(snapshot, fieldInfoName.toLowerCase())) {
+          return snapshot[fieldInfoName.toLowerCase()];
+        }
+        if (this.FieldName && Object.prototype.hasOwnProperty.call(snapshot, this.FieldName)) {
+          return snapshot[this.FieldName];
+        }
+        if (this.FieldName && Object.prototype.hasOwnProperty.call(snapshot, this.FieldName.toLowerCase())) {
+          return snapshot[this.FieldName.toLowerCase()];
+        }
+      }
+      const diff = this.VersionPreviewDiff;
+      if (diff) {
+        return diff.HistoricalValue;
+      }
+    }
     return this.Record?.Get(this.FieldName);
   }
 
   /** Set field value, mark touched, run validation, and emit change event */
   set Value(newValue: unknown) {
-    if (!this.Record) return;
+    if (!this.Record || this.ActiveVersionPreview) return;
     const oldValue = this.Record.Get(this.FieldName);
     this.Record.Set(this.FieldName, newValue);
+    this.AutoMergedPreviousValue = undefined;
     this.markTouched();
     this.runFieldValidation();
     this.ValueChange.emit({ FieldName: this.FieldName, OldValue: oldValue, NewValue: newValue });
     this.fieldEdits?.Notify({ FieldName: this.FieldName });
+    this.cdr.markForCheck();
   }
 
-  /** Whether this field is read-only based on entity metadata */
+  /** Whether this field is read-only based on entity metadata or active Time-Travel preview */
   get IsFieldReadOnly(): boolean {
+    if (this.ActiveVersionPreview !== null) return true;
     if (!this.FieldInfo) return false;
     return this.FieldInfo.ReadOnly || !this.IsFieldWritableByUser;
+  }
+
+  /**
+   * Diff descriptor for this field when In-Form Time-Travel version preview is active.
+   */
+  public get VersionPreviewDiff(): FormVersionPreviewFieldDiff | null {
+    const preview = this.ActiveVersionPreview;
+    const diffMap = preview?.FieldDiffs ?? preview?.ChangedFields;
+    if (!diffMap) return null;
+    const ownLower = (this.FieldName || '').trim().toLowerCase();
+    const infoLower = (this.FieldInfo?.Name || '').trim().toLowerCase();
+    return (ownLower ? diffMap.get(ownLower) : undefined)
+      ?? (infoLower ? diffMap.get(infoLower) : undefined)
+      ?? null;
+  }
+
+  /**
+   * Formatted representation of the current live record value (shown in the Time-Travel comparison bar).
+   */
+  public get FormattedCurrentLiveValue(): string {
+    const diff = this.VersionPreviewDiff;
+    if (!diff) return 'Empty';
+    return this.FormatFieldValue(diff.CurrentLiveValue);
+  }
+
+  /**
+   * Request restoring only this single field from the active Time-Travel historical version.
+   */
+  public OnRestoreSingleFieldFromPreview(event: Event): void {
+    event.stopPropagation();
+    event.preventDefault();
+    const preview = this.ActiveVersionPreview;
+    const diff = this.VersionPreviewDiff;
+    if (!preview || !diff || !this.recordRefresh) {
+      return;
+    }
+    this.recordRefresh.RequestRestoreSingleField({
+      FieldName: this.FieldInfo?.Name || this.FieldName,
+      HistoricalValue: diff.HistoricalValue,
+      SourceChangeID: preview.ChangeID,
+      ChangeID: preview.ChangeID,
+      ChangedAt: preview.ChangedAt,
+      ChangedByUser: preview.ChangedByUser ?? preview.UserName ?? ''
+    });
   }
 
   /**
@@ -515,8 +683,169 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Whether this field has been modified (dirty). Only shown for saved records (not new). */
   get IsDirty(): boolean {
     if (!this.Record || !this.Record.IsSaved) return false;
-    const field = this.Record.Fields?.find(f => f.Name === this.FieldName);
+    return this.IsFieldDirty;
+  }
+
+  /**
+   * Whether the underlying EntityField is currently marked dirty (modified compared to its baseline `OldValue`).
+   */
+  public get IsFieldDirty(): boolean {
+    const field = this.getEntityField();
     return field?.Dirty ?? false;
+  }
+
+  /**
+   * Formatted representation of the field's baseline `OldValue` (or `'Empty'` when null/empty).
+   */
+  public get FormattedOriginalValue(): string {
+    const field = this.getEntityField();
+    return this.FormatFieldValue(field?.OldValue);
+  }
+
+  /**
+   * Formatted representation of `AutoMergedPreviousValue` (when a clean field was updated live during Edit Mode).
+   */
+  public get FormattedAutoMergedPreviousValue(): string {
+    return this.FormatFieldValue(this.AutoMergedPreviousValue);
+  }
+
+  /**
+   * Formats an arbitrary field value cleanly for display in original-value popovers and conflict cards.
+   * Returns `'Empty'` when the value is null, undefined, or blank string.
+   */
+  public FormatFieldValue(val: unknown): string {
+    if (val === null || val === undefined) {
+      return 'Empty';
+    }
+    if (val instanceof Date) {
+      if (isNaN(val.getTime())) {
+        return 'Empty';
+      }
+      return this.isDateOnlyField ? FormatDateOnly(val) : val.toLocaleString();
+    }
+    const str = String(val);
+    return str.trim() === '' ? 'Empty' : str;
+  }
+
+  /**
+   * Toggle the floating Original Value popover on a modified field.
+   */
+  public ToggleOriginalValuePopover(event?: Event): void {
+    event?.stopPropagation();
+    this.ShowOriginalValuePopover = !this.ShowOriginalValuePopover;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Restore this field's value back to its baseline `OldValue`, clearing its dirty state
+   * and notifying the form's field-edit coordinator.
+   */
+  public RestoreOriginalValue(event?: Event): void {
+    event?.stopPropagation();
+    event?.preventDefault();
+    const field = this.getEntityField();
+    if (!field) {
+      return;
+    }
+    const previousCurrentValue = this.Record?.Get ? this.Record.Get(this.FieldName) : field.Value;
+    const originalValue = field.OldValue;
+    if (typeof this.Record?.Set === 'function') {
+      this.Record.Set(this.FieldName, originalValue);
+    }
+    field.Value = originalValue;
+    this._fkInputText = null;
+    this._resolvedFKName = undefined;
+    this._resolvedFKValue = undefined;
+    this.ShowOriginalValuePopover = false;
+    this.runFieldValidation();
+    this.ValueChange.emit({
+      FieldName: this.FieldName,
+      OldValue: previousCurrentValue,
+      NewValue: originalValue
+    });
+    this.fieldEdits?.Notify({ FieldName: this.FieldName });
+    this.sectionHost?.NotifyFieldChanged(this);
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Resolve an active conflict by keeping the user's local edit (`localEditedValue`) while
+   * ensuring the field's baseline `OldValue` matches the incoming server value.
+   */
+  public AcceptLocalConflictValue(event?: Event): void {
+    event?.stopPropagation();
+    const conflict = this.ActiveConflict;
+    if (!conflict) {
+      return;
+    }
+    const field = this.getEntityField();
+    const localValue = conflict.localEditedValue;
+    if (field) {
+      field.Value = conflict.incomingServerValue;
+      field.ResetOldValue?.();
+      field.Value = localValue;
+    }
+    if (typeof this.Record?.Set === 'function') {
+      this.Record.Set(this.FieldName, localValue);
+    }
+    this.ActiveConflict = null;
+    this.recordRefresh?.ResolveConflict(this.FieldName);
+    this.sectionHost?.NotifyFieldChanged(this);
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Resolve an active conflict by adopting the new server value (`incomingServerValue`),
+   * resetting the field's baseline `OldValue`, and notifying the field-edit coordinator.
+   */
+  public AcceptRemoteConflictValue(event?: Event): void {
+    event?.stopPropagation();
+    const conflict = this.ActiveConflict;
+    if (!conflict) {
+      return;
+    }
+    const previousLocal = conflict.localEditedValue;
+    const incomingVal = conflict.incomingServerValue;
+    const field = this.getEntityField();
+    if (typeof this.Record?.Set === 'function') {
+      this.Record.Set(this.FieldName, incomingVal);
+    }
+    if (field) {
+      field.Value = incomingVal;
+      field.ResetOldValue?.();
+    }
+    this._fkInputText = null;
+    this._resolvedFKName = undefined;
+    this._resolvedFKValue = undefined;
+    this.ActiveConflict = null;
+    this.runFieldValidation();
+    this.ValueChange.emit({
+      FieldName: this.FieldName,
+      OldValue: previousLocal,
+      NewValue: incomingVal
+    });
+    this.fieldEdits?.Notify({ FieldName: this.FieldName });
+    this.recordRefresh?.ResolveConflict(this.FieldName);
+    this.sectionHost?.NotifyFieldChanged(this);
+    this.cdr.markForCheck();
+  }
+
+  private getEntityField(): { Name: string; Value: unknown; OldValue: unknown; Dirty: boolean; ResetOldValue?: () => void } | undefined {
+    if (!this.Record || !this.FieldName) {
+      return undefined;
+    }
+    const recWithGetter = this.Record as BaseEntity & {
+      GetFieldByName?: (name: string) => { Name: string; Value: unknown; OldValue: unknown; Dirty: boolean; ResetOldValue?: () => void } | undefined;
+    };
+    if (typeof recWithGetter.GetFieldByName === 'function') {
+      const byMethod = recWithGetter.GetFieldByName(this.FieldName);
+      if (byMethod) {
+        return byMethod;
+      }
+    }
+    return this.Record.Fields?.find(
+      f => f.Name.trim().toLowerCase() === this.FieldName.trim().toLowerCase()
+    );
   }
 
   /** Whether this field is required (not nullable) */
@@ -694,7 +1023,8 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     // denied collapse away instead of rendering an empty card.
     if (!this.IsFieldReadableByUser) return true;
     if (this.FormContext?.hiddenFieldNames?.includes(this.FieldName)) return true;
-    if (this.EditMode) return false;
+    if (this.HasTimeTravelDiff) return false;
+    if (this.EditMode && !this.ActiveVersionPreview) return false;
     if (!this.HideWhenEmptyInReadOnlyMode) return false;
     if (this.FormContext?.showEmptyFields) return false;
     const val = this.Value;
@@ -727,7 +1057,10 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   private get polymorphicEntityRefValue(): string | null {
     const entityIdFieldName = this.FieldInfo?.EntityIDFieldName?.trim();
     if (!entityIdFieldName || !this.Record) return null;
-    const raw = this.Record.Get(entityIdFieldName);
+    const snap = this.ActiveVersionPreview?.SnapshotValues ?? this.ActiveVersionPreview?.Snapshot;
+    const raw = snap && Object.prototype.hasOwnProperty.call(snap, entityIdFieldName)
+      ? snap[entityIdFieldName]
+      : this.Record.Get(entityIdFieldName);
     if (raw == null) return null;
     const str = String(raw).trim();
     return str.length > 0 ? str : null;
@@ -758,9 +1091,12 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     return targetEntity?.Icon || null;
   }
 
-  /** Whether to show the subtle secondary raw-ID badge beside a resolved polymorphic FK link. */
+  public CopiedRawID = false;
+  private copyRawIDTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Whether to show the subtle copy-ID button beside a resolved FK / polymorphic FK link. */
   get ShowPolymorphicRawIDBadge(): boolean {
-    if (!this.IsPolymorphicFK) return false;
+    if (!this.HasRelatedEntity) return false;
     const displayName = this.FKDisplayName;
     const rawVal = this.FormatValue().trim();
     return !!displayName && !!rawVal && displayName !== rawVal;
@@ -771,6 +1107,30 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     const rawVal = this.FormatValue().trim();
     if (rawVal.length <= 16) return rawVal;
     return `${rawVal.slice(0, 6)}…${rawVal.slice(-6)}`;
+  }
+
+  public OnCopyRawID(event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const rawVal = this.FormatValue().trim();
+    if (!rawVal) return;
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        void navigator.clipboard.writeText(rawVal);
+      }
+    } catch {
+      // Ignore clipboard errors in restricted environments
+    }
+    this.CopiedRawID = true;
+    this.cdr.markForCheck();
+    if (this.copyRawIDTimer) {
+      clearTimeout(this.copyRawIDTimer);
+    }
+    this.copyRawIDTimer = setTimeout(() => {
+      this.copyRawIDTimer = null;
+      this.CopiedRawID = false;
+      this.cdr.markForCheck();
+    }, 1500);
   }
 
   /** Whether this field has a related entity (static foreign key or resolved polymorphic foreign key) */
@@ -805,8 +1165,19 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     // right: that path reads the related record, which has its own permissions.
     const nameFieldMap = this.FieldInfo?.RelatedEntityNameFieldMap;
     if (nameFieldMap && this.Record.EntityInfo?.IsFieldReadableByUser(nameFieldMap, this.ProviderToUse?.CurrentUser)) {
-      const val = this.Record.Get(nameFieldMap);
-      if (val != null && val !== '') return String(val);
+      if (this.ActiveVersionPreview) {
+        const snap = this.ActiveVersionPreview.SnapshotValues ?? this.ActiveVersionPreview.Snapshot;
+        if (snap && Object.prototype.hasOwnProperty.call(snap, nameFieldMap)) {
+          const snapVal = snap[nameFieldMap];
+          if (snapVal != null && snapVal !== '') return String(snapVal);
+        } else if (!this.HasTimeTravelDiff) {
+          const val = this.Record.Get(nameFieldMap);
+          if (val != null && val !== '') return String(val);
+        }
+      } else {
+        const val = this.Record.Get(nameFieldMap);
+        if (val != null && val !== '') return String(val);
+      }
     }
 
     const currentEntityRef = this.IsPolymorphicFK ? this.polymorphicEntityRefValue : null;
@@ -875,7 +1246,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     if (this.IsPolymorphicFK) {
       pk = CompositeKey.FromURLSegment(relatedEntity, String(fkValue));
     } else {
-      const pkFieldName = fieldInfo.RelatedEntityFieldName || relatedEntity?.FirstPrimaryKey?.Name;
+      const pkFieldName = fieldInfo.RelatedEntityFieldName || relatedEntity?.FirstPrimaryKey?.Name; // first-pk-ok: foreign-key target, single-column by design (polymorphic FKs take the FromURLSegment branch)
       if (!pkFieldName) return;
       pk = new CompositeKey([{
         FieldName: pkFieldName,
@@ -2841,7 +3212,9 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   FormatValue(): string {
     const val = this.Value;
-    if (val === null || val === undefined) return '';
+    if (val === null || val === undefined || val === '') {
+      return this.HasTimeTravelDiff ? '(Empty in this version)' : '';
+    }
     if (val instanceof Date) {
       /**
        * A DATE-ONLY VALUE IS NOT AN INSTANT, AND toLocaleString() TREATS IT AS ONE.
@@ -2939,6 +3312,9 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       if (changes['EditMode'] && !this.EditMode) {
         this._touched = false;
         this._fieldErrors = [];
+        this.ShowOriginalValuePopover = false;
+        this.AutoMergedPreviousValue = undefined;
+        this.ActiveConflict = null;
       }
       // Re-snapshot the edit-mode rendering decision whenever edit mode toggles
       if (changes['EditMode']) {
@@ -2958,6 +3334,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       clearTimeout(this._remoteHighlightTimer);
       this._remoteHighlightTimer = null;
     }
+    this.clearHoverPreviewTimers();
     this.sectionHost?.UnregisterField(this);
     // Retire the sequence too, not just the debounce: a lookup still in flight would otherwise
     // land on a destroyed component, reopen the panel and re-arm document listeners with no
@@ -2984,28 +3361,117 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     event.preventDefault();
     event.stopPropagation();
 
-    if (!this.FieldInfo || !this.Record) return;
-    const relatedEntity = this.getRelatedEntityInfo();
-    const relatedEntityName = relatedEntity?.Name || this.FieldInfo.RelatedEntity;
-    if (!relatedEntityName) return;
-
-    const fkValue = this.Value;
-    if (!fkValue) return;
-
-    let targetKey: CompositeKey;
-    if (this.IsPolymorphicFK) {
-      targetKey = CompositeKey.FromURLSegment(relatedEntity, String(fkValue));
-    } else {
-      const relatedFieldName = this.FieldInfo.RelatedEntityFieldName || relatedEntity?.FirstPrimaryKey?.Name || 'ID';
-      targetKey = new CompositeKey([new KeyValuePair(relatedFieldName, fkValue)]);
-    }
+    const target = ResolveRecordLinkTarget({
+      Record: this.Record,
+      FieldName: this.FieldName,
+      Provider: this.ProviderToUse
+    });
+    if (!target) return;
 
     this.Navigate.emit({
       Kind: 'record',
-      EntityName: relatedEntityName,
-      PrimaryKey: targetKey,
+      EntityName: target.EntityName,
+      PrimaryKey: target.PrimaryKey,
       OpenInNewTab: event.ctrlKey || event.metaKey
     });
+  }
+
+  /**
+   * Propagate inline Quick Edit updates from the linked record preview popover back onto this field's
+   * resolved display name and companion virtual name field on `this.Record`.
+   */
+  public OnLinkedRecordQuickEdited(event: RecordPreviewUpdatedEvent): void {
+    const target = ResolveRecordLinkTarget({
+      Record: this.Record,
+      FieldName: this.FieldName,
+      Provider: this.ProviderToUse
+    });
+    const updatedName = ApplyQuickEditToHostRecord(this.Record, target, event.UpdatedFields);
+    if (updatedName) {
+      this._resolvedFKName = updatedName;
+    }
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Open the `<mj-record-preview-popover>` hover card via the shared `MjRecordPreviewPopoverService`.
+   */
+  public OnFKLinkMouseEnter(event: MouseEvent): void {
+    if (!this.RecordLinksEnabled || !this.FieldInfo || !this.Record) return;
+    const anchorEl = event.currentTarget as HTMLElement | null;
+    if (!anchorEl) return;
+
+    const target = ResolveRecordLinkTarget({
+      Record: this.Record,
+      FieldName: this.FieldName,
+      DisplayName: this.FKDisplayName || this.FormatValue(),
+      Provider: this.ProviderToUse
+    });
+    if (!target) return;
+
+    const r = anchorEl.getBoundingClientRect();
+    this.FKHoverAnchorRect = {
+      top: r.top,
+      bottom: r.bottom,
+      left: r.left,
+      right: r.right,
+      width: r.width,
+      height: r.height
+    };
+    this.FKHoverTargetKey = target.PrimaryKey;
+    this.ShowFKHoverPreview = true;
+
+    this.previewPopoverService?.RequestOpen({
+      SourceID: `form-field-${this.FieldName}`,
+      EntityName: target.EntityName,
+      PrimaryKey: target.PrimaryKey,
+      RecordID: target.RecordID,
+      DisplayName: target.DisplayName || this.FKDisplayName || this.FormatValue(),
+      AnchorElement: anchorEl,
+      AnchorRect: this.FKHoverAnchorRect,
+      Provider: this.ProviderToUse,
+      OnNavigate: (navEvent: FormNavigationEvent) => this.OnPreviewCardNavigate(navEvent),
+      OnRecordUpdated: (updatedEvent: RecordPreviewUpdatedEvent) => this.OnLinkedRecordQuickEdited(updatedEvent)
+    });
+  }
+
+  /**
+   * Schedule closing the FK hover preview popover when the pointer leaves the link.
+   */
+  public OnFKLinkMouseLeave(): void {
+    this.ShowFKHoverPreview = false;
+    this.previewPopoverService?.RequestClose(`form-field-${this.FieldName}`);
+  }
+
+  /** Keep the hover preview card open while the pointer is inside the card. */
+  public OnPreviewCardMouseEnter(): void {
+    this.clearHoverPreviewTimers();
+  }
+
+  /** Close the hover preview card when the pointer leaves the card. */
+  public OnPreviewCardMouseLeave(): void {
+    this.OnFKLinkMouseLeave();
+  }
+
+  /** Forward navigation from the hover preview card and close it. */
+  public OnPreviewCardNavigate(navEvent: FormNavigationEvent): void {
+    this.clearHoverPreviewTimers();
+    this.ShowFKHoverPreview = false;
+    this.previewPopoverService?.CloseImmediately(`form-field-${this.FieldName}`);
+    this.Navigate.emit(navEvent);
+    this.cdr.markForCheck();
+  }
+
+  private clearHoverPreviewTimers(): void {
+    if (this._hoverPreviewOpenTimer) {
+      clearTimeout(this._hoverPreviewOpenTimer);
+      this._hoverPreviewOpenTimer = null;
+    }
+    if (this._hoverPreviewCloseTimer) {
+      clearTimeout(this._hoverPreviewCloseTimer);
+      this._hoverPreviewCloseTimer = null;
+    }
+    this.previewPopoverService?.CloseImmediately(`form-field-${this.FieldName}`);
   }
 
   /**
