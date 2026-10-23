@@ -649,8 +649,16 @@ export const AgentLoopStandinChecks: NamedCheck[] = [
             if (!h) { return; }
             const bound = { [h.calc.ID]: { Expression: '(2 * 3) + 4' } };
             const prior = await createAgentRunFixture(ctx);
-            prior.BoundActionParams = JSON.stringify(bound);
-            Assert(await prior.Save(), `prior run saves its bindings: ${prior.LatestResult?.CompleteMessage}`);
+            prior.BoundActionParams = JSON.stringify({ [h.calc.ID]: { Expression: '999' } });
+            Assert(await prior.Save(), `direct BoundActionParams assignment is ignored on save: ${prior.LatestResult?.CompleteMessage}`);
+            AssertEqual(prior.BoundActionParams, null, 'direct BoundActionParams write without SetServerBoundActionParams is discarded');
+
+            prior.SetServerBoundActionParams(JSON.stringify(bound));
+            Assert(await prior.Save(), `prior run saves its server-authored bindings: ${prior.LatestResult?.CompleteMessage}`);
+
+            prior.BoundActionParams = JSON.stringify({ [h.calc.ID]: { Expression: '999' } });
+            Assert(await prior.Save(), `subsequent update restores server-authored bindings: ${prior.LatestResult?.CompleteMessage}`);
+            AssertEqual(prior.BoundActionParams, JSON.stringify(bound), 'direct BoundActionParams overwrite is restored to the stored server value');
 
             h.params.lastRunId = prior.ID;
             await h.internals.inheritBoundActionParams(h.params);
@@ -660,7 +668,7 @@ export const AgentLoopStandinChecks: NamedCheck[] = [
             h.params.boundActionParams = own;
             await h.internals.inheritBoundActionParams(h.params);
             Assert(h.params.boundActionParams === own, 'a caller\'s own bindings win over the stored ones');
-            console.log('      → stored on the run, read back from the database, caller\'s bindings win');
+            console.log('      → stored on the run via SetServerBoundActionParams, direct overwrite refused, read back from the database, caller\'s bindings win');
         }
     }
 ];
