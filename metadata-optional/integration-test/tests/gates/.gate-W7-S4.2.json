@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W7 -> S4.2",
+    "Description": "Gate G0.12 (owner PR 2, phase 0, dataset W7, criterion S4.2): on W7-small-imbalanced s42–s44, 0 of the builder-agent models whose holdout accuracy is at or below the always-majority rate are graded above Poor or cleared to act.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G0.12\",\"owner:PR2\",\"phase:0\",\"dataset:W7\",\"criterion:S4.2\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "0 at-or-below-majority models graded above Poor or actionable."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w7-s4-2"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "9F8198E1-D5F4-4467-8E00-48103A71BEC8"
+  }
+}

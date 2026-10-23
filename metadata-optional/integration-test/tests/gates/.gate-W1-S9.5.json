@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W1 -> S9.5",
+    "Description": "Gate G0.5 (owner PR 2, phase 0, dataset W1, criterion S9.5): the At-Risk list (\"Send to a list\", 1 to 200 members) built from the W1-signal s42 record-process scores has a mean true renewal probability (TrueP from the truth file) below the population mean.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G0.5\",\"owner:PR2\",\"phase:0\",\"dataset:W1\",\"criterion:S9.5\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "The At-Risk list's mean TrueP is below the population mean."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w1-s9-5"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "348424BF-1174-4EC1-A951-195FBDCBFC3F"
+  }
+}

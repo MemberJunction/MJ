@@ -1,0 +1,38 @@
+[
+  {
+    "fields": {
+      "Name": "Predictive Studio Gates — Pending (PR 4)",
+      "Description": "G0.2 (W2 -> C1.1) and G0.3 (W3 -> C1.1), owned by PR 4 (gated publish): their tests stay Pending until PR 4 activates them. Needs MJAPI and the truth sidecar running and `pnpm run truth:provision` done. Run with: MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite \"Predictive Studio Gates — Pending (PR 4)\"",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "MJ: Test Suite Tests": [
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=W2 -> C1.1",
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "A0896CC3-0AED-4A54-9DB9-239FD3F492FF"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=W3 -> C1.1",
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7D299C43-9D7E-4F08-A8E7-B307363DAABD"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "09E4ED3C-BF42-4EE4-AF0A-CE284458A7CD"
+    }
+  }
+]

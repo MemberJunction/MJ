@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W1 -> S7.5",
+    "Description": "Gate G0.1 (owner PR 2, phase 0, dataset W1, criterion S7.5): on W1-signal s42, training with the UI default reads all 16,776 labelled rows (training + locked holdout) or is refused with READ_CAP_EXCEEDED, and a filter-scope ScoreRecordSet call scores all 16,776 rows or is refused with READ_CAP_EXCEEDED. Refusal is read from the operation's result code.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G0.1\",\"owner:PR2\",\"phase:0\",\"dataset:W1\",\"criterion:S7.5\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Training reads 16,776 of 16,776 rows or refuses with READ_CAP_EXCEEDED; filter scoring scores 16,776 of 16,776 or refuses with READ_CAP_EXCEEDED."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w1-s7-5"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "08A705E1-4A35-4828-B699-182AF5CC71E0"
+  }
+}
