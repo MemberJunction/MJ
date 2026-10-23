@@ -7,5 +7,5 @@ const merged = mergeConfig(sharedConfig, defineProject({
   },
 }));
 merged.test = merged.test || {};
-merged.test.include = ['generators/__tests__/**/*.test.ts'];
+merged.test.include = ['src/**/__tests__/**/*.regeneration.test.ts'];
 export default merged;

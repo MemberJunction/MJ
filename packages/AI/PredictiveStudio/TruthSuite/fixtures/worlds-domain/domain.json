@@ -917,7 +917,7 @@
         },
         "Year": {
           "type": "number",
-          "description": "the cycle year, denormalized onto the row (make_world.mjs)"
+          "description": "the cycle year, denormalized onto the row (make_world.ts)"
         },
         "StartDate": {
           "type": "date",
@@ -961,15 +961,15 @@
         },
         "IncomeK": {
           "type": "number",
-          "description": "denormalized copy of Person.IncomeK (make_world.mjs); causal via path arrow at the Person level"
+          "description": "denormalized copy of Person.IncomeK (make_world.ts); causal via path arrow at the Person level"
         },
         "AutoRenew": {
           "type": "boolean",
-          "description": "denormalized copy of Person.AutoRenew (make_world.mjs); causal via path arrow at the Person level"
+          "description": "denormalized copy of Person.AutoRenew (make_world.ts); causal via path arrow at the Person level"
         },
         "Region": {
           "type": "string",
-          "description": "denormalized copy of Person.Region (make_world.mjs); noise"
+          "description": "denormalized copy of Person.Region (make_world.ts); noise"
         },
         "PostalCode": {
           "type": "string",

@@ -132,7 +132,7 @@ jobs:
           path: |
             packages/AI/PredictiveStudio/TruthSuite/.loom
             packages/AI/PredictiveStudio/TruthSuite/.data
-          key: truth-${{ hashFiles('packages/AI/PredictiveStudio/TruthSuite/fixtures/**', 'packages/AI/PredictiveStudio/TruthSuite/generators/**') }}
+          key: truth-${{ hashFiles('packages/AI/PredictiveStudio/TruthSuite/fixtures/**', 'packages/AI/PredictiveStudio/TruthSuite/src/generators/**') }}
       - run: pnpm --filter @memberjunction/predictive-studio-truth-suite run truth:loom
       - name: Truth sidecar (single-threaded)
         working-directory: packages/AI/PredictiveStudio/TruthSuite

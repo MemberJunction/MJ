@@ -9,8 +9,15 @@ export interface CatalogEntry {
   Kind: 'world' | 'scenario';
   Code: string;
   SpecFile: string;
+  /** The generator's TypeScript entry point, relative to the package root; run with tsx (see `runGenerator`). */
   Generator: string;
 }
+
+/**
+ * The modules every generator imports. Their source joins the cache key with the generator's own, so a change to the
+ * shared CSV writer, people draw or Loom loader regenerates the data like a change to the generator does.
+ */
+const GENERATOR_SHARED_SOURCES = ['src/generators/gen_lib.ts', 'src/generators/loom.ts', 'src/generators/types.ts'] as const;
 
 const WORLD_IDS = [
   'W1-signal', 'W2-noise', 'W3-leak-row', 'W4-pit', 'W5-censor',
@@ -27,19 +34,19 @@ export const CATALOG: readonly CatalogEntry[] = [
     Kind: 'world',
     Code: id,
     SpecFile: `fixtures/worlds/${id}.json`,
-    Generator: id === 'W9-multiclass' ? 'generators/make_world_multiclass.mjs' : 'generators/make_world.mjs',
+    Generator: id === 'W9-multiclass' ? 'src/generators/make_world_multiclass.ts' : 'src/generators/make_world.ts',
   })),
   ...SCENARIO_IDS.map((id): CatalogEntry => ({
     Kind: 'scenario',
     Code: id,
     SpecFile: `fixtures/scenarios/specs/${id}.json`,
-    Generator: 'generators/make_scenario.mjs',
+    Generator: 'src/generators/make_scenario.ts',
   })),
   {
     Kind: 'scenario',
     Code: 'T3-lag',
     SpecFile: 'fixtures/scenarios/specs/T3.json',
-    Generator: 'generators/derive_t3_lag.mjs',
+    Generator: 'src/generators/derive_t3_lag.ts',
   },
 ];
 
@@ -56,10 +63,19 @@ export class DatasetCatalog {
   public static EntrySpecHash(entry: CatalogEntry): string {
     const root = TruthSuite.Root();
     const spec = SafeJSONParse<{ [k: string]: Json }>(readFileSync(path.join(root, entry.SpecFile), 'utf8'));
-    const genSource = readFileSync(path.join(root, entry.Generator), 'utf8');
+    const genSource = [entry.Generator, ...GENERATOR_SHARED_SOURCES].map((f) => readFileSync(path.join(root, f), 'utf8')).join('\0');
     const loomPin = SafeJSONParse<{ sha: string }>(readFileSync(path.join(root, 'fixtures', 'loom.json'), 'utf8'));
     if (!spec || !loomPin) throw new Error(`Failed to read spec or loom.json for ${entry.Code}`);
     return DataCache.SpecHash(spec, genSource, loomPin.sha);
+  }
+
+  /**
+   * Run a generator in a child Node process with tsx's loader, from the package root (where tsx resolves). The
+   * TypeScript source is what runs, so the code that generates is the code the cache key hashed, whether this module
+   * runs from src/ or dist/.
+   */
+  private static runGenerator(genPath: string, args: readonly string[]): void {
+    execFileSync(process.execPath, ['--import', 'tsx', genPath, ...args], { stdio: 'pipe', cwd: TruthSuite.Root() });
   }
 
   /** The file's text, or null when it does not exist (read directly rather than checked first, so there is no race). */
@@ -102,13 +118,13 @@ export class DatasetCatalog {
 
     if (entry.Kind === 'world') {
       const hashRoot = path.dirname(seedDir);
-      execFileSync(process.execPath, [genPath, specPath, hashRoot, '--seeds', String(seed)], { stdio: 'pipe' });
+      DatasetCatalog.runGenerator(genPath, [specPath, hashRoot, '--seeds', String(seed)]);
     } else if (entry.Code === 'T3-lag') {
       const t3Entry = DatasetCatalog.Find('scenario', 'T3');
       const t3Dir = await DatasetCatalog.EnsureGenerated(t3Entry, seed, dataRoot);
-      execFileSync(process.execPath, [genPath, t3Dir, seedDir], { stdio: 'pipe' });
+      DatasetCatalog.runGenerator(genPath, [t3Dir, seedDir]);
     } else {
-      execFileSync(process.execPath, [genPath, specPath, seedDir, '--seed', String(seed)], { stdio: 'pipe' });
+      DatasetCatalog.runGenerator(genPath, [specPath, seedDir, '--seed', String(seed)]);
     }
 
     const requiredFiles = entry.Kind === 'world'

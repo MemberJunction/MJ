@@ -1,7 +1,7 @@
 # probes/scenarios/manifest.py — one accessor for a series scenario's rolling-origin design (P3 fix round 1).
 #
 # Where each scenario keeps the object (same fields K, H, firstTestPeriod in both places):
-#   - P2 planted series (T1p, T3, T4; make_scenario.mjs):  manifest["planted"]["rollingOrigin"]
+#   - P2 planted series (T1p, T3, T4; make_scenario.ts):  manifest["planted"]["rollingOrigin"]
 #   - P3 real series (T1-real; build_real.py):              manifest["rollingOrigin"]  (planted is null for real data)
 # Semantics (P2's): periods are 0-indexed in T order; firstTestPeriod = nPeriods - K*H; origin k (1-based) trains on
 # periods t <= o_k and tests o_k < t <= o_k + H, with o_k = firstTestPeriod + (k - 1)*H - 1.
