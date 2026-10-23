@@ -1,6 +1,8 @@
 /**
- * Gate G0.10 "W1 → S5.4": two single-threaded trainings each of logistic regression, xgboost and lightgbm on W1-signal
- * s42 give predictions equal within 1e-9, 3 of 3.
+ * Gate G0.10 "W1 → S5.4": two trainings each of logistic regression, xgboost and lightgbm on W1-signal s42 give
+ * predictions equal within 1e-9, 3 of 3. The trainings run on the sidecar the gate run points at; the truth-suite
+ * sidecar (`pnpm run truth:sidecar`) pins OMP_NUM_THREADS=1. The thread count is the sidecar process's setting, which
+ * this test process cannot read, so it is not reported as a measured value.
  */
 import { IndexByUUID } from '@memberjunction/global';
 import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
@@ -36,7 +38,7 @@ export const PsGateW1S54Checks: NamedCheck[] = [
       const h = await PsGate.Harness(ctx);
       const w1 = await h.EnsureLoaded({ Kind: 'world', ID: 'W1-signal', Seed: 42 });
       const records = HarnessDatasets.FirstRowIDs(w1, 500);
-      const out: Record<string, number | string | boolean | null> = { threads: process.env.OMP_NUM_THREADS || null };
+      const out: Record<string, number | string | boolean | null> = {};
       let equal = 0;
       for (const algorithm of ['logistic_regression', 'xgboost', 'lightgbm'] as const) {
         const p = await h.CreatePipeline(PsGateSpecs.W(h, `G0.10 W1 ${algorithm}`, w1, { Algorithm: algorithm }));
