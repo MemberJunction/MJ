@@ -1,5 +1,5 @@
 import { RunView, type BaseEntity, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import type { MJMLModelEntity } from '@memberjunction/core-entities';
+import type { MJMLModelEntity, MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString, UUIDSet } from '@memberjunction/global';
 import type { AgentStepResult, CandidateModel, TruthHarness } from './types';
 
@@ -70,12 +70,16 @@ export class RunRecords {
 /** A row cleanup deletes: its key, `Delete()`, and the result a failed delete leaves. */
 export type CleanupRow = Pick<BaseEntity, 'Delete' | 'LatestResult'> & { readonly ID: string };
 
-/** A model row: a cleanup row with the pipeline it belongs to. */
-export type CleanupModelRow = CleanupRow & Pick<MJMLModelEntity, 'PipelineID'>;
+/** A model row: a cleanup row with the pipeline it belongs to and its stored artifact file. */
+export type CleanupModelRow = CleanupRow & Pick<MJMLModelEntity, 'PipelineID' | 'ArtifactFileID'>;
+
+/** A scoring Record Process row: a cleanup row with the configuration that names its model. */
+export type CleanupRecordProcessRow = CleanupRow & Pick<MJRecordProcessEntity, 'Configuration'>;
 
 /** Where cleanup reads the rows it deletes (the entity layer in a run; a fake in a unit test). */
 export interface CleanupStore {
   Models(filter: string): Promise<CleanupModelRow[]>;
+  RecordProcesses(filter: string): Promise<CleanupRecordProcessRow[]>;
   Rows(entityName: string, filter: string): Promise<CleanupRow[]>;
 }
 
@@ -85,13 +89,15 @@ export class HarnessCleanup {
   public static EntityStore(provider: IMetadataProvider, user: UserInfo): CleanupStore {
     return {
       Models: (filter) => HarnessCleanup.load<MJMLModelEntity>(provider, user, 'MJ: ML Models', filter),
+      RecordProcesses: (filter) => HarnessCleanup.load<MJRecordProcessEntity>(provider, user, 'MJ: Record Processes', filter),
       Rows: (entityName, filter) => HarnessCleanup.load<BaseEntity & { ID: string }>(provider, user, entityName, filter),
     };
   }
 
   /**
    * Delete the recorded models (and every model trained from a recorded pipeline) and the recorded pipelines (and the
-   * pipelines of recorded models), children first: scoring bindings and training runs, then models, then pipelines.
+   * pipelines of recorded models), children first: scoring bindings; the models' scoring Record Processes with their
+   * runs, run details and watermarks; training runs; then models, their artifact files, and pipelines.
    * Every row is attempted; deleted IDs leave `records`. Returns one line per row whose `Delete()` failed.
    */
   public static async DeleteRecorded(store: CleanupStore, records: RunRecords): Promise<string[]> {
@@ -99,19 +105,57 @@ export class HarnessCleanup {
     const models = modelFilter ? await store.Models(modelFilter) : [];
     const modelIds = new UUIDSet(models.map((m) => m.ID));
     const pipelineIds = new UUIDSet([...records.PipelineIDs, ...models.map((m) => m.PipelineID)]);
+    const fileIds = new UUIDSet(models.flatMap((m) => (m.ArtifactFileID ? [m.ArtifactFileID] : [])));
+    const processes = modelIds.Size > 0 ? await HarnessCleanup.scoringProcesses(store, modelIds) : [];
+    const processIds = new UUIDSet(processes.map((p) => p.ID));
+    const processFilter = HarnessCleanup.anyIn([['RecordProcessID', processIds]]);
+    const processRuns = processFilter ? await store.Rows('MJ: Process Runs', processFilter) : [];
+    const processRunIds = new UUIDSet(processRuns.map((r) => r.ID));
     const bindingFilter = HarnessCleanup.anyIn([['MLModelID', modelIds]]);
     const runFilter = HarnessCleanup.anyIn([['PipelineID', pipelineIds], ['ResultingModelID', modelIds]]);
     const pipelineFilter = HarnessCleanup.anyIn([['ID', pipelineIds]]);
+    const detailFilter = HarnessCleanup.anyIn([['ProcessRunID', processRunIds]]);
+    const fileFilter = HarnessCleanup.anyIn([['ID', fileIds]]);
     const bindings = bindingFilter ? await store.Rows('MJ: ML Model Scoring Bindings', bindingFilter) : [];
+    const details = detailFilter ? await store.Rows('MJ: Process Run Details', detailFilter) : [];
+    const watermarks = processFilter ? await store.Rows('MJ: Record Process Watermarks', processFilter) : [];
     const runs = runFilter ? await store.Rows('MJ: ML Training Runs', runFilter) : [];
+    const files = fileFilter ? await store.Rows('MJ: Files', fileFilter) : [];
     const pipelines = pipelineFilter ? await store.Rows('MJ: ML Training Pipelines', pipelineFilter) : [];
     const failures = [
       ...(await HarnessCleanup.deleteAll('MJ: ML Model Scoring Bindings', bindings)),
+      ...(await HarnessCleanup.deleteAll('MJ: Process Run Details', details)),
+      ...(await HarnessCleanup.deleteAll('MJ: Process Runs', processRuns)),
+      ...(await HarnessCleanup.deleteAll('MJ: Record Process Watermarks', watermarks)),
+      ...(await HarnessCleanup.deleteAll('MJ: Record Processes', processes)),
       ...(await HarnessCleanup.deleteAll('MJ: ML Training Runs', runs)),
       ...(await HarnessCleanup.deleteAll('MJ: ML Models', models, (id) => records.ModelIDs.Delete(id))),
+      ...(await HarnessCleanup.deleteAll('MJ: Files', files)),
       ...(await HarnessCleanup.deleteAll('MJ: ML Training Pipelines', pipelines, (id) => records.PipelineIDs.Delete(id))),
     ];
     return failures;
+  }
+
+  /**
+   * The `WorkType='ML Model'` Record Processes whose configuration names one of `modelIds`. The model is read from the
+   * parsed configuration, never matched by text, so another model's process is never selected.
+   */
+  private static async scoringProcesses(store: CleanupStore, modelIds: UUIDSet): Promise<CleanupRecordProcessRow[]> {
+    const all = await store.RecordProcesses(`WorkType = 'ML Model'`);
+    return all.filter((p) => {
+      const modelId = HarnessCleanup.configuredModelId(p.Configuration);
+      return modelId !== null && modelIds.Has(modelId);
+    });
+  }
+
+  /** The `modelId` a scoring Record Process's configuration names, or null. */
+  private static configuredModelId(configuration: string | null): string | null {
+    try {
+      const parsed: { modelId?: string | number | boolean | null } = JSON.parse(configuration ?? '{}');
+      return typeof parsed.modelId === 'string' ? parsed.modelId : null;
+    } catch {
+      return null;
+    }
   }
 
   /** `Col IN ('a','b') OR Other IN (…)` over the non-empty ID sets; null when every set is empty. */
