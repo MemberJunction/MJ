@@ -35,8 +35,6 @@ GO
 -- Stamps a session's recording file, media kind and t0. Each NULL parameter leaves its column as stored,
 -- so a caller writes only what it knows. Returns one row with the session's RecordingStatus after the
 -- write, or no row when the session does not exist (the caller treats that as an error).
-DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spStampAIAgentSessionRecordingFile];
-GO
 CREATE PROCEDURE [${flyway:defaultSchema}].[spStampAIAgentSessionRecordingFile]
     @AgentSessionID UNIQUEIDENTIFIER,
     @RecordingFileID UNIQUEIDENTIFIER = NULL,
