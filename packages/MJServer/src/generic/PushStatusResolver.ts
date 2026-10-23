@@ -245,6 +245,16 @@ export interface StatusUpdatesFilterContext {
  * `sessionId` is no longer sufficient. Fails CLOSED — a missing owner or connection identity never
  * matches.
  */
+/**
+ * The user a status update belongs to: the request's user, or, on a payload elevated by `ElevateUserPayload`, the user
+ * the elevated principal stands in for (a public widget guest). The guest's socket is authenticated as the guest, so
+ * an update stamped with the elevated system user would never pass {@link StatusUpdatesFilter} and the guest would
+ * wait forever for its run to finish.
+ */
+export function StatusUpdateOwnerID(userPayload: UserPayload | undefined): string {
+  return (userPayload?.ElevatedFrom ?? userPayload?.userRecord)?.ID ?? '';
+}
+
 export function StatusUpdatesFilter(data: {
   payload: PushStatusNotificationPayload;
   args: PushStatusNotificationArgs;

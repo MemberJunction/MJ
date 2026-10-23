@@ -10,6 +10,7 @@ import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { AgentRunStatusPublisher } from './AgentRunStatusPublisher.js';
 import { StartLivenessPulse } from '../generic/FireAndForgetHeartbeat.js';
+import { StatusUpdateOwnerID } from '../generic/PushStatusResolver.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
 import { ResolveWidgetGuestRunContext, ElevateUserPayload } from '../realtimeWidget/widgetGuestElevation.js';
@@ -1326,7 +1327,7 @@ export class RunAIAgentResolver extends ResolverBase {
         const pulse = StartLivenessPulse({
             pubSub,
             sessionId,
-            ownerUserId: userPayload.userRecord.ID,
+            ownerUserId: StatusUpdateOwnerID(userPayload),
             resolver: 'RunAIAgentResolver',
             readStatus: () => runRef.current
                 ? { runId: runRef.current.ID, status: runRef.current.Status }

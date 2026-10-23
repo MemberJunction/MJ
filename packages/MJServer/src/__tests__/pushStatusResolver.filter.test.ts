@@ -10,7 +10,7 @@
  */
 import 'reflect-metadata';
 import { describe, it, expect } from 'vitest';
-import { StatusUpdatesFilter, type PushStatusNotificationPayload, type StatusUpdatesFilterContext } from '../generic/PushStatusResolver';
+import { StatusUpdatesFilter, StatusUpdateOwnerID, type PushStatusNotificationPayload, type StatusUpdatesFilterContext } from '../generic/PushStatusResolver';
 import type { UserPayload } from '../types';
 
 const OWNER = 'AA11BB22-0000-4000-8000-000000000001';
@@ -61,3 +61,11 @@ describe('statusUpdatesFilter (B49 session-hijack gate)', () => {
   });
 });
 
+
+describe('StatusUpdateOwnerID (#4931)', () => {
+    it('is the request user, or the user an elevated payload stands in for', () => {
+        expect(StatusUpdateOwnerID({ sessionId: 's', email: 'e', userRecord: { ID: 'user-1' } } as UserPayload)).toBe('user-1');
+        expect(StatusUpdateOwnerID({ sessionId: 's', email: 'e', userRecord: { ID: 'system' }, ElevatedFrom: { ID: 'guest' } } as unknown as UserPayload)).toBe('guest');
+        expect(StatusUpdateOwnerID(undefined)).toBe('');
+    });
+});

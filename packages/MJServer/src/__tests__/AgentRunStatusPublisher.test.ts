@@ -29,6 +29,7 @@ vi.mock('@memberjunction/graphql-dataprovider', () => ({
 import type { ExecuteAgentResult } from '@memberjunction/ai-core-plus';
 import { ConversationStreaming, type IConversationsRuntimeContext } from '@memberjunction/conversations-runtime';
 import { AgentRunStatusPublisher } from '../resolvers/AgentRunStatusPublisher.js';
+import { StatusUpdatesFilter, type PushStatusNotificationPayload } from '../generic/PushStatusResolver.js';
 import type { UserPayload } from '../types.js';
 
 const run = {
@@ -171,5 +172,27 @@ describe('AgentRunStatusPublisher', () => {
         expect(onReply.mock.calls[0][0].message).toBe('Looking');
         expect(completions).toEqual([{ conversationDetailId: 'detail-1', agentRunId: 'run-1', success: true, errorMessage: undefined }]);
         expect(streaming.GetRecentCompletion('detail-1')?.agentRunId).toBe('run-1');
+    });
+});
+
+describe('AgentRunStatusPublisher — a widget guest elevated to the system user (#4931)', () => {
+    const GUEST = { ID: 'anonymous-user', IsMagicLinkAnonymous: true };
+    const SYSTEM = { ID: 'system-user' };
+
+    it("stamps the guest (ElevatedFrom), not the elevated user, so the guest's own socket receives the run's events", () => {
+        const publish = vi.fn().mockResolvedValue(undefined);
+        const elevated = { sessionId: 'session-1', userRecord: SYSTEM, isSystemUser: true, ElevatedFrom: GUEST } as unknown as UserPayload;
+        const made = new AgentRunStatusPublisher({ publish } as unknown as PubSubEngine, elevated, 'session-1');
+
+        made.PublishFinal({ success: true, agentRun: run, payload: { text: 'Hello' } } as ExecuteAgentResult, 'detail-1', '{"text":"Hello"}');
+        made.PublishFailure('detail-1', 'boom');
+
+        const owners = publish.mock.calls.map((call) => (call[1] as { ownerUserId: string }).ownerUserId);
+        expect(owners.length).toBeGreaterThan(0);
+        expect(owners.every((owner) => owner === GUEST.ID)).toBe(true);
+        const guestConnection = { userPayload: { sessionId: 'session-1', userRecord: GUEST } as unknown as UserPayload };
+        for (const call of publish.mock.calls) {
+            expect(StatusUpdatesFilter({ payload: call[1] as PushStatusNotificationPayload, args: { sessionId: 'session-1' }, context: guestConnection })).toBe(true);
+        }
     });
 });
