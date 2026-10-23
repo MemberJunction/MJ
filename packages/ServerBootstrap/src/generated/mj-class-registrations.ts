@@ -64,12 +64,6 @@ import {
     CohereReranker,
 } from '@memberjunction/ai-cohere';
 
-// @memberjunction/ai-elevenlabs (2 classes)
-import {
-    ElevenLabsAudioGenerator,
-    ElevenLabsRealtime,
-} from '@memberjunction/ai-elevenlabs';
-
 // @memberjunction/ai-fireworks (1 classes)
 import {
     FireworksLLM,
@@ -136,6 +130,13 @@ import {
 import {
     DeepInfraLLM,
 } from '@memberjunction/ai-deepinfra';
+
+// @memberjunction/ai-elevenlabs (3 classes)
+import {
+    ElevenLabsAudioGenerator,
+    ElevenLabsRealtime,
+    ElevenRealtime,
+} from '@memberjunction/ai-elevenlabs';
 
 // @memberjunction/ai-huggingface (1 classes)
 import {
@@ -1751,8 +1752,6 @@ const CLASS_REGISTRATIONS_0: any[] = [
     CloudflareDecision,
     CohereEmbedding,
     CohereReranker,
-    ElevenLabsAudioGenerator,
-    ElevenLabsRealtime,
     FireworksLLM,
     GeminiEmbedding,
     GeminiImageGenerator,
@@ -1776,6 +1775,9 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OpenAILiveRealtime,
     OpenAIRealtime,
     DeepInfraLLM,
+    ElevenLabsAudioGenerator,
+    ElevenLabsRealtime,
+    ElevenRealtime,
     HuggingFaceRealtime,
     InceptionDecision,
     InceptionLLM,
@@ -1937,11 +1939,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
     MJClusterAnalysisClusterEntity,
-    MJClusterAnalysisEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
     MJCollectionEntity,
     MJCollectionPermissionEntity,
@@ -2141,11 +2143,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQueryEntity,
     MJQueryEntityEntity,
     MJQueryEntityExtended,
-    MJQueryFieldEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJQueryFieldEntity,
     MJQueryParameterEntity,
     MJQueryPermissionEntity,
     MJQuerySQLEntity,
@@ -2345,11 +2347,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     CreateJotFormAction,
     CreateSurveyMonkeyAction,
     CreateTypeformAction,
-    ExportGoogleFormsCSVAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    ExportGoogleFormsCSVAction,
     ExportJotFormCSVAction,
     ExportSurveyMonkeyCSVAction,
     ExportTypeformCSVAction,
@@ -2549,11 +2551,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     SubmitHumanRubricAction,
     AzureAISearchProvider,
     BGEReRanker,
-    CohereReRanker,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    CohereReRanker,
     ElasticsearchSearchProvider,
     EntitySearchProvider,
     FullTextSearchProvider,
@@ -2753,11 +2755,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     DeleteScheduledJobAction,
     ExecuteScheduledJobNowAction,
     GetScheduledJobStatisticsAction,
-    QueryScheduledJobsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    QueryScheduledJobsAction,
     UpdateScheduledJobAction,
     AgentEvalDriver,
     DecisionEvalDriver,
@@ -2957,11 +2959,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     WorkQueueValidateBindingsServerOperation,
     AWSIoTCoreBroadcastProvider,
     AzureWebPubSubBroadcastProvider,
-    GCPPubSubBroadcastProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    GCPPubSubBroadcastProvider,
     MJEntityPermissionEntityServer,
     MJTenantFilterMiddleware,
     RateLimitMiddleware,
@@ -2985,7 +2987,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1206;
+export const CLASS_REGISTRATIONS_COUNT = 1207;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
@@ -2999,7 +3001,6 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-cerebras',
     '@memberjunction/ai-cloudflare',
     '@memberjunction/ai-cohere',
-    '@memberjunction/ai-elevenlabs',
     '@memberjunction/ai-fireworks',
     '@memberjunction/ai-gemini',
     '@memberjunction/ai-groq',
@@ -3011,6 +3012,7 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-ollama',
     '@memberjunction/ai-openai',
     '@memberjunction/ai-deepinfra',
+    '@memberjunction/ai-elevenlabs',
     '@memberjunction/ai-huggingface',
     '@memberjunction/ai-inception',
     '@memberjunction/ai-llamacpp',

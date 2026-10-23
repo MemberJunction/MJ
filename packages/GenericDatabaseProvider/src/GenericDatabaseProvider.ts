@@ -2675,7 +2675,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             }
 
             const maxRowsUsed = params.MaxRows || entityInfo.UserViewMaxRows;
-            const willNeedCount = countSQL && (usingPagination || params.ResultType === 'count_only');
+            // SkipTotalRowCount is an explicit caller opt-out of the count (see RunViewParams);
+            // count_only still counts — that result IS the count, the flag cannot mean anything there.
+            const skipCount = params.SkipTotalRowCount === true && params.ResultType !== 'count_only';
+            const willNeedCount = countSQL && ((usingPagination && !skipCount) || params.ResultType === 'count_only');
             if (willNeedCount) {
                 if (countExecutor && params.ResultType === 'count_only') {
                     countExecutorPromise = countExecutor(countSQL!);
@@ -2721,7 +2724,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             if (willNeedCount && resultMap['count']) {
                 const countResult = resultMap['count'] as { TotalRowCount: number }[];
                 if (countResult && countResult.length > 0) rowCount = countResult[0].TotalRowCount;
-            } else if (countSQL && maxRowsUsed && maxRowsUsed > 1 && retData.length === maxRowsUsed) {
+            } else if (countSQL && maxRowsUsed && maxRowsUsed > 1 && retData.length === maxRowsUsed && !skipCount) {
                 // A row-limited read that came back FULL may have been truncated, so the total is
                 // worth a second round trip: this is what makes Explorer's "100 of 299" correct.
                 // `maxRowsUsed > 1` carves out the ONE case where it cannot be: a `MaxRows:1`
@@ -2745,6 +2748,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 // observable difference, and it is confined to a limit of exactly one row — a shape
                 // no caller asks for in order to learn a total, because a total is the one thing a
                 // single-row limit cannot tell it anything about.
+                //
+                // `!skipCount`: a caller that never reads TotalRowCount can also opt out of this count
+                // on a full multi-row page (RunViewParams.SkipTotalRowCount); the pagination count
+                // above honours the same flag.
                 const countResult = await this.ExecuteSQL<{ TotalRowCount: number }>(countSQL, undefined, undefined, contextUser);
                 if (countResult && countResult.length > 0) rowCount = countResult[0].TotalRowCount;
             }

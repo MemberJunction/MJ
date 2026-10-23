@@ -20,6 +20,11 @@ import type {
 export class IntegrationProgressReader {
     constructor(private readonly rootDir: string = join(process.cwd(), 'logs', 'integration-runs')) {}
 
+    /** Directory these artifacts live in, so callers can address a run's files directly. */
+    public get RootDir(): string {
+        return this.rootDir;
+    }
+
     /** List runs, newest-first by mtime. */
     public async ListRuns(filter: IntegrationRunFilter = {}, limit = 50): Promise<IntegrationRunSnapshot[]> {
         const entries = await this.safeReadDir(this.rootDir);
