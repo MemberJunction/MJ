@@ -35,6 +35,9 @@ export class MJAIPromptFormComponentExtended extends MJAIPromptFormComponent imp
 
     /** Custom-layout AI Prompt form looks best full-width on first open. */
     public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
+
+    /** Custom-layout form owns its entire body; suppress auto-filled relationship sections. */
+    public override get OwnsEntireFormBody(): boolean { return true; }
     public Template: MJTemplateEntity | null = null;
 
     /** @deprecated Use {@link Template}. */

@@ -118,9 +118,10 @@ V[YYYYMMDDHHMM]__v[VERSION].x_[DESCRIPTION].sql
 3. **Schema changes only** - NO data manipulation beyond what's required for the schema change
 
 **NEVER INCLUDE IN MIGRATIONS:**
+- **Existence guards** — no `IF OBJECT_ID(...) IS NULL`, `IF COL_LENGTH(...) IS NULL`, `IF NOT EXISTS (SELECT … FROM sys.…)` or `DROP … IF EXISTS` around DDL or descriptions. Skyway runs each migration exactly once, so a guard only hides schema drift and complicates the PostgreSQL conversion. Use `CREATE OR ALTER` to replace a hand-written view or procedure. Enforced by the `migration-existence-guards` standard; see [`guides/SCHEMA_AND_CODE_AUTHORING_GUIDE.md`](../guides/SCHEMA_AND_CODE_AUTHORING_GUIDE.md), which also covers writing CHECK-list values for people (`'Opted In'`, not `'OptedIn'`).
 - **Metadata-record inserts via `*__Metadata_Sync.sql` migrations** — metadata changes (new AI models, prompts, agents, etc.) ship ONLY as declarative JSON under `/metadata/` (with CLI-`uuidgen` primaryKey UUIDs, no `sync` blocks). At release time the build engineer runs `mj sync push` against a clean DB at the last released version, generating ONE consolidated metadata-sync migration per build (SS + PG) and writing back the `sync` blocks. Do not hand-author per-PR sync migrations. See `metadata/CLAUDE.md` rule 1b.
 - View creation/updates (handled by CodeGen)
-- EntityField inserts/updates — **including `ValueListType` and `EntityFieldValue` rows** (handled by CodeGen)
+- EntityField inserts/updates — **including `ValueListType`, `EntityFieldValue` rows, and `EntityIDFieldName` polymorphic FK links** (CodeGen owns initial `EntityField` creation; `EntityIDFieldName` decorations belong in `metadata/entities/.polymorphic-fk-entity-fields.json` and ship via release-time `mj sync push`)
 - Entity metadata changes (handled by CodeGen)
 - Stored procedure creation/updates (handled by CodeGen)
 - Any MemberJunction metadata updates (handled by CodeGen)
@@ -432,30 +433,19 @@ ALTER TABLE ${flyway:defaultSchema}.TableName ADD Column3 UNIQUEIDENTIFIER NULL;
 
 ### 2. Modifying Existing Fields
 
-When modifying existing fields, **always drop existing extended properties first**:
+When changing the description of an existing field, **update it in place with `sp_updateextendedproperty`**. Migrations run in order against a known schema, so you know whether the column already has a description: update it if it does, add it with `sp_addextendedproperty` if it doesn't. Never wrap either call in an `IF EXISTS (SELECT … FROM sys.extended_properties …)` guard (see **NEVER INCLUDE IN MIGRATIONS** above).
 ```sql
--- Drop existing extended property if it exists
-IF EXISTS (SELECT * FROM sys.extended_properties 
-           WHERE major_id = OBJECT_ID('${flyway:defaultSchema}.TableName') 
-           AND minor_id = (SELECT column_id FROM sys.columns 
-                          WHERE object_id = OBJECT_ID('${flyway:defaultSchema}.TableName') 
-                          AND name = 'ColumnName')
-           AND name = 'MS_Description')
-BEGIN
-    EXEC sp_dropextendedproperty 
-        @name = N'MS_Description',
-        @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-        @level1type = N'TABLE', @level1name = 'TableName',
-        @level2type = N'COLUMN', @level2name = 'ColumnName';
-END
-
--- Then add the new extended property
-EXEC sp_addextendedproperty 
+-- ✅ CORRECT - the column already has a description
+EXEC sp_updateextendedproperty
     @name = N'MS_Description',
     @value = N'New description',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = 'TableName',
     @level2type = N'COLUMN', @level2name = 'ColumnName';
+
+-- ❌ WRONG - a guard turns a schema mismatch into a silent no-op
+IF EXISTS (SELECT * FROM sys.extended_properties WHERE ... AND name = 'MS_Description')
+    EXEC sp_dropextendedproperty ...;
 ```
 
 ### 3. Use Hardcoded UUIDs

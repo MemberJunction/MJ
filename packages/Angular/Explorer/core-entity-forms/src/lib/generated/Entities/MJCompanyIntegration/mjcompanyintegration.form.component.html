@@ -503,6 +503,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Company Integration Objects Section -->
+    <mj-collapsible-panel
+        SectionKey="mJCompanyIntegrationObjects"
+        SectionName="Company Integration Objects"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJCompanyIntegrationObjects')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integration Objects','CompanyIntegrationID')"
+                [NewRecordValues]="NewRecordValues('MJ: Company Integration Objects','CompanyIntegrationID')"
+                [AllowLoad]="IsSectionExpanded('mJCompanyIntegrationObjects')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrationObjects', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         
