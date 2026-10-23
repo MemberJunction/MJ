@@ -7,7 +7,12 @@
  */
 
 import { createHash } from 'node:crypto';
-import { TransformCodeOnly } from './ExpressionHelpers.js';
+import {
+  TransformCodeOnly,
+  UnquoteBuiltinFunctionCalls,
+  ConvertObjectIdCalls,
+  ConvertLikeCharacterClasses,
+} from './ExpressionHelpers.js';
 
 /**
  * Final cleanup pass on the complete converted SQL output.
@@ -361,6 +366,13 @@ export function PostProcess(sql: string): string {
   // Safety net: convert multi-column ALTER TABLE ADD to PG ADD COLUMN syntax
   // Catches cases where ALTER TABLE is embedded in a CREATE_TABLE batch
   sql = fixMultiColumnAdd(sql);
+
+  // Safety net for T-SQL built-ins a rule's PascalCase quoting turned into quoted identifiers
+  // ("UPPER"(x), "LTRIM"(x), "LEN"(x)), OBJECT_ID() existence probes, and LIKE character
+  // classes PostgreSQL LIKE cannot express (issue #5364 items 1 and 2).
+  sql = UnquoteBuiltinFunctionCalls(sql);
+  sql = ConvertObjectIdCalls(sql);
+  sql = ConvertLikeCharacterClasses(sql);
 
   // Fix RAISERROR that was quoted as "RAISERROR" by PascalCase quoting
   sql = sql.replace(/"RAISERROR"\s*\(/gi, 'RAISERROR(');

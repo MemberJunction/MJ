@@ -5,6 +5,7 @@
  * convert_top_to_limit, etc.
  */
 import { ResolveInlineType } from './TypeResolver.js';
+import { GAP_MARKER_NEEDS_HAND_AUTHORING } from './types.js';
 
 /**
  * Split SQL into segments of code, string literals, and comments.
@@ -507,7 +508,10 @@ export function ConvertStringConcat(
       const startsWithPlus = /^\s*\+/.test(newCode);
       const endsWithPlus = /\+\s*$/.test(newCode);
       if (startsWithPlus || endsWithPlus) {
-        newCode = newCode.replace(/\+/g, '||');
+        // A `+` whose right operand is a numeric literal is arithmetic even between two string
+        // literals: the code between them can span a whole recursive-CTE member, where
+        // `p."RelativeDepth" + 1` became `|| 1` (issue #5364 item 6).
+        newCode = newCode.replace(/\+(?!\s*\d)/g, '||');
       }
     } else if (prevIsString) {
       // After a string literal: 'text' + expr
@@ -915,11 +919,26 @@ const PASCAL_QUOTE_KEYWORDS = new Set([
  */
 export function QuotePascalCaseIdentifiers(sql: string): string {
   return TransformCodeOnly(sql, (code) => {
-    return code.replace(/(?<!")(?<!\w)([A-Z]\w*)(?!")(?!\w)/g, (match, word: string) => {
-      if (PASCAL_QUOTE_KEYWORDS.has(word.toUpperCase())) return match;
+    return code.replace(/(?<!")(?<!\w)([A-Z]\w*)(?!")(?!\w)/g, (match, word: string, offset: number, whole: string) => {
+      if (PASCAL_QUOTE_KEYWORDS.has(word.toUpperCase()) && !IsKeywordNamedColumn(word, whole, offset)) return match;
       return `"${word}"`;
     });
   });
+}
+
+/**
+ * True when a word that is also a SQL keyword or built-in (`Length`, `Precision`, `Action`) is
+ * being used as a column: written in mixed case, as MJ column names are, and followed by `=` the way
+ * an `UPDATE ... SET Length=100` assignment or a `WHERE Precision = 0` comparison uses it.
+ *
+ * Keywords in T-SQL source are upper-case by convention, so a mixed-case spelling directly followed
+ * by `=` is a column. Without this check CodeGen's `UPDATE EntityField SET ... Length=100,
+ * Precision=0` kept those two names bare while quoting every other column, and PostgreSQL folded
+ * them to `length` / `precision` (`column "length" does not exist`) — issue #5364 item 5.
+ */
+export function IsKeywordNamedColumn(word: string, text: string, offset: number): boolean {
+  if (word === word.toUpperCase()) return false;
+  return /^\s*=(?![=>])/.test(text.slice(offset + word.length));
 }
 
 /** @deprecated Use {@link QuotePascalCaseIdentifiers}. */
@@ -1345,4 +1364,181 @@ function splitTopLevelValues(s: string): string[] {
   }
   if (cur.length) out.push(cur);
   return out;
+}
+
+/**
+ * T-SQL built-in functions that PostgreSQL also has, keyed by upper-cased T-SQL name and mapped to
+ * the PostgreSQL spelling. Renamed ones carry the PG name (`LEN` → `LENGTH`).
+ */
+const BUILTIN_FUNCTION_NAMES: ReadonlyMap<string, string> = new Map([
+  ['UPPER', 'UPPER'], ['LOWER', 'LOWER'], ['LTRIM', 'LTRIM'], ['RTRIM', 'RTRIM'], ['TRIM', 'TRIM'],
+  ['LEN', 'LENGTH'], ['LENGTH', 'LENGTH'], ['DATALENGTH', 'OCTET_LENGTH'], ['SUBSTRING', 'SUBSTRING'],
+  ['REPLACE', 'REPLACE'], ['LEFT', 'LEFT'], ['RIGHT', 'RIGHT'], ['REVERSE', 'REVERSE'], ['CONCAT', 'CONCAT'],
+  ['COALESCE', 'COALESCE'], ['ISNULL', 'COALESCE'], ['NULLIF', 'NULLIF'],
+  ['ABS', 'ABS'], ['ROUND', 'ROUND'], ['FLOOR', 'FLOOR'], ['CEILING', 'CEILING'], ['POWER', 'POWER'],
+  ['SQRT', 'SQRT'], ['SIGN', 'SIGN'],
+  ['MAX', 'MAX'], ['MIN', 'MIN'], ['COUNT', 'COUNT'], ['SUM', 'SUM'], ['AVG', 'AVG'],
+]);
+
+/**
+ * Unquote T-SQL built-in function calls that identifier quoting turned into quoted identifiers:
+ * `"UPPER"("Code")` → `UPPER("Code")`, `"LEN"(x)` → `LENGTH(x)`.
+ *
+ * The PascalCase quoting passes each keep their own keyword list, and a built-in missing from one of
+ * them came out quoted. PostgreSQL resolves a quoted name case-sensitively, so `"UPPER"` names no
+ * function (`function UPPER(character) does not exist`) — issue #5364 item 1.
+ *
+ * Only an unqualified call matches: SQL Server requires a user-defined scalar function to be called
+ * schema-qualified (`dbo.fn(...)`), so a bare quoted name followed by `(` can only be a built-in.
+ * String literals and comments are left untouched.
+ */
+export function UnquoteBuiltinFunctionCalls(sql: string): string {
+  return TransformCodeOnly(sql, (code) =>
+    code.replace(/(?<![.\w"])"([A-Za-z_]+)"(\s*\()/g, (match, name: string, paren: string) => {
+      const pgName = BUILTIN_FUNCTION_NAMES.get(name.toUpperCase());
+      return pgName ? `${pgName}${paren}` : match;
+    })
+  );
+}
+
+/**
+ * Convert the argument of a T-SQL `OBJECT_ID('schema.Object')` to the text `to_regclass` parses:
+ * brackets removed, the object name double-quoted (MJ object names are case-sensitive PascalCase),
+ * the schema left unquoted so it folds to lowercase like the schema `CREATE SCHEMA` produced.
+ */
+function objectIdArgToRegclass(arg: string): string {
+  const parts = arg
+    .split('.')
+    .map((p) => p.trim().replace(/^\[(.*)\]$/, '$1').replace(/^"(.*)"$/, '$1'))
+    .filter((p) => p.length > 0);
+  const name = parts.pop() ?? '';
+  const quotedName = `"${name.replace(/"/g, '""')}"`;
+  return parts.length > 0 ? `${parts[parts.length - 1]}.${quotedName}` : quotedName;
+}
+
+/**
+ * Convert T-SQL `OBJECT_ID('[schema].[Table]'[, 'U'])` (bare or already quoted as `"OBJECT_ID"`) to
+ * PostgreSQL `to_regclass('schema."Table"')`. Both return NULL for a missing object, and the
+ * regclass result compares directly with `pg_constraint.conrelid` — issue #5364 item 1.
+ * The optional object-type argument has no `to_regclass` counterpart and is dropped.
+ */
+export function ConvertObjectIdCalls(sql: string): string {
+  return sql.replace(
+    /(?<![.\w"])"?OBJECT_ID"?\s*\(\s*N?'([^']+)'\s*(?:,\s*N?'[^']*'\s*)?\)/gi,
+    (_m, arg: string) => `to_regclass('${objectIdArgToRegclass(arg).replace(/'/g, "''")}')`
+  );
+}
+
+/** Regex metacharacters that must be escaped when a LIKE pattern becomes a POSIX regex. */
+const REGEX_META = /[.*+?^${}()|\\]/;
+
+/**
+ * Translate a T-SQL LIKE pattern that uses a character class (`[...]` / `[^...]`) into an
+ * equivalent POSIX regular expression, or return null when the pattern has no class.
+ * `%` → `.*`, `_` → `.`, a class is kept as-is (T-SQL and POSIX share `[a-z]`/`[^a-z]` syntax),
+ * everything else is matched literally. The regex is anchored, and a leading/trailing `.*` is
+ * dropped because an unanchored regex already means "anywhere".
+ */
+function likePatternToRegex(pattern: string): string | null {
+  if (!/\[[^\]]+\]/.test(pattern)) return null;
+  let body = '';
+  for (let i = 0; i < pattern.length; i++) {
+    const ch = pattern[i];
+    if (ch === '[') {
+      const close = pattern.indexOf(']', i + 1);
+      if (close < 0) return null;
+      // A backslash inside a POSIX bracket expression is literal, so the class copies verbatim.
+      body += pattern.slice(i, close + 1);
+      i = close;
+    } else if (ch === '%') {
+      body += '.*';
+    } else if (ch === '_') {
+      body += '.';
+    } else {
+      body += REGEX_META.test(ch) ? `\\${ch}` : ch;
+    }
+  }
+  let anchored = `^${body}$`;
+  if (anchored.startsWith('^.*')) anchored = anchored.slice(3);
+  if (anchored.endsWith('.*$')) anchored = anchored.slice(0, -3);
+  return anchored;
+}
+
+/**
+ * Convert `[NOT] LIKE '<pattern with [...] class>'` to the POSIX regex operators `~` / `!~`.
+ *
+ * PostgreSQL LIKE has no character classes, so `"Code" NOT LIKE '%[^A-Z0-9_-]%'` searches for the
+ * literal text `[^A-Z0-9_-]` and a CHECK built on it accepts every value — the constraint is lost
+ * without an error (issue #5364 item 2). The regex form keeps it: `"Code" !~ '[^A-Z0-9_-]'`.
+ *
+ * The match is case-sensitive, like the converted LIKE and `=` comparisons around it; a SQL Server
+ * database under a case-insensitive collation matched classes case-insensitively. A LIKE with an
+ * ESCAPE clause is left alone, since its escape character changes how the pattern reads.
+ */
+export function ConvertLikeCharacterClasses(sql: string): string {
+  const segments = segmentSQL(sql);
+  for (let i = 0; i + 1 < segments.length; i++) {
+    const code = segments[i];
+    const literal = segments[i + 1];
+    if (code.type !== 'code' || literal.type !== 'string') continue;
+    const op = code.text.match(/\b(NOT\s+)?LIKE\s*$/i);
+    if (!op || op.index === undefined) continue;
+    const after = segments[i + 2];
+    if (after && after.type === 'code' && /^\s*ESCAPE\b/i.test(after.text)) continue;
+    const pattern = literal.text.slice(1, -1).replace(/''/g, "'");
+    const regex = likePatternToRegex(pattern);
+    if (regex === null) continue;
+    code.text = code.text.slice(0, op.index) + (op[1] ? '!~ ' : '~ ');
+    literal.text = `'${regex.replace(/'/g, "''")}'`;
+  }
+  return segments.map((s) => s.text).join('');
+}
+
+/** MJ core's schema — the only schema the routine rules' patterns are written against. */
+const CORE_SCHEMA = '__mj';
+
+/** The schema a `CREATE [OR ALTER] PROCEDURE|FUNCTION|TRIGGER <schema>.<name>` routine is created in. */
+export function RoutineSchema(sql: string): string | null {
+  const m = StripComments(sql).match(
+    /\bCREATE\s+(?:OR\s+ALTER\s+)?(?:PROC(?:EDURE)?|FUNCTION|TRIGGER)\s+(?:\[([^\]]+)\]|"([^"]+)"|([\w$]+))\s*\./i
+  );
+  return m ? (m[1] ?? m[2] ?? m[3]) : null;
+}
+
+/**
+ * Convert a routine with a converter whose patterns are written against MJ core's `__mj` schema,
+ * when the routine lives in another schema (an Open App's `__mj_BizAppsAccounting`).
+ *
+ * The procedure and trigger rules match `[__mj].[spX]` and emit `__mj."X"` throughout. Rather than
+ * re-deriving each of those patterns, the routine's own schema is renamed to `__mj` on the way in
+ * and back on the way out, so an Open App routine takes exactly the path a core routine does.
+ * Before this, every Open App CRUD procedure and trigger fell through to "SKIPPED" and the
+ * converted migration installed tables and views but no routines (issue #5364 item 8).
+ *
+ * Returns null when the routine also names the literal core schema (`__mj.X`): the rename back
+ * could not tell its own references from core's, so the caller must not convert it this way.
+ * Placeholder references (`${mjSchema}.X`) are unaffected and stay distinct.
+ */
+export function ConvertInRoutineSchema(sql: string, convert: (coreSchemaSql: string) => string): string | null {
+  const schema = RoutineSchema(sql);
+  if (!schema || schema.toLowerCase() === CORE_SCHEMA) return convert(sql);
+  const code = StripComments(sql);
+  if (/(?:\[__mj\]|"__mj"|(?<![\w$])__mj)\s*\./i.test(code)) return null;
+
+  const own = new RegExp(`(?:\\[${EscapeRegExp(schema)}\\]|"${EscapeRegExp(schema)}"|(?<![\\w$])${EscapeRegExp(schema)})(\\s*\\.)`, 'gi');
+  const aliased = TransformCodeOnly(sql, (c) => c.replace(own, `${CORE_SCHEMA}$1`));
+  const converted = convert(aliased);
+  return TransformCodeOnly(converted, (c) => c.replace(/(?<![\w$"])__mj(\s*\.)/g, (_m, dot: string) => `${schema}${dot}`))
+    .replace(/'__mj'::regnamespace/g, () => `'${schema}'::regnamespace`);
+}
+
+/**
+ * Comment out a routine the converter cannot produce, under the needs-hand-authoring gap marker,
+ * keeping every line of the source so a person can author the PostgreSQL version from it.
+ * Every line is prefixed — a multi-line routine with only its first line commented leaves the
+ * rest as live T-SQL in a PostgreSQL file (issue #5364 item 7).
+ */
+export function NeedsHandAuthoring(kind: string, reason: string, sql: string): string {
+  const commented = sql.trim().split('\n').map((l) => `-- ${l}`).join('\n');
+  return `${GAP_MARKER_NEEDS_HAND_AUTHORING}: ${kind} — ${reason}\n${commented}\n`;
 }

@@ -13,6 +13,9 @@ import {
   RemoveNPrefix,
   RemoveCollate,
   ConvertCommonFunctions,
+  UnquoteBuiltinFunctionCalls,
+  ConvertObjectIdCalls,
+  ConvertLikeCharacterClasses,
 } from '../rules/ExpressionHelpers.js';
 
 // ---------------------------------------------------------------------------
@@ -884,4 +887,57 @@ describe('QuoteConstraintNames — DROP CONSTRAINT IF EXISTS', () => {
         expect(QuoteConstraintNames('ALTER TABLE t ADD CONSTRAINT ck_lower CHECK (x > 0);'))
             .toContain('CONSTRAINT ck_lower');
     });
+});
+
+// ---------------------------------------------------------------------------
+// Issue #5364 items 1 and 2 — quoted built-ins, OBJECT_ID, LIKE character classes
+// ---------------------------------------------------------------------------
+describe('UnquoteBuiltinFunctionCalls', () => {
+  it('unquotes built-in calls that PascalCase quoting turned into identifiers', () => {
+    expect(UnquoteBuiltinFunctionCalls('CHECK ("Code" = "UPPER"("Code"))'))
+      .toBe('CHECK ("Code" = UPPER("Code"))');
+    expect(UnquoteBuiltinFunctionCalls('"LTRIM"("RTRIM"("Name"))'))
+      .toBe('LTRIM(RTRIM("Name"))');
+  });
+
+  it('renames T-SQL-only built-ins to their PostgreSQL names', () => {
+    expect(UnquoteBuiltinFunctionCalls('"LEN"("Code") > 0')).toBe('LENGTH("Code") > 0');
+    expect(UnquoteBuiltinFunctionCalls('"ISNULL"("A", 0)')).toBe('COALESCE("A", 0)');
+  });
+
+  it('leaves schema-qualified calls, quoted columns and string content alone', () => {
+    expect(UnquoteBuiltinFunctionCalls('app."UPPER"("x")')).toBe('app."UPPER"("x")');
+    expect(UnquoteBuiltinFunctionCalls('"Upper" = 1')).toBe('"Upper" = 1');
+    expect(UnquoteBuiltinFunctionCalls(`'"UPPER"(x)'`)).toBe(`'"UPPER"(x)'`);
+    expect(UnquoteBuiltinFunctionCalls('"fnGetRoot"("ID")')).toBe('"fnGetRoot"("ID")');
+  });
+});
+
+describe('ConvertObjectIdCalls', () => {
+  it('converts OBJECT_ID to to_regclass with a quoted object name', () => {
+    expect(ConvertObjectIdCalls(`conrelid = "OBJECT_ID"('__mj_BizAppsAccounting.Account')`))
+      .toBe(`conrelid = to_regclass('__mj_BizAppsAccounting."Account"')`);
+  });
+
+  it('handles bracketed names, N prefixes and the object-type argument', () => {
+    expect(ConvertObjectIdCalls(`OBJECT_ID(N'[app].[Widget]', 'U') IS NULL`))
+      .toBe(`to_regclass('app."Widget"') IS NULL`);
+  });
+});
+
+describe('ConvertLikeCharacterClasses', () => {
+  it('converts NOT LIKE with a negated class to !~ (a CHECK that LIKE would silently void)', () => {
+    expect(ConvertLikeCharacterClasses(`CHECK ("Code" NOT LIKE '%[^A-Z0-9_-]%')`))
+      .toBe(`CHECK ("Code" !~ '[^A-Z0-9_-]')`);
+  });
+
+  it('anchors the regex and translates % and _ outside the class', () => {
+    expect(ConvertLikeCharacterClasses(`"Code" LIKE '[A-Z]_%'`)).toBe(`"Code" ~ '^[A-Z].'`);
+    expect(ConvertLikeCharacterClasses(`"Code" LIKE 'GL.[0-9]'`)).toBe(`"Code" ~ '^GL\\.[0-9]$'`);
+  });
+
+  it('leaves LIKE patterns without a class, and LIKE ... ESCAPE, unchanged', () => {
+    expect(ConvertLikeCharacterClasses(`"Name" LIKE 'Acme%'`)).toBe(`"Name" LIKE 'Acme%'`);
+    expect(ConvertLikeCharacterClasses(`"Name" LIKE '%![x]%' ESCAPE '!'`)).toBe(`"Name" LIKE '%![x]%' ESCAPE '!'`);
+  });
 });
