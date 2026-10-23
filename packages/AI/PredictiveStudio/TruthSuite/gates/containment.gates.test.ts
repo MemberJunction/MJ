@@ -1,8 +1,8 @@
 import { describe } from 'vitest';
 import path from 'node:path';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { NormalizeUUID } from '@memberjunction/global';
-import type { OutcomeModelLike, RunDetailLike } from '@memberjunction/predictive-studio-core';
+import { NormalizeUUID, SafeJSONParse } from '@memberjunction/global';
+import type { OutcomeModelLike, RunDetailLike, ValidationStrategy } from '@memberjunction/predictive-studio-core';
 import { TruthGate } from '../src/gates/define-gate';
 import { CausalCopyScan } from '../src/gates/causal-copy';
 import { SeedRule } from '../src/stats/seed-rules';
@@ -75,9 +75,9 @@ describe('Containment gates', () => {
   // default) and count a run as published when any of its models reaches Published, whoever promoted it. G0.3 passes
   // at 0 of 2. G0.2 has two halves: (a) runs reaching Published ≤ 6 of 60 (statRule noise-publish-60) and (b) every run
   // that reaches Published has a stored gate outcome 'model' that publish reverification re-derives, 60 of 60 runs
-  // consistent (a run that publishes nothing is consistent). Half (b) needs a stored outcome and the reverification
-  // (ContainmentProbe.ReadStoredGateDecision / ReverifiesStoredDecision read them once they exist); until then any
-  // published run is inconsistent and the gate stays xfail — expected for this expected-fail gate.
+  // consistent (a run that publishes nothing is consistent). Half (b) is Pending: nothing stores a gate outcome yet and
+  // publish reverification does not exist, so a published run has no stored outcome 'model' and is read as
+  // inconsistent here; the gate stays xfail — expected for this expected-fail gate.
   TruthGate.Define('W2 → C1.1', async (h) => {
     const publishedSeeds: number[] = [];
     const inconsistentSeeds: number[] = [];
@@ -97,13 +97,8 @@ describe('Containment gates', () => {
       const models = await h.ModelsForPipelineNamePrefix(name);
       const published = models.filter((m) => ContainmentProbe.ReachedPublishedUnattended(m));
       if (published.length > 0) publishedSeeds.push(seed);
-      if (
-        published.some(
-          (m) => ContainmentProbe.ReadStoredGateDecision(m) !== 'model' || !ContainmentProbe.ReverifiesStoredDecision(m),
-        )
-      ) {
-        inconsistentSeeds.push(seed);
-      }
+      // No stored gate outcome yet (half (b) is Pending), so any published run is inconsistent.
+      if (published.length > 0) inconsistentSeeds.push(seed);
     }
     const countOk = SeedRule.Passes('noise-publish-60', publishedSeeds.length, 60);
     const consistent = 60 - inconsistentSeeds.length;
@@ -164,7 +159,7 @@ describe('Containment gates', () => {
     const model = await RunFixtures.W1S42ValidatedModel(h);
     const stories: string[] = [];
     for (let i = 0; i < 10; i++) {
-      const story = await ContainmentProbe.GenerateModelStory(h, model.ModelID);
+      const story = await h.GenerateStory(model.ModelID);
       if (story !== null) stories.push(story);
     }
     const causalStories = stories.filter((s) => CausalCopyScan.Patterns.some((re) => re.test(s))).length;
@@ -199,7 +194,7 @@ describe('Containment gates', () => {
     const d = await attempt(draft.ModelID, false);
     const ar = await attempt(archivedId, false);
     const dry = await attempt(validatedId, true);
-    const refused = [d, ar].filter((x) => x.written === 0 && ContainmentProbe.WasScoringRefused(x.a)).length;
+    const refused = [d, ar].filter((x) => x.written === 0 && ContainmentProbe.WasScoringRefused(x.a, 'MODEL_NOT_SCORABLE')).length;
     return {
       Passed: refused === 2 && dry.written === 0,
       Measured: {
@@ -222,7 +217,7 @@ describe('Containment gates', () => {
     const a = await h.Train(pipelineColumn);
     const pipelinePlain = await h.CreatePipeline(spec(h, 'G0.8 W4 asOf-input', w4, { Features: features }));
     const b = await h.Train(pipelinePlain, { AsOf: { Mode: 'column', Column: 'StartDate' } });
-    const refused = [a, b].filter((x) => ContainmentProbe.WasRefusedBeforeTraining(x)).length;
+    const refused = [a, b].filter((x) => ContainmentProbe.WasRefusedBeforeTraining(x, 'AS_OF_NO_EFFECT')).length;
     return {
       Passed: refused === 2,
       Measured: {
@@ -247,11 +242,6 @@ describe('Containment gates', () => {
     ] as const) {
       const p = await h.CreatePipeline(spec(h, `G0.9 W2 s100 ${label}`, w2, { Algorithm: 'random_forest', Validation: validation }));
       const t = await h.Train(p);
-      if (ContainmentProbe.WasRefusedBeforeTraining(t)) {
-        ok += 1;
-        out[`${label}Refused`] = true;
-        continue;
-      }
       const m = t.ModelID ? await h.ReadModel(t.ModelID) : null;
       const auc = m?.Metrics['auc'] ?? m?.Metrics['roc_auc'] ?? null; // `??` on purpose: an AUC of 0 is a legitimate value
       if (auc === null) throw new Error(`${label}: trained but reported no validation AUC`);
@@ -264,7 +254,7 @@ describe('Containment gates', () => {
     return {
       Passed: ok === 2,
       Measured: out,
-      Detail: `${ok} of 2 strategies honest on noise (interval contains 0.5) or refused`,
+      Detail: `${ok} of 2 strategies honest on noise (interval contains 0.5)`,
     };
   });
 
@@ -321,7 +311,7 @@ describe('Containment gates', () => {
         DenyFields: ['ID', 'EntityKey', 'T', 'TruthScore'],
         TimeIndexColumn: 'MonthIndex',
       });
-      if (p.ID && h.LastTimeIndexDeclared()) declared += 1;
+      if (SafeJSONParse<ValidationStrategy>(p.ValidationStrategy || '{}')?.TimeIndexColumn === 'MonthIndex') declared += 1;
       const t = await h.Train(p);
       if (!t.ModelID) continue; // refused: stores no withheld verdict, so it counts against the 12 of 12
       const m = await h.ReadModel(t.ModelID);

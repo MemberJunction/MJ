@@ -3,6 +3,7 @@ import {
   PredictiveStudioTrainModelOperation,
   type PredictiveStudioTrainAsOf,
 } from '@memberjunction/core-entities';
+import { PredictiveStudioRefusalCodes } from '@memberjunction/predictive-studio-core';
 import type { RunContext } from './run-fixtures';
 import type { TrainAttempt } from './types';
 
@@ -29,6 +30,7 @@ export class HarnessTraining {
       return {
         Ok: false,
         ErrorMessage: r.ErrorMessage || null,
+        RefusalCode: PredictiveStudioRefusalCodes.IsRefusal(r.ResultCode) ? r.ResultCode : null,
         ModelID: null,
         TrainingRunID: null,
         HoldoutMetricsJSON: null,
@@ -38,6 +40,7 @@ export class HarnessTraining {
     return {
       Ok: true,
       ErrorMessage: null,
+      RefusalCode: null,
       ModelID: r.Output.modelId || null,
       TrainingRunID: r.Output.trainingRunId || null,
       HoldoutMetricsJSON: r.Output.holdoutMetrics || null,

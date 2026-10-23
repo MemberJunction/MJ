@@ -6,48 +6,69 @@ import {
   type PredictiveStudioModelTargetStatus,
 } from '@memberjunction/core-entities';
 import { EscapeSQLString, IndexByUUID, SafeJSONParse, type UUIDMap } from '@memberjunction/global';
-import { TrustVerdicts } from '@memberjunction/predictive-studio-core';
+import { TrustVerdicts, type ModelMetrics } from '@memberjunction/predictive-studio-core';
 import type { AlgorithmRow } from './pipelines';
 import type { RunContext } from './run-fixtures';
 import type { AlgorithmKey, CandidateModel, PromoteAttempt } from './types';
 
-function parseMetricsObject(raw: string | null | undefined): Record<string, number> {
-  if (!raw) return {};
-  const parsed = SafeJSONParse<Record<string, unknown>>(raw);
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-  const out: Record<string, number> = {};
-  for (const [k, v] of Object.entries(parsed)) {
-    if (typeof v === 'number' && Number.isFinite(v)) {
-      out[k] = v;
-    }
-  }
-  return out;
+/** The counts the training engine writes into a model's `Lineage` (`TrainingEngine.buildLineage`). */
+interface TrainingLineageCounts {
+  lockedHoldoutRowCount?: number;
 }
 
-function parseHoldoutRowCount(lineageRaw: string | null | undefined): number | null {
-  if (!lineageRaw) return null;
-  const parsed = SafeJSONParse<{ lockedHoldoutRowCount?: unknown }>(lineageRaw);
-  const count = parsed?.lockedHoldoutRowCount;
-  return typeof count === 'number' && Number.isFinite(count) ? count : null;
-}
+/** The training-run columns a `CandidateModel` reads. */
+type TrainingRunRow = Pick<MJMLTrainingRunEntity, 'Status' | 'Notes' | 'ValidationResults'>;
 
 /** Model read-back and lifecycle promotion wrappers for the truth harness. */
 export class HarnessModels {
+  private static readonly algorithmKeys: ReadonlySet<string> = new Set<AlgorithmKey>([
+    'logistic_regression', 'xgboost', 'lightgbm', 'random_forest', 'ridge', 'mlp',
+  ]);
+
+  /** True when `v` is one of the six algorithm driver keys the suite trains with. */
+  public static IsAlgorithmKey(v: string): v is AlgorithmKey {
+    return HarnessModels.algorithmKeys.has(v);
+  }
+
+  /** A stored metrics JSON as name → finite number; keys whose value is not a finite number are dropped. */
+  private static parseMetrics(raw: string | null | undefined): ModelMetrics {
+    if (!raw) return {};
+    const parsed = SafeJSONParse<ModelMetrics>(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const out: ModelMetrics = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      if (typeof v === 'number' && Number.isFinite(v)) {
+        out[k] = v;
+      }
+    }
+    return out;
+  }
+
+  /** The locked-holdout row count the training engine recorded in the model's lineage, or null when absent. */
+  private static parseHoldoutRowCount(lineageRaw: string | null | undefined): number | null {
+    if (!lineageRaw) return null;
+    const count = SafeJSONParse<TrainingLineageCounts>(lineageRaw)?.lockedHoldoutRowCount;
+    return typeof count === 'number' && Number.isFinite(count) ? count : null;
+  }
+
   private static toCandidateModel(
     m: MJMLModelEntity,
-    run: MJMLTrainingRunEntity | undefined,
+    run: TrainingRunRow | undefined,
     algosByID: UUIDMap<AlgorithmRow>,
   ): CandidateModel {
     const algoDriver = algosByID.Get(m.AlgorithmID)?.DriverClass || m.AlgorithmID;
+    if (!HarnessModels.IsAlgorithmKey(algoDriver)) {
+      throw new Error(`ML Model ${m.ID} uses algorithm '${algoDriver}', which is not one of the suite's algorithm keys`);
+    }
     return {
       ModelID: m.ID,
       PipelineID: m.PipelineID,
-      Algorithm: algoDriver as AlgorithmKey,
+      Algorithm: algoDriver,
       Status: m.Status,
       TrainingRowCount: m.TrainingRowCount,
-      HoldoutRowCount: parseHoldoutRowCount(m.Lineage),
-      Metrics: parseMetricsObject(m.Metrics),
-      HoldoutMetrics: parseMetricsObject(m.HoldoutMetrics),
+      HoldoutRowCount: HarnessModels.parseHoldoutRowCount(m.Lineage),
+      Metrics: HarnessModels.parseMetrics(m.Metrics),
+      HoldoutMetrics: HarnessModels.parseMetrics(m.HoldoutMetrics),
       Trust: TrustVerdicts.DeriveTrustVerdict(m),
       TrainingRunStatus: run?.Status ?? null,
       TrainingRunNotes: run?.Notes ?? null,
@@ -68,11 +89,12 @@ export class HarnessModels {
     if (!(await m.Load(modelId))) {
       throw new Error(`ML Model ${modelId} not found`);
     }
-    const runsRes = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJMLTrainingRunEntity>(
+    const runsRes = await RunView.FromMetadataProvider(ctx.Provider).RunView<TrainingRunRow>(
       {
         EntityName: 'MJ: ML Training Runs',
         ExtraFilter: `ResultingModelID='${EscapeSQLString(modelId)}'`,
-        ResultType: 'entity_object',
+        ResultType: 'simple',
+        Fields: ['Status', 'Notes', 'ValidationResults'],
         BypassCache: true,
       },
       ctx.User,
@@ -109,11 +131,13 @@ export class HarnessModels {
         },
         ctx.User,
       ),
-      rv.RunView<MJMLTrainingRunEntity>(
+      rv.RunView<TrainingRunRow & Pick<MJMLTrainingRunEntity, 'ResultingModelID'>>(
         {
           EntityName: 'MJ: ML Training Runs',
           ExtraFilter: `PipelineID IN (${inList})`,
-          ResultType: 'entity_object',
+          ResultType: 'simple',
+          // ResultingModelID as well: it keys the runs to their models.
+          Fields: ['ResultingModelID', 'Status', 'Notes', 'ValidationResults'],
           BypassCache: true,
         },
         ctx.User,
@@ -138,15 +162,14 @@ export class HarnessModels {
       { modelId, targetStatus: target, reason },
       { provider: ctx.Provider, user: ctx.User },
     );
-    if (r.Success && r.Output) {
-      return {
-        Promoted: r.Output.promoted,
-        Status: r.Output.status as MJMLModelEntity['Status'],
-      };
+    // A promotion that applied leaves the model at the target status (the operation's documented contract); any other
+    // outcome reads the status from the model itself, so the status always comes from a typed source.
+    if (r.Success && r.Output?.promoted) {
+      return { Promoted: true, Status: target };
     }
     const m = await ctx.Provider.GetEntityObject<MJMLModelEntity>('MJ: ML Models', ctx.User);
     if (!(await m.Load(modelId))) {
-      throw new Error(`ML Model ${modelId} not found after failed Promote: ${r.ErrorMessage || 'no message'}`);
+      throw new Error(`ML Model ${modelId} not found after Promote: ${r.ErrorMessage || 'no message'}`);
     }
     return {
       Promoted: false,

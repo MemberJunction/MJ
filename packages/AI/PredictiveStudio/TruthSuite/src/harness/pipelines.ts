@@ -13,8 +13,6 @@ export interface AlgorithmRow {
 
 /** The harness's pipeline members. */
 export class HarnessPipelines {
-  private static lastTimeIndexDeclared = false;
-
   /** Load all `MJ: ML Algorithms` rows from the provider. */
   public static async LoadAlgorithms(provider: GraphQLDataProvider, user: UserInfo): Promise<AlgorithmRow[]> {
     const res = await RunView.FromMetadataProvider(provider).RunView<AlgorithmRow>(
@@ -25,7 +23,8 @@ export class HarnessPipelines {
     return res.Results;
   }
 
-  private static featureKind(entity: EntityInfo, name: string): CandidateFeatureKind {
+  /** A feature's kind from its entity field: string fields are categorical, every other type numeric. */
+  public static FeatureKind(entity: EntityInfo, name: string): CandidateFeatureKind {
     const f = entity.Fields.find((x) => x.Name.toLowerCase() === name.toLowerCase());
     if (!f) throw new Error(`feature '${name}' is not a field of '${entity.Name}'`);
     return f.TSType === EntityFieldTSType.String ? 'categorical' : 'numeric';
@@ -35,7 +34,7 @@ export class HarnessPipelines {
     entity: EntityInfo,
     features: string[],
   ): { Steps: Array<{ Id: string; Kind: 'select'; Columns: string[] } | { Id: string; Kind: 'onehot'; Column: string }> } {
-    const cats = features.filter((f) => HarnessPipelines.featureKind(entity, f) === 'categorical');
+    const cats = features.filter((f) => HarnessPipelines.FeatureKind(entity, f) === 'categorical');
     return {
       Steps: [
         { Id: 'select-raw', Kind: 'select', Columns: features },
@@ -72,14 +71,10 @@ export class HarnessPipelines {
     });
     p.ValidationStrategy = JSON.stringify(spec.Validation);
     // The time-index declaration is applied before the single Save, so it is saved with the pipeline (G0.11).
-    HarnessPipelines.lastTimeIndexDeclared =
-      spec.TimeIndexColumn !== undefined && ContainmentProbe.ApplyTimeIndexDeclaration(p, spec.TimeIndexColumn);
+    if (spec.TimeIndexColumn !== undefined) {
+      ContainmentProbe.ApplyTimeIndexDeclaration(p, spec.TimeIndexColumn);
+    }
     if (!(await p.Save())) throw new Error(`pipeline save failed: ${p.LatestResult?.CompleteMessage || 'no message'}`);
     return p;
-  }
-
-  /** What the time-index declaration answered for the last CreatePipeline (TruthHarness.LastTimeIndexDeclared). */
-  public static LastTimeIndexDeclared(): boolean {
-    return HarnessPipelines.lastTimeIndexDeclared;
   }
 }

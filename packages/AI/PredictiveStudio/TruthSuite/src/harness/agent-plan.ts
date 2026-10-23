@@ -1,5 +1,6 @@
-import { EntityFieldTSType, type EntityInfo } from '@memberjunction/core';
-import type { CandidateFeatureKind, ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
+import type { EntityInfo } from '@memberjunction/core';
+import type { ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
+import { HarnessPipelines } from './pipelines';
 import type { AlgorithmKey } from './types';
 
 export interface AgentPlanInput {
@@ -13,12 +14,6 @@ export interface AgentPlanInput {
 
 /** Pure plan builder for the Pipeline Builder agent leg. */
 export class AgentPlans {
-  private static featureKind(entity: EntityInfo, name: string): CandidateFeatureKind {
-    const f = entity.Fields.find((x) => x.Name.toLowerCase() === name.toLowerCase());
-    if (!f) throw new Error(`feature '${name}' is not a field of '${entity.Name}'`);
-    return f.TSType === EntityFieldTSType.String ? 'categorical' : 'numeric';
-  }
-
   /** Build an approved `ModelingPlanSpec` with one experiment per algorithm in the given order. */
   public static Build(input: AgentPlanInput): ModelingPlanSpec {
     return {
@@ -35,7 +30,7 @@ export class AgentPlans {
       CandidateFeatures: input.Features.map((f) => ({
         Name: f,
         SourceRef: input.Entity.Name,
-        Kind: AgentPlans.featureKind(input.Entity, f),
+        Kind: HarnessPipelines.FeatureKind(input.Entity, f),
         Why: 'observable on the row',
       })),
       LeakageNotes: input.DenyFields.map((f) => ({

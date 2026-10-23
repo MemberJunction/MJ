@@ -90,7 +90,6 @@ export class RunFixtures {
       RunID: ctx.RunID,
       EnsureLoaded: (ref) => HarnessDatasets.EnsureLoaded(ctx, ref),
       CreatePipeline: (spec) => HarnessPipelines.CreatePipeline(ctx.Provider, ctx.User, ctx.Algorithms, spec),
-      LastTimeIndexDeclared: () => HarnessPipelines.LastTimeIndexDeclared(),
       Train: (pipeline, opts) => HarnessTraining.Train(ctx, pipeline, opts),
       RunBuilderAgent: (plan) => HarnessAgent.RunBuilderAgent(ctx, plan),
       ReadModel: (modelId) => HarnessModels.ReadModel(ctx, modelId),

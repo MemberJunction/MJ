@@ -7,6 +7,7 @@ import {
   RecordProcessRunNowOperation,
 } from '@memberjunction/core-entities';
 import { EscapeSQLString } from '@memberjunction/global';
+import { PredictiveStudioRefusalCodes } from '@memberjunction/predictive-studio-core';
 import type { RunContext } from './run-fixtures';
 import type { LoadedDataset, RecordProcessScoring, ScoreAttempt, ScoreRequest } from './types';
 
@@ -17,16 +18,19 @@ type ProcessRunRow = Pick<
 >;
 const TERMINAL_RUN_STATUSES: ReadonlySet<MJProcessRunEntity['Status']> = new Set(['Completed', 'Failed', 'Cancelled']);
 
-function bareId(raw: string): string {
-  const s = raw.trim();
-  const eq = s.indexOf('=');
-  return (eq >= 0 ? s.slice(eq + 1) : s).trim();
-}
-
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
-
 /** Scoring operation and record-process scoring wrappers for the truth harness. */
 export class HarnessScoring {
+  /** The bare record id of a `Field=value` composite-key string (or the string itself when it has no `=`). */
+  private static bareId(raw: string): string {
+    const s = raw.trim();
+    const eq = s.indexOf('=');
+    return (eq >= 0 ? s.slice(eq + 1) : s).trim();
+  }
+
+  private static sleep(ms: number): Promise<void> {
+    return new Promise((r) => setTimeout(r, ms));
+  }
+
   /** Execute `PredictiveStudio.ScoreRecordSet` and return a `ScoreAttempt` (never throws for a product refusal). */
   public static async Score(ctx: RunContext, modelId: string, req: ScoreRequest): Promise<ScoreAttempt> {
     const t0 = Date.now();
@@ -39,6 +43,7 @@ export class HarnessScoring {
       return {
         Ok: false,
         ErrorMessage: r.ErrorMessage || null,
+        RefusalCode: PredictiveStudioRefusalCodes.IsRefusal(r.ResultCode) ? r.ResultCode : null,
         Scored: 0,
         Failed: 0,
         Skipped: 0,
@@ -51,12 +56,13 @@ export class HarnessScoring {
     return {
       Ok: true,
       ErrorMessage: null,
+      RefusalCode: null,
       Scored: out.scored,
       Failed: out.failed,
       Skipped: out.skipped,
       WroteBack: out.wroteBack,
       Predictions: (out.predictions || []).map((p) => ({
-        RecordID: bareId(p.recordId || ''),
+        RecordID: HarnessScoring.bareId(p.recordId || ''),
         Score: p.score,
         Class: p.class ?? null,
       })),
@@ -116,7 +122,7 @@ export class HarnessScoring {
           status = run.Status;
           break;
         }
-        await sleep(5_000);
+        await HarnessScoring.sleep(5_000);
       }
       if (!processRunId) {
         throw new Error(`RecordProcess.RunNow for ${recordProcessId} failed: ${rn.ErrorMessage || 'no processRunID'}`);
@@ -139,7 +145,7 @@ export class HarnessScoring {
       ProcessRunID: processRunId,
       Status: status,
       Details: detailsRes.Results.map((d) => ({
-        RecordID: bareId(d.RecordID),
+        RecordID: HarnessScoring.bareId(d.RecordID),
         Status: d.Status,
         ResultPayload: d.ResultPayload ?? null,
       })),

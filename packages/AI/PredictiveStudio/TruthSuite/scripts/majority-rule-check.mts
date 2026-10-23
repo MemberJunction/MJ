@@ -23,7 +23,7 @@ async function main(): Promise<void> {
     console.log(JSON.stringify({
       rule, recorded: EvaluationLineage.Read(m.LineageJSON)?.MajorityBaselineRule || null,
       auc: m.HoldoutMetrics['auc'] ?? null,   // `??` on purpose: an AUC of 0 is a legitimate value
-      grade: m.Trust.grade, canAct: m.Trust.canAct, majorityBaseline: m.Trust.majorityBaseline || null,
+      grade: m.Trust.grade, canAct: m.Trust.canAct, majorityBaseline: m.Trust.MajorityBaseline || null,
     }));
   }
 }

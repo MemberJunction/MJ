@@ -7,7 +7,8 @@ import type { CandidateModel, ScoreAttempt, TrainAttempt } from '../types';
 
 const train = (over: Partial<TrainAttempt>): TrainAttempt => ({
   Ok: false,
-  ErrorMessage: 'refused',
+  ErrorMessage: 'x',
+  RefusalCode: null,
   ModelID: null,
   TrainingRunID: null,
   HoldoutMetricsJSON: null,
@@ -16,7 +17,8 @@ const train = (over: Partial<TrainAttempt>): TrainAttempt => ({
 });
 const score = (over: Partial<ScoreAttempt>): ScoreAttempt => ({
   Ok: false,
-  ErrorMessage: 'refused',
+  ErrorMessage: 'x',
+  RefusalCode: null,
   Scored: 0,
   Failed: 0,
   Skipped: 0,
@@ -42,18 +44,26 @@ const model = (over: Partial<CandidateModel>): CandidateModel => ({
   ...over,
 });
 
+describe('refusals are decided by code', () => {
+  it('a crash is not a refusal', () => {
+    expect(ContainmentProbe.WasRefusedBeforeTraining(train({ RefusalCode: null }), 'AS_OF_NO_EFFECT')).toBe(false);
+    expect(ContainmentProbe.WasScoringRefused(score({ RefusalCode: null }), 'MODEL_NOT_SCORABLE')).toBe(false);
+  });
+  it('the expected code is a refusal; a different code is not', () => {
+    expect(ContainmentProbe.WasRefusedBeforeTraining(train({ RefusalCode: 'AS_OF_NO_EFFECT' }), 'AS_OF_NO_EFFECT')).toBe(true);
+    expect(ContainmentProbe.WasRefusedBeforeTraining(train({ RefusalCode: 'READ_CAP_EXCEEDED' }), 'AS_OF_NO_EFFECT')).toBe(false);
+    expect(ContainmentProbe.WasScoringRefused(score({ RefusalCode: 'MODEL_NOT_SCORABLE' }), 'MODEL_NOT_SCORABLE')).toBe(true);
+    expect(ContainmentProbe.WasScoringRefused(score({ RefusalCode: 'READ_CAP_EXCEEDED' }), 'MODEL_NOT_SCORABLE')).toBe(false);
+  });
+  it('a refusal that still produced a model is not a refusal', () => {
+    expect(ContainmentProbe.WasRefusedBeforeTraining(train({ RefusalCode: 'AS_OF_NO_EFFECT', ModelID: 'm1' }), 'AS_OF_NO_EFFECT')).toBe(false);
+  });
+  it('a scoring refusal that still scored rows is not a refusal', () => {
+    expect(ContainmentProbe.WasScoringRefused(score({ RefusalCode: 'MODEL_NOT_SCORABLE', Scored: 5 }), 'MODEL_NOT_SCORABLE')).toBe(false);
+  });
+});
+
 describe('containment probe — predicates', () => {
-  it('counts a training refusal only when the operation failed and produced no model', () => {
-    expect(ContainmentProbe.WasRefusedBeforeTraining(train({}))).toBe(true);
-    expect(ContainmentProbe.WasRefusedBeforeTraining(train({ Ok: true, ErrorMessage: null, ModelID: 'm1' }))).toBe(false);
-    expect(ContainmentProbe.WasRefusedBeforeTraining(train({ ModelID: 'm1' }))).toBe(false); // failed after a model row existed
-  });
-  it('counts a scoring refusal only when it failed with a message and scored nothing', () => {
-    expect(ContainmentProbe.WasScoringRefused(score({}))).toBe(true);
-    expect(ContainmentProbe.WasScoringRefused(score({ ErrorMessage: null }))).toBe(false);
-    expect(ContainmentProbe.WasScoringRefused(score({ Scored: 5 }))).toBe(false);
-    expect(ContainmentProbe.WasScoringRefused(score({ Ok: true, ErrorMessage: null }))).toBe(false);
-  });
   it('counts Published, and only Published, as reaching publication', () => {
     expect(ContainmentProbe.ReachedPublishedUnattended(model({ Status: 'Published' }))).toBe(true);
     expect(ContainmentProbe.ReachedPublishedUnattended(model({ Status: 'Validated' }))).toBe(false);
@@ -88,7 +98,7 @@ describe('containment probe — stored verdict and time index', () => {
   it('declares the time index on the pipeline, keeping the rest of its validation strategy', () => {
     // Test double: ContainmentProbe.ApplyTimeIndexDeclaration reads and writes only ValidationStrategy.
     const pipeline = { ValidationStrategy: JSON.stringify({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2 }) } as unknown as MJMLTrainingPipelineEntity;
-    expect(ContainmentProbe.ApplyTimeIndexDeclaration(pipeline, 'MonthIndex')).toBe(true);
+    ContainmentProbe.ApplyTimeIndexDeclaration(pipeline, 'MonthIndex');
     const saved = JSON.parse(pipeline.ValidationStrategy || '{}') as ValidationStrategy;
     expect(saved).toEqual({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex' });
   });

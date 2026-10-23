@@ -3,7 +3,8 @@ import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity, MJProcessRunEntity,
   MJProcessRunDetailEntity, PredictiveStudioScoreRecordSetInput,
   PredictiveStudioTrainAsOf, PredictiveStudioModelTargetStatus } from '@memberjunction/core-entities';
-import type { ModelingPlanSpec, TrustVerdict, ValidationStrategy, AsOfStrategy, ProblemType } from '@memberjunction/predictive-studio-core';
+import type { ModelingPlanSpec, TrustVerdict, ValidationStrategy, AsOfStrategy, ProblemType,
+  PredictiveStudioRefusalCode } from '@memberjunction/predictive-studio-core';
 
 export type WorldID = 'W1-signal' | 'W2-noise' | 'W3-leak-row' | 'W4-pit' | 'W5-censor' | 'W6-drift'
   | 'W7-small-imbalanced' | 'W8-highcard' | 'W9-multiclass';
@@ -26,12 +27,14 @@ export interface PipelineSpec {
   AsOf: AsOfStrategy;
   Validation: ValidationStrategy;
   DenyFields: string[];
-  TimeIndexColumn?: string;           // declared through containment-probe ApplyTimeIndexDeclaration (G0.11)
+  TimeIndexColumn?: string;           // saved as ValidationStrategy.TimeIndexColumn (ContainmentProbe.ApplyTimeIndexDeclaration, G0.11)
 }
 
 export interface TrainAttempt {
   Ok: boolean;                        // the operation returned Success with an Output
   ErrorMessage: string | null;
+  /** The operation's refusal code (`RemoteOpResult.ResultCode`) when it refused; null on success or a generic failure. */
+  RefusalCode: PredictiveStudioRefusalCode | null;
   ModelID: string | null;
   TrainingRunID: string | null;
   HoldoutMetricsJSON: string | null;
@@ -49,7 +52,9 @@ export interface CandidateModel {
 
 // The operation's shipped input minus the model, so the request keeps the operation's own wire names.
 export type ScoreRequest = Omit<PredictiveStudioScoreRecordSetInput, 'modelId'>;
-export interface ScoreAttempt { Ok: boolean; ErrorMessage: string | null; Scored: number; Failed: number; Skipped: number;
+export interface ScoreAttempt { Ok: boolean; ErrorMessage: string | null;
+  /** The operation's refusal code (`RemoteOpResult.ResultCode`) when it refused; null on success or a generic failure. */
+  RefusalCode: PredictiveStudioRefusalCode | null; Scored: number; Failed: number; Skipped: number;
   WroteBack: boolean; Predictions: Array<{ RecordID: string; Score: number; Class: string | null }>; DurationMs: number }
 
 export interface RecordProcessScoring {
@@ -71,8 +76,6 @@ export interface TruthHarness {
   readonly RunID: string;
   EnsureLoaded(ref: DatasetRef): Promise<LoadedDataset>;
   CreatePipeline(spec: PipelineSpec): Promise<MJMLTrainingPipelineEntity>;
-  /** What ApplyTimeIndexDeclaration answered for the last CreatePipeline whose spec set timeIndexColumn (false otherwise). */
-  LastTimeIndexDeclared(): boolean;
   /** Never throws for a failed operation: Ok false, ModelID null, ErrorMessage set. */
   Train(pipeline: MJMLTrainingPipelineEntity, opts?: { MaxRows?: number; AsOf?: PredictiveStudioTrainAsOf }): Promise<TrainAttempt>;
   RunBuilderAgent(plan: ModelingPlanSpec): Promise<AgentStepResult>;

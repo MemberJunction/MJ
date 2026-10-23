@@ -1,52 +1,35 @@
-import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { SafeJSONParse } from '@memberjunction/global';
+import { MLSidecar } from '@memberjunction/predictive-studio-sidecar';
 import { TruthSuite } from '../registry/load';
+import { HarnessProcess } from './process';
 
 /** Subprocess bridge from TypeScript gate bodies to `truthsuite.judges.<module>`. */
 export class JudgeBridge {
-  /** Spawn `<TruthSuite>/.venv/bin/python -m truthsuite.judges.<module> ...args` and parse stdout as JSON. */
+  /**
+   * Run `python -m truthsuite.judges.<module> ...args` and parse stdout as JSON. The interpreter is resolved the way
+   * `MLSidecar` resolves its own (`PREDICTIVE_STUDIO_PYTHON`, then the bundled venv — here the TruthSuite's `.venv`).
+   */
   public static async Judge<TOut>(module: string, args: string[]): Promise<TOut> {
     const root = TruthSuite.Root();
-    const fromEnv = process.env.PREDICTIVE_STUDIO_PYTHON?.trim();
-    const venvPython = fromEnv && fromEnv.length > 0 ? fromEnv : path.join(root, '.venv', 'bin', 'python');
-    if (!existsSync(venvPython)) {
+    const venvPython = path.join(root, '.venv', 'bin', 'python');
+    const bundled = existsSync(venvPython) ? venvPython : null;
+    if (bundled === null && !process.env[MLSidecar.PythonEnvVar]?.trim()) {
       throw new Error(`TruthSuite Python not found at ${venvPython}. Run \`pnpm run setup:python\`.`);
     }
-
+    const python = MLSidecar.ResolvePython(undefined, process.env, bundled);
     const pythonDir = path.join(root, 'python');
-    const env: NodeJS.ProcessEnv = { ...process.env, PYTHONPATH: pythonDir };
-    if (process.platform === 'darwin' && existsSync('/opt/homebrew/opt/libomp/lib')) {
-      env.DYLD_LIBRARY_PATH = env.DYLD_LIBRARY_PATH
-        ? `/opt/homebrew/opt/libomp/lib:${env.DYLD_LIBRARY_PATH}`
-        : '/opt/homebrew/opt/libomp/lib';
-    }
-
-    const { code, stdout, stderr } = await new Promise<{ code: number; stdout: string; stderr: string }>((resolvePromise, reject) => {
-      const child = spawn(venvPython, ['-m', `truthsuite.judges.${module}`, ...args], {
-        cwd: pythonDir,
-        env,
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-      let out = '';
-      let err = '';
-      child.stdout.on('data', (d: Buffer) => {
-        out += d.toString();
-      });
-      child.stderr.on('data', (d: Buffer) => {
-        err += d.toString();
-      });
-      child.on('error', reject);
-      child.on('close', (c: number | null) => resolvePromise({ code: c ?? -1, stdout: out, stderr: err }));
+    const { Code, Stdout, Stderr } = await HarnessProcess.Run(python, ['-m', `truthsuite.judges.${module}`, ...args], {
+      Cwd: pythonDir,
+      Env: { ...process.env, PYTHONPATH: pythonDir },
     });
-
-    if (code !== 0) {
-      throw new Error(`truthsuite.judges.${module} exited ${code}: ${stderr.trim() || stdout.trim()}`);
+    if (Code !== 0) {
+      throw new Error(`truthsuite.judges.${module} exited ${Code}: ${Stderr.trim() || Stdout.trim()}`);
     }
-    const parsed = SafeJSONParse<TOut>(stdout.trim());
+    const parsed = SafeJSONParse<TOut>(Stdout.trim());
     if (parsed === null) {
-      throw new Error(`truthsuite.judges.${module} did not print valid JSON: ${stdout.slice(0, 400)}`);
+      throw new Error(`truthsuite.judges.${module} did not print valid JSON: ${Stdout.slice(0, 400)}`);
     }
     return parsed;
   }
