@@ -17,14 +17,13 @@ import {
   PredictiveStudioPromoteModelOperation,
   PredictiveStudioModelTargetStatus,
 } from '@memberjunction/core-entities';
-import { ImportanceDisplay } from '@memberjunction/predictive-studio-core';
+import { AtRiskRules, ImportanceDisplay } from '@memberjunction/predictive-studio-core';
 
 import {
   PSFeatureBar,
   PSMetricDisplay,
   PS_FEATURE_DOMINANCE_THRESHOLD,
   FormatMetricValue,
-  HumanizeFeatureName,
   MaxFeatureImportance,
   MetricsToDisplay,
   OverfitGap,
@@ -313,7 +312,7 @@ export class PSModelDetailComponent {
     if (this.importanceCache?.key !== key) {
       const allBars = ParseFeatureImportance(this.Model.FeatureImportance, 6).map((b) => ({
         ...b,
-        name: HumanizeFeatureName(b.name),
+        name: AtRiskRules.HumanizeFeatureName(b.name),
       }));
       const displayedBars = ImportanceDisplay.GlobalDriversShowable(this.Model.Lineage) ? allBars : [];
       this.importanceCache = { key, allBars, displayedBars };

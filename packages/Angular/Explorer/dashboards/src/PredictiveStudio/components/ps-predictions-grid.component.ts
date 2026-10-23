@@ -40,9 +40,7 @@ import {
 } from 'ag-grid-community';
 
 import {
-  ParseAtRiskRows,
-  ResolveRenewalPolarity,
-  type RenewalPolarityResult,
+  AtRiskRules,
   type RowDriver,
   type OutcomeConfig,
   type OutcomeBand,
@@ -609,9 +607,9 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
             return '<span class="ps-muted">—</span>';
           }
           const chips = params.data.drivers.slice(0, 2).map((d) => {
-            const cls = d.up ? 'up' : 'down';
-            const icon = d.up ? 'fa-arrow-up' : 'fa-arrow-down';
-            const label = this.escapeHtml(d.label);
+            const cls = d.Up ? 'up' : 'down';
+            const icon = d.Up ? 'fa-arrow-up' : 'fa-arrow-down';
+            const label = this.escapeHtml(d.Label);
             return `<span class="ps-why-chip ${cls}" title="${label}"><i class="fa-solid ${icon}"></i> ${label}</span>`;
           }).join(' ');
           return `<div class="pg-drivers-cell">${chips}</div>`;
@@ -774,27 +772,20 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
         return;
       }
 
-      // 4. Resolve OutcomeConfig and determine polarity
+      // 4. Resolve OutcomeConfig and polarity: one rule (the model's outcome config), shared with the resource and the gate probe
       if (model?.ProblemType) {
         this.ProblemType = model.ProblemType.toLowerCase();
       }
-      this.OutcomeConfig = resolveOutcomeConfig(model ?? undefined);
+      const atRiskOptions = AtRiskRules.BuildAtRiskOptions(model ?? undefined);
+      this.OutcomeConfig = atRiskOptions.OutcomeConfig || resolveOutcomeConfig(model ?? undefined);
       this.IsRenewalModel = this.OutcomeConfig.Polarity === 'positive' && !this.IsRegression;
       this.SetupColumnDefs();
+      // A positive-polarity score is P(good outcome): risk is 1 - score, while the displayed score stays the model's own.
+      this.invertedRisk = atRiskOptions.InvertedRisk === true;
 
-      const polarity = ResolveRenewalPolarity(
-        detailsRes.Results.map((d) => d.ResultPayload),
-        model?.TargetVariable,
-      );
-
-      // When the model outputs P(Renewed) (scoreIsLapseRisk = false), adverse risk is inverted (1 - score).
-      // When the model outputs P(Lapse) (scoreIsLapseRisk = true), adverse risk is ALREADY score (invertedRisk = false).
-      const shouldInvertRisk = polarity.IsRenewalModel ? !polarity.ScoreIsLapseRisk : false;
-      this.invertedRisk = shouldInvertRisk;
-
-      const parsedAtRisk = ParseAtRiskRows(
-        detailsRes.Results.map((d) => ({ recordId: d.RecordID, ResultPayload: d.ResultPayload })),
-        { InvertedRisk: shouldInvertRisk, OutcomeConfig: this.OutcomeConfig },
+      const parsedAtRisk = AtRiskRules.ParseAtRiskRows(
+        detailsRes.Results.map((d) => ({ RecordID: d.RecordID, ResultPayload: d.ResultPayload })),
+        atRiskOptions,
       );
 
       // Map details into indexed lookup for scoredAt timestamp
@@ -804,14 +795,9 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       }
 
       this.AllRows = parsedAtRisk.map((r) => {
-        const detail = detailByRecord.get(NormalizeUUID(r.recordId));
+        const detail = detailByRecord.get(NormalizeUUID(r.RecordID));
         const dt = detail?.CompletedAt ?? detail?.__mj_CreatedAt ?? null;
-        // For renewal models, the primary displayed score is Renewal Probability (0–1).
-        // If the raw score was lapse risk, renewal probability is 1 - r.score.
-        // Otherwise, raw score is already renewal probability.
-        const displayScore = polarity.IsRenewalModel
-          ? (polarity.ScoreIsLapseRisk ? Math.max(0, Math.min(1, 1 - r.score)) : r.score)
-          : r.score;
+        const displayScore = r.Score;
 
         const resolved = this.OutcomeConfig
           ? resolveScoreBand(displayScore, this.OutcomeConfig)
@@ -820,17 +806,17 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
         const formatted = formatPredictionScore(displayScore, this.OutcomeConfig, this.ProblemType);
 
         return {
-          recordId: r.recordId,
-          recordName: r.label ?? r.recordId,
+          recordId: r.RecordID,
+          recordName: r.Label || r.RecordID,
           score: displayScore,
           scoreFormatted: formatted,
-          riskPct: r.riskPct,
-          band: resolved?.Key ?? r.band,
-          badgeColor: resolved?.BadgeColor ?? r.badgeColor,
-          icon: resolved?.Icon ?? r.icon,
-          class: r.class,
-          drivers: r.drivers ?? [],
-          status: resolved?.Label ?? r.status ?? detail?.Status ?? 'Succeeded',
+          riskPct: r.RiskPct,
+          band: resolved?.Key || r.Band,
+          badgeColor: resolved?.BadgeColor || r.BadgeColor,
+          icon: resolved?.Icon || r.Icon,
+          class: r.Class,
+          drivers: r.Drivers || [],
+          status: resolved?.Label || r.Status || detail?.Status || 'Succeeded',
           scoredAtDate: dt instanceof Date ? dt : dt ? new Date(dt) : null,
         };
       });
@@ -1290,7 +1276,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
         r.recordName.toLowerCase().includes(q) ||
         r.recordId.toLowerCase().includes(q) ||
         (r.class && r.class.toLowerCase().includes(q)) ||
-        r.drivers.some((d) => d.label.toLowerCase().includes(q)),
+        r.drivers.some((d) => d.Label.toLowerCase().includes(q)),
       );
     }
 
@@ -1815,7 +1801,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     const lines = [headers.join(',')];
 
     for (const r of this.FilteredRows) {
-      const driversStr = r.drivers.map((d) => `${d.up ? '+' : '-'}${d.label}`).join('; ');
+      const driversStr = r.drivers.map((d) => `${d.Up ? '+' : '-'}${d.Label}`).join('; ');
       const statusStr = `${r.status || r.band} (${r.scoreFormatted})`;
       const rowData = [
         `"${r.recordId.replace(/"/g, '""')}"`,

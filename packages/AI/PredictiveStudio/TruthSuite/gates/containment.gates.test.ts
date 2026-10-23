@@ -2,6 +2,7 @@ import { describe } from 'vitest';
 import path from 'node:path';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { NormalizeUUID } from '@memberjunction/global';
+import type { OutcomeModelLike, RunDetailLike } from '@memberjunction/predictive-studio-core';
 import { TruthGate } from '../src/gates/define-gate';
 import { CausalCopyScan } from '../src/gates/causal-copy';
 import { SeedRule } from '../src/stats/seed-rules';
@@ -393,8 +394,10 @@ describe('Containment gates', () => {
     };
   });
 
-  let w1RecordProcessPromise: Promise<{ Details: Array<{ recordId: string; ResultPayload: string | null }>; TruthCsv: string }> | null = null;
-  function w1RecordProcess(h: TruthHarness): Promise<{ Details: Array<{ recordId: string; ResultPayload: string | null }>; TruthCsv: string }> {
+  /** The W1 s42 record-process scoring: its details, the model as the Predictions resource reads it, and the truth file. */
+  interface W1RecordProcessScoring { Details: RunDetailLike[]; Model: OutcomeModelLike; TruthCsv: string }
+  let w1RecordProcessPromise: Promise<W1RecordProcessScoring> | null = null;
+  function w1RecordProcess(h: TruthHarness): Promise<W1RecordProcessScoring> {
     w1RecordProcessPromise ||= (async () => {
       const w1 = await h.EnsureLoaded({ Kind: 'world', ID: 'W1-signal', Seed: 42 });
       const model = await RunFixtures.W1S42ValidatedModel(h);
@@ -402,11 +405,13 @@ describe('Containment gates', () => {
       if (run.Status !== 'Completed') throw new Error(`record-process scoring ended ${run.Status}`);
       await h.WriteArtifact('w1-s42-recordprocess', {
         targetVariable: 'Renewed',
+        lineage: model.LineageJSON,
         details: run.Details.map((d) => ({ recordId: d.RecordID, resultPayload: d.ResultPayload })),
       });
       return {
         TruthCsv: path.join(w1.Dir, 'truth.csv'),
-        Details: run.Details.map((d) => ({ recordId: d.RecordID, ResultPayload: d.ResultPayload })),
+        Details: run.Details.map((d) => ({ RecordID: d.RecordID, ResultPayload: d.ResultPayload })),
+        Model: { Lineage: model.LineageJSON, TargetVariable: 'Renewed', ProblemType: 'classification' },
       };
     })();
     return w1RecordProcessPromise;
@@ -429,21 +434,21 @@ describe('Containment gates', () => {
   }
 
   TruthGate.Define('W1 → S9.4', async (h) => {
-    const { Details: details } = await w1RecordProcess(h);
-    const badges = ContainmentProbe.TopDriverBadges(details, 'Auto Renew', 'Renewed');
-    const lowers = badges.filter((b) => b === 'Lowers Risk').length;
+    const { Details: details, Model: model } = await w1RecordProcess(h);
+    const raises = ContainmentProbe.TopDriverRaisesRisk(details, 'Auto Renew', model);
+    const lowers = raises.filter((r) => !r).length;
     return {
-      Passed: badges.length > 0 && lowers === badges.length,
-      Measured: { autoRenewTopDriverRows: badges.length, lowersRisk: lowers },
-      Detail: `${lowers} of ${badges.length} AutoRenew top-driver rows render "Lowers Risk"`,
+      Passed: raises.length > 0 && lowers === raises.length,
+      Measured: { autoRenewTopDriverRows: raises.length, lowersRisk: lowers },
+      Detail: `${lowers} of ${raises.length} AutoRenew top-driver rows lower the displayed risk ("Lowers Risk")`,
     };
   });
 
   TruthGate.Define('W1 → S9.5', async (h) => {
-    const { Details: details, TruthCsv: truthCsv } = await w1RecordProcess(h);
+    const { Details: details, Model: model, TruthCsv: truthCsv } = await w1RecordProcess(h);
     const truth = readTrueP(truthCsv);
-    const all = details.map((d) => truth.get(NormalizeUUID(d.recordId))).filter((v): v is number => v !== undefined);
-    const list = ContainmentProbe.AtRiskListRecordIDs(details, 'Renewed').map((id) => truth.get(NormalizeUUID(id))).filter((v): v is number => v !== undefined);
+    const all = details.map((d) => truth.get(NormalizeUUID(d.RecordID))).filter((v): v is number => v !== undefined);
+    const list = ContainmentProbe.AtRiskListRecordIDs(details, model).map((id) => truth.get(NormalizeUUID(id))).filter((v): v is number => v !== undefined);
     const mean = (xs: number[]): number => xs.reduce((s, x) => s + x, 0) / xs.length;
     return {
       Passed: list.length > 0 && mean(list) < mean(all),

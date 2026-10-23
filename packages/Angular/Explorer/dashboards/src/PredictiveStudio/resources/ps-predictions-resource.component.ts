@@ -3,7 +3,7 @@ import { NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global
 import { CompositeKey, LogError, RunView, UserInfo } from '@memberjunction/core';
 import { MJConversationEntity, MJEnvironmentEntityExtended, MJMLModelEntity, MJProcessRunDetailEntity, MJListEntity, MJListDetailEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { TrustDots, TrustVerdicts, AtRiskRules, ImportanceDisplay, resolveOutcomeConfig, TopGlobalDrivers, LabelFromRecord, type AtRiskRow } from '@memberjunction/predictive-studio-core';
+import { TrustDots, TrustVerdicts, AtRiskRules, ImportanceDisplay, type AtRiskRow } from '@memberjunction/predictive-studio-core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { PSResourceBase } from './ps-resource-base';
 import { buildBusinessCatalog, type BusinessPredictionCard } from '../business-predictions.view-models';
@@ -557,9 +557,9 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
       Selected: this.Selected ? { Name: this.Selected.title, TrustGrade: this.Selected.trust.grade, CanOpen: this.Selected.canOpen } : null,
       AtRiskLoaded: this.View === 'workspace' && !this.AtRiskLoading && !this.AtRiskError,
       AtRiskCount: this.AtRiskRows.length,
-      HighRiskCount: this.AtRiskRows.filter((r) => r.band === 'high').length,
-      MediumRiskCount: this.AtRiskRows.filter((r) => r.band === 'medium').length,
-      LowRiskCount: this.AtRiskRows.filter((r) => r.band === 'low').length,
+      HighRiskCount: this.AtRiskRows.filter((r) => r.Band === 'high').length,
+      MediumRiskCount: this.AtRiskRows.filter((r) => r.Band === 'medium').length,
+      LowRiskCount: this.AtRiskRows.filter((r) => r.Band === 'low').length,
       Drivers: this.Drivers,
     });
   }
@@ -659,7 +659,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   /** Load the open prediction's plain-language drivers + its latest run's ranked at-risk rows. */
   private async loadAtRisk(c: BusinessPredictionCard): Promise<void> {
     const model = this.engine.PublishedModels.find((m) => UUIDsEqual(m.ID, c.modelId));
-    this.Drivers = ImportanceDisplay.GlobalDriversShowable(model?.Lineage) ? TopGlobalDrivers(model?.FeatureImportance || null, 3) : [];
+    this.Drivers = ImportanceDisplay.GlobalDriversShowable(model?.Lineage) ? AtRiskRules.TopGlobalDrivers(model?.FeatureImportance || null, 3) : [];
     this.AtRiskLoading = true;
     this.AtRiskError = null;
     this.cdrLocal.detectChanges();
@@ -675,9 +675,8 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
           user,
         );
         if (res.Success && this.Selected?.modelId === c.modelId) {
-          const details = (res.Results || []).map((d) => ({ recordId: d.RecordID, ResultPayload: d.ResultPayload }));
-          const options = AtRiskRules.BuildAtRiskOptions(details.map((d) => d.ResultPayload), model?.TargetVariable, resolveOutcomeConfig(model || undefined));
-          this.AtRiskRows = AtRiskRules.ParseAtRiskRows(details, options);
+          const details = (res.Results || []).map((d) => ({ RecordID: d.RecordID, ResultPayload: d.ResultPayload }));
+          this.AtRiskRows = AtRiskRules.ParseAtRiskRows(details, AtRiskRules.BuildAtRiskOptions(model));
           await this.resolveAtRiskLabels(model);
         }
       }
@@ -747,12 +746,13 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
       // The target entity is arbitrary — its key can have any column name(s), including a composite key.
       const pkNames = entity.PrimaryKeys.map((pk) => pk.Name);
       const targets = this.AtRiskRows.slice(0, 200); // the rows a user actually acts on
-      const ids = targets.map((r) => r.recordId);
-      // Only fetch the columns labelFromRecord can actually use — a broad no-Fields fetch pulls every
-      // column (incl. large text/JSON) of an arbitrary entity just to render a display name. Fall back
-      // to the broad fetch only when the entity has none of the candidate label fields.
-      const candidates = ['Name', 'FirstName', 'LastName', 'Email'];
-      const labelFields = candidates.filter((c) => entity.Fields.some((f) => f.Name.toLowerCase() === c.toLowerCase()));
+      const ids = targets.map((r) => r.RecordID);
+      // Only fetch the columns LabelFromRecord can actually use (the entity's name field first) — a broad
+      // no-Fields fetch pulls every column (incl. large text/JSON) of an arbitrary entity just to render a
+      // display name. Fall back to the broad fetch only when the entity has none of the candidate label fields.
+      const nameField = entity.NameField?.Name || null;
+      const candidates = [...(nameField ? [nameField] : []), 'Name', 'FirstName', 'LastName', 'Email'];
+      const labelFields = entity.Fields.filter((f) => candidates.some((c) => c.toLowerCase() === f.Name.toLowerCase())).map((f) => f.Name);
       const res = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<Record<string, unknown>>(
         {
           EntityName: target.name,
@@ -767,8 +767,8 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
       const byId = new Map<string, Record<string, unknown>>();
       for (const row of res.Results ?? []) byId.set(NormalizeUUID(CompositeKey.FromEntityRecord(entity, row).ToCompactURLSegment()), row);
       for (const r of this.AtRiskRows) {
-        const rec = byId.get(NormalizeUUID(r.recordId));
-        if (rec) r.label = LabelFromRecord(rec);
+        const rec = byId.get(NormalizeUUID(r.RecordID));
+        if (rec) r.Label = AtRiskRules.LabelFromRecord(rec, nameField);
       }
     } catch (err) {
       LogError(`PSPredictionsResource.resolveAtRiskLabels (cosmetic — list keeps ids): ${err instanceof Error ? err.message : String(err)}`);
@@ -850,7 +850,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
       for (const r of members) {
         const ld = await p.GetEntityObject<MJListDetailEntity>('MJ: List Details', user);
         ld.ListID = list.ID;
-        ld.RecordID = r.recordId;
+        ld.RecordID = r.RecordID;
         ld.Sequence = seq++;
         ld.Status = 'Active';
         if (await ld.Save()) {
@@ -894,7 +894,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
     if (this.AtRiskRows.length === 0) return;
     const csv = [
       'Record,Risk %,Predicted',
-      ...this.AtRiskRows.map((r) => `${this.csvCell(r.label ?? r.recordId)},${r.riskPct},${this.csvCell(r.class ?? '')}`),
+      ...this.AtRiskRows.map((r) => `${this.csvCell(r.Label || r.RecordID)},${r.RiskPct},${this.csvCell(r.Class || '')}`),
     ].join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     const a = document.createElement('a');

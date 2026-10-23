@@ -15,22 +15,23 @@ try {
   // already initialized
 }
 
-interface Artifact { targetVariable: string; details: Array<{ recordId: string; resultPayload: string | null }> }
+interface Artifact { targetVariable: string; lineage?: string | null; details: Array<{ recordId: string; resultPayload: string | null }> }
 
 const FILE = process.env.TRUTH_RESULTS_DIR ? path.join(process.env.TRUTH_RESULTS_DIR, 'artifacts', 'w1-s42-recordprocess.json') : null;
 const ARTIFACT: Artifact | null = FILE && existsSync(FILE) ? SafeJSONParse<Artifact>(readFileSync(FILE, 'utf8')) : null;
 
 function rows() {
-  const details: RunDetailLike[] = (ARTIFACT?.details || []).map((d) => ({ recordId: d.recordId, ResultPayload: d.resultPayload }));
-  return AtRiskRules.ParseAtRiskRows(details, AtRiskRules.BuildAtRiskOptions(details.map((d) => d.ResultPayload), ARTIFACT?.targetVariable));
+  const details: RunDetailLike[] = (ARTIFACT?.details || []).map((d) => ({ RecordID: d.recordId, ResultPayload: d.resultPayload }));
+  const model = { Lineage: ARTIFACT?.lineage || null, TargetVariable: ARTIFACT?.targetVariable || null, ProblemType: 'classification' };
+  return AtRiskRules.ParseAtRiskRows(details, AtRiskRules.BuildAtRiskOptions(model));
 }
 
 describe.skipIf(ARTIFACT === null)('component tier on the real W1 s42 scores', () => {
   it('every Auto Renew top-driver row renders "Lowers Risk" in green', () => {
-    const autoRenew = rows().filter((r) => r.drivers?.[0]?.label === 'Auto Renew');
+    const autoRenew = rows().filter((r) => r.Drivers?.[0]?.Label === 'Auto Renew');
     expect(autoRenew.length).toBeGreaterThan(0);
     for (const r of autoRenew) {
-      const fixture = renderComponentFixture(PSRowDriversComponent, { inputs: { Drivers: r.drivers || [] } });
+      const fixture = renderComponentFixture(PSRowDriversComponent, { inputs: { Drivers: r.Drivers || [] } });
       expect(text(fixture, '[data-testid="ps-row-driver-label"]')).toContain('Auto Renew');
       expect(text(fixture, '[data-testid="ps-row-driver-badge"]')).toBe('Lowers Risk');
       expect(query(fixture, '[data-testid="ps-row-driver-badge"].green')).not.toBeNull();

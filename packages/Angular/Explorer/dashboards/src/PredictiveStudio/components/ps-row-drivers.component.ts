@@ -1,9 +1,12 @@
 import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
-import { AtRiskRules, type DriverBadge, type RowDriver } from '@memberjunction/predictive-studio-core';
+import type { RowDriver } from '@memberjunction/predictive-studio-core';
+
+/** The badge a person sees for a driver. */
+export type DriverBadge = 'Increases Risk' | 'Lowers Risk';
 
 /**
- * L1 widget: one scored row's signed drivers with their risk badge. The badge text comes from
- * {@link AtRiskRules.DriverBadgeText}, so the drawer, the truth-suite probe and the tests share one rule (gate W1 → S9.4).
+ * L1 widget: one scored row's signed drivers with their risk badge. Each driver's `Up` is
+ * `AtRiskRules.DriverRaisesRisk`, the rule the truth-suite probe also checks (gate W1 → S9.4); this widget owns only the copy.
  */
 @Component({
   standalone: true,
@@ -15,14 +18,14 @@ import { AtRiskRules, type DriverBadge, type RowDriver } from '@memberjunction/p
       <div class="ps-small ps-muted" data-testid="ps-row-drivers-empty">No per-row breakdown was recorded for this row.</div>
     } @else {
       <div class="pg-detail-drivers-list" data-testid="ps-row-drivers">
-        @for (d of Drivers; track d.label) {
+        @for (d of Drivers; track d.Label) {
           <div class="pg-detail-driver-item">
             <div class="pg-detail-driver-label" data-testid="ps-row-driver-label">
-              <i class="fa-solid" [class.fa-arrow-up]="d.up" [class.fa-arrow-down]="!d.up"
-                 [style.color]="d.up ? 'var(--mj-status-error)' : 'var(--mj-status-success)'"></i>
-              {{ d.label }}
+              <i class="fa-solid" [class.fa-arrow-up]="d.Up" [class.fa-arrow-down]="!d.Up"
+                 [style.color]="d.Up ? 'var(--mj-status-error)' : 'var(--mj-status-success)'"></i>
+              {{ d.Label }}
             </div>
-            <span class="ps-badge" [class.red]="d.up" [class.green]="!d.up" data-testid="ps-row-driver-badge">{{ Badge(d) }}</span>
+            <span class="ps-badge" [class.red]="d.Up" [class.green]="!d.Up" data-testid="ps-row-driver-badge">{{ Badge(d) }}</span>
           </div>
         }
       </div>
@@ -35,6 +38,11 @@ export class PSRowDriversComponent {
 
   /** Badge text for one driver. */
   public Badge(d: RowDriver): DriverBadge {
-    return AtRiskRules.DriverBadgeText(d.up);
+    return PSRowDriversComponent.driverBadgeText(d.Up);
+  }
+
+  /** The one place the badge copy is decided. */
+  private static driverBadgeText(raisesRisk: boolean): DriverBadge {
+    return raisesRisk ? 'Increases Risk' : 'Lowers Risk';
   }
 }

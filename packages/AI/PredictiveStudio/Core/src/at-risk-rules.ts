@@ -7,57 +7,57 @@
  * Honest about the gap: MJ stores only GLOBAL feature importance (not per-record/SHAP), so we surface the
  * top global drivers once for the whole prediction rather than fabricating per-member attribution.
  *
- * Framework-free + deterministic → unit-tested with no Angular.
+ * Pure, dependency-free, browser-safe → unit-tested with no Angular.
  */
 
-import {
-  type OutcomeConfig,
-  resolveScoreBand,
-} from './outcome-config';
+import { type OutcomeConfig, ResolveOutcomeConfig, ResolveScoreBand } from './outcome-config';
+
+/** The three risk bands the at-risk list colors and counts by. */
+export type RiskBand = 'high' | 'medium' | 'low';
 
 /** A scored record in the at-risk list. */
 export interface AtRiskRow {
-  recordId: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  RecordID: string;
   /**
    * Human-readable label for the record (e.g. the member's name/email), resolved from the model's
-   * target entity. Null until resolved; the UI falls back to {@link recordId} so the row is never blank.
+   * target entity. Null until resolved; the UI falls back to {@link RecordID} so the row is never blank.
    */
-  label: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  Label: string | null;
   /** 0–1 prediction score (probability / risk). */
-  score: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  Score: number;
   /** Risk as a 0–100 integer, for display. */
-  riskPct: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  RiskPct: number;
   /** Predicted class label, when present (classification). */
-  class: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  Class: string | null;
   /** Risk band, for color / filtering. */
-  band: 'high' | 'medium' | 'low' | string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  Band: RiskBand;
   /** Qualitative status label (e.g. "High", "Critical", "Low Risk"). */
-  status?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  Status?: string;
   /** Semantic badge color. */
-  badgeColor?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  BadgeColor?: string;
   /** Icon class. */
-  icon?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  Icon?: string;
   /**
-   * Top signed per-record drivers behind THIS row's prediction (P1-5), humanized + one-hot-collapsed for
-   * display. `up: true` pushed the risk up, `false` down. Null when the model doesn't produce per-record
-   * attribution (tree/ensemble/multiclass) — the UI then shows the model's global drivers instead.
+   * Top signed per-record drivers behind THIS row's prediction (P1-5), humanized for display. `Up: true`
+   * pushed the risk up, `false` down. Null when the model doesn't produce per-record attribution
+   * (tree/ensemble/multiclass) — the UI then shows the model's global drivers instead.
    */
-  drivers: RowDriver[] | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  Drivers: RowDriver[] | null;
 }
 
 /** A humanized, signed per-record driver for the at-risk row's inline "why". */
 export interface RowDriver {
-  /** Display label (humanized, one-hot base collapsed). */
-  label: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  /** Display label (humanized; the one-hot category is kept). */
+  Label: string;
   /** Signed contribution magnitude for this row. */
-  value: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  Value: number;
   /** Whether this pushed the displayed risk UP. */
-  up: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  Up: boolean;
 }
 
 /** The raw per-record detail the list is built from (a slice of `MJ: Process Run Details`). */
 export interface RunDetailLike {
-  recordId: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  RecordID: string;
   ResultPayload?: string | null;
 }
 
@@ -71,27 +71,25 @@ export interface ParseAtRiskOptions {
   InvertedRisk?: boolean;
   /**
    * Configured outcome metadata for the model (labels, thresholds, colors, icons).
-   * When provided, `resolveScoreBand()` evaluates the dynamic band, status, badgeColor, and icon.
+   * When provided, `ResolveScoreBand()` evaluates the band, status, badge color and icon.
    */
   OutcomeConfig?: OutcomeConfig;
 }
 
-/** Result of detecting whether a model is a renewal model and what its output score represents. */
-export interface RenewalPolarityResult {
-  IsRenewalModel: boolean;
-  /**
-   * True if `score` represents adverse lapse risk (P(Lapse) / Churn Risk), e.g. 0.01 = 1% risk.
-   * False if `score` represents positive outcome probability (P(Renewed)), e.g. 0.99 = 99% renewal chance.
-   */
-  ScoreIsLapseRisk: boolean;
-}
+/** The model shape the outcome config resolves from (the same input `ResolveOutcomeConfig` takes). */
+export type OutcomeModelLike = Parameters<typeof ResolveOutcomeConfig>[0];
 
-function bandFor(score: number): AtRiskRow['band'] {
-  return score >= 0.7 ? 'high' : score >= 0.4 ? 'medium' : 'low';
+/** The prediction fields a scored payload carries, after narrowing from parsed JSON. */
+interface ScoredPrediction {
+  Score: number;
+  Class: string | null;
+  Status?: string;
+  Band?: string;
+  BadgeColor?: string;
+  Icon?: string;
+  // unknown: the raw per-record drivers from the stored payload; ParseRowDrivers narrows them
+  Drivers: unknown;
 }
-
-/** The badge a person sees for a driver. */
-export type DriverBadge = 'Increases Risk' | 'Lowers Risk';
 
 /** Rows below this displayed risk never go on an "At-Risk" list. */
 export const AT_RISK_LIST_MIN_RISK_PCT = 40;
@@ -107,59 +105,48 @@ export class AtRiskRules {
     return invertedRisk ? contribution < 0 : contribution > 0;
   }
 
-  /** The one place the badge text is decided (the drawer, the gate probe and tests all call it). */
-  public static DriverBadgeText(raisesRisk: boolean): DriverBadge {
-    return raisesRisk ? 'Increases Risk' : 'Lowers Risk';
-  }
-
-  /**
-   * The At-Risk options for a model's scored rows: the same polarity rule the grid uses (`ResolveRenewalPolarity`), so the
-   * resource's list, the export and the grid agree on what "risk" is.
-   */
-  public static BuildAtRiskOptions(
-    payloads: ReadonlyArray<string | null | undefined>,
-    targetVariable: string | null | undefined,
-    outcomeConfig?: OutcomeConfig,
-  ): ParseAtRiskOptions {
-    const polarity = AtRiskRules.ResolveRenewalPolarity([...payloads], targetVariable);
-    return { InvertedRisk: polarity.IsRenewalModel && !polarity.ScoreIsLapseRisk, OutcomeConfig: outcomeConfig };
+  /** The At-Risk options for a model: its resolved outcome config, and risk inverted when the score is the good outcome. */
+  public static BuildAtRiskOptions(model: OutcomeModelLike): ParseAtRiskOptions {
+    const outcomeConfig = ResolveOutcomeConfig(model);
+    return { InvertedRisk: outcomeConfig.Polarity === 'positive' && model?.ProblemType !== 'regression', OutcomeConfig: outcomeConfig };
   }
 
   /** The members of an "At-Risk" list: highest displayed risk first, at least {@link AT_RISK_LIST_MIN_RISK_PCT}, at most `limit`. */
   public static SelectAtRiskListMembers(rows: ReadonlyArray<AtRiskRow>, limit: number): AtRiskRow[] {
     return [...rows]
-      .sort((a, b) => b.riskPct - a.riskPct)
-      .filter((r) => r.riskPct >= AT_RISK_LIST_MIN_RISK_PCT)
+      .sort((a, b) => b.RiskPct - a.RiskPct)
+      .filter((r) => r.RiskPct >= AT_RISK_LIST_MIN_RISK_PCT)
       .slice(0, limit);
   }
 
   /** Parse + humanize the raw per-record `drivers` (post-preprocessing `feature`/`value`) into {@link RowDriver}s. */
-  public static ParseRowDrivers(raw: unknown, invertedRisk: boolean): RowDriver[] | null {
+  public static ParseRowDrivers(raw: unknown, invertedRisk: boolean): RowDriver[] | null { // unknown: parsed JSON from a stored payload; narrowed below
     if (!Array.isArray(raw) || raw.length === 0) return null;
     const out: RowDriver[] = [];
-    for (const d of raw as Array<{ feature?: unknown; value?: unknown; importance?: unknown; weight?: unknown }>) {
-      const feature = typeof d?.feature === 'string' ? d.feature : '';
-      const rawVal = typeof d?.value === 'number' ? d.value : typeof d?.importance === 'number' ? d.importance : typeof d?.weight === 'number' ? d.weight : NaN;
-      const value = Number(rawVal);
-      if (!feature || !Number.isFinite(value)) continue;
+    for (const d of raw) {
+      if (!AtRiskRules.isDriverLike(d)) continue;
+      const feature = typeof d.feature === 'string' ? d.feature : '';
+      const value = AtRiskRules.firstNumber(d.value, d.importance, d.weight);
+      if (!feature || value === null) continue;
       // Keep the one-hot category: for a per-record "why", the category IS the story — "Membership Type =
       // Student lowers risk" is actionable where a collapsed "Membership Type" is close to meaningless.
       // (Collapsing across categories is only right for GLOBAL importance — see TopGlobalDrivers.)
-      out.push({ label: AtRiskRules.HumanizeFeatureName(feature), value, up: AtRiskRules.DriverRaisesRisk(value, invertedRisk) });
+      out.push({ Label: AtRiskRules.HumanizeFeatureName(feature), Value: value, Up: AtRiskRules.DriverRaisesRisk(value, invertedRisk) });
     }
     return out.length > 0 ? out : null;
   }
 
   /**
-   * Build a human-readable label for a record from its (simple) row of the target entity — preferring a
-   * single `Name`, else `FirstName`+`LastName`, else `Email`, else any first non-empty string field.
-   * Returns null when nothing usable is found (caller falls back to the record id).
+   * Build a human-readable label for a record from its (simple) row of the target entity — preferring the
+   * entity's name field (`nameField`), then `Name`, else `FirstName`+`LastName` (with `Email`), else `Email`,
+   * else any first short non-empty string field. Returns null when nothing usable is found (caller falls back
+   * to the record id).
    */
-  public static LabelFromRecord(row: Record<string, unknown> | undefined | null): string | null {
+  public static LabelFromRecord(row: Record<string, unknown> | undefined | null, nameField: string | null): string | null {
     if (!row) return null;
     const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
-    const member = str(row['MemberName'] || row['Member'] || row['FullName']);
-    if (member) return member;
+    const named = nameField ? str(row[nameField]) : '';
+    if (named) return named;
     const name = str(row['Name']);
     if (name) return name;
     const full = `${str(row['FirstName'])} ${str(row['LastName'])}`.trim();
@@ -174,150 +161,15 @@ export class AtRiskRules {
     return null;
   }
 
-  /**
-   * Robustly inspects model metadata and sample scoring payloads to determine:
-   * 1. Whether this is a renewal/retention/churn model (`IsRenewalModel`)
-   * 2. Whether the raw payload `score` represents adverse lapse risk (P(Lapse)) or positive outcome (P(Renewed))
-   */
-  public static ResolveRenewalPolarity(
-    rawPayloads: Array<string | null | undefined>,
-    targetVariable?: string | null,
-    modelName?: string | null,
-  ): RenewalPolarityResult {
-    const target = (targetVariable ?? '').toLowerCase();
-    const name = (modelName ?? '').toLowerCase();
-    const isTargetRenewal =
-      target.includes('renew') ||
-      target.includes('lapse') ||
-      target.includes('retention') ||
-      target.includes('churn') ||
-      target === 'status' ||
-      name.includes('renew') ||
-      name.includes('retention') ||
-      name.includes('churn');
-
-    let hasRenewalKeywords = false;
-    const sampleScoresForRenewed: number[] = [];
-
-    for (const p of rawPayloads.slice(0, 50)) {
-      if (!p) continue;
-      if (
-        p.includes('"Renewed"') ||
-        p.includes('"renewed"') ||
-        p.includes('"Lapsed"') ||
-        p.includes('"lapsed"') ||
-        p.includes('Renewal Risk')
-      ) {
-        hasRenewalKeywords = true;
-      }
-      try {
-        const parsed = JSON.parse(p) as { output?: { score?: number; class?: string }; score?: number; class?: string };
-        const out = parsed.output ?? parsed;
-        if (typeof out.score === 'number' && typeof out.class === 'string') {
-          const cls = out.class.toLowerCase();
-          if (cls === 'renewed' || cls === 'active') {
-            sampleScoresForRenewed.push(out.score);
-          }
-        }
-      } catch {
-        // skip invalid json
-      }
-    }
-
-    const isRenewalModel = isTargetRenewal || hasRenewalKeywords;
-    if (!isRenewalModel) {
-      return { IsRenewalModel: false, ScoreIsLapseRisk: false };
-    }
-
-    if (sampleScoresForRenewed.length > 0) {
-      const avg = sampleScoresForRenewed.reduce((a, b) => a + b, 0) / sampleScoresForRenewed.length;
-      // If members predicted 'Renewed' have small scores (< 0.5), the score represents Lapse Risk (P(Lapse))
-      return { IsRenewalModel: true, ScoreIsLapseRisk: avg < 0.5 };
-    }
-
-    // Fallback: target or name containing "risk", "lapse", or "churn" outputs lapse probability
-    const scoreIsLapseRisk =
-      target.includes('risk') ||
-      target.includes('lapse') ||
-      target.includes('churn') ||
-      name.includes('risk') ||
-      name.includes('churn');
-    return { IsRenewalModel: true, ScoreIsLapseRisk: scoreIsLapseRisk };
-  }
-
   /** Parse + rank the per-record predictions into the at-risk list (highest risk first). */
   public static ParseAtRiskRows(details: RunDetailLike[], options?: ParseAtRiskOptions): AtRiskRow[] {
     const rows: AtRiskRow[] = [];
     const isInverted = options?.InvertedRisk === true;
-    const outcomeConfig = options?.OutcomeConfig;
-
     for (const d of details) {
-      if (!d.ResultPayload) continue;
-      let parsed: {
-        score?: number;
-        class?: string;
-        status?: string;
-        band?: string;
-        badgeColor?: string;
-        icon?: string;
-        drivers?: unknown;
-        output?: {
-          score?: number;
-          class?: string;
-          status?: string;
-          band?: string;
-          badgeColor?: string;
-          icon?: string;
-          drivers?: unknown;
-        };
-      };
-      try {
-        parsed = JSON.parse(d.ResultPayload);
-      } catch {
-        continue;
-      }
-      // Write-back runs nest the prediction under `output`; generic runs carry it at the top level.
-      const p = parsed.output ?? parsed;
-      if (typeof p.score !== 'number' || !Number.isFinite(p.score)) continue;
-      const score = p.score;
-      const effectiveRisk = isInverted ? Math.max(0, Math.min(1, 1 - score)) : score;
-      const riskPct = Math.round(effectiveRisk * 100);
-
-      let bandKey: string;
-      let status: string | undefined = p.status;
-      let badgeColor: string | undefined = p.badgeColor;
-      let icon: string | undefined = p.icon;
-
-      if (outcomeConfig) {
-        const resolved = resolveScoreBand(score, outcomeConfig);
-        if (resolved) {
-          bandKey = resolved.Key;
-          status = status ?? resolved.Label;
-          badgeColor = badgeColor ?? resolved.BadgeColor;
-          icon = icon ?? resolved.Icon;
-        } else {
-          bandKey = p.band ?? bandFor(effectiveRisk);
-        }
-      } else if (p.band) {
-        bandKey = p.band;
-      } else {
-        bandKey = bandFor(effectiveRisk);
-      }
-
-      rows.push({
-        recordId: d.recordId,
-        label: null,
-        score,
-        riskPct,
-        class: p.class ?? null,
-        band: bandKey,
-        status,
-        badgeColor,
-        icon,
-        drivers: AtRiskRules.ParseRowDrivers(p.drivers, isInverted),
-      });
+      const p = AtRiskRules.readScoredPrediction(d.ResultPayload);
+      if (p) rows.push(AtRiskRules.buildRow(d.RecordID, p, isInverted, options?.OutcomeConfig));
     }
-    return rows.sort((a, b) => b.riskPct - a.riskPct);
+    return rows.sort((a, b) => b.RiskPct - a.RiskPct);
   }
 
   /**
@@ -327,30 +179,13 @@ export class AtRiskRules {
    * highest-importance feature names — so a business user sees feature names, not raw weights.
    */
   public static TopGlobalDrivers(featureImportanceJson: string | null | undefined, n = 3): string[] {
-    if (!featureImportanceJson) return [];
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(featureImportanceJson);
-    } catch {
-      return [];
-    }
-    const pairs: Array<{ name: string; weight: number }> = [];
-    if (Array.isArray(parsed)) {
-      for (const e of parsed as Array<Record<string, unknown>>) {
-        const name = (e.feature ?? e.name) as string | undefined;
-        const weight = (e.importance ?? e.value) as number | undefined;
-        if (typeof name === 'string' && typeof weight === 'number') pairs.push({ name, weight: Math.abs(weight) });
-      }
-    } else if (parsed && typeof parsed === 'object') {
-      for (const [name, weight] of Object.entries(parsed as Record<string, unknown>)) {
-        if (typeof weight === 'number') pairs.push({ name, weight: Math.abs(weight) });
-      }
-    }
+    const pairs = AtRiskRules.importancePairs(featureImportanceJson);
     // Collapse one-hot columns ("Feature=Value" → "Feature"), keeping each feature's max weight.
     const byFeature = new Map<string, number>();
     for (const { name, weight } of pairs) {
       const base = name.split('=')[0].trim();
       if (!base) continue;
+      // ?? keeps a legitimate 0 weight already stored for this feature
       byFeature.set(base, Math.max(byFeature.get(base) ?? 0, weight));
     }
     return [...byFeature.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([name]) => AtRiskRules.HumanizeFeatureName(name));
@@ -385,32 +220,112 @@ export class AtRiskRules {
       trimmed.length > maxTitleLen ? `${trimmed.slice(0, maxTitleLen - 1).trimEnd()}…` : trimmed;
     return `${prefix}${truncatedTitle}${suffix}`;
   }
-}
 
-export function ParseRowDrivers(raw: unknown, invertedRisk: boolean): RowDriver[] | null {
-  return AtRiskRules.ParseRowDrivers(raw, invertedRisk);
-}
+  /** One at-risk row from a narrowed prediction: risk (inverted when asked), band, status and drivers. */
+  private static buildRow(recordId: string, p: ScoredPrediction, isInverted: boolean, outcomeConfig: OutcomeConfig | undefined): AtRiskRow {
+    const effectiveRisk = isInverted ? Math.max(0, Math.min(1, 1 - p.Score)) : p.Score;
+    const resolved = outcomeConfig ? ResolveScoreBand(p.Score, outcomeConfig) : null;
+    // Payload strings are never legitimately '' — an empty status/color/icon means "not set", so || falls back.
+    const bandKey = resolved ? resolved.Key : p.Band || AtRiskRules.bandFor(effectiveRisk);
+    return {
+      RecordID: recordId,
+      Label: null,
+      Score: p.Score,
+      RiskPct: Math.round(effectiveRisk * 100),
+      Class: p.Class,
+      Band: AtRiskRules.toRiskBand(bandKey),
+      Status: p.Status || resolved?.Label,
+      BadgeColor: p.BadgeColor || resolved?.BadgeColor,
+      Icon: p.Icon || resolved?.Icon,
+      Drivers: AtRiskRules.ParseRowDrivers(p.Drivers, isInverted),
+    };
+  }
 
-export function LabelFromRecord(row: Record<string, unknown> | undefined | null): string | null {
-  return AtRiskRules.LabelFromRecord(row);
-}
+  /**
+   * Map a band key to a {@link RiskBand}. Configured bands may use their own keys (e.g. 'super-safe', 'danger'); those
+   * carry no risk direction this code can read, so they count as 'low' — never inflating the High/Medium counts. The
+   * row keeps the custom band's own status label, color and icon for display.
+   */
+  private static toRiskBand(key: string): RiskBand {
+    switch (key) {
+      case 'high':
+      case 'medium':
+      case 'low':
+        return key;
+      default:
+        return 'low';
+    }
+  }
 
-export function ResolveRenewalPolarity(
-  rawPayloads: Array<string | null | undefined>,
-  targetVariable?: string | null,
-  modelName?: string | null,
-): RenewalPolarityResult {
-  return AtRiskRules.ResolveRenewalPolarity(rawPayloads, targetVariable, modelName);
-}
+  private static bandFor(risk: number): RiskBand {
+    return risk >= 0.7 ? 'high' : risk >= 0.4 ? 'medium' : 'low';
+  }
 
-export function ParseAtRiskRows(details: RunDetailLike[], options?: ParseAtRiskOptions): AtRiskRow[] {
-  return AtRiskRules.ParseAtRiskRows(details, options);
-}
+  /** Parse a stored payload and narrow it to its prediction (write-back runs nest it under `output`); null when unusable. */
+  private static readScoredPrediction(payload: string | null | undefined): ScoredPrediction | null {
+    if (!payload) return null;
+    // unknown: parsed JSON from a stored payload; narrowed below
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(payload);
+    } catch {
+      return null;
+    }
+    if (!AtRiskRules.isDriverLike(parsed)) return null;
+    const p = AtRiskRules.isDriverLike(parsed.output) ? parsed.output : parsed;
+    if (typeof p.score !== 'number' || !Number.isFinite(p.score)) return null;
+    return {
+      Score: p.score,
+      Class: AtRiskRules.optionalString(p.class) || null,
+      Status: AtRiskRules.optionalString(p.status),
+      Band: AtRiskRules.optionalString(p.band),
+      BadgeColor: AtRiskRules.optionalString(p.badgeColor),
+      Icon: AtRiskRules.optionalString(p.icon),
+      Drivers: p.drivers,
+    };
+  }
 
-export function TopGlobalDrivers(featureImportanceJson: string | null | undefined, n = 3): string[] {
-  return AtRiskRules.TopGlobalDrivers(featureImportanceJson, n);
-}
+  /** The (name, |weight|) pairs of a global feature-importance JSON, in its object or array form. */
+  private static importancePairs(featureImportanceJson: string | null | undefined): Array<{ name: string; weight: number }> {
+    if (!featureImportanceJson) return [];
+    // unknown: parsed JSON from the stored FeatureImportance column; narrowed below
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(featureImportanceJson);
+    } catch {
+      return [];
+    }
+    const pairs: Array<{ name: string; weight: number }> = [];
+    if (Array.isArray(parsed)) {
+      for (const e of parsed) {
+        if (!AtRiskRules.isDriverLike(e)) continue;
+        const name = AtRiskRules.optionalString(e.feature) || AtRiskRules.optionalString(e.name);
+        const weight = AtRiskRules.firstNumber(e.importance, e.value);
+        if (name && weight !== null) pairs.push({ name, weight: Math.abs(weight) });
+      }
+    } else if (AtRiskRules.isDriverLike(parsed)) {
+      for (const [name, weight] of Object.entries(parsed)) {
+        if (typeof weight === 'number') pairs.push({ name, weight: Math.abs(weight) });
+      }
+    }
+    return pairs;
+  }
 
-export function HumanizeFeatureName(name: string): string {
-  return AtRiskRules.HumanizeFeatureName(name);
+  // unknown: one element of parsed JSON; this guard is what narrows it
+  private static isDriverLike(d: unknown): d is Record<string, unknown> {
+    return typeof d === 'object' && d !== null;
+  }
+
+  // unknown: a field of parsed JSON
+  private static optionalString(v: unknown): string | undefined {
+    return typeof v === 'string' ? v : undefined;
+  }
+
+  /** The first finite number among the candidates, or null. */
+  private static firstNumber(...candidates: unknown[]): number | null { // unknown: fields of parsed JSON
+    for (const c of candidates) {
+      if (typeof c === 'number' && Number.isFinite(c)) return c;
+    }
+    return null;
+  }
 }

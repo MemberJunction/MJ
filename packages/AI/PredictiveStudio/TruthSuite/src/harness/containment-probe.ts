@@ -2,7 +2,7 @@ import { readdirSync } from 'node:fs';
 import path from 'node:path';
 import { SafeJSONParse } from '@memberjunction/global';
 import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
-import { AtRiskRules, EvaluationLineage, type AtRiskRow, type DriverBadge, type RunDetailLike, type TrustVerdict, type ValidationStrategy } from '@memberjunction/predictive-studio-core';
+import { AtRiskRules, EvaluationLineage, type AtRiskRow, type OutcomeModelLike, type RunDetailLike, type TrustVerdict, type ValidationStrategy } from '@memberjunction/predictive-studio-core';
 import type { TrainAttempt, CandidateModel, ScoreAttempt, TruthHarness } from './types';
 
 /** The three gate outcomes (reference contracts.ts `GateOutcome`; named apart from the suite's own result outcomes). */
@@ -91,23 +91,26 @@ export class ContainmentProbe {
     return h.GenerateStory(modelId);
   }
 
-  /** The badge each row shows for its top per-record driver, for rows whose top driver has `label`. */
-  public static TopDriverBadges(details: RunDetailLike[], label: string, targetVariable: string): DriverBadge[] {
-    const badges: DriverBadge[] = [];
-    for (const row of ContainmentProbe.resourceRows(details, targetVariable)) {
-      const top = row.drivers?.[0];
-      if (top && top.label === label) badges.push(AtRiskRules.DriverBadgeText(top.up));
+  /**
+   * Whether each row's top per-record driver raises the displayed risk, for rows whose top driver has `label`
+   * (`AtRiskRules.DriverRaisesRisk`, the rule the drawer's badge renders from).
+   */
+  public static TopDriverRaisesRisk(details: RunDetailLike[], label: string, model: OutcomeModelLike): boolean[] {
+    const raises: boolean[] = [];
+    for (const row of ContainmentProbe.resourceRows(details, model)) {
+      const top = row.Drivers?.[0];
+      if (top && top.Label === label) raises.push(top.Up);
     }
-    return badges;
+    return raises;
   }
 
   /** The record ids "Send to a list" puts on the At-Risk list. */
-  public static AtRiskListRecordIDs(details: RunDetailLike[], targetVariable: string): string[] {
-    return AtRiskRules.SelectAtRiskListMembers(ContainmentProbe.resourceRows(details, targetVariable), 200).map((r) => r.recordId);
+  public static AtRiskListRecordIDs(details: RunDetailLike[], model: OutcomeModelLike): string[] {
+    return AtRiskRules.SelectAtRiskListMembers(ContainmentProbe.resourceRows(details, model), 200).map((r) => r.RecordID);
   }
 
   /** The rows the Predictions resource builds for a model's scored details (same options as `loadAtRisk`). */
-  private static resourceRows(details: RunDetailLike[], targetVariable: string): AtRiskRow[] {
-    return AtRiskRules.ParseAtRiskRows(details, AtRiskRules.BuildAtRiskOptions(details.map((d) => d.ResultPayload), targetVariable));
+  private static resourceRows(details: RunDetailLike[], model: OutcomeModelLike): AtRiskRow[] {
+    return AtRiskRules.ParseAtRiskRows(details, AtRiskRules.BuildAtRiskOptions(model));
   }
 }

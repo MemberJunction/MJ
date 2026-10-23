@@ -80,6 +80,7 @@ const METRIC_ALIASES: Record<string, PSMetricKey> = {
 
 export const PS_FEATURE_DOMINANCE_THRESHOLD = 0.6;
 
+/** @deprecated Use {@link AtRiskRules.HumanizeFeatureName} from `@memberjunction/predictive-studio-core`. Kept: a published export. */
 export function HumanizeFeatureName(name: string): string {
   if (!name) return '';
   return AtRiskRules.HumanizeFeatureName(name);

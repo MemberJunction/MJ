@@ -67,7 +67,7 @@ describe('PredictiveStudioScoreHistoryService', () => {
     expect(points[1].score).toBe(0.85);
     expect(points[1].Delta).toBeCloseTo(0.20, 5);
     expect(points[1].band).toBe('high');
-    expect(points[1].drivers[0].label).toContain('Tenure');
+    expect(points[1].drivers[0].Label).toContain('Tenure');
   });
 
   it('filters by modelId when specified', async () => {
@@ -147,6 +147,6 @@ describe('PredictiveStudioScoreHistoryService', () => {
     });
 
     expect(points).toHaveLength(1);
-    expect(points[0].drivers[0].up).toBe(false);
+    expect(points[0].drivers[0].Up).toBe(false);
   });
 });
