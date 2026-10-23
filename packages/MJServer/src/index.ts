@@ -77,7 +77,7 @@ import { RoomHandoffEngine } from '@memberjunction/livekit-room-server';
 // Type-only: the provider is built in ./sharedCache.ts. Still needed here because the handoff-offer
 // fan-out below stays in this file — see the note at its call site.
 import type { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
-import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
+import { IntegrationProgressEmitter, SweepInterruptedRuns } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
 import { ClientToolRequestManager, AgentRunWatchdog, SqlRealtimeRecordingLedger } from '@memberjunction/ai-agents';
@@ -1582,6 +1582,17 @@ const setupComplete$ = new ReplaySubject(1);
   if (!runBackgroundWorkers) {
     LogStatus(`[ServerRole] Running in '${serverRole}' mode — background worker services are disabled on this replica.`);
   }
+
+  // Close out run artifacts a dead process left open, BEFORE anything below can start a new run.
+  //
+  // A killed process (OOM killer, SIGKILL, host reboot) never writes its run's terminal result, so
+  // the run reads as in-flight forever: the wizard spins, the active-operations panel shows a step
+  // that will never advance, and no failure is reported anywhere. Sound only before the first new
+  // run: artifacts are process-local, so anything still in flight as THIS process starts belongs
+  // to a process that no longer exists. That is why it runs here, ahead of the scheduler, the
+  // integration sync worker (its Start() polls immediately), the HTTP listener (a request can
+  // start a discovery) and pending RSU work, and why it is awaited. It needs none of them.
+  await SweepInterruptedRuns(undefined, msg => console.warn(msg));
 
   // Initialize and start scheduled jobs service if enabled
   let scheduledJobsService: ScheduledJobsService | null = null;
