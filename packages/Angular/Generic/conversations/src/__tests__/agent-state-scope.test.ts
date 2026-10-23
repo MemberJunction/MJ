@@ -16,9 +16,12 @@ const BRANCH_SCOPE: ConversationScope = { ConversationID: 'CONV-1', BranchID: 'B
 /** `ConversationID=` outside brackets: a filter on the run's own conversation column. */
 const BARE_CONVERSATION_FILTER = /(^|[^[])ConversationID\s*=/;
 
+/** The statuses the poll treats as live: Paused and AwaitingFeedback are parked on a human, not finished. */
+const LIVE_STATUSES = `Status IN ('Running', 'Paused', 'AwaitingFeedback')`;
+
 /** The poll filter for a conversation: runs in scope, or conversation runs with no detail. */
 function conversationFilter(scope: ConversationScope, conversationId: string): string {
-    return `Status IN ('Running', 'Paused') AND (${ConversationEngine.ScopeSubquery(scope)} OR ([ConversationID]='${conversationId}' AND [ConversationDetailID] IS NULL))`;
+    return `${LIVE_STATUSES} AND (${ConversationEngine.ScopeSubquery(scope)} OR ([ConversationID]='${conversationId}' AND [ConversationDetailID] IS NULL))`;
 }
 
 describe('AgentStateService poll filter', () => {
@@ -54,8 +57,8 @@ describe('AgentStateService poll filter', () => {
         service.StartPolling(USER, 'CONV-1', BRANCH_SCOPE);
 
         const filter = lastFilter();
-        const clause = filter.slice(`Status IN ('Running', 'Paused') AND `.length);
-        expect(filter.startsWith(`Status IN ('Running', 'Paused') AND (`)).toBe(true);
+        const clause = filter.slice(`${LIVE_STATUSES} AND `.length);
+        expect(filter.startsWith(`${LIVE_STATUSES} AND (`)).toBe(true);
         expect(clause.startsWith('(')).toBe(true);
         expect(clause.endsWith(')')).toBe(true);
         expect(clause).toContain(ConversationEngine.ScopeSubquery(BRANCH_SCOPE));
@@ -79,7 +82,7 @@ describe('AgentStateService poll filter', () => {
     it('adds no conversation filter when no conversation id is given', () => {
         service.StartPolling(USER);
 
-        expect(lastFilter()).toBe(`Status IN ('Running', 'Paused')`);
+        expect(lastFilter()).toBe(LIVE_STATUSES);
     });
 
     it('passes the scope through the deprecated startPolling', () => {

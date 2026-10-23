@@ -20,6 +20,7 @@
 
 import {
     BaseEntity,
+    EntityField,
     EntityInfo,
     RunViewParams,
     RunViewResult,
@@ -95,6 +96,14 @@ export class WireTestGraphQLProvider extends GraphQLDataProvider {
     public CallInternalRunViews<T>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
         return this.InternalRunViews<T>(params, contextUser);
     }
+
+    /**
+     * Public gateway to the REAL protected ResolvePrimaryKeyField — the single lookup both
+     * `Load` and `Delete` use to turn a CompositeKey's FieldName into an EntityField.
+     */
+    public CallResolvePrimaryKeyField(entity: BaseEntity, keyFieldName: string, keyColumnCount: number): EntityField {
+        return this.ResolvePrimaryKeyField(entity, keyFieldName, keyColumnCount);
+    }
 }
 
 /**
@@ -137,6 +146,8 @@ export function BuildTestConfig(overrides?: {
 
 export const CUSTOMER_ENTITY_ID = 'A1B2C3D4-0000-4000-8000-000000000001';
 export const USER_VIEW_ENTITY_ID = 'A1B2C3D4-0000-4000-8000-000000000002';
+export const SOFT_KEYED_ENTITY_ID = 'A1B2C3D4-0000-4000-8000-000000000003';
+export const COMPOSITE_KEYED_ENTITY_ID = 'A1B2C3D4-0000-4000-8000-000000000004';
 
 interface TestFieldSpec {
     Name: string;
@@ -224,12 +235,67 @@ export function BuildUserViewEntityInfo(): EntityInfo {
     });
 }
 
+/**
+ * A SOFT-KEYED entity: the primary key is `cst_key`, not `ID`.
+ *
+ * Every MJ core entity is `ID`-keyed, so a provider path that assumes the name `ID` works across
+ * the entire core product and fails only here — on an entity mapped from an external schema
+ * (this shape is a NetForum member table). Callers that build a load key with
+ * `CompositeKey.FromID(id)` hand the provider the field name `'ID'`, which this entity does not
+ * have; the provider must still resolve it to the one primary key it does have.
+ */
+export function BuildSoftKeyedEntityInfo(): EntityInfo {
+    return new EntityInfo({
+        ID: SOFT_KEYED_ENTITY_ID,
+        Name: 'NetForum Customers',
+        BaseTable: 'customer',
+        BaseView: 'vwcustomers',
+        SchemaName: 'netforum',
+        Status: 'Active',
+        EntityFields: [
+            buildField({ Name: 'cst_key', Type: 'nvarchar', Length: 100, IsPrimaryKey: true, AllowsNull: false, Sequence: 1, EntityID: SOFT_KEYED_ENTITY_ID }),
+            buildField({ Name: 'cst_name', Type: 'nvarchar', Length: 400, AllowsNull: false, AllowUpdateAPI: true, Sequence: 2, EntityID: SOFT_KEYED_ENTITY_ID }),
+            buildField({ Name: 'cst_active', Type: 'bit', AllowsNull: false, AllowUpdateAPI: true, DefaultValue: '1', Sequence: 3, EntityID: SOFT_KEYED_ENTITY_ID }),
+        ],
+    });
+}
+
+/**
+ * A COMPOSITE-keyed entity — two primary-key columns, neither called `ID`.
+ *
+ * The single-primary-key fallback must NOT fire here: with more than one key column there is no
+ * unambiguous "the primary key" for an unrecognized name to mean, and silently picking the first
+ * column would truncate the key. This fixture is how the suite proves a genuine mismatch is
+ * reported rather than guessed at.
+ */
+export function BuildCompositeKeyedEntityInfo(): EntityInfo {
+    return new EntityInfo({
+        ID: COMPOSITE_KEYED_ENTITY_ID,
+        Name: 'Order Lines',
+        BaseTable: 'OrderLine',
+        BaseView: 'vwOrderLines',
+        SchemaName: 'ERP',
+        Status: 'Active',
+        EntityFields: [
+            buildField({ Name: 'OrderID', Type: 'uniqueidentifier', IsPrimaryKey: true, AllowsNull: false, Sequence: 1, EntityID: COMPOSITE_KEYED_ENTITY_ID }),
+            buildField({ Name: 'LineNo', Type: 'int', IsPrimaryKey: true, AllowsNull: false, Sequence: 2, EntityID: COMPOSITE_KEYED_ENTITY_ID }),
+            buildField({ Name: 'Quantity', Type: 'int', AllowsNull: false, AllowUpdateAPI: true, Sequence: 3, EntityID: COMPOSITE_KEYED_ENTITY_ID }),
+        ],
+    });
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Entity classes — REAL BaseEntity subclasses over the fixtures
 // ────────────────────────────────────────────────────────────────────────────
 
 /** Concrete BaseEntity for the Customers fixture (mirrors a generated entity class). */
 export class TestCustomerEntity extends BaseEntity {}
+
+/** Concrete BaseEntity for the soft-keyed (`cst_key`) fixture. */
+export class TestSoftKeyedEntity extends BaseEntity {}
+
+/** Concrete BaseEntity for the composite-keyed (`OrderID` + `LineNo`) fixture. */
+export class TestCompositeKeyedEntity extends BaseEntity {}
 
 /**
  * Saved-view fixture entity: a real BaseEntity that exposes the two members
