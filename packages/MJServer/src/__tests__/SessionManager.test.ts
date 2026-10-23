@@ -261,6 +261,43 @@ describe('SessionManager.CreateSession', () => {
         expect(session.ConversationID).toBe('conv-existing');
     });
 
+    describe('an anonymous caller binding a session to an existing conversation (#4931)', () => {
+        const anonUser = { ID: 'user-anon', Email: 'anonymous@magic-link.local', IsMagicLinkAnonymous: true, AnonymousVisitorID: 'sid-a', MagicLinkScope: { ResourceID: 'sid-a' } } as unknown as UserInfo;
+
+        function providerWith(conversation: FakeEntity, session: FakeEntity) {
+            return makeProvider((name) => (name === 'MJ: Conversations' ? conversation : session));
+        }
+
+        it('refuses another visitor\'s conversation and writes no session row', async () => {
+            hasPermissionMock.mockResolvedValue(true);
+            const session = makeSessionEntity({ ID: 'session-x' });
+            const { provider } = providerWith(makeSessionEntity({ ID: 'conv-b', ExternalID: 'sid-b' }), session);
+            await expect(
+                new SessionManager().CreateSession({ agentID: 'agent-1', userID: 'user-anon', conversationID: 'conv-b' }, anonUser, provider),
+            ).rejects.toBeInstanceOf(SessionAuthorizationError);
+            expect(session.Save).not.toHaveBeenCalled();
+        });
+
+        it('refuses a conversation it cannot read', async () => {
+            hasPermissionMock.mockResolvedValue(true);
+            const session = makeSessionEntity({ ID: 'session-x' });
+            const { provider } = providerWith(makeSessionEntity({ ID: 'conv-hidden', Load: vi.fn(async () => false) }), session);
+            await expect(
+                new SessionManager().CreateSession({ agentID: 'agent-1', userID: 'user-anon', conversationID: 'conv-hidden' }, anonUser, provider),
+            ).rejects.toBeInstanceOf(SessionAuthorizationError);
+            expect(session.Save).not.toHaveBeenCalled();
+        });
+
+        it('binds to its own conversation (ExternalID equals its scope identity)', async () => {
+            hasPermissionMock.mockResolvedValue(true);
+            const session = makeSessionEntity({ ID: 'session-x' });
+            const { provider } = providerWith(makeSessionEntity({ ID: 'conv-a', ExternalID: 'sid-a' }), session);
+            await new SessionManager().CreateSession({ agentID: 'agent-1', userID: 'user-anon', conversationID: 'conv-a' }, anonUser, provider);
+            expect(session.ConversationID).toBe('conv-a');
+            expect(session.Save).toHaveBeenCalled();
+        });
+    });
+
     it('throws (with the entity error detail) when the Conversation save fails — no session row attempted', async () => {
         hasPermissionMock.mockResolvedValue(true);
         const conversation = makeSessionEntity({
