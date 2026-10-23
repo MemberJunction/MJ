@@ -142,6 +142,50 @@ describe('ThemeService — org brand overlay persisted for first paint', () => {
     expect(document.documentElement.getAttribute('data-theme-overlay')).toBeNull();
   });
 
+  it('ClearBrandOverlay on an applied brand strips its attribute and disables its link', async () => {
+    const service = new ThemeService();
+    register(service, 'acme');
+    await apply(service, 'acme');
+    const brandLink = document.head.querySelector('link[data-mj-theme="acme"]') as HTMLLinkElement;
+    expect(document.documentElement.getAttribute('data-theme-overlay')).toBe('acme');
+    service.ClearBrandOverlay();
+    expect(document.documentElement.getAttribute('data-theme-overlay')).toBeNull();
+    expect(brandLink.disabled).toBe(true);
+    expect(service.BrandOverlayId).toBeNull();
+  });
+
+  it('ClearBrandOverlay is scoped to the brand: a custom theme the user selected survives a no-brand bootstrap', async () => {
+    const service = new ThemeService();
+    service.RegisterTheme({ Id: 'corp', Name: 'Corp', BaseTheme: 'light', IsBuiltIn: false, CssUrl: 'https://example.test/corp.css' });
+    const pending = service.SetTheme('corp');
+    const corpLink = document.head.querySelector('link[data-mj-theme="corp"]') as HTMLLinkElement;
+    corpLink.onload?.(new Event('load'));
+    await pending;
+    expect(document.documentElement.getAttribute('data-theme-overlay')).toBe('corp');
+    service.ClearBrandOverlay();   // bootstrap found no org brand
+    expect(document.documentElement.getAttribute('data-theme-overlay')).toBe('corp');
+    expect(corpLink.disabled).not.toBe(true);   // jsdom leaves an untouched link's disabled undefined
+  });
+
+  it('ClearBrandOverlay with a retired cached brand under a custom theme drops the brand and keeps the theme', async () => {
+    localStorage.setItem(OVERLAY_KEY, 'retired');
+    localStorage.setItem(OVERLAY_CSS_KEY, JSON.stringify({ id: 'retired', css: 'x{}' }));
+    const service = new ThemeService();
+    expect(service.RestorePersistedBrandOverlay()).toBe(true);
+    service.RegisterTheme({ Id: 'corp', Name: 'Corp', BaseTheme: 'light', IsBuiltIn: false, CssUrl: 'https://example.test/corp.css' });
+    const pending = service.SetTheme('corp');
+    const corpLink = document.head.querySelector('link[data-mj-theme="corp"]') as HTMLLinkElement;
+    corpLink.onload?.(new Event('load'));
+    await pending;
+    service.ClearBrandOverlay();   // bootstrap: the cached brand is gone
+    expect(document.documentElement.getAttribute('data-theme-overlay')).toBe('corp');
+    expect(corpLink.disabled).not.toBe(true);   // jsdom leaves an untouched link's disabled undefined
+    expect(document.head.querySelector(PRELOAD_SELECTOR)).toBeNull();
+    expect(localStorage.getItem(OVERLAY_KEY)).toBeNull();
+    expect(localStorage.getItem(OVERLAY_CSS_KEY)).toBeNull();
+    expect(service.BrandOverlayId).toBeNull();
+  });
+
   it('Initialize() before bootstrap keeps the restored overlay attribute (no brand flash between the two)', async () => {
     localStorage.setItem(OVERLAY_KEY, 'acme');
     localStorage.setItem(OVERLAY_CSS_KEY, JSON.stringify({ id: 'acme', css: 'x{}' }));

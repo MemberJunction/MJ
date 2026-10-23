@@ -10,8 +10,10 @@ vi.mock('@angular/core', () => ({
   Injectable: () => (target: Function) => target,
 }));
 
+type RunViewStubResult = { Success: boolean; Results: unknown[]; ErrorMessage?: string };
+
 const { runViewImpl } = vi.hoisted(() => ({
-  runViewImpl: vi.fn(async (_params: unknown) => ({ Success: true, Results: [] as unknown[] })),
+  runViewImpl: vi.fn(async (_params: unknown): Promise<RunViewStubResult> => ({ Success: true, Results: [] })),
 }));
 
 vi.mock('@memberjunction/core', () => ({
@@ -239,6 +241,17 @@ describe('WorkspaceInitializerService.applyDefaultBrandTheme', () => {
     await run();
     expect(runViewImpl).toHaveBeenCalledTimes(2);
     expect(themeService.ClearBrandOverlay).toHaveBeenCalledTimes(1);
+  });
+
+  it('a FAILED selection query followed by an empty org-default query leaves the cached brand alone (the selection was never disproved)', async () => {
+    themeService.GetSelectedBrandThemeId.mockReturnValue('mine');
+    runViewImpl
+      .mockResolvedValueOnce({ Success: false, Results: [], ErrorMessage: 'offline' })   // the user's selection: unknown
+      .mockResolvedValueOnce({ Success: true, Results: [] });                            // the org default: none
+    await run();
+    expect(runViewImpl).toHaveBeenCalledTimes(2);
+    expect(themeService.ClearBrandOverlay).not.toHaveBeenCalled();
+    expect(themeService.ApplyBrandOverlay).not.toHaveBeenCalled();
   });
 
   it('applies the brand it finds and never clears', async () => {
