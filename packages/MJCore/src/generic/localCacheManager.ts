@@ -2531,6 +2531,15 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             parts.push('bin:1');
         }
 
+        // SkipTotalRowCount segment. A call that skips the fallback COUNT stores a result whose
+        // TotalRowCount was never counted, so it must not share a slot with the otherwise
+        // identical counted call (each would be served the other's TotalRowCount). Appended only
+        // when true, so every existing fingerprint stays byte-for-byte identical. Not allowlisted
+        // in hasNarrowingSegment, so such a slot is invalidated on save rather than maintained.
+        if (params.SkipTotalRowCount === true) {
+            parts.push('strc:1');
+        }
+
         // DataSource segment. RunViewParams.DataSource:'Materialized' routes the read to the entity's
         // materialized snapshot view (GetEffectiveBaseView), a DIFFERENT physical source than the default
         // live base view — so a Live read and a Materialized read of the same entity/filter/orderBy MUST
