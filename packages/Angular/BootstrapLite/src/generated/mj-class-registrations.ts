@@ -11,10 +11,11 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-// @memberjunction/ai-realtime-client (8 classes)
+// @memberjunction/ai-realtime-client (9 classes)
 import {
     AssemblyAIRealtimeClient,
     ElevenLabsRealtimeClient,
+    ElevenRealtimeClient,
     GeminiEnterpriseRealtimeClient,
     GeminiRealtimeClient,
     HuggingFaceRealtimeClient,
@@ -35,7 +36,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (454 classes)
+// @memberjunction/core-entities (456 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -177,6 +178,8 @@ import {
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
     MJCompanyIntegrationFieldMapEntity,
+    MJCompanyIntegrationObjectEntity,
+    MJCompanyIntegrationObjectFieldEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
@@ -557,10 +560,11 @@ import {
     XlsxArtifactViewerComponent,
 } from '@memberjunction/ng-artifacts';
 
-// @memberjunction/ng-auth-services (6 classes)
+// @memberjunction/ng-auth-services (7 classes)
 import {
     MJAuth0Provider,
     MJCognitoProvider,
+    MJLocalDevProvider,
     MJMSALProvider,
     MJMagicLinkProvider,
     MJOktaProvider,
@@ -724,6 +728,7 @@ import {
 const CLASS_REGISTRATIONS_0: any[] = [
     AssemblyAIRealtimeClient,
     ElevenLabsRealtimeClient,
+    ElevenRealtimeClient,
     GeminiEnterpriseRealtimeClient,
     GeminiRealtimeClient,
     HuggingFaceRealtimeClient,
@@ -874,6 +879,8 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
     MJCompanyIntegrationFieldMapEntity,
+    MJCompanyIntegrationObjectEntity,
+    MJCompanyIntegrationObjectFieldEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
@@ -919,13 +926,13 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCredentialEntity,
     MJCredentialTypeEntity,
     MJDashboardCategoryEntity,
-    MJDashboardCategoryLinkEntity,
-    MJDashboardCategoryPermissionEntity,
-    MJDashboardEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJDashboardCategoryLinkEntity,
+    MJDashboardCategoryPermissionEntity,
+    MJDashboardEntity,
     MJDashboardEntityExtended,
     MJDashboardPartTypeEntity,
     MJDashboardPermissionEntity,
@@ -1123,13 +1130,13 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSignatureAccountEntity,
     MJSignatureProviderEntity,
     MJSignatureRequestDocumentEntity,
-    MJSignatureRequestEntity,
-    MJSignatureRequestLogEntity,
-    MJSignatureRequestRecipientEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSignatureRequestEntity,
+    MJSignatureRequestLogEntity,
+    MJSignatureRequestRecipientEntity,
     MJSkillEntity,
     MJStateProvinceEntity,
     MJTagAuditLogEntity,
@@ -1234,6 +1241,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     XlsxArtifactViewerComponent,
     MJAuth0Provider,
     MJCognitoProvider,
+    MJLocalDevProvider,
     MJMSALProvider,
     MJMagicLinkProvider,
     MJOktaProvider,
@@ -1326,14 +1334,14 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJTestRunFormComponentExtended,
     MJTestSuiteFormComponentExtended,
     MJTestSuiteRunFormComponentExtended,
-    MLModelFormComponentExtended,
-    MLModelFormPolicy,
-    ProjectHierarchyPanel,
-    QueryCategoryHierarchyPanel,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    MLModelFormComponentExtended,
+    MLModelFormPolicy,
+    ProjectHierarchyPanel,
+    QueryCategoryHierarchyPanel,
     RecordProcessCategoryHierarchyPanel,
     RecordProcessFormComponentExtended,
     RecordProcessFormPolicy,
@@ -1370,7 +1378,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 622;
+export const CLASS_REGISTRATIONS_COUNT = 626;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

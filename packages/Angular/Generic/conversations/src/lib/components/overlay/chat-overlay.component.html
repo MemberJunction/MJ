@@ -95,6 +95,50 @@
                 </div>
             </div>
 
+            <!-- Active Record Context Bar (when viewing an entity record form) -->
+            @if (ActiveRecordContext; as ctx) {
+                <div class="chat-overlay-record-context-bar" role="status" aria-live="polite">
+                    <div class="chat-overlay-context-main">
+                        <i class="fa-solid fa-wand-magic-sparkles chat-overlay-context-icon" aria-hidden="true"></i>
+                        <span class="chat-overlay-context-entity">{{ ctx.Entity }}</span>
+                        @if (ctx.RecordDisplayName) {
+                            <span class="chat-overlay-context-sep" aria-hidden="true">·</span>
+                            <span class="chat-overlay-context-record-name" [title]="ctx.RecordDisplayName">{{ ctx.RecordDisplayName }}</span>
+                        }
+                    </div>
+                    <div class="chat-overlay-context-chips">
+                        @if (ctx.Dirty) {
+                            <span class="chat-overlay-context-chip chat-overlay-context-chip-dirty"
+                                  [title]="'Unsaved edits: ' + ctx.DirtyFieldNames.join(', ')">
+                                <i class="fa-solid fa-pen" aria-hidden="true"></i>
+                                {{ ctx.DirtyFieldNames.length }} unsaved
+                            </span>
+                        }
+                        @if (ctx.HasExternalUpdateConflict) {
+                            <span class="chat-overlay-context-chip chat-overlay-context-chip-conflict"
+                                  title="Record has an external update conflict">
+                                <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+                                Conflict
+                            </span>
+                        }
+                        @if (ctx.PreviewingHistoricalChangeID) {
+                            <span class="chat-overlay-context-chip chat-overlay-context-chip-timetravel"
+                                  title="Previewing a historical version in form">
+                                <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+                                Time-Travel
+                            </span>
+                        }
+                        @if (ctx.TotalLinksCount > 0) {
+                            <span class="chat-overlay-context-chip chat-overlay-context-chip-links"
+                                  [title]="ctx.OutgoingLinksCount + ' on this record · ' + ctx.IncomingLinksCount + ' linked to this'">
+                                <i class="fa-solid fa-diagram-project" aria-hidden="true"></i>
+                                {{ ctx.TotalLinksCount }} {{ ctx.TotalLinksCount === 1 ? 'link' : 'links' }}
+                            </span>
+                        }
+                    </div>
+                </div>
+            }
+
             <!-- Chat Content — wraps conversation-chat-area -->
             <div class="chat-overlay-body">
                 <mj-conversation-chat-area

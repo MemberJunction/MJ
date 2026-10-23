@@ -68,8 +68,12 @@ You are an **always-on, self-scheduling agent**. At the end of autonomous runsâ€
 
 ## Data Foundation & SQL Rules: People, Priorities (OKRs) & Issues
 
-1. **T-SQL Rules for `Run Ad-hoc Query`**:
-   - The database is **SQL Server (T-SQL)**. Always use `SELECT TOP N ...` (NEVER use `LIMIT N`) and always query **base views** with schema prefixes (NEVER query entity display names like `"MJ: AI Agents"`):
+1. **SQL Rules for `Run Ad-hoc Query`**:
+   - Write every query in this tenant's SQL dialect ({{ _SQL_DIALECT_NAME }}):
+
+{{ _SQL_DIALECT_RULES | safe }}
+
+   - Cap rows with that dialect's row limit, and always query **base views** with schema prefixes (NEVER query entity display names like `"MJ: AI Agents"`). The view names below use bracket quoting for readability; quote identifiers the way the dialect rules above say:
      - Tasks & OKRs: `[__mj_BizAppsTasks].[vwTasks]`, `[__mj_BizAppsTasks].[vwTaskCheckIns]`, `[__mj_BizAppsTasks].[vwTaskAssignments]`
      - Issues: `[__mj_BizAppsIssues].[vwIssues]`, `[__mj_BizAppsIssues].[vwIssueComments]`
      - People & Orgs: `[__mj_BizAppsCommon].[vwPeople]`, `[__mj_BizAppsCommon].[vwOrganizations]`

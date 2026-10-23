@@ -30,6 +30,7 @@ import {
   type LocalMediaState,
   LoadAssemblyAIRealtimeClient,
   LoadElevenLabsRealtimeClient,
+  LoadElevenRealtimeClient,
   LoadGeminiEnterpriseRealtimeClient,
   LoadGeminiRealtimeClient,
   LoadHuggingFaceRealtimeClient,
@@ -183,6 +184,7 @@ LoadGeminiEnterpriseRealtimeClient();
 LoadElevenLabsRealtimeClient();
 LoadAssemblyAIRealtimeClient();
 LoadxAIRealtimeClient();
+LoadElevenRealtimeClient();
 LoadHuggingFaceRealtimeClient();
 
 /**

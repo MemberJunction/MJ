@@ -221,10 +221,14 @@ export class ConversationToolManager {
      * `{{ _CONVERSATION_TOOLS }}` template block), rendered only when the run has a
      * conversation.
      */
-    public GetToolDocumentation(): string {
+    public GetToolDocumentation(nativeTools: boolean = false): string {
+        // Native-only mode calls these through the `conversation_tool` tool, answered on the same turn.
+        const how = nativeTools
+            ? 'Page exact messages back in by calling the `conversation_tool` tool with a `tool` and `input` from the table below — each result comes back as that call\'s result.'
+            : 'Page exact messages back in with `conversationToolCalls` in your response — results arrive as a conversation message on your next turn.';
         return [
             '## Conversation History Tools',
-            'Older parts of this conversation may have been replaced by a summary. The FULL history remains stored, addressable by the `[seq N]` sequence numbers the summary references. Page exact messages back in with `conversationToolCalls` in your response — results arrive as a conversation message on your next turn. Prefer paging in exact messages over trusting the summary for precise wording, identifiers, numbers, or decisions.',
+            `Older parts of this conversation may have been replaced by a summary. The FULL history remains stored, addressable by the \`[seq N]\` sequence numbers the summary references. ${how} Prefer paging in exact messages over trusting the summary for precise wording, identifiers, numbers, or decisions.`,
             ...(this.historyFrom
                 ? ['', 'This run may read the conversation only from a set point onward: the tools return only messages from that point, and earlier sequence numbers are not available.']
                 : []),
@@ -237,9 +241,11 @@ export class ConversationToolManager {
             `| \`summarizeRange\` | \`{ "startSequence": 1, "endSequence": 120, "lens": "what the summary should focus on" }\` | a focused summary of the range through YOUR lens (max ${MAX_SUMMARIZE_RANGE_MESSAGES} messages) — use when a range is too big to page in raw |`,
             '',
             '',
-            `Max ${MAX_CONVERSATION_TOOL_CALLS_PER_TURN} tool calls per response — excess calls are skipped and reported back; re-request them on your next turn.`,
+            ...(nativeTools ? [] : [`Max ${MAX_CONVERSATION_TOOL_CALLS_PER_TURN} tool calls per response — excess calls are skipped and reported back; re-request them on your next turn.`]),
             '',
-            'Example: `"conversationToolCalls": [{ "tool": "searchConversation", "input": { "query": "budget approval" } }]`'
+            nativeTools
+                ? 'Example: call `conversation_tool` with `{ "tool": "searchConversation", "input": { "query": "budget approval" } }`'
+                : 'Example: `"conversationToolCalls": [{ "tool": "searchConversation", "input": { "query": "budget approval" } }]`'
         ].join('\n');
     }
 

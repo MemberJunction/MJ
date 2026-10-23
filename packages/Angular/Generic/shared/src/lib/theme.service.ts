@@ -29,6 +29,21 @@ export interface ThemeDefinition {
     Description?: string;
     /** Optional preview swatch colors for a future theme picker UI */
     PreviewColors?: string[];
+    /**
+     * The theme {@link ThemeService.Initialize} applies when the user has no saved preference
+     * (or the saved one is no longer registered). At most one registered theme should set it;
+     * the first registered wins. Without one the default stays `'system'`. A single-brand host
+     * registers its brand as the default instead of calling `SetTheme` on every login, which
+     * fought `Initialize()`'s own resolution and wrote a preference the user never chose.
+     *
+     * Not the same axis as Theme Studio's org default (`MJ: Themes`.IsDefault): that one picks
+     * the org BRAND OVERLAY, registered via {@link ThemeService.RegisterBrandTheme} into the
+     * brand registry and layered under whatever base theme is active. This flag picks the BASE
+     * (picker) theme and never looks at the brand registry, so the two compose: a picker-only
+     * built-in default keeps the org overlay; a `CssUrl` default replaces it while selected, as
+     * any explicitly selected custom theme does.
+     */
+    IsDefault?: boolean;
 }
 
 /**
@@ -147,6 +162,13 @@ export class ThemeService {
      * themeRegistry so brand overlays do NOT appear in the user's light/dark theme
      * picker — the org brand is applied independently of the user's mode (decision #1).
      */
+    /**
+     * Theme ids in the order they were FIRST registered with {@link ThemeDefinition.IsDefault}.
+     * Kept apart from the registry because a Map keeps an id's original slot on replace: the
+     * seeded 'light'/'dark' entries would otherwise outrank any custom theme flagged earlier.
+     */
+    private defaultCandidates: string[] = [];
+
     private brandRegistry = new Map<string, ThemeDefinition>();
 
     /** Cache of loaded <link> elements by theme ID to avoid re-downloading */
@@ -227,6 +249,12 @@ export class ThemeService {
      */
     public RegisterTheme(theme: ThemeDefinition): void {
         this.themeRegistry.set(theme.Id, theme);
+        const at = this.defaultCandidates.indexOf(theme.Id);
+        if (theme.IsDefault && at === -1) {
+            this.defaultCandidates.push(theme.Id);
+        } else if (!theme.IsDefault && at !== -1) {
+            this.defaultCandidates.splice(at, 1);
+        }
     }
 
     /**
@@ -475,13 +503,30 @@ export class ThemeService {
 
         this._starred$.next(this.loadStarredIds());
 
+        // A saved preference wins; without one the host's default theme (IsDefault), else 'system'.
         const savedPreference = await this.loadSetting();
-        this._preference$.next(savedPreference);
+        const preference = savedPreference ?? this.DefaultPreference;
+        this._preference$.next(preference);
 
-        const resolvedThemeId = this.resolveTheme(savedPreference);
+        const resolvedThemeId = this.resolveTheme(preference);
         await this.applyTheme(resolvedThemeId);
 
         this._initialized = true;
+    }
+
+    /**
+     * What {@link Initialize} applies when nothing is saved: the first theme REGISTERED with
+     * {@link ThemeDefinition.IsDefault} (registration order, not registry slot order — re-registering
+     * a built-in slot with the flag does not jump the queue), else `'system'`. Public so a picker
+     * can mark the default.
+     */
+    public get DefaultPreference(): string {
+        for (const id of this.defaultCandidates) {
+            if (this.themeRegistry.get(id)?.IsDefault) {
+                return id;
+            }
+        }
+        return 'system';
     }
 
     /**
@@ -511,7 +556,9 @@ export class ThemeService {
         this.systemMediaQuery = null;
         this.boundSystemThemeHandler = null;
 
-        this._preference$.next('system');
+        // "Nothing chosen" is the host's default, not literally 'system': a reader of Preference in
+        // the logged-out window (a sign-in page toggle) should see the same answer Initialize() will.
+        this._preference$.next(this.DefaultPreference);
         this._appliedTheme$.next('light');
         this._initialized = false;
 
@@ -818,17 +865,17 @@ export class ThemeService {
     // ========================================
 
     /**
-     * Load theme preference from User Settings.
-     * Accepts any registered theme ID or 'system'.
-     * Falls back to 'system' if saved value is not recognized.
+     * The user's saved preference ('system' or a registered theme ID), or `null` when there is
+     * none to honor — nothing saved, a saved theme that is no longer registered, or a failed
+     * read. The caller decides what `null` means (see {@link DefaultPreference}).
      */
-    private async loadSetting(): Promise<string> {
+    private async loadSetting(): Promise<string | null> {
         try {
             const engine = UserInfoEngine.Instance;
             const settingValue = engine.GetSetting(THEME_SETTING_KEY);
 
             if (!settingValue) {
-                return 'system';
+                return null;
             }
 
             // Accept 'system' or any registered theme ID
@@ -836,11 +883,11 @@ export class ThemeService {
                 return settingValue;
             }
 
-            // Saved theme no longer registered — fall back
-            return 'system';
+            // Saved theme no longer registered — nothing to honor
+            return null;
         } catch (error) {
             console.warn('Failed to load theme setting:', error);
-            return 'system';
+            return null;
         }
     }
 

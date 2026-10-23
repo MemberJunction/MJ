@@ -476,6 +476,8 @@ interface ThemeDefinition {
   Description?: string;
   /** Optional preview swatch colors for a future theme picker UI */
   PreviewColors?: string[];
+  /** Applied by Initialize() when the user has no saved preference; first registered wins */
+  IsDefault?: boolean;
 }
 ```
 
@@ -489,6 +491,7 @@ interface ThemeDefinition {
 | `AppliedTheme` | `string` | Currently applied theme ID (synchronous) |
 | `IsInitialized` | `boolean` | Whether `Initialize()` has been called |
 | `AvailableThemes` | `ThemeDefinition[]` | All registered themes |
+| `DefaultPreference` | `string` | What `Initialize()` applies with no saved preference: the first registered theme with `IsDefault`, else `'system'` |
 
 ### Methods
 
@@ -504,9 +507,23 @@ interface ThemeDefinition {
 ### Lifecycle
 
 1. **Registration** — Call `RegisterTheme()` / `RegisterThemes()` before `Initialize()` so saved preferences for custom themes are recognized.
-2. **Initialization** — The workspace initializer calls `Initialize()` after login. It loads the saved preference, resolves it, and applies the theme.
+2. **Initialization** — The workspace initializer calls `Initialize()` after login. It loads the saved preference, resolves it, and applies the theme. With no saved preference (or one that is no longer registered) it applies `DefaultPreference`: the registered theme flagged `IsDefault`, else `'system'`.
 3. **Switching** — User selects a theme from the menu, which calls `SetTheme()`. The service applies the theme and persists the preference.
 4. **Reset** — On logout, the shell calls `Reset()` to remove theme attributes and clean up.
+
+### Single-brand hosts: the compiled-in recipe
+
+A host with ONE brand (a learner portal, a white-labelled product) should not load its theme through `CssUrl`. Before login `Reset()` disables every dynamic theme `<link>` except the active org brand overlay, so a `CssUrl` base theme is gone and the login and loading screens render raw MJ tokens (plus the overlay, when one is active) no matter what was registered. The recipe that brands every screen from first paint, with no flash and no pre-paint script:
+
+1. **Compile the brand theme into the bundle** — the last entry in `angular.json`'s `styles`, keyed to plain `:root` (light) and `[data-theme='dark']` (dark). Every `--mj-*` token the brand overrides lives here; light/dark switching is attribute-only.
+2. **Register picker-only definitions** over the built-in slots so the theme menu shows the brand's names: `RegisterThemes([{ Id: 'light', Name: 'Brand', BaseTheme: 'light', IsBuiltIn: true, IsDefault: true }, { Id: 'dark', Name: 'Brand Dark', BaseTheme: 'dark', IsBuiltIn: true }])`. No `CssUrl` — the CSS is already loaded.
+3. **Flag the default** with `IsDefault: true` so a user with no saved preference lands on the brand rather than `'system'`.
+
+Keep `CssUrl` themes for what they are good at: themes selected at RUNTIME (per-tenant overlays, user-installed themes), where a `<link>` swap is the point.
+
+**How this composes with Theme Studio.** Theme Studio's "Set default" sets `MJ: Themes`.`IsDefault`, the org-wide **brand overlay**: at login bootstrap the workspace initializer registers it with `RegisterBrandTheme()` and applies it with `ApplyBrandOverlay()`, layered under whatever base theme is active, and `Reset()` keeps it so it survives logout. `ThemeDefinition.IsDefault` is a different axis: it picks the **base** theme `Initialize()` applies when the user has no saved light/dark preference, and it never looks at the brand registry. A picker-only built-in default (the recipe above) keeps the org overlay layered on top; a `CssUrl` theme flagged default replaces the overlay while it is selected, exactly as any explicitly selected custom theme does today.
+
+**The login screen.** Neither flag reaches a cold load of the sign-in page: `Initialize()` runs after login, and the org overlay's CSS is a session Blob that the pre-paint script cannot restore (only its `data-theme-overlay` attribute is). Right after a logout the overlay is still live, so the sign-in page stays branded until a reload. Branding the sign-in page from first paint is what the compiled-in recipe (and Login Studio's page data) is for. Since the cold-load restore below, the org overlay itself also survives a reload; see "The org brand on a cold load".
 
 ### The org brand on a cold load
 

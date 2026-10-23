@@ -3942,7 +3942,7 @@ export class ManageMetadataBase {
     */
    protected async manageParentEntityFields(pool: CodeGenConnection): Promise<{success: boolean, anyUpdates: boolean}> {
       let bSuccess = true;
-      let anyUpdates = false;
+      const updatedChildNames: string[] = [];
 
       const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       const childEntities = md.Entities.filter(e => e.IsChildType);
@@ -3956,7 +3956,9 @@ export class ManageMetadataBase {
       for (const childEntity of childEntities) {
          try {
             const { success, updated } = await this.manageSingleEntityParentFields(pool, childEntity);
-            anyUpdates = anyUpdates || updated;
+            if (updated) {
+               updatedChildNames.push(childEntity.Name);
+            }
             if (!success) {
                logError(`   Error managing IS-A parent fields for ${childEntity.Name}`);
                bSuccess = false;
@@ -3967,7 +3969,16 @@ export class ManageMetadataBase {
          }
       }
 
-      return { success: bSuccess, anyUpdates };
+      // A child whose virtual EntityField set changed has a different TypeScript surface (entity
+      // subclass, zod schema, GraphQL types). The rows were written directly above, so nothing
+      // else marks the entity — and the file emit only rebuilds schemas holding a new or modified
+      // entity (fileEmit.dirtySchemaOnly). Mark it here or the run reports success and ships a
+      // class that lacks the field the metadata declares, until someone runs `--skipdb` (#5961).
+      if (updatedChildNames.length > 0) {
+         ManageMetadataBase.AddNewEntitiesToModifiedList(updatedChildNames);
+      }
+
+      return { success: bSuccess, anyUpdates: updatedChildNames.length > 0 };
    }
 
    /**
@@ -8922,7 +8933,35 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
     */
    protected isFieldEligibleForNameField(field: Record<string, unknown>): boolean {
       if (field.IsVirtual === true && !this.isInheritedISAField(field)) return false;
+      if (this.isForeignKeyOrPolymorphicRecordIDField(field)) return false;
       return this.isNameFieldTypeSafe(field);
+   }
+
+   /**
+    * Rejects foreign-key columns (`RelatedEntityID`) and polymorphic record-ID
+    * payload columns (`EntityIDFieldName` populated, or named `*RecordID` /
+    * `*RecordPrimaryKey` such as `RecordID`, `SourceRecordID`, `TargetRecordID`,
+    * `LinkedRecordID`, `SurvivingRecordID`) from being selected as `IsNameField`.
+    *
+    * Polymorphic `RecordID` columns use `nvarchar(450)` / `nvarchar(750)` so they
+    * can hold composite primary keys or non-UUID strings, which previously tricked
+    * Smart Field Identification into treating them as human-readable text names
+    * and displaying raw UUIDs in tab headers, breadcrumbs, and link cards.
+    */
+   protected isForeignKeyOrPolymorphicRecordIDField(field: Record<string, unknown>): boolean {
+      const relatedEntityId = field.RelatedEntityID as string | undefined | null;
+      if (relatedEntityId && String(relatedEntityId).trim().length > 0) {
+         return true;
+      }
+      const entityIdFieldName = field.EntityIDFieldName as string | undefined | null;
+      if (entityIdFieldName && String(entityIdFieldName).trim().length > 0) {
+         return true;
+      }
+      const name = ((field.Name as string | undefined) ?? '').trim();
+      if (/^(?:[A-Z][A-Za-z0-9]*?)?Record(?:ID|PrimaryKey)$/.test(name)) {
+         return true;
+      }
+      return false;
    }
 
    /**
