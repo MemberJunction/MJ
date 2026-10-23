@@ -1,5 +1,5 @@
 <!-- Backdrop -->
-@if (IsOpen && !IsWideMode) {
+@if (IsOpen && !IsFullScreen) {
   <div class="panel-backdrop" (click)="OnClose()"></div>
 }
 
@@ -7,8 +7,8 @@
 <div class="config-panel"
      [class.open]="IsOpen"
      [class.resizing]="IsResizing"
-     [class.full-takeover]="IsWideMode"
-     [style.width.px]="HasCustomResizeWidth && !IsWideMode ? PanelWidth : null">
+     [class.full-takeover]="IsFullScreen"
+     [style.width.px]="HasCustomResizeWidth && !IsFullScreen ? PanelWidth : null">
   <!-- Resize Handle -->
   <div class="resize-handle"
        (mousedown)="OnResizeStart($event)"
@@ -71,11 +71,11 @@
         <button
           type="button"
           class="studio-action-btn"
-          [class.active]="IsWideMode"
+          [class.active]="IsFullScreen"
           (click)="ToggleWideMode()"
-          [title]="IsWideMode ? 'Switch back to split sheet' : 'Expand to full-screen workspace'">
-          <i [class]="IsWideMode ? 'fa-solid fa-compress' : 'fa-solid fa-expand'"></i>
-          <span>{{ IsWideMode ? 'Split Sheet' : 'Full Screen' }}</span>
+          [title]="IsFullScreen ? 'Switch back to split sheet' : 'Expand to full-screen workspace'">
+          <i [class]="IsFullScreen ? 'fa-solid fa-compress' : 'fa-solid fa-expand'"></i>
+          <span>{{ IsFullScreen ? 'Split Sheet' : 'Full Screen' }}</span>
         </button>
         @if (ViewEntity) {
           <button
@@ -607,9 +607,12 @@
                     @if (column.pinned) {
                       <span class="pin-badge" title="Pinned {{ column.pinned }}">
                         <i class="fa-solid fa-thumbtack"></i>
-                        {{ column.pinned === 'left' ? 'Left' : 'Right' }}
+                        {{ column.pinned === 'left' ? 'Pinned Left' : 'Pinned Right' }}
                       </span>
                     }
+                  </span>
+                  <span class="column-meta-tag" (click)="OpenFormatEditor(column)">
+                    {{ column.width ? column.width + 'px' : 'auto' }}
                   </span>
                   <div class="column-actions">
                     <button
@@ -1054,11 +1057,28 @@
             </div>
           </div>
           } @else {
-            <div class="wb-inspector-placeholder">
-              <i class="fa-solid fa-paintbrush"></i>
-              <div>
-                <strong>Column Inspector</strong>
-                <span>Click any visible column or its paintbrush icon on the left to customize its alias, width, pin position, number/date format, or conditional highlight rules.</span>
+            <div class="config-section wb-card wb-inspector-card">
+              <div class="section-header">
+                <i class="fa-solid fa-sliders"></i>
+                <span>Column Inspector</span>
+              </div>
+              <div class="wb-inspector-empty-body">
+                <p class="wb-inspector-copy">
+                  Select a visible column to customize its header alias, width, freeze/pin position, number/date formatting, or conditional highlight rules:
+                </p>
+                @if (VisibleColumns.length > 0) {
+                  <div class="wb-inspector-quick-pills">
+                    @for (col of VisibleColumns.slice(0, 6); track col.fieldId) {
+                      <button
+                        type="button"
+                        class="wb-quick-col-pill"
+                        (click)="OpenFormatEditor(col)">
+                        <i class="fa-solid fa-paintbrush"></i>
+                        <span>{{ col.userDisplayName || col.displayName }}</span>
+                      </button>
+                    }
+                  </div>
+                }
               </div>
             </div>
           }
@@ -1066,8 +1086,8 @@
           <!-- Hidden / Available Columns Card -->
           <div class="config-section wb-card">
             <div class="section-header">
-              <i class="fa-solid fa-eye-slash"></i>
-              <span>Available / Hidden Columns</span>
+              <i class="fa-solid fa-circle-plus"></i>
+              <span>Available Fields</span>
               <span class="column-count">{{ HiddenColumns.length }}</span>
               @if (HiddenColumns.length > 0 && CanEdit) {
                 <button
@@ -1092,15 +1112,12 @@
             }
             <div class="column-list hidden-columns">
               @for (column of FilteredHiddenColumns; track column.fieldId) {
-                <div class="column-item hidden">
+                <div class="column-item hidden" (click)="ToggleColumnVisibility(column)" title="Click to add {{ column.displayName }} to visible columns">
+                  <span class="column-add-icon"><i class="fa-solid fa-plus"></i></span>
                   <span class="column-name">{{ column.displayName }}</span>
-                  <button
-                    type="button"
-                    class="action-btn show-btn"
-                    (click)="ToggleColumnVisibility(column)"
-                    title="Show column">
-                    <i class="fa-solid fa-plus"></i>
-                  </button>
+                  @if (column.field.Type) {
+                    <span class="column-type-pill">{{ column.field.Type }}</span>
+                  }
                 </div>
               }
               @if (HiddenColumns.length === 0) {
@@ -1570,6 +1587,15 @@
     <mj-alert Variant="error" Size="sm" class="view-config-validation-pos">At least one column must be visible</mj-alert>
   }
 
+  <!-- Live Preview Summary Bar -->
+  <div class="live-preview-dock">
+    <span class="preview-dock-left">
+      <i class="fa-solid fa-bolt"></i>
+      <span>LIVE WORKBENCH — {{ VisibleColumns.length }} VISIBLE COLUMNS · {{ FilterChipLabel | uppercase }}</span>
+    </span>
+    <span class="preview-dock-right">UPDATES AUTOMATICALLY ON SAVE</span>
+  </div>
+
   <!-- ============================================================ -->
   <!-- PANEL FOOTER                                                 -->
   <!-- ============================================================ -->
@@ -1643,6 +1669,20 @@
         </button>
       }
     </div>
+
+    <div class="footer-status-hint">
+      @if (!ViewEntity && !IsCreatingNamedView) {
+        <i class="fa-solid fa-user-check"></i>
+        <span>Saving updates your personal <strong>{{ Entity?.DisplayNameOrName || 'Entity' }} (Default)</strong> layout across devices.</span>
+      } @else if (IsCreatingNamedView) {
+        <i class="fa-solid fa-bookmark"></i>
+        <span>Creates a new saved view <strong>{{ ViewName || 'Untitled View' }}</strong> for {{ Entity?.DisplayNameOrName || 'this entity' }}.</span>
+      } @else {
+        <i class="fa-solid fa-layer-group"></i>
+        <span>Editing saved view <strong>{{ ViewName }}</strong>.</span>
+      }
+    </div>
+
     <!-- Cancel button on RIGHT -->
     <button type="button" class="footer-btn cancel-btn" (click)="OnClose()">
       Cancel
