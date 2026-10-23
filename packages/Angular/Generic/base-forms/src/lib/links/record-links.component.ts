@@ -22,7 +22,10 @@ import {
 } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { FormNavigationEvent } from '../types/navigation-events';
-import { type RecordPreviewAnchorRect } from '../preview-popover/record-preview-popover.component';
+import {
+    type RecordPreviewAnchorRect,
+    type RecordPreviewUpdatedEvent
+} from '../preview-popover/record-preview-popover.component';
 
 /**
  * System telemetry/audit entities that should never appear in the business-facing Links panel.
@@ -92,6 +95,12 @@ export interface RecordLinkItem {
     Direction: 'outgoing' | 'incoming';
     /** Human-readable direction label ("On This Record" or "Linked To This") */
     DirectionLabel: 'On This Record' | 'Linked To This';
+    /** Field name on this record when Direction === 'outgoing' */
+    SourceFieldName?: string;
+    /** Companion EntityID discriminator field name on this record for outgoing polymorphic links */
+    SourceEntityIDFieldName?: string | null;
+    /** True when this outgoing link field is nullable and editable so the user can unlink it inline */
+    CanUnlink?: boolean;
 }
 
 /**
@@ -176,6 +185,9 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
     /** Whether the drawer is open when `Mode === 'drawer'`. */
     @Input() IsOpen = true;
 
+    /** Whether nullable outgoing links can be unlinked directly from the card list. */
+    @Input() AllowQuickUnlink = true;
+
     /** Emitted when the user clicks a linked record card to navigate to it. */
     @Output() Navigate = new EventEmitter<FormNavigationEvent>();
 
@@ -188,8 +200,14 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
     /** Emitted whenever the enriched links summary changes. */
     @Output() LinksSummaryChange = new EventEmitter<RecordLinksSummary>();
 
+    /** Emitted when an outgoing link is unlinked or a target record is updated via Quick Edit. */
+    @Output() RecordLinkModified = new EventEmitter<{ Action: 'unlinked' | 'updated'; Item: RecordLinkItem }>();
+
     /** Loading state */
     public IsLoading = false;
+
+    /** TrackKey of the outgoing link currently being unlinked */
+    public UnlinkingTrackKey: string | null = null;
 
     /** Error message if loading fails */
     public ErrorMessage: string | null = null;
@@ -725,6 +743,19 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
         this.cdr.markForCheck();
     }
 
+    /** Handle navigation emitted by `[mjRecordLink]` on a linked record card */
+    public OnItemNavigate(_item: RecordLinkItem, navEvent: FormNavigationEvent): void {
+        this.clearHoverTimers();
+        this.HoveredItem = null;
+        this.Navigate.emit(navEvent);
+    }
+
+    /** Handle inline Quick Edit save emitted by `[mjRecordLink]` on a linked record card */
+    public OnItemQuickEdited(item: RecordLinkItem, _event: RecordPreviewUpdatedEvent): void {
+        this.RecordLinkModified.emit({ Action: 'updated', Item: item });
+        void this.LoadLinks(true);
+    }
+
     /** Handle clicking a linked record card */
     public OnItemClick(item: RecordLinkItem, event?: MouseEvent): void {
         this.clearHoverTimers();
@@ -808,6 +839,81 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
         this.HoveredItem = null;
         this.Navigate.emit(navEvent);
         this.cdr.markForCheck();
+    }
+
+    public OnPreviewRecordUpdated(_event: RecordPreviewUpdatedEvent): void {
+        const currentHovered = this.HoveredItem;
+        if (currentHovered) {
+            this.RecordLinkModified.emit({ Action: 'updated', Item: currentHovered });
+        }
+        void this.LoadLinks(true);
+    }
+
+    /**
+     * Unlinks a nullable outgoing foreign-key or polymorphic-FK field on `this.Record`
+     * and saves the record if it was already saved.
+     */
+    public async OnUnlinkItem(item: RecordLinkItem, event: MouseEvent): Promise<void> {
+        event.preventDefault();
+        event.stopPropagation();
+        const record = this._record;
+        if (
+            !record ||
+            !this.AllowQuickUnlink ||
+            item.Direction !== 'outgoing' ||
+            !item.CanUnlink ||
+            !item.SourceFieldName ||
+            this.UnlinkingTrackKey
+        ) {
+            return;
+        }
+
+        this.clearHoverTimers();
+        if (this.HoveredItem?.TrackKey === item.TrackKey) {
+            this.HoveredItem = null;
+        }
+
+        this.UnlinkingTrackKey = item.TrackKey;
+        this.ErrorMessage = null;
+        this.cdr.markForCheck();
+
+        try {
+            record.Set(item.SourceFieldName, null);
+            if (item.SourceEntityIDFieldName) {
+                const entityIdCol = item.SourceEntityIDFieldName;
+                const sharedByAnotherActiveField = (record.EntityInfo?.Fields ?? []).some(f => {
+                    if (f.Name === item.SourceFieldName) return false;
+                    if (f.EntityIDFieldName?.trim() !== entityIdCol) return false;
+                    const val = record.Get(f.Name);
+                    return val != null && String(val).trim() !== '';
+                });
+                const entityIdFieldInfo = record.EntityInfo?.Fields?.find(f => f.Name === entityIdCol);
+                if (!sharedByAnotherActiveField && entityIdFieldInfo?.AllowsNull) {
+                    record.Set(entityIdCol, null);
+                }
+            }
+
+            if (record.IsSaved && typeof record.Save === 'function') {
+                const saved = await record.Save();
+                if (!saved) {
+                    const latestMsg = (record as BaseEntity & { LatestResult?: { Message?: string } }).LatestResult?.Message;
+                    this.ErrorMessage = latestMsg || 'Unable to unlink record.';
+                    this.UnlinkingTrackKey = null;
+                    this.cdr.markForCheck();
+                    return;
+                }
+            }
+
+            this.AllItems = this.AllItems.filter(existing => existing.TrackKey !== item.TrackKey);
+            this.UnlinkingTrackKey = null;
+            this.emitCountAndSummary();
+            this.RecordLinkModified.emit({ Action: 'unlinked', Item: item });
+            this.cdr.markForCheck();
+        } catch (err: unknown) {
+            this.ErrorMessage = err instanceof Error ? err.message : 'Unable to unlink record.';
+            this.UnlinkingTrackKey = null;
+            this.cdr.markForCheck();
+        }
     }
 
     private clearHoverTimers(): void {
@@ -947,6 +1053,11 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
                 const statusLabel = this.resolveStatusLabel(matchedRow, relatedEntity);
                 const formattedDate = this.resolveFormattedDate(matchedRow);
                 const pkConcat = this.getPrimaryKeyString(out.PrimaryKey);
+                const canUnlink = Boolean(
+                    out.FieldInfo.AllowsNull &&
+                    !out.FieldInfo.ReadOnly &&
+                    out.FieldInfo.AllowUpdateAPI !== false
+                );
 
                 enrichedItems.push({
                     TrackKey: `out:${out.EntityName}:${out.FieldInfo.Name}:${pkConcat}:${index++}`,
@@ -961,7 +1072,10 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
                     IsSoftLink: out.IsSoftLink,
                     LinkTypeLabel: out.IsSoftLink ? 'Cross-App Link' : 'Direct Relationship',
                     Direction: 'outgoing',
-                    DirectionLabel: 'On This Record'
+                    DirectionLabel: 'On This Record',
+                    SourceFieldName: out.FieldInfo.Name,
+                    SourceEntityIDFieldName: out.FieldInfo.EntityIDFieldName?.trim() || null,
+                    CanUnlink: canUnlink
                 });
             }
 

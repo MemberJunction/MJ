@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, ViewContainerRef, ViewChild, ElementRef, HostListener, inject } from '@angular/core';
 import { AngularAdapterService } from '@memberjunction/ng-react';
-import { ActivatedRoute, Router, NavigationEnd } from '@angular/router';
+import { ActivatedRoute, Router, NavigationEnd, NavigationError, NavigationCancel } from '@angular/router';
 import { Subscription, combineLatest, Subject } from 'rxjs';
 import { filter, takeUntil } from 'rxjs/operators';
 import {
@@ -16,7 +16,7 @@ import {
 } from '@memberjunction/ng-base-application';
 import { Metadata, EntityInfo, LogStatus, LogError, StartupManager, CompositeKey, EncodeNewRecordValuesForURL, IsNewEntityRecordUrlId, NEW_ENTITY_RECORD_URL_ID, NEW_RECORD_VALUES_QUERY_PARAM, RecordUrlMatchesTab, ResourceUrlsEquivalent } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
-import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem, SetRecordOpenStyle, RecordOpenStyle, IsRecordsRegionTab, IsRecordsTabConfiguration, NormalizeRecordIdForMatch, FormatEntityRecordDisplayTitle, ResolveRecordTabDisplayTitle } from '@memberjunction/ng-shared';
+import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem, SetRecordOpenStyle, RecordOpenStyle, IsRecordsRegionTab, IsRecordsTabConfiguration, NormalizeRecordIdForMatch, FormatEntityRecordDisplayTitle, ResolveRecordTabDisplayTitle, FORM_MODE_QUERY_PARAM, ReadStandardFormQuery } from '@memberjunction/ng-shared';
 import { StartupValidationService } from '../services/startup-validation.service';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
@@ -836,21 +836,43 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
   async ngOnInit(): Promise<void> {
     try {
+      let loggedIn = false;
+      let shellInitialized = false;
+      const initShellOnce = async (): Promise<void> => {
+        if (shellInitialized) {
+          return;
+        }
+        shellInitialized = true;
+        this.initialNavigationComplete = true;
+        await this.InitializeShell();
+      };
+
+      // Subscribe to router settlement events (NavigationEnd, NavigationError on unmatched routes,
+      // or NavigationCancel) before LoggedIn fires so we never miss a navigation that settled early
+      // or hang forever when a bad URL triggers NavigationError and resets to '/'.
+      this.subscriptions.push(
+        this.router.events.pipe(
+          filter(
+            (event): event is NavigationEnd | NavigationError | NavigationCancel =>
+              event instanceof NavigationEnd ||
+              event instanceof NavigationError ||
+              event instanceof NavigationCancel
+          ),
+          filter(() => !this.initialNavigationComplete)
+        ).subscribe(async () => {
+          this.initialNavigationComplete = true;
+          if (loggedIn) {
+            await initShellOnce();
+          }
+        })
+      );
+
       MJGlobal.Instance.GetEventListener(true).subscribe(async (loginEvent) => {
         if (loginEvent.event === MJEventType.LoggedIn) {
-          if (this.authBase.initialPath === "/") {
-            // Base route - no need to wait for NavigationEnd
-            await this.InitializeShell();
-          }
-          else {
-            // Deep link route - wait for NavigationEnd to ensure router URL is correct
-            this.router.events.pipe(
-              filter((event): event is NavigationEnd => event instanceof NavigationEnd),
-              filter(() => !this.initialNavigationComplete)
-            ).subscribe(async () => {
-              this.initialNavigationComplete = true;
-              await this.InitializeShell();
-            });
+          loggedIn = true;
+          if (this.authBase.initialPath === "/" || this.initialNavigationComplete) {
+            // Base route or initial router navigation already settled
+            await initShellOnce();
           }
         }
       });
@@ -1191,16 +1213,16 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     const initialUrl = this.router.url.split('?')[0]; // ignore query params for this check
     const isDeepLink = initialUrl.length > 1 && initialUrl !== '/';
 
-    const initConfig = this.workspaceManager.GetConfiguration();
+    let deepLinkResolved = false;
     if (isDeepLink) {
       // User navigated to a specific URL — sync workspace to match the URL,
       // not the other way around. The ResourceResolver will have created a tab
       // for this URL; we just need to activate it.
-      await this.syncWorkspaceWithUrl(this.router.url);
-    } else if (initConfig && initConfig.activeTabId) {
-      // Bare root URL — restore last workspace state
-      await this.syncActiveAppWithTab(initConfig);
-      this.syncUrlWithWorkspace(initConfig);
+      deepLinkResolved = await this.syncWorkspaceWithUrl(this.router.url);
+    }
+
+    if (!deepLinkResolved && !this.pendingAppPath) {
+      await this.restoreOrOpenFallbackTab();
     }
 
     // Force change detection to sync Angular's expected values after all async
@@ -1448,10 +1470,10 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    *   when it is. Defaults to {@link lastNavigationAt}, which for the startup call is construction time
    *   rather than the first navigation — that field's comment says why.
    */
-  private async syncWorkspaceWithUrl(url: string, navigatedAt: number = this.lastNavigationAt): Promise<void> {
+  private async syncWorkspaceWithUrl(url: string, navigatedAt: number = this.lastNavigationAt): Promise<boolean> {
     const config = this.workspaceManager.GetConfiguration();
     if (!config?.tabs) {
-      return;
+      return false;
     }
 
     // Find the tab that matches this URL (null when workspace has no tabs yet,
@@ -1500,10 +1522,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       // stays because it says what the comparison relies on, but removing it changes no behaviour and
       // breaks no test — do not read it as the thing that handles NaN.
       if (Number.isFinite(activatedAt) && activatedAt > navigatedAt && activatedAt <= Date.now()) {
-        return;
+        return true;
       }
       // Activate the matching tab
       this.workspaceManager.SetActiveTab(matchingTab.id);
+      return true;
     } else if (matchingTab && matchingTab.id === config.activeTabId) {
       // Same tab is already active, but query params may have changed (back/forward within nav item)
       const urlParams = this.extractQueryParamsFromUrl(url);
@@ -1520,8 +1543,63 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           this.urlBasedNavigation = false;
         }
       }
+      return true;
     } else if (!matchingTab) {
-      await this.handleMissingTabForUrl(url);
+      const handled = await this.handleMissingTabForUrl(url);
+      return handled !== false;
+    }
+    return false;
+  }
+
+  /**
+   * Restores the active workspace tab (syncing the active app and URL) or, when no active tab
+   * exists (such as a fresh workspace after an invalid deep link suppressed default tab creation),
+   * opens a default tab on the active or landing application so the loading screen always clears.
+   */
+  private async restoreOrOpenFallbackTab(): Promise<void> {
+    const config = this.workspaceManager.GetConfiguration();
+    const activeTab = config?.activeTabId
+      ? config.tabs?.find(tab => tab.id === config.activeTabId)
+      : undefined;
+
+    if (config && activeTab) {
+      await this.syncActiveAppWithTab(config);
+      await this.syncUrlWithWorkspace(config);
+      return;
+    }
+
+    if (config?.tabs && config.tabs.length > 0) {
+      const fallbackTab = config.tabs[0];
+      this.workspaceManager.SetActiveTab(fallbackTab.id);
+      const updatedConfig = this.workspaceManager.GetConfiguration() ?? { ...config, activeTabId: fallbackTab.id };
+      await this.syncActiveAppWithTab(updatedConfig);
+      await this.syncUrlWithWorkspace(updatedConfig);
+      return;
+    }
+
+    let activeApp = this.appManager.GetActiveApp();
+    if (!activeApp) {
+      const allApps = this.appManager.GetAllApps?.() ?? [];
+      if (allApps.length > 0) {
+        await this.openLandingApp(allApps);
+        activeApp = this.appManager.GetActiveApp();
+      }
+    }
+
+    if (activeApp) {
+      const existingAppTabs = this.workspaceManager.GetAppTabs?.(activeApp.ID) ?? [];
+      if (existingAppTabs.length === 0) {
+        const defaultTabRequest = await activeApp.CreateDefaultTab();
+        if (defaultTabRequest) {
+          this.tabService.OpenTab(defaultTabRequest);
+        }
+      }
+      const latestConfig = this.workspaceManager.GetConfiguration();
+      if (latestConfig?.activeTabId) {
+        await this.syncUrlWithWorkspace(latestConfig);
+      } else {
+        this.router.navigateByUrl(this.appManager.GetAppUrl(activeApp), { replaceUrl: true });
+      }
     }
   }
 
@@ -1556,8 +1634,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   /**
    * Handle the case where no tab matches the URL during back/forward navigation.
    * Creates new tabs for resources when the original tab was replaced.
+   * Returns true when a valid resource/tab was opened, or false when the URL did not resolve.
    */
-  private async handleMissingTabForUrl(url: string): Promise<void> {
+  private async handleMissingTabForUrl(url: string): Promise<boolean> {
     const urlPath = url.split('?')[0];
     const queryString = url.split('?')[1] || '';
     const queryParams = new URLSearchParams(queryString);
@@ -1570,8 +1649,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       if (appRecordMatch) {
         const entityName = decodeURIComponent(appRecordMatch[2]);
         const recordId = decodeURIComponent(appRecordMatch[3]);
-        this.openRecordFromUrl(entityName, recordId, queryParams);
-        return;
+        return this.openRecordFromUrl(entityName, recordId, queryParams);
       }
 
       // Check for app-scoped view URL: /app/:appName/view/:viewId
@@ -1579,16 +1657,19 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       if (appViewMatch && appViewMatch[2] !== 'dynamic') {
         const viewId = appViewMatch[2];
         this.navigationService.OpenView(viewId, 'View');
-        return;
+        return true;
       }
 
       // Check for app-scoped dynamic view URL: /app/:appName/view/dynamic/:entityName
       const appDynamicViewMatch = urlPath.match(/^\/app\/([^\/]+)\/view\/dynamic\/(.+)$/);
       if (appDynamicViewMatch) {
         const entityName = decodeURIComponent(appDynamicViewMatch[2]);
+        if (!this.isKnownEntity(entityName)) {
+          return false;
+        }
         const extraFilter = queryParams.get('ExtraFilter') || undefined;
         this.navigationService.OpenDynamicView(entityName, extraFilter);
-        return;
+        return true;
       }
 
       // Check for app-scoped dashboard URL: /app/:appName/dashboard/:dashboardId. The tab goes to
@@ -1598,7 +1679,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         OpenDashboard: (dashboardId, dashboardName, options) => this.navigationService.OpenDashboard(dashboardId, dashboardName, options),
       });
       if (openedDashboard) {
-        return;
+        return true;
       }
 
       // Check for app-scoped artifact URL: /app/:appName/artifact/:artifactId
@@ -1606,7 +1687,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       if (appArtifactMatch) {
         const artifactId = appArtifactMatch[2];
         this.navigationService.OpenArtifact(artifactId, 'Artifact');
-        return;
+        return true;
       }
 
       // Check for app-scoped query URL: /app/:appName/query/:queryId
@@ -1614,7 +1695,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       if (appQueryMatch) {
         const queryId = appQueryMatch[2];
         this.navigationService.OpenQuery(queryId, 'Query');
-        return;
+        return true;
       }
 
       // Check for app-scoped search URL: /app/:appName/search/:searchInput
@@ -1622,7 +1703,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       if (appSearchMatch) {
         const searchInput = decodeURIComponent(appSearchMatch[2]);
         this.navigationService.OpenSearch(searchInput);
-        return;
+        return true;
       }
 
       // Check for app nav item URL: /app/:appName/:navItemName
@@ -1636,7 +1717,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           // Activate the app and open the nav item
           await this.appManager.SetActiveApp(app.ID);
           const navItems = await app.GetNavItems();
-          const navItem = navItems.find(item => item.Label === navItemName);
+          const navItem = navItems.find(
+            item => item.Label?.trim().toLowerCase() === navItemName.trim().toLowerCase()
+          );
 
           if (navItem) {
             // Parse query params to pass as configuration
@@ -1648,11 +1731,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
               app.GetColor(),
               Object.keys(qpObj).length > 0 ? { queryParams: qpObj } : undefined
             );
+            return true;
           } else {
             console.warn('handleMissingTabForUrl: nav item not found:', navItemName, 'in app:', appPath);
           }
         }
-        return;
+        return false;
       }
 
       // Check for app-only URL: /app/:appName
@@ -1671,6 +1755,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
             const defaultTab = await app.CreateDefaultTab();
             if (defaultTab) {
               this.workspaceManager.OpenTab(defaultTab, app.GetColor());
+              return true;
             }
           } else {
             // App has nav items — activate the app and its default nav item
@@ -1678,10 +1763,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
             const defaultNavItem = navItems.find(item => (item as { isDefault?: boolean }).isDefault) || navItems[0];
             if (defaultNavItem) {
               this.navigationService.OpenNavItem(app.ID, defaultNavItem, app.GetColor());
+              return true;
             }
           }
         }
-        return;
+        return false;
       }
 
       // Legacy resource URLs (backward compatibility)
@@ -1690,8 +1776,19 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       if (legacyRecordMatch) {
         const entityName = decodeURIComponent(legacyRecordMatch[1]);
         const recordId = decodeURIComponent(legacyRecordMatch[2]);
-        this.openRecordFromUrl(entityName, recordId, queryParams);
-        return;
+        return this.openRecordFromUrl(entityName, recordId, queryParams);
+      }
+
+      // Check for legacy dynamic view URL: /resource/view/dynamic/:entityName
+      const legacyDynamicViewMatch = urlPath.match(/^\/resource\/view\/dynamic\/(.+)$/);
+      if (legacyDynamicViewMatch) {
+        const entityName = decodeURIComponent(legacyDynamicViewMatch[1]);
+        if (!this.isKnownEntity(entityName)) {
+          return false;
+        }
+        const extraFilter = queryParams.get('ExtraFilter') || queryParams.get('extraFilter') || undefined;
+        this.navigationService.OpenDynamicView(entityName, extraFilter);
+        return true;
       }
 
       // Check for legacy view URL: /resource/view/:viewId
@@ -1699,7 +1796,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       if (legacyViewMatch && legacyViewMatch[1] !== 'dynamic') {
         const viewId = legacyViewMatch[1];
         this.navigationService.OpenView(viewId, 'View');
-        return;
+        return true;
       }
 
       // Check for legacy dashboard URL: /resource/dashboard/:dashboardId
@@ -1707,11 +1804,56 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       if (legacyDashboardMatch) {
         const dashboardId = legacyDashboardMatch[1];
         this.navigationService.OpenDashboard(dashboardId, 'Dashboard');
-        return;
+        return true;
       }
+
+      // Check for legacy artifact URL: /resource/artifact/:artifactId
+      const legacyArtifactMatch = urlPath.match(/^\/resource\/artifact\/(.+)$/);
+      if (legacyArtifactMatch) {
+        this.navigationService.OpenArtifact(legacyArtifactMatch[1], 'Artifact');
+        return true;
+      }
+
+      // Check for legacy query URL: /resource/query/:queryId
+      const legacyQueryMatch = urlPath.match(/^\/resource\/query\/(.+)$/);
+      if (legacyQueryMatch) {
+        this.navigationService.OpenQuery(legacyQueryMatch[1], 'Query');
+        return true;
+      }
+
+      // Check for legacy search URL: /resource/search/:searchInput
+      const legacySearchMatch = urlPath.match(/^\/resource\/search\/(.+)$/);
+      if (legacySearchMatch) {
+        this.navigationService.OpenSearch(decodeURIComponent(legacySearchMatch[1]));
+        return true;
+      }
+
+      return false;
     } finally {
       this.urlBasedNavigation = false;
     }
+  }
+
+  /**
+   * Checks whether an entity exists in metadata when metadata is loaded.
+   * When metadata is empty (e.g. lightweight unit test harnesses), returns true.
+   */
+  private isKnownEntity(entityName: string): boolean {
+    let md: ReturnType<ShellComponent['getProviderSafe']> = null;
+    try {
+      md = this.getProviderSafe();
+    } catch {
+      return true;
+    }
+    const entities = md?.Entities;
+    if (!entities || entities.length === 0) {
+      return true;
+    }
+    return !!md?.EntityByName(entityName);
+  }
+
+  private getProviderSafe(): ShellComponent['ProviderToUse'] | null {
+    return this.ProviderToUse ?? null;
   }
 
   /**
@@ -1719,18 +1861,27 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    * the sentinel through OpenEntityRecord produced an empty CompositeKey and
    * another forced tab, which is the loop that killed the browser.
    */
-  private openRecordFromUrl(entityName: string, recordId: string, queryParams: URLSearchParams): void {
+  private openRecordFromUrl(entityName: string, recordId: string, queryParams: URLSearchParams): boolean {
+    if (!this.isKnownEntity(entityName)) {
+      LogError(`Entity ${entityName} not found in metadata`);
+      return false;
+    }
+    // Recreating from browser history must keep `?form=standard` (MJ#4755),
+    // or back/forward would reopen the record in the custom form.
+    const formMode = ReadStandardFormQuery({ [FORM_MODE_QUERY_PARAM]: queryParams.get(FORM_MODE_QUERY_PARAM) });
     if (IsNewEntityRecordUrlId(recordId)) {
       const nrv = queryParams.get(NEW_RECORD_VALUES_QUERY_PARAM) ?? undefined;
       this.navigationService.OpenNewEntityRecord(entityName, {
         newRecordValues: nrv,
         recordSource: 'none',
+        formMode,
       });
-      return;
+      return true;
     }
     const compositeKey = new CompositeKey();
     compositeKey.SimpleLoadFromURLSegment(recordId);
-    this.navigationService.OpenEntityRecord(entityName, compositeKey, { recordSource: 'none' });
+    this.navigationService.OpenEntityRecord(entityName, compositeKey, { recordSource: 'none', formMode });
+    return true;
   }
 
   private recordTabMatchesUrl(tab: WorkspaceTab, entityName: string, recordId: string): boolean {
@@ -1977,6 +2128,15 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       return `${url}${separator}${params.toString()}`;
     };
 
+    // Extra query params a record tab's URL carries beyond the tab's own
+    // queryParams (which appendQP already merges — that is where the
+    // standard-form `form` param lives, MJ#4755): initial values for an
+    // unsaved record.
+    const recordQueryParams = (isNewRecord: boolean): Record<string, string> => {
+      const nrv = isNewRecord ? EncodeNewRecordValuesForURL(config['NewRecordValues']) : undefined;
+      return nrv ? { [NEW_RECORD_VALUES_QUERY_PARAM]: nrv } : {};
+    };
+
     // Helper function to get app path for URL
     const getAppPath = (appIdOrName: string): string | null => {
       // First try by ID
@@ -2102,10 +2262,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
               // here, `syncUrlWithWorkspace`'s `currentUrl !== newUrl` check is permanently true and can
               // drive a re-navigation loop (with onSameUrlNavigation:'reload'). The read side already
               // decodeURIComponent()s this segment, so encoding here keeps both sides consistent.
-              const nrv = isNewRecord ? EncodeNewRecordValuesForURL(config['NewRecordValues']) : undefined;
               return appendQP(
                 `/app/${encodeURIComponent(appPath)}/record/${encodeURIComponent(entityName)}/${encodeURIComponent(idSeg)}`,
-                nrv ? { [NEW_RECORD_VALUES_QUERY_PARAM]: nrv } : undefined,
+                recordQueryParams(isNewRecord),
               );
             }
           }
@@ -2182,10 +2341,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           if (idSeg) {
             // Encode the CompositeKey segment ('|' → %7C) to match Angular's serialized router.url and
             // the decodeURIComponent() on the read side — see the app-scoped 'records' case above.
-            const nrv = isNewRecord ? EncodeNewRecordValuesForURL(config['NewRecordValues']) : undefined;
             return appendQP(
               `/resource/record/${encodeURIComponent(entityName)}/${encodeURIComponent(idSeg)}`,
-              nrv ? { [NEW_RECORD_VALUES_QUERY_PARAM]: nrv } : undefined,
+              recordQueryParams(isNewRecord),
             );
           }
         }
