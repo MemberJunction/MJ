@@ -265,12 +265,44 @@ function extractJoinUrlFromText(content?: string): string | undefined {
     if (!content) {
         return undefined;
     }
-    for (const token of content.split(/[\s"'<>]+/)) {
-        if (/^https?:\/\/(?:teams\.microsoft\.com\/l\/meetup-join|meet\.google\.com|zoom\.us\/j|[a-z0-9.-]+\.(?:teams\.microsoft\.com\/l\/meetup-join|zoom\.us\/j))/i.test(token)) {
+    for (const rawToken of content.split(/[\s"'<>]+/)) {
+        const token = trimCandidateUrl(rawToken);
+        if (
+            token &&
+            /^https?:\/\/(?:teams\.microsoft\.com\/l\/meetup-join|meet\.google\.com|zoom\.us\/j|[a-z0-9.-]+\.(?:teams\.microsoft\.com\/l\/meetup-join|zoom\.us\/j))/i.test(
+                token
+            )
+        ) {
             return token;
         }
     }
     return undefined;
+}
+
+const TRAILING_URL_PUNCTUATION = ')]}.,;:!?';
+
+function trimCandidateUrl(rawToken: string): string | undefined {
+    const httpIdx = rawToken.search(/https?:\/\//i);
+    if (httpIdx < 0) {
+        return undefined;
+    }
+    let candidate = rawToken.slice(httpIdx);
+    let changed = true;
+    while (changed && candidate.length > 0) {
+        changed = false;
+        const lower = candidate.toLowerCase();
+        if (lower.endsWith('&quot;')) {
+            candidate = candidate.slice(0, -6);
+            changed = true;
+        } else if (lower.endsWith('&#34;')) {
+            candidate = candidate.slice(0, -5);
+            changed = true;
+        } else if (TRAILING_URL_PUNCTUATION.includes(candidate[candidate.length - 1])) {
+            candidate = candidate.slice(0, -1);
+            changed = true;
+        }
+    }
+    return candidate;
 }
 
 /** First-poll window default (days). */

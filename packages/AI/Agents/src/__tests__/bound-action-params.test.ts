@@ -89,6 +89,8 @@ interface AgentInternals {
     _agentTypePromptParams: Record<string, unknown>;
     boundActionParamsError(params: ExecuteAgentParams): string | null;
     inheritBoundActionParams(params: ExecuteAgentParams): Promise<void>;
+    initializeAgentRun(params: ExecuteAgentParams): Promise<void>;
+    _agentRun: { BoundActionParams: string | null };
     shownActionParamEntries(params: ExecuteAgentParams, aa: { name: string; params: Record<string, unknown> }): [string, unknown][];
     ensureCatalogNarrowing: () => Promise<void>;
     availableSkills: () => Promise<unknown[]>;
@@ -468,25 +470,35 @@ describe('runs that inherit the bindings', () => {
 });
 
 describe('a run that continues another (lastRunId)', () => {
+    const PRIOR_RUN_ID = '11111111-1111-4111-8111-111111111111';
     const inherit = (params: ExecuteAgentParams) => new Probe().Internals.inheritBoundActionParams(params);
 
     it('takes the earlier run\'s stored bindings when its caller passes none', async () => {
         priorRun.result.Results = [{ BoundActionParams: JSON.stringify(bindChapter()) }];
-        const params = agentParams({ lastRunId: 'run-1' });
+        const params = agentParams({ lastRunId: PRIOR_RUN_ID });
         await inherit(params);
         expect(params.boundActionParams).toEqual(bindChapter());
-        expect(priorRun.reads).toEqual([expect.objectContaining({ EntityName: 'MJ: AI Agent Runs', ExtraFilter: "ID='run-1'", Fields: ['BoundActionParams'] })]);
+        expect(priorRun.reads).toEqual([expect.objectContaining({
+            EntityName: 'MJ: AI Agent Runs',
+            ExtraFilter: `ID='${PRIOR_RUN_ID}'`,
+            Fields: ['BoundActionParams'],
+            BypassCache: true
+        })]);
+    });
+    it('rejects a non-UUID lastRunId before querying RunView', async () => {
+        await expect(inherit(agentParams({ lastRunId: "not-a-uuid' OR '1'='1" }))).rejects.toThrow(/expected a UUID/);
+        expect(priorRun.reads).toHaveLength(0);
     });
     it('keeps the caller\'s own bindings and reads nothing', async () => {
         const own = bindChapter('chapter-9');
-        const params = agentParams({ lastRunId: 'run-1', boundActionParams: own });
+        const params = agentParams({ lastRunId: PRIOR_RUN_ID, boundActionParams: own });
         await inherit(params);
         expect(params.boundActionParams).toBe(own);
         expect(priorRun.reads).toHaveLength(0);
     });
     it('treats an empty bindings object as none and inherits', async () => {
         priorRun.result.Results = [{ BoundActionParams: JSON.stringify(bindChapter()) }];
-        const params = agentParams({ lastRunId: 'run-1', boundActionParams: {} });
+        const params = agentParams({ lastRunId: PRIOR_RUN_ID, boundActionParams: {} });
         await inherit(params);
         expect(params.boundActionParams).toEqual(bindChapter());
     });
@@ -498,24 +510,60 @@ describe('a run that continues another (lastRunId)', () => {
     });
     it('stays unbound when the earlier run had no bindings', async () => {
         priorRun.result.Results = [{ BoundActionParams: null }];
-        const params = agentParams({ lastRunId: 'run-1' });
+        const params = agentParams({ lastRunId: PRIOR_RUN_ID });
         await inherit(params);
         expect(params.boundActionParams).toBeUndefined();
     });
     it('fails closed when the earlier run cannot be read', async () => {
         priorRun.result = { Success: false, Results: [], ErrorMessage: 'boom' };
-        await expect(inherit(agentParams({ lastRunId: 'run-1' }))).rejects.toThrow(/Could not read the bindings of run run-1: boom/);
+        await expect(inherit(agentParams({ lastRunId: PRIOR_RUN_ID }))).rejects.toThrow(new RegExp(`Could not read the bindings of run ${PRIOR_RUN_ID}: boom`));
     });
     it('fails closed when the stored bindings do not parse', async () => {
         priorRun.result.Results = [{ BoundActionParams: '{not json' }];
-        await expect(inherit(agentParams({ lastRunId: 'run-1' }))).rejects.toThrow(SyntaxError);
+        await expect(inherit(agentParams({ lastRunId: PRIOR_RUN_ID }))).rejects.toThrow(SyntaxError);
     });
     it('fails closed when the earlier run is not found (missing, or hidden from this user)', async () => {
         priorRun.result.Results = [];
-        await expect(inherit(agentParams({ lastRunId: 'run-1' }))).rejects.toThrow(/no such run is visible/);
+        await expect(inherit(agentParams({ lastRunId: PRIOR_RUN_ID }))).rejects.toThrow(/no such run is visible/);
     });
     it('fails closed when the stored bindings parse to something other than an object', async () => {
         priorRun.result.Results = [{ BoundActionParams: 'null' }];
-        await expect(inherit(agentParams({ lastRunId: 'run-1' }))).rejects.toThrow(/not an object of action bindings/);
+        await expect(inherit(agentParams({ lastRunId: PRIOR_RUN_ID }))).rejects.toThrow(/not an object of action bindings/);
+    });
+    it('persists boundActionParams onto the run via SetServerBoundActionParams and normalizes undefined values to null so a resumed run keeps the binding', async () => {
+        const setServerSpy = vi.fn();
+        const fakeRun = {
+            BoundActionParams: null as string | null,
+            SetServerBoundActionParams(serialized: string | null) {
+                setServerSpy(serialized);
+                this.BoundActionParams = serialized;
+            },
+            Save: vi.fn(async () => true)
+        };
+        const probe = new Probe();
+        const params = agentParams({
+            boundActionParams: { [ACTION_ID]: { ChapterID: undefined, Status: undefined } },
+            provider: { GetEntityObject: vi.fn(async () => fakeRun) } as unknown as ExecuteAgentParams['provider']
+        });
+        await probe.Internals.initializeAgentRun(params);
+
+        expect(setServerSpy).toHaveBeenCalledTimes(1);
+        expect(fakeRun.BoundActionParams).toBe(JSON.stringify({ [ACTION_ID]: { ChapterID: null, Status: null } }));
+
+        // Feed the persisted JSON into a continuation run and verify the parameters stay bound.
+        priorRun.result.Results = [{ BoundActionParams: fakeRun.BoundActionParams }];
+        const resumed = agentParams({ lastRunId: PRIOR_RUN_ID });
+        await inherit(resumed);
+        const bindings = BindingsForAction(resumed.boundActionParams, ACTION_ID);
+        expect(bindings).toEqual({ ChapterID: null, Status: null });
+        expect(UnboundParams([chapterID, status], bindings)).toEqual([]);
+        expect(ApplyBoundActionParams({ ChapterID: 'model-chosen' }, bindings, [chapterID, status], 'List Members').Refusal).toMatch(/ChapterID.*bound to no value/);
+        expect(ApplyBoundActionParams({ ChapterID: 'c1', Status: 'model-chosen' }, { Status: bindings?.Status }, [chapterID, status], 'List Members')).toEqual({
+            Params: { ChapterID: 'c1' },
+            Bound: [],
+            Overridden: ['Status'],
+            Refusal: null,
+            HasBindings: true
+        });
     });
 });

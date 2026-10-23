@@ -210,7 +210,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT91)
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
         ['self-avatar-client', SelfAvatarClientChecks, 6], // AV1-AV6 self-service avatar mutation over the wire via per-user API keys (IT106)
-        ['view-properties-client', ViewPropertiesClientChecks, 5], // VP1-VP5 User View properties over the wire: values, locked refusal, token default, RLS on top, cache keying (IT133)
+        ['view-properties-client', ViewPropertiesClientChecks, 5], // VP1-VP5 User View properties over the wire: values, locked refusal, token default, RLS on top, cache keying (IT136)
         ['calendar-event-links', CalendarEventLinksChecks, 2], // CL1 UI role over GraphQL reads but cannot create; CL2 links, sync with a moved time and an RSVP, resync on a refused token, cancel (IT127)
         ['conversation-authorship-client', ConversationAuthorshipClientChecks, 10], // CA1-CA10 who a conversation message is from, owner + Edit grantee over the wire via per-user API keys; CA7-CA10 are the bypasses: forged OldValues___, transaction variables, role casing, moving a message (IT115)
         ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)

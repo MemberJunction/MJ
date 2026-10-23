@@ -187,6 +187,18 @@ describe('NormalizeCalendarEvent', () => {
         expect(invite).not.toHaveProperty('Subject');
     });
 
+    it('extracts join URLs wrapped in parentheses, markdown links, trailing punctuation, or HTML quote entities while rejecting embedded-host redirects', () => {
+        expect(NormalizeCalendarEvent(calendarEvent({ OnlineMeetingUrl: null, Body: `Join (${MEET_JOIN_URL}).` }))?.JoinUrl).toBe(MEET_JOIN_URL);
+        expect(NormalizeCalendarEvent(calendarEvent({ OnlineMeetingUrl: null, Body: `[Join call](${TEAMS_JOIN_URL});` }))?.JoinUrl).toBe(TEAMS_JOIN_URL);
+        expect(NormalizeCalendarEvent(calendarEvent({ OnlineMeetingUrl: null, Body: `href=&quot;https://us02web.zoom.us/j/12345?pwd=abc&quot;` }))?.JoinUrl).toBe(
+            'https://us02web.zoom.us/j/12345?pwd=abc'
+        );
+        expect(NormalizeCalendarEvent(calendarEvent({ OnlineMeetingUrl: null, Body: `href=&#34;${MEET_JOIN_URL}&#34;!` }))?.JoinUrl).toBe(MEET_JOIN_URL);
+        expect(
+            NormalizeCalendarEvent(calendarEvent({ OnlineMeetingUrl: null, Body: `https://evil.example/redirect?url=${MEET_JOIN_URL}` }))
+        ).not.toHaveProperty('JoinUrl');
+    });
+
     it('maps attendee responses, with None read as NeedsAction', () => {
         const invite = NormalizeCalendarEvent(
             calendarEvent({

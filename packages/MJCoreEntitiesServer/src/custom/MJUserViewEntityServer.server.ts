@@ -56,9 +56,13 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
             return false;
         }
         if (approving) {
-            this.ApprovedFingerprint = await ComputeUserViewFingerprintAsync(this);
-            if (!await super.Save()) {
-                LogError(`[MJUserViewEntityServer] View "${this.Name}" was approved but its fingerprint was not saved: ${this.LatestResult?.CompleteMessage}`);
+            try {
+                this.ApprovedFingerprint = await ComputeUserViewFingerprintAsync(this);
+                if (!await super.Save(options)) {
+                    LogError(`[MJUserViewEntityServer] View "${this.Name}" was approved but its fingerprint was not saved: ${this.LatestResult?.CompleteMessage}`);
+                }
+            } catch (e) {
+                LogError(`[MJUserViewEntityServer] View "${this.Name}" was approved but its fingerprint could not be computed: ${e instanceof Error ? e.message : String(e)}`);
             }
         }
         return true;

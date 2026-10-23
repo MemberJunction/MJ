@@ -1913,13 +1913,15 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * This is how a host fixes *which record* an action acts on (a space's chapter, a tenant, a folder)
      * so the model can neither see nor choose it, within these **limits**. Server-side only: no GraphQL
      * input reaches this field. A run with bindings has task graphs withheld (`enableTaskGraphs` is
-     * ignored), because a graph's action nodes are dispatched outside the agent's binding gate. Bindings
-     * are not persisted: a run resumed from a stored request (`MJ: AI Agent Requests`) starts without
-     * them, so the hidden parameter is open to the model again until bindings are persisted on the run;
-     * the same holds for {@link actionChanges}. The realtime client-direct action path and the workflow
-     * meta-actions (Loop, Conditional, Retry, Parallel Execute, Execute Agent) dispatch actions themselves
-     * and do not apply bindings, so do not grant them to a bound agent. An action's own message text may
-     * mention a bound value.
+     * ignored), because a graph's action nodes are dispatched outside the agent's binding gate. A run
+     * stores its bindings on `MJ: AI Agent Runs.BoundActionParams`, and a run that continues another
+     * (`lastRunId`, including a resume from a stored request) applies them when its caller passes none;
+     * a prior run that cannot be read (missing, hidden from the context user, or holding bindings that do
+     * not parse to an object) fails the continuing run. {@link actionChanges} are not persisted, so a
+     * resumed run starts without them. The realtime client-direct action path and the `Execute Agent`
+     * action (along with Loop, Conditional, Retry and Parallel Execute when run without a `RunScope` that
+     * refuses them) dispatch without forwarding `boundActionParams`, so do not grant them to a bound
+     * agent. An action's own message text may mention a bound value.
      *
      * @example
      * ```typescript

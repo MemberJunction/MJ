@@ -1165,11 +1165,13 @@ export class BaseAgent {
         if (this.hasBoundActionParams(params.boundActionParams) || !params.lastRunId) {
             return;
         }
+        this.assertLastRunIdIsUUID(params.lastRunId);
         const result = await new RunView().RunView<{ BoundActionParams: string | null }>({
             EntityName: 'MJ: AI Agent Runs',
             ExtraFilter: `ID='${EscapeSQLString(params.lastRunId)}'`,
             Fields: ['BoundActionParams'],
-            ResultType: 'simple'
+            ResultType: 'simple',
+            BypassCache: true
         }, params.contextUser);
         if (!result.Success) {
             throw new Error(`Could not read the bindings of run ${params.lastRunId}: ${result.ErrorMessage}`);
@@ -14165,8 +14167,18 @@ The context is now within limits. Please retry your request with the recovered c
         this._agentRun.ContinuationDepth = params.continuationDepth ?? 0;
         // Stored so a run that continues this one (lastRunId) applies the same bindings.
         // Plain JSON.stringify on purpose: a binding that can't be stored must fail the run, not be dropped.
+        // Normalize `undefined` parameter values to `null` so JSON.stringify preserves the bound key
+        // (ApplyBoundActionParams treats `null` and `undefined` identically).
         if (params.boundActionParams) {
-            this._agentRun.BoundActionParams = JSON.stringify(params.boundActionParams);
+            const serialized = JSON.stringify(
+                params.boundActionParams,
+                (_key, value) => (value === undefined ? null : value)
+            );
+            if (typeof this._agentRun.SetServerBoundActionParams === 'function') {
+                this._agentRun.SetServerBoundActionParams(serialized);
+            } else {
+                this._agentRun.BoundActionParams = serialized;
+            }
         }
 
         // Set LastRunID for run chaining (different from ParentRunID)

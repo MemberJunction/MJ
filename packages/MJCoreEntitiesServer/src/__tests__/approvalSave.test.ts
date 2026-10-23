@@ -7,9 +7,9 @@
  * store, and the database is a stand-in that answers the stored-approval and definition reads.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { RunViewParams } from '@memberjunction/core';
+import type { EntitySaveOptions, RunViewParams } from '@memberjunction/core';
 
-const { db, writes } = vi.hoisted(() => ({
+const { db, writes, saveOptions } = vi.hoisted(() => ({
     db: {
         stored: null as Record<string, unknown> | null,
         readFails: false,
@@ -18,6 +18,7 @@ const { db, writes } = vi.hoisted(() => ({
         views: [] as RunViewParams[],
     },
     writes: [] as Array<Record<string, unknown>>,
+    saveOptions: [] as Array<EntitySaveOptions | undefined>,
 }));
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
@@ -55,12 +56,13 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         }
         public GetFieldByName(): { Dirty: boolean } { return { Dirty: false }; }
         public async GenerateEmbeddingsByFieldName(): Promise<boolean> { return true; }
-        public async Save(): Promise<boolean> {
+        public async Save(options?: EntitySaveOptions): Promise<boolean> {
             writes.push({
                 ApprovedByUserID: this.ApprovedByUserID,
                 ApprovedAt: this.ApprovedAt,
                 ApprovedFingerprint: this.ApprovedFingerprint,
             });
+            saveOptions.push(options);
             return true;
         }
     }
@@ -90,9 +92,9 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         public SmartFilterWhereClause: string | null = null;
         public Properties: string | null = null;
         /** The real base regenerates the WhereClause from the filter state before it writes. */
-        public override async Save(): Promise<boolean> {
+        public override async Save(options?: EntitySaveOptions): Promise<boolean> {
             this.WhereClause = "Status='Active'";
-            return super.Save();
+            return super.Save(options);
         }
     }
 
@@ -143,6 +145,7 @@ beforeEach(() => {
     db.queryParameters = [];
     db.views = [];
     writes.length = 0;
+    saveOptions.length = 0;
 });
 
 describe('MJDashboardEntityServer', () => {
@@ -188,26 +191,42 @@ describe('MJComponentEntityServer', () => {
 });
 
 describe('MJUserViewEntityServer', () => {
-    it('stamps the fingerprint after the write, so it covers the WhereClause as stored', async () => {
+    it('stamps the fingerprint after the write, so it covers the WhereClause as stored, and forwards EntitySaveOptions', async () => {
         db.stored = { ApprovalStatus: 'Pending', ...PENDING };
         const view = create(MJUserViewEntityServer);
-        expect(await view.Save()).toBe(true);
+        const opts: EntitySaveOptions = { SkipEntityActions: true, SkipRecordChanges: true } as EntitySaveOptions;
+        expect(await view.Save(opts)).toBe(true);
         expect(writes).toHaveLength(2);
+        expect(saveOptions).toEqual([opts, opts]);
         expect(writes[0]).toMatchObject({ ApprovedByUserID: 'approver-1', ApprovedFingerprint: null });
         expect(view.WhereClause).toBe("Status='Active'");
         expect(writes[1].ApprovedFingerprint).toBe(await ComputeUserViewFingerprintAsync(view));
     });
+
+    it('catches and logs an exception during post-save fingerprint stamping without throwing from Save()', async () => {
+        db.stored = { ApprovalStatus: 'Pending', ...PENDING };
+        const view = create(MJUserViewEntityServer);
+        Object.defineProperty(view, 'WhereClause', {
+            get() { throw new Error('unexpected getter throw'); },
+            set() { /* ignore */ },
+        });
+        expect(await view.Save()).toBe(true);
+        expect(writes).toHaveLength(1);
+        expect(writes[0]).toMatchObject({ ApprovedByUserID: 'approver-1', ApprovedFingerprint: null });
+    });
 });
 
 describe('MJQueryEntityServer', () => {
-    it('stamps the fingerprint last, from the dialect and parameter rows read back from the database', async () => {
+    it('stamps the fingerprint last, from the dialect and parameter rows read back from the database, and forwards EntitySaveOptions', async () => {
         db.stored = { Status: 'Pending', ...PENDING };
         db.querySQLs = [{ SQLDialectID: 'D-1', SQL: 'SELECT 1 /* pg */' }];
         db.queryParameters = [{ Name: 'ChapterID', Type: 'number', IsRequired: true, ValidationFilters: null, IsServerSet: true }];
         const query = create(MJQueryEntityServer);
-        expect(await query.Save()).toBe(true);
+        const opts: EntitySaveOptions = { SkipEntityActions: true, SkipEntityAIActions: true } as EntitySaveOptions;
+        expect(await query.Save(opts)).toBe(true);
 
         expect(writes).toHaveLength(2);
+        expect(saveOptions).toEqual([opts, opts]);
         expect(writes[0]).toMatchObject({ ApprovedByUserID: 'approver-1', ApprovedFingerprint: null });
         const rows = { SQLs: db.querySQLs as never[], Parameters: db.queryParameters as never[] };
         expect(writes[1].ApprovedFingerprint).toBe(await ComputeQueryFingerprintAsync(query, rows));

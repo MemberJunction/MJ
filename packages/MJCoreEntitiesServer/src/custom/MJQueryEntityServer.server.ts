@@ -140,7 +140,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
             // The parameter and dialect rows are rewritten after the Query row, so the approved
             // fingerprint is taken last, from the definition as stored.
             if (approving) {
-                await this.stampApprovalFingerprintAsync();
+                await this.stampApprovalFingerprintAsync(options);
             }
 
             return true;
@@ -156,10 +156,10 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
      * external source, with its dialect and parameter rows read back from the database. Until this
      * write lands the approval is not current, so a failure here fails closed.
      */
-    private async stampApprovalFingerprintAsync(): Promise<void> {
+    private async stampApprovalFingerprintAsync(options?: EntitySaveOptions): Promise<void> {
         try {
             this.ApprovedFingerprint = await ComputeQueryFingerprintAsync(this, await this.loadDefinitionRowsAsync());
-            if (!await super.Save()) {
+            if (!await super.Save(options)) {
                 LogError(`[MJQueryEntityServer] Query "${this.Name}" was approved but its fingerprint was not saved: ${this.LatestResult?.CompleteMessage}`);
             }
         } catch (e) {

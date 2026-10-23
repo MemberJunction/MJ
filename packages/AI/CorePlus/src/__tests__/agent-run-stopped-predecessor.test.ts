@@ -58,3 +58,66 @@ describe('MJAIAgentRunEntityExtended.BuildStoppedPredecessorFilter', () => {
         );
     });
 });
+
+describe('MJAIAgentRunEntityExtended — BoundActionParams write protection', () => {
+    function buildRun(isSaved: boolean, initialBound: string | null = null) {
+        const run = Object.create(MJAIAgentRunEntityExtended.prototype) as MJAIAgentRunEntityExtended;
+        let boundValue: string | null = initialBound;
+        let savedState = isSaved;
+        Object.defineProperty(run, 'ID', { value: '22222222-2222-4222-8222-222222222222', configurable: true });
+        Object.defineProperty(run, 'IsSaved', { get: () => savedState, configurable: true });
+        Object.defineProperty(run, 'BoundActionParams', {
+            get: () => boundValue,
+            set: (v: string | null) => { boundValue = v; },
+            configurable: true,
+        });
+        const superSave = Object.getPrototypeOf(MJAIAgentRunEntityExtended.prototype) as { Save: () => Promise<boolean> };
+        const originalSave = superSave.Save;
+        return {
+            run,
+            setSaved(v: boolean) { savedState = v; },
+            withSuperSave: async <T>(fn: () => Promise<T>): Promise<T> => {
+                superSave.Save = async () => { savedState = true; return true; };
+                try { return await fn(); } finally { superSave.Save = originalSave; }
+            },
+        };
+    }
+
+    it('clears client-supplied BoundActionParams on a new run when SetServerBoundActionParams was not called', async () => {
+        const { run, withSuperSave } = buildRun(false, '{"action-1":{"ChapterID":"ATTACKER"}}');
+        await withSuperSave(() => run.Save());
+        expect(run.BoundActionParams).toBeNull();
+    });
+
+    it('preserves server-authored BoundActionParams across initial create and subsequent saves, ignoring later direct assignments', async () => {
+        const { run, withSuperSave } = buildRun(false);
+        run.SetServerBoundActionParams('{"action-1":{"ChapterID":"c1"}}');
+        await withSuperSave(() => run.Save());
+        expect(run.BoundActionParams).toBe('{"action-1":{"ChapterID":"c1"}}');
+
+        run.BoundActionParams = '{"action-1":{"ChapterID":"ATTACKER"}}';
+        await withSuperSave(() => run.Save());
+        expect(run.BoundActionParams).toBe('{"action-1":{"ChapterID":"c1"}}');
+    });
+
+    it('restores the stored BoundActionParams from the database when an existing run is saved without prior InnerLoad or SetServerBoundActionParams', async () => {
+        const { run, withSuperSave } = buildRun(true, '{"action-1":{"ChapterID":"ATTACKER"}}');
+        const reads: unknown[] = [];
+        Object.defineProperty(run, 'RunViewProviderToUse', {
+            value: {
+                RunView: async (params: unknown) => {
+                    reads.push(params);
+                    return { Success: true, Results: [{ BoundActionParams: '{"action-1":{"ChapterID":"stored-c1"}}' }] };
+                },
+            },
+            configurable: true,
+        });
+        await withSuperSave(() => run.Save());
+        expect(run.BoundActionParams).toBe('{"action-1":{"ChapterID":"stored-c1"}}');
+        expect(reads).toEqual([expect.objectContaining({
+            EntityName: 'MJ: AI Agent Runs',
+            Fields: ['BoundActionParams'],
+            BypassCache: true,
+        })]);
+    });
+});

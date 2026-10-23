@@ -65,6 +65,7 @@ const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
   'mj: record changes',
   'mj: conversation details',
   'mj: data context items',
+  'mj: ai agent runs',
 ]);
 
 export class ResolverBase {

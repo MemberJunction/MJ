@@ -1522,9 +1522,12 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT133 - View Properties over GraphQL",
+            "TestID": "@lookup:MJ: Tests.Name=IT136 - View Properties over GraphQL",
             "Sequence": 75,
             "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3E05F35F-E69D-49A8-B641-6C8C08BF2243"
           }
         },
         {
@@ -1533,6 +1536,9 @@
             "TestID": "@lookup:MJ: Tests.Name=IT120 - Server-Set Query Parameters and Approvals",
             "Sequence": 49,
             "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "DE6D8FB0-92C7-4454-9618-87412D144E56"
           }
         },
         {
@@ -1541,6 +1547,9 @@
             "TestID": "@lookup:MJ: Tests.Name=IT127 - Calendar Event Links and Sync",
             "Sequence": 49,
             "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "286A13C7-2C5D-4243-8918-336AF1C8FFB2"
           }
         },
         {

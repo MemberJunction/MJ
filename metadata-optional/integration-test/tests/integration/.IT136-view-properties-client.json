@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT133 - View Properties over GraphQL",
+    "Name": "IT136 - View Properties over GraphQL",
     "Description": "Client-transport bundle. User View properties over the GraphQL wire: a view run by ViewID with a property value returns only the matching rows; a client value for a property that does not allow override is refused with an error naming it; with no value the server works out a Context.UserID token default for the wire identity; row-level security still applies on top (the seeded scoped user it-rls-a, through its own API key, gets only its own rows); and the server result cache keys on the property values. Self-cleaning fixture: four MJ: AI Agent Runs rows and two shared views, created and deleted over the wire. Needs MJAPI and the seeded RLS users.",
     "InputDefinition": {},
     "ExpectedOutcomes": {
@@ -17,5 +17,8 @@
       ]
     },
     "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "2F57C521-86A5-4019-996F-F3A5B59964C3"
   }
 }

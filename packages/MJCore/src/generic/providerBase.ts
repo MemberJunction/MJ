@@ -1998,6 +1998,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 p.UserSearchString ?? '',
                 p.ViewID ?? '',
                 p.ViewName ?? '',
+                p.TimeZone ?? '',
                 contextUser?.ID ?? ''
             ].join('|');
             return `${base}|${extras}`;

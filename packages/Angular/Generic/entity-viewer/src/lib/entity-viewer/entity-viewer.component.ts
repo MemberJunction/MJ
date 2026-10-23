@@ -1251,7 +1251,8 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
 
   /**
    * Fetches the FULL result set for the current entity/view (up to {@link EXPORT_MAX_RECORDS}),
-   * honoring the active sort, business filter (WhereClause) and user search — used by the grid's
+   * honoring the active sort, business filter (`WhereClause`, or running by `ViewID` with
+   * `Properties` when the view declares properties) and user search — used by the grid's
    * export and add-all-to-list flows so they aren't capped at the on-screen page (bugs C1/E3). Bound
    * as an arrow property so it can be pushed to a dynamically-mounted renderer's `exportDataProvider`
    * input without losing `this`. If the true result count exceeds the cap, the user is warned that
