@@ -147,6 +147,16 @@ export class ActionResult {
    public LogEntry?: MJActionExecutionLogEntity;
 
    /**
+    * Resolves once every write queued so far for {@link LogEntry} has settled, so a dependent row (one with
+    * a foreign key to the log row) can be inserted safely. The engine writes the log row fire-and-forget,
+    * so `LogEntry.ID` is valid before the row exists. Absent when there is no `LogEntry`.
+    *
+    * Never rejects: a failed log write is already logged by the engine's save queue, and the awaiter must
+    * not throw because of it.
+    */
+   public LogEntryPersisted?: Promise<void>;
+
+   /**
     * Optional, a message an action can include that describes the outcome of the action. This is typically used to display a message to the user.
     */
    public Message?: string;
