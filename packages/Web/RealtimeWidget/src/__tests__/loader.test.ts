@@ -71,6 +71,109 @@ describe('mountWidget', () => {
         expect((calls[1].init?.headers as Record<string, string>).authorization).toBe('Bearer jwt');
     });
 
+    describe('when the server refuses a refresh for good (403: past the grace window, the 12 h end, or an old token) (#4931)', () => {
+        /** A transport that records each session it is initialized with. */
+        class RecordingTransport extends MockWidgetTransport {
+            public readonly Sessions: string[] = [];
+            public override async Initialize(session: Parameters<MockWidgetTransport['Initialize']>[0]): Promise<void> {
+                this.Sessions.push(session.token);
+                await super.Initialize(session);
+            }
+        }
+
+        it('mints a new session, starts the transport on it, tells the visitor, and keeps refreshing the new session', async () => {
+            const transport = new RecordingTransport();
+            const callbacks: Array<() => void> = [];
+            const calls: Array<{ url: string; init?: RequestInit }> = [];
+            let mints = 0;
+            const recordingFetch: FetchLike = async (url, init) => {
+                calls.push({ url, init });
+                if (url.endsWith('/refresh')) {
+                    return { ok: false, status: 403, json: async () => ({ success: false, errorCode: 'not_found' }) };
+                }
+                mints++;
+                return { ok: true, status: 200, json: async () => ({ ...sessionBody, token: `jwt-${mints}`, sessionId: `sid-${mints}` }) };
+            };
+            const el = await MountWidget(
+                { widgetKey: 'pk', apiUrl: 'https://api.test' },
+                {
+                    sessionClientFactory: (apiUrl: string, widgetKey: string) => new WidgetSessionClient(apiUrl, widgetKey, recordingFetch),
+                    transportFactory: () => transport,
+                    scheduler: (cb: () => void) => callbacks.push(cb),
+                },
+            );
+            callbacks[0]();
+            await vi.waitFor(() => expect(transport.Sessions).toEqual(['jwt-1', 'jwt-2']));
+            expect(calls.map((c) => c.url)).toEqual([
+                'https://api.test/widget/session',
+                'https://api.test/widget/session/refresh',
+                'https://api.test/widget/session',
+            ]);
+            expect(el.ShadowRootRef.querySelector('.mj-widget-msg.system')?.textContent).toMatch(/previous chat ended/i);
+            expect(el.ShadowRootRef.querySelector('.mj-widget-banner')?.hasAttribute('hidden')).toBe(true);
+            // The refresh timer is re-armed on the NEW session.
+            await vi.waitFor(() => expect(callbacks).toHaveLength(2));
+            callbacks[1]();
+            await vi.waitFor(() => expect(calls.length).toBeGreaterThanOrEqual(4));
+            expect(calls[3].url).toBe('https://api.test/widget/session/refresh');
+            expect((calls[3].init?.headers as Record<string, string>).authorization).toBe('Bearer jwt-2');
+        });
+
+        it('shows Retry when the new mint fails too, and Retry starts over from the refresh', async () => {
+            const transport = new RecordingTransport();
+            const callbacks: Array<() => void> = [];
+            let mints = 0;
+            const recordingFetch: FetchLike = async (url) => {
+                if (url.endsWith('/refresh')) {
+                    return { ok: false, status: 403, json: async () => ({ success: false, errorCode: 'not_found' }) };
+                }
+                mints++;
+                if (mints === 2) {
+                    return { ok: false, status: 503, json: async () => ({ success: false, errorCode: 'server_error' }) };
+                }
+                return { ok: true, status: 200, json: async () => ({ ...sessionBody, token: `jwt-${mints}` }) };
+            };
+            const el = await MountWidget(
+                { widgetKey: 'pk', apiUrl: 'https://api.test' },
+                {
+                    sessionClientFactory: (apiUrl: string, widgetKey: string) => new WidgetSessionClient(apiUrl, widgetKey, recordingFetch),
+                    transportFactory: () => transport,
+                    scheduler: (cb: () => void) => callbacks.push(cb),
+                },
+            );
+            callbacks[0]();
+            await vi.waitFor(() => expect(el.ShadowRootRef.querySelector('.mj-widget-banner')?.hasAttribute('hidden')).toBe(false));
+            expect(transport.Sessions).toEqual(['jwt-1']);
+            el.RetryConnection();
+            callbacks[callbacks.length - 1]();
+            await vi.waitFor(() => expect(transport.Sessions).toEqual(['jwt-1', 'jwt-3']));
+        });
+    });
+
+    it('does not mint a new session when the refresh fails for a temporary reason (network down)', async () => {
+        const transport = new MockWidgetTransport();
+        const callbacks: Array<() => void> = [];
+        const calls: string[] = [];
+        const recordingFetch: FetchLike = async (url) => {
+            calls.push(url);
+            if (url.endsWith('/refresh')) {
+                throw new TypeError('Failed to fetch');
+            }
+            return { ok: true, status: 200, json: async () => sessionBody };
+        };
+        const el = await MountWidget(
+            { widgetKey: 'pk', apiUrl: 'https://api.test' },
+            {
+                sessionClientFactory: (apiUrl: string, widgetKey: string) => new WidgetSessionClient(apiUrl, widgetKey, recordingFetch),
+                transportFactory: () => transport,
+                scheduler: (cb: () => void) => callbacks.push(cb),
+            },
+        );
+        callbacks[0]();
+        await vi.waitFor(() => expect(el.ShadowRootRef.querySelector('.mj-widget-banner')?.hasAttribute('hidden')).toBe(false));
+        expect(calls).toEqual(['https://api.test/widget/session', 'https://api.test/widget/session/refresh']);
+    });
+
     it('retries refresh with the current session token when the visitor clicks Retry after a failed refresh', async () => {
         const transport = new MockWidgetTransport();
         const callbacks: Array<() => void> = [];

@@ -17,6 +17,26 @@ export type FetchLike = (input: string, init?: RequestInit) => Promise<{
     json: () => Promise<unknown>;
 }>;
 
+/** A session endpoint answered with a failure. `Status` is the HTTP status, `Code` the server's `errorCode`. */
+export class WidgetSessionError extends Error {
+    constructor(
+        message: string,
+        public readonly Status: number,
+        public readonly Code: string | null,
+    ) {
+        super(message);
+        this.name = 'WidgetSessionError';
+    }
+
+    /**
+     * True when the server refused for good (401/403): retrying the same request cannot succeed, so the
+     * caller must start a new session. Rate limits (429), server faults (5xx) and network failures are temporary.
+     */
+    public get IsRefused(): boolean {
+        return this.Status === 401 || this.Status === 403;
+    }
+}
+
 /** How early (ms before expiry) to proactively refresh the guest token. */
 const REFRESH_LEAD_MS = 60_000;
 
@@ -161,7 +181,7 @@ export class WidgetSessionClient {
         const res = await this.fetchImpl(url, { method: 'POST', headers, body: JSON.stringify(request) });
         const body = (await res.json()) as WidgetSessionResponse;
         if (!res.ok || !body?.success || !body.token) {
-            throw new Error(`Widget session mint failed (${res.status}): ${body?.errorCode ?? body?.error ?? 'unknown'}`);
+            throw new WidgetSessionError(`Widget session mint failed (${res.status}): ${body?.errorCode ?? body?.error ?? 'unknown'}`, res.status, body?.errorCode ?? null);
         }
         return this.toSession(body);
     }
