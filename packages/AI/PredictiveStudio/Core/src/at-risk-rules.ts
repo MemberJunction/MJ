@@ -29,7 +29,7 @@ export interface AtRiskRow {
   RiskPct: number;
   /** Predicted class label, when present (classification). */
   Class: string | null;
-  /** Risk band, for color / filtering. */
+  /** Risk band measured on {@link RiskPct} (never on the raw score), for color / filtering / the High-Medium-Low counts. */
   Band: RiskBand;
   /** Qualitative status label (e.g. "High", "Critical", "Low Risk"). */
   Status?: string;
@@ -71,7 +71,7 @@ export interface ParseAtRiskOptions {
   InvertedRisk?: boolean;
   /**
    * Configured outcome metadata for the model (labels, thresholds, colors, icons).
-   * When provided, `ResolveScoreBand()` evaluates the band, status, badge color and icon.
+   * When provided, `ResolveScoreBand()` supplies the display status, badge color and icon (the risk `Band` is computed from risk).
    */
   OutcomeConfig?: OutcomeConfig;
 }
@@ -84,7 +84,6 @@ interface ScoredPrediction {
   Score: number;
   Class: string | null;
   Status?: string;
-  Band?: string;
   BadgeColor?: string;
   Icon?: string;
   // unknown: the raw per-record drivers from the stored payload; ParseRowDrivers narrows them
@@ -221,40 +220,27 @@ export class AtRiskRules {
     return `${prefix}${truncatedTitle}${suffix}`;
   }
 
-  /** One at-risk row from a narrowed prediction: risk (inverted when asked), band, status and drivers. */
+  /**
+   * One at-risk row from a narrowed prediction. `Band` is always measured on the displayed risk (inverted when asked), so
+   * the High/Medium/Low counts mean risk for every polarity; a configured band's keys are on the raw score, so the outcome
+   * config supplies only the display status, color and icon.
+   */
   private static buildRow(recordId: string, p: ScoredPrediction, isInverted: boolean, outcomeConfig: OutcomeConfig | undefined): AtRiskRow {
     const effectiveRisk = isInverted ? Math.max(0, Math.min(1, 1 - p.Score)) : p.Score;
     const resolved = outcomeConfig ? ResolveScoreBand(p.Score, outcomeConfig) : null;
     // Payload strings are never legitimately '' — an empty status/color/icon means "not set", so || falls back.
-    const bandKey = resolved ? resolved.Key : p.Band || AtRiskRules.bandFor(effectiveRisk);
     return {
       RecordID: recordId,
       Label: null,
       Score: p.Score,
       RiskPct: Math.round(effectiveRisk * 100),
       Class: p.Class,
-      Band: AtRiskRules.toRiskBand(bandKey),
+      Band: AtRiskRules.bandFor(effectiveRisk),
       Status: p.Status || resolved?.Label,
       BadgeColor: p.BadgeColor || resolved?.BadgeColor,
       Icon: p.Icon || resolved?.Icon,
       Drivers: AtRiskRules.ParseRowDrivers(p.Drivers, isInverted),
     };
-  }
-
-  /**
-   * Map a band key to a {@link RiskBand}. Configured bands may use their own keys (e.g. 'super-safe', 'danger'); those
-   * carry no risk direction this code can read, so they count as 'low' — never inflating the High/Medium counts. The
-   * row keeps the custom band's own status label, color and icon for display.
-   */
-  private static toRiskBand(key: string): RiskBand {
-    switch (key) {
-      case 'high':
-      case 'medium':
-      case 'low':
-        return key;
-      default:
-        return 'low';
-    }
   }
 
   private static bandFor(risk: number): RiskBand {
@@ -278,7 +264,6 @@ export class AtRiskRules {
       Score: p.score,
       Class: AtRiskRules.optionalString(p.class) || null,
       Status: AtRiskRules.optionalString(p.status),
-      Band: AtRiskRules.optionalString(p.band),
       BadgeColor: AtRiskRules.optionalString(p.badgeColor),
       Icon: AtRiskRules.optionalString(p.icon),
       Drivers: p.drivers,

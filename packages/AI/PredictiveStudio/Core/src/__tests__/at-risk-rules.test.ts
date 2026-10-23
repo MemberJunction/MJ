@@ -70,7 +70,7 @@ describe('AtRiskRules.ParseAtRiskRows', () => {
     expect(rows[0]).toMatchObject({ RecordID: 'w', RiskPct: 77 });
   });
 
-  it('resolves status, badge color and icon from the outcome config; a custom band key maps to a RiskBand', () => {
+  it('takes status, badge color and icon from the outcome config, while Band is measured on the displayed risk', () => {
     const customConfig = {
       ScoreLabel: 'Renewal Probability',
       StatusLabel: 'Renewal Status',
@@ -86,15 +86,15 @@ describe('AtRiskRules.ParseAtRiskRows', () => {
       { RecordID: 'safe', ResultPayload: JSON.stringify({ score: 0.95, class: 'Renewed' }) },
       { RecordID: 'med', ResultPayload: JSON.stringify({ score: 0.55, class: 'Renewed' }) },
       { RecordID: 'crit', ResultPayload: JSON.stringify({ score: 0.10, class: 'Lapsed' }) },
-    ], { OutcomeConfig: customConfig });
+    ], { InvertedRisk: true, OutcomeConfig: customConfig });
 
     expect(rows).toHaveLength(3);
-    expect(rows.find((r) => r.RecordID === 'safe')).toMatchObject({ Band: 'low', Status: 'Very Safe', BadgeColor: 'green', Icon: 'fa-star' });
-    expect(rows.find((r) => r.RecordID === 'med')).toMatchObject({ Band: 'medium', Status: 'Needs Watch' });
-    expect(rows.find((r) => r.RecordID === 'crit')).toMatchObject({ Band: 'low', Status: 'Critical Danger', BadgeColor: 'red', Icon: 'fa-skull' });
+    expect(rows.find((r) => r.RecordID === 'safe')).toMatchObject({ RiskPct: 5, Band: 'low', Status: 'Very Safe', BadgeColor: 'green', Icon: 'fa-star' });
+    expect(rows.find((r) => r.RecordID === 'med')).toMatchObject({ RiskPct: 45, Band: 'medium', Status: 'Needs Watch' });
+    expect(rows.find((r) => r.RecordID === 'crit')).toMatchObject({ RiskPct: 90, Band: 'high', Status: 'Critical Danger', BadgeColor: 'red', Icon: 'fa-skull' });
   });
 
-  it('respects pre-evaluated payload fields (status, band, badgeColor, icon) when present', () => {
+  it('respects pre-evaluated payload display fields (status, badgeColor, icon); a payload band never overrides the risk band', () => {
     const rows = AtRiskRules.ParseAtRiskRows([
       {
         RecordID: 'pre-eval',
@@ -102,7 +102,7 @@ describe('AtRiskRules.ParseAtRiskRows', () => {
           score: 0.88,
           class: 'Active',
           status: 'Custom High Status',
-          band: 'high',
+          band: 'low',
           badgeColor: 'blue',
           icon: 'fa-shield',
         }),
@@ -155,6 +155,17 @@ describe('AtRiskRules.BuildAtRiskOptions (one polarity rule)', () => {
   it('never inverts a regression model', () => {
     const lineage = JSON.stringify({ outcomeConfig: { Polarity: 'positive' } });
     expect(AtRiskRules.BuildAtRiskOptions({ Lineage: lineage, TargetVariable: 'X', ProblemType: 'regression' }).InvertedRisk).toBe(false);
+  });
+  it('bands a positive-polarity (renewal) model on risk, not on the raw score', () => {
+    const rows = AtRiskRules.ParseAtRiskRows(
+      [
+        { RecordID: 'loyal', ResultPayload: JSON.stringify({ score: 0.98 }) },
+        { RecordID: 'lapsing', ResultPayload: JSON.stringify({ score: 0.10 }) },
+      ],
+      AtRiskRules.BuildAtRiskOptions({ Lineage: null, TargetVariable: 'Renewed', ProblemType: 'classification' }),
+    );
+    expect(rows.find((r) => r.RecordID === 'loyal')).toMatchObject({ RiskPct: 2, Band: 'low' });
+    expect(rows.find((r) => r.RecordID === 'lapsing')).toMatchObject({ RiskPct: 90, Band: 'high' });
   });
   it('carries the resolved outcome config', () => {
     expect(AtRiskRules.BuildAtRiskOptions({ Lineage: null, TargetVariable: 'Renewed', ProblemType: 'classification' }).OutcomeConfig?.Polarity).toBe('positive');
