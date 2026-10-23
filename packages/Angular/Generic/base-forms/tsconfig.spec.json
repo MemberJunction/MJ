@@ -66,6 +66,7 @@
     "src/lib/links/record-links.component.ts",
     "src/lib/links/record-links-drawer.component.ts",
     "src/lib/links/record-links.component.dom.test.ts",
+    "src/lib/preview-popover/record-preview-popover.component.ts",
     "src/lib/field/form-field-live-merge.component.dom.test.ts",
     "src/lib/container/live-edit-mode-merge.component.dom.test.ts"
   ],

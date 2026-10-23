@@ -146,7 +146,7 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 | Path | Scope |
 |---|---|
 | [`migrations/CLAUDE.md`](migrations/CLAUDE.md) | Migration authoring — naming, hardcoded UUIDs, system columns CodeGen owns, CHECK constraints, CodeGen handoff |
-| [`metadata/CLAUDE.md`](metadata/CLAUDE.md) | Metadata authoring — `@lookup`/`@file`/`@parent` refs, `uuidgen` primary keys, metadata ships only as release migrations (no install-time metadata phase), seeding lookup tables, application metadata, polymorphic-FK `EntityIDFieldName` |
+| [`metadata/CLAUDE.md`](metadata/CLAUDE.md) | Metadata authoring — `@lookup`/`@file`/`@parent` refs, a `primaryKey` on every record (`uuidgen` or `@lookup`), metadata ships only as release migrations (no install-time metadata phase), seeding lookup tables, application metadata, polymorphic-FK `EntityIDFieldName` |
 | [`metadata/components/CLAUDE.md`](metadata/components/CLAUDE.md) | Interactive component authoring — component architecture rules, the `ProductRevenueMatrix` reference implementation |
 | [`docker/CLAUDE.md`](docker/CLAUDE.md) | Docker workbench + MJAPI container configurations |
 | [`stats/CLAUDE.md`](stats/CLAUDE.md) | Repo LOC stats — generated files, do not hand-edit |
@@ -183,6 +183,7 @@ Cross-cutting "read this before you build that" guides, categorized. **Consult t
 npm run check:ui          # design-token + button gates on changed CSS/SCSS (as the PR gate)
 npm run check:standards   # every adopted MJ standard (see .mj-standards.json)
 npm run check:guards      # UUID, global-provider and primary-key source scanners (CI "Source guards")
+npm run check:exact-pins  # @foblex/* exact pins match pnpm-lock.yaml
 npm run check:esm         # native-ESM import guard for "type": "module" packages
 npm run check:claude-md   # instruction-file budget, links, routing-table coverage
 npm run check:changeset   # changeset bump levels (local only — no CI gate)
