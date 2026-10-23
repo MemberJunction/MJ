@@ -135,6 +135,10 @@ class FakeLedger implements IRealtimeRecordingLedger {
         throw new Error('not used by the routes');
     }
 
+    public async StampFile(): Promise<{ RecordingStatus: string | null }> {
+        throw new Error('not used by the routes');
+    }
+
     public async LoadShards(sessionID: string): Promise<LedgerShard[]> {
         return [...this.shardsOf(sessionID).values()].sort((a, b) => a.Index - b.Index)
             .map(s => ({ Index: s.Index, StartSample: s.StartSample, SampleCount: s.SampleCount, Data: s.Data }));
@@ -198,6 +202,7 @@ function callerLedger(inner: FakeLedger): IRealtimeRecordingLedger {
         ClaimAssembly: id => inner.ClaimAssembly(id),
         FinishAssembly: input => inner.FinishAssembly(input),
         StampAssemblyGaps: () => inner.StampAssemblyGaps(),
+        StampFile: () => inner.StampFile(),
         LoadShards: refuse,
         LoadShardMetadata: refuse,
         CountShardsBelow: refuse,
