@@ -305,6 +305,10 @@ describe('MJAIAgentSessionEntityServer.Validate — a transaction variable canno
         expect(inGroup(false, (self) => [{ EntityObject: self, Type: 'Use', FieldName: 'Config' }]).Validate().Success).toBe(false);
     });
 
+    it("refuses an untrusted 'Use' variable on ID, which re-points the update (and its Config) at another user's session", () => {
+        expect(inGroup(false, (self) => [{ EntityObject: self, Type: 'Use', FieldName: 'ID' }]).Validate().Success).toBe(false);
+    });
+
     it("allows a 'Use' variable on Config inside a trusted scope, and a 'Use' variable on another row", async () => {
         await RunWithTrustedSessionConfigWrites(async () => {
             expect(inGroup(false, (self) => [{ EntityObject: self, Type: 'Use', FieldName: 'Config' }]).Validate().Success).toBe(true);

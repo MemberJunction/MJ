@@ -84,11 +84,12 @@ export class MJAIAgentSessionEntityServer extends MJAIAgentSessionEntity {
         if (!configField) {
             return null;
         }
-        // A 'Use' transaction variable writes Config at submit, after this comparison: its value is unknown here.
-        if (IsSetByTransactionVariable(this, ['Config'])) {
+        // A 'Use' transaction variable writes its field at submit, after this comparison: on Config its value is unknown
+        // here, and on ID the update (and this Config) lands on another session than the one compared against.
+        if (IsSetByTransactionVariable(this, ['Config', 'ID'])) {
             return new ValidationErrorInfo(
                 'Config',
-                'Config is server-managed in part and cannot take its value from a transaction variable.',
+                'Config is server-managed in part, so neither it nor the row it is written to can come from a transaction variable.',
                 null,
                 ValidationErrorType.Failure,
             );
