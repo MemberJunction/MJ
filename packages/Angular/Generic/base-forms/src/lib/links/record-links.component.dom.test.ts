@@ -545,7 +545,7 @@ describe('MjRecordLinksComponent', () => {
         expect(titleLink).not.toBeNull();
         titleLink.click();
         expect(navEvents).toHaveLength(1);
-        expect(navEvents[0].OpenInNewTab).toBe(false);
+        expect(navEvents[0]).toMatchObject({ Kind: 'record', OpenInNewTab: false });
 
         // Enter Edit mode -> contextual footer bar appears
         pop.OnStartEdit(new MouseEvent('click'));

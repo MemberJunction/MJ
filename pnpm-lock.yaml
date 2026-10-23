@@ -1923,9 +1923,15 @@ importers:
       '@memberjunction/ai':
         specifier: 6.2.0-edge.5
         version: link:../../Core
+      '@memberjunction/ai-openai':
+        specifier: 6.2.0-edge.5
+        version: link:../OpenAI
       '@memberjunction/global':
         specifier: 6.2.0-edge.5
         version: link:../../../MJGlobal
+      openai:
+        specifier: 6.18.0
+        version: 6.18.0(ws@8.19.0)(zod@4.3.6)
     devDependencies:
       ts-node-dev:
         specifier: ^2.0.0
