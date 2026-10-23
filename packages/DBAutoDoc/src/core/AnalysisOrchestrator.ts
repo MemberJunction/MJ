@@ -554,6 +554,11 @@ export class AnalysisOrchestrator {
     stateManager: StateManager
   ): Promise<void> {
     if (this.config.analysis.useExistingIndexes === false) {
+      // A resumed state can still hold indexes read by an earlier run; drop them so neither the
+      // prompt hints nor index-backed PK candidates use indexes the config says to ignore.
+      for (const table of state.schemas.flatMap((s) => s.tables)) {
+        delete table.indexes;
+      }
       return;
     }
     const schemas = state.schemas.filter((s) => s.tables.some((t) => t.indexes === undefined));
