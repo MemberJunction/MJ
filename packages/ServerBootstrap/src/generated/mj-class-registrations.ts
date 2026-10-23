@@ -64,12 +64,6 @@ import {
     CohereReranker,
 } from '@memberjunction/ai-cohere';
 
-// @memberjunction/ai-elevenlabs (2 classes)
-import {
-    ElevenLabsAudioGenerator,
-    ElevenLabsRealtime,
-} from '@memberjunction/ai-elevenlabs';
-
 // @memberjunction/ai-fireworks (1 classes)
 import {
     FireworksLLM,
@@ -136,6 +130,13 @@ import {
 import {
     DeepInfraLLM,
 } from '@memberjunction/ai-deepinfra';
+
+// @memberjunction/ai-elevenlabs (3 classes)
+import {
+    ElevenLabsAudioGenerator,
+    ElevenLabsRealtime,
+    ElevenRealtime,
+} from '@memberjunction/ai-elevenlabs';
 
 // @memberjunction/ai-huggingface (1 classes)
 import {
@@ -1733,8 +1734,6 @@ const CLASS_REGISTRATIONS_0: any[] = [
     CloudflareDecision,
     CohereEmbedding,
     CohereReranker,
-    ElevenLabsAudioGenerator,
-    ElevenLabsRealtime,
     FireworksLLM,
     GeminiEmbedding,
     GeminiImageGenerator,
@@ -1758,6 +1757,9 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OpenAILiveRealtime,
     OpenAIRealtime,
     DeepInfraLLM,
+    ElevenLabsAudioGenerator,
+    ElevenLabsRealtime,
+    ElevenRealtime,
     HuggingFaceRealtime,
     InceptionDecision,
     InceptionLLM,
@@ -1919,11 +1921,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
     MJCalendarEventLinkEntity,
-    MJCalendarSyncStateEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCalendarSyncStateEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -2123,11 +2125,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQueryCategoryEntity,
     MJQueryDependencyEntity,
     MJQueryEntity,
-    MJQueryEntityEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJQueryEntityEntity,
     MJQueryEntityExtended,
     MJQueryFieldEntity,
     MJQueryParameterEntity,
@@ -2327,11 +2329,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     LogActivityAction,
     MergeContactsAction,
     CreateJotFormAction,
-    CreateSurveyMonkeyAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    CreateSurveyMonkeyAction,
     CreateTypeformAction,
     ExportGoogleFormsCSVAction,
     ExportJotFormCSVAction,
@@ -2531,11 +2533,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     HumanRubricEvaluator,
     LLMRubricEvaluator,
     SubmitHumanRubricAction,
-    AzureAISearchProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    AzureAISearchProvider,
     BGEReRanker,
     CohereReRanker,
     ElasticsearchSearchProvider,
@@ -2735,11 +2737,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     StewardFeaturePipelineVersionAction,
     IntegrationTestDriver,
     BraveWebSearchProvider,
-    DuckDuckGoWebSearchProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    DuckDuckGoWebSearchProvider,
     GoogleCustomSearchWebSearchProvider,
     PerplexityWebSearchProvider,
     TavilyWebSearchProvider,
@@ -2948,7 +2950,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1192;
+export const CLASS_REGISTRATIONS_COUNT = 1193;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
@@ -2962,7 +2964,6 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-cerebras',
     '@memberjunction/ai-cloudflare',
     '@memberjunction/ai-cohere',
-    '@memberjunction/ai-elevenlabs',
     '@memberjunction/ai-fireworks',
     '@memberjunction/ai-gemini',
     '@memberjunction/ai-groq',
@@ -2974,6 +2975,7 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-ollama',
     '@memberjunction/ai-openai',
     '@memberjunction/ai-deepinfra',
+    '@memberjunction/ai-elevenlabs',
     '@memberjunction/ai-huggingface',
     '@memberjunction/ai-inception',
     '@memberjunction/ai-llamacpp',

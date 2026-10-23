@@ -11,10 +11,11 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-// @memberjunction/ai-realtime-client (8 classes)
+// @memberjunction/ai-realtime-client (9 classes)
 import {
     AssemblyAIRealtimeClient,
     ElevenLabsRealtimeClient,
+    ElevenRealtimeClient,
     GeminiEnterpriseRealtimeClient,
     GeminiRealtimeClient,
     HuggingFaceRealtimeClient,
@@ -866,6 +867,7 @@ import {
 const CLASS_REGISTRATIONS_0: any[] = [
     AssemblyAIRealtimeClient,
     ElevenLabsRealtimeClient,
+    ElevenRealtimeClient,
     GeminiEnterpriseRealtimeClient,
     GeminiRealtimeClient,
     HuggingFaceRealtimeClient,
@@ -1063,11 +1065,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCountryEntity,
     MJCredentialCategoryEntity,
     MJCredentialEntity,
-    MJCredentialTypeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCredentialTypeEntity,
     MJDashboardCategoryEntity,
     MJDashboardCategoryLinkEntity,
     MJDashboardCategoryPermissionEntity,
@@ -1267,11 +1269,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSearchScopeStorageAccountEntity,
     MJSearchScopeTestQueryEntity,
     MJSignatureAccountEntity,
-    MJSignatureProviderEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSignatureProviderEntity,
     MJSignatureRequestDocumentEntity,
     MJSignatureRequestEntity,
     MJSignatureRequestLogEntity,
@@ -1471,11 +1473,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJTestSuiteRunFormComponentExtended,
     MLModelFormComponentExtended,
     MLModelFormPolicy,
-    ProjectHierarchyPanel,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    ProjectHierarchyPanel,
     QueryCategoryHierarchyPanel,
     RecordProcessCategoryHierarchyPanel,
     RecordProcessFormComponentExtended,
@@ -1638,7 +1640,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 748;
+export const CLASS_REGISTRATIONS_COUNT = 749;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
