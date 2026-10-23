@@ -6,7 +6,7 @@
 - **Author**: Claude (Claude Code session), for review
 - **Branch**: `claude/alternate-base-views`
 - **Reviewed against**: `next` @ `48c974e76`
-- **Companion**: [`plans/canon-semantic-graph.md`](canon-semantic-graph.md), the graph that connects canon objects
+- **Companion**: [`plans/canon-semantic-graph.md`](canon-semantic-graph.md), the extensible semantic graph (any entity record as a node, any edge type). MJ Canon is its first graph.
 - **Supersedes**: Future Phases D–G of [`plans/complete/json-type-and-additional-base-views.md`](complete/json-type-and-additional-base-views.md)
 
 ## Overview
@@ -324,6 +324,46 @@ export function ResolveAlternateBaseView(entity: EntityInfo, params: RunViewPara
 - **REST:** `ViewOperationsHandler.RunView` passes `RunViewParams` through; confirm the body mapping keeps the field.
 - **New entities** (CodeGen-generated CRUD, forms and GraphQL): `MJ: Entity Alternate Base Views`, `MJ: Entity Alternate Base View Permissions`; the new `AlternateBaseViewID` field on `MJ: Query Entities`.
 
+## Implementation handoff
+
+This work needs migrations, CodeGen and `mj sync push`, so it is built by a local agent with its
+own database. This section is that agent's checklist for both plans.
+
+**Build order.** One PR per phase into `next`.
+
+| Order | Phase | Depends on |
+|---|---|---|
+| 1 | ABV 1, schema + metadata contract | — |
+| 2 | ABV 2, read path / cache / providers | ABV 1 |
+| 3 | ABV 3, transport | ABV 2 |
+| 4 | ABV 4, CodeGen upkeep (before any real entity adopts an alternate view) | ABV 1 |
+| 5 | ABV 5, queries + client SQL | ABV 1–3 |
+| 6 | ABV 6–9, User Views / BaseEngine, agents, Angular, docs + IT | ABV 1–5 |
+| any time | Graph G1, substrate (own migration) | — |
+| after ABV 5 | Graph G2, MJ Canon | G1, ABV 1, ABV 5 |
+| after G2 | Graph G3–G5 | G2 |
+
+**Every phase:**
+- **Branch.** Cut from `origin/next` and track `origin/<same-name>` (`git branch -vv` before every push). Never push to `next` or `main`.
+- **Database.** One per agent. Confirm no other session uses your `DB_DATABASE` before `mj migrate`, `mj codegen` or `mj sync push`; the `bootstrap-clean-db` skill builds a private one.
+- **Verify.**
+  - Build every touched package and run its `pnpm test`.
+  - Run `pnpm run test:integration` (deterministic tier) after migrations + CodeGen.
+  - Run `check:guards` and `check:standards`.
+  - Report pass/fail/skip counts in the PR.
+- **Changeset.** `minor` when the phase adds a migration or metadata; otherwise `patch`.
+
+**Phases with a migration (ABV 1, G1):**
+- **File.** `migrations/v6/V<YYYYMMDDHHMM>__v6.2.x__<Name>.sql`, with a timestamp after the newest migration on `next`. Renumber before merge if `next` has moved; a merged migration is immutable.
+- **Order.** Hand-written DDL, then at least 50 blank lines, then the CodeGen comment block, then CodeGen's output (`mj migrate` → `mj codegen`).
+- **`EntityField` inserts.** CodeGen's must not carry a literal `Sequence`; use the apply-time `MAX(Sequence)+1` form ([`migrations/CLAUDE.md`](../migrations/CLAUDE.md)). A literal fails only on fresh installs.
+- **PostgreSQL.** No file; it is transpiled at release.
+
+**Phases with metadata:**
+- **Order.** `mj sync push` **before** `mj codegen --skipdb`. CodeGen reads JSONType definitions from the database, and the reverse order silently drops properties.
+- **What the PR carries.** Only declarative JSON (`primaryKey` from `uuidgen`, `@lookup` references). Revert any `sync` blocks the push wrote back into `metadata/`. No `*__Metadata_Sync.sql`; the release seed carries it.
+- **Never commit** `mj.config.cjs`, `mj.config.json` or generated host folders.
+
 ## Implementation Plan
 
 Each phase is one PR into `next`, with unit tests for every package touched and the deterministic
@@ -409,7 +449,7 @@ CodeGen recreates the base view, and PostgreSQL freezes `*` at `CREATE VIEW`.
 1. `get-entity-details.action.ts` (`:189, :323`) and `explore-database-schema.action.ts` (`:208, :426`) list each usable, non-deprecated alternate view the caller may use (Name, DisplayName, Description, ViewName) next to `BaseView`.
 2. Agents that call RunView through actions (e.g. the data-retrieval actions in `packages/Actions/CoreActions/src/custom/data/`) accept an optional `AlternateBaseView` parameter, described as "prefer a canonical alternate view over writing an equivalent filter".
 3. **Skip.** Its integration is not in this repo. MJ's side is complete once alternate views are in entity metadata (Phase 1) and in the actions above. Skip's prompt and context change is a separate item for that codebase.
-4. **Canon graph inputs.** Alternate views and Query Entities' `AlternateBaseViewID` become derived edges in the companion design (`Subsets`, `Reads`). Nothing extra is built here.
+4. **Canon graph inputs.** In the companion design, the built-in `AlternateBaseViewEdgeProvider` (`Subsets`) and `QueryMetadataEdgeProvider` (`Reads`, using `AlternateBaseViewID`) turn these into derived edges. Nothing extra is built here.
 
 ### Phase 8 — Angular (Explorer)
 Layering per [`guides/UI_LAYERING_GUIDE.md`](../guides/UI_LAYERING_GUIDE.md): the picker and viewer
