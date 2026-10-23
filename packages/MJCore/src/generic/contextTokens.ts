@@ -8,6 +8,13 @@
  *
  * - User tokens (`Context.UserID`, `Context.UserEmail`, `Context.UserName`) need a context user;
  *   without one they throw rather than resolve to a blank.
+ * - **WARNING — SQL template escaping (`| sqlString`):** `Context.UserEmail` and `Context.UserName`
+ *   resolve to raw, unescaped strings (for example `O'Brien`) and reach Nunjucks query templates with
+ *   `autoescape: false`. Query templates **must** pipe them through `| sqlString`
+ *   (e.g. `WHERE Email = {{ Context.UserEmail | sqlString }}` or
+ *   `WHERE Name = {{ Context.UserName | sqlString }}`). Rendering `{{ Context.UserEmail }}` or
+ *   `{{ Context.UserName }}` bare produces broken SQL on apostrophes and opens SQL injection.
+ *   (User View properties are escaped automatically by `UserViewPropertyWhereClause`.)
  * - Date tokens give a `YYYY-MM-DD` date in the given zone (`Context.Today`, `Context.StartOf*`),
  *   or an ISO 8601 instant (`Context.Now`). Only date tokens take an offset.
  * - The zone is an IANA name, `'UTC'` when none is given. Weeks start on Monday (ISO 8601) unless

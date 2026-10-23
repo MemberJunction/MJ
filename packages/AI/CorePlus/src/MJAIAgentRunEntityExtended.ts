@@ -202,20 +202,24 @@ export class MJAIAgentRunEntityExtended extends MJAIAgentRunEntity {
         } else if (this._hasAuthoritativeBoundActionParams) {
             this.BoundActionParams = this._authoritativeBoundActionParams;
         } else {
-            this._authoritativeBoundActionParams = await this.readStoredBoundActionParams();
+            const stored = await this.readStoredBoundActionParams();
+            if (!stored.ok) {
+                return false;
+            }
+            this._authoritativeBoundActionParams = stored.value;
             this._hasAuthoritativeBoundActionParams = true;
             this.BoundActionParams = this._authoritativeBoundActionParams;
         }
         return super.Save(options);
     }
 
-    private async readStoredBoundActionParams(): Promise<string | null> {
+    private async readStoredBoundActionParams(): Promise<{ ok: true; value: string | null } | { ok: false }> {
         if (!this.ID) {
-            return null;
+            return { ok: false };
         }
         const rv = this.RunViewProviderToUse;
         if (!rv || typeof rv.RunView !== 'function') {
-            return null;
+            return { ok: false };
         }
         const result = await rv.RunView<{ BoundActionParams: string | null }>({
             EntityName: 'MJ: AI Agent Runs',
@@ -225,9 +229,9 @@ export class MJAIAgentRunEntityExtended extends MJAIAgentRunEntity {
             BypassCache: true
         }, this.ContextCurrentUser);
         if (!result?.Success || !result.Results?.length) {
-            return null;
+            return { ok: false };
         }
-        return result.Results[0].BoundActionParams ?? null;
+        return { ok: true, value: result.Results[0].BoundActionParams ?? null };
     }
 
     /**

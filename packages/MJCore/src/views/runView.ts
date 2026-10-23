@@ -115,15 +115,6 @@ export interface RunViewTelemetryOptions {
 }
 
 /**
- * Parameters for running either a stored or dynamic view.
- * A stored view is a view that is saved in the database and can be run either by ID or Name.
- * A dynamic view is one that is not stored in the database and you provide parameters to return data as
- * desired programatically.
- *
- * This class is fully backward compatible with object literal syntax - you can still use:
- * `{ EntityName: 'Users', ExtraFilter: 'Active=1' }` and it will work as expected.
- */
-/**
  * `RunViewParams` fields only server code may set. A transport that builds run params from a
  * client's request body (the REST endpoint) removes these before running the view, so a client
  * cannot choose them. GraphQL run inputs never carry them in the first place.
@@ -139,6 +130,15 @@ export function StripServerOnlyRunViewParams(params: RunViewParams): RunViewPara
     return copy;
 }
 
+/**
+ * Parameters for running either a stored or dynamic view.
+ * A stored view is a view that is saved in the database and can be run either by ID or Name.
+ * A dynamic view is one that is not stored in the database and you provide parameters to return data as
+ * desired programatically.
+ *
+ * This class is fully backward compatible with object literal syntax - you can still use:
+ * `{ EntityName: 'Users', ExtraFilter: 'Active=1' }` and it will work as expected.
+ */
 export class RunViewParams {
     /**
      * optional - ID of the UserView record to run, if provided, ViewName is ignored

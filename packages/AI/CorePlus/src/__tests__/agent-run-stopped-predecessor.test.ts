@@ -120,4 +120,20 @@ describe('MJAIAgentRunEntityExtended — BoundActionParams write protection', ()
             BypassCache: true,
         })]);
     });
+
+    it('fails closed (returns false without calling super.Save or clearing BoundActionParams) when the stored-row RunView fails or returns empty results', async () => {
+        for (const failedResult of [
+            { Success: false, Results: [] },
+            { Success: true, Results: [] },
+        ]) {
+            const { run, withSuperSave } = buildRun(true, '{"action-1":{"ChapterID":"stored-c1"}}');
+            Object.defineProperty(run, 'RunViewProviderToUse', {
+                value: { RunView: async () => failedResult },
+                configurable: true,
+            });
+            const saved = await withSuperSave(() => run.Save());
+            expect(saved).toBe(false);
+            expect(run.BoundActionParams).toBe('{"action-1":{"ChapterID":"stored-c1"}}');
+        }
+    });
 });

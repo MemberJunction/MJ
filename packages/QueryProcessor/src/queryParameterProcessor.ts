@@ -484,6 +484,13 @@ export class QueryParameterProcessor {
      * Processes a query template with the provided parameters.
      * Accepts either a full `QueryInfo` (saved queries) or a minimal `QueryTemplateInput`
      * (transient specs) — only `SQL`, `UsesTemplate`, and `Parameters` are used.
+     *
+     * **WARNING — Escaping `Context` user tokens:** Nunjucks renders with `autoescape: false`, and
+     * `Context.UserEmail` / `Context.UserName` resolve to raw, unescaped strings (e.g. `O'Brien`).
+     * Templates that interpolate them into SQL **must** apply the `| sqlString` filter:
+     * `{{ Context.UserEmail | sqlString }}` and `{{ Context.UserName | sqlString }}`. Never interpolate
+     * `{{ Context.UserEmail }}` or `{{ Context.UserName }}` bare in SQL.
+     *
      * @param query The query info or template input containing SQL and parameter definitions
      * @param parameters User-provided parameter values
      * @param sqlOverride Optional SQL to use instead of query.SQL (e.g., platform-resolved SQL)
