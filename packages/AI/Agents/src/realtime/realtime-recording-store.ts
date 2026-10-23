@@ -8,8 +8,8 @@
  * Also hosts server-side recovery ({@link RecoverRealtimeRecordingFromSegments}): rebuilding a recording
  * from its crash-recovery shards when the end-of-call upload never arrived. Recovery defers to a
  * recording that already exists on a best-effort basis: it re-checks the session immediately before
- * its stamp, but `BaseEntity` has no compare-and-set, so a writer landing inside that one load -> stamp proc call
- * window can still be overwritten.
+ * its stamp, but `spStampAIAgentSessionRecordingFile` has no compare-and-set, so a writer landing inside
+ * that one load -> stamp proc call window can still be overwritten.
  *
  * @module @memberjunction/ai-agents
  */
@@ -460,10 +460,15 @@ async function stampRecordingOnSession(
  * call needs `ExecuteSQL`, so a provider without it fails here with a clear message.
  */
 function requireDatabaseProvider(provider: IMetadataProvider, sessionID: string): DatabaseProviderBase {
-    if (typeof (provider as Partial<DatabaseProviderBase>).ExecuteSQL !== 'function') {
+    if (!isDatabaseProvider(provider)) {
         throw new Error(`session ${sessionID}: the recording file can only be stamped through a server-side database provider`);
     }
-    return provider as unknown as DatabaseProviderBase;
+    return provider;
+}
+
+/** True when the provider can run SQL, the one capability the stamp proc call needs. */
+function isDatabaseProvider(provider: IMetadataProvider): provider is IMetadataProvider & DatabaseProviderBase {
+    return typeof (provider as Partial<DatabaseProviderBase>).ExecuteSQL === 'function';
 }
 
 /** @deprecated Use {@link StoreRealtimeRecording}. */
