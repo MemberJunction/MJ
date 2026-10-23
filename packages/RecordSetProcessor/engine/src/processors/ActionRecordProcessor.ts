@@ -79,7 +79,10 @@ export class ActionRecordProcessor implements IRecordProcessor {
 
         // The detail row the tracker writes from this result carries ActionExecutionLogID, which has a
         // foreign key to the log row — and the engine writes that row fire-and-forget on its own queue,
-        // which the tracker's queue cannot wait on. Only waits when the action beat the log INSERT.
+        // which the tracker's queue cannot wait on. The promise settles after the log row's 'ended' UPDATE
+        // too (on the validation-failure and FailuresOnly paths that UPDATE is the write that creates the
+        // row), so every logged record waits about one log round-trip, not only when the action beat the
+        // INSERT.
         if (result.LogEntryPersisted) {
             await result.LogEntryPersisted;
         }
