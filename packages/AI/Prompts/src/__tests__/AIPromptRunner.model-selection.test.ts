@@ -133,7 +133,7 @@ import { ParallelExecutionCoordinator } from '../ParallelExecutionCoordinator';
 import { MJGlobal } from '@memberjunction/global';
 import {
   buildRealisticCatalog, DEFAULT_CONFIGURED_DRIVERS, MODEL, VENDOR, CONFIG, MODEL_TYPE,
-  makePromptModel, type AICatalog,
+  makePromptModel, makeModel, makeModelVendor, type AICatalog,
 } from './__fixtures__/ai-metadata.fixtures';
 
 // ---------------------------------------------------------------------------
@@ -302,6 +302,73 @@ describe('selectModel — Specific strategy + AIPromptModel', () => {
     const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Specific', RequireSpecificModels: false }));
     expect(r.model).not.toBeNull();
     expect(r.vendorDriverClass).toBe('AnthropicLLM'); // fell back to a credentialed Anthropic model
+  });
+});
+
+// #5523: Default selection expanded a vendor-pinned AIPromptModel row to every keyed vendor of its
+// model and added that vendor's AIModelVendor.Priority, so a vendor the prompt never lists could
+// outrank the prompt's own first choice. The shape mirrors the issue: Gemini listed first on Google,
+// GPT-OSS listed lower on Groq only, and Fireworks offering GPT-OSS at AIModelVendor.Priority 150.
+describe('selectModel — Default strategy honours AIPromptModel.VendorID (#5523)', () => {
+  const FIREWORKS = '0A1B2C3D-0000-0000-0000-0000000F1REW';
+  const GPT_OSS = '0A1B2C3D-0000-0000-0000-00000000O120';
+
+  function addGptOssWithFireworks(): void {
+    catalog.vendors.push({ ID: FIREWORKS, Name: 'Fireworks.ai' });
+    const vendors = [
+      makeModelVendor({ ModelID: GPT_OSS, VendorID: VENDOR.Groq, Vendor: 'Groq', DriverClass: 'GroqLLM', APIName: 'openai/gpt-oss-120b', Priority: 1 }),
+      makeModelVendor({ ModelID: GPT_OSS, VendorID: FIREWORKS, Vendor: 'Fireworks.ai', DriverClass: 'FireworksLLM', APIName: 'accounts/fireworks/models/gpt-oss-120b', Priority: 150 }),
+    ];
+    catalog.models.push(makeModel({ ID: GPT_OSS, Name: 'GPT-OSS-120B', Vendor: 'OpenAI', PowerRank: 12, ModelVendors: vendors }));
+    catalog.modelVendors.push(...vendors);
+  }
+
+  const driversOf = (r: SelectModelResult): string[] => (r.allCandidates ?? []).map(c => c.driverClass);
+
+  it('runs the listed first choice, never a vendor the prompt does not list', async () => {
+    addGptOssWithFireworks();
+    catalog.promptModels.push(
+      makePromptModel({ PromptID: 'prompt-1', ModelID: MODEL.Gemini3Flash, VendorID: VENDOR.Google, Priority: 15 }),
+      makePromptModel({ PromptID: 'prompt-1', ModelID: GPT_OSS, VendorID: VENDOR.Groq, Priority: 10 }),
+    );
+    loadCatalog(catalog, [...DEFAULT_CONFIGURED_DRIVERS, 'FireworksLLM']);
+
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default' }));
+
+    expect(r.model?.ID).toBe(MODEL.Gemini3Flash);
+    expect(r.vendorDriverClass).toBe('GeminiLLM');
+    expect(driversOf(r)).toEqual(['GeminiLLM', 'GroqLLM']);
+  });
+
+  it('a row with no VendorID still offers every vendor of the model, ordered by vendor priority', async () => {
+    addGptOssWithFireworks();
+    catalog.promptModels.push(makePromptModel({ PromptID: 'prompt-1', ModelID: GPT_OSS, VendorID: null, Priority: 10 }));
+    loadCatalog(catalog, [...DEFAULT_CONFIGURED_DRIVERS, 'FireworksLLM']);
+
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default' }));
+
+    expect(r.model?.ID).toBe(GPT_OSS);
+    expect(r.vendorDriverClass).toBe('FireworksLLM');
+    expect(driversOf(r)).toEqual(['FireworksLLM', 'GroqLLM']);
+  });
+
+  it('configuration fallback rows honour their VendorID too', async () => {
+    addGptOssWithFireworks();
+    catalog.configurations = [
+      { ID: CONFIG.Standard, Name: 'Standard', ParentID: null },
+      { ID: CONFIG.Fast, Name: 'Fast', ParentID: CONFIG.Standard },
+    ];
+    catalog.promptModels.push(
+      makePromptModel({ PromptID: 'prompt-1', ModelID: MODEL.Gemini3Flash, VendorID: VENDOR.Google, ConfigurationID: CONFIG.Fast, Priority: 15 }),
+      makePromptModel({ PromptID: 'prompt-1', ModelID: GPT_OSS, VendorID: VENDOR.Groq, ConfigurationID: CONFIG.Standard, Priority: 10 }),
+      makePromptModel({ PromptID: 'prompt-1', ModelID: GPT_OSS, VendorID: VENDOR.Groq, ConfigurationID: null, Priority: 10 }),
+    );
+    loadCatalog(catalog, [...DEFAULT_CONFIGURED_DRIVERS, 'FireworksLLM']);
+
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default' }), { configurationId: CONFIG.Fast });
+
+    expect(r.model?.ID).toBe(MODEL.Gemini3Flash);
+    expect(driversOf(r)).not.toContain('FireworksLLM');
   });
 });
 
