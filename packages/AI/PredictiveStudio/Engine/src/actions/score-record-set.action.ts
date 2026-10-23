@@ -19,7 +19,7 @@
 
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { RegisterClass } from '@memberjunction/global';
-import { LogError, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { LogError, Metadata, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
 
 import { BasePredictiveStudioAction, type JsonObject } from './base-predictive-studio.action';
@@ -145,13 +145,14 @@ export class PredictiveStudioScoreRecordSetAction extends BasePredictiveStudioAc
 
       const writeBack = this.parseWriteBack(params);
 
+      const provider = params.Provider || Metadata.Provider; // global-provider-ok: RunActionParams.Provider is optional; ActionEngine contract falls back to the global provider (ActionEngine-Base.ts:413-419)
       const runner = this.createRunner();
       const result = await runner.run({
         modelId,
         scope,
         writeBack,
         contextUser: params.ContextUser,
-        provider: params.Provider,
+        provider,
       });
 
       return this.mapResult(params, result);

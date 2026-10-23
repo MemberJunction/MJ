@@ -150,12 +150,13 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
   }
 
   /**
-   * Resolve a `MJ: Lists` id into its member records. Mirrors the substrate's `ListSource`
-   * membership contract — a List's members live in `MJ: List Details` (which store a
+   * Resolve a `MJ: Lists` id into its member records as entity objects. Mirrors the substrate's
+   * `ListSource` membership contract — a List's members live in `MJ: List Details` (which store a
    * composite-key-safe `RecordID`), NOT in a backing User View. We (1) read the list's target
-   * `EntityID`/name, (2) read its member `RecordID`s from `MJ: List Details`, then (3) read the
-   * target rows' primary keys. Feature assembly re-reads any feature column the rows lack, and
-   * write-back loads each record by its key, so the key columns are all the scope needs.
+   * `EntityID`/name, (2) read its member `RecordID`s from `MJ: List Details`, then (3) load those
+   * target rows as `entity_object`s so the inference processor gets the same full preloaded rows as
+   * the view and filter scopes (feature columns present whatever the key is called, `record.<field>`
+   * write-back refs resolvable, and write-back reuses the loaded entity instead of reloading it).
    */
   protected async resolveList(
     listId: string,
@@ -195,7 +196,7 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
   }
 
   /**
-   * Read the primary keys of the given records of `entityInfo`, in chunks of
+   * Load the given records of `entityInfo` as entity objects, in chunks of
    * {@link ProductionScoreRecordSetRunner.ID_CHUNK_SIZE} batched into one `RunViews` call. List
    * Details store each member's key as a compact CompositeKey URL segment (the bare value for a
    * single-column key, whatever that column is called; `F1|v1||F2|v2` for a composite key), so the
@@ -211,23 +212,16 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
     for (let i = 0; i < recordIds.length; i += ProductionScoreRecordSetRunner.ID_CHUNK_SIZE) {
       chunks.push(recordIds.slice(i, i + ProductionScoreRecordSetRunner.ID_CHUNK_SIZE));
     }
-    const results = await rv.RunViews<Record<string, unknown>>(
+    const results = await rv.RunViews<BaseEntity>(
       chunks.map((chunk) => ({
         EntityName: entityInfo.Name,
         ExtraFilter: this.primaryKeyInFilter(entityInfo, chunk),
-        Fields: entityInfo.PrimaryKeys.map((pk) => pk.Name),
         IgnoreMaxRows: true,
-        ResultType: 'simple' as const,
+        ResultType: 'entity_object' as const,
       })),
       contextUser,
     );
-    return results.flatMap((res) =>
-      this.toRecordRefs(res, entityInfo.Name, (row) => ({
-        EntityID: entityInfo.ID,
-        RecordID: CompositeKey.FromEntityRecord(entityInfo, row).ToCompactURLSegment(),
-        Record: row,
-      })),
-    );
+    return results.flatMap((res) => this.toRecordRefs(res, entityInfo.Name, (row) => this.entityToRecordRef(row, entityInfo.ID)));
   }
 
   /** The record refs a successful scope read produced; throws with the read's error when it failed. */

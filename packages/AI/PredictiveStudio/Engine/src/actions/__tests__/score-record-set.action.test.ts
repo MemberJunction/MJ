@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { RunActionParams, ActionParam, ActionResultSimple } from '@memberjunction/actions-base';
 
-import type { IMetadataProvider } from '@memberjunction/core';
+import { Metadata, type IMetadataProvider } from '@memberjunction/core';
 
 import { PredictiveStudioScoreRecordSetAction } from '../score-record-set.action';
 import { ProductionScoreRecordSetRunner } from '../score-record-set.runner';
@@ -133,6 +133,39 @@ describe('PredictiveStudioScoreRecordSetAction — ephemeral predictions', () =>
     const result = await new TestableScoreAction(runner).run(p);
     expect(result.Success).toBe(true);
     expect(runner.LastRequest?.scope.records).toEqual(['rec-1']);
+  });
+});
+
+describe('PredictiveStudioScoreRecordSetAction — provider', () => {
+  const scoreParams = (provider?: IMetadataProvider): RunActionParams => {
+    const p = params([
+      { Name: 'ModelID', Type: 'Input', Value: 'model-7' },
+      { Name: 'Scope', Type: 'Input', Value: { records: ['r1'] } },
+    ]);
+    p.Provider = provider;
+    return p;
+  };
+  const emptyResult: ScoreRecordSetResult = { scoredCount: 0, failedCount: 0, skippedCount: 0, wroteBack: false, predictions: [] };
+
+  it('hands the runner the provider the caller passed', async () => {
+    const runner = new MockRunner(emptyResult);
+    const scoped = { Name: 'scoped' } as unknown as IMetadataProvider; // test double: the mock runner only carries it
+    await new TestableScoreAction(runner).run(scoreParams(scoped));
+    expect(runner.LastRequest?.provider).toBe(scoped);
+  });
+
+  it('falls back to the global provider when RunActionParams.Provider is absent (ActionEngine contract)', async () => {
+    const previous = Metadata.Provider;
+    const global = { Name: 'global' } as unknown as IMetadataProvider; // test double: the mock runner only carries it
+    Metadata.Provider = global;
+    try {
+      const runner = new MockRunner(emptyResult);
+      const result = await new TestableScoreAction(runner).run(scoreParams());
+      expect(result.Success).toBe(true);
+      expect(runner.LastRequest?.provider).toBe(global);
+    } finally {
+      Metadata.Provider = previous;
+    }
   });
 });
 

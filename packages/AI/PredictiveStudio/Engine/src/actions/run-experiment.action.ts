@@ -31,7 +31,7 @@ import { validateModelingPlanSpec, validateBudget, ExperimentSessions } from '@m
 import { ExperimentOrchestrator } from '../experiment/experiment-orchestrator';
 import type { ExperimentDeps, ExperimentRunOptions, ExperimentSessionResult } from '../experiment/types';
 import { BasePredictiveStudioAction } from './base-predictive-studio.action';
-import { ExperimentSessionsUnavailableError } from './run-experiment.deps';
+import { BuildProductionExperimentDeps, ExperimentSessionsUnavailableError } from './run-experiment.deps';
 
 /** The driver-class key this action registers under (matches the metadata row). */
 export const RUN_EXPERIMENT_DRIVER_CLASS = 'PredictiveStudioRunExperimentAction';
@@ -155,11 +155,11 @@ export class PredictiveStudioRunExperimentAction extends BasePredictiveStudioAct
   }
 
   /**
-   * Build the orchestrator's dependency bundle. No production bundle exists while experiment sessions are switched
-   * off (the session runner cannot turn a proposed experiment into a training pipeline), so the default refuses.
-   * Overridable so tests inject in-memory seams (entity factory, fake clock, fake trainer).
+   * Build the orchestrator's production dependency bundle ({@link BuildProductionExperimentDeps}, which refuses while
+   * experiment sessions are switched off). Overridable so tests inject in-memory seams (entity factory, fake clock,
+   * fake trainer).
    */
-  protected async buildDeps(_params: RunActionParams): Promise<ExperimentDeps> {
-    throw new ExperimentSessionsUnavailableError();
+  protected buildDeps(params: RunActionParams): Promise<ExperimentDeps> {
+    return BuildProductionExperimentDeps(params.ContextUser, params.Provider);
   }
 }

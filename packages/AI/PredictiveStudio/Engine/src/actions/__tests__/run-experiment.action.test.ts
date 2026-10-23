@@ -8,6 +8,13 @@ import type {
 } from '@memberjunction/core-entities';
 
 import { PredictiveStudioRunExperimentAction } from '../run-experiment.action';
+import {
+  BuildProductionExperimentDeps,
+  buildProductionExperimentDeps,
+  ExperimentSessionsUnavailableError,
+  UnresolvedPipelineResolver,
+} from '../run-experiment.deps';
+import type { TrainExperimentInput } from '../../experiment/types';
 import { ExperimentOrchestrator } from '../../experiment/experiment-orchestrator';
 import type { ExperimentDeps, ExperimentRunOptions, ExperimentSessionResult } from '../../experiment/types';
 
@@ -230,5 +237,18 @@ describe('Experiment sessions are switched off (F-EXP-1)', () => {
     const result = await new ProductionDepsExperimentAction(orch).RunAction(params([]));
     expect(result.ResultCode).toBe('EXPERIMENT_UNAVAILABLE');
     expect(orch.CallCount).toBe(0);
+  });
+});
+
+describe('run-experiment.deps published entry points (kept from next)', () => {
+  it('BuildProductionExperimentDeps and its deprecated twin refuse before touching the database', async () => {
+    await expect(BuildProductionExperimentDeps(undefined, undefined)).rejects.toBeInstanceOf(ExperimentSessionsUnavailableError);
+    await expect(buildProductionExperimentDeps(undefined, undefined)).rejects.toBeInstanceOf(ExperimentSessionsUnavailableError);
+  });
+
+  it('UnresolvedPipelineResolver fails with an actionable message naming the experiment', async () => {
+    // Test double: the resolver reads only the experiment label.
+    const input = { experiment: { Label: 'xgb-baseline' } } as unknown as TrainExperimentInput;
+    await expect(new UnresolvedPipelineResolver().resolvePipelineId(input)).rejects.toThrow("experiment 'xgb-baseline'");
   });
 });
