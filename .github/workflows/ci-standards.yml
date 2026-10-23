@@ -8,6 +8,8 @@ on:
       - 'packages/**/*.ts'
       - 'packages/**/package.json'
       - '.mj-standards.json'
+      # The migration standards read migrations, so a migrations-only PR has to trigger this too.
+      - 'migrations/**/*.sql'
       - 'packages/Standards/**'
       - '.github/workflows/ci-standards.yml'
 
