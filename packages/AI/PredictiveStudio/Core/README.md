@@ -2,7 +2,7 @@
 
 > The shared vocabulary of **MemberJunction Predictive Studio** — every type the sidecar, engine, UI, and agent agree on, defined exactly once.
 
-**What** — the **type contracts** for Predictive Studio (MJ's capability for training predictive models on a client's own data and scoring records with them): the sidecar request/response shapes, the declarative pipeline-spec JSON, the visual FeatureStep DAG, and the Model Development Agent's modeling-plan payload — plus the handful of pure helpers every layer must agree on (zod validators for the modeling plan, the metric-direction predicate). Almost entirely interfaces and union types; the only runtime dependency is `zod` (for the trust-boundary validators).
+**What** — the **type contracts** for Predictive Studio (MJ's capability for training predictive models on a client's own data and scoring records with them): the sidecar request/response shapes, the declarative pipeline-spec JSON, the visual FeatureStep DAG, and the Model Development Agent's modeling-plan payload — plus the browser-safe, dependency-free runtime logic shared by ng-dashboards and ng-core-entity-forms that every layer must agree on (trust verdicts, at-risk rules, evaluation lineage, the metric-direction predicate, zod validators for the modeling plan). The only runtime dependency is `zod` (for the trust-boundary validators).
 
 **Why** — four layers (server engine, Python sidecar client, Studio UI, Model Development Agent) must agree on the same shapes. Defining the contract once, here, is what keeps them in lockstep — change a shape and every consumer fails to compile until it's reconciled.
 
@@ -62,7 +62,7 @@ const plan = result.value;        // typed ModelingPlanSpec, proven well-formed
 ## How it fits the whole
 
 ```
-predictive-studio-core  (this package — types only)
+predictive-studio-core  (this package — types + browser-safe, dependency-free runtime logic)
         │ imported by
         ├── predictive-studio-sidecar   → MLSidecar (train/predict over the contract)
         ├── predictive-studio (Engine)  → FeatureAssemblyExecutor · TrainingEngine ·

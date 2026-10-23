@@ -10,7 +10,8 @@
  * Excellent, say in plain words how much to rely on it, and — critically — GATE the downstream
  * actions: a Poor (or unmeasured) model returns `canAct: false`.
  *
- * It lives in the **types-only Core package on purpose**: the SAME rule must drive both the business
+ * It lives in the **Core package on purpose** (browser-safe, dependency-free runtime logic shared by
+ * ng-dashboards and ng-core-entity-forms): the SAME rule must drive both the business
  * UI (catalog trust badges + the workspace action gate) and the Predictive Studio Agent's **publish
  * gate** (it won't publish a model the verdict can't clear). One source of truth, no drift.
  *
@@ -19,7 +20,8 @@
  * the model's recorded majority-baseline rule `enforce` (the default) and carries a visible, non-capping finding under
  * `warn` (accuracy-only verdicts are capped under either).
  *
- * Pure + dependency-free (Core is types-only). Tolerant of missing/garbage metrics: an unmeasurable
+ * Pure + dependency-free (Core holds browser-safe, dependency-free runtime logic shared by ng-dashboards and
+ * ng-core-entity-forms). Tolerant of missing/garbage metrics: an unmeasurable
  * model grades `unknown` and is gated OFF — fail-safe, never fail-open.
  */
 import { EvaluationLineage, type EvaluationRecord } from './evaluation-record';

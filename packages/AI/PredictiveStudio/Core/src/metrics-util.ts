@@ -16,7 +16,8 @@
  * each consumer) prevents the two from drifting apart — a divergence that
  * silently promotes a *worse* model when comparing on an error metric.
  *
- * Pure / dependency-free so it stays in the types-only Core package.
+ * Pure / dependency-free so it stays in Core, which holds browser-safe, dependency-free runtime logic shared by
+ * ng-dashboards and ng-core-entity-forms.
  */
 
 /** The canonical set of lower-is-better metric keys (lower-cased). */

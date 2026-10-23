@@ -1,10 +1,13 @@
 /**
  * @module @memberjunction/predictive-studio-core
  *
- * Pure TypeScript type contracts for MemberJunction Predictive Studio — the
- * sidecar request/response contract, the declarative pipeline-spec JSON shapes,
- * the visual FeatureStep DAG, and the strongly-typed modeling-plan payload the
- * Model Development Agent builds. No runtime dependencies; types only.
+ * Type contracts for MemberJunction Predictive Studio — the sidecar
+ * request/response contract, the declarative pipeline-spec JSON shapes, the
+ * visual FeatureStep DAG, and the strongly-typed modeling-plan payload the
+ * Model Development Agent builds — plus the browser-safe, dependency-free
+ * runtime logic shared by ng-dashboards and ng-core-entity-forms (trust
+ * verdicts, at-risk rules, evaluation lineage). The only runtime dependency
+ * is `zod`, for the modeling-plan trust-boundary validators.
  *
  * See `plans/predictive-studio.md` for the full design.
  */
