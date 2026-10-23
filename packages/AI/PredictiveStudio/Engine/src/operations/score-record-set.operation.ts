@@ -17,7 +17,7 @@
  */
 
 import { RegisterClass } from '@memberjunction/global';
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { IMetadataProvider, RemoteOpResult, UserInfo } from '@memberjunction/core';
 import { BaseRemotableOperation, type RemoteOpServerContext } from '@memberjunction/core';
 import {
   PredictiveStudioScoreRecordSetOperation,
@@ -32,6 +32,7 @@ import type {
 } from '../actions/score-record-set.action';
 import { ProductionScoreRecordSetRunner } from '../actions/score-record-set.runner';
 import { ScoreRecordSetViaRunner, BuildScoreRecordSetRunner } from './delegation';
+import { PredictiveStudioRefusals } from './refusals';
 
 /**
  * Server implementation of `PredictiveStudio.ScoreRecordSet`. Extends the
@@ -41,6 +42,18 @@ import { ScoreRecordSetViaRunner, BuildScoreRecordSetRunner } from './delegation
  */
 @RegisterClass(BaseRemotableOperation, 'PredictiveStudio.ScoreRecordSet')
 export class PredictiveStudioScoreRecordSetServerOperation extends PredictiveStudioScoreRecordSetOperation {
+  /** Returns refusals as typed `ResultCode`s (see `PredictiveStudioRefusals`). */
+  public override async ExecuteServer(
+    input: PredictiveStudioScoreRecordSetInput,
+    context: RemoteOpServerContext,
+  ): Promise<RemoteOpResult<PredictiveStudioScoreRecordSetOutput>> {
+    return PredictiveStudioRefusals.ExecuteServer(
+      () => this.Authorize(input, context.user),
+      () => this.InternalExecute(input, context.provider, context.user, context),
+      this.OperationKey,
+    );
+  }
+
   /** @inheritdoc */
   protected async InternalExecute(
     input: PredictiveStudioScoreRecordSetInput,

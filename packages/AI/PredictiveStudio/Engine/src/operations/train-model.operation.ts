@@ -19,7 +19,7 @@
  */
 
 import { RegisterClass } from '@memberjunction/global';
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { IMetadataProvider, RemoteOpResult, UserInfo } from '@memberjunction/core';
 import { BaseRemotableOperation, type RemoteOpServerContext } from '@memberjunction/core';
 import {
   PredictiveStudioTrainModelOperation,
@@ -31,6 +31,7 @@ import { AsOfSettingHasNoEffectError } from '../training/as-of-refusal';
 import type { TrainModelInput } from '../training/types';
 import { TrainingEngine } from '../training/training-engine';
 import { TrainModelViaEngine, WasTrainingLeakageFlagged } from './delegation';
+import { PredictiveStudioRefusals } from './refusals';
 
 /**
  * Server implementation of `PredictiveStudio.TrainModel`. Extends the CodeGen-emitted
@@ -40,6 +41,18 @@ import { TrainModelViaEngine, WasTrainingLeakageFlagged } from './delegation';
  */
 @RegisterClass(BaseRemotableOperation, 'PredictiveStudio.TrainModel')
 export class PredictiveStudioTrainModelServerOperation extends PredictiveStudioTrainModelOperation {
+  /** Returns refusals as typed `ResultCode`s (see `PredictiveStudioRefusals`). */
+  public override async ExecuteServer(
+    input: PredictiveStudioTrainModelInput,
+    context: RemoteOpServerContext,
+  ): Promise<RemoteOpResult<PredictiveStudioTrainModelOutput>> {
+    return PredictiveStudioRefusals.ExecuteServer(
+      () => this.Authorize(input, context.user),
+      () => this.InternalExecute(input, context.provider, context.user, context),
+      this.OperationKey,
+    );
+  }
+
   /** @inheritdoc */
   protected async InternalExecute(
     input: PredictiveStudioTrainModelInput,
