@@ -486,7 +486,7 @@ describe('a run that continues another (lastRunId)', () => {
         })]);
     });
     it('rejects a non-UUID lastRunId before querying RunView', async () => {
-        await expect(inherit(agentParams({ lastRunId: "not-a-uuid' OR '1'='1" }))).rejects.toThrow(/expected a UUID/);
+        await expect(inherit(agentParams({ lastRunId: "not-a-uuid' OR '1'='1" }))).rejects.toThrow(/Invalid lastRunId: expected the UUID/);
         expect(priorRun.reads).toHaveLength(0);
     });
     it('keeps the caller\'s own bindings and reads nothing', async () => {
