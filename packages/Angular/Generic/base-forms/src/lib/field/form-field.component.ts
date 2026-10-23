@@ -856,23 +856,43 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /**
    * Whether this is a required field that is currently empty (for validation styling).
    *
-   * "Empty" means null/undefined ONLY — an empty string is a VALUE, not absence (MJ #4359).
+   * "Empty" means null/undefined — an empty string is a VALUE, not absence (MJ #4359).
    * `IsRequired` here is derived from `AllowsNull === false`, i.e. the column's nullability, and a
    * NOT NULL string column accepts `''` in both SQL Server and `EntityField.Validate()`. Counting
    * `''` as empty therefore painted a field red that would save perfectly well — the form and the
    * save disagreed about the same value, and the section indicators inherited the disagreement.
    *
-   * Requiring actual text is a separate, deliberate constraint (an `IsRequired`-style flag of the
-   * kind `ActionParam` / `TemplateParam` carry, or a CHECK constraint), not something to infer from
-   * nullability. Until such a flag exists for entity fields, this getter mirrors what the save will
-   * actually refuse.
+   * The one exception is the entity's resolved NAME field (MJ #4683): `BaseEntity.Validate()`
+   * refuses a blank or whitespace-only value there on a new record, or when the name is being
+   * changed, so this getter flags it in exactly those cases. A saved record whose name was ALREADY
+   * blank still saves, so it is not flagged until someone edits the name.
+   *
+   * Requiring actual text anywhere else is a separate, deliberate constraint (an `IsRequired`-style
+   * flag of the kind `ActionParam` / `TemplateParam` carry, or a CHECK constraint), not something to
+   * infer from nullability. Until such a flag exists for entity fields, this getter mirrors what the
+   * save will actually refuse.
    */
   get IsRequiredEmpty(): boolean {
     // Defer to the validation system when it has active errors for this field
     if (this.ShowErrors) return false;
     if (!this.IsRequired || !this.EditMode) return false;
     const val = this.Value;
-    return val === null || val === undefined;
+    if (val === null || val === undefined) return true;
+    // The one case where a blank string IS missing: the entity's NAME field (MJ #4683). The save
+    // refuses it there, so the form must flag it there — the same form/save agreement #4359
+    // established, reached this time by both refusing rather than both accepting.
+    return typeof val === 'string' && val.trim().length === 0 && this.isBlankNameRefused();
+  }
+
+  /**
+   * The save's blank-name condition, from the shared metadata definition
+   * (`EntityFieldInfo.IsEntityNameField`): this is the field the record is identified by, and the
+   * record is new or its name is being changed.
+   */
+  private isBlankNameRefused(): boolean {
+    if (!this.FieldInfo?.IsEntityNameField) return false;
+    if (!this.Record?.IsSaved) return true;
+    return this.Record.Fields?.find(f => f.Name === this.FieldName)?.Dirty ?? false;
   }
 
   // ---- INLINE VALIDATION ----
