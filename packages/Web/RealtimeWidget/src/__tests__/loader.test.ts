@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MountWidget, BootstrapFromDocument } from '../loader.js';
 import { WidgetSessionClient, type FetchLike } from '../session/widget-session-client.js';
 import { MockWidgetTransport } from '../transport/mock-widget-transport.js';
@@ -65,8 +65,8 @@ describe('mountWidget', () => {
         );
         expect(callbacks).toHaveLength(1);
         callbacks[0]();
-        await new Promise((r) => setTimeout(r, 0));
-        expect(calls).toHaveLength(2);
+        // The refresh signs a proof with Web Crypto first, so wait for the request rather than one tick.
+        await vi.waitFor(() => expect(calls).toHaveLength(2));
         expect(calls[1].url).toBe('https://api.test/widget/session/refresh');
         expect((calls[1].init?.headers as Record<string, string>).authorization).toBe('Bearer jwt');
     });
@@ -97,21 +97,19 @@ describe('mountWidget', () => {
         );
         // First scheduled refresh fails -> shows connection-lost banner
         callbacks[0]();
-        await new Promise((r) => setTimeout(r, 0));
-        expect(el.ShadowRootRef.querySelector('.mj-widget-banner')?.hasAttribute('hidden')).toBe(false);
+        await vi.waitFor(() => expect(el.ShadowRootRef.querySelector('.mj-widget-banner')?.hasAttribute('hidden')).toBe(false));
 
         // Visitor triggers Retry -> re-schedules and succeeds with the same Bearer token within the grace window
         el.RetryConnection();
         expect(callbacks).toHaveLength(2);
         callbacks[1]();
-        await new Promise((r) => setTimeout(r, 0));
+        await vi.waitFor(() => expect(callbacks).toHaveLength(3));
         expect(calls).toHaveLength(3);
         expect(calls[2].url).toBe('https://api.test/widget/session/refresh');
         expect((calls[2].init?.headers as Record<string, string>).authorization).toBe('Bearer jwt');
         // Refresh timer re-armed with the refreshed session token ('jwt-refreshed')
-        expect(callbacks).toHaveLength(3);
         callbacks[2]();
-        await new Promise((r) => setTimeout(r, 0));
+        await vi.waitFor(() => expect(calls).toHaveLength(4));
         expect((calls[3].init?.headers as Record<string, string>).authorization).toBe('Bearer jwt-refreshed');
     });
 
