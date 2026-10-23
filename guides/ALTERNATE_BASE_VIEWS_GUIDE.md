@@ -206,7 +206,7 @@ Registered in `bizapps-sales` (`metadata/entities/.alternate-base-views.json`):
 
 | Entity | Alternate Base View `Name` | Physical SQL View | `CachePolicy` | Predicate Summary |
 | --- | --- | --- | --- | --- |
-| `MJ_BizApps_Sales: Deals` | `OpenPipeline` | `vwDealsOpenPipeline` | `Default` | `ClosedAt IS NULL AND DealStatusType = N'Open'` — open pipeline deals layered directly on top of the `vwDeals` layered base view (including win-probability columns) for pipeline boards, forecasting, and AI deal coaching. |
+| `MJ_BizApps_Sales: Deals` | `OpenPipeline` | `vwDealsOpenPipeline` | `Default` | `ClosedAt IS NULL AND DealStatusType.IsOpen = 1` — open pipeline deals layered directly on top of the `vwDeals` layered base view (including win-probability columns) and filtered by the `DealStatusType.IsOpen` type-table flag (never comparing status names) for pipeline boards, forecasting, and AI deal coaching. |
 
 ---
 
