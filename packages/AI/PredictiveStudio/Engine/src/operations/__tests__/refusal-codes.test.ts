@@ -5,6 +5,15 @@ import { AsOfSettingHasNoEffectError } from '../../training/as-of-refusal';
 import { ModelNotScorableError, ModelNeedsTrainingError } from '../../scoring/model-readiness';
 import { ExperimentSessionsUnavailableError } from '../../actions/run-experiment.deps';
 
+describe('AsOfSettingHasNoEffectError.WouldBeIgnored', () => {
+  it('a setting with no Mode asks for nothing', () => {
+    expect(AsOfSettingHasNoEffectError.WouldBeIgnored({})).toBe(false);
+    expect(AsOfSettingHasNoEffectError.WouldBeIgnored(null)).toBe(false);
+    expect(AsOfSettingHasNoEffectError.WouldBeIgnored({ Mode: 'none' })).toBe(false);
+    expect(AsOfSettingHasNoEffectError.WouldBeIgnored({ Mode: 'column' })).toBe(true);
+  });
+});
+
 describe('PredictiveStudioRefusals', () => {
   it('maps each refusal error to its code', () => {
     expect(PredictiveStudioRefusals.CodeOf(ReadCapExceededError.ForTraining('E', 10, 10, 20))).toBe('READ_CAP_EXCEEDED');

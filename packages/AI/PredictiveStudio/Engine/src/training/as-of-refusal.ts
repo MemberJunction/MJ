@@ -24,8 +24,11 @@ export class AsOfSettingHasNoEffectError extends Error {
     this.name = 'AsOfSettingHasNoEffectError';
   }
 
-  /** True when an as-of setting asks for point-in-time assembly that training cannot perform today. */
-  public static WouldBeIgnored<T extends { Mode: AsOfStrategy['Mode'] }>(asOf: T | null | undefined): asOf is T {
-    return asOf !== null && asOf !== undefined && asOf.Mode !== 'none';
+  /**
+   * True when an as-of setting asks for point-in-time assembly that training cannot perform today. A setting with no
+   * `Mode` (a stored `{}`) asks for nothing, so it reads as `Mode: 'none'`.
+   */
+  public static WouldBeIgnored<T extends { Mode?: AsOfStrategy['Mode'] }>(asOf: T | null | undefined): asOf is T {
+    return asOf?.Mode !== undefined && asOf.Mode !== 'none';
   }
 }

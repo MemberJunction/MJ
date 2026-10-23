@@ -443,6 +443,14 @@ describe('TrainingEngine.trainModel — as-of settings that change nothing are r
     const { model } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
     expect(model.Status).toBe('Draft');
   });
+
+  it("trains a stored AsOfStrategy of {} as Mode='none'", async () => {
+    const pipeline = new FakeMLPipeline();
+    pipeline.AsOfStrategy = '{}';
+    const { deps } = buildDeps({ pipeline });
+    const { model } = await buildEngine().trainModel({ pipelineId: 'pipe-1' }, deps);
+    expect(model.Status).toBe('Draft');
+  });
 });
 
 describe('TrainingEngine — evaluation record and the time-index containment (T4 → S6.5, F-SCN-1)', () => {

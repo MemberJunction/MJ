@@ -165,7 +165,7 @@ export class TrainingEngine {
       hyperparameters: parseJson<Record<string, unknown>>(pipeline.Hyperparameters, {}),
       sourceBindings: parseJson<SourceBinding[]>(pipeline.SourceBindings, []),
       featureSteps: parseJson<FeatureStepGraph>(pipeline.FeatureSteps, { Steps: [] }),
-      asOf: parseJson<AsOfStrategy>(pipeline.AsOfStrategy, { Mode: 'none' }),
+      asOf: parseAsOf(pipeline.AsOfStrategy),
       leakageGuard: parseJson<LeakageGuard>(pipeline.LeakageGuard, { DenyFields: [], SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT }),
       validation: parseJson<ValidationStrategy>(pipeline.ValidationStrategy, { Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.1 }),
       outcomeConfig,
@@ -416,6 +416,12 @@ export class TrainingEngine {
 }
 
 /** Parse a possibly-null JSON column, falling back to a default on null/parse error. */
+/** The pipeline's stored AsOfStrategy; one with no `Mode` (a stored `{}`) asks for nothing and reads as `Mode: 'none'`. */
+function parseAsOf(raw: string | null | undefined): AsOfStrategy {
+  const parsed = parseJson<Partial<AsOfStrategy>>(raw, { Mode: 'none' });
+  return parsed.Mode ? (parsed as AsOfStrategy) : { Mode: 'none' };
+}
+
 function parseJson<T>(raw: string | null | undefined, fallback: T): T {
   if (raw == null || raw.trim().length === 0) {
     return fallback;
