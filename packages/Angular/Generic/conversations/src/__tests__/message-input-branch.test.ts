@@ -262,7 +262,7 @@ describe('MessageInputComponent — overlapping turns keep their own branch', ()
     function buildTurnHarness(history: TurnRow[] = []) {
         const created: TurnRow[] = [];
         const processMessage = vi.fn(async (): Promise<object> => chatResult('run-manager'));
-        const invokeSubAgent = vi.fn(async () => chatResult('run-agent'));
+        const invokeSubAgent = vi.fn(async (..._args: Parameters<ConversationAgentService['InvokeSubAgent']>): Promise<object> => chatResult('run-agent'));
         const findPreset = vi.fn(async (..._args: Parameters<ConversationAgentService['FindConfigurationPresetForAgent']>): Promise<string | undefined> => undefined);
         const findLatestOutput = vi.fn(async () => null);
         const component = Object.create(MessageInputComponent.prototype) as MessageInputComponent;
@@ -357,7 +357,7 @@ describe('MessageInputComponent — overlapping turns keep their own branch', ()
         expect([replyB.ParentID, replyB.AgentID, replyB.BranchID]).toEqual([userB.ID, RESEARCH.ID, null]);
         expect([replyA.ParentID, replyA.AgentID, replyA.BranchID]).toEqual([userA.ID, RESEARCH.ID, 'T1']);
         expect(h.findPreset.mock.calls.map(call => call[2])).toEqual(['T1', null]);
-        expect(h.invokeSubAgent.mock.calls.map(call => (call.at(-1) as { ReplyBranchId?: string | null } | null)?.ReplyBranchId ?? null)).toEqual([null, 'T1']);
+        expect(h.invokeSubAgent.mock.calls.map(call => call[15]?.ReplyBranchId ?? null)).toEqual([null, 'T1']);
     });
 });
 
