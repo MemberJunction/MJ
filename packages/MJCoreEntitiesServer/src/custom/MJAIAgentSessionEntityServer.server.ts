@@ -2,7 +2,7 @@ import { BaseEntity, EntitySaveOptions, ValidationErrorInfo, ValidationErrorType
 import { RegisterClass } from '@memberjunction/global';
 import { MJAIAgentSessionEntity } from '@memberjunction/core-entities';
 import { FindProtectedSessionConfigChanges, IsTrustedSessionConfigWriteActive } from './sessionConfigGuard';
-import { CheckAnonymousOwnershipKeyChange } from './anonymousOwnershipKeyGuard';
+import { CheckAnonymousOwnershipKeyChange, IsSetByTransactionVariable } from './anonymousOwnershipKeyGuard';
 
 /**
  * Server-side `MJ: AI Agent Sessions` entity.
@@ -83,6 +83,15 @@ export class MJAIAgentSessionEntityServer extends MJAIAgentSessionEntity {
         const configField = this.GetFieldByName('Config');
         if (!configField) {
             return null;
+        }
+        // A 'Use' transaction variable writes Config at submit, after this comparison: its value is unknown here.
+        if (IsSetByTransactionVariable(this, ['Config'])) {
+            return new ValidationErrorInfo(
+                'Config',
+                'Config is server-managed in part and cannot take its value from a transaction variable.',
+                null,
+                ValidationErrorType.Failure,
+            );
         }
         // A saved record is compared against what was loaded; a new record against nothing. For a
         // saved record whose Config was not touched there is nothing to compare.

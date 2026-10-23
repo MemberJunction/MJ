@@ -34,7 +34,7 @@ vi.mock('@memberjunction/core-entities', () => {
 
 import { MJConversationEntityServer } from '../custom/MJConversationEntityServer.server';
 
-type Stub = { IsSaved: boolean; ContextCurrentUser: unknown; Fields: Map<string, { Dirty: boolean }> };
+type Stub = { IsSaved: boolean; ContextCurrentUser: unknown; Fields: Map<string, { Dirty: boolean }>; TransactionGroup?: unknown };
 
 function conversation(opts: { saved: boolean; externalIdDirty: boolean; anonymous: boolean }): MJConversationEntityServer {
     const entity = new MJConversationEntityServer();
@@ -62,5 +62,29 @@ describe('MJConversationEntityServer — ExternalID is not rewritable by an anon
 
     it('allows a named caller changing ExternalID', () => {
         expect(conversation({ saved: true, externalIdDirty: true, anonymous: false }).Validate().Success).toBe(true);
+    });
+});
+
+describe('MJConversationEntityServer — a transaction variable cannot set ExternalID after the check (#4931)', () => {
+    /** An anonymous caller's untouched, saved conversation enrolled in a group with these variables. */
+    function inGroup(variables: (self: unknown) => Array<{ EntityObject: unknown; Type: 'Define' | 'Use'; FieldName: string }>): MJConversationEntityServer {
+        const entity = conversation({ saved: true, externalIdDirty: false, anonymous: true });
+        (entity as unknown as Stub).TransactionGroup = { Variables: variables(entity) };
+        return entity;
+    }
+
+    it("refuses when a 'Use' variable will set ExternalID at submit (a Validate-time Dirty check cannot see it)", () => {
+        const result = inGroup((self) => [{ EntityObject: self, Type: 'Use', FieldName: 'externalid' }]).Validate();
+        expect(result.Success).toBe(false);
+        expect(JSON.stringify(result.Errors)).toContain('ExternalID');
+    });
+
+    it("refuses when a 'Use' variable will set ID, which re-points the update at another row", () => {
+        expect(inGroup((self) => [{ EntityObject: self, Type: 'Use', FieldName: 'ID' }]).Validate().Success).toBe(false);
+    });
+
+    it("allows a 'Define' variable on this row, and a 'Use' variable on another row", () => {
+        expect(inGroup((self) => [{ EntityObject: self, Type: 'Define', FieldName: 'ExternalID' }]).Validate().Success).toBe(true);
+        expect(inGroup(() => [{ EntityObject: {}, Type: 'Use', FieldName: 'ExternalID' }]).Validate().Success).toBe(true);
     });
 });

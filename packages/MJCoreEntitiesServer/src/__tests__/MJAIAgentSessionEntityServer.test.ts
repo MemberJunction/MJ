@@ -285,6 +285,34 @@ describe('MJAIAgentSessionEntityServer.Validate — ConversationID is not rewrit
     });
 });
 
+describe('MJAIAgentSessionEntityServer.Validate — a transaction variable cannot set a guarded field after the check (#4931)', () => {
+    type GroupVar = { EntityObject: unknown; Type: 'Define' | 'Use'; FieldName: string };
+    /** A saved session with untouched fields, enrolled in a group with these variables. */
+    function inGroup(anonymous: boolean, variables: (self: unknown) => GroupVar[]): MJAIAgentSessionEntityServer {
+        const entity = session({ saved: true, previous: null, next: null, dirty: false });
+        const stub = entity as unknown as { ContextCurrentUser: unknown; TransactionGroup?: unknown };
+        stub.ContextCurrentUser = { ID: 'anon-user', IsMagicLinkAnonymous: anonymous };
+        stub.TransactionGroup = { Variables: variables(entity) };
+        return entity;
+    }
+
+    it("refuses an anonymous caller whose 'Use' variable will set ConversationID or ID at submit", () => {
+        expect(inGroup(true, (self) => [{ EntityObject: self, Type: 'Use', FieldName: 'ConversationID' }]).Validate().Success).toBe(false);
+        expect(inGroup(true, (self) => [{ EntityObject: self, Type: 'Use', FieldName: 'id' }]).Validate().Success).toBe(false);
+    });
+
+    it("refuses an untrusted 'Use' variable on Config, whose protected keys are compared only at Validate", () => {
+        expect(inGroup(false, (self) => [{ EntityObject: self, Type: 'Use', FieldName: 'Config' }]).Validate().Success).toBe(false);
+    });
+
+    it("allows a 'Use' variable on Config inside a trusted scope, and a 'Use' variable on another row", async () => {
+        await RunWithTrustedSessionConfigWrites(async () => {
+            expect(inGroup(false, (self) => [{ EntityObject: self, Type: 'Use', FieldName: 'Config' }]).Validate().Success).toBe(true);
+        });
+        expect(inGroup(true, () => [{ EntityObject: {}, Type: 'Use', FieldName: 'ConversationID' }]).Validate().Success).toBe(true);
+    });
+});
+
 describe('MJAIAgentSessionEntityServer.Save leaves the recording ledger\'s columns alone (#5294)', () => {
     const LEDGER = [
         'RecordingStatus', 'RecordingExpectedShards', 'RecordingCapturedSamples', 'RecordingGaps',
