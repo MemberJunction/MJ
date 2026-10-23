@@ -1,24 +1,20 @@
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type sql from 'mssql';
-import { SafeJSONParse } from '@memberjunction/global';
+import { RunView, type UserInfo } from '@memberjunction/core';
 import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { DatasetCatalog } from '../data/catalog';
-import { BulkLoader } from '../db/bulk-load';
 import { TruthConnection } from '../db/connection';
 import { TruthCsv } from '../db/csv';
-import { ScenarioLoader } from '../db/scenario-loader';
-import { DatasetStamp } from '../db/stamp';
-import { WorldLoader } from '../db/world-loader';
-import { TruthEntities } from './entities';
+import { DatasetLoader } from '../db/dataset-loader';
 import type { DatasetRef, LoadedDataset } from './types';
 
 export type DatasetPool = sql.ConnectionPool;
 
-interface ManifestRowCount {
-  rowCount?: number;
-  nRows?: number;
+/** What the dataset members close over: the MJAPI connection, its user, and the truth pool. */
+export interface DatasetContext {
+  readonly Provider: GraphQLDataProvider;
+  readonly User: UserInfo;
+  readonly Pool: DatasetPool;
 }
 
 /** Dataset generation, bulk-load, and SQL inspection helpers for the truth harness. */
@@ -29,93 +25,26 @@ export class HarnessDatasets {
   }
 
   /** Ensure a world, scenario, or rolling-origin series dataset is generated and loaded into `pstruth`. */
-  public static async EnsureLoaded(
-    ctx: { Provider: GraphQLDataProvider; Pool: DatasetPool },
-    ref: DatasetRef,
-  ): Promise<LoadedDataset> {
-    if (ref.Kind === 'world') {
-      const entry = DatasetCatalog.Find('world', ref.ID);
-      const dir = await DatasetCatalog.EnsureGenerated(entry, ref.Seed);
-      const rowsPath = path.join(dir, 'rows.csv');
-      const rowsSha = createHash('sha256').update(readFileSync(rowsPath)).digest('hex');
-      const table = WorldLoader.RowTable(ref.ID);
-      const wantStamp = `${ref.ID}/seed-${ref.Seed}#${rowsSha}`;
-      const currentStamp = await DatasetStamp.Read(ctx.Pool, table);
-      if (currentStamp !== wantStamp) {
-        await WorldLoader.LoadSeed(ctx.Pool, ref.ID, dir);
-      }
-      const manifest = SafeJSONParse<ManifestRowCount>(readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
-      const rowCount = manifest?.rowCount ?? 0;
-      const entity = TruthEntities.ForTable(ctx.Provider, table);
-      return { Ref: ref, Dir: dir, Entity: entity, RowCount: rowCount, RowsSha256: rowsSha };
-    }
-
-    if (ref.Kind === 'scenario') {
-      const entry = DatasetCatalog.Find('scenario', ref.ID);
-      const dir = await DatasetCatalog.EnsureGenerated(entry, ref.Seed);
-      const rowsPath = path.join(dir, 'rows.csv');
-      const rowsSha = createHash('sha256').update(readFileSync(rowsPath)).digest('hex');
-      const table = ScenarioLoader.ScenarioTable(ref.ID);
-      const wantStamp = `${ref.ID}/seed-${ref.Seed}#${rowsSha}`;
-      const currentStamp = await DatasetStamp.Read(ctx.Pool, table);
-      if (currentStamp !== wantStamp) {
-        await ScenarioLoader.LoadSeed(ctx.Pool, ref.ID, dir);
-      }
-      const manifest = SafeJSONParse<ManifestRowCount>(readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
-      const rowCount = manifest?.nRows ?? 0;
-      const entity = TruthEntities.ForTable(ctx.Provider, table);
-      return { Ref: ref, Dir: dir, Entity: entity, RowCount: rowCount, RowsSha256: rowsSha };
-    }
-
-    // series-origin
-    const entry = DatasetCatalog.Find('scenario', ref.ID);
-    const dir = await DatasetCatalog.EnsureGenerated(entry, ref.Seed);
-    const rowsPath = path.join(dir, 'rows.csv');
-    const rowsSha = createHash('sha256').update(readFileSync(rowsPath)).digest('hex');
-    const frameTable = ScenarioLoader.SeriesFrameTable(ref.ID);
-    const wantFrameStamp = `${ref.ID}/seed-${ref.Seed}#${rowsSha}`;
-    const currentFrameStamp = await DatasetStamp.Read(ctx.Pool, frameTable);
-    if (currentFrameStamp !== wantFrameStamp) {
-      await ScenarioLoader.LoadSeriesFrame(ctx.Pool, ref.ID, dir);
-    }
-    const trainTable = ScenarioLoader.SeriesTrainTable(ref.ID);
-    const wantTrainStamp = `${ref.ID}/seed-${ref.Seed}/origin-${ref.Origin}#${rowsSha}`;
-    const currentTrainStamp = await DatasetStamp.Read(ctx.Pool, trainTable);
-    let rowCount: number;
-    if (currentTrainStamp !== wantTrainStamp) {
-      const summary = await ScenarioLoader.FillSeriesTrain(ctx.Pool, ref.ID, ref.Origin, dir);
-      rowCount = summary.Rows;
-    } else {
-      const cntRes = await ctx.Pool.request().query<{ cnt: number }>(`SELECT COUNT(*) AS cnt FROM pstruth.[${trainTable}]`);
-      rowCount = Number(cntRes.recordset[0]?.cnt ?? 0);
-    }
-    const entity = TruthEntities.ForTable(ctx.Provider, trainTable);
-    return { Ref: ref, Dir: dir, Entity: entity, RowCount: rowCount, RowsSha256: rowsSha };
+  public static async EnsureLoaded(ctx: DatasetContext, ref: DatasetRef): Promise<LoadedDataset> {
+    return DatasetLoader.Load(ctx, ref);
   }
 
-  /** Count non-null values in `column` (`TruthScore`) on the dataset's `pstruth` table. */
-  public static async CountNonNull(
-    ctx: { Pool: DatasetPool },
-    dataset: LoadedDataset,
-    column: 'TruthScore',
-  ): Promise<number> {
-    const table = dataset.Entity.BaseTable;
-    await BulkLoader.AssertDirectSqlOptIn(ctx.Pool, table);
-    const res = await ctx.Pool
-      .request()
-      .query<{ cnt: number }>(`SELECT COUNT(*) AS cnt FROM pstruth.[${table}] WHERE [${column}] IS NOT NULL`);
-    return Number(res.recordset[0]?.cnt ?? 0);
+  /** Count rows whose `column` (`TruthScore`) is set on the dataset's entity. */
+  public static async CountNonNull(ctx: DatasetContext, dataset: LoadedDataset, column: 'TruthScore'): Promise<number> {
+    const res = await RunView.FromMetadataProvider(ctx.Provider).RunView(
+      { EntityName: dataset.Entity.Name, ExtraFilter: `[${column}] IS NOT NULL`, ResultType: 'count_only', BypassCache: true },
+      ctx.User,
+    );
+    if (!res.Success) throw new Error(`count ${dataset.Entity.Name}.${column}: ${res.ErrorMessage}`);
+    return res.TotalRowCount;
   }
 
-  /** Reset `column` (`TruthScore`) to NULL on the dataset's `pstruth` table. */
-  public static async ResetColumn(
-    ctx: { Pool: DatasetPool },
-    dataset: LoadedDataset,
-    column: 'TruthScore',
-  ): Promise<void> {
-    const table = dataset.Entity.BaseTable;
-    await BulkLoader.AssertDirectSqlOptIn(ctx.Pool, table);
-    await ctx.Pool.request().query(`UPDATE pstruth.[${table}] SET [${column}] = NULL WHERE [${column}] IS NOT NULL`);
+  /** Reset `column` (`TruthScore`) to NULL on the dataset's `pstruth` table: direct SQL its entity sanctions. */
+  public static async ResetColumn(ctx: DatasetContext, dataset: LoadedDataset, column: 'TruthScore'): Promise<void> {
+    if (!dataset.Entity.AllowDirectSQLUpdate) {
+      throw new Error(`Direct SQL updates are not sanctioned on ${dataset.Entity.Name} (AllowDirectSQLUpdate is false). Run truth:provision.`);
+    }
+    await ctx.Pool.request().query(`UPDATE pstruth.[${dataset.Entity.BaseTable}] SET [${column}] = NULL WHERE [${column}] IS NOT NULL`);
   }
 
   /** Count positive and negative labels in the dataset's cached `rows.csv` (never the truth file). */

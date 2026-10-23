@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type sql from 'mssql';
-import { CATALOG, DatasetCatalog } from '../../data/catalog';
+import { BootstrapIntegrationServer, type IntegrationBootstrapContext } from '@memberjunction/testing-integration';
+import { TruthCsv } from '../csv';
 import { TruthConnection } from '../connection';
+import { DatasetLoader, type DatasetLoadContext, type DatasetRow } from '../dataset-loader';
 import { DatasetStamp } from '../stamp';
-import { WorldLoader } from '../world-loader';
 
 async function readTableCounts(pool: sql.ConnectionPool): Promise<Record<string, number>> {
   const res = await pool.request().query<{ tbl: string; cnt: number }>(`
@@ -31,40 +31,49 @@ async function tableChecksum(pool: sql.ConnectionPool, table: string): Promise<n
   return res.recordset[0]?.chk ?? null;
 }
 
+/** The dataset's own `rows.csv` minus its last row, as a row source (one row short of the manifest). */
+function allButLastRow(dir: string): () => AsyncIterable<DatasetRow> {
+  const parsed = TruthCsv.Parse(readFileSync(path.join(dir, 'rows.csv'), 'utf8'));
+  return async function* () {
+    for (const row of parsed.Rows.slice(0, -1)) {
+      yield Object.fromEntries(parsed.Header.map((c, i) => [c, row[i] ?? '']));
+    }
+  };
+}
+
 describe('per-dataset loader isolation (M4.4)', () => {
+  let server: IntegrationBootstrapContext;
   let pool: sql.ConnectionPool;
+  let ctx: DatasetLoadContext;
 
   beforeAll(async () => {
+    server = await BootstrapIntegrationServer();
     pool = await TruthConnection.OpenPool();
+    ctx = { Provider: server.Provider, User: server.User, Pool: pool };
   });
 
   afterAll(async () => {
     await pool?.close();
+    await server?.ClosePool();
   });
 
   it('loads W1 s42, W3 s42, and W1 s43 without touching any other dataset tables', async () => {
-    const w1Entry = CATALOG.find((d) => d.ID === 'W1-signal');
-    const w3Entry = CATALOG.find((d) => d.ID === 'W3-leak-row');
-    if (!w1Entry || !w3Entry) throw new Error('W1-signal or W3-leak-row missing from CATALOG');
-
     const beforeCounts = await readTableCounts(pool);
 
-    const w1s42Dir = await DatasetCatalog.EnsureGenerated(w1Entry, 42);
-    const load1 = await WorldLoader.LoadSeed(pool, 'W1-signal', w1s42Dir);
-    expect(load1.Rows).toBe(16776);
-    expect(load1.People).toBe(4999);
+    const load1 = await DatasetLoader.Load(ctx, { Kind: 'world', ID: 'W1-signal', Seed: 42 });
+    expect(load1.RowCount).toBe(16776);
     const w1Stamp42 = await DatasetStamp.Read(pool, 'W1_MembershipYear');
     expect(w1Stamp42).toMatch(/^W1-signal\/seed-42#[0-9a-f]{64}$/);
 
     const afterW1s42Counts = await readTableCounts(pool);
+    expect(afterW1s42Counts['W1_Person']).toBe(4999);
     for (const [tbl, cnt] of Object.entries(afterW1s42Counts)) {
       if (tbl === 'W1_Person' || tbl === 'W1_MembershipYear') continue;
       expect(cnt, `table ${tbl} changed during W1 s42 load`).toBe(beforeCounts[tbl]);
     }
 
-    const w3s42Dir = await DatasetCatalog.EnsureGenerated(w3Entry, 42);
-    const load2 = await WorldLoader.LoadSeed(pool, 'W3-leak-row', w3s42Dir);
-    expect(load2.Rows).toBeGreaterThan(0);
+    const load2 = await DatasetLoader.Load(ctx, { Kind: 'world', ID: 'W3-leak-row', Seed: 42 });
+    expect(load2.RowCount).toBeGreaterThan(0);
     const w3Stamp42 = await DatasetStamp.Read(pool, 'W3_MembershipYear');
     expect(w3Stamp42).toMatch(/^W3-leak-row\/seed-42#[0-9a-f]{64}$/);
     const w3ChecksumBefore = await tableChecksum(pool, 'W3_MembershipYear');
@@ -78,9 +87,8 @@ describe('per-dataset loader isolation (M4.4)', () => {
       expect(cnt, `table ${tbl} changed during W3 s42 load`).toBe(afterW1s42Counts[tbl]);
     }
 
-    const w1s43Dir = await DatasetCatalog.EnsureGenerated(w1Entry, 43);
-    const load3 = await WorldLoader.LoadSeed(pool, 'W1-signal', w1s43Dir);
-    expect(load3.Rows).toBeGreaterThan(0);
+    const load3 = await DatasetLoader.Load(ctx, { Kind: 'world', ID: 'W1-signal', Seed: 43 });
+    expect(load3.RowCount).toBeGreaterThan(0);
     const w1Stamp43 = await DatasetStamp.Read(pool, 'W1_MembershipYear');
     expect(w1Stamp43).toMatch(/^W1-signal\/seed-43#[0-9a-f]{64}$/);
     expect(w1Stamp43).not.toBe(w1Stamp42);
@@ -97,20 +105,12 @@ describe('per-dataset loader isolation (M4.4)', () => {
     }
   });
 
-  it('refuses a seed whose row count differs from its manifest', async () => {
-    const w1Entry = CATALOG.find((d) => d.ID === 'W1-signal');
-    if (!w1Entry) throw new Error('W1-signal missing from CATALOG');
-    const w1s42Dir = await DatasetCatalog.EnsureGenerated(w1Entry, 42);
-    const tmpDir = mkdtempSync(path.join(tmpdir(), 'pstruth-bad-rowcount-'));
-    try {
-      copyFileSync(path.join(w1s42Dir, 'manifest.json'), path.join(tmpDir, 'manifest.json'));
-      copyFileSync(path.join(w1s42Dir, 'people.csv'), path.join(tmpDir, 'people.csv'));
-      const rowsLines = readFileSync(path.join(w1s42Dir, 'rows.csv'), 'utf8').split('\n');
-      writeFileSync(path.join(tmpDir, 'rows.csv'), rowsLines.slice(0, -1).join('\n'));
-      await expect(WorldLoader.LoadSeed(pool, 'W1-signal', tmpDir)).rejects.toThrow(/16775.*16776/);
-    } finally {
-      rmSync(tmpDir, { recursive: true, force: true });
-      await WorldLoader.LoadSeed(pool, 'W1-signal', w1s42Dir);
-    }
+  it('refuses a seed whose row count differs from its manifest, and keeps the rows it had', async () => {
+    const good = await DatasetLoader.Load(ctx, { Kind: 'world', ID: 'W1-signal', Seed: 42 });
+    const stamp = await DatasetStamp.Read(pool, 'W1_MembershipYear');
+    const short = DatasetLoader.LoadWithRowSource(ctx, { Kind: 'world', ID: 'W1-signal', Seed: 42 }, allButLastRow(good.Dir));
+    await expect(short).rejects.toThrow(/16775.*16776/);
+    expect(await DatasetStamp.Read(pool, 'W1_MembershipYear')).toBe(stamp);
+    expect((await readTableCounts(pool))['W1_MembershipYear']).toBe(16776);
   });
 });

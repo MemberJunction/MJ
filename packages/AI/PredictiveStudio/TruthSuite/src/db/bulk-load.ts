@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import type { EntityInfo } from '@memberjunction/core';
 import sql from 'mssql';
 import { TruthCsv, type SqlCell } from './csv';
 
@@ -6,6 +6,12 @@ export interface TableColumnSpec {
   Name: string;
   SqlType: string;
   IsNullable?: boolean;
+}
+
+/** Rows as text cells under a header: a parsed CSV, or a test's row source. */
+export interface TextRows {
+  Header: string[];
+  Rows: string[][];
 }
 
 /** Parameterised bulk-insert and direct-SQL opt-in verification for `pstruth.*` tables. */
@@ -16,19 +22,11 @@ export class BulkLoader {
     return table.startsWith('pstruth.') ? table.slice('pstruth.'.length) : table;
   }
 
-  /** Verify the `pstruth.<table>` entity has `AllowDirectSQLInsert=1` and `AllowDirectSQLDelete=1`; throws naming `truth:provision` otherwise. */
-  public static async AssertDirectSqlOptIn(pool: sql.ConnectionPool, table: string): Promise<void> {
-    const bare = BulkLoader.bareTable(table);
-    const res = await pool
-      .request()
-      .input('table', sql.NVarChar(128), bare)
-      .query<{ AllowDirectSQLInsert: boolean; AllowDirectSQLDelete: boolean }>(
-        "SELECT AllowDirectSQLInsert, AllowDirectSQLDelete FROM __mj.Entity WHERE SchemaName = 'pstruth' AND BaseTable = @table",
-      );
-    const row = res.recordset[0];
-    if (!row || !row.AllowDirectSQLInsert || !row.AllowDirectSQLDelete) {
+  /** Verify the entity sanctions direct-SQL inserts and deletes; throws naming `truth:provision` otherwise. */
+  public static AssertDirectSqlOptIn(entity: EntityInfo): void {
+    if (!entity.AllowDirectSQLInsert || !entity.AllowDirectSQLDelete) {
       throw new Error(
-        `Direct SQL is not sanctioned on pstruth.${bare} (AllowDirectSQLInsert/AllowDirectSQLDelete missing or 0). Run 'pnpm --filter @memberjunction/predictive-studio-truth-suite run truth:provision' first.`,
+        `Direct SQL is not sanctioned on pstruth.${entity.BaseTable} (AllowDirectSQLInsert/AllowDirectSQLDelete is false). Run 'pnpm --filter @memberjunction/predictive-studio-truth-suite run truth:provision' first.`,
       );
     }
   }
@@ -73,27 +71,46 @@ export class BulkLoader {
     throw new Error(`Unsupported SQL type in BulkLoader: '${sqlType}'`);
   }
 
-  /** Bulk-insert `rows` into `pstruth.<table>` in 50,000-row batches after checking column order and direct-SQL opt-in. */
+  /**
+   * Match text rows to the table's columns (the header must be an ordered subset of them) and coerce every cell to its
+   * column's type. Returns the active columns in header order and the coerced rows.
+   */
+  public static CoerceRows(
+    table: string,
+    rows: TextRows,
+    tableColumns: ReadonlyArray<TableColumnSpec>,
+  ): { Columns: TableColumnSpec[]; Rows: SqlCell[][] } {
+    TruthCsv.AssertHeaderOrder(rows.Header, tableColumns.map((c) => c.Name));
+    const colByName = new Map(tableColumns.map((c) => [c.Name, c]));
+    const columns = rows.Header.map((name) => {
+      const col = colByName.get(name);
+      if (!col) throw new Error(`Unknown column '${name}' on pstruth.${BulkLoader.bareTable(table)}`);
+      return col;
+    });
+    return {
+      Columns: columns,
+      Rows: rows.Rows.map((row) => columns.map((col, idx) => TruthCsv.CoerceCell(row[idx] ?? '', col.SqlType))),
+    };
+  }
+
+  /**
+   * Bulk-insert `rows` into `pstruth.<table>` inside `tx`, in 50,000-row batches, after checking the column order.
+   * Returns the number of rows the inserts reported.
+   */
   public static async Insert(
-    pool: sql.ConnectionPool,
+    tx: sql.Transaction,
     table: string,
     columns: ReadonlyArray<TableColumnSpec>,
     rows: ReadonlyArray<ReadonlyArray<SqlCell>>,
-    preloadedTableColumns?: ReadonlyArray<TableColumnSpec>,
-    tx?: sql.Transaction,
-  ): Promise<void> {
+    tableColumns: ReadonlyArray<TableColumnSpec>,
+  ): Promise<number> {
     const bare = BulkLoader.bareTable(table);
-    const tableColumns = preloadedTableColumns ?? (await (async (): Promise<TableColumnSpec[]> => {
-      await BulkLoader.AssertDirectSqlOptIn(pool, bare);
-      return BulkLoader.ReadTableColumns(pool, bare);
-    })());
     TruthCsv.AssertHeaderOrder(
       columns.map((c) => c.Name),
       tableColumns.map((c) => c.Name),
     );
-    if (rows.length === 0) return;
-
     const tableColByName = new Map(tableColumns.map((c) => [c.Name, c]));
+    let inserted = 0;
     for (let offset = 0; offset < rows.length; offset += BulkLoader.batchSize) {
       const batch = rows.slice(offset, offset + BulkLoader.batchSize);
       const sqlTable = new sql.Table(`pstruth.${bare}`);
@@ -107,37 +124,9 @@ export class BulkLoader {
       for (const row of batch) {
         sqlTable.rows.add(...row);
       }
-      const req = tx ? new sql.Request(tx) : pool.request();
-      await req.bulk(sqlTable);
+      const res = await new sql.Request(tx).bulk(sqlTable);
+      inserted += res.rowsAffected;
     }
-  }
-
-  /** Parse a CSV file (refusing truth files), coerce cells against `sys.columns`, and bulk-insert into `pstruth.<table>`. */
-  public static async LoadCsvFile(
-    pool: sql.ConnectionPool,
-    table: string,
-    csvPath: string,
-    tx?: sql.Transaction,
-  ): Promise<number> {
-    TruthCsv.AssertNotTruthFile(csvPath);
-    const bare = BulkLoader.bareTable(table);
-    await BulkLoader.AssertDirectSqlOptIn(pool, bare);
-    const tableCols = await BulkLoader.ReadTableColumns(pool, bare);
-    const parsed = TruthCsv.Parse(readFileSync(csvPath, 'utf8'));
-    TruthCsv.AssertHeaderOrder(
-      parsed.Header,
-      tableCols.map((c) => c.Name),
-    );
-    const colByName = new Map(tableCols.map((c) => [c.Name, c]));
-    const activeCols: TableColumnSpec[] = parsed.Header.map((name) => {
-      const col = colByName.get(name);
-      if (!col) throw new Error(`Unknown column '${name}' on pstruth.${bare}`);
-      return col;
-    });
-    const coercedRows: SqlCell[][] = parsed.Rows.map((row) =>
-      activeCols.map((col, idx) => TruthCsv.CoerceCell(row[idx] ?? '', col.SqlType)),
-    );
-    await BulkLoader.Insert(pool, bare, activeCols, coercedRows, tableCols, tx);
-    return coercedRows.length;
+    return inserted;
   }
 }

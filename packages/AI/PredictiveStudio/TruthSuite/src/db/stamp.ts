@@ -1,5 +1,8 @@
 import sql from 'mssql';
 
+/** Where a stamp is read or written: the pool, or an open transaction (a load stamps inside its own transaction). */
+export type StampConnection = sql.ConnectionPool | sql.Transaction;
+
 /** Extended-property dataset stamps (`pstruth_dataset`) on `pstruth.*` tables. */
 export class DatasetStamp {
   private static readonly propName = 'pstruth_dataset';
@@ -8,11 +11,14 @@ export class DatasetStamp {
     return table.startsWith('pstruth.') ? table.slice('pstruth.'.length) : table;
   }
 
+  private static request(conn: StampConnection): sql.Request {
+    return conn instanceof sql.Transaction ? new sql.Request(conn) : new sql.Request(conn);
+  }
+
   /** Read the current `pstruth_dataset` stamp on `pstruth.<table>`, or null if none is set. */
-  public static async Read(pool: sql.ConnectionPool, table: string): Promise<string | null> {
+  public static async Read(conn: StampConnection, table: string): Promise<string | null> {
     const bare = DatasetStamp.bareTable(table);
-    const res = await pool
-      .request()
+    const res = await DatasetStamp.request(conn)
       .input('qualified', sql.NVarChar(200), `pstruth.${bare}`)
       .input('propName', sql.NVarChar(128), DatasetStamp.propName)
       .query<{ val: string | null }>(
@@ -22,12 +28,11 @@ export class DatasetStamp {
   }
 
   /** Write or update the `pstruth_dataset` extended property on `pstruth.<table>`. */
-  public static async Write(pool: sql.ConnectionPool, table: string, value: string): Promise<void> {
+  public static async Write(conn: StampConnection, table: string, value: string): Promise<void> {
     const bare = DatasetStamp.bareTable(table);
-    const existing = await DatasetStamp.Read(pool, bare);
+    const existing = await DatasetStamp.Read(conn, bare);
     const proc = existing === null ? 'sys.sp_addextendedproperty' : 'sys.sp_updateextendedproperty';
-    await pool
-      .request()
+    await DatasetStamp.request(conn)
       .input('name', sql.NVarChar(128), DatasetStamp.propName)
       .input('value', sql.NVarChar(400), value)
       .input('level0type', sql.VarChar(20), 'SCHEMA')
