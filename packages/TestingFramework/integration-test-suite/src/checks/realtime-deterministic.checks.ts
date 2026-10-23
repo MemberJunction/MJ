@@ -1,5 +1,5 @@
 /**
- * realtime-deterministic.checks.ts — the 'realtime-deterministic' bundle (RD1–RD19).
+ * realtime-deterministic.checks.ts — the 'realtime-deterministic' bundle (RD1–RD20).
  *
  * Domain 10 deterministic legs — NO live sessions, NO sidecar, NO model calls:
  *  - realtime metadata integrity: agent channels (RD1), Realtime model → vendor DriverClass
@@ -41,6 +41,8 @@
  *  - the recording ledger survives a stale session save (RD19, #6010): a session copy loaded before the terminal stamp,
  *    through an app-owned `MJ: AI Agent Sessions` class that extends the generated entity (so no server subclass runs),
  *    is saved as the close; the terminal's counts and status are still there afterwards.
+ *  - deleting a conversation a tagged session points at cascades through spUpdateAIAgentSession and clears the
+ *    session's ConversationID (RD20, #6010): the generated delete's cascade must match the update proc's parameters.
  *
  * Every fixture row is tagged '(mj-integration-test — safe to delete)' and deleted in the same
  * check's finally block, so the bundle needs no shared lifecycle.
@@ -76,6 +78,7 @@ import {
     MJAIPersonaEntity,
     MJAIPersonaVendorEntity,
     MJAIPromptRunEntity,
+    MJConversationEntity,
     MJInteractionEntity,
     MJInteractionEventEntity,
     MJMeetingEntity,
@@ -1922,6 +1925,41 @@ export const RealtimeDeterministicChecks: NamedCheck[] = [
                 }
             }
             console.log('      → a stale close saved through an app-owned session class kept the terminal stamp; fixture removed');
+        }
+    },
+    {
+        Id: 'realtime-deterministic.RD20',
+        Name: "RD20: deleting a conversation an agent session points at clears the session's ConversationID (spDeleteConversation's cascade matches spUpdateAIAgentSession's parameters, #6010)",
+        Fn: async (ctx): Promise<void> => {
+            const session = await buildSessionFixture(ctx.User);
+            if (!session) {
+                console.warn('  ⚠ realtime-deterministic.RD20 SKIPPED — no MJ: AI Agents row available to anchor a session fixture');
+                return;
+            }
+            const conversation = await ctx.Provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', ctx.User);
+            conversation.NewRecord();
+            conversation.UserID = ctx.User.ID;
+            conversation.Name = `rd20 ${TAG}`;
+            try {
+                Assert(await conversation.Save(), `conversation fixture save failed: ${conversation.LatestResult?.CompleteMessage}`);
+                session.ConversationID = conversation.ID;
+                Assert(await session.Save(), `session fixture save failed: ${session.LatestResult?.CompleteMessage}`);
+
+                // The generated delete cascades to the session through spUpdateAIAgentSession (ConversationID cleared).
+                Assert(await conversation.Delete(), `conversation delete failed: ${conversation.LatestResult?.CompleteMessage}`);
+
+                const fresh = await loadFresh<MJAIAgentSessionEntity>(SESSION_ENTITY, session.ID, ctx.User);
+                Assert(!!fresh, 'the session fixture did not read back');
+                AssertEqual(fresh!.ConversationID, null, "the session's ConversationID was cleared by the cascade");
+            } finally {
+                if (session.IsSaved) {
+                    await session.Delete().catch(() => undefined);
+                }
+                if (conversation.IsSaved) {
+                    await conversation.Delete().catch(() => undefined);
+                }
+            }
+            console.log('      → the conversation delete cascaded to the session; fixture removed');
         }
     }
 ];
