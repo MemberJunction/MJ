@@ -45,8 +45,8 @@ function main(): number {
   const tree = path.join(mkdtempSync(path.join(tmpdir(), 'truth-readme-')), 'mj');
   execFileSync('git', ['-C', mjRoot, 'worktree', 'add', '--detach', tree, 'HEAD'], { stdio: 'inherit' });
   writeFileSync(path.join(tree, '.env'), baseEnv
-    .replace(/^DB_DATABASE=.*$/m, `DB_DATABASE=${database}`)
-    .replace(/^GRAPHQL_PORT=.*$/m, `GRAPHQL_PORT=${port}`));
+    .replace(/^DB_DATABASE=.*$/m, () => `DB_DATABASE=${database}`)
+    .replace(/^GRAPHQL_PORT=.*$/m, () => `GRAPHQL_PORT=${port}`));
   const results: StepResult[] = [];
   try {
     for (const s of steps) {
