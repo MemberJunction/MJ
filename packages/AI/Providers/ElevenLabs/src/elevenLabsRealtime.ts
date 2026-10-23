@@ -20,6 +20,7 @@ import {
     type RealtimeInputFrame,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
+import { ElevenLabsPremadeVoices } from './elevenLabsVoices';
 
 /**
  * Lifetime of an ElevenLabs signed websocket URL: the browser (or server bridge) must OPEN the
@@ -444,17 +445,7 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
      * The built-in default voices available in ElevenLabs — used to populate the voice picker.
      */
     public override get SupportedVoices(): RealtimeVoiceOption[] {
-        return [
-            { ID: '21m00Tcm4TlvDq8ikWAM', Name: 'Rachel' },
-            { ID: 'pNInz6obpgDQGcFmaJgB', Name: 'Adam' },
-            { ID: 'AZnzlk1XvdvUeBnXmlld', Name: 'Domi' },
-            { ID: 'EXAVITQu4vr4xnSDxMaL', Name: 'Bella' },
-            { ID: 'ErXwobaYiN019PkySvjV', Name: 'Antoni' },
-            { ID: 'MF3mGyEYCl7XYWbV9V6O', Name: 'Elli' },
-            { ID: 'TxGEqnHWrfWFTfGW9XjX', Name: 'Josh' },
-            { ID: 'VR6AewLTigWG4xSOukaG', Name: 'Arnold' },
-            { ID: 'yoZ06aMxZJJ28mfd3POQ', Name: 'Sam' },
-        ];
+        return ElevenLabsPremadeVoices();
     }
 
     /**
