@@ -1,7 +1,7 @@
 # MJ Semantic Graph: extensible structure, with MJ Canon as the first graph
 
 ## Status
-- **Status**: Draft. This is the basic structure, for review and iteration.
+- **Status**: **Design for review. Not scheduled for implementation.** This is the basic structure, for Jordan and Robert to iterate on and resolve the open questions. Do not build any phase until it is approved. Once approved, G1 can start independently; G2 needs alternate-views Phases 1 and 5 merged.
 - **Created**: 2026-10-23. **Revised** the same day: generalized from a canon-only graph to an extensible graph over any entity record and any edge type. Canon is the first graph built on it.
 - **Author**: Claude (Claude Code session), for review
 - **Proposed owners**: Jordan (lead), Robert (review), per the original note
@@ -456,6 +456,9 @@ A generic **Graph Explorer** dashboard (an L3 surface in `ng-dashboards`) hosts 
 A record form can embed the same view, showing that record's neighborhood.
 
 ## Implementation Plan
+
+> **Not scheduled.** These phases describe the eventual build once the design is approved. They
+> are not part of the alternate base views handoff.
 
 ### Phase G1: Substrate
 1. **Migration** (above) + CodeGen. Changeset `minor`. PostgreSQL is converted at release.

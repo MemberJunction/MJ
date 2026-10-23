@@ -6,7 +6,7 @@
 - **Author**: Claude (Claude Code session), for review
 - **Branch**: `claude/alternate-base-views`
 - **Reviewed against**: `next` @ `48c974e76`
-- **Companion**: [`plans/canon-semantic-graph.md`](canon-semantic-graph.md), the extensible semantic graph (any entity record as a node, any edge type). MJ Canon is its first graph.
+- **Companion**: [`plans/canon-semantic-graph.md`](canon-semantic-graph.md), the extensible semantic graph (any entity record as a node, any edge type), with MJ Canon as its first graph. It is a **design for review only, not scheduled**; this plan does not depend on it.
 - **Supersedes**: Future Phases D–G of [`plans/complete/json-type-and-additional-base-views.md`](complete/json-type-and-additional-base-views.md)
 
 ## Overview
@@ -327,7 +327,13 @@ export function ResolveAlternateBaseView(entity: EntityInfo, params: RunViewPara
 ## Implementation handoff
 
 This work needs migrations, CodeGen and `mj sync push`, so it is built by a local agent with its
-own database. This section is that agent's checklist for both plans.
+own database. This section is that agent's checklist.
+
+**Scope: build this plan only.** The semantic graph
+([`plans/canon-semantic-graph.md`](canon-semantic-graph.md)) is a design for review by Jordan and
+Robert and is **not scheduled**. Do not build any of its phases. Nothing here depends on it. Phase 5
+records each query's `AlternateBaseViewID`, which permissions and impact analysis need regardless.
+Phase 7 item 4 builds nothing.
 
 **Build order.** One PR per phase into `next`.
 
@@ -339,9 +345,9 @@ own database. This section is that agent's checklist for both plans.
 | 4 | ABV 4, CodeGen upkeep (before any real entity adopts an alternate view) | ABV 1 |
 | 5 | ABV 5, queries + client SQL | ABV 1–3 |
 | 6 | ABV 6–9, User Views / BaseEngine, agents, Angular, docs + IT | ABV 1–5 |
-| any time | Graph G1, substrate (own migration) | — |
-| after ABV 5 | Graph G2, MJ Canon | G1, ABV 1, ABV 5 |
-| after G2 | Graph G3–G5 | G2 |
+
+When the graph is approved and scheduled, its own document gives its order. G1 (substrate) is
+independent of this plan; G2 (MJ Canon) needs ABV 1 and ABV 5 merged.
 
 **Every phase:**
 - **Branch.** Cut from `origin/next` and track `origin/<same-name>` (`git branch -vv` before every push). Never push to `next` or `main`.
@@ -353,7 +359,7 @@ own database. This section is that agent's checklist for both plans.
   - Report pass/fail/skip counts in the PR.
 - **Changeset.** `minor` when the phase adds a migration or metadata; otherwise `patch`.
 
-**Phases with a migration (ABV 1, G1):**
+**Phases with a migration (ABV 1):**
 - **File.** `migrations/v6/V<YYYYMMDDHHMM>__v6.2.x__<Name>.sql`, with a timestamp after the newest migration on `next`. Renumber before merge if `next` has moved; a merged migration is immutable.
 - **Order.** Hand-written DDL, then at least 50 blank lines, then the CodeGen comment block, then CodeGen's output (`mj migrate` → `mj codegen`).
 - **`EntityField` inserts.** CodeGen's must not carry a literal `Sequence`; use the apply-time `MAX(Sequence)+1` form ([`migrations/CLAUDE.md`](../migrations/CLAUDE.md)). A literal fails only on fresh installs.
