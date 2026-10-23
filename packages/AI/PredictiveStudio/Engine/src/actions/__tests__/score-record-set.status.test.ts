@@ -101,3 +101,29 @@ describe('ProductionScoreRecordSetRunner — status and artifact refusal order',
     await expect(scoreWith('Published', null)).rejects.toBeInstanceOf(ModelNeedsTrainingError);
   });
 });
+
+describe('ProductionScoreRecordSetRunner — a refused model never reads its scope', () => {
+  class ScopeCountingRunner extends TestRunner {
+    public ScopeReads = 0;
+    protected override async resolveScope(): Promise<RecordRef[]> {
+      this.ScopeReads++;
+      return [];
+    }
+  }
+
+  it('an Archived model is refused before the scope is resolved', async () => {
+    const runner = new ScopeCountingRunner(
+      { modelLoader: new Loader(new StatusModel('Archived')), artifactLoader: new InMemoryArtifactLoader(), sidecar: new CountingSidecar() },
+      new SaveCounter(),
+    );
+    await expect(
+      runner.run({
+        modelId: 'm1',
+        scope: { filter: { entityName: 'Members' } },
+        contextUser: { ID: 'u1' } as unknown as UserInfo,          // test doubles: the refusal happens before either is used
+        provider: {} as unknown as IMetadataProvider,
+      }),
+    ).rejects.toBeInstanceOf(ModelNotScorableError);
+    expect(runner.ScopeReads).toBe(0);
+  });
+});

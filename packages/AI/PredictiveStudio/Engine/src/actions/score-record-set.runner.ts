@@ -92,15 +92,16 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
   /** @inheritdoc */
   public async run(request: ScoreRecordSetRequest): Promise<ScoreRecordSetResult> {
     const context = this.buildContext(request);
-    const records = await this.resolveScope(request.scope, request.contextUser, request.provider);
     const processor = new MLModelInferenceProcessor({
       modelId: request.modelId,
       deps: this.resolveDeps(),
       primaryKeyField: this.options.primaryKeyField,
     });
 
-    // Refuse up front (one clear "needs training" error) rather than returning N failed records.
+    // Refuse up front (one clear "needs training" error) rather than returning N failed records, and before the
+    // scope is read: a refused model never loads its scope's rows.
     await processor.Preflight(context);
+    const records = await this.resolveScope(request.scope, request.contextUser, request.provider);
     const results = await processor.ProcessBatch(records, context);
 
     // When an explicit OutputMapping was supplied (and this is not a dry run),
