@@ -68,6 +68,14 @@ import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { MagicLinkKeyManager } from '../auth/magicLink/MagicLinkKeys.js';
 import type { WidgetConfig } from '../config.js';
+import { CreateProofOfPossessionKey, CreateProofOfPossessionJwt, ComputeJwkThumbprint, type ProofOfPossessionKey } from '@memberjunction/global';
+
+const REFRESH_URL = 'https://mj.example.com/widget/session/refresh';
+
+/** A DPoP-style proof that the holder of `key` is refreshing `token`. */
+function proofFor(key: ProofOfPossessionKey, token: string, url = REFRESH_URL): Promise<string> {
+  return CreateProofOfPossessionJwt(key, { Method: 'POST', Url: url, AccessToken: token });
+}
 
 /**
  * Minimal `WidgetConfig` matching the zod schema's post-parse (defaulted) shape —
@@ -161,7 +169,12 @@ describe('WidgetSessionService — RefreshGuestSession preserves mj_sid (#4931)'
     };
   }
 
-  beforeEach(() => {
+  let key: ProofOfPossessionKey;
+  let thumbprint: string;
+
+  beforeEach(async () => {
+    key = await CreateProofOfPossessionKey();
+    thumbprint = await ComputeJwkThumbprint(key.PublicJwk);
     MagicLinkKeyManager.Instance.Initialize();
     mockUsers.length = 0;
     mockUsers.push({ ID: 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E', Email: 'system@system.org', IsActive: true });
@@ -183,6 +196,7 @@ describe('WidgetSessionService — RefreshGuestSession preserves mj_sid (#4931)'
     const minted = await service.MintGuestSession({
       widgetKey: 'pk_live_test',
       origin: 'https://acme.com',
+      ProofKey: key.PublicJwk,
     });
     expect(minted.success).toBe(true);
     expect(minted.sessionId).toBeDefined();
@@ -192,6 +206,7 @@ describe('WidgetSessionService — RefreshGuestSession preserves mj_sid (#4931)'
       widgetKey: 'pk_live_test',
       origin: 'https://acme.com',
       BearerToken: minted.token,
+      Proof: await proofFor(key, minted.token!),
     });
     expect(refreshed.success).toBe(true);
     expect(refreshed.sessionId).toBe(minted.sessionId);
@@ -217,6 +232,7 @@ describe('WidgetSessionService — RefreshGuestSession preserves mj_sid (#4931)'
       mj_anon: true,
       mj_sid: 'sid-recent-exp',
       mj_sid_iat: nowSeconds - 960,
+      cnf: { jkt: thumbprint },
       mj_widget_id: WIDGET_ID,
       mj_app_id: APP_ID,
       mj_role: 'Widget Guest',
@@ -227,6 +243,7 @@ describe('WidgetSessionService — RefreshGuestSession preserves mj_sid (#4931)'
       widgetKey: 'pk_live_test',
       origin: 'https://acme.com',
       BearerToken: recentlyExpiredToken,
+      Proof: await proofFor(key, recentlyExpiredToken),
     });
     expect(refreshed.success).toBe(true);
     expect(refreshed.sessionId).toBe('sid-recent-exp');
@@ -331,6 +348,8 @@ describe('WidgetSessionService — RefreshGuestSession re-applies every mint che
   const ORIGIN = 'https://acme.com';
   const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15';
   let widgetOverrides: Record<string, unknown> = {};
+  let key: ProofOfPossessionKey;
+  let thumbprint: string;
 
   function makeWidgetRow() {
     return {
@@ -366,6 +385,7 @@ describe('WidgetSessionService — RefreshGuestSession re-applies every mint che
       mj_anon: true,
       mj_sid: 'sid-live',
       mj_sid_iat: nowSeconds,
+      cnf: { jkt: thumbprint },
       mj_widget_id: WIDGET_ID,
       mj_app_id: APP_ID,
       mj_role: 'Widget Guest',
@@ -379,11 +399,18 @@ describe('WidgetSessionService — RefreshGuestSession re-applies every mint che
     return MagicLinkKeyManager.Instance.Sign(claims);
   }
 
-  function refresh(service: WidgetSessionService, bearerToken: string, origin = ORIGIN) {
-    return service.RefreshGuestSession({ widgetKey: 'pk_live_test', origin, BearerToken: bearerToken });
+  async function refresh(service: WidgetSessionService, bearerToken: string, origin = ORIGIN, proof?: string) {
+    return service.RefreshGuestSession({
+      widgetKey: 'pk_live_test',
+      origin,
+      BearerToken: bearerToken,
+      Proof: proof ?? (await proofFor(key, bearerToken)),
+    });
   }
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    key = await CreateProofOfPossessionKey();
+    thumbprint = await ComputeJwkThumbprint(key.PublicJwk);
     widgetOverrides = {};
     MagicLinkKeyManager.Instance.Initialize();
     mockUsers.length = 0;
@@ -458,7 +485,7 @@ describe('WidgetSessionService — RefreshGuestSession re-applies every mint che
       vi.useFakeTimers();
       vi.setSystemTime(START);
       const service = new WidgetSessionService(ISSUER, makeConfig());
-      const minted = await service.MintGuestSession({ widgetKey: 'pk_live_test', origin: ORIGIN });
+      const minted = await service.MintGuestSession({ widgetKey: 'pk_live_test', origin: ORIGIN, ProofKey: key.PublicJwk });
       expect(decode(minted.token!).mj_sid_iat).toBe(START / 1000);
 
       vi.setSystemTime(START + 14 * 60_000);
@@ -494,7 +521,7 @@ describe('WidgetSessionService — RefreshGuestSession re-applies every mint che
       vi.useFakeTimers();
       vi.setSystemTime(START);
       const service = new WidgetSessionService(ISSUER, makeConfig());
-      let token = (await service.MintGuestSession({ widgetKey: 'pk_live_test', origin: ORIGIN })).token!;
+      let token = (await service.MintGuestSession({ widgetKey: 'pk_live_test', origin: ORIGIN, ProofKey: key.PublicJwk })).token!;
       let accepted = 0;
       let refusedAtMinute: number | null = null;
       for (let minute = 14; minute <= 7 * 24 * 60 && refusedAtMinute === null; minute += 14) {
@@ -513,6 +540,55 @@ describe('WidgetSessionService — RefreshGuestSession re-applies every mint che
     });
   });
 
+  describe('refresh is bound to the key the widget registered at mint', () => {
+    it('records the key thumbprint as cnf.jkt at mint and keeps it on refresh', async () => {
+      const service = new WidgetSessionService(ISSUER, makeConfig());
+      const minted = await service.MintGuestSession({ widgetKey: 'pk_live_test', origin: ORIGIN, ProofKey: key.PublicJwk });
+      expect((jwt.decode(minted.token!) as jwt.JwtPayload).cnf).toEqual({ jkt: thumbprint });
+      const refreshed = await refresh(service, minted.token!);
+      expect(refreshed.success).toBe(true);
+      expect((jwt.decode(refreshed.token!) as jwt.JwtPayload).cnf).toEqual({ jkt: thumbprint });
+    });
+
+    it('refuses a mint whose key is not a public P-256 JWK', async () => {
+      const service = new WidgetSessionService(ISSUER, makeConfig());
+      const minted = await service.MintGuestSession({
+        widgetKey: 'pk_live_test',
+        origin: ORIGIN,
+        ProofKey: { ...key.PublicJwk, d: 'private-part' } as unknown as typeof key.PublicJwk,
+      });
+      expect(minted).toMatchObject({ success: false, errorCode: 'not_found' });
+    });
+
+    it('refuses a copied token presented without a proof', async () => {
+      const service = new WidgetSessionService(ISSUER, makeConfig());
+      const token = signGuestToken();
+      const refreshed = await service.RefreshGuestSession({ widgetKey: 'pk_live_test', origin: ORIGIN, BearerToken: token });
+      expect(refreshed).toMatchObject({ success: false, errorCode: 'not_found' });
+    });
+
+    it('refuses a proof signed by another key (the copier\'s own)', async () => {
+      const service = new WidgetSessionService(ISSUER, makeConfig());
+      const token = signGuestToken();
+      const attackerKey = await CreateProofOfPossessionKey();
+      const refreshed = await refresh(service, token, ORIGIN, await proofFor(attackerKey, token));
+      expect(refreshed).toMatchObject({ success: false, errorCode: 'not_found' });
+    });
+
+    it('refuses a proof made for another token, or for another endpoint', async () => {
+      const service = new WidgetSessionService(ISSUER, makeConfig());
+      const token = signGuestToken();
+      expect(await refresh(service, token, ORIGIN, await proofFor(key, signGuestToken({ mj_sid: 'sid-other' })))).toMatchObject({ success: false });
+      expect(await refresh(service, token, ORIGIN, await proofFor(key, token, 'https://mj.example.com/widget/session'))).toMatchObject({ success: false });
+    });
+
+    it('refuses a token minted without a key (no cnf), even with a valid proof', async () => {
+      const service = new WidgetSessionService(ISSUER, makeConfig());
+      const refreshed = await refresh(service, signGuestToken({ cnf: undefined }));
+      expect(refreshed).toMatchObject({ success: false, errorCode: 'not_found' });
+    });
+  });
+
   describe('through the real POST /session/refresh route', () => {
     let server: Server | undefined;
 
@@ -525,10 +601,13 @@ describe('WidgetSessionService — RefreshGuestSession re-applies every mint che
       return `http://127.0.0.1:${(server!.address() as AddressInfo).port}/widget/session/refresh`;
     }
 
-    function post(url: string, body: Record<string, unknown>, authorization?: string) {
+    function post(url: string, body: Record<string, unknown>, authorization?: string, dpop?: string) {
       const headers: Record<string, string> = { 'content-type': 'application/json', origin: ORIGIN, 'user-agent': BROWSER_UA };
       if (authorization) {
         headers.authorization = authorization;
+      }
+      if (dpop) {
+        headers.dpop = dpop;
       }
       return fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
     }
@@ -540,9 +619,24 @@ describe('WidgetSessionService — RefreshGuestSession re-applies every mint che
 
     it('reads the token from the Authorization header and keeps its mj_sid', async () => {
       const url = await startRouter();
-      const res = await post(url, { widgetKey: 'pk_live_test' }, `Bearer ${signGuestToken()}`);
+      const token = signGuestToken();
+      const res = await post(url, { widgetKey: 'pk_live_test' }, `Bearer ${token}`, await proofFor(key, token, url));
       expect(res.status).toBe(200);
       expect(await res.json()).toMatchObject({ success: true, sessionId: 'sid-live' });
+    });
+
+    it('reads the proof key from the mint body', async () => {
+      const url = await startRouter();
+      const res = await post(url.replace('/session/refresh', '/session'), { widgetKey: 'pk_live_test', proofKey: key.PublicJwk });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { token: string };
+      expect((jwt.decode(body.token) as jwt.JwtPayload).cnf).toEqual({ jkt: thumbprint });
+    });
+
+    it('returns 403 without a DPoP header', async () => {
+      const url = await startRouter();
+      const res = await post(url, { widgetKey: 'pk_live_test' }, `Bearer ${signGuestToken()}`);
+      expect(res.status).toBe(403);
     });
 
     it('returns 403 without an Authorization header, even when the body carries a token', async () => {

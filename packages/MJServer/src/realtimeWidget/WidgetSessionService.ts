@@ -17,7 +17,7 @@
 import { createPublicKey } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
-import { MJLruCache, UUIDsEqual } from '@memberjunction/global';
+import { ComputeJwkThumbprint, MJLruCache, ToProofPublicJwk, UUIDsEqual, VerifyProofOfPossessionJwt, type ProofPublicJwk } from '@memberjunction/global';
 import type { MJConversationWidgetInstanceEntity, MJConversationEntity } from '@memberjunction/core-entities';
 import { ResolveConfiguredPrincipal } from '../auth/principals.js';
 import { MagicLinkKeyManager } from '../auth/magicLink/MagicLinkKeys.js';
@@ -48,12 +48,20 @@ export const REFRESH_GRACE_SECONDS = 300;
  */
 export const MAX_GUEST_SESSION_SECONDS = 12 * 3600;
 
+/** The refresh route's path under the widget mount; the refresh proof must name it (`htu`). */
+export const WIDGET_REFRESH_PATH = '/session/refresh';
+
+/** How far a refresh proof's signing time (`iat`) may be from the server clock, either way. */
+export const REFRESH_PROOF_MAX_SKEW_SECONDS = 60;
+
 /** The session a valid refresh token belongs to, carried into the re-minted token unchanged. */
 interface RefreshableGuestSession {
   /** `mj_sid`. */
   SessionId: string;
   /** `mj_sid_iat`: when the session was first minted, epoch seconds. */
   StartedAtSeconds: number;
+  /** `cnf.jkt`: the thumbprint of the key the session is bound to. */
+  KeyThumbprint: string;
 }
 
 /** Resolved returning-visitor anchor for a mint: the durable key + the prior conversation to chain from. */
@@ -96,6 +104,13 @@ export interface MintGuestSessionInput {
    * preserves its `mj_sid` (`sessionId`).
    */
   BearerToken?: string;
+  /**
+   * The widget's proof key (public P-256 JWK, from the mint body's `proofKey`). Its thumbprint is signed into
+   * the token as `cnf.jkt`; a token minted without one cannot be refreshed.
+   */
+  ProofKey?: ProofPublicJwk;
+  /** The refresh proof (`DPoP` header), signed by the key registered at mint. Required by `RefreshGuestSession`. */
+  Proof?: string;
   audit?: WidgetMintAuditContext;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
@@ -296,7 +311,21 @@ export class WidgetSessionService {
       // anonymous trail to that record and surface the pair so the client stamps the new conversation.
       const resolvedIdentity = await this.resolveHostIdentityIfApplicable(widget, hostIdentity, returningVisitor, contextUser);
 
-      return this.audited(this.mintToken(widget, guestRoleName, hostIdentity, returningVisitor, resolvedIdentity), input, widget);
+      let proofKeyThumbprint: string | undefined;
+      if (input.ProofKey !== undefined) {
+        const proofKey = ToProofPublicJwk(input.ProofKey);
+        if (!proofKey) {
+          LogError(`[Widget] Mint for widget ${widget.ID} refused: the proof key is not a public P-256 JWK.`);
+          return this.audited({ success: false, errorCode: 'not_found', error: 'Widget mint rejected.' }, input, widget);
+        }
+        proofKeyThumbprint = await ComputeJwkThumbprint(proofKey);
+      }
+
+      return this.audited(
+        this.mintToken(widget, guestRoleName, hostIdentity, returningVisitor, resolvedIdentity, undefined, proofKeyThumbprint),
+        input,
+        widget,
+      );
     } catch (e) {
       LogError(e);
       return { success: false, errorCode: 'server_error', error: e instanceof Error ? e.message : String(e) };
@@ -346,7 +375,7 @@ export class WidgetSessionService {
         hostIdentity = verified;
       }
 
-      const existingSession = this.verifyRefreshBearerToken(input.BearerToken, widget.ID);
+      const existingSession = await this.verifyRefreshRequest(input.BearerToken, input.Proof, widget.ID);
       if (!existingSession) {
         return this.audited({ success: false, errorCode: 'not_found', error: 'Unknown widget key.' }, input, widget);
       }
@@ -355,7 +384,7 @@ export class WidgetSessionService {
       const resolvedIdentity = await this.resolveHostIdentityIfApplicable(widget, hostIdentity, returningVisitor, contextUser);
 
       return this.audited(
-        this.mintToken(widget, guestRoleName, hostIdentity, returningVisitor, resolvedIdentity, existingSession),
+        this.mintToken(widget, guestRoleName, hostIdentity, returningVisitor, resolvedIdentity, existingSession, existingSession.KeyThumbprint),
         input,
         widget,
       );
@@ -366,11 +395,37 @@ export class WidgetSessionService {
   }
 
   /**
-   * Verifies the caller's current widget guest JWT for `RefreshGuestSession` and returns its
-   * `mj_sid` and `mj_sid_iat` when valid, or `null` when missing, tampered, expired past {@link REFRESH_GRACE_SECONDS},
-   * past the session's hard end ({@link MAX_GUEST_SESSION_SECONDS}) or without a session start,
-   * non-anonymous, minted for a different widget, or issued by another deployment.
+   * Verifies a `RefreshGuestSession` request: the caller's current widget guest JWT and the proof that the
+   * caller holds the key the token is bound to. Returns the session to carry forward, or `null` when the token
+   * is missing, tampered, expired past {@link REFRESH_GRACE_SECONDS}, past the session's hard end
+   * ({@link MAX_GUEST_SESSION_SECONDS}) or without a session start, non-anonymous, minted for a different
+   * widget, issued by another deployment, or not bound to a key; or when the proof is missing or not made by
+   * that key for this request and token.
    */
+  private async verifyRefreshRequest(bearerToken: string | undefined, proof: string | undefined, widgetId: string): Promise<RefreshableGuestSession | null> {
+    const session = this.verifyRefreshBearerToken(bearerToken, widgetId);
+    if (!session) {
+      return null;
+    }
+    const verification = await VerifyProofOfPossessionJwt(proof ?? '', {
+      Method: 'POST',
+      PathSuffix: WIDGET_REFRESH_PATH,
+      AccessToken: (bearerToken ?? '').trim(),
+      NowSeconds: Math.floor(Date.now() / 1000),
+      MaxSkewSeconds: REFRESH_PROOF_MAX_SKEW_SECONDS,
+    });
+    if (verification.Valid === false) {
+      LogError(`[Widget] Refresh proof refused for widget ${widgetId} (${verification.Reason}).`);
+      return null;
+    }
+    if (verification.Thumbprint !== session.KeyThumbprint) {
+      LogError(`[Widget] Refresh proof refused for widget ${widgetId}: signed by a key the token is not bound to.`);
+      return null;
+    }
+    return session;
+  }
+
+  /** The token half of {@link verifyRefreshRequest}: everything except the proof. */
   private verifyRefreshBearerToken(bearerToken: string | undefined, widgetId: string): RefreshableGuestSession | null {
     const token = (bearerToken ?? '').trim();
     if (!token) {
@@ -410,7 +465,11 @@ export class WidgetSessionService {
       if (typeof startedAt !== 'number' || !Number.isFinite(startedAt) || nowSeconds - startedAt > MAX_GUEST_SESSION_SECONDS) {
         return null;
       }
-      return { SessionId: sid, StartedAtSeconds: startedAt };
+      const keyThumbprint = typeof payload.cnf?.jkt === 'string' ? payload.cnf.jkt : '';
+      if (keyThumbprint.length === 0) {
+        return null;
+      }
+      return { SessionId: sid, StartedAtSeconds: startedAt, KeyThumbprint: keyThumbprint };
     } catch (e) {
       LogError(`[Widget] Refresh token verification failed for widget ${widgetId}: ${e instanceof Error ? e.message : String(e)}`);
       return null;
@@ -547,6 +606,7 @@ export class WidgetSessionService {
     returningVisitor?: ReturningVisitorResolution,
     resolvedIdentity?: ResolvedVisitorIdentity,
     existingSession?: RefreshableGuestSession,
+    proofKeyThumbprint?: string,
   ): MintGuestSessionResult {
     const nowSeconds = Math.floor(Date.now() / 1000);
     const ttlMinutes = widget.SessionTTLMinutes || this.config.defaultSessionTtlMinutes;
@@ -568,6 +628,7 @@ export class WidgetSessionService {
       nowSeconds,
       ttlSeconds,
       sessionStartedAtSeconds: startedAtSeconds,
+      proofKeyThumbprint,
       hostIdentity,
       // RV1/RV2/RV4: carry the returning-visitor anchor + resolved identity as claims so the voice path
       // (server-created conversation) stamps the same fields the text path stamps client-side.

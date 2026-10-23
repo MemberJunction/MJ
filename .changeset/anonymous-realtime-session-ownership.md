@@ -1,5 +1,6 @@
 ---
 "@memberjunction/core": patch
+"@memberjunction/global": patch
 "@memberjunction/core-entities-server": patch
 "@memberjunction/server": patch
 "@memberjunction/ng-realtime-widget": patch
