@@ -148,6 +148,16 @@ export function parseManifestImports(text) {
    return { identifiers, packages };
 }
 
+/** An optional trailing `// …` comment after a decorator. */
+const TRAILING_COMMENT = String.raw`(?:[ \t]*\/\/[^\n]*)?`;
+/** Zero or more further decorators, each `@Name` or `@Name(…)`, each with an optional trailing comment. */
+const STACKED_DECORATORS = String.raw`(?:\s*@[A-Za-z_$][\w$.]*(?:\([^)]*\))?` + TRAILING_COMMENT + ')*';
+const REGISTRATION_PATTERN = new RegExp(
+   String.raw`@RegisterClass\(\s*BaseEntity\b[^)]*\)` + TRAILING_COMMENT + STACKED_DECORATORS +
+      String.raw`\s*export\s+(?:abstract\s+)?class\s+([A-Za-z0-9_$]+)`,
+   'g'
+);
+
 /**
  * Every `@RegisterClass(BaseEntity, …)` class declared in a source file.
  *
@@ -155,18 +165,28 @@ export function parseManifestImports(text) {
  * matches that carry a `${…}` substitution or a non-identifier name: CodeGen's own emitters hold
  * `@RegisterClass(BaseEntity, '${entity.Name}') export class ${sClassName}` inside template
  * literals, which is the generator's output rather than a registration in that file.
+ *
+ * Other decorators may sit between the registration and `export class` (`@Injectable()`, a
+ * decorator with arguments, one with a trailing `//` comment), so a subclass that gains a second
+ * decorator does not silently drop out of the scan. Anything that is not a decorator in between
+ * ends the match, so a registration is never credited to an unrelated class further down.
+ * Known blind spot: a `)` inside the `@RegisterClass(…)` arguments, or inside a stacked
+ * decorator's arguments, ends the match early. Nothing in the repo does either today.
  */
 export function extractBaseEntityRegistrations(raw) {
    const text = stripComments(raw);
    const rawLines = raw.split('\n');
    const out = [];
-   const pattern = /@RegisterClass\(\s*BaseEntity\b[^)]*\)(?:[ \t]*\/\/[^\n]*)?\s*export\s+(?:abstract\s+)?class\s+([A-Za-z0-9_$]+)/g;
+   const pattern = REGISTRATION_PATTERN;
+   pattern.lastIndex = 0;
    let match;
    while ((match = pattern.exec(text))) {
       const className = match[1];
       if (match[0].includes('${') || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(className)) continue;
       const lineIndex = text.slice(0, match.index).split('\n').length - 1;
-      const window = rawLines.slice(Math.max(0, lineIndex - 2), lineIndex + 3).join('\n');
+      // The marker may sit just above the class, below any stacked decorators.
+      const classLineIndex = lineIndex + match[0].split('\n').length - 1;
+      const window = rawLines.slice(Math.max(0, lineIndex - 2), Math.max(classLineIndex, lineIndex + 2) + 1).join('\n');
       out.push({ className, lineIndex, allowed: window.includes(ALLOW_MARKER) });
    }
    return out;

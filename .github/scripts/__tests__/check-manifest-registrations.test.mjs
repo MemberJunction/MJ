@@ -34,6 +34,52 @@ describe('extractBaseEntityRegistrations', () => {
       expect(hits[0].allowed).toBe(false);
    });
 
+   it('finds a registered entity subclass with another decorator stacked below it', () => {
+      const src = [
+         `@RegisterClass(BaseEntity, 'MJ: Actions')`,
+         `@Injectable()`,
+         `export class MJActionEntityServer extends MJActionEntityExtended {`,
+      ].join('\n');
+      expect(extractBaseEntityRegistrations(src).map((r) => r.className)).toEqual(['MJActionEntityServer']);
+   });
+
+   it('finds it under several stacked decorators with arguments and trailing comments', () => {
+      const src = [
+         `@RegisterClass(BaseEntity, 'MJ: Actions', 2) // wins over the generated class`,
+         `@Audited({ level: 'full' }) // every save is logged`,
+         `@Sealed`,
+         `export abstract class MJActionEntityServer extends MJActionEntityExtended {`,
+      ].join('\n');
+      const hits = extractBaseEntityRegistrations(src);
+      expect(hits.map((r) => r.className)).toEqual(['MJActionEntityServer']);
+      expect(hits[0].lineIndex).toBe(0);
+   });
+
+   it('finds it when another decorator sits above it', () => {
+      const src = [`@Injectable()`, `@RegisterClass(BaseEntity, 'MJ: Actions')`, `export class MJActionEntityServer {`].join('\n');
+      expect(extractBaseEntityRegistrations(src).map((r) => r.className)).toEqual(['MJActionEntityServer']);
+   });
+
+   it('does not credit a later class when ordinary code sits between the decorator and it', () => {
+      const src = [
+         `@RegisterClass(BaseEntity, 'MJ: Actions')`,
+         `const notADecorator = 1;`,
+         `export class Unrelated {`,
+      ].join('\n');
+      expect(extractBaseEntityRegistrations(src)).toEqual([]);
+   });
+
+   it('honours the allow marker just above the class when decorators are stacked between', () => {
+      const src = [
+         `@RegisterClass(BaseEntity, 'MJ: Actions')`,
+         `@Injectable()`,
+         `@Audited()`,
+         `// manifest-registration-ok: abstract base, never instantiated directly`,
+         `export abstract class MJActionEntityBase {`,
+      ].join('\n');
+      expect(extractBaseEntityRegistrations(src).map((r) => r.allowed)).toEqual([true]);
+   });
+
    it('ignores registrations for other base classes', () => {
       const src = [
          `@RegisterClass(BaseAction, 'Send Email')`,
