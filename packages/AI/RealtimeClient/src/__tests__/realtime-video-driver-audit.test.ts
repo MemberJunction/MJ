@@ -43,6 +43,7 @@ const CLIENT_DRIVER_AUDIT: ClientDriverAuditRow[] = [
     { Key: 'elevenlabs', Class: 'ElevenLabsRealtimeClient', AgentVideo: 'none', InboundVideo: 'none', KitRuns: [] },
     { Key: 'assemblyai', Class: 'AssemblyAIRealtimeClient', AgentVideo: 'none', InboundVideo: 'none', KitRuns: [] },
     { Key: 'xai', Class: 'xAIRealtimeClient', AgentVideo: 'none', InboundVideo: 'none', KitRuns: [] },
+    { Key: 'eleven-realtime', Class: 'ElevenRealtimeClient', AgentVideo: 'none', InboundVideo: 'none', KitRuns: [] },
     { Key: 'huggingface', Class: 'HuggingFaceRealtimeClient', AgentVideo: 'none', InboundVideo: 'none', KitRuns: [] },
 ];
 
