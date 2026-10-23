@@ -21,8 +21,9 @@ my-app {
 
 /* The page token on the document itself, so the frame BEFORE Angular boots paints the
    theme's (and the org brand overlay's) page background instead of the browser default.
-   Token-driven: follows light/dark and data-theme-overlay with no further wiring, and the
-   shell paints the same token once it renders, so nothing changes after boot. */
+   Token-driven: follows light/dark and data-theme-overlay with no further wiring. The shell and
+   its loading screen paint the same token, so an authenticated boot changes nothing; the sign-in
+   page paints its own banner over it. */
 html,
 body {
     background: var(--mj-bg-page);

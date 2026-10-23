@@ -144,4 +144,25 @@ describe('BRAND_OVERLAY_PREPAINT_SCRIPT', () => {
     const squash = (s: string) => s.replace(/\s+/g, ' ').trim();
     expect(squash(readFileSync(indexHtml, 'utf8'))).toContain(squash(BRAND_OVERLAY_PREPAINT_SCRIPT));
   });
+
+  it('the reference host carries the snippet at the top of <body>: after </head>, before <app-root>', () => {
+    // The pin above is position-blind. Angular injects the app stylesheet link just before
+    // </head>, so a snippet anywhere in <head> appends its <style> BEFORE that link and loses the
+    // cascade for the one frame it exists for; only a body position wins. HTML comments are
+    // stripped first because the file's own prose mentions <body> and <app-root>.
+    const indexHtml = resolve(__dirname, '../../../../../MJExplorer/src/index.html');
+    if (!existsSync(indexHtml)) {
+      return;
+    }
+    const squash = (s: string) => s.replace(/\s+/g, ' ').trim();
+    const html = squash(readFileSync(indexHtml, 'utf8').replace(/<!--[\s\S]*?-->/g, ''));
+    const snippetAt = html.indexOf(squash(BRAND_OVERLAY_PREPAINT_SCRIPT));
+    const headEndsAt = html.indexOf('</head>');
+    const appRootAt = html.indexOf('<app-root');
+    expect(snippetAt).toBeGreaterThan(-1);
+    expect(headEndsAt).toBeGreaterThan(-1);
+    expect(appRootAt).toBeGreaterThan(-1);
+    expect(snippetAt).toBeGreaterThan(headEndsAt);
+    expect(snippetAt).toBeLessThan(appRootAt);
+  });
 });
