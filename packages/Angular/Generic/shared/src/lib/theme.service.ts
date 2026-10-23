@@ -387,8 +387,8 @@ export class ThemeService {
         }
         try {
             window.localStorage.setItem(PRELOAD_OVERLAY_KEY, id);
-            // The CSS is tens of KB; skip the synchronous write when the stored entry already matches
-            // (a re-apply of the same brand), so repeated applies cost nothing and never approach quota.
+            // The CSS is a few KB; skip the synchronous write when the stored entry already matches
+            // (a re-apply of the same brand), so repeated applies cost nothing.
             const entry = JSON.stringify({ id, css: this.brandCss.get(id) ?? '' });
             if (window.localStorage.getItem(PRELOAD_OVERLAY_CSS_KEY) !== entry) {
                 window.localStorage.setItem(PRELOAD_OVERLAY_CSS_KEY, entry);
@@ -471,12 +471,25 @@ export class ThemeService {
 
     /**
      * Remove the active org brand overlay (revert to the base MJ tokens).
+     *
+     * Scoped to the brand: only the brand's own `<link>` is disabled and the `data-theme-overlay`
+     * attribute is dropped only when it still names that brand. Bootstrap calls this on every login
+     * where the org has no active brand, right after `Initialize()` applied the user's theme, so a
+     * blanket clear would switch off a user's custom theme on any install that never used Theme Studio.
      */
     public ClearBrandOverlay(): void {
+        const brandId = this._brandOverlayId;
         this._brandOverlayId = null;
         this.pendingOverlayId = null;
-        document.documentElement.removeAttribute('data-theme-overlay');
-        this.disableAllCustomCss();
+        if (brandId !== null) {
+            if (document.documentElement.getAttribute('data-theme-overlay') === brandId) {
+                document.documentElement.removeAttribute('data-theme-overlay');
+            }
+            const brandLink = this.loadedCssLinks.get(brandId);
+            if (brandLink) {
+                brandLink.disabled = true;
+            }
+        }
         this.removePreloadStyles();
         try {
             window.localStorage.removeItem(PRELOAD_OVERLAY_KEY);
