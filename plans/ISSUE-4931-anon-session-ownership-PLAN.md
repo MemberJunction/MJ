@@ -7,18 +7,24 @@
 > | Plan says | As shipped |
 > |---|---|
 > | `CloneSessionUserForRequest` | `CloneUserForSessionContext` (`packages/MJServer/src/auth/sessionUserClone.ts`) |
-> | `WidgetSessionMintInput.bearerToken` | `MintGuestSessionInput.BearerToken` (the camelCase `bearerToken` is a deprecated alias) |
-> | `jwt.verify(…, issuer: this.config.issuer, …)` | no issuer option: the token is signed by this server's own `MagicLinkKeyManager` key, checked with `algorithms`, `audience` and the manual grace window |
+> | `WidgetSessionMintInput.bearerToken` | `MintGuestSessionInput.BearerToken` (no camelCase alias) |
+> | `jwt.verify(…, issuer: this.config.issuer, …)` | `issuer: this.publicUrl` (the issuer the mint signs), with `algorithms`, `audience` and the manual grace window |
 > | `loadAndAuthorizeWidget(…)` | `RefreshGuestSession` repeats `MintGuestSession`'s checks inline |
 > | a bad, expired-past-grace or other-widget refresh token returns `errorCode: 'invalid_key'` / "Widget is unavailable for this origin." | it returns the uniform `{ success: false, errorCode: 'not_found', error: 'Unknown widget key.' }` (HTTP 403); an origin rejection keeps `EvaluateWidgetMint`'s own code |
 > | `renewGuestToken` passes `this.guestSession?.Token` to `this.config.guestSource.Refresh(…)` | it passes `this.guest.token` to `this.guestSource.Refresh(…)` through `mintGuest` |
 > | anonymous identity = `AnonymousVisitorID` (`mj_sid`) everywhere | `ResolveSessionScopeIdentity` (`realtimeSessions/sessionAccess.ts`): the token's `MagicLinkScope.ResourceID` when it carries one, else `mj_sid`; used by both `SessionManager` (the `ExternalID` stamp) and `AuthorizeSessionAccess`, so a resource-scoped anonymous invite visitor keeps matching the `{{ScopeResourceID}}` row filters |
-> | (not in the plan) | `MJ: Conversations` / `MJ: AI Agent Sessions` server entities refuse an anonymous visitor changing `ExternalID` / `ConversationID` on an existing row (`MJCoreEntitiesServer/src/custom/anonymousOwnershipKeyGuard.ts`) |
+> | (not in the plan) | `MJ: Conversations` / `MJ: AI Agent Sessions` server entities refuse an anonymous visitor changing `ExternalID` / `ConversationID` on an existing row (`MJCoreEntitiesServer/src/custom/anonymousOwnershipKeyGuard.ts`), including through a transaction group's `'Use'` variable on that field or on `ID`; the protected-`Config` check refuses a `'Use'` variable on `Config` |
+> | (not in the plan) | A guest session ends 12 h after its first mint: the token carries `mj_sid_iat`, refresh copies it, and refresh is refused once less than `MIN_REFRESHED_TOKEN_SECONDS` (120 s) remain (`MAX_GUEST_SESSION_SECONDS`); the web widget waits at least 5 s between refreshes |
+> | (not in the plan) | Refresh is bound to a key that never leaves the browser: the mint body carries `proofKey` (a public P-256 JWK), the token `cnf.jkt` (its RFC 7638 thumbprint), and refresh needs a `DPoP` proof signed by that key (`@memberjunction/global` `ProofOfPossession.ts`); on 401/403 the web widget mints a new session (`WidgetSessionError`) |
+> | (not in the plan) | A named user with a resource-scoped link may also use its own session on a conversation with no `ExternalID`, when it can read that conversation (`LoadSessionConversationScope`) |
+> | (not in the plan) | `SessionManager.CreateSession` refuses an anonymous caller that supplies a conversation that is not its own |
+> | (not in the plan) | A widget guest's agent reply is written as the guest (`RunAgentInConversation`'s `ConversationWriter`, from `UserPayload.ElevatedFrom`), and a reply that cannot be saved fails the run |
+> | (not in the plan) | `@memberjunction/realtime-widget`'s `build` also runs `bundle` (`dist/embed/mj-widget.js`) |
 > | `__tests__/agentSessions/SessionManager.createConversation.test.ts` | `__tests__/SessionManager.test.ts` |
 > | `__tests__/realtimeSessions/ownedRealtimeSession.test.ts` | `__tests__/realtimeSessions/ownedRealtimeSession.anonymous.test.ts` |
 > | `__tests__/agentSessions/AgentSessionResolver.test.ts` | `__tests__/AgentSessionResolver.ownership.test.ts` |
 > | `__tests__/resolvers/RemoteBrowserActionResolver.ownership.test.ts` | `__tests__/RemoteBrowserActionResolver.ownership.test.ts` |
-> | `__tests__/realtimeWidget/widgetSessionService.test.ts`, `…/widgetRouter.test.ts` | `__tests__/WidgetSessionService.test.ts` (no router test file) |
+> | `__tests__/realtimeWidget/widgetSessionService.test.ts`, `…/widgetRouter.test.ts` | `__tests__/WidgetSessionService.test.ts`, which also drives the real `POST /session/refresh` route |
 > | `src/lib/auth/widget-key-client.spec.ts`, `src/lib/session/widget-controller.spec.ts` | `src/__tests__/widget-key-client.test.ts`, `src/__tests__/widget-controller.test.ts` |
 
 **Goal:** Enforce per-visitor ownership on all realtime session write gates using the per-token `mj_sid` claim (`UserInfo.AnonymousVisitorID`) and preserve `mj_sid` across widget guest token refreshes.
@@ -186,7 +192,7 @@ Run:
    - Update `mintToken` signature to accept an optional 5th parameter `existingSessionId?: string` and use `const sessionId = existingSessionId ?? GenerateSessionId();`.
    - In `RefreshGuestSession(input: WidgetSessionMintInput)`:
      - Validate `input.widgetKey` and resolve the widget via `this.loadAndAuthorizeWidget(input.widgetKey, origin, input.hostAssertion)` (returning the uniform 403 result on failure).
-     - Verify `input.bearerToken` is a non-empty string; verify its signature with `MagicLinkKeyManager.Instance` using `jwt.verify(token, publicKeyPem, { algorithms: ['RS256'], audience: this.config.audience, issuer: this.config.issuer, ignoreExpiration: true })`. **[As shipped: no `issuer` option — see the corrections table.]**
+     - Verify `input.bearerToken` is a non-empty string; verify its signature with `MagicLinkKeyManager.Instance` using `jwt.verify(token, publicKeyPem, { algorithms: ['RS256'], audience: this.config.audience, issuer: this.config.issuer, ignoreExpiration: true })`. **[As shipped: `issuer: this.publicUrl` — see the corrections table.]**
      - Check `exp` is a finite number and `Math.floor(Date.now() / 1000) <= exp + REFRESH_GRACE_SECONDS`.
      - Check `decoded['mj_magic_link'] === true`, `decoded['mj_anon'] === true`, `typeof decoded['mj_widget_id'] === 'string' && UUIDsEqual(decoded['mj_widget_id'], auth.widget.ID)`, and `typeof decoded['mj_sid'] === 'string' && decoded['mj_sid'].trim().length > 0`.
      - On any token validation failure, return `{ success: false, error: 'Widget is unavailable for this origin.', errorCode: 'invalid_key' }`. **[As shipped: `{ success: false, errorCode: 'not_found', error: 'Unknown widget key.' }`.]**
