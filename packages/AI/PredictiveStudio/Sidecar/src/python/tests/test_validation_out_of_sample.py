@@ -64,18 +64,16 @@ def test_kfold_allows_non_contiguous_integer_class_labels() -> None:
     req = schemas.TrainRequest.model_validate(raw)
     dev_rows = raw["data"]["rows"]
     y_dev = np.array([1] * 20 + [2] * 20, dtype=int)
-    m = main._kfold_out_of_fold_metrics(
-        req,
-        dev_rows,
-        raw["data"]["columns"],
-        [f"x{i}" for i in range(6)],
-        [{"op": "standardize", "cols": [f"x{i}" for i in range(6)]}],
-        6,
-        y_dev,
-        True,
-        lambda: algorithms.build_estimator("logistic_regression", "classification", {}),
-        42,
+    ctx = main.FoldContext(
+        dev_rows=dev_rows,
+        columns=raw["data"]["columns"],
+        feature_cols=[f"x{i}" for i in range(6)],
+        ops_spec=[{"op": "standardize", "cols": [f"x{i}" for i in range(6)]}],
+        target_idx=6,
+        y_dev=y_dev,
+        build=lambda: algorithms.build_estimator("logistic_regression", "classification", {}),
     )
+    m = main._kfold_out_of_fold_metrics(req, ctx, True, 42)
     assert m["n"] == 40.0
 
 

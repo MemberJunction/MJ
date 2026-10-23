@@ -10,5 +10,6 @@ export declare class PythonProbe {
   static IsSupported(version: PythonVersion | null): boolean;
   static ProbeCommand(command: string): ProbeResult;
   static Select(candidates: readonly string[], probe?: (command: string) => ProbeResult): SelectResult;
+  static FormatVersion(v: PythonVersion): string;
   static FormatReport(probed: readonly ProbeResult[]): string;
 }

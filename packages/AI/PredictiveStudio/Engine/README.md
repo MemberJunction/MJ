@@ -109,18 +109,7 @@ record-set-processor / -base (substrate)  ─┤
 
 ## Build & test
 
-**One-time setup (fresh clone).** Predictive Studio's packages depend on other workspace packages, so build them
-together, never one by one (a per-package `tsc` on a fresh clone fails with `TS2307 Cannot find module
-'@memberjunction/core'`):
-
-    pnpm install                                                      # repo root
-    npx turbo run build --filter=@memberjunction/predictive-studio...  # PS + everything it depends on
-    pnpm --filter @memberjunction/predictive-studio-sidecar run setup:python
-
-`setup:python` needs CPython 3.11 or 3.12 (numpy 1.26.4 has no wheels for 3.13+); it tries `python3.11`, `python3.12`,
-`python3`, `python` and stops with the list it probed if none fits. Pass `--python <path>` to choose one. On macOS
-also `brew install libomp` (XGBoost/LightGBM). To run the sidecar or its tests on another interpreter, set
-`PREDICTIVE_STUDIO_PYTHON=<path to python>`.
+For one-time setup on a fresh clone (building the workspace and the Python environment), see [Setting up the bundled Python environment](../Sidecar/README.md#setting-up-the-bundled-python-environment).
 
 ```bash
 npm run build              # tsc && tsc-alias -f (after the workspace dependencies are built)

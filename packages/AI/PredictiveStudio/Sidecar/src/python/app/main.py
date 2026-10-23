@@ -13,6 +13,7 @@ Endpoints:
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
@@ -107,8 +108,7 @@ def train(req: TrainRequest) -> TrainResponse:
         training_row_count=result["training_row_count"],
         duration_sec=round(duration, 4),
         holdout_metrics=result.get("holdout_metrics"),
-        validation_out_of_sample=bool(result.get("validation_out_of_sample", True)),
-    )
+            )
 
 
 def _feature_columns(req: TrainRequest) -> List[str]:
@@ -252,7 +252,7 @@ def _run_training(req: TrainRequest) -> Dict[str, Any]:
     train_metrics, estimator = _fit_and_score(
         req, X_dev, y_dev, is_classification, rng,
         dev_rows=dev_rows, columns=columns, feature_cols=feature_cols, ops_spec=ops_spec,
-        target_idx=target_idx, encoder=encoder,
+        target_idx=target_idx,
     )
 
     # Stash decode map so the serialized model can map int predictions -> labels.
@@ -268,7 +268,6 @@ def _run_training(req: TrainRequest) -> Dict[str, Any]:
         "feature_importance": feature_importance,
         "feature_importance_kind": importance_kind,
         "training_row_count": int(len(rows)),
-        "validation_out_of_sample": True,
     }
 
     if X_hold.shape[0] > 0:
@@ -336,7 +335,6 @@ def _fit_and_score(
     feature_cols: List[str],
     ops_spec: List[Dict[str, Any]],
     target_idx: int,
-    encoder: Any,
 ) -> Tuple[Dict[str, float], Any]:
     """Fit the estimator using the configured validation strategy.
 
@@ -359,6 +357,7 @@ def _fit_and_score(
             req.algorithm, req.problem_type, req.hyperparameters
         )
 
+    fold_ctx = FoldContext(dev_rows, columns, feature_cols, ops_spec, target_idx, y, build)
     n_dev = X.shape[0]
     if n_dev < MIN_VALIDATION_ROWS:
         raise ValueError(
@@ -367,9 +366,7 @@ def _fit_and_score(
         )
 
     if strategy == "kfold":
-        val_metrics = _kfold_out_of_fold_metrics(
-            req, dev_rows, columns, feature_cols, ops_spec, target_idx, y, is_classification, build, random_state,
-        )
+        val_metrics = _kfold_out_of_fold_metrics(req, fold_ctx, is_classification, random_state)
     elif strategy in ("train_test_split", "holdout"):
         # `holdout` uses the same out-of-sample split as train_test_split (F-SC-1): it used to score in-sample.
         test_size = req.validation.test_size or 0.2
@@ -382,10 +379,7 @@ def _fit_and_score(
                 f"Only {n_dev} training rows remain after the locked holdout — too few to split {test_size:g} across all classes "
                 f"and measure the model on rows it did not train on ({exc}). Add rows, increase test_size, or lower LockedHoldoutFraction."
             ) from exc
-        val_metrics = _anti_skew_val_metrics(
-            req, dev_rows, columns, feature_cols, ops_spec, target_idx,
-            tr_idx, te_idx, y, is_classification, encoder, build,
-        )
+        val_metrics = _anti_skew_val_metrics(fold_ctx, tr_idx, te_idx, is_classification)
     else:
         raise ValueError(f"Unknown validation strategy '{strategy}'. Use train_test_split, kfold or holdout.")
 
@@ -395,19 +389,22 @@ def _fit_and_score(
     return val_metrics, final
 
 
+@dataclass(frozen=True)
+class FoldContext:
+    """The per-training-run inputs every validation fold shares: raw dev rows, schema, preprocessing spec, target and
+    the estimator factory."""
+
+    dev_rows: List[Sequence[Any]]
+    columns: List[str]
+    feature_cols: List[str]
+    ops_spec: List[Dict[str, Any]]
+    target_idx: int
+    y_dev: np.ndarray
+    build: Callable[[], Any]
+
+
 def _anti_skew_val_metrics(
-    req: TrainRequest,
-    dev_rows: List[Sequence[Any]],
-    columns: List[str],
-    feature_cols: List[str],
-    ops_spec: List[Dict[str, Any]],
-    target_idx: int,
-    tr_idx: np.ndarray,
-    te_idx: np.ndarray,
-    y_dev: np.ndarray,
-    is_classification: bool,
-    encoder: Any,
-    build,
+    ctx: FoldContext, tr_idx: np.ndarray, te_idx: np.ndarray, is_classification: bool
 ) -> Dict[str, float]:
     """Compute validation metrics with preprocessing fit on the TRAIN fold only.
 
@@ -415,71 +412,57 @@ def _anti_skew_val_metrics(
     train fold and APPLIED to the validation fold (fit-once / apply-everywhere within
     the split), so the validation fold never leaks into the fitted params.
     """
-    est, X_te = _fit_fold(dev_rows, columns, feature_cols, ops_spec, target_idx, tr_idx, te_idx, y_dev, build)
-    return _score(est, X_te, y_dev[te_idx], is_classification)
+    est, X_te = _fit_fold(ctx, tr_idx, te_idx)
+    return _score(est, X_te, ctx.y_dev[te_idx], is_classification)
 
 
-def _fit_fold(
-    dev_rows: List[Sequence[Any]],
-    columns: List[str],
-    feature_cols: List[str],
-    ops_spec: List[Dict[str, Any]],
-    target_idx: int,
-    tr_idx: np.ndarray,
-    te_idx: np.ndarray,
-    y_dev: np.ndarray,
-    build: Callable[[], Any],
-) -> Tuple[Any, np.ndarray]:
+def _fit_fold(ctx: FoldContext, tr_idx: np.ndarray, te_idx: np.ndarray) -> Tuple[Any, np.ndarray]:
     """Fit preprocessing and the estimator on the training fold only; return the estimator and the transformed
     held-out fold (preprocessing APPLIED, never re-fit — no held-out leakage into the fitted params)."""
-    tr_rows = [list(dev_rows[i]) for i in tr_idx]
-    te_rows = [list(dev_rows[i]) for i in te_idx]
-    X_tr, _, fold_fitted = preprocessing.fit_transform(columns, tr_rows, ops_spec, feature_cols)
-    te_feature_dicts = [{c: r[i] for i, c in enumerate(columns) if i != target_idx} for r in te_rows]
-    X_te = preprocessing.transform(te_feature_dicts, fold_fitted, feature_cols)
-    est = build()
-    est.fit(X_tr, y_dev[tr_idx])
+    tr_rows = [list(ctx.dev_rows[i]) for i in tr_idx]
+    te_rows = [list(ctx.dev_rows[i]) for i in te_idx]
+    X_tr, _, fold_fitted = preprocessing.fit_transform(ctx.columns, tr_rows, ctx.ops_spec, ctx.feature_cols)
+    te_feature_dicts = [{c: r[i] for i, c in enumerate(ctx.columns) if i != ctx.target_idx} for r in te_rows]
+    X_te = preprocessing.transform(te_feature_dicts, fold_fitted, ctx.feature_cols)
+    est = ctx.build()
+    est.fit(X_tr, ctx.y_dev[tr_idx])
     return est, X_te
 
 
-def _kfold_out_of_fold_metrics(
-    req: TrainRequest,
-    dev_rows: List[Sequence[Any]],
-    columns: List[str],
-    feature_cols: List[str],
-    ops_spec: List[Dict[str, Any]],
-    target_idx: int,
-    y_dev: np.ndarray,
-    is_classification: bool,
-    build: Callable[[], Any],
-    random_state: int,
-) -> Dict[str, float]:
-    """Pooled out-of-fold metrics for ``kfold``: every dev row is predicted exactly once by a model (and preprocessing)
-    fit without it. ``K`` = ``req.validation.k`` (default 5); stratified folds for classification."""
-    # Function-local, as every other scikit-learn import in main.py is (lines 126, 204, 340 at c92d4a47f9).
+def _kfold_splits(y_dev: np.ndarray, k: int, is_classification: bool, random_state: int) -> Any:
+    """Validate K against the rows/classes and return the (stratified for classification) fold splitter's splits."""
+    # Function-local, as every other scikit-learn import in main.py is.
     from sklearn.model_selection import KFold, StratifiedKFold
 
-    n_rows = len(dev_rows)
-    k = req.validation.k or 5
+    n_rows = len(y_dev)
     if k < 2 or k > n_rows:
         raise ValueError(f"kfold needs 2 <= K <= {n_rows} (the training rows); got K={k}.")
     idx = np.arange(n_rows)
-    if is_classification:
-        _, class_counts = np.unique(y_dev, return_counts=True)
-        smallest = int(np.min(class_counts)) if len(class_counts) >= 2 else 0
-        if smallest < k:
-            raise ValueError(
-                f"kfold with K={k} needs at least {k} rows of every class; the smallest class has {smallest}. "
-                "Lower K or use train_test_split."
-            )
-        splits = StratifiedKFold(n_splits=k, shuffle=True, random_state=random_state).split(idx, y_dev)
-    else:
-        splits = KFold(n_splits=k, shuffle=True, random_state=random_state).split(idx)
+    if not is_classification:
+        return KFold(n_splits=k, shuffle=True, random_state=random_state).split(idx)
+    _, class_counts = np.unique(y_dev, return_counts=True)
+    smallest = int(np.min(class_counts)) if len(class_counts) >= 2 else 0
+    if smallest < k:
+        raise ValueError(
+            f"kfold with K={k} needs at least {k} rows of every class; the smallest class has {smallest}. "
+            "Lower K or use train_test_split."
+        )
+    return StratifiedKFold(n_splits=k, shuffle=True, random_state=random_state).split(idx, y_dev)
+
+
+def _kfold_out_of_fold_metrics(
+    req: TrainRequest, ctx: FoldContext, is_classification: bool, random_state: int
+) -> Dict[str, float]:
+    """Pooled out-of-fold metrics for ``kfold``: every dev row is predicted exactly once by a model (and preprocessing)
+    fit without it. ``K`` = ``req.validation.k`` (default 5); stratified folds for classification."""
+    n_rows = len(ctx.dev_rows)
+    k = req.validation.k or 5
+    splits = _kfold_splits(ctx.y_dev, k, is_classification, random_state)
 
     oof_pred: Optional[np.ndarray] = None
     oof_score: Optional[np.ndarray] = None
     for tr_idx, te_idx in splits:
-        est, X_te = _fit_fold(dev_rows, columns, feature_cols, ops_spec, target_idx, tr_idx, te_idx, y_dev, build)
+        est, X_te = _fit_fold(ctx, tr_idx, te_idx)
         pred = np.asarray(est.predict(X_te))
         if oof_pred is None:
             oof_pred = np.empty(n_rows, dtype=pred.dtype)
@@ -494,8 +477,8 @@ def _kfold_out_of_fold_metrics(
     if oof_pred is None or (is_classification and oof_score is None):
         raise RuntimeError(f"kfold produced no out-of-fold predictions (K={k}, rows={n_rows})")
     if is_classification and oof_score is not None:
-        return metrics.classification_metrics(y_dev, oof_pred, oof_score)
-    return metrics.regression_metrics(y_dev, oof_pred)
+        return metrics.classification_metrics(ctx.y_dev, oof_pred, oof_score)
+    return metrics.regression_metrics(ctx.y_dev, oof_pred)
 
 
 def _score(

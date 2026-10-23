@@ -42,18 +42,18 @@ if (!existsSync(requirements)) {
 if (existsSync(venvPython)) {
   const existing = PythonProbe.ProbeCommand(venvPython);
   if (!PythonProbe.IsSupported(existing.Version)) {
-    const v = existing.Version ? `${existing.Version.Major}.${existing.Version.Minor}.${existing.Version.Patch}` : 'an unknown Python';
-    console.error(`The venv at ${venvDir} runs ${v}; the pins need 3.11 or 3.12. Delete it (rm -rf "${venvDir}") and re-run.`);
+    const v = existing.Version ? PythonProbe.FormatVersion(existing.Version) : 'an unknown Python';
+    console.error(`The venv at ${venvDir} runs ${v}; the pins need ${PythonProbe.SupportedMinors.map((m) => `3.${m}`).join(' or ')}. Delete it (rm -rf "${venvDir}") and re-run.`);
     process.exit(1);
   }
-  console.log(`Reusing venv at ${venvDir} (Python ${existing.Version.Major}.${existing.Version.Minor}.${existing.Version.Patch})`);
+  console.log(`Reusing venv at ${venvDir} (Python ${PythonProbe.FormatVersion(existing.Version)})`);
 } else {
   const selection = PythonProbe.Select(values.python ? [values.python] : PythonProbe.DefaultCandidates);
   if (!selection.Ok) {
     console.error(PythonProbe.FormatReport(selection.Probed));
     process.exit(1);
   }
-  console.log(`Creating venv at ${venvDir} with ${selection.Command} (Python ${selection.Version.Major}.${selection.Version.Minor}.${selection.Version.Patch})`);
+  console.log(`Creating venv at ${venvDir} with ${selection.Command} (Python ${PythonProbe.FormatVersion(selection.Version)})`);
   run(selection.Command, ['-m', 'venv', venvDir]);
 }
 

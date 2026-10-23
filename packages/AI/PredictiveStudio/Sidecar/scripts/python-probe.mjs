@@ -51,9 +51,14 @@ export class PythonProbe {
     ].join('\n');
   }
 
+  /** `Major.Minor.Patch` text for a parsed version. */
+  static FormatVersion(v) {
+    return `${v.Major}.${v.Minor}.${v.Patch}`;
+  }
+
   static #describeProbe(p) {
     if (!p.Found) return 'not found';
     if (!p.Version) return 'unrecognised --version output';
-    return `${p.Version.Major}.${p.Version.Minor}.${p.Version.Patch}`;
+    return PythonProbe.FormatVersion(p.Version);
   }
 }

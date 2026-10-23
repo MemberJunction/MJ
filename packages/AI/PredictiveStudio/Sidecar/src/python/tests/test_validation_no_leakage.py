@@ -58,24 +58,16 @@ def test_validation_preprocessing_fit_on_train_fold_only():
     captured: dict = {}
     build = _build_dummy_estimator_factory(captured)
 
-    # Build a minimal TrainRequest-like object with the fields _anti_skew_val_metrics reads.
-    class _Req:
-        problem_type = "classification"
-
-    main._anti_skew_val_metrics(
-        _Req(),
-        dev_rows,
-        columns,
-        feature_cols,
-        ops_spec,
+    ctx = main.FoldContext(
+        dev_rows=dev_rows,
+        columns=columns,
+        feature_cols=feature_cols,
+        ops_spec=ops_spec,
         target_idx=1,
-        tr_idx=tr_idx,
-        te_idx=te_idx,
         y_dev=y_dev,
-        is_classification=True,
-        encoder=None,
         build=build,
     )
+    main._anti_skew_val_metrics(ctx, tr_idx, te_idx, True)
 
     # Train fold is all-zero x → mean 0, std degenerate → treated as 1.0. So the
     # validation row x==100 standardizes to (100 - 0) / 1 == 100. If preprocessing

@@ -20,6 +20,9 @@ from sklearn.ensemble import (
 from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.neural_network import MLPClassifier, MLPRegressor
 
+# Seed shared by every estimator so training is reproducible.
+DEFAULT_RANDOM_STATE: int = 0
+
 try:  # xgboost requires OpenMP (libomp on macOS, libgomp1 on Linux)
     from xgboost import XGBClassifier, XGBRegressor
 
@@ -68,7 +71,7 @@ def _xgboost(problem_type: str, hp: Dict[str, Any]):
     a default ``eval_metric=logloss`` is set to quiet modern-xgboost warnings.
     """
     _require(_HAVE_XGB, "xgboost")
-    common = {"n_jobs": -1, "tree_method": "hist", "random_state": 0, **hp}
+    common = {"n_jobs": -1, "tree_method": "hist", "random_state": DEFAULT_RANDOM_STATE, **hp}
     if problem_type == "classification":
         # use_label_encoder removed in modern xgboost; eval_metric quiets warnings
         common.setdefault("eval_metric", "logloss")
@@ -79,7 +82,7 @@ def _xgboost(problem_type: str, hp: Dict[str, Any]):
 def _lightgbm(problem_type: str, hp: Dict[str, Any]):
     """Build a LightGBM classifier/regressor (quiet, small-leaf-friendly defaults)."""
     _require(_HAVE_LGBM, "lightgbm")
-    common = {"n_jobs": -1, "verbose": -1, "min_child_samples": 5, "random_state": 0, **hp}
+    common = {"n_jobs": -1, "verbose": -1, "min_child_samples": 5, "random_state": DEFAULT_RANDOM_STATE, **hp}
     if problem_type == "classification":
         return LGBMClassifier(**common)
     return LGBMRegressor(**common)
@@ -95,13 +98,13 @@ def _logistic_regression(problem_type: str, hp: Dict[str, Any]):
         raise AlgorithmNotSupportedError(
             "logistic_regression supports classification only."
         )
-    params = {"max_iter": 1000, "random_state": 0, **hp}
+    params = {"max_iter": 1000, "random_state": DEFAULT_RANDOM_STATE, **hp}
     return LogisticRegression(**params)
 
 
 def _random_forest(problem_type: str, hp: Dict[str, Any]):
     """Build a random-forest classifier/regressor (all cores by default)."""
-    common = {"n_jobs": -1, "random_state": 0, **hp}
+    common = {"n_jobs": -1, "random_state": DEFAULT_RANDOM_STATE, **hp}
     if problem_type == "classification":
         return RandomForestClassifier(**common)
     return RandomForestRegressor(**common)
@@ -120,7 +123,7 @@ def _ridge(problem_type: str, hp: Dict[str, Any]):
 
 def _mlp(problem_type: str, hp: Dict[str, Any]):
     """Build a multi-layer-perceptron classifier/regressor (500-iter default cap)."""
-    params = {"max_iter": 500, "random_state": 0, **hp}
+    params = {"max_iter": 500, "random_state": DEFAULT_RANDOM_STATE, **hp}
     if problem_type == "classification":
         return MLPClassifier(**params)
     return MLPRegressor(**params)
