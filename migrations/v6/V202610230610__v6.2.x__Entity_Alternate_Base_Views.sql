@@ -127,6 +127,91 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
     @level2type = N'COLUMN', @level2name = N'AlternateBaseViewID';
 GO
 
+-- -------------------------------------------------------------------------------------
+-- 4. Out-of-the-Box Alternate Base Views (MJ Core)
+--    Metadata registrations live in metadata/entities/.alternate-base-views.json
+-- -------------------------------------------------------------------------------------
+
+-- 4a. MJ: Users -> Active (vwUsersActive)
+CREATE OR ALTER VIEW [${flyway:defaultSchema}].[vwUsersActive]
+AS
+SELECT
+    u.*
+FROM
+    [${flyway:defaultSchema}].[vwUsers] AS u
+WHERE
+    u.[IsActive] = 1;
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwUsersActive] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+GO
+
+-- 4b. MJ: AI Agents -> Active (vwAIAgentsActive)
+CREATE OR ALTER VIEW [${flyway:defaultSchema}].[vwAIAgentsActive]
+AS
+SELECT
+    a.*
+FROM
+    [${flyway:defaultSchema}].[vwAIAgents] AS a
+WHERE
+    a.[Status] = N'Active'
+    AND a.[IsRestricted] = 0;
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAIAgentsActive] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+GO
+
+-- 4c. MJ: AI Prompts -> Active (vwAIPromptsActive)
+CREATE OR ALTER VIEW [${flyway:defaultSchema}].[vwAIPromptsActive]
+AS
+SELECT
+    p.*
+FROM
+    [${flyway:defaultSchema}].[vwAIPrompts] AS p
+WHERE
+    p.[Status] = N'Active';
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAIPromptsActive] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+GO
+
+-- 4d. MJ: Actions -> Active (vwActionsActive)
+CREATE OR ALTER VIEW [${flyway:defaultSchema}].[vwActionsActive]
+AS
+SELECT
+    a.*
+FROM
+    [${flyway:defaultSchema}].[vwActions] AS a
+WHERE
+    a.[Status] = N'Active';
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwActionsActive] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+GO
+
+-- 4e. MJ: Scheduled Jobs -> Active (vwScheduledJobsActive)
+CREATE OR ALTER VIEW [${flyway:defaultSchema}].[vwScheduledJobsActive]
+AS
+SELECT
+    j.*
+FROM
+    [${flyway:defaultSchema}].[vwScheduledJobs] AS j
+WHERE
+    j.[Status] = N'Active';
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwScheduledJobsActive] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+GO
+
+-- 4f. MJ: Scheduled Jobs -> DueNow (vwScheduledJobsDueNow, derived from vwScheduledJobsActive)
+CREATE OR ALTER VIEW [${flyway:defaultSchema}].[vwScheduledJobsDueNow]
+AS
+SELECT
+    j.*
+FROM
+    [${flyway:defaultSchema}].[vwScheduledJobsActive] AS j
+WHERE
+    j.[NextRunAt] IS NOT NULL
+    AND j.[NextRunAt] <= GETUTCDATE();
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwScheduledJobsDueNow] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+GO
+
 
 
 
