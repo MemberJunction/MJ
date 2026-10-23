@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { GateEntry, GateStatus, RunMode } from '../registry/types';
+import type { GateMeasurement } from '../harness/types';
 
 export type GateOutcome =
   | 'pass'             // required gate, threshold met
@@ -10,15 +11,6 @@ export type GateOutcome =
   | 'not-implemented'  // stub body (owner PR has not written it)
   | 'not-run'          // not selected in this run mode, or a requirement (live model keys) absent — reason given
   | 'error';           // the harness threw (data, DB, MJAPI, sidecar)    → vitest test fails, whatever the status
-
-export interface GateMeasurement {
-  /** True when the gate's threshold is met. */
-  Passed: boolean;
-  /** The measured numbers the threshold talks about, e.g. { trainingRows: 13421, holdoutRows: 3355, scored: 1000 }. */
-  Measured: Record<string, number | string | boolean | null>;
-  /** One sentence: what was measured against what. */
-  Detail: string;
-}
 
 export interface GateResult {
   GateID: string; TestName: string; OwnerPR: GateEntry['OwnerPR']; Status: GateStatus; RunMode: RunMode;

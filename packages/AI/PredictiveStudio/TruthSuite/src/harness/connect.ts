@@ -12,12 +12,12 @@ export class MJAPIConnection {
     const provider = GraphQLDataProvider.Instance;
     const user = provider.CurrentUser;
     if (!user) throw new Error('No current user after BootstrapIntegrationClient: check MJ_API_KEY and that MJAPI is up');
-    await MJAPIConnection.ensureActiveFileStorageProvider(provider, user);
+    await MJAPIConnection.EnsureActiveFileStorageProvider(provider, user);
     return { Provider: provider, User: user };
   }
 
-  /** Ensure at least one active `MJ: File Storage Providers` row exists via `BaseEntity.Save()` (never raw SQL). */
-  private static async ensureActiveFileStorageProvider(provider: GraphQLDataProvider, user: UserInfo): Promise<void> {
+  /** Ensure at least one active `MJ: File Storage Providers` row exists via `BaseEntity.Save()` (never raw SQL): training stores model artifacts there. */
+  public static async EnsureActiveFileStorageProvider(provider: GraphQLDataProvider, user: UserInfo): Promise<void> {
     const rv = RunView.FromMetadataProvider(provider);
     const active = await rv.RunView<{ ID: string }>(
       { EntityName: 'MJ: File Storage Providers', ExtraFilter: 'IsActive = 1', Fields: ['ID'], MaxRows: 1, ResultType: 'simple', BypassCache: true },

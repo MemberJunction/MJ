@@ -67,6 +67,16 @@ export interface AgentStepResult {
   BuildModelID: string | null; BuildSuccess: boolean; BuildErrorMessage: string | null; WallMs: number;
 }
 
+/** What a gate body returns: whether its threshold is met, the measured values and one plain sentence. */
+export interface GateMeasurement {
+  /** True when the gate's threshold is met. */
+  Passed: boolean;
+  /** The measured numbers the threshold talks about, e.g. { trainingRows: 13421, holdoutRows: 3355, scored: 1000 }. */
+  Measured: Record<string, number | string | boolean | null>;
+  /** One sentence: what was measured against what. */
+  Detail: string;
+}
+
 /** What `Promote` reports: whether the operation applied the transition and the model's status after it. */
 export interface PromoteAttempt { Promoted: boolean; Status: MJMLModelEntity['Status'] }
 

@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { SafeJSONParse } from '@memberjunction/global';
 import type { TestRunResult } from '@memberjunction/testing-engine-base';
 import { TruthGate } from '../src/gates/define-gate';
-import type { GateMeasurement } from '../src/gates/results';
+import type { GateMeasurement } from '../src/harness/types';
 
 /** gates/ → TruthSuite → PredictiveStudio → AI → packages → repository root (where mj.config.cjs loads the check bundles). */
 const REPO_ROOT = fileURLToPath(new URL('../../../../../', import.meta.url));

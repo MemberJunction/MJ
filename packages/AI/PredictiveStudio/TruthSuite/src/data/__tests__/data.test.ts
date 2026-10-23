@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { DatasetSeeds } from '../seeds';
 import { DataCache } from '../cache';
-import { CATALOG } from '../catalog';
+import { CATALOG, DatasetCatalog } from '../catalog';
 
 describe('seed sets', () => {
   it('fixes the base, T2 and 400-seed sets', () => {
@@ -29,5 +29,13 @@ describe('cache', () => {
     expect(CATALOG.filter((d) => d.Kind === 'world')).toHaveLength(9);
     expect(CATALOG.filter((d) => d.Kind === 'scenario').map((d) => d.Code)).toContain('T3-lag');
     expect(CATALOG.filter((d) => d.Kind === 'scenario')).toHaveLength(15);
+  });
+  it('narrows every catalog code to its id union, and nothing else', () => {
+    for (const entry of CATALOG) {
+      expect(entry.Kind === 'world' ? DatasetCatalog.IsWorldID(entry.Code) : DatasetCatalog.IsScenarioID(entry.Code)).toBe(true);
+    }
+    expect(DatasetCatalog.IsWorldID('C2')).toBe(false);
+    expect(DatasetCatalog.IsScenarioID('W1-signal')).toBe(false);
+    expect(DatasetCatalog.IsScenarioID('T9')).toBe(false);
   });
 });

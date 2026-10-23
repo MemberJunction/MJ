@@ -10,6 +10,7 @@ import { HarnessModels } from './promote';
 import { HarnessAgent } from './agent';
 import { JudgeBridge } from './judge-bridge';
 import { HarnessArtifacts } from './artifacts';
+import { HarnessCleanup } from './cleanup';
 import { W_WORLD_FEATURES, W_WORLD_DENY_FIELDS } from './w-world';
 import type { CandidateModel, LoadedDataset, TruthHarness } from './types';
 
@@ -22,9 +23,16 @@ export interface RunContext {
   readonly RunID: string;
 }
 
+/** The harness bound to one client provider (see {@link RunFixtures.HarnessFor}). */
+interface BoundHarness {
+  readonly Provider: GraphQLDataProvider;
+  readonly Harness: Promise<TruthHarness>;
+}
+
 /** The per-process harness the gates run against, and the fixture models several gates share. */
 export class RunFixtures {
   private static harness: Promise<TruthHarness> | null = null;
+  private static bound: BoundHarness | null = null;
   private static w1Draft: Promise<CandidateModel> | null = null;
   private static w1Validated: Promise<CandidateModel> | null = null;
 
@@ -32,6 +40,34 @@ export class RunFixtures {
   public static GetRunHarness(): Promise<TruthHarness> {
     RunFixtures.harness ||= RunFixtures.buildHarness();
     return RunFixtures.harness;
+  }
+
+  /**
+   * The run's harness on a provider the caller already holds (an `mj test` check's client provider), built on first use
+   * and shared while the provider stays the same; a different provider gets its own harness.
+   */
+  public static HarnessFor(provider: GraphQLDataProvider, user: UserInfo): Promise<TruthHarness> {
+    if (RunFixtures.bound?.Provider !== provider) {
+      RunFixtures.bound = { Provider: provider, Harness: RunFixtures.connectHarness(provider, user) };
+    }
+    return RunFixtures.bound.Harness;
+  }
+
+  /**
+   * Delete this run's `PSTruth: … <RunID>` pipelines and models (with their training runs and scoring bindings) through
+   * the entity layer, and forget the fixture models they held. Every row is attempted; throws one error naming each row
+   * whose `Delete()` failed. No-op when no harness was bound in this process.
+   */
+  public static async CleanupRun(user: UserInfo): Promise<void> {
+    const bound = RunFixtures.bound;
+    if (!bound) return;
+    RunFixtures.w1Draft = null;
+    RunFixtures.w1Validated = null;
+    const h = await bound.Harness;
+    const failures = await HarnessCleanup.DeleteRunRecords(h.Provider, user, h.RunID);
+    if (failures.length > 0) {
+      throw new Error(`cleanup of run ${h.RunID} left ${failures.length} row(s): ${failures.join('; ')}`);
+    }
   }
 
   /** Trains a logistic-regression model on the given dataset (`MaxRows: 1_000_000`) and returns its `ModelID`. */
@@ -74,9 +110,20 @@ export class RunFixtures {
     return RunFixtures.w1Validated;
   }
 
-  /** One object literal: a TruthHarness member without a line here is a compile error. */
+  /** The harness on the process's own MJAPI connection (`MJAPIConnection.Connect`). */
   private static async buildHarness(): Promise<TruthHarness> {
     const { Provider: provider, User: user } = await MJAPIConnection.Connect();
+    return RunFixtures.harnessFrom(provider, user);
+  }
+
+  /** The harness on a caller's provider; makes sure model artifacts have an active storage provider, as `Connect` does. */
+  private static async connectHarness(provider: GraphQLDataProvider, user: UserInfo): Promise<TruthHarness> {
+    await MJAPIConnection.EnsureActiveFileStorageProvider(provider, user);
+    return RunFixtures.harnessFrom(provider, user);
+  }
+
+  /** One object literal: a TruthHarness member without a line here is a compile error. */
+  private static async harnessFrom(provider: GraphQLDataProvider, user: UserInfo): Promise<TruthHarness> {
     const ctx: RunContext = {
       Provider: provider,
       User: user,

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { SafeJSONParse } from '@memberjunction/global';
 import { TruthSuite } from '../registry/load';
 import { DataCache, type Json } from './cache';
+import type { ScenarioID, WorldID } from '../harness/types';
 
 export interface CatalogEntry {
   Kind: 'world' | 'scenario';
@@ -19,15 +20,19 @@ export interface CatalogEntry {
  */
 const GENERATOR_SHARED_SOURCES = ['src/generators/gen_lib.ts', 'src/generators/loom.ts', 'src/generators/types.ts'] as const;
 
+// `satisfies` ties each list to its union in harness/types, so an id outside the union is a compile error.
 const WORLD_IDS = [
   'W1-signal', 'W2-noise', 'W3-leak-row', 'W4-pit', 'W5-censor',
   'W6-drift', 'W7-small-imbalanced', 'W8-highcard', 'W9-multiclass',
-] as const;
+] as const satisfies readonly WorldID[];
 
 const SCENARIO_IDS = [
   'C2', 'C4', 'D1c', 'D1r', 'D2', 'N1c', 'N1r',
   'R1', 'R2p', 'R3', 'T1p', 'T2p', 'T3', 'T4',
-] as const;
+] as const satisfies readonly ScenarioID[];
+
+/** The derived scenario: generated from T3's output, not from a spec of its own. */
+const DERIVED_SCENARIO_ID = 'T3-lag' satisfies ScenarioID;
 
 export const CATALOG: readonly CatalogEntry[] = [
   ...WORLD_IDS.map((id): CatalogEntry => ({
@@ -44,7 +49,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   })),
   {
     Kind: 'scenario',
-    Code: 'T3-lag',
+    Code: DERIVED_SCENARIO_ID,
     SpecFile: 'fixtures/scenarios/specs/T3.json',
     Generator: 'src/generators/derive_t3_lag.ts',
   },
@@ -52,6 +57,19 @@ export const CATALOG: readonly CatalogEntry[] = [
 
 /** Dataset catalog lookup and on-demand cached generation. */
 export class DatasetCatalog {
+  private static readonly worldIDs: ReadonlySet<string> = new Set<WorldID>(WORLD_IDS);
+  private static readonly scenarioIDs: ReadonlySet<string> = new Set<ScenarioID>([...SCENARIO_IDS, DERIVED_SCENARIO_ID]);
+
+  /** True when `code` names a world of the catalog. */
+  public static IsWorldID(code: string): code is WorldID {
+    return DatasetCatalog.worldIDs.has(code);
+  }
+
+  /** True when `code` names a scenario of the catalog (T3-lag included). */
+  public static IsScenarioID(code: string): code is ScenarioID {
+    return DatasetCatalog.scenarioIDs.has(code);
+  }
+
   /** Find a catalog entry by kind and ID. */
   public static Find(kind: 'world' | 'scenario', id: string): CatalogEntry {
     const entry = CATALOG.find((e) => e.Kind === kind && e.Code === id);

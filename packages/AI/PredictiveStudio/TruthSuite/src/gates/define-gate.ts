@@ -3,8 +3,8 @@ import { performance } from 'node:perf_hooks';
 import { IsTierEnabled } from '@memberjunction/testing-integration';
 import { GateRegistry } from '../registry/load';
 import type { GateEntry, RunMode } from '../registry/types';
-import { GateResults, type GateMeasurement } from './results';
-import type { TruthHarness } from '../harness/types';
+import { GateResults } from './results';
+import type { GateMeasurement, TruthHarness } from '../harness/types';
 import { RunFixtures } from '../harness/run-fixtures';
 
 /** Which gates a run executes: the run mode and the host requirements. */
