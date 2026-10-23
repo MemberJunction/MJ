@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { SimpleChange, type ChangeDetectorRef } from '@angular/core';
 import type { EntityInfo, IMetadataProvider } from '@memberjunction/core';
 import { CompositeFilterDescriptor } from '@memberjunction/ng-filter-builder';
-import { ViewConfigPanelComponent } from './view-config-panel.component';
+import { ViewConfigPanelComponent, type ViewSaveEvent } from './view-config-panel.component';
 
 /**
  * Issue #4220 follow-up — reopening the config panel from the quick-save name prompt
@@ -216,25 +216,15 @@ describe('ViewConfigPanelComponent — carrying a staged filter back from the na
     panel.OpenFormatEditor(firstCol);
     panel.AddConditionalRule();
     expect(firstCol.format?.conditionalRules).toHaveLength(1);
-    panel.ApplyConditionalPreset(firstCol.format!.conditionalRules![0], 'green');
-    expect(firstCol.format!.conditionalRules![0].style.backgroundColor).toBe('#d1fae5');
+    panel.ApplyConditionalPreset(firstCol.format!.conditionalRules![0], 'warning');
+    expect(firstCol.format!.conditionalRules![0].style.backgroundColor).toBe('#fef3c7');
 
     // Wide mode toggle
     expect(panel.IsWideMode).toBe(false);
     panel.ToggleWideMode();
     expect(panel.IsWideMode).toBe(true);
 
-    const emitted: Array<{
-      Name: string;
-      SaveAsNew: boolean;
-      IsShared: boolean;
-      IsDefault?: boolean;
-      CustomWhereClause?: boolean;
-      WhereClause?: string;
-      GridDisplayState?: { rowHeight?: string; wrapText?: boolean };
-      CardDisplayState?: { cardSize?: string };
-      Columns: Array<{ pinned?: string | null }>;
-    }> = [];
+    const emitted: ViewSaveEvent[] = [];
     panel.Save.subscribe(e => emitted.push(e));
     panel.OnSaveAsNew();
 
