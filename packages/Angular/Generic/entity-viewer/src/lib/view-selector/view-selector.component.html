@@ -53,19 +53,52 @@
           <div class="vs-section">
             <div
               class="vs-card"
-              [class.active]="!SelectedViewID"
+              [class.active]="!SelectedViewID && !SelectedAlternateBaseView"
               (click)="SelectDefault()">
-              <div class="vs-card-icon" [class.active]="!SelectedViewID">
+              <div class="vs-card-icon" [class.active]="!SelectedViewID && !SelectedAlternateBaseView">
                 <i class="fa-solid fa-table"></i>
               </div>
               <div class="vs-card-content">
                 <div class="vs-card-name">(Default)</div>
               </div>
-              @if (!SelectedViewID) {
+              @if (!SelectedViewID && !SelectedAlternateBaseView) {
                 <i class="fa-solid fa-check vs-card-check"></i>
               }
             </div>
           </div>
+
+          <!-- Base Views Section -->
+          @if (FilteredAlternateBaseViews.length > 0) {
+            <div class="vs-section">
+              <div class="vs-section-header">
+                <i class="fa-solid fa-database"></i>
+                <span>Base Views</span>
+                <span class="vs-section-count">{{ FilteredAlternateBaseViews.length }}</span>
+              </div>
+              @for (abv of FilteredAlternateBaseViews; track abv.ID) {
+                <div
+                  class="vs-card"
+                  [class.active]="!SelectedViewID && SelectedAlternateBaseView === abv.Name"
+                  (click)="SelectAlternateBaseView(abv)">
+                  <div class="vs-card-icon" [class.active]="!SelectedViewID && SelectedAlternateBaseView === abv.Name">
+                    <i class="fa-solid fa-database"></i>
+                  </div>
+                  <div class="vs-card-content">
+                    <div class="vs-card-name">{{ abv.EffectiveDisplayName }}</div>
+                    @if (abv.Description) {
+                      <div class="vs-card-desc">{{ abv.Description }}</div>
+                    }
+                    <div class="vs-card-meta">
+                      <span><i class="fa-solid fa-table"></i> {{ abv.ViewName }}</span>
+                    </div>
+                  </div>
+                  @if (!SelectedViewID && SelectedAlternateBaseView === abv.Name) {
+                    <i class="fa-solid fa-check vs-card-check"></i>
+                  }
+                </div>
+              }
+            </div>
+          }
 
           <!-- My Views Section -->
           @if (FilteredMyViews.length > 0) {

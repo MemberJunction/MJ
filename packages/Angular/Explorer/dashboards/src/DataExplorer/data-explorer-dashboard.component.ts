@@ -2141,6 +2141,15 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   /**
+   * Handle an Alternate Base View selection emitted by the workspace's view selector.
+   */
+  public OnWorkspaceAlternateBaseViewChanged(abv: string | null): void {
+    this.SelectedAlternateBaseView = abv;
+    this.pushCurrentStateToUrl();
+    this.cdr.detectChanges();
+  }
+
+  /**
    * Handle the workspace's "open view in tab" request — route via NavigationService.
    */
   public OnOpenInTabRequested(viewId: string): void {
@@ -2706,15 +2715,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         // Reset counts before setting entity to prevent stale data display
         this.resetRecordCounts();
         this.SelectedEntity = entity;
+        this.SelectedAlternateBaseView = deepLink.abv || null;
         this.StateService.selectEntity(entity.Name);
 
         // Apply filter if specified (to smart filter state, not user search)
         if (deepLink.filter) {
           this.StateService.setSmartFilterPrompt(deepLink.filter);
-        }
-
-        if (deepLink.abv) {
-          this.SelectedAlternateBaseView = deepLink.abv;
         }
 
         // Note: Record selection is handled after data loads via onDataLoaded
@@ -2955,6 +2961,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
       if (entity) {
         const entityChanged = this.SelectedEntity?.Name !== entity.Name;
+        const previousAbv = this.SelectedAlternateBaseView;
+        this.SelectedAlternateBaseView = urlState.viewId ? null : (urlState.abv || null);
 
         if (entityChanged) {
           // Entity changed - reset counts and select new entity
@@ -2973,7 +2981,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         // itself once selectedViewEntity flows into its [SelectedView] input.
         if (viewChanged) {
           if (urlState.viewId) {
-            this.SelectedAlternateBaseView = null;
             await this.restoreViewFromUrl(urlState.viewId, entity);
           } else {
             // No specific view — clear view selection to use default
@@ -2982,8 +2989,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
           }
         }
 
-        if (!urlState.viewId) {
-          this.SelectedAlternateBaseView = urlState.abv || null;
+        if (!entityChanged && previousAbv !== this.SelectedAlternateBaseView) {
+          this.pushCurrentStateToUrl();
         }
 
         // Filters live in saved views (DB), never in URL query strings.

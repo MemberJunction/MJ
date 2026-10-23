@@ -341,7 +341,8 @@ export class ResourceResolver implements Resolve<void> {
             // Dynamic view: /app/:appName/view/dynamic/:entityName
             const entityName = decodeURIComponent(param2);
             const extraFilter = route.queryParams['ExtraFilter'] || route.queryParams['extraFilter'];
-            const filterSuffix = extraFilter ? ' (Filtered)' : '';
+            const alternateBaseView = route.queryParams['AlternateBaseView'] || route.queryParams['alternateBaseView'] || route.queryParams['abv'];
+            const filterSuffix = (extraFilter || alternateBaseView) ? ' (Filtered)' : '';
 
             this.tabService.OpenTab({
               ApplicationId: app.ID,
@@ -350,6 +351,7 @@ export class ResourceResolver implements Resolve<void> {
                 resourceType: 'MJ: User Views',
                 Entity: entityName,
                 ExtraFilter: extraFilter,
+                AlternateBaseView: alternateBaseView,
                 isDynamic: true,
                 recordId: 'dynamic',
                 appName: appName,
@@ -617,8 +619,9 @@ export class ResourceResolver implements Resolve<void> {
       // /resource/view/dynamic/:entityName
       const entityName = decodeURIComponent(route.params['entityName']);
       const extraFilter = route.queryParams['ExtraFilter'] || route.queryParams['extraFilter'];
+      const alternateBaseView = route.queryParams['AlternateBaseView'] || route.queryParams['alternateBaseView'] || route.queryParams['abv'];
 
-      const filterSuffix = extraFilter ? ' (Filtered)' : '';
+      const filterSuffix = (extraFilter || alternateBaseView) ? ' (Filtered)' : '';
 
       // Queue tab request via TabService
       this.tabService.OpenTab({
@@ -628,6 +631,7 @@ export class ResourceResolver implements Resolve<void> {
           resourceType: 'MJ: User Views',
           Entity: entityName,
           ExtraFilter: extraFilter,
+          AlternateBaseView: alternateBaseView,
           isDynamic: true,
           recordId: 'dynamic'
         },

@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef, OnDestroy, ViewEncapsulation } from '@angular/core';
-import { EntityInfo } from '@memberjunction/core';
+import { EntityInfo, EntityAlternateBaseViewInfo } from '@memberjunction/core';
 import { MJUserViewEntityExtended, UserViewEngine, ViewInfo } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -63,6 +63,11 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
   @Input() SelectedViewID: string | null = null;
 
   /**
+   * Currently active Alternate Base View name when on the default view (null = standard BaseView)
+   */
+  @Input() SelectedAlternateBaseView: string | null = null;
+
+  /**
    * Whether the current view has unsaved modifications
    */
   @Input() ViewModified: boolean = false;
@@ -71,6 +76,11 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
    * Emitted when a view is selected
    */
   @Output() ViewSelected = new EventEmitter<ViewSelectedEvent>();
+
+  /**
+   * Emitted when an Alternate Base View is selected from the dropdown (or cleared back to Default)
+   */
+  @Output() AlternateBaseViewSelected = new EventEmitter<string | null>();
 
   /**
    * Emitted when user requests to save the current view
@@ -287,7 +297,39 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
     if (this.SelectedView) {
       return this.SelectedView.Name;
     }
+    if (this.SelectedAlternateBaseView && this.Entity) {
+      const abv = this.Entity.GetAlternateBaseView(this.SelectedAlternateBaseView);
+      return abv?.EffectiveDisplayName ?? this.SelectedAlternateBaseView;
+    }
     return '(Default)';
+  }
+
+  /**
+   * Usable, non-deprecated alternate base views registered on the current entity
+   */
+  get AvailableAlternateBaseViews(): EntityAlternateBaseViewInfo[] {
+    if (!this.Entity?.AlternateBaseViews?.length) {
+      return [];
+    }
+    return this.Entity.AlternateBaseViews.filter(v => {
+      const isUsable = v.IsUsable ?? v.Status !== 'Disabled';
+      const isDeprecated = v.IsDeprecated ?? v.Status === 'Deprecated';
+      return isUsable && !isDeprecated;
+    });
+  }
+
+  /**
+   * Alternate base views filtered by search text
+   */
+  get FilteredAlternateBaseViews(): EntityAlternateBaseViewInfo[] {
+    const list = this.AvailableAlternateBaseViews;
+    if (!this.SearchText.trim()) return list;
+    const term = this.SearchText.toLowerCase();
+    return list.filter(v =>
+      v.Name.toLowerCase().includes(term) ||
+      v.EffectiveDisplayName.toLowerCase().includes(term) ||
+      (v.Description || '').toLowerCase().includes(term)
+    );
   }
 
   /**
@@ -312,7 +354,19 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
    */
   SelectDefault(): void {
     this.SelectedView = null;
+    if (this.SelectedAlternateBaseView) {
+      this.AlternateBaseViewSelected.emit(null);
+    }
     this.ViewSelected.emit({ ViewID: null, View: null });
+    this.CloseDropdown();
+  }
+
+  /**
+   * Select an Alternate Base View directly from the dropdown
+   */
+  SelectAlternateBaseView(abv: EntityAlternateBaseViewInfo): void {
+    this.SelectedView = null;
+    this.AlternateBaseViewSelected.emit(abv.Name);
     this.CloseDropdown();
   }
 

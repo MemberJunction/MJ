@@ -74,7 +74,7 @@
         <span class="tab-badge">{{ EnabledAggregatesCount }}</span>
       }
     </button>
-    @if (ViewEntity || DefaultSaveAsNew) {
+    @if (ViewEntity || DefaultSaveAsNew || AvailableAlternateBaseViews.length > 0 || IsCurrentAlternateBaseViewUnavailable) {
       <button
         class="tab-btn"
         [class.active]="ActiveTab === 'settings'"
@@ -583,6 +583,36 @@
     <!-- Filters Tab -->
     @if (ActiveTab === 'filters') {
       <div class="tab-content">
+        @if (AvailableAlternateBaseViews.length > 0 || IsCurrentAlternateBaseViewUnavailable) {
+          <div class="config-section">
+            <div class="section-header">
+              <i class="fa-solid fa-database"></i>
+              <span>Base View</span>
+            </div>
+            <div class="form-group">
+              <label for="FilterTabAlternateBaseView">Canonical Base View</label>
+              <select
+                id="FilterTabAlternateBaseView"
+                class="form-input"
+                [(ngModel)]="AlternateBaseView"
+                [disabled]="!CanEdit"
+              >
+                <option [ngValue]="null">Default ({{ Entity?.BaseView }})</option>
+                @if (IsCurrentAlternateBaseViewUnavailable && AlternateBaseView) {
+                  <option [ngValue]="AlternateBaseView">
+                    {{ AlternateBaseView }} [Unavailable — select Default or another view]
+                  </option>
+                }
+                @for (abv of AvailableAlternateBaseViews; track abv.ID) {
+                  <option [ngValue]="abv.Name">
+                    {{ abv.EffectiveDisplayName }} ({{ abv.ViewName }}){{ abv.IsDeprecated ? ' [Deprecated]' : '' }}
+                  </option>
+                }
+              </select>
+            </div>
+          </div>
+        }
+
         <!-- Filter Mode Selection -->
         <div class="filter-mode-selector">
           <button
@@ -840,41 +870,90 @@
     <!-- Settings Tab -->
     @if (ActiveTab === 'settings') {
       <div class="tab-content">
-        <!-- View Name & Description -->
-        <div class="config-section">
-          <div class="section-header">
-            <i class="fa-solid fa-info-circle"></i>
-            <span>View Details</span>
-          </div>
-          <div class="form-group">
-            <label for="ViewName">Name</label>
-            <input
-              id="ViewName"
-              type="text"
-              class="form-input"
-              [class.invalid]="!ViewName || !ViewName.trim()"
-              placeholder="Enter view name..."
-              [(ngModel)]="ViewName"
-              [disabled]="!CanEdit"
-            />
-            @if (!ViewName || !ViewName.trim()) {
-              <span class="validation-error">View name is required</span>
+        @if (ViewEntity || DefaultSaveAsNew) {
+          <!-- View Name & Description -->
+          <div class="config-section">
+            <div class="section-header">
+              <i class="fa-solid fa-info-circle"></i>
+              <span>View Details</span>
+            </div>
+            <div class="form-group">
+              <label for="ViewName">Name</label>
+              <input
+                id="ViewName"
+                type="text"
+                class="form-input"
+                [class.invalid]="!ViewName || !ViewName.trim()"
+                placeholder="Enter view name..."
+                [(ngModel)]="ViewName"
+                [disabled]="!CanEdit"
+              />
+              @if (!ViewName || !ViewName.trim()) {
+                <span class="validation-error">View name is required</span>
+              }
+            </div>
+            <div class="form-group">
+              <label for="ViewDescription">Description</label>
+              <textarea
+                id="ViewDescription"
+                class="form-input form-textarea"
+                placeholder="Describe this view..."
+                [(ngModel)]="ViewDescription"
+                [disabled]="!CanEdit"
+                rows="3"
+              ></textarea>
+            </div>
+            @if (AvailableAlternateBaseViews.length > 0 || IsCurrentAlternateBaseViewUnavailable) {
+              <div class="form-group">
+                <label for="AlternateBaseView">Base View</label>
+                <select
+                  id="AlternateBaseView"
+                  class="form-input"
+                  [(ngModel)]="AlternateBaseView"
+                  [disabled]="!CanEdit"
+                >
+                  <option [ngValue]="null">Default ({{ Entity?.BaseView }})</option>
+                  @if (IsCurrentAlternateBaseViewUnavailable && AlternateBaseView) {
+                    <option [ngValue]="AlternateBaseView">
+                      {{ AlternateBaseView }} [Unavailable — select Default or another view]
+                    </option>
+                  }
+                  @for (abv of AvailableAlternateBaseViews; track abv.ID) {
+                    <option [ngValue]="abv.Name">
+                      {{ abv.EffectiveDisplayName }} ({{ abv.ViewName }}){{ abv.IsDeprecated ? ' [Deprecated]' : '' }}
+                    </option>
+                  }
+                </select>
+              </div>
             }
           </div>
-          <div class="form-group">
-            <label for="ViewDescription">Description</label>
-            <textarea
-              id="ViewDescription"
-              class="form-input form-textarea"
-              placeholder="Describe this view..."
-              [(ngModel)]="ViewDescription"
-              [disabled]="!CanEdit"
-              rows="3"
-            ></textarea>
+
+          <!-- Sharing -->
+          <div class="config-section">
+            <div class="section-header">
+              <i class="fa-solid fa-share-alt"></i>
+              <span>Sharing</span>
+            </div>
+            <label class="checkbox-label">
+              <input
+                type="checkbox"
+                [(ngModel)]="IsShared"
+                [disabled]="!CanEdit"
+              />
+              <span class="checkbox-text">
+                <strong>Share with others</strong>
+                <small>Allow other users to use this view</small>
+              </span>
+            </label>
           </div>
-          @if (AvailableAlternateBaseViews.length > 0 || IsCurrentAlternateBaseViewUnavailable) {
+        } @else if (AvailableAlternateBaseViews.length > 0 || IsCurrentAlternateBaseViewUnavailable) {
+          <div class="config-section">
+            <div class="section-header">
+              <i class="fa-solid fa-database"></i>
+              <span>Base View</span>
+            </div>
             <div class="form-group">
-              <label for="AlternateBaseView">Base View</label>
+              <label for="AlternateBaseView">Canonical Base View</label>
               <select
                 id="AlternateBaseView"
                 class="form-input"
@@ -894,27 +973,9 @@
                 }
               </select>
             </div>
-          }
-        </div>
-
-        <!-- Sharing -->
-        <div class="config-section">
-          <div class="section-header">
-            <i class="fa-solid fa-share-alt"></i>
-            <span>Sharing</span>
+            <mj-alert Variant="info" Size="sm" class="view-config-alert-pos">Selecting an Alternate Base View and clicking Save will prompt you to save a named view.</mj-alert>
           </div>
-          <label class="checkbox-label">
-            <input
-              type="checkbox"
-              [(ngModel)]="IsShared"
-              [disabled]="!CanEdit"
-            />
-            <span class="checkbox-text">
-              <strong>Share with others</strong>
-              <small>Allow other users to use this view</small>
-            </span>
-          </label>
-        </div>
+        }
 
         <!-- Danger Zone -->
         @if (ViewEntity && CanDelete) {

@@ -410,7 +410,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       this._localSaving = false;
     }
 
-    if (changes['Entity'] || changes['ViewEntity'] || changes['CurrentGridState']) {
+    if (changes['Entity'] || changes['ViewEntity'] || changes['CurrentGridState'] || changes['PendingNewViewAlternateBaseView']) {
       this.initializeFromEntity();
     }
 

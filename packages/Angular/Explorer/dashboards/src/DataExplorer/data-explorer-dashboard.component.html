@@ -381,6 +381,7 @@
           [ViewerConfig]="viewerConfig"
           (SelectedViewChange)="onWorkspaceViewSelected($event)"
           (ViewSelected)="onWorkspaceViewSelected($event)"
+          (AlternateBaseViewChange)="OnWorkspaceAlternateBaseViewChanged($event)"
           (OpenViewInTabRequested)="onOpenInTabRequested($event)"
           (OpenRecordRequested)="onWorkspaceOpenRecord($event)"
           (OpenRelatedRecordRequested)="onOpenRelatedRecordRequested($event)"

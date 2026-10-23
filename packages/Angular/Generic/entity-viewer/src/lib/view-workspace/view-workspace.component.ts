@@ -307,6 +307,11 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
    */
   @Output() SelectedViewChange = new EventEmitter<MJUserViewEntityExtended | null>();
 
+  /**
+   * Emitted when the active {@link AlternateBaseView} changes from the selector dropdown.
+   */
+  @Output() AlternateBaseViewChange = new EventEmitter<string | null>();
+
   // ----- Forwarded inner-viewer events (the generic, view-type-agnostic ones) -----
   //
   // The workspace owns the inner entity-viewer; it re-emits the viewer's generic signals (filter,
@@ -922,12 +927,36 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     this.ViewModified = false;
     this.filterText = '';
 
+    if (this._alternateBaseView) {
+      this._alternateBaseView = null;
+      this.AlternateBaseViewChange.emit(null);
+    }
+
     this.CurrentGridState = event.View
       ? this.parseViewGridState(event.View)
       : this.loadUserDefaultGridState();
 
     this.ViewSelected.emit(event.View);
     this.SelectedViewChange.emit(event.View);
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Handle an Alternate Base View selection from the selector dropdown.
+   */
+  public OnAlternateBaseViewSelected(abvName: string | null): void {
+    this.entityViewerRef?.EnsurePendingChangesSaved();
+    this._alternateBaseView = abvName || null;
+    if (this.SelectedViewId || this.CurrentViewEntity) {
+      this.CurrentViewEntity = null;
+      this.SelectedViewId = null;
+      this.ViewModified = false;
+      this.filterText = '';
+      this.CurrentGridState = this.loadUserDefaultGridState();
+      this.ViewSelected.emit(null);
+      this.SelectedViewChange.emit(null);
+    }
+    this.AlternateBaseViewChange.emit(this._alternateBaseView);
     this.cdr.detectChanges();
   }
 
@@ -1052,6 +1081,9 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   /** Handle the selector's "configure view" request — open the config panel. */
   public OnConfigureViewRequested(): void {
     this.DefaultSaveAsNew = false;
+    if (!this.CurrentViewEntity && !this.PendingNewViewAlternateBaseView && this.EffectiveAlternateBaseView) {
+      this.PendingNewViewAlternateBaseView = this.EffectiveAlternateBaseView;
+    }
     this.IsConfigPanelOpen = true;
     this.cdr.detectChanges();
   }
@@ -1301,6 +1333,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
 
     this.CurrentViewEntity = newView;
     this.SelectedViewId = newView.ID;
+    this._alternateBaseView = null;
     this.ViewModified = false;
     this.CurrentGridState = this.parseViewGridState(newView);
     this.ViewSelected.emit(newView);
