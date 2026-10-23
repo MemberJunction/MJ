@@ -288,6 +288,14 @@ export class AgentRunner {
             conversationName?: string;
             /** Optional test run ID to link conversation and details to (for test execution traceability) */
             testRunId?: string;
+            /**
+             * The user who writes this run's conversation rows: the conversation, the user's message and the agent's
+             * reply. Defaults to `params.contextUser`. A caller that runs the agent under an elevated principal on
+             * someone else's behalf (a public widget guest runs as the system user) names the conversation's owner
+             * here, because only the owner or a grantee may write a conversation's messages; the run's own records
+             * (run, steps, prompt runs, artifacts) are still written as `params.contextUser`.
+             */
+            ConversationWriter?: UserInfo;
         }
     ): Promise<{
         /** The agent execution result */
@@ -315,6 +323,7 @@ export class AgentRunner {
         if (!contextUser) {
             throw new Error('contextUser is required for RunAgentInConversation');
         }
+        const conversationWriter = options.ConversationWriter ?? contextUser;
 
         let agentResponseDetail: MJConversationDetailEntity | undefined;
 
@@ -345,7 +354,7 @@ export class AgentRunner {
                     // This path still works but incurs the extra DB round-trip to extract conversationId.
                     const tempDetail = await md.GetEntityObject<MJConversationDetailEntity>(
                         'MJ: Conversation Details',
-                        contextUser
+                        conversationWriter
                     );
                     if (await tempDetail.Load(agentResponseDetailId)) {
                         conversationId = tempDetail.ConversationID;
@@ -359,7 +368,7 @@ export class AgentRunner {
                 // This is needed regardless of whether conversationId was pre-resolved.
                 agentResponseDetail = await md.GetEntityObject<MJConversationDetailEntity>(
                     'MJ: Conversation Details',
-                    contextUser
+                    conversationWriter
                 );
                 if (!await agentResponseDetail.Load(agentResponseDetailId)) {
                     throw new Error(`Failed to load conversation detail entity for status updates: ${agentResponseDetailId}`);
@@ -379,7 +388,7 @@ export class AgentRunner {
                     LogStatus('Creating new conversation');
                     const conversation = await md.GetEntityObject<MJConversationEntity>(
                         'MJ: Conversations',
-                        contextUser
+                        conversationWriter
                     );
 
                     // Smart conversation naming:
@@ -404,7 +413,7 @@ export class AgentRunner {
 
                     conversation.Name = conversationName;
                     conversation.Description = conversationDescription || ''; // Set description too (like UI does)
-                    conversation.UserID = params.userId || contextUser.ID;
+                    conversation.UserID = params.userId || conversationWriter.ID;
                     conversation.Status = 'Available';
                     conversation.DataContextID = null; // Can be set by caller if needed
 
@@ -425,13 +434,13 @@ export class AgentRunner {
                 LogStatus('Creating conversation detail for user message');
                 const userMessageDetail = await md.GetEntityObject<MJConversationDetailEntity>(
                     'MJ: Conversation Details',
-                    contextUser
+                    conversationWriter
                 );
 
                 userMessageDetail.ConversationID = conversationId;
                 userMessageDetail.Message = options.userMessage;
                 userMessageDetail.Role = 'User';
-                userMessageDetail.UserID = contextUser.ID;
+                userMessageDetail.UserID = conversationWriter.ID;
                 userMessageDetail.HiddenToUser = false;
                 userMessageDetail.BranchID = params.ConversationBranchID ?? null;
 
@@ -451,7 +460,7 @@ export class AgentRunner {
                 LogStatus('Creating conversation detail for agent response');
                 agentResponseDetail = await md.GetEntityObject<MJConversationDetailEntity>(
                     'MJ: Conversation Details',
-                    contextUser
+                    conversationWriter
                 );
 
                 agentResponseDetail.ConversationID = conversationId;

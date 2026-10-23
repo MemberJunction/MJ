@@ -169,6 +169,7 @@ export function ElevateUserPayload(userPayload: UserPayload, elevatedUser: UserI
     email: elevatedUser.Email,
     userRecord: elevatedUser,
     isSystemUser: true,
+    ElevatedFrom: userPayload.userRecord,
   };
 }
 

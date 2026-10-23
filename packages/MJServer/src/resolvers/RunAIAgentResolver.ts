@@ -387,7 +387,9 @@ export class RunAIAgentResolver extends ResolverBase {
                 conversationId: conversationId, // LATENCY OPT #2: pre-resolved to skip redundant load in AgentRunner
                 userMessage: userMessage, // Provide user message when conversationDetailId not provided
                 createArtifacts: createArtifacts || false,
-                sourceArtifactId: sourceArtifactId
+                sourceArtifactId: sourceArtifactId,
+                // A widget guest runs as the system user, but its conversation stays the guest's to write (MJ#4791).
+                ConversationWriter: userPayload.ElevatedFrom,
             });
 
             const result = conversationResult.agentResult;
