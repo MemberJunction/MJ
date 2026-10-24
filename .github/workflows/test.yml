@@ -404,6 +404,26 @@ jobs:
         if: ${{ !cancelled() }}
         run: node .github/scripts/check-browser-manifest-leakage.mjs
 
+      # Entity class-registration manifest completeness gate (#6027). A `@RegisterClass(BaseEntity, …)`
+      # subclass missing from the committed manifests compiles, tests green and merges — then the app
+      # instantiates the BASE class, so whatever the subclass overrode never runs.
+      #
+      # The freshness gate below cannot catch it on a PR: it regenerates the manifests and diffs them,
+      # which needs a fully built tree, so it is gated on the full-suite path and every filtered PR run
+      # skips it. That is how `next` stayed red on this for most of 2026-10-22 (#5973 and #4412, fixed
+      # by #6009), and how #5997 and #6022 reached review with a class in no manifest. This gate is
+      # static — committed source against committed manifests, no build and no dist — so it belongs
+      # with the other pure-file guards and runs on every PR.
+      #
+      # Scoped to `BaseEntity` deliberately: measured on `next`, that rule flags 0 of 535 registrations,
+      # where looser rules flag 87 and 607. The script header carries the numbers; re-measure before
+      # widening it.
+      - name: Entity manifest registration gate
+        # `!cancelled()` for the same reason as its neighbours: a step's default `if: success()` would
+        # skip it whenever an earlier guard failed.
+        if: ${{ !cancelled() }}
+        run: pnpm run check:manifest-registrations
+
       # Python dialect tests against the COMMITTED sqlglot pin (issue #3252 review): the
       # sqlglot-ts vitest suite auto-skips when Python/sqlglot is absent, so CI never
       # executed mj_postgres.py — which let the code reference exp.IfBlock (added in

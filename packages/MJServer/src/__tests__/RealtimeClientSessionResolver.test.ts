@@ -375,6 +375,95 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession', () => {
         expect(JSON.parse(result.SessionConfigJson)).toEqual({ instructions: 'hi' });
     });
 
+    describe('recording consent at start (#6010)', () => {
+        const RECORDING_SESSION_ID = 'a1a1a1a1-0000-4000-8000-000000000001';
+        const STARTED_AT = '2026-10-01T00:00:00.000Z';
+
+        /** A provider that can run the ledger's proc, recording every SQL call; `failSql` makes it throw. */
+        function makeSqlProvider(failSql = false) {
+            const sqlCalls: { Sql: string; Params: unknown[] }[] = [];
+            const provider = {
+                ...(makeProvider(() => makeSessionEntity()) as object),
+                MJCoreSchemaName: '__mj',
+                Dialect: {
+                    ProcedureCallSyntax: (schema: string, name: string, params: string[]) => `EXEC [${schema}].[${name}] ${params.join(', ')}`,
+                    ParameterPlaceholder: (index: number) => `@p${index}`,
+                },
+                ExecuteSQL: vi.fn(async (sql: string, params: unknown[]) => {
+                    sqlCalls.push({ Sql: sql, Params: params });
+                    if (failSql) throw new Error('proc exploded');
+                    return [{ RecordingStatus: null }];
+                }),
+            };
+            return { provider, sqlCalls };
+        }
+
+        async function startWithConsent(provider: unknown) {
+            currentProvider = provider;
+            const createdSession = makeSessionEntity({ ID: RECORDING_SESSION_ID });
+            createSessionMock.mockResolvedValue(createdSession);
+            prepareClientSessionMock.mockResolvedValue({
+                Success: true,
+                ClientConfig: { Provider: 'openai', Model: 'gpt-realtime', EphemeralToken: 'ek', ExpiresAt: '2026-01-01T00:00:00Z', SessionConfig: {} },
+            });
+            const result = await makeResolver().StartRealtimeClientSession(
+                'target-1', makeCtx(), undefined, undefined, undefined, undefined, undefined, undefined, STARTED_AT, true,
+            );
+            return { createdSession, result };
+        }
+
+        /** The one stamp-proc call the start made, with its positional params. */
+        function onlyStamp(sqlCalls: { Sql: string; Params: unknown[] }[]): unknown[] {
+            const stamps = sqlCalls.filter((c) => c.Sql.includes('spStampAIAgentSessionRecordingFile'));
+            expect(stamps).toHaveLength(1);
+            return stamps[0].Params;
+        }
+
+        it('saves RecordingStartedAt through the entity and stamps RecordingMedia and t0 through the ledger proc', async () => {
+            const { provider, sqlCalls } = makeSqlProvider();
+            const { createdSession } = await startWithConsent(provider);
+
+            expect((createdSession.RecordingStartedAt as Date).toISOString()).toBe(STARTED_AT);
+            expect(createdSession.Save).toHaveBeenCalled();
+            const [sessionID, fileID, media, startedAt] = onlyStamp(sqlCalls);
+            expect([sessionID, fileID, media]).toEqual([RECORDING_SESSION_ID, null, 'Audio']);
+            expect((startedAt as Date).toISOString()).toBe(STARTED_AT);
+            expect(createdSession.RecordingMedia).toBeUndefined();
+        });
+
+        it('still stamps t0 through the ledger proc when the entity save fails (the janitor recovers only sessions with a t0)', async () => {
+            errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const { provider, sqlCalls } = makeSqlProvider();
+            createSessionMock.mockReset();
+            const failing = makeSessionEntity({
+                ID: RECORDING_SESSION_ID,
+                Save: vi.fn(async () => false),
+                LatestResult: { CompleteMessage: 'save refused' },
+            });
+            createSessionMock.mockResolvedValue(failing);
+            currentProvider = provider;
+            prepareClientSessionMock.mockResolvedValue({
+                Success: true,
+                ClientConfig: { Provider: 'openai', Model: 'gpt-realtime', EphemeralToken: 'ek', ExpiresAt: '2026-01-01T00:00:00Z', SessionConfig: {} },
+            });
+            await makeResolver().StartRealtimeClientSession(
+                'target-1', makeCtx(), undefined, undefined, undefined, undefined, undefined, undefined, STARTED_AT, true,
+            );
+
+            const [, , , startedAt] = onlyStamp(sqlCalls);
+            expect((startedAt as Date).toISOString()).toBe(STARTED_AT);
+        });
+
+        it('does not fail the session start when the media stamp throws, and logs it with the session id', async () => {
+            errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const { provider } = makeSqlProvider(true);
+            const { result } = await startWithConsent(provider);
+
+            expect(result.AgentSessionId).toBe(RECORDING_SESSION_ID);
+            expect(errSpy?.mock.calls.some((c) => String(c[0]).includes(RECORDING_SESSION_ID) && String(c[0]).includes('proc exploded'))).toBe(true);
+        });
+    });
+
     it('threads preferredModelId to the prepare service and surfaces ModelName + narration template', async () => {
         hasPermissionMock.mockResolvedValue(true);
         // Explicit model selection is gated by 'Realtime: Advanced Session Controls' — grant it.
@@ -3565,6 +3654,24 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toContain('Service Accounts do not have storage quota');
         // The shards survive a failed consolidation — there is nothing consolidated to replace them.
+        expect(deleteSegmentsMock).not.toHaveBeenCalled();
+    });
+
+    it('reports a file that uploaded but was not stamped on the session as a failure and keeps the shards', async () => {
+        // The store returns the uploaded file id together with the stamp failure (#6010): the session does not
+        // point at the file, so the crash-recovery shards are the only copy the janitor can still recover.
+        currentProvider = makeRecordingProvider();
+        storeRecordingMock.mockResolvedValue({
+            FileID: 'file-unstamped',
+            ErrorMessage: 'file file-unstamped uploaded and linked, but not stamped on session session-1: proc missing',
+        });
+        const resolver = makeAnonResolver();
+
+        const result = await resolver.UploadRealtimeRecording('session-1', AUDIO_B64, 'audio/wav', makeCtx(), 1000, true);
+
+        expect(result.Success).toBe(false);
+        expect(result.FileID).toBe('file-unstamped');
+        expect(result.ErrorMessage).toContain('not stamped on session session-1');
         expect(deleteSegmentsMock).not.toHaveBeenCalled();
     });
 
