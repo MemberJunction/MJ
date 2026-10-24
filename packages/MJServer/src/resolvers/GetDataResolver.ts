@@ -6,6 +6,7 @@ import { QueryCompositionEngine } from '@memberjunction/generic-database-provide
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { NoLog } from '../logging/NoLog.js';
 import { v4 as uuidv4 } from 'uuid';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { GetReadOnlyDataSource, GetReadOnlyProvider } from '../util.js';
 import { GetDbType } from '../index.js';
 import { GetSystemUser } from '../auth/index.js';
@@ -297,6 +298,17 @@ const __accessTokens: GetDataAccessToken[] = [];
 const __defaultTokenLifeSpan = 1000 * 60 * 5; // 5 minutes
 
 /**
+ * Constant-time token equality: compares SHA-256 digests with `timingSafeEqual` so lookup time
+ * never leaks how much of a presented token matched a stored one (hashing first also equalizes
+ * lengths, which `timingSafeEqual` requires).
+ */
+function tokensEqual(a: string, b: string): boolean {
+    const digestA = createHash('sha256').update(a).digest();
+    const digestB = createHash('sha256').update(b).digest();
+    return timingSafeEqual(digestA, digestB);
+}
+
+/**
  * Removes every token whose `ExpiresAt` has already passed (and its `TokenUses`
  * log along with it). Without this sweep `__accessTokens` grows forever — nothing
  * else in this module ever removes an expired token, `deleteAccessToken()` has no
@@ -356,7 +368,7 @@ export function registerAccessToken(token?: string, lifeSpan: number = __default
     return RegisterAccessToken(token, lifeSpan, requestorPayload);
 }
 export function DeleteAccessToken(token: string) {
-    const index = __accessTokens.findIndex((t) => t.Token === token);
+    const index = __accessTokens.findIndex((t) => tokensEqual(t.Token, token));
     if (index >= 0) {
         __accessTokens.splice(index, 1);
     }
@@ -370,7 +382,7 @@ export function deleteAccessToken(token: string) {
     return DeleteAccessToken(token);
 }
 export function TokenExists(token: string) {
-    return __accessTokens.find((t) => t.Token === token) !== undefined;
+    return __accessTokens.find((t) => tokensEqual(t.Token, token)) !== undefined;
 }
 
 /** @deprecated Use {@link TokenExists}. */
@@ -378,7 +390,7 @@ export function tokenExists(token: string) {
     return TokenExists(token);
 }
 export function IsTokenValid(token: string) {
-    const t = __accessTokens.find((t) => t.Token === token);
+    const t = __accessTokens.find((t) => tokensEqual(t.Token, token));
     if (t) {
         return t.ExpiresAt > new Date();
     }
@@ -390,7 +402,7 @@ export function isTokenValid(token: string) {
     return IsTokenValid(token);
 } 
 export function RecordTokenUse(token: string, usePayload: any) {
-    const t = __accessTokens.find((t) => t.Token === token);
+    const t = __accessTokens.find((t) => tokensEqual(t.Token, token));
     if (t) {
         if (!t.TokenUses) {
             t.TokenUses = [];

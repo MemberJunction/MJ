@@ -294,14 +294,35 @@ export class RealtimeMediaSurfaceComponent extends BaseAngularComponent implemen
     }
   }
 
-  /** A memoized sanitized resource URL for iframe-rendered media (web / pdf). */
+  /**
+   * A memoized sanitized resource URL for iframe-rendered media (web / pdf).
+   *
+   * SECURITY: `bypassSecurityTrustResourceUrl` disables Angular's sanitizer, and the URL here can
+   * originate from an agent tool call (`Media_ShowMedia`), so only http(s) URLs — absolute, or
+   * relative to this origin (the minted `/media/<fileId>?token=` streaming URLs) — are ever
+   * trusted. Anything else (javascript:, data:, blob:, …) renders about:blank instead.
+   */
   public SafeUrl(url: string): SafeResourceUrl {
     let cached = this.safeUrlCache.get(url);
     if (!cached) {
-      cached = this.sanitizer.bypassSecurityTrustResourceUrl(url);
+      const target = this.isEmbeddableUrl(url) ? url : 'about:blank';
+      if (target !== url) {
+        LogError(`RealtimeMediaSurface: refused to embed media URL with a non-http(s) scheme.`);
+      }
+      cached = this.sanitizer.bypassSecurityTrustResourceUrl(target);
       this.safeUrlCache.set(url, cached);
     }
     return cached;
+  }
+
+  /** True when the URL parses (relative to this origin) to http or https. */
+  private isEmbeddableUrl(url: string): boolean {
+    try {
+      const parsed = new URL(url, window.location.origin);
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch {
+      return false;
+    }
   }
 
   /** Inline style for the fractional highlight rectangle (percentages of the pane box). */

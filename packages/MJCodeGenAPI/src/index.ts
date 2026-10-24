@@ -1,4 +1,5 @@
 import express from 'express';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { from, tap } from 'rxjs';
 
 // Import pre-built MJ class registrations manifest (covers all @memberjunction/* packages)
@@ -28,33 +29,72 @@ serverInit$.subscribe({
   next: () => {
     // Start listening for requests only after initialization is complete
 //    app.post ('/api/entity-permissions', handleEntityPermissions);
-    app.post ('/api/run', handleRunCodeGen);
+    app.post ('/api/run', requireCodeGenAuth, handleRunCodeGen);
   },
   error: (err) => console.error(`Initialization failed: ${err}`),
 });
 
+/**
+ * Guards the CodeGen trigger endpoint: a CodeGen run performs DDL and metadata writes, so it must
+ * never be triggerable by anyone who can merely reach the port. When MJ_CODEGEN_API_KEY is set,
+ * the caller must present it in the x-mj-codegen-api-key header (compared constant-time over
+ * SHA-256 digests). When no key is configured, only loopback callers are accepted.
+ */
+function requireCodeGenAuth(req: express.Request, res: express.Response, next: express.NextFunction): void {
+  const configuredKey = process.env.MJ_CODEGEN_API_KEY?.trim();
+  if (configuredKey) {
+    const presented = req.headers['x-mj-codegen-api-key'];
+    if (typeof presented === 'string') {
+      const a = createHash('sha256').update(presented).digest();
+      const b = createHash('sha256').update(configuredKey).digest();
+      if (timingSafeEqual(a, b)) {
+        next();
+        return;
+      }
+    }
+    res.status(401).json({ status: 'error', errorMessage: 'Unauthorized' });
+    return;
+  }
+  const ip = req.socket.remoteAddress ?? '';
+  if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1') {
+    next();
+    return;
+  }
+  res.status(401).json({
+    status: 'error',
+    errorMessage: 'Unauthorized: set MJ_CODEGEN_API_KEY to allow non-loopback access to /api/run',
+  });
+}
 
 let runningPromise: Promise<void> | null = null;
-async function handleRunCodeGen() {
+async function handleRunCodeGen(_req: express.Request, res: express.Response) {
   try {
     if (runningPromise) {
-      return runningPromise;
+      res.status(409).json({ status: 'error', errorMessage: 'A CodeGen run is already in progress' });
+      return;
     }
-    else {
-      runningPromise = new Promise(async () => {
-        // We now need to process the entity permissions for the entities specified
-        const codeGen = MJGlobal.Instance.ClassFactory.CreateInstance<RunCodeGenBase>(RunCodeGenBase);
-        if (!codeGen) {
-          throw new Error("Couldn't get CodeGenRun object!!!")
-        }
 
-        await codeGen?.Run();
+    runningPromise = (async () => {
+      const codeGen = MJGlobal.Instance.ClassFactory.CreateInstance<RunCodeGenBase>(RunCodeGenBase);
+      if (!codeGen) {
+        throw new Error("Couldn't get CodeGenRun object!!!");
+      }
+      await codeGen.Run();
+    })();
+
+    // Clear the latch when the run settles so later requests can start a new run.
+    runningPromise
+      .catch((err) => console.error(`CodeGen run failed: ${err}`))
+      .finally(() => {
+        runningPromise = null;
       });
-    }
-  } 
-  catch (e) {
 
-  } 
+    res.status(202).json({ status: 'accepted' });
+  }
+  catch (e) {
+    runningPromise = null;
+    res.status(500).json({ status: 'error', errorMessage: e instanceof Error ? e.message : 'CodeGen run failed' });
+  }
 }
 
 // async function handleEntityPermissions(req: any, res: any) {
