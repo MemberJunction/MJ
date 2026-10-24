@@ -5,6 +5,7 @@ import sql from 'mssql';
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { SafeJSONParse } from '@memberjunction/global';
 import { DatasetCatalog } from '../data/catalog';
+import { GoldenHashes } from '../data/golden';
 import { TruthEntities } from '../harness/entities';
 import type { DatasetRef, LoadedDataset } from '../harness/types';
 import { BulkLoader, type TableColumnSpec, type TextRows } from './bulk-load';
@@ -24,14 +25,15 @@ export type DatasetRow = Record<string, string>;
 /** Rows that replace a dataset's `rows.csv` for one load (the seam a test uses to feed bad rows). */
 export type DatasetRowSource = () => AsyncIterable<DatasetRow>;
 
-/** The two manifest shapes the generators write: worlds count `rowCount`, scenarios count `nRows`. */
+/** The two manifest shapes the generators write: worlds count `rowCount` (and `nPersons` people), scenarios `nRows`. */
 interface DatasetManifest {
   rowCount?: number;
+  nPersons?: number;
   nRows?: number;
-  rollingOrigin?: RollingOriginSpec;
-  planted?: { nPeriods?: number; rollingOrigin?: RollingOriginSpec } | null;
+  planted?: { rollingOrigin?: RollingOriginSpec } | null;
 }
 
+/** The rolling-origin split a series manifest plants: K origins of H periods, from the first test period. */
 interface RollingOriginSpec {
   K: number;
   H: number;
@@ -58,9 +60,10 @@ interface RowsInput {
 }
 
 /**
- * Loads the generated datasets into their `pstruth` tables. Every load runs in one transaction: delete the table's rows,
- * bulk-insert the new ones, compare the inserted count with the manifest, write the stamp, commit. Any error rolls the
- * whole load back, so a table never carries a stamp for rows it does not hold.
+ * Loads the generated datasets into their `pstruth` tables. A base seed's generated `rows.csv` and `truth.csv` are first
+ * compared with fixtures/golden-hashes.json, and a mismatch throws before anything is loaded. Every load runs in one
+ * transaction: delete the table's rows, bulk-insert the new ones, compare the inserted count with the manifest, write
+ * the stamp, commit. Any error rolls the whole load back, so a table never carries a stamp for rows it does not hold.
  */
 export class DatasetLoader {
   /** Ensure the dataset is generated and loaded (skipped when the table's stamp already names these rows). */
@@ -102,6 +105,7 @@ export class DatasetLoader {
   private static async load(ctx: DatasetLoadContext, ref: DatasetRef, source: DatasetRowSource | null): Promise<LoadedDataset> {
     const entry = DatasetCatalog.Find(ref.Kind === 'world' ? 'world' : 'scenario', ref.ID);
     const dir = await DatasetCatalog.EnsureGenerated(entry, ref.Seed);
+    GoldenHashes.Verify(entry, ref.Seed, dir);
     const manifest = DatasetLoader.ReadManifest(dir);
     const input = source ? await DatasetLoader.ReadSource(source) : DatasetLoader.ReadCsv(path.join(dir, 'rows.csv'));
     const stamp = DatasetLoader.StampValue(ref.ID, ref.Seed, input);
@@ -148,7 +152,7 @@ export class DatasetLoader {
     const trainStamp = DatasetLoader.StampValue(ref.ID, ref.Seed, input, ref.Origin);
     const rowCount =
       force || (await DatasetStamp.Read(ctx.Pool, trainTable)) !== trainStamp
-        ? await DatasetLoader.fillSeriesTrain(ctx, frameTable, trainTable, DatasetLoader.Cutoff(manifest, ref.Origin), trainStamp)
+        ? await DatasetLoader.fillSeriesTrain(ctx, frameTable, trainTable, DatasetLoader.Cutoff(manifest, ref.Origin, dir), trainStamp)
         : await DatasetLoader.countRows(ctx, trainTable);
     return DatasetLoader.loaded(ctx, ref, dir, trainTable, rowCount, input.Sha256);
   }
@@ -175,7 +179,7 @@ export class DatasetLoader {
     const preparedRows = BulkLoader.CoerceRows(rowTable, input.Rows, rowColumns);
     await DatasetLoader.replaceTables(ctx.Pool, [
       { Table: personTable, Columns: preparedPeople.Columns, TableColumns: personColumns, Rows: preparedPeople.Rows,
-        ExpectedRows: preparedPeople.Rows.length, Stamp: stamp },
+        ExpectedRows: DatasetLoader.ExpectedRows(manifest, 'nPersons', dir), Stamp: stamp },
       { Table: rowTable, Columns: preparedRows.Columns, TableColumns: rowColumns, Rows: preparedRows.Rows,
         ExpectedRows: DatasetLoader.ExpectedRows(manifest, 'rowCount', dir), Stamp: stamp },
     ]);
@@ -312,17 +316,21 @@ export class DatasetLoader {
     return manifest;
   }
 
-  protected static ExpectedRows(manifest: DatasetManifest, key: 'rowCount' | 'nRows', dir: string): number {
+  protected static ExpectedRows(manifest: DatasetManifest, key: 'rowCount' | 'nPersons' | 'nRows', dir: string): number {
     const n = manifest[key];
     if (typeof n !== 'number') throw new Error(`manifest.json in ${dir} has no numeric '${key}'`);
     return n;
   }
 
-  /** The first test period of the rolling-origin split, moved 12 periods per origin. */
-  protected static Cutoff(manifest: DatasetManifest, origin: number): number {
-    const ro = manifest.planted?.rollingOrigin ?? manifest.rollingOrigin;
-    // `??` throughout: a first test period of 0 is legitimate.
-    const firstTestPeriod = ro ? ro.firstTestPeriod ?? (manifest.planted?.nPeriods ?? manifest.nRows ?? 240) - ro.K * ro.H : 96;
+  /**
+   * The first test period of the rolling-origin split, moved 12 periods per origin. Every series manifest records
+   * `planted.rollingOrigin.firstTestPeriod` (make_scenario.ts), so a manifest without it throws.
+   */
+  protected static Cutoff(manifest: DatasetManifest, origin: number, dir: string): number {
+    const firstTestPeriod = manifest.planted?.rollingOrigin?.firstTestPeriod;
+    if (typeof firstTestPeriod !== 'number') {
+      throw new Error(`manifest.json in ${dir} has no planted.rollingOrigin.firstTestPeriod: it is not a series dataset`);
+    }
     return firstTestPeriod + 12 * (origin - 1);
   }
 

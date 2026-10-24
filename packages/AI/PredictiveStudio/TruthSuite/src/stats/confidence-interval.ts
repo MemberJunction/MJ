@@ -21,6 +21,9 @@ export class ConfidenceInterval {
 
   /** Hanley & McNeil (1982) normal interval for an AUC with nPos positives and nNeg negatives. */
   public static HanleyMcNeil(auc: number, nPos: number, nNeg: number, z: number = ConfidenceInterval.Z95): Interval {
+    if (!Number.isInteger(nPos) || !Number.isInteger(nNeg) || nPos <= 0 || nNeg <= 0 || !(auc >= 0 && auc <= 1)) {
+      throw new RangeError(`ConfidenceInterval.HanleyMcNeil: invalid AUC ${auc} or class counts ${nPos}/${nNeg}`);
+    }
     const q1 = auc / (2 - auc);
     const q2 = (2 * auc * auc) / (1 + auc);
     const variance = (auc * (1 - auc) + (nPos - 1) * (q1 - auc * auc) + (nNeg - 1) * (q2 - auc * auc)) / (nPos * nNeg);

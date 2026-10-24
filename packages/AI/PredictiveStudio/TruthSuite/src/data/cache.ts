@@ -15,7 +15,8 @@ export class DataCache {
 
   /**
    * sha256 of the canonical spec (MJGlobal `Canonicalize`: object keys sorted at every level, so key order never changes
-   * the hash), the generator's source and the Loom pin: any of the three changing regenerates.
+   * the hash), the generator inputs (the generator's source, its extra input files and the shared generator modules,
+   * joined) and the Loom pin: any of them changing regenerates.
    */
   public static SpecHash(spec: { [k: string]: Json }, generatorSource: string, loomSha: string): string {
     return createHash('sha256').update(Canonicalize(spec)).update('\0').update(generatorSource).update('\0').update(loomSha).digest('hex');

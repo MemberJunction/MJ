@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import type { UserInfo } from '@memberjunction/core';
-import { MJAPIConnection } from './connect';
+import { HarnessFileStorage, type FileStorageActivation } from './file-storage';
 import { HarnessDatasets, type DatasetPool } from './datasets';
 import { HarnessPipelines, type AlgorithmRow } from './pipelines';
 import { HarnessTraining } from './train';
@@ -23,52 +23,92 @@ export interface RunContext {
   readonly RunID: string;
 }
 
-/** The harness bound to one client provider (see {@link RunFixtures.HarnessFor}). */
+/** One harness and what it holds open: its mssql pool and the File Storage Provider it switched on, if any. */
+interface HarnessConnection {
+  readonly Harness: TruthHarness;
+  readonly Pool: DatasetPool;
+  readonly FileStorage: FileStorageActivation | null;
+}
+
+/** A harness bound to one client provider (see {@link RunFixtures.HarnessFor}). */
 interface BoundHarness {
   readonly Provider: GraphQLDataProvider;
-  readonly Harness: Promise<TruthHarness>;
+  readonly Connection: Promise<HarnessConnection>;
 }
 
 /** The per-process harness the gates run against, and the fixture models several gates share. */
 export class RunFixtures {
-  private static harness: Promise<TruthHarness> | null = null;
-  private static bound: BoundHarness | null = null;
+  /** Every harness bound since the last cleanup, the current one last; cleanup closes them all. */
+  private static bound: BoundHarness[] = [];
   private static w1Draft: Promise<CandidateModel> | null = null;
   private static w1Validated: Promise<CandidateModel> | null = null;
 
-  /** The run's harness, built on first use and shared by every gate of the process. */
-  public static GetRunHarness(): Promise<TruthHarness> {
-    RunFixtures.harness ||= RunFixtures.buildHarness();
-    return RunFixtures.harness;
-  }
-
   /**
    * The run's harness on a provider the caller already holds (an `mj test` check's client provider), built on first use
-   * and shared while the provider stays the same; a different provider gets its own harness.
+   * and shared while the provider stays the same. A different provider gets its own harness, and the fixture models
+   * are forgotten: they were recorded on the previous harness, which is still cleaned up by `CleanupRun`.
    */
-  public static HarnessFor(provider: GraphQLDataProvider, user: UserInfo): Promise<TruthHarness> {
-    if (RunFixtures.bound?.Provider !== provider) {
-      RunFixtures.bound = { Provider: provider, Harness: RunFixtures.connectHarness(provider, user) };
+  public static async HarnessFor(provider: GraphQLDataProvider, user: UserInfo): Promise<TruthHarness> {
+    let current = RunFixtures.bound[RunFixtures.bound.length - 1];
+    if (current?.Provider !== provider) {
+      RunFixtures.w1Draft = null;
+      RunFixtures.w1Validated = null;
+      current = { Provider: provider, Connection: RunFixtures.connect(provider, user) };
+      RunFixtures.bound.push(current);
     }
-    return RunFixtures.bound.Harness;
+    return (await current.Connection).Harness;
   }
 
   /**
-   * Delete the pipelines and models the bound harness recorded (`TruthHarness.Created`: those it created, and those of
-   * the agent runs it observed), with their training runs and scoring bindings, through the entity layer, and forget
-   * the fixture models they held. Every row is attempted; throws one error naming each row whose `Delete()` failed.
-   * No-op when no harness was bound in this process.
+   * For every harness bound since the last cleanup: look up the pipelines of its agent runs again by their exact names
+   * (a run can create them after the client call returned), delete the pipelines and models it recorded with their
+   * training runs and scoring bindings through the entity layer, put back the File Storage Provider it switched on,
+   * and close its pool. Every step is attempted; throws one error naming each failure. No-op when nothing was bound.
    */
   public static async CleanupRun(user: UserInfo): Promise<void> {
     const bound = RunFixtures.bound;
-    if (!bound) return;
+    RunFixtures.bound = [];
     RunFixtures.w1Draft = null;
     RunFixtures.w1Validated = null;
-    const h = await bound.Harness;
-    const failures = await HarnessCleanup.DeleteRecorded(HarnessCleanup.EntityStore(h.Provider, user), h.Created);
-    if (failures.length > 0) {
-      throw new Error(`cleanup of run ${h.RunID} left ${failures.length} row(s): ${failures.join('; ')}`);
+    const failures: string[] = [];
+    for (const b of bound) {
+      failures.push(...(await RunFixtures.cleanupConnection(b, user)));
     }
+    if (failures.length > 0) {
+      throw new Error(`truth-suite cleanup left ${failures.length} problem(s): ${failures.join('; ')}`);
+    }
+  }
+
+  /** Clean up one bound harness; returns one line per failure (never throws). */
+  private static async cleanupConnection(b: BoundHarness, user: UserInfo): Promise<string[]> {
+    let conn: HarnessConnection;
+    try {
+      conn = await b.Connection;
+    } catch {
+      return []; // the harness never connected, so it created, switched on and opened nothing
+    }
+    const h = conn.Harness;
+    const failures: string[] = [];
+    try {
+      const agentPipelines = await HarnessAgent.PipelineIDsNamed(h.Provider, user, h.Created.AgentPipelineNames);
+      for (const id of agentPipelines) h.Created.RecordPipeline(id);
+      failures.push(...(await HarnessCleanup.DeleteRecorded(HarnessCleanup.EntityStore(h.Provider, user), h.Created)));
+    } catch (e) {
+      failures.push(e instanceof Error ? e.message : String(e));
+    }
+    if (conn.FileStorage) {
+      try {
+        await HarnessFileStorage.Restore(h.Provider, user, conn.FileStorage);
+      } catch (e) {
+        failures.push(e instanceof Error ? e.message : String(e));
+      }
+    }
+    try {
+      await conn.Pool.close();
+    } catch (e) {
+      failures.push(`closing the dataset pool: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    return failures.map((f) => `run ${h.RunID}: ${f}`);
   }
 
   /** Trains a logistic-regression model on the given dataset (`MaxRows: 1_000_000`) and returns its `ModelID`. */
@@ -111,24 +151,28 @@ export class RunFixtures {
     return RunFixtures.w1Validated;
   }
 
-  /** The harness on the process's own MJAPI connection (`MJAPIConnection.Connect`). */
-  private static async buildHarness(): Promise<TruthHarness> {
-    const { Provider: provider, User: user } = await MJAPIConnection.Connect();
-    return RunFixtures.harnessFrom(provider, user);
-  }
-
-  /** The harness on a caller's provider; makes sure model artifacts have an active storage provider, as `Connect` does. */
-  private static async connectHarness(provider: GraphQLDataProvider, user: UserInfo): Promise<TruthHarness> {
-    await MJAPIConnection.EnsureActiveFileStorageProvider(provider, user);
-    return RunFixtures.harnessFrom(provider, user);
+  /**
+   * The harness on a caller's provider: makes sure model artifacts have an active storage provider (recording any it
+   * switched on), then opens the dataset pool. The pool is closed again if building the harness fails.
+   */
+  private static async connect(provider: GraphQLDataProvider, user: UserInfo): Promise<HarnessConnection> {
+    const fileStorage = await HarnessFileStorage.EnsureActive(provider, user);
+    const pool = await HarnessDatasets.OpenDatasetPool();
+    try {
+      return { Harness: await RunFixtures.harnessFrom(provider, user, pool), Pool: pool, FileStorage: fileStorage };
+    } catch (e) {
+      await pool.close();
+      if (fileStorage) await HarnessFileStorage.Restore(provider, user, fileStorage);
+      throw e;
+    }
   }
 
   /** One object literal: a TruthHarness member without a line here is a compile error. */
-  private static async harnessFrom(provider: GraphQLDataProvider, user: UserInfo): Promise<TruthHarness> {
+  private static async harnessFrom(provider: GraphQLDataProvider, user: UserInfo, pool: DatasetPool): Promise<TruthHarness> {
     const ctx: RunContext = {
       Provider: provider,
       User: user,
-      Pool: await HarnessDatasets.OpenDatasetPool(),
+      Pool: pool,
       Algorithms: await HarnessPipelines.LoadAlgorithms(provider, user),
       RunID: process.env.TRUTH_RUN_ID || randomUUID(),
     };

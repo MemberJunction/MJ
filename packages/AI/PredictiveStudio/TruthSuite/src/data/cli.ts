@@ -1,6 +1,3 @@
-import { createHash } from 'node:crypto';
-import { appendFileSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
-import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { parseArgs } from 'node:util';
 import { DataCache } from './cache';
@@ -14,15 +11,15 @@ const { values } = parseArgs({
   options: {
     set: { type: 'string' },
     only: { type: 'string' },
-    stream: { type: 'boolean' },
   },
 });
 
-const set = (values.set || 'base') as SeedSetName;
-if (set !== 'base' && set !== 't2' && set !== 'n400') {
-  console.error(`Invalid --set ${set}; expected base | t2 | n400`);
+const setArg = values.set || 'base';
+if (setArg !== 'base' && setArg !== 't2') {
+  console.error(`Invalid --set ${setArg}; expected base | t2`);
   process.exit(1);
 }
+const set: SeedSetName = setArg;
 
 const entries = values.only ? CATALOG.filter((e) => e.Code === values.only) : CATALOG;
 if (entries.length === 0) {
@@ -34,20 +31,8 @@ const dataRoot = DataCache.Root();
 for (const entry of entries) {
   const t0 = performance.now();
   const seeds = DatasetSeeds.SeedSet(entry.Kind, entry.Code, set);
-  const specHash = DatasetCatalog.EntrySpecHash(entry);
-  const hashDir = path.join(dataRoot, entry.Kind, entry.Code, specHash.slice(0, 12));
-  mkdirSync(hashDir, { recursive: true });
-  const n400File = path.join(hashDir, 'n400.sha256');
-  if (values.stream) rmSync(n400File, { force: true });
-
   for (const seed of seeds) {
-    const dir = await DatasetCatalog.EnsureGenerated(entry, seed, dataRoot);
-    if (values.stream) {
-      const rowsSha = createHash('sha256').update(readFileSync(path.join(dir, 'rows.csv'))).digest('hex');
-      const truthSha = createHash('sha256').update(readFileSync(path.join(dir, 'truth.csv'))).digest('hex');
-      appendFileSync(n400File, `seed-${seed} rows=${rowsSha} truth=${truthSha}\n`);
-      rmSync(dir, { recursive: true, force: true });
-    }
+    await DatasetCatalog.EnsureGenerated(entry, seed, dataRoot);
   }
   const sec = ((performance.now() - t0) / 1000).toFixed(2);
   console.log(`${entry.Kind}/${entry.Code}: ${seeds.length} seed(s) in ${sec}s`);

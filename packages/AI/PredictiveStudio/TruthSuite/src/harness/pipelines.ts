@@ -1,7 +1,13 @@
 import { EntityFieldTSType, RunView, type EntityInfo, type UserInfo } from '@memberjunction/core';
 import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { DOMINANCE_THRESHOLD_DEFAULT, type CandidateFeatureKind } from '@memberjunction/predictive-studio-core';
+import {
+  DOMINANCE_THRESHOLD_DEFAULT,
+  type CandidateFeatureKind,
+  type FeatureStepGraph,
+  type OneHotFeatureStep,
+  type SelectFeatureStep,
+} from '@memberjunction/predictive-studio-core';
 import { ContainmentProbe } from './containment-probe';
 import type { PipelineSpec } from './types';
 
@@ -30,17 +36,13 @@ export class HarnessPipelines {
     return f.TSType === EntityFieldTSType.String ? 'categorical' : 'numeric';
   }
 
-  private static featureSteps(
-    entity: EntityInfo,
-    features: string[],
-  ): { Steps: Array<{ Id: string; Kind: 'select'; Columns: string[] } | { Id: string; Kind: 'onehot'; Column: string }> } {
-    const cats = features.filter((f) => HarnessPipelines.FeatureKind(entity, f) === 'categorical');
-    return {
-      Steps: [
-        { Id: 'select-raw', Kind: 'select', Columns: features },
-        ...cats.map((c) => ({ Id: `onehot-${c}`, Kind: 'onehot' as const, Column: c })),
-      ],
-    };
+  /** The suite's feature graph: select the features, then one-hot encode each categorical one. */
+  private static featureSteps(entity: EntityInfo, features: string[]): FeatureStepGraph {
+    const select: SelectFeatureStep = { Id: 'select-raw', Kind: 'select', Columns: features };
+    const onehots = features
+      .filter((f) => HarnessPipelines.FeatureKind(entity, f) === 'categorical')
+      .map((c): OneHotFeatureStep => ({ Id: `onehot-${c}`, Kind: 'onehot', Column: c }));
+    return { Steps: [select, ...onehots] };
   }
 
   /** Creates and saves a truth-suite pipeline from a spec; throws with the save's message when it fails. */

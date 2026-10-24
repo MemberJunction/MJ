@@ -1557,6 +1557,9 @@ importers:
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
+      dotenv:
+        specifier: ^17.2.4
+        version: 17.2.4
       tsc-alias:
         specifier: ^1.8.10
         version: 1.8.16
@@ -16444,6 +16447,9 @@ importers:
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
     devDependencies:
       '@types/express':
         specifier: ^5.0.6
@@ -16451,9 +16457,6 @@ importers:
       '@types/mssql':
         specifier: ^9.1.9
         version: 9.1.9
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
       vitest:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)

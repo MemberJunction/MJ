@@ -1,6 +1,6 @@
-import { RunView } from '@memberjunction/core';
+import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJMLModelEntity } from '@memberjunction/core-entities';
-import { EscapeSQLString, SafeJSONParse } from '@memberjunction/global';
+import { EscapeSQLString, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import type { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import type { ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
@@ -34,8 +34,9 @@ export class HarnessAgent {
     });
     const wallMs = Date.now() - t0;
     const build = result.payload?.BuildResult || null;
-    const pipelineIds = await HarnessAgent.builderPipelineIDs(ctx, plan);
-    if (build?.pipelineId && !pipelineIds.includes(build.pipelineId)) pipelineIds.push(build.pipelineId);
+    const pipelineIds = await HarnessAgent.PipelineIDsNamed(ctx.Provider, ctx.User, HarnessAgent.BuilderPipelineNames(plan));
+    const builtPipelineId = build?.pipelineId;
+    if (builtPipelineId && !pipelineIds.some((id) => UUIDsEqual(id, builtPipelineId))) pipelineIds.push(builtPipelineId);
     return {
       AgentRunID: result.agentRun?.ID || null,
       AgentSuccess: result.success,
@@ -92,21 +93,22 @@ export class HarnessAgent {
     return [base, ...experiments.map((e) => `${base} (${e.AlgorithmName.trim()})`)];
   }
 
-  /** The IDs of the pipelines named as the builder names `plan`'s pipelines (exact names, never a pattern). */
-  private static async builderPipelineIDs(ctx: RunContext, plan: ModelingPlanSpec): Promise<string[]> {
-    const names = HarnessAgent.BuilderPipelineNames(plan);
+  /**
+   * The IDs of the `MJ: ML Training Pipelines` rows with exactly these names (never a pattern). Run after an agent run,
+   * and again by `RunFixtures.CleanupRun`, so pipelines an agent run created after the client call returned are found.
+   */
+  public static async PipelineIDsNamed(provider: IMetadataProvider, user: UserInfo, names: readonly string[]): Promise<string[]> {
     if (names.length === 0) return [];
-    const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>(
+    const res = await RunView.FromMetadataProvider(provider).RunView<{ ID: string }>(
       {
         EntityName: 'MJ: ML Training Pipelines',
         ExtraFilter: `Name IN (${names.map((n) => `'${EscapeSQLString(n)}'`).join(',')})`,
         Fields: ['ID'],
-        ResultType: 'simple',
         BypassCache: true,
       },
-      ctx.User,
+      user,
     );
-    if (!res.Success) throw new Error(`read the builder's pipelines for "${plan.Name}": ${res.ErrorMessage}`);
+    if (!res.Success) throw new Error(`read the pipelines named ${names.join(', ')}: ${res.ErrorMessage}`);
     return res.Results.map((p) => p.ID);
   }
 

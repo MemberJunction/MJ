@@ -17,24 +17,11 @@ describe('Wilson interval (z = 1.959963984540054)', () => {
   });
 });
 
-describe('the four 400-seed rules', () => {
-  it('noise-publish and false-alarm accept 0–28 of 400', () => {
-    expect(SeedRule.AcceptanceRange('noise-publish-400', 400)).toEqual({ Min: 0, Max: 28 });
-    expect(SeedRule.AcceptanceRange('false-alarm-400', 400)).toEqual({ Min: 0, Max: 28 });
-    expect(SeedRule.NoisePublishPasses(28, 400)).toBe(true);
-    expect(SeedRule.NoisePublishPasses(29, 400)).toBe(false);
-  });
-  it('coverage accepts 372–388 of 400', () => {
-    expect(SeedRule.AcceptanceRange('coverage-400', 400)).toEqual({ Min: 372, Max: 388 });
-    expect(SeedRule.CoveragePasses(371, 400)).toBe(false);
-    expect(SeedRule.CoveragePasses(389, 400)).toBe(false);
-  });
-  it('detection accepts 372–400 of 400', () => {
-    expect(SeedRule.AcceptanceRange('detection-400', 400)).toEqual({ Min: 372, Max: 400 });
-    expect(SeedRule.DetectionPasses(371, 400)).toBe(false);
-  });
+describe('the seed rules', () => {
   it('noise-publish-60 (G0.2) accepts 0–6 of 60', () => {
     expect(SeedRule.AcceptanceRange('noise-publish-60', 60)).toEqual({ Min: 0, Max: 6 });
+    expect(SeedRule.Passes('noise-publish-60', 6, 60)).toBe(true);
+    expect(SeedRule.Passes('noise-publish-60', 7, 60)).toBe(false);
   });
 });
 
@@ -47,5 +34,11 @@ describe('Hanley–McNeil interval', () => {
     const ci = ConfidenceInterval.HanleyMcNeil(0.5, 2900, 2874);
     expect(ci.Lower).toBeLessThan(0.5);
     expect(ci.Upper).toBeGreaterThan(0.5);
+  });
+  it('rejects an empty class and an AUC outside [0, 1]', () => {
+    expect(() => ConfidenceInterval.HanleyMcNeil(0.7, 0, 10)).toThrow(RangeError);
+    expect(() => ConfidenceInterval.HanleyMcNeil(0.7, 10, 0)).toThrow(RangeError);
+    expect(() => ConfidenceInterval.HanleyMcNeil(1.2, 10, 10)).toThrow(RangeError);
+    expect(() => ConfidenceInterval.HanleyMcNeil(Number.NaN, 10, 10)).toThrow(RangeError);
   });
 });

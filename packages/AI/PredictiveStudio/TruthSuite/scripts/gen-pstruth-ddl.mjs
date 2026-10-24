@@ -23,11 +23,11 @@ const PERSON = 'ID UNIQUEIDENTIFIER NOT NULL PRIMARY KEY, MemberNumber NVARCHAR(
 for (const w of ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8']) {
   tables.push(`${w}_Person`, `${w}_MembershipYear`);
   emit(`CREATE TABLE pstruth.${w}_Person (${PERSON});`);
-  emit(`CREATE TABLE pstruth.${w}_MembershipYear (ID UNIQUEIDENTIFIER NOT NULL PRIMARY KEY, PersonID UNIQUEIDENTIFIER NOT NULL REFERENCES pstruth.${w}_Person(ID), [Year] INT NOT NULL, StartDate DATE NOT NULL, [Plan] NVARCHAR(20) NOT NULL, EventsAttended INT NOT NULL, IncomeK INT NOT NULL, AutoRenew BIT NOT NULL, Region NVARCHAR(10) NOT NULL, PostalCode NVARCHAR(10) NULL, MemberNumber NVARCHAR(80) NULL, Noise1 INT NOT NULL, Noise2 INT NOT NULL, Noise3 INT NOT NULL, Noise4 INT NOT NULL, Noise5 INT NOT NULL, Renewed BIT NULL, Status NVARCHAR(20) NULL, PersonStatusNow NVARCHAR(20) NULL, WorldID NVARCHAR(40) NOT NULL, Seed INT NOT NULL, TruthScore FLOAT NULL, TruthClass NVARCHAR(20) NULL);`);
+  emit(`CREATE TABLE pstruth.${w}_MembershipYear (ID UNIQUEIDENTIFIER NOT NULL PRIMARY KEY, PersonID UNIQUEIDENTIFIER NOT NULL REFERENCES pstruth.${w}_Person(ID), [Year] INT NOT NULL, StartDate DATE NOT NULL, [Plan] NVARCHAR(20) NOT NULL, EventsAttended INT NOT NULL, IncomeK INT NOT NULL, AutoRenew BIT NOT NULL, Region NVARCHAR(10) NOT NULL, PostalCode NVARCHAR(10) NULL, MemberNumber NVARCHAR(80) NULL, Noise1 INT NOT NULL, Noise2 INT NOT NULL, Noise3 INT NOT NULL, Noise4 INT NOT NULL, Noise5 INT NOT NULL, Renewed BIT NULL, Status NVARCHAR(20) NULL, PersonStatusNow NVARCHAR(20) NULL, WorldID NVARCHAR(40) NOT NULL, Seed INT NOT NULL, TruthScore FLOAT NULL);`);
 }
 tables.push('W9_Person', 'W9_EventRegistration');
 emit(`CREATE TABLE pstruth.W9_Person (${PERSON});`);
-emit('CREATE TABLE pstruth.W9_EventRegistration (ID UNIQUEIDENTIFIER NOT NULL PRIMARY KEY, PersonID UNIQUEIDENTIFIER NOT NULL REFERENCES pstruth.W9_Person(ID), EventDate DATE NOT NULL, TicketTier NVARCHAR(20) NOT NULL, DaysRegisteredBefore INT NOT NULL, PriorAttendance INT NOT NULL, Outcome NVARCHAR(20) NULL, WorldID NVARCHAR(40) NOT NULL, Seed INT NOT NULL, TruthScore FLOAT NULL, TruthClass NVARCHAR(20) NULL);');
+emit('CREATE TABLE pstruth.W9_EventRegistration (ID UNIQUEIDENTIFIER NOT NULL PRIMARY KEY, PersonID UNIQUEIDENTIFIER NOT NULL REFERENCES pstruth.W9_Person(ID), EventDate DATE NOT NULL, TicketTier NVARCHAR(20) NOT NULL, DaysRegisteredBefore INT NOT NULL, PriorAttendance INT NOT NULL, Outcome NVARCHAR(20) NULL, WorldID NVARCHAR(40) NOT NULL, Seed INT NOT NULL, TruthScore FLOAT NULL);');
 
 const DIST = { normal: 'FLOAT', int: 'INT', bernoulli: 'INT' };
 function scenarioColumns(id) {

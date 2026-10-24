@@ -1,15 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { AgentPlans } from '../agent-plan';
-import type { EntityInfo } from '@memberjunction/core';
+import { EntityInfo } from '@memberjunction/core';
 
-const entity = {
-  Name: 'PS Truth: W3_MembershipYear',
-  Fields: [
-    { Name: 'Plan', TSType: 'string' },
-    { Name: 'EventsAttended', TSType: 'number' },
-    { Name: 'Status', TSType: 'string' },
-  ],
-} as unknown as EntityInfo; // test double: only Name/Fields are read by AgentPlans.Build
+// A real EntityInfo built from field rows: AgentPlans.Build reads its Name and each field's TSType (derived from Type).
+const entity = new EntityInfo({ Name: 'PS Truth: W3_MembershipYear', Fields: [{ Name: 'Plan', Type: 'nvarchar' }, { Name: 'EventsAttended', Type: 'int' }, { Name: 'Status', Type: 'nvarchar' }] });
 
 describe('AgentPlans.Build', () => {
   it('builds an approved plan with one experiment per algorithm in the given order', () => {

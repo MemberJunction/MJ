@@ -1,6 +1,7 @@
 import { RunView, type BaseEntity, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJMLModelEntity, MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString, UUIDSet } from '@memberjunction/global';
+import { HarnessAgent } from './agent';
 import type { AgentStepResult, CandidateModel, TruthHarness } from './types';
 
 /**
@@ -11,6 +12,17 @@ import type { AgentStepResult, CandidateModel, TruthHarness } from './types';
 export class RunRecords {
   public readonly PipelineIDs = new UUIDSet();
   public readonly ModelIDs = new UUIDSet();
+  private readonly agentPipelineNames = new Set<string>();
+
+  /** The exact pipeline names of every builder-agent run the harness started (cleanup looks them up again). */
+  public get AgentPipelineNames(): readonly string[] {
+    return [...this.agentPipelineNames];
+  }
+
+  /** Record the names an agent run's pipelines get, before the run starts, so cleanup finds them however it ends. */
+  public RecordAgentPipelineNames(names: readonly string[]): void {
+    for (const n of names) this.agentPipelineNames.add(n);
+  }
 
   /** Record a pipeline the run created (or an agent run of it created). */
   public RecordPipeline(id: string): void {
@@ -54,6 +66,7 @@ export class RunRecords {
         return t;
       },
       RunBuilderAgent: async (plan) => {
+        this.RecordAgentPipelineNames(HarnessAgent.BuilderPipelineNames(plan));
         const r = await h.RunBuilderAgent(plan);
         this.RecordAgentRun(r);
         return r;

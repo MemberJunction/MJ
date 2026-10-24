@@ -17,11 +17,10 @@ describe('GenLib.WriteCsv', () => {
     expect(readFileSync(file, 'utf8')).toBe('A,B,C\n1,,true\n2.5,,false\n');
   });
 
-  it('quotes cells holding commas, quotes or newlines, doubling quotes', () => {
-    const file = tempFile('b.csv');
-    const values = ['a,b', 'say "hi"', 'two\nlines', 'plain'];
-    GenLib.WriteCsv(file, values.map((v) => ({ V: v })));
-    expect(readFileSync(file, 'utf8')).toBe('V\n"a,b"\n"say ""hi"""\n"two\nlines"\nplain\n');
+  it('refuses cells holding a comma, quote or line break (the truth-suite CSV is unquoted)', () => {
+    for (const v of ['a,b', 'say "hi"', 'two\nlines', 'cr\rhere']) {
+      expect(() => GenLib.WriteCsv(tempFile('b.csv'), [{ V: v }])).toThrow(/unquoted/);
+    }
   });
 
   it('honours an explicit column order and omits the trailing newline on request', () => {

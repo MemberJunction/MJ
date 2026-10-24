@@ -12,6 +12,11 @@ export interface CatalogEntry {
   SpecFile: string;
   /** The generator's TypeScript entry point, relative to the package root; run with tsx (see `runGenerator`). */
   Generator: string;
+  /**
+   * The other files, relative to the package root, whose bytes decide this entry's output and so join its cache key:
+   * the worlds domain a world generator reads, or the generator of the scenario a derived scenario is built from.
+   */
+  ExtraInputs: readonly string[];
 }
 
 /**
@@ -31,6 +36,12 @@ const SCENARIO_IDS = [
   'R1', 'R2p', 'R3', 'T1p', 'T2p', 'T3', 'T4',
 ] as const satisfies readonly ScenarioID[];
 
+/** The worlds domain every world generator reads (`GenLib.LoadWorldDomain`); its namespace mints every world ID. */
+const WORLD_DOMAIN_FILE = 'fixtures/worlds-domain/domain.json';
+
+/** The scenario generator; the derived scenario's key includes it because its input is T3's generated output. */
+const SCENARIO_GENERATOR = 'src/generators/make_scenario.ts';
+
 /** The derived scenario: generated from T3's output, not from a spec of its own. */
 const DERIVED_SCENARIO_ID = 'T3-lag' satisfies ScenarioID;
 
@@ -40,18 +51,21 @@ export const CATALOG: readonly CatalogEntry[] = [
     Code: id,
     SpecFile: `fixtures/worlds/${id}.json`,
     Generator: id === 'W9-multiclass' ? 'src/generators/make_world_multiclass.ts' : 'src/generators/make_world.ts',
+    ExtraInputs: [WORLD_DOMAIN_FILE],
   })),
   ...SCENARIO_IDS.map((id): CatalogEntry => ({
     Kind: 'scenario',
     Code: id,
     SpecFile: `fixtures/scenarios/specs/${id}.json`,
-    Generator: 'src/generators/make_scenario.ts',
+    Generator: SCENARIO_GENERATOR,
+    ExtraInputs: [],
   })),
   {
     Kind: 'scenario',
     Code: DERIVED_SCENARIO_ID,
     SpecFile: 'fixtures/scenarios/specs/T3.json',
     Generator: 'src/generators/derive_t3_lag.ts',
+    ExtraInputs: [SCENARIO_GENERATOR],
   },
 ];
 
@@ -77,11 +91,11 @@ export class DatasetCatalog {
     return entry;
   }
 
-  /** Compute the spec hash for a catalog entry. */
+  /** The cache key of a catalog entry: its spec, its generator, its extra inputs, the shared generator modules and the Loom pin. */
   public static EntrySpecHash(entry: CatalogEntry): string {
     const root = TruthSuite.Root();
     const spec = SafeJSONParse<{ [k: string]: Json }>(readFileSync(path.join(root, entry.SpecFile), 'utf8'));
-    const genSource = [entry.Generator, ...GENERATOR_SHARED_SOURCES].map((f) => readFileSync(path.join(root, f), 'utf8')).join('\0');
+    const genSource = [entry.Generator, ...entry.ExtraInputs, ...GENERATOR_SHARED_SOURCES].map((f) => readFileSync(path.join(root, f), 'utf8')).join('\0');
     const loomPin = SafeJSONParse<{ sha: string }>(readFileSync(path.join(root, 'fixtures', 'loom.json'), 'utf8'));
     if (!spec || !loomPin) throw new Error(`Failed to read spec or loom.json for ${entry.Code}`);
     return DataCache.SpecHash(spec, genSource, loomPin.sha);

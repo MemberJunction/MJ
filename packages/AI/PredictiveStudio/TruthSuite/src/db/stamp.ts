@@ -12,7 +12,7 @@ export class DatasetStamp {
   }
 
   private static request(conn: StampConnection): sql.Request {
-    return conn instanceof sql.Transaction ? new sql.Request(conn) : new sql.Request(conn);
+    return conn.request(); // a pool and a transaction both create their own requests
   }
 
   /** Read the current `pstruth_dataset` stamp on `pstruth.<table>`, or null if none is set. */

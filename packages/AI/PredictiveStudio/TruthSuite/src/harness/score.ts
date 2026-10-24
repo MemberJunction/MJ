@@ -1,10 +1,11 @@
-import { RunView } from '@memberjunction/core';
+import { RunView, type RemoteOpResult } from '@memberjunction/core';
 import {
   type MJProcessRunDetailEntity,
   type MJProcessRunEntity,
   PredictiveStudioCreateScoringProcessOperation,
   PredictiveStudioScoreRecordSetOperation,
   RecordProcessRunNowOperation,
+  type RecordProcessRunNowOutput,
 } from '@memberjunction/core-entities';
 import { EscapeSQLString } from '@memberjunction/global';
 import { PredictiveStudioRefusalCodes } from '@memberjunction/predictive-studio-core';
@@ -12,11 +13,12 @@ import type { RunContext } from './run-fixtures';
 import type { LoadedDataset, RecordProcessScoring, ScoreAttempt, ScoreRequest } from './types';
 
 type PrdRow = Pick<MJProcessRunDetailEntity, 'RecordID' | 'Status' | 'ResultPayload' | 'ErrorMessage'>;
-type ProcessRunRow = Pick<
-  MJProcessRunEntity,
-  'ID' | 'Status' | 'StartTime' | 'EndTime' | 'ProcessedItems' | 'SuccessCount' | 'ErrorCount' | 'SkippedCount' | 'ErrorMessage'
->;
+type ProcessRunRow = Pick<MJProcessRunEntity, 'ID' | 'Status'>;
 const TERMINAL_RUN_STATUSES: ReadonlySet<MJProcessRunEntity['Status']> = new Set(['Completed', 'Failed', 'Cancelled']);
+/** The result codes GraphQLDataProvider.RouteOperation returns when the call itself failed, not the operation. */
+const TRANSPORT_DROP_CODES: ReadonlySet<string> = new Set(['TRANSPORT_ERROR', 'NO_RESPONSE']);
+const POLL_ATTEMPTS = 480;
+const POLL_INTERVAL_MS = 5_000;
 
 /** Scoring operation and record-process scoring wrappers for the truth harness. */
 export class HarnessScoring {
@@ -95,39 +97,7 @@ export class HarnessScoring {
       { recordProcessID: recordProcessId },
       { provider: ctx.Provider, user: ctx.User },
     );
-    // A RunNow that drops at the transport (Success=false, no processRunID) leaves the run going server-side, so poll for it.
-    let processRunId: string | null = null;
-    let status: MJProcessRunEntity['Status'] = 'Failed';
-    if (rn.Output && rn.Output.processRunID) {
-      processRunId = rn.Output.processRunID;
-      status = rn.Output.status;
-    } else {
-      for (let i = 0; i < 480; i++) {
-        const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<ProcessRunRow>(
-          {
-            EntityName: 'MJ: Process Runs',
-            ExtraFilter: `RecordProcessID='${EscapeSQLString(recordProcessId)}' AND StartTime >= '${new Date(since.getTime() - 5000).toISOString()}'`,
-            Fields: ['ID', 'Status', 'StartTime', 'EndTime', 'ProcessedItems', 'SuccessCount', 'ErrorCount', 'SkippedCount', 'ErrorMessage'],
-            OrderBy: 'StartTime DESC',
-            MaxRows: 1,
-            ResultType: 'simple',
-            BypassCache: true,
-          },
-          ctx.User,
-        );
-        if (!res.Success) throw new Error(`read process runs: ${res.ErrorMessage}`);
-        const run = res.Results[0];
-        if (run && TERMINAL_RUN_STATUSES.has(run.Status)) {
-          processRunId = run.ID;
-          status = run.Status;
-          break;
-        }
-        await HarnessScoring.sleep(5_000);
-      }
-      if (!processRunId) {
-        throw new Error(`RecordProcess.RunNow for ${recordProcessId} failed: ${rn.ErrorMessage || 'no processRunID'}`);
-      }
-    }
+    const { ID: processRunId, Status: status } = await HarnessScoring.finishedRun(ctx, recordProcessId, rn, since);
 
     const detailsRes = await RunView.FromMetadataProvider(ctx.Provider).RunView<PrdRow>(
       {
@@ -150,5 +120,52 @@ export class HarnessScoring {
         ResultPayload: d.ResultPayload ?? null,
       })),
     };
+  }
+
+  /**
+   * The finished process run of a RunNow call. A RunNow that returned its run is polled by run ID until the run's status
+   * is terminal (`Pending`, `Running` and `Paused` are legal answers). A RunNow that dropped at the transport
+   * (`TRANSPORT_ERROR`/`NO_RESPONSE`, no run ID) may still be running server-side, so the record process's newest run
+   * is polled for. Any other failure is a refusal or a validation error that started nothing, and throws at once.
+   */
+  private static async finishedRun(
+    ctx: RunContext,
+    recordProcessId: string,
+    rn: RemoteOpResult<RecordProcessRunNowOutput>,
+    since: Date,
+  ): Promise<{ ID: string; Status: MJProcessRunEntity['Status'] }> {
+    const runId = rn.Output?.processRunID;
+    if (runId) {
+      if (rn.Output && TERMINAL_RUN_STATUSES.has(rn.Output.status)) return { ID: runId, Status: rn.Output.status };
+      return HarnessScoring.pollRun(ctx, `ID='${EscapeSQLString(runId)}'`, `process run ${runId}`);
+    }
+    if (rn.ResultCode && TRANSPORT_DROP_CODES.has(rn.ResultCode)) {
+      const startedAfter = new Date(since.getTime() - 5000).toISOString();
+      const filter = `RecordProcessID='${EscapeSQLString(recordProcessId)}' AND StartTime >= '${startedAfter}'`;
+      return HarnessScoring.pollRun(ctx, filter, `the run of record process ${recordProcessId}`);
+    }
+    throw new Error(`RecordProcess.RunNow for ${recordProcessId} failed (${rn.ResultCode || 'no result code'}): ${rn.ErrorMessage || 'no processRunID'}`);
+  }
+
+  /** Poll the newest `MJ: Process Runs` row matching `filter` until its status is terminal (480 × 5 s). */
+  private static async pollRun(ctx: RunContext, filter: string, what: string): Promise<{ ID: string; Status: MJProcessRunEntity['Status'] }> {
+    for (let i = 0; i < POLL_ATTEMPTS; i++) {
+      const res = await RunView.FromMetadataProvider(ctx.Provider).RunView<ProcessRunRow>(
+        {
+          EntityName: 'MJ: Process Runs',
+          ExtraFilter: filter,
+          Fields: ['ID', 'Status'],
+          OrderBy: 'StartTime DESC',
+          MaxRows: 1,
+          BypassCache: true,
+        },
+        ctx.User,
+      );
+      if (!res.Success) throw new Error(`read process runs: ${res.ErrorMessage}`);
+      const run = res.Results[0];
+      if (run && TERMINAL_RUN_STATUSES.has(run.Status)) return { ID: run.ID, Status: run.Status };
+      await HarnessScoring.sleep(POLL_INTERVAL_MS);
+    }
+    throw new Error(`${what} did not finish within ${(POLL_ATTEMPTS * POLL_INTERVAL_MS) / 60_000} minutes`);
   }
 }

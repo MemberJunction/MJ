@@ -141,3 +141,12 @@ describe('RunRecords.RecordObservedModels (a name-prefix read only observes)', (
     expect(store.Deleted).toEqual([]);
   });
 });
+
+describe('RunRecords.RecordAgentPipelineNames', () => {
+  it('keeps each agent pipeline name once, for cleanup to look up again', () => {
+    const records = new RunRecords();
+    records.RecordAgentPipelineNames(['PSTruth: G0.12 W7 s42 r', 'PSTruth: G0.12 W7 s42 r (xgboost)']);
+    records.RecordAgentPipelineNames(['PSTruth: G0.12 W7 s42 r']);
+    expect(records.AgentPipelineNames).toEqual(['PSTruth: G0.12 W7 s42 r', 'PSTruth: G0.12 W7 s42 r (xgboost)']);
+  });
+});

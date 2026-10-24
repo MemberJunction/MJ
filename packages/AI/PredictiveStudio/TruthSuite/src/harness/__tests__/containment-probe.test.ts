@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
+import { SafeJSONParse } from '@memberjunction/global';
 import { EvaluationLineage, TrustVerdicts, type ValidationStrategy } from '@memberjunction/predictive-studio-core';
 import { ContainmentProbe } from '../containment-probe';
 import { HarnessModels } from '../promote';
@@ -96,11 +97,16 @@ describe('containment probe — stored verdict and time index', () => {
   });
 
   it('declares the time index on the pipeline, keeping the rest of its validation strategy', () => {
-    // Test double: ContainmentProbe.ApplyTimeIndexDeclaration reads and writes only ValidationStrategy.
-    const pipeline = { ValidationStrategy: JSON.stringify({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2 }) } as unknown as MJMLTrainingPipelineEntity;
+    // ApplyTimeIndexDeclaration reads and writes only ValidationStrategy, so a plain object with that field is a full double.
+    const pipeline: Pick<MJMLTrainingPipelineEntity, 'ValidationStrategy'> = { ValidationStrategy: JSON.stringify({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2 }) };
     ContainmentProbe.ApplyTimeIndexDeclaration(pipeline, 'MonthIndex');
-    const saved = JSON.parse(pipeline.ValidationStrategy || '{}') as ValidationStrategy;
+    const saved = SafeJSONParse<ValidationStrategy>(pipeline.ValidationStrategy || '{}');
     expect(saved).toEqual({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex' });
+  });
+
+  it('refuses to declare a time index on a pipeline with no validation strategy', () => {
+    const pipeline: Pick<MJMLTrainingPipelineEntity, 'ValidationStrategy'> = { ValidationStrategy: null };
+    expect(() => ContainmentProbe.ApplyTimeIndexDeclaration(pipeline, 'MonthIndex')).toThrow(/no ValidationStrategy/);
   });
 });
 

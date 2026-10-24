@@ -4,14 +4,13 @@ import { DataCache } from '../cache';
 import { CATALOG, DatasetCatalog } from '../catalog';
 
 describe('seed sets', () => {
-  it('fixes the base, T2 and 400-seed sets', () => {
+  it('fixes the base and T2 sets', () => {
     expect(DatasetSeeds.SeedSet('world', 'W1-signal', 'base')).toEqual([42, 43, 44, 9042]);
     expect(DatasetSeeds.SeedSet('world', 'W2-noise', 't2')).toEqual(Array.from({ length: 60 }, (_, i) => 100 + i));
-    expect(DatasetSeeds.SeedSet('world', 'W2-noise', 'n400')).toHaveLength(400);
-    expect(DatasetSeeds.SeedSet('world', 'W2-noise', 'n400')[399]).toBe(499);
-    const c2 = DatasetSeeds.SeedSet('scenario', 'C2', 'n400');
-    expect(c2.slice(0, 3)).toEqual([2201, 2201001, 2201002]);
-    expect(new Set(c2).size).toBe(400);
+    expect(DatasetSeeds.SeedSet('scenario', 'C2', 'base')).toEqual([2201]);
+    expect(DatasetSeeds.SeedSet('scenario', 'T3-lag', 'base')).toEqual(DatasetSeeds.SeedSet('scenario', 'T3', 'base'));
+    expect(() => DatasetSeeds.SeedSet('world', 'W1-signal', 't2')).toThrow();
+    expect(() => DatasetSeeds.SeedSet('scenario', 'C2', 't2')).toThrow();
   });
 });
 

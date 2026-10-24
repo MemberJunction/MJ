@@ -48,7 +48,7 @@ export class BulkLoader {
         FROM sys.columns c
         JOIN sys.types t ON c.user_type_id = t.user_type_id
         WHERE c.object_id = OBJECT_ID(@qualified)
-          AND c.name NOT LIKE '__mj_%'
+          AND c.name NOT LIKE '[_][_]mj[_]%'
         ORDER BY c.column_id
       `);
     if (res.recordset.length === 0) {

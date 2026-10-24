@@ -50,14 +50,15 @@ export class ContainmentProbe {
     return { CanAct: m.Trust.canAct, Grade: m.Trust.grade, Reason: evaluation.WithheldReason };
   }
 
-  /** Declare the pipeline's time index as `ValidationStrategy.TimeIndexColumn`. The caller saves the pipeline. */
-  public static ApplyTimeIndexDeclaration(pipeline: MJMLTrainingPipelineEntity, column: string): void {
-    const current: ValidationStrategy =
-      (pipeline.ValidationStrategy ? SafeJSONParse<ValidationStrategy>(pipeline.ValidationStrategy) : null) || {
-        Strategy: 'train_test_split',
-        TestSize: 0.2,
-        LockedHoldoutFraction: 0.1,
-      };
+  /**
+   * Declare the pipeline's time index as `ValidationStrategy.TimeIndexColumn`, keeping the rest of its validation
+   * strategy. The caller sets the strategy first and saves the pipeline; throws when no strategy is set.
+   */
+  public static ApplyTimeIndexDeclaration(pipeline: Pick<MJMLTrainingPipelineEntity, 'ValidationStrategy'>, column: string): void {
+    const current = pipeline.ValidationStrategy ? SafeJSONParse<ValidationStrategy>(pipeline.ValidationStrategy) : null;
+    if (!current) {
+      throw new Error(`ContainmentProbe.ApplyTimeIndexDeclaration: the pipeline has no ValidationStrategy to declare '${column}' on`);
+    }
     const next: ValidationStrategy = { ...current, TimeIndexColumn: column };
     pipeline.ValidationStrategy = JSON.stringify(next);
   }

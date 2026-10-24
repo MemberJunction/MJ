@@ -83,8 +83,8 @@ export class GenLib {
   }
 
   /**
-   * Write `rows` as CSV. Null and absent cells are empty; a string holding a comma, quote or newline is quoted with
-   * its quotes doubled.
+   * Write `rows` as unquoted CSV, the only form `TruthCsv.Parse` reads. Null and absent cells are empty; a string
+   * holding a comma, quote or newline throws, so the error names the generator's cell rather than the loader's parse.
    */
   public static WriteCsv(filePath: string, rows: ReadonlyArray<CsvRow>, options: CsvWriteOptions = {}): void {
     const columns = options.Columns || Object.keys(rows[0]);
@@ -95,7 +95,9 @@ export class GenLib {
 
   private static csvCell(value: CsvValue | undefined): string {
     if (value === null || value === undefined) return '';
-    if (typeof value === 'string' && /[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+    if (typeof value === 'string' && /[",\r\n]/.test(value)) {
+      throw new Error(`GenLib.WriteCsv: cell ${JSON.stringify(value)} holds a comma, quote or line break; the truth-suite CSV is unquoted`);
+    }
     return String(value);
   }
 

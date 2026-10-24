@@ -1,15 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import type { EntityInfo } from '@memberjunction/core';
+import { EntityInfo } from '@memberjunction/core';
 import type { ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 import { ModelingPlanToPipelineConfig } from '@memberjunction/predictive-studio';
 import { AgentPlans } from '../agent-plan';
 import { HarnessAgent } from '../agent';
 import type { AlgorithmKey } from '../types';
 
-const entity = {
-  Name: 'PS Truth: W7_MembershipYear',
-  Fields: [{ Name: 'Plan', TSType: 'string' }, { Name: 'EventsAttended', TSType: 'number' }],
-} as unknown as EntityInfo; // test double: only Name/Fields are read by AgentPlans.Build
+// A real EntityInfo built from field rows: AgentPlans.Build reads its Name and each field's TSType (derived from Type).
+const entity = new EntityInfo({ Name: 'PS Truth: W7_MembershipYear', Fields: [{ Name: 'Plan', Type: 'nvarchar' }, { Name: 'EventsAttended', Type: 'int' }] });
 
 /** A plan as the agent-run gates build it. */
 function plan(name: string, algorithms: AlgorithmKey[]): ModelingPlanSpec {

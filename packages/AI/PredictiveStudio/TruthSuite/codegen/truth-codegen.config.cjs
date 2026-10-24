@@ -1,13 +1,15 @@
 /**
  * Scoped CodeGen config for the pstruth test schema (Predictive Studio truth suite). Copied to
- * .run/codegen/mj.config.cjs by scripts/provision.mjs (after migrate); never run against a shared database.
+ * .run/codegen/mj.config.cjs, with private-database.cjs beside it, by scripts/provision.mjs (after migrate); never run
+ * against a shared database.
  * includeSchemas is CodeGen's positive scope: __mj and every other schema are excluded. No additionalSchemaInfo.
  */
 const path = require('node:path');
+const { IsPrivateTruthDatabase, PRIVATE_TRUTH_DATABASE_DESCRIPTION } = require('./private-database.cjs');
 const MJ_ROOT = process.env.TRUTH_MJ_ROOT;
 if (!MJ_ROOT) throw new Error('TRUTH_MJ_ROOT is not set (scripts/provision.mjs sets it)');
-if (!/^MJ_PS_PR\d+_|^test$/.test(process.env.DB_DATABASE || '')) {
-  throw new Error(`Refusing to run scoped CodeGen on '${process.env.DB_DATABASE}': only MJ_PS_PR<n>_<agent> or the CI 'test' database`);
+if (!IsPrivateTruthDatabase(process.env.DB_DATABASE)) {
+  throw new Error(`Refusing to run scoped CodeGen on '${process.env.DB_DATABASE}': only ${PRIVATE_TRUTH_DATABASE_DESCRIPTION}`);
 }
 const base = require(path.join(MJ_ROOT, 'mj.config.cjs'));
 const scoped = {

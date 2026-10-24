@@ -13,12 +13,11 @@ export const W_WORLD_FEATURES: readonly string[] = [
   'Noise5',
 ];
 
-/** Columns no containment-gate pipeline may use: keys, world stamps and the truth-suite write-back columns. */
+/** Columns no containment-gate pipeline may use: keys, world stamps and the truth-suite write-back column. */
 export const W_WORLD_DENY_FIELDS: readonly string[] = [
   'ID',
   'PersonID',
   'WorldID',
   'Seed',
   'TruthScore',
-  'TruthClass',
 ];
