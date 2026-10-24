@@ -25,6 +25,7 @@ vi.mock('type-graphql', () => {
 
 const hoisted = vi.hoisted(() => ({
     runAgentInConversation: vi.fn(),
+    createAgentReplyDetail: vi.fn(),
     resolveWidgetGuestRunContext: vi.fn(),
     authorize: vi.fn(),
 }));
@@ -39,6 +40,9 @@ vi.mock('@memberjunction/ai-agents', () => ({
     AgentRunner: class {
         RunAgentInConversation(...args: unknown[]) {
             return hoisted.runAgentInConversation(...args);
+        }
+        CreateAgentReplyDetail(...args: unknown[]) {
+            return hoisted.createAgentReplyDetail(...args);
         }
     },
     ArtifactToolManager: class {},
@@ -137,6 +141,7 @@ beforeEach(() => {
     hoisted.resolveWidgetGuestRunContext.mockReset().mockResolvedValue(null);
     // Stop right after the run's params are captured — the rest of the run is out of scope.
     hoisted.runAgentInConversation.mockReset().mockRejectedValue(new Error('stop here'));
+    hoisted.createAgentReplyDetail.mockReset().mockResolvedValue({ ID: 'reply-1', __mj_CreatedAt: new Date() });
     hoisted.authorize.mockReset().mockImplementation(async (apiKeyHash: string, _app: string, scopePath: string) =>
         apiKeyHash === 'hash-trusted' && scopePath === 'agent:trusted'
             ? { Allowed: true, MatchedKeyRule: { ScopePath: scopePath }, EvaluatedRules: [] }
@@ -169,6 +174,11 @@ describe('RunAIAgentFromConversationDetail — who writes the conversation', () 
         expect((await handedOptions(0)).ConversationWriter?.ID).toBe(GUEST.ID);
         expect((await handedParams(1)).contextUser.ID).toBe(SYSTEM_USER.ID);
         expect((await handedOptions(1)).ConversationWriter?.ID).toBe(GUEST.ID);
+        // The server-created reply row (A19) is written as the guest too, never as the elevated system user.
+        for (const [args] of hoisted.createAgentReplyDetail.mock.calls) {
+            expect((args as { contextUser: { ID: string } }).contextUser.ID).toBe(GUEST.ID);
+        }
+        expect(hoisted.createAgentReplyDetail).toHaveBeenCalledTimes(2);
     });
 
     it('names no separate writer for an ordinary user (it runs and writes as itself)', async () => {

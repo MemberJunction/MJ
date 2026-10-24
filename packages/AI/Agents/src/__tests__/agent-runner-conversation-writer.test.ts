@@ -62,6 +62,7 @@ function recordingProvider(): { provider: IMetadataProvider; requests: Array<{ e
                 Save: async () => true,
                 Load: async () => true,
                 EnsureSaveComplete: async () => undefined,
+                MarkServerAuthoredReply: () => undefined,
             };
             rows.push(row);
             return row;
@@ -111,6 +112,8 @@ describe('AgentRunner.RunAgentInConversation — ConversationWriter', () => {
 
         expect(conversationRequests(requests).every((r) => r.userId === GUEST.ID)).toBe(true);
         expect(rows.some((r) => r.UserID === GUEST.ID && r.Role === 'User')).toBe(true);
+        expect(rows.some((r) => r.Role === 'AI')).toBe(true); // the reply row was created (CreateAgentReplyDetail), as the writer
+        expect(requests.filter((r) => r.entity === 'MJ: Conversation Details')).toHaveLength(2);
     });
 
     it('defaults to the run user when no writer is named (every other caller is unchanged)', async () => {

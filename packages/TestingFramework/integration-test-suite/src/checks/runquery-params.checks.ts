@@ -30,7 +30,7 @@
  * neutralized — either rejected by validation or literal-matched (row count identical to an
  * equally-nonsensical benign literal), NEVER a broadened result set.
  */
-import type { MJConversationDetailEntity, MJConversationEntity, MJQueryParameterEntity } from '@memberjunction/core-entities';
+import type { MJConversationDetailEntity, MJConversationDetailEntityExtended, MJConversationEntity, MJQueryParameterEntity } from '@memberjunction/core-entities';
 import { NormalizeUUID } from '@memberjunction/global';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
@@ -673,8 +673,9 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('runquery-params', {
             }
             qpFixture.conversationId = conversation.ID;
             for (const rating of [2, 5, 9]) {
-                const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', ctx.User);
+                const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntityExtended>('MJ: Conversation Details', ctx.User);
                 detail.NewRecord();
+                detail.MarkServerAuthoredReply(); // stands in for an agent reply, which only the server writes
                 detail.ConversationID = conversation.ID;
                 detail.Role = 'AI';
                 detail.Message = `rated fixture ${rating} (mj-integration-test — safe to delete)`;

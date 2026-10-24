@@ -128,6 +128,7 @@ function makeDetail(): FakeEntity {
         Save: vi.fn(async () => true),
         Load: vi.fn(async () => true),
         NewRecord: vi.fn(),
+        MarkServerAuthoredReply: vi.fn(),
     };
 }
 

@@ -34,11 +34,15 @@ export class AgentRunStatusPublisher {
     /**
      * @param sessionId Session stamped on the message body. Defaults to the payload's session.
      *   The push itself is always addressed to `userPayload.sessionId`, matching the resolver.
+     * @param conversationDetailId The run's reply row. When set, every message carries it as
+     *   `conversationDetailId`, not only the completion, so a client that reconnects mid-run can
+     *   find its row. When omitted, messages are as before.
      */
     constructor(
         private readonly pubSub: PubSubEngine,
         private readonly userPayload: UserPayload,
         private readonly sessionId: string = userPayload.sessionId,
+        private readonly conversationDetailId?: string,
     ) {}
 
     /** Latest run observed from a progress event, including steps that are not published. */
@@ -66,6 +70,7 @@ export class AgentRunStatusPublisher {
                 sessionId: this.sessionId,
                 agentRunId: agentRun.ID,
                 type: 'progress',
+                ...this.replyRow(),
                 agentRun: agentRun.GetAll ? agentRun.GetAll() : agentRun,
                 progress: {
                     currentStep: progress.step,
@@ -93,6 +98,7 @@ export class AgentRunStatusPublisher {
                 sessionId: this.sessionId,
                 agentRunId: agentRun.ID,
                 type: 'streaming',
+                ...this.replyRow(),
                 agentRun: agentRun.GetAll ? agentRun.GetAll() : agentRun,
                 streaming: {
                     content: chunk.content,
@@ -122,6 +128,7 @@ export class AgentRunStatusPublisher {
                 sessionId: this.sessionId,
                 agentRunId: agentRun.ID,
                 type: 'partial_result',
+                ...this.replyRow(),
                 partialResult: {
                     currentStep: lastStep,
                     partialOutput: result.payload || undefined,
@@ -134,7 +141,7 @@ export class AgentRunStatusPublisher {
             agentRunId: agentRun?.ID || 'unknown',
             type: 'complete',
             timestamp: new Date(),
-            conversationDetailId: conversationDetailId || agentRun?.ConversationDetailID,
+            conversationDetailId: conversationDetailId || agentRun?.ConversationDetailID || this.conversationDetailId,
             success: result.success,
             errorMessage: agentRun?.ErrorMessage || undefined,
             result: resultJson || undefined,
@@ -158,6 +165,11 @@ export class AgentRunStatusPublisher {
             errorMessage,
             result: JSON.stringify({ success: false, errorMessage }),
         });
+    }
+
+    /** `{ conversationDetailId }` when this run has a reply row, otherwise nothing, so the message keeps its old shape. */
+    private replyRow(): { conversationDetailId?: string } {
+        return this.conversationDetailId ? { conversationDetailId: this.conversationDetailId } : {};
     }
 
     private publish(type: 'ExecutionProgress' | 'StreamingContent', data: unknown): void {

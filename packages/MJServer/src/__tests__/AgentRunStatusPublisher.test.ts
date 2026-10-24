@@ -57,6 +57,31 @@ function envelopes(publish: ReturnType<typeof vi.fn>): Array<Record<string, unkn
 }
 
 describe('AgentRunStatusPublisher', () => {
+    it('stamps the reply row on every message when it has one, so a reconnecting client can find its row', () => {
+        const publish = vi.fn().mockResolvedValue(undefined);
+        const pubSub = { publish } as unknown as PubSubEngine;
+        const userPayload = { sessionId: 'session-1', userRecord: { ID: 'user-1' } } as UserPayload;
+        const made = new AgentRunStatusPublisher(pubSub, userPayload, 'session-1', 'reply-7');
+        const runWithoutDetail = { ...run, ConversationDetailID: undefined, GetAll: () => ({ ID: 'run-1' }) };
+
+        made.OnProgress({ step: 'prompt_execution', message: 'Writing', metadata: { agentRun: runWithoutDetail } });
+        made.OnStreaming({ content: 'Hel', isComplete: false, stepType: 'prompt', kind: 'final-response' });
+        made.PublishFinal({ success: true, agentRun: runWithoutDetail } as unknown as ExecuteAgentResult);
+
+        const details = envelopes(publish).map((row) => (row.data as { conversationDetailId?: string }).conversationDetailId);
+        expect(details).toEqual(['reply-7', 'reply-7', 'reply-7', 'reply-7']);
+    });
+
+    it('leaves progress and streaming messages without a reply row when it has none, as before', () => {
+        const { publish, made } = publisher();
+
+        made.OnProgress({ step: 'prompt_execution', message: 'Writing', metadata: { agentRun: run } });
+        made.OnStreaming({ content: 'Hel', isComplete: false, stepType: 'prompt', kind: 'final-response' });
+
+        const sent = envelopes(publish).map((row) => row.data as Record<string, unknown>);
+        expect(sent.every((data) => !('conversationDetailId' in data))).toBe(true);
+    });
+
     it('publishes the resolver sequence: a significant step, streamed text, the partial result, then the completion', () => {
         const { publish, made } = publisher();
 

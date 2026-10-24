@@ -250,6 +250,7 @@ function makeSessionEntity(overrides: Partial<FakeSession> = {}): FakeSession {
         UserID: 'user-1',
         Config_: JSON.stringify({ targetAgentID: 'target-1' }),
         NewRecord: vi.fn(),
+        MarkServerAuthoredReply: vi.fn(),
         Save: vi.fn(async () => true),
         Load: vi.fn(async () => true),
         LatestResult: { CompleteMessage: '' },
@@ -1107,6 +1108,39 @@ describe('RealtimeClientSessionResolver.RelayRealtimeTranscript', () => {
 
         await resolver.RelayRealtimeTranscript('session-1', 'assistant', 'response', makeCtx());
         expect(detail.Role).toBe('AI');
+        // The agent's side of the transcript is the server's write: unmarked, the reply gate refuses it.
+        expect(detail.MarkServerAuthoredReply).toHaveBeenCalled();
+    });
+
+    /** A19: the agent's words come from the browser here, so they are stored only in the caller's own conversation. */
+    it("does not store the agent's side in a conversation the caller doesn't own, while still mirroring to the prompt run, heartbeating, and storing their own side", async () => {
+        const detail = makeSessionEntity({ ID: 'detail-shared' });
+        const promptRun = makeSessionEntity({ ID: PROMPT_RUN_ID, Messages: null });
+        const session = makeSessionEntity({
+            ConversationID: 'conv-shared',
+            Config_: JSON.stringify({ targetAgentID: 'target-1', coAgentRunID: CO_RUN_ID, promptRunID: PROMPT_RUN_ID }),
+        });
+        const conversation = makeSessionEntity({ ID: 'conv-shared', UserID: 'the-owner' });
+        currentProvider = makeProvider(
+            (name) => {
+                if (name === 'MJ: Conversation Details') return detail;
+                if (name === 'MJ: Conversations') return conversation;
+                if (name === 'MJ: AI Prompt Runs') return promptRun;
+                return session;
+            },
+            sessionRunLookups([CO_RUN_ID], PROMPT_RUN_ID),
+        );
+        const resolver = makeResolver();
+
+        expect(await resolver.RelayRealtimeTranscript('session-1', 'assistant', 'words the agent never said', makeCtx())).toBe(false);
+        expect(await resolver.RelayRealtimeTranscript('session-1', 'assistant', 'a correction', makeCtx(), true)).toBe(false);
+        expect(detail.Save).not.toHaveBeenCalled();
+        expect(conversation.Load).toHaveBeenCalledWith('conv-shared');
+        expect(promptRun.Save).toHaveBeenCalled();
+        expect(heartbeatMock).toHaveBeenCalledTimes(2);
+
+        expect(await resolver.RelayRealtimeTranscript('session-1', 'user', 'my own words', makeCtx())).toBe(true);
+        expect(detail.Role).toBe('User');
     });
 
     it("maps role case/whitespace-insensitively (' USER ' → 'User')", async () => {
@@ -3559,6 +3593,33 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         // …but the hidden Conversation Detail tool-turn is written as the CALLER, never SYSTEM.
         expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: Conversation Details', ANON_USER);
         expect(getEntityObjectSpy()).not.toHaveBeenCalledWith('MJ: Conversation Details', SYSTEM_USER);
+    });
+
+    it("does not write a hidden tool-turn Conversation Detail in a conversation the caller doesn't own, while still mirroring to the prompt run", async () => {
+        const session = makeSessionEntity({
+            UserID: 'anon-1',
+            ConversationID: 'conv-shared',
+            Config_: JSON.stringify({ targetAgentID: 'target-1', coAgentRunID: CO_RUN_ID, promptRunID: PROMPT_RUN_ID }),
+        });
+        const conversation = makeSessionEntity({ ID: 'conv-shared', UserID: 'someone-else' });
+        const promptRun = makeSessionEntity({ ID: PROMPT_RUN_ID, Messages: null });
+        const detail = makeSessionEntity({ ID: 'detail-shared-tool' });
+        currentProvider = {
+            GetEntityObject: vi.fn(async (name: string) => {
+                if (name === 'MJ: AI Prompt Runs') return promptRun;
+                if (name === 'MJ: Conversations') return conversation;
+                if (name === 'MJ: Conversation Details') return detail;
+                return session;
+            }),
+            ...sessionRunLookups([CO_RUN_ID], PROMPT_RUN_ID),
+        };
+        const resolver = makeAnonResolver();
+
+        const ok = await resolver.RelayRealtimeToolTurn('session-1', 'browser_navigate', makeCtx(), '{"url":"x"}');
+
+        expect(ok).toBe(true);
+        expect(promptRun.Save).toHaveBeenCalled();
+        expect(detail.Save).not.toHaveBeenCalled();
     });
 
     it('prepares the session with observability under the SYSTEM user while UserID stays the visitor', async () => {
