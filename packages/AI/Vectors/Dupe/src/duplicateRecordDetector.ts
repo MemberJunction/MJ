@@ -152,6 +152,8 @@ interface RecordQueryResult {
     SourceKey: CompositeKey;
     TemplateText: string;
     Duplicates: PotentialDuplicateResult;
+    /** Matches the vector DB returned before any filtering; undefined when the query failed. */
+    RawMatchCount?: number;
 }
 
 /**
@@ -931,6 +933,7 @@ export class DuplicateRecordDetector extends VectorBase {
             allQueryResults.push(...subQueryResults);
             subBatchOffset += subRecords.length;
         }
+        this.AssertDocumentVectorsFound(allQueryResults);
 
         // 6d.5: Drop matches that point to records which no longer exist in the source
         //       entity (stale "ghost" vectors left behind when records are deleted or
@@ -1489,6 +1492,7 @@ export class DuplicateRecordDetector extends VectorBase {
                 return { SourceKey: compositeKey, TemplateText: templateText, Duplicates: emptyResult };
             }
 
+            const rawMatchCount = Array.isArray(queryResponse.data?.matches) ? queryResponse.data.matches.length : 0;
             const dupeResult = this.ParseVectorMatches(queryResponse, compositeKey);
             dupeResult.Duplicates = this.FilterSelfMatches(dupeResult.Duplicates, compositeKey);
             const potentialThreshold = options.PotentialMatchThreshold ?? entityDocument.PotentialMatchThreshold;
@@ -1498,7 +1502,7 @@ export class DuplicateRecordDetector extends VectorBase {
             dupeResult.EntityID = entityDocument.EntityID;
             dupeResult.RecordCompositeKey = compositeKey;
 
-            return { SourceKey: compositeKey, TemplateText: templateText, Duplicates: dupeResult };
+            return { SourceKey: compositeKey, TemplateText: templateText, Duplicates: dupeResult, RawMatchCount: rawMatchCount };
         });
 
         return RunWithConcurrency(tasks, concurrency);
@@ -1517,6 +1521,7 @@ export class DuplicateRecordDetector extends VectorBase {
         // SimpleVectorServiceProvider) need the EntityDocumentID as the query id; external/
         // colocated providers key by the logical index name. See VectorDBBase.QueryKeyIsEntityDocumentID.
         const queryId = this.vectorDB.QueryKeyIsEntityDocumentID ? this.entityDocumentID : this.indexName;
+        const filter = this.BuildDocumentScopeFilter();
 
         if (this.vectorDB.SupportsHybridSearch && templateText) {
             return this.vectorDB.HybridQuery({
@@ -1527,6 +1532,7 @@ export class DuplicateRecordDetector extends VectorBase {
                 FusionMethod: options.FusionMethod ?? 'rrf',
                 includeMetadata: true,
                 includeValues: false,
+                ...(filter ? { filter } : {}),
             }, this.CurrentUser);
         }
 
@@ -1536,7 +1542,48 @@ export class DuplicateRecordDetector extends VectorBase {
             topK,
             includeMetadata: true,
             includeValues: false,
+            ...(filter ? { filter } : {}),
         }, this.CurrentUser);
+    }
+
+    /**
+     * The metadata filter that scopes a vector query to this run's entity document, in the
+     * provider's native syntax — or undefined when the provider already scopes by document
+     * ({@link VectorDBBase.QueryKeyIsEntityDocumentID}). Without it, an index shared by several
+     * documents returns the other documents' vectors, which point at other entities' records, as
+     * candidates and lets them take TopK slots.
+     */
+    protected BuildDocumentScopeFilter(): object | undefined {
+        if (!this.ScopesQueriesByMetadataFilter) {
+            return undefined;
+        }
+        return this.vectorDB.BuildMetadataFilter({ EntityDocumentIDs: [this.entityDocumentID] });
+    }
+
+    /** True when queries reach this document's vectors through a metadata filter, not the query key. */
+    protected get ScopesQueriesByMetadataFilter(): boolean {
+        return !this.vectorDB.QueryKeyIsEntityDocumentID;
+    }
+
+    /**
+     * Fails a run when every document-scoped query in a batch came back empty. Every synced record
+     * is its own nearest neighbour, so an all-empty batch means the index holds no vectors tagged
+     * with this document: in practice, vectors synced before sync stored `EntityDocumentID`, which
+     * the scope filter cannot see. A clear error beats a run that silently finds no duplicates.
+     */
+    protected AssertDocumentVectorsFound(queryResults: RecordQueryResult[]): void {
+        if (!this.ScopesQueriesByMetadataFilter) {
+            return;
+        }
+        const answered = queryResults.filter(qr => qr.RawMatchCount !== undefined);
+        if (answered.length === 0 || answered.some(qr => (qr.RawMatchCount ?? 0) > 0)) {
+            return;
+        }
+        throw new Error(
+            `No vectors in index "${this.indexName}" are tagged with entity document ${this.entityDocumentID}. ` +
+            `Vectors synced before the document ID was stored with each vector cannot be matched to it: ` +
+            `re-sync this document's vectors, then run detection again.`
+        );
     }
 
     /**
