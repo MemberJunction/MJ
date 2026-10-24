@@ -2758,13 +2758,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     SQLServerCodeGenProvider,
     TimelineRelatedEntityGenerator,
     CreateScheduledJobAction,
-    DeleteScheduledJobAction,
-    ExecuteScheduledJobNowAction,
-    GetScheduledJobStatisticsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    DeleteScheduledJobAction,
+    ExecuteScheduledJobNowAction,
+    GetScheduledJobStatisticsAction,
     QueryScheduledJobsAction,
     UpdateScheduledJobAction,
     AgentEvalDriver,
@@ -2962,13 +2962,13 @@ const CLASS_REGISTRATIONS_5: any[] = [
     WorkQueueListDeadLettersServerOperation,
     WorkQueueListPartitionsServerOperation,
     WorkQueueReplayDeadLetterServerOperation,
-    WorkQueueValidateBindingsServerOperation,
-    AWSIoTCoreBroadcastProvider,
-    AzureWebPubSubBroadcastProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    WorkQueueValidateBindingsServerOperation,
+    AWSIoTCoreBroadcastProvider,
+    AzureWebPubSubBroadcastProvider,
     GCPPubSubBroadcastProvider,
     MJEntityPermissionEntityServer,
     MJTenantFilterMiddleware,
@@ -2993,7 +2993,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1215;
+export const CLASS_REGISTRATIONS_COUNT = 1210;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
