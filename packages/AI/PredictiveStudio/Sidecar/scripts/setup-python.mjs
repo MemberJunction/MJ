@@ -25,6 +25,13 @@ const venvDir = path.resolve(values.venv || path.join(packageRoot, '.venv'));
 const requirements = path.resolve(values.requirements || path.join(packageRoot, 'src', 'python', 'requirements.txt'));
 const venvPython = path.join(venvDir, 'bin', 'python');
 
+/** The real path of the base interpreter behind `command` (a venv's python resolves to the one it was built from); null when it cannot run. */
+function baseInterpreter(command) {
+  const code = "import os, sys; print(os.path.realpath(getattr(sys, '_base_executable', sys.executable)))";
+  const result = spawnSync(command, ['-c', code], { encoding: 'utf8' });
+  return result.error || result.status !== 0 ? null : result.stdout.trim();
+}
+
 function run(cmd, args) {
   console.log(`> ${cmd} ${args.join(' ')}`);
   const result = spawnSync(cmd, args, { stdio: 'inherit' });
@@ -45,6 +52,17 @@ if (existsSync(venvPython)) {
     const v = existing.Version ? PythonProbe.FormatVersion(existing.Version) : 'an unknown Python';
     console.error(`The venv at ${venvDir} runs ${v}; the pins need ${PythonProbe.SupportedMinors.map((m) => `3.${m}`).join(' or ')}. Delete it (rm -rf "${venvDir}") and re-run.`);
     process.exit(1);
+  }
+  if (values.python) {
+    // The venv is reused, so --python cannot take effect; say so rather than let a requested interpreter switch pass silently.
+    const requested = baseInterpreter(values.python);
+    const current = baseInterpreter(venvPython);
+    if (requested !== current) {
+      console.warn(
+        `Warning: --python ${values.python} (${requested ?? 'not runnable'}) is ignored: the existing venv at ${venvDir} was built from ${current ?? 'an unknown interpreter'}. ` +
+          `To switch interpreters, delete it (rm -rf "${venvDir}") and re-run.`
+      );
+    }
   }
   console.log(`Reusing venv at ${venvDir} (Python ${PythonProbe.FormatVersion(existing.Version)})`);
 } else {

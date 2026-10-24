@@ -106,3 +106,55 @@ def test_classification_metrics_report_majority_rate_and_predicted_classes() -> 
     assert m["predicted_classes"] == 1.0
     assert m["n"] == 20.0
     assert m["n_positive"] == 1.0
+
+
+def _regression_noise_request(strategy: str, algorithm: str, n: int = 1000) -> Dict[str, Any]:
+    rng = np.random.default_rng(200)
+    X = rng.normal(size=(n, 6))
+    y = rng.normal(size=n)
+    columns = [f"x{i}" for i in range(6)] + ["target"]
+    rows: List[List[Any]] = [[float(v) for v in X[i]] + [float(y[i])] for i in range(n)]
+    return {
+        "algorithm": algorithm,
+        "problem_type": "regression",
+        "hyperparameters": {},
+        "validation": {"strategy": strategy, "test_size": 0.2, "k": 5, "random_state": 42},
+        "feature_schema": [{"Name": c, "Kind": "numeric"} for c in columns[:-1]],
+        "preprocessing": [{"op": "standardize", "cols": columns[:-1]}],
+        "target": "target",
+        "data": {"columns": columns, "rows": rows},
+    }
+
+
+@pytest.mark.parametrize("strategy", ["kfold", "holdout", "train_test_split"])
+@pytest.mark.parametrize("algorithm", ["random_forest", "xgboost", "lightgbm", "ridge"])
+def test_regression_validation_metrics_are_out_of_sample_on_noise(strategy: str, algorithm: str) -> None:
+    """A target unrelated to the features has no learnable signal, so an out-of-sample R2 sits at or below ~0. Scored
+    in-sample, the tree ensembles memorise the noise and report R2 far above 0.1."""
+    resp = client.post("/train", json=_regression_noise_request(strategy, algorithm))
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["metrics"]["r2"] < 0.1, (strategy, algorithm, body["metrics"])
+    assert body["validation_out_of_sample"] is True
+
+
+def test_kfold_refuses_a_single_class_target() -> None:
+    req = _noise_request("kfold", "logistic_regression", k=5, n=40)
+    req["data"]["rows"] = [r[:-1] + [0] for r in req["data"]["rows"]]
+    resp = client.post("/train", json=req)
+    assert resp.status_code == 400
+    assert "at least two classes" in resp.text
+
+
+def test_split_failure_names_the_least_populated_class() -> None:
+    req = _noise_request("train_test_split", "logistic_regression", n=200)
+    rows = req["data"]["rows"]
+    req["data"]["rows"] = [r[:-1] + [0] for r in rows[:199]] + [rows[199][:-1] + [1]]
+    resp = client.post("/train", json=req)
+    assert resp.status_code == 400
+    assert "least-populated class has 1 row(s)" in resp.text
+
+
+def test_unknown_strategy_is_refused_by_the_schema() -> None:
+    resp = client.post("/train", json=_noise_request("leave_one_out", "logistic_regression", n=40))
+    assert resp.status_code == 422

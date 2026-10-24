@@ -10,7 +10,7 @@ leaderboard (plan §8).
 
 from __future__ import annotations
 
-from typing import Dict
+from typing import Dict, Optional
 
 import numpy as np
 from sklearn.metrics import (
@@ -54,7 +54,8 @@ def classification_metrics(
     metrics["recall"] = float(recall_score(y_true, y_pred, **kw))
 
     # The rate an always-majority guess achieves on these rows, and how many classes the model actually predicts.
-    # The trust verdict grades accuracy only against this baseline (F-TR-1); n / n_positive let judges build intervals.
+    # Without an AUC the trust verdict grades accuracy on its lift over this baseline, (accuracy - baseline) / (1 - baseline),
+    # so a majority-rate accuracy grades Poor (F-TR-1); n / n_positive let judges build intervals.
     _, true_counts = np.unique(y_true, return_counts=True)
     metrics["baseline_accuracy"] = float(true_counts.max() / true_counts.sum())
     metrics["predicted_classes"] = float(len(np.unique(y_pred)))
@@ -78,7 +79,7 @@ def regression_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, floa
     }
 
 
-def _safe_auc(y_true: np.ndarray, y_score: np.ndarray):
+def _safe_auc(y_true: np.ndarray, y_score: np.ndarray) -> Optional[float]:
     """ROC-AUC with graceful degradation (single-class folds, shape issues)."""
     try:
         classes = np.unique(y_true)

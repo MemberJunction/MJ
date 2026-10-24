@@ -52,7 +52,8 @@ class PreprocessingOp(BaseModel):
 class ValidationConfig(BaseModel):
     """Validation configuration sent at train time."""
 
-    strategy: str = "train_test_split"  # 'train_test_split' | 'kfold' | 'holdout'
+    strategy: Literal["train_test_split", "kfold", "holdout"] = "train_test_split"
+    # Validation fraction for the out-of-sample split that both `train_test_split` and `holdout` use.
     test_size: Optional[float] = 0.2
     k: Optional[int] = None
     # Locked-holdout fraction (plan §8.2). Scored exactly once, separate from
@@ -99,7 +100,8 @@ class TrainResponse(BaseModel):
     training_row_count: int
     duration_sec: float
     holdout_metrics: Optional[Dict[str, float]] = None
-    validation_out_of_sample: bool = True
+    # Required (no default) so every /train path must state it; a future in-sample path cannot inherit True.
+    validation_out_of_sample: bool
     # Opaque id callers may pass back on /predict to hit the warm model cache
     # without re-sending the (potentially large) artifact_b64.
     model_id: Optional[str] = None

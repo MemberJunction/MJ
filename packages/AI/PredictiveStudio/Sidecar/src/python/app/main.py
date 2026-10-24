@@ -14,10 +14,13 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, Iterator, List, Literal, Optional, Sequence, Tuple
 
 import numpy as np
 from fastapi import FastAPI, HTTPException
+
+if TYPE_CHECKING:  # scikit-learn is imported function-local at runtime; this import is for the type checker only.
+    from sklearn.preprocessing import LabelEncoder
 
 from . import algorithms, artifacts, metrics, preprocessing
 from .schemas import (
@@ -33,6 +36,10 @@ from .schemas import (
 app = FastAPI(title="Predictive Studio Sidecar", version="1.0.0")
 
 MIN_VALIDATION_ROWS = 4
+
+# Where the locked holdout came from, so refusals can name the knob that applies on that path:
+# "forwarded" = orchestrator-carved (LockedHoldoutFraction), "carved" = sidecar re-carve (validation.holdout_size).
+HoldoutSource = Literal["forwarded", "carved", "none"]
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -108,6 +115,7 @@ def train(req: TrainRequest) -> TrainResponse:
         training_row_count=result["training_row_count"],
         duration_sec=round(duration, 4),
         holdout_metrics=result.get("holdout_metrics"),
+        validation_out_of_sample=result["validation_out_of_sample"],
     )
 
 
@@ -119,62 +127,78 @@ def _feature_columns(req: TrainRequest) -> List[str]:
 
 
 def _split_holdout_indices(
-    matrix: np.ndarray,
     y: np.ndarray,
-    holdout_size,
+    holdout_size: Optional[float],
     random_state: int,
     is_classification: bool,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Split row INDICES into (dev, holdout). Index-based so the caller can carry
-    the raw dev rows alongside the transformed matrix (needed for the anti-skew
-    validation split). When no holdout is configured, all rows are dev."""
+    """Split row INDICES into (dev, holdout) from the labels alone, before anything is fit, so the holdout rows
+    never contribute to the fitted preprocessing that later scores them. When no holdout is configured, all rows
+    are dev."""
     from sklearn.model_selection import train_test_split
 
-    n = matrix.shape[0]
+    n = len(y)
     all_idx = np.arange(n)
     if not holdout_size or holdout_size <= 0 or holdout_size >= 1:
         return all_idx, np.empty((0,), dtype=int)
-    stratify = y if (is_classification or _looks_like_classes(y)) and len(np.unique(y)) > 1 else None
+    stratify = y if is_classification and len(np.unique(y)) > 1 else None
     try:
         dev_idx, hold_idx = train_test_split(
             all_idx, test_size=holdout_size, random_state=random_state, stratify=stratify
         )
     except ValueError as exc:
         raise ValueError(
-            f"Only {n} rows were supplied — too few to carve a {holdout_size:g} locked holdout across all classes "
-            f"and still measure the model on rows it did not train on ({exc}). Add rows or lower LockedHoldoutFraction."
+            _split_failure_message(f"carve a {holdout_size:g} locked holdout from", n, stratify, exc)
+            + " Add rows or lower validation.holdout_size."
         ) from exc
     return dev_idx, hold_idx
 
 
-def _looks_like_classes(y: np.ndarray) -> bool:
-    """Heuristic: do these labels look categorical (so a holdout split can stratify)?
-
-    True when the dtype is string/bool/int AND the distinct-value count is small
-    relative to the sample size — i.e. a plausible label set rather than a continuum.
-    """
-    return y.dtype.kind in {"U", "S", "O", "b", "i"} and len(np.unique(y)) <= max(
-        20, int(0.5 * len(y))
+def _split_failure_message(action: str, n_rows: int, stratify: Optional[np.ndarray], exc: ValueError) -> str:
+    """Explain a failed ``train_test_split``. A stratified split usually fails because one class has too few rows
+    (which can happen with thousands of rows), so that case names the least-populated class instead of the total."""
+    if stratify is not None:
+        _, class_counts = np.unique(stratify, return_counts=True)
+        return (
+            f"Could not {action} the {n_rows} training rows with every class on both sides: the least-populated "
+            f"class has {int(np.min(class_counts))} row(s), too few to measure the model on rows it did not train "
+            f"on ({exc})."
+        )
+    return (
+        f"Could not {action} the {n_rows} training rows — too few to measure the model on rows it did not train "
+        f"on ({exc})."
     )
+
+
+def _holdout_advice(source: HoldoutSource) -> Tuple[str, str]:
+    """``(context, remedy)`` phrases for a too-few-rows refusal: say "after the locked holdout" only when one was
+    taken, and name the knob that controls it on the path this request used."""
+    if source == "forwarded":
+        return " after the locked holdout", " Add rows or lower LockedHoldoutFraction."
+    if source == "carved":
+        return " after the locked holdout", " Add rows or lower validation.holdout_size."
+    return "", " Add rows."
 
 
 def _run_training(req: TrainRequest) -> Dict[str, Any]:
     """Run the full training pipeline and return all artifacts the response needs.
 
     The anti-skew backbone (plan §6.2) lives here:
-      1. Fit preprocessing on ALL training data → the FROZEN ``fitted`` payload.
-      2. Label-encode classification targets to contiguous ints (XGBoost requires it),
+      1. Label-encode classification targets to contiguous ints (XGBoost requires it),
          stashing the decode map on the estimator for /predict.
-      3. Carve the locked holdout — an orchestrator-forwarded ``req.holdout`` (scored
-         via the frozen transform, apply-only) takes precedence over a sidecar
-         re-carve from ``validation.holdout_size``.
+      2. Separate the locked holdout — an orchestrator-forwarded ``req.holdout`` (already
+         absent from ``data``) takes precedence over a sidecar re-carve from
+         ``validation.holdout_size``. The re-carve happens BEFORE any fitting.
+      3. Fit preprocessing on the dev rows only → the FROZEN ``fitted`` payload, and APPLY it
+         (never re-fit) to the holdout rows.
       4. Fit + score via :func:`_fit_and_score` (honest, train-fold-only validation),
          then re-fit the production estimator on all dev rows.
       5. Score the locked holdout exactly once.
 
     Returns:
         A dict with ``estimator``, ``fitted``, ``metrics``, ``feature_importance``,
-        ``training_row_count``, and (when a holdout exists) ``holdout_metrics``.
+        ``feature_importance_kind``, ``training_row_count`` (dev rows the model was fit on),
+        ``validation_out_of_sample``, and (when a holdout exists) ``holdout_metrics``.
     """
     feature_cols = _feature_columns(req)
     target = req.target
@@ -192,14 +216,6 @@ def _run_training(req: TrainRequest) -> Dict[str, Any]:
     if len(valid_indices) < len(rows):
         rows = [rows[i] for i in valid_indices]
 
-    # Fit preprocessing on the FULL training data, then transform. This `fitted`
-    # payload is FROZEN: it is what gets applied (never re-fit) to the locked
-    # holdout below and at /predict — the anti-skew guarantee (plan §6.2).
-    ops_spec = [op.model_dump(exclude_none=True) for op in req.preprocessing]
-    matrix, output_columns, fitted = preprocessing.fit_transform(
-        columns, rows, ops_spec, feature_cols
-    )
-
     y_raw = [r[target_idx] for r in rows]
     is_classification = req.problem_type == "classification"
 
@@ -210,7 +226,7 @@ def _run_training(req: TrainRequest) -> Dict[str, Any]:
     # fitted encoder is reused to encode the locked-holdout labels so the holdout
     # score uses an identical label mapping.
     label_classes: List[str] = []
-    encoder = None
+    encoder: Optional[LabelEncoder] = None
     if is_classification:
         from sklearn.preprocessing import LabelEncoder
 
@@ -220,40 +236,47 @@ def _run_training(req: TrainRequest) -> Dict[str, Any]:
     else:
         y = np.array([float(v) for v in y_raw], dtype=float)
 
-    rng = req.validation.random_state or 42
+    # `or 42` would turn an explicit seed of 0 into 42.
+    rng = 42 if req.validation.random_state is None else req.validation.random_state
 
-    # Carve off a locked holdout for scoring exactly once. Precedence:
+    # Separate the locked holdout for scoring exactly once. Precedence:
     #   1. An explicit forwarded `req.holdout` (the orchestrator-carved locked
-    #      holdout) — scored via the FROZEN fitted transform (apply-only).
-    #   2. Else `validation.holdout_size` — the sidecar re-carves from `matrix`
+    #      holdout). `data` already excludes it, so we DON'T re-carve.
+    #   2. Else `validation.holdout_size` — the sidecar re-carves from `rows`
     #      (fallback used by the sidecar's own fixtures).
-    # When (1) is used, `data` already excludes the holdout, so we DON'T re-carve.
-    # We carve by ROW INDEX so the raw dev rows are available for an anti-skew
-    # validation split (preprocessing fit on the train fold only — see below).
-    forwarded_holdout = _prepare_forwarded_holdout(
-        req, fitted, feature_cols, is_classification, encoder
-    )
-    if forwarded_holdout is not None:
-        X_dev, y_dev = matrix, y
+    # Either way the holdout is set aside before preprocessing is fit, so its
+    # statistics never reach the transform that scores it.
+    forwarded = _forwarded_holdout_rows(req)
+    holdout_source: HoldoutSource
+    if forwarded is not None:
+        hold_columns, hold_rows = forwarded
         dev_rows = rows
-        X_hold, y_hold = forwarded_holdout
+        y_dev = y
+        holdout_source = "forwarded"
     else:
-        dev_idx, hold_idx = _split_holdout_indices(
-            matrix, y, req.validation.holdout_size, rng, is_classification
-        )
-        X_dev, y_dev = matrix[dev_idx], y[dev_idx]
-        X_hold, y_hold = matrix[hold_idx], y[hold_idx]
+        dev_idx, hold_idx = _split_holdout_indices(y, req.validation.holdout_size, rng, is_classification)
+        hold_columns = columns
+        hold_rows = [rows[i] for i in hold_idx]
         dev_rows = [rows[i] for i in dev_idx]
+        y_dev = y[dev_idx]
+        holdout_source = "carved" if len(hold_idx) > 0 else "none"
+
+    # Fit preprocessing on the dev rows only, then transform. This `fitted`
+    # payload is FROZEN: it is what gets applied (never re-fit) to the locked
+    # holdout below and at /predict — the anti-skew guarantee (plan §6.2).
+    ops_spec = [op.model_dump(exclude_none=True) for op in req.preprocessing]
+    X_dev, output_columns, fitted = preprocessing.fit_transform(columns, dev_rows, ops_spec, feature_cols)
 
     # Out-of-sample validation for every strategy (train/test split, holdout, or pooled K-fold). The validation
     # metric fits preprocessing on the TRAIN fold ONLY (no val-fold leakage), so the
     # reported `metrics` are an honest estimate; the production `estimator` + the
     # FROZEN `fitted` payload remain fit on ALL dev data.
-    train_metrics, estimator = _fit_and_score(
+    fit = _fit_and_score(
         req, X_dev, y_dev, is_classification, rng,
         dev_rows=dev_rows, columns=columns, feature_cols=feature_cols, ops_spec=ops_spec,
-        target_idx=target_idx,
+        target_idx=target_idx, holdout_source=holdout_source,
     )
+    estimator = fit.estimator
 
     # Stash decode map so the serialized model can map int predictions -> labels.
     if is_classification:
@@ -264,63 +287,81 @@ def _run_training(req: TrainRequest) -> Dict[str, Any]:
     result: Dict[str, Any] = {
         "estimator": estimator,
         "fitted": fitted,
-        "metrics": train_metrics,
+        "metrics": fit.metrics,
         "feature_importance": feature_importance,
         "feature_importance_kind": importance_kind,
-        "training_row_count": int(len(rows)),
+        "training_row_count": int(len(dev_rows)),
+        "validation_out_of_sample": fit.out_of_sample,
     }
 
-    if X_hold.shape[0] > 0:
-        result["holdout_metrics"] = _score(
-            estimator, X_hold, y_hold, is_classification
+    if hold_rows:
+        X_hold, y_hold = _transform_holdout(
+            hold_columns, hold_rows, target, fitted, feature_cols, is_classification, encoder
         )
+        result["holdout_metrics"] = _score(estimator, X_hold, y_hold, is_classification)
     return result
 
 
-def _prepare_forwarded_holdout(
-    req: TrainRequest,
-    fitted: Dict[str, Any],
-    feature_cols: List[str],
-    is_classification: bool,
-    encoder,
-) -> Tuple[np.ndarray, np.ndarray] | None:
-    """Transform + encode an explicit orchestrator-forwarded locked holdout.
-
-    Returns ``(X_hold, y_hold)`` ready to score, or ``None`` when no `holdout`
-    matrix was forwarded. The holdout feature rows are run through the FROZEN
-    fitted preprocessing (``preprocessing.transform`` — apply only, never re-fit),
-    so the holdout score is free of train/serve skew. Classification labels are
-    encoded with the SAME fitted ``encoder`` used on the training labels.
-    """
+def _forwarded_holdout_rows(req: TrainRequest) -> Optional[Tuple[List[str], List[List[Any]]]]:
+    """The orchestrator-forwarded locked holdout as ``(columns, labelled rows)``, or ``None`` when none was
+    forwarded or every forwarded row is unlabelled (unlabelled rows cannot be evaluated)."""
     if req.holdout is None or not req.holdout.rows:
         return None
-
     hold_columns = list(req.holdout.columns)
     if req.target not in hold_columns:
         raise ValueError(
             f"Holdout matrix is missing the target column '{req.target}'."
         )
     target_idx = hold_columns.index(req.target)
+    hold_rows = [list(r) for r in req.holdout.rows if r[target_idx] is not None]
+    if not hold_rows:
+        return None
+    return hold_columns, hold_rows
 
+
+def _transform_holdout(
+    hold_columns: List[str],
+    hold_rows: Sequence[Sequence[Any]],
+    target: str,
+    fitted: Dict[str, Any],
+    feature_cols: List[str],
+    is_classification: bool,
+    encoder: Optional[LabelEncoder],
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Transform + encode locked-holdout rows, returning ``(X_hold, y_hold)`` ready to score.
+
+    The feature rows are run through the FROZEN dev-fitted preprocessing (``preprocessing.transform`` — apply
+    only, never re-fit), so the holdout score is free of train/serve skew and of holdout leakage. Classification
+    labels are encoded with the SAME fitted ``encoder`` used on the training labels.
+    """
+    target_idx = hold_columns.index(target)
     # Map each holdout row to a feature-name -> value dict (the /predict shape)
     # so the frozen `preprocessing.transform` apply-path produces a positionally
     # identical vector to training.
-    # Exclude holdout rows with null targets (unlabeled rows cannot be evaluated).
-    hold_rows = [r for r in req.holdout.rows if r[target_idx] is not None]
-    if not hold_rows:
-        return None
     feature_dicts = [
-        {c: r[i] for i, c in enumerate(hold_columns) if c != req.target}
+        {c: r[i] for i, c in enumerate(hold_columns) if c != target}
         for r in hold_rows
     ]
     X_hold = preprocessing.transform(feature_dicts, fitted, feature_cols)
 
     y_raw_hold = [r[target_idx] for r in hold_rows]
     if is_classification:
+        if encoder is None:
+            raise RuntimeError("classification holdout scored without a fitted label encoder")
         y_hold = encoder.transform([str(v) for v in y_raw_hold])
     else:
         y_hold = np.array([float(v) for v in y_raw_hold], dtype=float)
     return X_hold, y_hold
+
+
+@dataclass(frozen=True)
+class FitResult:
+    """What :func:`_fit_and_score` produces: the validation metrics, the production estimator, and whether those
+    metrics were measured on rows the scoring model did not train on (set by the validation path taken)."""
+
+    metrics: Dict[str, float]
+    estimator: Any
+    out_of_sample: bool
 
 
 def _fit_and_score(
@@ -335,7 +376,8 @@ def _fit_and_score(
     feature_cols: List[str],
     ops_spec: List[Dict[str, Any]],
     target_idx: int,
-) -> Tuple[Dict[str, float], Any]:
+    holdout_source: HoldoutSource,
+) -> FitResult:
     """Fit the estimator using the configured validation strategy.
 
     Validation metrics are computed out-of-sample for every strategy (`train_test_split`, `holdout`, and `kfold`)
@@ -350,25 +392,26 @@ def _fit_and_score(
     """
     from sklearn.model_selection import train_test_split
 
-    strategy = req.validation.strategy
-
-    def build():
+    def build() -> Any:
         return algorithms.build_estimator(
             req.algorithm, req.problem_type, req.hyperparameters
         )
 
     fold_ctx = FoldContext(dev_rows, columns, feature_cols, ops_spec, target_idx, y, build)
     n_dev = X.shape[0]
+    context, remedy = _holdout_advice(holdout_source)
     if n_dev < MIN_VALIDATION_ROWS:
         raise ValueError(
-            f"Only {n_dev} training rows remain after the locked holdout; at least {MIN_VALIDATION_ROWS} are needed to "
-            "measure the model on rows it did not train on. Add rows or lower LockedHoldoutFraction."
+            f"Only {n_dev} training rows remain{context}; at least {MIN_VALIDATION_ROWS} are needed to "
+            f"measure the model on rows it did not train on.{remedy}"
         )
 
-    if strategy == "kfold":
+    if req.validation.strategy == "kfold":
         val_metrics = _kfold_out_of_fold_metrics(req, fold_ctx, is_classification, random_state)
-    elif strategy in ("train_test_split", "holdout"):
-        # `holdout` uses the same out-of-sample split as train_test_split (F-SC-1): it used to score in-sample.
+        out_of_sample = True  # pooled out-of-fold: each row is scored by a fold model that never saw it
+    else:
+        # `train_test_split` and `holdout` (the schema's Literal admits nothing else) share one out-of-sample split
+        # (F-SC-1): `holdout` used to score in-sample.
         test_size = req.validation.test_size or 0.2
         idx = np.arange(n_dev)
         stratify = y if is_classification and len(np.unique(y)) > 1 else None
@@ -376,17 +419,16 @@ def _fit_and_score(
             tr_idx, te_idx = train_test_split(idx, test_size=test_size, random_state=random_state, stratify=stratify)
         except ValueError as exc:
             raise ValueError(
-                f"Only {n_dev} training rows remain after the locked holdout — too few to split {test_size:g} across all classes "
-                f"and measure the model on rows it did not train on ({exc}). Add rows, increase test_size, or lower LockedHoldoutFraction."
+                _split_failure_message(f"split {test_size:g} for validation from", n_dev, stratify, exc)
+                + remedy.rstrip(".") + ", or increase test_size."
             ) from exc
         val_metrics = _anti_skew_val_metrics(fold_ctx, tr_idx, te_idx, is_classification)
-    else:
-        raise ValueError(f"Unknown validation strategy '{strategy}'. Use train_test_split, kfold or holdout.")
+        out_of_sample = True  # scored on the split's test rows, which the scoring model never trained on
 
     # The production estimator is fit on all dev rows (with the frozen, fit-on-all-dev preprocessing).
     final = build()
     final.fit(X, y)
-    return val_metrics, final
+    return FitResult(metrics=val_metrics, estimator=final, out_of_sample=out_of_sample)
 
 
 @dataclass(frozen=True)
@@ -429,7 +471,9 @@ def _fit_fold(ctx: FoldContext, tr_idx: np.ndarray, te_idx: np.ndarray) -> Tuple
     return est, X_te
 
 
-def _kfold_splits(y_dev: np.ndarray, k: int, is_classification: bool, random_state: int) -> Any:
+def _kfold_splits(
+    y_dev: np.ndarray, k: int, is_classification: bool, random_state: int
+) -> Iterator[Tuple[np.ndarray, np.ndarray]]:
     """Validate K against the rows/classes and return the (stratified for classification) fold splitter's splits."""
     # Function-local, as every other scikit-learn import in main.py is.
     from sklearn.model_selection import KFold, StratifiedKFold
@@ -441,7 +485,9 @@ def _kfold_splits(y_dev: np.ndarray, k: int, is_classification: bool, random_sta
     if not is_classification:
         return KFold(n_splits=k, shuffle=True, random_state=random_state).split(idx)
     _, class_counts = np.unique(y_dev, return_counts=True)
-    smallest = int(np.min(class_counts)) if len(class_counts) >= 2 else 0
+    if len(class_counts) < 2:
+        raise ValueError("kfold needs at least two classes in the training rows; the target has only one.")
+    smallest = int(np.min(class_counts))
     if smallest < k:
         raise ValueError(
             f"kfold with K={k} needs at least {k} rows of every class; the smallest class has {smallest}. "
@@ -473,12 +519,14 @@ def _kfold_out_of_fold_metrics(
                 oof_score = np.empty((n_rows,) + score.shape[1:], dtype=float)
             oof_score[te_idx] = score
 
-    # K >= 2 guarantees at least one fold; an explicit raise (not `assert`, which `python -O` strips) narrows for mypy.
-    if oof_pred is None or (is_classification and oof_score is None):
+    # K >= 2 guarantees at least one fold; explicit raises (not `assert`, which `python -O` strips) narrow for mypy.
+    if oof_pred is None:
         raise RuntimeError(f"kfold produced no out-of-fold predictions (K={k}, rows={n_rows})")
-    if is_classification and oof_score is not None:
-        return metrics.classification_metrics(ctx.y_dev, oof_pred, oof_score)
-    return metrics.regression_metrics(ctx.y_dev, oof_pred)
+    if not is_classification:
+        return metrics.regression_metrics(ctx.y_dev, oof_pred)
+    if oof_score is None:
+        raise RuntimeError(f"kfold produced no out-of-fold scores (K={k}, rows={n_rows})")
+    return metrics.classification_metrics(ctx.y_dev, oof_pred, oof_score)
 
 
 def _score(

@@ -20,7 +20,8 @@ from sklearn.ensemble import (
 from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.neural_network import MLPClassifier, MLPRegressor
 
-# Seed shared by every estimator so training is reproducible.
+# Seed shared by every estimator. Seeded training is reproducible single-threaded (n_jobs=1); the multi-threaded
+# defaults below (n_jobs=-1) are not guaranteed bit-identical across runs.
 DEFAULT_RANDOM_STATE: int = 0
 
 try:  # xgboost requires OpenMP (libomp on macOS, libgomp1 on Linux)
@@ -64,7 +65,7 @@ def _require(flag: bool, name: str) -> None:
         )
 
 
-def _xgboost(problem_type: str, hp: Dict[str, Any]):
+def _xgboost(problem_type: str, hp: Dict[str, Any]) -> Any:
     """Build an XGBoost classifier/regressor with histogram tree method.
 
     Hyperparameters override the histogram + n_jobs defaults. For classification
@@ -79,7 +80,7 @@ def _xgboost(problem_type: str, hp: Dict[str, Any]):
     return XGBRegressor(**common)
 
 
-def _lightgbm(problem_type: str, hp: Dict[str, Any]):
+def _lightgbm(problem_type: str, hp: Dict[str, Any]) -> Any:
     """Build a LightGBM classifier/regressor (quiet, small-leaf-friendly defaults)."""
     _require(_HAVE_LGBM, "lightgbm")
     common = {"n_jobs": -1, "verbose": -1, "min_child_samples": 5, "random_state": DEFAULT_RANDOM_STATE, **hp}
@@ -88,7 +89,7 @@ def _lightgbm(problem_type: str, hp: Dict[str, Any]):
     return LGBMRegressor(**common)
 
 
-def _logistic_regression(problem_type: str, hp: Dict[str, Any]):
+def _logistic_regression(problem_type: str, hp: Dict[str, Any]) -> Any:
     """Build a logistic-regression classifier (classification only).
 
     Raises:
@@ -102,7 +103,7 @@ def _logistic_regression(problem_type: str, hp: Dict[str, Any]):
     return LogisticRegression(**params)
 
 
-def _random_forest(problem_type: str, hp: Dict[str, Any]):
+def _random_forest(problem_type: str, hp: Dict[str, Any]) -> Any:
     """Build a random-forest classifier/regressor (all cores by default)."""
     common = {"n_jobs": -1, "random_state": DEFAULT_RANDOM_STATE, **hp}
     if problem_type == "classification":
@@ -110,7 +111,7 @@ def _random_forest(problem_type: str, hp: Dict[str, Any]):
     return RandomForestRegressor(**common)
 
 
-def _ridge(problem_type: str, hp: Dict[str, Any]):
+def _ridge(problem_type: str, hp: Dict[str, Any]) -> Any:
     """Build a ridge (L2) regressor (regression only).
 
     Raises:
@@ -118,10 +119,12 @@ def _ridge(problem_type: str, hp: Dict[str, Any]):
     """
     if problem_type != "regression":
         raise AlgorithmNotSupportedError("ridge supports regression only.")
-    return Ridge(**hp)
+    # Only the sag/saga solvers draw random numbers; seeding keeps them reproducible when a caller picks one.
+    params = {"random_state": DEFAULT_RANDOM_STATE, **hp}
+    return Ridge(**params)
 
 
-def _mlp(problem_type: str, hp: Dict[str, Any]):
+def _mlp(problem_type: str, hp: Dict[str, Any]) -> Any:
     """Build a multi-layer-perceptron classifier/regressor (500-iter default cap)."""
     params = {"max_iter": 500, "random_state": DEFAULT_RANDOM_STATE, **hp}
     if problem_type == "classification":
@@ -144,7 +147,7 @@ def supported_algorithms() -> List[str]:
     return sorted(_REGISTRY.keys())
 
 
-def build_estimator(algorithm: str, problem_type: str, hyperparameters: Dict[str, Any]):
+def build_estimator(algorithm: str, problem_type: str, hyperparameters: Dict[str, Any]) -> Any:
     """Build an sklearn-compatible estimator for the given driver key.
 
     Args:
@@ -165,8 +168,3 @@ def build_estimator(algorithm: str, problem_type: str, hyperparameters: Dict[str
             f"Unknown algorithm '{algorithm}'. Supported: {supported_algorithms()}"
         )
     return factory(problem_type, dict(hyperparameters or {}))
-
-
-def supports_feature_importance(estimator: Any) -> bool:
-    """True when the fitted estimator exposes importances or linear coefficients."""
-    return hasattr(estimator, "feature_importances_") or hasattr(estimator, "coef_")
