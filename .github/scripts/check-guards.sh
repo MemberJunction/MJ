@@ -3,6 +3,7 @@
 #
 #   UUIDCompliance + MultiProviderCompliance  (packages/MJGlobal; the "Source guards" job)
 #   PrimaryKeyCompliance                      (packages/MJCore; runs in CI only when a PR touches MJCore)
+#   check:manifest-registrations              (an entity subclass missing from the committed manifests)
 #
 # All three read source text off disk: no build, no database. Each is run even if an earlier one
 # fails, so one invocation reports every violation. Exits non-zero if any scanner fails.
@@ -25,12 +26,18 @@ pnpm --filter @memberjunction/global exec vitest run \
 pnpm --filter @memberjunction/core exec vitest run --passWithNoTests=false \
   src/__tests__/PrimaryKeyCompliance.test.ts || status=1
 
+# Entity manifest completeness. Here rather than only in CI because the pre-push hook runs this
+# script: a `@RegisterClass(BaseEntity, …)` subclass missing from the committed manifests is caught
+# before the PR exists. Pure file reads, like its neighbours above.
+node .github/scripts/check-manifest-registrations.mjs || status=1
+
 if [ "$status" -ne 0 ]; then
   echo ""
   echo "check:guards failed. The rules behind each scanner:"
   echo "  UUID comparisons / nested scans -> .claude/rules/typescript-style.md (COMPARE UUIDs WITH THE @memberjunction/global HELPERS)"
   echo "  global Metadata provider        -> .claude/rules/data-access.md (Don't Reach for the Global Metadata Provider)"
   echo "  primary-key assumptions         -> .claude/rules/data-access.md (Primary keys: never assume a column named ID)"
+  echo "  entity class not in a manifest  -> regenerate with the pnpm run mj:manifest:* script the failure names"
 fi
 
 exit "$status"

@@ -120,11 +120,12 @@ const result = await session.RunAgent({
     Messages: [{ role: 'user', content: 'Show me active members' }],
 });
 
-// 6. Or run from an existing conversation detail
+// 6. Or run from an existing user message in a conversation
 const result2 = await session.RunAgentFromConversationDetail({
-    ConversationDetailId: 'detail-uuid',
+    UserMessageId: 'user-message-detail-uuid',
     AgentId: 'agent-uuid',
     MaxHistoryMessages: 20,
+    OnAccepted: (reply) => console.log('Server created reply row:', reply.ConversationDetailId),
 });
 
 // 7. Clean up when done

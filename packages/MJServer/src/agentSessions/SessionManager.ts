@@ -539,9 +539,9 @@ export class SessionManager {
     }
 
     /**
-     * Loads a session entity by ID, returning null when it cannot be loaded. The server entity
-     * (`MJAIAgentSessionEntityServer`) keeps the lifecycle saves that follow from writing back the
-     * recording ledger's columns (#5294).
+     * Loads a session entity by ID, returning null when it cannot be loaded. The lifecycle saves that
+     * follow cannot write back the recording ledger's columns: those have `AllowUpdateAPI=0`, so they are
+     * not parameters of `spUpdateAIAgentSession` (#5294, #6010).
      */
     private async loadSession(
         agentSessionID: string,

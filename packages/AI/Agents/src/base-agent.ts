@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, MJAIPromptRunEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJConversationDetailEntityExtended, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, MJAIPromptRunEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
 import { BuildActionToolSet, CoerceActionArguments, FilterDeclarableActions, SanitizeToolName } from './native-tools/action-tool-builder';
 import { DescribeValueSchemaInline, GetStoredValueSchema } from './native-tools/action-param-schema';
 import { BuildNativeToolSet, COMPLETE_TASK_TOOL, SUB_AGENT_TOOL_PREFIX, type NativeToolBinding } from './native-tools/control-tools';
@@ -3825,8 +3825,9 @@ export class BaseAgent {
             // A closed entry (a prior turn's finalized row still tracked for streamed re-finals) means
             // THIS delta begins a NEW turn — fall through and create a fresh In-Progress row, replacing
             // the tracked entry below.
-            const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', params.contextUser);
+            const detail = await md.GetEntityObject<MJConversationDetailEntityExtended>('MJ: Conversation Details', params.contextUser);
             detail.NewRecord();
+            detail.MarkServerAuthoredReply(); // an agent turn is the server's to write; a person's turn is unaffected
             detail.ConversationID = conversationID;
             detail.Role = mjRole;
             detail.Message = transcript.Text;
@@ -3861,16 +3862,16 @@ export class BaseAgent {
         // (closed) rather than deleted, so a later streamed re-final can still update this same row and
         // the next interim/non-replacing-final correctly detects the turn boundary via `open`.
         const inFlight = this.realtimeInFlightTurns.get(roleKey);
-        let detail: MJConversationDetailEntity | null = null;
+        let detail: MJConversationDetailEntityExtended | null = null;
         if (inFlight && (transcript.ReplacesPrevious || inFlight.open)) {
-            const candidate = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', params.contextUser);
+            const candidate = await md.GetEntityObject<MJConversationDetailEntityExtended>('MJ: Conversation Details', params.contextUser);
             if (await candidate.Load(inFlight.id)) {
                 detail = candidate; // update the existing row in place → not a new turn
             }
         }
         let created = false;
         if (!detail) {
-            detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', params.contextUser);
+            detail = await md.GetEntityObject<MJConversationDetailEntityExtended>('MJ: Conversation Details', params.contextUser);
             detail.NewRecord();
             detail.ConversationID = conversationID;
             detail.Role = mjRole;
@@ -3880,6 +3881,7 @@ export class BaseAgent {
             }
             created = true;
         }
+        detail.MarkServerAuthoredReply();
         detail.Message = transcript.Text;
         detail.Status = 'Complete';
         detail.TurnEndedAt = new Date();
@@ -4027,10 +4029,11 @@ export class BaseAgent {
                 Provider: md,
                 Peaks: peaks.length > 0 ? peaks : undefined
             });
-            if (stored.FileID) {
+            if (stored.FileID && !stored.ErrorMessage) {
                 this.logStatus(`🎬 Realtime recording stored (${Math.round(encoded.DurationMs / 1000)}s, file ${stored.FileID}).`, true, params);
             } else {
-                // The store never throws, so its reason only reaches an operator if we log it here.
+                // The store never throws, so its reason only reaches an operator if we log it here. A
+                // FileID alongside an ErrorMessage is an uploaded file the session was not stamped with.
                 this.logError(`Failed to store realtime recording for session ${sessionID}: ${stored.ErrorMessage ?? 'no reason reported'}`, {
                     agent: params.agent, category: 'RealtimeSession'
                 });
