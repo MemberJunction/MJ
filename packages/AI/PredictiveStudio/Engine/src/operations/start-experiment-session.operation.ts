@@ -3,18 +3,15 @@
  *
  * **Start Experiment Session** Remote Operation — the server body for the
  * Manual-mode `PredictiveStudio.StartExperimentSession` operation. The typed peer of
- * the Run-Experiment *Action*: it validates that an **approved** modeling plan was
- * supplied and runs it as an experiment session (in waves, under a budget,
- * maintaining a leaderboard) via {@link ExperimentOrchestrator.runSession}.
+ * the Run-Experiment *Action*.
  *
- * Per CLAUDE.md "transport-layer architecture", the operation is a THIN adapter —
- * it carries no orchestration logic. The wave loop / leaderboard / budget gate live
- * in the orchestrator, and the production deps wiring is shared with the action via
- * {@link runExperimentSessionViaOrchestrator}.
- *
- * Marked `LongRunning`: it emits coarse start/finish progress. The orchestrator runs
- * the session synchronously to completion (or a clean budget pause); it does not
- * expose a per-wave progress hook today, so progress is bounded to lifecycle phases.
+ * Experiment sessions are switched off (`ExperimentSessions.Enabled` in
+ * `@memberjunction/predictive-studio-core`): no production pipeline resolver exists, so
+ * the operation refuses with `EXPERIMENT_SESSIONS_UNAVAILABLE` before it reads any input
+ * or emits any progress — the same code, at the same point, as the Run Experiment
+ * Session action. The plan validation and the delegation to
+ * {@link RunExperimentSessionViaOrchestrator} stay behind that switch so the body is
+ * ready when sessions are switched on.
  */
 
 import { RegisterClass } from '@memberjunction/global';
@@ -26,15 +23,16 @@ import {
   type PredictiveStudioStartExperimentSessionOutput,
 } from '@memberjunction/core-entities';
 import {
+  ExperimentSessions,
   validateModelingPlanSpec,
   validateBudget,
   type ModelingPlanSpec,
   type Budget,
 } from '@memberjunction/predictive-studio-core';
 
-import { ExperimentOrchestrator } from '../experiment/experiment-orchestrator';
 import type { ExperimentRunOptions, ExperimentSessionResult } from '../experiment/types';
 import { RunExperimentSessionViaOrchestrator } from './delegation';
+import { ExperimentSessionsUnavailableError } from '../actions/run-experiment.deps';
 import { PredictiveStudioRefusals } from './refusals';
 
 /**
@@ -67,6 +65,10 @@ export class PredictiveStudioStartExperimentSessionServerOperation extends Predi
     user: UserInfo,
     context: RemoteOpServerContext,
   ): Promise<PredictiveStudioStartExperimentSessionOutput> {
+    // Refuse first, before reading the plan or emitting progress, so the code matches the action's.
+    if (!ExperimentSessions.Enabled) {
+      throw new ExperimentSessionsUnavailableError();
+    }
     const plan = this.validatePlan(input.planSpec);
 
     context.emitProgress({
@@ -76,13 +78,7 @@ export class PredictiveStudioStartExperimentSessionServerOperation extends Predi
       Message: `Starting experiment session for goal: ${plan.Goal}`,
     });
 
-    const result = await RunExperimentSessionViaOrchestrator(
-      plan,
-      this.buildOptions(input),
-      provider,
-      user,
-      this.orchestrator(),
-    );
+    const result = await RunExperimentSessionViaOrchestrator(plan, this.buildOptions(input), provider, user);
 
     context.emitProgress({
       OperationKey: this.OperationKey,
@@ -157,14 +153,6 @@ export class PredictiveStudioStartExperimentSessionServerOperation extends Predi
     }
     const validation = validateBudget(raw);
     return validation.ok ? validation.value : undefined;
-  }
-
-  /**
-   * The {@link ExperimentOrchestrator} to delegate to. Overridable so unit tests
-   * inject a mock with no live DB / sidecar (mirrors the Action's seam).
-   */
-  protected orchestrator(): ExperimentOrchestrator {
-    return new ExperimentOrchestrator();
   }
 }
 

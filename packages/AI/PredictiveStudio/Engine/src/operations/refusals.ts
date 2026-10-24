@@ -1,5 +1,5 @@
 import type { RemoteOpResult } from '@memberjunction/core';
-import type { PredictiveStudioRefusalCode } from '@memberjunction/predictive-studio-core';
+import { InvalidMajorityBaselineRuleError, type PredictiveStudioRefusalCode } from '@memberjunction/predictive-studio-core';
 import { ReadCapExceededError } from '../feature-assembly/read-cap-error';
 import { AsOfSettingHasNoEffectError } from '../training/as-of-refusal';
 import { ModelNotScorableError, ModelNeedsTrainingError } from '../scoring/model-readiness';
@@ -20,6 +20,7 @@ export class PredictiveStudioRefusals {
     if (e instanceof ModelNotScorableError) return 'MODEL_NOT_SCORABLE';
     if (e instanceof ModelNeedsTrainingError) return 'MODEL_NEEDS_TRAINING';
     if (e instanceof ExperimentSessionsUnavailableError) return 'EXPERIMENT_SESSIONS_UNAVAILABLE';
+    if (e instanceof InvalidMajorityBaselineRuleError) return 'INVALID_EVALUATION_SETTING';
     return null;
   }
 

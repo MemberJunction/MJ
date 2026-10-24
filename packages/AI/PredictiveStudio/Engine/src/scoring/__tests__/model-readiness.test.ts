@@ -59,7 +59,7 @@ class FakeSidecar implements ISidecarPredictor {
 
 class NoDataAccess implements IFeatureDataAccess {
   async fetchRows(_p: FetchRowsParams): Promise<FetchRowsResult> {
-    return { Success: true, Rows: [] };
+    return { Success: true, Rows: [], TotalRowCount: 0 };
   }
   async fetchEmbedding(): Promise<number[] | null> {
     return null;
@@ -175,6 +175,15 @@ describe('MLModelInferenceProcessor.Preflight — opt-in auto-train', () => {
     const proc = new MLModelInferenceProcessor({ modelId: 'model-1', deps, autoTrain: { pipelineId: 'pipe-1' }, autoTrainer: trainer }, new TestAssembler());
     await proc.Preflight(CTX);
     expect(trainer.Requests).toHaveLength(0);
+  });
+
+  it('does not train in a dry run: an untrained model is refused with ModelNeedsTrainingError', async () => {
+    const { deps, map, artifacts } = setup([new FakeModel('model-1', null)]);
+    const trainer = new FakeAutoTrainer(map, artifacts);
+    const proc = new MLModelInferenceProcessor({ modelId: 'model-1', deps, autoTrain: { pipelineId: 'pipe-1' }, autoTrainer: trainer }, new TestAssembler());
+    await expect(proc.Preflight({ ...CTX, DryRun: true })).rejects.toBeInstanceOf(ModelNeedsTrainingError);
+    expect(trainer.Requests).toHaveLength(0);
+    expect(map.has('trained-1')).toBe(false);
   });
 
   it('does not train on a failure that is not "needs training"', async () => {

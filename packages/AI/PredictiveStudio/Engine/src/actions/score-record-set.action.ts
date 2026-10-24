@@ -23,11 +23,12 @@ import { LogError, Metadata, type UserInfo, type IMetadataProvider } from '@memb
 import { BaseAction } from '@memberjunction/actions';
 
 import { BasePredictiveStudioAction, type JsonObject } from './base-predictive-studio.action';
-import { ProductionScoreRecordSetRunner } from './score-record-set.runner';
+import { BuildScoreRecordSetRunner } from '../operations/delegation';
 import { PredictiveStudioRefusals } from '../operations/refusals';
 
 /** The driver-class key this action registers under (matches the metadata row). */
-export const SCORE_RECORD_SET_DRIVER_CLASS = 'PredictiveStudioScoreRecordSetAction';
+export { SCORE_RECORD_SET_DRIVER_CLASS } from './driver-classes';
+import { SCORE_RECORD_SET_DRIVER_CLASS } from './driver-classes';
 
 /**
  * The scope of records to score. Mirrors the Record Set Processing scope shapes
@@ -221,8 +222,12 @@ export class PredictiveStudioScoreRecordSetAction extends BasePredictiveStudioAc
 
   // ----- injectable runner seam (overridden in tests) ------------------------
 
-  /** Construct the production scoring runner. Overridable so tests inject a mock. */
+  /**
+   * Construct the production scoring runner — the same one the Score Record Set
+   * operation uses, wired with the production model loader, sidecar and artifact
+   * loader. Overridable so tests inject a mock.
+   */
   protected createRunner(): IScoreRecordSetRunner {
-    return new ProductionScoreRecordSetRunner();
+    return BuildScoreRecordSetRunner();
   }
 }

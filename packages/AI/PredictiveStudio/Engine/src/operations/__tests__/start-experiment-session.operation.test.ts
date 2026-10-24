@@ -5,7 +5,7 @@ import { ExperimentSessions } from '@memberjunction/predictive-studio-core';
 import { PredictiveStudioStartExperimentSessionServerOperation } from '../start-experiment-session.operation';
 import { CapturingContext } from './helpers';
 
-/** An approved, schema-valid plan, so the operation gets past plan validation to the switched-off delegate. */
+/** An approved, schema-valid plan: the operation must refuse it while sessions are switched off. */
 function approvedPlan(): PredictiveStudioStartExperimentSessionInput['planSpec'] {
   return {
     Goal: 'Predict member churn',
@@ -29,12 +29,23 @@ describe('PredictiveStudioStartExperimentSessionServerOperation — refusal code
     expect(result.ErrorMessage).toBe(ExperimentSessions.DisabledReason);
   });
 
-  it('keeps EXECUTION_ERROR for a plain failure such as an unapproved plan', async () => {
+  it('refuses with EXPERIMENT_SESSIONS_UNAVAILABLE before validating the plan, so an unapproved plan gets the same code', async () => {
     const result = await new PredictiveStudioStartExperimentSessionServerOperation().ExecuteServer(
       { planSpec: { ...approvedPlan(), Approved: false } },
       new CapturingContext(),
     );
     expect(result.Success).toBe(false);
-    expect(result.ResultCode).toBe('EXECUTION_ERROR');
+    expect(result.ResultCode).toBe('EXPERIMENT_SESSIONS_UNAVAILABLE');
+  });
+
+  it('refuses a missing plan with EXPERIMENT_SESSIONS_UNAVAILABLE', async () => {
+    const result = await new PredictiveStudioStartExperimentSessionServerOperation().ExecuteServer({ planSpec: undefined }, new CapturingContext());
+    expect(result.ResultCode).toBe('EXPERIMENT_SESSIONS_UNAVAILABLE');
+  });
+
+  it('emits no progress before refusing', async () => {
+    const ctx = new CapturingContext();
+    await new PredictiveStudioStartExperimentSessionServerOperation().ExecuteServer({ planSpec: approvedPlan() }, ctx);
+    expect(ctx.Progress).toHaveLength(0);
   });
 });

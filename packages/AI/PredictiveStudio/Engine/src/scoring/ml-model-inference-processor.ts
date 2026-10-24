@@ -132,6 +132,10 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
    * the error-rate circuit breaker. The loaded model is the same warm cache every
    * record then reuses, so this costs no extra load.
    *
+   * A dry run (`context.DryRun`) never auto-trains: training creates and publishes a model, repoints the
+   * Record Process and archives the old model, none of which a compute-only run may do. It reports the
+   * {@link ModelNeedsTrainingError} instead.
+   *
    * @param context the run-level execution context (user + provider)
    * @throws when the model is missing, has no trained artifact, or its artifact can't be loaded
    */
@@ -142,7 +146,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     } catch (err) {
       // Clear the memoized failure so a retry (or the auto-train below) re-attempts the load.
       this.resetModelCache();
-      if (!(err instanceof ModelNeedsTrainingError) || !this.autoTrain || !this.autoTrainer) {
+      if (!(err instanceof ModelNeedsTrainingError) || context.DryRun || !this.autoTrain || !this.autoTrainer) {
         throw err;
       }
     }
@@ -326,7 +330,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     context: RecordProcessorContext,
   ): Promise<ResolvedScoringPipeline> {
     try {
-      const rv = context.Provider ? RunView.FromMetadataProvider(context.Provider) : new RunView();
+      const rv = RunView.FromMetadataProvider(context.Provider);
       interface PipelineViewRow {
         TargetEntityID?: string;
         TargetEntity?: string;
@@ -348,7 +352,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
         const rawSteps = parseJson<FeatureStepGraph>(row.FeatureSteps, { Steps: [] });
         const targetEntity =
           row.TargetEntity ||
-          (row.TargetEntityID && context.Provider ? context.Provider.EntityByID(row.TargetEntityID)?.Name : undefined) ||
+          (row.TargetEntityID ? context.Provider.EntityByID(row.TargetEntityID)?.Name : undefined) ||
           existing.targetEntityName;
 
         return {

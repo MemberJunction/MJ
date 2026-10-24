@@ -12,10 +12,14 @@ interface FakeLoadedRow {
   EntityInfo: { ID: string };
 }
 
-/** Provider fake: behaves like RunView — serves `matched` rows, or at most MaxRows / the 1,000 entity cap. */
+/**
+ * Provider fake: behaves like RunView — serves `matched` rows, or at most MaxRows / the 1,000 entity cap. With
+ * `reportsTotal` false it reports the rows served as `TotalRowCount` (as the real provider does when it skips the
+ * count query, e.g. for `MaxRows: 1`), so a test can prove the cap check does not depend on that count.
+ */
 class ScopeProvider {
   public readonly Params: RunViewParams[] = [];
-  constructor(private readonly matched: number) {}
+  constructor(private readonly matched: number, private readonly reportsTotal: boolean = true) {}
   public EntityByName(name: string): { ID: string; Name: string } {
     return { ID: `${name}-id`, Name: name };
   }
@@ -29,7 +33,7 @@ class ScopeProvider {
     }));
     return {
       // Test double: the runner reads only PrimaryKey and EntityInfo from each loaded row.
-      Success: true, Results: rows as unknown as T[], RowCount: served, TotalRowCount: this.matched, ExecutionTime: 0, ErrorMessage: '',
+      Success: true, Results: rows as unknown as T[], RowCount: served, TotalRowCount: this.reportsTotal ? this.matched : served, ExecutionTime: 0, ErrorMessage: '',
     } as RunViewResult<T>;
   }
 }
@@ -68,5 +72,46 @@ describe('ProductionScoreRecordSetRunner — scope reads are complete (W1 → S7
     const refs = await new TestableRunner().Resolve({ filter: { entityName: 'Members', maxRows: 100 } }, provider);
     expect(refs).toHaveLength(40);
     expect(provider.Params[0].IgnoreMaxRows).toBe(false);
+    expect(provider.Params[0].MaxRows).toBe(101);
+  });
+});
+
+describe('ProductionScoreRecordSetRunner — maxRows values (0, null, 1, N)', () => {
+  for (const maxRows of [0, -5, null]) {
+    it(`treats maxRows=${maxRows} as uncapped and reads every matching row`, async () => {
+      const provider = new ScopeProvider(1500);
+      const refs = await new TestableRunner().Resolve({ filter: { entityName: 'Members', maxRows } }, provider);
+      expect(refs).toHaveLength(1500);
+      expect(provider.Params[0].IgnoreMaxRows).toBe(true);
+      expect(provider.Params[0].MaxRows).toBeUndefined();
+    });
+  }
+
+  it('refuses maxRows=1 when more than one row matches, even though the provider reports no total', async () => {
+    const provider = new ScopeProvider(3, false);
+    const refusal = new TestableRunner().Resolve({ filter: { entityName: 'Members', maxRows: 1 } }, provider);
+    await expect(refusal).rejects.toBeInstanceOf(ReadCapExceededError);
+    await expect(refusal).rejects.toThrow("maxRows=1 would score only 1.");
+    expect(provider.Params[0].MaxRows).toBe(2);
+  });
+
+  it('accepts maxRows=1 when exactly one row matches', async () => {
+    const provider = new ScopeProvider(1, false);
+    const refs = await new TestableRunner().Resolve({ filter: { entityName: 'Members', maxRows: 1 } }, provider);
+    expect(refs).toHaveLength(1);
+  });
+
+  it('accepts maxRows=N when exactly N rows match', async () => {
+    const provider = new ScopeProvider(250, false);
+    const refs = await new TestableRunner().Resolve({ filter: { entityName: 'Members', maxRows: 250 } }, provider);
+    expect(refs).toHaveLength(250);
+    expect(provider.Params[0].MaxRows).toBe(251);
+  });
+
+  it('refuses maxRows=N when N+1 rows match, from the rows returned alone', async () => {
+    const provider = new ScopeProvider(251, false);
+    const refusal = new TestableRunner().Resolve({ filter: { entityName: 'Members', maxRows: 250 } }, provider);
+    await expect(refusal).rejects.toBeInstanceOf(ReadCapExceededError);
+    await expect(refusal).rejects.toThrow("maxRows=250 would score only 250.");
   });
 });

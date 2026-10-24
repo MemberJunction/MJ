@@ -13,10 +13,10 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../
 describe('Predictive Studio maintenance job metadata (F-MNT-1 contained)', () => {
   const [job] = JSON.parse(readFileSync(path.join(repoRoot, 'metadata/scheduled-jobs/.predictive-studio-maintenance-job.json'), 'utf8')) as ScheduledJobRecord[];
 
-  it('is Disabled, has no Action, and says it must stay Disabled', () => {
+  it('is Disabled, has no Action, and says why it is Disabled', () => {
     expect(job.fields.Status).toBe('Disabled');
     expect(job.fields.Configuration).toEqual({});
     expect(job.fields.Name).toBe('Predictive Studio Maintenance');
-    expect(job.fields.Description).toMatch(/^Kept Disabled: no Action backs this job/);
+    expect(job.fields.Description).toMatch(/^Disabled: no Action backs this job/);
   });
 });

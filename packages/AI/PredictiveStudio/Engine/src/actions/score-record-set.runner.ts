@@ -9,10 +9,12 @@
  * production seams, and drives its batch path.
  *
  * Keeping this OUT of the action keeps the action thin (validate → delegate → map)
- * and keeps this resolver independently testable. The artifact-loader seam is
- * deliberately injected from a higher layer (the Engine package does not import
- * MJStorage drivers — see `scoring/seams.ts`); when it is not supplied the runner
- * fails with a clear, actionable message rather than silently mis-scoring.
+ * and keeps this resolver independently testable. The production wiring (model
+ * loader, sidecar and the `LocalArtifactLoader`) comes from
+ * `BuildScoreRecordSetRunner()` in `operations/delegation`, which both the Score
+ * action and the Score Record Set operation use. A runner constructed without `deps`
+ * has no artifact loader and fails with a clear, actionable message rather than
+ * silently mis-scoring.
  */
 
 import {
@@ -25,7 +27,7 @@ import {
   type RunViewResult,
 } from '@memberjunction/core';
 import { BaseEntity } from '@memberjunction/core';
-import { resolveMappingRef } from '@memberjunction/global';
+import { IsValidUUID, resolveMappingRef } from '@memberjunction/global';
 import type { RecordRef, RecordProcessorContext, RecordResult } from '@memberjunction/record-set-processor-base';
 
 import { MLModelInferenceProcessor } from '../scoring/ml-model-inference-processor';
@@ -67,8 +69,8 @@ interface ScoringOutputMapping {
 export interface ProductionScoreRecordSetRunnerOptions {
   /**
    * The scoring dependency bundle (model loader / artifact loader / sidecar). When
-   * omitted, production model-loader + sidecar are built, but the artifact loader
-   * MUST be supplied by the higher layer that owns the MJStorage binding.
+   * omitted, production model-loader + sidecar are built with an artifact loader
+   * that refuses; `BuildScoreRecordSetRunner()` supplies the production bundle.
    */
   deps?: MLInferenceDeps;
   /** Primary-key field on scored entities (defaults to `ID`). */
@@ -124,6 +126,7 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
       return scope.records.map((r) => this.toRecordRef(r));
     }
     if (scope.single) {
+      // Requires every primary-key field, so at most one row matches; the cap of 1 refuses anything else.
       return this.resolveFilter(
         scope.single.entityName,
         this.primaryKeyFilter(scope.single.entityName, scope.single.primaryKey, provider),
@@ -164,6 +167,10 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
     contextUser: UserInfo | undefined,
     provider: IMetadataProvider,
   ): Promise<RecordRef[]> {
+    // The id is interpolated into two filters and comes from untrusted action / operation input: only a UUID is legal.
+    if (!IsValidUUID(listId)) {
+      throw new Error(`Score Record Set: listId '${listId}' is not a valid UUID; refusing to read the list.`);
+    }
     const rv = RunView.FromMetadataProvider(provider);
 
     const listResult = await rv.RunView<{ EntityID: string }>(
@@ -222,13 +229,18 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
       })),
       contextUser,
     );
-    return results.flatMap((res) => this.toRecordRefs(res, entityInfo.Name, (row) => this.entityToRecordRef(row, entityInfo.ID)));
+    return results.flatMap((res) => this.toRecordRefs(res, `entity '${entityInfo.Name}'`, (row) => this.entityToRecordRef(row, entityInfo.ID)));
   }
 
-  /** The record refs a successful scope read produced; throws with the read's error when it failed. */
-  private toRecordRefs<T>(result: RunViewResult<T>, entityName: string, toRef: (row: T) => RecordRef): RecordRef[] {
+  /**
+   * The record refs a successful scope read produced; throws with the read's error when it failed, so a failed read
+   * (or one failed chunk of a list) never silently drops records.
+   *
+   * @param scopeLabel what was read, for the error message (e.g. `entity 'Members'`, `view '<id>'`)
+   */
+  private toRecordRefs<T>(result: RunViewResult<T>, scopeLabel: string, toRef: (row: T) => RecordRef): RecordRef[] {
     if (!result.Success) {
-      throw new Error(`Score Record Set: failed to resolve scope for '${entityName}': ${result.ErrorMessage}`);
+      throw new Error(`Score Record Set: failed to resolve scope for ${scopeLabel}: ${result.ErrorMessage}`);
     }
     return result.Results.map(toRef);
   }
@@ -248,33 +260,46 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
     return recordIds.map((id) => `(${CompositeKey.FromURLSegment(entityInfo, id).ToWhereClause()})`).join(' OR ');
   }
 
-  /** Resolve an entity + filter into entity-object record refs. */
+  /**
+   * Resolve an entity + filter into entity-object record refs.
+   *
+   * `maxRows` that is absent, `null` (possible on the operation's JSON input) or `<= 0` means no cap: every matching
+   * row is read. A positive cap reads one row past it, and a scope that returns more than `maxRows` rows is refused
+   * with {@link ReadCapExceededError} (decision D2-C1: scoring a fraction and reporting success is F-L3-2). Reading
+   * `maxRows + 1` rows detects the cut from the rows themselves, so it holds for `maxRows: 1`, where the provider
+   * issues no count query and `TotalRowCount` cannot show the truncation.
+   */
   protected async resolveFilter(
     entityName: string,
     extraFilter: string | undefined,
-    maxRows: number | undefined,
+    maxRows: number | null | undefined,
     contextUser: UserInfo | undefined,
     provider: IMetadataProvider,
   ): Promise<RecordRef[]> {
+    const cap = ProductionScoreRecordSetRunner.explicitCap(maxRows);
     const result = await RunView.FromMetadataProvider(provider).RunView<BaseEntity>(
       {
         EntityName: entityName,
         ExtraFilter: extraFilter,
-        MaxRows: maxRows,
+        MaxRows: cap === undefined ? undefined : cap + 1,
         // No explicit cap means every matching row. Without this RunView silently stops at the entity's
         // UserViewMaxRows (1,000 by default) and the run reports success on a fraction of the scope (F-L3-2).
-        IgnoreMaxRows: maxRows === undefined,
+        IgnoreMaxRows: cap === undefined,
         ResultType: 'entity_object',
       },
       contextUser,
     );
     const entityId = this.resolveEntityId(entityName, provider);
-    const refs = this.toRecordRefs(result, entityName, (row) => this.entityToRecordRef(row, entityId));
-    // Refuse a scope an explicit cap cut short: scoring a fraction and reporting success is F-L3-2 (decision D2-C1).
-    if (maxRows !== undefined && ReadCapExceededError.IsTruncated(maxRows, result.Results.length, result.TotalRowCount)) {
-      throw ReadCapExceededError.ForScoring(entityName, maxRows, result.Results.length, result.TotalRowCount);
+    const refs = this.toRecordRefs(result, `entity '${entityName}'`, (row) => this.entityToRecordRef(row, entityId));
+    if (cap !== undefined && refs.length > cap) {
+      throw ReadCapExceededError.ForScoring(entityName, cap, cap, Math.max(result.TotalRowCount ?? 0, refs.length));
     }
     return refs;
+  }
+
+  /** The explicit row cap a `maxRows` value asks for, or `undefined` when it asks for every row (absent, null, <= 0). */
+  private static explicitCap(maxRows: number | null | undefined): number | undefined {
+    return typeof maxRows === 'number' && maxRows > 0 ? maxRows : undefined;
   }
 
   /** Resolve a saved-view id into entity-object record refs. */
@@ -287,10 +312,7 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
       { ViewID: params.ViewID, IgnoreMaxRows: true, ResultType: 'entity_object' },
       contextUser,
     );
-    if (!result.Success) {
-      throw new Error(`Score Record Set: failed to resolve view '${params.ViewID}': ${result.ErrorMessage}`);
-    }
-    return result.Results.map((row) => this.entityToRecordRef(row));
+    return this.toRecordRefs(result, `view '${params.ViewID}'`, (row) => this.entityToRecordRef(row));
   }
 
   // ----- helpers ---------------------------------------------------------------
@@ -328,11 +350,10 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
   }
 
   /**
-   * A placeholder {@link IArtifactLoader} that fails loudly. The Engine package
-   * does not import MJStorage drivers, so the real artifact loader is supplied by
-   * the layer that owns the storage binding (see `scoring/seams.ts`). Callers that
-   * run this action in production wire `deps` (with a real artifact loader) into
-   * the runner; tests inject the whole runner.
+   * A placeholder {@link IArtifactLoader} that fails loudly, used only when the
+   * runner is constructed without `deps`. Production callers (the Score action and
+   * the Score Record Set operation) build the runner with
+   * `BuildScoreRecordSetRunner()`, which wires the real `LocalArtifactLoader`.
    */
   protected missingArtifactLoader(): IArtifactLoader {
     return {
@@ -365,10 +386,11 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
 
   /**
    * Build a `Field='value'`-style filter from a primary-key object. Each KEY is
-   * validated against the entity's real fields BEFORE interpolation — an unknown
-   * field name is rejected (SQL-injection defense for the untrusted key names,
-   * mirroring how the write-entity-fields action validates field names). Values
-   * are still single-quote-escaped.
+   * validated against the entity's PRIMARY-KEY fields BEFORE interpolation — any
+   * other name is rejected (SQL-injection defense for the untrusted key names, and
+   * a non-key field such as `Status` would select an arbitrary matching row). Every
+   * primary-key field must be supplied, so the filter identifies exactly one record.
+   * Values are single-quote-escaped.
    */
   protected primaryKeyFilter(entityName: string, primaryKey: JsonObject, provider: IMetadataProvider): string {
     const entity = provider.EntityByName(entityName);
@@ -379,15 +401,25 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
     if (entries.length === 0) {
       throw new Error(`Score Record Set: single-record scope for '${entityName}' supplied no primary-key fields.`);
     }
-    return entries
-      .map(([k, v]) => {
-        const field = entity.Fields.find((f) => f.Name.trim().toLowerCase() === k.trim().toLowerCase());
-        if (!field) {
-          throw new Error(`Score Record Set: '${k}' is not a field on entity '${entityName}'; refusing to build a filter from an unknown key.`);
-        }
-        return `${field.Name}='${String(v).replace(/'/g, "''")}'`;
-      })
-      .join(' AND ');
+    const keyName = (name: string): string => name.trim().toLowerCase();
+    const terms = entries.map(([k, v]) => {
+      const field = entity.PrimaryKeys.find((f) => keyName(f.Name) === keyName(k));
+      if (!field) {
+        throw new Error(
+          `Score Record Set: '${k}' is not a primary-key field on entity '${entityName}'; refusing to build a filter from it.`,
+        );
+      }
+      return { name: field.Name, clause: `${field.Name}='${String(v).replace(/'/g, "''")}'` };
+    });
+    const supplied = new Set(terms.map((t) => keyName(t.name)));
+    const missing = entity.PrimaryKeys.filter((f) => !supplied.has(keyName(f.Name))).map((f) => f.Name);
+    if (missing.length > 0) {
+      throw new Error(
+        `Score Record Set: single-record scope for '${entityName}' is missing primary-key field(s) ${missing.join(', ')}; ` +
+          'supply every key field so exactly one record is scored.',
+      );
+    }
+    return terms.map((t) => t.clause).join(' AND ');
   }
 
   /** Resolve an entity id from its name (best-effort; empty when unavailable). */

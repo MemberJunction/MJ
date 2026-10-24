@@ -205,6 +205,15 @@ function clamp(v: number, lo: number, hi: number): number {
 // region: in-memory FeatureAssembly data source ------------------------------
 
 /**
+ * The provider slice training uses: `EntityByName` for the target's primary key, which orders the training read.
+ * Every row read goes through the in-memory data access, so nothing else on the provider is called.
+ */
+const TRAINING_PROVIDER = {
+  EntityByName: () => ({ PrimaryKeys: [{ Name: 'ID' }] }),
+} as unknown as IMetadataProvider;
+const TRAINING_USER = { ID: 'user-1', Email: 'trainer@example.com' } as UserInfo;
+
+/**
  * In-memory {@link IFeatureDataAccess} — feeds the REAL FeatureAssemblyExecutor
  * synthetic rows instead of a database/RunView. This is the legitimate seam the
  * executor exposes for exactly this purpose.
@@ -215,10 +224,10 @@ class InMemoryDataAccess implements IFeatureDataAccess {
   async fetchRows(params: FetchRowsParams): Promise<FetchRowsResult> {
     const rows = this.rowsByEntity[params.EntityName];
     if (!rows) {
-      return { Success: false, Rows: [], ErrorMessage: `No fixture for ${params.EntityName}` };
+      return { Success: false, Rows: [], TotalRowCount: 0, ErrorMessage: `No fixture for ${params.EntityName}` };
     }
     const capped = params.MaxRows && params.MaxRows > 0 ? rows.slice(0, params.MaxRows) : rows;
-    return { Success: true, Rows: capped };
+    return { Success: true, Rows: capped, TotalRowCount: rows.length };
   }
 
   async fetchEmbedding(): Promise<number[] | null> {
@@ -493,6 +502,8 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
       recordLoader: new FakeRecordLoader(pipeline),
       sidecar: makeProductionTrainer(sidecar),
       artifactStore,
+      contextUser: TRAINING_USER,
+      provider: TRAINING_PROVIDER,
     };
 
     // REAL FeatureAssemblyExecutor reads the synthetic rows through the in-memory seam.
@@ -615,6 +626,8 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
       recordLoader: new FakeRecordLoader(pipeline),
       sidecar: makeProductionTrainer(sidecar),
       artifactStore,
+      contextUser: TRAINING_USER,
+      provider: TRAINING_PROVIDER,
     };
     const engine = new TrainingEngine(makeAssemblerForRows(DATASET));
     const { model } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);
@@ -661,6 +674,8 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
       recordLoader: new FakeRecordLoader(pipeline),
       sidecar: makeProductionTrainer(sidecar),
       artifactStore,
+      contextUser: TRAINING_USER,
+      provider: TRAINING_PROVIDER,
     };
     const engine = new TrainingEngine(makeAssemblerForRows(DATASET));
     const { model } = await engine.trainModel({ pipelineId: pipeline.ID }, deps);

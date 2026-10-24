@@ -9,7 +9,7 @@
  * Per CLAUDE.md "transport-layer architecture", the operation is a THIN adapter —
  * it carries no scoring logic. The scope resolution + `MLModelInferenceProcessor`
  * batch path live in {@link ProductionScoreRecordSetRunner}, shared with the Score
- * action via {@link scoreRecordSetViaRunner}.
+ * action via {@link ScoreRecordSetViaRunner}.
  *
  * Marked `LongRunning` (a large scope can take a while): it emits coarse start/finish
  * progress. The runner does not expose a per-record progress hook today, so progress

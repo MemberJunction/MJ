@@ -35,7 +35,8 @@ import { BasePredictiveStudioAction } from './base-predictive-studio.action';
 import { BuildProductionExperimentDeps, ExperimentSessionsUnavailableError } from './run-experiment.deps';
 
 /** The driver-class key this action registers under (matches the metadata row). */
-export const RUN_EXPERIMENT_DRIVER_CLASS = 'PredictiveStudioRunExperimentAction';
+export { RUN_EXPERIMENT_DRIVER_CLASS } from './driver-classes';
+import { RUN_EXPERIMENT_DRIVER_CLASS } from './driver-classes';
 
 /**
  * Runs an approved modeling plan as an experiment session. Outputs: `SessionID`

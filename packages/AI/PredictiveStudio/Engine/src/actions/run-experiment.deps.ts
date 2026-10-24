@@ -45,16 +45,15 @@ export class UnresolvedPipelineResolver implements IPipelineResolver {
 }
 
 /**
- * Build the production {@link ExperimentDeps} from the request user/provider. Experiment sessions are switched off
- * ({@link ExperimentSessions.Enabled}), so this refuses with {@link ExperimentSessionsUnavailableError} before
- * touching the database.
+ * Build the production {@link ExperimentDeps}. Always refuses with {@link ExperimentSessionsUnavailableError}
+ * (no production pipeline resolver exists), before touching the database.
  *
- * @param contextUser request user (unused while sessions are switched off; kept for the published signature)
- * @param provider optional provider (unused while sessions are switched off; kept for the published signature)
+ * @param _contextUser request user (unused; kept for the published signature)
+ * @param _provider optional provider (unused; kept for the published signature)
  */
 export async function BuildProductionExperimentDeps(
-  contextUser?: UserInfo,
-  provider?: IMetadataProvider,
+  _contextUser?: UserInfo,
+  _provider?: IMetadataProvider,
 ): Promise<ExperimentDeps> {
   throw new ExperimentSessionsUnavailableError();
 }

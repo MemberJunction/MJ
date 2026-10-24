@@ -68,7 +68,7 @@ class FakeSidecar implements ISidecarPredictor {
 
 class InMemoryDataAccess implements IFeatureDataAccess {
   async fetchRows(_params: FetchRowsParams): Promise<FetchRowsResult> {
-    return { Success: true, Rows: [] };
+    return { Success: true, Rows: [], TotalRowCount: 0 };
   }
   async fetchEmbedding(): Promise<number[] | null> {
     return null;

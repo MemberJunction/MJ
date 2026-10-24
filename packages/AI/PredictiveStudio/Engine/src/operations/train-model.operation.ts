@@ -10,7 +10,7 @@
  * Per CLAUDE.md "transport-layer architecture", the operation is a THIN adapter —
  * it carries no training logic. The actual orchestration (locked-holdout carve,
  * sidecar `/train`, immutable model persist, leakage flag) lives in the engine, and
- * the production wiring is shared with the Train action via {@link trainModelViaEngine}.
+ * the production wiring is shared with the Train action via {@link TrainModelViaEngine}.
  *
  * Marked `LongRunning` (training can take a while): it emits coarse start/finish
  * progress through the server context. The engine does not expose a per-epoch

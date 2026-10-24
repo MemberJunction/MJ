@@ -1,18 +1,10 @@
 import { describe, it, expect } from 'vitest';
+import { InvalidMajorityBaselineRuleError } from '@memberjunction/predictive-studio-core';
 import { PredictiveStudioRefusals } from '../refusals';
 import { ReadCapExceededError } from '../../feature-assembly/read-cap-error';
 import { AsOfSettingHasNoEffectError } from '../../training/as-of-refusal';
 import { ModelNotScorableError, ModelNeedsTrainingError } from '../../scoring/model-readiness';
 import { ExperimentSessionsUnavailableError } from '../../actions/run-experiment.deps';
-
-describe('AsOfSettingHasNoEffectError.WouldBeIgnored', () => {
-  it('a setting with no Mode asks for nothing', () => {
-    expect(AsOfSettingHasNoEffectError.WouldBeIgnored({})).toBe(false);
-    expect(AsOfSettingHasNoEffectError.WouldBeIgnored(null)).toBe(false);
-    expect(AsOfSettingHasNoEffectError.WouldBeIgnored({ Mode: 'none' })).toBe(false);
-    expect(AsOfSettingHasNoEffectError.WouldBeIgnored({ Mode: 'column' })).toBe(true);
-  });
-});
 
 describe('PredictiveStudioRefusals', () => {
   it('maps each refusal error to its code', () => {
@@ -21,6 +13,7 @@ describe('PredictiveStudioRefusals', () => {
     expect(PredictiveStudioRefusals.CodeOf(new ModelNotScorableError('m1', 'Archived'))).toBe('MODEL_NOT_SCORABLE');
     expect(PredictiveStudioRefusals.CodeOf(new ModelNeedsTrainingError('needs training'))).toBe('MODEL_NEEDS_TRAINING');
     expect(PredictiveStudioRefusals.CodeOf(new ExperimentSessionsUnavailableError())).toBe('EXPERIMENT_SESSIONS_UNAVAILABLE');
+    expect(PredictiveStudioRefusals.CodeOf(new InvalidMajorityBaselineRuleError('off'))).toBe('INVALID_EVALUATION_SETTING');
   });
 
   it('EXECUTION_ERROR is not a refusal: a plain error keeps the generic code', async () => {

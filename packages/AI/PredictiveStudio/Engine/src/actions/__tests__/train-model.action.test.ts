@@ -40,6 +40,8 @@ function inertDeps(): TrainingDeps {
     recordLoader: {} as TrainingDeps['recordLoader'],
     sidecar: {} as TrainingDeps['sidecar'],
     artifactStore: {} as TrainingDeps['artifactStore'],
+    contextUser: {} as TrainingDeps['contextUser'],
+    provider: {} as TrainingDeps['provider'],
   };
 }
 
