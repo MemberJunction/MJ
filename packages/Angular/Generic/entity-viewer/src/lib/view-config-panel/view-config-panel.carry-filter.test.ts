@@ -487,4 +487,72 @@ describe('ViewConfigPanelComponent — carrying a staged filter back from the na
     } as unknown as KeyboardEvent);
     expect(closedCount).toBe(1);
   });
+
+  it('prompts for confirmation before discarding active filters/base view when switching to Default Layout, and does not leak savedTraditionalFilter into Smart SQL preview', () => {
+    const panel = makePanel();
+    panel.DefaultSaveAsNew = true;
+    panel.PendingNewViewFilterState = traditionalFilter;
+    open(panel);
+
+    // Traditional filter is active; switch to Smart Filter mode (which parks FilterState into savedTraditionalFilter)
+    expect(panel.FilterMode).toBe('traditional');
+    panel.SetFilterMode('smart');
+    expect(panel.ShowFilterModeSwitchConfirm).toBe(true);
+    panel.OnFilterModeSwitchConfirmed();
+    expect(panel.SmartFilterEnabled).toBe(true);
+    expect(panel.SmartFilterPrompt).toBe('');
+
+    // GeneratedSqlWhereClause must NOT fall back to the parked savedTraditionalFilter while Smart mode is active
+    expect(panel.GeneratedSqlWhereClause).toBe('');
+
+    // RequestSwitchToDefaultLayoutMode shows confirmation dialog when prompt or alternate base view is active
+    panel.OnSmartFilterPromptChange('Enterprise customers');
+    expect(panel.HasActiveFilterOrBaseView).toBe(true);
+    panel.RequestSwitchToDefaultLayoutMode();
+    expect(panel.ShowDefaultLayoutSwitchConfirm).toBe(true);
+    expect(panel.IsCreatingNamedView).toBe(true);
+
+    panel.SwitchToDefaultLayoutMode();
+    expect(panel.ShowDefaultLayoutSwitchConfirm).toBe(false);
+    expect(panel.IsCreatingNamedView).toBe(false);
+  });
+
+  it('supports ArrowDown, ArrowUp, Enter, and Escape keyboard navigation across Sort, Base View, and Timeline Date dropdowns', () => {
+    const panel = makePanel();
+    const abvList = [
+      { ID: 'abv-1', Name: 'Active', EffectiveDisplayName: 'Active Only', ViewName: 'vwAccountsActive', Status: 'Active', IsUsable: true, IsDeprecated: false },
+    ];
+    panel.Entity = {
+      ...makeEntity(),
+      BaseView: 'vwAccounts',
+      AlternateBaseViews: abvList,
+      GetAlternateBaseView: (name: string) => abvList.find(v => v.Name.toLowerCase() === name.trim().toLowerCase()),
+    } as unknown as EntityInfo;
+    open(panel);
+
+    const makeKeyEvent = (key: string) => ({
+      key,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    } as unknown as KeyboardEvent);
+
+    // 1. Sort dropdown keyboard navigation
+    panel.AddSortLevel();
+    panel.ToggleSortFieldDropdown(0);
+    expect(panel.SortHighlightIndex).toBe(0);
+    panel.OnSortSearchKeydown(makeKeyEvent('ArrowDown'), panel.SortItems[0]);
+    expect(panel.SortHighlightIndex).toBe(1);
+    panel.OnSortSearchKeydown(makeKeyEvent('Enter'), panel.SortItems[0]);
+    expect(panel.SortItems[0].field).toBe('Status');
+    expect(panel.OpenSortFieldDropdownIndex).toBeNull();
+
+    // 2. Base View dropdown keyboard navigation
+    expect(panel.AlternateBaseView).toBeNull();
+    panel.OnBaseViewTriggerKeydown(makeKeyEvent('ArrowDown'));
+    expect(panel.IsBaseViewDropdownOpen).toBe(true);
+    expect(panel.AlternateBaseView).toBe('Active');
+    panel.OnBaseViewTriggerKeydown(makeKeyEvent('Enter'));
+    expect(panel.IsBaseViewDropdownOpen).toBe(false);
+    expect(panel.AlternateBaseView).toBe('Active');
+  });
 });

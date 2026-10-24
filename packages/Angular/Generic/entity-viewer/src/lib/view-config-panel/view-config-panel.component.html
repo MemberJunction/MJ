@@ -19,7 +19,7 @@
               class="intent-seg-btn"
               [class.active]="!IsCreatingNamedView"
               [attr.aria-selected]="!IsCreatingNamedView"
-              (click)="SwitchToDefaultLayoutMode()"
+              (click)="RequestSwitchToDefaultLayoutMode()"
               title="Customize your personal default columns, sort, and summaries for this entity">
               <i class="fa-solid fa-sliders"></i>
               <span>Personal Default Layout</span>
@@ -146,7 +146,7 @@
             <button
               type="button"
               class="auto-promoted-undo-btn"
-              (click)="SwitchToDefaultLayoutMode()">
+              (click)="RequestSwitchToDefaultLayoutMode()">
               Clear filter &amp; use Default Layout
             </button>
           </div>
@@ -1334,7 +1334,8 @@
                       [class.open]="OpenSortFieldDropdownIndex === i"
                       [disabled]="!CanEdit"
                       [attr.aria-expanded]="OpenSortFieldDropdownIndex === i"
-                      (click)="ToggleSortFieldDropdown(i, $event)">
+                      (click)="ToggleSortFieldDropdown(i, $event)"
+                      (keydown)="OnSortTriggerKeydown($event, sortItem, i)">
                       <span class="sort-field-trigger-main">
                         <span class="sort-field-trigger-name">{{ GetFieldDisplayName(sortItem.field) }}</span>
                         @if (IsAdvancedMode && GetSortFieldInfo(sortItem.field)?.Type) {
@@ -1356,17 +1357,20 @@
                             class="sort-field-search-input"
                             placeholder="Search fields by name or description..."
                             [(ngModel)]="SortFieldSearchText"
-                            (keydown)="OnSortSearchKeydown($event)"
+                            (ngModelChange)="SortHighlightIndex = 0"
+                            (keydown)="OnSortSearchKeydown($event, sortItem)"
                           />
                         </div>
                         <div class="sort-field-options-list" role="listbox">
-                          @for (field of GetFilteredSortableFields(sortItem); track field.ID) {
+                          @for (field of GetFilteredSortableFields(sortItem); track field.ID; let optIdx = $index) {
                             <button
                               type="button"
                               class="sort-field-option"
                               role="option"
                               [class.selected]="sortItem.field === field.Name"
+                              [class.highlighted]="optIdx === SortHighlightIndex"
                               [attr.aria-selected]="sortItem.field === field.Name"
+                              (mouseenter)="SortHighlightIndex = optIdx"
                               (click)="SelectSortField(sortItem, field.Name, $event)">
                               <div class="sort-field-option-header">
                                 <span class="sort-field-option-name">{{ field.DisplayNameOrName }}</span>
@@ -1957,7 +1961,8 @@
                       [class.open]="IsTimelineDateDropdownOpen"
                       [disabled]="!CanEdit"
                       [attr.aria-expanded]="IsTimelineDateDropdownOpen"
-                      (click)="ToggleTimelineDateDropdown($event)">
+                      (click)="ToggleTimelineDateDropdown($event)"
+                      (keydown)="OnTimelineDateTriggerKeydown($event)">
                       <span class="timeline-date-trigger-left">
                         <i class="fa-regular fa-calendar"></i>
                         <span class="timeline-date-trigger-name">{{ SelectedTimelineDateFieldLabel }}</span>
@@ -2242,6 +2247,19 @@
   (Cancelled)="OnFilterModeSwitchCancelled()">
 </mj-ev-confirm-dialog>
 
+<!-- Default Layout Mode Switch Confirmation Dialog -->
+<mj-ev-confirm-dialog
+  [IsOpen]="ShowDefaultLayoutSwitchConfirm"
+  Title="Switch to Personal Default Layout"
+  Message="Switching to Personal Default Layout will clear your active filter, custom SQL WHERE clause, and alternate base view selection."
+  DetailMessage="Personal default layouts store columns, sorting, and summaries for your (Default) view without record filtering."
+  ConfirmText="Clear & Use Default Layout"
+  ConfirmStyle="primary"
+  Icon="fa-solid fa-sliders"
+  (Confirmed)="OnDefaultLayoutSwitchConfirmed()"
+  (Cancelled)="OnDefaultLayoutSwitchCancelled()">
+</mj-ev-confirm-dialog>
+
 <!-- Reusable Custom Alternate Base View Dropdown -->
 <ng-template #baseViewSelector>
   <div class="abv-custom-select" [class.open]="IsBaseViewDropdownOpen" [class.disabled]="!CanEdit">
@@ -2254,7 +2272,8 @@
       [disabled]="!CanEdit"
       [attr.aria-expanded]="IsBaseViewDropdownOpen"
       aria-haspopup="listbox"
-      (click)="ToggleBaseViewDropdown($event)">
+      (click)="ToggleBaseViewDropdown($event)"
+      (keydown)="OnBaseViewTriggerKeydown($event)">
       <div class="abv-trigger-main">
         <div class="abv-trigger-icon" [class.active]="!!AlternateBaseView && !IsCurrentAlternateBaseViewUnavailable" [class.warning]="IsCurrentAlternateBaseViewUnavailable">
           @if (IsCurrentAlternateBaseViewUnavailable) {

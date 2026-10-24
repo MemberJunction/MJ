@@ -166,9 +166,9 @@ MemberJunction provides several complementary view and filtering primitives. Use
 
 ---
 
-## Out-of-the-Box Alternate Base Views
+## Out-of-the-Box Alternate Base Views & Domain Reference Patterns
 
-MemberJunction Core ships with **6 canonical Alternate Base Views** out of the box (defined in [`migrations/v6/V202610240805__v6.2.x__Entity_Alternate_Base_Views.sql`](../migrations/v6/V202610240805__v6.2.x__Entity_Alternate_Base_Views.sql) and registered in [`metadata/entities/.alternate-base-views.json`](../metadata/entities/.alternate-base-views.json)), and sections 2–4 below document the companion BizApps patterns (`bizapps-common`, `bizapps-orders`, `bizapps-sales`).
+MemberJunction Core ships with **6 canonical Alternate Base Views** out of the box (defined in [`migrations/v6/V202610240805__v6.2.x__Entity_Alternate_Base_Views.sql`](../migrations/v6/V202610240805__v6.2.x__Entity_Alternate_Base_Views.sql) and registered in [`metadata/entities/.alternate-base-views.json`](../metadata/entities/.alternate-base-views.json)). Sections 2–4 below show reference domain patterns illustrating how downstream applications (`bizapps-common`, `bizapps-orders`, `bizapps-sales`) model domain subsets with Alternate Base Views.
 
 ### 1. MemberJunction Core (`@memberjunction/*` — schema `__mj`)
 
@@ -183,18 +183,18 @@ Defined in [`migrations/v6/V202610240805__v6.2.x__Entity_Alternate_Base_Views.sq
 | `MJ: Scheduled Jobs` | `Active` | `vwScheduledJobsActive` | `NULL` | `Default` | `Status = N'Active'` — excludes `Paused`, `Disabled`, `Pending`, and `Expired` jobs. |
 | `MJ: Scheduled Jobs` | `DueNow` | `vwScheduledJobsDueNow` | `Active` (`vwScheduledJobsActive`) | `Bypass` | Selects from `vwScheduledJobsActive` where `NextRunAt IS NOT NULL AND NextRunAt <= GETUTCDATE()`. Demonstrates two-level `ParentID` derivation and `Bypass` cache policy for wall-clock predicates. |
 
-### 2. BizApps Common (`MemberJunction/bizapps-common` — schema `__mj_BizAppsCommon`)
+### 2. Reference Pattern: BizApps Common (`__mj_BizAppsCommon`)
 
-Registered in `bizapps-common` (`metadata/entities/.alternate-base-views.json`):
+Illustrative CRM/party-model alternate base views:
 
 | Entity | Alternate Base View `Name` | Physical SQL View | `CachePolicy` | Predicate Summary |
 | --- | --- | --- | --- | --- |
 | `MJ_BizApps_Common: People` | `Active` | `vwPeopleActive` | `Default` | `Status = N'Active'` — excludes `Inactive`, `Deceased`, and `Merged` person records across CRM, Orders, Sales, Committees, and Tasks. |
 | `MJ_BizApps_Common: Organizations` | `Active` | `vwOrganizationsActive` | `Default` | `Status = N'Active'` — excludes `Inactive`, `Dissolved`, and `Merged` organization records. |
 
-### 3. BizApps Orders (`MemberJunction/bizapps-orders` — schema `__mj_BizAppsOrders`)
+### 3. Reference Pattern: BizApps Orders (`__mj_BizAppsOrders`)
 
-Registered in `bizapps-orders` (`metadata/entities/.alternate-base-views.json`):
+Illustrative order/commerce alternate base views:
 
 | Entity | Alternate Base View `Name` | Physical SQL View | `CachePolicy` | Predicate Summary |
 | --- | --- | --- | --- | --- |
@@ -202,9 +202,9 @@ Registered in `bizapps-orders` (`metadata/entities/.alternate-base-views.json`):
 | `MJ_BizApps_Orders: Order Headers` | `OpenBalance` | `vwOrderHeadersOpenBalance` | `Default` | `Status = N'Confirmed' AND ISNULL(Balance, 0) > 0` — confirmed orders carrying an unpaid A/R balance for collections, dunning, and open-receivables dashboards. |
 | `MJ_BizApps_Orders: Products` | `Sellable` | `vwProductsSellable` | `Bypass` | `Status = N'Active' AND (AvailableFrom IS NULL OR AvailableFrom <= CAST(GETUTCDATE() AS DATE)) AND (AvailableTo IS NULL OR AvailableTo >= CAST(GETUTCDATE() AS DATE))` — active products currently within their sellable availability window (`Bypass` because the window depends on the UTC date). |
 
-### 4. BizApps Sales (`MemberJunction/bizapps-sales` — schema `__mj_BizAppsSales`)
+### 4. Reference Pattern: BizApps Sales (`__mj_BizAppsSales`)
 
-Registered in `bizapps-sales` (`metadata/entities/.alternate-base-views.json`):
+Illustrative sales-pipeline alternate base view layered on a Layered Base View:
 
 | Entity | Alternate Base View `Name` | Physical SQL View | `CachePolicy` | Predicate Summary |
 | --- | --- | --- | --- | --- |

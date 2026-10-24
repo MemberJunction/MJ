@@ -336,6 +336,8 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   // Custom Alternate Base View & Timeline Date Field dropdown state
   public IsBaseViewDropdownOpen: boolean = false;
   public IsTimelineDateDropdownOpen: boolean = false;
+  public SortHighlightIndex: number = 0;
+  public ShowDefaultLayoutSwitchConfirm: boolean = false;
 
   // Full-screen Studio state (always full-screen takeover)
   public IsFullScreen: boolean = true;
@@ -1004,6 +1006,40 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   /**
+   * Keyboard navigation (ArrowDown / ArrowUp / Enter / Escape) for the Timeline Date Axis Field trigger
+   */
+  OnTimelineDateTriggerKeydown(event: KeyboardEvent): void {
+    if (!this.CanEdit) return;
+    const fields = this.AvailableDateFields;
+    if (fields.length === 0) return;
+    if (event.key === 'Escape' && this.IsTimelineDateDropdownOpen) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.IsTimelineDateDropdownOpen = false;
+      this.cdr.detectChanges();
+      return;
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      event.stopPropagation();
+      this.IsTimelineDateDropdownOpen = true;
+      const idx = fields.findIndex(f => f.Name === this.TimelineDateField);
+      const nextIdx = event.key === 'ArrowDown'
+        ? Math.min(fields.length - 1, idx + 1)
+        : Math.max(0, (idx < 0 ? 0 : idx) - 1);
+      this.TimelineDateField = fields[nextIdx].Name;
+      this.cdr.detectChanges();
+      return;
+    }
+    if (event.key === 'Enter' && this.IsTimelineDateDropdownOpen) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.IsTimelineDateDropdownOpen = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
    * Set Grid Row Density preference
    */
   SetGridRowHeight(density: 'compact' | 'normal' | 'comfortable'): void {
@@ -1108,10 +1144,41 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   /**
+   * Request switching from "Save as New Named View" back to "Personal Default Layout" mode.
+   * When active filter rules, a Smart Filter prompt, an Alternate Base View, or Custom SQL WHERE
+   * would be discarded, prompts the user for confirmation first.
+   */
+  RequestSwitchToDefaultLayoutMode(): void {
+    if (this.HasActiveFilterOrBaseView) {
+      this.ShowDefaultLayoutSwitchConfirm = true;
+      this.cdr.detectChanges();
+      return;
+    }
+    this.SwitchToDefaultLayoutMode();
+  }
+
+  /**
+   * Confirm discarding filter/base-view settings and switching to Personal Default Layout mode.
+   */
+  OnDefaultLayoutSwitchConfirmed(): void {
+    this.ShowDefaultLayoutSwitchConfirm = false;
+    this.SwitchToDefaultLayoutMode();
+  }
+
+  /**
+   * Cancel switching to Personal Default Layout mode.
+   */
+  OnDefaultLayoutSwitchCancelled(): void {
+    this.ShowDefaultLayoutSwitchConfirm = false;
+    this.cdr.detectChanges();
+  }
+
+  /**
    * Switch from "Save as New Named View" back to "Personal Default Layout" mode.
    * Clears any filter or alternate base view that forced named-view promotion.
    */
   SwitchToDefaultLayoutMode(): void {
+    this.ShowDefaultLayoutSwitchConfirm = false;
     this.IsCreatingNewView = false;
     this.IsSaveAsNewFlow = false;
     this.SmartFilterPrompt = '';
@@ -1272,6 +1339,45 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       this.ViewName = this.BuildSuggestedViewName();
     }
     this.cdr.detectChanges();
+  }
+
+  /**
+   * Keyboard navigation (ArrowDown / ArrowUp / Enter / Escape) for the Alternate Base View trigger
+   */
+  OnBaseViewTriggerKeydown(event: KeyboardEvent): void {
+    if (!this.CanEdit) return;
+    const options: Array<string | null> = [
+      null,
+      ...this.AvailableAlternateBaseViews.map(v => v.Name)
+    ];
+    if (event.key === 'Escape' && this.IsBaseViewDropdownOpen) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.IsBaseViewDropdownOpen = false;
+      this.cdr.detectChanges();
+      return;
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      event.stopPropagation();
+      this.IsBaseViewDropdownOpen = true;
+      const currentIdx = options.findIndex(opt => this.IsAlternateBaseViewSelected(opt));
+      const nextIdx = event.key === 'ArrowDown'
+        ? Math.min(options.length - 1, (currentIdx < 0 ? 0 : currentIdx) + 1)
+        : Math.max(0, (currentIdx < 0 ? 0 : currentIdx) - 1);
+      this.AlternateBaseView = options[nextIdx];
+      if (!this.ViewEntity && this.AlternateBaseView && !this.ViewName.trim()) {
+        this.ViewName = this.BuildSuggestedViewName();
+      }
+      this.cdr.detectChanges();
+      return;
+    }
+    if (event.key === 'Enter' && this.IsBaseViewDropdownOpen) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.IsBaseViewDropdownOpen = false;
+      this.cdr.detectChanges();
+    }
   }
 
   /**
@@ -1589,6 +1695,10 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     } else {
       this.OpenSortFieldDropdownIndex = index;
       this.SortFieldSearchText = '';
+      const currentItem = this.SortItems[index];
+      const available = currentItem ? this.GetAvailableFieldsForSort(currentItem) : [];
+      const selectedIdx = currentItem ? available.findIndex(f => f.Name === currentItem.field) : -1;
+      this.SortHighlightIndex = selectedIdx >= 0 ? selectedIdx : 0;
       // Determine whether the dropdown should open upward when near bottom of viewport
       const triggerEl = (event?.currentTarget as HTMLElement | null);
       if (triggerEl && typeof window !== 'undefined') {
@@ -1634,11 +1744,57 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   /**
-   * Prevent Escape/Enter in the sort field search input from bubbling to form/dialog handlers
+   * Handle keyboard navigation (ArrowDown / ArrowUp / Enter / Escape) in the sort field search input
    */
-  OnSortSearchKeydown(event: KeyboardEvent): void {
+  OnSortSearchKeydown(event: KeyboardEvent, sortItem?: SortItem): void {
     event.stopPropagation();
     if (event.key === 'Escape') {
+      event.preventDefault();
+      this.OpenSortFieldDropdownIndex = null;
+      this.SortFieldSearchText = '';
+      this.cdr.detectChanges();
+      return;
+    }
+    const targetItem = sortItem ?? (this.OpenSortFieldDropdownIndex !== null ? this.SortItems[this.OpenSortFieldDropdownIndex] : undefined);
+    if (!targetItem) return;
+    const filtered = this.GetFilteredSortableFields(targetItem);
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      if (filtered.length > 0) {
+        this.SortHighlightIndex = Math.min(this.SortHighlightIndex + 1, filtered.length - 1);
+        this.cdr.detectChanges();
+      }
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (filtered.length > 0) {
+        this.SortHighlightIndex = Math.max(0, this.SortHighlightIndex - 1);
+        this.cdr.detectChanges();
+      }
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      const idx = Math.min(this.SortHighlightIndex, Math.max(0, filtered.length - 1));
+      const pick = filtered[idx];
+      if (pick) {
+        this.SelectSortField(targetItem, pick.Name);
+      }
+    }
+  }
+
+  /**
+   * Handle keyboard navigation on the sort field trigger button
+   */
+  OnSortTriggerKeydown(event: KeyboardEvent, sortItem: SortItem, index: number): void {
+    if (!this.CanEdit) return;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (this.OpenSortFieldDropdownIndex !== index) {
+        this.ToggleSortFieldDropdown(index);
+      } else {
+        this.OnSortSearchKeydown(event, sortItem);
+      }
+    } else if (event.key === 'Escape' && this.OpenSortFieldDropdownIndex === index) {
+      event.preventDefault();
+      event.stopPropagation();
       this.OpenSortFieldDropdownIndex = null;
       this.SortFieldSearchText = '';
       this.cdr.detectChanges();
@@ -2466,9 +2622,6 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     if (this.GetFilterCount() > 0) {
       return this.CompileFilterStateToSqlWhere(this.FilterState);
     }
-    if (this.countFilters(this.savedTraditionalFilter) > 0) {
-      return this.CompileFilterStateToSqlWhere(this.savedTraditionalFilter);
-    }
     if (this.ViewEntity?.SmartFilterWhereClause) {
       return this.ViewEntity.SmartFilterWhereClause;
     }
@@ -2505,8 +2658,8 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     if (this.CustomWhereClause) {
       return 'Custom SQL Override (Editable)';
     }
-    if (!this.SmartFilterEnabled && (this.GetFilterCount() > 0 || this.countFilters(this.savedTraditionalFilter) > 0)) {
-      const count = this.GetFilterCount() || this.countFilters(this.savedTraditionalFilter);
+    if (!this.SmartFilterEnabled && this.GetFilterCount() > 0) {
+      const count = this.GetFilterCount();
       return `Generated from Rule Builder (${count} rule${count !== 1 ? 's' : ''} · Read-Only)`;
     }
     if (this.ViewEntity?.SmartFilterWhereClause || (this.SmartFilterPrompt.trim() || this.savedSmartFilterPrompt.trim())) {
@@ -2520,16 +2673,14 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    */
   OnToggleCustomWhereOverride(enabled: boolean): void {
     if (!this.CanEdit) return;
+    // Capture generated SQL from the currently active filter mode BEFORE clearing SmartFilterEnabled
+    const generated = enabled && !this.WhereClause.trim() ? this.GeneratedSqlWhereClause : '';
     this.CustomWhereClause = enabled;
     if (enabled) {
       this.FilterMode = 'sql';
       this.SmartFilterEnabled = false;
-      // Seed WhereClause from the generated Rule Builder / Smart Filter SQL if WhereClause is empty or still equal to previous generated SQL
-      if (!this.WhereClause.trim()) {
-        const generated = this.GeneratedSqlWhereClause;
-        if (generated) {
-          this.WhereClause = generated;
-        }
+      if (!this.WhereClause.trim() && generated) {
+        this.WhereClause = generated;
       }
       if (!this.ViewEntity && this.WhereClause.trim() && !this.ViewName.trim()) {
         this.ViewName = this.BuildSuggestedViewName();

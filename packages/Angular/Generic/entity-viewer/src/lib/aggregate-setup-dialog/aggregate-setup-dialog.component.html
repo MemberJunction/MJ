@@ -111,7 +111,8 @@
                 class="agg-column-trigger"
                 [class.open]="IsColumnDropdownOpen"
                 [attr.aria-expanded]="IsColumnDropdownOpen"
-                (click)="ToggleColumnDropdown($event)">
+                (click)="ToggleColumnDropdown($event)"
+                (keydown)="OnColumnTriggerKeydown($event)">
                 <span class="agg-column-trigger-left">
                   <i [class]="!SelectedColumn && SelectedFunction === 'COUNT' ? 'fa-solid fa-layer-group' : 'fa-solid fa-table-columns'"></i>
                   <span class="agg-column-trigger-name">{{ SelectedColumnDisplayLabel }}</span>
@@ -131,6 +132,7 @@
                       class="agg-column-search-input"
                       placeholder="Search fields by name or description..."
                       [(ngModel)]="ColumnSearchText"
+                      (ngModelChange)="ColumnHighlightIndex = 0"
                       (keydown)="OnColumnSearchKeydown($event)"
                     />
                   </div>

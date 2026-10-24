@@ -101,6 +101,7 @@
   gap: 24px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   position: relative;
+  z-index: 2;
 }
 
 .header-left {
@@ -442,10 +443,11 @@
   display: flex;
   flex: 1 1 0%;
   overflow: hidden;
-  /* Stacking context isolation for grid/Leaflet panes now lives on
-     .workspace-body inside mj-view-workspace so that full-screen overlays
-     (mj-view-config-panel, filter/save/duplicate dialogs) hosted inside
-     mj-view-workspace are not trapped at a low z-index. */
+  /* Intentionally no z-index or isolation here: .content-header sits at z-index: 2
+     above normal body content, .dynamic-view-host isolates plug-in renderers such as
+     Leaflet (whose internal controls reach z-index: 1000) at z-index: 1, and full-screen
+     modal overlays (--mj-z-modal) hosted inside mj-view-workspace or mj-entity-data-grid
+     can escape above .content-header without being trapped. */
   position: relative;
 }
 

@@ -388,9 +388,13 @@ export class AggregateSetupDialogComponent implements OnInit, OnChanges {
     this.IsColumnDropdownOpen = !this.IsColumnDropdownOpen;
     if (!this.IsColumnDropdownOpen) {
       this.ColumnSearchText = '';
+    } else {
+      this.ColumnHighlightIndex = 0;
     }
     this.cdr.detectChanges();
   }
+
+  public ColumnHighlightIndex: number = 0;
 
   /**
    * Select a column from the custom searchable dropdown
@@ -404,11 +408,56 @@ export class AggregateSetupDialogComponent implements OnInit, OnChanges {
   }
 
   /**
-   * Handle Escape key inside column search input
+   * Handle keyboard navigation (ArrowDown / ArrowUp / Enter / Escape) inside column search input
    */
   OnColumnSearchKeydown(event: KeyboardEvent): void {
     event.stopPropagation();
     if (event.key === 'Escape') {
+      event.preventDefault();
+      this.IsColumnDropdownOpen = false;
+      this.ColumnSearchText = '';
+      this.cdr.detectChanges();
+      return;
+    }
+    const options: string[] = [
+      ...(this.SelectedFunction === 'COUNT' ? [''] : []),
+      ...this.FilteredAvailableFields.map(f => f.Name)
+    ];
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      if (options.length > 0) {
+        this.ColumnHighlightIndex = Math.min(this.ColumnHighlightIndex + 1, options.length - 1);
+        this.cdr.detectChanges();
+      }
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (options.length > 0) {
+        this.ColumnHighlightIndex = Math.max(0, this.ColumnHighlightIndex - 1);
+        this.cdr.detectChanges();
+      }
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      const idx = Math.min(this.ColumnHighlightIndex, Math.max(0, options.length - 1));
+      if (idx < options.length) {
+        this.SelectColumnFromDropdown(options[idx]);
+      }
+    }
+  }
+
+  /**
+   * Handle keyboard navigation on the aggregate target field trigger button
+   */
+  OnColumnTriggerKeydown(event: KeyboardEvent): void {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (!this.IsColumnDropdownOpen) {
+        this.ToggleColumnDropdown();
+      } else {
+        this.OnColumnSearchKeydown(event);
+      }
+    } else if (event.key === 'Escape' && this.IsColumnDropdownOpen) {
+      event.preventDefault();
+      event.stopPropagation();
       this.IsColumnDropdownOpen = false;
       this.ColumnSearchText = '';
       this.cdr.detectChanges();
