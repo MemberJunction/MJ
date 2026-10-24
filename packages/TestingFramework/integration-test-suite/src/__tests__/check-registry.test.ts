@@ -24,6 +24,8 @@ import { RemoteOpWireProgressChecks } from '../checks/remote-op-wire-progress.ch
 import { PromptRunnerChecks } from '../checks/prompt-runner.checks';
 import { AiVendorEffortChecks } from '../checks/ai-vendor-effort.checks';
 import { NativeToolCallingLiveChecks } from '../checks/native-tool-calling-live.checks';
+import { NativeToolLoopChecks } from '../checks/native-tool-loop.checks';
+import { NativeToolLoopLiveChecks } from '../checks/native-tool-loop-live.checks';
 import { ConcurrentChecks } from '../checks/concurrent.checks';
 import { AgentRunnerChecks } from '../checks/agent-runner.checks';
 import { RemoteOpAiAuthoringChecks } from '../checks/remote-op-ai-authoring.checks';
@@ -66,6 +68,8 @@ import { EntityEmbeddedChecks } from '../checks/entity-embedded.checks';
 import { EntityGraphClientChecks } from '../checks/entity-graph-client.checks';
 import { JSONTypeLiveSyncChecks, JSONTypeLiveSyncClientChecks } from '../checks/jsontype-live-sync.checks';
 import { SelfAvatarClientChecks } from '../checks/self-avatar-client.checks';
+import { ViewPropertiesClientChecks } from '../checks/view-properties-client.checks';
+import { CalendarEventLinksChecks } from '../checks/calendar-event-links.checks';
 import { ConversationAuthorshipClientChecks } from '../checks/conversation-authorship-client.checks';
 import { RecordCloningChecks } from '../checks/record-cloning.checks';
 import { BinaryFieldsChecks } from '../checks/binary-fields.checks';
@@ -149,6 +153,8 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['prompt-runner', PromptRunnerChecks, 1],
         ['ai-vendor-effort', AiVendorEffortChecks, 2],
         ['native-tool-calling-live', NativeToolCallingLiveChecks, 4],
+        ['native-tool-loop', NativeToolLoopChecks, 13],
+        ['native-tool-loop-live', NativeToolLoopLiveChecks, 3],
         ['concurrent', ConcurrentChecks, 2],
         ['agent-runner', AgentRunnerChecks, 1],
         ['remote-op-ai-authoring', RemoteOpAiAuthoringChecks, 3],
@@ -204,7 +210,9 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT91)
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
         ['self-avatar-client', SelfAvatarClientChecks, 6], // AV1-AV6 self-service avatar mutation over the wire via per-user API keys (IT106)
-        ['conversation-authorship-client', ConversationAuthorshipClientChecks, 10], // CA1-CA10 who a conversation message is from, owner + Edit grantee over the wire via per-user API keys; CA7-CA10 are the bypasses: forged OldValues___, transaction variables, role casing, moving a message (IT115)
+        ['view-properties-client', ViewPropertiesClientChecks, 5], // VP1-VP5 User View properties over the wire: values, locked refusal, token default, RLS on top, cache keying (IT136)
+        ['calendar-event-links', CalendarEventLinksChecks, 2], // CL1 UI role over GraphQL reads but cannot create; CL2 links, sync with a moved time and an RSVP, resync on a refused token, cancel (IT127)
+        ['conversation-authorship-client', ConversationAuthorshipClientChecks, 12], // CA1-CA12 who a conversation message is from, owner + Edit grantee over the wire via per-user API keys; CA7-CA10 are the bypasses: forged OldValues___, transaction variables, role casing, moving a message; CA11-CA12 only the server writes agent replies (IT115)
         ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)
         ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
         ['binary-fields', BinaryFieldsChecks, 6], // BF1-BF6 binary fields end to end + binary vector columns, client transport (IT101)
@@ -266,7 +274,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-decisions-switch': 9,
         'agent-external-harness': 7,
         'agent-loop-live': 7,
-        'agent-loop-standin': 11,
+        'agent-loop-standin': 14,
         'agent-memory-guards': 5,
         'agent-note-cache-types': 5,
         'agent-payload-guards': 9,
@@ -293,6 +301,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'cache-architecture': 11,
         'cache-gauntlet': 8,
         'cache-immutability': 15,
+        'calendar-event-links': 2,
         'class-resolution': 5,
         'client-cache': 14,
         'cloudflare-clef': 6,
@@ -300,7 +309,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'communication': 5,
         'concurrent': 2,
         'content-vectorization': 10,
-        'conversation-authorship-client': 10,
+        'conversation-authorship-client': 12,
         'conversation-compaction': 23,
         'dataset-cache': 4,
         'entity-actions': 8,
@@ -332,6 +341,8 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'metadata-sync-push': 10,
         'metadata-sync': 9,
         'native-tool-calling-live': 4,
+        'native-tool-loop': 13,
+        'native-tool-loop-live': 3,
         'nested-transactions': 11,
         'open-app-teardown': 2,
         'performance-benchmark': 14,
@@ -340,8 +351,9 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'predictive-studio': 5,
         'prompt-eval-harness': 7,
         'prompt-runner': 1,
+        'query-approvals': 5,
         'queue': 7,
-        'realtime-deterministic': 18,
+        'realtime-deterministic': 20,
         'realtime-session-guard': 2,
         'realtime-session-verification': 6,
         'record-cloning': 13,
@@ -387,6 +399,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'user-elevation': 4,
         'user-routines': 16,
         'view-execution': 12,
+        'view-properties-client': 5,
         'view-security': 4,
         'work-queue-runtime': 19,
         'workflow-demo-agents': 5,
@@ -413,7 +426,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(131);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(136);
     });
 });
 
@@ -487,6 +500,8 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'content-vectorization.CV9',
         'conversation-authorship-client.CA1',
         'conversation-authorship-client.CA10',
+        'conversation-authorship-client.CA11',
+        'conversation-authorship-client.CA12',
         'conversation-authorship-client.CA2',
         'conversation-authorship-client.CA3',
         'conversation-authorship-client.CA4',
@@ -768,6 +783,9 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'native-tool-calling-live.NTC2',
         'native-tool-calling-live.NTC3',
         'native-tool-calling-live.NTC4',
+        'native-tool-loop-live.NTLL1',
+        'native-tool-loop-live.NTLL2',
+        'native-tool-loop-live.NTLL3',
         'performance-benchmark.PB10',
         'performance-benchmark.PB11',
         'performance-benchmark.PB12',

@@ -34,6 +34,8 @@ export * from './checks/agent-prompt-cancellation.checks';
 export * from './checks/prompt-runner.checks';
 export * from './checks/ai-vendor-effort.checks';
 export * from './checks/native-tool-calling-live.checks';
+export * from './checks/native-tool-loop.checks';
+export * from './checks/native-tool-loop-live.checks';
 export * from './checks/record-process-facade.checks';
 export * from './checks/entity-actions.checks';
 export * from './checks/task-graph-execution.checks';
@@ -48,6 +50,7 @@ export * from './checks/fls-enforcement.checks';
 export * from './checks/fls-lifecycle.checks';
 export * from './checks/fls-client.checks';
 export * from './checks/self-avatar-client.checks';
+export * from './checks/view-properties-client.checks';
 export * from './checks/conversation-authorship-client.checks';
 export * from './checks/keyrowfilter.checks'; // KF1–KF6: registers into the 'rls-isolation' bundle AFTER RLS1–RLS10 (order matters for GetBundle parity)
 export * from './checks/rolerowfilter.checks'; // RF1–RF3: registers into the 'rls-isolation' bundle AFTER KF1–KF6
@@ -66,6 +69,8 @@ export * from './checks/runquery-params.checks';
 export * from './checks/runquery-features.checks';
 export * from './checks/runquery-rendering.checks';
 export * from './checks/runquery-rendering-client.checks';
+export * from './checks/query-approvals.checks';
+export * from './checks/calendar-event-links.checks';
 export * from './checks/scope-enforcement.checks';
 export * from './checks/subscription-isolation.checks';
 export * from './checks/templates.checks';

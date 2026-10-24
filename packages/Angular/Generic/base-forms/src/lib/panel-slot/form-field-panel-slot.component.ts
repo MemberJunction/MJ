@@ -78,7 +78,10 @@ export class FormFieldPanelSlotComponent implements OnInit, OnChanges, OnDestroy
 
     public ngOnInit(): void {
         this.recordRefresh?.Refreshed$.pipe(takeUntil(this.destroy$)).subscribe((record) => {
-            for (const ref of this.mounted) ref.instance.OnRecordRefreshed(record);
+            for (const ref of this.mounted) {
+                ref.instance.OnRecordRefreshed(record);
+                ref.changeDetectorRef.detectChanges();
+            }
         });
         // The engine's subject replays the current rows on subscribe, which ngOnChanges has
         // already mounted.

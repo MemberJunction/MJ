@@ -14,10 +14,157 @@ import {
     type LLMOneShotCallback,
 } from '@memberjunction/integration-pk-classifier';
 import { BaseIntegrationConnector, type ExternalObjectSchema, type ExternalFieldSchema } from './BaseIntegrationConnector.js';
-import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
-import { IntegrationSchemaSync, type PersistSchemaResult } from './IntegrationSchemaSync.js';
-import type { IntrospectSchemaOptions, SourceObjectInfo } from './types.js';
+import { BuildCatalogWriter, ResolveCatalogSource } from './CatalogSource.js';
+import { LoadCatalogScope, RunInCatalogScope } from './CatalogScope.js';
+import { IntegrationSchemaSync, type PersistSchemaOptions, type PersistSchemaResult } from './IntegrationSchemaSync.js';
+import type { IntrospectSchemaOptions, SourceObjectInfo, SourceSchemaInfo } from './types.js';
 import { MergeDeclaredWithSample } from './DeclaredSampleMerge.js';
+import { getHeapStatistics } from 'node:v8';
+import { totalmem } from 'node:os';
+
+/**
+ * Has the heap reached the point where a long stage must stop taking on new work?
+ *
+ * Pure, so the boundary is testable without arranging real memory pressure — the same reason the
+ * overlay deciders in IntegrationSchemaSync are pure.
+ *
+ * A limit of zero means V8 did not report a ceiling. That must read as "do not stop": a missing
+ * reading is not evidence of pressure, and treating it as pressure would halt sampling everywhere
+ * the statistic is unavailable.
+ *
+ * `minHeadroomBytes` (default 0 = off) also stops when no more than that many bytes remain below
+ * the limit. A heap caller needs it; see {@link HEAP_STOP_MIN_HEADROOM_BYTES}. An RSS caller (limit
+ * = the box) does not pass it.
+ */
+export function ShouldStopSamplingForHeap(
+    usedBytes: number,
+    limitBytes: number,
+    stopFraction: number,
+    minHeadroomBytes = 0,
+): boolean {
+    if (!(limitBytes > 0) || !(stopFraction > 0)) return false;
+    if (usedBytes / limitBytes >= stopFraction) return true;
+    return minHeadroomBytes > 0 && limitBytes - usedBytes <= minHeadroomBytes;
+}
+
+/**
+ * The absolute headroom a HEAP reading must keep, beside its fraction.
+ *
+ * A fraction of `heap_size_limit` alone cannot fire on a small heap. That limit includes a fixed
+ * young-generation reserve (192 MB on Node 20-24, constant across `--max-old-space-size` values)
+ * which live data can never occupy: V8 aborts when the OLD space fills, i.e. at
+ * `heap_size_limit - reserve`. At 0.92 the fractional stop sits ABOVE that line for every old space
+ * under ~2.4 GB (1 GB: 95 MB above; 2 GB: 13 MB above; the ~2 GB ceiling a 4 GB box gets: 16 MB
+ * above), so on such a box the gate could not fire before the abort it exists to prevent. Measured
+ * 2026-09-24 on 888 objects / 97k fields: with the heap pre-filled to 92% of a 4 GB limit the gate
+ * stopped after 25 objects; the same fill at a 1 GB limit aborted V8 before the stage ran.
+ *
+ * 320 MB is the reserve plus 128 MB of old space. Above ~4 GB the 8% margin already exceeds it, so
+ * large workspaces are unaffected.
+ */
+export const HEAP_STOP_MIN_HEADROOM_BYTES = 320 * 1024 * 1024;
+
+/** One reading of the two numbers the two memory ceilings are measured against. */
+export interface MemorySample {
+    /** V8 heap in use, bytes. */
+    HeapUsed: number;
+    /** V8's heap ceiling (`--max-old-space-size`), bytes; 0 when unknown. */
+    HeapLimit: number;
+    /** Resident set of this process, bytes. */
+    RSS: number;
+    /** Physical memory of the box, bytes; 0 when unknown. */
+    TotalMemory: number;
+}
+
+/** The live reading. Cheap enough per object: counters V8 and the OS already maintain. */
+export function ReadMemorySample(): MemorySample {
+    const heap = getHeapStatistics();
+    return {
+        HeapUsed: heap.used_heap_size,
+        HeapLimit: heap.heap_size_limit,
+        RSS: process.memoryUsage().rss,
+        TotalMemory: totalmem(),
+    };
+}
+
+/**
+ * Stop when EITHER ceiling is close. The heap gate alone cannot save a process the kernel kills:
+ * the kernel measures resident memory against the box, V8 measures the heap against its own
+ * limit, and the two diverge — parsed response bodies, driver buffers and heap fragmentation all
+ * sit in RSS outside the live heap, so RSS runs well above it under load. Observed 2026-09-18 and
+ * 2026-09-21 on a 15.7 GB box: node killed at 15.3 GB and 15.6 GB anon-RSS mid-discovery while
+ * the heap was still under its ceiling, so the heap gate never fired. An unknown reading (a
+ * limit or a box size of 0) is not evidence of pressure, as for the heap.
+ *
+ * `heapMinHeadroomBytes` applies to the HEAP reading only (see
+ * {@link HEAP_STOP_MIN_HEADROOM_BYTES}); resident memory is judged against the whole box, where a
+ * fraction is the right measure.
+ */
+export function ShouldStopForMemory(
+    sample: MemorySample,
+    heapStopFraction: number,
+    rssStopFraction: number,
+    heapMinHeadroomBytes = 0,
+): boolean {
+    return ShouldStopSamplingForHeap(sample.HeapUsed, sample.HeapLimit, heapStopFraction, heapMinHeadroomBytes)
+        || ShouldStopSamplingForHeap(sample.RSS, sample.TotalMemory, rssStopFraction);
+}
+
+/** The run-deadline race `runInternal` wraps each stage in. */
+type StageDeadline = <T>(stage: string, work: Promise<T>) => Promise<T>;
+
+/** A persist result with nothing in it yet — the accumulator a streaming persist sums into. */
+function emptyPersistResult(): PersistSchemaResult {
+    return {
+        ObjectsCreated: 0,
+        ObjectsUpdated: 0,
+        FieldsCreated: 0,
+        FieldsUpdated: 0,
+        ObjectMergeLog: [],
+        FieldMergeLog: [],
+        ObjectsDeactivated: [],
+        FieldsDeactivated: [],
+    };
+}
+
+/** Folds one per-object persist into the streaming total. */
+function addPersistResult(total: PersistSchemaResult, part: PersistSchemaResult): void {
+    total.ObjectsCreated += part.ObjectsCreated;
+    total.ObjectsUpdated += part.ObjectsUpdated;
+    total.FieldsCreated += part.FieldsCreated;
+    total.FieldsUpdated += part.FieldsUpdated;
+    total.ObjectMergeLog.push(...part.ObjectMergeLog);
+    total.FieldMergeLog.push(...part.FieldMergeLog);
+    total.ObjectsDeactivated.push(...part.ObjectsDeactivated);
+    total.FieldsDeactivated.push(...part.FieldsDeactivated);
+}
+
+/**
+ * A name-only object for the final pass of a streamed persist, which exists to tell the absent-
+ * object retirement which objects the source still has. It must carry NO opinion: the persist
+ * overlay treats any non-empty label or description as the source's, so a stub labelled with its
+ * own name would overwrite every stored DisplayName with the raw object name. An empty label is
+ * silence to the overlay, and a row that is somehow new still gets its name as display name.
+ */
+function nameStub(externalName: string): SourceObjectInfo {
+    return { ExternalName: externalName, ExternalLabel: '', Fields: [], PrimaryKeyFields: [], Relationships: [] };
+}
+
+/**
+ * Runs the work it is handed one item at a time, in arrival order, however many callers hand work
+ * in at once. A failure belongs to the caller that handed it in; it never stalls the next one.
+ */
+function serialQueue(): <T>(work: () => Promise<T>) => Promise<T> {
+    let tail: Promise<void> = Promise.resolve();
+    return <T>(work: () => Promise<T>): Promise<T> => {
+        const run = tail.then(work);
+        tail = run.then(() => undefined, () => undefined);
+        return run;
+    };
+}
+
+/** How many field names a `pk.classifier.result` event carries — enough to read, bounded for a wide object. */
+const PK_VERDICT_FIELD_NAMES = 12;
 
 /** Options for the creation/refresh pipeline run. */
 export interface ConnectorCreationPipelineOptions {
@@ -60,7 +207,15 @@ export interface ConnectorCreationPipelineOptions {
      */
     DeactivateAbsent?: boolean;
     /**
-     * Hard ceiling for the WHOLE run. Default {@link DEFAULT_RUN_DEADLINE_MS}; 0 disables it.
+     * Hard ceiling for the WHOLE run. `0` disables it.
+     *
+     * Resolution order — explicit argument, then the connection's own
+     * `Configuration.runDeadlineMs`, then `MJ_INTEGRATION_RUN_DEADLINE_MS`, then
+     * {@link DEFAULT_RUN_DEADLINE_MS}. Every other discovery bound
+     * (`discoveryTimeBudgetMs`, `discoveryBatchSize`, `discoveryMaxRecords`) is already settable per
+     * connection; this one — the OUTERMOST bound, the only one that can fail a whole run — was not,
+     * so the sole way to change it was editing the constant and redeploying. A 5-object connector and
+     * an 888-object one are not the same workload and should not share a hardcoded ceiling.
      *
      * Every other budget in this system bounds something INSIDE a stage, and none of them can preempt
      * an `await` that never settles. A connector's `outOfTime()` is only checked BETWEEN requests; an
@@ -153,11 +308,59 @@ export class IntegrationConnectorCreationPipeline {
      */
     private static readonly IN_FLIGHT_MAX_AGE_MS = 20 * 60_000;
     /**
-     * Default whole-run ceiling. Deliberately far above any healthy run — the reference Totara run
-     * completes in under four minutes and a large Salesforce-backed catalog in tens — so this only ever
-     * fires on work that has genuinely stopped, never on work that is merely big.
+     * Default whole-run ceiling, deliberately enormous: it exists ONLY to release a run that has hung
+     * forever, never to bound work that is merely big. At 45 minutes it did the latter — an 888-object
+     * catalog was failed at object 336, and because the failure precedes Persist, everything
+     * introspected up to then was discarded. A connection that wants a tighter bound sets
+     * `Configuration.runDeadlineMs`; the environment can set `MJ_INTEGRATION_RUN_DEADLINE_MS`.
      */
-    private static readonly DEFAULT_RUN_DEADLINE_MS = 45 * 60_000;
+    private static readonly DEFAULT_RUN_DEADLINE_MS = 12 * 60 * 60_000;
+
+    /**
+     * Resolves the whole-run ceiling: explicit argument → the connection's `Configuration.runDeadlineMs`
+     * → `MJ_INTEGRATION_RUN_DEADLINE_MS` → {@link DEFAULT_RUN_DEADLINE_MS}.
+     *
+     * `0` is a MEANINGFUL value here (it disables the ceiling), which is why this does not reuse the
+     * positive-only reader the inner discovery knobs share — that one treats 0 as absent and would make
+     * "no ceiling" unexpressible. Negatives and non-numerics are rejected rather than honoured, so a
+     * malformed Configuration falls through to the next source instead of disabling the one mechanism
+     * that rescues a run stuck in-flight forever.
+     */
+    private static resolveRunDeadlineMs(opts: ConnectorCreationPipelineOptions): number {
+        const valid = (v: unknown): number | undefined =>
+            typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : undefined;
+
+        const explicit = valid(opts.RunDeadlineMs);
+        if (explicit != null) return explicit;
+
+        let fromConfig: number | undefined;
+        try {
+            const raw = opts.CompanyIntegration?.Configuration;
+            if (raw) fromConfig = valid((JSON.parse(raw) as Record<string, unknown>).runDeadlineMs);
+        } catch { /* malformed Configuration → fall through to env/default */ }
+        if (fromConfig != null) return fromConfig;
+
+        const fromEnv = Number.parseInt(process.env.MJ_INTEGRATION_RUN_DEADLINE_MS ?? '', 10);
+        if (Number.isFinite(fromEnv) && fromEnv >= 0) return fromEnv;
+
+        return IntegrationConnectorCreationPipeline.DEFAULT_RUN_DEADLINE_MS;
+    }
+    /**
+     * Heap fraction past which Introspect stops taking on NEW sampling work.
+     *
+     * Higher than a warning threshold on purpose. A warning exists to fire while there is still
+     * room to act; this is the last exit before V8 gives up, and past it the next large allocation
+     * is as likely to abort the process as to succeed. 0.92 leaves roughly the cost of one more
+     * object's sample plus the persist that follows — enough to land what has already been
+     * gathered, which is the entire point of stopping rather than being stopped.
+     */
+    private static readonly HEAP_STOP_FRACTION = 0.92;
+    /**
+     * Resident-set fraction of the box's memory past which the two long stages stop. Lower than
+     * the heap fraction on purpose: the box is shared with everything else that runs on it, and
+     * the kernel does not warn first. See ShouldStopForMemory.
+     */
+    private static readonly RSS_STOP_FRACTION = 0.80;
     /** Just-completed runs by CompanyIntegrationID — coalesces a *sequential* duplicate within the window. */
     private static readonly recentRuns = new Map<string, { result: ConnectorCreationPipelineResult; at: number }>();
     /** Default coalesce window (ms) when the env override is unset/invalid. */
@@ -192,8 +395,23 @@ export class IntegrationConnectorCreationPipeline {
      * is indistinguishable from "the run hasn't opened its stream yet". So whenever a caller supplied
      * a `RunID` and coalescing served a different run, we publish a terminal ALIAS run under the
      * requested ID pointing at the run that actually did the work. See {@link honourRequestedRunID}.
+     *
+     * CATALOG SCOPE. Every read a discovery makes — the connector's GetCachedObject/GetCachedFields during
+     * sampling, the dependency graph, the excluded-field resolution — happens with THIS connection
+     * in catalog scope. Scope-aware getters answer from the connection's own rows once it has any
+     * and fall back to the shared declared rows until then, so a first discovery still sees the
+     * connector's declared floor and a re-discovery sees what this connection found last time,
+     * not what some other connection of the same connector found.
      */
     public async Run(opts: ConnectorCreationPipelineOptions): Promise<ConnectorCreationPipelineResult> {
+        // Entered SYNCHRONOUSLY. The de-dup below registers this run before the caller's next
+        // statement, which is what lets a concurrent duplicate find it; awaiting the catalog load
+        // first would open a window in which both callers start a run. The connection's catalog is
+        // loaded inside the run instead (runInternal), where a failed read is a failed run.
+        return RunInCatalogScope(opts.CompanyIntegration?.ID ?? '', () => this.runWithDedup(opts));
+    }
+
+    private async runWithDedup(opts: ConnectorCreationPipelineOptions): Promise<ConnectorCreationPipelineResult> {
         const ciID = opts.CompanyIntegration?.ID;
         if (!ciID) return this.runInternal(opts); // no key to de-dup on — run directly
 
@@ -357,8 +575,8 @@ export class IntegrationConnectorCreationPipeline {
         // THE RUN MUST END. Raced rather than awaited: a stage that never settles cannot be cancelled,
         // but it can be stopped being waited on — which is the difference between a run that fails and
         // one that is in-flight forever. See RunDeadlineMs.
-        const deadlineMs = opts.RunDeadlineMs ?? IntegrationConnectorCreationPipeline.DEFAULT_RUN_DEADLINE_MS;
-        // The default is 45min, but RunDeadlineMs is a public knob and a caller may set seconds — in
+        const deadlineMs = IntegrationConnectorCreationPipeline.resolveRunDeadlineMs(opts);
+        // The ceiling is configurable and a caller (or a connection) may set seconds — in
         // which case rounding to minutes reported the failure as a "deadline of 0min", which reads as
         // a bug in the pipeline rather than the limit the caller actually asked for.
         const deadlineLabel = deadlineMs >= 60_000
@@ -389,9 +607,13 @@ export class IntegrationConnectorCreationPipeline {
         };
 
         try {
+            // The connection's own catalog is no longer resident (MJ-RUN-43): load its objects and
+            // dependency edges into the scope before any stage reads them synchronously.
+            await LoadCatalogScope(opts.CompanyIntegration.ID, opts.ContextUser);
             await withDeadline('ConnectionTest', this.stageConnectionTest(emitter, opts));
-            const sourceSchema = await withDeadline('Introspect', this.stageIntrospect(emitter, opts));
-            const persistResult = await withDeadline('Persist', this.stagePersist(emitter, opts, sourceSchema));
+            // Introspect + Persist as ONE traversal of the source when the connector can stream;
+            // the old whole-schema persist when it cannot. See streamIntrospectAndPersist.
+            const persistResult = await this.streamIntrospectAndPersist(emitter, opts, withDeadline);
             const { verdicts, unresolved } = await withDeadline('PKClassify', this.stagePKClassify(emitter, opts));
 
             emitter.stageComplete('Pipeline', {
@@ -446,8 +668,9 @@ export class IntegrationConnectorCreationPipeline {
 
     private async stageIntrospect(
         emitter: IntegrationProgressEmitter,
-        opts: ConnectorCreationPipelineOptions
-    ) {
+        opts: ConnectorCreationPipelineOptions,
+        onObject?: (obj: SourceObjectInfo) => Promise<void>,
+    ): Promise<SourceSchemaInfo> {
         emitter.stageStart('Introspect', 'Discovering objects and fields via connector');
         const startMs = Date.now();
         // Sampling is now per OBJECT, so this stage's cost scales with the catalog — and on a large
@@ -460,8 +683,33 @@ export class IntegrationConnectorCreationPipeline {
         // it, so the two differ by one connectivity probe. The approximation can only ever stop
         // work LATER than the race — never earlier — so it cannot truncate a run that would
         // otherwise have completed.
-        const budgetMs = opts.RunDeadlineMs ?? IntegrationConnectorCreationPipeline.DEFAULT_RUN_DEADLINE_MS;
+        const budgetMs = IntegrationConnectorCreationPipeline.resolveRunDeadlineMs(opts);
         const outOfTime = (): boolean => budgetMs > 0 && Date.now() - startMs >= budgetMs;
+        // THE OTHER BUDGET. Introspect accumulates: `schema.Objects` holds every object with every
+        // field for the whole stage and is handed to the persist stage only at the end, so memory
+        // climbs monotonically with the size of the source and is never released mid-stage. On a
+        // large catalog that reaches V8's ceiling before the time budget is anywhere near spent —
+        // 888 objects, some with thousands of columns, is ~97k field descriptors held at once, and
+        // a first discovery samples the whole set TWICE.
+        //
+        // Running out of memory here is not like running out of time. Time ends the stage with
+        // everything gathered so far intact; the heap ceiling ends the PROCESS, so the run loses
+        // every object it had already sampled, writes no result, and stays in flight forever.
+        // Observed 2026-09-19: two hours of sampling discarded by
+        // `FATAL ERROR: Ineffective mark-compacts near heap limit`.
+        //
+        // So memory gets the same treatment time already has — stop taking on new sampling, keep
+        // what is gathered, let the stage finish and persist. A smaller catalog beats no catalog.
+        // Read synchronously and per object: `used_heap_size` is a counter V8 already maintains,
+        // and the alternative (the async whole-machine reading) cannot be afforded per item.
+        // The heap side also keeps an absolute floor: on a small heap the fraction alone sits above
+        // V8's real abort line (see HEAP_STOP_MIN_HEADROOM_BYTES).
+        const outOfMemory = (): boolean => ShouldStopForMemory(
+            ReadMemorySample(),
+            IntegrationConnectorCreationPipeline.HEAP_STOP_FRACTION,
+            IntegrationConnectorCreationPipeline.RSS_STOP_FRACTION,
+            HEAP_STOP_MIN_HEADROOM_BYTES,
+        );
         try {
             // U11 — determinate discovery progress: surface scanned/total on the structured
             // stream (IntegrationTailRunEvents carries counts) so a client can render a real
@@ -473,11 +721,98 @@ export class IntegrationConnectorCreationPipeline {
                 lastEmitted = scanned;
                 emitter.heartbeat('Introspect', `scanned ${scanned}/${total} objects`, { processed: scanned, totalKnown: total });
             };
+
+            // §7 — a SCOPED introspection asked about a named subset. IntrospectSchema already
+            // honours the filter; DiscoverObjects does not take it, so without this the scoped run
+            // pulled and sampled the whole runtime catalog anyway.
+            const wantedNames = opts.IntrospectOptions?.ObjectNames;
+            const wanted = wantedNames && wantedNames.length > 0
+                ? new Set(wantedNames.map(n => n.toLowerCase()))
+                : null;
+            const inScope = (name: string): boolean => !wanted || wanted.has(name.toLowerCase());
+
+            const declaredNames: string[] = [];
+            const seen = new Set<string>();
+            const sampledDeclared = new Set<string>();
+            let runtimeAdded = 0;
+            let unsampledForTime = 0;
+            let unsampledForMemory = 0;
+
+            // Per-object progress. Everything below this point is the expensive half of discovery —
+            // one read-path sample per object — and it emitted nothing, so a consumer watching a
+            // 23-object source saw the same silence as a 5-object one for however long it ran.
+            // The denominator is the union BOTH passes will sample (in-scope runtime objects plus
+            // in-scope declared ones) rather than either loop's own length, so the total is fixed
+            // before the first sample instead of revising upward when the second pass starts. (A
+            // STREAMED declared catalog is the exception: its size is unknown until the stream
+            // ends, so the denominator grows as it arrives.)
+            const sampleUniverse = new Set<string>();
+            // Keyed, not counted: a name the connector surfaces twice is sampled twice by the loop
+            // below, and a bare counter would then report "24 of 23".
+            const announced = new Set<string>();
+            const announceSample = (name: string): void => {
+                const k = name.toLowerCase();
+                if (announced.has(k)) return;
+                announced.add(k);
+                emitter.heartbeat('Introspect', `Sampling "${name}" (${announced.size} of ${sampleUniverse.size})`, {
+                    processed: announced.size,
+                    totalKnown: sampleUniverse.size,
+                    skipped: unsampledForTime,
+                });
+            };
+
+            // STREAMING. When the caller persists per object (onObject), each declared object is
+            // sampled HERE, as the connector hands it over, and then handed on — never collected.
+            // Everything after IntrospectSchema reads `schema.Objects`, which is empty by design
+            // when the connector streamed, so without this nothing streamed would be sampled and
+            // every runtime object would look brand new. Sampling stays serial, as it is when the
+            // catalog is accumulated, even when the connector describes several objects at once.
+            const streamedNames: string[] = [];
+            let streamedFields = 0;
+            const handOff = async (obj: SourceObjectInfo): Promise<void> => {
+                streamedNames.push(obj.ExternalName);
+                streamedFields += obj.Fields.length;
+                await onObject!(obj);
+            };
+            const serially = serialQueue();
+            const streamDeclared = async (obj: SourceObjectInfo): Promise<void> => {
+                const key = obj.ExternalName.toLowerCase();
+                declaredNames.push(obj.ExternalName);
+                seen.add(key);
+                if (inScope(obj.ExternalName)) {
+                    sampleUniverse.add(key);
+                    await serially(async () => {
+                        // Two declared entries differing only by case are ONE object: sample it once.
+                        if (sampledDeclared.has(key)) return;
+                        announceSample(obj.ExternalName);
+                        if (outOfTime()) { unsampledForTime++; return; }
+                        if (outOfMemory()) { unsampledForMemory++; return; }
+                        sampledDeclared.add(key);
+                        await this.sampleDeclaredObjectInPlace(obj, obj.ExternalName, opts, emitter);
+                    });
+                }
+                await handOff(obj);
+            };
+
             const schema = await opts.Connector.IntrospectSchema(
                 opts.CompanyIntegration,
                 opts.ContextUser,
-                { ...(opts.IntrospectOptions ?? {}), OnProgress: onProgress }
+                { ...(opts.IntrospectOptions ?? {}), OnProgress: onProgress, OnObject: onObject ? streamDeclared : undefined }
             );
+            // Streamed if the connector says so — or if it called the handler at all: an override
+            // that forwards OnObject but rebuilds its result without the flag would otherwise get a
+            // whole-schema persist of an EMPTY schema, which on an authoritative comprehensive
+            // refresh finds every stored object absent and retires all of them.
+            const streamed = !!onObject && (schema.Streamed === true || streamedNames.length > 0);
+            if (streamed) {
+                // Anything the connector returned rather than streamed goes through the same door.
+                for (const leftover of schema.Objects.splice(0)) await streamDeclared(leftover);
+            } else {
+                for (const o of schema.Objects) {
+                    declaredNames.push(o.ExternalName);
+                    seen.add(o.ExternalName.toLowerCase());
+                }
+            }
 
             // UNIVERSAL additive runtime-object discovery — the single chokepoint EVERY connector
             // funnels through, regardless of which base it extends or whether that base's
@@ -488,8 +823,6 @@ export class IntegrationConnectorCreationPipeline {
             // can't silently lose runtime discovery). PersistDiscoveredSchema is additive, so
             // declared objects are preserved and runtime-only objects (e.g. an auth-gated file
             // feed's streams) get created as Discovered. Errors are SURFACED, never swallowed.
-            const declaredNames = schema.Objects.map(o => o.ExternalName);
-            const seen = new Set(declaredNames.map(n => n.toLowerCase()));
             let runtimeObjects: ExternalObjectSchema[] = [];
             // A DiscoverObjects failure used to end sampling for the ENTIRE run: the loop below was
             // the only thing that sampled, and it iterated this (now empty) list. The declared
@@ -506,50 +839,20 @@ export class IntegrationConnectorCreationPipeline {
                 console.error(`[IntrospectPipeline] DiscoverObjects failed: ${msg}`);
             }
 
-            // §7 — a SCOPED introspection asked about a named subset. IntrospectSchema already
-            // honours the filter; DiscoverObjects does not take it, so without this the scoped run
-            // pulled and sampled the whole runtime catalog anyway.
-            const wantedNames = opts.IntrospectOptions?.ObjectNames;
-            const wanted = wantedNames && wantedNames.length > 0
-                ? new Set(wantedNames.map(n => n.toLowerCase()))
-                : null;
-            const inScope = (name: string): boolean => !wanted || wanted.has(name.toLowerCase());
-
-            const sampledDeclared = new Set<string>();
-            let runtimeAdded = 0;
-            let unsampledForTime = 0;
-
-            // Per-object progress. Everything below this point is the expensive half of discovery —
-            // one read-path sample per object — and it emitted nothing, so a consumer watching a
-            // 23-object source saw the same silence as a 5-object one for however long it ran.
-            // The denominator is the union BOTH passes will sample (in-scope runtime objects plus
-            // in-scope declared ones) rather than either loop's own length, so the total is fixed
-            // before the first sample instead of revising upward when the second pass starts.
-            const sampleUniverse = new Set<string>();
             for (const d of runtimeObjects) if (inScope(d.Name)) sampleUniverse.add(d.Name.toLowerCase());
             for (const n of declaredNames) if (inScope(n)) sampleUniverse.add(n.toLowerCase());
-            const sampleTotal = sampleUniverse.size;
-            // Keyed, not counted: a name the connector surfaces twice is sampled twice by the loop
-            // below, and a bare counter would then report "24 of 23".
-            const announced = new Set<string>();
-            const announceSample = (name: string): void => {
-                const k = name.toLowerCase();
-                if (announced.has(k)) return;
-                announced.add(k);
-                emitter.heartbeat('Introspect', `Sampling "${name}" (${announced.size} of ${sampleTotal})`, {
-                    processed: announced.size,
-                    totalKnown: sampleTotal,
-                    skipped: unsampledForTime,
-                });
-            };
 
             for (const d of runtimeObjects) {
                 const key = d.Name.toLowerCase();
                 if (!inScope(d.Name)) continue;
+                // Streamed: a declared object was already sampled (or budget-skipped) and handed on
+                // as it arrived — counting it again here would report it twice.
+                if (streamed && seen.has(key)) continue;
                 // Announced BEFORE the budget check so an exhausted budget reads as a run that
                 // reached the end of its object list, not one that stalled partway through it.
                 announceSample(d.Name);
                 if (outOfTime()) { unsampledForTime++; continue; }
+                if (outOfMemory()) { unsampledForMemory++; continue; }
                 if (seen.has(key)) {
                     // §case-3 (data-only-discoverable): a DECLARED object the connector ALSO surfaces at
                     // runtime. Sampling populates it IN PLACE so a name-only declaration becomes syncable
@@ -577,7 +880,13 @@ export class IntegrationConnectorCreationPipeline {
                     emitter.stageError('Introspect', `DiscoverFieldsViaFetch failed for "${d.Name}": ${msg}`, { code: 'discover-fields-failed' });
                     console.error(`[IntrospectPipeline] DiscoverFieldsViaFetch failed for "${d.Name}": ${msg}`);
                 }
-                schema.Objects.push({
+                if (fields.length === 0) {
+                    // A RUNTIME-DISCOVERED object has no declaration behind it, so the sample is the
+                    // only source of fields there is — an empty one is persisted verbatim as a
+                    // fieldless object. Ask the connector's describe surface before accepting that.
+                    fields = await this.describeAsLastResort(d.Name, opts, emitter);
+                }
+                const built: SourceObjectInfo = {
                     ExternalName: d.Name,
                     ExternalLabel: d.Label,
                     Description: d.Description,
@@ -603,7 +912,10 @@ export class IntegrationConnectorCreationPipeline {
                     Relationships: fields
                         .filter(f => (f.IsForeignKey ?? false) && f.ForeignKeyTarget)
                         .map(f => ({ FieldName: f.Name, TargetObject: f.ForeignKeyTarget!, TargetField: 'ID' })),
-                });
+                };
+                // Streamed: persisted now and released, like every other object of a streamed run.
+                if (streamed) await handOff(built);
+                else schema.Objects.push(built);
                 runtimeAdded++;
             }
 
@@ -613,12 +925,14 @@ export class IntegrationConnectorCreationPipeline {
             // for every object when DiscoverObjects fails — was never sampled at all. It kept whatever
             // widths the catalog guessed (a truncation waiting to happen) and could only ever gain its
             // undeclared columns later, one sync at a time, through the overflow path.
+            // (Streamed: every declared object went through streamDeclared, which already sampled it.)
             let declaredOnlySampled = 0;
-            for (const name of declaredNames) {
+            for (const name of streamed ? [] : declaredNames) {
                 const key = name.toLowerCase();
                 if (sampledDeclared.has(key) || !inScope(name)) continue;
                 announceSample(name);
                 if (outOfTime()) { unsampledForTime++; continue; }
+                if (outOfMemory()) { unsampledForMemory++; continue; }
                 const existing = schema.Objects.find(o => o.ExternalName.toLowerCase() === key);
                 if (!existing) continue;
                 // Record it here too: two declared entries that differ only by case resolve to the
@@ -640,22 +954,39 @@ export class IntegrationConnectorCreationPipeline {
                 emitter.stageError('Introspect', msg, { code: 'sample-budget-exhausted' });
                 console.warn(`[IntrospectPipeline] ${msg}`);
             }
-            console.log(`[IntrospectPipeline] declared=${declaredNames.length} runtime-added=${runtimeAdded} declared-only-sampled=${declaredOnlySampled} unsampled-for-time=${unsampledForTime} total=${schema.Objects.length}`);
+            if (unsampledForMemory > 0) {
+                // Deliberately the code the sync path already emits and the UI already renders,
+                // rather than a second vocabulary for the same condition.
+                const msg =
+                    `This workspace ran short of memory partway through reading your source, so ` +
+                    `${unsampledForMemory} object(s) were not sampled and keep their declared fields ` +
+                    `and catalog widths. Everything sampled before that point was kept. Re-run to ` +
+                    `finish the rest, or give the workspace more memory for a source this size.`;
+                emitter.warning('Introspect', 'HOST_MEMORY_PRESSURE', msg, {
+                    unsampledForMemory,
+                    sampled: announced.size - unsampledForMemory - unsampledForTime,
+                });
+                console.warn(`[IntrospectPipeline] ${msg}`);
+            }
+            // A streamed run handed its objects on instead of keeping them, so count what it handed.
+            const discovered = streamedNames.length + schema.Objects.length;
+            console.log(`[IntrospectPipeline] declared=${declaredNames.length} runtime-added=${runtimeAdded} declared-only-sampled=${declaredOnlySampled} unsampled-for-time=${unsampledForTime} unsampled-for-memory=${unsampledForMemory} streamed=${streamed} total=${discovered}`);
 
-            const fieldCount = schema.Objects.reduce((acc, o) => acc + o.Fields.length, 0);
+            const fieldCount = streamedFields + schema.Objects.reduce((acc, o) => acc + o.Fields.length, 0);
             emitter.stageComplete('Introspect', {
-                processed: schema.Objects.length,
-                succeeded: schema.Objects.length,
-                totalKnown: schema.Objects.length,
+                processed: discovered,
+                succeeded: discovered,
+                totalKnown: discovered,
             });
             emitter.checkpoint('Introspect', {
-                objectsDiscovered: schema.Objects.length,
+                objectsDiscovered: discovered,
                 fieldsDiscovered: fieldCount,
                 durationMs: Date.now() - startMs,
                 discoverObjectsFailed,
                 unsampledForTime,
+                unsampledForMemory,
             });
-            return schema;
+            return streamed ? { ...schema, Objects: [], Streamed: true } : schema;
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             emitter.stageError('Introspect', msg, { code: 'introspect-failed' });
@@ -694,6 +1025,44 @@ export class IntegrationConnectorCreationPipeline {
         console.warn(`[IntrospectPipeline] sample fallback for "${objectName}": ${msg}`);
     }
 
+    /**
+     * LAST RESORT before an object is persisted with NO FIELDS AT ALL.
+     *
+     * A sample returns zero fields whenever it saw zero records, and an empty source table is an
+     * ordinary state rather than a malfunction — so it never throws, never takes the failure
+     * fallback, and the empty result was written out as the object's schema. The object then maps
+     * to nothing and syncs nothing, and because discovery does not re-run on its own, the emptiness
+     * of a table at one moment becomes a permanent property of the schema. All while the connector's
+     * own describe surface knew the columns the entire time.
+     *
+     * Only ever consulted when nothing else can supply fields. An object whose declaration already
+     * names fields keeps them and merges normally — which is also what preserves the sampler's
+     * deliberate "adjourn to declared-only fields" outcome for a composition child whose parent
+     * tuple is unknowable: that returns zero fields ON PURPOSE, and it must stay a no-op rather
+     * than become a fallback.
+     */
+    private async describeAsLastResort(
+        objectName: string,
+        opts: ConnectorCreationPipelineOptions,
+        emitter: IntegrationProgressEmitter
+    ): Promise<ExternalFieldSchema[]> {
+        // Announce it either way. The condition being reported is "this discovery learned nothing",
+        // which is true whether or not the catalog can rescue it — and a fieldless object that
+        // nobody was told about is exactly how this stayed invisible.
+        this.reportSampleFallback(
+            objectName,
+            new Error('the sample returned no fields (the source produced no records)'),
+            emitter
+        );
+        try {
+            return await opts.Connector.DiscoverFields(opts.CompanyIntegration, objectName, opts.ContextUser);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.warn(`[IntrospectPipeline] catalog backstop also failed for "${objectName}": ${msg}`);
+            return [];
+        }
+    }
+
     private async sampleDeclaredObjectInPlace(
         existing: SourceObjectInfo,
         objectName: string,
@@ -701,10 +1070,17 @@ export class IntegrationConnectorCreationPipeline {
         emitter: IntegrationProgressEmitter
     ): Promise<void> {
         try {
-            const dfields = await opts.Connector.DiscoverFieldsViaFetch(
+            let dfields = await opts.Connector.DiscoverFieldsViaFetch(
                 opts.CompanyIntegration, objectName, opts.ContextUser,
                 { OnFallback: (err) => this.reportSampleFallback(objectName, err, emitter) }
             );
+            if (dfields.length === 0 && existing.Fields.length === 0) {
+                // A name-only declaration plus a sample that saw nothing leaves NOTHING to persist,
+                // and the branch below would assign that emptiness as the object's whole schema.
+                // Gated on the declaration being empty too: an object that declared fields keeps
+                // them and merges, so the sampler's deliberate zero-field "adjourn" stays a no-op.
+                dfields = await this.describeAsLastResort(objectName, opts, emitter);
+            }
             const sampled = dfields.map(f => ({
                 Name: f.Name, Label: f.Label, Description: f.Description, SourceType: f.DataType,
                 IsRequired: f.IsRequired, AllowsNull: f.AllowsNull, MaxLength: f.MaxLength ?? null,
@@ -753,21 +1129,83 @@ export class IntegrationConnectorCreationPipeline {
         }
     }
 
+    /**
+     * One traversal of the source, persisted object by object.
+     *
+     * Peak memory becomes one object's fields instead of the whole catalog. Only object NAMES are
+     * carried to the end, because that is all absent-object retirement needs.
+     *
+     * Retirement is split across the two moments deliberately (see IntegrationSchemaSync):
+     *   per object — its own field list is complete, so absent FIELDS may retire; absent OBJECTS may
+     *                not, because from one object's vantage every other object looks absent.
+     *   final pass — the complete name set is known, so absent OBJECTS may retire; absent FIELDS may
+     *                not, because name stubs carry no fields and would retire every column.
+     *
+     * A connector whose IntrospectSchema override ignores OnObject simply returns a populated schema
+     * with `Streamed` falsy, and the old whole-schema persist runs unchanged — which is what keeps
+     * connector overrides in other repositories working untouched.
+     */
+    private async streamIntrospectAndPersist(
+        emitter: IntegrationProgressEmitter,
+        opts: ConnectorCreationPipelineOptions,
+        withDeadline: StageDeadline,
+    ): Promise<PersistSchemaResult> {
+        const names: string[] = [];
+        const agg = emptyPersistResult();
+        const onObject = async (obj: SourceObjectInfo): Promise<void> => {
+            names.push(obj.ExternalName);
+            // Not authoritative: the source's claim is only known once the stream ends, so the
+            // per-object persist cannot retire anything yet. Field retirement is requested here so
+            // the intent is in one place, but it stays gated on that claim inside PersistDiscoveredSchema.
+            const r = await this.stagePersist(
+                emitter, opts,
+                { Objects: [obj], IsAuthoritative: false },
+                { DeactivateAbsentObjects: false, DeactivateAbsentFields: opts.DeactivateAbsent ?? false },
+            );
+            addPersistResult(agg, r);
+        };
+        const sourceSchema = await withDeadline('Introspect', this.stageIntrospect(emitter, opts, onObject));
+        if (!sourceSchema.Streamed) {
+            // The connector did not stream — persist the whole schema exactly as before.
+            return withDeadline('Persist', this.stagePersist(emitter, opts, sourceSchema));
+        }
+        // The final name pass exists only to retire absent OBJECTS; with nothing to retire it would
+        // be one no-op upsert per object.
+        if (!opts.DeactivateAbsent) return agg;
+        const tail = await this.stagePersist(
+            emitter, opts,
+            { Objects: names.map(n => nameStub(n)), IsAuthoritative: sourceSchema.IsAuthoritative },
+            { DeactivateAbsentObjects: true, DeactivateAbsentFields: false },
+        );
+        agg.ObjectsDeactivated.push(...tail.ObjectsDeactivated);
+        return agg;
+    }
+
     private async stagePersist(
         emitter: IntegrationProgressEmitter,
         opts: ConnectorCreationPipelineOptions,
-        sourceSchema: Awaited<ReturnType<BaseIntegrationConnector['IntrospectSchema']>>
+        sourceSchema: SourceSchemaInfo,
+        retirement?: Pick<PersistSchemaOptions, 'DeactivateAbsentObjects' | 'DeactivateAbsentFields'>,
     ): Promise<PersistSchemaResult> {
         emitter.stageStart('Persist', 'Upserting IntegrationObject/Field rows with overlay precedence');
         const startMs = Date.now();
         const persistResult = await IntegrationSchemaSync.PersistDiscoveredSchema({
             IntegrationID: opts.CompanyIntegration.IntegrationID,
+            // The connection this discovery belongs to, and which catalog it writes into. Resolved
+            // in ONE place (CatalogSource.ts) so the read side and the write side of the same run
+            // can never disagree about which catalog they are on.
+            CompanyIntegrationID: opts.CompanyIntegration.ID,
+            CatalogSource: ResolveCatalogSource(opts.CompanyIntegration),
             SourceSchema: sourceSchema,
             ContextUser: opts.ContextUser,
             Provider: opts.Provider,
             UseTransactionGroup: true,
             // §7 comprehensive-refresh deactivation (objects + fields absent from this discovery).
             DeactivateAbsent: opts.DeactivateAbsent ?? false,
+            // The streaming path drives the two halves separately (see streamIntrospectAndPersist);
+            // every other caller leaves them undefined and inherits DeactivateAbsent exactly as before.
+            DeactivateAbsentObjects: retirement?.DeactivateAbsentObjects,
+            DeactivateAbsentFields: retirement?.DeactivateAbsentFields,
         });
 
         // Emit per-object + per-field structural-transparency events so the UI/audit
@@ -821,17 +1259,77 @@ export class IntegrationConnectorCreationPipeline {
     }> {
         emitter.stageStart('PKClassify', 'Soft PK classifier for objects still missing a PK');
         const md = opts.Provider ?? Metadata.Provider;
-        const engine = IntegrationEngineBase.Instance;
-        // Refresh from DB so we see what Persist just wrote
-        await engine.Config(true, opts.ContextUser, md);
-        const objects = engine.GetIntegrationObjectsByIntegrationID(opts.CompanyIntegration.IntegrationID);
+        // NO engine reload here (MJ-RUN-42). This stage used to open with
+        //     await IntegrationEngineBase.Instance.Config(true, opts.ContextUser, md);
+        // to "see what Persist just wrote". Config(true) reloads ALL EIGHT engine datasets,
+        // including every IntegrationObject and IntegrationObjectField row Persist has just written,
+        // and then this stage reads none of them: every read below goes through the catalog writer,
+        // which queries per call. So it bought nothing and cost a full second copy of the catalog in
+        // process memory at the exact moment memory peaks, immediately after the run's largest write.
+        // Observed 2026-09-19 (888 objects / 97,414 fields): the run persisted both passes and then
+        // died here with `Ineffective mark-compacts near heap limit`, taking classification with it —
+        // 412 keys instead of the 797 the same catalog produced the day before.
+        //
+        // Safe by ORDERING: this is the LAST stage of Run(), so no later stage can observe a staler
+        // cache; the discovery heal opens its second pass with its own refresh; and the callers that
+        // run this pipeline reload the engine once it returns. RefreshCatalog is no cheaper
+        // substitute: the two arrays it reloads ARE the cost. Do not reintroduce a reload here.
+        //
+        // Read through the writer rather than the cache. On the per-connection catalog the cached
+        // rows are read-only projections with no Save(), so the classifier's one write — promoting
+        // its nominee to primary key — would have had nothing to write to.
+        const writer = BuildCatalogWriter(md, opts.CompanyIntegration, opts.ContextUser);
+        const objects = (await writer.ObjectsInScope()).filter(o => o.Status === 'Active');
+        // Ask ONCE which objects already have a key. The loop below used to load every object's
+        // fields as entity objects just to test `some(IsPrimaryKey)` — 97,414 BaseEntity instances
+        // on an 888-object catalog, right after the run's largest write. The keyed majority needs
+        // nothing else and is settled from one scan; the entity read is kept for the keyless
+        // minority, whose nominee must be Saved.
+        const keyedObjectIDs = await writer.KeyedObjectIDs(objects.map(o => String(o.ID)));
 
         const classifier = new SoftPKClassifier();
         const verdicts: ConnectorCreationPipelineResult['PKVerdicts'] = [];
         const unresolved: string[] = [];
 
+        // The same reading, thresholds and heap floor Introspect uses, so the two long stages agree
+        // about what "out of room" means.
+        const outOfMemoryPK = (): boolean => ShouldStopForMemory(
+            ReadMemorySample(),
+            IntegrationConnectorCreationPipeline.HEAP_STOP_FRACTION,
+            IntegrationConnectorCreationPipeline.RSS_STOP_FRACTION,
+            HEAP_STOP_MIN_HEADROOM_BYTES,
+        );
+        // This stage runs right after the run's largest write, so it starts wherever Introspect
+        // left the heap, and then works a tight loop: a classifier verdict per object and a Save()
+        // for each nominee. Two things keep it from being the stage that dies where Introspect
+        // learned to stop:
+        //  1. YIELD. Every YIELD_EVERY objects, hand the loop back to the event loop so the
+        //     collector can run — a loop with no await between allocations never lets it.
+        //  2. GATE, and STOP rather than die. Past the memory fraction, stop classifying. The
+        //     objects not reached come back unresolved, are emitted as skipped, and ONE warning
+        //     says how many and why. A short key list is the symptom a customer sees, and
+        //     "we stopped early under memory pressure" is the only honest explanation for it.
+        // Observed 2026-09-22 on an 888-object catalog: Persist completed, this stage started the
+        // same second, and 44 s later V8 aborted with `Ineffective mark-compacts near heap limit`
+        // — 830 objects kept their fields, 46 kept a key, and the run was marked killed.
+        const YIELD_EVERY = 25;
+        let classifiedCount = 0;
+        let shedForMemory = 0;
+
         for (const obj of objects) {
-            const fields = engine.GetIntegrationObjectFields(obj.ID);
+            if (classifiedCount > 0 && classifiedCount % YIELD_EVERY === 0) {
+                await new Promise<void>(resolve => setImmediate(resolve));
+                if (outOfMemoryPK()) {
+                    shedForMemory = objects.length - classifiedCount;
+                    break;
+                }
+            }
+            classifiedCount++;
+            if (keyedObjectIDs.has(String(obj.ID).toLowerCase())) {
+                emitter.entityGenerated(obj.Name, obj.Name);
+                continue;
+            }
+            const fields = await writer.FieldsForObject(obj.ID);
             const hasPK = fields.some(f => f.IsPrimaryKey);
             if (hasPK) {
                 emitter.entityGenerated(obj.Name, obj.Name);
@@ -846,6 +1344,16 @@ export class IntegrationConnectorCreationPipeline {
                 llmInference: opts.LLMInference,
             });
             emitter.pkClassifierResult(obj.Name, {
+                // How many fields the classifier was actually shown, the names of the first few, and
+                // the object id they were read against. Zero names a defect (an empty or failed
+                // catalog read); a non-zero count with no nominee is an honest "no signal". The names
+                // settle what the count cannot: on 2026-09-27 a connector reported all 34 objects
+                // keyless while 30 carried a primary key in the catalog, and the classifier claimed
+                // its naming strategy found nothing for objects whose field list contains a column
+                // literally named "id" — four theories were argued from that one ambiguous verdict.
+                FieldCount: fields.length,
+                FieldNames: fields.slice(0, PK_VERDICT_FIELD_NAMES).map(f => f.Name),
+                ObjectID: String(obj.ID),
                 Confident: verdict.Confident,
                 Nominee: verdict.Nominee,
                 Confidence: verdict.Confidence,
@@ -881,6 +1389,19 @@ export class IntegrationConnectorCreationPipeline {
                 unresolved.push(obj.Name);
                 emitter.entitySkippedNoPK(obj.Name);
             }
+        }
+
+        if (shedForMemory > 0) {
+            // Loud, and on the run stream rather than a server console.
+            for (const skipped of objects.slice(objects.length - shedForMemory)) {
+                unresolved.push(skipped.Name);
+                emitter.entitySkippedNoPK(skipped.Name);
+            }
+            emitter.warning('PKClassify', 'HOST_MEMORY_PRESSURE',
+                `Stopped classifying primary keys after ${classifiedCount} of ${objects.length} objects — the ` +
+                `process was at its memory ceiling. The ${shedForMemory} object(s) not reached are reported ` +
+                `without a key; re-run discovery with more memory, or a smaller selection, to classify them.`,
+                { classified: classifiedCount, total: objects.length, shed: shedForMemory });
         }
 
         emitter.stageComplete('PKClassify', {

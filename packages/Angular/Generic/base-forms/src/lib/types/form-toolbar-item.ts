@@ -10,9 +10,11 @@ export type StandardToolbarItemKey =
   | 'history'
   | 'list'
   | 'tags'
+  | 'links'
   | 'attachments'
   | 'refresh'
-  | 'clone';
+  | 'clone'
+  | 'ask-ai';
 
 /**
  * Union of standard toolbar item keys and any custom button key.

@@ -5,6 +5,7 @@ import { BaseEntity } from '../generic/baseEntity';
 import { PlatformSQL, IsPlatformSQL } from '../generic/platformSQL';
 import { CompositeKey } from '../generic/compositeKey';
 import type { CacheChangedEvent } from '../generic/localCacheManager';
+import { ViewPropertyValues, ViewPropertyValuesKey } from './viewProperties';
 
 /**
  * Reason codes for {@link AfterKeyNotSupportedError}. Use these to make caller
@@ -114,6 +115,22 @@ export interface RunViewTelemetryOptions {
 }
 
 /**
+ * `RunViewParams` fields only server code may set. A transport that builds run params from a
+ * client's request body (the REST endpoint) removes these before running the view, so a client
+ * cannot choose them. GraphQL run inputs never carry them in the first place.
+ */
+export const SERVER_ONLY_RUN_VIEW_PARAMS: ReadonlyArray<keyof RunViewParams> = ['TimeZone', 'ServerProperties'];
+
+/** A copy of client-supplied run params without the {@link SERVER_ONLY_RUN_VIEW_PARAMS} fields. */
+export function StripServerOnlyRunViewParams(params: RunViewParams): RunViewParams {
+    const copy: RunViewParams = { ...params };
+    for (const key of SERVER_ONLY_RUN_VIEW_PARAMS) {
+        delete copy[key];
+    }
+    return copy;
+}
+
+/**
  * Parameters for running either a stored or dynamic view.
  * A stored view is a view that is saved in the database and can be run either by ID or Name.
  * A dynamic view is one that is not stored in the database and you provide parameters to return data as
@@ -216,6 +233,21 @@ export class RunViewParams {
      * optional - if provided, and if IgnoreMaxRows = false, this value will be used to constrain the total # of rows returned by the view. If this is not provided, either the default settings at the entity-level will be used, or if the entity has no UserViewMaxRows setting, all rows will be returned that match any filter, if provided.
      */
     MaxRows?: number;
+    /**
+     * optional - when true, the provider skips the EXTRA count query it would otherwise run to
+     * populate `TotalRowCount` when the returned page comes back exactly full
+     * (`Results.length === MaxRows`); `TotalRowCount` then reports the rows actually returned.
+     * That fallback count is a second, sequential round trip after the data query — and for a
+     * single-row existence/lookup read (`MaxRows: 1`) it fires on every HIT, so a hot lookup path
+     * pays double round trips to compute a total it never reads. Set this on reads that only
+     * consume `Results`. Ignored for `ResultType: 'count_only'`, whose entire point is the count.
+     *
+     * Scope: it also suppresses the up-front count a PAGINATED read (`StartRow` with `MaxRows`)
+     * runs, so a paginated caller that needs "1-100 of N" must leave it unset. With the flag,
+     * `TotalRowCount` is always the number of rows returned. Calls with and without it get
+     * separate cache slots, since their `TotalRowCount` differs.
+     */
+    SkipTotalRowCount?: boolean;
     /**
      * optional - if provided, this value will be used to offset the rows returned.
      *
@@ -422,6 +454,48 @@ export class RunViewParams {
     IncludeBinaryFields?: boolean;
 
     /**
+     * Server only: the IANA time zone (e.g. `'Europe/Paris'`) that context tokens such as
+     * `Context.Today` are worked out in for this run. Unset means UTC.
+     *
+     * MJServer's GraphQL resolvers set it from the request's `x-mj-timezone` header
+     * (`TIME_ZONE_HEADER`); server code that runs without a request (agents, schedules) sets it
+     * itself. No GraphQL run input carries it, so a GraphQL client cannot set it.
+     *
+     * It is not part of the result-cache fingerprint. Code that resolves tokens with it must put the
+     * resolved values, not the zone, into whatever the fingerprint covers.
+     */
+    TimeZone?: string;
+
+    /**
+     * Values for a stored view's declared properties (`MJ: User Views.Properties`), keyed by
+     * property name. Each property with a value, or with a default, adds one predicate on its target
+     * field, ANDed after the view's own filter and `ExtraFilter`; row-level security applies on top.
+     * A value is checked against the property's type and written as a typed SQL literal. A list is
+     * accepted only for a property whose operator is `IN`. `null` means "no value": the default is
+     * not used and no predicate is added.
+     *
+     * Clients may set this (the GraphQL view inputs and REST carry it). The run is refused, with an
+     * error naming the property, for: a name the view does not declare, a value for a property whose
+     * `AllowOverride` is false, a value of the wrong type, or a required property left without one.
+     * Only a stored view (ViewID, ViewName or ViewEntity) takes properties.
+     *
+     * Part of the result-cache fingerprint. On the server the database provider replaces it, before
+     * the cache lookup, with the resolved values in {@link ServerProperties}.
+     */
+    Properties?: ViewPropertyValues;
+
+    /**
+     * Server only: values for a stored view's properties that server code sets, including properties
+     * whose `AllowOverride` is false (a client value for those is refused). A value here wins over
+     * {@link Properties} and over the property's default. Unknown names are refused.
+     *
+     * No GraphQL run input carries it and the REST view routes strip it
+     * ({@link SERVER_ONLY_RUN_VIEW_PARAMS}), so a client cannot set it. Part of the result-cache
+     * fingerprint.
+     */
+    ServerProperties?: ViewPropertyValues;
+
+    /**
      * Optional TTL (time-to-live) in milliseconds for cached results when CacheLocal is true.
      * After this time, cached results will be considered stale and fresh data will be fetched.
      * If not specified, the LocalCacheManager's default TTL will be used (typically 5 minutes).
@@ -525,6 +599,7 @@ export class RunViewParams {
         if (a.SaveViewResults !== b.SaveViewResults) return false;
         if (a.IgnoreMaxRows !== b.IgnoreMaxRows) return false;
         if (a.MaxRows !== b.MaxRows) return false;
+        if (a.SkipTotalRowCount !== b.SkipTotalRowCount) return false;
         if (a.StartRow !== b.StartRow) return false;
         if (!RunViewParams.afterKeyEqual(a.AfterKey, b.AfterKey)) return false;
         if (a.ForceAuditLog !== b.ForceAuditLog) return false;
@@ -535,6 +610,8 @@ export class RunViewParams {
         // Including binary fields changes the columns returned, so a toggle must trigger a reload.
         // undefined and false mean the same thing and must not cause a spurious one.
         if ((a.IncludeBinaryFields === true) !== (b.IncludeBinaryFields === true)) return false;
+        if (a.TimeZone !== b.TimeZone) return false;
+        if (ViewPropertyValuesKey(a.Properties, a.ServerProperties) !== ViewPropertyValuesKey(b.Properties, b.ServerProperties)) return false;
         // A Live↔Materialized DataSource toggle changes the result set and MUST trigger a reload. Compared via
         // IsMaterializedDataSource so undefined/'Live' are treated as equal (no spurious reload) while a switch to
         // (or from) 'Materialized' is not — matching the read-routing decision everywhere else.

@@ -101,13 +101,13 @@ export type SendProgress = {
     message: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 };
 
-/** Outcome of {@link SendMessage}: the saved user message id, the placeholder AI reply id, and whether completion must be polled. */
+/** Outcome of {@link SendMessage}: the saved user message id, the AI reply id the server created, and whether completion must be polled. */
 export type SendResult = {
     success: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     errorMessage?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /** The user message we created (already saved). */
     UserMessageId: string;
-    /** The in-progress AI response detail we created (server fills it). */
+    /** The agent's reply row, which the server created for the user's message and fills in. */
     AiMessageId?: string;
 };
 
@@ -117,13 +117,11 @@ export type SendResult = {
  * The orchestration itself — agent resolution, permission-filtered routing roster, client-tool
  * advertisement, plan mode, requested skills — belongs to
  * {@link ConversationsRuntime.AgentRunner}, the same pure-TypeScript engine MJ Explorer runs. This
- * function supplies only what the runtime cannot know: the two `Conversation Detail` rows that
- * frame a turn.
+ * function supplies only what the runtime cannot know: the user's `Conversation Detail` row.
  *
- * Those two rows are not incidental. `RunAIAgentFromConversationDetail` writes the agent's answer
- * **into the detail whose id it is given**, so the AI placeholder must exist first; passing the
- * user's row instead lands the response on it with `Role='User'` and renders the reply as plain
- * text in a user bubble.
+ * The agent's reply row is the server's: `RunAIAgentFromConversationDetail` takes the user's
+ * message, creates the reply row (`Role='AI'`, In-Progress) and names it in its acknowledgement.
+ * Only the server writes agent replies, so the app never creates one.
  *
  * @param args.conversationId The conversation to post into.
  * @param args.text The user's message body.
@@ -147,12 +145,7 @@ export async function SendMessage(args: {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
 
-    const userDetail = await createTurnDetail(md, currentUser, {
-        conversationId,
-        message: text,
-        role: 'User',
-        status: 'Complete',
-    });
+    const userDetail = await createUserMessage(md, currentUser, conversationId, text);
     if (!userDetail) {
         return { success: false, errorMessage: 'Failed to save message.', UserMessageId: '' };
     }
@@ -173,21 +166,8 @@ export async function SendMessage(args: {
         }
     }
 
-    const aiDetail = await createTurnDetail(md, currentUser, {
-        conversationId,
-        message: '',
-        role: 'AI',
-        status: 'In-Progress',
-        parentId: userDetail.ID,
-        agentId,
-    });
-    if (!aiDetail) {
-        return {
-            success: false,
-            errorMessage: 'Failed to prepare the agent response.',
-            UserMessageId: userDetail.ID,
-        };
-    }
+    // The server names the reply row it created when it accepts the run.
+    let aiMessageId: string | undefined;
 
     try {
         const runtime = ConversationsRuntime.Instance;
@@ -210,7 +190,7 @@ export async function SendMessage(args: {
         const result = await runtime.AgentRunner.processMessage({
             conversationId,
             message: userDetail,
-            conversationDetailId: aiDetail.ID,
+            onReplyAccepted: (reply) => { aiMessageId = reply.ConversationDetailId; },
             // An @mention outranks the caller's choice — naming someone is the most specific signal
             // a user can give, and it is the rule the web follows too.
             explicitAgentId: mentions.agentMention?.id ?? agentId ?? null,
@@ -230,55 +210,46 @@ export async function SendMessage(args: {
                 success: false,
                 errorMessage: 'No agent was available to respond.',
                 UserMessageId: userDetail.ID,
-                AiMessageId: aiDetail.ID,
+                AiMessageId: aiMessageId,
             };
         }
         return {
             success: result.success !== false,
             errorMessage: result.success === false ? result.errorMessage ?? 'The agent run failed.' : undefined,
             UserMessageId: userDetail.ID,
-            AiMessageId: aiDetail.ID,
+            // A headless (synchronous) run has no acknowledgement; its run names the row instead.
+            AiMessageId: aiMessageId ?? result.agentRun?.ConversationDetailID ?? undefined,
         };
     } catch (error) {
         return {
             success: false,
             errorMessage: error instanceof Error ? error.message : String(error),
             UserMessageId: userDetail.ID,
-            AiMessageId: aiDetail.ID,
+            AiMessageId: aiMessageId,
         };
     }
 }
 
 /**
- * Creates and saves one `Conversation Detail` row for a turn.
- *
- * Both halves of a turn are the same shape with different values, so they share one helper rather
- * than two near-identical blocks that can drift apart.
+ * Creates and saves the user's `Conversation Detail` row for a turn. (The agent's reply row is the
+ * server's to write.)
  *
  * @returns The saved entity, or `null` when the save failed.
  */
-async function createTurnDetail(
+async function createUserMessage(
     md: Metadata,
     currentUser: UserInfo | undefined,
-    spec: {
-        conversationId: string;
-        message: string;
-        role: 'User' | 'AI';
-        status: 'Complete' | 'In-Progress';
-        parentId?: string;
-        agentId?: string;
-    },
+    conversationId: string,
+    message: string,
 ): Promise<MJConversationDetailEntity | null> {
     const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', currentUser);
     detail.NewRecord();
-    detail.ConversationID = spec.conversationId;
-    detail.Message = spec.message;
-    detail.Role = spec.role;
-    detail.Status = spec.status;
+    detail.ConversationID = conversationId;
+    detail.Message = message;
+    detail.Role = 'User';
+    detail.Status = 'Complete';
     detail.HiddenToUser = false;
-    if (spec.parentId) detail.ParentID = spec.parentId;
-    if (spec.agentId) detail.AgentID = spec.agentId;
-    if (spec.role === 'User' && currentUser?.ID) detail.UserID = currentUser.ID;
+    if (currentUser?.ID) detail.UserID = currentUser.ID;
 
     if (!(await detail.Save())) {
         console.warn('[agents] detail save failed:', detail.LatestResult?.CompleteMessage ?? 'unknown error');

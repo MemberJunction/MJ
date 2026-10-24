@@ -129,6 +129,8 @@ import { MJAuditLogTypeFormComponent } from "./Entities/MJAuditLogType/mjauditlo
 import { MJAuthenticationProviderFormComponent } from "./Entities/MJAuthenticationProvider/mjauthenticationprovider.form.component";
 import { MJAuthorizationFormComponent } from "./Entities/MJAuthorization/mjauthorization.form.component";
 import { MJAuthorizationRoleFormComponent } from "./Entities/MJAuthorizationRole/mjauthorizationrole.form.component";
+import { MJCalendarEventLinkFormComponent } from "./Entities/MJCalendarEventLink/mjcalendareventlink.form.component";
+import { MJCalendarSyncStateFormComponent } from "./Entities/MJCalendarSyncState/mjcalendarsyncstate.form.component";
 import { MJClusterAnalysisClusterFormComponent } from "./Entities/MJClusterAnalysisCluster/mjclusteranalysiscluster.form.component";
 import { MJClusterAnalysisFormComponent } from "./Entities/MJClusterAnalysis/mjclusteranalysis.form.component";
 import { MJCollectionArtifactFormComponent } from "./Entities/MJCollectionArtifact/mjcollectionartifact.form.component";
@@ -143,6 +145,8 @@ import { MJCompanyFormComponent } from "./Entities/MJCompany/mjcompany.form.comp
 import { MJCompanyIntegrationEntityMapFormComponent } from "./Entities/MJCompanyIntegrationEntityMap/mjcompanyintegrationentitymap.form.component";
 import { MJCompanyIntegrationFieldMapFormComponent } from "./Entities/MJCompanyIntegrationFieldMap/mjcompanyintegrationfieldmap.form.component";
 import { MJCompanyIntegrationFormComponent } from "./Entities/MJCompanyIntegration/mjcompanyintegration.form.component";
+import { MJCompanyIntegrationObjectFieldFormComponent } from "./Entities/MJCompanyIntegrationObjectField/mjcompanyintegrationobjectfield.form.component";
+import { MJCompanyIntegrationObjectFormComponent } from "./Entities/MJCompanyIntegrationObject/mjcompanyintegrationobject.form.component";
 import { MJCompanyIntegrationRecordMapFormComponent } from "./Entities/MJCompanyIntegrationRecordMap/mjcompanyintegrationrecordmap.form.component";
 import { MJCompanyIntegrationRunAPILogFormComponent } from "./Entities/MJCompanyIntegrationRunAPILog/mjcompanyintegrationrunapilog.form.component";
 import { MJCompanyIntegrationRunDetailFormComponent } from "./Entities/MJCompanyIntegrationRunDetail/mjcompanyintegrationrundetail.form.component";
@@ -477,6 +481,7 @@ export class GeneratedForms_SubModule_0 { }
 declarations: [
     MJAIAgentCoAgentFormComponent,
     MJArtifactFormComponent,
+    MJCalendarSyncStateFormComponent,
     MJClusterAnalysisClusterFormComponent,
     MJCountryFormComponent,
     MJKnowledgeHubSavedSearchFormComponent,
@@ -594,6 +599,7 @@ declarations: [
     MJAIBridgeAgentIdentityFormComponent,
     MJAPIApplicationFormComponent,
     MJArchiveRunDetailFormComponent,
+    MJCalendarEventLinkFormComponent,
     MJComponentLibraryFormComponent,
     MJContentItemAttributeFormComponent,
     MJContentItemFormComponent,
@@ -1145,6 +1151,7 @@ declarations: [
     MJAIConfigurationFormComponent,
     MJAPIKeyUsageLogFormComponent,
     MJActionFilterFormComponent,
+    MJCompanyIntegrationObjectFieldFormComponent,
     MJConversationSkillFormComponent,
     MJDashboardCategoryFormComponent,
     MJInteractionFormComponent,
@@ -1272,6 +1279,7 @@ export class GeneratedForms_SubModule_26 { }
 declarations: [
     MJAIAgentRequestFormComponent,
     MJAIAgentRequestTypeFormComponent,
+    MJCompanyIntegrationObjectFormComponent,
     MJConversationWidgetInstanceFormComponent,
     MJDuplicateRunDetailMatchFormComponent,
     MJEntityCommunicationMessageTypeFormComponent,

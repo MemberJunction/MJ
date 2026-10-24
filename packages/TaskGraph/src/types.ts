@@ -437,6 +437,8 @@ export type TaskContinuationParams = {
     ConversationDetailID: string | null;
     /** The agent run that emitted the graph — the target of a `reinvoke`. */
     SubmittedByAgentRunID: string | null;
+    /** The person who submitted the graph. Its outcome is posted as them, so it lands only where they may write. */
+    SubmittedByUserID: string | null;
     /** How many continuation hops preceded this one, so a re-submitted graph can carry depth + 1. */
     ReinvokeDepth: number;
     /**
