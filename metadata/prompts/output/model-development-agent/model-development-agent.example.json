@@ -26,8 +26,8 @@
               "label": "Change the data/features"
             },
             {
-              "value": "change_the_experiments_or_budget",
-              "label": "Change the experiments or budget"
+              "value": "change_the_experiments",
+              "label": "Change the experiments"
             }
           ]
         }

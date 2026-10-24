@@ -31,6 +31,7 @@
 
 import { LogError, LogStatus, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJMLModelEntity, MJMLModelScoringBindingEntity, MJRecordProcessEntity } from '@memberjunction/core-entities';
+import { IsValidUUID } from '@memberjunction/global';
 
 import { TrainModelViaEngine } from '../operations/delegation';
 import { ProductionModelPromotionGate } from '../actions/promote-model.gate';
@@ -40,13 +41,6 @@ import { LocalArtifactLoader } from './artifact-loader';
 import { UpsertScoringBinding } from './scoring-binding';
 import { ModelHasTrainedArtifact } from './model-readiness';
 import type { AutoTrainRequest, IArtifactLoader, IModelAutoTrainer } from './types';
-
-/** Canonical UUID shape — the only id shape interpolated into a filter here. */
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function isUuid(value: string | null | undefined): value is string {
-  return typeof value === 'string' && UUID_RE.test(value.trim());
-}
 
 /** Signature of the train step (production: {@link TrainModelViaEngine}); injectable for tests. */
 export type AutoTrainTrainFn = (pipelineId: string, provider: IMetadataProvider, user: UserInfo) => Promise<MJMLModelEntity>;
@@ -77,7 +71,7 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
 
   /** @inheritdoc */
   public async EnsureTrainedModel(request: AutoTrainRequest, contextUser: UserInfo, provider: IMetadataProvider): Promise<string> {
-    if (!isUuid(request.pipelineId)) {
+    if (!IsValidUUID(request.pipelineId)) {
       throw new Error(`Auto-train: '${request.pipelineId}' is not a valid ML Training Pipeline id.`);
     }
     const reused = await this.findReusableModel(request.pipelineId, contextUser, provider);
@@ -163,7 +157,7 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
   protected async repoint(request: AutoTrainRequest, modelId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<void> {
     const factory = new MetadataEntityFactory(provider);
     let rp: MJRecordProcessEntity | null = null;
-    if (isUuid(request.recordProcessId)) {
+    if (IsValidUUID(request.recordProcessId)) {
       rp = await factory.getEntityObject<MJRecordProcessEntity>('MJ: Record Processes', contextUser);
       if (await rp.Load(request.recordProcessId)) {
         const config = this.parseConfig(rp.Configuration);
@@ -211,8 +205,8 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
     provider: IMetadataProvider,
   ): Promise<MJMLModelScoringBindingEntity[]> {
     const clauses: string[] = [];
-    if (isUuid(recordProcessId)) clauses.push(`RecordProcessID='${recordProcessId}'`);
-    if (isUuid(request.currentModelId)) clauses.push(`MLModelID='${request.currentModelId}'`);
+    if (IsValidUUID(recordProcessId)) clauses.push(`RecordProcessID='${recordProcessId}'`);
+    if (IsValidUUID(request.currentModelId)) clauses.push(`MLModelID='${request.currentModelId}'`);
     if (clauses.length === 0) {
       return [];
     }
@@ -225,7 +219,7 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
 
   /** Archive the superseded model when it was Published (best-effort — never fails the run). */
   protected async archiveSuperseded(oldModelId: string | null, newModelId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<void> {
-    if (!isUuid(oldModelId) || oldModelId.toLowerCase() === newModelId.toLowerCase()) {
+    if (!IsValidUUID(oldModelId) || oldModelId.toLowerCase() === newModelId.toLowerCase()) {
       return;
     }
     try {
