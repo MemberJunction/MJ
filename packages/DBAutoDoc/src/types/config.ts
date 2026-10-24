@@ -394,7 +394,8 @@ export interface RelationshipDiscoveryConfig {
   /**
    * Use existing unique indexes as PK evidence for tables with no declared primary key (default true):
    * a unique index on NOT NULL columns becomes a candidate even when the statistics can't show
-   * uniqueness (e.g. an empty table), and composite unique indexes are always considered.
+   * uniqueness (e.g. an empty table), and composite unique indexes are considered when no single column
+   * qualifies (next to a qualifying single-column key they are alternate keys and are not added).
    * Needs `analysis.useExistingIndexes` (also default true).
    */
   indexBackedCandidates?: boolean;

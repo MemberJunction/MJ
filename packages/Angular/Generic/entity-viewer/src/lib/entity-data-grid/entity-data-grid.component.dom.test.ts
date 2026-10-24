@@ -34,7 +34,7 @@ class PaginationStub { @Input() IsLoading = false; @Input() PageNumber = 1; @Inp
 @Component({ standalone: true, selector: 'mj-export-dialog', template: '' })
 class ExportDialogStub { @Input() config: unknown; @Input() visible = false; }
 @Component({ standalone: true, selector: 'mj-recycle-bin-chip', template: '<div class="recycle-stub"></div>' })
-class RecycleChipStub { @Input() EntityName: string | null = null; }
+class RecycleChipStub { @Input() Provider: unknown; @Input() EntityName: string | null = null; }
 @Component({ standalone: true, selector: 'mj-entity-action-ux-host', template: '' })
 class ActionHostStub { @Input() Context: unknown; @Input() DriverClass = ''; }
 
