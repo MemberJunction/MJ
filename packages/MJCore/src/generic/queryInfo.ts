@@ -974,6 +974,11 @@ export class QueryParameterInfo extends BaseInfo implements IQueryParameterInfoB
      */
     public AutoDetectConfidenceScore: number = null
     /**
+     * When true, only server code may supply this parameter's value (`RunQueryParams.ServerParameters`).
+     * A value for it in `RunQueryParams.Parameters` is refused.
+     */
+    public IsServerSet: boolean = false
+    /**
      * Date and time when this parameter was created
      */
     __mj_CreatedAt: Date = null

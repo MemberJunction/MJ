@@ -46,6 +46,7 @@ import {
     MJAIAgentRunEntity,
     MJAIPromptRunEntity,
     MJConversationDetailEntity,
+    MJConversationDetailEntityExtended,
     MJConversationEntity,
 } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -125,7 +126,9 @@ async function buildAgentRunFixture(user: UserInfo, agentID: string): Promise<MJ
 /**
  * Creates (unsaved) the hidden tool-execution turn `persistDirectActionTurn` writes, under `user`.
  * The same field values are built for every principal SA6 tries, so the principal is the only
- * difference between the refused save and the accepted one.
+ * difference between the refused save and the accepted one. Marked as a server-authored reply, as
+ * `persistDirectActionTurn` marks it: only the server writes an agent's reply (A19), and the marker
+ * grants nothing on a conversation the writer can't reach — which is what SA6 pins.
  */
 async function buildHiddenToolTurnFixture(
     user: UserInfo,
@@ -133,8 +136,9 @@ async function buildHiddenToolTurnFixture(
     ownerID: string,
 ): Promise<MJConversationDetailEntity> {
     const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
-    const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', user);
+    const detail = await md.GetEntityObject<MJConversationDetailEntityExtended>('MJ: Conversation Details', user);
     detail.NewRecord();
+    detail.MarkServerAuthoredReply();
     detail.ConversationID = conversationID;
     detail.Role = 'AI';
     detail.HiddenToUser = true;
