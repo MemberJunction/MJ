@@ -347,4 +347,35 @@ describe('ViewConfigPanelComponent — carrying a staged filter back from the na
     panel.SetTimelineOrientation('horizontal');
     expect(panel.TimelineOrientation).toBe('horizontal');
   });
+
+  it('supports clean default Columns tab with mutually exclusive on-demand Add Columns and Column Inspector drawers', () => {
+    const panel = makePanel();
+    open(panel);
+
+    // By default, neither drawer is open
+    expect(panel.ShowAddColumnsDrawer).toBe(false);
+    expect(panel.FormatEditingColumn).toBeNull();
+
+    // Opening Add Columns drawer sets ShowAddColumnsDrawer = true
+    panel.OpenAddColumnsDrawer();
+    expect(panel.ShowAddColumnsDrawer).toBe(true);
+    expect(panel.FormatEditingColumn).toBeNull();
+
+    // Selecting a visible column for inspection closes Add Columns drawer and opens Column Inspector
+    const firstCol = panel.VisibleColumns[0];
+    panel.OpenFormatEditor(firstCol);
+    expect(panel.ShowAddColumnsDrawer).toBe(false);
+    expect(panel.FormatEditingColumn).toBe(firstCol);
+
+    // Opening Add Columns drawer again closes Column Inspector
+    panel.ToggleAddColumnsDrawer();
+    expect(panel.ShowAddColumnsDrawer).toBe(true);
+    expect(panel.FormatEditingColumn).toBeNull();
+
+    // Closing Add Columns drawer resets search text
+    panel.ColumnSearchText = 'Status';
+    panel.CloseAddColumnsDrawer();
+    expect(panel.ShowAddColumnsDrawer).toBe(false);
+    expect(panel.ColumnSearchText).toBe('');
+  });
 });

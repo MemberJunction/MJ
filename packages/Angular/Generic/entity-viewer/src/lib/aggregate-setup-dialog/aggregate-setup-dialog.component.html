@@ -1,296 +1,420 @@
-<!-- Dialog Backdrop -->
+<!-- Slide-In Drawer Backdrop -->
 @if (IsOpen) {
-  <div class="dialog-backdrop" (click)="onClose()"></div>
+  <div class="dialog-backdrop" (click)="OnClose()"></div>
 }
 
-<!-- Dialog Panel -->
-<div class="dialog-panel" [class.open]="IsOpen">
-  <!-- Header -->
+<!-- Right-Side Slide-In Drawer Panel -->
+<div class="dialog-panel" [class.open]="IsOpen" role="dialog" aria-modal="true" aria-labelledby="aggDrawerTitle">
+  <!-- Drawer Header -->
   <div class="dialog-header">
-    <div class="header-title">
-      <i class="fa-solid fa-chart-simple"></i>
-      <span>{{ Aggregate ? 'Edit Aggregate' : 'Add Aggregate' }}</span>
+    <div class="header-title-group">
+      <div class="header-icon-badge">
+        <i class="fa-solid fa-calculator"></i>
+      </div>
+      <div class="header-title-copy">
+        <h3 id="aggDrawerTitle">{{ Aggregate ? 'Edit Summary Calculation' : 'Add Summary Calculation' }}</h3>
+        <p>Configure a live server-side KPI card or column footer summary for {{ Entity?.DisplayNameOrName || 'this view' }}.</p>
+      </div>
     </div>
-    <button class="close-btn" (click)="onClose()" title="Close" aria-label="Close dialog">
-      <i class="fa-solid fa-times"></i>
+    <button type="button" class="close-btn" (click)="OnClose()" title="Close drawer" aria-label="Close drawer">
+      <i class="fa-solid fa-xmark"></i>
     </button>
   </div>
 
-  <!-- Mode Selector -->
-  <div class="mode-selector">
-    <button
-      class="mode-btn"
-      [class.active]="Mode === 'simple'"
-      (click)="setMode('simple')"
-      title="Pick a column and function">
-      <i class="fa-solid fa-wand-sparkles"></i>
-      <span>Simple</span>
-    </button>
-    <button
-      class="mode-btn"
-      [class.active]="Mode === 'advanced'"
-      (click)="setMode('advanced')"
-      title="Write custom SQL expression">
-      <i class="fa-solid fa-code"></i>
-      <span>Advanced</span>
-    </button>
-    <button
-      class="mode-btn"
-      [class.active]="Mode === 'smart'"
-      (click)="setMode('smart')"
-      title="Describe in natural language">
-      <i class="fa-solid fa-wand-magic-sparkles"></i>
-      <span>Smart</span>
-    </button>
+  <!-- Mode Selector Segmented Bar -->
+  <div class="mode-selector-bar">
+    <div class="mode-selector" [class.three-col]="IsAdvancedMode || Mode === 'advanced'">
+      <button
+        type="button"
+        class="mode-btn"
+        [class.active]="Mode === 'simple'"
+        (click)="SetMode('simple')"
+        title="Pick a calculation function and field">
+        <i class="fa-solid fa-sliders"></i>
+        <span>Guided Builder</span>
+      </button>
+      <button
+        type="button"
+        class="mode-btn"
+        [class.active]="Mode === 'smart'"
+        (click)="SetMode('smart')"
+        title="Describe calculation in plain English">
+        <i class="fa-solid fa-wand-magic-sparkles"></i>
+        <span>Smart AI</span>
+      </button>
+      @if (IsAdvancedMode || Mode === 'advanced') {
+        <button
+          type="button"
+          class="mode-btn"
+          [class.active]="Mode === 'advanced'"
+          (click)="SetMode('advanced')"
+          title="Write custom SQL aggregate expression">
+          <i class="fa-solid fa-code"></i>
+          <span>Custom SQL</span>
+        </button>
+      }
+    </div>
   </div>
 
-  <!-- Content -->
+  <!-- Drawer Scrollable Body -->
   <div class="dialog-content">
-    <!-- Simple Mode -->
+    <!-- ====================================================== -->
+    <!-- MODE 1: GUIDED BUILDER (SIMPLE)                        -->
+    <!-- ====================================================== -->
     @if (Mode === 'simple') {
-      <div class="mode-content simple-mode">
-        <div class="mode-description">
-          <i class="fa-solid fa-info-circle"></i>
-          <span>Select a column and an aggregate function to calculate</span>
+      <div class="drawer-card">
+        <div class="drawer-card-header">
+          <span class="drawer-step-badge">1</span>
+          <div class="drawer-card-title">
+            <h4>Calculation &amp; Target Field</h4>
+            <p>Choose the summary function and which field to aggregate across matching records.</p>
+          </div>
         </div>
 
-        <!-- Function Selection -->
-        <div class="form-section">
-          <label class="form-label">Function</label>
-          <div class="function-grid">
-            @for (func of AggregateFunctions; track func.value) {
+        <div class="drawer-card-body">
+          <!-- Function Selection Grid -->
+          <div class="form-section">
+            <label class="form-label">Calculation Function</label>
+            <div class="function-grid">
+              @for (func of AggregateFunctions; track func.value) {
+                <button
+                  type="button"
+                  class="function-btn"
+                  [class.active]="SelectedFunction === func.value"
+                  (click)="SelectFunction(func.value)"
+                  [title]="func.label">
+                  <div class="function-btn-icon">
+                    <i [class]="func.icon"></i>
+                  </div>
+                  <span class="function-btn-label">{{ func.label }}</span>
+                  @if (SelectedFunction === func.value) {
+                    <i class="fa-solid fa-circle-check function-btn-check"></i>
+                  }
+                </button>
+              }
+            </div>
+          </div>
+
+          <!-- Custom Searchable Column Dropdown -->
+          <div class="form-section">
+            <label class="form-label">Target Field</label>
+            <div class="agg-column-custom-select" [class.open]="IsColumnDropdownOpen">
               <button
-                class="function-btn"
-                [class.active]="SelectedFunction === func.value"
-                (click)="selectFunction(func.value)"
-                [title]="func.label">
-                <i [class]="func.icon"></i>
-                <span>{{ func.label }}</span>
+                type="button"
+                class="agg-column-trigger"
+                [class.open]="IsColumnDropdownOpen"
+                [attr.aria-expanded]="IsColumnDropdownOpen"
+                (click)="ToggleColumnDropdown($event)">
+                <span class="agg-column-trigger-left">
+                  <i [class]="!SelectedColumn && SelectedFunction === 'COUNT' ? 'fa-solid fa-layer-group' : 'fa-solid fa-table-columns'"></i>
+                  <span class="agg-column-trigger-name">{{ SelectedColumnDisplayLabel }}</span>
+                  @if (IsAdvancedMode && SelectedFieldInfo?.Type) {
+                    <span class="agg-field-type-badge">{{ SelectedFieldInfo?.Type }}</span>
+                  }
+                </span>
+                <i class="fa-solid fa-chevron-down agg-column-chevron" [class.rotated]="IsColumnDropdownOpen"></i>
               </button>
+
+              @if (IsColumnDropdownOpen) {
+                <div class="agg-column-dropdown-menu" (click)="$event.stopPropagation()">
+                  <div class="agg-column-search-box">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input
+                      type="text"
+                      class="agg-column-search-input"
+                      placeholder="Search fields by name or description..."
+                      [(ngModel)]="ColumnSearchText"
+                      (keydown)="OnColumnSearchKeydown($event)"
+                    />
+                  </div>
+                  <div class="agg-column-options-list" role="listbox">
+                    @if (SelectedFunction === 'COUNT') {
+                      <button
+                        type="button"
+                        class="agg-column-option"
+                        role="option"
+                        [class.selected]="!SelectedColumn"
+                        [attr.aria-selected]="!SelectedColumn"
+                        (click)="SelectColumnFromDropdown('', $event)">
+                        <div class="agg-column-option-header">
+                          <span class="agg-column-option-name">All Matching Records (COUNT(*))</span>
+                          @if (IsAdvancedMode) {
+                            <span class="agg-field-type-badge">COUNT(*)</span>
+                          }
+                        </div>
+                        <div class="agg-column-option-desc">Counts the total number of records returned by the view regardless of null values.</div>
+                      </button>
+                    }
+                    @for (field of FilteredAvailableFields; track field.ID) {
+                      <button
+                        type="button"
+                        class="agg-column-option"
+                        role="option"
+                        [class.selected]="SelectedColumn === field.Name"
+                        [attr.aria-selected]="SelectedColumn === field.Name"
+                        (click)="SelectColumnFromDropdown(field.Name, $event)">
+                        <div class="agg-column-option-header">
+                          <span class="agg-column-option-name">{{ field.DisplayNameOrName }}</span>
+                          @if (IsAdvancedMode && field.Type) {
+                            <span class="agg-field-type-badge">{{ field.Type }}</span>
+                          }
+                        </div>
+                        @if (field.Description) {
+                          <div class="agg-column-option-desc">{{ field.Description }}</div>
+                        }
+                      </button>
+                    }
+                    @if (FilteredAvailableFields.length === 0 && SelectedFunction !== 'COUNT') {
+                      <div class="agg-column-empty">No compatible fields match your search.</div>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+
+            @if (SelectedFunction !== 'COUNT' && SelectedFunction !== 'COUNT_DISTINCT' && NumericFields.length === 0) {
+              <div class="field-hint warning">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <span>This entity has no numeric columns for {{ SelectedFunction }}. Try <strong>Count</strong> or <strong>Count Distinct</strong>.</span>
+              </div>
             }
           </div>
-        </div>
 
-        <!-- Column Selection -->
-        <div class="form-section">
-          <label class="form-label">Column</label>
-          <select
-            class="form-select"
-            [(ngModel)]="SelectedColumn"
-            (ngModelChange)="onColumnSelected($event)">
-            <option value="">Select a column...</option>
-            @for (field of AvailableFields; track field.ID) {
-              <option [value]="field.Name">{{ getFieldDisplayLabel(field) }}</option>
-            }
-          </select>
-          @if (SelectedFunction !== 'COUNT' && SelectedFunction !== 'COUNT_DISTINCT' && NumericFields.length === 0) {
-            <div class="field-hint warning">
-              <i class="fa-solid fa-exclamation-triangle"></i>
-              <span>No numeric fields available. Use COUNT or switch to Advanced mode.</span>
+          <!-- Expression Preview (shown in Advanced Mode) -->
+          @if (IsAdvancedMode && SelectedFunction && (SelectedColumn || SelectedFunction === 'COUNT')) {
+            <div class="expression-preview">
+              <span class="preview-label">Compiled SQL Expression</span>
+              <code class="preview-code">{{
+                !SelectedColumn && SelectedFunction === 'COUNT' ? 'COUNT(*)' :
+                SelectedFunction === 'COUNT_DISTINCT' ? 'COUNT(DISTINCT [' + SelectedColumn + '])' :
+                SelectedFunction + '([' + SelectedColumn + '])'
+              }}</code>
             </div>
           }
-          @if (SelectedFunction === 'COUNT' && !SelectedColumn) {
-            <div class="field-hint info">
-              <i class="fa-solid fa-info-circle"></i>
-              <span>No column selected - will count all records (COUNT(*))</span>
+
+          @if (!IsAdvancedMode) {
+            <div class="custom-sql-inline-hint">
+              <span>Need conditional logic or multi-column math?</span>
+              <button type="button" class="inline-sql-switch-btn" (click)="SetMode('advanced')">
+                <i class="fa-solid fa-code"></i>
+                <span>Switch to Custom SQL</span>
+              </button>
             </div>
           }
         </div>
-
-        <!-- Preview -->
-        @if (SelectedFunction && (SelectedColumn || SelectedFunction === 'COUNT')) {
-          <div class="expression-preview">
-            <label class="preview-label">Expression Preview</label>
-            <code class="preview-code">{{
-              !SelectedColumn && SelectedFunction === 'COUNT' ? 'COUNT(*)' :
-              SelectedFunction === 'COUNT_DISTINCT' ? 'COUNT(DISTINCT ' + SelectedColumn + ')' :
-              SelectedFunction + '(' + SelectedColumn + ')'
-            }}</code>
-          </div>
-        }
       </div>
     }
 
-    <!-- Advanced Mode -->
-    @if (Mode === 'advanced') {
-      <div class="mode-content advanced-mode">
-        <div class="mode-description">
-          <i class="fa-solid fa-info-circle"></i>
-          <span>Write a custom SQL aggregate expression. Use field names as they appear in the database.</span>
-        </div>
-
-        <div class="form-section">
-          <label class="form-label">SQL Expression</label>
-          <textarea
-            class="form-textarea code-input"
-            [(ngModel)]="Expression"
-            placeholder="e.g., SUM(Amount * Quantity) or COUNT(CASE WHEN Status = 'Active' THEN 1 END)"
-            rows="3"
-          ></textarea>
-          <div class="field-hint">
-            <i class="fa-solid fa-lightbulb"></i>
-            <span>Tip: Use brackets for column names with spaces, e.g., [Total Amount]</span>
-          </div>
-        </div>
-
-        <!-- Quick Examples -->
-        <div class="form-section">
-          <label class="form-label examples-label">Quick Examples</label>
-          <div class="example-chips">
-            <button class="example-chip" (click)="Expression = 'SUM(Amount)'">
-              SUM(Amount)
-            </button>
-            <button class="example-chip" (click)="Expression = 'AVG(Price * Quantity)'">
-              AVG(Price * Quantity)
-            </button>
-            <button class="example-chip" (click)="Expression = 'COUNT(CASE WHEN Status = \'Active\' THEN 1 END)'">
-              COUNT with condition
-            </button>
-            <button class="example-chip" (click)="Expression = 'SUM(CASE WHEN Type = \'Credit\' THEN Amount ELSE -Amount END)'">
-              Conditional SUM
-            </button>
-          </div>
-        </div>
-      </div>
-    }
-
-    <!-- Smart Mode -->
+    <!-- ====================================================== -->
+    <!-- MODE 2: SMART AI                                       -->
+    <!-- ====================================================== -->
     @if (Mode === 'smart') {
-      <div class="mode-content smart-mode">
-        <div class="mode-description">
-          <i class="fa-solid fa-wand-magic-sparkles"></i>
-          <span>Describe what you want to calculate in plain English. AI will generate the expression.</span>
-        </div>
-
-        <div class="form-section">
-          <label class="form-label">What would you like to calculate?</label>
-          <div class="smart-input-container">
-            <textarea
-              class="form-textarea smart-input"
-              [(ngModel)]="SmartPrompt"
-              [disabled]="!!GeneratedExpression"
-              placeholder="e.g., 'Total revenue from completed orders' or 'Average order value for premium customers'"
-              rows="3"
-            ></textarea>
-            @if (!GeneratedExpression) {
-              <button
-                class="generate-btn"
-                [disabled]="!SmartPrompt.trim() || IsGenerating"
-                (click)="onGenerateFromPrompt()">
-                @if (IsGenerating) {
-                  <i class="fa-solid fa-spinner fa-spin"></i>
-                  <span>Generating...</span>
-                } @else {
-                  <i class="fa-solid fa-wand-magic-sparkles"></i>
-                  <span>Generate</span>
-                }
-              </button>
-            }
+      <div class="drawer-card">
+        <div class="drawer-card-header">
+          <span class="drawer-step-badge">1</span>
+          <div class="drawer-card-title">
+            <h4>AI-Generated Calculation</h4>
+            <p>Describe the metric you want in plain English and MJ AI will write the SQL expression.</p>
           </div>
         </div>
 
-        <!-- Generated Expression -->
-        @if (GeneratedExpression) {
-          <div class="generated-section">
-            <div class="generated-header">
-              <label class="form-label">Generated Expression</label>
-              <button class="clear-generated-btn" (click)="clearGeneratedExpression()" title="Edit prompt">
-                <i class="fa-solid fa-pen"></i>
-                <span>Edit Prompt</span>
-              </button>
-            </div>
-            <code class="generated-code">{{ GeneratedExpression }}</code>
-            <div class="generated-info">
-              <i class="fa-solid fa-info-circle"></i>
-              <span>This expression was generated from your description. Clear it to edit the prompt.</span>
+        <div class="drawer-card-body">
+          <div class="form-section">
+            <label class="form-label">What would you like to calculate?</label>
+            <div class="smart-input-container">
+              <textarea
+                class="form-textarea smart-input"
+                [(ngModel)]="SmartPrompt"
+                [disabled]="!!GeneratedExpression"
+                placeholder="e.g., Total revenue from completed orders, or Count of records created this year"
+                rows="3"
+              ></textarea>
+              @if (!GeneratedExpression) {
+                <button
+                  type="button"
+                  class="generate-btn"
+                  [disabled]="!SmartPrompt.trim() || IsGenerating"
+                  (click)="OnGenerateFromPrompt()">
+                  @if (IsGenerating) {
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                    <span>Generating SQL...</span>
+                  } @else {
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    <span>Generate Expression</span>
+                  }
+                </button>
+              }
             </div>
           </div>
-        }
 
-        <!-- Smart Mode Tips -->
-        <div class="smart-tips">
-          <div class="tips-header">
-            <i class="fa-solid fa-lightbulb"></i>
-            <span>Tips for better results:</span>
-          </div>
-          <ul class="tips-list">
-            <li>Be specific about which fields to use</li>
-            <li>Mention any conditions or filters</li>
-            <li>Specify the type of calculation (sum, average, count, etc.)</li>
-          </ul>
+          @if (GeneratedExpression) {
+            <div class="generated-section">
+              <div class="generated-header">
+                <label class="form-label">Generated SQL Expression</label>
+                <button type="button" class="clear-generated-btn" (click)="ClearGeneratedExpression()" title="Edit prompt">
+                  <i class="fa-solid fa-pen"></i>
+                  <span>Edit Prompt</span>
+                </button>
+              </div>
+              <code class="generated-code">{{ GeneratedExpression }}</code>
+            </div>
+          }
         </div>
       </div>
     }
 
-    <!-- Common Configuration -->
-    <div class="config-section">
-      <div class="section-divider">
-        <span>Display Options</span>
-      </div>
+    <!-- ====================================================== -->
+    <!-- MODE 3: CUSTOM SQL EXPRESSION (ADVANCED)               -->
+    <!-- ====================================================== -->
+    @if (Mode === 'advanced') {
+      <div class="drawer-card">
+        <div class="drawer-card-header">
+          <span class="drawer-step-badge">1</span>
+          <div class="drawer-card-title">
+            <h4>Custom SQL Aggregate Expression</h4>
+            <p>Write any valid T-SQL aggregate expression (`SUM`, `AVG`, `COUNT`, `CASE WHEN`) using entity column names.</p>
+          </div>
+        </div>
 
-      <!-- Label -->
-      <div class="form-section">
-        <label class="form-label required">Label</label>
-        <input
-          type="text"
-          class="form-input"
-          [(ngModel)]="Label"
-          placeholder="e.g., Total Revenue, Average Order Value"
-        />
-      </div>
+        <div class="drawer-card-body">
+          <div class="form-section">
+            <div class="sql-editor-card">
+              <div class="sql-editor-card-header">
+                <span class="sql-editor-badge">
+                  <i class="fa-solid fa-code"></i>
+                  <span>SQL EXPRESSION</span>
+                </span>
+                <span class="sql-editor-hint">Bracket column names with spaces, e.g. <code>[Total Amount]</code></span>
+              </div>
+              <div class="sql-editor-card-body">
+                <mj-code-editor
+                  [ngModel]="Expression"
+                  (ngModelChange)="OnSqlExpressionChange($event)"
+                  Language="sql"
+                  Placeholder="SUM([Amount] * [Quantity])"
+                   style="min-height: 120px; display: block;">
+                </mj-code-editor>
+              </div>
+            </div>
+          </div>
 
-      <!-- Description (optional) -->
-      <div class="form-section">
-        <label class="form-label">Description <span class="optional">(optional)</span></label>
-        <input
-          type="text"
-          class="form-input"
-          [(ngModel)]="Description"
-          placeholder="Brief explanation of what this shows"
-        />
+          <div class="form-section">
+            <label class="form-label examples-label">Quick Templates</label>
+            <div class="example-chips">
+              <button type="button" class="example-chip" (click)="OnSqlExpressionChange('COUNT(*)')">
+                COUNT(*)
+              </button>
+              <button type="button" class="example-chip" (click)="OnSqlExpressionChange('SUM([Amount])')">
+                SUM([Amount])
+              </button>
+              <button type="button" class="example-chip" (click)="OnSqlExpressionChange('COUNT(CASE WHEN [Status] = \'Active\' THEN 1 END)')">
+                Conditional COUNT
+              </button>
+              <button type="button" class="example-chip" (click)="OnSqlExpressionChange('AVG(CAST([Score] AS FLOAT))')">
+                Weighted / Cast AVG
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
+    }
 
-      <!-- Display Type -->
-      <div class="form-section">
-        <label class="form-label">Display As</label>
-        <div class="display-type-toggle">
-          <button
-            class="display-type-btn"
-            [class.active]="DisplayType === 'card'"
-            (click)="DisplayType = 'card'">
-            <i class="fa-solid fa-id-card"></i>
-            <span>Card</span>
-            <small>Shows in summary panel</small>
-          </button>
-          <button
-            class="display-type-btn"
-            [class.active]="DisplayType === 'column'"
-            (click)="DisplayType = 'column'">
-            <i class="fa-solid fa-table-columns"></i>
-            <span>Column Footer</span>
-            <small>Shows at bottom of grid</small>
-          </button>
+    <!-- ====================================================== -->
+    <!-- STEP 2: DISPLAY & APPEARANCE CARD                      -->
+    <!-- ====================================================== -->
+    <div class="drawer-card">
+      <div class="drawer-card-header">
+        <span class="drawer-step-badge">2</span>
+        <div class="drawer-card-title">
+          <h4>Presentation &amp; Placement</h4>
+          <p>Choose where this summary appears in the view and customize its label and icon.</p>
         </div>
       </div>
 
-      <!-- Icon Selection -->
-      <div class="form-section">
-        <label class="form-label">Icon <span class="optional">(optional)</span></label>
-        <div class="icon-selector">
-          @if (Icon) {
-            <div class="selected-icon">
-              <i [class]="Icon"></i>
-              <button class="clear-icon-btn" (click)="clearIcon()" title="Remove icon" aria-label="Remove icon">
-                <i class="fa-solid fa-times"></i>
+      <div class="drawer-card-body">
+        <!-- Where to Display (Visual Choice Cards) -->
+        <div class="form-section">
+          <label class="form-label">Display Location</label>
+          <div class="placement-choice-grid" role="radiogroup" aria-label="Aggregate Display Location">
+            <button
+              type="button"
+              class="placement-choice-card"
+              [class.active]="DisplayType === 'card'"
+              (click)="DisplayType = 'card'">
+              <div class="placement-illus kpi-card-illus">
+                <div class="illus-kpi-top"></div>
+                <div class="illus-kpi-val"></div>
+              </div>
+              <div class="placement-choice-copy">
+                <span class="placement-choice-title">Summary KPI Card</span>
+                <span class="placement-choice-desc">Callout card in the summary dock</span>
+              </div>
+              @if (DisplayType === 'card') {
+                <i class="fa-solid fa-circle-check placement-check"></i>
+              }
+            </button>
+
+            <button
+              type="button"
+              class="placement-choice-card"
+              [class.active]="DisplayType === 'column'"
+              (click)="DisplayType = 'column'">
+              <div class="placement-illus footer-row-illus">
+                <div class="illus-grid-line"></div>
+                <div class="illus-grid-line"></div>
+                <div class="illus-footer-highlight"></div>
+              </div>
+              <div class="placement-choice-copy">
+                <span class="placement-choice-title">Grid Column Footer</span>
+                <span class="placement-choice-desc">Pinned total row aligned to column</span>
+              </div>
+              @if (DisplayType === 'column') {
+                <i class="fa-solid fa-circle-check placement-check"></i>
+              }
+            </button>
+          </div>
+        </div>
+
+        <!-- Label & Description Row -->
+        <div class="label-desc-grid">
+          <div class="form-section">
+            <label class="form-label required">Display Label</label>
+            <input
+              type="text"
+              class="form-input"
+              [(ngModel)]="Label"
+              placeholder="e.g., Total Revenue, Record Count"
+            />
+          </div>
+
+          <div class="form-section">
+            <label class="form-label">Tooltip / Subtitle <span class="optional">(optional)</span></label>
+            <input
+              type="text"
+              class="form-input"
+              [(ngModel)]="Description"
+              placeholder="Optional description shown on hover"
+            />
+          </div>
+        </div>
+
+        <!-- Curated Icon Picker -->
+        <div class="form-section">
+          <div class="icon-label-row">
+            <label class="form-label">Card Icon <span class="optional">(optional)</span></label>
+            @if (Icon) {
+              <button type="button" class="clear-icon-link" (click)="ClearIcon()">
+                Reset to default icon
               </button>
-            </div>
-          }
+            }
+          </div>
           <div class="icon-grid">
             @for (icon of CommonIcons; track icon) {
               <button
+                type="button"
                 class="icon-btn"
                 [class.active]="Icon === icon"
-                (click)="selectIcon(icon)"
+                (click)="SelectIcon(icon)"
                 [title]="icon">
                 <i [class]="icon"></i>
               </button>
@@ -301,27 +425,26 @@
     </div>
   </div>
 
-  <!-- Footer -->
-  <div class="dialog-footer">
-    <div class="footer-left">
-      <button
-        class="footer-btn save-btn primary"
-        [disabled]="!IsValid"
-        (click)="onSave()">
-        <i class="fa-solid fa-check"></i>
-        <span>{{ Aggregate ? 'Update' : 'Add' }} Aggregate</span>
-      </button>
-    </div>
-    <button class="footer-btn cancel-btn" (click)="onClose()">
-      Cancel
-    </button>
-  </div>
-
-  <!-- Validation Message -->
+  <!-- Validation Banner -->
   @if (ValidationMessage) {
-    <div class="validation-message">
-      <i class="fa-solid fa-exclamation-circle"></i>
+    <div class="validation-banner">
+      <i class="fa-solid fa-circle-info"></i>
       <span>{{ ValidationMessage }}</span>
     </div>
   }
+
+  <!-- Drawer Footer -->
+  <div class="dialog-footer">
+    <button
+      type="button"
+      class="footer-btn primary"
+      [disabled]="!IsValid"
+      (click)="OnSave()">
+      <i class="fa-solid fa-check"></i>
+      <span>{{ Aggregate ? 'Save Changes' : 'Add Summary Calculation' }}</span>
+    </button>
+    <button type="button" class="footer-btn cancel-btn" (click)="OnClose()">
+      Cancel
+    </button>
+  </div>
 </div>

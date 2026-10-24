@@ -306,8 +306,9 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   public DropTargetColumn: ColumnConfig | null = null;
   public DropPosition: 'before' | 'after' | null = null;
 
-  // Column format editing state
+  // Column format editing & Add Columns on-demand drawer state
   public FormatEditingColumn: ColumnConfig | null = null;
+  public ShowAddColumnsDrawer: boolean = false;
 
   // Custom Alternate Base View & Timeline Date Field dropdown state
   public IsBaseViewDropdownOpen: boolean = false;
@@ -369,9 +370,6 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       // Return to whichever standard filter mode has active data, or Smart Filter
       this.FilterMode = this.GetFilterCount() > 0 ? 'traditional' : 'smart';
     }
-    if (!this.IsAdvancedMode && this.ActiveTab === 'aggregates' && this.Aggregates.length === 0) {
-      this.ActiveTab = 'columns';
-    }
     this.cdr.detectChanges();
   }
 
@@ -386,7 +384,9 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    */
   @HostListener('document:keydown.escape')
   HandleEscape(): void {
-    if (this.OpenSortFieldDropdownIndex !== null) {
+    if (this.ShowAggregateDialog) {
+      return; // AggregateSetupDialog handles its own Escape
+    } else if (this.OpenSortFieldDropdownIndex !== null) {
       this.OpenSortFieldDropdownIndex = null;
       this.SortFieldSearchText = '';
       this.cdr.detectChanges();
@@ -398,6 +398,8 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       this.cdr.detectChanges();
     } else if (this.FormatEditingColumn) {
       this.CloseFormatEditor();
+    } else if (this.ShowAddColumnsDrawer) {
+      this.CloseAddColumnsDrawer();
     } else if (this.IsOpen) {
       this.OnClose();
     }
@@ -523,6 +525,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       this.ActiveTab = this.DefaultSaveAsNew ? 'filters' : 'columns';
       this.ColumnSearchText = '';
       this.FormatEditingColumn = null;
+      this.ShowAddColumnsDrawer = false;
       this.IsBaseViewDropdownOpen = false;
       this.IsTimelineDateDropdownOpen = false;
       this.OpenSortFieldDropdownIndex = null;
@@ -984,7 +987,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   /**
-   * Get filtered columns for search
+   * Get filtered columns for search (matches display name, technical name, description, or SQL type)
    */
   get FilteredHiddenColumns(): ColumnConfig[] {
     if (!this.ColumnSearchText) {
@@ -993,7 +996,9 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     const search = this.ColumnSearchText.toLowerCase();
     return this.HiddenColumns.filter(c =>
       c.displayName.toLowerCase().includes(search) ||
-      c.fieldName.toLowerCase().includes(search)
+      c.fieldName.toLowerCase().includes(search) ||
+      (c.field.Description && c.field.Description.toLowerCase().includes(search)) ||
+      (c.field.Type && c.field.Type.toLowerCase().includes(search))
     );
   }
 
@@ -1856,17 +1861,47 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   // ========================================
-  // COLUMN FORMAT EDITOR
+  // COLUMN FORMAT EDITOR & ADD COLUMNS DRAWER
   // ========================================
 
   /**
-   * Open the format editor for a column
+   * Open the on-demand Add Columns drawer (closing Column Inspector if open)
+   */
+  OpenAddColumnsDrawer(): void {
+    this.FormatEditingColumn = null;
+    this.ShowAddColumnsDrawer = true;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Close the on-demand Add Columns drawer
+   */
+  CloseAddColumnsDrawer(): void {
+    this.ShowAddColumnsDrawer = false;
+    this.ColumnSearchText = '';
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Toggle the on-demand Add Columns drawer
+   */
+  ToggleAddColumnsDrawer(): void {
+    if (this.ShowAddColumnsDrawer) {
+      this.CloseAddColumnsDrawer();
+    } else {
+      this.OpenAddColumnsDrawer();
+    }
+  }
+
+  /**
+   * Open the format editor for a column (closing Add Columns drawer if open)
    */
   OpenFormatEditor(column: ColumnConfig): void {
     // Initialize format if not present
     if (!column.format) {
       column.format = this.getDefaultFormat(column.field);
     }
+    this.ShowAddColumnsDrawer = false;
     this.FormatEditingColumn = column;
     this.cdr.detectChanges();
   }
@@ -2268,6 +2303,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   SetActiveTab(tab: 'columns' | 'sorting' | 'filters' | 'aggregates' | 'settings' | 'display'): void {
     this.ActiveTab = tab === 'settings' ? 'filters' : tab;
     this.FormatEditingColumn = null; // Close format editor when switching tabs
+    this.ShowAddColumnsDrawer = false;
     this.IsBaseViewDropdownOpen = false;
     this.IsTimelineDateDropdownOpen = false;
     this.OpenSortFieldDropdownIndex = null;

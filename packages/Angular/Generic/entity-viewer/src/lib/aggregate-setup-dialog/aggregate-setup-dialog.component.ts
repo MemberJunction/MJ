@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef, HostListener } from '@angular/core';
 import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
 import { MJUserViewEntity_IGridAggregate as ViewGridAggregate } from '@memberjunction/core-entities';
 
@@ -72,6 +72,11 @@ export class AggregateSetupDialogComponent implements OnInit, OnChanges {
   @Input() IsOpen: boolean = false;
 
   /**
+   * Whether the parent View Studio is in Advanced Mode
+   */
+  @Input() IsAdvancedMode: boolean = false;
+
+  /**
    * Emitted when the dialog is closed
    */
   @Output() Close = new EventEmitter<void>();
@@ -87,6 +92,8 @@ export class AggregateSetupDialogComponent implements OnInit, OnChanges {
   // Simple mode state
   SelectedColumn: string = '';
   SelectedFunction: AggregateFunctionType = 'SUM';
+  IsColumnDropdownOpen: boolean = false;
+  ColumnSearchText: string = '';
 
   // Advanced mode state
   Expression: string = '';
@@ -193,14 +200,46 @@ export class AggregateSetupDialogComponent implements OnInit, OnChanges {
     this.Mode = 'simple';
     this.SelectedColumn = '';
     this._previousColumn = ''; // Reset previous column tracking
-    this.SelectedFunction = 'SUM';
+    this.IsColumnDropdownOpen = false;
+    this.ColumnSearchText = '';
+    const hasNumeric = this.NumericFields.length > 0;
+    this.SelectedFunction = hasNumeric ? 'SUM' : 'COUNT';
     this.Expression = '';
     this.SmartPrompt = '';
     this.GeneratedExpression = '';
-    this.Label = '';
+    this.Label = hasNumeric ? '' : 'Record Count';
     this.DisplayType = 'card';
     this.Icon = '';
     this.Description = '';
+  }
+
+  /**
+   * Close dropdown or slide-in drawer on Escape key
+   */
+  @HostListener('document:keydown.escape')
+  HandleEscape(): void {
+    if (!this.IsOpen) return;
+    if (this.IsColumnDropdownOpen) {
+      this.IsColumnDropdownOpen = false;
+      this.ColumnSearchText = '';
+      this.cdr.detectChanges();
+    } else {
+      this.OnClose();
+    }
+  }
+
+  /**
+   * Close custom column dropdown when clicking outside
+   */
+  @HostListener('document:click', ['$event'])
+  HandleDocumentClick(event: MouseEvent): void {
+    if (!this.IsColumnDropdownOpen) return;
+    const target = event.target as HTMLElement | null;
+    if (!target?.closest('.agg-column-custom-select')) {
+      this.IsColumnDropdownOpen = false;
+      this.ColumnSearchText = '';
+      this.cdr.detectChanges();
+    }
   }
 
   /**
@@ -302,6 +341,89 @@ export class AggregateSetupDialogComponent implements OnInit, OnChanges {
   }
 
   /**
+   * Available fields filtered by search query and Standard/Advanced Mode
+   */
+  get FilteredAvailableFields(): EntityFieldInfo[] {
+    const base = this.AvailableFields.filter(f =>
+      this.IsAdvancedMode || !f.Name.startsWith('__mj_') || f.Name === this.SelectedColumn
+    );
+    const query = this.ColumnSearchText.trim().toLowerCase();
+    if (!query) {
+      return base;
+    }
+    return base.filter(f =>
+      f.DisplayNameOrName.toLowerCase().includes(query) ||
+      f.Name.toLowerCase().includes(query) ||
+      (f.Description && f.Description.toLowerCase().includes(query)) ||
+      (f.Type && f.Type.toLowerCase().includes(query))
+    );
+  }
+
+  /**
+   * Currently selected EntityFieldInfo for the column dropdown
+   */
+  get SelectedFieldInfo(): EntityFieldInfo | undefined {
+    if (!this.SelectedColumn || !this.Entity) return undefined;
+    return this.Entity.Fields.find(f => f.Name === this.SelectedColumn);
+  }
+
+  /**
+   * Friendly display label for the custom column dropdown trigger
+   */
+  get SelectedColumnDisplayLabel(): string {
+    if (!this.SelectedColumn) {
+      return this.SelectedFunction === 'COUNT'
+        ? 'All Records — COUNT(*)'
+        : 'Select a column to calculate...';
+    }
+    const info = this.SelectedFieldInfo;
+    return info ? info.DisplayNameOrName : this.SelectedColumn;
+  }
+
+  /**
+   * Toggle custom searchable column dropdown
+   */
+  ToggleColumnDropdown(event?: MouseEvent): void {
+    event?.stopPropagation();
+    this.IsColumnDropdownOpen = !this.IsColumnDropdownOpen;
+    if (!this.IsColumnDropdownOpen) {
+      this.ColumnSearchText = '';
+    }
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Select a column from the custom searchable dropdown
+   */
+  SelectColumnFromDropdown(fieldName: string, event?: MouseEvent): void {
+    event?.stopPropagation();
+    this.SelectedColumn = fieldName;
+    this.IsColumnDropdownOpen = false;
+    this.ColumnSearchText = '';
+    this.OnColumnSelected(fieldName);
+  }
+
+  /**
+   * Handle Escape key inside column search input
+   */
+  OnColumnSearchKeydown(event: KeyboardEvent): void {
+    event.stopPropagation();
+    if (event.key === 'Escape') {
+      this.IsColumnDropdownOpen = false;
+      this.ColumnSearchText = '';
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Handle changes from <mj-code-editor> in Advanced SQL mode
+   */
+  OnSqlExpressionChange(value: string): void {
+    this.Expression = value;
+    this.cdr.detectChanges();
+  }
+
+  /**
    * Set the setup mode
    */
   SetMode(mode: AggregateSetupMode): void {
@@ -310,6 +432,18 @@ export class AggregateSetupDialogComponent implements OnInit, OnChanges {
     // If switching from smart mode with generated expression, populate advanced mode
     if (mode === 'advanced' && this.GeneratedExpression) {
       this.Expression = this.GeneratedExpression;
+    } else if (mode === 'advanced' && !this.Expression.trim()) {
+      // Seed from simple expression if present
+      const simpleExpr = this.SelectedFunction && (this.SelectedColumn || this.SelectedFunction === 'COUNT')
+        ? (!this.SelectedColumn && this.SelectedFunction === 'COUNT'
+            ? 'COUNT(*)'
+            : this.SelectedFunction === 'COUNT_DISTINCT'
+              ? `COUNT(DISTINCT ${this.SelectedColumn.includes(' ') ? '[' + this.SelectedColumn + ']' : this.SelectedColumn})`
+              : `${this.SelectedFunction}(${this.SelectedColumn.includes(' ') ? '[' + this.SelectedColumn + ']' : this.SelectedColumn})`)
+        : '';
+      if (simpleExpr) {
+        this.Expression = simpleExpr;
+      }
     }
 
     this.cdr.detectChanges();
