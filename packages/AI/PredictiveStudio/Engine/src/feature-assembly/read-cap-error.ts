@@ -16,18 +16,20 @@ export class ReadCapExceededError extends Error {
   }
 
   /**
-   * True when an explicit cap cut the read short. No cap means the read was uncapped (`IgnoreMaxRows`), so it can
-   * never truncate; an unknown match count cannot prove truncation.
+   * True when an explicit cap cut the read short: the database matched more rows than the capped read returned. No
+   * cap means the read was uncapped (`IgnoreMaxRows`), so it can never truncate. Narrows `maxRows` to `number`, so
+   * callers need no cap check of their own.
    */
-  public static IsTruncated(maxRows: number | undefined, rowsRead: number, rowsMatched: number | undefined): rowsMatched is number {
-    return maxRows !== undefined && rowsMatched !== undefined && rowsMatched > rowsRead;
+  public static IsTruncated(maxRows: number | undefined, rowsRead: number, rowsMatched: number): maxRows is number {
+    return maxRows !== undefined && rowsMatched > rowsRead;
   }
 
   /** The training refusal (feature assembly). */
   public static ForTraining(entityName: string, maxRows: number, rowsRead: number, rowsMatched: number): ReadCapExceededError {
     return new ReadCapExceededError(
       `FeatureAssembly read ${rowsRead} of ${rowsMatched} rows of '${entityName}' because MaxRows=${maxRows}. ` +
-        'Training reads every labelled row: remove maxRows, or narrow the population with a filter, and train again.',
+        'Training reads every row the filter matches (rows with no label are dropped after the read): remove maxRows, ' +
+        'or narrow the population with a filter, and train again.',
       entityName,
       maxRows,
       rowsRead,

@@ -1,9 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import type { FeatureStepGraph, LeakageGuard } from '@memberjunction/predictive-studio-core';
 
-import { FeatureAssemblyExecutor, type DatedSourceSpec } from '../feature-assembly-executor';
+import { FeatureAssemblyExecutor, type DatedSourceSpec, type FeatureAssemblyParams } from '../feature-assembly-executor';
 import { ReadCapExceededError } from '../read-cap-error';
 import type { IFeatureDataAccess, FetchRowsParams, FetchRowsResult, SourceRow } from '../data-access';
+import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
+
+/** The read scope every assembly needs. Reads go through the injected `dataAccess`, so the provider is never called. */
+const testScope: Pick<FeatureAssemblyParams, 'contextUser' | 'provider'> = { contextUser: { ID: 'user-1' } as UserInfo, provider: {} as IMetadataProvider };
 
 /**
  * Read completeness (gate W1 → S7.5, findings F-L3-1 / F-PIT-4). The data-access fake behaves like RunView:
@@ -32,6 +36,7 @@ function members(n: number): SourceRow[] {
 
 function assemble(dataAccess: IFeatureDataAccess, maxRows: number | undefined, datedSources?: DatedSourceSpec[]) {
   return new FeatureAssemblyExecutor().assemble({
+    ...testScope,
     targetEntityName: 'Members',
     recordSet: { EntityName: 'Members', MaxRows: maxRows },
     sources: [{ Kind: 'Entity', Ref: 'Members' }],

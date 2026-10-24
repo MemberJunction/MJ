@@ -19,6 +19,7 @@ import { type ModelingPlanSpec, TrustVerdicts, type TrustVerdict, type FeatureSt
 
 import { ModelingPlanToPipelineConfig, type PipelineConfig } from './modeling-plan-to-pipeline';
 import { trainModelViaEngine, wasTrainingLeakageFlagged } from '../operations/delegation';
+import { PredictiveStudioRefusals } from '../operations/refusals';
 
 /** Inputs for {@link PredictiveStudioPipelineBuilder.build}. */
 export interface BuildPredictionInput {
@@ -34,17 +35,22 @@ export interface BuildPredictionInput {
   sidecarVersion?: string;
 }
 
-/** Leaderboard entry matching MLExperimentResultsSpec and ModelingPlanSpec. */
+/**
+ * Leaderboard entry matching MLExperimentResultsSpec. `Metric`/`score` is the candidate's measured headline metric
+ * (the same one its trust verdict uses), or null when the candidate was not measured — never a stand-in number.
+ */
 export interface MLLeaderboardEntryPayload {
   IterationID: string;
-  Metric: number;
+  Metric: number | null;
   ModelID?: string;
   rank?: number;
   algorithm?: string;
   featureSet?: string;
   score?: number | null;
-  cvScore?: number | null;
+  /** Which headline metric `score` is (e.g. `AUC`, `R2`); null when not measured. */
+  metricName?: string | null;
   modelId?: string;
+  /** True only for the selected candidate, and only when it was measured. */
   isWinner?: boolean;
 }
 
@@ -76,46 +82,70 @@ export interface BuildPredictionResult {
   warnings?: FeatureStepWarning[];
 }
 
-/** Extract a representative score for tournament comparison (R² for regression, AUC/accuracy for classification). */
-function extractModelScore(model: MJMLModelEntity, problemType: string): number {
-  const parseJsonSafe = (raw: string | null | undefined): Record<string, unknown> => {
-    if (!raw) return {};
-    try {
-      const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
-    } catch {
-      return {};
-    }
-  };
+/** One trained tournament candidate. */
+export interface TrainedCandidate {
+  Pipeline: MJMLTrainingPipelineEntity;
+  Model: MJMLModelEntity;
+  Trust: TrustVerdict;
+  LeakageFlagged: boolean;
+  AlgorithmName: string;
+  FeatureSetName: string;
+}
 
-  const holdout = parseJsonSafe(model.HoldoutMetrics);
-  const train = parseJsonSafe(model.Metrics);
-  const isReg = (problemType ?? '').toLowerCase() === 'regression';
-
-  const getNum = (obj: Record<string, unknown>, keys: string[]): number | null => {
-    for (const k of keys) {
-      const v = obj[k];
-      if (typeof v === 'number' && Number.isFinite(v)) return v;
-      if (typeof v === 'string') {
-        const n = parseFloat(v);
-        if (Number.isFinite(n)) return n;
-      }
-    }
-    return null;
-  };
-
-  if (isReg) {
-    const r2 = getNum(holdout, ['r2', 'r_squared', 'R2']) ?? getNum(train, ['r2', 'r_squared', 'R2']);
-    if (r2 != null) return r2;
-    const rmse = getNum(holdout, ['rmse', 'RMSE']) ?? getNum(train, ['rmse', 'RMSE']);
-    if (rmse != null) return Math.max(0, 1 / (1 + rmse));
-  } else {
-    const auc = getNum(holdout, ['auc', 'roc_auc', 'AUC']) ?? getNum(train, ['auc', 'roc_auc', 'AUC']);
-    if (auc != null) return auc;
-    const acc = getNum(holdout, ['accuracy', 'acc', 'Accuracy']) ?? getNum(train, ['accuracy', 'acc', 'Accuracy']);
-    if (acc != null) return acc;
+/** How tournament candidates are scored, ranked and reported. Pure; no I/O. */
+export class TournamentRanking {
+  /**
+   * A candidate's leaderboard score: its trust verdict's headline metric, so the leaderboard and the headline can
+   * never disagree for the same model. Null when the model was not measured.
+   */
+  public static HeadlineScore(trust: TrustVerdict): number | null {
+    return trust.headlineMetric ? trust.headlineMetric.value : null;
   }
-  return 0.85;
+
+  /** Best-first: measured candidates by score (higher is better), unmeasured candidates last in plan order. */
+  public static Rank(trained: TrainedCandidate[]): TrainedCandidate[] {
+    return [...trained].sort((a, b) => {
+      const sa = TournamentRanking.HeadlineScore(a.Trust);
+      const sb = TournamentRanking.HeadlineScore(b.Trust);
+      if (sa === null && sb === null) return 0;
+      if (sa === null) return 1;
+      if (sb === null) return -1;
+      return sb - sa;
+    });
+  }
+
+  /** Leaderboard rows for ranked candidates; the first row is the winner only when it was measured. */
+  public static Leaderboard(ranked: TrainedCandidate[]): MLLeaderboardEntryPayload[] {
+    return ranked.map((t, idx) => {
+      const score = TournamentRanking.HeadlineScore(t.Trust);
+      return {
+        IterationID: t.Model.ID,
+        Metric: score,
+        ModelID: t.Model.ID,
+        rank: idx + 1,
+        algorithm: t.AlgorithmName,
+        featureSet: t.FeatureSetName,
+        score,
+        metricName: t.Trust.headlineMetric ? t.Trust.headlineMetric.key : null,
+        modelId: t.Model.ID,
+        isWinner: idx === 0 && score !== null,
+      };
+    });
+  }
+
+  /**
+   * The error a tournament throws when every candidate failed. When every candidate hit the same Predictive Studio
+   * refusal, the first one is rethrown so its type and code survive; otherwise one error lists each distinct message.
+   */
+  public static AllCandidatesFailed(errors: Error[]): Error {
+    const codes = errors.map((e) => PredictiveStudioRefusals.CodeOf(e));
+    const first = codes[0];
+    if (first !== null && first !== undefined && codes.every((c) => c === first)) {
+      return errors[0];
+    }
+    const distinct = [...new Set(errors.map((e) => e.message))];
+    return new Error(`All proposed experiment candidates failed to train: ${distinct.join(' | ')}`);
+  }
 }
 
 /** Deterministic builder: approved {@link ModelingPlanSpec} → pipeline + trained (+ maybe published) model. */
@@ -123,7 +153,8 @@ export class PredictiveStudioPipelineBuilder {
   /**
    * Build a prediction from an approved plan: create the pipeline, train, and publish if the trust
    * verdict clears the bar. When multiple experiments are proposed, runs a multi-algorithm tournament
-   * across up to 3 candidates, ranks them on holdout performance, and selects/publishes the winning model.
+   * across up to 3 candidates, ranks them on each one's trust-verdict headline metric (unmeasured
+   * candidates last, never the winner), and selects/publishes the winning model.
    * Never throws — returns a typed result with `success`/`errorMessage`.
    */
   public async Build(input: BuildPredictionInput): Promise<BuildPredictionResult> {
@@ -155,19 +186,14 @@ export class PredictiveStudioPipelineBuilder {
         const trust = TrustVerdicts.DeriveTrustVerdict(model);
         const leakageFlagged = wasTrainingLeakageFlagged(trainResult);
         const { published, heldReason } = await this.maybePublish(model, trust, leakageFlagged, autoPublish);
-        const scoreVal = extractModelScore(model, config.problemType);
-        const singleRow: MLLeaderboardEntryPayload = {
-          IterationID: model.ID,
-          Metric: scoreVal,
-          ModelID: model.ID,
-          rank: 1,
-          algorithm: experiments[0]?.AlgorithmName ?? config.algorithmName,
-          featureSet: experiments[0]?.FeatureSet?.join(', ') || 'Full Feature Set',
-          score: scoreVal,
-          cvScore: Number((scoreVal * 0.98).toFixed(3)),
-          modelId: model.ID,
-          isWinner: true,
-        };
+        const leaderboard = TournamentRanking.Leaderboard([{
+          Pipeline: pipeline,
+          Model: model,
+          Trust: trust,
+          LeakageFlagged: leakageFlagged,
+          AlgorithmName: experiments[0]?.AlgorithmName ?? config.algorithmName,
+          FeatureSetName: experiments[0]?.FeatureSet?.join(', ') || 'Full Feature Set',
+        }]);
         return {
           success: true,
           pipelineId: pipeline.ID,
@@ -179,23 +205,15 @@ export class PredictiveStudioPipelineBuilder {
           leakageFlagged,
           heldReason,
           errorMessage: null,
-          leaderboard: [singleRow],
+          leaderboard,
           warnings: collectedWarnings.length > 0 ? collectedWarnings : undefined,
         };
       }
 
       // Multi-algorithm tournament over up to 3 candidate experiments
       const candidatesToRun = experiments.slice(0, 3);
-      interface TrainedCandidate {
-        pipeline: MJMLTrainingPipelineEntity;
-        model: MJMLModelEntity;
-        trust: TrustVerdict;
-        leakageFlagged: boolean;
-        score: number;
-        algorithmName: string;
-        featureSetName: string;
-      }
       const trained: TrainedCandidate[] = [];
+      const candidateErrors: Error[] = [];
 
       for (let i = 0; i < candidatesToRun.length; i++) {
         const exp = candidatesToRun[i];
@@ -207,54 +225,41 @@ export class PredictiveStudioPipelineBuilder {
           const model = trainResult.model;
           const trust = TrustVerdicts.DeriveTrustVerdict(model);
           const leakageFlagged = wasTrainingLeakageFlagged(trainResult);
-          const score = extractModelScore(model, config.problemType);
           trained.push({
-            pipeline,
-            model,
-            trust,
-            leakageFlagged,
-            score,
-            algorithmName: exp.AlgorithmName || config.algorithmName,
-            featureSetName: exp.FeatureSet?.join(', ') || 'Full Feature Set',
+            Pipeline: pipeline,
+            Model: model,
+            Trust: trust,
+            LeakageFlagged: leakageFlagged,
+            AlgorithmName: exp.AlgorithmName || config.algorithmName,
+            FeatureSetName: exp.FeatureSet?.join(', ') || 'Full Feature Set',
           });
         } catch (candidateErr) {
-          const msg = candidateErr instanceof Error ? candidateErr.message : String(candidateErr);
-          LogError(`PredictiveStudioPipelineBuilder: candidate '${exp.AlgorithmName}' failed: ${msg}`);
+          const error = candidateErr instanceof Error ? candidateErr : new Error(String(candidateErr));
+          candidateErrors.push(error);
+          LogError(`PredictiveStudioPipelineBuilder: candidate '${exp.AlgorithmName}' failed: ${error.message}`);
         }
       }
 
       if (trained.length === 0) {
-        throw new Error('All proposed experiment candidates failed to train.');
+        throw TournamentRanking.AllCandidatesFailed(candidateErrors);
       }
 
-      // Rank best-first: higher score is better
-      trained.sort((a, b) => b.score - a.score);
-
-      const winner = trained[0];
-      const { published, heldReason } = await this.maybePublish(winner.model, winner.trust, winner.leakageFlagged, autoPublish);
-
-      const leaderboard: MLLeaderboardEntryPayload[] = trained.map((t, idx) => ({
-        IterationID: t.model.ID,
-        Metric: t.score,
-        ModelID: t.model.ID,
-        rank: idx + 1,
-        algorithm: t.algorithmName,
-        featureSet: t.featureSetName,
-        score: t.score,
-        cvScore: Number((t.score * 0.98).toFixed(3)),
-        modelId: t.model.ID,
-        isWinner: idx === 0,
-      }));
+      // Measured candidates best-first, unmeasured last. When none was measured there is no winner: the result
+      // still reports the top-priority candidate (held by the trust gate, which never lets an unmeasured model act).
+      const ranked = TournamentRanking.Rank(trained);
+      const winner = ranked[0];
+      const { published, heldReason } = await this.maybePublish(winner.Model, winner.Trust, winner.LeakageFlagged, autoPublish);
+      const leaderboard = TournamentRanking.Leaderboard(ranked);
 
       return {
         success: true,
-        pipelineId: winner.pipeline.ID,
-        modelId: winner.model.ID,
-        model: winner.model,
-        pipeline: winner.pipeline,
-        trust: winner.trust,
+        pipelineId: winner.Pipeline.ID,
+        modelId: winner.Model.ID,
+        model: winner.Model,
+        pipeline: winner.Pipeline,
+        trust: winner.Trust,
         published,
-        leakageFlagged: winner.leakageFlagged,
+        leakageFlagged: winner.LeakageFlagged,
         heldReason,
         errorMessage: null,
         leaderboard,

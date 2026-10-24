@@ -1,7 +1,24 @@
 import { describe, it, expect } from 'vitest';
-import type { IMetadataProvider, EntityInfo } from '@memberjunction/core';
-import { SummarizeBuildResult, BuildOutcomeMessage, GenerateMarkdownReport } from '../pipeline-builder-agent';
-import type { BuildPredictionResult } from '../pipeline-builder';
+import type { IMetadataProvider, EntityInfo, UserInfo } from '@memberjunction/core';
+import type { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep } from '@memberjunction/ai-core-plus';
+import type { MJMLModelEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
+import { TrustVerdicts, ImportanceDisplay, type ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
+import {
+  SummarizeBuildResult,
+  BuildOutcomeMessage,
+  GenerateMarkdownReport,
+  HiddenImportanceNote,
+  UNSHOWN_IMPORTANCE_KIND_NOTE,
+  PredictiveStudioPipelineBuilderAgent,
+  type PredictiveStudioBuilderPayload,
+} from '../pipeline-builder-agent';
+import {
+  PredictiveStudioPipelineBuilder,
+  TournamentRanking,
+  type BuildPredictionInput,
+  type BuildPredictionResult,
+  type MLLeaderboardEntryPayload,
+} from '../pipeline-builder';
 
 /**
  * The code sub-agent's pure projection helpers — they turn the rich builder result into the compact,
@@ -10,12 +27,12 @@ import type { BuildPredictionResult } from '../pipeline-builder';
  */
 const published: BuildPredictionResult = {
   success: true, pipelineId: 'p1', modelId: 'm1', published: true, leakageFlagged: false, heldReason: null, errorMessage: null,
-  trust: { grade: 'Good', score01: 0.56, oneLiner: 'Right about 8 out of 10 times.', explanation: '', canAct: true, gateReason: null, headlineMetric: { key: 'AUC', value: 0.78 }, unknown: false },
+  trust: { grade: 'Good', score01: 0.56, oneLiner: 'Right about 8 out of 10 times.', explanation: '', canAct: true, gateReason: null, headlineMetric: { key: 'AUC', value: 0.78 }, unknown: false, WithheldReason: null, MajorityBaseline: null },
 };
 const held: BuildPredictionResult = {
   success: true, pipelineId: 'p2', modelId: 'm2', published: false, leakageFlagged: false, errorMessage: null,
   heldReason: 'This prediction is about as accurate as guessing, so it isn\'t safe to act on yet.',
-  trust: { grade: 'Poor', score01: 0, oneLiner: 'About as accurate as guessing — not reliable.', explanation: '', canAct: false, gateReason: 'x', headlineMetric: { key: 'AUC', value: 0.51 }, unknown: false },
+  trust: { grade: 'Poor', score01: 0, oneLiner: 'About as accurate as guessing — not reliable.', explanation: '', canAct: false, gateReason: 'x', headlineMetric: { key: 'AUC', value: 0.51 }, unknown: false, WithheldReason: null, MajorityBaseline: null },
 };
 const failed: BuildPredictionResult = { success: false, published: false, leakageFlagged: false, heldReason: null, errorMessage: 'Algorithm not found' };
 
@@ -139,7 +156,9 @@ describe('GenerateMarkdownReport', () => {
       'Excellent',
       'Accurate and reliable.',
       true,
-      [{ feature: 'DuesAmount', importance: 0.45 }]
+      [{ feature: 'DuesAmount', importance: 0.45 }],
+      [],
+      false,
     );
     expect(md).toContain('# Model Development Results: Member Renewal Risk');
     expect(md).toContain('**AUC** = **0.864**');
@@ -180,11 +199,48 @@ describe('resolveEntity', () => {
 });
 
 describe('GenerateMarkdownReport — unmeasured model', () => {
-  it('says the metric was not measured instead of printing a number', () => {
-    const md = GenerateMarkdownReport('Renewal', 'Predict renewal', 'Renewed', 'AUC', null, null, 'Not measured.', false, [], []);
+  it("says the metric was not measured, and does not call the unmeasured verdict's 'Poor' grade a measured result", () => {
+    // Production passes the verdict's grade, which is 'Poor' for an unmeasured model (TrustVerdicts.unknownVerdict).
+    const md = GenerateMarkdownReport('Renewal', 'Predict renewal', 'Renewed', 'AUC', null, 'Poor', 'Not measured.', false, [], [], false);
     expect(md).toContain('**AUC** = **not measured**');
     expect(md).not.toMatch(/0\.850/);
-    expect(md).toContain('**Not measured**');
+    expect(md).toContain('**Trust Grade**: **Not measured**');
+    expect(md).not.toContain('**Poor**');
+  });
+});
+
+describe('GenerateMarkdownReport — measurement copy (M8)', () => {
+  const row = (rank: number, score: number | null, isWinner: boolean): MLLeaderboardEntryPayload => ({
+    IterationID: `m${rank}`, Metric: score, rank, algorithm: `Algo ${rank}`, score, metricName: score === null ? null : 'AUC', isWinner,
+  });
+  it('says nothing about picking a winner for a single-model build', () => {
+    const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', 0.8, 'Good', 'ok', true, [], [row(1, 0.8, true)], false);
+    expect(md).not.toMatch(/winner was picked/);
+    expect(md).toContain('## Model Performance');
+  });
+  it('says the score is optimistic when a tournament picked a winner on the held-back rows', () => {
+    const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', 0.8, 'Good', 'ok', true, [], [row(1, 0.8, true), row(2, 0.7, false)], false);
+    expect(md).toMatch(/winner was picked on those same rows/);
+    expect(md).toContain('## Winning Model Performance');
+  });
+  it('says a tournament with no measured candidate has no winner', () => {
+    const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', null, 'Poor', 'x', false, [], [row(1, null, false), row(2, null, false)], false);
+    expect(md).toContain('No candidate was measured, so no winner was picked.');
+    expect(md).not.toContain('🏆');
+    expect(md).not.toMatch(/winner was picked on those same rows/);
+  });
+});
+
+describe('HiddenImportanceNote (M7)', () => {
+  const lineage = (kind: string | null): string => JSON.stringify({ evaluation: { ImportanceKind: kind } });
+  it('explains split/impurity counts for a tree model', () => {
+    expect(HiddenImportanceNote(lineage('split_or_impurity'))).toBe(ImportanceDisplay.HiddenNote);
+  });
+  it('uses neutral wording for any other kind, including none and unknown', () => {
+    expect(HiddenImportanceNote(lineage('none'))).toBe(UNSHOWN_IMPORTANCE_KIND_NOTE);
+    expect(HiddenImportanceNote(lineage(null))).toBe(UNSHOWN_IMPORTANCE_KIND_NOTE);
+    expect(HiddenImportanceNote(null)).toBe(UNSHOWN_IMPORTANCE_KIND_NOTE);
+    expect(UNSHOWN_IMPORTANCE_KIND_NOTE).not.toContain('split or impurity');
   });
 });
 
@@ -203,4 +259,65 @@ describe('GenerateMarkdownReport — copy (W1 → S9.3)', () => {
   });
 });
 
+/** The model slice the agent reads off a build result; an unmeasured model has no metrics. */
+function unmeasuredModel(id: string): MJMLModelEntity {
+  // Test double at the entity boundary: the agent and the verdict read only these typed members.
+  return {
+    ID: id, Version: 1, Metrics: null, HoldoutMetrics: null, ProblemType: 'classification',
+    FeatureImportance: null, Lineage: JSON.stringify({ evaluation: { ImportanceKind: 'split_or_impurity' } }),
+  } as unknown as MJMLModelEntity;
+}
 
+/** A builder stub that "trains" one unmeasured candidate and ranks it the way the real builder does. */
+class UnmeasuredBuilder extends PredictiveStudioPipelineBuilder {
+  public override async Build(_input: BuildPredictionInput): Promise<BuildPredictionResult> {
+    const model = unmeasuredModel('model-unmeasured');
+    const trust = TrustVerdicts.DeriveTrustVerdict(model);
+    const leaderboard = TournamentRanking.Leaderboard(TournamentRanking.Rank([
+      { Pipeline: { ID: 'pipe-1' } as MJMLTrainingPipelineEntity, Model: model, Trust: trust, LeakageFlagged: false, AlgorithmName: 'XGBoost', FeatureSetName: 'Full Feature Set' },
+    ]));
+    return {
+      success: true, pipelineId: 'pipe-1', modelId: model.ID, model, trust, published: false, leakageFlagged: false,
+      heldReason: trust.gateReason, errorMessage: null, leaderboard,
+    };
+  }
+}
+
+/** The agent with the builder seam stubbed and a provider supplied, exposing the protected run. */
+class TestableBuilderAgent extends PredictiveStudioPipelineBuilderAgent {
+  protected override createBuilder(): PredictiveStudioPipelineBuilder {
+    return new UnmeasuredBuilder();
+  }
+  protected override get ProviderToUse(): IMetadataProvider {
+    return {} as IMetadataProvider;
+  }
+  public async Run(payload: PredictiveStudioBuilderPayload): Promise<BaseAgentNextStep<PredictiveStudioBuilderPayload>> {
+    // Test double for the framework params: executeAgentInternal reads only payload + contextUser.
+    const params = { payload, contextUser: { ID: 'user-1' } as UserInfo } as unknown as ExecuteAgentParams;
+    const { finalStep } = await this.executeAgentInternal<PredictiveStudioBuilderPayload>(params, {} as AgentConfiguration);
+    return finalStep;
+  }
+}
+
+const plan: ModelingPlanSpec = {
+  Goal: 'Predict renewal',
+  TargetDefinition: { EntityName: 'Members', TargetVariable: 'Renewed', ProblemType: 'classification', SuccessMetric: 'AUC' },
+  CandidateSources: [],
+  CandidateFeatures: [],
+  LeakageNotes: [],
+  ProposedExperiments: [{ Label: 'x', AlgorithmName: 'XGBoost', FeatureSet: [], Rationale: 'r', Priority: 1 }],
+  ValidationStrategy: { Strategy: 'holdout', LockedHoldoutFraction: 0.2 },
+  ProposedBudget: {},
+};
+
+describe('PredictiveStudioPipelineBuilderAgent.executeAgentInternal — unmeasured model (C1)', () => {
+  it('reports the candidate as not measured, with no score and no winner', async () => {
+    const step = await new TestableBuilderAgent().Run({ ...plan });
+    const payload = step.newPayload as PredictiveStudioBuilderPayload;
+    expect(payload.Leaderboard).toEqual([expect.objectContaining({ Metric: null, score: null, isWinner: false })]);
+    expect(payload.Markdown).toContain('| 1 | XGBoost | not measured | Not measured |');
+    expect(payload.Markdown).not.toContain('🏆');
+    expect(payload.Markdown).not.toMatch(/0\.850|0\.833/);
+    expect(payload.Markdown).toContain('**AUC** = **not measured**');
+  });
+});

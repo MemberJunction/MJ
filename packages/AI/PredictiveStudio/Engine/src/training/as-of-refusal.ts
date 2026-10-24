@@ -8,20 +8,52 @@
  */
 import type { AsOfStrategy } from '@memberjunction/predictive-studio-core';
 
+/** Where the refused as-of setting came from. */
+export type AsOfSettingSource = 'pipeline' | 'train-input' | 'modeling-plan';
+
 /** Thrown before any training row is written when an as-of setting would be ignored. */
 export class AsOfSettingHasNoEffectError extends Error {
+  /**
+   * @param Source where the setting came from
+   * @param Mode the refused as-of mode
+   * @param PipelineID the pipeline being trained; null for a modeling plan, which has no pipeline row yet
+   */
   constructor(
-    public readonly Source: 'pipeline' | 'train-input',
+    public readonly Source: AsOfSettingSource,
     public readonly Mode: AsOfStrategy['Mode'],
-    public readonly PipelineID: string,
+    public readonly PipelineID: string | null,
   ) {
     super(
-      `Training refused: ${Source === 'pipeline' ? "the pipeline's AsOfStrategy" : "the Train operation's asOf input"} ` +
+      `Training refused: ${AsOfSettingHasNoEffectError.settingName(Source)} ` +
         `(Mode='${Mode}') has no effect. Training reads every feature as it stands today and ` +
         `uses no dated sources, so the model would be identical to Mode='none' while appearing point-in-time. ` +
-        `Set the pipeline's AsOfStrategy to {"Mode":"none"} (pipeline ${PipelineID}).`,
+        AsOfSettingHasNoEffectError.remedy(Source, PipelineID),
     );
     this.name = 'AsOfSettingHasNoEffectError';
+  }
+
+  /** The setting the message names. */
+  private static settingName(source: AsOfSettingSource): string {
+    switch (source) {
+      case 'pipeline':
+        return "the pipeline's AsOfStrategy";
+      case 'train-input':
+        return "the Train operation's asOf input";
+      case 'modeling-plan':
+        return "the modeling plan's TargetDefinition.AsOfStrategy";
+    }
+  }
+
+  /** What to change: the pipeline's stored setting, the Train operation's own `asOf` input, or the plan. */
+  private static remedy(source: AsOfSettingSource, pipelineID: string | null): string {
+    switch (source) {
+      case 'pipeline':
+        return `Set the pipeline's AsOfStrategy to {"Mode":"none"} (pipeline ${pipelineID}).`;
+      case 'train-input':
+        return `Remove the asOf input from the Train request (pipeline ${pipelineID}).`;
+      case 'modeling-plan':
+        return 'Remove TargetDefinition.AsOfStrategy from the plan or set it to {"Mode":"none"}; no pipeline was created.';
+    }
   }
 
   /**

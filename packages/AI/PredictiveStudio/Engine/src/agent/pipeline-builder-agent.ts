@@ -17,7 +17,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { LogError } from '@memberjunction/core';
 import { BaseAgent } from '@memberjunction/ai-agents';
 import type { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, ArtifactDirective } from '@memberjunction/ai-core-plus';
-import { ImportanceDisplay, type ModelingPlanSpec, type TrustGrade, type FeatureStepWarning } from '@memberjunction/predictive-studio-core';
+import { ImportanceDisplay, EvaluationLineage, type ModelingPlanSpec, type TrustGrade, type FeatureStepWarning } from '@memberjunction/predictive-studio-core';
 
 import { PredictiveStudioPipelineBuilder, type BuildPredictionResult, type MLLeaderboardEntryPayload } from './pipeline-builder';
 export type { MLLeaderboardEntryPayload };
@@ -45,8 +45,11 @@ export interface MLFeatureImportancePayload {
   importance: number;
 }
 
-/** The agent payload = the modeling plan the conversation accumulated, plus the builder's outcome. */
-export interface PredictiveStudioBuilderPayload extends ModelingPlanSpec {
+/**
+ * The agent payload = the modeling plan the conversation accumulated, plus the builder's outcome. `Leaderboard` is
+ * the builder's own row shape, whose score may be null (an unmeasured candidate), so it replaces the plan's.
+ */
+export interface PredictiveStudioBuilderPayload extends Omit<ModelingPlanSpec, 'Leaderboard'> {
   /** Optional display name */
   Name?: string;
   BuildResult?: PredictiveStudioBuildOutcome;
@@ -147,9 +150,24 @@ export function parseFeatureImportance(raw: unknown): MLFeatureImportancePayload
   return ParseFeatureImportance(raw);
 }
 
+/** The hidden-list note for a model whose stored weights are not of a kind shown as drivers but are not split/impurity counts. */
+export const UNSHOWN_IMPORTANCE_KIND_NOTE = "This model's feature weights are not of a kind we show as drivers yet.";
+
+/**
+ * The note shown where a hidden feature-importance list would be, chosen from the model's stored importance kind:
+ * split/impurity counts get the reason they are hidden; any other kind (unknown, `none`) gets a neutral note.
+ */
+export function HiddenImportanceNote(lineageJSON: string | null | undefined): string {
+  return EvaluationLineage.Read(lineageJSON || null)?.ImportanceKind === 'split_or_impurity'
+    ? ImportanceDisplay.HiddenNote
+    : UNSHOWN_IMPORTANCE_KIND_NOTE;
+}
+
 /**
  * Generate a clean markdown results report for the ML Experiment Results artifact. A `null` score or
  * trust grade means the model was not measured; the report says so rather than standing in a number.
+ * `hiddenImportanceNote` is the note printed when `importanceHidden` (see {@link HiddenImportanceNote});
+ * it defaults to the split/impurity note.
  */
 export function GenerateMarkdownReport(
   name: string,
@@ -161,11 +179,13 @@ export function GenerateMarkdownReport(
   oneLiner: string,
   published: boolean,
   features: MLFeatureImportancePayload[],
-  leaderboard?: MLLeaderboardEntryPayload[],
-  importanceHidden = true,
+  leaderboard: MLLeaderboardEntryPayload[] | undefined,
+  importanceHidden: boolean,
+  hiddenImportanceNote: string = ImportanceDisplay.HiddenNote,
 ): string {
-  const trustGradeLabel = trustGrade || 'Not measured';
-  return renderMarkdownReport(name, targetVar, targetMetric, score, trustGradeLabel, oneLiner, published, features, leaderboard, importanceHidden);
+  // An unmeasured model's verdict grade is 'Poor' by construction; say "Not measured" rather than calling it a measured Poor result.
+  const trustGradeLabel = trustGrade && score !== null ? trustGrade : 'Not measured';
+  return renderMarkdownReport(name, targetVar, targetMetric, score, trustGradeLabel, oneLiner, published, features, leaderboard, importanceHidden, hiddenImportanceNote);
 }
 
 /** The report body, with the trust grade already rendered as its display label. */
@@ -180,41 +200,58 @@ function renderMarkdownReport(
   features: MLFeatureImportancePayload[],
   leaderboard: MLLeaderboardEntryPayload[] | undefined,
   importanceHidden: boolean,
+  hiddenImportanceNote: string,
 ): string {
   const topFeatures = features.length > 0
     ? features.slice(0, 8).map((f) => `- **${f.feature}**: ${(f.importance * 100).toFixed(1)}% of the model's weight`).join('\n')
     : importanceHidden
-      ? `- ${ImportanceDisplay.HiddenNote}`
+      ? `- ${hiddenImportanceNote}`
       : '- No feature importance weights were recorded for this model.';
-
-  let leaderboardSection = '';
-  if (leaderboard && leaderboard.length > 0) {
-    const rows = leaderboard
-      .map(
-        (r) =>
-          `| ${r.rank ?? '—'} | ${r.algorithm ?? 'Candidate'} | ${r.score !== null && r.score !== undefined ? r.score.toFixed(3) : '—'} | ${r.isWinner ? '🏆 Winner (Selected)' : 'Evaluated'} |`,
-      )
-      .join('\n');
-    leaderboardSection = `\n## Tournament Leaderboard\n| Rank | Algorithm | Score (${targetMetric}) | Status |\n|---|---|---|---|\n${rows}\n`;
-  }
+  const isTournament = (leaderboard?.length ?? 0) > 1;
+  const hasWinner = (leaderboard ?? []).some((r) => r.isWinner === true);
 
   return `# Model Development Results: ${name}
 
 ## Executive Summary
 ${oneLiner}
 
-## Winning Model Performance
+## ${isTournament ? (hasWinner ? 'Winning Model Performance' : 'Selected Model Performance') : 'Model Performance'}
 - **Target Variable**: \`${targetVar}\`
 - **Primary Metric**: **${targetMetric}** = **${score !== null && score !== undefined ? score.toFixed(3) : 'not measured'}**
 - **Trust Grade**: **${trustGradeLabel}** (${published ? 'Published to Catalog' : 'Held for Review'})
-${leaderboardSection}
+${renderLeaderboardSection(leaderboard, targetMetric, hasWinner)}
 ## Features the model weighted most (associations, not causes)
 ${topFeatures}
 
 ## How this was measured
-- The score comes from the rows held back from training; the winner was picked on those same rows, so the score is optimistic.
+- ${measurementNote(isTournament, hasWinner)}
 - Registered in the Predictive Studio Models catalog; the Trust Grade line above says whether it was published.
 `;
+}
+
+/** The leaderboard table; an unmeasured row says so, and a tournament with no measured candidate says it has no winner. */
+function renderLeaderboardSection(leaderboard: MLLeaderboardEntryPayload[] | undefined, targetMetric: string, hasWinner: boolean): string {
+  if (!leaderboard || leaderboard.length === 0) {
+    return '';
+  }
+  const rows = leaderboard
+    .map((r) => {
+      const measured = r.score !== null && r.score !== undefined;
+      const scoreText = measured ? `${(r.score as number).toFixed(3)}${r.metricName ? ` (${r.metricName})` : ''}` : 'not measured';
+      const status = r.isWinner ? '🏆 Winner (Selected)' : measured ? 'Evaluated' : 'Not measured';
+      return `| ${r.rank ?? '—'} | ${r.algorithm ?? 'Candidate'} | ${scoreText} | ${status} |`;
+    })
+    .join('\n');
+  const noWinner = leaderboard.length > 1 && !hasWinner ? '\nNo candidate was measured, so no winner was picked.\n' : '';
+  return `\n## Tournament Leaderboard\n| Rank | Algorithm | Score (${targetMetric}) | Status |\n|---|---|---|---|\n${rows}\n${noWinner}`;
+}
+
+/** How the score was measured; only a tournament picked a winner on the held-back rows. */
+function measurementNote(isTournament: boolean, hasWinner: boolean): string {
+  if (isTournament && hasWinner) {
+    return 'The score comes from the rows held back from training; the winner was picked on those same rows, so the score is optimistic.';
+  }
+  return 'The score comes from the rows held back from training.';
 }
 
 /** @deprecated Use {@link GenerateMarkdownReport}. */
@@ -230,7 +267,7 @@ export function generateMarkdownReport(
   features: MLFeatureImportancePayload[],
   leaderboard?: MLLeaderboardEntryPayload[],
 ): string {
-  return renderMarkdownReport(name, targetVar, targetMetric, score, trustGrade, oneLiner, published, features, leaderboard, true);
+  return renderMarkdownReport(name, targetVar, targetMetric, score, trustGrade, oneLiner, published, features, leaderboard, false, ImportanceDisplay.HiddenNote);
 }
 
 @RegisterClass(BaseAgent, 'PredictiveStudioPipelineBuilderAgent')
@@ -281,25 +318,7 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
       const featureBars = showable ? rawFeatures : [];
       const importanceHidden = rawFeatures.length > 0 && !showable;
 
-      const leaderboard: MLLeaderboardEntryPayload[] =
-        result.leaderboard && result.leaderboard.length > 0
-          ? result.leaderboard
-          : scoreVal === null || scoreVal === undefined
-            ? []
-            : [
-              {
-                IterationID: result.modelId ?? 'iteration-1',
-                Metric: scoreVal,
-                ModelID: result.modelId,
-                rank: 1,
-                algorithm: payload.ProposedExperiments?.[0]?.AlgorithmName ?? 'Winning Algorithm',
-                featureSet: 'Full Feature Set',
-                score: scoreVal,
-                cvScore: Number((scoreVal * 0.98).toFixed(3)),
-                modelId: result.modelId,
-                isWinner: true,
-              },
-            ];
+      const leaderboard: MLLeaderboardEntryPayload[] = result.leaderboard ?? [];
 
       const bestModelName = `${name} (v${result.model?.Version ?? 1})`;
       const summaryText = result.trust?.oneLiner ?? BuildOutcomeMessage(outcome);
@@ -315,6 +334,7 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
         featureBars,
         leaderboard,
         importanceHidden,
+        HiddenImportanceNote(result.model?.Lineage),
       );
 
       newPayloadObj = {

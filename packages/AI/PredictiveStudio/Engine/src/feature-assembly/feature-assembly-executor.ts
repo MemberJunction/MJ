@@ -142,10 +142,10 @@ export interface FeatureAssemblyParams {
   primaryKeyField?: string;
   /** Telemetry tag (train / materialize / on-demand). Logic is identical regardless. */
   context?: AssemblyContext;
-  /** Request user — REQUIRED on the server for isolation/audit. */
-  contextUser?: UserInfo;
-  /** Optional provider for multi-provider correctness. */
-  provider?: IMetadataProvider;
+  /** Request user — threaded through every read for isolation/audit. */
+  contextUser: UserInfo;
+  /** The provider every read runs on; required because the reads have no global fallback. */
+  provider: IMetadataProvider;
   /**
    * Optional data-access override — the seam that makes the executor unit-testable
    * without a DB. When omitted, a {@link RunViewDataAccess} is used.
@@ -252,9 +252,8 @@ export class FeatureAssemblyExecutor {
       throw new Error(`Failed to fetch target records: ${res.ErrorMessage ?? 'unknown error'}`);
     }
     const cap = params.recordSet.MaxRows;
-    // `??` on purpose: a match count of 0 is legitimate; an in-memory fixture without a count means "what it served".
-    const matched = res.TotalRowCount ?? res.Rows.length;
-    if (cap !== undefined && ReadCapExceededError.IsTruncated(cap, res.Rows.length, matched)) {
+    const matched = res.TotalRowCount;
+    if (ReadCapExceededError.IsTruncated(cap, res.Rows.length, matched)) {
       throw ReadCapExceededError.ForTraining(params.recordSet.EntityName, cap, res.Rows.length, matched);
     }
     return res.Rows;
