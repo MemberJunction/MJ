@@ -1551,7 +1551,11 @@ describe('SEAM-4: config-tuning bag → driver session payload (end-to-end shape
  * the OpenAI-protocol wire block, gated by each profile's declared `supportedTurnModes`.
  */
 describe('MapNormalizedTurnDetection — normalized vocabulary → wire block', () => {
-    const openaiProfile = { providerKey: OPENAI_REALTIME_PROFILE.providerKey, supportedTurnModes: OPENAI_REALTIME_PROFILE.supportedTurnModes };
+    const openaiProfile = {
+        providerKey: OPENAI_REALTIME_PROFILE.providerKey,
+        supportedTurnModes: OPENAI_REALTIME_PROFILE.supportedTurnModes,
+        supportsIdleTimeout: OPENAI_REALTIME_PROFILE.supportsIdleTimeout,
+    };
 
     it('returns undefined when nothing is requested, so the caller applies its own default', () => {
         expect(MapNormalizedTurnDetection(openaiProfile, false, undefined)).toBeUndefined();
@@ -1615,16 +1619,121 @@ describe('MapNormalizedTurnDetection — normalized vocabulary → wire block', 
     it('falls back (never rejects) when the profile does not support the requested mode', () => {
         // A SHARED catalog must be safe on every provider: an inherited semanticVad reaching a
         // server_vad-only profile degrades to that profile's default rather than failing the session.
-        const serverVadOnly = { providerKey: 'xai', supportedTurnModes: ['serverVad'] as const };
+        const serverVadOnly = { providerKey: 'xai', supportedTurnModes: ['serverVad'] as const, supportsIdleTimeout: true };
         expect(MapNormalizedTurnDetection(serverVadOnly, false, { Mode: 'semanticVad' })).toBeUndefined();
 
-        const noModes = { providerKey: 'huggingface', supportedTurnModes: [] as const };
+        const noModes = { providerKey: 'huggingface', supportedTurnModes: [] as const, supportsIdleTimeout: false };
         expect(MapNormalizedTurnDetection(noModes, false, { Mode: 'serverVad' })).toBeUndefined();
     });
 
     it("falls back for 'native' when a profile declares it supported but ships no mapping", () => {
-        const declaresNative = { providerKey: 'xai', supportedTurnModes: ['serverVad', 'native'] as const };
+        const declaresNative = { providerKey: 'xai', supportedTurnModes: ['serverVad', 'native'] as const, supportsIdleTimeout: true };
         expect(MapNormalizedTurnDetection(declaresNative, false, { Mode: 'native' })).toBeUndefined();
+    });
+});
+
+describe('MapNormalizedTurnDetection — idle timeout (IdleTimeoutMs → idle_timeout_ms)', () => {
+    const withIdle = { providerKey: 'openai', supportedTurnModes: ['serverVad', 'semanticVad'] as const, supportsIdleTimeout: true };
+    const withoutIdle = { providerKey: 'compat', supportedTurnModes: ['serverVad'] as const, supportsIdleTimeout: false };
+
+    it('adds idle_timeout_ms to server VAD when the profile supports it', () => {
+        expect(MapNormalizedTurnDetection(withIdle, false, { Mode: 'serverVad', IdleTimeoutMs: 7000 })).toEqual({
+            type: 'server_vad', idle_timeout_ms: 7000, create_response: true, interrupt_response: true,
+        });
+    });
+
+    it('reads an idle timeout with no Mode (or Mode default) as a server-VAD request', () => {
+        const expected = { type: 'server_vad', idle_timeout_ms: 7000, create_response: true, interrupt_response: true };
+        expect(MapNormalizedTurnDetection(withIdle, false, { IdleTimeoutMs: 7000 })).toEqual(expected);
+        expect(MapNormalizedTurnDetection(withIdle, false, { Mode: 'default', IdleTimeoutMs: 7000 })).toEqual(expected);
+    });
+
+    it('leaves semantic VAD alone (the idle timer exists only under server VAD)', () => {
+        expect(MapNormalizedTurnDetection(withIdle, false, { Mode: 'semanticVad', IdleTimeoutMs: 7000 })).toEqual({
+            type: 'semantic_vad', create_response: true, interrupt_response: true,
+        });
+    });
+
+    it('drops the idle timeout on a profile without one, and does not invent a server-VAD request for it', () => {
+        expect(MapNormalizedTurnDetection(withoutIdle, false, { IdleTimeoutMs: 7000 })).toBeUndefined();
+        expect(MapNormalizedTurnDetection(withoutIdle, false, { Mode: 'serverVad', IdleTimeoutMs: 7000 })).toEqual({
+            type: 'server_vad', create_response: true, interrupt_response: true,
+        });
+    });
+});
+
+describe('OpenAIRealtime voice speed, transcription hints and hosted tools (profile-gated)', () => {
+    let driver: TestableOpenAIRealtime;
+
+    beforeEach(() => {
+        driver = new TestableOpenAIRealtime('test-key');
+    });
+
+    /** The first session.update the driver sent, as a plain record. */
+    function firstSessionUpdate(): Record<string, unknown> {
+        const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+        if (update?.type !== 'session.update') {
+            throw new Error('expected a session.update');
+        }
+        return update.session as Record<string, unknown>;
+    }
+
+    it('keeps the GA placement: voice under audio.output, with voiceSpeed as audio.output.speed', async () => {
+        await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys', Config: { voice: 'marin', voiceSpeed: 1.25 } });
+        const session = firstSessionUpdate();
+        expect((session.audio as { output?: unknown }).output).toEqual({ voice: 'marin', speed: 1.25 });
+        expect(session.voice).toBeUndefined();
+        expect(session.voiceSpeed).toBeUndefined();
+    });
+
+    it("clamps voiceSpeed to OpenAI's 0.25–1.5 range", async () => {
+        await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys', Config: { voiceSpeed: 3 } });
+        expect((firstSessionUpdate().audio as { output?: unknown }).output).toEqual({ speed: 1.5 });
+    });
+
+    it('scrubs the language hint, keyterms and hosted tools OpenAI has no channel for, without leaking them raw', async () => {
+        await driver.StartSession({
+            Model: 'gpt-realtime',
+            SystemPrompt: 'sys',
+            Config: { transcriptionLanguages: ['en-US'], transcriptionKeyterms: ['MemberJunction'], providerTools: [{ type: 'web_search' }] },
+        });
+        const session = firstSessionUpdate();
+        expect((session.audio as { input?: { transcription?: unknown } }).input?.transcription).toEqual({ model: 'gpt-4o-mini-transcribe' });
+        expect(session.tools).toBeUndefined();
+        expect(session.transcriptionLanguages).toBeUndefined();
+        expect(session.transcriptionKeyterms).toBeUndefined();
+        expect(session.providerTools).toBeUndefined();
+    });
+
+    it('nests the idle timeout under audio.input.turn_detection on the GA placement', async () => {
+        await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys', Config: { turnDetection: { IdleTimeoutMs: 12000 } } });
+        const input = (firstSessionUpdate().audio as { input?: { turn_detection?: unknown } }).input;
+        expect(input?.turn_detection).toEqual({ type: 'server_vad', idle_timeout_ms: 12000, create_response: true, interrupt_response: true });
+    });
+
+    it('RegisterTools keeps the declared MCP servers instead of silently replacing them away', async () => {
+        const session = await driver.StartSession({
+            Model: 'gpt-realtime',
+            SystemPrompt: 'sys',
+            Config: { mcpTools: [{ type: 'mcp', server_label: 'kb', server_url: 'https://mcp.example.com', require_approval: 'never' }] },
+        });
+        const before = driver.Fake.Sent.length;
+        await session.RegisterTools([{ Name: 'Lookup', Description: 'look up', ParametersSchema: { type: 'object' } }]);
+        const frame = driver.Fake.Sent.slice(before)[0];
+        if (frame.type !== 'session.update') {
+            throw new Error('expected a session.update from RegisterTools');
+        }
+        const tools = (frame.session as Record<string, unknown>).tools as Array<Record<string, unknown>>;
+        expect(tools.map((t) => t.type)).toEqual(['function', 'mcp']);
+    });
+
+    it('treats input_audio_buffer.timeout_triggered as diagnostic only', async () => {
+        const session = await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' });
+        const seen: string[] = [];
+        session.OnTranscript(() => seen.push('transcript'));
+        session.OnError(() => seen.push('error'));
+        driver.Fake.Fire({ type: 'input_audio_buffer.timeout_triggered', audio_start_ms: 0, audio_end_ms: 1, event_id: 'e', item_id: 'i' } as RealtimeServerEvent);
+        expect(seen).toEqual([]);
     });
 });
 
