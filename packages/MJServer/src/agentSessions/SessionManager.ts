@@ -13,6 +13,7 @@ import { WriteReturningVisitorRecap } from './ReturningVisitorRecap.js';
 import { SessionRunIDVerifier, SessionRunIDs } from './SessionRunIDVerifier.js';
 import { ResolveScopedAnonymousRunUser } from '../realtimeWidget/widgetGuestElevation.js';
 import { RecordingAssemblyScheduler } from '../realtimeSessions/RecordingAssemblyScheduler.js';
+import { ResolveSessionScopeIdentity } from '../realtimeSessions/sessionAccess.js';
 
 /** Entity names — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
@@ -153,11 +154,13 @@ export class SessionManager {
     /**
      * Authorize and create a new session. Flow:
      * 1. `CanRun` check on the agent — denied → {@link SessionAuthorizationError}, no row written.
-     * 2. Resolve the conversation (use the supplied one, or create+link a fresh Conversation).
+     * 2. Resolve the conversation (use the supplied one, or create+link a fresh Conversation). An anonymous
+     *    caller may only supply a conversation stamped with its own scope identity.
      * 3. Persist the `AIAgentSession` as `Active`, stamped with this host and `LastActiveAt = now`.
      *
      * @returns the saved {@link MJAIAgentSessionEntity}.
-     * @throws {SessionAuthorizationError} when the user may not run the agent.
+     * @throws {SessionAuthorizationError} when the user may not run the agent, or an anonymous caller supplies a
+     *   conversation that is not its own.
      * @throws {Error} when conversation creation or session save fails.
      */
     public async CreateSession(
@@ -166,6 +169,9 @@ export class SessionManager {
         provider: IMetadataProvider,
     ): Promise<MJAIAgentSessionEntity> {
         await this.assertCanRun(input.agentID, contextUser);
+        if (input.conversationID && contextUser.IsMagicLinkAnonymous) {
+            await this.assertAnonymousOwnsConversation(input.conversationID, contextUser, provider);
+        }
 
         const conversationID = input.conversationID
             ?? await this.createConversation(input, contextUser, provider);
@@ -449,6 +455,23 @@ export class SessionManager {
     // ----- internals -------------------------------------------------------------------------
 
     /** Throws {@link SessionAuthorizationError} unless the user has `CanRun` on the agent. */
+    /**
+     * Refuses an anonymous caller binding a new session to a conversation that is not its own. Every anonymous
+     * visitor shares one Anonymous user, so row-level security alone may let one visitor read another's
+     * conversation; the session gates would then refuse the visitor its own new session, but the session row
+     * and its relays would already point into the other visitor's conversation. The conversation is read as
+     * the caller, so an unreadable one is refused too.
+     */
+    private async assertAnonymousOwnsConversation(conversationID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<void> {
+        const conversation = await provider.GetEntityObject<MJConversationEntity>(CONVERSATION_ENTITY, contextUser);
+        const loaded = await conversation.Load(conversationID);
+        const scopeIdentity = ResolveSessionScopeIdentity(contextUser);
+        if (!loaded || !scopeIdentity || conversation.ExternalID !== scopeIdentity) {
+            LogError(`SessionManager.CreateSession: refused anonymous user ${contextUser.ID} binding a session to conversation ${conversationID} (${loaded ? 'not its own' : 'not readable'}).`);
+            throw new SessionAuthorizationError('Not authorized to start a session on this conversation.');
+        }
+    }
+
     private async assertCanRun(agentID: string, contextUser: UserInfo): Promise<void> {
         const canRun = await AIAgentPermissionHelper.HasPermission(agentID, contextUser, 'run');
         if (!canRun) {
@@ -468,13 +491,13 @@ export class SessionManager {
         conversation.NewRecord();
         conversation.UserID = input.userID;
         conversation.Name = 'Agent Session';
-        // For a magic-link-anonymous principal (e.g. a public web-widget voice guest), stamp the
-        // session's conversation with the signed per-session scope so the Widget Guest RLS filters
-        // ({{ScopeResourceID}}) isolate this session — and everything chained to it (AI Agent
-        // Sessions via ConversationID, Session Channels via the session) — from other guests
-        // sharing the Anonymous UserID. No-op for named principals (no scope → default ExternalID).
-        if (contextUser.MagicLinkScope?.ResourceID) {
-            conversation.ExternalID = contextUser.MagicLinkScope.ResourceID;
+        // Stamp the scope identity AuthorizeSessionAccess compares against (one rule, one place:
+        // ResolveSessionScopeIdentity) — the token's resource scope when it has one, else an anonymous
+        // visitor's mj_sid. This isolates anonymous visitors that share the Anonymous UserID, and keeps
+        // the {{ScopeResourceID}} RLS filters matching the visitor's own rows. No-op for unscoped named principals.
+        const scopeIdentity = ResolveSessionScopeIdentity(contextUser);
+        if (scopeIdentity) {
+            conversation.ExternalID = scopeIdentity;
         }
 
         // Returning-visitor memory (RV1/RV2/RV4) for the VOICE path: the widget guest token carries the

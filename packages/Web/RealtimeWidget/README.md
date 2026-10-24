@@ -85,8 +85,8 @@ host page → <mj-support-widget> (shadow DOM, design-token-scoped)
 ## Scripts
 
 ```bash
-npm run build       # tsc → dist/ (ESM)
-npm run bundle      # esbuild → dist/mj-widget.js (single-file browser ESM)
+npm run build       # tsc → dist/ (ESM), then the bundle below, so a build never leaves a stale mj-widget.js
+npm run bundle      # esbuild → dist/embed/mj-widget.js (browser ESM, code-split into dist/embed/chunks)
 npm run bundle:min  # minified variant
 npm run test        # vitest (jsdom): session client, element, loader
 ```

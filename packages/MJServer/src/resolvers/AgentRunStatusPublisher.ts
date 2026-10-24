@@ -15,7 +15,7 @@ import type {
     ExecuteAgentResult,
 } from '@memberjunction/ai-core-plus';
 import type { UserPayload } from '../types.js';
-import { PublishStatusUpdate } from '../generic/PushStatusResolver.js';
+import { PublishStatusUpdate, StatusUpdateOwnerID } from '../generic/PushStatusResolver.js';
 
 const SIGNIFICANT_STEPS = ['prompt_execution', 'action_execution', 'subagent_execution', 'decision_processing'];
 
@@ -175,7 +175,7 @@ export class AgentRunStatusPublisher {
     private publish(type: 'ExecutionProgress' | 'StreamingContent', data: unknown): void {
         PublishStatusUpdate(this.pubSub, {
             sessionId: this.userPayload.sessionId,
-            ownerUserId: this.userPayload?.userRecord?.ID ?? '',
+            ownerUserId: StatusUpdateOwnerID(this.userPayload),
             message: JSON.stringify({
                 resolver: 'RunAIAgentResolver',
                 type,

@@ -49,7 +49,7 @@ import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, ReplaceByteArraysWi
 import { SQLParser, IsBalancedSQLFragment, LexSQL } from '@memberjunction/sql-parser';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import { EncryptionEngine, IsEncryptionKeyUnavailable, ReportEncryptionKeyUnavailable } from '@memberjunction/encryption';
-import { PUSH_STATUS_UPDATES_TOPIC, PublishStatusUpdate } from './PushStatusResolver.js';
+import { PUSH_STATUS_UPDATES_TOPIC, PublishStatusUpdate, StatusUpdateOwnerID } from './PushStatusResolver.js';
 import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData } from './CacheInvalidationResolver.js';
 import { PubSubManager } from './PubSubManager.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
@@ -59,11 +59,17 @@ import { Subscription } from 'rxjs';
  * Entities whose update is always hydrated from the stored row, never from the client's `OldValues___`, though they
  * do not track record changes: their server-side write rules compare against the prior state, which a client could
  * otherwise supply itself (lower-case names). See `ResolverBase.MustLoadTruthFromDatabase`.
+ *
+ * `mj: conversations` and `mj: ai agent sessions` carry the anonymous realtime-session ownership key
+ * (`ExternalID` / `ConversationID`), which their server entities refuse an anonymous visitor to change — a rule
+ * that decides on `Dirty`, so the baseline must be the stored row, not a client-supplied one (#4931).
  */
 const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
   'mj: record changes',
   'mj: conversation details',
   'mj: data context items',
+  'mj: conversations',
+  'mj: ai agent sessions',
 ]);
 
 export class ResolverBase {
@@ -1630,7 +1636,7 @@ export class ResolverBase {
   protected PublishStatusUpdate(pubSub: PubSubEngine, sessionId: string, message: string | undefined, userPayload: UserPayload): void {
     PublishStatusUpdate(pubSub, {
       sessionId,
-      ownerUserId: userPayload?.userRecord?.ID ?? '',
+      ownerUserId: StatusUpdateOwnerID(userPayload),
       message,
     });
   }

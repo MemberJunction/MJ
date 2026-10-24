@@ -140,7 +140,7 @@ describe('AgentRunner.RunAgentInConversation — refused conversation-detail sav
         expect(persistLine).toContain(REFUSAL);
     });
 
-    it('a refused final-status save logs the gate reason', async () => {
+    it('a refused final-status save logs the gate reason and fails the run, so the caller does not wait for a reply that never lands', async () => {
         // Agent-response detail: create OK, then the final-status save (step 5) is refused.
         const agentDetail = makeDetail('agent-detail', [true, false]);
         const runner = new AgentRunner(makeProvider([makeDetail('user-detail', [true]), agentDetail]));
@@ -151,7 +151,9 @@ describe('AgentRunner.RunAgentInConversation — refused conversation-detail sav
             agentRun: { ID: 'run-1', Status: 'Completed', FinalStep: 'Success' },
         } as unknown as ExecuteAgentResult);
 
-        await runner.RunAgentInConversation(makeParams(), { conversationId: 'conv-1', userMessage: 'hi' });
+        await expect(
+            runner.RunAgentInConversation(makeParams(), { conversationId: 'conv-1', userMessage: 'hi' }),
+        ).rejects.toThrow(REFUSAL);
 
         const finalLine = loggedErrors.find((line) => line.includes('final status'));
         expect(finalLine).toBeDefined();

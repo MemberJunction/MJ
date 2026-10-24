@@ -32,6 +32,8 @@ export * from './custom/MJAIBridgeProviderChannelEntityServer.server';
 export * from './custom/MJAIAgentSessionBridgeEntityServer.server';
 export * from './custom/sessionConfigGuard';
 export * from './custom/MJAIAgentSessionEntityServer.server';
+export * from './custom/anonymousOwnershipKeyGuard';
+export * from './custom/MJConversationEntityServer.server';
 export * from './custom/MJAIAgentSessionBridgeParticipantEntityServer.server';
 export * from './custom/MJAIRemoteBrowserProviderEntityServer.server';
 export * from './custom/MJMaterializedResultEntityServer.server';

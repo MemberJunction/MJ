@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { ComputeJwkThumbprint, ToProofPublicJwk, VerifyProofOfPossessionJwt } from '@memberjunction/global';
 import { WidgetSessionClient, type FetchLike } from '../session/widget-session-client.js';
 import type { WidgetSession } from '../types.js';
 
@@ -31,7 +32,8 @@ describe('WidgetSessionClient.Mint', () => {
         const session = await client.Mint();
 
         expect(calls[0].url).toBe('https://api.test/widget/session');
-        expect(JSON.parse(calls[0].init?.body as string)).toEqual({ widgetKey: 'pk_test_1' });
+        expect(calls[0].init?.headers).toEqual({ 'content-type': 'application/json' });
+        expect(JSON.parse(calls[0].init?.body as string)).toEqual({ widgetKey: 'pk_test_1', proofKey: expect.any(Object) });
         expect(session.token).toBe('jwt.token.here');
         expect(session.pinnedAgentId).toBe('AGENT1');
         expect(session.modality).toBe('Both');
@@ -66,7 +68,7 @@ describe('WidgetSessionClient.Mint (returning-visitor, RV1/RV2/RV4)', () => {
         const client = new WidgetSessionClient('https://api.test', 'pk_test_1', fn);
         const session = await client.Mint('vk_abc123');
 
-        expect(JSON.parse(calls[0].init?.body as string)).toEqual({ widgetKey: 'pk_test_1', visitorKey: 'vk_abc123' });
+        expect(JSON.parse(calls[0].init?.body as string)).toEqual({ widgetKey: 'pk_test_1', visitorKey: 'vk_abc123', proofKey: expect.any(Object) });
         expect(session.rememberReturningVisitors).toBe(true);
         expect(session.visitorKey).toBe('vk_abc123');
         expect(session.lastConversationId).toBe('conv-prior');
@@ -119,11 +121,62 @@ describe('WidgetSessionClient.ResolveIdentity (RV4)', () => {
 });
 
 describe('WidgetSessionClient.Refresh', () => {
-    it('hits the refresh endpoint', async () => {
+    it('hits the refresh endpoint with Authorization: Bearer <currentToken>', async () => {
         const { fn, calls } = fakeFetch(200, goodBody);
         const client = new WidgetSessionClient('https://api.test', 'pk_test_1', fn);
-        await client.Refresh();
-        expect(calls[0].url).toBe('https://api.test/widget/session/refresh');
+        await client.Mint();
+        await client.Refresh('current.guest.jwt', 'vk_abc123');
+        expect(calls[1].url).toBe('https://api.test/widget/session/refresh');
+        expect(calls[1].init?.headers).toEqual({
+            'content-type': 'application/json',
+            authorization: 'Bearer current.guest.jwt',
+            dpop: expect.any(String),
+        });
+        expect(JSON.parse(calls[1].init?.body as string)).toEqual({
+            widgetKey: 'pk_test_1',
+            visitorKey: 'vk_abc123',
+        });
+    });
+});
+
+describe('WidgetSessionClient proof of possession (#4931)', () => {
+    it('registers a public P-256 key at mint (never the private part)', async () => {
+        const { fn, calls } = fakeFetch(200, goodBody);
+        await new WidgetSessionClient('https://api.test', 'pk_test_1', fn).Mint();
+        const sent = (JSON.parse(calls[0].init?.body as string) as { proofKey: unknown }).proofKey;
+        expect(ToProofPublicJwk(sent)).toEqual(sent);
+    });
+
+    it('signs each refresh with the key registered at mint, for this URL and this token', async () => {
+        const { fn, calls } = fakeFetch(200, goodBody);
+        const client = new WidgetSessionClient('https://api.test/base/', 'pk_test_1', fn);
+        await client.Mint();
+        await client.Refresh('current.guest.jwt');
+        const registered = ToProofPublicJwk((JSON.parse(calls[0].init?.body as string) as { proofKey: unknown }).proofKey)!;
+        const proof = (calls[1].init?.headers as Record<string, string>).dpop;
+        const result = await VerifyProofOfPossessionJwt(proof, {
+            Method: 'POST',
+            PathSuffix: '/base/widget/session/refresh',
+            AccessToken: 'current.guest.jwt',
+            NowSeconds: Math.floor(Date.now() / 1000),
+            MaxSkewSeconds: 60,
+        });
+        expect(result).toEqual({ Valid: true, Thumbprint: await ComputeJwkThumbprint(registered) });
+    });
+
+    it('registers a new key on each mint', async () => {
+        const { fn, calls } = fakeFetch(200, goodBody);
+        const client = new WidgetSessionClient('https://api.test', 'pk_test_1', fn);
+        await client.Mint();
+        await client.Mint();
+        const keyOf = (i: number) => (JSON.parse(calls[i].init?.body as string) as { proofKey: { x: string } }).proofKey.x;
+        expect(keyOf(0)).not.toBe(keyOf(1));
+    });
+
+    it('refuses to refresh before a mint, since it holds no key to prove with', async () => {
+        const { fn, calls } = fakeFetch(200, goodBody);
+        await expect(new WidgetSessionClient('https://api.test', 'pk_test_1', fn).Refresh('current.guest.jwt')).rejects.toThrow(/mint/i);
+        expect(calls).toHaveLength(0);
     });
 });
 
@@ -160,6 +213,14 @@ describe('WidgetSessionClient.MsUntilRefresh', () => {
             sessionId: 'sess-1',
         };
         expect(WidgetSessionClient.MsUntilRefresh(session, 900_000)).toBe(40_000);
-        expect(WidgetSessionClient.MsUntilRefresh(session, 1_000_000)).toBe(0);
+        expect(WidgetSessionClient.MsUntilRefresh(session, 1_000_000)).toBe(5_000);
+    });
+
+    it('waits at least 5 s even when the token is already inside the refresh lead (#4931)', () => {
+        // A token due at once (a client clock ahead of the server's, or the session's last minutes) must not be
+        // refreshed in a tight loop that trips the rate limiter's 429 instead of the server's 403.
+        const session = { expiresAtMs: 1_000_000 } as WidgetSession;
+        expect(WidgetSessionClient.MsUntilRefresh(session, 990_000)).toBe(5_000);
+        expect(WidgetSessionClient.MsUntilRefresh(session, 2_000_000)).toBe(5_000);
     });
 });

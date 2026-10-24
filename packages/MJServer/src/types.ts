@@ -33,6 +33,12 @@ export type UserPayload = {
    * redemption; do not treat `undefined` as `false`.
    */
   emailVerified?: boolean;
+  /**
+   * Set only on a payload elevated by `ElevateUserPayload`: the principal the elevated user stands in for (a public
+   * widget guest). The run's own records are written as `userRecord`, but the guest's conversation is written as
+   * this user, because only a conversation's owner (or a grantee) may write its messages (MJ#4791).
+   */
+  ElevatedFrom?: UserInfo;
 };
 
 /**

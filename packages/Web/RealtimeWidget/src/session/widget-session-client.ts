@@ -7,6 +7,7 @@
  * @module @memberjunction/realtime-widget
  */
 
+import { CreateProofOfPossessionJwt, CreateProofOfPossessionKey, type ProofOfPossessionKey } from '@memberjunction/global';
 import type { WidgetModality, WidgetSession, WidgetSessionResponse } from '../types.js';
 
 /** Injectable fetch so the client is unit-testable without a network. Defaults to global fetch. */
@@ -16,14 +17,47 @@ export type FetchLike = (input: string, init?: RequestInit) => Promise<{
     json: () => Promise<unknown>;
 }>;
 
+/** A session endpoint answered with a failure. `Status` is the HTTP status, `Code` the server's `errorCode`. */
+export class WidgetSessionError extends Error {
+    constructor(
+        message: string,
+        public readonly Status: number,
+        public readonly Code: string | null,
+    ) {
+        super(message);
+        this.name = 'WidgetSessionError';
+    }
+
+    /**
+     * True when the server refused for good (401/403): retrying the same request cannot succeed, so the
+     * caller must start a new session. Rate limits (429), server faults (5xx) and network failures are temporary.
+     */
+    public get IsRefused(): boolean {
+        return this.Status === 401 || this.Status === 403;
+    }
+}
+
 /** How early (ms before expiry) to proactively refresh the guest token. */
 const REFRESH_LEAD_MS = 60_000;
+
+/**
+ * The shortest wait before a refresh. A token already inside the lead (the client's clock ahead of the server's)
+ * would otherwise be refreshed in a tight loop that trips the rate limiter's 429 instead of reaching the server's 403
+ * that starts a new session.
+ */
+const MIN_REFRESH_DELAY_MS = 5_000;
 
 /**
  * Talks to the widget guest-session endpoints. One instance per mounted widget.
  */
 export class WidgetSessionClient {
     private readonly fetchImpl: FetchLike;
+    /**
+     * The key the current session is bound to: created at each mint, held only in memory, and never
+     * exportable. The server signs its thumbprint into the token, and refresh must be signed with it, so a
+     * token copied off this page cannot be renewed elsewhere.
+     */
+    private proofKey: ProofOfPossessionKey | null = null;
 
     constructor(
         private readonly apiUrl: string,
@@ -41,13 +75,20 @@ export class WidgetSessionClient {
      *   RememberReturningVisitors toggle). Omit on a first visit; the server mints one when remembering is on.
      */
     public async Mint(visitorKey?: string): Promise<WidgetSession> {
-        return this.call('/widget/session', visitorKey);
+        const key = await CreateProofOfPossessionKey();
+        const session = await this.call('/widget/session', visitorKey, undefined, key);
+        this.proofKey = key;
+        return session;
     }
 
-    /** Refreshes the guest session (server re-mints by the same key). Carries the visitor anchor so the
-     *  refreshed session keeps the same returning-visitor identity. */
-    public async Refresh(visitorKey?: string): Promise<WidgetSession> {
-        return this.call('/widget/session/refresh', visitorKey);
+    /** Refreshes the guest session (server re-mints by the same key while verifying the current token to
+     *  preserve `mj_sid`). Carries the visitor anchor so the refreshed session keeps the same
+     *  returning-visitor identity. */
+    public async Refresh(currentToken: string, visitorKey?: string): Promise<WidgetSession> {
+        if (!this.proofKey) {
+            throw new Error('Widget session refresh needs the key registered at mint; call Mint first.');
+        }
+        return this.call('/widget/session/refresh', visitorKey, currentToken, this.proofKey);
     }
 
     /**
@@ -122,20 +163,32 @@ export class WidgetSessionClient {
         }
     }
 
-    /** Milliseconds until the given session should be refreshed (never negative). */
+    /** Milliseconds until the given session should be refreshed (at least {@link MIN_REFRESH_DELAY_MS}). */
     public static MsUntilRefresh(session: WidgetSession, nowMs: number): number {
-        return Math.max(0, session.expiresAtMs - nowMs - REFRESH_LEAD_MS);
+        return Math.max(MIN_REFRESH_DELAY_MS, session.expiresAtMs - nowMs - REFRESH_LEAD_MS);
     }
 
-    private async call(path: string, visitorKey?: string): Promise<WidgetSession> {
-        const res = await this.fetchImpl(`${this.trimmedApiUrl()}${path}`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify(visitorKey ? { widgetKey: this.widgetKey, visitorKey } : { widgetKey: this.widgetKey }),
-        });
+    /**
+     * POSTs to a session endpoint. A mint (no `bearerToken`) registers `key`'s public half; a refresh sends the
+     * token and a proof signed by `key` for this URL and token.
+     */
+    private async call(path: string, visitorKey: string | undefined, bearerToken: string | undefined, key: ProofOfPossessionKey): Promise<WidgetSession> {
+        const url = `${this.trimmedApiUrl()}${path}`;
+        const headers: Record<string, string> = { 'content-type': 'application/json' };
+        const request: Record<string, unknown> = { widgetKey: this.widgetKey };
+        if (visitorKey) {
+            request.visitorKey = visitorKey;
+        }
+        if (bearerToken) {
+            headers['authorization'] = `Bearer ${bearerToken}`;
+            headers['dpop'] = await CreateProofOfPossessionJwt(key, { Method: 'POST', Url: url, AccessToken: bearerToken });
+        } else {
+            request.proofKey = key.PublicJwk;
+        }
+        const res = await this.fetchImpl(url, { method: 'POST', headers, body: JSON.stringify(request) });
         const body = (await res.json()) as WidgetSessionResponse;
         if (!res.ok || !body?.success || !body.token) {
-            throw new Error(`Widget session mint failed (${res.status}): ${body?.errorCode ?? body?.error ?? 'unknown'}`);
+            throw new WidgetSessionError(`Widget session mint failed (${res.status}): ${body?.errorCode ?? body?.error ?? 'unknown'}`, res.status, body?.errorCode ?? null);
         }
         return this.toSession(body);
     }

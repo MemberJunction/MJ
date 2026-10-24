@@ -269,11 +269,15 @@ describe('realtime recording REST routes', () => {
                 const user = {
                     ID: id,
                     IsMagicLinkAnonymous: req.header('x-test-anonymous') === 'true',
+                    AnonymousVisitorID: scope ?? undefined,
                     MagicLinkScope: scope ? { ResourceID: scope } : undefined,
                 };
                 return id ? { ContextUser: user as unknown as UserInfo, Provider: {} as unknown as DatabaseProviderBase } : null;
             },
-            LoadConversationExternalID: async session => ledger.Sessions.get(session.ID)?.ConversationExternalID ?? null,
+            LoadConversationScope: async session => {
+                const row = ledger.Sessions.get(session.ID);
+                return { ExternalID: row?.ConversationExternalID ?? null, Readable: row?.ConversationExternalID !== undefined };
+            },
             LoadOwnedSession: async (agentSessionId, contextUser) => {
                 const row = ledger.Sessions.get(agentSessionId);
                 if (!row) {
@@ -394,6 +398,14 @@ describe('realtime recording REST routes', () => {
                 const headers = { 'x-test-anonymous': 'true', 'x-test-scope': SCOPE };
                 expect((await post(`/${SESSION}/shard/0`, shardBytes(0), OWNER_ID, headers)).status).toBe(200);
                 expect((await post(`/${SESSION}/end?lastShardIndex=0&capturedSamples=${SHARD_SAMPLES}`, null, OWNER_ID, headers)).status).toBe(200);
+            });
+
+            it('accepts a named owner holding a resource-scoped link on its own unstamped conversation, and refuses another stamp (#4931)', async () => {
+                const headers = { 'x-test-scope': 'res-1' };
+                addSession(SESSION, { ConversationExternalID: null });
+                expect((await post(`/${SESSION}/shard/0`, shardBytes(0), OWNER_ID, headers)).status).toBe(200);
+                addSession(SESSION, { ConversationExternalID: 'res-2' });
+                expect((await post(`/${SESSION}/shard/1`, shardBytes(1), OWNER_ID, headers)).status).toBe(403);
             });
 
             it('leaves a named owner (no scope, not anonymous) unaffected', async () => {

@@ -8,7 +8,7 @@
  * response — the application, the pinned agent, the voice ceiling, the channels the instance enables — is
  * what the server decided, and is returned as such.
  */
-import { TrimTrailingSlashes } from '@memberjunction/global';
+import { CreateProofOfPossessionJwt, CreateProofOfPossessionKey, TrimTrailingSlashes, type ProofOfPossessionKey } from '@memberjunction/global';
 
 /** Modalities a widget instance may expose. */
 export type WidgetKeyModality = 'Text' | 'Voice' | 'Both';
@@ -51,6 +51,12 @@ const FIFTEEN_MINUTES_MS = 15 * 60_000;
 
 export class WidgetKeyClient {
   private readonly baseUrl: string;
+  /**
+   * The key the current session is bound to: created at each mint, held only in memory, and never exportable.
+   * The server signs its thumbprint into the token and requires refresh to be signed with it, so a token copied
+   * off this page cannot be renewed elsewhere.
+   */
+  private proofKey: ProofOfPossessionKey | null = null;
 
   constructor(
     apiUrl: string,
@@ -61,22 +67,41 @@ export class WidgetKeyClient {
   }
 
   /** Mints a fresh guest session. Throws {@link WidgetKeyError}. */
-  public Mint(): Promise<WidgetGuestSession> {
-    return this.call('/widget/session');
+  public async Mint(): Promise<WidgetGuestSession> {
+    const key = await CreateProofOfPossessionKey();
+    const session = await this.call('/widget/session', key);
+    this.proofKey = key;
+    return session;
   }
 
-  /** Re-mints by the same key (the server's refresh path). Throws {@link WidgetKeyError}. */
-  public Refresh(): Promise<WidgetGuestSession> {
-    return this.call('/widget/session/refresh');
+  /** Re-mints by the same key while presenting the current session token so `mj_sid` is preserved. Throws {@link WidgetKeyError}. */
+  public async Refresh(currentToken: string): Promise<WidgetGuestSession> {
+    if (!this.proofKey) {
+      throw new WidgetKeyError('A guest session refresh needs the key registered at mint; call Mint first.', 'no_proof_key', null);
+    }
+    return this.call('/widget/session/refresh', this.proofKey, currentToken);
   }
 
-  private async call(path: string): Promise<WidgetGuestSession> {
+  /**
+   * POSTs to a session endpoint. A mint (no `bearerToken`) registers `key`'s public half; a refresh sends the token
+   * and a proof signed by `key` for this URL and token.
+   */
+  private async call(path: string, key: ProofOfPossessionKey, bearerToken?: string): Promise<WidgetGuestSession> {
     let response: Awaited<ReturnType<FetchLike>>;
+    const url = `${this.baseUrl}${path}`;
+    const headers: Record<string, string> = { 'content-type': 'application/json' };
+    const request: Record<string, unknown> = { widgetKey: this.widgetKey };
+    if (bearerToken) {
+      headers['authorization'] = `Bearer ${bearerToken}`;
+      headers['dpop'] = await CreateProofOfPossessionJwt(key, { Method: 'POST', Url: url, AccessToken: bearerToken });
+    } else {
+      request['proofKey'] = key.PublicJwk;
+    }
     try {
-      response = await this.fetchImpl(`${this.baseUrl}${path}`, {
+      response = await this.fetchImpl(url, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ widgetKey: this.widgetKey })
+        headers,
+        body: JSON.stringify(request)
       });
     } catch (error) {
       throw new WidgetKeyError(`Could not reach the server: ${error instanceof Error ? error.message : String(error)}`, 'network', null);

@@ -1,15 +1,17 @@
 import { describe, it, expect } from 'vitest';
+import { ComputeJwkThumbprint, ToProofPublicJwk, VerifyProofOfPossessionJwt } from '@memberjunction/global';
 import { WidgetKeyClient, WidgetKeyError, DescribeMintFailure, type FetchLike } from '../lib/auth/widget-key-client';
 
 interface Call {
   url: string;
+  headers?: Record<string, string>;
   body: unknown;
 }
 
 function client(answer: { ok?: boolean; status?: number; json?: unknown | (() => Promise<unknown>); throws?: Error }) {
   const calls: Call[] = [];
   const fetchImpl: FetchLike = async (url, init) => {
-    calls.push({ url, body: JSON.parse(init?.body ?? 'null') });
+    calls.push({ url, headers: init?.headers, body: JSON.parse(init?.body ?? 'null') });
     if (answer.throws) {
       throw answer.throws;
     }
@@ -35,16 +37,49 @@ const GOOD = {
 };
 
 describe('WidgetKeyClient', () => {
-  it('mints through the existing /widget/session endpoint, sending only the key', async () => {
+  it('mints through the existing /widget/session endpoint, sending only the key and no Authorization header', async () => {
     const { api, calls } = client({ json: GOOD });
     await api.Mint();
-    expect(calls).toEqual([{ url: 'https://api.example.com/widget/session', body: { widgetKey: 'pk_live_abc' } }]);
+    expect(calls).toEqual([
+      {
+        url: 'https://api.example.com/widget/session',
+        headers: { 'content-type': 'application/json' },
+        body: { widgetKey: 'pk_live_abc', proofKey: expect.any(Object) }
+      }
+    ]);
   });
 
-  it('refreshes through /widget/session/refresh', async () => {
+  it('refreshes through /widget/session/refresh with Authorization: Bearer <currentToken> and a proof', async () => {
     const { api, calls } = client({ json: GOOD });
-    await api.Refresh();
-    expect(calls[0].url).toBe('https://api.example.com/widget/session/refresh');
+    await api.Mint();
+    await api.Refresh('current.guest.jwt');
+    expect(calls[1]).toEqual({
+      url: 'https://api.example.com/widget/session/refresh',
+      headers: { 'content-type': 'application/json', authorization: 'Bearer current.guest.jwt', dpop: expect.any(String) },
+      body: { widgetKey: 'pk_live_abc' }
+    });
+  });
+
+  it('registers a public P-256 key at mint and signs each refresh with it, for this URL and token (#4931)', async () => {
+    const { api, calls } = client({ json: GOOD });
+    await api.Mint();
+    await api.Refresh('current.guest.jwt');
+    const registered = ToProofPublicJwk((calls[0].body as { proofKey: unknown }).proofKey);
+    expect(registered).toEqual((calls[0].body as { proofKey: unknown }).proofKey);
+    const result = await VerifyProofOfPossessionJwt(calls[1].headers!['dpop'], {
+      Method: 'POST',
+      PathSuffix: '/widget/session/refresh',
+      AccessToken: 'current.guest.jwt',
+      NowSeconds: Math.floor(Date.now() / 1000),
+      MaxSkewSeconds: 60
+    });
+    expect(result).toEqual({ Valid: true, Thumbprint: await ComputeJwkThumbprint(registered!) });
+  });
+
+  it('refuses to refresh before a mint, since it holds no key to prove with (#4931)', async () => {
+    const { api, calls } = client({ json: GOOD });
+    await expect(api.Refresh('current.guest.jwt')).rejects.toThrow(/mint/i);
+    expect(calls).toHaveLength(0);
   });
 
   it('returns what the SERVER decided: the pinned agent, the application, the voice ceiling, the enabled channels', async () => {

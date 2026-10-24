@@ -61,7 +61,9 @@ export function RealtimeSessionEventsFilter(data: {
         return false;
     }
     const decision = AuthorizeSessionAccess(
-        { SessionUserID: payload.OwnerUserID, ConversationExternalID: payload.ScopeKey },
+        // Readability is per caller and was proven when this subscription opened (it only receives events for
+        // that one session); the snapshot carries just the stamp, so a null ScopeKey stays usable by that owner.
+        { SessionUserID: payload.OwnerUserID, ConversationExternalID: payload.ScopeKey, ConversationReadable: true },
         connectionPrincipal(context),
     );
     return decision.Allowed;
@@ -105,7 +107,7 @@ export async function AuthorizeRealtimeSessionSubscription(
         throw new Error(REFUSAL_MESSAGE);
     }
     const decision = AuthorizeSessionAccess(
-        { SessionUserID: loaded.Session.UserID, ConversationExternalID: loaded.ConversationExternalID },
+        { SessionUserID: loaded.Session.UserID, ConversationExternalID: loaded.ConversationExternalID, ConversationReadable: loaded.ConversationReadable },
         principal,
     );
     if (decision.Allowed === false) {
