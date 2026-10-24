@@ -1573,6 +1573,17 @@
           "primaryKey": {
             "ID": "19516008-6F25-49C0-BEAA-59762CC20B21"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT132 - Content Pipeline Lifecycle",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "951C5436-7A5C-4F27-B0CF-E952B385611B"
+          }
         }
       ]
     },
