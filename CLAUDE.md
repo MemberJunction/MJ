@@ -135,7 +135,7 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 
 | Rule | Loads for | Covers |
 |---|---|---|
-| [`data-access.md`](.claude/rules/data-access.md) | `**/*.ts` | `RunView`/`RunViews`, `ResultType`/`Fields`, `BaseEntity` Save/Delete error handling, entity metadata lookup (`EntityByName`), per-provider `Metadata` scoping, caching + `BaseEngine`/`BaseEngineRegistry`, keyset pagination, `UserInfoEngine` preferences |
+| [`data-access.md`](.claude/rules/data-access.md) | `**/*.ts` | `RunView`/`RunViews` (`AlternateBaseView`), `ResultType`/`Fields`, `BaseEntity` Save/Delete error handling, entity metadata lookup (`EntityByName`), per-provider `Metadata` scoping, caching + `BaseEngine`/`BaseEngineRegistry`, keyset pagination, `UserInfoEngine` preferences |
 | [`typescript-style.md`](.claude/rules/typescript-style.md) | `**/*.ts` | No `any`, no `.Get()`/`.Set()`, derive field types from the entity, no cross-package re-exports, `BaseSingleton`, no dynamic `import()`, naming conventions, functional decomposition, OOD |
 | [`design-tokens.md`](.claude/rules/design-tokens.md) | `**/*.scss`, `**/*.css` | No hardcoded colors, the semantic token catalog, hex→token mappings, `color-mix()`, the CI gates |
 | [`testing.md`](.claude/rules/testing.md) | `**/*.test.ts`, `**/__tests__/**` | Vitest conventions, test structure, the scaffold script, fixing test drift, CI integration |
@@ -146,7 +146,7 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 | Path | Scope |
 |---|---|
 | [`migrations/CLAUDE.md`](migrations/CLAUDE.md) | Migration authoring — naming, hardcoded UUIDs, system columns CodeGen owns, CHECK constraints, CodeGen handoff |
-| [`metadata/CLAUDE.md`](metadata/CLAUDE.md) | Metadata authoring — `@lookup`/`@file`/`@parent` refs, a `primaryKey` on every record (`uuidgen` or `@lookup`), metadata ships only as release migrations (no install-time metadata phase), seeding lookup tables, application metadata, polymorphic-FK `EntityIDFieldName` |
+| [`metadata/CLAUDE.md`](metadata/CLAUDE.md) | Metadata authoring — `@lookup`/`@file`/`@parent` refs, a `primaryKey` on every record (`uuidgen` or `@lookup`), metadata ships only as release migrations (no install-time metadata phase), seeding lookup tables, application metadata, polymorphic-FK `EntityIDFieldName`, `MJ: Entity Alternate Base Views` |
 | [`metadata/components/CLAUDE.md`](metadata/components/CLAUDE.md) | Interactive component authoring — component architecture rules, the `ProductRevenueMatrix` reference implementation |
 | [`docker/CLAUDE.md`](docker/CLAUDE.md) | Docker workbench + MJAPI container configurations |
 | [`stats/CLAUDE.md`](stats/CLAUDE.md) | Repo LOC stats — generated files, do not hand-edit |
@@ -164,7 +164,7 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 
 ### Guides — the complete index is [`guides/README.md`](guides/README.md)
 
-Cross-cutting "read this before you build that" guides, categorized. **Consult the index before working in an unfamiliar area** — they capture patterns already litigated. Frequently needed: [Caching & Pub/Sub](guides/CACHING_AND_PUBSUB_GUIDE.md), [UUID Comparison](guides/UUID_COMPARISON_GUIDE.md), [Unified Permissions](guides/UNIFIED_PERMISSIONS_GUIDE.md), [Search Overview](guides/SEARCH_OVERVIEW_GUIDE.md), [Dashboard Best Practices](guides/DASHBOARD_BEST_PRACTICES.md), [Forms Architecture](guides/FORMS_ARCHITECTURE_GUIDE.md), [Transport Layer](guides/TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md), [Remote Operations](guides/REMOTE_OPERATIONS_GUIDE.md).
+Cross-cutting "read this before you build that" guides, categorized. **Consult the index before working in an unfamiliar area** — they capture patterns already litigated. Frequently needed: [Alternate Base Views](guides/ALTERNATE_BASE_VIEWS_GUIDE.md), [Caching & Pub/Sub](guides/CACHING_AND_PUBSUB_GUIDE.md), [UUID Comparison](guides/UUID_COMPARISON_GUIDE.md), [Unified Permissions](guides/UNIFIED_PERMISSIONS_GUIDE.md), [Search Overview](guides/SEARCH_OVERVIEW_GUIDE.md), [Dashboard Best Practices](guides/DASHBOARD_BEST_PRACTICES.md), [Forms Architecture](guides/FORMS_ARCHITECTURE_GUIDE.md), [Transport Layer](guides/TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md), [Remote Operations](guides/REMOTE_OPERATIONS_GUIDE.md).
 
 **UI work is layered — L0 runtime → L1 widget → L2 composite → L3 Explorer surface.** Nothing below L3 imports `@angular/router` or an Explorer package; nothing at L3 holds domain logic. Read [`guides/UI_LAYERING_GUIDE.md`](guides/UI_LAYERING_GUIDE.md) before building any UI, in this repo or any MJ app repo.
 
@@ -196,10 +196,7 @@ npm run check:codegen-tail # new-table migrations ship their generated entity (a
 
 **Parallelize aggressively.** Whenever you need to spin up tasks that don't require user interaction and aren't interdependent, run them **in parallel**. Never process independent tasks sequentially.
 
-<!-- Function decomposition rules deliberately live ONLY in .claude/rules/typescript-style.md.
-     They were summarized here at one point, and the paraphrase drifted from the rule it was
-     summarizing — a restated rule is a second source of truth that silently diverges. If a rule
-     has a home, link to it; don't re-say it. -->
+<!-- Function decomposition rules live ONLY in .claude/rules/typescript-style.md — link to rules, don't restate them. -->
 
 ---
 

@@ -11,8 +11,11 @@ import {
 import type {
   FilterDescriptor,
   CompositeFilterDescriptor,
-  FilterFieldType
+  FilterFieldType,
+  FilterFieldInfo
 } from '../lib/types/filter.types';
+import { FilterRuleComponent } from '../lib/filter-rule/filter-rule.component';
+import type { ElementRef } from '@angular/core';
 
 describe('IsCompositeFilter', () => {
   it('should return true for composite filters', () => {
@@ -163,5 +166,126 @@ describe('GetDefaultValue', () => {
 
   it('should return null for lookup', () => {
     expect(GetDefaultValue('lookup')).toBeNull();
+  });
+});
+
+describe('FilterRuleComponent field filtering and drop-up positioning', () => {
+  const sampleFields: FilterFieldInfo[] = [
+    { name: 'JobTypeID', displayName: 'Job Type ID', type: 'lookup', sqlType: 'uniqueidentifier', description: 'Foreign key to Scheduled Job Types' },
+    { name: 'CronExpression', displayName: 'Cron Expression', type: 'string', sqlType: 'nvarchar', description: 'Standard 5-field cron schedule expression' },
+    { name: 'NextRunAt', displayName: 'Next Run At', type: 'date', sqlType: 'datetimeoffset', description: 'UTC timestamp of next scheduled execution' }
+  ];
+
+  it('filters fields by displayName, name, description, or sqlType', () => {
+    const comp = new FilterRuleComponent({ nativeElement: { contains: () => false } } as unknown as ElementRef);
+    comp.fields = sampleFields;
+    comp.Filter = { field: 'JobTypeID', operator: 'eq', value: null };
+
+    expect(comp.FilteredFields()).toHaveLength(3);
+
+    comp.OnFieldSearchInput('cron');
+    expect(comp.FilteredFields().map(f => f.name)).toEqual(['CronExpression']);
+
+    comp.OnFieldSearchInput('timestamp');
+    expect(comp.FilteredFields().map(f => f.name)).toEqual(['NextRunAt']);
+
+    comp.OnFieldSearchInput('uniqueidentifier');
+    expect(comp.FilteredFields().map(f => f.name)).toEqual(['JobTypeID']);
+  });
+
+  it('flips dropdown above trigger when space below is insufficient', () => {
+    const comp = new FilterRuleComponent({ nativeElement: { contains: () => false } } as unknown as ElementRef);
+    comp.fields = sampleFields;
+    comp.Filter = { field: 'JobTypeID', operator: 'eq', value: null };
+
+    const originalWindow = globalThis.window;
+    Object.defineProperty(globalThis, 'window', {
+      value: { innerHeight: 800, innerWidth: 1200 },
+      configurable: true
+    });
+
+    try {
+      comp.FieldDropdownBtn = {
+        nativeElement: {
+          parentElement: null,
+          getBoundingClientRect: () => ({ top: 700, bottom: 740, left: 200, width: 220 }),
+          focus: () => {}
+        }
+      } as unknown as ElementRef<HTMLButtonElement>;
+
+      comp.ToggleFieldDropdown();
+      expect(comp.FieldDropdownOpen).toBe(true);
+      expect(comp.DropdownDropUp).toBe(true);
+      expect(comp.DropdownMenuStyle['top']).toBe('auto');
+      expect(comp.DropdownMenuStyle['bottom']).toBe('104px');
+    } finally {
+      Object.defineProperty(globalThis, 'window', {
+        value: originalWindow,
+        configurable: true
+      });
+    }
+  });
+
+  it('calculates drop-up bottom offset relative to transformed ancestor bottom edge', () => {
+    const comp = new FilterRuleComponent({ nativeElement: { contains: () => false } } as unknown as ElementRef);
+    comp.fields = sampleFields;
+    comp.Filter = { field: 'JobTypeID', operator: 'eq', value: null };
+
+    const originalWindow = globalThis.window;
+    const originalGetComputedStyle = globalThis.getComputedStyle;
+    const transformedAncestor = {
+      parentElement: null,
+      getBoundingClientRect: () => ({ top: 60, bottom: 900, left: 40, width: 1120 })
+    };
+    Object.defineProperty(globalThis, 'window', {
+      value: { innerHeight: 1000, innerWidth: 1200 },
+      configurable: true
+    });
+    Object.defineProperty(globalThis, 'getComputedStyle', {
+      value: (el: unknown) => ({ transform: el === transformedAncestor ? 'matrix(1, 0, 0, 1, 0, 0)' : 'none' }),
+      configurable: true
+    });
+
+    try {
+      comp.FieldDropdownBtn = {
+        nativeElement: {
+          parentElement: transformedAncestor,
+          getBoundingClientRect: () => ({ top: 780, bottom: 820, left: 200, width: 220 }),
+          focus: () => {}
+        }
+      } as unknown as ElementRef<HTMLButtonElement>;
+
+      comp.ToggleFieldDropdown();
+      expect(comp.DropdownDropUp).toBe(true);
+      // 900 (ancestorRect.bottom) - 780 (rect.top) + 4 = 124px
+      expect(comp.DropdownMenuStyle['bottom']).toBe('124px');
+      expect(comp.DropdownMenuStyle['left']).toBe('160px');
+    } finally {
+      Object.defineProperty(globalThis, 'window', {
+        value: originalWindow,
+        configurable: true
+      });
+      Object.defineProperty(globalThis, 'getComputedStyle', {
+        value: originalGetComputedStyle,
+        configurable: true
+      });
+    }
+  });
+
+  it('uses FilteredFields in OnFieldKeydown so Enter selects the visible filtered field', () => {
+    const comp = new FilterRuleComponent({ nativeElement: { contains: () => false } } as unknown as ElementRef);
+    comp.fields = sampleFields;
+    comp.Filter = { field: 'JobTypeID', operator: 'eq', value: null };
+    comp.FieldDropdownOpen = true;
+    comp.OnFieldSearchInput('Next Run');
+
+    comp.OnFieldKeydown({
+      key: 'Enter',
+      defaultPrevented: false,
+      preventDefault: () => {},
+      stopPropagation: () => {}
+    } as unknown as KeyboardEvent);
+
+    expect(comp.SelectedField?.name).toBe('NextRunAt');
   });
 });

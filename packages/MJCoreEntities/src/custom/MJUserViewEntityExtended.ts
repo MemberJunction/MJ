@@ -1,5 +1,5 @@
 import { MJGlobal, RegisterClass, UUIDsEqual } from "@memberjunction/global";
-import { Metadata, BaseEntity, BaseInfo, EntityInfo, EntityFieldInfo,RunView, UserInfo, EntitySaveOptions, LogError, EntityFieldTSType, EntityPermissionType, BaseEntityResult, IMetadataProvider, ParseFilterField, ValidationResult, ValidationErrorInfo, ValidationErrorType, ValidateUserViewProperties } from "@memberjunction/core";
+import { Metadata, BaseEntity, BaseInfo, EntityInfo, EntityFieldInfo,RunView, UserInfo, EntitySaveOptions, LogError, EntityFieldTSType, EntityPermissionType, BaseEntityResult, IMetadataProvider, ParseFilterField, ExtractAlternateBaseViewFromDisplayState, ValidationResult, ValidationErrorInfo, ValidationErrorType, ValidateUserViewProperties } from "@memberjunction/core";
 import {
     MJUserViewEntity,
     MJUserViewEntity_IColumnFormat as ColumnFormat,
@@ -190,6 +190,34 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
     public setTimelineConfig(config: ViewTimelineState): void {
         const current = this.ParsedDisplayState || { defaultMode: 'grid' as const };
         current.timeline = config;
+        this.setDisplayState(current);
+    }
+
+    /**
+     * Semantic `Name` of the alternate base view (`MJ: Entity Alternate Base Views.Name`)
+     * pinned in `DisplayState.alternateBaseView`, or `null` when this view reads from the
+     * entity's canonical `BaseView`.
+     */
+    public get AlternateBaseView(): string | null {
+        const parsed = this.ParsedDisplayState as (ViewDisplayState & { AlternateBaseView?: string }) | null;
+        const raw = parsed?.alternateBaseView ?? parsed?.AlternateBaseView;
+        const val = typeof raw === 'string' ? raw.trim() : undefined;
+        return val && val.length > 0 ? val : null;
+    }
+
+    /**
+     * Updates or clears the pinned `alternateBaseView` in `DisplayState`.
+     */
+    public set AlternateBaseView(value: string | null) {
+        const trimmed = value?.trim() || undefined;
+        const current: ViewDisplayState & { AlternateBaseView?: string } =
+            this.ParsedDisplayState || { defaultMode: 'grid' as const };
+        delete current.AlternateBaseView;
+        if (trimmed) {
+            current.alternateBaseView = trimmed;
+        } else {
+            delete current.alternateBaseView;
+        }
         this.setDisplayState(current);
     }
 
@@ -446,6 +474,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
             if (!this.IsSaved ||
                 options?.IgnoreDirtyState || 
                 this.smartFilterPending ||
+                (Boolean(this.SmartFilterEnabled) && this.alternateBaseViewDirty) ||
                 filterStateField?.Dirty ||
                 smartFilterEnabledField?.Dirty ||
                 smartFilterPromptField?.Dirty) {
@@ -576,7 +605,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
                 // A new record (IsSaved === false — see the note in Save() on why the ID can't be used for this) or a
                 // record whose SmartFilterWhereClause is missing or blank (see smartFilterWhereClauseBlank) also needs the AI pass.
                 const smartFilterPromptDirty = this.Fields.find(c => c.Name.toLowerCase() == 'smartfilterprompt')?.Dirty === true;
-                if (!this.IsSaved || ignoreDirtyState || smartFilterPromptDirty || this.smartFilterWhereClauseBlank) {
+                if (!this.IsSaved || ignoreDirtyState || smartFilterPromptDirty || this.alternateBaseViewDirty || this.smartFilterWhereClauseBlank) {
                     // the prompt has changed (or is newly populated, either way it is dirty) so use the AI to figure this out
                     const result = await this.GenerateSmartFilterWhereClause(this.SmartFilterPrompt, this.ViewEntityInfo);
                     this.SmartFilterWhereClause = result.whereClause;
@@ -637,6 +666,21 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
     private get smartFilterPending(): boolean {
         const hasPrompt = (this.SmartFilterPrompt ?? '').trim().length > 0;
         return !!this.SmartFilterEnabled && hasPrompt && this.smartFilterWhereClauseBlank;
+    }
+
+    /**
+     * True when `DisplayState.alternateBaseView` changed compared to the persisted `DisplayState` OldValue.
+     * Used to re-evaluate SmartFilterWhereClause against the new base view context on Save.
+     */
+    private get alternateBaseViewDirty(): boolean {
+        const displayStateField = this.Fields.find(c => c.Name.toLowerCase() === 'displaystate');
+        if (!displayStateField?.Dirty) {
+            return false;
+        }
+        const oldVal = ExtractAlternateBaseViewFromDisplayState(
+            typeof displayStateField.OldValue === 'string' ? displayStateField.OldValue : null
+        );
+        return (oldVal ?? null) !== (this.AlternateBaseView ?? null);
     }
 
     public override Set(FieldName: string, Value: any): void {
@@ -701,15 +745,20 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
           }]
         }`;
      */
-    protected GenerateWhereClause(FilterState: string, entityInfo: EntityInfo): string {
-        return this.processFilterGroup(JSON.parse(FilterState), entityInfo);
+    public static GenerateWhereClauseFromFilterState(FilterState: string | Record<string, unknown>, entityInfo: EntityInfo): string {
+        const parsed = typeof FilterState === 'string' ? JSON.parse(FilterState) : FilterState;
+        return MJUserViewEntityExtended.processFilterGroupStatic(parsed, entityInfo);
     }
 
-    private wrapQuotes(value: string, needQuotes: boolean): string {
+    protected GenerateWhereClause(FilterState: string, entityInfo: EntityInfo): string {
+        return MJUserViewEntityExtended.GenerateWhereClauseFromFilterState(FilterState, entityInfo);
+    }
+
+    private static wrapQuotesStatic(value: string, needQuotes: boolean): string {
         return needQuotes ? `'${value}'` : value;
     }
 
-    private convertFilterToSQL(
+    private static convertFilterToSQLStatic(
         field: string,
         operator: string,
         value: string,
@@ -734,22 +783,22 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
         }
         switch (operator) {
             case 'eq':
-                op = '= ' + this.wrapQuotes(newValue, f.NeedsQuotes);
+                op = '= ' + MJUserViewEntityExtended.wrapQuotesStatic(newValue, f.NeedsQuotes);
                 break;
             case 'neq':
-                op = '<> ' + this.wrapQuotes(newValue, f.NeedsQuotes);
+                op = '<> ' + MJUserViewEntityExtended.wrapQuotesStatic(newValue, f.NeedsQuotes);
                 break;
             case 'gt':
-                op = '> ' + this.wrapQuotes(newValue, f.NeedsQuotes);
+                op = '> ' + MJUserViewEntityExtended.wrapQuotesStatic(newValue, f.NeedsQuotes);
                 break;
             case 'gte':
-                op = '>= ' + this.wrapQuotes(newValue, f.NeedsQuotes);
+                op = '>= ' + MJUserViewEntityExtended.wrapQuotesStatic(newValue, f.NeedsQuotes);
                 break;
             case 'lt':
-                op = '< ' + this.wrapQuotes(newValue, f.NeedsQuotes);
+                op = '< ' + MJUserViewEntityExtended.wrapQuotesStatic(newValue, f.NeedsQuotes);
                 break;
             case 'lte':
-                op = '<= ' + this.wrapQuotes(newValue, f.NeedsQuotes);
+                op = '<= ' + MJUserViewEntityExtended.wrapQuotesStatic(newValue, f.NeedsQuotes);
                 break;
             case 'startswith':
                 op = `LIKE '${newValue}%'`;
@@ -775,7 +824,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
         return `[${field}] ${op}`;
     }
 
-    private processFilterGroup(filterGroup: any, entity: EntityInfo): string {
+    private static processFilterGroupStatic(filterGroup: any, entity: EntityInfo): string {
         // each filter has two properties, logic and filters
         // logic is either 'and' or 'or' and is what we use to determine the SQL logic operator
         // filters is an array of filters, each filter has a field, operator, and value,
@@ -792,13 +841,13 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
             // if an individual filter has a "logic" property, it's a group and we need to process it with parenthesis and recurisely
             if (filter.logic && filter.logic.length > 0) {
                 // this is a group, we process it with parenthesis
-                whereClause += `(${this.processFilterGroup(filter, entity)})`;
+                whereClause += `(${MJUserViewEntityExtended.processFilterGroupStatic(filter, entity)})`;
             } else {
                 // Dotted names (`Organizations.Type`) are the multi-entity encoding.
                 // Views are one table — use the field part. Bare names stay as they are.
                 const stored = String(filter.field ?? '');
                 const column = ParseFilterField(stored).Name;
-                whereClause += `(${this.convertFilterToSQL(
+                whereClause += `(${MJUserViewEntityExtended.convertFilterToSQLStatic(
                     column,
                     filter.operator,
                     filter.value,

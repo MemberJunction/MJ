@@ -227,11 +227,16 @@
   text-align: center;
 }
 
-/* Host for dynamically-mounted plug-in view renderers (Cluster, third-party) */
+/* Host for dynamically-mounted plug-in view renderers (Map/Leaflet, Cluster, third-party).
+   Isolated at z-index: 1 so Leaflet's internal z-index: 400..1000 panes stay contained
+   below Data Explorer's .content-header (z-index: 2) and view-selector menus (#2701). */
 .dynamic-view-host {
   height: 100%;
   width: 100%;
   overflow: auto;
+  isolation: isolate;
+  position: relative;
+  z-index: 1;
 }
 
 /* Content */
