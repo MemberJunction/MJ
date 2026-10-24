@@ -81,6 +81,22 @@
   },
   {
     "fields": {
+      "Name": "Calendar",
+      "DisplayName": "Calendar",
+      "Description": "Places records on a day, week or month calendar by a configurable start date field and an optional end date field, so records with an end span the days they cover.",
+      "DriverClass": "CalendarViewType",
+      "PropertySheetDriverClass": "CalendarViewPropSheet",
+      "Icon": "fa-solid fa-calendar-days",
+      "Sequence": 45,
+      "IsActive": 1,
+      "SupportsConfiguration": 1
+    },
+    "primaryKey": {
+      "ID": "E96278BA-C2FF-49CF-AFA6-5A2674A84526"
+    }
+  },
+  {
+    "fields": {
       "Name": "Cluster",
       "DisplayName": "Cluster",
       "Description": "Visualizes records grouped into clusters by similarity, surfacing structure and relationships in the data via a configurable clustering analysis.",

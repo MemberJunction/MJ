@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChanges, ChangeDetectorRef, HostListener } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { EntityInfo, EntityFieldInfo, Metadata, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, Metadata, IsDateOnlySQLType, FormatDateOnly, ToPlainJSON, UserViewProperty, ValidateUserViewProperties } from '@memberjunction/core';
 import {
   MJUserViewEntityExtended,
   ViewColumnInfo,
@@ -69,6 +69,8 @@ export interface ViewSaveEvent {
   FilterState: CompositeFilterDescriptor | null;
   /** Aggregates configuration */
   AggregatesConfig: ViewGridAggregatesConfig | null;
+  /** The view's declared properties; an empty list means none. Absent on events that save no view (defaults). */
+  Properties?: UserViewProperty[];
 }
 
 /**
@@ -246,7 +248,10 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   private _localSaving: boolean = false;
 
   // UI state
-  public ActiveTab: 'columns' | 'sorting' | 'filters' | 'aggregates' | 'settings' = 'columns';
+  public ActiveTab: 'columns' | 'sorting' | 'filters' | 'aggregates' | 'properties' | 'settings' = 'columns';
+
+  /** The view's declared properties being edited (a copy; the view changes only on save). */
+  public Properties: UserViewProperty[] = [];
   @Input() IsSaving: boolean = false;
   public ColumnSearchText: string = '';
 
@@ -578,6 +583,9 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
         this.SmartFilterEnabled = true;
       }
     }
+
+    const declared = this.ViewEntity?.PropertiesObject;
+    this.Properties = declared ? ToPlainJSON(declared) : [];
 
     // Load aggregates from currentGridState if available
     if (this.CurrentGridState?.aggregates?.expressions) {
@@ -1431,7 +1439,13 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     if (this.VisibleColumns.length === 0) {
       errors.push('At least one column must be visible');
     }
+    errors.push(...this.PropertyErrors);
     return errors;
+  }
+
+  /** Problems with the view's properties, each naming the property; any one blocks saving. */
+  get PropertyErrors(): string[] {
+    return ValidateUserViewProperties(this.Properties, (this.Entity?.Fields ?? []).filter(f => !f.IsBinaryFieldType).map(f => f.Name));
   }
 
   /**
@@ -1445,7 +1459,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    * Whether the form is valid for save-as-new (name can default to 'New View')
    */
   get IsValidForSaveAsNew(): boolean {
-    return this.VisibleColumns.length > 0;
+    return this.VisibleColumns.length > 0 && this.PropertyErrors.length === 0;
   }
 
   /**
@@ -1484,7 +1498,8 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       SmartFilterEnabled: this.SmartFilterEnabled,
       SmartFilterPrompt: this.SmartFilterPrompt,
       FilterState: this.hasActiveFilters() ? this.FilterState : null,
-      AggregatesConfig: this.buildAggregatesConfig()
+      AggregatesConfig: this.buildAggregatesConfig(),
+      Properties: [...this.Properties]
     });
   }
 
@@ -1510,7 +1525,8 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       SmartFilterEnabled: this.SmartFilterEnabled,
       SmartFilterPrompt: this.SmartFilterPrompt,
       FilterState: this.hasActiveFilters() ? this.FilterState : null,
-      AggregatesConfig: this.buildAggregatesConfig()
+      AggregatesConfig: this.buildAggregatesConfig(),
+      Properties: [...this.Properties]
     });
   }
 
@@ -1576,7 +1592,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   /**
    * Set the active tab
    */
-  SetActiveTab(tab: 'columns' | 'sorting' | 'filters' | 'aggregates' | 'settings'): void {
+  SetActiveTab(tab: 'columns' | 'sorting' | 'filters' | 'aggregates' | 'properties' | 'settings'): void {
     this.ActiveTab = tab;
     this.FormatEditingColumn = null; // Close format editor when switching tabs
     this.cdr.detectChanges();
