@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Predictive Studio Gates — Pending",
-      "Description": "Gates that do not block a merge. G0.2 (W2 -> C1.1) and G0.3 (W3 -> C1.1) are owned by PR 4 (gated publish) and stay Pending until PR 4 activates them. G0.6 (W1 -> S9.3) is an LLM judge whose verdict can differ between runs on the same text; it also needs RUN_AGENT_TESTS=1 with AI_VENDOR_API_KEY__GeminiLLM set. Needs MJAPI and the truth sidecar running and `pnpm run truth:provision` done. Run with: MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite \"Predictive Studio Gates — Pending\"",
+      "Description": "Gates that do not block a merge. G0.2 (W2 -> C1.1) and G0.3 (W3 -> C1.1) are owned by PR 4 (gated publish) and stay Pending until PR 4 activates them. G0.6 (W1 -> S9.3) is an LLM judge whose verdict can differ between runs on the same text; it needs AI_VENDOR_API_KEY__GeminiLLM set, runs unless RUN_AGENT_TESTS=0 (the live-model tier is on by default), and needs RUN_MUTATION_TESTS=1 because it trains and promotes a model. Needs MJAPI and the truth sidecar running and `pnpm run truth:provision` done. Run with: MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite \"Predictive Studio Gates — Pending\"",
       "Status": "Active"
     },
     "relatedEntities": {

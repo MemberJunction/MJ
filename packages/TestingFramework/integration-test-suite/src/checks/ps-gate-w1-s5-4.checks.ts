@@ -1,8 +1,11 @@
 /**
- * Gate G0.10 "W1 → S5.4": two trainings each of logistic regression, xgboost and lightgbm on W1-signal s42 give
- * predictions equal within 1e-9, 3 of 3. The trainings run on the sidecar the gate run points at; the truth-suite
- * sidecar (`pnpm run truth:sidecar`) pins OMP_NUM_THREADS=1. The thread count is the sidecar process's setting, which
- * this test process cannot read, so it is not reported as a measured value.
+ * Gate G0.10 "W1 → S5.4": two trainings each of logistic regression, xgboost, lightgbm and random forest on W1-signal
+ * s42 give predictions equal within 1e-9, 4 of 4. What this proves: the validation split is seeded (an unseeded split
+ * changes the training rows of every algorithm), and the estimators are seeded (random forest bootstraps, so it is the
+ * algorithm whose predictions move when the estimator seed is dropped; the other three run without sampling on their
+ * sidecar defaults). The trainings run on the sidecar the gate run points at; the truth-suite sidecar
+ * (`pnpm run truth:sidecar`) pins OMP_NUM_THREADS=1. The thread count is the sidecar process's setting, which this test
+ * process cannot read, so it is not reported as a measured value.
  */
 import { IndexByUUID } from '@memberjunction/global';
 import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
@@ -10,6 +13,9 @@ import { IntegrationCheckRegistry, type NamedCheck } from '@memberjunction/testi
 import { HarnessDatasets, type TruthHarness } from '@memberjunction/predictive-studio-truth-suite';
 import { PsGate } from './ps-gates/ps-gate-fixture';
 import { PsGateSpecs } from './ps-gates/ps-gate-specs';
+
+/** The algorithms G0.10 trains twice: the three without sampling, and random forest, the one default that bootstraps. */
+const DETERMINISM_ALGORITHMS = ['logistic_regression', 'xgboost', 'lightgbm', 'random_forest'] as const;
 
 /** The training and scoring of one G0.10 repetition. */
 class DeterminismSteps {
@@ -33,14 +39,14 @@ class DeterminismSteps {
 
 export const PsGateW1S54Checks: NamedCheck[] = [
   {
-    Id: 'ps-gate-w1-s5-4.G0.10', Name: 'G0.10 W1 → S5.4: two trainings reproduce predictions within 1e-9, 3 of 3 algorithms', RequiresMutation: true,
+    Id: 'ps-gate-w1-s5-4.G0.10', Name: 'G0.10 W1 → S5.4: two trainings reproduce predictions within 1e-9, 4 of 4 algorithms', RequiresMutation: true,
     Fn: async (ctx) => {
       const h = await PsGate.Harness(ctx);
       const w1 = await h.EnsureLoaded({ Kind: 'world', ID: 'W1-signal', Seed: 42 });
       const records = HarnessDatasets.FirstRowIDs(w1, 500);
       const out: Record<string, number | string | boolean | null> = {};
       let equal = 0;
-      for (const algorithm of ['logistic_regression', 'xgboost', 'lightgbm'] as const) {
+      for (const algorithm of DETERMINISM_ALGORITHMS) {
         const p = await h.CreatePipeline(PsGateSpecs.W(h, `G0.10 W1 ${algorithm}`, w1, { Algorithm: algorithm }));
         const first = await DeterminismSteps.TrainAndScore(h, p, records, `${algorithm} training 1`);
         const second = await DeterminismSteps.TrainAndScore(h, p, records, `${algorithm} training 2`);
@@ -48,7 +54,7 @@ export const PsGateW1S54Checks: NamedCheck[] = [
         out[`${algorithm}MaxDiff`] = maxDiff;
         if (maxDiff <= 1e-9) equal += 1;
       }
-      PsGate.Assert({ Passed: equal === 3, Measured: out, Detail: `${equal} of 3 algorithms reproduce predictions within 1e-9` });
+      PsGate.Assert({ Passed: equal === DETERMINISM_ALGORITHMS.length, Measured: out, Detail: `${equal} of ${DETERMINISM_ALGORITHMS.length} algorithms reproduce predictions within 1e-9` });
     },
   },
 ];

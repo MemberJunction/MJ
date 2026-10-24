@@ -1,11 +1,14 @@
 /**
- * Gate G0.1 "W1 → S7.5": training with the UI default reads every labelled W1-signal s42 row or is refused with
- * READ_CAP_EXCEEDED, and a filter-scope scoring call scores every row or is refused with READ_CAP_EXCEEDED.
+ * Gate G0.1 "W1 → S7.5": W1-signal s42 loads its 16,776 labelled rows, training with the UI default reads all of them or
+ * is refused with READ_CAP_EXCEEDED, and a filter-scope scoring call scores every row or is refused with READ_CAP_EXCEEDED.
  */
 import { IntegrationCheckRegistry, type NamedCheck } from '@memberjunction/testing-integration';
 import { RunFixtures } from '@memberjunction/predictive-studio-truth-suite';
 import { PsGate } from './ps-gates/ps-gate-fixture';
 import { PsGateSpecs } from './ps-gates/ps-gate-specs';
+
+/** The labelled rows of the seeded W1-signal s42 dataset (fixed by its generator and seed). */
+const W1_S42_LABELLED_ROWS = 16776;
 
 export const PsGateW1S75Checks: NamedCheck[] = [
   {
@@ -23,7 +26,7 @@ export const PsGateW1S75Checks: NamedCheck[] = [
       const s = await h.Score(scoring.ModelID, { scope: { filter: { entityName: w1.Entity.Name } } });
       const scoreOk = s.Ok ? s.Scored === w1.RowCount : s.RefusalCode === 'READ_CAP_EXCEEDED';
       PsGate.Assert({
-        Passed: trainOk && scoreOk,
+        Passed: w1.RowCount === W1_S42_LABELLED_ROWS && trainOk && scoreOk,
         Measured: {
           labelledRows: w1.RowCount,
           trainingRows: m?.TrainingRowCount ?? null,
@@ -34,7 +37,7 @@ export const PsGateW1S75Checks: NamedCheck[] = [
           scoreRefusalCode: s.RefusalCode,
           scoreError: s.ErrorMessage,
         },
-        Detail: `training read ${trainRead === null ? `refused (${t.RefusalCode || 'no refusal code'})` : trainRead} of ${w1.RowCount}; filter scoring scored ${s.Scored}${s.ErrorMessage ? ` (${s.RefusalCode || 'no refusal code'}: ${s.ErrorMessage})` : ''}`,
+        Detail: `${w1.RowCount} of ${W1_S42_LABELLED_ROWS} labelled rows loaded; training read ${trainRead === null ? `refused (${t.RefusalCode || 'no refusal code'})` : trainRead} of ${w1.RowCount}; filter scoring scored ${s.Scored}${s.ErrorMessage ? ` (${s.RefusalCode || 'no refusal code'}: ${s.ErrorMessage})` : ''}`,
       });
     },
   },

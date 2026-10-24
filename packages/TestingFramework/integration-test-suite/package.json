@@ -90,10 +90,10 @@
     "express": "^5.2.1",
     "ioredis": "^5.6.1",
     "mssql": "^12.2.0",
-    "reflect-metadata": "^0.2.2"
+    "reflect-metadata": "^0.2.2",
+    "typescript": "^5.9.3"
   },
   "devDependencies": {
-    "typescript": "^5.9.3",
     "@types/express": "^5.0.6",
     "vitest": "^4.0.18",
     "@types/mssql": "^9.1.9"

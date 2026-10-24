@@ -18,8 +18,8 @@ import {
     MJMLTrainingPipelineEntity,
     MJMLModelEntity,
     MJMLModelScoringBindingEntity,
+    type MJActionEntity,
 } from '@memberjunction/core-entities';
-import type { MJActionEntity } from '@memberjunction/core-entities';
 import {
     RecordProcessorRegistry,
     type RecordProcessorBuildContext,

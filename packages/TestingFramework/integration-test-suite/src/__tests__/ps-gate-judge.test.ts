@@ -44,6 +44,19 @@ describe('PsGateJudge.Chunks', () => {
   });
 });
 
+describe('PsGateJudge.CalibrationChunk', () => {
+  it('plants the control in the middle of the largest chunk, keeping the chunk at most 50 texts', () => {
+    const many = Array.from({ length: 120 }, (_, i) => `text ${i}`);
+    const planted = PsGateJudge.CalibrationChunk(PsGateJudge.Chunks([{ Label: 'b.html', Texts: ['one text'] }, { Label: 'a.ts', Texts: many }]));
+    expect(planted).toHaveLength(50);
+    expect(planted[24]).toBe(PsGateJudge.CalibrationControl);
+    expect(planted.filter((t) => t !== PsGateJudge.CalibrationControl)).toEqual(many.slice(0, 49));
+  });
+  it('is the control alone when there are no chunks', () => {
+    expect(PsGateJudge.CalibrationChunk([])).toEqual([PsGateJudge.CalibrationControl]);
+  });
+});
+
 describe('PsGateJudge.JudgeAll', () => {
   const chunks = [{ Label: 'a.ts', Texts: ['Weighted by the model'] }, { Label: 'generated stories', Texts: ['A story'] }];
   /** A fake judge: fails the calibration control on the causal criterion, and fails any chunk containing `bad`. */
@@ -61,6 +74,13 @@ describe('PsGateJudge.JudgeAll', () => {
     const r = await PsGateJudge.JudgeAll(chunks, async () => ({ oracleType: 'llm-judge', passed: false, score: 0, message: 'LLM judge error: timeout' }));
     expect(r.Passed).toBe(false);
     expect(r.Detail).toMatch(/^judge calibration failed.*timeout/);
+  });
+  it('a judge that fails the control only when it is judged alone is not calibrated', async () => {
+    const aloneOnly: PsGateJudgeFn = async (texts) =>
+      texts.length === 1 && texts[0] === PsGateJudge.CalibrationControl ? judged({ [CAUSAL]: 'causal' }) : judged({});
+    const r = await PsGateJudge.JudgeAll(chunks, aloneOnly);
+    expect(r.Passed).toBe(false);
+    expect(r.Detail).toMatch(/^judge calibration failed: the 2-text chunk/);
   });
   it('a calibrated judge passes clean chunks', async () => {
     expect(await PsGateJudge.JudgeAll(chunks, calibrated)).toEqual({ Passed: true, Detail: '2 of 2 chunks pass', ChunksJudged: 2, FailedChunks: [] });

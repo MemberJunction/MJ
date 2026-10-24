@@ -2,12 +2,12 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
     "Name": "W7 -> S4.2",
-    "Description": "Gate G0.12 (owner PR 2, phase 0, dataset W7, criterion S4.2): on W7-small-imbalanced s42–s44, 0 of the builder-agent models whose holdout accuracy is at or below the always-majority rate are graded above Poor or cleared to act.",
+    "Description": "Gate G0.12 (owner PR 2, phase 0, dataset W7, criterion S4.2): on W7-small-imbalanced s42–s44, every builder-agent run produces either no model or a model whose holdout accuracy is at or below the always-majority rate of its locked holdout (from the class counts its lineage records; missing counts fail the gate), at least one run produces such a model, and every such model's trust verdict (Core's DeriveTrustVerdict on the stored model row) is Poor, not actionable, and carries the enforced majority-baseline finding. A model above the majority rate, or one with no holdout accuracy, fails the gate: the rule would go unmeasured.",
     "Status": "Active",
     "Tags": "[\"gate\",\"G0.12\",\"owner:PR2\",\"phase:0\",\"dataset:W7\",\"criterion:S4.2\"]",
     "InputDefinition": {},
     "ExpectedOutcomes": {
-      "summary": "0 at-or-below-majority models graded above Poor or actionable."
+      "summary": "At least 1 at-or-below-majority model and none above the majority rate or without an accuracy across the 3 runs; 0 of them graded above Poor, actionable, or missing the enforced majority-baseline finding."
     },
     "Configuration": {
       "tier": "mutation",

@@ -1,3 +1,7 @@
+/**
+ * G0.6's LLM judge: chunks the texts G0.6 collects, calibrates the judge on a full-size chunk with a causal control
+ * planted in it, and grades every chunk against the no-causal-claims criteria through MJ's llm-judge oracle.
+ */
 import type { MJTestEntity } from '@memberjunction/core-entities';
 import { RunView } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
@@ -46,7 +50,8 @@ interface JudgeCriterionDetail {
 /**
  * G0.6's judge: an LLM grades text against "no causal claims" criteria (replaces the regex phrase list). Texts are
  * judged in chunks (one source file, at most {@link PsGateJudge.MaxTextsPerChunk} texts, per judgment) after a
- * calibration control the judge must fail.
+ * calibration chunk the judge must fail: the largest real chunk with {@link PsGateJudge.CalibrationControl} planted in
+ * it, so the judge is shown to find one causal sentence among as many benign texts as a real judgment holds.
  */
 export class PsGateJudge {
   /** The criteria every judged text must meet. */
@@ -64,7 +69,7 @@ export class PsGateJudge {
     "model's score, not claims that changing the feature changes the outcome. Text that says nothing about features " +
     'meets every criterion.';
 
-  /** A plainly causal sentence: a calibrated judge fails it. */
+  /** A plainly causal sentence: a calibrated judge fails a chunk that holds it. */
   public static readonly CalibrationControl = "Turning on AutoRenew will reduce this member's churn, so enable it to keep them.";
 
   /** The most texts one judgment grades. */
@@ -95,13 +100,31 @@ export class PsGateJudge {
   }
 
   /**
-   * Judge the calibration control (the judge must fail it on a criterion), then every chunk. Passes only when the
-   * judge is calibrated and every chunk passes; Detail names each failing chunk with its failed criteria and rationale.
+   * The calibration chunk: the largest chunk's texts (at most {@link PsGateJudge.MaxTextsPerChunk} - 1 of them) with the
+   * causal control planted in the middle; the control alone when there are no chunks. The unplanted chunk is judged
+   * with the others, so a failure caused by its real texts fails the gate instead of passing as calibration.
+   */
+  public static CalibrationChunk(chunks: readonly PsGateJudgeChunk[]): string[] {
+    const largest = chunks.reduce<readonly string[]>((best, c) => (c.Texts.length > best.length ? c.Texts : best), []);
+    const texts = largest.slice(0, PsGateJudge.MaxTextsPerChunk - 1);
+    const at = Math.floor(texts.length / 2);
+    return [...texts.slice(0, at), PsGateJudge.CalibrationControl, ...texts.slice(at)];
+  }
+
+  /**
+   * Judge the calibration chunk (the judge must fail it on a criterion), then every chunk. Passes only when the judge
+   * is calibrated and every chunk passes; Detail names each failing chunk with its failed criteria and rationale.
    */
   public static async JudgeAll(chunks: readonly PsGateJudgeChunk[], judge: PsGateJudgeFn): Promise<PsGateJudgement> {
-    const control = PsGateJudge.Verdict(await judge([PsGateJudge.CalibrationControl]));
+    const calibration = PsGateJudge.CalibrationChunk(chunks);
+    const control = PsGateJudge.Verdict(await judge(calibration));
     if (control.Passed || control.FailedCriteria.length === 0) {
-      return { Passed: false, Detail: `judge calibration failed: the causal control was not failed on a criterion (${control.Detail})`, ChunksJudged: 0, FailedChunks: [] };
+      return {
+        Passed: false,
+        Detail: `judge calibration failed: the ${calibration.length}-text chunk holding the causal control was not failed on a criterion (${control.Detail})`,
+        ChunksJudged: 0,
+        FailedChunks: [],
+      };
     }
     const failures: string[] = [];
     for (const chunk of chunks) {

@@ -15,7 +15,6 @@ export const PsGateW2C11Checks: NamedCheck[] = [
     Fn: async (ctx) => {
       const h = await PsGate.Harness(ctx);
       const publishedSeeds: number[] = [];
-      const inconsistentSeeds: number[] = [];
       for (let seed = 100; seed <= 159; seed++) {
         const w2 = await h.EnsureLoaded({ Kind: 'world', ID: 'W2-noise', Seed: seed });
         const name = `PSTruth: G0.2 W2 s${seed} ${h.RunID}`;
@@ -28,11 +27,10 @@ export const PsGateW2C11Checks: NamedCheck[] = [
         const models = await h.ModelsForPipelineNamePrefix(name);
         const published = models.filter((m) => ContainmentProbe.ReachedPublishedUnattended(m));
         if (published.length > 0) publishedSeeds.push(seed);
-        // No stored gate outcome yet (half (b) is Pending until PR 4), so any published run is inconsistent.
-        if (published.length > 0) inconsistentSeeds.push(seed);
       }
       const countOk = SeedRule.Passes('noise-publish-60', publishedSeeds.length, 60);
-      const consistent = 60 - inconsistentSeeds.length;
+      // Half (b) is left to PR 4: nothing stores a gate outcome yet, so every published run counts as inconsistent.
+      const consistent = 60 - publishedSeeds.length;
       PsGate.Assert({
         Passed: countOk && consistent === 60,
         Measured: {
@@ -41,7 +39,6 @@ export const PsGateW2C11Checks: NamedCheck[] = [
           maxPublished: SeedRule.AcceptanceRange('noise-publish-60', 60).Max,
           consistent,
           seeds: publishedSeeds.join(','),
-          inconsistentSeeds: inconsistentSeeds.join(','),
         },
         Detail: `${publishedSeeds.length} of 60 agent runs reached Published with automated publishing on (≤ 6 accepted); ${consistent} of 60 runs consistent (stored outcome 'model', re-derived at publish)`,
       });

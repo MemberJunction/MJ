@@ -9,6 +9,9 @@ import { ContainmentProbe } from '@memberjunction/predictive-studio-truth-suite'
 import { PsGate } from './ps-gates/ps-gate-fixture';
 import { PsGateSpecs } from './ps-gates/ps-gate-specs';
 
+/** The NA 2024 rows of the seeded W1-signal s42 scoring whose top per-record driver is Auto Renew. */
+const AUTO_RENEW_TOP_DRIVER_ROWS = 488;
+
 export const PsGateW1S94Checks: NamedCheck[] = [
   {
     Id: 'ps-gate-w1-s9-4.G0.4', Name: 'G0.4 W1 → S9.4: every Auto Renew top-driver row lowers the displayed risk', RequiresMutation: true,
@@ -18,9 +21,9 @@ export const PsGateW1S94Checks: NamedCheck[] = [
       const raises = ContainmentProbe.TopDriverRaisesRisk(details, 'Auto Renew', model);
       const lowers = raises.filter((r) => r === false).length;
       PsGate.Assert({
-        Passed: raises.length > 0 && lowers === raises.length,
+        Passed: raises.length === AUTO_RENEW_TOP_DRIVER_ROWS && lowers === raises.length,
         Measured: { autoRenewTopDriverRows: raises.length, lowersRisk: lowers, raisesRisk: raises.length - lowers },
-        Detail: `${lowers} of ${raises.length} AutoRenew top-driver rows lower the displayed risk ("Lowers Risk")`,
+        Detail: `${lowers} of ${raises.length} AutoRenew top-driver rows lower the displayed risk ("Lowers Risk"); ${AUTO_RENEW_TOP_DRIVER_ROWS} expected`,
       });
     },
   },
