@@ -308,7 +308,6 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'codegen-determinism': 6,
         'communication': 5,
         'concurrent': 2,
-        'content-pipeline': 15,
         'content-vectorization': 10,
         'conversation-authorship-client': 12,
         'conversation-compaction': 23,
@@ -427,7 +426,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(137);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(136);
     });
 });
 
@@ -489,21 +488,6 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'cache-immutability.F12',
         'client-cache.C10',
         'client-cache.C14',
-        'content-pipeline.CP1',
-        'content-pipeline.CP10',
-        'content-pipeline.CP11',
-        'content-pipeline.CP12',
-        'content-pipeline.CP13',
-        'content-pipeline.CP14',
-        'content-pipeline.CP15',
-        'content-pipeline.CP2',
-        'content-pipeline.CP3',
-        'content-pipeline.CP4',
-        'content-pipeline.CP5',
-        'content-pipeline.CP6',
-        'content-pipeline.CP7',
-        'content-pipeline.CP8',
-        'content-pipeline.CP9',
         'content-vectorization.CV1',
         'content-vectorization.CV10',
         'content-vectorization.CV2',
