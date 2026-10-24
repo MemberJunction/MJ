@@ -17,7 +17,7 @@ import {
     EntityInfo,
     RunView
 } from '@memberjunction/core';
-import { ClassRegistration, MJGlobal, OptionalKeyedSpecialization } from '@memberjunction/global';
+import { ClassRegistration, MJGlobal, MJLruCache, OptionalKeyedSpecialization } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { CancellableFormEvent } from '../types/form-events';
 import { FormNavigationEvent } from '../types/navigation-events';
@@ -128,7 +128,8 @@ export interface RecordPreviewAnchorRect {
 })
 export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implements OnDestroy {
     protected static readonly CACHE_TTL_MS = 60_000;
-    protected static readonly summaryCache = new Map<string, { LoadedAt: number; Summary: RecordPreviewSummary }>();
+    /** Bounded: one entry per previewed record would otherwise accumulate for the whole session. */
+    protected static readonly summaryCache = new MJLruCache<string, { LoadedAt: number; Summary: RecordPreviewSummary }>({ maxSize: 500, ttlMs: 60_000 });
 
     protected cdr = inject(ChangeDetectorRef);
     protected _destroyed = false;
@@ -239,7 +240,7 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
 
     /** Clear the static summary cache (useful in unit tests). */
     public static ClearCache(): void {
-        MjRecordPreviewPopoverComponent.summaryCache.clear();
+        MjRecordPreviewPopoverComponent.summaryCache.Clear();
     }
 
     public ngOnDestroy(): void {
@@ -448,7 +449,7 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
             }
 
             const cacheKey = `${summary.EntityName.toLowerCase()}::${summary.RecordID.toLowerCase()}`;
-            MjRecordPreviewPopoverComponent.summaryCache.delete(cacheKey);
+            MjRecordPreviewPopoverComponent.summaryCache.Delete(cacheKey);
             this.resetEditState();
             await this.loadSummary(true);
             const updatedEvent: RecordPreviewUpdatedEvent = {
@@ -550,7 +551,7 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
         const recordIdStr = this._recordID?.trim() || pk.Values();
         const cacheKey = `${entityName.toLowerCase()}::${recordIdStr.toLowerCase()}`;
         if (!forceRefresh) {
-            const cached = MjRecordPreviewPopoverComponent.summaryCache.get(cacheKey);
+            const cached = MjRecordPreviewPopoverComponent.summaryCache.Get(cacheKey);
             if (cached && Date.now() - cached.LoadedAt < MjRecordPreviewPopoverComponent.CACHE_TTL_MS) {
                 this.Summary = cached.Summary;
                 this.IsLoading = false;
@@ -613,7 +614,7 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
 
             const row = result.Success && result.Results?.length > 0 ? result.Results[0] : null;
             const summary = this.buildSummaryFromRow(entityInfo, pk, recordIdStr, candidateFields, row);
-            MjRecordPreviewPopoverComponent.summaryCache.set(cacheKey, {
+            MjRecordPreviewPopoverComponent.summaryCache.Set(cacheKey, {
                 LoadedAt: Date.now(),
                 Summary: summary
             });

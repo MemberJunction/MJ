@@ -20,6 +20,7 @@ import {
     RunView,
     RunViewParams
 } from '@memberjunction/core';
+import { MJLruCache } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { FormNavigationEvent } from '../types/navigation-events';
 import {
@@ -141,7 +142,8 @@ export interface RecordLinkCategoryChip {
 })
 export class MjRecordLinksComponent extends BaseAngularComponent implements OnInit, OnDestroy {
     private static readonly DEP_CACHE_TTL_MS = 30_000;
-    private static readonly depCache = new Map<string, { LoadedAt: number; Deps: RecordDependency[] }>();
+    /** Bounded: one entry per opened record would otherwise accumulate for the whole session. */
+    private static readonly depCache = new MJLruCache<string, { LoadedAt: number; Deps: RecordDependency[] }>({ maxSize: 200, ttlMs: 30_000 });
 
     private cdr = inject(ChangeDetectorRef);
 
@@ -242,7 +244,7 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
 
     /** Clear the static dependency cache (useful in unit tests). */
     public static ClearDependencyCache(): void {
-        MjRecordLinksComponent.depCache.clear();
+        MjRecordLinksComponent.depCache.Clear();
     }
 
     /**
@@ -385,7 +387,7 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
         const pkStr = MjRecordLinksComponent.getPrimaryKeyStringStatic(record.PrimaryKey);
         const cacheKey = `${record.EntityInfo.Name}::${pkStr}`;
         if (!forceRefresh) {
-            const cached = MjRecordLinksComponent.depCache.get(cacheKey);
+            const cached = MjRecordLinksComponent.depCache.Get(cacheKey);
             if (cached && Date.now() - cached.LoadedAt < MjRecordLinksComponent.DEP_CACHE_TTL_MS) {
                 return cached.Deps;
             }
@@ -394,7 +396,7 @@ export class MjRecordLinksComponent extends BaseAngularComponent implements OnIn
             IncludeSystemEntities: false
         });
         const safeDeps = deps ?? [];
-        MjRecordLinksComponent.depCache.set(cacheKey, {
+        MjRecordLinksComponent.depCache.Set(cacheKey, {
             LoadedAt: Date.now(),
             Deps: safeDeps
         });

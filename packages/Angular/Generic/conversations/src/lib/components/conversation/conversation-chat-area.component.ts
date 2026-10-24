@@ -3630,12 +3630,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         this.artifactMapConversationId = conversationId;
       }
 
-      if (!this.messageInputMetadataCache.has(conversationId)) {
-        this.messageInputMetadataCache.set(conversationId, {
-          conversationId: conversationId,
-          conversationName: this.Conversation?.Name || null
-        });
-      }
+      this.touchMessageInputCache(conversationId);
 
       // Only show loading spinner if the engine doesn't have cached data for this conversation.
       // This prevents the "no messages" flash when switching between conversations.
@@ -3701,6 +3696,30 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   private _cachedInputsArray: Array<{conversationId: string; conversationName: string | null}> = [];
   private _cachedInputsKey = '';
+
+  /** Max hidden composers kept mounted for draft/state preservation; older ones are unmounted. */
+  private static readonly MAX_CACHED_MESSAGE_INPUTS = 10;
+
+  /**
+   * Registers `conversationId` as the most-recently-used composer and unmounts the
+   * least-recently-used ones beyond the cap. Each cache entry keeps a live
+   * `mj-message-input` component, so without a bound memory grows with every
+   * conversation visited. Drafts live in the draft store, so an evicted composer's
+   * frozen restore snapshot is dropped to let a remount re-read the latest draft.
+   */
+  private touchMessageInputCache(conversationId: string): void {
+    const existing = this.messageInputMetadataCache.get(conversationId);
+    this.messageInputMetadataCache.delete(conversationId); // re-insert to refresh recency
+    this.messageInputMetadataCache.set(conversationId, existing ?? {
+      conversationId: conversationId,
+      conversationName: this.Conversation?.Name || null
+    });
+    while (this.messageInputMetadataCache.size > ConversationChatAreaComponent.MAX_CACHED_MESSAGE_INPUTS) {
+      const oldest = this.messageInputMetadataCache.keys().next().value as string;
+      this.messageInputMetadataCache.delete(oldest);
+      this.initialDraftSnapshots.delete(oldest.trim().toLowerCase());
+    }
+  }
 
   /**
    * Returns array of cached message-input metadata for rendering.
