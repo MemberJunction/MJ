@@ -1912,7 +1912,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
         const effectiveAbv = GetEffectiveAlternateBaseViewName(param);
         if (!effectiveAbv) {
-            return !param.ViewEntity && Boolean(param.ViewID || param.ViewName);
+            if (!param.ViewEntity && Boolean(param.ViewID || param.ViewName)) {
+                const knownEntity = this.ResolveRunViewEntitySync(param);
+                if (knownEntity) {
+                    return knownEntity.AlternateBaseViews.some(v => v.IsBypassCache || !v.IsUsable);
+                }
+                return this.Entities.some(e => e.AlternateBaseViews.some(v => v.IsBypassCache || !v.IsUsable));
+            }
+            return false;
         }
         const entity = this.ResolveRunViewEntitySync(param);
         if (!entity) {
