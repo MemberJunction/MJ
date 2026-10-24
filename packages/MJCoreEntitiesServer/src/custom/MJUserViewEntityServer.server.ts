@@ -60,7 +60,12 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
         if (!pinnedName || !this.ViewEntityInfo) {
             return;
         }
-        if (this.IsSaved && !this.hasAlternateBaseViewChanged()) {
+        const smartPromptModified = Boolean(
+            this.SmartFilterEnabled &&
+            (this.GetFieldByName('SmartFilterPrompt')?.Dirty === true ||
+                this.GetFieldByName('SmartFilterEnabled')?.Dirty === true),
+        );
+        if (this.IsSaved && !this.hasAlternateBaseViewChanged() && !smartPromptModified) {
             return;
         }
         const abv = this.ViewEntityInfo.GetAlternateBaseView(pinnedName);

@@ -25,7 +25,7 @@
               class="dropdown-search-input"
               placeholder="Search fields by name or description..."
               [value]="FieldSearchText"
-              (input)="OnFieldSearchInput($any($event.target).value)"
+              (input)="OnFieldSearchInputEvent($event)"
               (keydown)="OnFieldSearchKeydown($event)"
             />
           </div>

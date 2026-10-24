@@ -5,6 +5,7 @@ import { BaseEntity } from '../generic/baseEntity';
 import { PlatformSQL, IsPlatformSQL } from '../generic/platformSQL';
 import { CompositeKey } from '../generic/compositeKey';
 import type { CacheChangedEvent } from '../generic/localCacheManager';
+import { IsExplicitBaseViewOverride } from '../generic/alternateBaseViews';
 
 /**
  * Reason codes for {@link AfterKeyNotSupportedError}. Use these to make caller
@@ -574,9 +575,7 @@ export class RunViewParams {
         // Switching AlternateBaseView (case-insensitive, trimmed) changes the underlying SQL view and MUST trigger
         // a reload. An explicit empty string (`""`) overrides a saved User View's pinned `DisplayState.alternateBaseView`
         // back to `BaseView` and therefore differs from `undefined` (which inherits the saved view's pin).
-        const aExplicitBaseOverride = typeof a.AlternateBaseView === 'string' && a.AlternateBaseView.trim().length === 0;
-        const bExplicitBaseOverride = typeof b.AlternateBaseView === 'string' && b.AlternateBaseView.trim().length === 0;
-        if (aExplicitBaseOverride !== bExplicitBaseOverride) return false;
+        if (IsExplicitBaseViewOverride(a) !== IsExplicitBaseViewOverride(b)) return false;
         if (NormalizeAlternateBaseViewName(a.AlternateBaseView) !== NormalizeAlternateBaseViewName(b.AlternateBaseView)) return false;
 
         // Compare ViewEntity by reference (deep comparison would be expensive)

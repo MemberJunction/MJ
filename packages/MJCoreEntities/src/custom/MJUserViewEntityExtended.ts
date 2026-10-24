@@ -717,15 +717,20 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
           }]
         }`;
      */
-    protected GenerateWhereClause(FilterState: string, entityInfo: EntityInfo): string {
-        return this.processFilterGroup(JSON.parse(FilterState), entityInfo);
+    public static GenerateWhereClauseFromFilterState(FilterState: string | Record<string, unknown>, entityInfo: EntityInfo): string {
+        const parsed = typeof FilterState === 'string' ? JSON.parse(FilterState) : FilterState;
+        return MJUserViewEntityExtended.processFilterGroupStatic(parsed, entityInfo);
     }
 
-    private wrapQuotes(value: string, needQuotes: boolean): string {
+    protected GenerateWhereClause(FilterState: string, entityInfo: EntityInfo): string {
+        return MJUserViewEntityExtended.GenerateWhereClauseFromFilterState(FilterState, entityInfo);
+    }
+
+    private static wrapQuotesStatic(value: string, needQuotes: boolean): string {
         return needQuotes ? `'${value}'` : value;
     }
 
-    private convertFilterToSQL(
+    private static convertFilterToSQLStatic(
         field: string,
         operator: string,
         value: string,
@@ -750,22 +755,22 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
         }
         switch (operator) {
             case 'eq':
-                op = '= ' + this.wrapQuotes(newValue, f.NeedsQuotes);
+                op = '= ' + MJUserViewEntityExtended.wrapQuotesStatic(newValue, f.NeedsQuotes);
                 break;
             case 'neq':
-                op = '<> ' + this.wrapQuotes(newValue, f.NeedsQuotes);
+                op = '<> ' + MJUserViewEntityExtended.wrapQuotesStatic(newValue, f.NeedsQuotes);
                 break;
             case 'gt':
-                op = '> ' + this.wrapQuotes(newValue, f.NeedsQuotes);
+                op = '> ' + MJUserViewEntityExtended.wrapQuotesStatic(newValue, f.NeedsQuotes);
                 break;
             case 'gte':
-                op = '>= ' + this.wrapQuotes(newValue, f.NeedsQuotes);
+                op = '>= ' + MJUserViewEntityExtended.wrapQuotesStatic(newValue, f.NeedsQuotes);
                 break;
             case 'lt':
-                op = '< ' + this.wrapQuotes(newValue, f.NeedsQuotes);
+                op = '< ' + MJUserViewEntityExtended.wrapQuotesStatic(newValue, f.NeedsQuotes);
                 break;
             case 'lte':
-                op = '<= ' + this.wrapQuotes(newValue, f.NeedsQuotes);
+                op = '<= ' + MJUserViewEntityExtended.wrapQuotesStatic(newValue, f.NeedsQuotes);
                 break;
             case 'startswith':
                 op = `LIKE '${newValue}%'`;
@@ -791,7 +796,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
         return `[${field}] ${op}`;
     }
 
-    private processFilterGroup(filterGroup: any, entity: EntityInfo): string {
+    private static processFilterGroupStatic(filterGroup: any, entity: EntityInfo): string {
         // each filter has two properties, logic and filters
         // logic is either 'and' or 'or' and is what we use to determine the SQL logic operator
         // filters is an array of filters, each filter has a field, operator, and value,
@@ -808,13 +813,13 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
             // if an individual filter has a "logic" property, it's a group and we need to process it with parenthesis and recurisely
             if (filter.logic && filter.logic.length > 0) {
                 // this is a group, we process it with parenthesis
-                whereClause += `(${this.processFilterGroup(filter, entity)})`;
+                whereClause += `(${MJUserViewEntityExtended.processFilterGroupStatic(filter, entity)})`;
             } else {
                 // Dotted names (`Organizations.Type`) are the multi-entity encoding.
                 // Views are one table — use the field part. Bare names stay as they are.
                 const stored = String(filter.field ?? '');
                 const column = ParseFilterField(stored).Name;
-                whereClause += `(${this.convertFilterToSQL(
+                whereClause += `(${MJUserViewEntityExtended.convertFilterToSQLStatic(
                     column,
                     filter.operator,
                     filter.value,

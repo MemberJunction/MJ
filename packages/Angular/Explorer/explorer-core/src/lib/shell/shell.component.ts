@@ -1534,9 +1534,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       }
       // If the URL carries query params that differ from the matching tab's config, sync them
       // before activating so syncUrlWithWorkspace doesn't overwrite the URL with stale params.
+      // When the URL is a bare app-level URL (/app/:appName) with no query params, preserve the
+      // default tab's saved queryParams state (matching ApplyDeepLinkToRestoredWorkspace).
       const urlParams = this.extractQueryParamsFromUrl(url);
+      const isBareAppOnlyUrl = /^\/app\/[^\/]+$/.test(url.split('?')[0]) && Object.keys(urlParams).length === 0;
       const tabParams = (matchingTab.configuration?.['queryParams'] || {}) as Record<string, string>;
-      if (!this.queryParamsEqual(urlParams, tabParams) && typeof this.workspaceManager.UpdateTabConfiguration === 'function') {
+      if (!isBareAppOnlyUrl && !this.queryParamsEqual(urlParams, tabParams) && typeof this.workspaceManager.UpdateTabConfiguration === 'function') {
         this.urlBasedNavigation = true;
         try {
           this.workspaceManager.UpdateTabConfiguration(matchingTab.id, {
@@ -1553,8 +1556,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     } else if (matchingTab && matchingTab.id === config.activeTabId) {
       // Same tab is already active, but query params may have changed (back/forward within nav item)
       const urlParams = this.extractQueryParamsFromUrl(url);
+      const isBareAppOnlyUrl = /^\/app\/[^\/]+$/.test(url.split('?')[0]) && Object.keys(urlParams).length === 0;
       const tabParams = (matchingTab.configuration?.['queryParams'] || {}) as Record<string, string>;
-      if (!this.queryParamsEqual(urlParams, tabParams)) {
+      if (!isBareAppOnlyUrl && !this.queryParamsEqual(urlParams, tabParams)) {
         // URL is source of truth during back/forward — update tab config to match.
         this.urlBasedNavigation = true;
         try {

@@ -1319,10 +1319,22 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     newView.SmartFilterPrompt = event.SmartFilterPrompt;
     newView.FilterState = this.buildFilterStateJson(event);
     newView.AlternateBaseView = event.AlternateBaseView || null;
+    if (this.CurrentViewEntity?.ViewTypeID) {
+      newView.ViewTypeID = this.CurrentViewEntity.ViewTypeID;
+    }
     if (event.CustomWhereClause !== undefined) {
-      newView.CustomWhereClause = event.CustomWhereClause;
-      if (event.CustomWhereClause && event.WhereClause !== undefined) {
-        newView.WhereClause = event.WhereClause;
+      const copyingOtherUsersView =
+        !!this.CurrentViewEntity &&
+        !UUIDsEqual(this.CurrentViewEntity.UserID, provider.CurrentUser.ID);
+      const canPersistCustomWhere =
+        !event.CustomWhereClause ||
+        provider.CurrentUser.Type === 'Owner' ||
+        !copyingOtherUsersView;
+      if (canPersistCustomWhere) {
+        newView.CustomWhereClause = event.CustomWhereClause;
+        if (event.CustomWhereClause && event.WhereClause !== undefined) {
+          newView.WhereClause = event.WhereClause;
+        }
       }
     }
     const displayState = this.buildDisplayState(event, newView);
@@ -1343,6 +1355,10 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     if (!saved) {
       LogError(`[ViewWorkspace] Failed to create view: ${newView.LatestResult?.CompleteMessage ?? 'unknown error'}`);
       return false;
+    }
+
+    if (newView.IsDefault) {
+      await this.clearOtherDefaultViewsForEntity(newView.ID);
     }
 
     this.CurrentViewEntity = newView;
@@ -1407,10 +1423,27 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
       return false;
     }
 
+    if (view.IsDefault) {
+      await this.clearOtherDefaultViewsForEntity(view.ID);
+    }
+
     this.ViewModified = false;
     this.CurrentGridState = this.parseViewGridState(view);
     this.AfterViewSave.emit({ View: view, IsNew: false });
     return true;
+  }
+
+  /**
+   * Ensure at most one user-owned view for the current entity has `IsDefault = true`.
+   */
+  private async clearOtherDefaultViewsForEntity(keepViewId: string): Promise<void> {
+    const myViews = this.viewSelectorRef?.MyViews ?? [];
+    for (const item of myViews) {
+      if (item.entity && item.entity.IsDefault && !UUIDsEqual(item.entity.ID, keepViewId)) {
+        item.entity.IsDefault = false;
+        await item.entity.Save();
+      }
+    }
   }
 
   /**
@@ -1599,11 +1632,13 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
       SortField: staged?.SortField ?? null,
       SortDirection: staged?.SortDirection ?? 'asc',
       SortItems: staged?.SortItems ?? [],
-      SmartFilterEnabled: staged?.SmartFilterEnabled ?? false,
-      SmartFilterPrompt: staged?.SmartFilterPrompt ?? '',
-      FilterState: staged?.FilterState ?? this.FilterDialogState ?? null,
+      SmartFilterEnabled: staged?.SmartFilterEnabled ?? this.CurrentViewEntity?.SmartFilterEnabled ?? false,
+      SmartFilterPrompt: staged?.SmartFilterPrompt ?? this.CurrentViewEntity?.SmartFilterPrompt ?? '',
+      FilterState: staged?.FilterState ?? this.FilterDialogState ?? (this.CurrentViewEntity?.FilterStateObject as CompositeFilterDescriptor | undefined) ?? null,
       AggregatesConfig: staged?.AggregatesConfig ?? null,
-      AlternateBaseView: staged?.AlternateBaseView ?? this._alternateBaseView ?? null
+      AlternateBaseView: staged?.AlternateBaseView !== undefined
+        ? staged.AlternateBaseView
+        : (this._alternateBaseView ?? this.EffectiveAlternateBaseView)
     };
     const saved = await this.OnSaveView(viewSaveEvent);
     if (!saved && staged) {
@@ -1811,6 +1846,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     newView.CardState = sourceView.CardState;
     newView.DisplayState = sourceView.DisplayState;
     newView.ViewTypeID = sourceView.ViewTypeID;
+    newView.AlternateBaseView = sourceView.AlternateBaseView;
     newView.SmartFilterEnabled = sourceView.SmartFilterEnabled || false;
     newView.SmartFilterPrompt = sourceView.SmartFilterPrompt || '';
 
@@ -1969,11 +2005,12 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     event: ViewSaveEvent,
     view?: MJUserViewEntityExtended | null
   ): MJUserViewEntity_IDisplayState | null {
-    if (!event.GridDisplayState && !event.CardDisplayState && !event.TimelineState && !event.AlternateBaseView) {
+    const existing = view?.DisplayStateObject ?? (event.SaveAsNew ? this.CurrentViewEntity?.DisplayStateObject : undefined);
+    if (!event.GridDisplayState && !event.CardDisplayState && !event.TimelineState && !event.AlternateBaseView && !existing) {
       return null;
     }
-    const existing = view?.DisplayStateObject;
     return {
+      ...(existing ?? {}),
       defaultMode: existing?.defaultMode ?? 'grid',
       enabledModes: existing?.enabledModes,
       alternateBaseView: event.AlternateBaseView || undefined,

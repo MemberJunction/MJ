@@ -25,8 +25,8 @@ function makeEntity(): EntityInfo {
     Name: 'Accounts',
     DisplayNameOrName: 'Accounts',
     Fields: [
-      { ID: 'f1', Name: 'AccountName', DisplayNameOrName: 'Account Name', Description: 'Primary legal name of the account', DefaultInView: true, DefaultColumnWidth: 200, Type: 'nvarchar', EntityFieldValues: [] },
-      { ID: 'f2', Name: 'Status', DisplayNameOrName: 'Status', Description: 'Lifecycle status of the account', DefaultInView: true, DefaultColumnWidth: 120, Type: 'nvarchar', EntityFieldValues: [] },
+      { ID: 'f1', Name: 'AccountName', DisplayNameOrName: 'Account Name', Description: 'Primary legal name of the account', DefaultInView: true, DefaultColumnWidth: 200, Type: 'nvarchar', NeedsQuotes: true, EntityFieldValues: [] },
+      { ID: 'f2', Name: 'Status', DisplayNameOrName: 'Status', Description: 'Lifecycle status of the account', DefaultInView: true, DefaultColumnWidth: 120, Type: 'nvarchar', NeedsQuotes: true, EntityFieldValues: [] },
     ],
   } as unknown as EntityInfo;
 }
@@ -288,13 +288,13 @@ describe('ViewConfigPanelComponent — carrying a staged filter back from the na
     expect(panel.CustomWhereClause).toBe(false);
 
     // Read-only preview shows live compiled SQL from Rule Builder
-    expect(panel.DisplayedSqlWhereClause).toBe("[Status] = 'Active' AND [AccountName] LIKE '%Acme%'");
+    expect(panel.DisplayedSqlWhereClause).toBe("([Status] = 'Active') AND ([AccountName] LIKE '%Acme%')");
     expect(panel.SqlWhereSourceLabel).toContain('Generated from Rule Builder');
 
     // Checking the one-way override seeds WhereClause from the compiled SQL and unlocks editing
     panel.OnToggleCustomWhereOverride(true);
     expect(panel.CustomWhereClause).toBe(true);
-    expect(panel.WhereClause).toBe("[Status] = 'Active' AND [AccountName] LIKE '%Acme%'");
+    expect(panel.WhereClause).toBe("([Status] = 'Active') AND ([AccountName] LIKE '%Acme%')");
 
     panel.OnCustomSqlWhereChange("[Status] = 'Active' AND [AccountName] LIKE '%Acme%' AND [IsActive] = 1");
     expect(panel.DisplayedSqlWhereClause).toBe("[Status] = 'Active' AND [AccountName] LIKE '%Acme%' AND [IsActive] = 1");
@@ -377,5 +377,113 @@ describe('ViewConfigPanelComponent — carrying a staged filter back from the na
     panel.CloseAddColumnsDrawer();
     expect(panel.ShowAddColumnsDrawer).toBe(false);
     expect(panel.ColumnSearchText).toBe('');
+  });
+
+  it('opens in Create Named View mode when DefaultSaveAsNew is true even while a saved ViewEntity is selected', () => {
+    const panel = makePanel();
+    panel.ViewEntity = {
+      ID: 'view-existing-1',
+      Name: 'Team Shared Accounts',
+      Description: 'Shared view owned by another user',
+      IsShared: true,
+      IsDefault: true,
+      UserCanEdit: false,
+      UserCanDelete: false,
+      Columns: [{ Name: 'AccountName', hidden: false, orderIndex: 0 }],
+      ViewSortInfo: []
+    } as unknown as MJUserViewEntityExtended;
+    panel.DefaultSaveAsNew = true;
+    open(panel);
+
+    expect(panel.IsSaveAsNewFlow).toBe(true);
+    expect(panel.IsCreatingNamedView).toBe(true);
+    expect(panel.CanEdit).toBe(true);
+    expect(panel.CanDelete).toBe(false);
+    expect(panel.ViewName).toBe('');
+    expect(panel.IsShared).toBe(false);
+    expect(panel.IsDefault).toBe(false);
+
+    panel.ViewName = 'My Personal Accounts Copy';
+    const emitted: ViewSaveEvent[] = [];
+    panel.Save.subscribe(e => emitted.push(e));
+    panel.OnSaveAsNew();
+
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0].SaveAsNew).toBe(true);
+    expect(emitted[0].Name).toBe('My Personal Accounts Copy');
+    expect(emitted[0].IsShared).toBe(false);
+    expect(emitted[0].IsDefault).toBe(false);
+  });
+
+  it('forces IsShared=false and IsDefault=false when saving a copy via OnSaveAsCopy', () => {
+    const panel = makePanel();
+    panel.ViewEntity = {
+      ID: 'view-existing-2',
+      Name: 'Shared Default View',
+      Description: 'Original description',
+      IsShared: true,
+      IsDefault: true,
+      UserCanEdit: false,
+      UserCanDelete: false,
+      Columns: [{ Name: 'AccountName', hidden: false, orderIndex: 0 }],
+      ViewSortInfo: []
+    } as unknown as MJUserViewEntityExtended;
+    open(panel);
+
+    const emitted: ViewSaveEvent[] = [];
+    panel.Save.subscribe(e => emitted.push(e));
+    panel.OnSaveAsCopy();
+
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0].SaveAsNew).toBe(true);
+    expect(emitted[0].Name).toBe('Shared Default View (Copy)');
+    expect(emitted[0].IsShared).toBe(false);
+    expect(emitted[0].IsDefault).toBe(false);
+  });
+
+  it('restores SmartFilterEnabled=true when leaving Advanced Mode from read-only SQL preview', () => {
+    const panel = makePanel();
+    open(panel);
+
+    panel.ToggleAdvancedMode();
+    expect(panel.IsAdvancedMode).toBe(true);
+
+    panel.SetFilterMode('sql');
+    expect(panel.FilterMode).toBe('sql');
+
+    // Toggle Advanced Mode OFF while in read-only SQL mode with no rule-builder filters
+    panel.ToggleAdvancedMode();
+    expect(panel.IsAdvancedMode).toBe(false);
+    expect(panel.FilterMode).toBe('smart');
+    expect(panel.SmartFilterEnabled).toBe(true);
+  });
+
+  it('ignores Escape key events that are defaultPrevented or originate inside mj-code-editor', () => {
+    const panel = makePanel();
+    open(panel);
+
+    let closedCount = 0;
+    panel.Close.subscribe(() => closedCount++);
+
+    // 1. defaultPrevented Escape (e.g. from inner dropdown or search input)
+    panel.HandleEscape({
+      defaultPrevented: true,
+      target: null
+    } as unknown as KeyboardEvent);
+    expect(closedCount).toBe(0);
+
+    // 2. Escape inside mj-code-editor / .cm-editor
+    panel.HandleEscape({
+      defaultPrevented: false,
+      target: { closest: (sel: string) => (sel.includes('mj-code-editor') ? {} : null) }
+    } as unknown as KeyboardEvent);
+    expect(closedCount).toBe(0);
+
+    // 3. Normal Escape closes the panel
+    panel.HandleEscape({
+      defaultPrevented: false,
+      target: { closest: () => null }
+    } as unknown as KeyboardEvent);
+    expect(closedCount).toBe(1);
   });
 });

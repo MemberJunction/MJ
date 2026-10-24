@@ -131,10 +131,11 @@ import {
     DeepInfraLLM,
 } from '@memberjunction/ai-deepinfra';
 
-// @memberjunction/ai-elevenlabs (2 classes)
+// @memberjunction/ai-elevenlabs (3 classes)
 import {
     ElevenLabsAudioGenerator,
     ElevenLabsRealtime,
+    ElevenRealtime,
 } from '@memberjunction/ai-elevenlabs';
 
 // @memberjunction/ai-inception (2 classes)
@@ -1483,6 +1484,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     DeepInfraLLM,
     ElevenLabsAudioGenerator,
     ElevenLabsRealtime,
+    ElevenRealtime,
     InceptionDecision,
     InceptionLLM,
     LlamaCppLLM,
@@ -1644,11 +1646,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCommunicationProviderMessageTypeEntity,
     MJCommunicationRunEntity,
     MJCompanyEntity,
-    MJCompanyIntegrationEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
     MJCompanyIntegrationFieldMapEntity,
     MJCompanyIntegrationObjectEntity,
@@ -1848,11 +1850,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRSUPendingWorkEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
-    MJRecommendationProviderEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJRecommendationProviderEntity,
     MJRecommendationRunEntity,
     MJRecordChangeEntity,
     MJRecordChangeReplayRunEntity,
@@ -2052,11 +2054,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetTypeformFileContentAction,
     GetTypeformFormsAction,
     GetTypeformResponsesAction,
-    GetTypeformStatisticsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetTypeformStatisticsAction,
     UpdateJotFormAction,
     UpdateSurveyMonkeyAction,
     UpdateTypeformAction,
@@ -2256,11 +2258,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MLModelScoreEnricher,
     PredictiveStudioControlExperimentSessionServerOperation,
     PredictiveStudioCreateScoringProcessServerOperation,
-    PredictiveStudioModelDevAgent,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    PredictiveStudioModelDevAgent,
     PredictiveStudioPipelineBuilderAgent,
     PredictiveStudioPromoteModelAction,
     PredictiveStudioPromoteModelServerOperation,
@@ -2460,11 +2462,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     LoadAgentSpecAction,
     LoopAction,
     MCPToolAction,
-    ManageMyCalendarEventAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ManageMyCalendarEventAction,
     ManageMyEmailInboxAction,
     MaterializeListFromViewAction,
     ModifyDocumentSectionAction,
@@ -2574,7 +2576,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1093;
+export const CLASS_REGISTRATIONS_COUNT = 1094;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

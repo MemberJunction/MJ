@@ -336,9 +336,9 @@ export class FilterRuleComponent implements OnInit, OnChanges {
       return;
     }
     const rect = triggerBtn.nativeElement.getBoundingClientRect();
-    const offset = this.getTransformAncestorOffset(triggerBtn.nativeElement);
     const viewportHeight = typeof window !== 'undefined' && window.innerHeight ? window.innerHeight : 800;
     const viewportWidth = typeof window !== 'undefined' && window.innerWidth ? window.innerWidth : 1200;
+    const offset = this.getTransformAncestorOffset(triggerBtn.nativeElement, viewportHeight);
 
     const spaceBelow = viewportHeight - rect.bottom - 12;
     const spaceAbove = rect.top - 12;
@@ -359,7 +359,7 @@ export class FilterRuleComponent implements OnInit, OnChanges {
       this.DropdownMenuStyle = {
         position: 'fixed',
         top: 'auto',
-        bottom: `${viewportHeight - rect.top + 4 + offset.top}px`,
+        bottom: `${offset.bottom - rect.top + 4}px`,
         left: `${clampedLeft - offset.left}px`,
         width: `${menuWidth}px`,
         maxHeight: `${maxH}px`
@@ -381,17 +381,20 @@ export class FilterRuleComponent implements OnInit, OnChanges {
    * Find the nearest ancestor with a CSS transform, which creates a new
    * containing block for position:fixed elements per CSS spec.
    */
-  private getTransformAncestorOffset(element: HTMLElement): { top: number; left: number } {
+  private getTransformAncestorOffset(
+    element: HTMLElement,
+    viewportHeight: number = typeof window !== 'undefined' && window.innerHeight ? window.innerHeight : 800
+  ): { top: number; left: number; bottom: number } {
     let el: HTMLElement | null = element.parentElement;
     while (el) {
       const transform = getComputedStyle(el).transform;
       if (transform && transform !== 'none') {
         const ancestorRect = el.getBoundingClientRect();
-        return { top: ancestorRect.top, left: ancestorRect.left };
+        return { top: ancestorRect.top, left: ancestorRect.left, bottom: ancestorRect.bottom };
       }
       el = el.parentElement;
     }
-    return { top: 0, left: 0 };
+    return { top: 0, left: 0, bottom: viewportHeight };
   }
 
   // ========================================
@@ -506,13 +509,15 @@ export class FilterRuleComponent implements OnInit, OnChanges {
    */
   OnFieldKeydown(event: KeyboardEvent): void {
     if (this.Disabled) return;
+    const visibleFields = this.FilteredFields(this.ActiveSourceKey);
 
     if (!this.FieldDropdownOpen) {
       // Open dropdown on Enter, Space, or arrow keys
       if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault();
         this.ToggleFieldDropdown();
-        this.FieldHighlightIndex = this.fields.findIndex(f => f.name === this.Filter.field);
+        const refreshedFields = this.FilteredFields(this.ActiveSourceKey);
+        this.FieldHighlightIndex = refreshedFields.findIndex(f => f.name === this.Filter.field);
         if (this.FieldHighlightIndex < 0) this.FieldHighlightIndex = 0;
       }
       return;
@@ -520,7 +525,7 @@ export class FilterRuleComponent implements OnInit, OnChanges {
 
     this.handleDropdownKeydown(
       event,
-      this.fields,
+      visibleFields,
       this.FieldHighlightIndex,
       (index) => this.FieldHighlightIndex = index,
       (item) => this.SelectField(item.name),
@@ -611,6 +616,7 @@ export class FilterRuleComponent implements OnInit, OnChanges {
     getLabel: (item: T) => string,
     onClose: () => void
   ): void {
+    if (event.defaultPrevented) return;
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault();
@@ -635,6 +641,7 @@ export class FilterRuleComponent implements OnInit, OnChanges {
       case 'Escape':
       case 'Tab':
         event.preventDefault();
+        event.stopPropagation();
         onClose();
         break;
 
@@ -746,8 +753,14 @@ export class FilterRuleComponent implements OnInit, OnChanges {
     this.FieldHighlightIndex = 0;
   }
 
+  public OnFieldSearchInputEvent(event: Event): void {
+    const target = event.target as HTMLInputElement | null;
+    this.OnFieldSearchInput(target?.value ?? '');
+  }
+
   public OnFieldSearchKeydown(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
+      event.preventDefault();
       event.stopPropagation();
       if (this.FieldSearchText) {
         this.FieldSearchText = '';

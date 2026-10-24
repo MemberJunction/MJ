@@ -45,15 +45,17 @@ CREATE TABLE [${flyway:defaultSchema}].[EntityAlternateBaseView] (
     ),
     CONSTRAINT [CK_EntityAlternateBaseView_ViewName] CHECK (
         LEN(LTRIM(RTRIM([ViewName]))) > 0
-        AND [ViewName] NOT LIKE N'%[^A-Za-z0-9_@#$]%'
-        AND [ViewName] LIKE N'[A-Za-z_@#]%'
+        AND LEN([ViewName]) <= 128
+        AND [ViewName] NOT LIKE N'%[^A-Za-z0-9_]%'
+        AND [ViewName] NOT LIKE N'[^A-Za-z_]%'
     ),
     CONSTRAINT [CK_EntityAlternateBaseView_SchemaName] CHECK (
         [SchemaName] IS NULL
         OR (
             LEN(LTRIM(RTRIM([SchemaName]))) > 0
-            AND [SchemaName] NOT LIKE N'%[^A-Za-z0-9_@#$]%'
-            AND [SchemaName] LIKE N'[A-Za-z_@#]%'
+            AND LEN([SchemaName]) <= 128
+            AND [SchemaName] NOT LIKE N'%[^A-Za-z0-9_]%'
+            AND [SchemaName] NOT LIKE N'[^A-Za-z_]%'
         )
     ),
     CONSTRAINT [CK_EntityAlternateBaseView_CachePolicy] CHECK ([CachePolicy] IN (N'Default', N'Bypass')),

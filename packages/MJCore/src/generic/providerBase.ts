@@ -2007,6 +2007,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 p.UserSearchString ?? '',
                 p.ViewID ?? '',
                 p.ViewName ?? '',
+                IsExplicitBaseViewOverride(p) ? 'abv_override:base' : '',
                 contextUser?.ID ?? ''
             ].join('|');
             return `${base}|${extras}`;

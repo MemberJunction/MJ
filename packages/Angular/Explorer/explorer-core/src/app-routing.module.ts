@@ -341,7 +341,8 @@ export class ResourceResolver implements Resolve<void> {
             // Dynamic view: /app/:appName/view/dynamic/:entityName
             const entityName = decodeURIComponent(param2);
             const extraFilter = route.queryParams['ExtraFilter'] || route.queryParams['extraFilter'];
-            const alternateBaseView = route.queryParams['AlternateBaseView'] || route.queryParams['alternateBaseView'] || route.queryParams['abv'];
+            const rawAbv = route.queryParams['AlternateBaseView'] ?? route.queryParams['alternateBaseView'] ?? route.queryParams['abv'];
+            const alternateBaseView = typeof rawAbv === 'string' ? rawAbv : (Array.isArray(rawAbv) ? rawAbv[0] : undefined);
             const filterSuffix = (extraFilter || alternateBaseView) ? ' (Filtered)' : '';
 
             this.tabService.OpenTab({
@@ -619,7 +620,8 @@ export class ResourceResolver implements Resolve<void> {
       // /resource/view/dynamic/:entityName
       const entityName = decodeURIComponent(route.params['entityName']);
       const extraFilter = route.queryParams['ExtraFilter'] || route.queryParams['extraFilter'];
-      const alternateBaseView = route.queryParams['AlternateBaseView'] || route.queryParams['alternateBaseView'] || route.queryParams['abv'];
+      const rawAbv = route.queryParams['AlternateBaseView'] ?? route.queryParams['alternateBaseView'] ?? route.queryParams['abv'];
+      const alternateBaseView = typeof rawAbv === 'string' ? rawAbv : (Array.isArray(rawAbv) ? rawAbv[0] : undefined);
 
       const filterSuffix = (extraFilter || alternateBaseView) ? ' (Filtered)' : '';
 

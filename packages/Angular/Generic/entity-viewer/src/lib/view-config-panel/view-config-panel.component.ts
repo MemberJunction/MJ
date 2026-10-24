@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChanges, ChangeDetectorRef, HostListener } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { EntityInfo, EntityFieldInfo, EntityAlternateBaseViewInfo, EntityFieldTSType, Metadata, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import {
   MJUserViewEntityExtended,
   ViewColumnInfo,
@@ -315,43 +316,16 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   public IsTimelineDateDropdownOpen: boolean = false;
 
   // Full-screen Studio state (always full-screen takeover)
-  public IsResizing: boolean = false;
   public IsFullScreen: boolean = true;
-  public HasCustomResizeWidth: boolean = false;
-  public PanelWidth: number = 960;
-  private readonly MIN_PANEL_WIDTH = 480;
-  private readonly MAX_PANEL_WIDTH = 1400;
-  private readonly DEFAULT_PANEL_WIDTH = 960;
-  /** Width threshold below which tabs show icons only */
-  private readonly ICON_ONLY_THRESHOLD = 440;
-  private readonly PANEL_WIDTH_SETTING_KEY = 'view-config-panel/width';
+  /** True when the Studio was opened via "+ Create New View" (DefaultSaveAsNew), even if a ViewEntity is currently selected */
+  public IsSaveAsNewFlow: boolean = false;
   private readonly ADVANCED_MODE_SETTING_KEY = 'view-config-panel/advanced-mode';
-  private resizeStartX: number = 0;
-  private resizeStartWidth: number = 0;
-
-  /**
-   * Whether tabs should show icons only (narrow panel mode)
-   */
-  get IsIconOnlyMode(): boolean {
-    return this.PanelWidth < this.ICON_ONLY_THRESHOLD;
-  }
 
   /**
    * Whether the panel is currently in expanded wide / full-screen studio mode
    */
   get IsWideMode(): boolean {
     return true;
-  }
-
-  /**
-   * Toggle between Wide Split Sheet (960px) and Full Workspace Takeover (100% width)
-   */
-  ToggleWideMode(): void {
-    this.IsFullScreen = !this.IsFullScreen;
-    this.HasCustomResizeWidth = false;
-    this.PanelWidth = this.IsFullScreen ? 960 : this.DEFAULT_PANEL_WIDTH;
-    void this.savePanelWidth();
-    this.cdr.detectChanges();
   }
 
   /**
@@ -367,8 +341,10 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     }
     this.FilterFields = this.buildFilterFields();
     if (!this.IsAdvancedMode && this.FilterMode === 'sql' && !this.CustomWhereClause) {
-      // Return to whichever standard filter mode has active data, or Smart Filter
-      this.FilterMode = this.GetFilterCount() > 0 ? 'traditional' : 'smart';
+      // Return to whichever standard filter mode has active data, or Smart Filter (updating SmartFilterEnabled too)
+      const targetMode = this.GetFilterCount() > 0 ? 'traditional' : 'smart';
+      this.FilterMode = targetMode;
+      this.SmartFilterEnabled = targetMode === 'smart';
     }
     this.cdr.detectChanges();
   }
@@ -382,8 +358,15 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    * Handle keyboard shortcuts
    * Escape: Close open dropdown, format sub-panel, or the panel itself
    */
-  @HostListener('document:keydown.escape')
-  HandleEscape(): void {
+  @HostListener('document:keydown.escape', ['$event'])
+  HandleEscape(event?: Event): void {
+    if (event?.defaultPrevented) {
+      return;
+    }
+    const targetEl = event?.target as HTMLElement | null;
+    if (targetEl?.closest?.('mj-code-editor, .cm-editor')) {
+      return;
+    }
     if (this.ShowAggregateDialog) {
       return; // AggregateSetupDialog handles its own Escape
     } else if (this.OpenSortFieldDropdownIndex !== null) {
@@ -426,76 +409,16 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     }
   }
 
-  // ========================================
-  // PANEL RESIZE HANDLERS
-  // ========================================
-
-  /**
-   * Start resizing the panel
-   */
-  OnResizeStart(event: MouseEvent): void {
-    event.preventDefault();
-    this.IsResizing = true;
-    this.IsFullScreen = false;
-    this.HasCustomResizeWidth = true;
-    this.resizeStartX = event.clientX;
-    this.resizeStartWidth = this.PanelWidth >= 680 ? this.PanelWidth : 940;
-
-    // Add document-level listeners for mouse move and up
-    document.addEventListener('mousemove', this.onResizeMove);
-    document.addEventListener('mouseup', this.onResizeEnd);
-    document.body.style.cursor = 'ew-resize';
-    document.body.style.userSelect = 'none';
-  }
-
-  /**
-   * Handle resize movement (bound to document)
-   */
-  private onResizeMove = (event: MouseEvent): void => {
-    if (!this.IsResizing) return;
-
-    // Calculate new width (panel is on the right, so moving left increases width)
-    const deltaX = this.resizeStartX - event.clientX;
-    let newWidth = this.resizeStartWidth + deltaX;
-
-    // Clamp to min/max bounds
-    newWidth = Math.max(this.MIN_PANEL_WIDTH, Math.min(this.MAX_PANEL_WIDTH, newWidth));
-
-    this.PanelWidth = newWidth;
-    this.cdr.detectChanges();
-  };
-
-  /**
-   * End resizing the panel (bound to document)
-   */
-  private onResizeEnd = (): void => {
-    this.IsResizing = false;
-    document.removeEventListener('mousemove', this.onResizeMove);
-    document.removeEventListener('mouseup', this.onResizeEnd);
-    document.body.style.cursor = '';
-    document.body.style.userSelect = '';
-    // Persist the panel width to user settings
-    this.savePanelWidth();
-    this.cdr.detectChanges();
-  };
-
   ngOnInit(): void {
-    this.loadSavedPanelWidth();
+    this.loadSavedStudioPreferences();
     this.initializeFromEntity();
   }
 
   /**
-   * Load saved studio preferences (panel width and advanced mode) from user settings
+   * Load saved studio preferences (advanced mode) from user settings
    */
-  private loadSavedPanelWidth(): void {
+  private loadSavedStudioPreferences(): void {
     try {
-      const savedWidth = UserInfoEngine.Instance.GetSetting(this.PANEL_WIDTH_SETTING_KEY);
-      if (savedWidth) {
-        const width = parseInt(savedWidth, 10);
-        if (!isNaN(width) && width >= this.MIN_PANEL_WIDTH && width <= this.MAX_PANEL_WIDTH) {
-          this.PanelWidth = width;
-        }
-      }
       const savedAdvanced = UserInfoEngine.Instance.GetSetting(this.ADVANCED_MODE_SETTING_KEY);
       if (savedAdvanced === 'true') {
         this.IsAdvancedMode = true;
@@ -504,17 +427,6 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       }
     } catch (error) {
       console.warn('[ViewConfigPanel] Failed to load saved studio preferences:', error);
-    }
-  }
-
-  /**
-   * Save panel width to user settings
-   */
-  private async savePanelWidth(): Promise<void> {
-    try {
-      await UserInfoEngine.Instance.SetSetting(this.PANEL_WIDTH_SETTING_KEY, String(this.PanelWidth));
-    } catch (error) {
-      console.warn('[ViewConfigPanel] Failed to save panel width:', error);
     }
   }
 
@@ -549,7 +461,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       this._localSaving = false;
     }
 
-    if (changes['Entity'] || changes['ViewEntity'] || changes['CurrentGridState'] || changes['PendingNewViewAlternateBaseView']) {
+    if (changes['Entity'] || changes['ViewEntity'] || changes['CurrentGridState'] || changes['DefaultSaveAsNew'] || changes['PendingNewViewAlternateBaseView']) {
       this.initializeFromEntity();
     }
 
@@ -668,9 +580,10 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     this.FilterFields = this.buildFilterFields();
 
     const defaultTimelineDateField = this.AvailableDateFields[0]?.Name || '';
+    this.IsSaveAsNewFlow = this.DefaultSaveAsNew;
 
-    // Apply view entity metadata (name, description, etc.) if available
-    if (this.ViewEntity) {
+    // Apply view entity metadata (name, description, etc.) when editing an existing view (not "+ Create New View")
+    if (this.ViewEntity && !this.IsSaveAsNewFlow) {
       this.IsCreatingNewView = false;
       this.ViewName = this.ViewEntity.Name;
       this.ViewDescription = this.ViewEntity.Description || '';
@@ -714,11 +627,11 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       }
     } else {
       // Default view or pending new view — use pending values if creating a new view
-      this.IsCreatingNewView = this.DefaultSaveAsNew;
-      this.ViewName = this.DefaultSaveAsNew ? this.PendingNewViewName : '';
-      this.ViewDescription = this.DefaultSaveAsNew ? this.PendingNewViewDescription : '';
+      this.IsCreatingNewView = this.IsSaveAsNewFlow;
+      this.ViewName = this.IsSaveAsNewFlow ? this.PendingNewViewName : '';
+      this.ViewDescription = this.IsSaveAsNewFlow ? this.PendingNewViewDescription : '';
       this.ShowDescriptionEditor = !!this.ViewDescription.trim();
-      this.IsShared = this.DefaultSaveAsNew ? this.PendingNewViewIsShared : false;
+      this.IsShared = this.IsSaveAsNewFlow ? this.PendingNewViewIsShared : false;
       this.IsDefault = false;
       this.AlternateBaseView = this.PendingNewViewAlternateBaseView || null;
       this.CustomWhereClause = false;
@@ -738,8 +651,8 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       }
       // Carry a filter back from the quick-save dialog when continuing a new-view flow; otherwise
       // start clean. Smart takes precedence, matching how a saved view's filter mode is chosen.
-      const carryingSmartFilter = this.DefaultSaveAsNew && this.PendingNewViewSmartFilterEnabled;
-      const carriedFilter = this.DefaultSaveAsNew && !carryingSmartFilter ? this.PendingNewViewFilterState : null;
+      const carryingSmartFilter = this.IsSaveAsNewFlow && this.PendingNewViewSmartFilterEnabled;
+      const carriedFilter = this.IsSaveAsNewFlow && !carryingSmartFilter ? this.PendingNewViewFilterState : null;
       this.SmartFilterPrompt = carryingSmartFilter ? this.PendingNewViewSmartFilterPrompt : '';
       this.SmartFilterExplanation = '';
       if (carriedFilter && this.countFilters(carriedFilter) > 0) {
@@ -1114,7 +1027,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    * Check if the current user can edit the view
    */
   get CanEdit(): boolean {
-    if (!this.ViewEntity) return true; // Can always create new
+    if (!this.ViewEntity || this.IsSaveAsNewFlow) return true; // Can always create new
     return this.ViewEntity.UserCanEdit;
   }
 
@@ -1122,7 +1035,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    * Check if the current user can delete the view
    */
   get CanDelete(): boolean {
-    if (!this.ViewEntity) return false; // Can't delete default
+    if (!this.ViewEntity || this.IsSaveAsNewFlow) return false; // Can't delete default or unsaved new view
     return this.ViewEntity.UserCanDelete;
   }
 
@@ -1147,7 +1060,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    * promoted via "Save as Named View...", or automatically promoted because a filter/ABV was configured).
    */
   get IsCreatingNamedView(): boolean {
-    return !this.ViewEntity && (this.DefaultSaveAsNew || this.IsCreatingNewView || this.HasActiveFilterOrBaseView);
+    return this.IsSaveAsNewFlow || (!this.ViewEntity && (this.IsCreatingNewView || this.HasActiveFilterOrBaseView));
   }
 
   /**
@@ -1155,7 +1068,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    * because a filter, Smart Filter prompt, Alternate Base View, or Custom SQL WHERE was added.
    */
   get WasAutoPromotedToNamedView(): boolean {
-    return !this.ViewEntity && !this.DefaultSaveAsNew && !this.IsCreatingNewView && this.HasActiveFilterOrBaseView;
+    return !this.ViewEntity && !this.IsSaveAsNewFlow && !this.IsCreatingNewView && this.HasActiveFilterOrBaseView;
   }
 
   /**
@@ -1175,12 +1088,14 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    */
   SwitchToDefaultLayoutMode(): void {
     this.IsCreatingNewView = false;
-    this.DefaultSaveAsNew = false;
+    this.IsSaveAsNewFlow = false;
     this.SmartFilterPrompt = '';
     this.FilterState = CreateEmptyFilter();
     this.AlternateBaseView = null;
     this.CustomWhereClause = false;
     this.WhereClause = '';
+    this.FilterMode = 'smart';
+    this.SmartFilterEnabled = true;
     this.cdr.detectChanges();
   }
 
@@ -2174,12 +2089,14 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    * Build the ViewSaveEvent payload with all Unified View Studio & progressive disclosure settings
    */
   private buildSaveEvent(saveAsNew: boolean, overrideName?: string): ViewSaveEvent {
+    const existingTimeline = this.ViewEntity?.ParsedDisplayState?.timeline;
     const timelineState: ViewTimelineState | null = this.TimelineDateField
       ? {
+          ...(existingTimeline ?? {}),
           dateFieldName: this.TimelineDateField,
           segmentGrouping: this.TimelineGrouping,
           orientation: this.TimelineOrientation,
-          sortOrder: 'desc'
+          sortOrder: existingTimeline?.sortOrder ?? 'desc'
         }
       : null;
 
@@ -2239,7 +2156,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   /**
-   * Save edits to an existing view as a new copy without overwriting the original
+   * Save edits to an existing view as a new personal copy without overwriting the original
    */
   OnSaveAsCopy(): void {
     if (this.IsSaving || this._localSaving) return;
@@ -2248,7 +2165,10 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     this._localSaving = true;
     const baseName = this.ViewName.trim() || this.ViewEntity?.Name || 'View';
     const copyName = baseName === this.ViewEntity?.Name ? `${baseName} (Copy)` : baseName;
-    this.Save.emit(this.buildSaveEvent(true, copyName));
+    const event = this.buildSaveEvent(true, copyName);
+    event.IsShared = false;
+    event.IsDefault = false;
+    this.Save.emit(event);
   }
 
   /**
@@ -2420,11 +2340,21 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   /**
-   * Compile a CompositeFilterDescriptor into a SQL WHERE expression using entity field metadata
+   * Compile a CompositeFilterDescriptor into a SQL WHERE expression using the canonical
+   * `MJUserViewEntityExtended.GenerateWhereClauseFromFilterState` compiler when entity metadata is present.
    */
   CompileFilterStateToSqlWhere(filter: CompositeFilterDescriptor = this.FilterState): string {
     if (!filter?.filters?.length) {
       return '';
+    }
+    if (this.Entity?.Fields?.length) {
+      const canonical = MJUserViewEntityExtended.GenerateWhereClauseFromFilterState(
+        filter as unknown as Record<string, unknown>,
+        this.Entity
+      );
+      if (canonical) {
+        return canonical;
+      }
     }
     const parts: string[] = [];
     for (const item of filter.filters) {
@@ -2445,7 +2375,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   /**
-   * Compile a single FilterDescriptor rule into a SQL condition
+   * Compile a single FilterDescriptor rule into a SQL condition (fallback when Entity metadata is unavailable)
    */
   private compileSingleRuleToSql(rule: FilterDescriptor): string {
     const col = `[${rule.field}]`;
@@ -2456,7 +2386,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     if (op === 'isnotempty') return `(${col} IS NOT NULL AND ${col} <> '')`;
 
     const rawVal = rule.value;
-    const escaped = String(rawVal ?? '').replace(/'/g, "''");
+    const escaped = EscapeSQLString(String(rawVal ?? ''));
 
     if (op === 'contains') return `${col} LIKE '%${escaped}%'`;
     if (op === 'doesnotcontain') return `${col} NOT LIKE '%${escaped}%'`;
@@ -2492,6 +2422,15 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    * Returns the SQL WHERE clause generated from the active Rule Builder or Smart Filter
    */
   get GeneratedSqlWhereClause(): string {
+    if (this.FilterMode === 'smart' || this.SmartFilterEnabled) {
+      if (this.ViewEntity?.SmartFilterWhereClause) {
+        return this.ViewEntity.SmartFilterWhereClause;
+      }
+      if (this.ViewEntity?.SmartFilterEnabled && !this.ViewEntity?.CustomWhereClause && this.ViewEntity?.WhereClause) {
+        return this.ViewEntity.WhereClause;
+      }
+      return '';
+    }
     if (this.GetFilterCount() > 0) {
       return this.CompileFilterStateToSqlWhere(this.FilterState);
     }
@@ -2534,7 +2473,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     if (this.CustomWhereClause) {
       return 'Custom SQL Override (Editable)';
     }
-    if (this.GetFilterCount() > 0 || this.countFilters(this.savedTraditionalFilter) > 0) {
+    if (!this.SmartFilterEnabled && (this.GetFilterCount() > 0 || this.countFilters(this.savedTraditionalFilter) > 0)) {
       const count = this.GetFilterCount() || this.countFilters(this.savedTraditionalFilter);
       return `Generated from Rule Builder (${count} rule${count !== 1 ? 's' : ''} · Read-Only)`;
     }

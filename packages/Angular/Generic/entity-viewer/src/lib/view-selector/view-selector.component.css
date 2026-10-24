@@ -401,20 +401,24 @@
   padding: 0 6px;
 }
 
-/* View Card Actions (hover reveal) */
+/* View Card Actions (hover & focus-within reveal) */
 .vs-card-actions {
-  display: none;
+  display: flex;
   align-items: center;
   gap: 2px;
   background: var(--mj-bg-surface-card);
   border: 1px solid var(--mj-border-default);
   border-radius: 6px;
   padding: 2px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
 }
 
 .vs-card:hover .vs-card-actions,
 .vs-card:focus-within .vs-card-actions {
-  display: flex;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .vs-card:hover .vs-card-check,

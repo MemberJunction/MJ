@@ -1160,7 +1160,7 @@ export class NavigationService implements OnDestroy {
         resourceType: 'MJ: User Views',
         Entity: entityName,
         ExtraFilter: extraFilter,
-        ...(options?.alternateBaseView ? { AlternateBaseView: options.alternateBaseView } : {}),
+        AlternateBaseView: options?.alternateBaseView ?? undefined,
         isDynamic: true,
         recordId: 'dynamic'  // Special marker for dynamic views
       },

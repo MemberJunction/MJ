@@ -73,10 +73,10 @@ Why this matters:
 
 ### 2. `MJ: Query Entities.AlternateBaseViewID` (`__mj.QueryEntity.AlternateBaseViewID`)
 
-When a stored Query (`MJ: Queries`) references an alternate base view in its `SELECT ... FROM` clause, MJ's automatic SQL AST extractor (`extractQueryMetadata` / `syncQueryEntities`) resolves the physical view via `FindAlternateBaseViewByPhysicalName`:
+When a stored Query (`MJ: Queries`) references an alternate base view in its `SELECT ... FROM` clause, MJ's automatic SQL AST extractor (`extractFromSQL` / `syncQueryMetadata` in `packages/MJCoreEntitiesServer/src/custom/query-extraction/`) resolves the physical view via `FindAlternateBaseViewByPhysicalName`:
 - `QueryEntity.EntityID` points to the **owning entity** (preserving entity permission checks and dependency tracking).
 - `QueryEntity.AlternateBaseViewID` points to the **matched `EntityAlternateBaseView`** record.
-- If a single query joins both an entity's canonical `BaseView` and one of its alternate base views, `syncQueryEntities` keys on `(EntityID, AlternateBaseViewID)` so both lineage edges are preserved.
+- If a single query joins both an entity's canonical `BaseView` and one of its alternate base views, `syncQueryMetadata` keys on `(EntityID, AlternateBaseViewID)` so both lineage edges are preserved.
 
 ---
 
@@ -144,7 +144,6 @@ If a specialized alternate view selects from another alternate view on the same 
 
 In runtime metadata (`EntityAlternateBaseViewInfo`):
 - `IsUsable`, `IsDeprecated`, and `IsBypassCache` walk the `ParentView` chain automatically — disabling or setting `CachePolicy = 'Bypass'` on a parent alternate base view cascades to all derived child views on that entity.
-- `vwEntityAlternateBaseViews` includes a recursive CTE computing `RootParentID`.
 - During `mj codegen`, `sp_refreshview` (SQL Server) and `spRebindLayeredOuterView` (PostgreSQL) execute in topological `ParentID` order so parent alternate views rebind before derived child views.
 
 ---
@@ -156,7 +155,7 @@ MemberJunction provides several complementary view and filtering primitives. Use
 | Mechanism | Cardinality | Changes Columns? | Changes Rows? | Who Owns It? | When to Use |
 | --- | --- | --- | --- | --- | --- |
 | **Canonical Base View (`Entity.BaseView`)** | 1 per entity | Defines the canonical column contract | No (all non-deleted rows) | CodeGen (`BaseViewGenerated = 1`) | Default read surface for every entity. |
-| **Layered Base View (`Entity.GeneratedBaseViewName`)** | 1 per entity | **Yes** — wraps `vw<Entity>Generated` (`SELECT g.*, <computed>`) to add cross-hop or aggregate columns | No | CodeGen writes inner view; migration writes outer `BaseView` ([`.layered-base-views.json`](../metadata/entities/.layered-base-views.json)) | Every consumer of the entity needs extra computed columns that CodeGen cannot infer from direct FKs. |
+| **Layered Base View (`Entity.GeneratedBaseViewName`)** | 1 per entity | **Yes** — wraps `vw<Entity>Generated` (`SELECT g.*, <computed>`) to add cross-hop or aggregate columns | No | CodeGen writes inner view; migration writes outer `BaseView` (`metadata/entities/`) | Every consumer of the entity needs extra computed columns that CodeGen cannot infer from direct FKs. |
 | **Alternate Base Views (`MJ: Entity Alternate Base Views`)** | N per entity | **No** — must maintain 100% column parity with `BaseView` (`SELECT v.*`) | **Yes** — exposes named, governed row subsets | Migration writes `CREATE OR ALTER VIEW`; metadata registers in `.alternate-base-views.json` | Domain-canonical subsets (`Active`, `DueNow`, `Completed`, `OpenBalance`, `Sellable`, `OpenPipeline`) shared across `RunView`, `BaseEngine`, User Views, Stored Queries, and AI Agents. |
 | **Saved User Views (`MJ: User Views`)** | N per entity / user | Projects a UI column list (`Columns`) | Filters via `WhereClause` / `FilterState`, and can pin `DisplayState.alternateBaseView` | End users or app metadata (`metadata/user-views/`) | User-facing grid/card layouts in Explorer and dashboards. Can layer on top of an Alternate Base View. |
 | **Row-Level Security (`MJ: Row Level Security Filters`)** | Per role × entity | No | Mandatory security boundary appended to every read | Administrators / security metadata | Access control (`CanRead` row scoping). Enforced identically on both `BaseView` and every `AlternateBaseView`. |
@@ -169,7 +168,7 @@ MemberJunction provides several complementary view and filtering primitives. Use
 
 ## Out-of-the-Box Alternate Base Views
 
-MemberJunction Core and the MemberJunction BizApps suite ship with **12 canonical Alternate Base Views** out of the box. In every repository, the physical SQL view is created in a migration (`CREATE OR ALTER VIEW ...`) and registered declaratively in `metadata/entities/.alternate-base-views.json`.
+MemberJunction Core ships with **6 canonical Alternate Base Views** out of the box (defined in [`migrations/v6/V202610230610__v6.2.x__Entity_Alternate_Base_Views.sql`](../migrations/v6/V202610230610__v6.2.x__Entity_Alternate_Base_Views.sql) and registered in [`metadata/entities/.alternate-base-views.json`](../metadata/entities/.alternate-base-views.json)), and sections 2–4 below document the companion BizApps patterns (`bizapps-common`, `bizapps-orders`, `bizapps-sales`).
 
 ### 1. MemberJunction Core (`@memberjunction/*` — schema `__mj`)
 
@@ -179,7 +178,7 @@ Defined in [`migrations/v6/V202610230610__v6.2.x__Entity_Alternate_Base_Views.sq
 | --- | --- | --- | --- | --- | --- |
 | `MJ: Users` | `Active` | `vwUsersActive` | `NULL` | `Default` | `IsActive = 1` — excludes deactivated user accounts from user pickers, assignments, notifications, and active user queries. |
 | `MJ: AI Agents` | `Active` | `vwAIAgentsActive` | `NULL` | `Default` | `Status = N'Active' AND IsRestricted = 0` — active, non-restricted agents ready for interactive selection, orchestration, and sub-agent delegation. |
-| `MJ: AI Prompts` | `Active` | `vwAIPromptsActive` | `NULL` | `Default` | `Status = N'Active'` — excludes `Disabled`, `Pending`, and `Preview` prompts. |
+| `MJ: AI Prompts` | `Active` | `vwAIPromptsActive` | `NULL` | `Default` | `Status = N'Active'` — excludes `Disabled`, `Pending`, and `Inactive` prompts. |
 | `MJ: Actions` | `Active` | `vwActionsActive` | `NULL` | `Default` | `Status = N'Active'` — excludes `Disabled` and `Pending` actions from workflow, agent, and action catalogs. |
 | `MJ: Scheduled Jobs` | `Active` | `vwScheduledJobsActive` | `NULL` | `Default` | `Status = N'Active'` — excludes `Paused`, `Disabled`, `Pending`, and `Expired` jobs. |
 | `MJ: Scheduled Jobs` | `DueNow` | `vwScheduledJobsDueNow` | `Active` (`vwScheduledJobsActive`) | `Bypass` | Selects from `vwScheduledJobsActive` where `NextRunAt IS NOT NULL AND NextRunAt <= GETUTCDATE()`. Demonstrates two-level `ParentID` derivation and `Bypass` cache policy for wall-clock predicates. |
@@ -272,6 +271,6 @@ Alternate base views inherit the parent entity's security boundaries with zero d
 
 ### Cache Isolation & Invalidation
 
-- **Isolated fingerprints**: `LocalCacheManager.GenerateRunViewFingerprint` and `GenericDatabaseProvider.generateRunViewCacheKey` append `|abv:<lowercased-name>` when `AlternateBaseView` is active, ensuring cached results for `Active` never collide with `BaseView` or another alternate view.
+- **Isolated fingerprints**: `LocalCacheManager.GenerateRunViewFingerprint` and `GenericDatabaseProvider.buildSingleFlightRunViewKey` append `|abv:<lowercased-name>` when `AlternateBaseView` is active, ensuring cached results for `Active` never collide with `BaseView` or another alternate view.
 - **Narrowing segment classification**: `LocalCacheManager.hasNarrowingSegment` classifies `abv:<name>` as a narrowing segment so in-memory smart-cache filtering never serves unfiltered `BaseView` rows to an `AlternateBaseView` request.
 - **Invalidation**: Saving or deleting a record on the parent entity invalidates both the canonical `BaseView` cache and all `Default`-policy alternate base view caches for that entity.

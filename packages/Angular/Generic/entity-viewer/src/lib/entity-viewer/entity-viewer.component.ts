@@ -198,9 +198,6 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       if (this._viewEntity && value && !UUIDsEqual(this._viewEntity.EntityID, value.ID)) {
         this._viewEntity = null;
       }
-      if (this._alternateBaseView && value && !value.GetAlternateBaseView(this._alternateBaseView)?.IsUsable) {
-        this._alternateBaseView = null;
-      }
       this.viewTypeConfigById.clear();
       this.InternalSortState = null;
       // The canonical grid state, when WE captured it from the renderer. It was the other entity's

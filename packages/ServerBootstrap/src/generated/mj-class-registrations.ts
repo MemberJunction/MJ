@@ -131,10 +131,11 @@ import {
     DeepInfraLLM,
 } from '@memberjunction/ai-deepinfra';
 
-// @memberjunction/ai-elevenlabs (2 classes)
+// @memberjunction/ai-elevenlabs (3 classes)
 import {
     ElevenLabsAudioGenerator,
     ElevenLabsRealtime,
+    ElevenRealtime,
 } from '@memberjunction/ai-elevenlabs';
 
 // @memberjunction/ai-huggingface (1 classes)
@@ -1757,6 +1758,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     DeepInfraLLM,
     ElevenLabsAudioGenerator,
     ElevenLabsRealtime,
+    ElevenRealtime,
     HuggingFaceRealtime,
     InceptionDecision,
     InceptionLLM,
@@ -1918,11 +1920,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
     MJClusterAnalysisClusterEntity,
-    MJClusterAnalysisEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
     MJCollectionEntity,
     MJCollectionPermissionEntity,
@@ -2122,11 +2124,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQueryDependencyEntity,
     MJQueryEntity,
     MJQueryEntityEntity,
-    MJQueryEntityExtended,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJQueryEntityExtended,
     MJQueryFieldEntity,
     MJQueryParameterEntity,
     MJQueryPermissionEntity,
@@ -2326,11 +2328,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MergeContactsAction,
     CreateJotFormAction,
     CreateSurveyMonkeyAction,
-    CreateTypeformAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    CreateTypeformAction,
     ExportGoogleFormsCSVAction,
     ExportJotFormCSVAction,
     ExportSurveyMonkeyCSVAction,
@@ -2530,11 +2532,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     LLMRubricEvaluator,
     SubmitHumanRubricAction,
     AzureAISearchProvider,
-    BGEReRanker,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    BGEReRanker,
     CohereReRanker,
     ElasticsearchSearchProvider,
     EntitySearchProvider,
@@ -2734,11 +2736,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     IntegrationTestDriver,
     BraveWebSearchProvider,
     DuckDuckGoWebSearchProvider,
-    GoogleCustomSearchWebSearchProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    GoogleCustomSearchWebSearchProvider,
     PerplexityWebSearchProvider,
     TavilyWebSearchProvider,
     WebSearchQueryServerOperation,
@@ -2946,7 +2948,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1191;
+export const CLASS_REGISTRATIONS_COUNT = 1192;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -1778,17 +1778,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         params: RunViewParams | undefined,
         viewEntity?: MJUserViewEntityExtended | null,
     ): string | undefined {
-        if (IsExplicitBaseViewOverride(params)) {
-            return undefined;
-        }
-        if (typeof params?.AlternateBaseView === 'string') {
-            return params.AlternateBaseView.trim();
-        }
-        const pinned = viewEntity?.AlternateBaseView?.trim();
-        if (pinned && pinned.length > 0) {
-            return pinned;
-        }
-        return GetPinnedAlternateBaseViewFromViewEntity(params?.ViewEntity);
+        return GetEffectiveAlternateBaseViewName(params, viewEntity);
     }
 
     /**
@@ -2303,7 +2293,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             const viewEntityKey = ve
                 ? `${ve.ID ?? ''}:${ve.WhereClause ?? ''}:${ve.SmartFilterWhereClause ?? ''}:${ve.AlternateBaseView ?? ''}`
                 : '';
-            const abvKey = NormalizeAlternateBaseViewName(GetEffectiveAlternateBaseViewName(params)) ?? '';
+            const abvKey = IsExplicitBaseViewOverride(params)
+                ? '__base_override__'
+                : (NormalizeAlternateBaseViewName(GetEffectiveAlternateBaseViewName(params)) ?? '');
             return [
                 baseFingerprint,
                 `f:${fieldsKey}`,
@@ -4239,7 +4231,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         entityName: string,
         viewEntity?: MJUserViewEntityExtended | null
     ): void {
-        if (GetEffectiveAlternateBaseViewName(params) || viewEntity?.AlternateBaseView) {
+        if (this.resolveEffectiveAbvNameFromParams(params, viewEntity)) {
             throw new Error(`AlternateBaseView is not supported for external-data-source entity '${entityName}'.`);
         }
         if (params.AfterKey) {

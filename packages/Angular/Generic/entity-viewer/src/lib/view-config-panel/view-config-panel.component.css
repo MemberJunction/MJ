@@ -1,34 +1,17 @@
-/* Backdrop */
-.panel-backdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.3);
-  z-index: 1500; /* Above Leaflet map (1000), content-header, navigation-panel, omnibar (1400) */
-  animation: fadeIn 0.2s ease;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
 /* Full-Screen Unified View Studio */
 .config-panel {
   position: fixed;
-  top: 60px;
+  top: var(--mj-shell-header-height, 60px);
   left: 0;
   right: 0;
   width: 100%;
   min-width: 100%;
   max-width: 100%;
-  height: calc(100% - 60px);
+  height: calc(100% - var(--mj-shell-header-height, 60px));
   background: var(--mj-bg-surface);
   border-left: none;
   box-shadow: none;
-  z-index: 1501; /* Above backdrop (1500) and all underlying page chrome */
+  z-index: var(--mj-z-modal, 1050); /* Above Leaflet map (1000) and page chrome; below omnibar (1400) */
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
@@ -1319,7 +1302,7 @@
   color: var(--mj-text-muted);
   white-space: nowrap;
   flex-shrink: 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--mj-font-family-mono, monospace);
 }
 
 .column-add-icon {
@@ -2513,7 +2496,7 @@
 }
 
 .abv-sql-badge {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--mj-font-family-mono, monospace);
   font-size: 11px;
   padding: 1px 6px;
   border-radius: 4px;
@@ -3027,7 +3010,7 @@
 }
 
 .sql-override-copy code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--mj-font-family-mono, monospace);
   font-size: 11px;
   padding: 1px 5px;
   border-radius: 4px;
@@ -3072,7 +3055,7 @@
 }
 
 .sql-editor-topbar-left code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--mj-font-family-mono, monospace);
   font-size: 10.5px;
   font-weight: 700;
   padding: 1px 6px;
@@ -3132,7 +3115,7 @@
 }
 
 .advanced-hint-text code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--mj-font-family-mono, monospace);
   font-size: 11px;
   padding: 1px 5px;
   border-radius: 4px;
@@ -3230,7 +3213,7 @@
 }
 
 .sort-field-type-badge {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--mj-font-family-mono, monospace);
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
@@ -3408,97 +3391,50 @@
   overflow-x: auto;
 }
 
-/* Compiled SQL Preview */
-.sql-compiled-preview {
+/* Compiled SQL Preview & Smart SQL Disclosure */
+.smart-sql-disclosure {
   margin-top: 12px;
+}
+
+.sql-disclosure-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sql-disclosure-toggle:hover {
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary);
+}
+
+.sql-disclosure-toggle .rotated {
+  transform: rotate(180deg);
+}
+
+.sql-compiled-preview {
+  margin-top: 10px;
   padding: 10px 12px;
   border-radius: 8px;
   background: var(--mj-bg-surface-sunken);
   border: 1px solid var(--mj-border-default);
 }
 
-.sql-preview-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--mj-text-muted);
-  margin-bottom: 6px;
-}
-
-.sql-preview-code {
+.sql-compiled-preview code {
   display: block;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--mj-font-family-mono, monospace);
   font-size: 12px;
   color: var(--mj-text-primary);
   white-space: pre-wrap;
   word-break: break-word;
-}
-
-/* Progressive Disclosure Cards */
-.disclosure-card {
-  margin-top: 14px;
-  border: 1px solid var(--mj-border-default);
-  border-radius: 10px;
-  background: var(--mj-bg-surface-card);
-  overflow: hidden;
-}
-
-.disclosure-trigger {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 11px 14px;
-  border: none;
-  background: transparent;
-  color: var(--mj-text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  text-align: left;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-.disclosure-trigger:hover {
-  background: var(--mj-bg-surface-hover);
-  color: var(--mj-text-primary);
-}
-
-.disclosure-trigger-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.disclosure-trigger-left i {
-  color: var(--mj-brand-primary);
-}
-
-.disclosure-badge {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  padding: 2px 6px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
-  color: var(--mj-brand-primary);
-}
-
-.disclosure-body {
-  padding: 12px 14px 14px;
-  border-top: 1px solid var(--mj-border-default);
-  background: var(--mj-bg-surface);
-}
-
-.sql-code-textarea {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
-  line-height: 1.45;
 }
 
 /* Column Pinning & Section Links */
@@ -3561,32 +3497,32 @@
   gap: 8px;
 }
 
+.cond-rule-top,
 .conditional-rule-top {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.conditional-rule-style-row {
+.cond-rule-values {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 6px;
 }
 
-.conditional-style-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  color: var(--mj-text-muted);
-}
-
+.cond-rule-presets,
 .conditional-presets {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.cond-rule-preview {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
 }
 
 .preset-chip {
@@ -3620,10 +3556,6 @@
   background: var(--mj-status-info-bg);
   color: var(--mj-status-info-text, var(--mj-status-info));
 }
-
-/* ============================================================
-   RESPONSIVE FULL-SCREEN VIEW STUDIO (TABLET & MOBILE)
-   ============================================================ */
 /* ============================================================
    WORLD-CLASS DISPLAY & MODES WORKBENCH
    ============================================================ */

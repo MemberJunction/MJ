@@ -309,13 +309,16 @@ export function IsExplicitBaseViewOverride(params: RunViewParams | undefined | n
  * - When `params.AlternateBaseView` is `undefined`, falls back to `params.ViewEntity`'s pinned
  *   `DisplayState.alternateBaseView`.
  */
-export function GetEffectiveAlternateBaseViewName(params: RunViewParams | undefined | null): string | undefined {
-    if (!params) {
+export function GetEffectiveAlternateBaseViewName(
+    params: RunViewParams | undefined | null,
+    viewEntity?: BaseEntity | undefined | null
+): string | undefined {
+    if (!params && !viewEntity) {
         return undefined;
     }
-    if (typeof params.AlternateBaseView === 'string') {
+    if (typeof params?.AlternateBaseView === 'string') {
         const trimmed = params.AlternateBaseView.trim();
         return trimmed.length > 0 ? trimmed : undefined;
     }
-    return GetPinnedAlternateBaseViewFromViewEntity(params.ViewEntity);
+    return GetPinnedAlternateBaseViewFromViewEntity(viewEntity ?? params?.ViewEntity);
 }

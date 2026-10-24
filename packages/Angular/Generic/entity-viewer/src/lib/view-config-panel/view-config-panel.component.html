@@ -10,13 +10,15 @@
     <!-- Top Row: Mode Switcher / Context Badge + Entity Tag + Horizontal Studio Actions -->
     <div class="studio-top-bar">
       <div class="studio-badges">
-        @if (!ViewEntity) {
+        @if (!ViewEntity || IsSaveAsNewFlow) {
           <!-- Segmented Intent Switcher when opened from (Default) or Creating New View -->
           <div class="intent-segmented" role="tablist" aria-label="View configuration mode">
             <button
               type="button"
+              role="tab"
               class="intent-seg-btn"
               [class.active]="!IsCreatingNamedView"
+              [attr.aria-selected]="!IsCreatingNamedView"
               (click)="SwitchToDefaultLayoutMode()"
               title="Customize your personal default columns, sort, and summaries for this entity">
               <i class="fa-solid fa-sliders"></i>
@@ -24,9 +26,11 @@
             </button>
             <button
               type="button"
+              role="tab"
               class="intent-seg-btn"
               [class.active]="IsCreatingNamedView"
               [class.new-view-intent]="IsCreatingNamedView"
+              [attr.aria-selected]="IsCreatingNamedView"
               (click)="PromoteToNewView()"
               title="Create a new named view with filters, base view, and sharing options">
               <i class="fa-solid fa-plus"></i>
@@ -66,7 +70,7 @@
           <span>Advanced Mode</span>
           <span class="advanced-state-pill">{{ IsAdvancedMode ? 'ON' : 'OFF' }}</span>
         </button>
-        @if (ViewEntity) {
+        @if (ViewEntity && !IsSaveAsNewFlow) {
           <button
             type="button"
             class="studio-action-btn"
@@ -76,7 +80,7 @@
             <span>Duplicate</span>
           </button>
         }
-        @if (ViewEntity && CanDelete) {
+        @if (ViewEntity && !IsSaveAsNewFlow && CanDelete) {
           <button
             type="button"
             class="studio-action-btn danger"
@@ -100,7 +104,7 @@
     <!-- ============================================================ -->
     <!-- STATE A: PERSONAL DEFAULT LAYOUT BANNER (NO NAME INPUT!)     -->
     <!-- ============================================================ -->
-    @if (!ViewEntity && !IsCreatingNamedView) {
+    @if ((!ViewEntity || IsSaveAsNewFlow) && !IsCreatingNamedView) {
       <div class="default-layout-explainer">
         <div class="default-explainer-left">
           <div class="default-explainer-icon">
@@ -128,7 +132,7 @@
     <!-- ============================================================ -->
     <!-- STATE B: NAMED VIEW IDENTITY ROW (CREATE NEW OR EDIT SAVED)  -->
     <!-- ============================================================ -->
-    @if (ViewEntity || IsCreatingNamedView) {
+    @if ((ViewEntity && !IsSaveAsNewFlow) || IsCreatingNamedView) {
       <div class="studio-identity-body">
         @if (WasAutoPromotedToNamedView) {
           <div class="auto-promoted-banner">
@@ -155,7 +159,7 @@
               id="ViewName"
               type="text"
               class="studio-name-input"
-              [class.invalid]="ViewEntity && (!ViewName || !ViewName.trim())"
+              [class.invalid]="ViewEntity && !IsSaveAsNewFlow && (!ViewName || !ViewName.trim())"
               placeholder="Enter a name for this view (e.g., Active Records)..."
               [(ngModel)]="ViewName"
               [disabled]="!CanEdit"
@@ -209,11 +213,13 @@
   <div class="studio-body">
     <!-- Left Navigation Rail -->
     <div class="studio-rail">
-      <div class="rail-nav-list" role="tablist">
+      <div class="rail-nav-list" role="tablist" aria-label="View studio sections">
         <button
           type="button"
+          role="tab"
           class="rail-nav-btn"
           [class.active]="ActiveTab === 'columns'"
+          [attr.aria-selected]="ActiveTab === 'columns'"
           (click)="SetActiveTab('columns')">
           <span class="rail-btn-left">
             <i class="fa-solid fa-table-columns"></i>
@@ -224,8 +230,10 @@
 
         <button
           type="button"
+          role="tab"
           class="rail-nav-btn"
           [class.active]="ActiveTab === 'filters'"
+          [attr.aria-selected]="ActiveTab === 'filters'"
           (click)="SetActiveTab('filters')">
           <span class="rail-btn-left">
             <i class="fa-solid fa-filter"></i>
@@ -238,8 +246,10 @@
 
         <button
           type="button"
+          role="tab"
           class="rail-nav-btn"
           [class.active]="ActiveTab === 'sorting'"
+          [attr.aria-selected]="ActiveTab === 'sorting'"
           (click)="SetActiveTab('sorting')">
           <span class="rail-btn-left">
             <i class="fa-solid fa-arrow-up-wide-short"></i>
@@ -252,8 +262,10 @@
 
         <button
           type="button"
+          role="tab"
           class="rail-nav-btn"
           [class.active]="ActiveTab === 'aggregates'"
+          [attr.aria-selected]="ActiveTab === 'aggregates'"
           (click)="SetActiveTab('aggregates')">
           <span class="rail-btn-left">
             <i class="fa-solid fa-chart-simple"></i>
@@ -266,8 +278,10 @@
 
         <button
           type="button"
+          role="tab"
           class="rail-nav-btn"
           [class.active]="ActiveTab === 'display'"
+          [attr.aria-selected]="ActiveTab === 'display'"
           (click)="SetActiveTab('display')">
           <span class="rail-btn-left">
             <i class="fa-solid fa-display"></i>
@@ -2074,7 +2088,7 @@
   <div class="panel-footer">
     <!-- Action buttons on LEFT -->
     <div class="footer-left">
-      @if (ViewEntity && CanEdit) {
+      @if (ViewEntity && !IsSaveAsNewFlow && CanEdit) {
         <!-- Editing an existing saved view -->
         <button
           type="button"
@@ -2097,7 +2111,7 @@
           <i class="fa-regular fa-copy"></i>
           Save as Copy
         </button>
-      } @else if (ViewEntity && !CanEdit) {
+      } @else if (ViewEntity && !IsSaveAsNewFlow && !CanEdit) {
         <!-- Read-only shared view — allow saving as personal copy -->
         <button
           type="button"
@@ -2143,7 +2157,7 @@
     </div>
 
     <div class="footer-status-hint">
-      @if (!ViewEntity && !IsCreatingNamedView) {
+      @if ((!ViewEntity || IsSaveAsNewFlow) && !IsCreatingNamedView) {
         <i class="fa-solid fa-user-check"></i>
         <span>Saving updates your personal <strong>{{ Entity?.DisplayNameOrName || 'Entity' }} (Default)</strong> layout across devices.</span>
       } @else if (IsCreatingNamedView) {

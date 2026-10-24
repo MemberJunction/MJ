@@ -286,6 +286,8 @@ describe('Alternate Base Views — MJCore', () => {
 
             expect(GetPinnedAlternateBaseViewFromViewEntity(fakeViewEntity)).toBe('Active');
             expect(GetEffectiveAlternateBaseViewName({ ViewEntity: fakeViewEntity })).toBe('Active');
+            expect(GetEffectiveAlternateBaseViewName({ ViewID: 'view-1' }, fakeViewEntity)).toBe('Active');
+            expect(GetEffectiveAlternateBaseViewName({ ViewID: 'view-1', AlternateBaseView: '' }, fakeViewEntity)).toBeUndefined();
             expect(
                 GetEffectiveAlternateBaseViewName({
                     ViewEntity: fakeViewEntity,

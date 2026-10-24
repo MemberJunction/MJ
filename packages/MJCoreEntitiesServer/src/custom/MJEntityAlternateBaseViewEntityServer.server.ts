@@ -376,13 +376,29 @@ export class MJEntityAlternateBaseViewEntityServer extends MJEntityAlternateBase
                 },
                 this.ContextCurrentUser,
             );
-            if (!rvResult?.Success || !rvResult.Results || rvResult.Results.length === 0) {
+            if (!rvResult || !rvResult.Success) {
+                result.Errors.push(
+                    new ValidationErrorInfo(
+                        'Name',
+                        `Could not verify live MJ: Entity Alternate Base Views records (${rvResult?.ErrorMessage ?? 'RunView returned Success: false'}).`,
+                        this.Name,
+                        ValidationErrorType.Failure
+                    )
+                );
+                return;
+            }
+            if (!rvResult.Results || rvResult.Results.length === 0) {
                 return;
             }
             this.checkLiveDatabaseRowsForConflicts(result, owningEntity, allEntities, rvResult.Results);
         } catch (err) {
-            LogWarning(
-                `MJEntityAlternateBaseViewEntityServer.validateAgainstLiveDatabaseRows: live RunView check skipped (${err instanceof Error ? err.message : String(err)})`,
+            result.Errors.push(
+                new ValidationErrorInfo(
+                    'Name',
+                    `Could not verify live MJ: Entity Alternate Base Views records (${err instanceof Error ? err.message : String(err)}).`,
+                    this.Name,
+                    ValidationErrorType.Failure
+                )
             );
         }
     }
@@ -458,7 +474,7 @@ export class MJEntityAlternateBaseViewEntityServer extends MJEntityAlternateBase
         }
         const isPostgres = (this.ProviderToUse as { PlatformKey?: string })?.PlatformKey === 'postgresql';
         const probeSql = isPostgres
-            ? `SELECT CASE WHEN to_regclass('${effectiveSchema}.${this.ViewName}') IS NOT NULL THEN 1 ELSE 0 END AS "ViewExists"`
+            ? `SELECT CASE WHEN to_regclass('"${effectiveSchema}"."${this.ViewName}"') IS NOT NULL THEN 1 ELSE 0 END AS "ViewExists"`
             : `SELECT CASE WHEN OBJECT_ID(N'[${effectiveSchema}].[${this.ViewName}]', N'V') IS NOT NULL THEN 1 ELSE 0 END AS ViewExists`;
         try {
             const rows = await dbProvider.ExecuteSQL<{ ViewExists?: number }>(probeSql);
@@ -506,7 +522,7 @@ export class MJEntityAlternateBaseViewEntityServer extends MJEntityAlternateBase
 
         const isPostgres = (this.ProviderToUse as { PlatformKey?: string })?.PlatformKey === 'postgresql';
         const sql = isPostgres
-            ? `SELECT pg_get_viewdef(to_regclass('${effectiveSchema}.${this.ViewName}'), true) AS "ViewDefinition"`
+            ? `SELECT pg_get_viewdef(to_regclass('"${effectiveSchema}"."${this.ViewName}"'), true) AS "ViewDefinition"`
             : `SELECT OBJECT_DEFINITION(OBJECT_ID(N'[${effectiveSchema}].[${this.ViewName}]')) AS ViewDefinition`;
 
         try {
@@ -542,7 +558,7 @@ export class MJEntityAlternateBaseViewEntityServer extends MJEntityAlternateBase
         try {
             const tableRefs = SQLParser.ExtractTableRefs(
                 viewDefinitionSQL,
-                GetDialect(isPostgres ? 'postgres' : 'sqlserver'),
+                GetDialect(isPostgres ? 'postgresql' : 'sqlserver'),
             );
             if (!tableRefs || tableRefs.length === 0) {
                 return;

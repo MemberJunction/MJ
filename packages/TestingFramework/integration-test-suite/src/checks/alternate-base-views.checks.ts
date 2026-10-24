@@ -259,53 +259,94 @@ async function verifyNarrowingPhysicalAlternateView(ctx: IntegrationCheckContext
     );
 
     await withTemporaryAlternateBaseView(usersEntity!, activeUsersAbv, async () => {
-        const rv = new RunView();
-        const activeRes = await rv.RunView<{ ID: string; IsActive: boolean }>(
-            {
-                EntityName: 'MJ: Users',
-                AlternateBaseView: 'ActiveUsersCheck',
-                Fields: ['ID', 'IsActive'],
-                MaxRows: 25,
-                ResultType: 'simple',
-            },
-            ctx.User,
-        );
-        Assert(activeRes.Success === true, `vwUsersActive RunView failed: ${activeRes.ErrorMessage}`);
-        for (const row of activeRes.Results) {
-            Assert(Boolean(row.IsActive) === true, `vwUsersActive returned inactive user row ${row.ID}`);
-        }
+        const tempInactiveUserId = '00000000-0000-4000-8000-00000000AB99';
+        const insertedTempInactive = await tryInsertTempInactiveUser(ctx, tempInactiveUserId);
+        try {
+            const rv = new RunView();
+            const baseRes = await rv.RunView<{ ID: string; IsActive: boolean }>(
+                {
+                    EntityName: 'MJ: Users',
+                    Fields: ['ID', 'IsActive'],
+                    IgnoreMaxRows: true,
+                    BypassCache: true,
+                    ResultType: 'simple',
+                },
+                ctx.User,
+            );
+            Assert(baseRes.Success === true, `Baseline MJ: Users RunView failed: ${baseRes.ErrorMessage}`);
 
-        const subqueryRes = await rv.RunView<{ ID: string }>(
-            {
-                EntityName: 'MJ: Users',
-                ExtraFilter: `ID IN (SELECT ID FROM [${usersEntity!.SchemaName}].[vwUsersActive])`,
-                Fields: ['ID'],
-                MaxRows: 5,
-                ResultType: 'simple',
-            },
-            ctx.User,
-        );
-        Assert(subqueryRes.Success === true, `Subquery over registered ABV failed: ${subqueryRes.ErrorMessage}`);
+            const activeRes = await rv.RunView<{ ID: string; IsActive: boolean }>(
+                {
+                    EntityName: 'MJ: Users',
+                    AlternateBaseView: 'ActiveUsersCheck',
+                    Fields: ['ID', 'IsActive'],
+                    IgnoreMaxRows: true,
+                    BypassCache: true,
+                    ResultType: 'simple',
+                },
+                ctx.User,
+            );
+            Assert(activeRes.Success === true, `vwUsersActive RunView failed: ${activeRes.ErrorMessage}`);
+            for (const row of activeRes.Results) {
+                Assert(Boolean(row.IsActive) === true, `vwUsersActive returned inactive user row ${row.ID}`);
+            }
+            if (insertedTempInactive) {
+                Assert(
+                    activeRes.Results.length < baseRes.Results.length,
+                    `vwUsersActive (${activeRes.Results.length} rows) must return strictly fewer rows than vwUsers (${baseRes.Results.length} rows) when an inactive user exists`,
+                );
+                Assert(
+                    !activeRes.Results.some(r => r.ID.toLowerCase() === tempInactiveUserId.toLowerCase()),
+                    'vwUsersActive must exclude the seeded inactive user row',
+                );
+            }
+
+            const subqueryRes = await rv.RunView<{ ID: string }>(
+                {
+                    EntityName: 'MJ: Users',
+                    ExtraFilter: `ID IN (SELECT ID FROM [${usersEntity!.SchemaName}].[vwUsersActive])`,
+                    Fields: ['ID'],
+                    MaxRows: 5,
+                    ResultType: 'simple',
+                },
+                ctx.User,
+            );
+            Assert(subqueryRes.Success === true, `Subquery over registered ABV failed: ${subqueryRes.ErrorMessage}`);
+        } finally {
+            if (insertedTempInactive) {
+                await deleteTempInactiveUser(ctx, tempInactiveUserId);
+            }
+        }
     });
 }
 
+async function tryInsertTempInactiveUser(ctx: IntegrationCheckContext, userId: string): Promise<boolean> {
+    if (!ctx.Pool) {
+        return false;
+    }
+    await ctx.Pool.request().query(`
+        DELETE FROM [__mj].[User] WHERE [ID] = '${userId}';
+        INSERT INTO [__mj].[User] ([ID], [Name], [FirstName], [LastName], [Email], [Type], [IsActive])
+        VALUES ('${userId}', N'IT132 Inactive Probe', N'IT132', N'Inactive', N'it132-inactive@example.com', N'User', 0);
+    `);
+    return true;
+}
+
+async function deleteTempInactiveUser(ctx: IntegrationCheckContext, userId: string): Promise<void> {
+    if (!ctx.Pool) {
+        return;
+    }
+    await ctx.Pool.request().query(`DELETE FROM [__mj].[User] WHERE [ID] = '${userId}'`);
+}
+
 /**
- * Helper: runs a `RunView` expected to fail closed (either by throwing or by returning
- * `{ Success: false, ErrorMessage }`) and asserts OUTSIDE `try/catch` that it failed.
+ * Helper: runs a `RunView` expected to fail closed via `{ Success: false, ErrorMessage }`
+ * (without throwing) and asserts OUTSIDE `try/catch` that it failed cleanly.
  */
 async function expectRunViewToFailClosed(fn: () => Promise<{ Success: boolean; ErrorMessage?: string }>): Promise<string> {
-    let didFail = false;
-    let errorMessage = '';
-    try {
-        const res = await fn();
-        didFail = res.Success === false;
-        errorMessage = res.ErrorMessage ?? '';
-    } catch (err) {
-        didFail = true;
-        errorMessage = err instanceof Error ? err.message : String(err);
-    }
-    Assert(didFail === true, 'RunView with invalid/disabled AlternateBaseView must fail closed');
-    return errorMessage;
+    const res = await fn();
+    Assert(res.Success === false, 'RunView with invalid/disabled AlternateBaseView must return Success: false');
+    return res.ErrorMessage ?? '';
 }
 
 /**
@@ -349,39 +390,85 @@ async function checkRunViewFailsClosedOnInvalidOrDisabledAbv(ctx: IntegrationChe
         entity!.SchemaName,
     );
 
-    await withTemporaryAlternateBaseView(entity!, disabledAbv, async () => {
-        const disabledMessage = await expectRunViewToFailClosed(() =>
-            rv.RunView(
-                {
-                    EntityName: 'MJ: Entities',
-                    AlternateBaseView: 'DisabledTestView',
-                    MaxRows: 1,
-                    ResultType: 'simple',
-                },
-                ctx.User,
-            ),
-        );
-        Assert(
-            disabledMessage.includes('is disabled and cannot be used'),
-            `Error message must state 'is disabled and cannot be used', got: ${disabledMessage}`,
-        );
+    const activeAbv = new EntityAlternateBaseViewInfo(
+        {
+            ID: '00000000-0000-4000-8000-00000000AB04',
+            EntityID: entity!.ID,
+            ParentID: null,
+            Name: 'ActiveMirrorForMaterializedCheck',
+            DisplayName: 'Active Mirror View',
+            SchemaName: entity!.SchemaName,
+            ViewName: entity!.BaseView,
+            CachePolicy: 'Default',
+            Status: 'Active',
+            Sequence: 3,
+        },
+        entity!.SchemaName,
+    );
 
-        const materializedMsg = await expectRunViewToFailClosed(() =>
-            rv.RunView(
+    await withTemporaryAlternateBaseView(entity!, disabledAbv, async () => {
+        await withTemporaryAlternateBaseView(entity!, activeAbv, async () => {
+            const disabledMessage = await expectRunViewToFailClosed(() =>
+                rv.RunView(
+                    {
+                        EntityName: 'MJ: Entities',
+                        AlternateBaseView: 'DisabledTestView',
+                        MaxRows: 1,
+                        ResultType: 'simple',
+                    },
+                    ctx.User,
+                ),
+            );
+            Assert(
+                disabledMessage.includes('is disabled and cannot be used'),
+                `Error message must state 'is disabled and cannot be used', got: ${disabledMessage}`,
+            );
+
+            const materializedMsg = await expectRunViewToFailClosed(() =>
+                rv.RunView(
+                    {
+                        EntityName: 'MJ: Entities',
+                        AlternateBaseView: 'ActiveMirrorForMaterializedCheck',
+                        DataSource: 'Materialized',
+                        MaxRows: 1,
+                        ResultType: 'simple',
+                    },
+                    ctx.User,
+                ),
+            );
+            Assert(
+                materializedMsg.includes('Materialized'),
+                `Error message must reject Materialized + AlternateBaseView, got: ${materializedMsg}`,
+            );
+
+            // Verify explicit AlternateBaseView: "" overrides a ViewEntity's Disabled pin back to BaseView
+            const fakePinnedViewEntity = {
+                ID: '00000000-0000-4000-8000-00000000AB05',
+                EntityID: entity!.ID,
+                AlternateBaseView: 'DisabledTestView',
+                DisplayState: JSON.stringify({ alternateBaseView: 'DisabledTestView' }),
+                WhereClause: `Name = 'MJ: Entities'`,
+                SmartFilterEnabled: false,
+                SmartFilterWhereClause: '',
+                CustomWhereClause: false,
+                OrderByClause: '',
+                Get: (field: string) => (field === 'EntityID' ? entity!.ID : null),
+            };
+            const overrideRes = await rv.RunView(
                 {
                     EntityName: 'MJ: Entities',
-                    AlternateBaseView: 'DisabledTestView',
-                    DataSource: 'Materialized',
+                    ViewEntity: fakePinnedViewEntity as unknown as never,
+                    AlternateBaseView: '',
                     MaxRows: 1,
                     ResultType: 'simple',
                 },
                 ctx.User,
-            ),
-        );
-        Assert(
-            materializedMsg.includes('Materialized'),
-            `Error message must reject Materialized + AlternateBaseView, got: ${materializedMsg}`,
-        );
+            );
+            Assert(
+                overrideRes.Success === true,
+                `Explicit AlternateBaseView: "" must override a Disabled ViewEntity pin and succeed, got: ${overrideRes.ErrorMessage}`,
+            );
+        });
     });
 }
 

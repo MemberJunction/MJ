@@ -242,13 +242,7 @@ const result = await rv.RunView<MJUserEntity>({
 
 - **100% column parity**: Every Alternate Base View exposes the exact same columns as the entity's canonical `BaseView`, so returned records hydrate the same `BaseEntity` subclass and enforce the same Entity Permissions, Row-Level Security (RLS), and Field-Level Security (FLS).
 - **Fail-closed**: Passing an unknown or `Disabled` `AlternateBaseView` name fails closed (never silently falls back to `BaseView`).
-- **Out-of-the-box MJ Core Alternate Base Views**:
-  - `MJ: Users` → `'Active'` (`vwUsersActive`)
-  - `MJ: AI Agents` → `'Active'` (`vwAIAgentsActive`)
-  - `MJ: AI Prompts` → `'Active'` (`vwAIPromptsActive`)
-  - `MJ: Actions` → `'Active'` (`vwActionsActive`)
-  - `MJ: Scheduled Jobs` → `'Active'` (`vwScheduledJobsActive`) and `'DueNow'` (`vwScheduledJobsDueNow`, derived from `'Active'` with `CachePolicy = 'Bypass'`)
-- Full architecture, authoring rules (`metadata/entities/.alternate-base-views.json`), and BizApps catalog: [`guides/ALTERNATE_BASE_VIEWS_GUIDE.md`](../../guides/ALTERNATE_BASE_VIEWS_GUIDE.md).
+- Full architecture, authoring rules (`metadata/entities/.alternate-base-views.json`), and out-of-the-box catalog: [`guides/ALTERNATE_BASE_VIEWS_GUIDE.md`](../../guides/ALTERNATE_BASE_VIEWS_GUIDE.md).
 
 ### 🚨 SQL Literal Escaping in `ExtraFilter` & SQL Clauses — use `EscapeSQLString`
 

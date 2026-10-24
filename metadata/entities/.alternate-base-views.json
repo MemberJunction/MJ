@@ -73,7 +73,7 @@
             "EntityID": "@parent:ID",
             "Name": "Active",
             "DisplayName": "Active Prompts",
-            "Description": "AI Prompts with Status = 'Active', excluding Disabled, Pending, and Preview prompts.",
+            "Description": "AI Prompts with Status = 'Active', excluding Disabled, Pending, and Inactive prompts.",
             "ViewName": "vwAIPromptsActive",
             "CachePolicy": "Default",
             "Status": "Active",

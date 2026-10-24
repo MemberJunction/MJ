@@ -4,7 +4,14 @@
 }
 
 <!-- Right-Side Slide-In Drawer Panel -->
-<div class="dialog-panel" [class.open]="IsOpen" role="dialog" aria-modal="true" aria-labelledby="aggDrawerTitle">
+<div
+  class="dialog-panel"
+  [class.open]="IsOpen"
+  [attr.inert]="!IsOpen ? '' : null"
+  [attr.aria-hidden]="!IsOpen"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="aggDrawerTitle">
   <!-- Drawer Header -->
   <div class="dialog-header">
     <div class="header-title-group">

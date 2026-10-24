@@ -423,5 +423,44 @@ describe('ViewWorkspaceComponent — default-view Save with a filter (#4220)', (
       expect(JSON.parse(createdView.FilterState)).toEqual(traditionalFilter);
       expect(createdView.SmartFilterEnabled).toBe(false);
     });
+
+    it('preserves a saved view\'s AlternateBaseView pin and DisplayStateObject.viewTypeConfigs across quick-save and Studio save', async () => {
+      const existingView = makeFakeView();
+      existingView.ID = 'view-existing-abv';
+      existingView.Name = 'Due Now Map View';
+      existingView.AlternateBaseView = 'DueNow';
+      existingView.DisplayStateObject = {
+        defaultMode: 'map' as 'grid',
+        viewTypeConfigs: { map: { latField: 'Lat', lngField: 'Lng' } }
+      } as unknown as MJUserViewEntityExtended['DisplayStateObject'];
+      component.CurrentViewEntity = existingView as unknown as MJUserViewEntityExtended;
+
+      // 1. Quick-save updating the existing view preserves AlternateBaseView
+      await component.OnQuickSave({
+        Name: 'Due Now Map View',
+        Description: 'Updated via Ctrl+S',
+        IsShared: false,
+        SaveAsNew: false
+      });
+
+      expect(existingView.AlternateBaseView).toBe('DueNow');
+
+      // 2. Studio save updating GridDisplayState preserves DisplayStateObject.viewTypeConfigs
+      await component.OnSaveView(
+        makeSaveEvent({
+          Name: 'Due Now Map View',
+          SaveAsNew: false,
+          AlternateBaseView: 'DueNow',
+          GridDisplayState: { rowHeight: 'compact', wrapText: true }
+        })
+      );
+
+      expect(existingView.DisplayStateObject).toMatchObject({
+        defaultMode: 'map',
+        alternateBaseView: 'DueNow',
+        grid: { rowHeight: 'compact', wrapText: true },
+        viewTypeConfigs: { map: { latField: 'Lat', lngField: 'Lng' } }
+      });
+    });
   });
 });
