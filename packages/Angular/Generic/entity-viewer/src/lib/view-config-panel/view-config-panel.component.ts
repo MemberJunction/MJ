@@ -96,15 +96,32 @@ export interface ViewSaveEvent {
 }
 
 /**
- * ViewConfigPanelComponent - Sliding panel for configuring view settings
+ * ViewConfigPanelComponent - Unified Full-Screen View Studio (`mj-view-config-panel`)
  *
- * Features:
- * - Column visibility and ordering with drag-drop
- * - Column formatting (number, currency, date, etc.)
- * - Sort configuration
- * - View name and description editing
- * - Share settings
- * - Save / Save As New / Cancel actions
+ * Architectural & UX Design Notes:
+ * 1. **Unified Full-Screen Studio & Alternate Base View Integration**:
+ *    Configuring a User View spans five tightly coupled dimensions — `Columns`, `Filters`
+ *    (Smart Filter, Visual Rule Builder, and Advanced SQL WHERE override), `Sorting`,
+ *    `Aggregates` (Summary KPI Cards & Pinned Grid Totals via an integrated right-side
+ *    Slide-In Drawer), and `Display` (Grid, Cards, Timeline) — plus the underlying
+ *    **Data Source (Canonical Base View vs. Alternate SQL View)**.
+ *    Opening `mj-view-config-panel` as a unified full-screen studio with progressive
+ *    disclosure (**Regular Mode** by default vs. **Advanced Mode** on demand) eliminates
+ *    fragmented modal popups and keeps Alternate Base View selection, SQL WHERE clause
+ *    inspection/override (`<mj-code-editor Language="sql">`), and `__mj_*` system audit
+ *    fields behind an intentional Advanced Mode toggle.
+ *
+ * 2. **Purpose-Built Rich Searchable Dropdowns & Visual Choice Cards (vs. `<mj-combobox>` / `<mj-dropdown>`)**:
+ *    Standard `<mj-combobox>` and `<mj-dropdown>` components render single-line text items.
+ *    In the View Studio (`Sorting` field picker, `Data Source` Alternate Base View picker,
+ *    and `Display` / `Aggregates` field selectors), users need multi-line option cards
+ *    displaying human-readable descriptions (`EntityField.Description` /
+ *    `EntityAlternateBaseView.Description`), SQL data-type pills (`nvarchar`,
+ *    `datetimeoffset`, etc. in Advanced Mode), `__mj_*` system-field badges, and
+ *    viewport-aware flip-up positioning. These controls therefore intentionally use
+ *    purpose-built searchable listbox dropdowns (`role="listbox"` / `role="option"`) and
+ *    visual choice cards (`role="radiogroup"` / `role="radio"`) with keyboard navigation
+ *    and `Escape` containment rather than generic single-line comboboxes.
  */
 @Component({
   standalone: false,

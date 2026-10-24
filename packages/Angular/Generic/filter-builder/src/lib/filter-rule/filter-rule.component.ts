@@ -14,6 +14,17 @@ import { GetOperatorsForType, OperatorInfo, OperatorRequiresValue } from '../typ
  *
  * Displays field selector, operator selector, and value editor
  * based on the field type.
+ *
+ * Architectural Note — Purpose-Built Rich Field Picker (vs. `<mj-combobox>` / `<mj-dropdown>`):
+ * `FilterRuleComponent` intentionally uses a custom fixed-positioned searchable field
+ * dropdown (`role="listbox"` / `role="option"`) rather than a generic single-line
+ * `<mj-combobox>` or native `<select>`. This enables:
+ * - Multi-line field options displaying `FilterFieldInfo.description` alongside type badges
+ * - Two-pane multi-source entity navigation (`Sources` list + per-source field list)
+ * - Automatic viewport measurement (`dropUp`) so the menu flips above the trigger when
+ *   opened near the bottom of a dialog or inside transformed ancestors
+ * - Contained keyboard navigation (`ArrowDown`/`ArrowUp`/`Enter`/`Escape`) that closes
+ *   only the open field menu without dismissing parent modals.
  */
 @Component({
   standalone: false,
