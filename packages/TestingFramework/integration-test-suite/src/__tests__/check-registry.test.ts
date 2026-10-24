@@ -212,7 +212,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['self-avatar-client', SelfAvatarClientChecks, 6], // AV1-AV6 self-service avatar mutation over the wire via per-user API keys (IT106)
         ['view-properties-client', ViewPropertiesClientChecks, 5], // VP1-VP5 User View properties over the wire: values, locked refusal, token default, RLS on top, cache keying (IT136)
         ['calendar-event-links', CalendarEventLinksChecks, 2], // CL1 UI role over GraphQL reads but cannot create; CL2 links, sync with a moved time and an RSVP, resync on a refused token, cancel (IT127)
-        ['conversation-authorship-client', ConversationAuthorshipClientChecks, 10], // CA1-CA10 who a conversation message is from, owner + Edit grantee over the wire via per-user API keys; CA7-CA10 are the bypasses: forged OldValues___, transaction variables, role casing, moving a message (IT115)
+        ['conversation-authorship-client', ConversationAuthorshipClientChecks, 12], // CA1-CA12 who a conversation message is from, owner + Edit grantee over the wire via per-user API keys; CA7-CA10 are the bypasses: forged OldValues___, transaction variables, role casing, moving a message; CA11-CA12 only the server writes agent replies (IT115)
         ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)
         ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
         ['binary-fields', BinaryFieldsChecks, 6], // BF1-BF6 binary fields end to end + binary vector columns, client transport (IT101)
@@ -308,8 +308,9 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'codegen-determinism': 6,
         'communication': 5,
         'concurrent': 2,
+        'content-pipeline': 15,
         'content-vectorization': 10,
-        'conversation-authorship-client': 10,
+        'conversation-authorship-client': 12,
         'conversation-compaction': 23,
         'dataset-cache': 4,
         'entity-actions': 8,
@@ -353,7 +354,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'prompt-runner': 1,
         'query-approvals': 5,
         'queue': 7,
-        'realtime-deterministic': 18,
+        'realtime-deterministic': 20,
         'realtime-session-guard': 2,
         'realtime-session-verification': 6,
         'record-cloning': 13,
@@ -426,7 +427,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(136);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(137);
     });
 });
 
@@ -488,6 +489,21 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'cache-immutability.F12',
         'client-cache.C10',
         'client-cache.C14',
+        'content-pipeline.CP1',
+        'content-pipeline.CP10',
+        'content-pipeline.CP11',
+        'content-pipeline.CP12',
+        'content-pipeline.CP13',
+        'content-pipeline.CP14',
+        'content-pipeline.CP15',
+        'content-pipeline.CP2',
+        'content-pipeline.CP3',
+        'content-pipeline.CP4',
+        'content-pipeline.CP5',
+        'content-pipeline.CP6',
+        'content-pipeline.CP7',
+        'content-pipeline.CP8',
+        'content-pipeline.CP9',
         'content-vectorization.CV1',
         'content-vectorization.CV10',
         'content-vectorization.CV2',
@@ -500,6 +516,8 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'content-vectorization.CV9',
         'conversation-authorship-client.CA1',
         'conversation-authorship-client.CA10',
+        'conversation-authorship-client.CA11',
+        'conversation-authorship-client.CA12',
         'conversation-authorship-client.CA2',
         'conversation-authorship-client.CA3',
         'conversation-authorship-client.CA4',
