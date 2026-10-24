@@ -466,7 +466,11 @@ function readMetric(model: RecordingEntity, field: 'Metrics' | 'HoldoutMetrics',
 // region: the suite ----------------------------------------------------------
 
 describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score (real sidecar)', () => {
-  const DATASET = buildDataset(420);
+  // 3,000 rows: the locked holdout is a seeded, stratified 20% sample (LockedHoldoutSplitter), and on
+  // this generator the xgboost holdout AUC's 1st percentile across random 600-row holdouts is 0.77,
+  // so the 0.7 floor below holds for any seed. At 420 rows the 84-row holdout AUC fell below 0.7 on
+  // 40% of carves and the floor only held by the luck of one particular carve.
+  const DATASET = buildDataset(3000);
   // Hold back the last 20 rows as a "fresh" scoring set the model never trained on.
   const SCORING_HOLDOUT = DATASET.slice(-20);
 
