@@ -65,12 +65,14 @@ Per root `CLAUDE.md` rule 5, types are imported **directly from `-core`** — ne
 together, never one by one (a per-package `tsc` on a fresh clone fails with `TS2307 Cannot find module
 '@memberjunction/core'`):
 
-    pnpm install                                                      # repo root
-    npx turbo run build --filter=@memberjunction/predictive-studio...  # PS + everything it depends on
-    pnpm --filter @memberjunction/predictive-studio-sidecar run setup:python
+```bash
+pnpm install        # repo root
+pnpm run build      # repo root: builds PS and everything it depends on, in dependency order
+pnpm --filter @memberjunction/predictive-studio-sidecar run setup:python
+```
 
 `setup:python` needs CPython 3.11 or 3.12 (numpy 1.26.4 has no wheels for 3.13+); it tries `python3.11`, `python3.12`,
-`python3`, `python` and stops with the list it probed if none fits. Pass `--python <path>` to choose one. On macOS
+`python3`, `python` and stops with the list it probed if none fits. Pass `-- --python <path>` after the `setup:python` command to choose one. On macOS
 also `brew install libomp` (XGBoost/LightGBM). To run the sidecar or its tests on another interpreter, set
 `PREDICTIVE_STUDIO_PYTHON=<path to python>`.
 

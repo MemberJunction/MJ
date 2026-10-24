@@ -3,14 +3,14 @@
 **Date**: 2026-10-23
 **Branch**: `ps/pr-2-truth-suite-containment`
 **PR**: [#5978 — planted-truth suite and Phase-0 containment](https://github.com/MemberJunction/MJ/pull/5978)
-**Binding standard**: `coding_standards.md` (cited below as §N)
+**Binding standard**: the team's coding standards (`coding_standards.md`, kept outside the repo; cited below as §N)
 **Precedent**: [`PR-1-an-bc-review-design.md`](PR-1-an-bc-review-design.md) and PR 1's gate layout (commit `ce758af8ce`)
 
 ---
 
 ## 1. Goal and decisions
 
-An audit of the PR (270 files, ~96k lines) against `coding_standards.md` found that it rebuilt MJ's Testing Framework next
+An audit of the PR (270 files, ~96k lines) against the team's coding standards (`coding_standards.md`, kept outside the repo) found that it rebuilt MJ's Testing Framework next
 to itself, committed generated output and one-off scripts, moved logic into Core with heuristics and compatibility shims,
 and carried changes unrelated to Predictive Studio. Four of the findings are correctness bugs in the gates themselves.
 
@@ -56,10 +56,11 @@ Clean it up **in this one PR**, following the shape PR 1 already established.
 metadata-optional/integration-test/
   test-suites/.ps-gates-containment-suite.json        "Predictive Studio Gates — Containment"
   tests/gates/.gate-W1-S7.5.json                       G0.1   (one file per gate, PR 1's naming)
-  tests/gates/.gate-W1-S9.3.json                       G0.6
-  ...                                                  G0.4, G0.5, G0.7–G0.12
-  tests/gates/.gate-W2-C1.1.json                       G0.2   Status = Pending, not in the suite
-  tests/gates/.gate-W3-C1.1.json                       G0.3   Status = Pending, not in the suite
+  ...                                                  G0.4, G0.5, G0.7–G0.12 (nine gates in the suite)
+  test-suites/.ps-gates-pending-suite.json             "Predictive Studio Gates — Pending" (A5, A7)
+  tests/gates/.gate-W1-S9.3.json                       G0.6   Status = Pending, in the Pending suite (A7)
+  tests/gates/.gate-W2-C1.1.json                       G0.2   Status = Pending, in the Pending suite (A5)
+  tests/gates/.gate-W3-C1.1.json                       G0.3   Status = Pending, in the Pending suite (A5)
   tests/gates/.ps-truth-datasets-load.json             68-dataset load and verify
 packages/TestingFramework/integration-test-suite/src/checks/
   ps-gate-<id>.checks.ts                               one NamedCheck per gate
@@ -219,5 +220,6 @@ New gate implementations for PR 3–5; CI scheduling; PostgreSQL; any migration 
 | A2 | §4.2 | Per-dataset tables stay; only the five never-loaded tables are dropped. | The loader deletes and reloads one table per dataset; sharing W1–W8 tables would change which rows an already-trained fixture model scores between gates. With CodeGen at provision the tables add no committed lines. |
 | A3 | §4.2 | `provision.mjs` keeps regenerating `.pstruth-entities.json` after `mj sync push`. | The generator is the file's source of truth; committing sync blocks would dirty the tree on every provision. |
 | A4 | §5.1 | Polarity comes from `ResolveOutcomeConfig(model).Polarity` (explicit config in Lineage first, its existing default otherwise). | `ResolveOutcomeConfig` already exists on `next`; this removes the second, divergent rule (§3 "unify divergent predicates"). Replacing the existing resolver's default is outside this PR. |
-| A5 | §3.1 | G0.2/G0.3 join a second suite, "Predictive Studio Gates — Pending (PR 4)". | `sibling-parity.test.ts` requires every `tests/gates/` record to be in a `.ps-gates-*` suite. Status stays `Pending`. |
+| A5 | §3.1 | G0.2/G0.3 join a second suite, "Predictive Studio Gates — Pending". | `sibling-parity.test.ts` requires every `tests/gates/` record to be in a `.ps-gates-*` suite. Status stays `Pending`. |
 | A6 | §5.2 | Refusal codes travel as `RemoteOpResult.ResultCode`, set by a shared `ExecuteServer` override in the two PS operations. | `BaseRemotableOperation.ExecuteServer` maps every throw to `EXECUTION_ERROR`; changing MJCore is outside the PR's scope. `ResultCode` already crosses GraphQL (`graphQLDataProvider.ts:2044`). |
+| A7 | §3.1 | G0.6 (`W1 -> S9.3`, the LLM judge) moves from the containment suite to "Predictive Studio Gates — Pending", Status `Pending`. The containment suite holds nine gates (G0.1, G0.4, G0.5, G0.7–G0.12) plus the dataset test. | The judge verdict is not repeatable: the same model and inputs can pass on one run and fail on the next, so a containment gate that must pass every run cannot depend on it. |

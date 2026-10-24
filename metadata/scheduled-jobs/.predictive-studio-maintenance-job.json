@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Predictive Studio Maintenance",
-      "Description": "Kept Disabled: no Action backs this job yet, so it must stay Disabled. It will run the Predictive Studio maintenance pass (staleness, scheduled re-scoring, retraining with a challenger comparison) once that action exists.",
+      "Description": "Disabled: no Action backs this job yet. It will run the Predictive Studio maintenance pass (staleness, scheduled re-scoring, retraining with a challenger comparison) once that action exists. WIRING NOTE: when the action lands, add Configuration.ActionID = '@lookup:MJ: Actions.DriverClass=PredictiveStudioRunMaintenancePassAction'; it is omitted today because an unresolvable @lookup fails and rolls back the entire scheduled-jobs push.",
       "JobTypeID": "@lookup:MJ: Scheduled Job Types.DriverClass=ActionScheduledJobDriver",
       "CronExpression": "0 0 3 * * 0",
       "Timezone": "UTC",

@@ -41,7 +41,7 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": false,
-            "Description": "Optional cap on the number of training rows pulled from the target entity."
+            "Description": "Optional row cap for the training read. Training reads every row of the target entity; a MaxRows smaller than the rows in scope is refused with READ_CAP_EXCEEDED rather than training on a sample. Omit it unless you want that check."
           },
           "primaryKey": {
             "ID": "1AEC4C95-D252-462D-9DD7-F287F8B5D6F5"
@@ -157,7 +157,7 @@
             "ActionID": "@parent:ID",
             "ResultCode": "READ_CAP_EXCEEDED",
             "IsSuccess": false,
-            "Description": "Training refused: the pipeline's read cap would cut the training rows short, so the model would be trained on a fraction of its scope. The same code the PredictiveStudio.TrainModel operation returns."
+            "Description": "Training refused: the MaxRows parameter is smaller than the rows in scope, so the model would be trained on a fraction of its scope. Omit MaxRows and train again; training reads every row of the target entity. The same code the PredictiveStudio.TrainModel operation returns."
           },
           "primaryKey": {
             "ID": "CA1C5767-E6E5-4DCA-9E4B-CE775C8D1A0A"
@@ -168,10 +168,21 @@
             "ActionID": "@parent:ID",
             "ResultCode": "AS_OF_NO_EFFECT",
             "IsSuccess": false,
-            "Description": "Training refused: the as-of setting asks for point-in-time assembly training cannot perform, so the model would be identical to Mode 'none'. The same code the PredictiveStudio.TrainModel operation returns."
+            "Description": "Training refused: the as-of setting asks for point-in-time assembly that training cannot perform, so the model would be identical to Mode 'none'. The same code the PredictiveStudio.TrainModel operation returns."
           },
           "primaryKey": {
             "ID": "204E62AB-B4E7-42A8-84B8-19ADDDF5DC9E"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_EVALUATION_SETTING",
+            "IsSuccess": false,
+            "Description": "Training refused: the pipeline's ValidationStrategy.MajorityBaselineRule is not a known value ('enforce' or 'warn'). Fix or remove it (removing it uses 'enforce') and train again. The same code the PredictiveStudio.TrainModel operation returns."
+          },
+          "primaryKey": {
+            "ID": "9645CFEB-B686-4C0C-B7E1-F217C750443B"
           }
         }
       ]
@@ -371,7 +382,7 @@
             "ActionID": "@parent:ID",
             "ResultCode": "MODEL_NOT_SCORABLE",
             "IsSuccess": false,
-            "Description": "Scoring refused: the model's status (Draft without training, Archived) does not allow scoring. The same code the PredictiveStudio.ScoreRecordSet operation returns."
+            "Description": "Scoring refused: the model's status does not allow scoring. Only Validated and Published models score; a trained Draft must be promoted to Validated first, and an Archived model cannot score. The same code the PredictiveStudio.ScoreRecordSet operation returns."
           },
           "primaryKey": {
             "ID": "FFA2645F-430A-4BBD-B3DE-9950E2CBBE27"
@@ -405,7 +416,7 @@
     ],
     "fields": {
       "Name": "Run Experiment Session",
-      "Description": "Executes an approved modeling plan as an experiment session — running its proposed experiments in waves to completion or until the budget bound, maintaining a leaderboard. Outputs the session id, the best (winning) model id, the final leaderboard, and why the session stopped.",
+      "Description": "Disabled: experiment sessions are switched off; returns EXPERIMENT_SESSIONS_UNAVAILABLE. Executes an approved modeling plan as an experiment session — running its proposed experiments in waves to completion or until the budget bound, maintaining a leaderboard. Outputs the session id, the best (winning) model id, the final leaderboard, and why the session stopped.",
       "Type": "Custom",
       "DriverClass": "PredictiveStudioRunExperimentAction",
       "Status": "Disabled",

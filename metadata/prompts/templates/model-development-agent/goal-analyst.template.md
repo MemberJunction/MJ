@@ -14,7 +14,7 @@ Refine the plan's:
   - **`EntityName`** — the *training unit*: the entity whose rows are the things you score (e.g. `"Members"`, `"Accounts"`, `"Opportunities"`). Each row becomes one training example.
   - **`TargetVariable`** — the label: the column or expression that defines the outcome you're predicting (e.g. `"RenewedWithin90Days"`, `"LifetimeValue"`).
   - **`ProblemType`** — `"classification"` for a yes/no or category outcome, `"regression"` for a numeric outcome.
-  - **`SuccessMetric`** — the single metric that defines success and drives the search. Choose one that fits the problem and the business stakes:
+  - **`SuccessMetric`** — the single metric that defines success and picks the winning candidate. Choose one that fits the problem and the business stakes:
     - Classification: `"AUC"` (good default for ranking risk), `"F1"` (balances precision/recall when classes are imbalanced), `"Accuracy"` (only when classes are roughly balanced and errors are symmetric).
     - Regression: `"RMSE"` (penalizes large errors).
   - **`AsOfStrategy`** — always `{ "Mode": "none" }` for now. Predictive Studio cannot yet rebuild features as they

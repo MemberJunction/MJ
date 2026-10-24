@@ -2,13 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Bring PR #5978 into line with `coding_standards.md` in place: gates on MJ's Testing Framework (PR 1's layout), gate correctness bugs fixed, the truth-suite framework and dead code removed, product-code violations fixed, unrelated changes out.
+**Goal:** Bring PR #5978 into line with the team's coding standards (`coding_standards.md`, kept outside the repo) in place: gates on MJ's Testing Framework (PR 1's layout), gate correctness bugs fixed, the truth-suite framework and dead code removed, product-code violations fixed, unrelated changes out.
 
 **Architecture:** Each PR 2 gate becomes a `NamedCheck` bundle in `@memberjunction/integration-test-suite` plus one `MJ: Tests` record, grouped in the suite "Predictive Studio Gates — Containment" and run by `mj test suite`. The truth-suite package keeps the datasets (generators, loader, catalog) and the harness the checks call; its own registry, runner, report and stubs are deleted. Refusals travel as typed `ResultCode`s on the remote-operation result, so gates never read error text.
 
 **Tech Stack:** TypeScript (ESM), Vitest, Angular 21, Python 3.11/3.12 (FastAPI, scikit-learn, pytest, mypy), SQL Server, MJ Testing Framework (`@memberjunction/testing-integration`, `@memberjunction/testing-engine`).
 
-**Spec:** [`PR-2-standards-cleanup-design.md`](PR-2-standards-cleanup-design.md) (amended in Task 0). Standard: `/Users/arieglazier/repos/MJ_20260925/coding_standards.md`.
+**Spec:** [`PR-2-standards-cleanup-design.md`](PR-2-standards-cleanup-design.md) (amended in Task 0). Standard: the team's coding standards (`coding_standards.md`, kept outside the repo).
 
 ## Global Constraints
 
@@ -74,8 +74,9 @@ The investigation for this plan found six places where the spec does not fit the
 | A2 | §4.2 | Per-dataset tables stay; only the five never-loaded tables are dropped. | The loader deletes and reloads one table per dataset; sharing W1–W8 tables would change which rows an already-trained fixture model scores between gates. With CodeGen at provision the tables add no committed lines. |
 | A3 | §4.2 | `provision.mjs` keeps regenerating `.pstruth-entities.json` after `mj sync push`. | The generator is the file's source of truth; committing sync blocks would dirty the tree on every provision. |
 | A4 | §5.1 | Polarity comes from `ResolveOutcomeConfig(model).Polarity` (explicit config in Lineage first, its existing default otherwise). | `ResolveOutcomeConfig` already exists on `next`; this removes the second, divergent rule (§3 "unify divergent predicates"). Replacing the existing resolver's default is outside this PR. |
-| A5 | §3.1 | G0.2/G0.3 join a second suite, "Predictive Studio Gates — Pending (PR 4)". | `sibling-parity.test.ts` requires every `tests/gates/` record to be in a `.ps-gates-*` suite. Status stays `Pending`. |
+| A5 | §3.1 | G0.2/G0.3 join a second suite, "Predictive Studio Gates — Pending". | `sibling-parity.test.ts` requires every `tests/gates/` record to be in a `.ps-gates-*` suite. Status stays `Pending`. |
 | A6 | §5.2 | Refusal codes travel as `RemoteOpResult.ResultCode`, set by a shared `ExecuteServer` override in the two PS operations. | `BaseRemotableOperation.ExecuteServer` maps every throw to `EXECUTION_ERROR`; changing MJCore is outside the PR's scope. `ResultCode` already crosses GraphQL (`graphQLDataProvider.ts:2044`). |
+| A7 | §3.1 | G0.6 (`W1 -> S9.3`, the LLM judge) moves from the containment suite to "Predictive Studio Gates — Pending", Status `Pending`. The containment suite holds nine gates (G0.1, G0.4, G0.5, G0.7–G0.12) plus the dataset test. | The judge verdict is not repeatable: the same model and inputs can pass on one run and fail on the next, so a containment gate that must pass every run cannot depend on it. |
 ```
 
 - [ ] **Step 2: Commit**
@@ -1045,7 +1046,7 @@ One record per bundle under `metadata-optional/integration-test/tests/gates/` (P
 
 Names use `->` like PR 1 (`"W1 -> S7.5"`). G0.6's record has `"tier": "live-model"`. G0.2/G0.3 have `"Status": "Pending"` and a description that says PR 4 activates them. The datasets record is named `"PS truth datasets: load and verify"`.
 
-Suites (`.ps-gates-containment-suite.json`, `.ps-gates-pending-suite.json`) follow `.ps-gates-feature-pipelines-suite.json`: the containment suite lists the ten PR 2 gates and the datasets test (`Sequence` 1..11, datasets first); the pending suite lists G0.2 and G0.3. Each suite description states the run command:
+Suites (`.ps-gates-containment-suite.json`, `.ps-gates-pending-suite.json`) follow `.ps-gates-feature-pipelines-suite.json`: the containment suite lists the nine PR 2 containment gates and the datasets test (`Sequence` 1..10, datasets first); the pending suite lists G0.2, G0.3 and G0.6 (A7). Each suite description states the run command:
 `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Containment"` (MJAPI and the truth sidecar running; `pnpm run truth:provision` done).
 
 - [ ] **Step 6: Unit tests of the suite package**
@@ -1269,15 +1270,16 @@ On `MJ_PS_PR2_clean` (fresh, per the `bootstrap-clean-db` skill, plus bizapps-co
 ```bash
 cd packages/AI/PredictiveStudio/TruthSuite && pnpm run truth:loom && pnpm run setup:python && pnpm run truth:provision
 pnpm run truth:sidecar &           # leave running
-cd /Users/arieglazier/repos/MJ_20260925 && GRAPHQL_PORT=4001 pnpm run start:api &   # wait until it accepts connections
+cd ../../../.. && GRAPHQL_PORT=4001 pnpm run start:api &   # from the repo root; wait until it accepts connections
 MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Containment"
 MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test run "W2 -> C1.1"
 MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test run "W3 -> C1.1"
+MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test run "W1 -> S9.3"
 pnpm run test:integration
 ```
-Expected: the containment suite passes 11/11 (ten gates + the 68-dataset test); G0.2 and G0.3 report their results (G0.3 fails as expected until PR 4; say so); the deterministic integration tier passes (if CG5 fails, restore the cache-gauntlet change from Task 13 and re-run).
+Expected: the containment suite passes 10/10 (nine gates + the 68-dataset test); G0.2, G0.3 and G0.6 report their results (G0.3 fails as expected until PR 4, and G0.6's judge verdict can differ between runs (A7); say so); the deterministic integration tier passes (if CG5 fails, restore the cache-gauntlet change from Task 13 and re-run).
 
-Verify with `sqlcmd` using `.env` credentials: `SELECT t.Name, tr.Status FROM __mj.vwTestRuns tr JOIN __mj.Test t ON t.ID = tr.TestID WHERE t.Name LIKE 'W%->%' OR t.Name LIKE 'T4%' OR t.Name LIKE 'PS truth%' ORDER BY tr.__mj_CreatedAt DESC` — 11 Passed rows for this run.
+Verify with `sqlcmd` using `.env` credentials: `SELECT t.Name, tr.Status FROM __mj.vwTestRuns tr JOIN __mj.Test t ON t.ID = tr.TestID WHERE t.Name LIKE 'W%->%' OR t.Name LIKE 'T4%' OR t.Name LIKE 'PS truth%' ORDER BY tr.__mj_CreatedAt DESC` — 10 Passed rows from the containment suite for this run.
 
 Stop MJAPI and the sidecar. Restore any sync write-back as in Task 12 Step 5.
 
