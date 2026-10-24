@@ -27,6 +27,8 @@
   border-bottom: 1px solid var(--mj-border-default);
   background: var(--mj-bg-surface);
   flex-shrink: 0;
+  position: relative;
+  z-index: 2;
 }
 
 /* Pushes the view-type switcher to the right end of the toolbar row */
@@ -35,12 +37,18 @@
   min-width: 0;
 }
 
-/* Data renderer fills remaining space */
+/* Data renderer fills remaining space.
+   Isolate the data renderer's stacking context so inner grid/Leaflet z-indices
+   (up to ~1000) stay below .workspace-toolbar and .content-header, while
+   full-screen overlays (mj-view-config-panel, dialogs) outside .workspace-body
+   overlay the entire screen cleanly. */
 .workspace-body {
   flex: 1 1 auto;
   min-height: 0;
   position: relative;
   overflow: hidden;
+  isolation: isolate;
+  z-index: 1;
 }
 
 .workspace-body mj-entity-viewer {

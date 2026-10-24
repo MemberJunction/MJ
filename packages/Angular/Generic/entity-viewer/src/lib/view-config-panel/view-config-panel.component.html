@@ -217,7 +217,7 @@
           (click)="SetActiveTab('columns')">
           <span class="rail-btn-left">
             <i class="fa-solid fa-table-columns"></i>
-            <span>Columns &amp; Format</span>
+            <span>{{ IsAdvancedMode ? 'Columns & Format' : 'Columns' }}</span>
           </span>
           <span class="rail-badge">{{ VisibleColumns.length }}</span>
         </button>
@@ -229,7 +229,7 @@
           (click)="SetActiveTab('filters')">
           <span class="rail-btn-left">
             <i class="fa-solid fa-filter"></i>
-            <span>Filters &amp; Source</span>
+            <span>{{ IsAdvancedMode ? 'Filters & Source' : 'Filters' }}</span>
           </span>
           @if (HasActiveFilterChip || AlternateBaseView) {
             <span class="rail-badge active-dot">•</span>
@@ -250,19 +250,21 @@
           }
         </button>
 
-        <button
-          type="button"
-          class="rail-nav-btn"
-          [class.active]="ActiveTab === 'aggregates'"
-          (click)="SetActiveTab('aggregates')">
-          <span class="rail-btn-left">
-            <i class="fa-solid fa-chart-simple"></i>
-            <span>Aggregates</span>
-          </span>
-          @if (EnabledAggregatesCount > 0) {
-            <span class="rail-badge">{{ EnabledAggregatesCount }}</span>
-          }
-        </button>
+        @if (IsAdvancedMode || Aggregates.length > 0) {
+          <button
+            type="button"
+            class="rail-nav-btn"
+            [class.active]="ActiveTab === 'aggregates'"
+            (click)="SetActiveTab('aggregates')">
+            <span class="rail-btn-left">
+              <i class="fa-solid fa-chart-simple"></i>
+              <span>Aggregates</span>
+            </span>
+            @if (EnabledAggregatesCount > 0) {
+              <span class="rail-badge">{{ EnabledAggregatesCount }}</span>
+            }
+          </button>
+        }
 
         <button
           type="button"
@@ -271,33 +273,35 @@
           (click)="SetActiveTab('display')">
           <span class="rail-btn-left">
             <i class="fa-solid fa-display"></i>
-            <span>Display &amp; Modes</span>
+            <span>{{ IsAdvancedMode ? 'Display & Modes' : 'Display' }}</span>
           </span>
         </button>
       </div>
 
-      <!-- Active View Recipe Box in Bottom of Left Rail -->
-      <div class="rail-recipe-box">
-        <div class="rail-recipe-title">Active View Recipe</div>
-        @if (AvailableAlternateBaseViews.length > 0 || IsCurrentAlternateBaseViewUnavailable || AlternateBaseView) {
+      <!-- Active View Recipe Box in Bottom of Left Rail (Advanced Mode only) -->
+      @if (IsAdvancedMode) {
+        <div class="rail-recipe-box">
+          <div class="rail-recipe-title">Active View Recipe</div>
+          @if (AvailableAlternateBaseViews.length > 0 || IsCurrentAlternateBaseViewUnavailable || AlternateBaseView) {
+            <button type="button" class="rail-recipe-item" (click)="SetActiveTab('filters')">
+              <i class="fa-solid fa-database"></i>
+              <span>{{ SelectedBaseViewLabel }}</span>
+            </button>
+          }
           <button type="button" class="rail-recipe-item" (click)="SetActiveTab('filters')">
-            <i class="fa-solid fa-database"></i>
-            <span>{{ SelectedBaseViewLabel }}</span>
+            <i class="fa-solid fa-filter"></i>
+            <span>{{ FilterChipLabel }}</span>
           </button>
-        }
-        <button type="button" class="rail-recipe-item" (click)="SetActiveTab('filters')">
-          <i class="fa-solid fa-filter"></i>
-          <span>{{ FilterChipLabel }}</span>
-        </button>
-        <button type="button" class="rail-recipe-item" (click)="SetActiveTab('columns')">
-          <i class="fa-solid fa-table-columns"></i>
-          <span>{{ VisibleColumns.length }} Visible{{ PinnedColumnsCount > 0 ? ' (' + PinnedColumnsCount + ' Pinned)' : '' }}</span>
-        </button>
-        <button type="button" class="rail-recipe-item" (click)="SetActiveTab('sorting')">
-          <i class="fa-solid fa-arrow-up-wide-short"></i>
-          <span>{{ SortSummaryLabel }}</span>
-        </button>
-      </div>
+          <button type="button" class="rail-recipe-item" (click)="SetActiveTab('columns')">
+            <i class="fa-solid fa-table-columns"></i>
+            <span>{{ VisibleColumns.length }} Visible{{ PinnedColumnsCount > 0 ? ' (' + PinnedColumnsCount + ' Pinned)' : '' }}</span>
+          </button>
+          <button type="button" class="rail-recipe-item" (click)="SetActiveTab('sorting')">
+            <i class="fa-solid fa-arrow-up-wide-short"></i>
+            <span>{{ SortSummaryLabel }}</span>
+          </button>
+        </div>
+      }
     </div>
 
     <!-- Right Wide Workbench Content -->
@@ -477,15 +481,17 @@
                       Clear
                     </button>
                   }
-                  <button
-                    type="button"
-                    class="summary-btn"
-                    (click)="OpenFilterDialog()"
-                    [disabled]="!CanEdit && GetFilterCount() === 0"
-                    title="Open in full-screen modal editor">
-                    <i class="fa-solid fa-up-right-and-down-left-from-center"></i>
-                    Full Screen
-                  </button>
+                  @if (IsAdvancedMode) {
+                    <button
+                      type="button"
+                      class="summary-btn"
+                      (click)="OpenFilterDialog()"
+                      [disabled]="!CanEdit && GetFilterCount() === 0"
+                      title="Open in standalone modal editor">
+                      <i class="fa-solid fa-up-right-and-down-left-from-center"></i>
+                      Pop Out
+                    </button>
+                  }
                 </div>
               </div>
 
@@ -636,43 +642,49 @@
                       </span>
                     }
                   </span>
-                  <span class="column-meta-tag" (click)="OpenFormatEditor(column)">
-                    {{ column.width ? column.width + 'px' : 'auto' }}
-                  </span>
+                  @if (IsAdvancedMode || column.width) {
+                    <span class="column-meta-tag" (click)="OpenFormatEditor(column)">
+                      {{ column.width ? column.width + 'px' : 'auto' }}
+                    </span>
+                  }
                   <div class="column-actions">
-                    <button
-                      type="button"
-                      class="action-btn pin-btn"
-                      [class.active]="!!column.pinned"
-                      (click)="ToggleColumnPin(column, $event)"
-                      [disabled]="!CanEdit"
-                      [title]="column.pinned ? 'Pinned ' + column.pinned + ' — click to cycle' : 'Pin column left/right'">
-                      <i class="fa-solid fa-thumbtack"></i>
-                    </button>
+                    @if (IsAdvancedMode || column.pinned) {
+                      <button
+                        type="button"
+                        class="action-btn pin-btn"
+                        [class.active]="!!column.pinned"
+                        (click)="ToggleColumnPin(column, $event)"
+                        [disabled]="!CanEdit"
+                        [title]="column.pinned ? 'Pinned ' + column.pinned + ' — click to cycle' : 'Pin column left/right'">
+                        <i class="fa-solid fa-thumbtack"></i>
+                      </button>
+                    }
                     <button
                       type="button"
                       class="action-btn format-btn"
                       [class.active]="FormatEditingColumn === column"
                       (click)="OpenFormatEditor(column)"
-                      title="Format column, width & conditional rules">
+                      title="Rename or format column">
                       <i class="fa-solid fa-paintbrush"></i>
                     </button>
-                    <button
-                      type="button"
-                      class="action-btn"
-                      [disabled]="i === 0"
-                      (click)="MoveColumnUp(column)"
-                      title="Move up">
-                      <i class="fa-solid fa-chevron-up"></i>
-                    </button>
-                    <button
-                      type="button"
-                      class="action-btn"
-                      [disabled]="i === VisibleColumns.length - 1"
-                      (click)="MoveColumnDown(column)"
-                      title="Move down">
-                      <i class="fa-solid fa-chevron-down"></i>
-                    </button>
+                    @if (IsAdvancedMode) {
+                      <button
+                        type="button"
+                        class="action-btn"
+                        [disabled]="i === 0"
+                        (click)="MoveColumnUp(column)"
+                        title="Move up">
+                        <i class="fa-solid fa-chevron-up"></i>
+                      </button>
+                      <button
+                        type="button"
+                        class="action-btn"
+                        [disabled]="i === VisibleColumns.length - 1"
+                        (click)="MoveColumnDown(column)"
+                        title="Move down">
+                        <i class="fa-solid fa-chevron-down"></i>
+                      </button>
+                    }
                     <button
                       type="button"
                       class="action-btn hide-btn"
@@ -716,7 +728,7 @@
         <div class="format-section">
           <div class="format-section-header">
             <i class="fa-solid fa-pen-nib"></i>
-            <span>Column Name, Width & Pinning</span>
+            <span>{{ IsAdvancedMode ? 'Column Name, Width & Pinning' : 'Column Header Name' }}</span>
           </div>
           <div class="format-row">
             <label>Display As</label>
@@ -733,42 +745,46 @@
               </button>
             </div>
           }
-          <div class="format-row">
-            <label>Pin Column</label>
-            <div class="alignment-toggle">
-              <button
-                type="button"
-                class="align-btn"
-                [class.active]="!FormatEditingColumn.pinned"
-                (click)="SetColumnPin(FormatEditingColumn, null)">
-                None
-              </button>
-              <button
-                type="button"
-                class="align-btn"
-                [class.active]="FormatEditingColumn.pinned === 'left'"
-                (click)="SetColumnPin(FormatEditingColumn, 'left')">
-                <i class="fa-solid fa-thumbtack"></i> Left
-              </button>
-              <button
-                type="button"
-                class="align-btn"
-                [class.active]="FormatEditingColumn.pinned === 'right'"
-                (click)="SetColumnPin(FormatEditingColumn, 'right')">
-                <i class="fa-solid fa-thumbtack"></i> Right
-              </button>
+          @if (IsAdvancedMode || FormatEditingColumn.pinned) {
+            <div class="format-row">
+              <label>Pin Column</label>
+              <div class="alignment-toggle">
+                <button
+                  type="button"
+                  class="align-btn"
+                  [class.active]="!FormatEditingColumn.pinned"
+                  (click)="SetColumnPin(FormatEditingColumn, null)">
+                  None
+                </button>
+                <button
+                  type="button"
+                  class="align-btn"
+                  [class.active]="FormatEditingColumn.pinned === 'left'"
+                  (click)="SetColumnPin(FormatEditingColumn, 'left')">
+                  <i class="fa-solid fa-thumbtack"></i> Left
+                </button>
+                <button
+                  type="button"
+                  class="align-btn"
+                  [class.active]="FormatEditingColumn.pinned === 'right'"
+                  (click)="SetColumnPin(FormatEditingColumn, 'right')">
+                  <i class="fa-solid fa-thumbtack"></i> Right
+                </button>
+              </div>
             </div>
-          </div>
-          <div class="format-row">
-            <label>Width (px)</label>
-            <input
-              type="number"
-              class="format-input small"
-              min="50"
-              max="1000"
-              placeholder="Auto"
-              [(ngModel)]="FormatEditingColumn.width" />
-          </div>
+          }
+          @if (IsAdvancedMode || FormatEditingColumn.width) {
+            <div class="format-row">
+              <label>Width (px)</label>
+              <input
+                type="number"
+                class="format-input small"
+                min="50"
+                max="1000"
+                placeholder="Auto"
+                [(ngModel)]="FormatEditingColumn.width" />
+            </div>
+          }
         </div>
 
         <!-- Preview Section -->
@@ -1094,7 +1110,7 @@
               </button>
             </div>
           </div>
-          } @else {
+          } @else if (IsAdvancedMode) {
             <div class="config-section wb-card wb-inspector-card">
               <div class="section-header">
                 <i class="fa-solid fa-sliders"></i>
@@ -1153,7 +1169,7 @@
                 <div class="column-item hidden" (click)="ToggleColumnVisibility(column)" title="Click to add {{ column.displayName }} to visible columns">
                   <span class="column-add-icon"><i class="fa-solid fa-plus"></i></span>
                   <span class="column-name">{{ column.displayName }}</span>
-                  @if (column.field.Type) {
+                  @if (IsAdvancedMode && column.field.Type) {
                     <span class="column-type-pill">{{ column.field.Type }}</span>
                   }
                 </div>
@@ -1229,7 +1245,7 @@
                       (click)="ToggleSortFieldDropdown(i, $event)">
                       <span class="sort-field-trigger-main">
                         <span class="sort-field-trigger-name">{{ GetFieldDisplayName(sortItem.field) }}</span>
-                        @if (GetSortFieldInfo(sortItem.field)?.Type) {
+                        @if (IsAdvancedMode && GetSortFieldInfo(sortItem.field)?.Type) {
                           <span class="sort-field-type-badge">{{ GetSortFieldInfo(sortItem.field)?.Type }}</span>
                         }
                       </span>
@@ -1262,7 +1278,7 @@
                               (click)="SelectSortField(sortItem, field.Name, $event)">
                               <div class="sort-field-option-header">
                                 <span class="sort-field-option-name">{{ field.DisplayNameOrName }}</span>
-                                @if (field.Type) {
+                                @if (IsAdvancedMode && field.Type) {
                                   <span class="sort-field-type-badge">{{ field.Type }}</span>
                                 }
                               </div>
@@ -1552,119 +1568,360 @@
     <!-- TAB 5: DISPLAY & VIEW MODE OPTIONS                         -->
     <!-- ========================================================== -->
     @if (ActiveTab === 'display') {
-      <div class="tab-content">
-        <div class="config-section wb-card">
-          <div class="section-header">
-            <i class="fa-solid fa-display"></i>
-            <span>Grid & Card Display Preferences</span>
-          </div>
-          <div class="disclosure-body">
-            <div class="format-row">
-              <label>Grid Row Density</label>
-              <div class="alignment-toggle">
-                <button
-                  type="button"
-                  class="align-btn"
-                  [class.active]="GridRowHeight === 'compact'"
-                  (click)="GridRowHeight = 'compact'">
-                  Compact
-                </button>
-                <button
-                  type="button"
-                  class="align-btn"
-                  [class.active]="GridRowHeight === 'normal'"
-                  (click)="GridRowHeight = 'normal'">
-                  Normal
-                </button>
-                <button
-                  type="button"
-                  class="align-btn"
-                  [class.active]="GridRowHeight === 'comfortable'"
-                  (click)="GridRowHeight = 'comfortable'">
-                  Comfortable
-                </button>
+      <div class="tab-content display-workbench-container">
+        <div class="display-workbench-grid">
+          <!-- CARD 1: GRID VIEW APPEARANCE -->
+          <div class="display-mode-card">
+            <div class="display-card-header">
+              <div class="display-card-icon">
+                <i class="fa-solid fa-table-cells"></i>
+              </div>
+              <div class="display-card-title-group">
+                <h4>Grid View Appearance</h4>
+                <p>Control row density and multi-line cell text behavior in the data grid.</p>
               </div>
             </div>
 
-            <div class="format-row">
-              <label>Wrap Long Cell Text</label>
-              <input type="checkbox" [(ngModel)]="GridWrapText" [disabled]="!CanEdit" />
-            </div>
-
-            <div class="format-row">
-              <label>Card View Size</label>
-              <div class="alignment-toggle">
-                <button
-                  type="button"
-                  class="align-btn"
-                  [class.active]="CardSize === 'small'"
-                  (click)="CardSize = 'small'">
-                  Small
-                </button>
-                <button
-                  type="button"
-                  class="align-btn"
-                  [class.active]="CardSize === 'medium'"
-                  (click)="CardSize = 'medium'">
-                  Medium
-                </button>
-                <button
-                  type="button"
-                  class="align-btn"
-                  [class.active]="CardSize === 'large'"
-                  (click)="CardSize = 'large'">
-                  Large
-                </button>
-              </div>
-            </div>
-
-            @if (AvailableDateFields.length > 0) {
-              <div class="disclosure-subsection">
-                <div class="subsection-label">
-                  <i class="fa-solid fa-timeline"></i>
-                  <span>Timeline Mode Defaults</span>
-                </div>
-                <div class="format-row">
-                  <label>Date Axis Field</label>
-                  <select class="format-select" [(ngModel)]="TimelineDateField" [disabled]="!CanEdit">
-                    @for (df of AvailableDateFields; track df.ID) {
-                      <option [value]="df.Name">{{ df.DisplayNameOrName }}</option>
+            <div class="display-card-body">
+              <div class="display-field-group">
+                <span class="display-field-label">Row Density</span>
+                <div class="visual-choice-grid three-cols" role="radiogroup" aria-label="Grid Row Density">
+                  <!-- Compact -->
+                  <button
+                    type="button"
+                    class="visual-choice-card"
+                    role="radio"
+                    [class.active]="GridRowHeight === 'compact'"
+                    [attr.aria-checked]="GridRowHeight === 'compact'"
+                    [disabled]="!CanEdit"
+                    (click)="SetGridRowHeight('compact')">
+                    <div class="visual-choice-illustration density-illus compact">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                    <div class="visual-choice-text">
+                      <span class="visual-choice-name">Compact</span>
+                      <span class="visual-choice-meta">32px · High density</span>
+                    </div>
+                    @if (GridRowHeight === 'compact') {
+                      <i class="fa-solid fa-circle-check visual-choice-check"></i>
                     }
-                  </select>
+                  </button>
+
+                  <!-- Normal -->
+                  <button
+                    type="button"
+                    class="visual-choice-card"
+                    role="radio"
+                    [class.active]="GridRowHeight === 'normal'"
+                    [attr.aria-checked]="GridRowHeight === 'normal'"
+                    [disabled]="!CanEdit"
+                    (click)="SetGridRowHeight('normal')">
+                    <div class="visual-choice-illustration density-illus normal">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                    <div class="visual-choice-text">
+                      <span class="visual-choice-name">Normal</span>
+                      <span class="visual-choice-meta">40px · Balanced</span>
+                    </div>
+                    @if (GridRowHeight === 'normal') {
+                      <i class="fa-solid fa-circle-check visual-choice-check"></i>
+                    }
+                  </button>
+
+                  <!-- Comfortable -->
+                  <button
+                    type="button"
+                    class="visual-choice-card"
+                    role="radio"
+                    [class.active]="GridRowHeight === 'comfortable'"
+                    [attr.aria-checked]="GridRowHeight === 'comfortable'"
+                    [disabled]="!CanEdit"
+                    (click)="SetGridRowHeight('comfortable')">
+                    <div class="visual-choice-illustration density-illus comfortable">
+                      <span></span>
+                      <span></span>
+                    </div>
+                    <div class="visual-choice-text">
+                      <span class="visual-choice-name">Comfortable</span>
+                      <span class="visual-choice-meta">52px · Spacious</span>
+                    </div>
+                    @if (GridRowHeight === 'comfortable') {
+                      <i class="fa-solid fa-circle-check visual-choice-check"></i>
+                    }
+                  </button>
                 </div>
-                <div class="format-row">
-                  <label>Segment Grouping</label>
-                  <select class="format-select" [(ngModel)]="TimelineGrouping" [disabled]="!CanEdit">
-                    <option value="none">None</option>
-                    <option value="day">By Day</option>
-                    <option value="week">By Week</option>
-                    <option value="month">By Month</option>
-                    <option value="quarter">By Quarter</option>
-                    <option value="year">By Year</option>
-                  </select>
+              </div>
+
+              <!-- Wrap Long Cell Text Toggle Card -->
+              <button
+                type="button"
+                class="display-toggle-card"
+                [class.active]="GridWrapText"
+                [disabled]="!CanEdit"
+                [attr.aria-pressed]="GridWrapText"
+                (click)="ToggleGridWrapText()">
+                <div class="display-toggle-left">
+                  <div class="display-toggle-icon">
+                    <i class="fa-solid fa-align-left"></i>
+                  </div>
+                  <div class="display-toggle-copy">
+                    <span class="display-toggle-title">Wrap Long Cell Text</span>
+                    <span class="display-toggle-desc">
+                      Expand row height automatically to show multi-line text instead of truncating with an ellipsis.
+                    </span>
+                  </div>
                 </div>
-                <div class="format-row">
-                  <label>Orientation</label>
-                  <div class="alignment-toggle">
+                <span class="studio-switch" [class.checked]="GridWrapText" aria-hidden="true">
+                  <span class="studio-switch-thumb"></span>
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <!-- CARD 2: CARD VIEW APPEARANCE -->
+          <div class="display-mode-card">
+            <div class="display-card-header">
+              <div class="display-card-icon">
+                <i class="fa-solid fa-grip"></i>
+              </div>
+              <div class="display-card-title-group">
+                <h4>Card View Appearance</h4>
+                <p>Choose how much detail each record card displays when browsing in Card mode.</p>
+              </div>
+            </div>
+
+            <div class="display-card-body">
+              <div class="display-field-group">
+                <span class="display-field-label">Card Size &amp; Density</span>
+                <div class="visual-choice-grid three-cols" role="radiogroup" aria-label="Card View Size">
+                  <!-- Small -->
+                  <button
+                    type="button"
+                    class="visual-choice-card"
+                    role="radio"
+                    [class.active]="CardSize === 'small'"
+                    [attr.aria-checked]="CardSize === 'small'"
+                    [disabled]="!CanEdit"
+                    (click)="SetCardSize('small')">
+                    <div class="visual-choice-illustration cards-illus small">
+                      <span></span><span></span><span></span>
+                      <span></span><span></span><span></span>
+                    </div>
+                    <div class="visual-choice-text">
+                      <span class="visual-choice-name">Small</span>
+                      <span class="visual-choice-meta">Compact · More per row</span>
+                    </div>
+                    @if (CardSize === 'small') {
+                      <i class="fa-solid fa-circle-check visual-choice-check"></i>
+                    }
+                  </button>
+
+                  <!-- Medium -->
+                  <button
+                    type="button"
+                    class="visual-choice-card"
+                    role="radio"
+                    [class.active]="CardSize === 'medium'"
+                    [attr.aria-checked]="CardSize === 'medium'"
+                    [disabled]="!CanEdit"
+                    (click)="SetCardSize('medium')">
+                    <div class="visual-choice-illustration cards-illus medium">
+                      <span></span><span></span>
+                      <span></span><span></span>
+                    </div>
+                    <div class="visual-choice-text">
+                      <span class="visual-choice-name">Medium</span>
+                      <span class="visual-choice-meta">Balanced · Key fields</span>
+                    </div>
+                    @if (CardSize === 'medium') {
+                      <i class="fa-solid fa-circle-check visual-choice-check"></i>
+                    }
+                  </button>
+
+                  <!-- Large -->
+                  <button
+                    type="button"
+                    class="visual-choice-card"
+                    role="radio"
+                    [class.active]="CardSize === 'large'"
+                    [attr.aria-checked]="CardSize === 'large'"
+                    [disabled]="!CanEdit"
+                    (click)="SetCardSize('large')">
+                    <div class="visual-choice-illustration cards-illus large">
+                      <span></span>
+                      <span></span>
+                    </div>
+                    <div class="visual-choice-text">
+                      <span class="visual-choice-name">Large</span>
+                      <span class="visual-choice-meta">Detailed · Rich preview</span>
+                    </div>
+                    @if (CardSize === 'large') {
+                      <i class="fa-solid fa-circle-check visual-choice-check"></i>
+                    }
+                  </button>
+                </div>
+              </div>
+
+              <div class="display-card-summary-banner">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <span>
+                  Card View automatically highlights the record title, status badge, and the top visible columns configured in the <strong>Columns</strong> tab.
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- CARD 3: TIMELINE MODE DEFAULTS (Full-Width Bottom Card when entity has date fields) -->
+          @if (AvailableDateFields.length > 0) {
+            <div class="display-mode-card full-span">
+              <div class="display-card-header">
+                <div class="display-card-icon">
+                  <i class="fa-solid fa-timeline"></i>
+                </div>
+                <div class="display-card-title-group">
+                  <h4>Timeline View Defaults</h4>
+                  <p>Configure the default date axis field, time-bucket grouping, and stream orientation when switching to Timeline mode.</p>
+                </div>
+              </div>
+
+              <div class="display-card-body timeline-controls-grid">
+                <!-- Control 1: Custom Styled Date Axis Field Selector -->
+                <div class="timeline-control-col">
+                  <span class="display-field-label">Date Axis Field</span>
+                  <span class="display-field-sublabel">Which timestamp field anchors records on the timeline</span>
+                  <div class="timeline-date-custom-select" [class.open]="IsTimelineDateDropdownOpen">
                     <button
                       type="button"
-                      class="align-btn"
-                      [class.active]="TimelineOrientation === 'vertical'"
-                      (click)="TimelineOrientation = 'vertical'">
-                      Vertical
+                      class="timeline-date-trigger"
+                      [class.open]="IsTimelineDateDropdownOpen"
+                      [disabled]="!CanEdit"
+                      [attr.aria-expanded]="IsTimelineDateDropdownOpen"
+                      (click)="ToggleTimelineDateDropdown($event)">
+                      <span class="timeline-date-trigger-left">
+                        <i class="fa-regular fa-calendar"></i>
+                        <span class="timeline-date-trigger-name">{{ SelectedTimelineDateFieldLabel }}</span>
+                        @if (IsAdvancedMode && SelectedTimelineDateFieldInfo?.Type) {
+                          <span class="sort-field-type-badge">{{ SelectedTimelineDateFieldInfo?.Type }}</span>
+                        }
+                      </span>
+                      <i class="fa-solid fa-chevron-down sort-field-chevron" [class.rotated]="IsTimelineDateDropdownOpen"></i>
+                    </button>
+
+                    @if (IsTimelineDateDropdownOpen) {
+                      <div class="timeline-date-dropdown-menu" role="listbox" (click)="$event.stopPropagation()">
+                        @for (df of AvailableDateFields; track df.ID) {
+                          <button
+                            type="button"
+                            class="sort-field-option"
+                            role="option"
+                            [class.selected]="TimelineDateField === df.Name"
+                            [attr.aria-selected]="TimelineDateField === df.Name"
+                            (click)="SelectTimelineDateField(df.Name, $event)">
+                            <div class="sort-field-option-header">
+                              <span class="sort-field-option-name">{{ df.DisplayNameOrName }}</span>
+                              @if (IsAdvancedMode && df.Type) {
+                                <span class="sort-field-type-badge">{{ df.Type }}</span>
+                              }
+                            </div>
+                            @if (df.Description) {
+                              <div class="sort-field-option-desc">{{ df.Description }}</div>
+                            }
+                          </button>
+                        }
+                      </div>
+                    }
+                  </div>
+                </div>
+
+                <!-- Control 2: Segment Grouping Pill Bar -->
+                <div class="timeline-control-col">
+                  <span class="display-field-label">Segment Grouping</span>
+                  <span class="display-field-sublabel">How records are bucketed along the timeline</span>
+                  <div class="timeline-grouping-pills" role="radiogroup" aria-label="Timeline Segment Grouping">
+                    <button
+                      type="button"
+                      class="timeline-group-pill"
+                      [class.active]="TimelineGrouping === 'none'"
+                      [disabled]="!CanEdit"
+                      (click)="SetTimelineGrouping('none')">
+                      None
                     </button>
                     <button
                       type="button"
-                      class="align-btn"
+                      class="timeline-group-pill"
+                      [class.active]="TimelineGrouping === 'day'"
+                      [disabled]="!CanEdit"
+                      (click)="SetTimelineGrouping('day')">
+                      Day
+                    </button>
+                    <button
+                      type="button"
+                      class="timeline-group-pill"
+                      [class.active]="TimelineGrouping === 'week'"
+                      [disabled]="!CanEdit"
+                      (click)="SetTimelineGrouping('week')">
+                      Week
+                    </button>
+                    <button
+                      type="button"
+                      class="timeline-group-pill"
+                      [class.active]="TimelineGrouping === 'month'"
+                      [disabled]="!CanEdit"
+                      (click)="SetTimelineGrouping('month')">
+                      Month
+                    </button>
+                    <button
+                      type="button"
+                      class="timeline-group-pill"
+                      [class.active]="TimelineGrouping === 'quarter'"
+                      [disabled]="!CanEdit"
+                      (click)="SetTimelineGrouping('quarter')">
+                      Quarter
+                    </button>
+                    <button
+                      type="button"
+                      class="timeline-group-pill"
+                      [class.active]="TimelineGrouping === 'year'"
+                      [disabled]="!CanEdit"
+                      (click)="SetTimelineGrouping('year')">
+                      Year
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Control 3: Timeline Orientation Cards -->
+                <div class="timeline-control-col">
+                  <span class="display-field-label">Layout Orientation</span>
+                  <span class="display-field-sublabel">Direction of the chronological stream</span>
+                  <div class="timeline-orientation-grid" role="radiogroup" aria-label="Timeline Orientation">
+                    <button
+                      type="button"
+                      class="timeline-orient-btn"
+                      [class.active]="TimelineOrientation === 'vertical'"
+                      [disabled]="!CanEdit"
+                      (click)="SetTimelineOrientation('vertical')">
+                      <i class="fa-solid fa-arrows-up-down"></i>
+                      <span>Vertical Feed</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="timeline-orient-btn"
                       [class.active]="TimelineOrientation === 'horizontal'"
-                      (click)="TimelineOrientation = 'horizontal'">
-                      Horizontal
+                      [disabled]="!CanEdit"
+                      (click)="SetTimelineOrientation('horizontal')">
+                      <i class="fa-solid fa-arrows-left-right"></i>
+                      <span>Horizontal Track</span>
                     </button>
                   </div>
                 </div>
               </div>
-            }
-          </div>
+            </div>
+          }
         </div>
       </div>
     }
@@ -1676,14 +1933,16 @@
     <mj-alert Variant="error" Size="sm" class="view-config-validation-pos">At least one column must be visible</mj-alert>
   }
 
-  <!-- Live Preview Summary Bar -->
-  <div class="live-preview-dock">
-    <span class="preview-dock-left">
-      <i class="fa-solid fa-bolt"></i>
-      <span>LIVE WORKBENCH — {{ VisibleColumns.length }} VISIBLE COLUMNS · {{ FilterChipLabel | uppercase }}</span>
-    </span>
-    <span class="preview-dock-right">UPDATES AUTOMATICALLY ON SAVE</span>
-  </div>
+  <!-- Live Preview Summary Bar (Advanced Mode only) -->
+  @if (IsAdvancedMode) {
+    <div class="live-preview-dock">
+      <span class="preview-dock-left">
+        <i class="fa-solid fa-bolt"></i>
+        <span>LIVE WORKBENCH — {{ VisibleColumns.length }} VISIBLE COLUMNS · {{ FilterChipLabel | uppercase }}</span>
+      </span>
+      <span class="preview-dock-right">UPDATES AUTOMATICALLY ON SAVE</span>
+    </div>
+  }
 
   <!-- ============================================================ -->
   <!-- PANEL FOOTER                                                 -->

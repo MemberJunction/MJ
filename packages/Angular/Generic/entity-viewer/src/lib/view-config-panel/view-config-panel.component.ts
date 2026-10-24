@@ -309,8 +309,9 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   // Column format editing state
   public FormatEditingColumn: ColumnConfig | null = null;
 
-  // Custom Alternate Base View dropdown state
+  // Custom Alternate Base View & Timeline Date Field dropdown state
   public IsBaseViewDropdownOpen: boolean = false;
+  public IsTimelineDateDropdownOpen: boolean = false;
 
   // Full-screen Studio state (always full-screen takeover)
   public IsResizing: boolean = false;
@@ -363,9 +364,13 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     } catch (error) {
       console.warn('[ViewConfigPanel] Failed to persist advanced mode setting:', error);
     }
+    this.FilterFields = this.buildFilterFields();
     if (!this.IsAdvancedMode && this.FilterMode === 'sql' && !this.CustomWhereClause) {
       // Return to whichever standard filter mode has active data, or Smart Filter
       this.FilterMode = this.GetFilterCount() > 0 ? 'traditional' : 'smart';
+    }
+    if (!this.IsAdvancedMode && this.ActiveTab === 'aggregates' && this.Aggregates.length === 0) {
+      this.ActiveTab = 'columns';
     }
     this.cdr.detectChanges();
   }
@@ -385,6 +390,9 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       this.OpenSortFieldDropdownIndex = null;
       this.SortFieldSearchText = '';
       this.cdr.detectChanges();
+    } else if (this.IsTimelineDateDropdownOpen) {
+      this.IsTimelineDateDropdownOpen = false;
+      this.cdr.detectChanges();
     } else if (this.IsBaseViewDropdownOpen) {
       this.IsBaseViewDropdownOpen = false;
       this.cdr.detectChanges();
@@ -396,13 +404,17 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   /**
-   * Close custom dropdowns (Base View or Sort Field) when clicking outside
+   * Close custom dropdowns (Base View, Timeline Date Field, or Sort Field) when clicking outside
    */
   @HostListener('document:click', ['$event'])
   HandleDocumentClick(event: MouseEvent): void {
     const target = event.target as HTMLElement | null;
     if (this.IsBaseViewDropdownOpen && !target?.closest('.abv-custom-select')) {
       this.IsBaseViewDropdownOpen = false;
+      this.cdr.detectChanges();
+    }
+    if (this.IsTimelineDateDropdownOpen && !target?.closest('.timeline-date-custom-select')) {
+      this.IsTimelineDateDropdownOpen = false;
       this.cdr.detectChanges();
     }
     if (this.OpenSortFieldDropdownIndex !== null && !target?.closest('.sort-field-custom-select')) {
@@ -512,6 +524,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       this.ColumnSearchText = '';
       this.FormatEditingColumn = null;
       this.IsBaseViewDropdownOpen = false;
+      this.IsTimelineDateDropdownOpen = false;
       this.OpenSortFieldDropdownIndex = null;
       this.SortFieldSearchText = '';
       this.ShowGeneratedSmartSql = false;
@@ -744,6 +757,9 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       this.IsAdvancedMode = true;
     }
 
+    // Rebuild filter fields now that FilterState and IsAdvancedMode are resolved
+    this.FilterFields = this.buildFilterFields();
+
     // Load aggregates from currentGridState if available
     if (this.CurrentGridState?.aggregates?.expressions) {
       this.Aggregates = [...this.CurrentGridState.aggregates.expressions];
@@ -764,19 +780,38 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   /**
-   * Build filter fields from entity fields (including __mj_ fields for filtering by timestamps)
+   * Collect field names referenced anywhere in a CompositeFilterDescriptor
+   */
+  private collectFilterFieldNames(filter: CompositeFilterDescriptor | null | undefined, acc: Set<string> = new Set()): Set<string> {
+    if (!filter?.filters) return acc;
+    for (const item of filter.filters) {
+      if (IsCompositeFilter(item)) {
+        this.collectFilterFieldNames(item, acc);
+      } else if (IsSimpleFilter(item) && item.field) {
+        acc.add(item.field.toLowerCase());
+      }
+    }
+    return acc;
+  }
+
+  /**
+   * Build filter fields from entity fields (hiding system __mj_ fields and raw sqlType badges
+   * in Standard Mode unless already referenced by an active rule or Advanced Mode is enabled)
    */
   private buildFilterFields(): FilterFieldInfo[] {
     if (!this.Entity) return [];
 
+    const activeFilterFields = this.collectFilterFieldNames(this.FilterState);
+
     return this.Entity.Fields
       .filter(f => !f.IsBinaryFieldType)
+      .filter(f => this.IsAdvancedMode || !f.Name.startsWith('__mj_') || activeFilterFields.has(f.Name.toLowerCase()))
       .map(field => ({
         name: field.Name,
         displayName: field.DisplayNameOrName,
         type: this.mapFieldType(field),
         description: field.Description || undefined,
-        sqlType: field.Type || undefined,
+        sqlType: this.IsAdvancedMode ? (field.Type || undefined) : undefined,
         lookupEntityName: field.RelatedEntity || undefined,
         valueList: field.ValueListType === 'List' && field.EntityFieldValues?.length > 0
           ? field.EntityFieldValues.map(v => ({ value: v.Value, label: v.Value }))
@@ -942,10 +977,10 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   /**
-   * Get hidden columns
+   * Get hidden columns (in Standard Mode, hides internal __mj_* system columns unless Advanced Mode is ON)
    */
   get HiddenColumns(): ColumnConfig[] {
-    return this.Columns.filter(c => !c.visible);
+    return this.Columns.filter(c => !c.visible && (this.IsAdvancedMode || !c.fieldName.startsWith('__mj_')));
   }
 
   /**
@@ -963,12 +998,14 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   /**
-   * Get sortable fields for dropdown (including __mj_ fields for sorting by timestamps)
+   * Get sortable fields for dropdown (hiding internal __mj_* fields in Standard Mode unless already sorted)
    */
   get SortableFields(): EntityFieldInfo[] {
     if (!this.Entity) return [];
+    const activeSortFields = new Set(this.SortItems.map(s => s.field.toLowerCase()));
     return this.Entity.Fields.filter(f =>
-      !f.IsBinaryFieldType // Exclude binary fields from sorting
+      !f.IsBinaryFieldType &&
+      (this.IsAdvancedMode || !f.Name.startsWith('__mj_') || activeSortFields.has(f.Name.toLowerCase()))
     );
   }
 
@@ -982,6 +1019,90 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       f.Type.toLowerCase().includes('date') ||
       f.Type.toLowerCase().includes('time')
     );
+  }
+
+  /**
+   * Currently selected EntityFieldInfo for the Timeline Date Axis Field
+   */
+  get SelectedTimelineDateFieldInfo(): EntityFieldInfo | undefined {
+    return this.AvailableDateFields.find(f => f.Name === this.TimelineDateField);
+  }
+
+  /**
+   * Friendly label for the currently selected Timeline Date Axis Field
+   */
+  get SelectedTimelineDateFieldLabel(): string {
+    const info = this.SelectedTimelineDateFieldInfo;
+    if (info) {
+      return info.DisplayNameOrName;
+    }
+    return this.TimelineDateField || 'Select a date field...';
+  }
+
+  /**
+   * Toggle the custom Timeline Date Axis Field dropdown
+   */
+  ToggleTimelineDateDropdown(event?: MouseEvent): void {
+    if (!this.CanEdit) return;
+    event?.stopPropagation();
+    this.IsTimelineDateDropdownOpen = !this.IsTimelineDateDropdownOpen;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Select a date field for Timeline View Defaults
+   */
+  SelectTimelineDateField(fieldName: string, event?: MouseEvent): void {
+    if (!this.CanEdit) return;
+    event?.stopPropagation();
+    this.TimelineDateField = fieldName;
+    this.IsTimelineDateDropdownOpen = false;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Set Grid Row Density preference
+   */
+  SetGridRowHeight(density: 'compact' | 'normal' | 'comfortable'): void {
+    if (!this.CanEdit) return;
+    this.GridRowHeight = density;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Toggle Grid cell text wrapping preference
+   */
+  ToggleGridWrapText(): void {
+    if (!this.CanEdit) return;
+    this.GridWrapText = !this.GridWrapText;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Set Card View size preference
+   */
+  SetCardSize(size: 'small' | 'medium' | 'large'): void {
+    if (!this.CanEdit) return;
+    this.CardSize = size;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Set Timeline segment grouping preference
+   */
+  SetTimelineGrouping(grouping: 'none' | 'day' | 'week' | 'month' | 'quarter' | 'year'): void {
+    if (!this.CanEdit) return;
+    this.TimelineGrouping = grouping;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Set Timeline layout orientation preference
+   */
+  SetTimelineOrientation(orientation: 'vertical' | 'horizontal'): void {
+    if (!this.CanEdit) return;
+    this.TimelineOrientation = orientation;
+    this.cdr.detectChanges();
   }
 
   /**
@@ -1957,6 +2078,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    */
   OnClose(): void {
     this.IsBaseViewDropdownOpen = false;
+    this.IsTimelineDateDropdownOpen = false;
     this.Close.emit();
   }
 
@@ -2147,6 +2269,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     this.ActiveTab = tab === 'settings' ? 'filters' : tab;
     this.FormatEditingColumn = null; // Close format editor when switching tabs
     this.IsBaseViewDropdownOpen = false;
+    this.IsTimelineDateDropdownOpen = false;
     this.OpenSortFieldDropdownIndex = null;
     this.SortFieldSearchText = '';
     this.cdr.detectChanges();

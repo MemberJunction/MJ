@@ -272,15 +272,16 @@ describe('ViewConfigPanelComponent — carrying a staged filter back from the na
     };
     open(panel);
 
-    // FilterFields include description and sqlType
+    // In Standard Mode (!IsAdvancedMode), FilterFields include friendly description without raw sqlType jargon
     expect(panel.FilterFields).toHaveLength(2);
     expect(panel.FilterFields[0].description).toBe('Primary legal name of the account');
-    expect(panel.FilterFields[0].sqlType).toBe('nvarchar');
+    expect(panel.FilterFields[0].sqlType).toBeUndefined();
 
-    // Toggle Advanced Mode ON and switch to SQL WHERE Clause mode
+    // Toggle Advanced Mode ON: reveals raw sqlType badge and SQL WHERE Clause mode
     expect(panel.IsAdvancedMode).toBe(false);
     panel.ToggleAdvancedMode();
     expect(panel.IsAdvancedMode).toBe(true);
+    expect(panel.FilterFields[0].sqlType).toBe('nvarchar');
 
     panel.SetFilterMode('sql');
     expect(panel.FilterMode).toBe('sql');
@@ -322,5 +323,28 @@ describe('ViewConfigPanelComponent — carrying a staged filter back from the na
     expect(panel.SortItems[0].field).toBe('Status');
     expect(panel.OpenSortFieldDropdownIndex).toBeNull();
     expect(panel.SortFieldSearchText).toBe('');
+  });
+
+  it('supports Display & Modes visual card preferences (Grid Row Density, Wrap Text, Card Size, Timeline Defaults)', () => {
+    const panel = makePanel();
+    open(panel);
+
+    expect(panel.GridRowHeight).toBe('normal');
+    panel.SetGridRowHeight('compact');
+    expect(panel.GridRowHeight).toBe('compact');
+
+    expect(panel.GridWrapText).toBe(false);
+    panel.ToggleGridWrapText();
+    expect(panel.GridWrapText).toBe(true);
+
+    expect(panel.CardSize).toBe('medium');
+    panel.SetCardSize('large');
+    expect(panel.CardSize).toBe('large');
+
+    panel.SetTimelineGrouping('week');
+    expect(panel.TimelineGrouping).toBe('week');
+
+    panel.SetTimelineOrientation('horizontal');
+    expect(panel.TimelineOrientation).toBe('horizontal');
   });
 });
