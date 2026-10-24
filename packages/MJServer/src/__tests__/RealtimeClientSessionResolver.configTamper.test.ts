@@ -122,7 +122,7 @@ function makeSession(config: Record<string, unknown>, overrides: Partial<FakeEnt
 }
 
 function makeDetail(): FakeEntity {
-    return { ID: 'c3c3c3c3-0000-4000-8000-0000000000d1', Save: vi.fn(async () => true), Load: vi.fn(async () => true), NewRecord: vi.fn() };
+    return { ID: 'c3c3c3c3-0000-4000-8000-0000000000d1', Save: vi.fn(async () => true), Load: vi.fn(async () => true), NewRecord: vi.fn(), MarkServerAuthoredReply: vi.fn() };
 }
 
 /** A provider serving the session plus view rows per entity name; `runView` records every view run. */

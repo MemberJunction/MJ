@@ -2888,6 +2888,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Calendar Event Links Section -->
+    <mj-collapsible-panel
+        SectionKey="mJCalendarEventLinks"
+        SectionName="Calendar Event Links"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJCalendarEventLinks')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Calendar Event Links','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Calendar Event Links','EntityID')"
+                [AllowLoad]="IsSectionExpanded('mJCalendarEventLinks')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJCalendarEventLinks', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Feature Values Section -->
     <mj-collapsible-panel
         SectionKey="mJFeatureValues"

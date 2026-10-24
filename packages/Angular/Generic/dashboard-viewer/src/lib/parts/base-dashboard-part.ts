@@ -12,6 +12,18 @@ import {
     OpenApplicationNavRequest,
     OpenNavItemNavRequest
 } from '../models/dashboard-types';
+import {
+    DashboardPartContext,
+    DashboardPartEventArgs,
+    DashboardPartInput,
+    DashboardPartInputMapping,
+    GetInputMappings,
+    PartInputProblemMessage,
+    PartInputResolution,
+    PartInputResolutionKey,
+    ResolvePartInputs,
+} from '../models/dashboard-properties';
+import { GetLocalTimeZone, PropertyResolutionContext } from '@memberjunction/core';
 
 /**
  * Event emitted when a part requests configuration
@@ -119,6 +131,41 @@ export abstract class BaseDashboardPart extends BaseAngularComponent implements 
     @Output() NavigationRequested = new EventEmitter<DashboardNavRequestEvent>();
 
     /**
+     * The dashboard's properties and their values as this part sees them, set by the viewer when the
+     * dashboard has properties or the part has input mappings. Null (the default): the part ignores
+     * its mappings and runs exactly as before. A new context reapplies the part's inputs only when
+     * the values it runs with change.
+     */
+    @Input()
+    set PropertyContext(value: DashboardPartContext | null) {
+        this._propertyContext = value;
+        this.OnPropertyContextChanged();
+    }
+    get PropertyContext(): DashboardPartContext | null {
+        return this._propertyContext;
+    }
+    private _propertyContext: DashboardPartContext | null = null;
+
+    /** The events of this part a dashboard wire listens to. After one fires, the part offers Clear selection. */
+    @Input() WiredEvents: string[] | null = null;
+
+    /**
+     * Emitted when the part raises one of the events it declares (a View part's `RecordSelected`, a
+     * Query part's `RowSelected`, a component's declared events). Values null: the selection was cleared.
+     */
+    @Output() PartEvent = new EventEmitter<DashboardPartEventArgs>();
+
+    /** The part's inputs as last worked out from its mappings. Null when it has no mappings: it runs as before. */
+    public InputResolution: PartInputResolution | null = null;
+
+    /** True after a wired event of this part fired with a value, until the selection is cleared. */
+    public HasActiveSelection = false;
+
+    private declaredInputs: DashboardPartInput[] | null = null;
+    private inputResolutionKey = '';
+    private lastWiredEvent: string | null = null;
+
+    /**
      * Whether the part is currently loading
      */
     public IsLoading = false;
@@ -221,6 +268,83 @@ export abstract class BaseDashboardPart extends BaseAngularComponent implements 
                 Panel: this.Panel,
                 Data: data
             });
+        }
+    }
+
+    // ========================================
+    // Dashboard properties, input mappings and events
+    // ========================================
+
+    /** This part's input mappings, from its config. Empty when it has none. */
+    protected get InputMappings(): DashboardPartInputMapping[] {
+        return GetInputMappings(this.Panel?.config);
+    }
+
+    /** Why the part can't run with its mappings (a broken mapping, a missing input), or null. */
+    public get InputProblem(): string | null {
+        return PartInputProblemMessage(this.InputResolution);
+    }
+
+    /**
+     * Records the inputs the part declares and works out their values from its mappings. Returns null,
+     * and the part runs exactly as before, when it has no mappings.
+     */
+    protected UpdateInputs(inputs: DashboardPartInput[]): PartInputResolution | null {
+        this.declaredInputs = inputs;
+        this.InputResolution = this.resolveInputs(inputs);
+        this.inputResolutionKey = PartInputResolutionKey(this.InputResolution);
+        return this.InputResolution;
+    }
+
+    /**
+     * Called when the viewer hands the part a new context. Reapplies the inputs only when the values the
+     * part runs with changed, so a property the part doesn't map, or a value its own event set, never
+     * refreshes it.
+     */
+    protected OnPropertyContextChanged(): void {
+        if (!this.declaredInputs) return; // not loaded yet: loading works the inputs out
+        const next = this.resolveInputs(this.declaredInputs);
+        const key = PartInputResolutionKey(next);
+        if (key === this.inputResolutionKey) return;
+        this.InputResolution = next;
+        this.inputResolutionKey = key;
+        this.ApplyInputs(next);
+    }
+
+    /** Applies new input values to the part's content. The default reloads it. */
+    protected ApplyInputs(_resolution: PartInputResolution | null): void {
+        void this.loadContent();
+    }
+
+    /** The context the part's token defaults are worked out with: the provider's user and the browser's zone. */
+    protected get ResolutionContext(): PropertyResolutionContext {
+        const user = this.ProviderToUse?.CurrentUser;
+        return { User: user ? { ID: user.ID, Email: user.Email, Name: user.Name } : undefined, TimeZone: GetLocalTimeZone() };
+    }
+
+    private resolveInputs(inputs: DashboardPartInput[]): PartInputResolution | null {
+        const mappings = this.InputMappings;
+        if (mappings.length === 0) return null;
+        const context = this._propertyContext ?? { Properties: [], Values: {} };
+        return ResolvePartInputs(inputs, mappings, context.Properties, context.Values, this.ResolutionContext);
+    }
+
+    /** Raises one of the part's events. Values null clears the selection it set. */
+    protected EmitPartEvent(event: string, values: Record<string, unknown> | null): void {
+        if (!this.Panel) return;
+        const wired = this.WiredEvents?.includes(event) ?? false;
+        if (wired) {
+            this.lastWiredEvent = values ? event : null;
+            this.HasActiveSelection = values !== null;
+        }
+        this.PartEvent.emit(new DashboardPartEventArgs(event, values));
+    }
+
+    /** Clears the selection a wired event of this part set, so the dashboard property goes back to its host value or default. */
+    public ClearSelection(): void {
+        if (this.lastWiredEvent) {
+            this.EmitPartEvent(this.lastWiredEvent, null);
+            this.cdr.detectChanges();
         }
     }
 

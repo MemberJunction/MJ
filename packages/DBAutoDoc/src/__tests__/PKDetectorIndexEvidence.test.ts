@@ -141,6 +141,18 @@ describe('PKDetector with index evidence', () => {
     expect(found[0]).toMatchObject({ columnNames: ['order_ref', 'line_ref'], confidence: UNIQUE_COMPOSITE_CONFIDENCE.NotNull, evidence: { backingIndex: 'uq_order_line' } });
   });
 
+  it('replaces a lower-confidence statistical composite with the index composite on the same columns', async () => {
+    // Robert's case on #5791: no H10 run (label at position 0 isn't key-named), so the legacy ID-column
+    // search finds (a_id, b_id) at 75; the unique index on the same pair is stronger (85) and replaces it.
+    const specs: ColSpec[] = [{ name: 'label', type: 'varchar(50)', rows: 200, distinct: 20, samples: ['x', 'y'] }, { name: 'a_id', rows: 200, distinct: 40 }, { name: 'b_id', rows: 200, distinct: 25 }];
+    const t = (indexes?: AutoDocIndex[]) => table('link', specs, indexes);
+    const without = await detect(t(), specs, { combinationUnique: true });
+    expect(without.find((c) => c.columnNames.length === 2)?.confidence).toBe(75);
+    const found = (await detect(t([index('uq_ab', ['a_id', 'b_id'])]), specs, { combinationUnique: true })).filter((c) => c.columnNames.length === 2);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({ columnNames: ['a_id', 'b_id'], confidence: UNIQUE_COMPOSITE_CONFIDENCE.NotNull, evidence: { backingIndex: 'uq_ab' } });
+  });
+
   it('keeps the higher-confidence candidate when a statistical composite and an index composite share columns', async () => {
     // H10 finds (order_id, product_id) at 95 from the data; the unique index on the same pair would add it at 85.
     const specs: ColSpec[] = [{ name: 'order_id', rows: 300, distinct: 60 }, { name: 'product_id', rows: 300, distinct: 40 }];

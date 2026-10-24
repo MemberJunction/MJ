@@ -16,6 +16,10 @@ import { MJDashboardPartTypeEntity } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { PanelConfig, DashboardPanel } from '../../models/dashboard-types';
 import { BaseConfigPanel, ConfigPanelResult } from '../../config-panels/base-config-panel';
+import type { PropertyDefault } from '@memberjunction/core';
+import { DashboardProperty, GetInputMappings, INPUT_MAPPINGS_KEY } from '../../models/dashboard-properties';
+import { LoadPartInterface } from '../../models/dashboard-part-interfaces';
+import { PartInputRow, PartInputsEditor } from '../../models/part-inputs-editor';
 
 /** Whether the part dialog adds a new part or edits an existing one. */
 export type DashboardPartDialogMode = 'add' | 'edit';
@@ -49,7 +53,15 @@ const PART_TYPE_TILE_COPY: Readonly<Record<string, PartTypeTileCopy | undefined>
     Query: { Label: 'Query', Description: 'A saved query, with its parameters' },
     Artifact: { Label: 'Artifact', Description: 'A report, chart or component from Chat' },
     WebURL: { Label: 'Web page', Description: 'An embedded page' },
+    Component: { Label: 'Component', Description: 'An interactive component, with its props' },
 };
+
+/** The config keys that say which source a part shows; its declared inputs change only when one of them does. */
+const SOURCE_KEYS = ['type', 'viewId', 'entityName', 'queryId', 'queryName', 'componentName', 'componentNamespace', 'componentVersion', 'url'];
+
+function sourceSignature(config: PanelConfig | null): string {
+    return JSON.stringify(SOURCE_KEYS.map(key => config?.[key] ?? null));
+}
 
 /**
  * The dialog that adds a part to a dashboard or edits one, on `mj-dialog`.
@@ -100,6 +112,9 @@ export class DashboardPartDialogComponent extends BaseAngularComponent implement
     /** The part to edit in edit mode. Its part type is the one in {@link PartTypes} with its `partTypeId`. */
     @Input() Panel: DashboardPanel | null = null;
 
+    /** The dashboard's properties, which the Inputs list maps onto the part's inputs. */
+    @Input() DashboardProperties: DashboardProperty[] = [];
+
     /** Emitted on Add part or Apply with the part type, config, title and icon of the part. */
     @Output() Saved = new EventEmitter<DashboardPartDialogResult>();
 
@@ -136,6 +151,18 @@ export class DashboardPartDialogComponent extends BaseAngularComponent implement
 
     /** The settings panel's validation errors from the last Add part or Apply. */
     public Errors: string[] = [];
+
+    /** The part's Inputs list, once its declared inputs are loaded. Null before then, or when they couldn't load. */
+    public InputsEditor: PartInputsEditor | null = null;
+
+    /** True while the part's declared inputs load. */
+    public IsLoadingInputs = false;
+
+    /** Why the part's declared inputs couldn't load; its mappings are then kept as they are. */
+    public InputsLoadError: string | null = null;
+
+    private inputsSignature: string | null = null;
+    private inputsLoadCount = 0;
 
     private configPanelRef: ComponentRef<BaseConfigPanel> | null = null;
     private configChangedSubscription: Subscription | null = null;
@@ -196,7 +223,7 @@ export class DashboardPartDialogComponent extends BaseAngularComponent implement
      * Add part waits until the settings panel reports a valid source.
      */
     get CanSubmit(): boolean {
-        if (!this.SelectedPartType || this.IsLoadingPanel) return false;
+        if (!this.SelectedPartType || this.IsLoadingPanel || this.IsLoadingInputs) return false;
         return this.Mode === 'edit' || this.configPanelRef == null || this.latestResult?.isValid === true;
     }
 
@@ -229,7 +256,34 @@ export class DashboardPartDialogComponent extends BaseAngularComponent implement
             this.setSourceName(panel.getDefaultTitle());
         }
         this.Errors = [];
+        this.refreshInputs(result.config);
         this.cdr.markForCheck();
+    }
+
+    /** True when the Inputs list has something to show. */
+    get HasInputs(): boolean {
+        return !!this.InputsEditor && (this.InputsEditor.Rows.length > 0 || this.InputsEditor.Orphans.length > 0);
+    }
+
+    /** The property names an input row offers: the compatible properties, plus its current one if that isn't. */
+    public PropertyChoices(row: PartInputRow): string[] {
+        const names = this.InputsEditor?.CompatibleProperties(row, this.DashboardProperties).map(p => p.Name) ?? [];
+        return row.Property && !names.includes(row.Property) ? [...names, row.Property] : names;
+    }
+
+    public SetInputProperty(row: PartInputRow, property: string): void {
+        row.Property = property || null;
+        this.Errors = [];
+    }
+
+    public SetInputDefault(row: PartInputRow, value: PropertyDefault | undefined): void {
+        row.Default = value;
+        this.Errors = [];
+    }
+
+    public RemoveOrphan(index: number): void {
+        this.InputsEditor?.RemoveOrphan(index);
+        this.Errors = [];
     }
 
     /**
@@ -267,6 +321,9 @@ export class DashboardPartDialogComponent extends BaseAngularComponent implement
             config['autoRefreshSeconds'] = this.AutoRefreshEnabled ? this.AutoRefreshSeconds : 0;
         }
 
+        if (this.refuseInputProblems()) return;
+        this.applyInputMappings(config);
+
         this.Saved.emit({
             PartType: partType,
             Config: config,
@@ -283,6 +340,7 @@ export class DashboardPartDialogComponent extends BaseAngularComponent implement
     ngOnDestroy(): void {
         this.destroyed = true;
         this.loadCount++;
+        this.inputsLoadCount++;
         this.destroyConfigPanel();
     }
 
@@ -295,9 +353,71 @@ export class DashboardPartDialogComponent extends BaseAngularComponent implement
         this.selectType(editing ? this.findEditedPartType() : this.TypeTiles[0] ?? null);
     }
 
+    /** Shows what is wrong with the Inputs list and returns true, or returns false when nothing is. */
+    private refuseInputProblems(): boolean {
+        const problems = this.InputsEditor?.Problems(this.Title.trim() || this.SourceName, this.DashboardProperties) ?? [];
+        if (problems.length === 0) return false;
+        this.Errors = problems;
+        this.cdr.markForCheck();
+        return true;
+    }
+
+    /**
+     * Writes the Inputs list into the config. No mappings: the key is removed, so a part without them
+     * saves exactly as before. When the part's inputs couldn't load, its mappings are kept as they were.
+     */
+    private applyInputMappings(config: PanelConfig): void {
+        const mappings = this.InputsEditor
+            ? this.InputsEditor.BuildMappings()
+            : GetInputMappings(this.Mode === 'edit' ? this.Panel?.config : null);
+        if (mappings.length > 0) {
+            config[INPUT_MAPPINGS_KEY] = mappings;
+        } else {
+            delete config[INPUT_MAPPINGS_KEY];
+        }
+    }
+
+    /**
+     * Loads the inputs the part declares for its source, when the source changed. The current
+     * mappings carry over; those to inputs the new source doesn't declare are listed as broken.
+     */
+    private refreshInputs(config: PanelConfig | null): void {
+        const signature = sourceSignature(config);
+        if (signature === this.inputsSignature) return;
+        this.inputsSignature = signature;
+        const loadId = ++this.inputsLoadCount;
+        const mappings = this.InputsEditor?.BuildMappings() ?? GetInputMappings(this.Mode === 'edit' ? this.Panel?.config : null);
+        this.IsLoadingInputs = true;
+        this.InputsLoadError = null;
+        LoadPartInterface(config, this.ProviderToUse)
+            .then(partInterface => {
+                if (loadId === this.inputsLoadCount) this.InputsEditor = new PartInputsEditor(partInterface, mappings);
+            })
+            .catch((error: unknown) => {
+                if (loadId !== this.inputsLoadCount) return;
+                this.InputsEditor = null;
+                this.InputsLoadError = `The part's inputs could not load (${error instanceof Error ? error.message : String(error)}). Its mappings are kept as they are.`;
+            })
+            .finally(() => {
+                if (loadId !== this.inputsLoadCount || this.destroyed) return;
+                this.IsLoadingInputs = false;
+                this.cdr.markForCheck();
+            });
+    }
+
+    /** Drops the Inputs list and any load of it. */
+    private resetInputs(): void {
+        this.inputsLoadCount++;
+        this.inputsSignature = null;
+        this.InputsEditor = null;
+        this.IsLoadingInputs = false;
+        this.InputsLoadError = null;
+    }
+
     /** Removes the settings panel and drops a load that is still running. */
     private close(): void {
         this.loadCount++;
+        this.resetInputs();
         this.destroyConfigPanel();
         this.SelectedPartType = null;
         this.IsLoadingPanel = false;
@@ -329,6 +449,7 @@ export class DashboardPartDialogComponent extends BaseAngularComponent implement
     /** Makes a part type the chosen one and starts to load its settings panel. */
     private selectType(partType: MJDashboardPartTypeEntity | null): void {
         const loadId = ++this.loadCount;
+        this.resetInputs();
         this.destroyConfigPanel();
         this.SelectedPartType = partType;
         this.SourceName = partType ? this.TileLabel(partType) : '';
@@ -341,6 +462,8 @@ export class DashboardPartDialogComponent extends BaseAngularComponent implement
         this.cdr.detectChanges();
         if (partType && className) {
             void this.loadConfigPanel(partType, className, loadId);
+        } else if (partType) {
+            this.refreshInputs(this.Mode === 'edit' && this.Panel ? this.Panel.config : { type: partType.Name });
         }
     }
 
@@ -373,6 +496,9 @@ export class DashboardPartDialogComponent extends BaseAngularComponent implement
             this.configChangedSubscription = panel.configChanged.subscribe(result => this.OnConfigChanged(result));
             this.SourceName = panel.getDefaultTitle();
             this.IsLoadingPanel = false;
+            if (this.Mode === 'edit' && this.Panel) {
+                this.refreshInputs(this.Panel.config);
+            }
             this.cdr.detectChanges();
         } catch (error) {
             if (loadId !== this.loadCount) return;

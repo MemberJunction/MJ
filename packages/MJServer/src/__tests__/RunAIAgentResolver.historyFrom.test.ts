@@ -28,12 +28,16 @@ vi.mock('type-graphql', () => {
 
 const hoisted = vi.hoisted(() => ({
     runAgentInConversation: vi.fn(),
+    reply: { ID: 'reply-1', ConversationID: 'conv-1', __mj_CreatedAt: new Date('2026-10-12T10:00:00.000Z') },
 }));
 
 vi.mock('@memberjunction/ai-agents', () => ({
     AgentRunner: class {
         RunAgentInConversation(...args: unknown[]) {
             return hoisted.runAgentInConversation(...args);
+        }
+        async CreateAgentReplyDetail() {
+            return hoisted.reply;
         }
     },
     ArtifactToolManager: class {},
@@ -94,7 +98,7 @@ async function runMutation(
     options: { agentHistoryFrom?: string; fireAndForget?: boolean }
 ) {
     return resolver.RunAIAgentFromConversationDetail(
-        'detail-1', 'agent-1', makeContext(), 'session-1', pubSub,
+        'user-msg-1', 'agent-1', makeContext(), 'session-1', pubSub,
         undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
         undefined, undefined, options.fireAndForget, undefined, undefined,
         options.agentHistoryFrom
@@ -108,8 +112,8 @@ afterEach(() => {
 describe('RunAIAgentFromConversationDetail — agentHistoryFrom', () => {
     let resolver: RunAIAgentResolver;
     let seams: ResolverSeams;
-    /** The floor's position in executeAIAgent / executeAgentInBackground: third from last, before TrustReservedRunData and the branch. */
-    const FLOOR_ARG = -3;
+    /** The floor's position in executeAIAgent / executeAgentInBackground: fourth from last, before TrustReservedRunData, the branch, and the reply detail. */
+    const FLOOR_ARG = -4;
 
     beforeEach(() => {
         ({ resolver, seams } = makeResolver());
@@ -124,7 +128,7 @@ describe('RunAIAgentFromConversationDetail — agentHistoryFrom', () => {
         expect(result.success).toBe(true);
         const loaderArgs = seams.loadConversationHistoryWithAttachments.mock.calls[0];
         expect(loaderArgs[0]).toBe('conv-1');
-        expect(loaderArgs[4]).toEqual(['detail-1']);
+        expect(loaderArgs[4]).toBeUndefined(); // the reply row is created after the history loads, so nothing to exclude
         expect((loaderArgs[5] as Date).toISOString()).toBe(FLOOR_ISO);
         const runFloor = seams.executeAIAgent.mock.calls[0].at(FLOOR_ARG) as Date;
         expect(runFloor.toISOString()).toBe(FLOOR_ISO);
