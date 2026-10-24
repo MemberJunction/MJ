@@ -89,7 +89,9 @@
     <div class="ps-card">
       <div class="ps-card-head">
         <h3>Feature Importance</h3>
-        <span class="ps-muted ps-small">{{ importanceCaption }}</span>
+        @if (!ImportanceHidden) {
+          <span class="ps-muted ps-small" data-testid="ps-importance-caption">{{ ImportanceCaption }}</span>
+        }
       </div>
       <div class="ps-card-body">
         @if (DisplayedImportance.length > 0) {
@@ -113,21 +115,31 @@
     </div>
 
     <!-- 5. Leakage Sign-Off Gate -->
-    @if (importance.length > 0) {
-      <div class="ps-callout gate" [class.success]="!leakageFlagged" [class.warn]="leakageFlagged">
-        <i [class]="leakageFlagged ? 'fa-solid fa-triangle-exclamation' : 'fa-solid fa-shield-halved'"></i>
+    @if (Importance.length > 0) {
+      <div class="ps-callout gate" data-testid="ps-leakage-gate" [class.success]="!LeakageFlagged" [class.warn]="LeakageFlagged">
+        <i [class]="LeakageFlagged ? 'fa-solid fa-triangle-exclamation' : 'fa-solid fa-shield-halved'"></i>
         <div>
-          @if (leakageFlagged) {
-            <strong>Leakage flag raised.</strong> A single feature dominates — top importance is
-            <strong>{{ topFeatureName }} at {{ topFeatureValue }}</strong>, at/above the
-            <strong>{{ dominanceThreshold }}</strong> dominance threshold.
+          @if (LeakageFlagged) {
+            @if (ImportanceHidden) {
+              <strong>Leakage flag raised.</strong> A single feature's split share is at or above the
+              <strong>{{ dominanceThreshold }}</strong> dominance threshold.
+            } @else {
+              <strong>Leakage flag raised.</strong> A single feature dominates — top importance is
+              <strong>{{ TopFeatureName }} at {{ TopFeatureValue }}</strong>, at/above the
+              <strong>{{ dominanceThreshold }}</strong> dominance threshold.
+            }
             <div class="ps-small" style="margin-top:6px">
               <i class="fa-solid fa-pen"></i> Sign-off with a reason is required to publish this model.
             </div>
           } @else {
-            <strong>Leakage gate clear.</strong> No single feature dominates — top importance is
-            <strong>{{ topFeatureName }} at {{ topFeatureValue }}</strong>, below the
-            <strong>{{ dominanceThreshold }}</strong> dominance threshold.
+            @if (ImportanceHidden) {
+              <strong>Leakage gate clear.</strong> No single feature's split share is at or above the
+              <strong>{{ dominanceThreshold }}</strong> dominance threshold.
+            } @else {
+              <strong>Leakage gate clear.</strong> No single feature dominates — top importance is
+              <strong>{{ TopFeatureName }} at {{ TopFeatureValue }}</strong>, below the
+              <strong>{{ dominanceThreshold }}</strong> dominance threshold.
+            }
             <div class="ps-small" style="margin-top:6px">
               <i class="fa-solid fa-check"></i> Sign-off required before any Validated &rarr; Published promotion.
             </div>

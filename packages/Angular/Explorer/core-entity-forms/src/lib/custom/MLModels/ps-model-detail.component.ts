@@ -352,6 +352,7 @@ export class PSModelDetailComponent {
   /** The note shown in place of hidden importance. */
   public readonly ImportanceHiddenNote = ImportanceDisplay.HiddenNote;
 
+  /** The Feature Importance card's caption. The template hides it when {@link ImportanceHidden}, along with the bars. */
   public get ImportanceCaption(): string {
     const n = this.Importance.length;
     return n === 0 ? 'no data' : `normalized · top ${n}`;

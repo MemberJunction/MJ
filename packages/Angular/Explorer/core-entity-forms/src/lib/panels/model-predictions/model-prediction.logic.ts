@@ -194,6 +194,14 @@ export class PredictionDrivers {
     public static DriversForModel(lineageJSON: string | null | undefined, featureImportanceJson: string | null): PredictionDriver[] {
         return ImportanceDisplay.GlobalDriversShowable(lineageJSON) ? ParseDrivers(featureImportanceJson) : [];
     }
+
+    /**
+     * True when the model has stored importances that {@link DriversForModel} withholds because of their kind, so the card
+     * shows {@link ImportanceDisplay.HiddenNote} in their place (the same note the model detail page shows).
+     */
+    public static DriversHidden(lineageJSON: string | null | undefined, featureImportanceJson: string | null): boolean {
+        return !ImportanceDisplay.GlobalDriversShowable(lineageJSON) && ParseDrivers(featureImportanceJson).length > 0;
+    }
 }
 
 /** Format a last-scored timestamp to a short date, or null when absent/invalid. */

@@ -20,12 +20,18 @@ describe('PSRowDriversComponent (DOM)', () => {
     const fixture = render({ Drivers: drivers });
     expect(text(fixture, '[data-testid="ps-row-driver-badge"]')).toBe('Lowers Risk');
     expect(query(fixture, '.ps-badge.green')).not.toBeNull();
+    const arrow = query(fixture, '[data-testid="ps-row-driver-label"] i');
+    expect(arrow?.classList.contains('fa-arrow-down')).toBe(true);
+    expect(arrow?.classList.contains('fa-arrow-up')).toBe(false);
   });
 
   it('renders "Increases Risk" for a contribution that raises the adverse score', () => {
     const drivers = AtRiskRules.ParseRowDrivers([{ feature: 'DaysLate', value: 0.7 }], false) || [];
     const fixture = render({ Drivers: drivers });
     expect(text(fixture, '[data-testid="ps-row-driver-badge"]')).toBe('Increases Risk');
+    const arrow = query(fixture, '[data-testid="ps-row-driver-label"] i');
+    expect(arrow?.classList.contains('fa-arrow-up')).toBe(true);
+    expect(arrow?.classList.contains('fa-arrow-down')).toBe(false);
   });
 
   it('shows the empty message when no per-row breakdown exists', () => {

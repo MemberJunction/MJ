@@ -2,8 +2,8 @@ import { ChangeDetectorRef, Component, Input, OnInit, ViewEncapsulation, inject 
 import { CommonModule } from '@angular/common';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { UUIDsEqual } from '@memberjunction/global';
-import { Metadata, RunView, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { LogError, Metadata, RunView, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
   MJArtifactEntity,
   MJArtifactVersionEntity,
@@ -81,10 +81,12 @@ interface BudgetGaugeVM {
             <i class="fa-solid fa-flask-vial"></i> {{ artifactLoading ? 'Loading…' : 'View Results Artifact' }}
           </button>
         </div>
-        <div class="ps-callout warn" data-testid="ps-experiments-unavailable">
-          <i class="fa-solid fa-circle-info"></i>
-          @if (!SessionsEnabled) { <div data-testid="ps-experiments-unavailable-reason">{{ SessionsDisabledReason }}</div> }
-        </div>
+        @if (!SessionsEnabled) {
+          <div class="ps-callout warn" data-testid="ps-experiments-unavailable">
+            <i class="fa-solid fa-circle-info"></i>
+            <div data-testid="ps-experiments-unavailable-reason">{{ SessionsDisabledReason }}</div>
+          </div>
+        }
 
         <!-- Leaderboard strip -->
         <div class="ps-card" data-testid="ps-experiments-leaderboard">
@@ -208,7 +210,7 @@ export class PSExperimentsComponent implements OnInit {
   public readonly SessionsEnabled = ExperimentSessions.Enabled;
   public readonly SessionsDisabledReason = ExperimentSessions.DisabledReason;
   @Input() engine!: PredictiveStudioEngine;
-  /** Provider to route the control Remote Op + engine refresh through (multi-provider correctness). */
+  /** Provider the panel reads and writes through (multi-provider correctness); the global provider when unset. */
   @Input() provider: IMetadataProvider | null = null;
   /** Acting user for the engine refresh after a mutation. */
   @Input() CurrentUser: UserInfo | null = null;
@@ -326,11 +328,14 @@ export class PSExperimentsComponent implements OnInit {
     this.ArtifactLoading = true;
     try {
       const p = this.provider ?? Metadata.Provider;
-      const rv = new RunView();
-      const res = await rv.RunView<MJArtifactEntity>({
+      // The artifact this button generated earlier carries this exact comment; matched exactly, not by substring.
+      const sessionComment = `Auto-generated for Experiment Session ${s.ID}`;
+      const res = await RunView.FromMetadataProvider(p).RunView<Pick<MJArtifactEntity, 'ID'>>({
         EntityName: 'MJ: Artifacts',
-        ExtraFilter: `Name LIKE '${s.Name}%' OR Comments LIKE '%${s.ID}%'`,
-        ResultType: 'entity_object',
+        ExtraFilter: `Comments = '${EscapeSQLString(sessionComment)}'`,
+        Fields: ['ID'],
+        MaxRows: 1,
+        ResultType: 'simple',
       }, this.currentUser ?? undefined);
 
       if (res.Success && res.Results && res.Results.length > 0) {
@@ -343,7 +348,7 @@ export class PSExperimentsComponent implements OnInit {
       art.Name = `${s.Name} — Results`;
       art.Description = `Modeling results, leaderboard, and winning model metrics for ${s.Name}.`;
       art.TypeID = 'D41AB707-58F1-4413-8725-9DF31C95F4C5';
-      art.Comments = `Auto-generated for Experiment Session ${s.ID}`;
+      art.Comments = sessionComment;
       const saved = await art.Save();
       if (!saved) {
         this.notifications.CreateSimpleNotification('Could not generate artifact record.', 'error', 5000);
@@ -383,7 +388,16 @@ export class PSExperimentsComponent implements OnInit {
       };
 
       ver.Content = JSON.stringify(payload);
-      await ver.Save();
+      if (!(await ver.Save())) {
+        const message = ver.LatestResult?.CompleteMessage ?? 'unknown error';
+        LogError(`PSExperimentsComponent.ViewResultsArtifact: artifact version save failed: ${message}`);
+        // Remove the empty artifact, so the next click generates it again instead of finding an artifact with no content.
+        if (!(await art.Delete())) {
+          LogError(`PSExperimentsComponent.ViewResultsArtifact: could not remove the empty artifact ${art.ID}: ${art.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+        this.notifications.CreateSimpleNotification(`Could not save the results artifact: ${message}`, 'error', 5000);
+        return;
+      }
 
       this.ActiveArtifactId = art.ID;
       this.ShowArtifactModal = true;

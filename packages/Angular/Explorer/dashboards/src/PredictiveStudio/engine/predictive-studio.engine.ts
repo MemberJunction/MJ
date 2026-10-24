@@ -328,16 +328,19 @@ export class PredictiveStudioEngine extends BaseEngine<PredictiveStudioEngine> {
 
   /** The most run details one read returns; a larger run is read up to this many and reported {@link PSRunDetails.Capped}. */
   public static readonly MaxRunDetailRows = 50_000;
+  /** {@link MaxRunDetailRows} formatted for the notices that tell a user a run was capped ("50,000"). */
+  public static readonly MaxRunDetailRowsLabel = PredictiveStudioEngine.MaxRunDetailRows.toLocaleString('en-US');
   private static readonly runDetailPageSize = 1000;
 
   /**
    * Reads a run's process run details one keyset page at a time (read-only, only the columns the surfaces use), up to
-   * {@link PredictiveStudioEngine.MaxRunDetailRows}. Returns null when a page fails to load.
+   * {@link PredictiveStudioEngine.MaxRunDetailRows}. Throws, with the provider's error message, when a page fails to load,
+   * so the caller shows the failure instead of an empty run.
    */
-  public async LoadRunDetails(runId: string, provider: IMetadataProvider, user: UserInfo | undefined): Promise<PSRunDetails | null> {
+  public async LoadRunDetails(runId: string, provider: IMetadataProvider, user: UserInfo | undefined): Promise<PSRunDetails> {
     const entityInfo = provider.EntityByName('MJ: Process Run Details');
     if (!entityInfo) {
-      return null;
+      throw new Error("The 'MJ: Process Run Details' entity is not in this provider's metadata.");
     }
     const rv = RunView.FromMetadataProvider(provider);
     const rows: PSRunDetailRow[] = [];
@@ -355,14 +358,26 @@ export class PredictiveStudioEngine extends BaseEngine<PredictiveStudioEngine> {
         user,
       );
       if (!page.Success || !page.Results) {
-        return null;
+        throw new Error(`Could not read the predictions of run ${runId}: ${page.ErrorMessage || 'the request failed'}`);
       }
       rows.push(...page.Results);
       if (page.Results.length < PredictiveStudioEngine.runDetailPageSize) {
         return { Rows: rows, Capped: false };
       }
       if (rows.length >= PredictiveStudioEngine.MaxRunDetailRows) {
-        return { Rows: rows, Capped: true };
+        // Capped only when the run really has more: a run of exactly the cap is complete.
+        const probe = await rv.RunView<Pick<PSRunDetailRow, 'ID'>>(
+          {
+            EntityName: 'MJ: Process Run Details',
+            ExtraFilter: `ProcessRunID = '${EscapeSQLString(runId)}'`,
+            Fields: ['ID'],
+            MaxRows: 1,
+            AfterKey: CompositeKey.FromEntityRecord(entityInfo, page.Results[page.Results.length - 1]),
+            ResultType: 'simple',
+          },
+          user,
+        );
+        return { Rows: rows, Capped: probe.Success && probe.Results.length > 0 };
       }
       lastKey = CompositeKey.FromEntityRecord(entityInfo, page.Results[page.Results.length - 1]);
     }

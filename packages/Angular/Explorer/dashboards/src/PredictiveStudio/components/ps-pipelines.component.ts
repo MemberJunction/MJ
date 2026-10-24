@@ -745,8 +745,10 @@ const PS_PIPELINES_STARTER_PROMPT =
                     <div class="ps-card-head"><i class="fa-solid fa-clock-rotate-left" style="color:var(--mj-brand-primary)"></i><h3>As-of strategy</h3></div>
                     <div class="ps-card-body">
                       <div class="ps-field"><label>Mode</label><span data-testid="ps-pipelines-asof-mode">{{ editAsOf.Mode }}</span></div>
-                      @if (editAsOf.Mode !== 'none') { <button mjButton variant="secondary" size="sm" data-testid="ps-pipelines-asof-reset" [disabled]="busy" (click)="resetAsOfToNone()">Reset to none</button> }
-                      @if (editAsOf.Mode !== 'none') { <p class="ps-muted">Training refuses this setting: it reads every feature as it stands today, so a cutoff has no effect. Set Mode to none to train this pipeline.</p> }
+                      @if (EditAsOf.Mode !== 'none') {
+                        <button mjButton variant="secondary" size="sm" data-testid="ps-pipelines-asof-reset" [disabled]="Busy" (click)="ResetAsOfToNone()">Reset to none</button>
+                        <p class="ps-muted">Training refuses this setting: it reads every feature as it stands today, so a cutoff has no effect. Reset to none, then save, to train this pipeline.</p>
+                      }
                     </div>
                   </div>
 
@@ -2183,16 +2185,13 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
   public setThreshold(v: string): void {
     return this.SetThreshold(v);
   }
-  /** Resets a stored as-of cutoff to `none` (training refuses any other mode) and saves through the pipeline save path. */
-  public async ResetAsOfToNone(): Promise<void> {
+  /**
+   * Resets a stored as-of cutoff to `none` (training refuses any other mode) as an unsaved edit. It does not save: the
+   * user saves with the pipeline's other edits, so a reset never commits half-finished changes.
+   */
+  public ResetAsOfToNone(): void {
     this.EditAsOf = { Mode: 'none' };
-    this.Dirty = true;
-    await this.save();
-  }
-
-  /** @deprecated Use {@link ResetAsOfToNone}. */
-  public resetAsOfToNone(): Promise<void> {
-    return this.ResetAsOfToNone();
+    this.markDirty();
   }
   public SetValStrategy(v: string): void { this.EditValidation = { ...this.EditValidation, Strategy: v as ValidationStrategy['Strategy'] }; this.Dirty = true; }
 

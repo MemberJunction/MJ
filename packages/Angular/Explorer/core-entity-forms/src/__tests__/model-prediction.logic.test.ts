@@ -153,6 +153,15 @@ describe('model-prediction.logic', () => {
             expect(PredictionDrivers.DriversForModel(JSON.stringify({ evaluation: { ImportanceKind: 'coefficient' } }), json).length).toBeGreaterThan(0);
             expect(PredictionDrivers.DriversForModel(JSON.stringify({ evaluation: { ImportanceKind: 'split_or_impurity' } }), json)).toEqual([]);
         });
+
+        it('reports hidden drivers only when a non-coefficient model has importances', () => {
+            const tree = JSON.stringify({ evaluation: { ImportanceKind: 'split_or_impurity' } });
+            const linear = JSON.stringify({ evaluation: { ImportanceKind: 'coefficient' } });
+            expect(PredictionDrivers.DriversHidden(tree, json)).toBe(true);
+            expect(PredictionDrivers.DriversHidden(null, json)).toBe(true);
+            expect(PredictionDrivers.DriversHidden(linear, json)).toBe(false);
+            expect(PredictionDrivers.DriversHidden(tree, null)).toBe(false);
+        });
     });
 
     describe('formatLastScored', () => {

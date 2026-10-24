@@ -2,7 +2,7 @@
  * Pure view-model functions and types for ML Model detail and metrics rendering.
  * Framework-free, deterministic calculations over plain model entity data.
  */
-import { AtRiskRules, ImportanceDisplay } from '@memberjunction/predictive-studio-core';
+import { ImportanceDisplay } from '@memberjunction/predictive-studio-core';
 
 export interface PSFeatureBar {
   name: string;
@@ -83,7 +83,7 @@ export const PS_FEATURE_DOMINANCE_THRESHOLD = 0.6;
 /**
  * The ML Model form's label for a feature column: drops a leading `Is` before a capital, splits camelCase, turns `_`
  * into spaces and title-cases every word (`IsActive` → `Active`, `membership_type` → `Membership Type`). A published
- * export whose output is fixed; the dashboards' at-risk drivers use {@link AtRiskRules.HumanizeFeatureName}, which
+ * export whose output is fixed; the dashboards' at-risk drivers use `AtRiskRules.HumanizeFeatureName` (predictive-studio-core), which
  * keeps an `Is` prefix and sentence-cases snake_case names.
  */
 export function HumanizeFeatureName(name: string): string {

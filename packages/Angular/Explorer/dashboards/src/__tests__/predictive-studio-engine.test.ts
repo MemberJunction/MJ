@@ -74,7 +74,7 @@ describe('computeBestLevels', () => {
 /** Serves `total` run-detail rows one keyset page at a time; records every page request. */
 class PagedDetailProvider {
   public readonly Requests: RunViewParams[] = [];
-  constructor(private readonly total: number) {}
+  constructor(private readonly total: number, private readonly failWith: string | null = null) {}
 
   public EntityByName(_name: string): EntityInfo {
     // Test double: the keyset cursor reads only the primary-key list.
@@ -83,6 +83,9 @@ class PagedDetailProvider {
 
   public async RunView<T>(params: RunViewParams): Promise<RunViewResult<T>> {
     this.Requests.push(params);
+    if (this.failWith) {
+      return { Success: false, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: this.failWith, UserViewRunID: '' };
+    }
     const after = params.AfterKey ? Number(params.AfterKey.KeyValuePairs[0].Value) : 0;
     const count = Math.max(0, Math.min(params.MaxRows ?? this.total, this.total - after));
     const rows: PSRunDetailRow[] = Array.from({ length: count }, (_, i) => {
@@ -101,15 +104,29 @@ describe('PredictiveStudioEngine.LoadRunDetails', () => {
   it('reads every row of a run larger than one page, not a fixed cap', async () => {
     const provider = new PagedDetailProvider(2500);
     const read = await load(provider);
-    expect(read?.Rows).toHaveLength(2500);
-    expect(read?.Capped).toBe(false);
+    expect(read.Rows).toHaveLength(2500);
+    expect(read.Capped).toBe(false);
     expect(provider.Requests).toHaveLength(3);
   });
 
   it('stops at MaxRunDetailRows and reports the read as capped', async () => {
     const provider = new PagedDetailProvider(PredictiveStudioEngine.MaxRunDetailRows + 10);
     const read = await load(provider);
-    expect(read?.Rows).toHaveLength(PredictiveStudioEngine.MaxRunDetailRows);
-    expect(read?.Capped).toBe(true);
+    expect(read.Rows).toHaveLength(PredictiveStudioEngine.MaxRunDetailRows);
+    expect(read.Capped).toBe(true);
+  });
+
+  it('a run of exactly MaxRunDetailRows is complete, not capped', async () => {
+    const read = await load(new PagedDetailProvider(PredictiveStudioEngine.MaxRunDetailRows));
+    expect(read.Rows).toHaveLength(PredictiveStudioEngine.MaxRunDetailRows);
+    expect(read.Capped).toBe(false);
+  });
+
+  it("throws with the provider's error message when a page fails", async () => {
+    await expect(load(new PagedDetailProvider(10, 'Timeout expired'))).rejects.toThrow('Timeout expired');
+  });
+
+  it('formats the cap once for every notice', () => {
+    expect(PredictiveStudioEngine.MaxRunDetailRowsLabel).toBe('50,000');
   });
 });
