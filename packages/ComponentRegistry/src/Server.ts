@@ -349,9 +349,16 @@ export class ComponentRegistryAPIServer {
    * ```
    */
   protected async checkAPIKey(req: Request): Promise<boolean> {
-    // Default implementation: no authentication required
-    // Override this method in a subclass to implement custom authentication
-    return true;
+    // Fail closed: this base implementation validates nothing, so when requireAuth is on and no
+    // subclass has overridden this method, every request must be REFUSED rather than silently
+    // admitted. Returning true here would make `requireAuth: true` cosmetic — the registry would
+    // look protected while accepting any caller.
+    LogError(
+      'ComponentRegistryAPIServer.checkAPIKey: requireAuth is enabled but no checkAPIKey override is ' +
+      'registered — refusing the request. Subclass ComponentRegistryAPIServer and implement checkAPIKey ' +
+      'to validate your API keys.'
+    );
+    return false;
   }
   
   /**

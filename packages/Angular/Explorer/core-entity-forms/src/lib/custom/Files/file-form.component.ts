@@ -106,6 +106,23 @@ export class MJFileFormComponentExtended extends MJFileFormComponent implements 
   }
 
   /**
+   * Trusts a server-returned media/download URL for element binding, but only after verifying it
+   * resolves to http(s) (absolute, or relative to this origin). `bypassSecurityTrustResourceUrl`
+   * disables Angular's sanitizer, so a poisoned URL on a File record must never reach it.
+   */
+  private trustEmbeddableUrl(url: string): SafeResourceUrl | null {
+    try {
+      const parsed = new URL(url, window.location.origin);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        return this.sanitizer.bypassSecurityTrustResourceUrl(url);
+      }
+    } catch {
+      // fall through — refuse anything that does not parse
+    }
+    return null;
+  }
+
+  /**
    * Loads the media streaming URL for inline viewing.
    */
   public async LoadMediaPreview(): Promise<void> {
@@ -127,7 +144,7 @@ export class MJFileFormComponentExtended extends MJFileFormComponent implements 
       const parsedMedia = CreateMediaAccessTokenMutationSchema.safeParse(mediaResult);
       if (parsedMedia.success && parsedMedia.data.CreateMediaAccessToken.Success && parsedMedia.data.CreateMediaAccessToken.Url) {
         this.MediaUrl = parsedMedia.data.CreateMediaAccessToken.Url;
-        this.SafeMediaUrl = this.sanitizer.bypassSecurityTrustResourceUrl(this.MediaUrl);
+        this.SafeMediaUrl = this.trustEmbeddableUrl(this.MediaUrl);
       } else {
         // 2. Fallback to DownloadUrl
         const downloadResult = await GraphQLDataProvider.ExecuteGQL(
@@ -137,7 +154,7 @@ export class MJFileFormComponentExtended extends MJFileFormComponent implements 
         const parsedDownload = DownloadUrlMutationSchema.safeParse(downloadResult);
         if (parsedDownload.success && parsedDownload.data.DownloadUrl.Success && parsedDownload.data.DownloadUrl.Url) {
           this.MediaUrl = parsedDownload.data.DownloadUrl.Url;
-          this.SafeMediaUrl = this.sanitizer.bypassSecurityTrustResourceUrl(this.MediaUrl);
+          this.SafeMediaUrl = this.trustEmbeddableUrl(this.MediaUrl);
         }
       }
 

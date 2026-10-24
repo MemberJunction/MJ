@@ -191,6 +191,11 @@ export class RealtimeMediaChannel extends BaseRealtimeChannelClient<RealtimeMedi
     if (!url && !fileId) {
       return this.fail('Media_ShowMedia requires a source — provide a "url" (external/public) OR a "fileId" (an MJ: Files id).');
     }
+    // SECURITY: the url arg is model-supplied and is later rendered in an img/iframe/player, so
+    // only absolute http(s) URLs are accepted — never javascript:, data:, blob: or scheme-relative.
+    if (url && !/^https?:\/\//i.test(url)) {
+      return this.fail('Media_ShowMedia "url" must be an absolute http:// or https:// URL.');
+    }
     if (!displayName) {
       return this.fail('Media_ShowMedia requires a "displayName".');
     }

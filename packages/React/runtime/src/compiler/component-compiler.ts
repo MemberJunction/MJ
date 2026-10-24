@@ -673,8 +673,12 @@ export class ComponentCompiler {
    */
   private loadScript(url: string, globalName: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      // Check if script already exists
-      const existingScript = document.querySelector(`script[src="${url}"]`);
+      // Check if script already exists. Compare src attributes directly instead of interpolating
+      // the URL into a CSS selector, where quotes/brackets in a URL would break (or redirect) the
+      // selector match.
+      const existingScript = Array.from(document.getElementsByTagName('script')).find(
+        (s) => s.getAttribute('src') === url
+      );
       if (existingScript) {
         // Wait for it to finish loading with exponential backoff
         let attempts = 0;

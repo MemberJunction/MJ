@@ -1,6 +1,6 @@
 import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, CompositeKey, ConsoleColor, EntityFieldTSType, EntityInfo, IMetadataProvider, LogError, LogStatus, Metadata, RunQuery, RunView, UpdateCurrentConsoleLine, UpdateCurrentConsoleProgress, UserInfo } from "@memberjunction/core";
 import { MJRecordChangeReplayRunEntity } from "@memberjunction/core-entities";
-import { UUIDsEqual } from "@memberjunction/global";
+import { EscapeSQLString, UUIDsEqual } from "@memberjunction/global";
 import { EncryptionEngine } from "@memberjunction/encryption";
 import { SQLServerDataProvider, SQLServerProviderConfigData } from "@memberjunction/sqlserver-dataprovider";
 import { PostgreSQLDialect, SQLDialect, SQLServerDialect } from "@memberjunction/sql-dialect";
@@ -513,7 +513,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
             const rv = new RunView();
             const result = await rv.RunView({
                 EntityName: "MJ: Record Changes",
-                ExtraFilter: `EntityID = '${change.Entity.ID}' AND RecordID = '${change.PrimaryKey.ToConcatenatedString()}' AND Type IN ('Update', 'Create')`,
+                ExtraFilter: `EntityID = '${change.Entity.ID}' AND RecordID = '${EscapeSQLString(change.PrimaryKey.ToConcatenatedString())}' AND Type IN ('Update', 'Create')`,
                 OrderBy: "ChangedAt DESC"
             }, this.ContextUser);
 

@@ -818,11 +818,16 @@ export class SyncEngine {
           const escaped = fieldValue.replace(/'/g, "''");
           filterParts.push(`${dialect.LowerCase(fieldName)} = ${dialect.LowerCase(`'${escaped}'`)}`);
         } else {
+          // An unquoted value is spliced into the SQL verbatim, so it must be a pure
+          // numeric/boolean token — anything else (e.g. `1 OR 1=1`) would rewrite the lookup.
+          if (!quotes && !/^-?\d+(\.\d+)?$/.test(fieldValue.trim()) && !/^(true|false)$/i.test(fieldValue.trim())) {
+            throw new Error(`Lookup value '${fieldValue}' for non-string field '${fieldName}' on entity '${entityName}' must be a numeric or boolean literal`);
+          }
           filterParts.push(`${fieldName} = ${quotes}${fieldValue.replace(/'/g, "''")}${quotes}`);
         }
       }
     }
-    
+
     const extraFilter = filterParts.join(' AND ');
     const result = await rv.RunView({
       EntityName: entityName,
@@ -1507,7 +1512,12 @@ export class SyncEngine {
       // Check if field needs quotes
       const field = entityInfo.Fields.find(f => f.Name === pk.Name);
       const quotes = field?.NeedsQuotes ? "'" : '';
-      const escapedValue = field?.NeedsQuotes && typeof value === 'string' ? value.replace(/'/g, "''") : value;
+      // An unquoted value is spliced into the SQL verbatim, so it must be a pure numeric/boolean
+      // token — anything else would splice SQL into the primary-key filter.
+      if (!quotes && typeof value === 'string' && !/^-?\d+(\.\d+)?$/.test(value.trim()) && !/^(true|false)$/i.test(value.trim())) {
+        throw new Error(`Primary key value '${value}' for non-string field '${pk.Name}' on entity '${entityName}' must be a numeric or boolean literal`);
+      }
+      const escapedValue = typeof value === 'string' ? value.replace(/'/g, "''") : value;
       filters.push(`${pk.Name} = ${quotes}${escapedValue}${quotes}`);
     }
     
