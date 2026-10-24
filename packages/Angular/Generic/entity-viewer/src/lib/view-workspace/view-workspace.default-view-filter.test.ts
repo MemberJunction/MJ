@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { ChangeDetectorRef } from '@angular/core';
 import type { EntityFieldInfo, EntityInfo, IMetadataProvider } from '@memberjunction/core';
-import { UserInfoEngine } from '@memberjunction/core-entities';
+import { UserInfoEngine, type MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { CompositeFilterDescriptor } from '@memberjunction/ng-filter-builder';
 import { ViewWorkspaceComponent } from './view-workspace.component';
 import { ColumnConfig, SortItem, ViewSaveEvent } from '../view-config-panel/view-config-panel.component';
@@ -36,6 +36,8 @@ interface FakeViewEntity {
   SmartFilterPrompt: string;
   FilterState: string;
   GridState: string | null;
+  AlternateBaseView?: string | null;
+  DisplayStateObject?: MJUserViewEntityExtended['DisplayStateObject'];
   Save: ReturnType<typeof vi.fn>;
   LatestResult: unknown;
 }
