@@ -1635,9 +1635,17 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     const queryIndex = cleanUrl.indexOf('?');
     if (queryIndex === -1) return {};
     const params = new URLSearchParams(cleanUrl.substring(queryIndex + 1));
-    const result: Record<string, string> = {};
-    params.forEach((value, key) => { result[key] = value; });
-    return result;
+    return this.urlSearchParamsToRecord(params);
+  }
+
+  private urlSearchParamsToRecord(params: URLSearchParams): Record<string, string> {
+    const safeEntries: Array<[string, string]> = [];
+    params.forEach((value, key) => {
+      if (key !== '__proto__' && key !== 'constructor' && key !== 'prototype') {
+        safeEntries.push([key, value]);
+      }
+    });
+    return Object.fromEntries(safeEntries);
   }
 
   /**
@@ -1747,8 +1755,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
           if (navItem) {
             // Parse query params to pass as configuration
-            const qpObj: Record<string, string> = {};
-            queryParams.forEach((value, key) => { qpObj[key] = value; });
+            const qpObj = this.urlSearchParamsToRecord(queryParams);
             this.navigationService.OpenNavItem(
               app.ID,
               navItem,
@@ -1770,8 +1777,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         const app = this.appManager.GetAppByPath(appPath) || this.appManager.GetAppByName(appPath);
 
         if (app) {
-          const qpObj: Record<string, string> = {};
-          queryParams.forEach((value, key) => { qpObj[key] = value; });
+          const qpObj = this.urlSearchParamsToRecord(queryParams);
           const navItems = await app.GetNavItems();
           // Only auto-create tabs for apps with zero nav items
           // Apps with nav items should have had their tabs preserved
