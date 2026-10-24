@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { CommonModule } from '@angular/common';
 import { renderComponentFixture, query, queryAll, text, attr, hasClass } from '@memberjunction/ng-test-utils';
 import { LoadingComponent } from './loading.component';
@@ -92,5 +92,45 @@ describe('LoadingComponent (DOM)', () => {
     const id = attr(fixture, 'defs linearGradient', 'id');
     const path = query(fixture, 'svg path') as SVGPathElement;
     expect(path.style.fill).toBe(`url(#${id})`);
+  });
+
+  // ── --mj-loading-mark: a brand theme's mark replaces the inline MJ mark (LXP P5) ──────
+  describe('theme loading mark', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    /** Make every computed style report the token (jsdom has no cascade for custom properties). */
+    function withLoadingMark(value: string): void {
+      const real = window.getComputedStyle.bind(window);
+      vi.spyOn(window, 'getComputedStyle').mockImplementation((el: Element, pseudo?: string | null) => {
+        const style = real(el, pseudo);
+        const getPropertyValue = (prop: string) => (prop === '--mj-loading-mark' ? value : style.getPropertyValue(prop));
+        return new Proxy(style, { get: (t, k) => (k === 'getPropertyValue' ? getPropertyValue : Reflect.get(t, k)) });
+      });
+    }
+
+    it('renders the inline MJ mark when the token is unset (MJ\'s own loader is unchanged)', () => {
+      const fixture = render();
+      expect(query(fixture, 'svg.mj-logo-svg')).not.toBeNull();
+      expect(query(fixture, '.mj-logo-image')).toBeNull();
+      expect(fixture.componentInstance.UsesThemeMark).toBe(false);
+    });
+
+    it('renders the theme image inside the SAME animated wrapper when the token is set', () => {
+      withLoadingMark("url('/assets/brand-mark.svg')");
+      const fixture = render({ size: 'large', animation: 'pulse' });
+      expect(fixture.componentInstance.UsesThemeMark).toBe(true);
+      expect(query(fixture, '.mj-loading-logo .mj-logo-image')).not.toBeNull();
+      expect(query(fixture, 'svg.mj-logo-svg')).toBeNull();
+      // The wrapper keeps the size + animation classes, so the pulse still applies to the image.
+      expect(hasClass(fixture, '.mj-loading-logo', 'size-large')).toBe(true);
+      expect(hasClass(fixture, '.mj-loading-logo', 'animation-pulse')).toBe(true);
+    });
+
+    it('treats "none" like unset', () => {
+      withLoadingMark('none');
+      const fixture = render();
+      expect(fixture.componentInstance.UsesThemeMark).toBe(false);
+      expect(query(fixture, 'svg.mj-logo-svg')).not.toBeNull();
+    });
   });
 });
