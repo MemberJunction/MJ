@@ -1,11 +1,11 @@
-import { Anthropic, APIUserAbortError } from "@anthropic-ai/sdk";
-import { ContentBlock, MessageCreateParams, MessageParam, Tool, ToolChoice } from "@anthropic-ai/sdk/resources/messages";
+import { Anthropic } from "@anthropic-ai/sdk";
+import { ContentBlock, MessageCreateParams, MessageParam, RedactedThinkingBlockParam, ThinkingBlockParam, Tool, ToolChoice } from "@anthropic-ai/sdk/resources/messages";
 import { BaseLLM, ChatMessage, ChatMessageRole, ChatMessageContent, ChatMessageContentBlock, ChatParams, ChatResult, ClassifyParams, ClassifyResult,
     GetSystemPromptFromChatParams, GetUserMessageFromChatParams, SummarizeParams,
     SummarizeResult, ModelUsage, ErrorAnalyzer, parseBase64DataUrl, FileCapabilities,
-    ChatToolCall, CHAT_FINISH_REASON_TOOL_CALLS } from "@memberjunction/ai";
+    ChatToolCall, ChatReasoningBlock, CHAT_FINISH_REASON_TOOL_CALLS } from "@memberjunction/ai";
 import { RegisterClass, ToJSONSafe } from "@memberjunction/global";
-import { BuildAnthropicThinking, UsesAdaptiveThinking } from "./thinking-config";
+import { BuildAnthropicThinking, UsesAdaptiveThinking, type AnthropicThinkingRequest } from "./thinking-config";
 
 /**
  * Sentinel a prompt can embed to tell the Anthropic adapter WHERE the stable, cacheable prefix ends
@@ -24,6 +24,12 @@ import { BuildAnthropicThinking, UsesAdaptiveThinking } from "./thinking-config"
  */
 export const ANTHROPIC_CACHE_BREAKPOINT = '<<<MJ_CACHE_BREAKPOINT>>>';
 
+/** The `provider` this driver stamps on the {@link ChatReasoningBlock}s it produces, and replays. */
+const ANTHROPIC_REASONING_PROVIDER = 'anthropic';
+
+/** Beta that lets budget-form thinking models think between tool calls, not only on the first turn. */
+export const ANTHROPIC_INTERLEAVED_THINKING_BETA = 'interleaved-thinking-2025-05-14';
+
 /** Anthropic allows at most 4 cache_control breakpoints per request. */
 const MAX_CACHE_BREAKPOINTS = 4;
 
@@ -32,6 +38,12 @@ type AnthropicTextBlock = { type: 'text'; text: string; cache_control?: { type: 
 
 @RegisterClass(BaseLLM, 'AnthropicLLM')
 export class AnthropicLLM extends BaseLLM {
+    /**
+     * Claude 5.x accepts a replayed thinking block only while the system prompt, tools and every
+     * earlier message are unchanged since the turn that produced it.
+     */
+    public static override readonly ReplayedReasoningRequiresStablePrefix: boolean = true;
+
     private _anthropic: Anthropic;
     
     // State tracking for streaming thinking extraction
@@ -47,12 +59,6 @@ export class AnthropicLLM extends BaseLLM {
         outputTokens: number;
         cacheReadTokens: number;
         cacheWriteTokens: number;
-        // Cancellation token for the in-flight streaming request. The Anthropic SDK's raw `Stream`
-        // exits *silently* when its underlying request is aborted (it swallows the AbortError rather
-        // than throwing), so the base-class chunk loop simply ends. We keep the signal here so
-        // finalizeStreamingResponse() can tell "the model finished" from "we cancelled it" and
-        // report a failed/cancelled result instead of a truncated success.
-        cancellationToken?: AbortSignal;
     } = {
         accumulatedThinking: '',
         inThinkingBlock: false,
@@ -61,8 +67,7 @@ export class AnthropicLLM extends BaseLLM {
         inputTokens: 0,
         outputTokens: 0,
         cacheReadTokens: 0,
-        cacheWriteTokens: 0,
-        cancellationToken: undefined
+        cacheWriteTokens: 0
     };
 
     constructor(apiKey: string) {
@@ -184,13 +189,16 @@ export class AnthropicLLM extends BaseLLM {
                     }
                 } else if (block.type === 'tool_result') {
                     // Anthropic carries tool results as `tool_result` blocks inside a USER turn,
-                    // paired to the originating call by `tool_use_id`. Never cache-marked: results
-                    // are the volatile tail of the conversation by definition.
+                    // paired to the originating call by `tool_use_id`. The last block of the last
+                    // message carries the breakpoint, as a text block would: in a tool loop that is
+                    // where the next turn's cached prefix has to end, or every turn re-reads the
+                    // whole history uncached.
                     formattedBlocks.push({
                         type: 'tool_result',
                         tool_use_id: block.toolCallId,
                         content: block.content,
-                        ...(block.isError ? { is_error: true } : {})
+                        ...(block.isError ? { is_error: true } : {}),
+                        ...(enableCaching && isLastBlock ? { cache_control: { type: 'ephemeral' } } : {})
                     });
                 }
                 // Note: video_url, audio_url not yet supported by Anthropic
@@ -371,15 +379,19 @@ export class AnthropicLLM extends BaseLLM {
      * @param enableCaching Whether to enable caching
      * @returns Formatted messages
      */
-    protected formatMessagesWithCaching(messages: ChatMessage[], enableCaching: boolean = true): any[] {
+    protected formatMessagesWithCaching(messages: ChatMessage[], enableCaching: boolean = true, replayReasoning: boolean = false): any[] {
         // When the request ends with a trailing runtime state fragment (optionally followed by an
         // assistant prefill), place the ephemeral cache breakpoint on the last real history message
         // instead, so the next iteration's prefix still ends at a cached boundary. Otherwise the
         // volatile fragment would sit inside the cached prefix and miss on every iteration.
         const split = enableCaching ? this.splitTrailingVolatileState(messages) : null;
         if (split) {
-            const head = this.formatMessagesWithCaching(split.head, true);
-            const tail = this.formatMessagesWithCaching(split.tail, false);
+            const head = this.formatMessagesWithCaching(split.head, true, replayReasoning);
+            const tail = this.formatMessagesWithCaching(split.tail, false, replayReasoning);
+            // State that follows tool results joins their turn, after the breakpoint on the last result.
+            if (tail[0]?.role === 'user' && AnthropicLLM.appendToToolResultTurn(head[head.length - 1], tail[0].content)) {
+                return [...head, ...tail.slice(1)];
+            }
             if (head[head.length - 1]?.role === 'user' && tail[0]?.role === 'user') {
                 head.push({
                     role: 'assistant',
@@ -400,22 +412,39 @@ export class AnthropicLLM extends BaseLLM {
         for (let i = 0; i < coalesced.length; i++) {
             const role = this.ConvertMJToAnthropicRole(coalesced[i].role);
 
-            // If we have two messages with the same role back-to-back, insert an assistant message
-            if (role === lastRole) {
+            // Apply caching only to the last message
+            const isLastMessage = i === (coalesced.length - 1);
+
+            // Format the content - now returns an array of content blocks. An assistant turn's own
+            // thinking goes first, ahead of its text and tool_use blocks, as Anthropic requires.
+            const contentBlocks = [
+                ...(replayReasoning && role === 'assistant' ? AnthropicLLM.reasoningBlocksForReplay(coalesced[i]) : []),
+                ...this.formatContentWithCaching(coalesced[i].content, enableCaching && isLastMessage)
+            ];
+
+            // A user message right after tool results joins their turn. An assistant "OK" between
+            // them would read as the model's own reply, and closes the tool loop: Anthropic only
+            // keeps the turn's thinking while the loop stays open.
+            if (role === 'user' && lastRole === 'user' && AnthropicLLM.appendToToolResultTurn(result[result.length - 1], contentBlocks)) {
+                continue;
+            }
+
+            // If we have two messages with the same role back-to-back, insert a message of the other
+            // role. An assistant turn that opens with replayed thinking after another assistant turn
+            // gets a user filler instead: an assistant one would merge into it and put text ahead of
+            // the thinking, which must come first.
+            const opensWithThinking = contentBlocks[0]?.type === 'thinking' || contentBlocks[0]?.type === 'redacted_thinking';
+            if (role === lastRole && role === 'assistant' && result.length > 0 && opensWithThinking) {
+                result.push({
+                    role: "user",
+                    content: [{ type: "text", text: "Continue." }]
+                });
+            } else if (role === lastRole) {
                 result.push({
                     role: "assistant",
                     content: [{ type: "text", text: "OK" }]
                 });
             }
-
-            // Apply caching only to the last message
-            const isLastMessage = i === (coalesced.length - 1);
-
-            // Format the content - now returns an array of content blocks
-            const contentBlocks = this.formatContentWithCaching(
-                coalesced[i].content,
-                enableCaching && isLastMessage
-            );
 
             // An assistant turn that called tools must replay those calls as `tool_use` blocks, or
             // Anthropic rejects the `tool_result` blocks that answer them as orphaned.
@@ -442,6 +471,19 @@ export class AnthropicLLM extends BaseLLM {
         }
 
         return result;
+    }
+
+    /**
+     * Adds content to a formatted user turn that carries tool results, after them — Anthropic
+     * wants a turn's `tool_result` blocks first. Returns false, changing nothing, when the turn
+     * carries no tool results.
+     */
+    private static appendToToolResultTurn(turn: { role?: string; content?: Array<{ type: string; text?: string }> } | undefined, blocks: Array<{ type: string; text?: string }>): boolean {
+        if (turn?.role !== 'user' || !Array.isArray(turn.content) || !turn.content.some((b) => b.type === 'tool_result')) {
+            return false;
+        }
+        turn.content.push(...blocks.filter((b) => b.type !== 'text' || (b.text ?? '').length > 0));
+        return true;
     }
 
     /**
@@ -605,6 +647,87 @@ export class AnthropicLLM extends BaseLLM {
     }
 
     /**
+     * The turn's thinking and redacted-thinking blocks, in order, as replayable reasoning.
+     *
+     * Anthropic asks for a tool-use turn's thinking to come back unchanged — each block with its
+     * signature, redacted blocks with their encrypted data — or the model continues the tool loop
+     * without the reasoning that led to its calls.
+     *
+     * @param content The response's content blocks
+     * @returns The blocks, or undefined when the turn had none
+     */
+    private extractReasoning(content: ContentBlock[]): ChatReasoningBlock[] | undefined {
+        const blocks: ChatReasoningBlock[] = [];
+        for (const block of content ?? []) {
+            if (block?.type === 'thinking') {
+                blocks.push({ provider: ANTHROPIC_REASONING_PROVIDER, kind: 'thinking', text: block.thinking, signature: block.signature });
+            } else if (block?.type === 'redacted_thinking') {
+                blocks.push({ provider: ANTHROPIC_REASONING_PROVIDER, kind: 'redacted_thinking', data: block.data });
+            }
+        }
+        return blocks.length > 0 ? blocks : undefined;
+    }
+
+    /**
+     * An assistant message's own Anthropic reasoning, back in wire form. Blocks another provider
+     * produced are skipped: their signatures would not validate here.
+     */
+    private static reasoningBlocksForReplay(message: ChatMessage): Array<ThinkingBlockParam | RedactedThinkingBlockParam> {
+        const out: Array<ThinkingBlockParam | RedactedThinkingBlockParam> = [];
+        for (const block of message.reasoning ?? []) {
+            if (block.provider !== ANTHROPIC_REASONING_PROVIDER) {
+                continue;
+            }
+            if (block.kind === 'thinking' && block.signature) {
+                out.push({ type: 'thinking', thinking: block.text ?? '', signature: block.signature });
+            } else if (block.kind === 'redacted_thinking' && block.data) {
+                out.push({ type: 'redacted_thinking', data: block.data });
+            }
+        }
+        return out;
+    }
+
+    /**
+     * The thinking setting this history can be sent with.
+     *
+     * With budget-form thinking on, Anthropic requires the last tool-call turn of an open tool loop
+     * to start with its own thinking block. A turn made with thinking off, by another provider
+     * before a failover, or on a path that kept no signatures has none to replay, and the request is
+     * rejected. Thinking is turned off for that one request, with a warning; the effort setting
+     * stays. Adaptive models are left as they are: on the models where thinking is always on,
+     * omitting the parameter does not turn it off.
+     */
+    private static thinkingForHistory(thinking: AnthropicThinkingRequest, messages: ChatMessage[], model: string): AnthropicThinkingRequest {
+        if (!thinking.thinking || UsesAdaptiveThinking(model)) {
+            return thinking;
+        }
+        const lastAssistant = [...messages].reverse().find((m) => m.role === ChatMessageRole.assistant);
+        if (!lastAssistant?.toolCalls?.length || AnthropicLLM.reasoningBlocksForReplay(lastAssistant).length > 0) {
+            return thinking;
+        }
+        console.warn(`AnthropicLLM: thinking is off for this ${model} request — the open tool loop's last call turn carries no thinking to replay.`);
+        const { thinking: _omitted, ...rest } = thinking;
+        return rest;
+    }
+
+    /**
+     * Request options that let a budget-thinking model think between tool calls.
+     *
+     * Budget-form models (Claude 4.x before 4.6) think only on the first turn of a tool loop unless
+     * the request carries the interleaved-thinking beta. Adaptive models interleave natively and
+     * use the `adaptive` form, so the header is never sent to them.
+     *
+     * @param createParams The request being sent
+     * @returns The `headers` option, or an empty object when it does not apply
+     */
+    protected interleavedThinkingOptions(createParams: MessageCreateParams): { headers?: Record<string, string> } {
+        if (!createParams.tools?.length || createParams.thinking?.type !== 'enabled') {
+            return {};
+        }
+        return { headers: { 'anthropic-beta': ANTHROPIC_INTERLEAVED_THINKING_BETA } };
+    }
+
+    /**
      * Pulls the `tool_use` blocks out of an Anthropic response and normalizes them.
      *
      * @param content The response's content blocks
@@ -627,56 +750,11 @@ export class AnthropicLLM extends BaseLLM {
     }
 
     /**
-     * Was this error produced by the caller aborting the request?
-     *
-     * The Anthropic SDK raises {@link APIUserAbortError} when the `signal` we hand it fires (and it
-     * does NOT retry an aborted request — `makeRequest` throws the abort before any retry decision).
-     * We also treat "the token is aborted" as cancellation, which covers the raw `Stream` path where
-     * the SDK swallows the abort instead of surfacing an error.
-     */
-    private isCancellation(error: unknown, token?: AbortSignal): boolean {
-        if (token?.aborted) {
-            return true;
-        }
-        if (error instanceof APIUserAbortError) {
-            return true;
-        }
-        return error instanceof Error && error.name === 'AbortError';
-    }
-
-    /**
-     * Build the failed ChatResult returned when a request is cancelled (caller abort or the
-     * timeout composed into `cancellationToken` by AIPromptRunner). Shaped like every other
-     * failure this driver reports, so callers keep using `success === false` + `errorMessage`.
-     */
-    private buildCancelledResult(startTime: Date, endTime: Date): ChatResult {
-        const message = 'Anthropic request was cancelled';
-        return {
-            data: {
-                choices: [],
-                usage: new ModelUsage(0, 0)
-            },
-            success: false,
-            statusText: 'cancelled',
-            startTime,
-            endTime,
-            timeElapsed: endTime.getTime() - startTime.getTime(),
-            errorMessage: message,
-            exception: new APIUserAbortError(),
-            errorInfo: ErrorAnalyzer.analyzeError(new Error(message), 'Anthropic')
-        };
-    }
-
-    /**
      * Non-streaming implementation for Anthropic
      */
     protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
         const startTime = new Date();
         let result: any = null;
-        if (params.cancellationToken?.aborted) {
-            // Already cancelled before we opened a socket — don't bother the API.
-            return this.buildCancelledResult(startTime, new Date());
-        }
         try {
             // Find system message and non-system messages
             const systemMsgs = params.messages.filter(m => m.role === "system");
@@ -701,12 +779,18 @@ export class AnthropicLLM extends BaseLLM {
             // Append assistant prefill message if specified
             const messagesForApi = this.appendPrefillMessage(nonSystemMsgs, params.assistantPrefill);
 
+            // Thinking, in whichever form the model accepts, if an effort level is set. Resolved before
+            // the messages are formatted: earlier turns' thinking blocks are replayed only when this
+            // request thinks too.
+            const thinking = AnthropicLLM.thinkingForHistory(
+                BuildAnthropicThinking({ model: params.model, effortLevel: params.effortLevel, budgetTokens: thinkingBudget }), messagesForApi, params.model);
+
             // Create the request parameters
             const createParams: MessageCreateParams = {
                 model: params.model,
                 max_tokens: maxTokens,
                 stream: true, // even for non-streaming, we set stream to true as Anthropic prefers it for any decent sized response
-                messages: this.formatMessagesWithCaching(messagesForApi, params.enableCaching || true)
+                messages: this.formatMessagesWithCaching(messagesForApi, params.enableCaching ?? true, thinking.thinking !== undefined)
             };
 
             // Add temperature if specified. Note that Claude 4.5 Opus doesn't support temperature changes when extended thinking is enabled.
@@ -748,12 +832,10 @@ export class AnthropicLLM extends BaseLLM {
             if (systemMsgs) {
                 createParams.system = this.formatSystemMessagesWithCaching(
                     systemMsgs,
-                    params.enableCaching || true
+                    params.enableCaching ?? true
                 );
             }
 
-            // Add thinking, in whichever form the model accepts, if an effort level is set
-            const thinking = BuildAnthropicThinking({ model: params.model, effortLevel: params.effortLevel, budgetTokens: thinkingBudget });
             if (thinking.thinking) {
                 createParams.thinking = thinking.thinking;
             }
@@ -788,7 +870,7 @@ export class AnthropicLLM extends BaseLLM {
             // leaving it streaming into an abandoned promise; `finalMessage()` then rejects with
             // APIUserAbortError.
             const stream = this.AnthropicClient.messages
-                .stream(createParams, { signal: params.cancellationToken })
+                .stream(createParams, { signal: params.cancellationToken, ...this.interleavedThinkingOptions(createParams) })
                 .on('text', (chunk: any) => {
                     // too noisy to log this -- console.log('stream chunk', chunk);
                 });
@@ -797,16 +879,19 @@ export class AnthropicLLM extends BaseLLM {
             
             // Extract thinking and text content from response
             let content: string = '';
-            let thinkingContent: string | undefined = undefined;
+            const thinkingTexts: string[] = [];
 
-            // Process content blocks - can contain both thinking and text blocks
+            // Process content blocks - can contain both thinking and text blocks. With interleaved
+            // thinking a turn carries several thinking blocks; keep them all.
             for (const block of result.content) {
                 if (block.type === 'thinking') {
-                    thinkingContent = block.thinking;
+                    thinkingTexts.push(block.thinking);
                 } else if (block.type === 'text') {
                     content += block.text;
                 }
             }
+            let thinkingContent: string | undefined = thinkingTexts.length > 0 ? thinkingTexts.join('\n\n') : undefined;
+            const reasoning = this.extractReasoning(result.content);
 
             // Fallback: check for old-style thinking tags in content (for backward compatibility)
             if (!thinkingContent && content.startsWith('<thinking>') && content.includes('</thinking>')) {
@@ -843,7 +928,8 @@ export class AnthropicLLM extends BaseLLM {
                                 role: "assistant",
                                 content: content,
                                 thinking: thinkingContent,
-                                toolCalls: toolCalls
+                                toolCalls: toolCalls,
+                                ...(reasoning ? { reasoning } : {})
                             },
                             // Only the tool-call case gets a normalized reason; everything else keeps
                             // this driver's long-standing "completed" so existing consumers are
@@ -893,8 +979,9 @@ export class AnthropicLLM extends BaseLLM {
         }
         catch (e) {
             const endTime = new Date();
-            if (this.isCancellation(e, params.cancellationToken)) {
-                return this.buildCancelledResult(startTime, endTime);
+            // The SDK raises APIUserAbortError when the signal fires, and never retries an abort.
+            if (this.IsCancellationError(e, params.cancellationToken)) {
+                return this.BuildCancelledChatResult(startTime, { error: e, signal: params.cancellationToken });
             }
             return {
                 data: {
@@ -930,8 +1017,7 @@ export class AnthropicLLM extends BaseLLM {
             inputTokens: 0,
             outputTokens: 0,
             cacheReadTokens: 0,
-            cacheWriteTokens: 0,
-            cancellationToken: undefined
+            cacheWriteTokens: 0
         };
     }
 
@@ -941,9 +1027,6 @@ export class AnthropicLLM extends BaseLLM {
     protected async createStreamingRequest(params: ChatParams): Promise<any> {
         // Reset streaming state for new request
         this.resetStreamingState();
-        // Remember the caller's cancellation token so finalizeStreamingResponse() can distinguish
-        // a cancelled stream from a completed one (the SDK's Stream ends silently on abort).
-        this._streamingState.cancellationToken = params.cancellationToken;
         // Find system message and non-system messages
         const systemMsg = params.messages.find(m => m.role === "system");
         const nonSystemMsgs = params.messages.filter(m => m.role !== "system");
@@ -995,19 +1078,20 @@ export class AnthropicLLM extends BaseLLM {
         
         // Append assistant prefill message if specified, then add messages with caching applied
         const messagesForApi = this.appendPrefillMessage(nonSystemMsgs, params.assistantPrefill);
-        createParams.messages = this.formatMessagesWithCaching(
-            messagesForApi,
-            params.enableCaching
-        );
-        
         // Add thinking, in whichever form the model accepts, if an effort level is set. The budget
         // form needs a caller-supplied budget of at least 1024 tokens (and below max_tokens); the
-        // adaptive form (Claude 4.6+, all of Claude 5) has no budget at all.
-        const streamingThinking = BuildAnthropicThinking({
+        // adaptive form (Claude 4.6+, all of Claude 5) has no budget at all. Resolved before the
+        // messages are formatted: earlier turns' thinking is replayed only when this request thinks.
+        const streamingThinking = AnthropicLLM.thinkingForHistory(BuildAnthropicThinking({
             model: params.model,
             effortLevel: params.effortLevel,
             budgetTokens: params.reasoningBudgetTokens >= 1024 ? params.reasoningBudgetTokens : undefined
-        });
+        }), messagesForApi, params.model);
+        createParams.messages = this.formatMessagesWithCaching(
+            messagesForApi,
+            params.enableCaching ?? true,
+            streamingThinking.thinking !== undefined
+        );
         if (streamingThinking.thinking) {
             createParams.thinking = streamingThinking.thinking;
         }
@@ -1183,14 +1267,6 @@ export class AnthropicLLM extends BaseLLM {
         lastChunk: any | null | undefined,
         usage: any | null | undefined
     ): ChatResult {
-        // A cancelled stream ends silently (the SDK's Stream swallows the abort), so the base-class
-        // chunk loop would otherwise hand us a truncated response and we'd report it as a success.
-        // Detect it here and report the same cancelled failure the non-streaming path returns.
-        if (this._streamingState.cancellationToken?.aborted) {
-            const now = new Date();
-            return this.buildCancelledResult(now, now);
-        }
-
         // Handle possible null/undefined values. Token usage is read from streaming state, which
         // accumulated input/output/cache counts across the message_start + message_delta events
         // (the `usage` param from the base loop only reflects the last chunk that carried usage and

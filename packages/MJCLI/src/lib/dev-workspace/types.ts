@@ -65,10 +65,13 @@ export interface MjAppPackageEntry {
   name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /**
    * One of the manifest schema's seven roles (`bootstrap`, `actions`, `engine`, `provider`, `module`,
-   * `components`, `library`). Read for reporting only — the host's client emitter applies NO role
-   * filter, so role never decides whether a package must be linked. See `readShellImportedEntries`.
+   * `components`, `library`). Read for reporting, and as the fallback for `platform` below when a
+   * manifest leaves it unset: `role: 'actions'` defaults to `platform: 'node'`, every other role to
+   * `'both'`. See `readShellImportedEntries`.
    */
   role?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  /** See ResolvePackagePlatform in packages/OpenApp/Engine/src/manifest/package-platform.ts. */
+  platform?: 'node' | 'browser' | 'both';  // case-violation-ok-legacy-back-compat: mirrors the `platform` key of a member's mj-app.json, read off parsed JSON; a rename compiles and silently reads undefined
   startupExport?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
@@ -94,9 +97,10 @@ export interface MjAppJson {
 /**
  * A client-side package an Open App member declares in its own `mj-app.json`.
  *
- * Collected from `packages.client[]` AND `packages.shared[]`, at every role, because that is exactly
- * the set the host emits into `dynamicPackages.client` and therefore the set an app shell imports
- * without ever declaring. `packages.server[]` is excluded: the host routes it to
+ * Collected from `packages.client[]` AND `packages.shared[]`, at every role except those whose
+ * platform excludes the browser (#4428), because that is exactly the set the host emits into
+ * `dynamicPackages.client` and therefore the set an app shell imports without ever declaring.
+ * `packages.server[]` is excluded: the host routes it to
  * `dynamicPackages.server`, a Node process that resolves importer-relative, not from the vite root.
  */
 export interface OpenAppClientPackage {

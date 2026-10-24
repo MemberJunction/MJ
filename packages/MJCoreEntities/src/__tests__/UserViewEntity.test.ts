@@ -1607,6 +1607,38 @@ describe('MJUserViewEntityExtended WhereClause regeneration', () => {
         expect(view.WhereClause).toBe('[IsActive] = 1');
     });
 
+    // A BLANK clause is the same state as a missing one. The server's generator can return '' (or a
+    // model's whitespace), `WhereClause = SmartFilterWhereClause` then makes the view return EVERY
+    // row, and a re-save of the same prompt leaves no field dirty, so nothing ever retried it.
+    it.each([
+        ['empty', ''],
+        ['whitespace-only', '   '],
+    ])('UpdateWhereClause() on an EXISTING record whose SmartFilterWhereClause is %s calls the AI', async (_label, blank) => {
+        const view = makeSmartView({ isSaved: true, smartEnabled: true, prompt: 'Only active records', existingSmartWhere: blank });
+        await view.UpdateWhereClause();
+        expect(view.GenerateCalls).toHaveLength(1);
+        expect(view.WhereClause).toBe('[IsActive] = 1');
+    });
+
+    it('Save() on an EXISTING record with a smart filter but an empty clause regenerates it although nothing is Dirty', async () => {
+        const view = makeSmartView({ isSaved: true, smartEnabled: true, prompt: 'Only active records', existingSmartWhere: '' });
+        expect(await view.Save()).toBe(true);
+        expect(view.GenerateCalls).toEqual([{ prompt: 'Only active records' }]);
+        expect(view.SmartFilterWhereClause).toBe('[IsActive] = 1');
+        expect(view.WhereClause).toBe('[IsActive] = 1');
+    });
+
+    it.each([
+        ['the smart filter is off', { smartEnabled: false, prompt: 'Only active records' }],
+        ['the prompt is blank', { smartEnabled: true, prompt: '  ' }],
+    ])('Save() on an EXISTING record with an empty clause leaves the WhereClause alone when %s', async (_label, init) => {
+        const view = makeSmartView({ isSaved: true, existingSmartWhere: '', ...init });
+        (view as unknown as Record<string, unknown>)['WhereClause'] = "([Name] = 'Acme')";
+        expect(await view.Save()).toBe(true);
+        expect(view.GenerateCalls).toEqual([]);
+        expect(view.WhereClause).toBe("([Name] = 'Acme')");
+    });
+
     it('Save() on an EXISTING record with a changed prompt regenerates via the AI', async () => {
         const view = makeSmartView({ isSaved: true, smartEnabled: true, prompt: 'Inactive only', promptDirty: true, existingSmartWhere: '[IsActive] = 1' });
         view.GeneratedWhereClause = '[IsActive] = 0';

@@ -36,6 +36,9 @@ vi.mock('@memberjunction/global', () => ({
 // on chat.types. The helpers are pure functions, so the real ones are what the driver should
 // be tested against — a mocked copy would be the second implementation the shared module exists to prevent.
 import * as actualToolMapping from '../../../../Core/src/generic/openAICompatibleTools';
+// The cancellation classification is likewise pure and shared, so the stand-in BaseLLM below builds
+// its cancelled results from the real module rather than from a hand-copied shape.
+import * as actualCancellation from '../../../../Core/src/generic/cancellation';
 
 vi.mock('@memberjunction/ai', () => {
     class BaseModel {
@@ -58,6 +61,20 @@ vi.mock('@memberjunction/ai', () => {
             }
             return { content, thinking: undefined };
         }
+        /** Mirrors BaseLLM.IsCancellationError: an aborted signal or an abort-named error. */
+        protected IsCancellationError(error: unknown, signal?: AbortSignal | null): boolean {
+            return signal?.aborted === true || actualCancellation.IsAbortError(error);
+        }
+        /** Mirrors BaseLLM.BuildCancelledChatResult, classifying through the real shared module. */
+        protected BuildCancelledChatResult(startTime: Date, options: { error?: unknown; signal?: AbortSignal | null; message?: string } = {}): ChatResult {
+            const result = new ChatResult(false, startTime, new Date());
+            result.data = { choices: [], usage: new ModelUsage(0, 0) };
+            result.statusText = 'cancelled';
+            result.errorMessage = options.message || actualCancellation.DescribeCancellation(options.signal);
+            result.exception = options.error;
+            result.errorInfo = actualCancellation.BuildCancellationErrorInfo({ error: options.error, signal: options.signal, provider: this.constructor.name });
+            return result;
+        }
     }
     class ModelUsage {
         promptTokens: number;
@@ -77,6 +94,7 @@ vi.mock('@memberjunction/ai', () => {
         statusText: string | null = null;
         errorMessage: string | null = null;
         exception: unknown = null;
+        errorInfo: unknown = null;
         modelSpecificResponseDetails: unknown = null;
         cacheInfo: unknown = null;
         constructor(success: boolean, startTime: Date, endTime: Date) {
@@ -115,6 +133,8 @@ vi.mock('@memberjunction/ai', () => {
         buildOpenAICompatibleToolCalls: actualToolMapping.buildOpenAICompatibleToolCalls,
         buildOpenAICompatibleToolResults: actualToolMapping.buildOpenAICompatibleToolResults,
         extractOpenAICompatibleToolCalls: actualToolMapping.extractOpenAICompatibleToolCalls,
+        ReadOpenAICompatibleToolCalls: actualToolMapping.ReadOpenAICompatibleToolCalls,
+        CHAT_FINISH_REASON_MALFORMED_TOOL_CALL: 'malformed_tool_call',
         BaseLLM,
         ModelUsage,
         ChatResult,
@@ -146,7 +166,6 @@ import { ChatMessageRole, ChatParams, ChatResult } from '@memberjunction/ai';
  */
 type OpenAILLMInternals = {
     buildRequestOptions(params: ChatParams): { signal?: AbortSignal };
-    isCancellationError(error: unknown, cancellationToken?: AbortSignal): boolean;
     nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult>;
     createStreamingRequest(params: ChatParams): Promise<unknown>;
     finalizeStreamingResponse(content: string | null, lastChunk: unknown, usage: unknown): ChatResult;
@@ -490,45 +509,36 @@ describe('OpenAILLM', () => {
             expect(mockCreate).toHaveBeenCalledWith(expect.anything(), { signal: controller.signal });
         });
 
-        it('returns a clean, non-failover-able failure when the non-streaming request is aborted', async () => {
+        it('returns a Cancelled, non-failover-able result when the non-streaming request is aborted', async () => {
             const controller = new AbortController();
-            mockCreate.mockRejectedValueOnce(new MockAPIUserAbortError());
+            const abortError = new MockAPIUserAbortError();
+            mockCreate.mockRejectedValueOnce(abortError);
             controller.abort();
 
             const result = await internals.nonStreamingChatCompletion(buildChatParams(controller.signal));
 
             expect(result.success).toBe(false);
             expect(result.statusText).toBe('cancelled');
-            expect(result.errorMessage).toBe('Request was aborted.');
+            expect(result.errorMessage).toMatch(/^Request was cancelled/);
+            expect(result.exception).toBe(abortError);
+            expect(result.errorInfo?.errorType).toBe('Cancelled');
             expect(result.errorInfo?.severity).toBe('Fatal');
             expect(result.errorInfo?.canFailover).toBe(false);
             expect(result.errorInfo?.providerErrorCode).toBe('request_cancelled');
         });
 
+        it('treats an SDK abort error as a cancellation even when the token is not aborted', async () => {
+            mockCreate.mockRejectedValueOnce(new MockAPIUserAbortError());
+
+            const result = await internals.nonStreamingChatCompletion(buildChatParams());
+
+            expect(result.statusText).toBe('cancelled');
+            expect(result.errorInfo?.errorType).toBe('Cancelled');
+        });
+
         it('rethrows non-cancellation errors from the non-streaming path', async () => {
             mockCreate.mockRejectedValueOnce(new Error('boom'));
             await expect(internals.nonStreamingChatCompletion(buildChatParams())).rejects.toThrow('boom');
-        });
-
-        it('identifies SDK abort errors and already-aborted tokens as cancellations', () => {
-            const controller = new AbortController();
-            controller.abort();
-            expect(internals.isCancellationError(new MockAPIUserAbortError())).toBe(true);
-            expect(internals.isCancellationError(new Error('nope'), controller.signal)).toBe(true);
-            expect(internals.isCancellationError(new Error('nope'))).toBe(false);
-        });
-
-        it('finalizes an aborted stream as a cancelled result rather than a truncated success', async () => {
-            const controller = new AbortController();
-            mockCreate.mockResolvedValueOnce({});
-
-            await internals.createStreamingRequest(buildChatParams(controller.signal));
-            controller.abort();
-
-            const result = internals.finalizeStreamingResponse('partial content', null, null);
-            expect(result.success).toBe(false);
-            expect(result.statusText).toBe('cancelled');
-            expect(result.errorInfo?.canFailover).toBe(false);
         });
 
         it('finalizes a normal stream as a success', async () => {
@@ -707,7 +717,7 @@ describe('OpenAILLM — native tool calling', () => {
             expect(result.data.choices[0].finish_reason).toBe('tool_calls');
         });
 
-        it('surfaces a call with malformed arguments rather than dropping it', async () => {
+        it('reports a call with malformed arguments as a malformed tool call rather than dropping it or running it with {}', async () => {
             stubResponse({
                 message: {
                     role: 'assistant',
@@ -719,9 +729,9 @@ describe('OpenAILLM — native tool calling', () => {
 
             const result = await run({ messages: [{ role: ChatMessageRole.user, content: 'x' }], tools: [WEATHER_TOOL] });
 
-            expect(result.data.choices[0].message.toolCalls).toEqual([
-                { id: 'call_1', name: 'get_weather', arguments: {} }
-            ]);
+            expect(result.data.choices[0].message.toolCalls).toBeUndefined();
+            expect(result.data.choices[0].finish_reason).toBe('malformed_tool_call');
+            expect(result.data.choices[0].finishMessage).toContain('get_weather');
         });
 
         it('leaves toolCalls undefined and finish_reason untouched on an ordinary turn', async () => {

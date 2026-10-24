@@ -146,7 +146,7 @@ const entity = await md.GetEntityObject<AIModelEntity>('AI Models');
       }
   }
   ```
-- **Known weak singletons** that need migration: ~26 classes across the codebase including `GraphQLDataProvider`, `UserCache`, `StartupManager`, `RunQuerySQLFilterManager`, `QueueManager`, `SQLExpressionValidator`, `WarningManager`, `AuthProviderFactory`, `MCPClientManager`, `AgentDataPreloader`, and Angular/React services. See GitHub issue tracking this migration.
+- **When a class cannot extend `BaseSingleton<T>`** (e.g. `GraphQLDataProvider extends ProviderBase`, Angular `@Injectable()` services with DI constructor args, or classes whose constructor takes required arguments): back `Instance` with `GetGlobalObjectStore()` from `@memberjunction/global` under `private static readonly _globalStoreKey = '___SINGLETON__ClassName'` instead of a `private static _instance` field.
 
 ## 🚨 NO DYNAMIC `import()` UNLESS NARROWLY JUSTIFIED
 
@@ -180,6 +180,22 @@ The unit-test workflow imports every built `"type": "module"` package's entry po
 - `npm run check:esm:test` — the guard's own vitest suite (entry-point resolution, failure classification, CLI contract)
 
 The guard lives at `.github/scripts/check-esm-imports.mjs`. Only `OWN_DIST_MISSING_EXT` fails the gate; dependency failures, side-effect crashes, and unbuilt packages are reported but non-gating.
+
+---
+
+## 🚨 COMPARE UUIDs WITH THE `@memberjunction/global` HELPERS — NEVER `===`, NEVER A NESTED SCAN
+
+SQL Server returns UUIDs upper-case and PostgreSQL lower-case, so `===`, `.includes()`, and a plain `Set`/`Map` keyed by ID break when the database changes. And a `.find()`/`.filter()` with `UUIDsEqual` inside a loop is an `n × m` scan.
+
+| Need | Use |
+|---|---|
+| Compare two IDs | `UUIDsEqual(a, b)` |
+| A set or map keyed by ID | `UUIDSet` / `UUIDMap` (not `Set` / `Map`) |
+| Look items up by ID inside a loop | `const byID = IndexByUUID(items);` once, then `byID.Get(id)` |
+| Children by parent ID inside a loop | `const byParent = GroupByUUID(items, x => x.ParentID);` once, then `byParent.Get(id) ?? []` |
+| Items whose ID is / is not in a list | `FilterByUUIDs(items, ids)` / `ExcludeByUUIDs(items, ids)` |
+
+`UUIDCompliance.test.ts` (the Source guards CI check) fails a PR that adds either pattern. Full patterns: [`guides/UUID_COMPARISON_GUIDE.md`](../../guides/UUID_COMPARISON_GUIDE.md).
 
 ---
 

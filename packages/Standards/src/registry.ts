@@ -11,6 +11,9 @@
 import type { StandardCheck } from './types.js';
 import { UILayersCheck } from './checks/ui-layers.js';
 import { NamingConventionsCheck } from './checks/naming-conventions.js';
+import { PolymorphicFKCheck } from './checks/polymorphic-fk.js';
+import { MigrationExistenceGuardsCheck } from './checks/migration-existence-guards.js';
+import { ReadableStatusValuesCheck } from './checks/readable-status-values.js';
 
 /**
  * Every registered standard.
@@ -23,7 +26,13 @@ import { NamingConventionsCheck } from './checks/naming-conventions.js';
  * no longer exists gets an "unknown check" warning rather than a silent no-op, so removal is
  * visible — but it is still a breaking change for anyone whose CI names it.
  */
-export const STANDARD_CHECKS: readonly StandardCheck[] = [UILayersCheck, NamingConventionsCheck];
+export const STANDARD_CHECKS: readonly StandardCheck[] = [
+    UILayersCheck,
+    NamingConventionsCheck,
+    PolymorphicFKCheck,
+    MigrationExistenceGuardsCheck,
+    ReadableStatusValuesCheck,
+];
 
 /** Look up a check by its config key. */
 export function GetCheck(id: string): StandardCheck | undefined {

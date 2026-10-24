@@ -40,7 +40,7 @@ const OUTPUT_DIR = join(REPO_ROOT, 'metadata/prompts/output');
 /** Top-level fields on `LoopAgentResponse`. Anything else is silently dropped at runtime. */
 const TOP_LEVEL_FIELDS = new Set([
     'taskComplete', 'message', 'responseForm', 'actionableCommands', 'automaticCommands',
-    'payloadChangeRequest', 'scratchpad', 'artifactToolCalls', 'conversationToolCalls',
+    'payloadChangeRequest', 'artifactDirective', 'scratchpad', 'artifactToolCalls', 'conversationToolCalls',
     'memoryWrites', 'reasoning', 'confidence', 'nextStep', 'decisions'
 ]);
 const NEXT_STEP_FIELDS = new Set([
@@ -236,7 +236,7 @@ describe('OutputExample files', () => {
 
 describe('Loop system prompt — implicit-mode section matches the code', () => {
     const template = readFileSync(join(TEMPLATES_DIR, 'system/loop-agent-type-system-prompt.template.md'), 'utf8');
-    const start = template.indexOf("{%- if _NATIVE_TOOL_CALLING and _NATIVE_CONTROL_FLOW == 'implicit' %}");
+    const start = template.indexOf("_NATIVE_TOOL_CALLING and _NATIVE_CONTROL_FLOW == 'implicit' %}\n## How you act in this mode");
     const end = template.indexOf('{%- elif actionCount > 0 and _NATIVE_TOOL_CALLING %}', start);
     const section = start >= 0 && end > start ? template.slice(start, end) : '';
 

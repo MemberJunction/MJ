@@ -26,10 +26,14 @@ import {
   TabShownEvent,
   WorkspaceTab,
   LayoutNode,
-  FlattenLayoutToSingleStack
+  FlattenLayoutToSingleStack,
+  TabService
 } from '@memberjunction/ng-base-application';
 import { MJGlobal } from '@memberjunction/global';
-import { BaseResourceComponent, HomeAppPinService, NavigationService, IsRecordTabsStyle, IsRecordsTabConfiguration, IsRecordsRegionTab, IsRecordDockedToWorkspace, RECORD_DOCKED_TO_WORKSPACE_KEY, GetRecordSourceContext, SafeDetectChanges, ExplorerBreakpointService, ResolveRecordTypeIcon } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, HomeAppPinService, NavigationService, IsRecordTabsStyle, IsRecordsTabConfiguration, IsRecordsRegionTab, IsRecordDockedToWorkspace, RECORD_DOCKED_TO_WORKSPACE_KEY, GetRecordSourceContext, SafeDetectChanges, ExplorerBreakpointService, ResolveRecordTypeIcon, ResolveRecordTabDisplayTitle,
+  GetDeletedRecordFromEvent, RecordTabShowsRecord, RemoveDeletedRecordFromOrigin, OriginToTabConfiguration, OriginHasReturnTarget,
+  NormalizeRecordIdForMatch } from '@memberjunction/ng-shared';
+import type { DeletedRecordRef, RecordSourceContext } from '@memberjunction/ng-shared';
 import { ResourceData, MJResourceTypeEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
 import { RecordOriginCrumbComponent } from '../record-open/record-origin-crumb.component';
 import { RecordSwitcherService } from '../record-open/record-switcher.service';
@@ -126,6 +130,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
   private pinService = inject(HomeAppPinService);
   private navigationService = inject(NavigationService);
+  private tabService = inject(TabService);
   private recordSwitcher = inject(RecordSwitcherService);
   private subscriptions: Subscription[] = [];
   private layoutInitRetryCount = 0;
@@ -348,7 +353,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     const activeTab = config.tabs.find(t => t.id === config.activeTabId);
     if (activeTab && this.isRecordTab(activeTab)) {
       const app = this.appManager.GetAppById(activeTab.applicationId);
-      this.RecordBarTitle = activeTab.title;
+      this.RecordBarTitle = this.resolveTabTitle(activeTab);
       this.RecordBarIcon = ResolveRecordTypeIcon(activeTab.configuration, this.ProviderToUse);
       this.RecordBarColor = app?.GetColor() || DEFAULT_APP_COLOR;
     }
@@ -376,12 +381,16 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       : null;
     return {
       TabId: tab.id,
-      Title: tab.title,
+      Title: this.resolveTabTitle(tab),
       Icon: ResolveRecordTypeIcon(tab.configuration, this.ProviderToUse),
       Color: app?.GetColor() || DEFAULT_APP_COLOR,
       OriginLabel: originLabel,
       IsActive: tab.id === activeTabId
     };
+  }
+
+  private resolveTabTitle(tab: WorkspaceTab): string {
+    return ResolveRecordTabDisplayTitle(tab, this.ProviderToUse) || tab.title;
   }
 
   /** True while the RECORDS region is the visible surface (active tab is a record) */
@@ -409,6 +418,8 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     SafeDetectChanges(this.cdr);
   }
 
+  private recordsLayoutInitRetryCount = 0;
+
   /**
    * Keep the RECORDS region in lockstep with the workspace configuration:
    * resolve region visibility (active tab is a record), lazily initialize the
@@ -430,6 +441,14 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     const activeTab = config.tabs.find(t => t.id === config.activeTabId);
     const showing = !!activeTab && this.isRecordTab(activeTab);
 
+    if (showing !== this.ShowRecordsRegion) {
+      this.ShowRecordsRegion = showing;
+      // Flush NOW — the visibility class must land BEFORE records GL init/tab
+      // creation so synchronous TabShown events see ShowRecordsRegion=true and
+      // load the active record immediately instead of parking it.
+      this.flushRegionCd();
+    }
+
     // EAGER init + sync on EVERY emission. The region container always keeps
     // its full layout box (visibility-hidden, never display:none — see the
     // component CSS), so the records GL can initialize and reconcile even
@@ -444,14 +463,8 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       this.syncRecordsTabs(recordTabs);
     }
 
-    if (showing !== this.ShowRecordsRegion) {
-      this.ShowRecordsRegion = showing;
-      // Flush NOW — the visibility class must land in this pass, not
-      // whenever the next unrelated emission happens to run CD.
-      this.flushRegionCd();
-      if (showing) {
-        this.flushPendingRecordShows();
-      }
+    if (this.ShowRecordsRegion) {
+      this.flushPendingRecordShows();
     }
 
     if (showing && activeTab && this.recordsLayoutInitialized) {
@@ -485,7 +498,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         const app = this.appManager.GetAppById(tab.applicationId);
         this.recordsLayoutManager.UpdateTabStyle(tab.id, {
           isPinned: tab.isPinned,
-          title: tab.title,
+          title: this.resolveTabTitle(tab),
           appColor: app?.GetColor() || DEFAULT_APP_COLOR,
           typeIcon: this.resolveTabTypeIcon(tab)
         });
@@ -688,17 +701,24 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       return;
     }
     const container = this.RecordsGlContainer?.nativeElement;
-    if (!container) {
-      return; // Template not settled yet — the next sync pass retries
-    }
-    // NEVER initialize GL inside a zero-size (hidden) container — it bakes a
-    // 0x0 internal size into every stack it later creates and the region
-    // renders collapsed forever. Happens when the region flip is reverted
-    // (activation stolen) before this deferred init runs; staying
-    // uninitialized is safe — the next real show retries.
-    if (container.getBoundingClientRect().height === 0) {
+    if (!container || container.getBoundingClientRect().height === 0) {
+      // NEVER initialize GL inside a missing or zero-size (hidden) container —
+      // it bakes a 0x0 internal size into every stack it later creates and the
+      // region renders collapsed forever. If the records region IS the active
+      // surface (e.g. startup deep link to a record before layout settles),
+      // schedule a bounded retry so initialization is not stranded.
+      if (this.ShowRecordsRegion && this.recordsLayoutInitRetryCount < this.MAX_LAYOUT_INIT_RETRIES) {
+        this.recordsLayoutInitRetryCount++;
+        setTimeout(() => {
+          const latest = this.workspaceManager.GetConfiguration();
+          if (latest && !this.recordsLayoutInitialized) {
+            this.syncRecordsRegion(latest);
+          }
+        }, 50);
+      }
       return;
     }
+    this.recordsLayoutInitRetryCount = 0;
     // Mobile: headerless GL — the record bar replaces the strip
     this.recordsLayoutManager.Initialize(container, { HideHeaders: this.mobileRecordsActive });
     this.recordsLayoutInitialized = true;
@@ -718,6 +738,14 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       // loading such a layout would render a ghost pane for a closed record.
       if (layoutToLoad?.root && recordTabs.length > 0 && this.layoutCoversExactTabSet(layoutToLoad.root, recordTabs)) {
         if (this.recordsLayoutManager.LoadLayout(layoutToLoad)) {
+          recordTabs.forEach(tab => this.updateTabDisplayName(tab));
+          setTimeout(() => {
+            const latest = this.workspaceManager.GetConfiguration();
+            if (latest?.activeTabId && this.ShowRecordsRegion) {
+              this.focusRecordsTab(latest.activeTabId);
+            }
+            this.recordsLayoutManager.updateSize();
+          }, 50);
           return;
         }
       }
@@ -777,7 +805,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       tabId: tab.id,
       appId: tab.applicationId,
       appColor: app?.GetColor() || DEFAULT_APP_COLOR,
-      title: tab.title,
+      title: this.resolveTabTitle(tab),
       route: tab.configuration['route'] as string || '',
       isPinned: tab.isPinned,
       isLoaded: false,
@@ -839,6 +867,26 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     );
 
     this.wireRecordsLayoutEvents();
+
+    // A record deleted in this session: close every tab showing it and move the
+    // user off it (see HandleRecordDeleted). Remote deletes are left to the
+    // record tab itself, which shows a banner rather than vanishing under the user.
+    this.subscriptions.push(
+      MJGlobal.Instance.GetEventListener().subscribe(event => {
+        // Read the key NOW: right after raising 'delete' the entity calls
+        // NewRecord() and its key is gone.
+        const deleted = GetDeletedRecordFromEvent(event);
+        if (!deleted || deleted.Remote) {
+          return;
+        }
+        // Deferred one macrotask: the event fires inside BaseEntity.Delete(), and
+        // the deleting form still has to finish (success toast, RecordDeleted
+        // handlers) before its tab is torn down.
+        setTimeout(() => {
+          this.HandleRecordDeleted(deleted).catch(err => LogError(err));
+        }, 0);
+      })
+    );
 
     // Breakpoint crossings rebuild the records GL in the other chrome mode
     // (headerless+flattened vs full strip+splits). Skip-if-equal: the
@@ -1016,6 +1064,12 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   }
 
   ngAfterViewInit(): void {
+    const config = this.workspaceManager.GetConfiguration();
+    if (config) {
+      this.syncRecordsRegion(config);
+      this.updateRecordSurfaceState(config);
+    }
+
     // Initialize Golden Layout only if we're not in single-resource mode
     if (!this.UseSingleResourceMode) {
       this.initializeGoldenLayout();
@@ -1818,13 +1872,28 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     const tab = config?.tabs.find(t => t.id === tabId);
     const isLastTab = config?.tabs.length === 1 && config.tabs[0].id === tabId;
 
-    // DESTROY (not just detach) the cached component before closing. The default
-    // tab-close path detaches and keeps components alive for reuse — but the
-    // discarded form is exactly what we DON'T want to keep: it holds a stale
-    // BaseEntity in view mode. The next "Create New Record" click for the same
-    // entity would otherwise hit the cache discriminator lookup, find this stale
-    // component, and reattach it — surfacing a blank form in view mode instead
-    // of a fresh edit-mode form. Destroy here forces a cache miss on the next click.
+    this.closeTabDestroyingComponent(tabId);
+
+    if (isLastTab && tab) {
+      // CloseTab kept the tab around but unpinned it. Replace it with the app's
+      // default tab so the user lands on a meaningful surface (typically the
+      // home dashboard) instead of staying on the discarded form.
+      await this.openAppDefaultTab(tab.applicationId);
+    }
+  }
+
+  /**
+   * Close a tab and DESTROY (not just detach) its cached component.
+   *
+   * The default tab-close path detaches and keeps components alive for reuse —
+   * but a discarded or deleted record's form is exactly what we DON'T want to
+   * keep: it holds a stale BaseEntity in view mode. The next "Create New Record"
+   * click for the same entity would otherwise hit the cache discriminator
+   * lookup, find this stale component, and reattach it — surfacing a blank form
+   * in view mode instead of a fresh edit-mode form. Destroy here forces a cache
+   * miss on the next open.
+   */
+  private closeTabDestroyingComponent(tabId: string): void {
     if (this.singleResourceCacheIdentity?.tabId === tabId) {
       // Single-resource mode: the component is tracked via singleResource* fields,
       // and its cache entry is currently marked attached. Use the identity directly
@@ -1835,7 +1904,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       this.singleResourceComponentRef = null;
       this.singleResourceCacheIdentity = null;
       // Clear the host container's DOM so the user isn't briefly looking at the
-      // destroyed component's wrapper between CloseTab and the default-tab load.
+      // destroyed component's wrapper between CloseTab and the next tab's load.
       const directContainer = this.DirectContentContainer?.nativeElement;
       if (directContainer) {
         while (directContainer.firstChild) directContainer.removeChild(directContainer.firstChild);
@@ -1848,19 +1917,89 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     }
 
     this.workspaceManager.CloseTab(tabId);
+  }
 
-    if (isLastTab && tab) {
-      // CloseTab kept the tab around but unpinned it. Replace it with the app's
-      // default tab so the user lands on a meaningful surface (typically the
-      // home dashboard) instead of staying on the discarded form.
-      const app = this.appManager.GetAppById(tab.applicationId);
-      if (app) {
-        const defaultTabRequest = await app.CreateDefaultTab();
-        if (defaultTabRequest) {
-          this.workspaceManager.OpenTab(defaultTabRequest, app.GetColor());
-        }
+  /** Open an app's default tab (its home / landing surface), if it has one. */
+  private async openAppDefaultTab(appId: string): Promise<void> {
+    const app = this.appManager.GetAppById(appId);
+    if (app) {
+      const defaultTabRequest = await app.CreateDefaultTab();
+      if (defaultTabRequest) {
+        this.workspaceManager.OpenTab(defaultTabRequest, app.GetColor());
       }
     }
+  }
+
+  /**
+   * A record was deleted in this session — from its own form, a custom form, a
+   * grid row, or any other `BaseEntity.Delete()`. Nothing may keep showing it:
+   *
+   * 1. Other record tabs whose origin chain names it get the record spliced out,
+   *    so their crumb returns to where the user was before it.
+   * 2. Every record tab showing it closes, its cached form destroyed.
+   * 3. If one of those was the ACTIVE tab, the user is taken back to where it
+   *    was opened from; with no origin (e.g. loaded straight from a URL), to the
+   *    Home dashboard, or the tab's own app landing page when there is no Home
+   *    app. Its URL's history entry is replaced so browser Back can't reopen it.
+   *
+   * Inactive tabs showing it just close: the user wasn't looking at them.
+   */
+  public async HandleRecordDeleted(record: DeletedRecordRef): Promise<void> {
+    const config = this.workspaceManager.GetConfiguration();
+    if (!config) {
+      return;
+    }
+    const showing = config.tabs.filter(t => RecordTabShowsRecord(t, record));
+    const showingIds = new Set(showing.map(t => t.id));
+
+    for (const tab of config.tabs) {
+      if (showingIds.has(tab.id) || !IsRecordsTabConfiguration(tab.configuration)) {
+        continue;
+      }
+      const origin = GetRecordSourceContext(tab.configuration) ?? undefined;
+      const pruned = RemoveDeletedRecordFromOrigin(origin, record);
+      if (pruned !== origin) {
+        this.workspaceManager.UpdateTabConfiguration(tab.id, OriginToTabConfiguration(pruned));
+      }
+    }
+
+    if (showing.length === 0) {
+      return;
+    }
+
+    const activeTab = showing.find(t => t.id === config.activeTabId);
+    const returnTo = activeTab
+      ? RemoveDeletedRecordFromOrigin(GetRecordSourceContext(activeTab.configuration) ?? undefined, record)
+      : undefined;
+    if (activeTab) {
+      // Mark by what the tab's URL carries (its own entity string and id), not
+      // the event's canonical name: the URL is built from the tab.
+      const urlEntity = activeTab.configuration?.['Entity'];
+      this.tabService.MarkRecordUrlForReplacement(
+        typeof urlEntity === 'string' ? urlEntity : record.EntityName,
+        NormalizeRecordIdForMatch(activeTab.resourceRecordId || record.RecordId)
+      );
+    }
+
+    for (const tab of showing) {
+      this.closeTabDestroyingComponent(tab.id);
+    }
+
+    if (activeTab) {
+      await this.leaveDeletedRecord(activeTab, returnTo);
+    }
+  }
+
+  /** Where the user goes after the record they were looking at is deleted. */
+  private async leaveDeletedRecord(deletedTab: WorkspaceTab, origin: RecordSourceContext | undefined): Promise<void> {
+    if (OriginHasReturnTarget(origin)) {
+      await this.navigationService.ReturnToRecordSource(origin);
+      return;
+    }
+    if (await this.navigationService.OpenHomeDashboard()) {
+      return;
+    }
+    await this.openAppDefaultTab(deletedTab.applicationId);
   }
 
   /**
@@ -1894,7 +2033,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       tabId: tab.id,
       appId: tab.applicationId,
       appColor,
-      title: tab.title,
+      title: this.resolveTabTitle(tab),
       route: tab.configuration['route'] as string || '',
       isPinned: tab.isPinned,
       isLoaded: false,
@@ -2647,7 +2786,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         const app = this.appManager.GetAppById(tab.applicationId);
         const styleUpdate: Partial<TabComponentState> = {
           isPinned: tab.isPinned,
-          title: tab.title,
+          title: this.resolveTabTitle(tab),
           appColor: app?.GetColor() || DEFAULT_APP_COLOR
         };
         if (IsRecordsTabConfiguration(tab.configuration)) {

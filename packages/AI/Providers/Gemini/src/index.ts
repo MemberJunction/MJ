@@ -1,11 +1,13 @@
 
 
 // Google Gemini Import
-import { GoogleGenAI, Content, Part, Blob, FileData, FunctionDeclaration, FunctionCallingConfigMode, ToolConfig, ToolListUnion } from "@google/genai";
+import { GoogleGenAI, ApiError, Content, Part, Blob, FileData, FunctionDeclaration, FunctionCallingConfigMode, ToolConfig, ToolListUnion, GenerateContentResponseUsageMetadata, ThinkingConfig } from "@google/genai";
 
 // MJ stuff
-import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ChatMessageContentBlock, ModelUsage, ErrorAnalyzer, FileCapabilities, ChatToolCall, CHAT_FINISH_REASON_TOOL_CALLS, CHAT_FINISH_REASON_MALFORMED_TOOL_CALL } from "@memberjunction/ai";
+import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ChatMessageContentBlock, ModelUsage, ErrorAnalyzer, FileCapabilities, ChatToolCall, ChatReasoningBlock, CHAT_FINISH_REASON_TOOL_CALLS, CHAT_FINISH_REASON_MALFORMED_TOOL_CALL, CHAT_FINISH_REASON_UNEXPECTED_TOOL_CALL } from "@memberjunction/ai";
 import { RegisterClass, ToJSONSafe } from "@memberjunction/global";
+import { AcceptsCustomSampling } from "./geminiSampling";
+import { GeminiThinkingFallback, ResolveGeminiThinkingConfig } from "./geminiThinking";
 
 /**
  * Snapshot of a request's cacheable-prefix info, captured so the GEMINI_CACHE_DEBUG diagnostics
@@ -28,20 +30,6 @@ type GeminiUsageMetadataLike = {
 };
 
 /**
- * True when `error` represents a client-initiated cancellation rather than a genuine provider or
- * network failure. Node's fetch (which @google/genai uses under the hood) rejects with a
- * `DOMException` named `AbortError` when the supplied `AbortSignal` fires, and with `TimeoutError`
- * when the signal came from `AbortSignal.timeout()`.
- */
-function isGeminiCancellationError(error: unknown): boolean {
-    if (!error || typeof error !== 'object') {
-        return false;
-    }
-    const name = (error as { name?: string }).name;
-    return name === 'AbortError' || name === 'TimeoutError';
-}
-
-/**
  * Gemini 3 requires a `thoughtSignature` on every replayed `functionCall` part. Calls the model made
  * carry their own (kept on `ChatToolCall.providerMetadata`); calls constructed outside the model —
  * a corpus history, a conversation transferred from another provider — use this documented
@@ -56,6 +44,9 @@ const GEMINI_INJECTED_CALL_THOUGHT_SIGNATURE = 'skip_thought_signature_validator
  * on capture, compared on replay, and a foreign signature is replaced with the placeholder.
  */
 const THOUGHT_SIGNATURE_ORIGIN_KEY = 'thoughtSignatureOrigin';
+
+/** The `provider` this driver (and Vertex, which extends it) stamps on its {@link ChatReasoningBlock}s. */
+const GEMINI_REASONING_PROVIDER = 'gemini';
 
 /**
  * The user turn Gemini is given when a conversation would otherwise open with a model turn.
@@ -91,11 +82,6 @@ export class GeminiLLM extends BaseLLM {
     // Diagnostic context for the in-flight streaming request, used only by the GEMINI_CACHE_DEBUG
     // logging path so the final chunk's usage can be reported alongside the request's prefix info.
     private _cacheDiagContext: GeminiCacheDiagContext | null = null;
-
-    // Cancellation token for the in-flight STREAMING request. The base class's streaming loop
-    // swallows mid-stream iteration errors, so finalizeStreamingResponse() consults this to detect
-    // that the stream ended because the caller aborted (rather than because the model finished).
-    private _streamingCancellationToken: AbortSignal | null = null;
 
     constructor(apiKey: string) {
         super(apiKey);
@@ -160,75 +146,6 @@ export class GeminiLLM extends BaseLLM {
     }
 
     /**
-     * Convert MJ effort level (1-100) to Gemini thinkingBudget (0-24576)
-     *
-     * Mapping strategy:
-     * - 1 (minimal): 0 (disabled) on Flash; clamped to ~1024 on Pro
-     * - 2-33 (low): 1024-4096 tokens
-     * - 34-66 (medium): 4097-12288 tokens
-     * - 67-100 (high): 12289-24576 tokens
-     * - undefined: No thinkingConfig (Gemini default ~8192)
-     *
-     * Model-specific behavior:
-     * - Gemini 2.5 Flash/Flash-Lite: Can disable thinking with budget=0
-     * - Gemini 2.5 Pro: Cannot disable thinking, minimum ~1024
-     * - Gemini 3 models: Use thinkingLevel instead (future consideration)
-     *
-     * @param effortLevel - MJ normalized effort level (1-100) as string or number
-     * @param modelName - The Gemini model name to check capabilities
-     * @returns thinkingBudget value or undefined for default behavior
-     */
-    private getThinkingBudget(effortLevel: string | number | undefined, modelName: string): number | undefined {
-        if (effortLevel === undefined || effortLevel === null || effortLevel === '') {
-            return undefined; // Use Gemini's default behavior (auto, up to ~8192)
-        }
-
-        // Parse string to number if needed
-        const numericLevel = typeof effortLevel === 'string' ? parseInt(effortLevel, 10) : effortLevel;
-        if (isNaN(numericLevel)) {
-            return undefined; // Invalid effort level, use default
-        }
-
-        // Clamp to valid range
-        const level = Math.max(1, Math.min(100, numericLevel));
-
-        // Check model capabilities for thinking
-        const lowerModel = modelName.toLowerCase();
-        const isFlashModel = lowerModel.includes('flash');
-        const isProModel = lowerModel.includes('pro') && !isFlashModel;
-
-        // Minimal effort (1) - disable thinking on Flash models
-        if (level === 1 && isFlashModel) {
-            return 0; // Disable thinking (only works on Flash/Flash-Lite)
-        }
-
-        // For Pro models, minimum effective budget is ~1024
-        // For Flash models with effort >= 2, use normal scaling
-        if (level <= 33) {
-            // Low (2-33): linear scale from 1024 to 4096
-            return Math.round(1024 + ((level - 2) / 31) * (4096 - 1024));
-        } else if (level <= 66) {
-            // Medium: linear scale from 4097 to 12288
-            return Math.round(4097 + ((level - 34) / 32) * (12288 - 4097));
-        } else {
-            // High: linear scale from 12289 to 24576
-            return Math.round(12289 + ((level - 67) / 33) * (24576 - 12289));
-        }
-    }
-
-    /**
-     * Check if a model supports thinking configuration
-     * Thinking is supported on Gemini 2.5+ models
-     */
-    private supportsThinking(modelName: string): boolean {
-        const lowerModel = modelName.toLowerCase();
-        // Gemini 2.5 and later support thinking
-        return lowerModel.includes('2.5') ||
-               lowerModel.includes('gemini-3') ||
-               lowerModel.includes('gemini-exp');
-    }
-    
-    /**
      * Gemini supports streaming
      */
     public override get SupportsStreaming(): boolean {
@@ -286,9 +203,6 @@ export class GeminiLLM extends BaseLLM {
     protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
         const startTime = new Date();
         try {
-            // Fail fast if the caller already cancelled before we opened a socket.
-            this.throwIfCancelled(params.cancellationToken);
-
             // For text-only input, use the gemini-pro model
             const modelName = params.model || "gemini-pro";
             
@@ -320,54 +234,8 @@ export class GeminiLLM extends BaseLLM {
                 finalMessageParts = [{ text: '' }];
             }
 
-            // Create the model and then chat
-            const modelOptions: Record<string, any> = {
-                temperature: params.temperature || 0.5,
-            };
-
-            switch (params.responseFormat) {
-                case 'JSON':
-                    modelOptions.responseMimeType = 'application/json';
-                    break;
-                case 'ModelSpecific':
-                    if (params.modelSpecificResponseFormat) {
-                        Object.assign(modelOptions, params.modelSpecificResponseFormat);
-                    }
-                    break;
-            }
-
-            // Add supported parameters
-            if (params.topP != null) {
-                modelOptions.top_p = params.topP;
-            }
-            if (params.topK != null) {
-                modelOptions.top_k = params.topK;
-            }
-            if (params.stopSequences != null && params.stopSequences.length > 0) {
-                modelOptions.stopSequences = params.stopSequences;
-            }
-            if (params.seed != null) {
-                modelOptions.seed = params.seed;
-            }
-
-            // Gemini doesn't support these parameters - warn if provided
-            if (params.frequencyPenalty != null) {
-                console.warn('Gemini provider does not support frequencyPenalty parameter, ignoring');
-            }
-            if (params.presencePenalty != null) {
-                console.warn('Gemini provider does not support presencePenalty parameter, ignoring');
-            }
-            if (params.minP != null) {
-                console.warn('Gemini provider does not support minP parameter, ignoring');
-            }
-
-            // Build thinking configuration based on effort level and model capabilities
-            const thinkingBudget = this.getThinkingBudget(params.effortLevel, modelName);
-            const useThinking = this.supportsThinking(modelName) && thinkingBudget !== undefined;
-
-            // Create chat config - only include thinkingConfig if model supports it and effortLevel is specified
-            const chatConfig: Record<string, unknown> = {};
-            this.setThinkingConfig(chatConfig, useThinking, params.effortLevel, modelName, thinkingBudget);
+            // Sampling + response-format options, shaped for the model's version (see buildGenerationOptions)
+            const modelOptions = this.buildGenerationOptions(params, modelName);
 
             // Ensure Gemini client is initialized
             const client = await this.ensureGeminiClient();
@@ -377,26 +245,18 @@ export class GeminiLLM extends BaseLLM {
             // cacheable prefix so Gemini's implicit cache can engage across turns.
             // NOTE: @google/genai's sendMessage `config` REPLACES (not merges) the session config, so
             // systemInstruction must ride in the per-request config (modelOptions) — that's the one
-            // that applies. We intentionally do NOT fold chatConfig (thinkingConfig) in here: that
-            // preserves the prior thinking behavior exactly (it stays on the session config) and avoids
-            // sending a thinking level some models reject.
+            // that applies, and the session config is never sent. The same holds for thinkingConfig.
             const requestConfig: Record<string, unknown> = { ...modelOptions };
             if (systemInstructionText) {
                 requestConfig.systemInstruction = systemInstructionText;
             }
             this.applyToolParams(requestConfig, params);
+            this.applyThinkingConfig(requestConfig, modelName, params.effortLevel);
             this.applyCancellationToken(requestConfig, params.cancellationToken);
 
-            const chat = client.chats.create({
-                config: Object.keys(chatConfig).length > 0 ? chatConfig : undefined,
-                model: modelName,
-                history: history
-            });
-
-            const result = await chat.sendMessage({
-                message: finalMessageParts,
-                config: requestConfig
-            });
+            const result = await this.sendWithThinkingFallback(modelName, requestConfig, params.cancellationToken, config =>
+                client.chats.create({ model: modelName, history }).sendMessage({ message: finalMessageParts, config })
+            );
 
             // Check for blocked response or empty candidates
             if (!result.candidates || result.candidates.length === 0) {
@@ -438,14 +298,20 @@ export class GeminiLLM extends BaseLLM {
                 throw new Error(`Content blocked by model: ${finishReason}${blockedCategories ? ` - ${blockedCategories}` : ''}`);
             }
 
-            const rawContent = candidate.content?.parts?.find(part => part.text && !part.thought)?.text || '';
-            const thinking = candidate.content?.parts?.find(part => part.thought)?.text || '';
+            // Every visible text part, not only the first: a turn can split its answer across parts.
+            const rawContent = (candidate.content?.parts ?? []).filter(part => part.text && !part.thought).map(part => part.text).join('');
+            const thinking = (candidate.content?.parts ?? []).filter(part => part.thought && part.text).map(part => part.text).join('');
             const toolCalls = this.extractToolCalls(candidate.content?.parts, this.thoughtSignatureOrigin(modelName));
+            const reasoning = GeminiLLM.extractReasoning(candidate.content?.parts, this.thoughtSignatureOrigin(modelName));
 
             // Check if we got empty content despite no blocking. A native tool call IS output, and a
             // forced/clean tool-call turn legitimately carries no text at all — so tool calls
             // satisfy this check just as text does.
-            if (!rawContent && !thinking && !toolCalls) {
+            // A rejected tool call is an answer the tool loop must correct, not missing output — but
+            // only for a request that declared tools. Without any, no tool loop can correct it, and
+            // the empty turn stays the error it always was, so failover can try another model.
+            const rejectedCall = params.tools?.length ? GeminiLLM.rejectedToolCallReason(finishReason) : undefined;
+            if (!rawContent && !thinking && !toolCalls && !rejectedCall) {
                 const usage = result.usageMetadata;
                 throw new Error(
                     `No output received from model (finishReason: ${finishReason || 'none'}, ` +
@@ -471,18 +337,8 @@ export class GeminiLLM extends BaseLLM {
 
             const endTime = new Date();
 
-            // Gemini's cache convention: `promptTokenCount` INCLUDES cached tokens, reported
-            // separately as `cachedContentTokenCount`. Normalize to the uniform ModelUsage contract:
-            // promptTokens must be UNCACHED/net-new only, so subtract the cache-read count (clamped at
-            // 0) and record it disjointly. Gemini does not report a separate cache-write charge, so
-            // cacheWriteTokens stays 0. Full native prompt count = usage.totalInputTokens.
-            const geminiCachedTokens = result.usageMetadata?.cachedContentTokenCount ?? 0;
-            const geminiNetPromptTokens = Math.max(0, (result.usageMetadata?.promptTokenCount || 0) - geminiCachedTokens);
-            const geminiUsage = new ModelUsage(
-                geminiNetPromptTokens,
-                result.usageMetadata?.candidatesTokenCount || 0
-            );
-            geminiUsage.cacheReadTokens = geminiCachedTokens;
+            const geminiUsage = GeminiLLM.usageFromMetadata(result.usageMetadata);
+            const geminiCachedTokens = geminiUsage.cacheReadTokens ?? 0;
 
             this.logCacheDiagnostics(
                 'non-streaming',
@@ -506,14 +362,14 @@ export class GeminiLLM extends BaseLLM {
                             role: 'assistant',
                             content: content,
                             thinking: thinkingContent || undefined,
-                            toolCalls: toolCalls
+                            toolCalls: toolCalls,
+                            ...(reasoning ? { reasoning } : {})
                         },
                         // Normalize the tool-call case and Gemini's "tried to call a tool but the call was
                         // unreadable" case; every other reason keeps Gemini's own value.
-                        finish_reason: toolCalls ? CHAT_FINISH_REASON_TOOL_CALLS
-                            : finishReason === 'MALFORMED_FUNCTION_CALL' ? CHAT_FINISH_REASON_MALFORMED_TOOL_CALL
-                            : (finishReason || "completed"),
-                        index: 0
+                        finish_reason: toolCalls ? CHAT_FINISH_REASON_TOOL_CALLS : (rejectedCall ?? (finishReason || "completed")),
+                        index: 0,
+                        ...(rejectedCall && candidate.finishMessage ? { finishMessage: candidate.finishMessage } : {})
                     }],
                     usage: geminiUsage
                 },
@@ -529,8 +385,9 @@ export class GeminiLLM extends BaseLLM {
             }
         }
         catch (e) {
-            if (this.isCancelled(e, params.cancellationToken)) {
-                return this.buildCancelledResult(startTime, e, params.cancellationToken);
+            // Node's fetch, which @google/genai uses, rejects with an AbortError when the signal fires.
+            if (this.IsCancellationError(e, params.cancellationToken)) {
+                return this.BuildCancelledChatResult(startTime, { error: e, signal: params.cancellationToken });
             }
             return {
                 success: false,
@@ -549,11 +406,6 @@ export class GeminiLLM extends BaseLLM {
         }
     }
 
-    /**
-     * Attach the caller's cancellation token to a Gemini per-request config. @google/genai reads
-     * `GenerateContentConfig.abortSignal` and forwards it to the underlying `fetch` call, so an
-     * abort tears down the HTTP socket instead of merely abandoning the promise.
-     */
     /**
      * Maps the neutral {@link ChatParams.tools} onto Gemini's `tools` / `toolConfig` request fields.
      *
@@ -583,8 +435,9 @@ export class GeminiLLM extends BaseLLM {
             requestConfig.toolConfig = toolConfig;
         }
 
-        if (params.parallelToolCalls !== undefined) {
-            console.warn('Gemini provider does not support the parallelToolCalls parameter, ignoring');
+        // Gemini always allows parallel calls, so only a request to turn them off goes unmet.
+        if (params.parallelToolCalls === false) {
+            console.warn('Gemini provider does not support turning parallel tool calls off, ignoring parallelToolCalls=false');
         }
     }
 
@@ -621,6 +474,19 @@ export class GeminiLLM extends BaseLLM {
     }
 
     /**
+     * The normalized finish reason for a tool call Gemini rejected — `MALFORMED_FUNCTION_CALL` (the
+     * call could not be read) or `UNEXPECTED_TOOL_CALL` (a call to a tool the request did not offer)
+     * — or undefined for any other finish reason.
+     */
+    private static rejectedToolCallReason(finishReason: string | undefined): string | undefined {
+        switch (finishReason) {
+            case 'MALFORMED_FUNCTION_CALL': return CHAT_FINISH_REASON_MALFORMED_TOOL_CALL;
+            case 'UNEXPECTED_TOOL_CALL': return CHAT_FINISH_REASON_UNEXPECTED_TOOL_CALL;
+            default: return undefined;
+        }
+    }
+
+    /**
      * Pulls `functionCall` parts out of a Gemini candidate and normalizes them.
      *
      * Gemini does not always populate a call `id`, so one is synthesized from the tool name and the
@@ -652,112 +518,191 @@ export class GeminiLLM extends BaseLLM {
         return calls.length > 0 ? calls : undefined;
     }
 
+    /**
+     * Attach the caller's cancellation token to a Gemini per-request config. @google/genai reads
+     * `GenerateContentConfig.abortSignal` and forwards it to the underlying `fetch` call, so an
+     * abort tears down the HTTP socket instead of merely abandoning the promise.
+     */
     private applyCancellationToken(requestConfig: Record<string, unknown>, token: AbortSignal | undefined): void {
         if (token) {
             requestConfig.abortSignal = token;
         }
     }
 
-    /** Throw immediately (before any socket is opened) when the caller has already cancelled. */
-    private throwIfCancelled(token: AbortSignal | undefined): void {
-        if (token?.aborted) {
-            throw this.createCancellationError(token);
+    /**
+     * Model + field pairs already warned about, so a prompt that sets `temperature` on every call
+     * logs once per process instead of once per request.
+     */
+    private static readonly _warnedUnsupportedSampling = new Set<string>();
+
+    /**
+     * Builds the per-request generation options: sampling, stop sequences, seed, response format.
+     *
+     * Sampling fields depend on the model's version. Models before Gemini 3.6 keep the original
+     * shape (`temperature` defaulting to 0.5, `topP`, `topK`) because they still honor it. Every
+     * other model gets none of the three: Google ignores them since Gemini 3.6 Flash and upcoming
+     * models reject them with a 400, so a caller-supplied value is dropped with a one-time warning.
+     *
+     * A `ModelSpecific` response format is merged in after this gate, so it can still set these
+     * fields explicitly; that is the caller's deliberate override.
+     */
+    private buildGenerationOptions(params: ChatParams, modelName: string): Record<string, unknown> {
+        const modelOptions: Record<string, unknown> = {};
+
+        if (AcceptsCustomSampling(modelName)) {
+            modelOptions.temperature = params.temperature ?? 0.5;
+            if (params.topP != null) {
+                modelOptions.topP = params.topP;
+            }
+            if (params.topK != null) {
+                modelOptions.topK = params.topK;
+            }
+        } else {
+            this.warnUnsupportedSampling(modelName, 'temperature', params.temperature);
+            this.warnUnsupportedSampling(modelName, 'topP', params.topP);
+            this.warnUnsupportedSampling(modelName, 'topK', params.topK);
         }
+
+        switch (params.responseFormat) {
+            case 'JSON':
+                modelOptions.responseMimeType = 'application/json';
+                break;
+            case 'ModelSpecific':
+                if (params.modelSpecificResponseFormat) {
+                    Object.assign(modelOptions, params.modelSpecificResponseFormat);
+                }
+                break;
+        }
+
+        if (params.stopSequences != null && params.stopSequences.length > 0) {
+            modelOptions.stopSequences = params.stopSequences;
+        }
+        if (params.seed != null) {
+            modelOptions.seed = params.seed;
+        }
+
+        // Gemini doesn't support these parameters - warn if provided
+        if (params.frequencyPenalty != null) {
+            console.warn('Gemini provider does not support frequencyPenalty parameter, ignoring');
+        }
+        if (params.presencePenalty != null) {
+            console.warn('Gemini provider does not support presencePenalty parameter, ignoring');
+        }
+        if (params.minP != null) {
+            console.warn('Gemini provider does not support minP parameter, ignoring');
+        }
+
+        return modelOptions;
     }
 
-    /** The canonical abort error we raise for a pre-aborted request, shaped like fetch's own. */
-    private createCancellationError(token: AbortSignal): Error {
-        const error = new Error(this.describeCancellation(token));
-        error.name = 'AbortError';
-        return error;
-    }
-
-    /** True when this failure is the caller's cancellation rather than a provider/network fault. */
-    private isCancelled(error: unknown, token: AbortSignal | undefined): boolean {
-        return token?.aborted === true || isGeminiCancellationError(error);
-    }
-
-    /** Human-readable reason for a cancellation, preferring the signal's own reason when present. */
-    private describeCancellation(token: AbortSignal | undefined): string {
-        const reason: unknown = token?.reason;
-        if (reason instanceof Error && reason.message) {
-            return `Gemini request cancelled: ${reason.message}`;
+    private warnUnsupportedSampling(modelName: string, field: 'temperature' | 'topP' | 'topK', value: number | undefined): void {
+        if (value == null) {
+            return;
         }
-        if (typeof reason === 'string' && reason.length > 0) {
-            return `Gemini request cancelled: ${reason}`;
+        const key = `${modelName}:${field}`;
+        if (GeminiLLM._warnedUnsupportedSampling.has(key)) {
+            return;
         }
-        return 'Gemini request cancelled by caller';
+        GeminiLLM._warnedUnsupportedSampling.add(key);
+        console.warn(`Gemini model ${modelName} does not accept a custom ${field}; omitting it so the model uses its default sampling.`);
     }
 
     /**
-     * Build the typed ChatResult for a cancelled request. Reported as a normal failed ChatResult —
-     * same shape as every other Gemini error path — never as an unhandled rejection.
+     * Thinking settings a model rejected in this process, mapped to what was sent instead (`null`
+     * for no setting). Keyed by driver, model and setting, so a rejected `MINIMAL` does not stop
+     * `HIGH` being sent, and a rejection through one driver does not affect another.
      */
-    private buildCancelledResult(startTime: Date, error: unknown, token?: AbortSignal | null): ChatResult {
-        const endTime = new Date();
-        const result = new ChatResult(false, startTime, endTime);
-        result.statusText = 'Cancelled';
-        result.errorMessage = this.describeCancellation(token ?? undefined);
-        result.exception = error;
-        result.errorInfo = ErrorAnalyzer.analyzeError(error, 'Gemini');
-        result.data = {
-            choices: [],
-            usage: new ModelUsage(0, 0)
-        };
-        return result;
+    private static readonly _thinkingReplacements = new Map<string, ThinkingConfig | null>();
+    /** Thinking warnings already logged, so each is logged once per process. */
+    private static readonly _warnedThinking = new Set<string>();
+
+    private thinkingReplacementKey(modelName: string, config: ThinkingConfig): string {
+        return `${this.constructor.name}|${modelName}|${JSON.stringify(config)}`;
     }
 
-    private setThinkingConfig(chatConfig: any, useThinking: boolean, effortLevel: string | undefined, modelName: string, thinkingBudget: number) {
-        // this is a hack, need a cleaner way of doing this
-        const gemini3AndAbove: boolean = modelName?.toLowerCase().includes("-3") ||
-                                         modelName?.toLowerCase().includes("-4") ||
-                                         modelName?.toLowerCase().includes("-5") ||
-                                         modelName?.toLowerCase().includes("-6") ||
-                                         modelName?.toLowerCase().includes("-7");
-                                         
-        if (useThinking) {
-            if (gemini3AndAbove) {
-                // no budget used, we map the effortLevel to 4 buckets
-                let geminiLevel = undefined;
-                // Parse string to number if needed
-                let numericLevel = typeof effortLevel === 'string' ? parseInt(effortLevel, 10) : effortLevel;
-                if (isNaN(numericLevel)) {
-                    numericLevel = 0;
-                }
-
-                if (numericLevel === 1) {
-                    geminiLevel = "MINIMAL" // effort 1 is the minimum valid value and maps to minimal thinking on Gemini 3+ models
-                }
-                else if (numericLevel >= 2 && numericLevel <= 33) {
-                    geminiLevel = "LOW"
-                }
-                else if (numericLevel <= 66) {
-                    geminiLevel = "MEDIUM" 
-                }
-                else {
-                    geminiLevel = "HIGH" 
-                }
-
-                chatConfig.thinkingConfig = {
-                    thinkingLevel: geminiLevel
-                }
-            }
-            else {
-                chatConfig.thinkingConfig = {
-                    includeThoughts: true,
-                    thinkingBudget: thinkingBudget
-                };
-            }
+    /**
+     * Puts the `thinkingConfig` for `effortLevel` on the request (see {@link ResolveGeminiThinkingConfig}),
+     * or what replaced it after the model rejected it earlier in this process. Nothing is added when
+     * no effort is set; an effort that cannot be used is reported once.
+     */
+    private applyThinkingConfig(requestConfig: Record<string, unknown>, modelName: string, effortLevel: string | undefined): void {
+        const resolution = ResolveGeminiThinkingConfig(modelName, effortLevel);
+        if (resolution.Ignored) {
+            this.warnThinkingOnce(`${modelName}:${resolution.Ignored}`, `Gemini: ${resolution.Ignored}; sending no thinking setting, so the model thinks at its default.`);
         }
-        else {
-            if (gemini3AndAbove) {
-                chatConfig.thinkingConfig = {
-                    thinkingLevel: "MINIMAL" // if we don't have thinking setup and we're dealing with Gemini 3 series models, set thinking level to minimal
-                }
-            }
+        if (!resolution.Config) {
+            return;
+        }
+        const key = this.thinkingReplacementKey(modelName, resolution.Config);
+        const config = GeminiLLM._thinkingReplacements.has(key) ? GeminiLLM._thinkingReplacements.get(key) : resolution.Config;
+        if (config) {
+            requestConfig.thinkingConfig = config;
         }
     }
-    
+
+    /**
+     * Sends a request, and when it carried a thinking setting and Google answered 400, sends it once
+     * more with the setting's fallback (see {@link GeminiThinkingFallback}: `LOW` for a rejected
+     * `MINIMAL`, otherwise none). Which levels a model accepts varies (Gemini 3.8 Flash rejects
+     * `MINIMAL`), so an unsupported level must not fail the request. When the retry succeeds, the
+     * rejected setting is replaced for this driver and model for the rest of the process; when it also
+     * fails, the 400 had another cause, so the original error is thrown and nothing is remembered.
+     */
+    private async sendWithThinkingFallback<T>(
+        modelName: string,
+        requestConfig: Record<string, unknown>,
+        cancellationToken: AbortSignal | undefined,
+        send: (config: Record<string, unknown>) => Promise<T>
+    ): Promise<T> {
+        try {
+            return await send(requestConfig);
+        } catch (error) {
+            const { thinkingConfig, ...withoutThinking } = requestConfig as Record<string, unknown> & { thinkingConfig?: ThinkingConfig };
+            if (!thinkingConfig || !(error instanceof ApiError) || error.status !== 400 || cancellationToken?.aborted) {
+                throw error;
+            }
+            const fallback = GeminiThinkingFallback(thinkingConfig);
+            let result: T;
+            try {
+                result = await send(fallback ? { ...withoutThinking, thinkingConfig: fallback } : withoutThinking);
+            } catch {
+                throw error;
+            }
+            GeminiLLM._thinkingReplacements.set(this.thinkingReplacementKey(modelName, thinkingConfig), fallback ?? null);
+            this.warnThinkingOnce(this.thinkingReplacementKey(modelName, thinkingConfig),
+                `Gemini model ${modelName} rejected thinking setting ${JSON.stringify(thinkingConfig)} (${error.message}); ` +
+                `sending ${fallback ? JSON.stringify(fallback) : 'no thinking setting'} instead for the rest of the process.`);
+            return result;
+        }
+    }
+
+    private warnThinkingOnce(key: string, message: string): void {
+        if (GeminiLLM._warnedThinking.has(key)) {
+            return;
+        }
+        GeminiLLM._warnedThinking.add(key);
+        console.warn(message);
+    }
+
+    /**
+     * Normalizes Gemini usage to the {@link ModelUsage} contract.
+     *
+     * - `promptTokenCount` includes cached tokens, reported separately as `cachedContentTokenCount`,
+     *   so the cached count is subtracted (clamped at 0) and recorded as `cacheReadTokens`. Gemini
+     *   reports no separate cache-write charge.
+     * - `candidatesTokenCount` leaves out thinking, which Google counts in `thoughtsTokenCount` and
+     *   bills as output, so completion tokens are the sum of the two.
+     */
+    private static usageFromMetadata(metadata: GenerateContentResponseUsageMetadata | undefined): ModelUsage {
+        const cached = metadata?.cachedContentTokenCount ?? 0;
+        const usage = new ModelUsage(
+            Math.max(0, (metadata?.promptTokenCount ?? 0) - cached),
+            (metadata?.candidatesTokenCount ?? 0) + (metadata?.thoughtsTokenCount ?? 0)
+        );
+        usage.cacheReadTokens = cached;
+        return usage;
+    }
+
     /**
      * Reset streaming state for a new request
      */
@@ -768,7 +713,6 @@ export class GeminiLLM extends BaseLLM {
             pendingContent: '',
             thinkingComplete: false
         };
-        this._streamingCancellationToken = null;
     }
 
     /**
@@ -777,8 +721,6 @@ export class GeminiLLM extends BaseLLM {
     protected async createStreamingRequest(params: ChatParams): Promise<any> {
         // Reset streaming state for new request
         this.resetStreamingState();
-        this.throwIfCancelled(params.cancellationToken);
-        this._streamingCancellationToken = params.cancellationToken ?? null;
         const modelName = params.model || "gemini-pro";
 
         // Filter out system messages and extract system instruction content
@@ -815,79 +757,27 @@ export class GeminiLLM extends BaseLLM {
             finalMessageParts = [{ text: '' }];
         }
 
-        // Create the model and then chat
-        const modelOptions: Record<string, any> = {
-            temperature: params.temperature || 0.5,
-        };
-
-        switch (params.responseFormat) {
-            case 'JSON':
-                modelOptions.responseMimeType = 'application/json';
-                break;
-            case 'ModelSpecific':
-                if (params.modelSpecificResponseFormat) {
-                    Object.assign(modelOptions, params.modelSpecificResponseFormat);
-                }
-                break;
-        }
-
-        // Add supported parameters
-        if (params.topP != null) {
-            modelOptions.top_p = params.topP;
-        }
-        if (params.topK != null) {
-            modelOptions.top_k = params.topK;
-        }
-        if (params.stopSequences != null && params.stopSequences.length > 0) {
-            modelOptions.stopSequences = params.stopSequences;
-        }
-        if (params.seed != null) {
-            modelOptions.seed = params.seed;
-        }
-
-        // Gemini doesn't support these parameters - warn if provided
-        if (params.frequencyPenalty != null) {
-            console.warn('Gemini provider does not support frequencyPenalty parameter, ignoring');
-        }
-        if (params.presencePenalty != null) {
-            console.warn('Gemini provider does not support presencePenalty parameter, ignoring');
-        }
-        if (params.minP != null) {
-            console.warn('Gemini provider does not support minP parameter, ignoring');
-        }
-
-        // Build thinking configuration based on effort level and model capabilities
-        const thinkingBudget = this.getThinkingBudget(params.effortLevel, modelName);
-        const useThinking = this.supportsThinking(modelName) && thinkingBudget !== undefined;
-
-        // Create chat config - only include thinkingConfig if model supports it and effortLevel is specified
-        const chatConfig: Record<string, unknown> = {};
-        this.setThinkingConfig(chatConfig, useThinking, params.effortLevel, modelName, thinkingBudget);
+        // Sampling + response-format options, shaped for the model's version (see buildGenerationOptions)
+        const modelOptions = this.buildGenerationOptions(params, modelName);
 
         // Ensure Gemini client is initialized
         const client = await this.ensureGeminiClient();
 
         // systemInstruction (a plain string) is the stable, cacheable prefix. It must ride in the
-        // per-request config since @google/genai's sendMessage config REPLACES the session config.
-        // We do NOT fold chatConfig (thinkingConfig) in — that preserves prior thinking behavior and
-        // avoids sending a thinking level some models reject (see nonStreamingChatCompletion).
+        // per-request config since @google/genai's sendMessage config REPLACES the session config;
+        // so must thinkingConfig.
         const requestConfig: Record<string, unknown> = { ...modelOptions };
         if (systemInstructionText) {
             requestConfig.systemInstruction = systemInstructionText;
         }
+        this.applyThinkingConfig(requestConfig, modelName, params.effortLevel);
         this.applyCancellationToken(requestConfig, params.cancellationToken);
 
-        const chat = client.chats.create({
-            config: Object.keys(chatConfig).length > 0 ? chatConfig : undefined,
-            model: modelName,
-            history: history
-        });
-
-        // Send the latest user message (streaming); system prompt rides in requestConfig.
-        const streamResult = await chat.sendMessageStream({
-            message: finalMessageParts,
-            config: requestConfig
-        });
+        // Send the latest user message (streaming); system prompt rides in requestConfig. A rejected
+        // request throws here, before any chunk, so the thinking fallback works as it does above.
+        const streamResult = await this.sendWithThinkingFallback(modelName, requestConfig, params.cancellationToken, config =>
+            client.chats.create({ model: modelName, history }).sendMessageStream({ message: finalMessageParts, config })
+        );
         
         // Return the stream for the for-await loop to work
         return streamResult;
@@ -935,19 +825,10 @@ export class GeminiLLM extends BaseLLM {
             finishReason = chunk.candidates[0].finishReason;
         }
 
-        // Extract usage from chunk if available (appears on final chunk). Normalize to the uniform
-        // ModelUsage contract: promptTokenCount INCLUDES cached, so subtract cachedContentTokenCount
-        // (clamped at 0) to get UNCACHED/net-new promptTokens; cacheReadTokens holds the disjoint
-        // cache-read subset.
+        // Extract usage from chunk if available (appears on final chunk).
         let usage = null;
         if (chunk.usageMetadata) {
-            const chunkCachedTokens = chunk.usageMetadata.cachedContentTokenCount ?? 0;
-            const chunkNetPromptTokens = Math.max(0, (chunk.usageMetadata.promptTokenCount || 0) - chunkCachedTokens);
-            usage = new ModelUsage(
-                chunkNetPromptTokens,
-                chunk.usageMetadata.candidatesTokenCount || 0
-            );
-            usage.cacheReadTokens = chunkCachedTokens;
+            usage = GeminiLLM.usageFromMetadata(chunk.usageMetadata);
 
             // Usage only appears on the final chunk — log the cache diagnostic once here.
             this.logCacheDiagnostics('streaming', this._cacheDiagContext, chunk.usageMetadata);
@@ -1111,15 +992,6 @@ export class GeminiLLM extends BaseLLM {
         lastChunk: any | null | undefined,
         usage: any | null | undefined
     ): ChatResult {
-        // A mid-stream abort surfaces as an iteration error that the base class swallows, so the
-        // ONLY reliable signal here is the token itself. Report cancellation as a clean failure
-        // rather than passing off a truncated stream as a successful completion.
-        const cancellationToken = this._streamingCancellationToken;
-        if (cancellationToken?.aborted) {
-            const now = new Date();
-            return this.buildCancelledResult(now, this.createCancellationError(cancellationToken), cancellationToken);
-        }
-
         // Extract finish reason from last chunk if available
         let finishReason = 'stop';
         if (lastChunk?.candidates && lastChunk.candidates.length > 0 && lastChunk.candidates[0].finishReason) {
@@ -1313,6 +1185,56 @@ export class GeminiLLM extends BaseLLM {
     }
 
     /**
+     * A turn's thought parts and signed text parts, as replayable reasoning.
+     *
+     * Thought parts are kept with their signature when they have one. Text parts are kept only when
+     * at least one of them is signed, and then all of them, in order — the replay rebuilds the
+     * turn's text from these blocks, so each signature lands back on the text it was minted for.
+     * Function-call signatures travel on the calls themselves (see {@link extractToolCalls}).
+     *
+     * @param parts The candidate's content parts
+     * @param signatureOrigin Where this response's signatures validate (see {@link thoughtSignatureOrigin})
+     * @returns The blocks, or undefined when the turn had nothing to replay
+     */
+    private static extractReasoning(parts: Part[] | undefined, signatureOrigin: string): ChatReasoningBlock[] | undefined {
+        const all = parts ?? [];
+        const signature = (part: Part) => (part.thoughtSignature ? { signature: part.thoughtSignature } : {});
+        const blocks: ChatReasoningBlock[] = all
+            .filter((part) => part.thought && part.text)
+            .map((part) => ({ provider: GEMINI_REASONING_PROVIDER, kind: 'thought', text: part.text, ...signature(part), origin: signatureOrigin }));
+        // Gemini can put a turn's signature on a trailing part with empty text; it has to come back too.
+        const textParts = all.filter((part) => typeof part.text === 'string' && !part.thought && !part.functionCall
+            && (part.text.length > 0 || !!part.thoughtSignature));
+        if (textParts.some((part) => part.thoughtSignature)) {
+            blocks.push(...textParts.map((part): ChatReasoningBlock =>
+                ({ provider: GEMINI_REASONING_PROVIDER, kind: 'signed_text', text: part.text, ...signature(part), origin: signatureOrigin })));
+        }
+        return blocks.length > 0 ? blocks : undefined;
+    }
+
+    /**
+     * The parts that replay a model turn's own reasoning: its thought parts, and — when its text
+     * parts were signed and the message text is still exactly theirs — those text parts with their
+     * signatures. `text` is undefined when the message's content should be mapped as usual: no
+     * signed text, or text that was changed after the turn (compaction), which a signature would
+     * no longer match. Blocks from another provider, or signed where this request is not going,
+     * are dropped — a foreign signature is a hard 400.
+     */
+    private static reasoningPartsForReplay(message: ChatMessage, signatureOrigin: string | undefined): { thoughts: Part[]; text?: Part[] } {
+        const usable = (message.reasoning ?? []).filter((block) =>
+            block.provider === GEMINI_REASONING_PROVIDER
+            && !(signatureOrigin !== undefined && block.origin !== undefined && block.origin !== signatureOrigin));
+        const toPart = (block: ChatReasoningBlock, thought: boolean): Part =>
+            ({ text: block.text ?? '', ...(thought ? { thought: true } : {}), ...(block.signature ? { thoughtSignature: block.signature } : {}) });
+        const thoughts = usable.filter((block) => block.kind === 'thought').map((block) => toPart(block, true));
+        const signedText = usable.filter((block) => block.kind === 'signed_text');
+        const textMatches = typeof message.content === 'string'
+            && signedText.length > 0
+            && signedText.map((block) => block.text ?? '').join('').trim() === message.content.trim();
+        return { thoughts, text: textMatches ? signedText.map((block) => toPart(block, false)) : undefined };
+    }
+
+    /**
      * Maps one MJ message to a Gemini history entry.
      *
      * @param message The message to map
@@ -1320,7 +1242,10 @@ export class GeminiLLM extends BaseLLM {
      *   call's thought signature from anywhere else is swapped for the placeholder.
      */
     public static MapMJMessageToGeminiHistoryEntry(message: ChatMessage, signatureOrigin?: string): Content {
-        const parts = GeminiLLM.MapMJContentToGeminiParts(message.content);
+        // A model turn replays its own thoughts first, then its text, then its calls — the order
+        // Gemini produced them in.
+        const replay = message.role === 'assistant' ? GeminiLLM.reasoningPartsForReplay(message, signatureOrigin) : { thoughts: [] };
+        const parts = [...replay.thoughts, ...(replay.text ?? GeminiLLM.MapMJContentToGeminiParts(message.content))];
 
         // An assistant turn that called tools must replay those calls as `functionCall` parts so the
         // `functionResponse` parts that follow have something to pair with.
@@ -1334,8 +1259,9 @@ export class GeminiLLM extends BaseLLM {
         }
 
         // Gemini rejects an empty part list, and a pure tool-call turn has no prose — drop the empty
-        // text part that content mapping produces once real parts are carrying the turn.
-        const meaningfulParts = parts.length > 1 ? parts.filter(p => p.text !== '') : parts;
+        // text part that content mapping produces once real parts are carrying the turn. An empty
+        // part that carries a signature is the model's own, and stays.
+        const meaningfulParts = parts.length > 1 ? parts.filter(p => p.text !== '' || !!p.thoughtSignature) : parts;
 
         return {
             role: message.role === 'assistant' ? 'model' : 'user', // google calls all messages other than the replies from the model 'user' which would include the system prompt

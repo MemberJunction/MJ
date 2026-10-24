@@ -1,5 +1,295 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- 8443fd2: CodeGen produces correct, lean and observable artefacts for a schema it did not author — and can express a join that is not a declared foreign key.
+
+  **A relationship over a non-primary-key join column is now persisted.** A foreign key does not have to point at a primary key, and `EntityField.RelatedEntityFieldName` has always recorded which column it does point at — but nothing carried that across to `EntityRelationship.EntityKeyField`, which is the only place a consumer can learn it. All three consumers fall back to the parent's first primary key when it is blank, so every relationship over a non-PK join queried the wrong column and returned zero rows for every parent record. The INSERT now emits `EntityKeyField`, and — this is the half that repairs an existing database — a relationship whose join field is already correct, and which therefore takes the "exact match, skip" path, gets its key field healed rather than left blank forever. `AutoUpdateFromSchema = 0` rows are untouched. Nothing is emitted for an ordinary FK-to-primary-key relationship, so generated SQL is byte-identical wherever the fallback was already right.
+
+  **Indexes no longer come only from foreign-key metadata.** `isIndexableForeignKey` looked at `RelatedEntityID` and nothing else, which made "remove the FK metadata that is wrong" and "get an index for the join you actually perform" mutually exclusive: on an imported schema the real joins are on external ids, the inferred FKs onto them are deleted _because_ they are wrong, and the entity is left with a join MJ runs per parent record and no index. It now also indexes columns MJ itself has declared as joins — `EntityRelationship.EntityKeyField`, and the match fields of ACTIVE `ExactMatch` organic keys. Organic keys with any other normalization strategy are deliberately NOT indexed: their predicate is `LOWER(LTRIM(RTRIM(col))) = ?`, which no plain index on `col` can serve, and the generated SQL now says so instead of emitting an index that costs a write per insert and is never used. A verified join column that is already unique gets no second index: a declared FK can only target a column with a unique constraint, so that constraint's index already serves every `EntityKeyField` set from one.
+
+  **Organic-key detection survives a large schema.** `RunStructuralPhase` guarded only "no clusters", and the walk beneath it ran one BFS per hub × _every table in the database_ — including every table with no join edge at all — with each enqueued state allocating a fresh `Set` and a fresh path array, onto an unbounded queue drained with `Array.shift()`, into an uncapped result array. The phase is now gated on the **edge set** (not on declared FKs: `CollectFKEdgesFromState` also pulls inferred soft FKs, so a database that declares none can still build a dense graph), skips hubs and spokes with no edge, drains the queue with an index cursor, bounds the live BFS frontier and both result arrays, and **reports** when a bound fired rather than silently returning a partial answer. `RunStructuralPhase` also takes a `Skip` option, so a run can decline the phase and still emit its semantic-phase keys.
+
+  **Virtual-field drift heals on a normal run.** Pass 2 of `ManageEntityFields` is scoped to entities something changed on during _this_ run, so an entity whose related-entity name field never got its `EntityField` row dropped out of scope permanently — `BaseEntity.InnerLoad` then threw on that column for every record form of that entity, and the only recovery was `forceRegeneration` across the whole database. A catalog probe now finds entities carrying a view-only column with no `EntityField` and adds them to the Pass 2 scope. New _physical_ columns are deliberately not included: Pass 1 already finds those, and pulling them in would widen the scoped pass back out to a full scan.
+
+  **Base views can keep a column out.** New `baseViewExcludedFields` config. A base view is what every read goes through and both providers emitted `SELECT alias.*`, so a column no component reads was still fetched and held on every `RunView`, `Load` and grid — measured on one integration mirror at 52–70% of the table's bytes for a single JSON bookkeeping column. **Empty by default, and an empty list changes nothing**: the star is emitted unless an entity actually has an excluded column, so generated output is byte-identical for every entity nobody names.
+
+  It ships with an interlock, because without one it would destroy metadata. CodeGen's field prune asks "is this column in the base VIEW?" — `vwSQLColumnsAndEntityFields` resolves columns view-first on both dialects — so an excluded column's `EntityField` row looks orphaned and is deleted on the next run, silently taking out every metadata-mediated read and write of it. Verified against live PostgreSQL 16: deleted without protection, retained with it. `spDeleteUnneededEntityFields` therefore takes a new optional `ProtectedFieldNames` list, and CodeGen **declines the exclusion entirely**, with a message naming the prerequisite, on any database whose prune routine does not accept it. The PostgreSQL routine ships with CodeGen so it always does; the SQL Server routine ships in migrations, and the capability is probed rather than dialect-branched so that half activates the moment the parameter lands.
+
+  The measured column that motivated this — `__mj_integration_LastSyncedSnapshot` — is **not** excluded by default, and should not be until one reader is repointed: `IntegrationEngine.computePushCombine` reads it out of `change.Fields`, which is `entity.GetAll()` after an `InnerLoad` off the base view. Without it that method falls back to pushing the full attribute set, silently and by design, so bidirectional field-level merge would quietly stop working. The other `__mj_integration_*` columns are not default-excluded either: `SyncStatus` and `LastSyncedAt` are mapped onto the API surface by `GraphQLDataProvider`'s `FieldMapper`.
+
+  **Enabling full-text search now says what it costs.** The generated objects are charged on every write to the table from then on — PostgreSQL: a row-level `BEFORE INSERT OR UPDATE` trigger recomputing `to_tsvector`, a GIN index maintained on those writes, and a whole-table backfill; SQL Server: continuous change tracking plus a full re-crawl on every apply — and turning the entity's flags back off removes none of it. A case-insensitive sweep of the generator for `warn|cost|overhead|expensive|caution` previously returned nothing.
+
+  **A long run reports where it is.** There was a 100 ms elapsed ticker, but the message it re-rendered was set once before the entity loop, so a run stalled on entity 3 and a run on entity 1,180 looked identical. The loop now emits position, total, phase and elapsed per batch, through `UpdateSpinner` so verbose mode gets the same information as a line per batch.
+
+  **PostgreSQL support objects.** `spUpdateExistingEntitiesFromSchema` was the last routine still joining the catalog-introspection view directly — a function-based scan over `pg_catalog` with no row statistics, estimated at `rows=1`, nested-looped per `Entity` row — and never ANALYZEd its own `_ues_filtered` working table. Both are fixed the way the two sibling routines in that file already were. And `spRecompileAllViews` now exists on PostgreSQL. It cannot do what the SQL Server proc does (PG freezes a view's targetlist at creation, `CREATE OR REPLACE VIEW` may only append columns, and `pg_get_viewdef` returns the already-expanded definition, so there is no in-place refresh and no original source to replay) — what it closes is the silence: a stale base view said nothing until something read it and failed with `column "X" does not exist`, taking `BaseEngine` loads and `mj sync push` with it. It reports every base view whose column list has drifted from its base table, raises a warning per view so a `mj migrate` log carries it, and names `mj codegen` as the repair. `R__RefreshMetadata.pg-only.sql` calls it.
+
+  **In-process CodeGen generates SQL for the entities it just registered.** The pipeline reads entities through `new Metadata()`, the process's global provider, but after `manageMetadata` it refreshed only the provider it was handed. On the CLI they are the same object. In-process (`RunInProcess`, the runtime schema-update path) the host passes a separate CodeGen-credential provider, so SQL generation ran on the host's last timed snapshot, where newly registered entities had no soft primary key yet, and skipped every one of them as "no primary key field in metadata": no base view, no CRUD routines. The global provider is now refreshed too when it is a different object.
+
+  **A value list on a boolean field no longer breaks the generated package.** Value lists become literal unions in the generated property type and Zod schema, quoted only when the field needs quotes. A boolean field never does, so a declared "False"/"True" list came out as the bare identifiers `False | True` and `z.literal(False)` (TS2304), and the build failed. A boolean field now keeps `boolean` / `z.boolean()`, with its values still listed in the doc comment; string and numeric value lists are unchanged.
+
+- 2ed72d8: Detect `Entity.Configuration.SaveReturnMode` changes on existing `spCreate*` and `spUpdate*` routines during `SQLCodeGenBase.loadExistingRoutines` so running `mj codegen` after `mj sync push` automatically logs and executes the updated stored procedures, and ship the `SaveReturnMode = 'datestamps_only'` stored procedures migration in `migrations/v6/`.
+- 832c63c: CodeGen checks soft foreign keys from `additionalSchemaInfo` before writing them (#4532).
+  - **Conflicting declarations are not resolved by file order.** A field declared as a soft FK to more than one target got one `UPDATE` per declaration, so the last one in the file won silently. CodeGen now reports such a field as an error, naming every target, and leaves it as it is; the other fields still apply. Declarations that differ only in letter case count as one.
+  - **The target column must exist.** A target column the related entity does not have is skipped with a warning instead of being written into metadata. The name matches case-sensitively on PostgreSQL, where `ID` and `id` are different columns. On SQL Server the column's real name is written.
+  - **Non-unique targets are flagged.** A target that is neither a single-column primary key nor unique (for example one column of a composite primary key) is still applied, with a warning that a join on it can return more than one row. A column of a multi-column primary key counts as not unique even when its `IsUnique` flag is set, which it was on a live SQL Server run.
+  - **`IsUnique` alone is checked against the unique indexes.** Schema sync sets `IsUnique` on every column of a composite unique constraint, and on the INCLUDE columns of a unique index. A target that only `IsUnique` vouches for is now looked up in the database's unique indexes, on SQL Server and PostgreSQL. It counts as unique only with a unique index of its own; otherwise it gets the same warning. A view, a failed lookup, or a provider without the new `GetUniqueIndexMembershipSQL` keeps the flag's answer.
+  - **Soft primary keys are applied first.** Every table's soft primary keys are written before any foreign key is checked, so the uniqueness check sees them whatever the order of the tables in the file.
+
+- 0c634ba: Fix Explorer console errors: grant UI role create/update permissions on MJ: User Record Logs and guard RecentAccessService.LogAccess, emit Conversations$ synchronously on optimistic SaveConversation updates and run change detection on conversation rename/creation callbacks to prevent NG0100, fall back to user-settings persistence in EntityViewerComponent when UserCanEdit is false on a loaded UserView, and hide/omit Deprecated and Disabled entity fields in MjFormFieldComponent and AngularClientGeneratorBase.
+- Updated dependencies [3b0e8db]
+- Updated dependencies [0d81c53]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [52b9fd5]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [5465489]
+- Updated dependencies [a9344ad]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [0ab85d7]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [2274f42]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [db39145]
+- Updated dependencies [a0db1fb]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [230cdad]
+- Updated dependencies [7e72c86]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [a9614be]
+- Updated dependencies [8420f36]
+- Updated dependencies [72dd65c]
+- Updated dependencies [e38710c]
+- Updated dependencies [1d29837]
+- Updated dependencies [006a5e7]
+- Updated dependencies [ba61c0b]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [2ca8690]
+- Updated dependencies [74d44e1]
+- Updated dependencies [c7d1170]
+- Updated dependencies [79d4f27]
+- Updated dependencies [5f707d1]
+- Updated dependencies [091e7ea]
+- Updated dependencies [3cb20c0]
+- Updated dependencies [d1b1958]
+- Updated dependencies [8389c99]
+- Updated dependencies [03c085c]
+- Updated dependencies [dc38250]
+  - @memberjunction/generic-database-provider@6.2.0-edge.5
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.5
+  - @memberjunction/postgresql-dataprovider@6.2.0-edge.5
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/ai-prompts@6.2.0-edge.5
+  - @memberjunction/ai@6.2.0-edge.5
+  - @memberjunction/ai-core-plus@6.2.0-edge.5
+  - @memberjunction/actions-base@6.2.0-edge.5
+  - @memberjunction/actions@6.2.0-edge.5
+  - @memberjunction/aiengine@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/core-entities-server@6.2.0-edge.5
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/sql-parser@6.2.0-edge.5
+  - @memberjunction/sql-dialect@6.2.0-edge.5
+  - @memberjunction/external-data-sources@6.2.0-edge.5
+  - @memberjunction/external-data-source-databricks@6.2.0-edge.5
+  - @memberjunction/external-data-source-mongodb@6.2.0-edge.5
+  - @memberjunction/external-data-source-mysql@6.2.0-edge.5
+  - @memberjunction/external-data-source-oracle@6.2.0-edge.5
+  - @memberjunction/external-data-source-postgres@6.2.0-edge.5
+  - @memberjunction/external-data-source-sqlserver@6.2.0-edge.5
+  - @memberjunction/external-data-source-snowflake@6.2.0-edge.5
+  - @memberjunction/query-processor@6.2.0-edge.5
+  - @memberjunction/cli-core@6.2.0-edge.5
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.5
+  - @memberjunction/config@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- 1a091ac: Per-table `Entities` entries in the additionalSchemaInfo config now apply their entity flags (`TrackRecordChanges`, `AllowCaching`, the `Allow*API` flags, `UserViewMaxRows`, …) when CodeGen first creates the entity, not only in a later pass. A table declared `TrackRecordChanges: false` no longer gets `__mj_CreatedAt` / `__mj_UpdatedAt` columns on its first CodeGen run.
+- 88e6902: `EntityInfo.ConfigurableAtCreationAttributes` (with the `EntityConfigurableAtCreationAttribute` type) lists the entity flags a per-table CodeGen config entry may set when the entity is first created. It is typed against `EntityInfo`, so a misspelled name fails to compile. CodeGenLib now uses it instead of its own copy.
+- 33bd959: Read PostgreSQL's CHECK-constraint value lists, and stop producing partial ones (#4713).
+
+  #3978 taught CodeGen to read SQL Server's unquoted numeric `IN (...)` renderings. PostgreSQL writes
+  the same constraints differently and none of those forms were read: a numeric list produced no
+  `EntityFieldValue` rows, and a single-value list produced none for any type, so the field lost its
+  dropdown in Explorer and its runtime validation.
+
+  Two shapes were worse than empty. PostgreSQL may quote one element of an array and parenthesize
+  another — `ARRAY['100000000000'::bigint, (2)::bigint]`, `ARRAY['-1.50'::numeric, 2.25]` — and the
+  old extractor read only the quoted ones. That produced a value list missing a legal value, so
+  `EntityField.Validate()` refused a value the database accepts. Element reading is now
+  all-or-nothing: an array containing anything it cannot read yields no list at all rather than a
+  partial one.
+
+  The PostgreSQL parse is now **anchored on the whole constraint** instead of searching for
+  `ARRAY[...]` anywhere in the definition. That matters because `(x <> ALL (ARRAY[1, 2]))` (NOT IN)
+  and `((x = ANY (ARRAY[1, 2])) OR (x > 100))` both contain an array whose elements are _not_ the
+  field's legal values — the first inverts the meaning, the second is a subset. Both were previously
+  safe only because unquoted elements were unreadable, so reading them without anchoring would have
+  introduced exactly that bug.
+
+  Shapes now parsed, every one captured from a live PostgreSQL 16 via `pg_get_constraintdef()` — the
+  same function the `vwEntityFieldsWithCheckConstraints` PG view feeds CodeGen: multi-value numeric
+  (`= ANY (ARRAY[1, 2, 3])`), mixed quoting and nested casts, the nullable `(x IS NULL) OR …` form,
+  and single-value lists (`(one = 7)`, `((s)::text = 'OnlyOne'::text)`, uuid, text). Booleans stay
+  out, matching the `bit` exclusion on SQL Server: `true`/`false` are neither quoted nor numeric
+  literals, and `boolean`/`bool` are also named in the field-level exclusion.
+
+  SQL Server parsing is unchanged.
+
+- b8a9e5e: Remove nested `UUIDsEqual` scans where both lists grow with the data or the code runs on every render. Fix one cross-database lookup bug.
+  - **Rubric publish validation could miss advisory parents.** `ValidateRubricTree` looked a raw `parentId` up in a map with normalized keys. On SQL Server (upper-case IDs) the advisory-ancestor walk silently stopped, so a non-advisory criterion under an advisory group was not reported. The map is now a `UUIDMap`.
+  - **Per-render getters no longer rescan the entity list.** The Entity form's `FormChromeCandidates`, the Data Explorer's `RecentEntities` / `FavoriteEntities` and the storage admin's `FilteredAccountRows` now read cached or once-built indexes.
+  - **Entity lookups by ID** in the ERD, the get-entity-details and list-entities actions, recent-access and the form builder now use the provider's indexed `EntityByID`. The application dialog uses a once-built index.
+  - **Other once-built indexes:** tag lookups, permission grantee names, orphaned-conversation owners and flow-editor node moves.
+  - `createFakeProvider` (`ng-test-utils`) now implements `EntityByID`, like a real provider.
+  - **New helper:** `GroupByUUID(items, getId?)` in `@memberjunction/global` groups items by a UUID in one pass, each group in input order.
+  - **Server sites that matched two growing lists:** the user cache (users × user roles), resource-permission deduplication, user/role sync, default-app user applications, scheduled-job statistics, MCP action discovery, REST connector schema introspection and rubric calibration.
+  - **Offline tools:** CodeGen relationship sync and CHECK-constraint value lists, CodeGen's related-entity form lookups, and `mj artifacts reclassify`.
+  - **Angular screens that scale with the data:** the AI Agent form's linked prompts and actions, the prompt priority matrix, the Testing explorer, the conversations message cache, the Query Browser tree, the Actions overview and categories, the dashboard browser, list-form bulk remove and credentials bulk actions.
+
+  Behaviour is unchanged otherwise, and each site has a test that also passes against the old code.
+
+- Updated dependencies [96d6ec2]
+- Updated dependencies [a709bb6]
+- Updated dependencies [d17de94]
+- Updated dependencies [7ada797]
+- Updated dependencies [432cb73]
+- Updated dependencies [293c316]
+- Updated dependencies [155aa45]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [1da00cb]
+- Updated dependencies [b699a37]
+- Updated dependencies [dde482c]
+- Updated dependencies [a4b23b7]
+- Updated dependencies [49f26d9]
+- Updated dependencies [961d529]
+- Updated dependencies [10c2311]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [bb3028a]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [64b6fa5]
+- Updated dependencies [fcf8e1c]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [af6f892]
+- Updated dependencies [432fe69]
+- Updated dependencies [4889fb2]
+- Updated dependencies [b2441c3]
+- Updated dependencies [69e19c5]
+- Updated dependencies [7316ac3]
+- Updated dependencies [91be34f]
+- Updated dependencies [8ef5e86]
+- Updated dependencies [596855c]
+- Updated dependencies [fdf6669]
+- Updated dependencies [4c682c1]
+- Updated dependencies [f325baa]
+- Updated dependencies [0c68021]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [b09fe34]
+- Updated dependencies [6d5c6ad]
+- Updated dependencies [8bac4d6]
+- Updated dependencies [c0ebd97]
+- Updated dependencies [7dc604e]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [20650af]
+- Updated dependencies [5a3de97]
+- Updated dependencies [0d0ba18]
+- Updated dependencies [b6fcb30]
+- Updated dependencies [f73e192]
+- Updated dependencies [8704df6]
+- Updated dependencies [5345e3d]
+- Updated dependencies [1ea4085]
+- Updated dependencies [975948b]
+- Updated dependencies [22c9074]
+- Updated dependencies [88b85fc]
+- Updated dependencies [aee2d53]
+- Updated dependencies [5dc3752]
+- Updated dependencies [6c8798b]
+- Updated dependencies [f0c78c3]
+- Updated dependencies [25f7b82]
+- Updated dependencies [35ed7b5]
+- Updated dependencies [d853bf8]
+- Updated dependencies [e293b68]
+- Updated dependencies [02bb563]
+- Updated dependencies [afe9eb4]
+- Updated dependencies [90829e3]
+- Updated dependencies [57096ab]
+- Updated dependencies [aac148b]
+- Updated dependencies [a28ce42]
+- Updated dependencies [e1942c7]
+- Updated dependencies [d2cb42e]
+- Updated dependencies [cbddadb]
+- Updated dependencies [bdea87a]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [b653746]
+- Updated dependencies [57fea6a]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [6b487b8]
+  - @memberjunction/ai-core-plus@6.2.0-edge.4
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/aiengine@6.2.0-edge.4
+  - @memberjunction/ai@6.2.0-edge.4
+  - @memberjunction/core-entities-server@6.2.0-edge.4
+  - @memberjunction/generic-database-provider@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/ai-prompts@6.2.0-edge.4
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.4
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.4
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.4
+  - @memberjunction/sql-dialect@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/actions@6.2.0-edge.4
+  - @memberjunction/sql-parser@6.2.0-edge.4
+  - @memberjunction/postgresql-dataprovider@6.2.0-edge.4
+  - @memberjunction/actions-base@6.2.0-edge.4
+  - @memberjunction/external-data-sources@6.2.0-edge.4
+  - @memberjunction/external-data-source-databricks@6.2.0-edge.4
+  - @memberjunction/external-data-source-mongodb@6.2.0-edge.4
+  - @memberjunction/external-data-source-mysql@6.2.0-edge.4
+  - @memberjunction/external-data-source-oracle@6.2.0-edge.4
+  - @memberjunction/external-data-source-postgres@6.2.0-edge.4
+  - @memberjunction/external-data-source-sqlserver@6.2.0-edge.4
+  - @memberjunction/external-data-source-snowflake@6.2.0-edge.4
+  - @memberjunction/query-processor@6.2.0-edge.4
+  - @memberjunction/cli-core@6.2.0-edge.4
+  - @memberjunction/config@6.2.0-edge.4
+
 ## 6.2.0-edge.3
 
 ### Minor Changes

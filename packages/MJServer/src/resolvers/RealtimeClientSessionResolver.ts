@@ -33,7 +33,7 @@
  */
 import { Resolver, Mutation, Arg, Ctx, Int, Float, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
-import { AuthorizationEvaluator, UserInfo, IMetadataProvider, LogError, LogErrorEx, LogStatus, RunView, BaseEntity } from '@memberjunction/core';
+import { AuthorizationEvaluator, UserInfo, IMetadataProvider, DatabaseProviderBase, LogError, LogErrorEx, LogStatus, RunView, BaseEntity } from '@memberjunction/core';
 import { UUIDsEqual, IsValidUUID } from '@memberjunction/global';
 import {
     MJAIAgentEntity,
@@ -43,6 +43,7 @@ import {
     MJArtifactVersionEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailEntity,
+    ConversationEngine,
 } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIAgentPermissionHelper, AIEngineBase, HasRealtimeUsage, ParseRealtimeUsageRecord, type RealtimeUsageRecord } from '@memberjunction/ai-engine-base';
@@ -61,6 +62,7 @@ import {
     RealtimeAllowedAgent,
     RealtimeDirectActionsConfig,
     REALTIME_ADVANCED_SESSION_CONTROLS_AUTHORIZATION,
+    SqlRealtimeRecordingLedger,
     resolveRecordingStorageAccountID,
     storeRealtimeRecording,
     writeRealtimeRecordingSegment,
@@ -86,6 +88,7 @@ import { ResolveWidgetGuestRunContext, ResolveScopedAnonymousRunUser, ResolveRec
 import { RunWithTrustedSessionConfigWrites } from '@memberjunction/core-entities-server';
 import { BuildMintConfigStamps, LoadInheritedVerifiedIdentity } from '../realtimeSessions/sessionConfigStamps.js';
 import { ParseConfigObject } from '../realtimeSessions/verificationCore.js';
+import { LoadOwnedRealtimeSession } from '../realtimeSessions/ownedRealtimeSession.js';
 
 /**
  * Progress steps worth narrating to the realtime model — mirrors the normal agent-run path's filter
@@ -209,6 +212,11 @@ interface RealtimeSessionConfig {
      * agent default kit is used (the common case).
      */
     mediaCollectionID?: string;
+    /**
+     * The fork (`MJ: Conversation Branches.ID`) the session was started on, fixed at start; absent means
+     * Main. Every transcript, direct-action and anchor row the session writes carries it.
+     */
+    conversationBranchID?: string;
     /**
      * Server-authoritative identity-verification state (policy snapshot taken at mint, pending/verified
      * state written by `RealtimeSessionVerificationService`). Protected from owner writes by
@@ -409,7 +417,7 @@ export class CancelRealtimeSessionToolResult {
  * Result of {@link RealtimeClientSessionResolver.UploadRealtimeRecording} — a structured
  * success/failure envelope. A recording-storage failure must never throw to the browser (the
  * session it belongs to has already ended), so problems come back as `Success: false` with a
- * human-readable reason; only ownership/authn violations (from `loadOwnedSession`) still throw.
+ * human-readable reason; only ownership/authn violations (from `LoadOwnedRealtimeSession`) still throw.
  */
 @ObjectType()
 export class UploadRealtimeRecordingResult {
@@ -506,6 +514,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * @param showsAgentVideo `false` from an app that shows no agent video (no channel of it shows it: the embeddable
      *   widgets, the mobile app): the session asks the model for no avatar, and `AvatarStatusJson` says `host`. Absent or
      *   `true`: the app may show it. It only ever turns video off, so it needs no authorization.
+     * @param conversationBranchId Optional fork (`MJ: Conversation Branches.ID`) the session starts on;
+     *   omitted is Main. It must be a fork of `conversationId`, else the start fails and no session is
+     *   created. The session's history is read from that fork's path and its transcript is written there.
      *
      * @returns The ephemeral config + session linkage the browser needs to open its socket.
      */
@@ -526,6 +537,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         @Arg('appContextJson', () => String, { nullable: true }) appContextJson?: string,
         @Arg('channelCandidatesJson', () => String, { nullable: true }) channelCandidatesJson?: string,
         @Arg('showsAgentVideo', () => Boolean, { nullable: true }) showsAgentVideo?: boolean,
+        @Arg('conversationBranchId', () => String, { nullable: true }) conversationBranchId?: string,
     ): Promise<StartRealtimeClientSessionResult> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
 
@@ -563,6 +575,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 );
             }
         }
+        const sessionBranchId = await this.resolveSessionBranch(conversationId, conversationBranchId, contextUser, provider);
+        if (sessionBranchId) {
+            config.conversationBranchID = sessionBranchId;
+        }
         // The initial Config carries `maxSessionDeadlineIso` for capped sessions — a server-authoritative key
         // that `MJAIAgentSessionEntityServer` refuses to let the session OWNER write, so this write (and only
         // this one, built entirely from server-decided values) runs in the trusted scope.
@@ -581,7 +597,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         );
 
         // Best-effort: stamp recording-start metadata when the browser captured (with consent) at start.
-        await this.stampRecordingStart(session, recordingConsent, recordingStartedAt);
+        await this.stampRecordingStart(session, recordingConsent, recordingStartedAt, contextUser, provider);
 
         const clientTools = this.parseClientTools(clientToolsJson);
         const channelCandidates = this.parseChannelCandidates(channelCandidatesJson);
@@ -594,7 +610,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         // framed as the resumed transcript, and injecting the same turns twice puts two accounts of
         // the same exchange in one prompt.
         const conversationMessages = await this.loadConversationHistory(
-            conversationId, prior?.LegIDs ?? [], contextUser, provider,
+            conversationId, prior?.LegIDs ?? [], contextUser, provider, sessionBranchId,
         );
         const result = await this.prepareClientSessionOrClose(
             session, coAgentID, effectiveTargetId, contextUser, provider, preferredModelId, clientTools, prior?.Text,
@@ -606,6 +622,32 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         // board). Strictly tolerant — any problem yields a null field, never a failed start.
         result.PriorChannelStatesJson = (await this.loadPriorChannelStatesJson(lastSessionId, contextUser, provider)) ?? undefined;
         return result;
+    }
+
+    /**
+     * The fork a session starts on: null (Main) when none is named; else the named fork, which must
+     * belong to the session's conversation. Returns the fork's stored id.
+     * @throws when a fork is named without a conversation, or is not a fork of it, or the fork rows cannot be read
+     */
+    private async resolveSessionBranch(
+        conversationId: string | undefined,
+        branchId: string | undefined,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<string | null> {
+        const named = branchId?.trim();
+        if (!named) {
+            return null;
+        }
+        if (!conversationId) {
+            throw new Error(`StartRealtimeClientSession: fork ${named} needs a conversation`);
+        }
+        try {
+            const scope = await ConversationEngine.LoadScope(conversationId, named, contextUser, provider);
+            return scope.BranchID;
+        } catch (error) {
+            throw new Error(`StartRealtimeClientSession: fork ${named} is not a readable fork of conversation ${conversationId}: ${(error as Error).message}`);
+        }
     }
 
     /**
@@ -904,7 +946,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * the call and uploads the assembled blob (base64) once the session ends.
      *
      * Hard gates (in order):
-     * 1. Ownership — `loadOwnedSession` enforces `UserID === contextUser.ID` (throws on violation).
+     * 1. Ownership — `LoadOwnedRealtimeSession` enforces `UserID === contextUser.ID` (throws on violation).
      * 2. Consent — `consent !== true` is a hard refusal: no audio is ever stored without it.
      * 3. Storage configuration — the session's agent must resolve a recording storage account (the
      *    agent's `RecordingStorageProviderID`, else `AttachmentStorageProviderID`).
@@ -933,7 +975,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         @Arg('peaks', () => [Float], { nullable: true }) peaks?: number[],
     ): Promise<UploadRealtimeRecordingResult> {
         const { contextUser, provider } = this.requireUserAndProvider(ctx.userPayload, ctx.providers);
-        const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
+        const session = await LoadOwnedRealtimeSession(agentSessionId, contextUser, provider);
 
         // HARD consent gate — no audio is ever stored without an explicit grant.
         if (consent !== true) {
@@ -975,16 +1017,21 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             });
 
             // Canonical consolidated file written — drop the crash-recovery shards (best-effort).
-            if (stored.FileID) {
+            // A FileID with an ErrorMessage is an uploaded file the session was not stamped with: the
+            // shards are then the only recording the janitor could still recover, so keep them.
+            const storedAndStamped = !!stored.FileID && !stored.ErrorMessage;
+            if (storedAndStamped) {
                 await deleteRealtimeRecordingSegments(agentSessionId, accountID, runUser);
+            } else if (stored.FileID) {
+                LogError(`RealtimeClientSessionResolver.UploadRealtimeRecording: session ${agentSessionId} has file ${stored.FileID} but it is not stamped (${stored.ErrorMessage}); shards kept`);
             }
 
             return {
-                Success: !!stored.FileID,
+                Success: storedAndStamped,
                 FileID: stored.FileID ?? undefined,
                 // Report the reason the storage layer knew (e.g. Drive's "Service Accounts do not have
                 // storage quota"); the generic sentence is only for when no layer supplied one.
-                ErrorMessage: stored.FileID ? undefined : (stored.ErrorMessage ?? 'Storage upload failed.'),
+                ErrorMessage: storedAndStamped ? undefined : (stored.ErrorMessage ?? 'Storage upload failed.'),
             };
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
@@ -1020,7 +1067,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     ): Promise<boolean> {
         try {
             const { contextUser, provider } = this.requireUserAndProvider(ctx.userPayload, ctx.providers);
-            const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
+            const session = await LoadOwnedRealtimeSession(agentSessionId, contextUser, provider);
             // The consolidated recording already landed and its upload deleted the shards; a shard
             // arriving now (one still on the wire at hang-up) would be an orphan nothing deletes.
             if (session.RecordingFileID) {
@@ -1143,7 +1190,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         @Arg('callId', () => String, { nullable: true }) callId?: string,
     ): Promise<CancelRealtimeSessionToolResult> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
-        await this.loadOwnedSession(agentSessionId, contextUser, provider);
+        await LoadOwnedRealtimeSession(agentSessionId, contextUser, provider);
         try {
             const aborted = this.clientSessionService.CancelInFlightDelegations(agentSessionId, callId);
             return { AbortedCount: aborted, Success: true };
@@ -1190,7 +1237,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         @Arg('usageDetailsJson', () => String, { nullable: true }) usageDetailsJson?: string,
     ): Promise<boolean> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
-        const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
+        const session = await LoadOwnedRealtimeSession(agentSessionId, contextUser, provider);
 
         const inputDelta = this.clampTokenDelta(inputTokens);
         const outputDelta = this.clampTokenDelta(outputTokens);
@@ -1318,7 +1365,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         @Ctx() { userPayload, providers }: AppContext,
     ): Promise<boolean> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
-        const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
+        const session = await LoadOwnedRealtimeSession(agentSessionId, contextUser, provider);
 
         if (!this.isChannelInSessionScope(session, channelName)) {
             LogError(`SaveSessionChannelState: channel '${channelName}' is not in session ${agentSessionId}'s resolved scope — state not saved.`);
@@ -1401,7 +1448,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         @Ctx() { userPayload, providers }: AppContext,
     ): Promise<SaveSessionChannelArtifactResult> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
-        const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
+        const session = await LoadOwnedRealtimeSession(agentSessionId, contextUser, provider);
 
         if (!this.isChannelInSessionScope(session, channelName)) {
             const message = `SaveSessionChannelArtifact: channel '${channelName}' is not in session ${agentSessionId}'s resolved scope — nothing saved.`;
@@ -1436,7 +1483,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     private requireUserAndProvider(
         userPayload: AppContext['userPayload'],
         providers: AppContext['providers'],
-    ): { contextUser: UserInfo; provider: IMetadataProvider } {
+    ): { contextUser: UserInfo; provider: DatabaseProviderBase } {
         const contextUser = this.GetUserFromPayload(userPayload);
         if (!contextUser) {
             throw new Error('Not authenticated: no user context for realtime session operation');
@@ -1914,33 +1961,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         contextUser: UserInfo,
         provider: IMetadataProvider,
     ): Promise<MJAIAgentSessionEntity> {
-        const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
+        const session = await LoadOwnedRealtimeSession(agentSessionId, contextUser, provider);
         if (session.Status === 'Closed') {
             throw new Error(`Realtime session ${agentSessionId} is closed`);
-        }
-        return session;
-    }
-
-    /**
-     * Loads a session and enforces inbound ownership (`UserID === contextUser.ID`) WITHOUT
-     * rejecting `Closed` sessions — {@link SaveSessionChannelState}'s final on-end flush
-     * legitimately arrives after the session closed. Throws when not found / not owned.
-     */
-    private async loadOwnedSession(
-        agentSessionId: string,
-        contextUser: UserInfo,
-        provider: IMetadataProvider,
-    ): Promise<MJAIAgentSessionEntity> {
-        const session = await provider.GetEntityObject<MJAIAgentSessionEntity>(SESSION_ENTITY, contextUser);
-        const loaded = await session.Load(agentSessionId);
-        if (!loaded) {
-            throw new Error(`Realtime session ${agentSessionId} not found`);
-        }
-        if (!UUIDsEqual(session.UserID, contextUser.ID)) {
-            LogError(
-                `RealtimeClientSessionResolver: ownership check failed — user ${contextUser.ID} attempted to operate on session ${agentSessionId} owned by ${session.UserID}`,
-            );
-            throw new Error('Not authorized: you do not own this realtime session');
         }
         return session;
     }
@@ -2150,6 +2173,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * as the resumed transcript are removed, so the prompt never carries two accounts of one
      * exchange.
      *
+     * Only the rows on the session's path that no rerun replaced are read: the fork it started on,
+     * or Main, in `Sequence` order. When that path cannot be built — its branch rows are missing or invalid — the session
+     * starts with no history, never with every branch's rows.
+     *
      * Strictly tolerant — no conversation, a failed read, or any throw yields `[]`, never a failed
      * session start. The call still works; it just starts cold.
      *
@@ -2157,6 +2184,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * @param coveredSessionIDs Session ids already framed via `PriorTranscript`.
      * @param contextUser The calling user (RunView scope — the read is row-level-secured).
      * @param provider The request-scoped metadata provider.
+     * @param branchId The fork the session started on; null is Main.
      * @returns The capped history, oldest first.
      */
     private async loadConversationHistory(
@@ -2164,12 +2192,22 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         coveredSessionIDs: string[],
         contextUser: UserInfo,
         provider: IMetadataProvider,
+        branchId: string | null,
     ): Promise<ChatMessage[]> {
         if (!conversationId) {
             return [];
         }
+        const rv = RunView.FromMetadataProvider(provider);
+        let pathFilter: string;
         try {
-            const rv = RunView.FromMetadataProvider(provider);
+            pathFilter = await ConversationEngine.BranchPathFilterFresh(conversationId, branchId, contextUser, provider);
+        } catch (error) {
+            LogError(
+                `StartRealtimeClientSession: could not build the path of the session's view for conversation ${conversationId}: ${(error as Error).message}`,
+            );
+            return [];
+        }
+        try {
             const result = await rv.RunView<{
                 Role: string;
                 Message: string | null;
@@ -2178,9 +2216,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             }>(
                 {
                     EntityName: CONVERSATION_DETAIL_ENTITY,
-                    ExtraFilter: `ConversationID='${conversationId.replace(/'/g, "''")}'`,
+                    ExtraFilter: ConversationEngine.LiveRowsFilter(pathFilter),
                     Fields: ['ID', 'Role', 'Message', 'HiddenToUser', 'AgentSessionID', '__mj_CreatedAt'],
-                    OrderBy: '__mj_CreatedAt ASC',
+                    OrderBy: 'Sequence ASC',
                     ResultType: 'simple',
                 },
                 contextUser,
@@ -2547,6 +2585,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         const detail = await provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, callerUser);
         detail.NewRecord();
         detail.ConversationID = session.ConversationID;
+        detail.BranchID = this.sessionBranchIdOf(session);
         detail.Role = 'AI';
         detail.HiddenToUser = true;
         detail.Message = 'Artifacts produced during a realtime session (system anchor).';
@@ -2736,6 +2775,12 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         return channels.some((key) => typeof key === 'string' && NormalizeChannelKey(key) === wanted);
     }
 
+    /** The fork the session was started on (its config's `conversationBranchID`); null is Main. */
+    private sessionBranchIdOf(session: MJAIAgentSessionEntity): string | null {
+        const branchId = ParseConfigObject(session.Config_)['conversationBranchID'];
+        return typeof branchId === 'string' && branchId.length > 0 ? branchId : null;
+    }
+
     /**
      * Parses the session's persisted config, returning its `targetAgentID` plus any observability run
      * ids (`coAgentRunID`/`promptRunID`). Throws when the config is missing/malformed or carries no
@@ -2767,6 +2812,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                             parsed.directActions && typeof parsed.directActions === 'object' && typeof parsed.directActions.enabled === 'boolean'
                                 ? (parsed.directActions as RealtimeDirectActionsConfig)
                                 : undefined,
+                        conversationBranchID: typeof parsed.conversationBranchID === 'string' ? parsed.conversationBranchID : undefined,
                         mediaCollectionID: typeof parsed.mediaCollectionID === 'string' ? parsed.mediaCollectionID : undefined,
                         channels: Array.isArray(parsed.channels) ? parsed.channels.filter((k): k is string => typeof k === 'string') : undefined,
                     };
@@ -2805,17 +2851,26 @@ export class RealtimeClientSessionResolver extends ResolverBase {
 
     /**
      * Stamps `RecordingStartedAt` (the recording `t0` alignment origin) + `RecordingMedia` on a
-     * just-started session when the browser captured WITH consent. Best-effort: a parse/save failure
-     * is logged and swallowed — a recording-metadata problem must never fail the session start.
+     * just-started session when the browser captured WITH consent. `RecordingStartedAt` goes through
+     * the entity save (and stays set on the in-memory session, so a later save of it cannot clear it);
+     * `RecordingMedia` is a recording-ledger column that an entity save cannot write (#6010), so it goes
+     * through the ledger's `spStampAIAgentSessionRecordingFile` proc. The proc stamps `t0` as well, so it
+     * lands even when the entity save fails: the janitor recovers only sessions that carry a
+     * `RecordingStartedAt`. Best-effort: a parse/save/stamp failure is logged and swallowed — a
+     * recording-metadata problem must never fail the session start.
      *
      * @param session The freshly created/loaded session.
      * @param recordingConsent Whether the user consented to recording — only `true` stamps anything.
      * @param recordingStartedAt ISO-8601 recording start timestamp from the browser.
+     * @param contextUser The caller, on whose behalf the proc runs.
+     * @param provider The server-side database provider the proc runs through.
      */
     private async stampRecordingStart(
         session: MJAIAgentSessionEntity,
         recordingConsent: boolean | undefined,
         recordingStartedAt: string | undefined,
+        contextUser: UserInfo,
+        provider: DatabaseProviderBase,
     ): Promise<void> {
         if (recordingConsent !== true || !recordingStartedAt) {
             return;
@@ -2826,10 +2881,17 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             return;
         }
         session.RecordingStartedAt = startedAt;
-        session.RecordingMedia = 'Audio';
         if (!(await session.Save())) {
             LogError(
                 `RealtimeClientSessionResolver.stampRecordingStart save failed for session ${session.ID}: ${this.describeSaveFailure(session)}`,
+            );
+        }
+        try {
+            await new SqlRealtimeRecordingLedger(provider, contextUser).StampFile(session.ID, { media: 'Audio', startedAt });
+        } catch (error) {
+            LogError(
+                `RealtimeClientSessionResolver.stampRecordingStart media stamp failed for session ${session.ID}: ` +
+                    `${error instanceof Error ? error.message : String(error)}`,
             );
         }
     }
@@ -2856,6 +2918,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         );
         detail.NewRecord();
         detail.ConversationID = session.ConversationID;
+        detail.BranchID = this.sessionBranchIdOf(session);
         detail.Role = this.mapTranscriptRole(role);
         detail.Message = text;
         detail.AgentSessionID = session.ID;
@@ -3029,6 +3092,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             );
             detail.NewRecord();
             detail.ConversationID = session.ConversationID;
+            detail.BranchID = this.sessionBranchIdOf(session);
             detail.Role = 'AI';
             detail.HiddenToUser = true;
             detail.AgentSessionID = session.ID;

@@ -25,8 +25,8 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Entities&Name=Configuration"
           },
           "sync": {
-            "lastModified": "2026-10-06T20:21:58.365Z",
-            "checksum": "eeedb7c9bee8f7303174cfe0cad8e6ba6b14f14efc6245cb23ac9000df6d564f"
+            "lastModified": "2026-10-20T23:17:43.008Z",
+            "checksum": "857ac32f5eb7f272bd4d324f99c61ac8c62754a89c43f513090679815252290b"
           }
         }
       ]

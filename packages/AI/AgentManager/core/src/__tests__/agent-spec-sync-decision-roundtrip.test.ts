@@ -215,4 +215,107 @@ describe('AgentSpecSync Decision step round-trip', () => {
         expect(loadedStep.PromptID).toBe('decision-prompt-777');
         expect(loadedStep.Configuration).toBe(decisionConfigJson);
     });
+
+    it('loads step geometry (PositionX, PositionY, Width, Height), resilience (TimeoutSeconds, RetryCount, OnErrorBehavior), and path PathPoints from database', async () => {
+        const mockAgentEntity = {
+            Load: vi.fn().mockResolvedValue(true),
+            ID: 'agent-4',
+            Name: 'Geometry & Resilience Agent',
+            TypeID: '4F6A189B-C068-4736-9F23-3FF540B40FDD',
+            Status: 'Active',
+            StartingPayloadValidationMode: 'Fail',
+        };
+
+        const mockStepA = {
+            ID: 'step-a',
+            AgentID: 'agent-4',
+            Name: 'Step A at Origin',
+            StepType: 'Action',
+            StartingStep: true,
+            ActionID: 'action-a',
+            Status: 'Active',
+            TimeoutSeconds: 120,
+            RetryCount: 0,
+            OnErrorBehavior: 'retry',
+            PositionX: 0,
+            PositionY: 0,
+            Width: 240,
+            Height: 88,
+        };
+
+        const mockStepB = {
+            ID: 'step-b',
+            AgentID: 'agent-4',
+            Name: 'Step B Positioned',
+            StepType: 'Prompt',
+            StartingStep: false,
+            PromptID: 'prompt-b',
+            Status: 'Active',
+            TimeoutSeconds: null,
+            RetryCount: 3,
+            OnErrorBehavior: 'continue',
+            PositionX: 420,
+            PositionY: 160,
+            Width: null,
+            Height: null,
+        };
+
+        const mockPathAB = {
+            ID: 'path-ab',
+            OriginStepID: 'step-a',
+            DestinationStepID: 'step-b',
+            Condition: 'payload.ready === true',
+            Description: 'Ready route',
+            Priority: 10,
+            ActionOutputMapping: null,
+            PathPoints: JSON.stringify([{ x: 240, y: 44 }, { x: 420, y: 160 }]),
+        };
+
+        mockGetEntityObject.mockImplementation((name: string) => {
+            if (name === 'MJ: AI Agents') {
+                return Promise.resolve(mockAgentEntity);
+            }
+            return Promise.resolve({
+                Load: vi.fn().mockResolvedValue(true),
+                Save: vi.fn().mockResolvedValue(true),
+                Validate: vi.fn().mockReturnValue({ Success: true, Errors: [] }),
+            });
+        });
+
+        const empty = { Success: true, Results: [], RowCount: 0 };
+        const stepsResult = { Success: true, Results: [mockStepA, mockStepB], RowCount: 2 };
+        const pathsResult = { Success: true, Results: [mockPathAB], RowCount: 1 };
+        mockRunViews.mockResolvedValueOnce([empty, empty, empty, empty, stepsResult]);
+        mockRunView.mockResolvedValueOnce(pathsResult);
+
+        const loadedSync = await AgentSpecSync.LoadFromDatabase('agent-4', mockUser);
+
+        expect(loadedSync.Spec.Steps).toHaveLength(2);
+        const [stepA, stepB] = loadedSync.Spec.Steps!;
+
+        // Step A: numeric 0 values must be preserved (not coerced to undefined)
+        expect(stepA.TimeoutSeconds).toBe(120);
+        expect(stepA.RetryCount).toBe(0);
+        expect(stepA.OnErrorBehavior).toBe('retry');
+        expect(stepA.PositionX).toBe(0);
+        expect(stepA.PositionY).toBe(0);
+        expect(stepA.Width).toBe(240);
+        expect(stepA.Height).toBe(88);
+
+        // Step B: non-zero values preserved, nulls mapped to undefined
+        expect(stepB.TimeoutSeconds).toBeUndefined();
+        expect(stepB.RetryCount).toBe(3);
+        expect(stepB.OnErrorBehavior).toBe('continue');
+        expect(stepB.PositionX).toBe(420);
+        expect(stepB.PositionY).toBe(160);
+        expect(stepB.Width).toBeUndefined();
+        expect(stepB.Height).toBeUndefined();
+
+        expect(loadedSync.Spec.Paths).toHaveLength(1);
+        const [pathAB] = loadedSync.Spec.Paths!;
+        expect(pathAB.ID).toBe('path-ab');
+        expect(pathAB.OriginStepID).toBe('step-a');
+        expect(pathAB.DestinationStepID).toBe('step-b');
+        expect(pathAB.PathPoints).toBe(JSON.stringify([{ x: 240, y: 44 }, { x: 420, y: 160 }]));
+    });
 });

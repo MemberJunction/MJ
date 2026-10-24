@@ -1,5 +1,97 @@
 # @memberjunction/ng-user-avatar
 
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [5465489]
+- Updated dependencies [c6b4b85]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [2274f42]
+- Updated dependencies [35ed364]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [7e72c86]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [8420f36]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [5f707d1]
+- Updated dependencies [dc38250]
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- 382b9aa: Users can change their own avatar on deployments that do not let them update `MJ: Users`.
+
+  My Profile and the login avatar sync used to save the caller's own `MJ: Users` row, which needs Update permission on `MJ: Users`. A locked-down deployment cannot grant that: a row filter restricts rows, not columns, so a user who may update their own row may also rewrite their own `Email`. There, every avatar save failed ("Failed to save avatar") and the login sync failed silently.
+  - `@memberjunction/server`: new `UpdateMyAvatar(ImageURL, IconClass)` mutation returning `UpdateMyAvatarResult { Success, ErrorMessage }`. The caller comes only from the request; their own row is loaded as the system user and only `UserImageURL` and `UserImageIconClass` are written. Input is validated by the exported `ValidateAvatarInput`: a PNG/JPEG/GIF/WEBP base64 data URI of at most 200KB decoded, or an absolute http(s) URL of at most 2048 characters; a lower-case Font Awesome class list of at most 100 characters. `javascript:`, SVG and every other `data:` type are refused. Null clears a column. Scope-limited (magic-link) sessions are refused: an anonymous guest is the shared Anonymous user. Save failures return a generic message; the detail is logged.
+  - `@memberjunction/ng-user-avatar`: `UserAvatarService.UpdateMyAvatar(imageURL, iconClass, provider?)` calls the mutation. `SyncFromImageUrl` uses it instead of `user.Save()`, refuses any user other than the signed-in one, and reloads the entity afterwards. The package now depends on `@memberjunction/graphql-dataprovider`.
+  - `@memberjunction/ng-explorer-settings`: My Profile save and Revert to Default use the mutation, reload the user afterwards, and show the server's message on failure.
+  - `@memberjunction/ng-explorer-core`: after an avatar change the shell also refreshes the user menu's context user entity, so `GetUserDisplayInfo()` stops returning the old avatar.
+  - `@memberjunction/integration-test-suite`: IT106 (`self-avatar-client`, AV1–AV6, mutation tier) proves the mutation over the wire for a user without and a user with Update on `MJ: Users`, using two new seeded `it-avatar-*` users in `metadata-optional/integration-test`. `fls-client.checks.ts` now exports its user-API-key helpers for reuse.
+
+  Behaviour change: an avatar image larger than 200KB, or one served as a non-image content type, is now refused by the server, including on the login sync.
+
+- Updated dependencies [a709bb6]
+- Updated dependencies [d17de94]
+- Updated dependencies [432cb73]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [dde482c]
+- Updated dependencies [49f26d9]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [7316ac3]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [dbc3462]
+- Updated dependencies [1ea4085]
+- Updated dependencies [aee2d53]
+- Updated dependencies [f0c78c3]
+- Updated dependencies [25f7b82]
+- Updated dependencies [90829e3]
+- Updated dependencies [aac148b]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [57fea6a]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+
 ## 6.2.0-edge.3
 
 ### Patch Changes

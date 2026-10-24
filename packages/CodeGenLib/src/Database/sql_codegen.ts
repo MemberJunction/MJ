@@ -117,9 +117,17 @@ export class SQLCodeGenBase {
      */
     protected existingRoutines: Set<string> | null = null;
 
+    /**
+     * Map of `schema.routine` (lowercased) to its live `OBJECT_DEFINITION` text on SQL Server,
+     * used by {@link isRoutineSaveReturnModeChanged} to detect when `Entity.Configuration.SaveReturnMode`
+     * changed via `mj sync push` without a physical table/column change.
+     */
+    protected existingRoutineDefinitions: Map<string, string> | null = null;
+
     public async ManageSQLScriptsAndExecution(pool: CodeGenConnection, entities: EntityInfo[], directory: string, currentUser: UserInfo): Promise<boolean> {
         try {
             this.existingRoutines = null;
+            this.existingRoutineDefinitions = null;
             // Build list of entities qualified for forced regeneration if entityWhereClause is provided
             if (configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.entityWhereClause) {
                 this.filterEntitiesQualifiedForRegeneration = true; // Enable filtering
@@ -372,11 +380,21 @@ export class SQLCodeGenBase {
             // Pass 2 (this call) only re-runs to pick up new virtual fields from regenerated views and to apply advanced
             // generation. Scoping to changed entities collapses the SP scans to seeks; an empty list means no work to do.
             // forceRegeneration override skips the scoping so all entities get reprocessed (used when prompts change, etc.).
+            //
+            // The two lists only ever contain entities something changed on during THIS run, so an
+            // entity whose virtual-field row was missed once drops out of scope forever and its
+            // record forms stay broken until someone runs forceRegeneration over the whole database.
+            // The drift probe closes that: it asks the catalog which entities have a view-only
+            // column with no EntityField and unions those in, so recovery is a normal run.
+            const driftEntities = configInfo.forceRegeneration?.enabled
+                ? []
+                : await manageMD.FindVirtualFieldDriftEntities(pool, configInfo.excludeSchemas);
             const pass2EntityFilter: string[] | undefined = configInfo.forceRegeneration?.enabled
                 ? undefined
                 : [...new Set([
                     ...ManageMetadataBase.newEntityList,
                     ...ManageMetadataBase.modifiedEntityList,
+                    ...driftEntities,
                 ])];
             StartSpinner('Managing entity fields metadata...');
             if (! await manageMD.manageEntityFields(pool, configInfo.excludeSchemas, true, true, currentUser, false, false, pass2EntityFilter)) {
@@ -728,7 +746,12 @@ export class SQLCodeGenBase {
         enableSQLLoggingForNewOrModifiedEntities?: boolean,
         /** Optional UNION of will-regenerate keys across ALL batches in the same
          *  codegen run. When provided, takes precedence over the per-batch set. */
-        willRegenerate?: Set<string>
+        willRegenerate?: Set<string>,
+        /**
+         * Phase name for the per-batch progress line, e.g. 'Generating SQL'. Defaults from
+         * `onlyPermissions`. See {@link reportEntityBatchProgress} for why the line exists.
+         */
+        progressLabel?: string
     }): Promise<{Success: boolean, Files: string[]}> {
         if (!options.batchSize)
             options.batchSize = 5; // default to 5 if not specified
@@ -748,8 +771,11 @@ export class SQLCodeGenBase {
                 options.entities.map(e => `${e.SchemaName}.${e.BaseView}`)
             );
 
+            const phaseLabel = options.progressLabel ?? (options.onlyPermissions ? 'Applying permissions' : 'Generating SQL');
+            const phaseStart = Date.now();
             for (let i = 0; i < totalEntities; i += options.batchSize) {
                 const batch = options.entities.slice(i, i + options.batchSize);
+                this.reportEntityBatchProgress(phaseLabel, i, totalEntities, batch[0], phaseStart);
                 const promises = batch.map(async (e) => {
                     const pkeyField = e.Fields.find(f => f.IsPrimaryKey)
                     if (!pkeyField) {
@@ -1001,6 +1027,28 @@ export class SQLCodeGenBase {
                 ? await this.generateSPDelete(entity, pool)
                 : '';
 
+        // Full-text search DDL. Without its own phase the generated
+        // *.fulltext.generated.sql is written to disk and then never executed on
+        // any provider that implements executeEntityPhased — nothing in the
+        // phase list carried it. The search objects were therefore absent while
+        // applyPermissions still GRANTed EXECUTE on the search function, and the
+        // resulting `function does not exist` failed the whole CodeGen run.
+        // Generated here (not in the provider) because building it needs the
+        // internal generators and a pool round trip for the PK index name.
+        let ftsSQL = '';
+        if (entity.FullTextSearchEnabled && !entity.VirtualEntity) {
+            try {
+                const ft = await this.GenerateEntityFullTextSearchSQL(pool, entity);
+                ftsSQL = ft.sql;
+            } catch (e) {
+                return {
+                    success: false,
+                    phase: 'fulltext-generate',
+                    error: e instanceof Error ? e : new Error(String(e)),
+                };
+            }
+        }
+
         return this._dbProvider.executeEntityPhased!({
             entity,
             tvfSQL,
@@ -1008,6 +1056,7 @@ export class SQLCodeGenBase {
             crudCreateSQL,
             crudUpdateSQL,
             crudDeleteSQL,
+            ftsSQL,
             viewPermSQL: viewPieces.viewPermSQL,
             willRegenerate,
         });
@@ -1641,10 +1690,12 @@ export class SQLCodeGenBase {
     /**
      * Snapshot every CRUD routine currently in the database (one query) so
      * generate-and-log can force-emit CREATE PROC for objects that vanished
-     * without the entity landing on newEntityList/modifiedEntityList.
+     * without the entity landing on newEntityList/modifiedEntityList, or whose
+     * return-row mode (`SaveReturnMode`) changed via `mj sync push`.
      */
     protected async loadExistingRoutines(pool: CodeGenConnection, entities: EntityInfo[]): Promise<void> {
         this.existingRoutines = new Set<string>();
+        this.existingRoutineDefinitions = null;
         const schemas = [...new Set(entities.map((e) => e.SchemaName).filter((s) => !!s))];
         const sql = this._dbProvider.getRoutineNamesBySchemaSQL(schemas);
         if (!sql || !sql.trim()) {
@@ -1659,9 +1710,27 @@ export class SQLCodeGenBase {
                     this.existingRoutines.add(`${schemaName}.${routineName}`);
                 }
             }
+
+            if (this._dbProvider.PlatformKey === 'sqlserver' && schemas.length > 0) {
+                const inList = schemas.map((s) => `'${s.replace(/'/g, "''")}'`).join(', ');
+                const defResult = await pool.query(
+                    `SELECT s.name AS schema_name, p.name AS routine_name, OBJECT_DEFINITION(p.object_id) AS routine_definition ` +
+                    `FROM sys.procedures p INNER JOIN sys.schemas s ON s.schema_id = p.schema_id WHERE s.name IN (${inList})`
+                );
+                this.existingRoutineDefinitions = new Map<string, string>();
+                for (const row of defResult.recordset ?? []) {
+                    const schemaName = String(row.schema_name ?? '').toLowerCase();
+                    const routineName = String(row.routine_name ?? '').toLowerCase();
+                    const routineDef = row.routine_definition != null ? String(row.routine_definition) : '';
+                    if (schemaName && routineName && routineDef) {
+                        this.existingRoutineDefinitions.set(`${schemaName}.${routineName}`, routineDef);
+                    }
+                }
+            }
         } catch (e) {
             LogWarning(`Could not load existing CRUD routines (missing-proc self-heal disabled this run): ${e instanceof Error ? e.message : String(e)}`);
             this.existingRoutines = null;
+            this.existingRoutineDefinitions = null;
         }
     }
 
@@ -1672,8 +1741,37 @@ export class SQLCodeGenBase {
         return !this.existingRoutines.has(`${schema}.${routineName}`.toLowerCase());
     }
 
+    /**
+     * Returns true when `spCreate` or `spUpdate` in the database was generated under a different
+     * `SaveReturnMode` (`'full'` vs `'datestamps_only'`) than the entity's current metadata.
+     * This ensures that when `Entity.Configuration.SaveReturnMode` is updated via `mj sync push`,
+     * the subsequent `mj codegen` run automatically logs and executes the updated stored procedures.
+     */
+    protected isRoutineSaveReturnModeChanged(entity: EntityInfo, routineName: string): boolean {
+        if (!this.existingRoutineDefinitions || !entity.BaseView) {
+            return false;
+        }
+        const createSpName = this.GetSPName(entity, SPType.Create).toLowerCase();
+        const updateSpName = this.GetSPName(entity, SPType.Update).toLowerCase();
+        const lowerRoutine = routineName.toLowerCase();
+        if (lowerRoutine !== createSpName && lowerRoutine !== updateSpName) {
+            return false;
+        }
+        const def = this.existingRoutineDefinitions.get(`${entity.SchemaName}.${routineName}`.toLowerCase());
+        if (!def) {
+            return false;
+        }
+        const selectsFromBaseView = def.toLowerCase().includes(`[${entity.BaseView.toLowerCase()}]`);
+        if (entity.SaveReturnMode === 'datestamps_only') {
+            return selectsFromBaseView;
+        }
+        return !selectsFromBaseView;
+    }
+
     protected forceLogForRoutine(entity: EntityInfo, routineName: string, baseViewChanged: boolean): boolean {
-        return baseViewChanged || this.isRoutineMissing(entity.SchemaName, routineName);
+        return baseViewChanged ||
+               this.isRoutineMissing(entity.SchemaName, routineName) ||
+               this.isRoutineSaveReturnModeChanged(entity, routineName);
     }
 
     public GetEntityPermissionFileNames(entity: EntityInfo): string[] {
@@ -1762,22 +1860,65 @@ export class SQLCodeGenBase {
         if (entity.FullTextSearchFunctionGenerated && searchFields.length === 0)
             throw new Error(`FullTextSearchFunctionGenerated is true for entity ${entity.Name}, but no fields are marked as FullTextSearchEnabled`);
 
-        // Get the primary key index name (needed for full text index)
+        // Get the primary key index name — but ONLY for a provider whose full-text DDL actually
+        // embeds it. `GetEntityPrimaryKeyIndexName` THROWS when the table has no PRIMARY KEY
+        // constraint, and on PostgreSQL that is a legitimate shape: MJ's primary key can be a soft
+        // key declared in metadata only. Asking unconditionally turned a SQL-Server requirement
+        // (`CREATE FULLTEXT INDEX … KEY INDEX <name>`) into a precondition that no such table can
+        // satisfy, so full-text search could never be generated for it — on a platform that builds
+        // a GIN index over a tsvector and never looks at the name.
         let primaryKeyIndexName = '';
-        if (entity.FullTextIndexGenerated) {
+        if (entity.FullTextIndexGenerated && this._dbProvider.FullTextIndexNeedsPrimaryKeyIndexName) {
             primaryKeyIndexName = await this.GetEntityPrimaryKeyIndexName(pool, entity);
         }
 
-        // If the function name is not set, save it to the DB
-        const functionName = entity.FullTextSearchFunction && entity.FullTextSearchFunction.length > 0
-            ? entity.FullTextSearchFunction
-            : `fnSearch${entity.CodeName}`;
+        // Say what enabling full-text search costs, at the one moment the person who enabled it is
+        // still in the room. The objects below are charged on every write to the table from here on
+        // and are not removed by turning the entity's flags back off.
+        const costDisclosure = this._dbProvider.FullTextSearchCostDisclosure(entity, searchFields);
+        if (costDisclosure) {
+            LogWarning(`   > ${costDisclosure}`);
+        }
 
-        if (entity.FullTextSearchFunctionGenerated && (!entity.FullTextSearchFunction || entity.FullTextSearchFunction.length === 0)) {
+        // Delegate SQL generation to the provider FIRST — the provider owns the
+        // platform's naming scheme, and the name it used is what actually exists
+        // in the database. PostgreSQL creates `fn_search_<snake(BaseTable)>`;
+        // deriving the name here instead (the SQL Server `fnSearch<CodeName>`
+        // form) recorded a function that never exists on PG, and runtime search
+        // then called a name that was never created.
+        const result = this._dbProvider.generateFullTextSearch(entity, searchFields, primaryKeyIndexName);
+
+        const functionName = result.functionName && result.functionName.length > 0
+            ? result.functionName
+            : (entity.FullTextSearchFunction && entity.FullTextSearchFunction.length > 0
+                ? entity.FullTextSearchFunction
+                : `fnSearch${entity.CodeName}`);
+
+        // Persist the provider-derived name whenever the stored one DIFFERS, not
+        // only when it is empty. An empty-only condition can never correct a row
+        // stamped with the wrong platform's scheme by an earlier run, because the
+        // wrong name is still a non-empty one.
+        if (entity.FullTextSearchFunctionGenerated && entity.FullTextSearchFunction !== functionName) {
             const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
-            const u = UserCache.Instance.Users[0];
+            // Guard the ARRAY, not only its first element. An unrefreshed cache holds `[]` today, but
+            // a holder carrying an older GenericDatabaseProvider leaves `_users` undefined, and
+            // `.Users[0]` against that throws a bare `TypeError: Cannot read properties of undefined
+            // (reading '0')` BEFORE the guard below can say anything at all. The declared type is
+            // widened here because the runtime value is the thing being guarded.
+            //
+            // Fatal on purpose: the write-back is the ONLY thing that records the function name.
+            // Skipping it would leave `Entity.FullTextSearchFunction` empty while the DDL still
+            // creates the function, so CodeGen would report success and runtime search would look
+            // for a name no row carries.
+            const cachedUsers: UserInfo[] | undefined = UserCache.Instance.Users;
+            const u: UserInfo | undefined = cachedUsers?.[0];
             if (!u)
-                throw new Error('Could not find the first user in the cache, cant generate the full text search function without a user');
+                throw new Error(
+                    `Cannot record the full-text search function name for entity ${entity.Name}: the CodeGen user cache holds no users, ` +
+                    `so there is no user to write __mj.Entity.FullTextSearchFunction as. The cache is populated by the provider's ` +
+                    `SetupDataSource via UserCache.Instance.Refresh() — verify that it ran for this connection and that __mj.User has ` +
+                    `at least one row. To complete this run without the write-back, set FullTextSearchFunction to '${functionName}' on ` +
+                    `entity ${entity.Name}; that is the name CodeGen is trying to record, so the write-back becomes unnecessary.`);
 
             const e = <MJEntityEntity>await md.GetEntityObject('MJ: Entities', u);
             await e.Load(entity.ID);
@@ -1785,9 +1926,6 @@ export class SQLCodeGenBase {
             if (!await e.Save())
                 throw new Error(`Could not update the FullTextSearchFunction for entity ${entity.Name}`);
         }
-
-        // Delegate SQL generation to the provider
-        const result = this._dbProvider.generateFullTextSearch(entity, searchFields, primaryKeyIndexName);
 
         // Add permissions if function was generated
         if (entity.FullTextSearchFunctionGenerated) {
@@ -1824,6 +1962,39 @@ export class SQLCodeGenBase {
     /** @deprecated Use {@link GenerateAllEntitiesSQLFileHeader}. */
     public generateAllEntitiesSQLFileHeader(): string {
       return this.GenerateAllEntitiesSQLFileHeader();
+    }
+
+    /**
+     * Emits the one live progress line for the entity generation/permissions loop: which phase, how
+     * far through, which entity is being worked on, and how long the phase has been running.
+     *
+     * WHY. The spinner already re-renders an elapsed timer every 100 ms, so a long run is not silent
+     * — but the message it re-renders was set ONCE before the loop ("Generating SQL for 1,200
+     * entities…") and never changed again. A run that has been sitting on entity 3 for four minutes
+     * and a run that is on entity 1,180 render identically, which makes a stall and normal progress
+     * indistinguishable. `N/total` is the whole difference.
+     *
+     * Called per BATCH rather than per entity: the batch is the unit of concurrency (its members run
+     * under one `Promise.all`), so a per-entity line would just interleave five entities' names at
+     * random. The named entity is the batch's first, which is what the run is demonstrably on.
+     *
+     * `UpdateSpinner` covers both output modes by construction — in verbose mode it routes to
+     * `logStatus`, so a verbose run gets the same information as a line per batch instead of a
+     * re-rendered spinner.
+     */
+    protected reportEntityBatchProgress(
+        phaseLabel: string,
+        completed: number,
+        total: number,
+        currentEntity: EntityInfo | undefined,
+        phaseStartMs: number
+    ): void {
+        if (total === 0) {
+            return;
+        }
+        const elapsed = ((Date.now() - phaseStartMs) / 1000).toFixed(1);
+        const where = currentEntity ? ` — ${currentEntity.SchemaName}.${currentEntity.Name}` : '';
+        UpdateSpinner(`${phaseLabel}: ${completed}/${total} entities, ${elapsed}s elapsed${where}`);
     }
 
     public GenerateSingleEntitySQLFileHeader(entity: EntityInfo, itemName: string): string {
@@ -1871,10 +2042,19 @@ export class SQLCodeGenBase {
     /**
      * Detects self-referential foreign keys in an entity (e.g., ParentTaskID pointing back to Task table)
      * Returns array of field info objects representing recursive relationships
+     *
+     * A column that IS the entity's own primary key is excluded. It can carry a self-referencing
+     * `RelatedEntityID` — FK auto-detection matches a `<prefix>_key`-style column to its own table
+     * and does not exclude that table's own key — but "my parent is me" is not a hierarchy. The
+     * generated recursive CTE then joins the key to itself and selects the same column three times,
+     * which the database rejects outright: 15 entities on one Postgres instance failed to compile
+     * with `column reference "tea_key" is ambiguous`. Nothing downstream can recover from that, and
+     * a real hierarchy always parents on a DIFFERENT column, so excluding the key loses nothing.
      */
     protected detectRecursiveForeignKeys(entity: EntityInfo): EntityFieldInfo[] {
         const hierarchyFKs = entity.Fields.filter(field =>
             field.RelatedEntityID != null &&
+            !field.IsPrimaryKey &&
             UUIDsEqual(field.RelatedEntityID, entity.ID) &&
             !field.IsVirtual &&
             field.IsHierarchy === true

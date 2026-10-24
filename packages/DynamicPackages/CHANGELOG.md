@@ -1,5 +1,13 @@
 # @memberjunction/dynamic-packages
 
+## 6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Patch Changes
+
+- 32fedd8: Pass `DynamicPackageStartupContext` with `ProcessId` to dynamic package `StartupExport` functions so startup kicks can distinguish host environments (e.g. `mjapi` vs `cli:<cmd>` vs test runners) without heuristic argv sniffing.
+
 ## 6.2.0-edge.3
 
 ## 6.2.0-edge.2

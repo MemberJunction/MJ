@@ -217,6 +217,8 @@ interface FakeSession {
     LatestResult?: { CompleteMessage?: string; Success?: boolean };
     /** Only set on the fakes exercising `describeSaveFailure`'s "no failure detail recorded" branches. */
     ResultHistory?: unknown[];
+    /** The fork a conversation-detail fake is written on (null is Main). */
+    BranchID?: string | null;
 }
 
 /**
@@ -370,6 +372,95 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession', () => {
         expect(result.EphemeralToken).toBe('ek_abc');
         expect(result.ExpiresAt).toBe('2026-01-01T00:00:00Z');
         expect(JSON.parse(result.SessionConfigJson)).toEqual({ instructions: 'hi' });
+    });
+
+    describe('recording consent at start (#6010)', () => {
+        const RECORDING_SESSION_ID = 'a1a1a1a1-0000-4000-8000-000000000001';
+        const STARTED_AT = '2026-10-01T00:00:00.000Z';
+
+        /** A provider that can run the ledger's proc, recording every SQL call; `failSql` makes it throw. */
+        function makeSqlProvider(failSql = false) {
+            const sqlCalls: { Sql: string; Params: unknown[] }[] = [];
+            const provider = {
+                ...(makeProvider(() => makeSessionEntity()) as object),
+                MJCoreSchemaName: '__mj',
+                Dialect: {
+                    ProcedureCallSyntax: (schema: string, name: string, params: string[]) => `EXEC [${schema}].[${name}] ${params.join(', ')}`,
+                    ParameterPlaceholder: (index: number) => `@p${index}`,
+                },
+                ExecuteSQL: vi.fn(async (sql: string, params: unknown[]) => {
+                    sqlCalls.push({ Sql: sql, Params: params });
+                    if (failSql) throw new Error('proc exploded');
+                    return [{ RecordingStatus: null }];
+                }),
+            };
+            return { provider, sqlCalls };
+        }
+
+        async function startWithConsent(provider: unknown) {
+            currentProvider = provider;
+            const createdSession = makeSessionEntity({ ID: RECORDING_SESSION_ID });
+            createSessionMock.mockResolvedValue(createdSession);
+            prepareClientSessionMock.mockResolvedValue({
+                Success: true,
+                ClientConfig: { Provider: 'openai', Model: 'gpt-realtime', EphemeralToken: 'ek', ExpiresAt: '2026-01-01T00:00:00Z', SessionConfig: {} },
+            });
+            const result = await makeResolver().StartRealtimeClientSession(
+                'target-1', makeCtx(), undefined, undefined, undefined, undefined, undefined, undefined, STARTED_AT, true,
+            );
+            return { createdSession, result };
+        }
+
+        /** The one stamp-proc call the start made, with its positional params. */
+        function onlyStamp(sqlCalls: { Sql: string; Params: unknown[] }[]): unknown[] {
+            const stamps = sqlCalls.filter((c) => c.Sql.includes('spStampAIAgentSessionRecordingFile'));
+            expect(stamps).toHaveLength(1);
+            return stamps[0].Params;
+        }
+
+        it('saves RecordingStartedAt through the entity and stamps RecordingMedia and t0 through the ledger proc', async () => {
+            const { provider, sqlCalls } = makeSqlProvider();
+            const { createdSession } = await startWithConsent(provider);
+
+            expect((createdSession.RecordingStartedAt as Date).toISOString()).toBe(STARTED_AT);
+            expect(createdSession.Save).toHaveBeenCalled();
+            const [sessionID, fileID, media, startedAt] = onlyStamp(sqlCalls);
+            expect([sessionID, fileID, media]).toEqual([RECORDING_SESSION_ID, null, 'Audio']);
+            expect((startedAt as Date).toISOString()).toBe(STARTED_AT);
+            expect(createdSession.RecordingMedia).toBeUndefined();
+        });
+
+        it('still stamps t0 through the ledger proc when the entity save fails (the janitor recovers only sessions with a t0)', async () => {
+            errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const { provider, sqlCalls } = makeSqlProvider();
+            createSessionMock.mockReset();
+            const failing = makeSessionEntity({
+                ID: RECORDING_SESSION_ID,
+                Save: vi.fn(async () => false),
+                LatestResult: { CompleteMessage: 'save refused' },
+            });
+            createSessionMock.mockResolvedValue(failing);
+            currentProvider = provider;
+            prepareClientSessionMock.mockResolvedValue({
+                Success: true,
+                ClientConfig: { Provider: 'openai', Model: 'gpt-realtime', EphemeralToken: 'ek', ExpiresAt: '2026-01-01T00:00:00Z', SessionConfig: {} },
+            });
+            await makeResolver().StartRealtimeClientSession(
+                'target-1', makeCtx(), undefined, undefined, undefined, undefined, undefined, undefined, STARTED_AT, true,
+            );
+
+            const [, , , startedAt] = onlyStamp(sqlCalls);
+            expect((startedAt as Date).toISOString()).toBe(STARTED_AT);
+        });
+
+        it('does not fail the session start when the media stamp throws, and logs it with the session id', async () => {
+            errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const { provider } = makeSqlProvider(true);
+            const { result } = await startWithConsent(provider);
+
+            expect(result.AgentSessionId).toBe(RECORDING_SESSION_ID);
+            expect(errSpy?.mock.calls.some((c) => String(c[0]).includes(RECORDING_SESSION_ID) && String(c[0]).includes('proc exploded'))).toBe(true);
+        });
     });
 
     it('threads preferredModelId to the prepare service and surfaces ModelName + narration template', async () => {
@@ -975,6 +1066,26 @@ describe('RealtimeClientSessionResolver.RelayRealtimeTranscript', () => {
         expect(detail.UserID).toBe('user-1');
         expect(detail.Save).toHaveBeenCalled();
         expect(heartbeatMock).toHaveBeenCalledWith('session-1', USER, currentProvider);
+    });
+
+    it("writes the turn on the session's fork", async () => {
+        const detail = makeSessionEntity({ ID: 'detail-t' });
+        const session = makeSessionEntity({ ConversationID: 'conv-7', Config_: JSON.stringify({ targetAgentID: 'target-1', conversationBranchID: 'b1' }) });
+        currentProvider = makeProvider((name) => (name === 'MJ: Conversation Details' ? detail : session));
+
+        await makeResolver().RelayRealtimeTranscript('session-1', 'user', 'hello', makeCtx());
+
+        expect(detail.BranchID).toBe('b1');
+    });
+
+    it('writes the turn on Main when the session has no fork', async () => {
+        const detail = makeSessionEntity({ ID: 'detail-m' });
+        const session = makeSessionEntity({ ConversationID: 'conv-7' });
+        currentProvider = makeProvider((name) => (name === 'MJ: Conversation Details' ? detail : session));
+
+        await makeResolver().RelayRealtimeTranscript('session-1', 'user', 'hello', makeCtx());
+
+        expect(detail.BranchID).toBeNull();
     });
 
     it("maps a non-user role to 'AI'", async () => {
@@ -3485,6 +3596,24 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         expect(deleteSegmentsMock).not.toHaveBeenCalled();
     });
 
+    it('reports a file that uploaded but was not stamped on the session as a failure and keeps the shards', async () => {
+        // The store returns the uploaded file id together with the stamp failure (#6010): the session does not
+        // point at the file, so the crash-recovery shards are the only copy the janitor can still recover.
+        currentProvider = makeRecordingProvider();
+        storeRecordingMock.mockResolvedValue({
+            FileID: 'file-unstamped',
+            ErrorMessage: 'file file-unstamped uploaded and linked, but not stamped on session session-1: proc missing',
+        });
+        const resolver = makeAnonResolver();
+
+        const result = await resolver.UploadRealtimeRecording('session-1', AUDIO_B64, 'audio/wav', makeCtx(), 1000, true);
+
+        expect(result.Success).toBe(false);
+        expect(result.FileID).toBe('file-unstamped');
+        expect(result.ErrorMessage).toContain('not stamped on session session-1');
+        expect(deleteSegmentsMock).not.toHaveBeenCalled();
+    });
+
     it('falls back to the generic message only when no layer supplied a reason', async () => {
         currentProvider = makeRecordingProvider();
         storeRecordingMock.mockResolvedValue({ FileID: null, ErrorMessage: null });
@@ -3779,18 +3908,36 @@ describe('RealtimeClientSessionResolver — conversation-history hydration', () 
         return { ID: `h-${message ?? 'x'}`, Role: role, Message: message, HiddenToUser: false, AgentSessionID: null, ...over };
     }
 
+    /** A `MJ: Conversation Branches` row as the branch-path read selects it. */
+    interface BranchRow {
+        ID: string;
+        ConversationID: string;
+        ParentBranchID: string | null;
+        ForkFromSequence: number | null;
+        Name: string | null;
+    }
+
     /**
      * Provider that answers BOTH Conversation Details queries separately: the prior-leg transcript
-     * (filtered by `AgentSessionID IN (…)`) and the conversation history (`ConversationID=…`).
-     * Routing on the filter is what keeps the two from being confused for one another.
+     * (filtered by `AgentSessionID IN (…)`) and the conversation history (the session's path filter).
+     * Routing on the filter is what keeps the two from being confused for one another. It also
+     * serves the conversation's branch rows, which the start reads to check the named fork and
+     * to build its path.
      */
     function makeProvider(opts: {
         chain?: Record<string, { UserID: string; LastSessionID?: string | null }>;
         legRows?: Array<{ ID: string; Role: string; Message: string | null; HiddenToUser: boolean }>;
         historyRows?: HistoryRow[];
         historyFails?: boolean;
+        branchRows?: BranchRow[];
+        branchesFail?: boolean;
     }): { provider: unknown; runView: ReturnType<typeof vi.fn> } {
         const runView = vi.fn(async (params: { EntityName: string; ExtraFilter?: string }) => {
+            if (params.EntityName === 'MJ: Conversation Branches') {
+                return opts.branchesFail
+                    ? { Success: false, ErrorMessage: 'db down', Results: [] }
+                    : { Success: true, Results: opts.branchRows ?? [] };
+            }
             if (params.EntityName === 'MJ: Conversation Details') {
                 if (params.ExtraFilter?.startsWith('AgentSessionID IN')) {
                     return { Success: true, Results: opts.legRows ?? [] };
@@ -3817,6 +3964,15 @@ describe('RealtimeClientSessionResolver — conversation-history hydration', () 
             RunView: runView,
         };
         return { provider, runView };
+    }
+
+    /** The history read: the Conversation Details query that is not the prior-leg lookup. */
+    function historyCall(runView: ReturnType<typeof vi.fn>): { ExtraFilter: string; OrderBy: string } | undefined {
+        const call = runView.mock.calls.find((c) => {
+            const params = c[0] as { EntityName: string; ExtraFilter?: string };
+            return params.EntityName === 'MJ: Conversation Details' && !params.ExtraFilter?.startsWith('AgentSessionID IN');
+        });
+        return call?.[0] as { ExtraFilter: string; OrderBy: string } | undefined;
     }
 
     function historyArg(): Array<{ role: string; content: unknown }> {
@@ -3856,17 +4012,62 @@ describe('RealtimeClientSessionResolver — conversation-history hydration', () 
         ]);
     });
 
-    it('scopes the read to the session\'s conversation', async () => {
+    /** Starts a session on `conversationId`, optionally on a fork (the mutation's last argument). */
+    function start(conversationId: string, forkId?: string): Promise<{ AgentSessionId: string }> {
+        return makeResolver().StartRealtimeClientSession(
+            'target-1', makeCtx(), conversationId,
+            undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+            undefined, undefined, forkId,
+        );
+    }
+
+    it('reads Main when the start names no fork, with the apostrophe doubled once', async () => {
         const { provider, runView } = makeProvider({ historyRows: [row('User', 'hi')] });
         currentProvider = provider;
 
-        await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), "conv-o'brien");
+        await start("conv-o'brien");
 
-        const call = runView.mock.calls.find(
-            (c) => (c[0] as { ExtraFilter?: string }).ExtraFilter?.startsWith('ConversationID='),
-        );
-        // The apostrophe must be doubled, not passed through — this string is concatenated into SQL.
-        expect((call![0] as { ExtraFilter: string }).ExtraFilter).toBe("ConversationID='conv-o''brien'");
+        expect(historyCall(runView)).toMatchObject({ ExtraFilter: "[ConversationID]='conv-o''brien' AND [BranchID] IS NULL AND [ReplacedAt] IS NULL", OrderBy: 'Sequence ASC' });
+        expect(runView.mock.calls.some((c) => (c[0] as { EntityName: string }).EntityName === 'MJ: Conversation Branches')).toBe(false);
+        expect(historyArg()).toEqual([{ role: 'user', content: 'hi' }]);
+    });
+
+    it('reads the path of the fork the start names, and stores the fork on the session', async () => {
+        const { provider, runView } = makeProvider({
+            historyRows: [row('User', 'in the fork')],
+            branchRows: [{ ID: 'b1', ConversationID: 'conv-1', ParentBranchID: null, ForkFromSequence: 4, Name: null }],
+        });
+        currentProvider = provider;
+
+        await start('conv-1', 'B1');
+
+        expect(historyCall(runView)).toMatchObject({
+            ExtraFilter: "[ConversationID]='conv-1' AND ([BranchID]='b1' OR ([BranchID] IS NULL AND [Sequence] <= 4)) AND [ReplacedAt] IS NULL",
+            OrderBy: 'Sequence ASC',
+        });
+        const config = JSON.parse((createSessionMock.mock.calls.at(-1)![0] as { config: string }).config) as { conversationBranchID?: string };
+        expect(config.conversationBranchID).toBe('b1');
+    });
+
+    it.each([
+        ['the fork is not a fork of the conversation', { branchRows: [] }],
+        ['the fork rows cannot be read', { branchesFail: true }],
+    ])('refuses the start when %s', async (_label, opts) => {
+        const { provider } = makeProvider({ historyRows: [row('User', 'never read')], ...opts });
+        currentProvider = provider;
+        const sessionsBefore = createSessionMock.mock.calls.length;
+
+        await expect(start('conv-1', 'b1')).rejects.toThrow(/fork b1/);
+        expect(createSessionMock.mock.calls.length).toBe(sessionsBefore);
+    });
+
+    it('refuses a fork without a conversation', async () => {
+        const { provider } = makeProvider({});
+        currentProvider = provider;
+
+        await expect(makeResolver().StartRealtimeClientSession(
+            'target-1', makeCtx(), undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, 'b1',
+        )).rejects.toThrow(/needs a conversation/);
     });
 
     it('skips hidden rows, error rows, and empty messages', async () => {
@@ -3977,7 +4178,8 @@ describe('RealtimeClientSessionResolver — conversation-history hydration', () 
         await makeResolver().StartRealtimeClientSession('target-1', makeCtx());
 
         expect(historyArg()).toEqual([]);
-        expect(runView.mock.calls.some((c) => (c[0] as { ExtraFilter?: string }).ExtraFilter?.startsWith('ConversationID='))).toBe(false);
+        expect(historyCall(runView)).toBeUndefined();
+        expect(runView.mock.calls.some((c) => (c[0] as { EntityName: string }).EntityName === 'MJ: Conversations')).toBe(false);
     });
 });
 

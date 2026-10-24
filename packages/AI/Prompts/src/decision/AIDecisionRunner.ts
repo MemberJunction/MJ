@@ -5,10 +5,12 @@ import { TemplateEngineServer } from '@memberjunction/templates';
 import {
   AIErrorType,
   BaseDecision,
+  BuildCancellationErrorInfo,
   DecisionParams,
   DecisionQuestion,
   DecisionResult,
   ErrorAnalyzer,
+  IsRequestAborted,
   ModelUsage,
 } from '@memberjunction/ai';
 import {
@@ -29,6 +31,7 @@ import {
   AIDecisionRunResult,
 } from './decision-runner.types';
 import { LLMDecision } from './LLMDecision';
+import { AIPromptRunner } from '../AIPromptRunner';
 
 /**
  * The result of running a decision, the candidate that produced it (after any failover), and what
@@ -451,7 +454,11 @@ export class AIDecisionRunner extends BaseModelRunner {
       return await driver.Decide(driverParams);
     } catch (err: unknown) {
       const failed = this.failedDecision(err instanceof Error ? err.message : String(err), 'Unknown');
-      failed.errorInfo = ErrorAnalyzer.AnalyzeError(err, candidate.vendorName);
+      // An abort is classified by the bound's signal: a caller cancellation is not failed over, a
+      // timeout is.
+      failed.errorInfo = IsRequestAborted(err, bound.Signal)
+        ? BuildCancellationErrorInfo({ error: err, signal: bound.Signal, provider: candidate.vendorName })
+        : ErrorAnalyzer.AnalyzeError(err, candidate.vendorName);
       return failed;
     } finally {
       bound.Dispose();
@@ -652,7 +659,7 @@ export class AIDecisionRunner extends BaseModelRunner {
       }
       const systemPlaceholders = await SystemPlaceholderManager.resolveAllPlaceholders(params);
       const mergedData = { ...systemPlaceholders, ...params.data, ...params.templateData };
-      const rendered = await TemplateEngineServer.Instance.RenderTemplate(template, content, mergedData, true, false);
+      const rendered = await TemplateEngineServer.Instance.RenderTemplate(template, content, mergedData, true, false, AIPromptRunner.RenderOptions(params));
       if (!rendered?.Success) {
         return { success: false, errorMessage: `Failed to render the template for prompt '${prompt.Name}': ${rendered?.Message ?? 'unknown error'}` };
       }

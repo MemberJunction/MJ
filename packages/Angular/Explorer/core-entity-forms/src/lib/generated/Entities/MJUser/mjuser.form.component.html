@@ -3170,6 +3170,106 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Conversation Branches Section -->
+    <mj-collapsible-panel
+        SectionKey="mJConversationBranches"
+        SectionName="Conversation Branches"
+        Icon="fa fa-code-branch"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJConversationBranches')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Branches','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Conversation Branches','UserID')"
+                [AllowLoad]="IsSectionExpanded('mJConversationBranches')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJConversationBranches', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Feature Pipeline Versions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJFeaturePipelineVersions"
+        SectionName="Feature Pipeline Versions"
+        Icon="fa fa-code-branch"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJFeaturePipelineVersions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Feature Pipeline Versions','ApprovedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Feature Pipeline Versions','ApprovedByUserID')"
+                [AllowLoad]="IsSectionExpanded('mJFeaturePipelineVersions')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJFeaturePipelineVersions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Bridge Agent Identities Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIBridgeAgentIdentities"
+        SectionName="AI Bridge Agent Identities"
+        Icon="fa fa-id-card"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIBridgeAgentIdentities')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Bridge Agent Identities','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Bridge Agent Identities','UserID')"
+                [AllowLoad]="IsSectionExpanded('mJAIBridgeAgentIdentities')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIBridgeAgentIdentities', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent User Policies Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentUserPolicies"
+        SectionName="AI Agent User Policies"
+        Icon="fa fa-shield-alt"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentUserPolicies')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent User Policies','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent User Policies','UserID')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentUserPolicies')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentUserPolicies', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

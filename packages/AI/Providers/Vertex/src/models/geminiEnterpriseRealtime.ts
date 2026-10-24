@@ -222,15 +222,7 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
         const model = GeminiEnterpriseRealtime.usesRegionalApiKey(credentials)
             ? BuildGeminiLiveModelPath({ Endpoint: 'enterprise', Model: args.Model, Project: credentials.project, Location: credentials.location })
             : args.Model;
-        return client.live.connect({
-            model,
-            config: args.Config,
-            callbacks: {
-                onmessage: args.OnMessage,
-                onerror: args.OnError,
-                onclose: args.OnClose,
-            },
-        });
+        return this.connectUntilSetup(args, (callbacks) => client.live.connect({ model, config: args.Config, callbacks }));
     }
 
     /** Gemini Enterprise has no ephemeral tokens; a client-direct session goes through the relay instead. */

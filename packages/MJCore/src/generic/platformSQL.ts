@@ -9,6 +9,82 @@
 // in the dep chain).
 export type { DatabasePlatform } from '@memberjunction/sql-dialect';
 
+import { DatabasePlatform, GetDialect, IsSupportedPlatform } from '@memberjunction/sql-dialect';
+
+/**
+ * The platform key used when no provider can tell us what the tenant actually
+ * runs. SQL Server is MemberJunction's historical default, so keeping it here
+ * preserves behaviour for every caller that used to hardcode `'sqlserver'`.
+ */
+export const DEFAULT_DATABASE_PLATFORM: DatabasePlatform = 'sqlserver';
+
+/**
+ * Structural shape of anything that knows which database platform it talks to.
+ *
+ * `ProviderBase` (and therefore every concrete MJ data provider) already
+ * exposes `PlatformKey`, but `IMetadataProvider` does not declare it — so
+ * callers holding only an interface-typed provider had no typed way to ask.
+ * This is that way.
+ */
+export interface IPlatformAwareProvider {
+    readonly PlatformKey?: DatabasePlatform | string | null;
+}
+
+/**
+ * THE seam through which runtime code picks a SQL dialect.
+ *
+ * Any code that generates, formats, or re-executes SQL must derive its dialect
+ * from the provider that will actually run the SQL — never from a literal.
+ * A hardcoded `'sqlserver'` is invisible on a SQL Server tenant and silently
+ * wrong on every other one.
+ *
+ * @param provider anything that may expose `PlatformKey` (a data provider, a
+ *        metadata provider, `BaseEntity.Provider`, `undefined`, …)
+ * @param fallback the platform to assume when the provider is absent or does
+ *        not name a platform this build supports. Defaults to
+ *        {@link DEFAULT_DATABASE_PLATFORM}.
+ */
+export function ResolvePlatformKey(
+    provider: unknown,
+    fallback: DatabasePlatform = DEFAULT_DATABASE_PLATFORM,
+): DatabasePlatform {
+    const key = (provider as IPlatformAwareProvider | null | undefined)?.PlatformKey;
+    // `IsSupportedPlatform` is backed by the dialect registry, so an unknown or
+    // not-yet-implemented platform degrades to the fallback instead of throwing
+    // deep inside SQL generation.
+    return IsSupportedPlatform(key) ? key : fallback;
+}
+
+/**
+ * Renders the dialect briefing an LLM needs in order to write SQL that will
+ * actually run on `platform`.
+ *
+ * The text is composed by {@link SQLDialect.PromptGuidance} from the dialect's
+ * own primitives, so a newly implemented dialect produces correct guidance with
+ * no prompt or template edit anywhere.
+ */
+export function DescribeSQLDialectForPrompt(platform: DatabasePlatform): string {
+    return GetDialect(platform).PromptGuidance;
+}
+
+/**
+ * Human-readable name of a platform, e.g. for prompts and UI labels.
+ */
+export function DescribeSQLDialectName(platform: DatabasePlatform): string {
+    return GetDialect(platform).DisplayName;
+}
+
+/**
+ * The `sql-formatter` language key for a platform (`'tsql'`, `'postgresql'`, …).
+ *
+ * Lives here so callers that pretty-print SQL do not need a direct dependency
+ * on `@memberjunction/sql-dialect` just to avoid hardcoding a language. The
+ * value is declared by the dialect itself, so it follows the platform.
+ */
+export function ResolveSQLFormatterLanguage(platform: DatabasePlatform): string {
+    return GetDialect(platform).FormatterLanguage;
+}
+
 /**
  * Represents a SQL fragment that may have platform-specific variants.
  * Used for ExtraFilter, OrderBy, WhereClause, and other user-provided SQL.

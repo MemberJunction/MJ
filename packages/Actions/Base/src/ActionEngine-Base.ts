@@ -1,7 +1,8 @@
-import { BaseEngine, IMetadataProvider, UserInfo, RunView, BaseEnginePropertyConfig } from "@memberjunction/core";
+import { BaseEngine, BaseEntity, IMetadataProvider, UserInfo, RunView, BaseEnginePropertyConfig } from "@memberjunction/core";
 import { EntityChangeContext } from './EntityChangeContext';
 import { MJActionCategoryEntity, MJActionEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJEntityActionEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
 import { MJActionEntityExtended } from "./MJActionEntityExtended";
+import type { ActionRunAudience } from "./ActionAudience";
 
 
 export class ActionLibrary {
@@ -131,6 +132,14 @@ export class ActionResult {
     * A code that indicates the outcome of the action. Will be one of the possible ResultCodes enumerated in the MJActionResultCodeEntity
     */
    public Result?: MJActionResultCodeEntity;
+
+   /**
+    * The result code as text: the action's own `ActionResultSimple.ResultCode`, or the code of a refusal the
+    * engine made without running the action ({@link AUDIENCE_UNSUPPORTED_RESULT_CODE}). Set whether or not it
+    * matches one of the action's metadata result codes — {@link Result} is that match, `undefined` when there is
+    * none. Absent when the run ended without a code (a timeout, an exception, a validation or filter refusal).
+    */
+   public ResultCode?: string;
 
    /**
     * Whenever an action is executed a log entry is created. This log entry is stored in the database and can be used to track the execution of the action. This property contains the log entry object for the action that was run.
@@ -347,6 +356,37 @@ export class RunActionParams<TContext = any> {
    public CredentialScope?: RuntimeCredentialScope;
 
    /**
+    * Everyone besides {@link ContextUser} who will see what this action returns — set by BaseAgent, per
+    * dispatch, from the agent run's audience (`ExecuteAgentParams.Audience`) when it adds a reader. Not on
+    * {@link Context}, for the reason {@link RuntimeAPIKeyResolver} is not: the context is the agent's own
+    * object, shared by every action in the run. The model cannot set it.
+    *
+    * **The engine gates on it.** When it adds a reader beyond the caller, `ActionEngineServer.RunAction`
+    * refuses — result code {@link AUDIENCE_UNSUPPORTED_RESULT_CODE}, without running the action or writing an
+    * execution log row — any action whose class does not declare `SupportsAudience`, and every runtime-defined
+    * or deferred action. For an action it lets through, it first normalizes this to the distinct readers
+    * beyond the caller ({@link ActionAudienceReaders}), and clears it when the audience adds nobody, so an
+    * action may treat "present" as "there is a room" and `Readers` as exactly the people to check.
+    *
+    * An action that declares support must return only what every reader may see: pass the audience to the
+    * search engine (`SearchParams.Audience`), check each reader's entitlement to anything it scopes by, and
+    * leave out counts or other aggregates computed before that filtering.
+    */
+   public Audience?: ActionRunAudience;
+
+   /**
+    * The agent run's scope — its tenant (`PrimaryScopeRecordID`) and secondary dimensions — set by BaseAgent on
+    * every dispatch inside an agent run, from the run's validated scope (`ExecuteAgentParams.PrimaryScope*` /
+    * `SecondaryScopes`, as written to the `MJ: AI Agent Runs` row). Fields are `null` when the run is unscoped;
+    * the object itself is ABSENT outside an agent run. Per dispatch and not on {@link Context}, for the reason
+    * {@link Audience} is not: the context is the agent's own object. The model cannot set it.
+    *
+    * An action that scopes by tenant must treat it as authoritative over its own parameters, which inside a Loop
+    * agent are model-written: default a missing tenant to the run's, and refuse one the run does not carry.
+    */
+   public RunScope?: ActionRunScope;
+
+   /**
     * Optional AbortSignal that is aborted when the action exceeds its wall-clock
     * time budget (set via `Action.MaxExecutionTimeMS` or the engine default). Set
     * automatically by `ActionEngine.RunAction()` — callers should not populate it
@@ -517,6 +557,129 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
       return this.__coreRootCategoryID;
    }
 
+    private _indexedActionsRef?: MJActionEntityExtended[];
+    private _actionsByName = new Map<string, MJActionEntityExtended>();
+    private _indexedCategoriesRef?: MJActionCategoryEntity[];
+    private _categoriesById = new Map<string, MJActionCategoryEntity>();
+    private _indexedParamsRef?: MJActionParamEntity[];
+    private _paramsByActionId = new Map<string, MJActionParamEntity[]>();
+    private _indexedResultCodesRef?: MJActionResultCodeEntity[];
+    private _resultCodesByActionId = new Map<string, MJActionResultCodeEntity[]>();
+
+    /**
+     * Marks every lookup index stale so the next lookup rebuilds it.
+     *
+     * The ref-and-size checks in the `ensure*Index` methods catch a reloaded array, but not a save or
+     * delete that {@link BaseEngine} applies in place: replacing an element (an update) keeps both the
+     * reference and the length, so a param whose `LogValue` changed or an action that was renamed would
+     * keep resolving to the old entity until restart.
+     */
+    private invalidateLookupIndexes(): void {
+       this._indexedActionsRef = undefined;
+       this._indexedCategoriesRef = undefined;
+       this._indexedParamsRef = undefined;
+       this._indexedResultCodesRef = undefined;
+    }
+
+    /** Invalidates the lookup indexes before DataChange$ subscribers run, since they may call a lookup. */
+    protected override NotifyDataChange(
+       config: BaseEnginePropertyConfig,
+       data: unknown[],
+       changeType: 'refresh' | 'add' | 'update' | 'delete' = 'refresh',
+       affectedEntity?: BaseEntity
+    ): void {
+       this.invalidateLookupIndexes();
+       super.NotifyDataChange(config, data, changeType, affectedEntity);
+    }
+
+    /** Invalidates the lookup indexes on every in-place array mutation BaseEngine applies. */
+    protected override emitPropertyChange(propertyName: string): void {
+       this.invalidateLookupIndexes();
+       super.emitPropertyChange(propertyName);
+    }
+
+    private ensureActionIndex(): void {
+       if (!this._Actions) return;
+       if (this._indexedActionsRef === this._Actions && this._actionsByName.size === this._Actions.length) return;
+       this._actionsByName.clear();
+       for (let i = 0; i < this._Actions.length; i++) {
+          const a = this._Actions[i];
+          if (a.Name) {
+             const key = a.Name.trim().toLowerCase();
+             if (!this._actionsByName.has(key)) {
+                this._actionsByName.set(key, a);
+             }
+          }
+       }
+       this._indexedActionsRef = this._Actions;
+    }
+
+    private ensureCategoryIndex(): void {
+       if (!this._ActionCategories) return;
+       if (this._indexedCategoriesRef === this._ActionCategories && this._categoriesById.size === this._ActionCategories.length) return;
+       this._categoriesById.clear();
+       for (let i = 0; i < this._ActionCategories.length; i++) {
+          const c = this._ActionCategories[i];
+          if (c.ID) {
+             this._categoriesById.set(c.ID.trim().toLowerCase(), c);
+          }
+       }
+       this._indexedCategoriesRef = this._ActionCategories;
+    }
+
+    private ensureParamsIndex(): void {
+       if (!this._Params) return;
+       if (this._indexedParamsRef === this._Params) return;
+       this._paramsByActionId.clear();
+       for (let i = 0; i < this._Params.length; i++) {
+          const p = this._Params[i];
+          if (p.ActionID) {
+             const key = p.ActionID.trim().toLowerCase();
+             let bucket = this._paramsByActionId.get(key);
+             if (!bucket) {
+                bucket = [];
+                this._paramsByActionId.set(key, bucket);
+             }
+             bucket.push(p);
+          }
+       }
+       this._indexedParamsRef = this._Params;
+    }
+
+    private ensureResultCodesIndex(): void {
+       if (!this._ActionResultCodes) return;
+       if (this._indexedResultCodesRef === this._ActionResultCodes) return;
+       this._resultCodesByActionId.clear();
+       for (let i = 0; i < this._ActionResultCodes.length; i++) {
+          const r = this._ActionResultCodes[i];
+          if (r.ActionID) {
+             const key = r.ActionID.trim().toLowerCase();
+             let bucket = this._resultCodesByActionId.get(key);
+             if (!bucket) {
+                bucket = [];
+                this._resultCodesByActionId.set(key, bucket);
+             }
+             bucket.push(r);
+          }
+       }
+       this._indexedResultCodesRef = this._ActionResultCodes;
+    }
+
+    public GetParamsByActionID(actionId: string): MJActionParamEntity[] {
+       if (!actionId || !this._Params) return [];
+       this.ensureParamsIndex();
+       return this._paramsByActionId.get(actionId.trim().toLowerCase()) ?? [];
+    }
+
+    public GetResultCode(actionId: string, resultCode: string): MJActionResultCodeEntity | undefined {
+       if (!actionId || !resultCode || !this._ActionResultCodes) return undefined;
+       this.ensureResultCodesIndex();
+       const bucket = this._resultCodesByActionId.get(actionId.trim().toLowerCase());
+       if (!bucket) return undefined;
+       const target = resultCode.trim().toLowerCase();
+       return bucket.find(r => r.ResultCode.trim().toLowerCase() === target);
+    }
+
    /**
     * Utility method that determines if a given Action Category ID is a child of the specified parent category ID.
     * @param categoryId - The ID of the category to check.
@@ -527,15 +690,18 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
       if (!categoryId || !parentCategoryId) {
          return false;
       }
-      if (categoryId.trim().toLowerCase() === parentCategoryId.trim().toLowerCase()) {
+      const catKey = categoryId.trim().toLowerCase();
+      const parentKey = parentCategoryId.trim().toLowerCase();
+      if (catKey === parentKey) {
          return true;
       }
-      const category = this._ActionCategories.find(c => c.ID.trim().toLowerCase() === categoryId.trim().toLowerCase());
-      if (!category) {
+      this.ensureCategoryIndex();
+      const category = this._categoriesById.get(catKey);
+      if (!category || !category.ParentID) {
          return false;
       }
       // Check if the parent ID matches the parentCategoryId or if it is a child of the parentCategoryId
-      if (category.ParentID?.trim().toLowerCase() === parentCategoryId.trim().toLowerCase()) {
+      if (category.ParentID.trim().toLowerCase() === parentKey) {
          return true;
       }
       // If the parent ID is not the parentCategoryId, recursively check the parent category
@@ -575,7 +741,8 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
       if (!actionName || actionName.trim().length === 0) {
          throw new Error("Action name cannot be null or empty.");
       }
-      return this.Actions.find(a => a.Name.trim().toLowerCase() === actionName.trim().toLowerCase());
+      this.ensureActionIndex();
+      return this._actionsByName.get(actionName.trim().toLowerCase());
    }
 
    /**
@@ -608,3 +775,44 @@ export type RuntimeAPIKeyResolver = (driverClass: string) => string | undefined;
  * does not depend on that one.
  */
 export type RuntimeCredentialScope = 'Any' | 'RuntimeOnly';
+
+/**
+ * One secondary scope dimension's value. The same union as `SecondaryScopeValue` in
+ * `@memberjunction/ai-core-plus`, declared here because that package depends on this one.
+ *
+ * Nothing here ties the two together; the compiler does only where code converts one into the other, and each
+ * conversion guards one direction. In `@memberjunction/ai-agents`, BaseAgent assigns `SecondaryScopeValue` records
+ * into {@link ActionRunScope} (so a value added to `SecondaryScopeValue` alone fails there) and passes the run's
+ * {@link ActionRunScope} back into its memory, RAG and scoped-prompt inputs, typed `SecondaryScopeValue` (so a value
+ * added here alone fails there). Scoped Search in `@memberjunction/core-actions` makes the second conversion too.
+ * Removing those conversions removes the guard: keep the two unions identical by hand.
+ */
+export type ActionRunScopeValue = string | number | boolean | string[];
+
+/**
+ * An agent run's scope, as BaseAgent hands it to each action dispatch ({@link RunActionParams.RunScope}).
+ * `null` fields mean the run carries no such scope; the whole object is absent outside an agent run.
+ */
+export interface ActionRunScope {
+   /** The primary scope entity's name (e.g. `'Organizations'`), or `null` when the run names none. */
+   PrimaryScopeEntityName?: string | null;
+   /** The run's tenant: the record ID within the primary scope entity, or `null` when the run has none. */
+   PrimaryScopeRecordID: string | null;
+   /** The run's secondary dimensions (with the agent's configured defaults applied), or `null` when it has none. */
+   SecondaryScopes?: Record<string, ActionRunScopeValue> | null;
+}
+
+/**
+ * Whether an agent run's scope bounds what the run may reach: it carries a tenant (a non-blank
+ * `PrimaryScopeRecordID`) or at least one secondary dimension. `false` outside an agent run (`undefined`) and for an
+ * unscoped run's nulls; a primary entity name alone bounds nothing. The one predicate for "this run is
+ * tenant-scoped": BaseAgent withholds work that would run outside the scope (task graphs) when it holds, and an
+ * action that searches without a tenant (the Search action) refuses to run.
+ */
+export function ActionRunScopeIsBounded(scope: ActionRunScope | null | undefined): boolean {
+   if (!scope) return false;
+   const tenant = scope.PrimaryScopeRecordID;
+   if (typeof tenant === 'string' && tenant.trim().length > 0) return true;
+   const secondary = scope.SecondaryScopes;
+   return secondary !== null && typeof secondary === 'object' && Object.keys(secondary).length > 0;
+}

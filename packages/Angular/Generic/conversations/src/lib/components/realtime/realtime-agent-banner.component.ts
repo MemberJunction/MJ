@@ -43,6 +43,12 @@ export class RealtimeAgentBannerComponent {
    */
   @Input() Compact = false;
 
+  /**
+   * Whether to suppress the turn-state pill and redundant "speaking as" label in the banner
+   * because the center hero orb is already displaying the agent's name and live turn state.
+   */
+  @Input() HideState = false;
+
   /** Display name of the agent the voice session fronts (e.g. "Sage"). */
   @Input() AgentName = 'the agent';
 
@@ -97,6 +103,9 @@ export class RealtimeAgentBannerComponent {
 
   /** Whether the Minimize control renders (live sessions only). */
   @Input() ShowMinimize = false;
+
+  /** Review only: whether the "Start live session" action renders. */
+  @Input() ShowStartLive = true;
 
   /** The user's current interface-density override (selected state in the gear popover). */
   @Input() Density: RealtimeUxDensity = 'auto';

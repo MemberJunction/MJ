@@ -39,7 +39,7 @@ vi.mock('@memberjunction/core-entities', () => {
             return { Success: true, Errors: [] };
         }
 
-        public GetFieldByName(name: string): StubConfigField | null {
+        public GetFieldByName(name: string): unknown {
             return name === 'Config' ? this.ConfigField : null;
         }
     }

@@ -4,6 +4,7 @@ import { UserInfo } from '@memberjunction/core';
 import {
   AudioModel,
   BaseTextToSpeech,
+  BuildCancellationErrorInfo,
   ErrorAnalyzer,
   ModelUsage,
   PronounciationDictionary,
@@ -115,6 +116,20 @@ function rejected(error: Error): SpeechResult {
 /** A driver call that never answers. */
 function hangs(): Promise<SpeechResult> {
   return new Promise<SpeechResult>(() => undefined);
+}
+
+/**
+ * A driver call that honors its params' `CancellationToken` as the shipped drivers do: it answers
+ * only when the signal aborts, with the failure classified as the abort's cause.
+ */
+function answersOnAbort(params: TextToSpeechParams): Promise<SpeechResult> {
+  return new Promise<SpeechResult>(resolve => {
+    params.CancellationToken?.addEventListener('abort', () => {
+      const result = failed('The request was aborted');
+      result.errorInfo = BuildCancellationErrorInfo({ signal: params.CancellationToken, provider: 'Test vendor' });
+      resolve(result);
+    }, { once: true });
+  });
 }
 
 /** Request errors the shipped drivers return, with the status their SDKs keep. */
@@ -473,7 +488,10 @@ describe('AITextToSpeechRunner', () => {
       expect(run?.FailoverAttempts).toBe(1);
       expect(JSON.parse(String(run?.FailoverErrors))).toMatchObject([{ errorType: 'NetworkError' }]);
       expect(Object.keys(calls[0].Params)).not.toContain('TimeoutMS');
-      expect(Object.keys(calls[0].Params)).not.toContain('CancellationToken');
+      // The timed-out request is torn down: its driver was handed the bound's signal, now aborted.
+      expect(calls[0].Params.CancellationToken).toBeInstanceOf(AbortSignal);
+      expect(calls[0].Params.CancellationToken?.aborted).toBe(true);
+      expect(calls[1].Params.CancellationToken?.aborted).toBe(false);
     });
 
     it('fails with a timeout error when every vendor exceeds TimeoutMS', async () => {
@@ -521,6 +539,43 @@ describe('AITextToSpeechRunner', () => {
       expect(run?.Status).toBe('Cancelled');
       expect(run?.Cancelled).toBe(true);
       expect(run?.CancellationReason).toBe('user_requested');
+    });
+
+    it("hands the driver the bound's signal, which aborts when the caller cancels", async () => {
+      const controller = new AbortController();
+      respond = (_driver, params) => {
+        setTimeout(() => controller.abort(), 10);
+        return answersOnAbort(params);
+      };
+
+      const result = await runner.RunTextToSpeech(speechParams({ CancellationToken: controller.signal, TimeoutMS: 5000 }));
+      await runner.WaitForPendingPromptRunSaves();
+      const run = MediaHarness.LastRun;
+
+      const signal = calls[0].Params.CancellationToken;
+      expect(signal).toBeInstanceOf(AbortSignal);
+      expect(signal).not.toBe(controller.signal);
+      expect(signal?.aborted).toBe(true);
+      expect(calls).toHaveLength(1);
+      expect(result.ErrorMessage).toBe('The TTS call was cancelled');
+      expect(run?.Status).toBe('Cancelled');
+      expect(run?.FailoverAttempts).toBe(0);
+    });
+
+    it('records a cancellation the driver reports as Cancelled, without failing over', async () => {
+      respond = () => {
+        const result = failed('Request was aborted.');
+        result.errorInfo = BuildCancellationErrorInfo({ provider: 'Test vendor' });
+        return result;
+      };
+
+      const result = await runner.RunTextToSpeech(speechParams());
+      await runner.WaitForPendingPromptRunSaves();
+
+      expect(calls).toHaveLength(1);
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toBe('The TTS call was cancelled');
+      expect(MediaHarness.LastRun?.Status).toBe('Cancelled');
     });
 
     it('does not try the next vendor once the caller has cancelled', async () => {

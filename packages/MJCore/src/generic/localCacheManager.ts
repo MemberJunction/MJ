@@ -103,6 +103,8 @@ export interface CacheEntryInfo {
     rowCount?: number;
     /** Optional TTL expiry timestamp */
     expiresAt?: number;
+    /** Timestamp (epoch ms) when this entry was last verified against the backing database */
+    lastVerifiedAt?: number;
 }
 
 /**
@@ -158,12 +160,24 @@ export interface CachedRunViewData {
      */
     schemaHash?: string;
     /**
+     * The newest `__mj_UpdatedAt` (ISO string) across the entity's metadata row and its field rows,
+     * written alongside {@link schemaHash}. When two processes sharing a cache disagree on the hash,
+     * this says which of them holds the newer metadata, so the older one stops treating the newer
+     * one's slots as stale. Absent on entries from writers that predate it or whose metadata
+     * carries no timestamps.
+     */
+    schemaStamp?: string;
+    /**
      * Set when the slot was written with {@link CacheWriteOptions.ProviderInternalScaffolding}.
      * Persisted so that in-place slot maintenance (`storeCachedResults`, driven by BaseEntity
      * save/delete events) can carry the exemption FORWARD. Without it, the first save event
      * touching a scaffolding slot would freeze it and break the owner that mutates those rows.
      */
     providerInternalScaffolding?: boolean;
+    /** Timestamp (epoch ms) when this entry was initially cached */
+    cachedAt?: number;
+    /** Timestamp (epoch ms) when this entry was last verified against the backing database */
+    lastVerifiedAt?: number;
 }
 
 /**
@@ -192,12 +206,117 @@ export interface CachedRunViewResult {
      * permanently disabling post-migration drift detection for that slot.
      */
     schemaHash?: string;
+    /** Surfaced for the same carry-forward reason as {@link schemaHash}. See {@link CachedRunViewData.schemaStamp}. */
+    schemaStamp?: string;
     /**
      * Surfaced from the stored payload so in-place maintenance can carry the freeze exemption
      * forward. See {@link CachedRunViewData.providerInternalScaffolding}.
      */
     providerInternalScaffolding?: boolean;
+    /** Timestamp (epoch ms) when this entry was initially cached */
+    cachedAt?: number;
+    /** Timestamp (epoch ms) when this entry was last verified against the backing database */
+    lastVerifiedAt?: number;
 }
+
+/** A RunQuery result slot as stored. */
+interface CachedRunQueryData {
+    results: unknown[];
+    maxUpdatedAt: string;
+    rowCount?: number;
+    queryId?: string;
+    /** User who executed the authorized miss that produced this slot (B43 tie-breaker). */
+    warmedForUserID?: string;
+    /** {@link QueryDefinitionSignature.Hash} the rows were computed under. Absent on older slots. */
+    definitionHash?: string;
+    /** {@link QueryDefinitionSignature.Stamp} the rows were computed under. */
+    definitionStamp?: string;
+}
+
+/** A cached RunQuery result, as {@link LocalCacheManager.GetRunQueryResult} returns it. */
+export interface CachedRunQuerySlot {
+    /**
+     * The cached result rows — shared and deep-frozen under a reference-sharing storage
+     * provider, exactly like {@link CachedRunViewData.results}. Do not mutate.
+     */
+    results: unknown[];
+    maxUpdatedAt: string;
+    rowCount: number;
+    queryId?: string;
+    /** User who executed the authorized miss that produced this slot (B43 tie-breaker). */
+    warmedForUserID?: string;
+    /** The definition hash the slot was written under; undefined for slots written without one. */
+    definitionHash?: string;
+}
+
+/** An entity's schema hash and schema stamp. See {@link CachedRunViewData.schemaStamp}. */
+interface SchemaSignature {
+    Hash: string;
+    Stamp?: string;
+}
+
+/**
+ * What a saved query's cached results were computed from. A RunQuery slot stores the hash and the
+ * stamp it was written under; a read that expects a different hash is a miss. Computed by the
+ * database provider from the query metadata it executes (`QueryEngine`), so every process that
+ * runs the query agrees on it once it holds the same definition.
+ */
+export interface QueryDefinitionSignature {
+    /** The query the signature describes. Its RunQuery slots are indexed and held by this ID. */
+    QueryID: string;
+    /**
+     * Hash of everything that changes the query's results: its SQL for the platform, the columns
+     * that change how that SQL executes, its parameter definitions, and the hashes of the queries
+     * it composes.
+     */
+    Hash: string;
+    /**
+     * The newest `__mj_UpdatedAt` (ISO string) across the rows the hash covers. When two processes
+     * sharing a cache disagree on the hash, this says which of them holds the newer definition.
+     */
+    Stamp?: string;
+}
+
+/**
+ * The subject of a signature mismatch: an entity whose RunView slots were written under another
+ * schema, or a query whose RunQuery slots were written under another definition.
+ */
+interface SignatureSubject {
+    Kind: 'runview' | 'runquery';
+    /** For log messages: the entity name, or the query name (its ID when the name is unknown). */
+    Name: string;
+    /** The lowercased entity name, or the lowercased query ID. */
+    Key: string;
+}
+
+/** A cached slot whose signature differs from this process's for the slot's subject. */
+interface SignatureMismatch {
+    Subject: SignatureSubject;
+    /** The slot's hash; empty for a RunQuery slot written before slots carried one. */
+    CachedHash: string;
+    Current: SchemaSignature;
+    /** The slot's stamp is known to be newer than this process's. */
+    EntryIsNewer: boolean;
+}
+
+/**
+ * A hold on writing one subject's shared slots after a signature mismatch. See
+ * `LocalCacheManager.handleSchemaMismatch`.
+ */
+interface SchemaWriteHold {
+    /** This process's schema hash when the hold was taken; a different hash ends the hold. */
+    OwnHash: string;
+    /** Earliest time (ms) of the next permitted write; infinite while this process is behind. */
+    NextWriteAt: number;
+    /** When a mismatch was last seen for the entity (ms). */
+    LastMismatchAt: number;
+}
+
+/**
+ * Why a RunView slot is being read: to serve it to a caller, or to rewrite it in place after a
+ * row changed.
+ */
+type SlotReadPurpose = 'serve' | 'maintain';
 
 /**
  * Per-write options for the cache write methods.
@@ -244,16 +363,29 @@ export interface LocalCacheManagerConfig {
      */
     maxPercentOfCachePerEntity: number;
     /**
-     * Maximum size of any single cache entry, expressed as a percentage of
-     * maxSizeBytes. An entry estimated larger than this cap is not cached at
-     * all — the write is skipped (logged, data still returned to the caller
-     * uncached). Without this cap, storing an oversized entry is strictly worse
-     * than not caching it: evictIfNeeded frees max(incoming, 10% of budget), so
-     * an entry larger than the whole budget evicts EVERY other entry and still
-     * cannot be retained within budget — a full cache wipe on every store.
-     * Applies to RunView and RunQuery entries. Default: 25. Set to 0 to disable.
+     * Ceiling on the size of any ONE cache entry. An entry estimated larger than the
+     * ceiling is not cached at all — the write is skipped (logged, data still returned
+     * to the caller uncached). Applies to RunView and RunQuery entries.
+     *
+     * The ceiling exists because an entry that cannot be RETAINED within the budget is
+     * worse than no entry: it evicts other entries to make room and is itself evicted on
+     * the next store, so the cache churns and nothing is ever served from it.
+     *
+     * Three modes:
+     * - `'auto'` (default): the ceiling is DERIVED from the budget — everything except a
+     *   reserve of {@link SINGLE_ENTRY_RESERVE_PERCENT} held back for the rest of the
+     *   cache. This is deliberately not a small fixed fraction: a fixed fraction sized for
+     *   a small tenant makes the one entity worth caching (the biggest one) permanently
+     *   uncacheable, which is the failure this mode exists to avoid. The only entries
+     *   `'auto'` declines are entries that genuinely cannot be retained — and the decline
+     *   message says which `maxMemoryMB` would admit them.
+     * - a positive number: an explicit percentage of `maxSizeBytes`, for an operator who
+     *   wants a stricter ceiling than `'auto'`. Clamped to
+     *   {@link HARD_MAX_ENTRY_PERCENT} — no configuration may admit an entry that leaves
+     *   the cache less free space than one eviction cycle needs.
+     * - `0`: no ceiling at all (the original, unguarded behaviour — not recommended).
      */
-    maxEntryPercentOfCache: number;
+    maxEntryPercentOfCache: number | 'auto';
     /**
      * Interval in milliseconds for the periodic eviction sweep.
      * Catches entries that should have been evicted (TTL expired) but weren't
@@ -272,13 +404,38 @@ export interface LocalCacheManagerConfig {
 // DEFAULT CONFIGURATION
 // ============================================================================
 
+/**
+ * Minimum percentage of the cache budget that eviction frees in one pass, so a run of
+ * stores near the budget does not trigger an eviction each time. Also the floor under the
+ * space any single entry must leave behind it — see {@link HARD_MAX_ENTRY_PERCENT}.
+ */
+const EVICTION_THRASH_FLOOR_PERCENT = 10;
+
+/**
+ * Percentage of the budget held back from any one entry when the per-entry ceiling is
+ * derived (`maxEntryPercentOfCache: 'auto'`). The reserve is what keeps the rest of the
+ * cache alive alongside one large entry: with it, a store that arrives after the large
+ * entry can be satisfied by evicting entries out of the reserve rather than the large
+ * entry itself. It MUST be at least {@link EVICTION_THRASH_FLOOR_PERCENT}, or a single
+ * eviction pass could not be satisfied without evicting the large entry that eviction
+ * was making room around.
+ */
+const SINGLE_ENTRY_RESERVE_PERCENT = 25;
+
+/**
+ * Hard upper bound on the per-entry ceiling, whatever the configuration says. One entry
+ * may never occupy so much of the budget that less than one eviction pass' worth of space
+ * is left — that is the state in which every store wipes everything else.
+ */
+const HARD_MAX_ENTRY_PERCENT = 100 - EVICTION_THRASH_FLOOR_PERCENT;
+
 const DEFAULT_CONFIG: LocalCacheManagerConfig = {
     enabled: true,
     maxSizeBytes: 150 * 1024 * 1024, // 150MB
     defaultTTLMs: 0, // No TTL — event-based invalidation is the primary mechanism
     evictionPolicy: 'lru',
     maxPercentOfCachePerEntity: 50,
-    maxEntryPercentOfCache: 25,
+    maxEntryPercentOfCache: 'auto',
     evictionSweepIntervalMs: 300000, // 5 minutes
     verboseLogging: false,
 };
@@ -429,6 +586,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      */
     private _sharesReferences: boolean = false;
     private _registry: Map<string, CacheEntryInfo> = new Map();
+    private _lastVerifiedAt: Map<string, number> = new Map();
     private _initialized: boolean = false;
     private _initializePromise: Promise<void> | null = null;
     private _stats = { hits: 0, misses: 0 };
@@ -449,6 +607,20 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     private _entityEventBatches = new EntityEventBatchSet();
     /** Save/delete events a batch took when they were raised. See {@link WasTakenByEntityEventBatch}. */
     private _eventsTakenByBatch = new WeakSet<BaseEntityEvent>();
+
+    /**
+     * Write holds on entities whose shared slots were found under a different schema, keyed by
+     * lowercased entity name. While a hold applies, {@link SetRunViewResult} skips or rate-limits
+     * writes of that entity's slots. See {@link handleSchemaMismatch} and {@link mayWriteUnderSchemaHold}.
+     */
+    private _schemaWriteHolds = new Map<string, SchemaWriteHold>();
+    /**
+     * How often, at most, a process writes an entity's shared slots while it keeps finding that
+     * entity's slots under a schema different from its own. See {@link handleSchemaMismatch}.
+     */
+    public static readonly SCHEMA_MISMATCH_WRITE_INTERVAL_MS = 60_000;
+    /** Schema mismatches already reported, so each entity/hash pair is logged once per process. */
+    private _reportedSchemaMismatches = new Set<string>();
 
     private readonly REGISTRY_KEY = '__MJ_CACHE_REGISTRY__';
 
@@ -954,28 +1126,170 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
-     * Checks whether a cached RunView entry is structurally stale due to a schema change
-     * (e.g., new columns added via migration + CodeGen). Compares the stored schema hash
-     * against the current entity field list. If they differ, the entry is invalidated.
+     * Compares a cached RunView entry's schema hash against this process's current field list for
+     * the entity (a mismatch follows a migration + CodeGen that added, removed or reordered
+     * columns). Entries without a hash, and entities this process cannot resolve, never mismatch.
      * @param fingerprint - The cache fingerprint
      * @param data - The cached data to validate
-     * @returns true if the entry is stale and should not be served
+     * @returns The mismatch, or null when the entry may be served
      */
-    private isSchemaStaleCacheEntry(fingerprint: string, data: CachedRunViewData): boolean {
-        if (!data.schemaHash) return false;
+    private findSchemaMismatch(fingerprint: string, data: CachedRunViewData): SignatureMismatch | null {
+        if (!data.schemaHash) return null;
 
         const entityName = this.extractEntityFromFingerprint(fingerprint);
-        if (!entityName) return false;
+        if (!entityName) return null;
 
-        const currentHash = this.ComputeSchemaHash(undefined, entityName);
-        if (!currentHash) return false;
+        const current = this.computeSchemaSignature(undefined, entityName);
+        if (!current || current.Hash === data.schemaHash) return null;
 
-        if (currentHash !== data.schemaHash) {
-            LogWarning(`[CACHE-SCHEMA-STALE] Entity "${entityName}" schema changed (cached=${data.schemaHash}, current=${currentHash}) — dropping the slot`, 'Cache');
+        return {
+            Subject: LocalCacheManager.runViewSubject(entityName),
+            CachedHash: data.schemaHash,
+            Current: current,
+            EntryIsNewer: LocalCacheManager.isNewerSchemaStamp(data.schemaStamp, current.Stamp),
+        };
+    }
+
+    /** The mismatch subject for an entity's RunView slots. */
+    private static runViewSubject(entityName: string): SignatureSubject {
+        return { Kind: 'runview', Name: entityName, Key: entityName.trim().toLowerCase() };
+    }
+
+    /** The mismatch subject for a query's RunQuery slots. */
+    private static runQuerySubject(definition: QueryDefinitionSignature, queryName: string | undefined): SignatureSubject {
+        return { Kind: 'runquery', Name: queryName || definition.QueryID, Key: definition.QueryID.trim().toLowerCase() };
+    }
+
+    /**
+     * True only when both stamps are present and the cached entry's is strictly newer than this
+     * process's. Equal or missing stamps leave the order unknown, which counts as not newer.
+     */
+    private static isNewerSchemaStamp(entryStamp: string | undefined, currentStamp: string | undefined): boolean {
+        if (!entryStamp || !currentStamp) {
+            return false;
+        }
+        return LocalCacheManager.timestampMs(entryStamp) > LocalCacheManager.timestampMs(currentStamp);
+    }
+
+    /**
+     * Decides what a signature mismatch does to the slot: an entity schema mismatch on a RunView
+     * slot, or a query definition mismatch on a RunQuery slot. The entry is never served; the
+     * question is whether the slot is deleted, which on a shared store may also tell every peer to
+     * reload.
+     *
+     * - Process-local store, or a slot-maintenance read: delete it (`drop`). No other process reads a
+     *   local store. A maintenance read happens because a row changed, and a slot that cannot take
+     *   the change in place must go, whichever process wrote it.
+     * - Shared store, serving read: leave it, and hold back this process's writes of the subject's
+     *   slots. Deleting a RunView slot publishes `removed`, every peer engine holding the slot
+     *   reloads and rewrites it under its own hash, and processes on either side of a migration keep
+     *   doing that to each other. The caller reads the database instead.
+     *   - When the slot is known to come from newer metadata, this process is the one out of date.
+     *     It stops writing the subject's slots until its own hash changes.
+     *   - Otherwise it writes the subject's slots at most once per
+     *     {@link SCHEMA_MISMATCH_WRITE_INTERVAL_MS} while mismatches keep appearing. That still
+     *     replaces a slot left by older metadata, but a peer running code that deletes mismatched
+     *     slots (any release before this check stopped deleting them) gets one slot to delete per
+     *     interval instead of one per read. The hold lapses after an interval with no mismatch.
+     *     For RunView slots the first replacement waits one interval. For RunQuery slots it is
+     *     immediate: no release ever deleted a RunQuery slot over its definition and the category
+     *     is not published, so an immediate replacement cannot feed a loop, and waiting would make
+     *     every server run an edited query against the database for a full interval.
+     */
+    private handleSchemaMismatch(mismatch: SignatureMismatch, purpose: SlotReadPurpose, drop: () => Promise<void>): void {
+        const shared = this._storageProvider?.SharedAcrossProcesses === true;
+        if (!shared || purpose === 'maintain') {
+            this.reportSchemaMismatch(mismatch, 'dropping the slot');
+            drop().catch(() => {});
+            return;
+        }
+        this.holdSchemaWrites(mismatch);
+        this.reportSchemaMismatch(mismatch, LocalCacheManager.describeHeldMismatch(mismatch));
+    }
+
+    /** The log text for a mismatch that left the slot in place and took a write hold. */
+    private static describeHeldMismatch(mismatch: SignatureMismatch): string {
+        const seconds = LocalCacheManager.SCHEMA_MISMATCH_WRITE_INTERVAL_MS / 1000;
+        if (mismatch.Subject.Kind === 'runquery') {
+            return mismatch.EntryIsNewer
+                ? 'another process wrote the slot under a newer query definition. This process runs the query against ' +
+                  'the database and stops writing its cache slots until its own definition catches up.'
+                : `running the query against the database. While slots under other definitions keep appearing, this ` +
+                  `process writes the query's slots at most once every ${seconds}s.`;
+        }
+        return mismatch.EntryIsNewer
+            ? 'another process wrote the slot under newer metadata. This process reads the entity from the database ' +
+              'and stops writing its cache slots until its metadata changes. If it started before a migration, restart it.'
+            : `reading from the database. While slots under other metadata keep appearing, this process writes the entity's ` +
+              `slots at most once every ${seconds}s.`;
+    }
+
+    /** The key of a subject's write hold. RunView and RunQuery holds share one map. */
+    private static holdKey(subject: SignatureSubject): string {
+        return `${subject.Kind}:${subject.Key}`;
+    }
+
+    /** Records or extends the write hold for a mismatch seen on a shared store. */
+    private holdSchemaWrites(mismatch: SignatureMismatch): void {
+        const key = LocalCacheManager.holdKey(mismatch.Subject);
+        const now = Date.now();
+        const existing = this._schemaWriteHolds.get(key);
+        if (mismatch.EntryIsNewer) {
+            this._schemaWriteHolds.set(key, { OwnHash: mismatch.Current.Hash, NextWriteAt: Number.POSITIVE_INFINITY, LastMismatchAt: now });
+        } else if (existing && existing.OwnHash === mismatch.Current.Hash) {
+            existing.LastMismatchAt = now;
+        } else {
+            const firstWriteDelay = mismatch.Subject.Kind === 'runquery' ? 0 : LocalCacheManager.SCHEMA_MISMATCH_WRITE_INTERVAL_MS;
+            this._schemaWriteHolds.set(key, {
+                OwnHash: mismatch.Current.Hash,
+                NextWriteAt: now + firstWriteDelay,
+                LastMismatchAt: now,
+            });
+        }
+    }
+
+    /** Logs a mismatch once per subject and hash pair per process. */
+    private reportSchemaMismatch(mismatch: SignatureMismatch, outcome: string): void {
+        const key = `${LocalCacheManager.holdKey(mismatch.Subject)}|${mismatch.CachedHash}|${mismatch.Current.Hash}`;
+        if (this._reportedSchemaMismatches.has(key)) {
+            return;
+        }
+        this._reportedSchemaMismatches.add(key);
+        const label = mismatch.Subject.Kind === 'runquery'
+            ? `[CACHE-QUERY-DEFINITION-STALE] Query "${mismatch.Subject.Name}" definition`
+            : `[CACHE-SCHEMA-STALE] Entity "${mismatch.Subject.Name}" schema`;
+        LogWarning(`${label} differs from a cached slot ` +
+            `(cached=${mismatch.CachedHash || '(none)'}, current=${mismatch.Current.Hash}) — ${outcome}`, 'Cache');
+    }
+
+    /**
+     * Whether a slot of `subject` may be written now, given its write hold (see
+     * {@link handleSchemaMismatch}). A permitted write under a rate-limiting hold uses up the
+     * interval. The hold is dropped once this process's hash changes (a metadata refresh, or a
+     * query edit reaching this process) or, for a rate-limiting hold, once an interval passes with
+     * no mismatch.
+     */
+    private mayWriteUnderSchemaHold(subject: SignatureSubject, currentHash: string): boolean {
+        if (this._storageProvider?.SharedAcrossProcesses !== true) {
             return true;
         }
-
-        return false;
+        const key = LocalCacheManager.holdKey(subject);
+        const hold = this._schemaWriteHolds.get(key);
+        if (!hold) {
+            return true;
+        }
+        const now = Date.now();
+        const interval = LocalCacheManager.SCHEMA_MISMATCH_WRITE_INTERVAL_MS;
+        const lapsed = hold.NextWriteAt !== Number.POSITIVE_INFINITY && now - hold.LastMismatchAt > interval;
+        if (hold.OwnHash !== currentHash || lapsed) {
+            this._schemaWriteHolds.delete(key);
+            return true;
+        }
+        if (now < hold.NextWriteAt) {
+            return false;
+        }
+        hold.NextWriteAt = now + interval;
+        return true;
     }
 
     /**
@@ -1945,9 +2259,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         if (!this._storageProvider || !this._config.enabled) return;
 
         const key = this.buildDatasetKey(name, itemFilters, keyPrefix);
-        // Estimate size from a string representation (used only for cache eviction
-        // accounting; the actual stored value is the native object).
-        const sizeBytes = this.estimateSize(JSON.stringify(dataset));
+        // Estimate size by sampling item result arrays instead of stringifying the entire dataset
+        const sizeBytes = Array.isArray(dataset?.Results)
+            ? dataset.Results.reduce((sum, item) => sum + this.estimateResultsSize(item.Results), 128)
+            : 128;
 
         // Fourth write funnel, held to the same contract as SetRunViewResult /
         // SetRunQueryResult / storeCachedResults. `GetDataset` hands this object straight back
@@ -2216,6 +2531,15 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             parts.push('bin:1');
         }
 
+        // SkipTotalRowCount segment. A call that skips the fallback COUNT stores a result whose
+        // TotalRowCount was never counted, so it must not share a slot with the otherwise
+        // identical counted call (each would be served the other's TotalRowCount). Appended only
+        // when true, so every existing fingerprint stays byte-for-byte identical. Not allowlisted
+        // in hasNarrowingSegment, so such a slot is invalidated on save rather than maintained.
+        if (params.SkipTotalRowCount === true) {
+            parts.push('strc:1');
+        }
+
         // DataSource segment. RunViewParams.DataSource:'Materialized' routes the read to the entity's
         // materialized snapshot view (GetEffectiveBaseView), a DIFFERENT physical source than the default
         // live base view — so a Live read and a Materialized read of the same entity/filter/orderBy MUST
@@ -2396,6 +2720,15 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * @returns The schema hash string, or undefined if the entity can't be resolved
      */
     public ComputeSchemaHash(provider: IMetadataProvider | undefined, entityName: string): string | undefined {
+        return this.computeSchemaSignature(provider, entityName)?.Hash;
+    }
+
+    /**
+     * The entity's schema hash (see {@link ComputeSchemaHash}) together with its schema stamp: the
+     * newest `__mj_UpdatedAt` across the entity row and its field rows, as an ISO string, or
+     * undefined when the metadata carries no timestamps.
+     */
+    private computeSchemaSignature(provider: IMetadataProvider | undefined, entityName: string): SchemaSignature | undefined {
         try {
             const md = provider ?? new Metadata();
             const entity = md.EntityByName(entityName);
@@ -2403,10 +2736,26 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             // Use natural sequence order (EntityInfo.Fields is sorted by Sequence).
             // This detects field additions, removals, AND reorderings.
             const fieldNames = entity.Fields.map(f => f.Name).join('|');
-            return this.simpleHash(fieldNames);
+            let newest = LocalCacheManager.timestampMs(entity.__mj_UpdatedAt);
+            for (const field of entity.Fields) {
+                newest = Math.max(newest, LocalCacheManager.timestampMs(field.__mj_UpdatedAt));
+            }
+            return {
+                Hash: this.simpleHash(fieldNames),
+                Stamp: newest > 0 ? new Date(newest).toISOString() : undefined,
+            };
         } catch {
             return undefined;
         }
+    }
+
+    /** Milliseconds since the epoch for a metadata timestamp (a Date or a string), or 0 when unreadable. */
+    private static timestampMs(value: Date | string | null | undefined): number {
+        if (value == null) {
+            return 0;
+        }
+        const ms = value instanceof Date ? value.getTime() : Date.parse(value);
+        return Number.isNaN(ms) ? 0 : ms;
     }
 
     /**
@@ -2567,7 +2916,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
 
         // Persist results, maxUpdatedAt, aggregateResults, totalRowCount, and schemaHash
-        const data: CachedRunViewData = { results, maxUpdatedAt };
+        const initialNow = Date.now();
+        const data: CachedRunViewData = { results, maxUpdatedAt, cachedAt: initialNow, lastVerifiedAt: initialNow };
         if (options?.ProviderInternalScaffolding) {
             // Persisted so event-driven in-place maintenance carries the exemption forward.
             data.providerInternalScaffolding = true;
@@ -2580,28 +2930,35 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
         // Compute and store schema hash for upgrade detection
         if (params.EntityName) {
-            const schemaHash = this.ComputeSchemaHash(provider, params.EntityName);
-            if (schemaHash) {
-                data.schemaHash = schemaHash;
+            const signature = this.computeSchemaSignature(provider, params.EntityName);
+            if (signature) {
+                if (!this.mayWriteUnderSchemaHold(LocalCacheManager.runViewSubject(params.EntityName), signature.Hash)) {
+                    LogStatusEx({ message: `[CACHE-WRITE-GATE] Skipping cache write for "${params.EntityName}" — its shared slots were found under different metadata`, verboseOnly: true });
+                    return;
+                }
+                data.schemaHash = signature.Hash;
+                if (signature.Stamp) {
+                    data.schemaStamp = signature.Stamp;
+                }
             }
         }
         // Estimate size by sampling rows (eviction accounting only); the actual stored
         // value is the native object — no full JSON.stringify on the hot path.
         const sizeBytes = this.estimateResultsSize(data.results as unknown[]);
 
-        // Oversized-entry gate: an entry above maxEntryPercentOfCache of the budget is
-        // never cached. Attempting to store it would trigger a full-cache eviction to
-        // make room for an entry the very next store would evict again — strictly worse
-        // than serving this one query uncached. Always logged (not verbose-gated): an
-        // oversized result is a perf smell the operator should be able to see.
+        // Oversized-entry gate: an entry too large to be RETAINED within the budget is
+        // never cached — storing it would evict other entries for something the next store
+        // evicts again. An entry that fits under MaxEntrySizeBytes is cached however large
+        // it is. Always logged (not verbose-gated): a query too big to cache is a cost the
+        // operator is paying on every call and must be able to see.
         if (this.exceedsMaxEntrySize(sizeBytes)) {
-            LogWarning(`[CACHE-WRITE-GATE] Skipping cache write for "${params.EntityName || fingerprint.substring(0, 60)}" — estimated entry size ${sizeBytes} bytes exceeds per-entry cap (${this._config.maxEntryPercentOfCache}% of ${this._config.maxSizeBytes} byte budget)`, 'Cache');
+            LogWarning(this.describeOversizedEntry(params.EntityName || fingerprint.substring(0, 60), sizeBytes), 'Cache');
             return;
         }
 
-        // The oversized gate above is the ONLY step that can decline this write, and it is
-        // synchronous — so by here the row set is definitely becoming shared state, and it is
-        // frozen with no intervening yield point. That ordering is load-bearing: the eviction
+        // The schema gate and the oversized gate above are the ONLY steps that can decline this
+        // write, and they are synchronous — so by here the row set is definitely becoming shared
+        // state, and it is frozen with no intervening yield point. That ordering is load-bearing: the eviction
         // steps below are awaited, and callers hold this very array while they run (the
         // smart-cache stale leg does not await this method at all). Freezing after them leaves
         // a window in which shared rows are handed out still mutable — and `BaseEntity`
@@ -2622,10 +2979,12 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
         try {
             // Native object storage — IDB structured-clones, localStorage / Redis serialize internally.
-            const expiresAt = ttlMs ? Date.now() + ttlMs : undefined;
+            const writeNow = Date.now();
+            const expiresAt = ttlMs ? writeNow + ttlMs : undefined;
             await this._storageProvider.SetItem<CachedRunViewData>(fingerprint, data, CacheCategory.RunViewCache,
                 this.runViewWriteOptions(fingerprint, expiresAt));
 
+            this._lastVerifiedAt.set(fingerprint, writeNow);
             this.registerEntry({
                 key: fingerprint,
                 type: 'runview',
@@ -2639,8 +2998,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                     MaxRows: params.MaxRows,
                     HasAggregates: (params.Aggregates?.length ?? 0) > 0
                 },
-                cachedAt: Date.now(),
-                lastAccessedAt: Date.now(),
+                cachedAt: writeNow,
+                lastAccessedAt: writeNow,
+                lastVerifiedAt: writeNow,
                 accessCount: 1,
                 sizeBytes,
                 maxUpdatedAt,
@@ -2669,17 +3029,17 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             this._stats.misses++;
             return null;
         }
-        return this.readRunViewSlot(fingerprint);
+        return this.readRunViewSlot(fingerprint, 'serve');
     }
 
     /** {@link GetRunViewResult} without the open-batch check; slot maintenance reads through this. */
-    private async readRunViewSlot(fingerprint: string): Promise<CachedRunViewResult | null> {
+    private async readRunViewSlot(fingerprint: string, purpose: SlotReadPurpose): Promise<CachedRunViewResult | null> {
         if (!this._storageProvider || !this._config.enabled) return null;
 
         try {
             // Native object read — IDB structured-clones the result back, no JSON.parse needed.
             const parsed = await this._storageProvider.GetItem<CachedRunViewData>(fingerprint, CacheCategory.RunViewCache);
-            return this.materializeCachedRunViewResult(fingerprint, parsed);
+            return this.materializeCachedRunViewResult(fingerprint, parsed, purpose);
         } catch (e) {
             LogError(`LocalCacheManager.GetRunViewResult failed: ${e}`);
             this._stats.misses++;
@@ -2719,7 +3079,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         try {
             const raw = await this._storageProvider.GetItems<CachedRunViewData>(fingerprints, CacheCategory.RunViewCache);
             for (const [fp, parsed] of raw) {
-                out.set(fp, this.isPendingInBatch(fp) ? null : this.materializeCachedRunViewResult(fp, parsed));
+                out.set(fp, this.isPendingInBatch(fp) ? null : this.materializeCachedRunViewResult(fp, parsed, 'serve'));
             }
             return out;
         } catch (e) {
@@ -2739,12 +3099,14 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * recording the appropriate hit/miss + access-tracking side effects.
      *
      * Also validates the schema hash (if present) to detect structurally stale
-     * cache entries after schema migrations. If the entity's field list changed
-     * since the entry was cached, the entry is invalidated and null is returned.
+     * cache entries after schema migrations. If the entity's field list differs
+     * from the one the entry was cached under, null is returned; whether the slot
+     * is also deleted depends on `purpose` (see {@link handleSchemaMismatch}).
      */
     private materializeCachedRunViewResult(
         fingerprint: string,
-        parsed: CachedRunViewData | null | undefined
+        parsed: CachedRunViewData | null | undefined,
+        purpose: SlotReadPurpose
     ): CachedRunViewResult | null {
         if (!parsed) {
             this._stats.misses++;
@@ -2761,8 +3123,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             return null;
         }
 
-        if (this.isSchemaStaleCacheEntry(fingerprint, parsed)) {
-            this.InvalidateRunViewResult(fingerprint).catch(() => {});
+        const schemaMismatch = this.findSchemaMismatch(fingerprint, parsed);
+        if (schemaMismatch) {
+            this.handleSchemaMismatch(schemaMismatch, purpose, () => this.InvalidateRunViewResult(fingerprint));
             this._stats.misses++;
             return null;
         }
@@ -2771,6 +3134,11 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         this.indexSlotThisProcessDidNotWrite(fingerprint);
         this._stats.hits++;
         const results = parsed.results || [];
+        const cachedAt = registryEntry?.cachedAt ?? parsed.cachedAt;
+        const lastVerifiedAt = this._lastVerifiedAt.get(fingerprint)
+            ?? registryEntry?.lastVerifiedAt
+            ?? parsed.lastVerifiedAt
+            ?? cachedAt;
         const result: CachedRunViewResult = {
             results,
             maxUpdatedAt: parsed.maxUpdatedAt,
@@ -2778,13 +3146,34 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             totalRowCount: parsed.totalRowCount,
             // Surfaced so in-place maintenance can carry it forward on rewrite (B38).
             schemaHash: parsed.schemaHash,
+            schemaStamp: parsed.schemaStamp,
             // Same carry-forward rationale: a maintained scaffolding slot must stay exempt.
             providerInternalScaffolding: parsed.providerInternalScaffolding,
+            cachedAt,
+            lastVerifiedAt,
         };
         if (parsed.aggregateResults) {
             result.aggregateResults = parsed.aggregateResults;
         }
         return result;
+    }
+
+    /**
+     * Updates the `lastVerifiedAt` timestamp for a cached RunView slot in O(1) time
+     * without re-cloning, re-freezing, or rewriting its stored row array.
+     *
+     * Used by server-side smart-cache verification after a lightweight SQL status probe
+     * (`MAX(__mj_UpdatedAt)`, `COUNT(*)`) confirms that a cached slot is still current.
+     *
+     * @param fingerprint - The cache fingerprint to touch
+     * @param timestamp - Verification timestamp in epoch ms (defaults to `Date.now()`)
+     */
+    public TouchRunViewResultVerifiedAt(fingerprint: string, timestamp: number = Date.now()): void {
+        this._lastVerifiedAt.set(fingerprint, timestamp);
+        const entry = this._registry.get(fingerprint);
+        if (entry) {
+            entry.lastVerifiedAt = timestamp;
+        }
     }
 
     /**
@@ -2976,11 +3365,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             );
 
             // Return with rowCount derived from merged results and aggregates if provided
+            const verifiedNow = this._lastVerifiedAt.get(fingerprint) ?? Date.now();
+            this._lastVerifiedAt.set(fingerprint, verifiedNow);
+            const registryEntry = this._registry.get(fingerprint);
             const result: CachedRunViewResult = {
                 results: mergedResults,
                 maxUpdatedAt: newMaxUpdatedAt,
                 rowCount: mergedResults.length,
-                totalRowCount: mergedTotalRowCount
+                totalRowCount: mergedTotalRowCount,
+                cachedAt: registryEntry?.cachedAt ?? verifiedNow,
+                lastVerifiedAt: verifiedNow
             };
             if (aggregateResults) {
                 result.aggregateResults = aggregateResults;
@@ -3105,7 +3499,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
         return this.maintainSlotLocked(fingerprint, async () => {
             try {
-                const cached = await this.readRunViewSlot(fingerprint);
+                const cached = await this.readRunViewSlot(fingerprint, 'maintain');
                 if (!cached) {
                     LogStatusVerbose(`LocalCacheManager.ApplyRowChanges: No cached data found for fingerprint "${fingerprint.substring(0, 60)}" — skipping (cache will be populated on next RunView)`);
                     return false;
@@ -3117,7 +3511,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 }
                 return await this.storeCachedResults(fingerprint, Array.from(resultMap.values()), newMaxUpdatedAt,
                     { totalRowCount: cached.totalRowCount, rowCount: cached.results.length, schemaHash: cached.schemaHash,
-                      providerInternalScaffolding: cached.providerInternalScaffolding });
+                      schemaStamp: cached.schemaStamp, providerInternalScaffolding: cached.providerInternalScaffolding });
             } catch (e) {
                 LogError(`LocalCacheManager.ApplyRowChanges failed: ${e}`);
                 return false;
@@ -3173,16 +3567,20 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         fingerprint: string,
         updatedResults: unknown[],
         newMaxUpdatedAt: string,
-        prior?: { totalRowCount?: number; rowCount: number; schemaHash?: string; providerInternalScaffolding?: boolean }
+        prior?: { totalRowCount?: number; rowCount: number; schemaHash?: string; schemaStamp?: string; providerInternalScaffolding?: boolean }
     ): Promise<boolean> {
         // Stamp the slot the way the fill path does — the newest row's __mj_UpdatedAt — so the
         // stamp means the same thing whichever funnel wrote the slot and matches what the database
         // reports for the same rows (the client smart-cache check compares the two). The caller's
         // value (the event time) is used only when the rows carry no timestamp column.
         const maxUpdatedAt = LocalCacheManager.MaxUpdatedAtOfRows(updatedResults) ?? newMaxUpdatedAt;
+        const now = Date.now();
+        const existingEntry = this._registry.get(fingerprint);
         const data: CachedRunViewData = {
             results: updatedResults,
-            maxUpdatedAt
+            maxUpdatedAt,
+            cachedAt: existingEntry?.cachedAt ?? now,
+            lastVerifiedAt: now
         };
         // Carry the schemaHash FORWARD — never recompute it here (B38).
         //
@@ -3197,6 +3595,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // the very drift the guard exists to catch.
         if (prior?.schemaHash) {
             data.schemaHash = prior.schemaHash;
+        }
+        if (prior?.schemaStamp) {
+            data.schemaStamp = prior.schemaStamp;
         }
         // Carry the freeze exemption forward too — a scaffolding slot that gets maintained in
         // place must not silently become frozen, or the owner that mutates those rows breaks on
@@ -3223,15 +3624,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             this.freezeRowDataIfProviderSharesReferences(data);
         }
 
-        const existingEntry = this._registry.get(fingerprint);
         await this._storageProvider!.SetItem<CachedRunViewData>(fingerprint, data, CacheCategory.RunViewCache,
             this.runViewWriteOptions(fingerprint, existingEntry?.expiresAt));
 
+        this._lastVerifiedAt.set(fingerprint, now);
         if (existingEntry) {
             existingEntry.maxUpdatedAt = maxUpdatedAt;
             existingEntry.rowCount = updatedResults.length;
             existingEntry.sizeBytes = sizeBytes;
-            existingEntry.lastAccessedAt = Date.now();
+            existingEntry.lastAccessedAt = now;
+            existingEntry.lastVerifiedAt = now;
             this.debouncedPersistRegistry();
         }
 
@@ -3259,6 +3661,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             try {
                 await this._storageProvider.Remove(key, CacheCategory.RunViewCache);
                 this._registry.delete(key);
+                this._lastVerifiedAt.delete(key);
                 this.removeFromEntityIndex(key);
             } catch (e) {
                 LogError(`LocalCacheManager.InvalidateEntityCaches failed for key ${key}: ${e}`);
@@ -3324,6 +3727,12 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * @param rowCount - Optional row count (defaults to results.length if not provided)
      * @param queryId - Optional query ID for reference
      * @param ttlMs - Optional TTL in milliseconds (for cache expiry tracking)
+     * @param warmedForUserID - The user whose authorized execution produced the rows
+     * @param definition - The query definition the rows were computed under. Stored with the slot so
+     *   a read under a different definition misses (see {@link GetRunQueryResult}), and used to index
+     *   the slot by query ID (see {@link InvalidateRunQueryResultsForQuery}). On a shared store the
+     *   write is skipped while the query's slots are under a write hold (see
+     *   `handleSchemaMismatch`).
      */
     public async SetRunQueryResult(
         fingerprint: string,
@@ -3333,7 +3742,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         rowCount?: number,
         queryId?: string,
         ttlMs?: number,
-        warmedForUserID?: string
+        warmedForUserID?: string,
+        definition?: QueryDefinitionSignature
     ): Promise<void> {
         if (!this._storageProvider || !this._config.enabled) return;
 
@@ -3343,20 +3753,30 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // from cached metadata (runtime-created queries never are — the provider's Queries cache
         // does not refresh in-process): the warmer proved their permission by executing; anyone
         // ELSE falls through to an authorized execution rather than being served unchecked.
-        const data = { results, maxUpdatedAt, rowCount: actualRowCount, queryId, warmedForUserID };
+        const data: CachedRunQueryData = { results, maxUpdatedAt, rowCount: actualRowCount, queryId, warmedForUserID };
+        if (definition) {
+            if (!this.mayWriteUnderSchemaHold(LocalCacheManager.runQuerySubject(definition, queryName), definition.Hash)) {
+                LogStatusEx({ message: `[CACHE-WRITE-GATE] Skipping cache write for query "${queryName}" — its shared slots were found under a different definition`, verboseOnly: true });
+                return;
+            }
+            data.definitionHash = definition.Hash;
+            if (definition.Stamp) {
+                data.definitionStamp = definition.Stamp;
+            }
+        }
         // Estimate size by sampling rows (eviction accounting only).
         const sizeBytes = this.estimateResultsSize(results);
 
         // Oversized-entry gate — same rationale as SetRunViewResult: never wipe the
         // cache to make room for an entry that can't be retained within budget.
         if (this.exceedsMaxEntrySize(sizeBytes)) {
-            LogWarning(`[CACHE-WRITE-GATE] Skipping cache write for query "${queryName}" — estimated entry size ${sizeBytes} bytes exceeds per-entry cap (${this._config.maxEntryPercentOfCache}% of ${this._config.maxSizeBytes} byte budget)`, 'Cache');
+            LogWarning(this.describeOversizedEntry(`query ${queryName}`, sizeBytes), 'Cache');
             return;
         }
 
         // Same reference-sharing exposure as the RunView path (GetRunQueryResult hands
         // `results` straight back out) — closed here rather than waiting for a mutator to
-        // find it. Placed immediately after the only declining gate and BEFORE the awaited
+        // find it. Placed immediately after the only declining gates and BEFORE the awaited
         // eviction below, for the same reason as SetRunViewResult: callers of this method do
         // not always await it, so any yield point before the freeze is a window in which the
         // caller can still mutate the rows the cache is about to store.
@@ -3378,7 +3798,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             // that bounds it there. Without it an external-data-source query result was served
             // forever by every server except the one that wrote it.
             await this._storageProvider.SetItem(fingerprint, data, CacheCategory.RunQueryCache,
-                expiresAt ? { TTLSeconds: Math.max(1, Math.ceil((expiresAt - now) / 1000)) } : undefined);
+                LocalCacheManager.runQueryWriteOptions(expiresAt, now, definition?.QueryID ?? queryId));
 
             this.registerEntry({
                 key: fingerprint,
@@ -3399,23 +3819,33 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
+     * Store options for a RunQuery slot: its expiry, and the query ID as the index group, so a
+     * shared store can list every slot of one query whichever process wrote it.
+     */
+    private static runQueryWriteOptions(expiresAt: number | undefined, now: number, queryId: string | undefined): LocalStorageWriteOptions | undefined {
+        const options: LocalStorageWriteOptions = {};
+        if (expiresAt) {
+            options.TTLSeconds = Math.max(1, Math.ceil((expiresAt - now) / 1000));
+        }
+        if (queryId) {
+            options.IndexGroup = queryId.trim().toLowerCase();
+        }
+        return options.TTLSeconds !== undefined || options.IndexGroup !== undefined ? options : undefined;
+    }
+
+    /**
      * Retrieves a cached RunQuery result.
      *
      * @param fingerprint - The cache fingerprint
-     * @returns The cached results, maxUpdatedAt, rowCount, and queryId, or null if not found
+     * @param expectedDefinition - The query definition the caller would execute on a miss. When
+     *   given, a slot written under a different definition (or one that records none) is a miss.
+     *   On a process-local store the slot is also deleted; on a shared store it is left in place and
+     *   this process's writes of the query's slots are held (see `handleSchemaMismatch`). Omit it
+     *   where the caller cannot compute a definition (a client, whose slots the server validates).
+     * @returns The cached results, maxUpdatedAt, rowCount, queryId and definition hash, or null if
+     *   not found, expired, or written under another definition
      */
-    public async GetRunQueryResult(fingerprint: string): Promise<{
-        /**
-         * The cached result rows — shared and deep-frozen under a reference-sharing storage
-         * provider, exactly like {@link CachedRunViewData.results}. Do not mutate.
-         */
-        results: unknown[];
-        maxUpdatedAt: string;
-        rowCount: number;
-        queryId?: string;
-        /** User who executed the authorized miss that produced this slot (B43 tie-breaker). */
-        warmedForUserID?: string;
-    } | null> {
+    public async GetRunQueryResult(fingerprint: string, expectedDefinition?: QueryDefinitionSignature): Promise<CachedRunQuerySlot | null> {
         if (!this._storageProvider || !this._config.enabled) return null;
 
         // Check if entry has expired
@@ -3429,15 +3859,17 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
         try {
             // Native object read — no JSON.parse needed.
-            const parsed = await this._storageProvider.GetItem<{
-                results: unknown[];
-                maxUpdatedAt: string;
-                rowCount?: number;
-                queryId?: string;
-                warmedForUserID?: string;
-            }>(fingerprint, CacheCategory.RunQueryCache);
+            const parsed = await this._storageProvider.GetItem<CachedRunQueryData>(fingerprint, CacheCategory.RunQueryCache);
 
             if (parsed) {
+                const mismatch = expectedDefinition
+                    ? LocalCacheManager.findDefinitionMismatch(parsed, expectedDefinition, entry?.name)
+                    : null;
+                if (mismatch) {
+                    this.handleSchemaMismatch(mismatch, 'serve', () => this.InvalidateRunQueryResult(fingerprint));
+                    this._stats.misses++;
+                    return null;
+                }
                 this.recordAccess(fingerprint);
                 this._stats.hits++;
                 // Handle legacy entries that may not have rowCount
@@ -3451,7 +3883,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                     // (the B38 omission pattern, which this session exists to stamp out — and
                     // which the first version of this very fix repeated) silently disabled that
                     // tie-break and with it TTL caching for runtime-created queries.
-                    warmedForUserID: parsed.warmedForUserID
+                    warmedForUserID: parsed.warmedForUserID,
+                    // Same pass-through rule: a client sends it back to the server, which answers
+                    // `stale` when its own definition differs.
+                    definitionHash: parsed.definitionHash
                 };
             }
         } catch (e) {
@@ -3460,6 +3895,23 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
         this._stats.misses++;
         return null;
+    }
+
+    /**
+     * Compares a RunQuery slot's definition hash with the definition the caller expects. A slot
+     * that records no hash was written before slots carried one, so nothing says which SQL produced
+     * its rows; it counts as a mismatch with an unknown order.
+     */
+    private static findDefinitionMismatch(data: CachedRunQueryData, expected: QueryDefinitionSignature, queryName: string | undefined): SignatureMismatch | null {
+        if (data.definitionHash === expected.Hash) {
+            return null;
+        }
+        return {
+            Subject: LocalCacheManager.runQuerySubject(expected, queryName),
+            CachedHash: data.definitionHash ?? '',
+            Current: { Hash: expected.Hash, Stamp: expected.Stamp },
+            EntryIsNewer: LocalCacheManager.isNewerSchemaStamp(data.definitionStamp, expected.Stamp),
+        };
     }
 
     /**
@@ -3482,7 +3934,12 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * Invalidates all cached RunQuery results for a specific query.
      * Useful when a query's underlying data changes and all related caches should be cleared.
      *
+     * Matches this process's registry by name only, so it misses slots written by other processes
+     * on a shared store and slots written under a former name.
+     *
      * @param queryName - The query name to invalidate
+     * @deprecated Use {@link InvalidateRunQueryResultsForQuery}, which finds a query's slots by ID
+     *   in every process that shares the store.
      */
     public async InvalidateQueryCaches(queryName: string): Promise<void> {
         if (!this._storageProvider) return;
@@ -3509,22 +3966,78 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
+     * Deletes every cached RunQuery result of one query: the slots this process wrote, and on a
+     * shared store every slot any process wrote with the query's ID (see {@link SetRunQueryResult}).
+     * Slots keyed by the query's name alone, or written before slots were indexed, are not found;
+     * a definition check on read (see {@link GetRunQueryResult}) keeps them from being served.
+     * Never throws.
+     *
+     * @param queryId - The query whose slots to delete
+     * @returns The number of slots deleted
+     */
+    public async InvalidateRunQueryResultsForQuery(queryId: string): Promise<number> {
+        if (!this._storageProvider || !queryId) return 0;
+
+        const keys = await this.findRunQueryKeysForQuery(queryId);
+        let removed = 0;
+        for (const key of keys) {
+            try {
+                await this._storageProvider.Remove(key, CacheCategory.RunQueryCache);
+                this._registry.delete(key);
+                removed++;
+            } catch (e) {
+                LogError(`LocalCacheManager.InvalidateRunQueryResultsForQuery failed for key ${key}: ${e}`);
+            }
+        }
+        if (removed > 0) {
+            await this.persistRegistry();
+        }
+        return removed;
+    }
+
+    /** The keys of one query's RunQuery slots: this process's registry, plus the shared index. */
+    private async findRunQueryKeysForQuery(queryId: string): Promise<Set<string>> {
+        const id = queryId.trim().toLowerCase();
+        const keys = new Set<string>();
+        for (const [key, entry] of this._registry.entries()) {
+            // A fingerprint is `Name|ID|Category|Params[|Connection]`; matching any segment keeps a
+            // name that itself contains '|' from hiding the ID.
+            if (entry.type === 'runquery' && key.toLowerCase().split('|').includes(id)) {
+                keys.add(key);
+            }
+        }
+        if (this._storageProvider?.GetIndexGroupKeys) {
+            try {
+                for (const key of await this._storageProvider.GetIndexGroupKeys(CacheCategory.RunQueryCache, id)) {
+                    keys.add(key);
+                }
+            } catch (e) {
+                LogError(`LocalCacheManager: listing RunQuery slots of query ${queryId} failed: ${e}`);
+            }
+        }
+        return keys;
+    }
+
+    /**
      * Gets the cache status (fingerprint data) for a RunQuery result.
      * Used for smart cache validation with the server.
      *
      * @param fingerprint - The cache fingerprint
-     * @returns The cache status with maxUpdatedAt and rowCount, or null if not found/expired
+     * @returns The cache status with maxUpdatedAt, rowCount and the definition hash the slot was
+     *   written under, or null if not found/expired
      */
     public async GetRunQueryCacheStatus(fingerprint: string): Promise<{
         maxUpdatedAt: string;
         rowCount: number;
+        definitionHash?: string;
     } | null> {
         const cached = await this.GetRunQueryResult(fingerprint);
         if (!cached) return null;
 
         return {
             maxUpdatedAt: cached.maxUpdatedAt,
-            rowCount: cached.rowCount
+            rowCount: cached.rowCount,
+            definitionHash: cached.definitionHash
         };
     }
 
@@ -3559,18 +4072,24 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             runquery: { count: 0, sizeBytes: 0 }
         };
 
+        let totalSizeBytes = 0;
+        let oldestEntry = Infinity;
+        let newestEntry = 0;
+
         for (const entry of entries) {
             byType[entry.type].count++;
             byType[entry.type].sizeBytes += entry.sizeBytes;
+            totalSizeBytes += entry.sizeBytes;
+            if (entry.cachedAt < oldestEntry) oldestEntry = entry.cachedAt;
+            if (entry.cachedAt > newestEntry) newestEntry = entry.cachedAt;
         }
 
-        const timestamps = entries.map(e => e.cachedAt);
         return {
             totalEntries: entries.length,
-            totalSizeBytes: entries.reduce((sum, e) => sum + e.sizeBytes, 0),
+            totalSizeBytes,
             byType,
-            oldestEntry: timestamps.length ? Math.min(...timestamps) : 0,
-            newestEntry: timestamps.length ? Math.max(...timestamps) : 0,
+            oldestEntry: entries.length > 0 ? oldestEntry : 0,
+            newestEntry,
             hits: this._stats.hits,
             misses: this._stats.misses
         };
@@ -3607,6 +4126,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                     await this._storageProvider.Remove(entry.key + '_date', category);
                 }
                 this._registry.delete(entry.key);
+                this._lastVerifiedAt.delete(entry.key);
             } catch (e) {
                 LogError(`LocalCacheManager.ClearByType failed for key ${entry.key}: ${e}`);
             }
@@ -3638,6 +4158,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
 
         this._registry.clear();
+        this._lastVerifiedAt.clear();
         this._stats = { hits: 0, misses: 0 };
         await this.persistRegistry();
         return count;
@@ -3698,6 +4219,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      */
     private unregisterEntry(key: string): void {
         this._registry.delete(key);
+        this._lastVerifiedAt.delete(key);
         this.debouncedPersistRegistry();
     }
 
@@ -3813,7 +4335,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             }
         };
 
-        const sampleCount = Math.min(rowCount, Math.max(3, Math.ceil(rowCount * 0.10)));
+        const sampleCount = rowCount <= 3 ? rowCount : Math.min(10, Math.max(3, Math.ceil(rowCount * 0.10)));
         if (sampleCount >= rowCount) {
             // Small result set — measure every row (no point sampling).
             let total = 0;
@@ -3835,33 +4357,91 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
-     * Returns true when a single entry of the given estimated size exceeds the
-     * per-entry cap (maxEntryPercentOfCache of maxSizeBytes) and must not be
-     * cached. See the config property's doc comment for the full rationale —
-     * in short, an entry that large can only be stored by evicting most (or
-     * all) of the cache, and it would be evicted again on the next store, so
-     * caching it is strictly worse than skipping it.
+     * The largest single entry this cache will store, in bytes, or 0 when no ceiling
+     * applies (`maxEntryPercentOfCache: 0`).
+     *
+     * `'auto'` derives it from the budget — the whole budget less
+     * {@link SINGLE_ENTRY_RESERVE_PERCENT} — so the ceiling grows with the memory the
+     * operator gave the cache instead of being a small fixed fraction that the biggest
+     * entity can never fit under. An explicit percentage is honoured as a stricter
+     * ceiling, clamped to {@link HARD_MAX_ENTRY_PERCENT} so no configuration can admit an
+     * entry that leaves the cache with less free space than one eviction pass needs.
+     */
+    public get MaxEntrySizeBytes(): number {
+        const pct = this.effectiveMaxEntryPercent;
+        if (pct <= 0) return 0;
+        return Math.floor(this._config.maxSizeBytes * pct / 100);
+    }
+
+    /**
+     * The per-entry ceiling as a percentage of the budget, with `'auto'` resolved and an
+     * explicit configuration clamped. 0 or below means "no ceiling".
+     */
+    private get effectiveMaxEntryPercent(): number {
+        const pct = this._config.maxEntryPercentOfCache;
+        if (pct === 'auto') {
+            return 100 - Math.max(SINGLE_ENTRY_RESERVE_PERCENT, EVICTION_THRASH_FLOOR_PERCENT);
+        }
+        return Math.min(pct, HARD_MAX_ENTRY_PERCENT);
+    }
+
+    /**
+     * Returns true when a single entry of the given estimated size exceeds
+     * {@link MaxEntrySizeBytes} and must not be cached. See the config property's doc
+     * comment for the rationale — in short, an entry that cannot be RETAINED within the
+     * budget would be evicted again on the next store, so caching it is churn. An entry
+     * that fits is cached however large it is: the cases that most need caching are the
+     * large ones.
      */
     private exceedsMaxEntrySize(sizeBytes: number): boolean {
-        const pct = this._config.maxEntryPercentOfCache;
-        if (pct <= 0) return false;
-        return sizeBytes > Math.floor(this._config.maxSizeBytes * pct / 100);
+        const ceiling = this.MaxEntrySizeBytes;
+        if (ceiling <= 0) return false;
+        return sizeBytes > ceiling;
+    }
+
+    /**
+     * Renders the decline of an oversized entry as something an operator can act on: what
+     * the ceiling is, and the `cacheSettings.maxMemoryMB` that would admit this entry.
+     * The old message reported raw byte counts and a percentage, which named the symptom
+     * but not the lever — and the entries it declines are exactly the expensive queries
+     * whose absence from the cache costs the most.
+     */
+    private describeOversizedEntry(label: string, sizeBytes: number): string {
+        const mb = (bytes: number): string => (bytes / 1024 / 1024).toFixed(1);
+        const pct = this.effectiveMaxEntryPercent;
+        const head = `[CACHE-WRITE-GATE] Not caching "${label}" — ${mb(sizeBytes)}MB exceeds the largest single entry this cache can retain (${mb(this.MaxEntrySizeBytes)}MB of a ${mb(this._config.maxSizeBytes)}MB budget). Every read of it goes to the database.`;
+        // pct can only be <= 0 with the ceiling disabled, in which case nothing is declined
+        // and this message is never produced — but the arithmetic below must not divide by it.
+        if (pct <= 0) return head;
+        const requiredBudgetMB = Math.ceil((sizeBytes * 100 / pct) / 1024 / 1024);
+        return `${head} To cache it, raise cacheSettings.maxMemoryMB to ${requiredBudgetMB} or more.`;
     }
 
     /**
      * Evicts entries if needed to make room for new data.
+     *
+     * Frees the DEFICIT — how far over budget the cache would be with the incoming entry —
+     * rounded up to {@link EVICTION_THRASH_FLOOR_PERCENT} of the budget so a run of stores
+     * near the budget does not evict on every one. It deliberately does not free the
+     * incoming entry's whole size: for a large entry arriving into a mostly empty cache the
+     * deficit is small, and freeing the entry's full size instead emptied the cache to make
+     * room that was already there. That over-eviction is what made a large entry look
+     * inherently destructive, and it is why the per-entry ceiling used to be set low enough
+     * to exclude every large entry.
      */
     private async evictIfNeeded(neededBytes: number): Promise<void> {
         if (!this._storageProvider) return;
 
-        const stats = this.GetStats();
-        const wouldExceedSize = (stats.totalSizeBytes + neededBytes) > this._config.maxSizeBytes;
+        let currentSizeBytes = 0;
+        for (const entry of this._registry.values()) {
+            currentSizeBytes += entry.sizeBytes;
+        }
+        const deficitBytes = (currentSizeBytes + neededBytes) - this._config.maxSizeBytes;
 
-        if (!wouldExceedSize) return;
+        if (deficitBytes <= 0) return;
 
-        // Calculate how much to free — at least the incoming entry's size, but
-        // free 10% of total budget to avoid thrashing on every store.
-        const targetFreeBytes = Math.max(neededBytes, this._config.maxSizeBytes * 0.1);
+        const thrashFloorBytes = Math.floor(this._config.maxSizeBytes * EVICTION_THRASH_FLOOR_PERCENT / 100);
+        const targetFreeBytes = Math.max(deficitBytes, thrashFloorBytes);
 
         await this.evict(targetFreeBytes);
     }
@@ -3913,6 +4493,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                     this.removeFromEntityIndex(entry.fingerprint);
                 }
                 this._registry.delete(key);
+                this._lastVerifiedAt.delete(key);
             } catch (e) {
                 // Continue evicting other entries
             }
@@ -3968,6 +4549,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 this.removeFromEntityIndex(entry.key);
                 bytesToFree -= entry.sizeBytes;
                 this._registry.delete(entry.key);
+                this._lastVerifiedAt.delete(entry.key);
             } catch {
                 // Continue evicting
             }
@@ -4086,5 +4668,6 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             this.removeFromEntityIndex(entry.fingerprint);
         }
         this._registry.delete(key);
+        this._lastVerifiedAt.delete(key);
     }
 }
