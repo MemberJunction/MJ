@@ -17,7 +17,7 @@
  * silently promotes a *worse* model when comparing on an error metric.
  *
  * Pure / dependency-free so it stays in Core, which holds browser-safe, dependency-free runtime logic shared by
- * ng-dashboards and ng-core-entity-forms.
+ * the server engine, the UI and the agent.
  */
 
 /** The canonical set of lower-is-better metric keys (lower-cased). */

@@ -5,19 +5,23 @@
  * operation's `ResultCode`, so callers (the UI, the gate checks) branch on the code and never on the message text.
  */
 
+/** Every refusal code; the {@link PredictiveStudioRefusalCode} union is derived from this list. */
+const REFUSAL_CODES = [
+  'READ_CAP_EXCEEDED',
+  'AS_OF_NO_EFFECT',
+  'MODEL_NOT_SCORABLE',
+  'MODEL_NEEDS_TRAINING',
+  'EXPERIMENT_SESSIONS_UNAVAILABLE',
+  /** A pipeline's evaluation setting is not a known value (e.g. `ValidationStrategy.MajorityBaselineRule`). */
+  'INVALID_EVALUATION_SETTING',
+] as const;
+
 /** Why a Train or Score request was refused. */
-export type PredictiveStudioRefusalCode =
-  | 'READ_CAP_EXCEEDED'
-  | 'AS_OF_NO_EFFECT'
-  | 'MODEL_NOT_SCORABLE'
-  | 'MODEL_NEEDS_TRAINING'
-  | 'EXPERIMENT_SESSIONS_UNAVAILABLE';
+export type PredictiveStudioRefusalCode = (typeof REFUSAL_CODES)[number];
 
 /** The refusal codes and the check that a result code is one of them. */
 export class PredictiveStudioRefusalCodes {
-  public static readonly All: ReadonlyArray<PredictiveStudioRefusalCode> = [
-    'READ_CAP_EXCEEDED', 'AS_OF_NO_EFFECT', 'MODEL_NOT_SCORABLE', 'MODEL_NEEDS_TRAINING', 'EXPERIMENT_SESSIONS_UNAVAILABLE',
-  ];
+  public static readonly All: ReadonlyArray<PredictiveStudioRefusalCode> = REFUSAL_CODES;
 
   /** True when `code` is a Predictive Studio refusal (a generic code such as `EXECUTION_ERROR` is not). */
   public static IsRefusal(code: string | undefined): code is PredictiveStudioRefusalCode {

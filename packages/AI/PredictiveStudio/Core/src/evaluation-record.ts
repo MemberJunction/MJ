@@ -13,8 +13,6 @@ export interface EvaluationRecord {
   ValidationOutOfSample: boolean;
   /** The pipeline's declared time index (`ValidationStrategy.TimeIndexColumn`), or null. */
   TimeIndexColumn: string | null;
-  /** True only when the model was tested on periods after its training periods (no strategy does yet). */
-  EvaluatedAsForecast: boolean;
   /** Why the trust verdict is withheld, or null when it is not. */
   WithheldReason: string | null;
   /** The majority-baseline rule in force when the model was trained (D2-C5d). */
@@ -54,22 +52,22 @@ export class EvaluationLineage {
   }
 
   /**
-   * The record training writes for a pipeline's validation strategy. Pass `MajorityBaselineRule` when the caller has
-   * already parsed it with {@link ParseMajorityBaselineRule}; otherwise it is parsed here, which throws
-   * `InvalidMajorityBaselineRuleError` for an unknown value.
+   * The record training writes for a pipeline's validation strategy. `ValidationOutOfSample` is required: it is the
+   * flag that lets validation `Metrics` count toward trust, so it never defaults to true. Pass `MajorityBaselineRule`
+   * when the caller has already parsed it with {@link ParseMajorityBaselineRule}; otherwise it is parsed here, which
+   * throws `InvalidMajorityBaselineRuleError` for an unknown value.
    */
   public static Build(
     validation: ValidationStrategy,
-    options?: { ValidationOutOfSample?: boolean; ImportanceKind?: ImportanceKind | null; MajorityBaselineRule?: MajorityBaselineRule },
+    options: { ValidationOutOfSample: boolean; ImportanceKind?: ImportanceKind | null; MajorityBaselineRule?: MajorityBaselineRule },
   ): EvaluationRecord {
     const timeIndex = validation.TimeIndexColumn?.trim() || null;
     return {
-      ValidationOutOfSample: options?.ValidationOutOfSample ?? true,
+      ValidationOutOfSample: options.ValidationOutOfSample,
       TimeIndexColumn: timeIndex,
-      EvaluatedAsForecast: false,
       WithheldReason: timeIndex ? EvaluationLineage.NotEvaluatedAsForecast : null,
-      MajorityBaselineRule: options?.MajorityBaselineRule || EvaluationLineage.ParseMajorityBaselineRule(validation.MajorityBaselineRule),
-      ImportanceKind: options?.ImportanceKind || null,
+      MajorityBaselineRule: options.MajorityBaselineRule || EvaluationLineage.ParseMajorityBaselineRule(validation.MajorityBaselineRule),
+      ImportanceKind: options.ImportanceKind || null,
     };
   }
 
@@ -89,7 +87,6 @@ export class EvaluationLineage {
     return {
       ValidationOutOfSample: raw.ValidationOutOfSample === true,
       TimeIndexColumn: typeof raw.TimeIndexColumn === 'string' && raw.TimeIndexColumn.length > 0 ? raw.TimeIndexColumn : null,
-      EvaluatedAsForecast: raw.EvaluatedAsForecast === true,
       WithheldReason: typeof raw.WithheldReason === 'string' && raw.WithheldReason.length > 0 ? raw.WithheldReason : null,
       // Stored by training, so it was valid when written; anything else (a record from before D2-C5d) is the default.
       MajorityBaselineRule: raw.MajorityBaselineRule === 'warn' ? 'warn' : EvaluationLineage.DefaultMajorityBaselineRule,

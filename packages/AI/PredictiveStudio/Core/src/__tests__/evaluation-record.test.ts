@@ -2,29 +2,44 @@ import { describe, it, expect } from 'vitest';
 import { EvaluationLineage, InvalidMajorityBaselineRuleError } from '../evaluation-record';
 
 describe('evaluation record', () => {
-  it('records out-of-sample validation and no withheld reason for an ordinary pipeline', () => {
-    expect(EvaluationLineage.Build({ Strategy: 'kfold', K: 5, LockedHoldoutFraction: 0.1 })).toEqual({
-      ValidationOutOfSample: true, TimeIndexColumn: null, EvaluatedAsForecast: false, WithheldReason: null, MajorityBaselineRule: 'enforce', ImportanceKind: null,
+  it('records what the caller says about out-of-sample validation, and no withheld reason for an ordinary pipeline', () => {
+    expect(EvaluationLineage.Build({ Strategy: 'kfold', K: 5, LockedHoldoutFraction: 0.1 }, { ValidationOutOfSample: true })).toEqual({
+      ValidationOutOfSample: true, TimeIndexColumn: null, WithheldReason: null, MajorityBaselineRule: 'enforce', ImportanceKind: null,
     });
     expect(EvaluationLineage.Build({ Strategy: 'kfold', K: 5, LockedHoldoutFraction: 0.1 }, { ValidationOutOfSample: false }).ValidationOutOfSample).toBe(false);
   });
   it('withholds the verdict when a time index is declared (not evaluated as a forecast)', () => {
-    const record = EvaluationLineage.Build({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex' });
-    expect(record).toEqual({ ValidationOutOfSample: true, TimeIndexColumn: 'MonthIndex', EvaluatedAsForecast: false, WithheldReason: EvaluationLineage.NotEvaluatedAsForecast, MajorityBaselineRule: 'enforce', ImportanceKind: null });
+    const record = EvaluationLineage.Build({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex' }, { ValidationOutOfSample: true });
+    expect(record).toEqual({ ValidationOutOfSample: true, TimeIndexColumn: 'MonthIndex', WithheldReason: EvaluationLineage.NotEvaluatedAsForecast, MajorityBaselineRule: 'enforce', ImportanceKind: null });
   });
   it('round-trips through the Lineage JSON and tolerates lineage without it', () => {
-    const record = EvaluationLineage.Build({ Strategy: 'holdout', LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex', MajorityBaselineRule: 'warn' });
+    const record = EvaluationLineage.Build({ Strategy: 'holdout', LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex', MajorityBaselineRule: 'warn' }, { ValidationOutOfSample: true, ImportanceKind: 'none' });
     expect(EvaluationLineage.Read(JSON.stringify({ pipelineId: 'p', [EvaluationLineage.Key]: record }))).toEqual(record);
     expect(EvaluationLineage.Read(JSON.stringify({ pipelineId: 'p' }))).toBeNull();
     expect(EvaluationLineage.Read('not json')).toBeNull();
     expect(EvaluationLineage.Read(null)).toBeNull();
   });
+  it('reads an evaluation that is an array or a string as absent', () => {
+    expect(EvaluationLineage.Read(JSON.stringify({ [EvaluationLineage.Key]: [{ ValidationOutOfSample: true }] }))).toBeNull();
+    expect(EvaluationLineage.Read(JSON.stringify({ [EvaluationLineage.Key]: 'out of sample' }))).toBeNull();
+    expect(EvaluationLineage.Read(JSON.stringify([{ [EvaluationLineage.Key]: {} }]))).toBeNull();
+  });
+  it('reads a record stored before ImportanceKind existed with a null kind, and the other fields intact', () => {
+    const legacy = { ValidationOutOfSample: true, TimeIndexColumn: null, WithheldReason: null, MajorityBaselineRule: 'warn' };
+    expect(EvaluationLineage.Read(JSON.stringify({ [EvaluationLineage.Key]: legacy }))).toEqual({
+      ValidationOutOfSample: true, TimeIndexColumn: null, WithheldReason: null, MajorityBaselineRule: 'warn', ImportanceKind: null,
+    });
+  });
+  it("reads ImportanceKind 'none' and drops an unknown kind", () => {
+    expect(EvaluationLineage.Read(JSON.stringify({ [EvaluationLineage.Key]: { ImportanceKind: 'none' } }))?.ImportanceKind).toBe('none');
+    expect(EvaluationLineage.Read(JSON.stringify({ [EvaluationLineage.Key]: { ImportanceKind: 'shap' } }))?.ImportanceKind).toBeNull();
+  });
   it("records the pipeline's majority-baseline rule, enforce when absent (D2-C5d)", () => {
     expect(EvaluationLineage.DefaultMajorityBaselineRule).toBe('enforce');
-    expect(EvaluationLineage.Build({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, MajorityBaselineRule: 'warn' }).MajorityBaselineRule).toBe('warn');
-    expect(EvaluationLineage.Build({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, MajorityBaselineRule: 'enforce' }).MajorityBaselineRule).toBe('enforce');
+    expect(EvaluationLineage.Build({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, MajorityBaselineRule: 'warn' }, { ValidationOutOfSample: true }).MajorityBaselineRule).toBe('warn');
+    expect(EvaluationLineage.Build({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2, MajorityBaselineRule: 'enforce' }, { ValidationOutOfSample: true }).MajorityBaselineRule).toBe('enforce');
     // a record stored before the rule existed reads as the default
-    const legacy = { ValidationOutOfSample: true, TimeIndexColumn: null, EvaluatedAsForecast: false, WithheldReason: null };
+    const legacy = { ValidationOutOfSample: true, TimeIndexColumn: null, WithheldReason: null };
     expect(EvaluationLineage.Read(JSON.stringify({ [EvaluationLineage.Key]: legacy }))?.MajorityBaselineRule).toBe('enforce');
   });
   it('refuses an unknown majority-baseline rule instead of ignoring it', () => {

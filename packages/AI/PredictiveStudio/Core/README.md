@@ -2,7 +2,7 @@
 
 > The shared vocabulary of **MemberJunction Predictive Studio** — every type the sidecar, engine, UI, and agent agree on, defined exactly once.
 
-**What** — the **type contracts** for Predictive Studio (MJ's capability for training predictive models on a client's own data and scoring records with them): the sidecar request/response shapes, the declarative pipeline-spec JSON, the visual FeatureStep DAG, and the Model Development Agent's modeling-plan payload — plus the browser-safe, dependency-free runtime logic shared by ng-dashboards and ng-core-entity-forms that every layer must agree on (trust verdicts, at-risk rules, evaluation lineage, the metric-direction predicate, zod validators for the modeling plan). The only runtime dependency is `zod` (for the trust-boundary validators).
+**What** — the **type contracts** for Predictive Studio (MJ's capability for training predictive models on a client's own data and scoring records with them): the sidecar request/response shapes, the declarative pipeline-spec JSON, the visual FeatureStep DAG, and the Model Development Agent's modeling-plan payload — plus the browser-safe, dependency-free runtime logic shared by the server engine, the UI and the agent that every layer must agree on (trust verdicts, at-risk rules, evaluation lineage, the metric-direction predicate, zod validators for the modeling plan). The only runtime dependency is `zod` (for the trust-boundary validators).
 
 **Why** — four layers (server engine, Python sidecar client, Studio UI, Model Development Agent) must agree on the same shapes. Defining the contract once, here, is what keeps them in lockstep — change a shape and every consumer fails to compile until it's reconciled.
 
@@ -20,14 +20,22 @@ It's a workspace package — within the monorepo it's already wired as a depende
 
 ## What's here
 
-| File | Contents | Plan ref |
+| File | Public surface | Plan ref |
 |---|---|---|
-| `sidecar-contract.ts` | The Python sidecar `/train` + `/predict` HTTP contract: `TrainRequest`/`TrainResponse`, `PredictRequest`/`PredictResponse`, `FeatureSchemaEntry`, `PreprocessingOp`, `ValidationConfig`, `MatrixData`, `Prediction`; scalars `FeatureKind`, `ProblemType`, `ModelMetrics`, `FeatureImportance`, `FittedPreprocessing` | §3.2 |
-| `pipeline-spec.ts` | The declarative training-pipeline shape: `SourceBinding`, `AsOfStrategy` (point-in-time), `LeakageGuard`, `ValidationStrategy` | §4.2 / §5 / §6 |
+| `sidecar-contract.ts` | The Python sidecar `/train` + `/predict` HTTP contract: `TrainRequest`/`TrainResponse`, `PredictRequest`/`PredictResponse`, `Prediction`, `PredictionContribution`, `FeatureSchemaEntry`, `PreprocessingOp`, `ValidationConfig`, `MatrixData`; scalars `FeatureKind`, `ProblemType`, `ModelMetrics`, `FeatureImportance`, `ImportanceKind`, `FittedPreprocessing`; `ProblemTypes.IsRegression()` — the one problem-type predicate the trust, outcome and at-risk rules share | §3.2 |
+| `pipeline-spec.ts` | The declarative training-pipeline shape: `SourceBinding`, `AsOfStrategy` (point-in-time), `LeakageGuard`, `ValidationStrategy`, `MajorityBaselineRule` | §4.2 / §5 / §6 |
+| `leakage-guard-validation.ts` | Validation of a pipeline's `LeakageGuard`: `ValidateLeakageGuard()`, `ParseDenyList()`, `SanitizeNameToken()`, `NormalizeName()`, `IsMalformedNameToken()`, `ClampDominanceThreshold()`, the `DOMINANCE_THRESHOLD_*` constants, `LeakageGuardIssue` and its field/severity types | §6 |
 | `feature-steps.ts` | The visual **FeatureStep DAG** — a discriminated union on `Kind` (`select` / `impute` / `standardize` / `onehot` / `bin` / `embedding` / `llm-derived` / `flow-agent` / `vision-llm`) + `FeatureStepGraph` | §4.2 / §5 / §6 |
-| `modeling-plan-spec.ts` | `ModelingPlanSpec` — the Model Development Agent's strongly-typed payload — plus `Budget` and `LeaderboardEntry` | §9.2 / §8.4 |
-| `modeling-plan-schema.ts` | **Runtime** (zod) validators for the modeling plan — `ModelingPlanSpecSchema`, `BudgetSchema`, and the `validateModelingPlanSpec()` / `validateBudget()` guards that prove an untrusted JSON payload (an Action param, an agent-produced plan) well-formed before the deterministic engine executes it | §9.2 |
-| `metrics-util.ts` | `isErrorMetric()` — the single source of truth for a metric's **direction** (lower-is-better RMSE/MAE/MSE/loss vs. higher-is-better AUC/F1/R²), shared by the experiment leaderboard and the maintenance challenger comparison so the two never disagree on which model is "better" | §8 / §12 |
+| `modeling-plan-spec.ts` | `ModelingPlanSpec` — the Model Development Agent's strongly-typed payload — plus `Budget`, `LeaderboardEntry`, `CandidateFeatureKind`, `FeatureStepWarning` | §9.2 / §8.4 |
+| `modeling-plan-schema.ts` | **Runtime** (zod) validators for the modeling plan — `ModelingPlanSpecSchema`, `BudgetSchema`, and the `ValidateModelingPlanSpec()` / `ValidateBudget()` guards that prove an untrusted JSON payload (an Action param, an agent-produced plan) well-formed before the deterministic engine executes it | §9.2 |
+| `metrics-util.ts` | `IsErrorMetric()` — the single source of truth for a metric's **direction** (lower-is-better RMSE/MAE/MSE/loss vs. higher-is-better AUC/F1/R²), shared by the experiment leaderboard and the maintenance challenger comparison so the two never disagree on which model is "better" | §8 / §12 |
+| `trust.ts` | `TrustVerdicts` — `DeriveTrustVerdict()` (the Poor/Fair/Good/Excellent grade and the `canAct` gate the UI and the agent's publish gate share), `TrustEvidenceLine()`, `TrustDots()`; types `TrustGrade`, `TrustModelInput`, `TrustVerdict`, `MajorityBaselineFinding`, `TrustEvidenceOptions` | business UX |
+| `outcome-config.ts` | Score labels, polarity and status bands for a model's predictions: `OutcomeConfig`, `OutcomeBand`, `OutcomeStyle`, `OutcomeConfigSource`, `ResolveOutcomeConfig()` (stored config, else inferred from the target name), `NormalizeOutcomeConfig()`, `ResolveScoreBand()`, `ResolveOutcomeStyle()`, `FormatPredictionScore()`, `CloseSentinelBandGaps()`, the `DEFAULT_*_BANDS` | business UX |
+| `at-risk-rules.ts` | `AtRiskRules` — the ranked at-risk list: `BuildAtRiskOptions()`, `ParseAtRiskRows()`, `SelectAtRiskListMembers()`, `RiskOf()`, `RiskBandFor()`, `RiskBands`, `RiskBandDisplayFor()`, `DriverRaisesRisk()`, `ParseRowDrivers()`, `TopGlobalDrivers()`, `HumanizeFeatureName()`, `LabelFromRecord()`, `FormatAtRiskListName()`; types `AtRiskRow`, `RowDriver`, `RiskBand`, `RiskBandDisplay`, `RunDetailLike`, `ParseAtRiskOptions`, `AtRiskModelOptions`, `OutcomeModelLike`; `AT_RISK_LIST_MIN_RISK_PCT` | business UX |
+| `evaluation-record.ts` | `EvaluationLineage` — builds (`Build()`) and reads (`Read()`) the `evaluation` record training stores in `MLModel.Lineage`, plus `ParseMajorityBaselineRule()`; `EvaluationRecord`; `InvalidMajorityBaselineRuleError` | trust |
+| `importance-display.ts` | `ImportanceDisplay.GlobalDriversShowable()` — whether a model's global feature-importance list may be shown (coefficient models only) — and its `HiddenNote` | trust |
+| `refusal-codes.ts` | `PredictiveStudioRefusalCodes` (`All`, `IsRefusal()`) and the `PredictiveStudioRefusalCode` union — the typed `ResultCode`s a refused Train or Score request returns | operations |
+| `experiment-sessions.ts` | `ExperimentSessions` — the `Enabled` switch (off) and the `DisabledReason` callers report | §8 |
 
 ## Usage
 
@@ -50,9 +58,9 @@ Two contract details worth internalizing (both enforce the system's anti-skew co
 At trust boundaries — where untrusted JSON (an Action param or an agent-produced plan) crosses into the deterministic engine — validate it *at runtime* with the shared zod guard rather than trusting the compile-time type:
 
 ```typescript
-import { validateModelingPlanSpec } from '@memberjunction/predictive-studio-core';
+import { ValidateModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 
-const result = validateModelingPlanSpec(rawJson);
+const result = ValidateModelingPlanSpec(rawJson);
 if (!result.ok) {
   throw new Error(result.error); // single flattened "path: message; …" string
 }

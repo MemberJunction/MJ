@@ -4,16 +4,25 @@
  * the model's global feature importance into the features the model weighted most (shown only for
  * coefficient models — see `ImportanceDisplay.GlobalDriversShowable`).
  *
- * Honest about the gap: MJ stores only GLOBAL feature importance (not per-record/SHAP), so we surface the
- * top global drivers once for the whole prediction rather than fabricating per-member attribution.
+ * Per-member "why": a row carries the signed per-record drivers the scoring payload stored (linear models produce them);
+ * a model that stores none gets no per-member attribution rather than a fabricated one.
  *
  * Pure, dependency-free, browser-safe → unit-tested with no Angular.
  */
 
-import { type OutcomeConfig, ResolveOutcomeConfig, ResolveScoreBand } from './outcome-config';
+import { type OutcomeConfig, type OutcomeConfigSource, ResolveOutcomeConfig } from './outcome-config';
+import { ProblemTypes } from './sidecar-contract';
 
 /** The three risk bands the at-risk list colors and counts by. */
 export type RiskBand = 'high' | 'medium' | 'low';
+
+/** How one risk band is shown: its tier label, badge color and icon. Risk is always red at the top, whatever the model's polarity. */
+export interface RiskBandDisplay {
+  Key: RiskBand;
+  Label: string;
+  BadgeColor: 'red' | 'amber' | 'green';
+  Icon: string;
+}
 
 /** A scored record in the at-risk list. */
 export interface AtRiskRow {
@@ -31,16 +40,17 @@ export interface AtRiskRow {
   Class: string | null;
   /** Risk band measured on {@link RiskPct} (never on the raw score), for color / filtering / the High-Medium-Low counts. */
   Band: RiskBand;
-  /** Qualitative status label (e.g. "High", "Critical", "Low Risk"). */
-  Status?: string;
-  /** Semantic badge color. */
-  BadgeColor?: string;
-  /** Icon class. */
-  Icon?: string;
+  /** Status label: the payload's own `status` when it carries one, else the {@link AtRiskRules.RiskBands} label for {@link Band}. */
+  Status: string;
+  /** Badge color: the payload's own `badgeColor` when it carries one, else the risk band's color. */
+  BadgeColor: string;
+  /** Icon class: the payload's own `icon` when it carries one, else the risk band's icon. */
+  Icon: string;
   /**
    * Top signed per-record drivers behind THIS row's prediction (P1-5), humanized for display. `Up: true`
    * pushed the risk up, `false` down. Null when the model doesn't produce per-record attribution
-   * (tree/ensemble/multiclass) — the UI then shows the model's global drivers instead.
+   * (tree/ensemble/multiclass). Global drivers are shown only for coefficient models
+   * (`ImportanceDisplay.GlobalDriversShowable`), so a tree model shows neither.
    */
   Drivers: RowDriver[] | null;
 }
@@ -69,15 +79,16 @@ export interface ParseAtRiskOptions {
    * High score (0.99) -> Low Risk (1%, green). Low score (0.10) -> High Risk (90%, red).
    */
   InvertedRisk?: boolean;
-  /**
-   * Configured outcome metadata for the model (labels, thresholds, colors, icons).
-   * When provided, `ResolveScoreBand()` supplies the display status, badge color and icon (the risk `Band` is computed from risk).
-   */
-  OutcomeConfig?: OutcomeConfig;
+}
+
+/** {@link AtRiskRules.BuildAtRiskOptions}' result: the parse options plus the resolved outcome config, for the caller's score labels and formatting. */
+export interface AtRiskModelOptions extends ParseAtRiskOptions {
+  /** The model's resolved outcome config. The at-risk rows do not read it: their status, color and icon come from the risk band. */
+  OutcomeConfig: OutcomeConfig;
 }
 
 /** The model shape the outcome config resolves from (the same input `ResolveOutcomeConfig` takes). */
-export type OutcomeModelLike = Parameters<typeof ResolveOutcomeConfig>[0];
+export type OutcomeModelLike = OutcomeConfigSource | undefined;
 
 /** The prediction fields a scored payload carries, after narrowing from parsed JSON. */
 interface ScoredPrediction {
@@ -89,6 +100,9 @@ interface ScoredPrediction {
   // unknown: the raw per-record drivers from the stored payload; ParseRowDrivers narrows them
   Drivers: unknown;
 }
+
+/** A UUID string; `LabelFromRecord` skips these (same pattern as `IsValidUUID` in `@memberjunction/global`, which Core does not depend on). */
+const UUID_FORMAT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Rows below this displayed risk never go on an "At-Risk" list. */
 export const AT_RISK_LIST_MIN_RISK_PCT = 40;
@@ -105,9 +119,9 @@ export class AtRiskRules {
   }
 
   /** The At-Risk options for a model: its resolved outcome config, and risk inverted when the score is the good outcome. */
-  public static BuildAtRiskOptions(model: OutcomeModelLike): ParseAtRiskOptions & { OutcomeConfig: OutcomeConfig } {
+  public static BuildAtRiskOptions(model: OutcomeModelLike): AtRiskModelOptions {
     const outcomeConfig = ResolveOutcomeConfig(model);
-    return { InvertedRisk: outcomeConfig.Polarity === 'positive' && model?.ProblemType !== 'regression', OutcomeConfig: outcomeConfig };
+    return { InvertedRisk: outcomeConfig.Polarity === 'positive' && !ProblemTypes.IsRegression(model?.ProblemType), OutcomeConfig: outcomeConfig };
   }
 
   /** The members of an "At-Risk" list: highest displayed risk first, at least {@link AT_RISK_LIST_MIN_RISK_PCT}, at most `limit`. */
@@ -138,8 +152,8 @@ export class AtRiskRules {
   /**
    * Build a human-readable label for a record from its (simple) row of the target entity — preferring the
    * entity's name field (`nameField`), then `Name`, else `FirstName`+`LastName` (with `Email`), else `Email`,
-   * else any first short non-empty string field. Returns null when nothing usable is found (caller falls back
-   * to the record id).
+   * else the first short non-empty string field that is not a UUID (the row's `ID` adds nothing the caller's record-id
+   * fallback doesn't). Returns null when nothing usable is found (caller falls back to the record id).
    */
   public static LabelFromRecord(row: Record<string, unknown> | undefined | null, nameField: string | null): string | null {
     if (!row) return null;
@@ -155,7 +169,7 @@ export class AtRiskRules {
     if (email) return email;
     for (const v of Object.values(row)) {
       const s = str(v);
-      if (s && s.length <= 120) return s;
+      if (s && s.length <= 120 && !UUID_FORMAT.test(s)) return s;
     }
     return null;
   }
@@ -166,7 +180,7 @@ export class AtRiskRules {
     const isInverted = options?.InvertedRisk === true;
     for (const d of details) {
       const p = AtRiskRules.readScoredPrediction(d.ResultPayload);
-      if (p) rows.push(AtRiskRules.buildRow(d.RecordID, p, isInverted, options?.OutcomeConfig));
+      if (p) rows.push(AtRiskRules.buildRow(d.RecordID, p, isInverted));
     }
     return rows.sort((a, b) => b.RiskPct - a.RiskPct);
   }
@@ -184,8 +198,7 @@ export class AtRiskRules {
     for (const { name, weight } of pairs) {
       const base = name.split('=')[0].trim();
       if (!base) continue;
-      // ?? keeps a legitimate 0 weight already stored for this feature
-      byFeature.set(base, Math.max(byFeature.get(base) ?? 0, weight));
+      byFeature.set(base, Math.max(byFeature.get(base) || 0, weight));
     }
     return [...byFeature.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([name]) => AtRiskRules.HumanizeFeatureName(name));
   }
@@ -221,13 +234,14 @@ export class AtRiskRules {
   }
 
   /**
-   * One at-risk row from a narrowed prediction. `Band` is always measured on the displayed risk (inverted when asked), so
-   * the High/Medium/Low counts mean risk for every polarity; a configured band's keys are on the raw score, so the outcome
-   * config supplies only the display status, color and icon.
+   * One at-risk row from a narrowed prediction. `Band` is measured on the displayed risk (inverted when asked), and the
+   * status, color and icon come from that band's {@link RiskBands} entry, so a row's badge and its High/Medium/Low count
+   * always agree. A configured outcome band is keyed on the raw score, so it is never used here.
    */
-  private static buildRow(recordId: string, p: ScoredPrediction, isInverted: boolean, outcomeConfig: OutcomeConfig | undefined): AtRiskRow {
-    const effectiveRisk = isInverted ? Math.max(0, Math.min(1, 1 - p.Score)) : p.Score;
-    const resolved = outcomeConfig ? ResolveScoreBand(p.Score, outcomeConfig) : null;
+  private static buildRow(recordId: string, p: ScoredPrediction, isInverted: boolean): AtRiskRow {
+    const effectiveRisk = AtRiskRules.RiskOf(p.Score, isInverted);
+    const band = AtRiskRules.RiskBandFor(effectiveRisk);
+    const display = AtRiskRules.RiskBandDisplayFor(band);
     // Payload strings are never legitimately '' — an empty status/color/icon means "not set", so || falls back.
     return {
       RecordID: recordId,
@@ -235,16 +249,40 @@ export class AtRiskRules {
       Score: p.Score,
       RiskPct: Math.round(effectiveRisk * 100),
       Class: p.Class,
-      Band: AtRiskRules.bandFor(effectiveRisk),
-      Status: p.Status || resolved?.Label,
-      BadgeColor: p.BadgeColor || resolved?.BadgeColor,
-      Icon: p.Icon || resolved?.Icon,
+      Band: band,
+      Status: p.Status || display.Label,
+      BadgeColor: p.BadgeColor || display.BadgeColor,
+      Icon: p.Icon || display.Icon,
       Drivers: AtRiskRules.ParseRowDrivers(p.Drivers, isInverted),
     };
   }
 
-  private static bandFor(risk: number): RiskBand {
+  /** The risk bands in display order, highest risk first. */
+  public static readonly RiskBands: ReadonlyArray<RiskBandDisplay> = [
+    { Key: 'high', Label: 'High risk', BadgeColor: 'red', Icon: 'fa-circle-exclamation' },
+    { Key: 'medium', Label: 'Medium risk', BadgeColor: 'amber', Icon: 'fa-triangle-exclamation' },
+    { Key: 'low', Label: 'Low risk', BadgeColor: 'green', Icon: 'fa-circle-check' },
+  ];
+
+  /**
+   * Risk in 0–1 from a model's score: `1 - score` when the score is the probability of the good outcome. Clamped on both
+   * paths, so a score outside 0–1 (a regression value such as an LTV of 2500) reads as risk 1, never as 250000%.
+   */
+  public static RiskOf(score: number, inverted: boolean): number {
+    const risk = inverted ? 1 - score : score;
+    return Math.max(0, Math.min(1, risk));
+  }
+
+  /** The risk band of a 0–1 risk. Every surface that tiers, filters or counts by risk uses this one rule. */
+  public static RiskBandFor(risk: number): RiskBand {
     return risk >= 0.7 ? 'high' : risk >= 0.4 ? 'medium' : 'low';
+  }
+
+  /** The {@link RiskBands} entry for a band. */
+  public static RiskBandDisplayFor(band: RiskBand): RiskBandDisplay {
+    const display = AtRiskRules.RiskBands.find((b) => b.Key === band);
+    if (!display) throw new Error(`AtRiskRules.RiskBands has no entry for band '${band}'`);
+    return display;
   }
 
   /** Parse a stored payload and narrow it to its prediction (write-back runs nest it under `output`); null when unusable. */

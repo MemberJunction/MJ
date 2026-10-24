@@ -26,6 +26,17 @@ export type FeatureKind = 'numeric' | 'categorical' | 'embedding' | 'llm-derived
  */
 export type ProblemType = 'classification' | 'regression';
 
+/** The one problem-type predicate every Core rule uses, so the trust verdict, outcome config and at-risk rules agree. */
+export class ProblemTypes {
+  /**
+   * True when a stored problem type is regression. Trims and ignores case: the entity field is a lower-case literal union,
+   * but the shared inputs are typed `string` (Core cannot import `MJMLModelEntity`) and hand-built rows vary.
+   */
+  public static IsRegression(problemType: string | null | undefined): boolean {
+    return (problemType || '').trim().toLowerCase() === 'regression';
+  }
+}
+
 /**
  * One entry in the ordered feature schema — the inference input contract. The
  * order of entries defines column order in the matrix; `Name` is the stable
@@ -65,13 +76,14 @@ export interface PreprocessingOp {
 
 /**
  * Validation configuration sent to the sidecar at train time (plan §3.2 / §8.2).
- * The default discipline is a single train/test split with overfitting
- * detection; k-fold and holdout are opt-in.
+ * The default is a single train/test split. `holdout` uses the same
+ * out-of-sample split (it reads `test_size` too); `kfold` scores pooled
+ * out-of-fold predictions. Every strategy reports out-of-sample `metrics`.
  */
 export interface ValidationConfig {
   /** Validation strategy the sidecar should apply during `/train`. */
   strategy: 'train_test_split' | 'kfold' | 'holdout';
-  /** Test fraction for `train_test_split` (e.g. `0.2`). */
+  /** Validation fraction for the split that `train_test_split` and `holdout` both use (e.g. `0.2`). */
   test_size?: number;
   /** Number of folds for `kfold`. */
   k?: number;
@@ -182,13 +194,13 @@ export interface TrainResponse {
   feature_importance: FeatureImportance;
   /** Which kind of number `feature_importance` holds. Absent on sidecars that predate it. */
   feature_importance_kind?: ImportanceKind;
-  /** Number of training rows the model was fit on. */
+  /** Number of training rows the model was fit on (excludes any locked holdout, forwarded or sidecar-carved). */
   training_row_count: number;
   /** Wall-clock training time in seconds. */
   duration_sec: number;
   /** Honest metrics on the locked holdout, scored exactly once (plan §8.2). */
   holdout_metrics?: ModelMetrics;
-  /** True when the sidecar computed `metrics` strictly out-of-sample (fit on train fold/split only, scored on held-out fold/split). Absent on pre-C5 sidecars. */
+  /** True when the sidecar computed `metrics` strictly out-of-sample (fit on train fold/split only, scored on held-out fold/split); set per run from the validation path taken. Absent on pre-C5 sidecars. */
   validation_out_of_sample?: boolean;
 }
 
