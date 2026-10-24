@@ -105,6 +105,14 @@ parent. A package declared by a repo that is not a workspace member is ignored (
 linked — that is what excluding it means), and the check skips entirely until `pnpm install` has
 run at the parent, since linkage is the install's output rather than the generator's.
 
+Doctor also reads build output. Linking a member package links its source folder, so a package that
+was never built, or was edited after its last build, installs cleanly and fails only when Explorer
+loads it (a missing export, or "No form is registered for …"). For every member package with a
+`build` script and a `src/` folder, doctor FAILS when its entry file (`main`, else `module`, else
+the `exports` root; `dist/` when none is declared) does not exist, and WARNS when a `src/` file is
+newer than everything in the output folder. Test files do not count. Rebuild with
+`pnpm --filter <package> run build` at the parent.
+
 ## Recovery
 
 Someone (or an IDE) ran `npm install` / `pnpm install` **inside** a member repo? `status` will flag
