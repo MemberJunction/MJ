@@ -1,20 +1,7 @@
-<!-- Backdrop -->
-@if (IsOpen && !IsFullScreen) {
-  <div class="panel-backdrop" (click)="OnClose()"></div>
-}
-
-<!-- Sliding Panel: Unified View Studio (Wide Split Sheet 960px or 100% Full Takeover) -->
-<div class="config-panel"
+<!-- Full-Screen Unified View Studio -->
+<div class="config-panel full-takeover"
      [class.open]="IsOpen"
-     [class.resizing]="IsResizing"
-     [class.full-takeover]="IsFullScreen"
-     [style.width.px]="HasCustomResizeWidth && !IsFullScreen ? PanelWidth : null">
-  <!-- Resize Handle -->
-  <div class="resize-handle"
-       (mousedown)="OnResizeStart($event)"
-       title="Drag to resize">
-    <div class="resize-grip"></div>
-  </div>
+     [class.advanced-mode]="IsAdvancedMode">
 
   <!-- ============================================================ -->
   <!-- PINNED STUDIO HEADER (Intent Switcher / Identity / Actions)  -->
@@ -70,12 +57,14 @@
       <div class="studio-header-actions">
         <button
           type="button"
-          class="studio-action-btn"
-          [class.active]="IsFullScreen"
-          (click)="ToggleWideMode()"
-          [title]="IsFullScreen ? 'Switch back to split sheet' : 'Expand to full-screen workspace'">
-          <i [class]="IsFullScreen ? 'fa-solid fa-compress' : 'fa-solid fa-expand'"></i>
-          <span>{{ IsFullScreen ? 'Split Sheet' : 'Full Screen' }}</span>
+          class="studio-action-btn advanced-mode-toggle"
+          [class.active]="IsAdvancedMode"
+          (click)="ToggleAdvancedMode()"
+          [attr.aria-pressed]="IsAdvancedMode"
+          title="Toggle Advanced Mode to reveal canonical base views, SQL WHERE clause editor, conditional formatting rules, and technical field metadata">
+          <i class="fa-solid fa-code"></i>
+          <span>Advanced Mode</span>
+          <span class="advanced-state-pill">{{ IsAdvancedMode ? 'ON' : 'OFF' }}</span>
         </button>
         @if (ViewEntity) {
           <button
@@ -318,12 +307,13 @@
     <!-- ========================================================== -->
     @if (ActiveTab === 'filters') {
       <div class="tab-content">
-        <!-- Canonical Base View Selector -->
-        @if (AvailableAlternateBaseViews.length > 0 || IsCurrentAlternateBaseViewUnavailable) {
+        <!-- Canonical Base View Selector (Advanced Mode or when already active) -->
+        @if ((IsAdvancedMode || !!AlternateBaseView || IsCurrentAlternateBaseViewUnavailable) && (AvailableAlternateBaseViews.length > 0 || IsCurrentAlternateBaseViewUnavailable)) {
           <div class="config-section">
             <div class="section-header">
               <i class="fa-solid fa-database"></i>
               <span>Data Source (Canonical Base View)</span>
+              <span class="section-optional-tag">Advanced</span>
             </div>
             <div class="form-group">
               <ng-container [ngTemplateOutlet]="baseViewSelector"></ng-container>
@@ -338,7 +328,8 @@
             <span>Record Filtering</span>
           </div>
 
-          <div class="filter-mode-segmented">
+          <div class="filter-mode-segmented"
+               [class.three-col]="IsAdvancedMode || CustomWhereClause || FilterMode === 'sql'">
             <button
               type="button"
               class="seg-mode-btn"
@@ -360,6 +351,20 @@
                 <span class="seg-badge">{{ GetFilterCount() }}</span>
               }
             </button>
+            @if (IsAdvancedMode || CustomWhereClause || FilterMode === 'sql') {
+              <button
+                type="button"
+                class="seg-mode-btn"
+                [class.active]="FilterMode === 'sql'"
+                (click)="SetFilterMode('sql')"
+                [disabled]="!CanEdit">
+                <i class="fa-solid fa-terminal"></i>
+                <span>SQL WHERE Clause</span>
+                @if (CustomWhereClause) {
+                  <span class="seg-badge sql-override-badge">Override</span>
+                }
+              </button>
+            }
           </div>
 
           <!-- Smart Filter Section -->
@@ -496,59 +501,79 @@
               </div>
             </div>
           }
-        </div>
 
-        <!-- Progressive Disclosure: Advanced Custom SQL WHERE Clause -->
-        <div class="disclosure-card" [class.open]="ShowAdvancedSqlSection || CustomWhereClause">
-          <button
-            type="button"
-            class="disclosure-header"
-            (click)="ShowAdvancedSqlSection = !ShowAdvancedSqlSection">
-            <div class="disclosure-title">
-              <i class="fa-solid fa-terminal"></i>
-              <span>Advanced: Custom SQL WHERE Clause</span>
-              @if (CustomWhereClause) {
-                <span class="disclosure-badge active">Custom SQL Active</span>
-              }
-            </div>
-            <i class="fa-solid fa-chevron-down disclosure-chevron" [class.rotated]="ShowAdvancedSqlSection"></i>
-          </button>
-
-          @if (ShowAdvancedSqlSection) {
-            <div class="disclosure-body">
-              <label class="checkbox-label">
-                <input
-                  type="checkbox"
-                  [(ngModel)]="CustomWhereClause"
-                  [disabled]="!CanEdit"
-                />
-                <span class="checkbox-text">
-                  <strong>Lock & override with custom SQL WHERE clause</strong>
-                  <small>When enabled, RunView executes your custom SQL expression directly instead of the Smart/Rule filter above.</small>
-                </span>
-              </label>
-
-              @if (CustomWhereClause) {
-                <div class="sql-editor-wrap">
-                  <label for="CustomSqlWhereInput">SQL WHERE Expression (without leading WHERE keyword)</label>
-                  <textarea
-                    id="CustomSqlWhereInput"
-                    class="sql-code-textarea"
-                    placeholder="e.g., [Status] = 'Active' AND [CreatedAt] >= DATEADD(day, -30, GETUTCDATE())"
-                    [(ngModel)]="WhereClause"
+          <!-- Mutually Exclusive Mode 3: SQL WHERE Clause Workbench -->
+          @if (FilterMode === 'sql') {
+            <div class="sql-where-workbench">
+              <div class="sql-override-banner" [class.override-active]="CustomWhereClause">
+                <label class="sql-override-checkbox-label">
+                  <input
+                    type="checkbox"
+                    [ngModel]="CustomWhereClause"
+                    (ngModelChange)="OnToggleCustomWhereOverride($event)"
                     [disabled]="!CanEdit"
-                    rows="3"
-                  ></textarea>
+                  />
+                  <div class="sql-override-copy">
+                    <div class="sql-override-title-row">
+                      <strong>Override with Custom SQL WHERE Clause (One-Way)</strong>
+                      <span class="sql-source-pill" [class.editable]="CustomWhereClause">
+                        <i [class]="CustomWhereClause ? 'fa-solid fa-pen-to-square' : 'fa-solid fa-lock'"></i>
+                        {{ SqlWhereSourceLabel }}
+                      </span>
+                    </div>
+                    <p>
+                      @if (CustomWhereClause) {
+                        Custom SQL override is active. RunView will execute the SQL expression below directly instead of Smart Filter or Rule Builder. (One-way: edits here cannot be converted back into visual rules.)
+                      } @else {
+                        Inspecting the read-only SQL <code>WHERE</code> clause compiled from your Smart Filter or Rule Builder. Check the box above to unlock the editor and override it with custom SQL (one-way).
+                      }
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              <div class="sql-code-editor-card" [class.readonly]="!CustomWhereClause || !CanEdit">
+                <div class="sql-editor-topbar">
+                  <span class="sql-editor-topbar-left">
+                    <i class="fa-solid fa-database"></i>
+                    <span>SQL WHERE Expression</span>
+                    <code>WHERE</code>
+                  </span>
+                  <span class="sql-editor-topbar-right">
+                    @if (CustomWhereClause && CanEdit) {
+                      <i class="fa-solid fa-unlock"></i>
+                      <span>Editable SQL</span>
+                    } @else {
+                      <i class="fa-solid fa-lock"></i>
+                      <span>Read-Only — Check box above to edit</span>
+                    }
+                  </span>
                 </div>
-              } @else if (ViewEntity?.WhereClause) {
-                <div class="sql-compiled-preview">
-                  <div class="sql-preview-label">Compiled SQL WHERE Clause (Read-Only)</div>
-                  <code>{{ ViewEntity?.WhereClause }}</code>
+                <div class="sql-code-editor-body">
+                  <mj-code-editor
+                    [Value]="DisplayedSqlWhereClause"
+                    Language="sql"
+                    [readonly]="!CustomWhereClause || !CanEdit"
+                    Placeholder="e.g., [Status] = 'Active' AND [__mj_CreatedAt] >= DATEADD(day, -30, GETUTCDATE())"
+                    (Change)="OnCustomSqlWhereChange($event)">
+                  </mj-code-editor>
                 </div>
-              }
+              </div>
             </div>
           }
         </div>
+
+        @if (!IsAdvancedMode && !CustomWhereClause && !AlternateBaseView) {
+          <div class="advanced-mode-hint-bar">
+            <div class="advanced-hint-text">
+              <i class="fa-solid fa-code"></i>
+              <span>Want to inspect or override the raw SQL <code>WHERE</code> clause or select an alternate canonical base view?</span>
+            </div>
+            <button type="button" class="advanced-hint-btn" (click)="ToggleAdvancedMode()">
+              Enable Advanced Mode
+            </button>
+          </div>
+        }
       </div>
     }
 
@@ -915,18 +940,20 @@
               <i class="fa-solid fa-underline"></i>
             </button>
           </div>
-          <div class="format-row">
-            <label>Text Color</label>
-            <input type="color" class="color-input"
-                   [value]="FormatEditingColumn.format?.headerStyle?.color || '#000000'"
-                   (input)="UpdateHeaderColor('color', $any($event.target).value)" />
-          </div>
-          <div class="format-row">
-            <label>Background</label>
-            <input type="color" class="color-input"
-                   [value]="FormatEditingColumn.format?.headerStyle?.backgroundColor || '#ffffff'"
-                   (input)="UpdateHeaderColor('backgroundColor', $any($event.target).value)" />
-          </div>
+          @if (IsAdvancedMode || FormatEditingColumn.format?.headerStyle?.color || FormatEditingColumn.format?.headerStyle?.backgroundColor) {
+            <div class="format-row">
+              <label>Text Color</label>
+              <input type="color" class="color-input"
+                     [value]="FormatEditingColumn.format?.headerStyle?.color || '#000000'"
+                     (input)="UpdateHeaderColor('color', $any($event.target).value)" />
+            </div>
+            <div class="format-row">
+              <label>Background</label>
+              <input type="color" class="color-input"
+                     [value]="FormatEditingColumn.format?.headerStyle?.backgroundColor || '#ffffff'"
+                     (input)="UpdateHeaderColor('backgroundColor', $any($event.target).value)" />
+            </div>
+          }
         </div>
 
         <!-- Cell Style -->
@@ -952,101 +979,112 @@
               <i class="fa-solid fa-underline"></i>
             </button>
           </div>
-          <div class="format-row">
-            <label>Text Color</label>
-            <input type="color" class="color-input"
-                   [value]="FormatEditingColumn.format?.cellStyle?.color || '#000000'"
-                   (input)="UpdateCellColor('color', $any($event.target).value)" />
-          </div>
-          <div class="format-row">
-            <label>Background</label>
-            <input type="color" class="color-input"
-                   [value]="FormatEditingColumn.format?.cellStyle?.backgroundColor || '#ffffff'"
-                   (input)="UpdateCellColor('backgroundColor', $any($event.target).value)" />
-          </div>
+          @if (IsAdvancedMode || FormatEditingColumn.format?.cellStyle?.color || FormatEditingColumn.format?.cellStyle?.backgroundColor) {
+            <div class="format-row">
+              <label>Text Color</label>
+              <input type="color" class="color-input"
+                     [value]="FormatEditingColumn.format?.cellStyle?.color || '#000000'"
+                     (input)="UpdateCellColor('color', $any($event.target).value)" />
+            </div>
+            <div class="format-row">
+              <label>Background</label>
+              <input type="color" class="color-input"
+                     [value]="FormatEditingColumn.format?.cellStyle?.backgroundColor || '#ffffff'"
+                     (input)="UpdateCellColor('backgroundColor', $any($event.target).value)" />
+            </div>
+          }
         </div>
 
-        <!-- Progressive Disclosure: Conditional Formatting Rules -->
-        <div class="format-section">
-          <div class="format-section-header">
-            <i class="fa-solid fa-wand-sparkles"></i>
-            <span>Conditional Formatting Rules</span>
-            <button
-              type="button"
-              class="section-link-btn"
-              (click)="AddConditionalRule()"
-              [disabled]="!CanEdit">
-              <i class="fa-solid fa-plus"></i>
-              Add Rule
-            </button>
-          </div>
+        <!-- Progressive Disclosure: Conditional Formatting Rules (Advanced Mode or when rules exist) -->
+        @if (IsAdvancedMode || FormatEditingColumn.format?.conditionalRules?.length) {
+          <div class="format-section">
+            <div class="format-section-header">
+              <i class="fa-solid fa-wand-sparkles"></i>
+              <span>Conditional Formatting Rules</span>
+              <button
+                type="button"
+                class="section-link-btn"
+                (click)="AddConditionalRule()"
+                [disabled]="!CanEdit">
+                <i class="fa-solid fa-plus"></i>
+                Add Rule
+              </button>
+            </div>
 
-          @if (FormatEditingColumn.format?.conditionalRules?.length) {
-            <div class="conditional-rules-list">
-              @for (rule of FormatEditingColumn.format?.conditionalRules || []; track $index; let rIdx = $index) {
-                <div class="conditional-rule-card">
-                  <div class="cond-rule-top">
-                    <select class="format-select" [(ngModel)]="rule.condition">
-                      <option value="equals">Equals (=)</option>
-                      <option value="notEquals">Not Equals (≠)</option>
-                      <option value="contains">Contains</option>
-                      <option value="notContains">Does Not Contain</option>
-                      <option value="startsWith">Starts With</option>
-                      <option value="endsWith">Ends With</option>
-                      <option value="greaterThan">Greater Than (&gt;)</option>
-                      <option value="lessThan">Less Than (&lt;)</option>
-                      <option value="greaterThanOrEqual">Greater or Equal (≥)</option>
-                      <option value="lessThanOrEqual">Less or Equal (≤)</option>
-                      <option value="between">Between</option>
-                      <option value="isEmpty">Is Empty</option>
-                      <option value="isNotEmpty">Is Not Empty</option>
-                    </select>
-                    <button
-                      type="button"
-                      class="sort-remove-btn"
-                      (click)="RemoveConditionalRule(rIdx)"
-                      title="Remove rule">
-                      <i class="fa-solid fa-times"></i>
-                    </button>
-                  </div>
+            @if (FormatEditingColumn.format?.conditionalRules?.length) {
+              <div class="conditional-rules-list">
+                @for (rule of FormatEditingColumn.format?.conditionalRules || []; track $index; let rIdx = $index) {
+                  <div class="conditional-rule-card">
+                    <div class="cond-rule-top">
+                      <select class="format-select" [(ngModel)]="rule.condition">
+                        <option value="equals">Equals (=)</option>
+                        <option value="notEquals">Not Equals (≠)</option>
+                        <option value="contains">Contains</option>
+                        <option value="notContains">Does Not Contain</option>
+                        <option value="startsWith">Starts With</option>
+                        <option value="endsWith">Ends With</option>
+                        <option value="greaterThan">Greater Than (&gt;)</option>
+                        <option value="lessThan">Less Than (&lt;)</option>
+                        <option value="greaterThanOrEqual">Greater or Equal (≥)</option>
+                        <option value="lessThanOrEqual">Less or Equal (≤)</option>
+                        <option value="between">Between</option>
+                        <option value="isEmpty">Is Empty</option>
+                        <option value="isNotEmpty">Is Not Empty</option>
+                      </select>
+                      <button
+                        type="button"
+                        class="sort-remove-btn"
+                        (click)="RemoveConditionalRule(rIdx)"
+                        title="Remove rule">
+                        <i class="fa-solid fa-times"></i>
+                      </button>
+                    </div>
 
-                  @if (rule.condition !== 'isEmpty' && rule.condition !== 'isNotEmpty') {
-                    <div class="cond-rule-values">
-                      <input
-                        type="text"
-                        class="format-input"
-                        placeholder="Value..."
-                        [(ngModel)]="rule.value" />
-                      @if (rule.condition === 'between') {
-                        <span class="muted-text">and</span>
+                    @if (rule.condition !== 'isEmpty' && rule.condition !== 'isNotEmpty') {
+                      <div class="cond-rule-values">
                         <input
                           type="text"
                           class="format-input"
-                          placeholder="End value..."
-                          [(ngModel)]="rule.value2" />
-                      }
-                    </div>
-                  }
+                          placeholder="Value..."
+                          [(ngModel)]="rule.value" />
+                        @if (rule.condition === 'between') {
+                          <span class="muted-text">and</span>
+                          <input
+                            type="text"
+                            class="format-input"
+                            placeholder="End value..."
+                            [(ngModel)]="rule.value2" />
+                        }
+                      </div>
+                    }
 
-                  <div class="cond-rule-presets">
-                    <button type="button" class="preset-chip success" (click)="ApplyConditionalPreset(rule, 'success')">Green</button>
-                    <button type="button" class="preset-chip warning" (click)="ApplyConditionalPreset(rule, 'warning')">Amber</button>
-                    <button type="button" class="preset-chip danger" (click)="ApplyConditionalPreset(rule, 'danger')">Red</button>
-                    <button type="button" class="preset-chip info" (click)="ApplyConditionalPreset(rule, 'info')">Blue</button>
-                    <span class="cond-rule-preview"
-                          [style.color]="rule.style.color"
-                          [style.background-color]="rule.style.backgroundColor"
-                          [style.font-weight]="rule.style.bold ? '700' : '400'">
-                      Sample
-                    </span>
+                    <div class="cond-rule-presets">
+                      <button type="button" class="preset-chip success" (click)="ApplyConditionalPreset(rule, 'success')">Green</button>
+                      <button type="button" class="preset-chip warning" (click)="ApplyConditionalPreset(rule, 'warning')">Amber</button>
+                      <button type="button" class="preset-chip danger" (click)="ApplyConditionalPreset(rule, 'danger')">Red</button>
+                      <button type="button" class="preset-chip info" (click)="ApplyConditionalPreset(rule, 'info')">Blue</button>
+                      <span class="cond-rule-preview"
+                            [style.color]="rule.style.color"
+                            [style.background-color]="rule.style.backgroundColor"
+                            [style.font-weight]="rule.style.bold ? '700' : '400'">
+                        Sample
+                      </span>
+                    </div>
                   </div>
-                </div>
-              }
-            </div>
-          } @else {
-            <p class="muted-text">Highlight cells automatically when their value matches a condition.</p>
-          }
-        </div>
+                }
+              </div>
+            } @else {
+              <p class="muted-text">Highlight cells automatically when their value matches a condition.</p>
+            }
+          </div>
+        } @else {
+          <div class="format-section advanced-inspector-cta">
+            <button type="button" class="advanced-hint-btn" (click)="ToggleAdvancedMode()">
+              <i class="fa-solid fa-wand-sparkles"></i>
+              <span>Enable Advanced Mode for Custom Colors &amp; Conditional Rules</span>
+            </button>
+          </div>
+        }
 
             <!-- Clear Format Button -->
             <div class="format-actions">
@@ -1167,6 +1205,7 @@
                   class="sort-item"
                   [class.dragging]="DraggedSortItem === sortItem"
                   [class.drop-target]="DropTargetSortItem === sortItem"
+                  [class.dropdown-open]="OpenSortFieldDropdownIndex === i"
                   draggable="true"
                   (dragstart)="OnSortDragStart($event, sortItem)"
                   (dragover)="OnSortDragOver($event, sortItem)"
@@ -1179,16 +1218,66 @@
                   <div class="sort-drag-handle" title="Drag to reorder">
                     <i class="fa-solid fa-grip-vertical"></i>
                   </div>
-                  <!-- Field Dropdown -->
-                  <select
-                    class="sort-field-dropdown"
-                    [(ngModel)]="sortItem.field"
-                    (ngModelChange)="OnSortFieldChange(sortItem, $event)"
-                    [disabled]="!CanEdit">
-                    @for (field of SortableFields; track field.ID) {
-                      <option [value]="field.Name">{{ field.DisplayNameOrName }}</option>
+                  <!-- Custom Searchable Field Dropdown -->
+                  <div class="sort-field-custom-select" [class.open]="OpenSortFieldDropdownIndex === i">
+                    <button
+                      type="button"
+                      class="sort-field-trigger"
+                      [class.open]="OpenSortFieldDropdownIndex === i"
+                      [disabled]="!CanEdit"
+                      [attr.aria-expanded]="OpenSortFieldDropdownIndex === i"
+                      (click)="ToggleSortFieldDropdown(i, $event)">
+                      <span class="sort-field-trigger-main">
+                        <span class="sort-field-trigger-name">{{ GetFieldDisplayName(sortItem.field) }}</span>
+                        @if (GetSortFieldInfo(sortItem.field)?.Type) {
+                          <span class="sort-field-type-badge">{{ GetSortFieldInfo(sortItem.field)?.Type }}</span>
+                        }
+                      </span>
+                      <i class="fa-solid fa-chevron-down sort-field-chevron" [class.rotated]="OpenSortFieldDropdownIndex === i"></i>
+                    </button>
+
+                    @if (OpenSortFieldDropdownIndex === i) {
+                      <div
+                        class="sort-field-dropdown-menu"
+                        [class.drop-up]="SortDropdownDropUp"
+                        (click)="$event.stopPropagation()">
+                        <div class="sort-field-search-box">
+                          <i class="fa-solid fa-magnifying-glass"></i>
+                          <input
+                            type="text"
+                            class="sort-field-search-input"
+                            placeholder="Search fields by name or description..."
+                            [(ngModel)]="SortFieldSearchText"
+                            (keydown)="OnSortSearchKeydown($event)"
+                          />
+                        </div>
+                        <div class="sort-field-options-list" role="listbox">
+                          @for (field of GetFilteredSortableFields(sortItem); track field.ID) {
+                            <button
+                              type="button"
+                              class="sort-field-option"
+                              role="option"
+                              [class.selected]="sortItem.field === field.Name"
+                              [attr.aria-selected]="sortItem.field === field.Name"
+                              (click)="SelectSortField(sortItem, field.Name, $event)">
+                              <div class="sort-field-option-header">
+                                <span class="sort-field-option-name">{{ field.DisplayNameOrName }}</span>
+                                @if (field.Type) {
+                                  <span class="sort-field-type-badge">{{ field.Type }}</span>
+                                }
+                              </div>
+                              @if (field.Description) {
+                                <div class="sort-field-option-desc">{{ field.Description }}</div>
+                              }
+                            </button>
+                          }
+                          @if (GetFilteredSortableFields(sortItem).length === 0) {
+                            <div class="sort-field-empty">No matching fields found</div>
+                          }
+                        </div>
+                      </div>
                     }
-                  </select>
+                  </div>
                   <!-- Direction Toggle -->
                   <div class="sort-direction-toggle">
                     <button

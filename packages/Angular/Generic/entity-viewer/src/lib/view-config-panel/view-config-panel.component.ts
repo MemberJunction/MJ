@@ -20,9 +20,12 @@ import {
 } from '@memberjunction/core-entities';
 import {
   CompositeFilterDescriptor,
+  FilterDescriptor,
   FilterFieldInfo,
   FilterFieldType,
-  CreateEmptyFilter
+  CreateEmptyFilter,
+  IsCompositeFilter,
+  IsSimpleFilter
 } from '@memberjunction/ng-filter-builder';
 import { ViewConfigSummary } from '../types';
 
@@ -233,8 +236,9 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   /** Multi-column sort configuration (ordered by priority) */
   public SortItems: SortItem[] = [];
 
-  // Unified View Studio: Pinned Identity Header & Progressive Disclosure state
+  // Unified View Studio: Pinned Identity Header, Advanced Mode & Progressive Disclosure state
   public IsCreatingNewView: boolean = false;
+  public IsAdvancedMode: boolean = false;
   public ShowDescriptionEditor: boolean = false;
   public ShowGeneratedSmartSql: boolean = false;
   public ShowAdvancedSqlSection: boolean = false;
@@ -250,10 +254,13 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   public ShowAggregateDisplaySection: boolean = false;
   public AggregateDisplay: Required<ViewGridAggregateDisplay> = { ...DEFAULT_AGGREGATE_DISPLAY };
 
-  // Sort drag state
+  // Sort drag & custom field dropdown state
   public DraggedSortItem: SortItem | null = null;
   public DropTargetSortItem: SortItem | null = null;
   public SortDropPosition: 'before' | 'after' | null = null;
+  public OpenSortFieldDropdownIndex: number | null = null;
+  public SortFieldSearchText: string = '';
+  public SortDropdownDropUp: boolean = false;
 
   // Available sort directions for dropdown
   public SortDirections = [
@@ -270,8 +277,8 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   public FilterState: CompositeFilterDescriptor = CreateEmptyFilter();
   public FilterFields: FilterFieldInfo[] = [];
 
-  // Filter mode: 'smart' or 'traditional' (mutually exclusive)
-  public FilterMode: 'smart' | 'traditional' = 'smart';
+  // Filter mode: 'smart', 'traditional', or 'sql' (mutually exclusive)
+  public FilterMode: 'smart' | 'traditional' | 'sql' = 'smart';
 
   // Aggregates state
   public Aggregates: ViewGridAggregate[] = [];
@@ -284,7 +291,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
 
   // Filter mode switch confirmation (BUG-006)
   public ShowFilterModeSwitchConfirm: boolean = false;
-  public PendingFilterModeSwitch: 'smart' | 'traditional' | null = null;
+  public PendingFilterModeSwitch: 'smart' | 'traditional' | 'sql' | null = null;
 
   // Local saving guard (BUG-003: race condition on double-click)
   private _localSaving: boolean = false;
@@ -305,17 +312,18 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   // Custom Alternate Base View dropdown state
   public IsBaseViewDropdownOpen: boolean = false;
 
-  // Panel resize & full-screen state
+  // Full-screen Studio state (always full-screen takeover)
   public IsResizing: boolean = false;
-  public IsFullScreen: boolean = false;
+  public IsFullScreen: boolean = true;
   public HasCustomResizeWidth: boolean = false;
-  public PanelWidth: number = 520;
+  public PanelWidth: number = 960;
   private readonly MIN_PANEL_WIDTH = 480;
   private readonly MAX_PANEL_WIDTH = 1400;
-  private readonly DEFAULT_PANEL_WIDTH = 520;
+  private readonly DEFAULT_PANEL_WIDTH = 960;
   /** Width threshold below which tabs show icons only */
   private readonly ICON_ONLY_THRESHOLD = 440;
   private readonly PANEL_WIDTH_SETTING_KEY = 'view-config-panel/width';
+  private readonly ADVANCED_MODE_SETTING_KEY = 'view-config-panel/advanced-mode';
   private resizeStartX: number = 0;
   private resizeStartWidth: number = 0;
 
@@ -330,7 +338,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    * Whether the panel is currently in expanded wide / full-screen studio mode
    */
   get IsWideMode(): boolean {
-    return this.IsFullScreen || this.PanelWidth >= 680;
+    return true;
   }
 
   /**
@@ -341,6 +349,24 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     this.HasCustomResizeWidth = false;
     this.PanelWidth = this.IsFullScreen ? 960 : this.DEFAULT_PANEL_WIDTH;
     void this.savePanelWidth();
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Toggle Studio-Wide Advanced Mode (reveals Canonical Base View, SQL WHERE Clause mode,
+   * Conditional Formatting Rules, custom hex color overrides, and technical field metadata)
+   */
+  ToggleAdvancedMode(): void {
+    this.IsAdvancedMode = !this.IsAdvancedMode;
+    try {
+      UserInfoEngine.Instance.SetSettingDebounced(this.ADVANCED_MODE_SETTING_KEY, String(this.IsAdvancedMode));
+    } catch (error) {
+      console.warn('[ViewConfigPanel] Failed to persist advanced mode setting:', error);
+    }
+    if (!this.IsAdvancedMode && this.FilterMode === 'sql' && !this.CustomWhereClause) {
+      // Return to whichever standard filter mode has active data, or Smart Filter
+      this.FilterMode = this.GetFilterCount() > 0 ? 'traditional' : 'smart';
+    }
     this.cdr.detectChanges();
   }
 
@@ -355,7 +381,11 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    */
   @HostListener('document:keydown.escape')
   HandleEscape(): void {
-    if (this.IsBaseViewDropdownOpen) {
+    if (this.OpenSortFieldDropdownIndex !== null) {
+      this.OpenSortFieldDropdownIndex = null;
+      this.SortFieldSearchText = '';
+      this.cdr.detectChanges();
+    } else if (this.IsBaseViewDropdownOpen) {
       this.IsBaseViewDropdownOpen = false;
       this.cdr.detectChanges();
     } else if (this.FormatEditingColumn) {
@@ -366,16 +396,18 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   /**
-   * Close the custom Base View dropdown when clicking outside
+   * Close custom dropdowns (Base View or Sort Field) when clicking outside
    */
   @HostListener('document:click', ['$event'])
   HandleDocumentClick(event: MouseEvent): void {
-    if (!this.IsBaseViewDropdownOpen) {
-      return;
-    }
     const target = event.target as HTMLElement | null;
-    if (!target?.closest('.abv-custom-select')) {
+    if (this.IsBaseViewDropdownOpen && !target?.closest('.abv-custom-select')) {
       this.IsBaseViewDropdownOpen = false;
+      this.cdr.detectChanges();
+    }
+    if (this.OpenSortFieldDropdownIndex !== null && !target?.closest('.sort-field-custom-select')) {
+      this.OpenSortFieldDropdownIndex = null;
+      this.SortFieldSearchText = '';
       this.cdr.detectChanges();
     }
   }
@@ -439,7 +471,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   /**
-   * Load saved panel width from user settings
+   * Load saved studio preferences (panel width and advanced mode) from user settings
    */
   private loadSavedPanelWidth(): void {
     try {
@@ -450,8 +482,14 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
           this.PanelWidth = width;
         }
       }
+      const savedAdvanced = UserInfoEngine.Instance.GetSetting(this.ADVANCED_MODE_SETTING_KEY);
+      if (savedAdvanced === 'true') {
+        this.IsAdvancedMode = true;
+      } else if (savedAdvanced === 'false') {
+        this.IsAdvancedMode = false;
+      }
     } catch (error) {
-      console.warn('[ViewConfigPanel] Failed to load saved panel width:', error);
+      console.warn('[ViewConfigPanel] Failed to load saved studio preferences:', error);
     }
   }
 
@@ -474,6 +512,8 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       this.ColumnSearchText = '';
       this.FormatEditingColumn = null;
       this.IsBaseViewDropdownOpen = false;
+      this.OpenSortFieldDropdownIndex = null;
+      this.SortFieldSearchText = '';
       this.ShowGeneratedSmartSql = false;
       this.ShowDisplayOptionsSection = false;
       this.ShowAggregateDisplaySection = false;
@@ -643,8 +683,11 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       this.FilterState = this.parseFilterState(this.ViewEntity.FilterState);
 
       // Set filter mode based on which type of filter is active
-      // Smart filter takes precedence if enabled
-      if (this.SmartFilterEnabled && this.SmartFilterPrompt) {
+      // Custom SQL WHERE takes precedence when locked, then Smart Filter, then Rule Builder
+      if (this.CustomWhereClause) {
+        this.FilterMode = 'sql';
+        this.SmartFilterEnabled = false;
+      } else if (this.SmartFilterEnabled && this.SmartFilterPrompt) {
         this.FilterMode = 'smart';
       } else if (this.GetFilterCount() > 0) {
         this.FilterMode = 'traditional';
@@ -695,6 +738,12 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       }
     }
 
+    // Auto-enable Advanced Mode if this view uses any advanced features
+    const hasConditionalRules = this.Columns.some(c => (c.format?.conditionalRules?.length ?? 0) > 0);
+    if (this.CustomWhereClause || !!this.AlternateBaseView || hasConditionalRules) {
+      this.IsAdvancedMode = true;
+    }
+
     // Load aggregates from currentGridState if available
     if (this.CurrentGridState?.aggregates?.expressions) {
       this.Aggregates = [...this.CurrentGridState.aggregates.expressions];
@@ -726,6 +775,8 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
         name: field.Name,
         displayName: field.DisplayNameOrName,
         type: this.mapFieldType(field),
+        description: field.Description || undefined,
+        sqlType: field.Type || undefined,
         lookupEntityName: field.RelatedEntity || undefined,
         valueList: field.ValueListType === 'List' && field.EntityFieldValues?.length > 0
           ? field.EntityFieldValues.map(v => ({ value: v.Value, label: v.Value }))
@@ -1454,6 +1505,81 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   /**
+   * Get the EntityFieldInfo for a sort item's field
+   */
+  GetSortFieldInfo(fieldName: string): EntityFieldInfo | undefined {
+    return this.SortableFields.find(f => f.Name === fieldName);
+  }
+
+  /**
+   * Toggle the custom searchable sort field dropdown for a given sort item index
+   */
+  ToggleSortFieldDropdown(index: number, event?: MouseEvent): void {
+    if (!this.CanEdit) return;
+    event?.stopPropagation();
+    if (this.OpenSortFieldDropdownIndex === index) {
+      this.OpenSortFieldDropdownIndex = null;
+      this.SortFieldSearchText = '';
+    } else {
+      this.OpenSortFieldDropdownIndex = index;
+      this.SortFieldSearchText = '';
+      // Determine whether the dropdown should open upward when near bottom of viewport
+      const triggerEl = (event?.currentTarget as HTMLElement | null);
+      if (triggerEl && typeof window !== 'undefined') {
+        const rect = triggerEl.getBoundingClientRect();
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const spaceAbove = rect.top;
+        this.SortDropdownDropUp = spaceBelow < 280 && spaceAbove > spaceBelow;
+      } else {
+        this.SortDropdownDropUp = false;
+      }
+    }
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Get sortable fields filtered by the user's search query (display name, technical name, type, or description)
+   */
+  GetFilteredSortableFields(currentSortItem: SortItem): EntityFieldInfo[] {
+    const available = this.GetAvailableFieldsForSort(currentSortItem);
+    const query = this.SortFieldSearchText.trim().toLowerCase();
+    if (!query) {
+      return available;
+    }
+    return available.filter(f =>
+      f.DisplayNameOrName.toLowerCase().includes(query) ||
+      f.Name.toLowerCase().includes(query) ||
+      (f.Description && f.Description.toLowerCase().includes(query)) ||
+      (f.Type && f.Type.toLowerCase().includes(query))
+    );
+  }
+
+  /**
+   * Select a field from the custom sort field dropdown
+   */
+  SelectSortField(sortItem: SortItem, fieldName: string, event?: MouseEvent): void {
+    if (!this.CanEdit) return;
+    event?.stopPropagation();
+    sortItem.field = fieldName;
+    this.OpenSortFieldDropdownIndex = null;
+    this.SortFieldSearchText = '';
+    this.syncLegacySortFields();
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Prevent Escape/Enter in the sort field search input from bubbling to form/dialog handlers
+   */
+  OnSortSearchKeydown(event: KeyboardEvent): void {
+    event.stopPropagation();
+    if (event.key === 'Escape') {
+      this.OpenSortFieldDropdownIndex = null;
+      this.SortFieldSearchText = '';
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
    * Get fields available for a sort item (excludes already selected fields except current)
    */
   GetAvailableFieldsForSort(currentSortItem: SortItem): EntityFieldInfo[] {
@@ -2021,15 +2147,40 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     this.ActiveTab = tab === 'settings' ? 'filters' : tab;
     this.FormatEditingColumn = null; // Close format editor when switching tabs
     this.IsBaseViewDropdownOpen = false;
+    this.OpenSortFieldDropdownIndex = null;
+    this.SortFieldSearchText = '';
     this.cdr.detectChanges();
   }
 
   /**
-   * Set the filter mode (smart or traditional)
-   * BUG-006: Shows confirmation when switching if active mode has data
+   * Set the filter mode ('smart', 'traditional', or 'sql')
+   * Switching to 'sql' shows the read-only compiled SQL from Smart Filter or Rule Builder
+   * until the user checks the one-way Custom SQL Override checkbox.
    */
-  SetFilterMode(mode: 'smart' | 'traditional'): void {
+  SetFilterMode(mode: 'smart' | 'traditional' | 'sql'): void {
     if (this.FilterMode === mode) return;
+
+    // Switching into 'sql' mode is non-destructive until the user checks the override box
+    if (mode === 'sql') {
+      this.FilterMode = 'sql';
+      this.cdr.detectChanges();
+      return;
+    }
+
+    // If returning from 'sql' mode without CustomWhereClause enabled, restore target mode or switch cleanly
+    if (this.FilterMode === 'sql' && !this.CustomWhereClause) {
+      if ((mode === 'smart' && this.GetFilterCount() > 0) ||
+          (mode === 'traditional' && !!this.SmartFilterPrompt.trim())) {
+        this.PendingFilterModeSwitch = mode;
+        this.ShowFilterModeSwitchConfirm = true;
+        this.cdr.detectChanges();
+        return;
+      }
+      this.FilterMode = mode;
+      this.SmartFilterEnabled = mode === 'smart';
+      this.cdr.detectChanges();
+      return;
+    }
 
     // Check if current mode has data that would be lost
     const currentModeHasData = this.currentFilterModeHasData();
@@ -2051,8 +2202,10 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   private currentFilterModeHasData(): boolean {
     if (this.FilterMode === 'smart') {
       return !!this.SmartFilterPrompt.trim();
-    } else {
+    } else if (this.FilterMode === 'traditional') {
       return this.GetFilterCount() > 0;
+    } else {
+      return this.CustomWhereClause && !!this.WhereClause.trim();
     }
   }
 
@@ -2078,11 +2231,11 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   /**
    * Apply the filter mode switch - saves current mode data and restores target mode data
    */
-  private applyFilterModeSwitch(mode: 'smart' | 'traditional'): void {
+  private applyFilterModeSwitch(mode: 'smart' | 'traditional' | 'sql'): void {
     // Save current mode's data before switching
     if (this.FilterMode === 'smart') {
       this.savedSmartFilterPrompt = this.SmartFilterPrompt;
-    } else {
+    } else if (this.FilterMode === 'traditional') {
       this.savedTraditionalFilter = this.FilterState;
     }
 
@@ -2090,16 +2243,180 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
 
     // Restore target mode's saved data or clear
     if (mode === 'smart') {
+      this.CustomWhereClause = false;
       this.SmartFilterEnabled = true;
       this.SmartFilterPrompt = this.savedSmartFilterPrompt;
       this.FilterState = CreateEmptyFilter();
-    } else {
+    } else if (mode === 'traditional') {
+      this.CustomWhereClause = false;
       this.SmartFilterEnabled = false;
       this.SmartFilterPrompt = '';
       this.SmartFilterExplanation = '';
       this.FilterState = this.savedTraditionalFilter;
+    } else {
+      this.SmartFilterEnabled = false;
     }
 
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Compile a CompositeFilterDescriptor into a SQL WHERE expression using entity field metadata
+   */
+  CompileFilterStateToSqlWhere(filter: CompositeFilterDescriptor = this.FilterState): string {
+    if (!filter?.filters?.length) {
+      return '';
+    }
+    const parts: string[] = [];
+    for (const item of filter.filters) {
+      if (IsCompositeFilter(item)) {
+        const sub = this.CompileFilterStateToSqlWhere(item);
+        if (sub) {
+          parts.push(item.filters.length > 1 ? `(${sub})` : sub);
+        }
+      } else if (IsSimpleFilter(item) && item.field) {
+        const clause = this.compileSingleRuleToSql(item);
+        if (clause) {
+          parts.push(clause);
+        }
+      }
+    }
+    const joiner = filter.logic === 'or' ? ' OR ' : ' AND ';
+    return parts.join(joiner);
+  }
+
+  /**
+   * Compile a single FilterDescriptor rule into a SQL condition
+   */
+  private compileSingleRuleToSql(rule: FilterDescriptor): string {
+    const col = `[${rule.field}]`;
+    const op = rule.operator;
+    if (op === 'isnull') return `${col} IS NULL`;
+    if (op === 'isnotnull') return `${col} IS NOT NULL`;
+    if (op === 'isempty') return `(${col} IS NULL OR ${col} = '')`;
+    if (op === 'isnotempty') return `(${col} IS NOT NULL AND ${col} <> '')`;
+
+    const rawVal = rule.value;
+    const escaped = String(rawVal ?? '').replace(/'/g, "''");
+
+    if (op === 'contains') return `${col} LIKE '%${escaped}%'`;
+    if (op === 'doesnotcontain') return `${col} NOT LIKE '%${escaped}%'`;
+    if (op === 'startswith') return `${col} LIKE '${escaped}%'`;
+    if (op === 'endswith') return `${col} LIKE '%${escaped}'`;
+
+    const entityField = this.Entity?.Fields.find(f => f.Name.trim().toLowerCase() === rule.field.trim().toLowerCase());
+    const isBool = entityField?.TSType === EntityFieldTSType.Boolean || typeof rawVal === 'boolean';
+    const isNum = entityField?.TSType === EntityFieldTSType.Number || typeof rawVal === 'number';
+
+    let sqlVal: string;
+    if (isBool) {
+      sqlVal = (rawVal === true || rawVal === 'true' || rawVal === 1) ? '1' : '0';
+    } else if (isNum && rawVal !== null && rawVal !== undefined && rawVal !== '') {
+      sqlVal = String(rawVal);
+    } else {
+      sqlVal = `'${escaped}'`;
+    }
+
+    const opMap: Record<string, string> = {
+      eq: '=',
+      neq: '<>',
+      gt: '>',
+      gte: '>=',
+      lt: '<',
+      lte: '<='
+    };
+    const sqlOp = opMap[op] || '=';
+    return `${col} ${sqlOp} ${sqlVal}`;
+  }
+
+  /**
+   * Returns the SQL WHERE clause generated from the active Rule Builder or Smart Filter
+   */
+  get GeneratedSqlWhereClause(): string {
+    if (this.GetFilterCount() > 0) {
+      return this.CompileFilterStateToSqlWhere(this.FilterState);
+    }
+    if (this.countFilters(this.savedTraditionalFilter) > 0) {
+      return this.CompileFilterStateToSqlWhere(this.savedTraditionalFilter);
+    }
+    if (this.ViewEntity?.SmartFilterWhereClause) {
+      return this.ViewEntity.SmartFilterWhereClause;
+    }
+    if (this.ViewEntity?.WhereClause && !this.ViewEntity.CustomWhereClause) {
+      return this.ViewEntity.WhereClause;
+    }
+    return '';
+  }
+
+  /**
+   * Returns the SQL string displayed inside <mj-code-editor Language="sql">:
+   * - When CustomWhereClause is true (override checked): returns the editable WhereClause
+   * - When CustomWhereClause is false (read-only): returns the live SQL from Rule Builder / Smart Filter
+   */
+  get DisplayedSqlWhereClause(): string {
+    if (this.CustomWhereClause) {
+      return this.WhereClause;
+    }
+    const generated = this.GeneratedSqlWhereClause;
+    if (generated) {
+      return generated;
+    }
+    const activePrompt = this.SmartFilterPrompt.trim() || this.savedSmartFilterPrompt.trim();
+    if (activePrompt) {
+      return `-- Smart Filter Prompt: "${activePrompt}"\n-- AI compiles this prompt into a SQL WHERE clause when the view is saved.\n-- Check "Override with Custom SQL WHERE Clause" above to write custom SQL directly.`;
+    }
+    return `-- No active filter rules or Smart Filter configured.\n-- Check "Override with Custom SQL WHERE Clause" above to write a custom SQL WHERE expression.`;
+  }
+
+  /**
+   * Human-readable badge describing the source of the SQL shown in <mj-code-editor>
+   */
+  get SqlWhereSourceLabel(): string {
+    if (this.CustomWhereClause) {
+      return 'Custom SQL Override (Editable)';
+    }
+    if (this.GetFilterCount() > 0 || this.countFilters(this.savedTraditionalFilter) > 0) {
+      const count = this.GetFilterCount() || this.countFilters(this.savedTraditionalFilter);
+      return `Generated from Rule Builder (${count} rule${count !== 1 ? 's' : ''} · Read-Only)`;
+    }
+    if (this.ViewEntity?.SmartFilterWhereClause || (this.SmartFilterPrompt.trim() || this.savedSmartFilterPrompt.trim())) {
+      return 'Generated from Smart Filter (AI · Read-Only)';
+    }
+    return 'Read-Only Preview';
+  }
+
+  /**
+   * Handle toggling the one-way Custom SQL WHERE Override checkbox
+   */
+  OnToggleCustomWhereOverride(enabled: boolean): void {
+    if (!this.CanEdit) return;
+    this.CustomWhereClause = enabled;
+    if (enabled) {
+      this.FilterMode = 'sql';
+      this.SmartFilterEnabled = false;
+      // Seed WhereClause from the generated Rule Builder / Smart Filter SQL if WhereClause is empty or still equal to previous generated SQL
+      if (!this.WhereClause.trim()) {
+        const generated = this.GeneratedSqlWhereClause;
+        if (generated) {
+          this.WhereClause = generated;
+        }
+      }
+      if (!this.ViewEntity && this.WhereClause.trim() && !this.ViewName.trim()) {
+        this.ViewName = this.BuildSuggestedViewName();
+      }
+    }
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Handle changes emitted from <mj-code-editor> when CustomWhereClause is enabled
+   */
+  OnCustomSqlWhereChange(value: string): void {
+    if (!this.CustomWhereClause || !this.CanEdit) return;
+    this.WhereClause = value;
+    if (!this.ViewEntity && value.trim() && !this.ViewName.trim()) {
+      this.ViewName = this.BuildSuggestedViewName();
+    }
     this.cdr.detectChanges();
   }
 

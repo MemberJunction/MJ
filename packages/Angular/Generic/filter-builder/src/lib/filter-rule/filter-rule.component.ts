@@ -166,6 +166,8 @@ export class FilterRuleComponent implements OnInit, OnChanges {
 
   // Fixed-position style for the active dropdown (escapes overflow clipping)
   public DropdownMenuStyle: Record<string, string> = {};
+  public DropdownDropUp = false;
+  public FieldSearchText = '';
 
   /** @deprecated Use {@link DropdownMenuStyle}. */
   public get dropdownMenuStyle(): Record<string, string> {
@@ -321,21 +323,58 @@ export class FilterRuleComponent implements OnInit, OnChanges {
   /**
    * Calculate fixed-position style for a dropdown menu based on its trigger button.
    * Uses position:fixed so the menu escapes any overflow:hidden/auto ancestors.
+   * Automatically flips above the trigger button when there is insufficient space below.
    * Accounts for CSS transform on ancestors (which change the containing block for fixed positioning).
    */
-  private calculateDropdownPosition(triggerBtn: ElementRef<HTMLButtonElement> | undefined): void {
+  private calculateDropdownPosition(
+    triggerBtn: ElementRef<HTMLButtonElement> | undefined,
+    isFieldDropdown: boolean = false
+  ): void {
     if (!triggerBtn?.nativeElement) {
       this.DropdownMenuStyle = {};
+      this.DropdownDropUp = false;
       return;
     }
     const rect = triggerBtn.nativeElement.getBoundingClientRect();
     const offset = this.getTransformAncestorOffset(triggerBtn.nativeElement);
-    this.DropdownMenuStyle = {
-      position: 'fixed',
-      top: `${rect.bottom + 4 - offset.top}px`,
-      left: `${rect.left - offset.left}px`,
-      width: `${rect.width}px`
-    };
+    const viewportHeight = typeof window !== 'undefined' && window.innerHeight ? window.innerHeight : 800;
+    const viewportWidth = typeof window !== 'undefined' && window.innerWidth ? window.innerWidth : 1200;
+
+    const spaceBelow = viewportHeight - rect.bottom - 12;
+    const spaceAbove = rect.top - 12;
+    const desiredHeight = isFieldDropdown ? 340 : 260;
+    const openAbove = spaceBelow < Math.min(desiredHeight, 260) && spaceAbove > spaceBelow;
+    this.DropdownDropUp = openAbove;
+
+    const menuWidth = isFieldDropdown
+      ? Math.min(Math.max(rect.width, 320), Math.max(260, viewportWidth - 24))
+      : rect.width;
+    const clampedLeft = Math.min(
+      Math.max(12, rect.left),
+      Math.max(12, viewportWidth - menuWidth - 12)
+    );
+
+    if (openAbove) {
+      const maxH = Math.min(desiredHeight, Math.max(180, spaceAbove));
+      this.DropdownMenuStyle = {
+        position: 'fixed',
+        top: 'auto',
+        bottom: `${viewportHeight - rect.top + 4 + offset.top}px`,
+        left: `${clampedLeft - offset.left}px`,
+        width: `${menuWidth}px`,
+        maxHeight: `${maxH}px`
+      };
+    } else {
+      const maxH = Math.min(desiredHeight, Math.max(180, spaceBelow));
+      this.DropdownMenuStyle = {
+        position: 'fixed',
+        top: `${rect.bottom + 4 - offset.top}px`,
+        bottom: 'auto',
+        left: `${clampedLeft - offset.left}px`,
+        width: `${menuWidth}px`,
+        maxHeight: `${maxH}px`
+      };
+    }
   }
 
   /**
@@ -365,7 +404,8 @@ export class FilterRuleComponent implements OnInit, OnChanges {
     this.CloseAllDropdowns();
     this.FieldDropdownOpen = !wasOpen;
     if (this.FieldDropdownOpen) {
-      this.calculateDropdownPosition(this.FieldDropdownBtn);
+      this.FieldSearchText = '';
+      this.calculateDropdownPosition(this.FieldDropdownBtn, true);
       setTimeout(() => this.FieldDropdownBtn?.nativeElement?.focus(), 0);
     }
   }
@@ -687,6 +727,47 @@ export class FilterRuleComponent implements OnInit, OnChanges {
   /** @deprecated Use {@link FieldsForSource}. */
   public fieldsForSource(key: string | null): FilterFieldInfo[] {
     return this.FieldsForSource(key);
+  }
+
+  public FilteredFields(sourceKey: string | null = null): FilterFieldInfo[] {
+    const base = sourceKey ? this.FieldsForSource(sourceKey) : this.fields;
+    const q = this.FieldSearchText.trim().toLowerCase();
+    if (!q) return base;
+    return base.filter((f) =>
+      f.displayName.toLowerCase().includes(q) ||
+      f.name.toLowerCase().includes(q) ||
+      (f.description && f.description.toLowerCase().includes(q)) ||
+      (f.sqlType && f.sqlType.toLowerCase().includes(q))
+    );
+  }
+
+  public OnFieldSearchInput(value: string): void {
+    this.FieldSearchText = value;
+    this.FieldHighlightIndex = 0;
+  }
+
+  public OnFieldSearchKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      event.stopPropagation();
+      if (this.FieldSearchText) {
+        this.FieldSearchText = '';
+      } else {
+        this.CloseFieldDropdown();
+      }
+      return;
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Enter') {
+      const items = this.FilteredFields(this.IsMultiSource ? this.ActiveSourceKey : null);
+      this.handleDropdownKeydown(
+        event,
+        items,
+        this.FieldHighlightIndex,
+        (index) => (this.FieldHighlightIndex = index),
+        (item) => this.SelectField(item.name),
+        (item) => item.displayName,
+        () => this.CloseFieldDropdown()
+      );
+    }
   }
 
   public SelectSource(key: string): void {

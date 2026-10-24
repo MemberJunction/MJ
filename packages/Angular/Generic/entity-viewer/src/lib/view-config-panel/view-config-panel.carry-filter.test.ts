@@ -25,8 +25,8 @@ function makeEntity(): EntityInfo {
     Name: 'Accounts',
     DisplayNameOrName: 'Accounts',
     Fields: [
-      { ID: 'f1', Name: 'AccountName', DisplayNameOrName: 'Account Name', DefaultInView: true, DefaultColumnWidth: 200, Type: 'nvarchar', EntityFieldValues: [] },
-      { ID: 'f2', Name: 'Status', DisplayNameOrName: 'Status', DefaultInView: true, DefaultColumnWidth: 120, Type: 'nvarchar', EntityFieldValues: [] },
+      { ID: 'f1', Name: 'AccountName', DisplayNameOrName: 'Account Name', Description: 'Primary legal name of the account', DefaultInView: true, DefaultColumnWidth: 200, Type: 'nvarchar', EntityFieldValues: [] },
+      { ID: 'f2', Name: 'Status', DisplayNameOrName: 'Status', Description: 'Lifecycle status of the account', DefaultInView: true, DefaultColumnWidth: 120, Type: 'nvarchar', EntityFieldValues: [] },
     ],
   } as unknown as EntityInfo;
 }
@@ -219,9 +219,8 @@ describe('ViewConfigPanelComponent — carrying a staged filter back from the na
     panel.ApplyConditionalPreset(firstCol.format!.conditionalRules![0], 'warning');
     expect(firstCol.format!.conditionalRules![0].style.backgroundColor).toBe('#fef3c7');
 
-    // Wide mode toggle
-    expect(panel.IsWideMode).toBe(false);
-    panel.ToggleWideMode();
+    // Studio always opens in full-screen wide mode
+    expect(panel.IsFullScreen).toBe(true);
     expect(panel.IsWideMode).toBe(true);
 
     const emitted: ViewSaveEvent[] = [];
@@ -259,5 +258,69 @@ describe('ViewConfigPanelComponent — carrying a staged filter back from the na
     expect(panel.IsCreatingNamedView).toBe(false);
     expect(panel.WasAutoPromotedToNamedView).toBe(false);
     expect(panel.SmartFilterPrompt).toBe('');
+  });
+
+  it('decorates FilterFields with description and sqlType, compiles Rule Builder to SQL WHERE, and supports one-way Custom SQL Override in Advanced Mode', () => {
+    const panel = makePanel();
+    panel.DefaultSaveAsNew = true;
+    panel.PendingNewViewFilterState = {
+      logic: 'and',
+      filters: [
+        { field: 'Status', operator: 'eq', value: 'Active' },
+        { field: 'AccountName', operator: 'contains', value: 'Acme' },
+      ],
+    };
+    open(panel);
+
+    // FilterFields include description and sqlType
+    expect(panel.FilterFields).toHaveLength(2);
+    expect(panel.FilterFields[0].description).toBe('Primary legal name of the account');
+    expect(panel.FilterFields[0].sqlType).toBe('nvarchar');
+
+    // Toggle Advanced Mode ON and switch to SQL WHERE Clause mode
+    expect(panel.IsAdvancedMode).toBe(false);
+    panel.ToggleAdvancedMode();
+    expect(panel.IsAdvancedMode).toBe(true);
+
+    panel.SetFilterMode('sql');
+    expect(panel.FilterMode).toBe('sql');
+    expect(panel.CustomWhereClause).toBe(false);
+
+    // Read-only preview shows live compiled SQL from Rule Builder
+    expect(panel.DisplayedSqlWhereClause).toBe("[Status] = 'Active' AND [AccountName] LIKE '%Acme%'");
+    expect(panel.SqlWhereSourceLabel).toContain('Generated from Rule Builder');
+
+    // Checking the one-way override seeds WhereClause from the compiled SQL and unlocks editing
+    panel.OnToggleCustomWhereOverride(true);
+    expect(panel.CustomWhereClause).toBe(true);
+    expect(panel.WhereClause).toBe("[Status] = 'Active' AND [AccountName] LIKE '%Acme%'");
+
+    panel.OnCustomSqlWhereChange("[Status] = 'Active' AND [AccountName] LIKE '%Acme%' AND [IsActive] = 1");
+    expect(panel.DisplayedSqlWhereClause).toBe("[Status] = 'Active' AND [AccountName] LIKE '%Acme%' AND [IsActive] = 1");
+  });
+
+  it('supports custom searchable Sorting field dropdown with description filtering', () => {
+    const panel = makePanel();
+    open(panel);
+
+    panel.AddSortLevel();
+    expect(panel.SortItems).toHaveLength(1);
+    expect(panel.SortItems[0].field).toBe('AccountName');
+    expect(panel.GetSortFieldInfo('AccountName')?.Type).toBe('nvarchar');
+
+    // Open dropdown and filter by description
+    panel.ToggleSortFieldDropdown(0);
+    expect(panel.OpenSortFieldDropdownIndex).toBe(0);
+
+    panel.SortFieldSearchText = 'lifecycle';
+    const filtered = panel.GetFilteredSortableFields(panel.SortItems[0]);
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0].Name).toBe('Status');
+
+    // Select Status
+    panel.SelectSortField(panel.SortItems[0], 'Status');
+    expect(panel.SortItems[0].field).toBe('Status');
+    expect(panel.OpenSortFieldDropdownIndex).toBeNull();
+    expect(panel.SortFieldSearchText).toBe('');
   });
 });

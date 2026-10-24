@@ -12,6 +12,7 @@ import { RecordChangesModule } from '@memberjunction/ng-record-changes';
 import { RecordMergeModule } from '@memberjunction/ng-record-merge';
 import { MjSlidePanelComponent, MJButtonDirective, MJAccordionModule, MJEmptyStateComponent, MJAlertComponent, MJDialogComponent } from '@memberjunction/ng-ui-components';
 import { FilterBuilderModule } from '@memberjunction/ng-filter-builder';
+import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 
 import { EntityCardsComponent } from './lib/entity-cards/entity-cards.component';
 import { EntityViewerComponent } from './lib/entity-viewer/entity-viewer.component';
@@ -112,6 +113,7 @@ LoadEntityActionUX();
     MJEmptyStateComponent,
     MJAlertComponent,
     FilterBuilderModule,
+    CodeEditorModule,
     EntityActionUXHostComponent
   ],
   exports: [
