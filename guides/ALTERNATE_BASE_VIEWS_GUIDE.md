@@ -168,11 +168,11 @@ MemberJunction provides several complementary view and filtering primitives. Use
 
 ## Out-of-the-Box Alternate Base Views
 
-MemberJunction Core ships with **6 canonical Alternate Base Views** out of the box (defined in [`migrations/v6/V202610230610__v6.2.x__Entity_Alternate_Base_Views.sql`](../migrations/v6/V202610230610__v6.2.x__Entity_Alternate_Base_Views.sql) and registered in [`metadata/entities/.alternate-base-views.json`](../metadata/entities/.alternate-base-views.json)), and sections 2–4 below document the companion BizApps patterns (`bizapps-common`, `bizapps-orders`, `bizapps-sales`).
+MemberJunction Core ships with **6 canonical Alternate Base Views** out of the box (defined in [`migrations/v6/V202610240805__v6.2.x__Entity_Alternate_Base_Views.sql`](../migrations/v6/V202610240805__v6.2.x__Entity_Alternate_Base_Views.sql) and registered in [`metadata/entities/.alternate-base-views.json`](../metadata/entities/.alternate-base-views.json)), and sections 2–4 below document the companion BizApps patterns (`bizapps-common`, `bizapps-orders`, `bizapps-sales`).
 
 ### 1. MemberJunction Core (`@memberjunction/*` — schema `__mj`)
 
-Defined in [`migrations/v6/V202610230610__v6.2.x__Entity_Alternate_Base_Views.sql`](../migrations/v6/V202610230610__v6.2.x__Entity_Alternate_Base_Views.sql) and registered in [`metadata/entities/.alternate-base-views.json`](../metadata/entities/.alternate-base-views.json):
+Defined in [`migrations/v6/V202610240805__v6.2.x__Entity_Alternate_Base_Views.sql`](../migrations/v6/V202610240805__v6.2.x__Entity_Alternate_Base_Views.sql) and registered in [`metadata/entities/.alternate-base-views.json`](../metadata/entities/.alternate-base-views.json):
 
 | Entity | Alternate Base View `Name` | Physical SQL View | `ParentID` | `CachePolicy` | Predicate Summary |
 | --- | --- | --- | --- | --- | --- |

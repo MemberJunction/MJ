@@ -1,5 +1,5 @@
 import { MJGlobal, RegisterClass, UUIDsEqual } from "@memberjunction/global";
-import { Metadata, BaseEntity, BaseInfo, EntityInfo, EntityFieldInfo,RunView, UserInfo, EntitySaveOptions, LogError, EntityFieldTSType, EntityPermissionType, BaseEntityResult, IMetadataProvider, ParseFilterField, ExtractAlternateBaseViewFromDisplayState } from "@memberjunction/core";
+import { Metadata, BaseEntity, BaseInfo, EntityInfo, EntityFieldInfo,RunView, UserInfo, EntitySaveOptions, LogError, EntityFieldTSType, EntityPermissionType, BaseEntityResult, IMetadataProvider, ParseFilterField, ExtractAlternateBaseViewFromDisplayState, ValidationResult, ValidationErrorInfo, ValidationErrorType, ValidateUserViewProperties } from "@memberjunction/core";
 import {
     MJUserViewEntity,
     MJUserViewEntity_IColumnFormat as ColumnFormat,
@@ -499,6 +499,34 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
             res.EndedAt = new Date();
             this.RegisterResultHistoryEntry(res);
             return false;
+        }
+    }
+
+    /**
+     * Adds the checks on the view's declared `Properties`: unique, non-empty names; a known type; a
+     * target field of the view's entity with an operator that suits the type; and each default valid
+     * for the type. A view with no properties validates exactly as before.
+     */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.validateProperties(result);
+        result.Success = result.Success && result.Errors.length === 0;
+        return result;
+    }
+
+    private validateProperties(result: ValidationResult): void {
+        if (this.Properties == null || this.Properties.trim().length === 0) {
+            return;
+        }
+        let problems: string[];
+        try {
+            const fieldNames = this.ViewEntityInfo?.Fields.map(f => f.Name) ?? [];
+            problems = ValidateUserViewProperties(JSON.parse(this.Properties), fieldNames);
+        } catch {
+            problems = ['Properties must be valid JSON.'];
+        }
+        for (const problem of problems) {
+            result.Errors.push(new ValidationErrorInfo('Properties', problem, this.Properties, ValidationErrorType.Failure));
         }
     }
 

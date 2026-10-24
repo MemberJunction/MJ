@@ -1,7 +1,8 @@
 import { Arg, Ctx, Field, InputType, Int, ObjectType, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { ResolverBase, type RunViewResultWithResolvedView } from './ResolverBase.js';
-import { LogError, LogStatus, EntityInfo, FieldSecurityError, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams, AggregateResult, CompositeKey } from '@memberjunction/core';
+import { LogError, LogStatus, EntityInfo, FieldSecurityError, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams, AggregateResult, CompositeKey, ViewPropertyValues } from '@memberjunction/core';
+import { GraphQLJSONObject } from 'graphql-type-json';
 
 import { ReplaceByteArraysWithBase64, UUIDsEqual } from '@memberjunction/global';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
@@ -214,6 +215,13 @@ export class RunViewByIDInput {
       'Optional registered Alternate Base View logical Name (from EntityAlternateBaseView.Name) for this entity. When set, overrides both a saved UserView DisplayState.alternateBaseView pin and the entity default BaseView. Pass an empty string ("") to force the entity default BaseView over a saved UserView pin.',
   })
   AlternateBaseView?: string;
+
+  @Field(() => GraphQLJSONObject, {
+    nullable: true,
+    description:
+      "Optional values for the view's declared properties, keyed by property name ({ \"Chapter\": \"<id>\" }). A list is accepted only for a property whose operator is IN; null means no value. A name the view does not declare, a value of the wrong type, a value for a property that only the server may set, or a required property left without a value refuses the run with an error naming the property.",
+  })
+  Properties?: ViewPropertyValues;
 }
 
 @InputType()
@@ -349,6 +357,13 @@ export class RunViewByNameInput {
       'Optional registered Alternate Base View logical Name (from EntityAlternateBaseView.Name) for this entity. When set, overrides both a saved UserView DisplayState.alternateBaseView pin and the entity default BaseView. Pass an empty string ("") to force the entity default BaseView over a saved UserView pin.',
   })
   AlternateBaseView?: string;
+
+  @Field(() => GraphQLJSONObject, {
+    nullable: true,
+    description:
+      "Optional values for the view's declared properties, keyed by property name ({ \"Chapter\": \"<id>\" }). A list is accepted only for a property whose operator is IN; null means no value. A name the view does not declare, a value of the wrong type, a value for a property that only the server may set, or a required property left without a value refuses the run with an error naming the property.",
+  })
+  Properties?: ViewPropertyValues;
 }
 
 @InputType()
@@ -620,6 +635,13 @@ export class RunViewGenericInput {
       'Optional registered Alternate Base View logical Name (from EntityAlternateBaseView.Name) for this entity. When set, overrides both a saved UserView DisplayState.alternateBaseView pin and the entity default BaseView. Pass an empty string ("") to force the entity default BaseView over a saved UserView pin.',
   })
   AlternateBaseView?: string;
+
+  @Field(() => GraphQLJSONObject, {
+    nullable: true,
+    description:
+      "Optional values for the view's declared properties, keyed by property name ({ \"Chapter\": \"<id>\" }). A list is accepted only for a property whose operator is IN; null means no value. A name the view does not declare, a value of the wrong type, a value for a property that only the server may set, or a required property left without a value refuses the run with an error naming the property.",
+  })
+  Properties?: ViewPropertyValues;
 }
 
 //****************************************************************************
@@ -846,6 +868,7 @@ export class RunViewResolver extends ResolverBase {
         TotalRowCount: rawData?.TotalRowCount,
         ExecutionTime: rawData?.ExecutionTime,
         Success: rawData?.Success,
+        ErrorMessage: rawData?.ErrorMessage,
         AggregateResults: this.processAggregateResults(rawData?.AggregateResults),
         AggregateExecutionTime: rawData?.AggregateExecutionTime,
       };
@@ -896,6 +919,7 @@ export class RunViewResolver extends ResolverBase {
         TotalRowCount: rawData?.TotalRowCount,
         ExecutionTime: rawData?.ExecutionTime,
         Success: rawData?.Success,
+        ErrorMessage: rawData?.ErrorMessage,
         AggregateResults: this.processAggregateResults(rawData?.AggregateResults),
         AggregateExecutionTime: rawData?.AggregateExecutionTime,
       };
@@ -1305,6 +1329,7 @@ export class RunViewResolver extends ResolverBase {
           AfterKey: item.params.AfterKey
             ? CompositeKey.FromKeyValuePairs(item.params.AfterKey.KeyValuePairs)
             : undefined,
+          TimeZone: userPayload?.TimeZone,
         },
         cacheStatus: item.cacheStatus ? {
           maxUpdatedAt: item.cacheStatus.maxUpdatedAt,

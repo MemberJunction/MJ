@@ -23,6 +23,7 @@ import {
   RunViewParams,
   RunViewResult,
   UserInfo,
+  ViewPropertyValues,
 } from '@memberjunction/core';
 import { MJAuditLogEntity, MJErrorLogEntity, MJUserViewEntityExtended, UserViewEngine } from '@memberjunction/core-entities';
 
@@ -64,6 +65,7 @@ const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
   'mj: record changes',
   'mj: conversation details',
   'mj: data context items',
+  'mj: ai agent runs',
 ]);
 
 export class ResolverBase {
@@ -648,7 +650,8 @@ export class ResolverBase {
           viewInput.BypassCache,
           viewInput.DataSource,
           viewInput.IncludeBinaryFields,
-          viewInput.AlternateBaseView
+          viewInput.AlternateBaseView,
+          viewInput.Properties
         );
       }
       else {
@@ -696,7 +699,8 @@ export class ResolverBase {
         viewInput.BypassCache,
         viewInput.DataSource,
         viewInput.IncludeBinaryFields,
-        viewInput.AlternateBaseView
+        viewInput.AlternateBaseView,
+        viewInput.Properties
       );
     } catch (err) {
       console.log(err);
@@ -821,6 +825,7 @@ export class ResolverBase {
           dataSource: viewInput.DataSource,
           includeBinaryFields: viewInput.IncludeBinaryFields,
           alternateBaseView: viewInput.AlternateBaseView,
+          properties: viewInput.Properties,
         });
       } catch (err) {
         LogError(err);
@@ -1200,7 +1205,8 @@ export class ResolverBase {
     bypassCache?: boolean,
     dataSource?: 'Live' | 'Materialized',
     includeBinaryFields?: boolean,
-    alternateBaseView?: string
+    alternateBaseView?: string,
+    properties?: ViewPropertyValues
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
@@ -1284,6 +1290,8 @@ export class ResolverBase {
           DataSource: dataSource,
           IncludeBinaryFields: includeBinaryFields,
           AlternateBaseView: alternateBaseView,
+          Properties: properties,
+          TimeZone: userPayload?.TimeZone,
         },
         user
       );
@@ -1446,6 +1454,8 @@ export class ResolverBase {
           DataSource: param.dataSource,
           IncludeBinaryFields: param.includeBinaryFields,
           AlternateBaseView: param.alternateBaseView,
+          Properties: param.properties,
+          TimeZone: param.userPayload?.TimeZone,
         });
       }
 

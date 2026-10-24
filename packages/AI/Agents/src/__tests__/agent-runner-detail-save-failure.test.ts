@@ -71,6 +71,7 @@ function makeDetail(id: string, saveResults: boolean[]): FakeDetail {
         }),
         Load: vi.fn(async () => true),
         EnsureSaveComplete: vi.fn(async () => undefined),
+        MarkServerAuthoredReply: vi.fn(),
     };
     return detail;
 }

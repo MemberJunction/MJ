@@ -2,6 +2,7 @@ import { BaseSingleton, MJGlobal, MJEventType } from "@memberjunction/global";
 import { AggregateResult, DatasetItemFilterType, DatasetResultType, IMetadataProvider, ILocalStorageProvider, LocalStorageWriteOptions } from "./interfaces";
 import { AggregateExpression, RunViewParams, IsMaterializedDataSource, NormalizeAlternateBaseViewName } from "../views/runView";
 import { GetEffectiveAlternateBaseViewName } from "./alternateBaseViews";
+import { ViewPropertyValuesKey } from "../views/viewProperties";
 import { LogError, LogStatusEx, LogWarning } from "./logging";
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 import { Metadata } from "./metadata";
@@ -2614,6 +2615,18 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const viewKey = (params.ViewID || params.ViewName || params.ViewEntity?.PrimaryKey?.ToConcatenatedString() || '').trim();
         if (viewKey.length > 0) {
             parts.push(`vw:${viewKey}`);
+        }
+
+        // View-property segment. A stored view's property values (RunViewParams.Properties and
+        // ServerProperties) each add a predicate the provider builds, so one chapter's run must
+        // never be served another chapter's slot. On the server the provider has already replaced
+        // both with the resolved values (token defaults included) before this runs. The values go
+        // in as canonical JSON rather than a hash: a 32-bit hash of values a client partly chooses
+        // could be steered onto another run's slot. Appended ONLY when a value is present, so every
+        // run without properties keeps its exact fingerprint.
+        const propertyKey = ViewPropertyValuesKey(params.Properties, params.ServerProperties);
+        if (propertyKey.length > 0) {
+            parts.push(`vp:${propertyKey}`);
         }
 
         // Dataset namespace. `GetDatasetByName` caches each dataset ITEM's rows through this same

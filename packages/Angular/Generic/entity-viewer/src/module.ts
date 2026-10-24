@@ -10,7 +10,7 @@ import { ListManagementModule } from '@memberjunction/ng-list-management';
 import { MapViewModule } from '@memberjunction/ng-map-view';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
 import { RecordMergeModule } from '@memberjunction/ng-record-merge';
-import { MjSlidePanelComponent, MJButtonDirective, MJAccordionModule, MJEmptyStateComponent, MJAlertComponent, MJDialogComponent } from '@memberjunction/ng-ui-components';
+import { MjSlidePanelComponent, MJButtonDirective, MJAccordionModule, MJEmptyStateComponent, MJAlertComponent, MJDialogComponent, MJViewToggleComponent } from '@memberjunction/ng-ui-components';
 import { FilterBuilderModule } from '@memberjunction/ng-filter-builder';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 
@@ -20,6 +20,7 @@ import { EntityRecordDetailPanelComponent } from './lib/entity-record-detail-pan
 import { PillComponent } from './lib/pill/pill.component';
 import { EntityDataGridComponent } from './lib/entity-data-grid/entity-data-grid.component';
 import { ViewConfigPanelComponent } from './lib/view-config-panel/view-config-panel.component';
+import { ViewPropertiesEditorComponent } from './lib/view-properties-editor/view-properties-editor.component';
 import { AggregatePanelComponent } from './lib/aggregate-panel/aggregate-panel.component';
 import { AggregateSetupDialogComponent } from './lib/aggregate-setup-dialog/aggregate-setup-dialog.component';
 import { ConfirmDialogComponent } from './lib/confirm-dialog/confirm-dialog.component';
@@ -36,6 +37,8 @@ import { CardsViewRendererComponent } from './lib/view-types/renderers/cards-vie
 import { GridViewRendererComponent } from './lib/view-types/renderers/grid-view-renderer.component';
 import { TimelineViewRendererComponent } from './lib/view-types/renderers/timeline-view-renderer.component';
 import { MapViewRendererComponent } from './lib/view-types/renderers/map-view-renderer.component';
+import { CalendarViewRendererComponent } from './lib/view-types/renderers/calendar-view-renderer.component';
+import { CalendarViewPropSheetComponent } from './lib/view-types/renderers/calendar-view-prop-sheet.component';
 import { LoadViewTypeDescriptors } from './lib/view-types';
 import { EntityActionUXHostComponent, LoadEntityActionUX } from '@memberjunction/ng-entity-action-ux';
 
@@ -77,6 +80,7 @@ LoadEntityActionUX();
     PillComponent,
     EntityDataGridComponent,
     ViewConfigPanelComponent,
+    ViewPropertiesEditorComponent,
     AggregatePanelComponent,
     AggregateSetupDialogComponent,
     ConfirmDialogComponent,
@@ -92,7 +96,9 @@ LoadEntityActionUX();
     CardsViewRendererComponent,
     GridViewRendererComponent,
     TimelineViewRendererComponent,
-    MapViewRendererComponent
+    MapViewRendererComponent,
+    CalendarViewRendererComponent,
+    CalendarViewPropSheetComponent
   ],
   imports: [
     CommonModule,
@@ -112,6 +118,7 @@ LoadEntityActionUX();
     MJAccordionModule,
     MJEmptyStateComponent,
     MJAlertComponent,
+    MJViewToggleComponent,
     FilterBuilderModule,
     CodeEditorModule,
     EntityActionUXHostComponent
@@ -123,6 +130,7 @@ LoadEntityActionUX();
     PillComponent,
     EntityDataGridComponent,
     ViewConfigPanelComponent,
+    ViewPropertiesEditorComponent,
     AggregatePanelComponent,
     AggregateSetupDialogComponent,
     ConfirmDialogComponent,

@@ -1,4 +1,4 @@
-import { IMetadataProvider, IRunViewProvider, LogError, RunMaybeSerial, UserInfo, DatabasePlatform } from "@memberjunction/core";
+import { IMetadataProvider, IRunViewProvider, LogError, LogStatus, QUERY_CONTEXT_NAME, RunMaybeSerial, UserInfo, DatabasePlatform } from "@memberjunction/core";
 import {
     MJQueryParameterEntity,
     MJQueryFieldEntity,
@@ -106,8 +106,10 @@ export async function SyncParameters(
     runViewProvider: IRunViewProvider,
     isSaved: boolean
 ): Promise<void> {
-    // Filter out any parameter named "query" that came from {{query:"..."}} composition tokens.
-    const filteredParams = extractedParams.filter(p => p.name !== 'query');
+    // Filter out any parameter named "query" that came from {{query:"..."}} composition tokens, and
+    // the reserved Context object: `{{ Context.UserID }}` reads a server-set value, and a parameter
+    // named Context would shadow it.
+    const filteredParams = extractedParams.filter(p => p.name !== 'query' && !isReservedContextName(p.name));
 
     try {
         const existingParams = await loadExistingRecords<MJQueryParameterEntity>(
@@ -157,6 +159,18 @@ export async function SyncParameters(
         LogError(`Failed to sync parameters for query ${queryID}:`, e);
         throw e;
     }
+}
+
+/**
+ * True for the reserved `Context` object and its members (`Context.UserID`, as the parser reports a
+ * template's `{{ Context.UserID }}`). Extraction refuses them as parameters, and logs it.
+ */
+function isReservedContextName(name: string): boolean {
+    if (name !== QUERY_CONTEXT_NAME && !name.startsWith(`${QUERY_CONTEXT_NAME}.`)) {
+        return false;
+    }
+    LogStatus(`Query parameter extraction: '${name}' reads the server-set ${QUERY_CONTEXT_NAME} object; it is not a parameter, and no parameter row is kept for it.`);
+    return true;
 }
 
 /**

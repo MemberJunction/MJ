@@ -26,6 +26,8 @@ import { Observable, Subscription } from "rxjs";
 import { GetDataHooks, PreRunViewHook, PostRunViewHook } from "./dataHooks";
 import { TransformSimpleObjectToEntityObject } from "./util";
 import { LoadRelatedRecordsBatched } from "./relatedRecordBatchLoader";
+import { ContextToken, GetLocalTimeZone } from "./contextTokens";
+import { FindQueryContextTokens, QueryContextCacheValues } from "./queryTemplateContext";
 
 
 
@@ -117,6 +119,12 @@ export interface QueryCacheAuthorization {
     categoryPath?: string;
     /** Resolved query name — for log messages when the request was by ID only. */
     queryName?: string;
+    /**
+     * The context tokens the resolved query's template reads, with every query it composes
+     * (`FindQueryContextTokens`). Their values join the fingerprint, so a result that depends on
+     * the user or the date is never served to another user or on another day.
+     */
+    contextTokens?: ContextToken[];
     /**
      * Resolved query ID. With `queryName`, the identity the RunQuery fingerprint is built from, so
      * a request by ID, by name, or by both reaches the same slot.
@@ -1410,7 +1418,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
 
         // ── Coalescing: merge concurrent RunViews into one mega-batch ──
-        if (ProviderBase.CoalesceWindowMs > 0 && !this.TrustLocalCacheCompletely) {
+        // A run carrying view properties is never merged: a merged batch with any CacheLocal member
+        // goes through the cache-check transport, which carries dynamic runs only and would drop the
+        // view and its properties.
+        if (ProviderBase.CoalesceWindowMs > 0 && !this.TrustLocalCacheCompletely && !params.some(ProviderBase.carriesViewProperties)) {
             // Only coalesce on the client side where cache validation round-trips are expensive.
             // Server-side trusts its cache (no network calls), so coalescing adds no benefit.
             return this.enqueueCoalescedRunViews<T>(params, contextUser);
@@ -1870,6 +1881,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * - entities where server caching is disallowed
      */
     protected runViewCacheEligible(param: RunViewParams): boolean {
+        // In the browser a run carrying view properties is never cached: the server works out values
+        // the browser cannot see (token defaults, server-set values), so a browser slot could go stale
+        // without any row changing. The server caches it, keyed on the resolved values.
+        if (!this.TrustLocalCacheCompletely && ProviderBase.carriesViewProperties(param)) {
+            return false;
+        }
         return !param.BypassCache &&
             !param.AfterKey &&
             !IsMaterializedDataSource(param.DataSource) &&
@@ -1906,6 +1923,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return true;
         }
         return abv.IsBypassCache;
+    }
+
+    /** True when a run carries view properties (even an empty map): the browser sends it to the server as it is. */
+    private static carriesViewProperties(param: RunViewParams): boolean {
+        return param.Properties !== undefined || param.ServerProperties !== undefined;
     }
 
     /** True when the entity is a CodeGen materialized-query wrapper (materialized_vw*) whose snapshot is
@@ -2008,6 +2030,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 p.ViewID ?? '',
                 p.ViewName ?? '',
                 IsExplicitBaseViewOverride(p) ? 'abv_override:base' : '',
+                p.TimeZone ?? '',
                 contextUser?.ID ?? ''
             ].join('|');
             return `${base}|${extras}`;
@@ -2534,8 +2557,40 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             authorized: !user || qInfo.UserCanRun(user),
             categoryPath: qInfo.CategoryPath,
             queryName: qInfo.Name,
+            contextTokens: FindQueryContextTokens(
+                qInfo.ID,
+                id => [this.Queries.find(q => UUIDsEqual(q.ID, id))?.SQL, ...this.QuerySQLs.filter(s => UUIDsEqual(s.QueryID, id)).map(s => s.SQL)],
+                id => this.QueryDependencies.filter(d => UUIDsEqual(d.QueryID, id)).map(d => d.DependsOnQueryID)
+            ),
             queryId: qInfo.ID
         };
+    }
+
+    /**
+     * The fingerprint segment for what the server sets on a run: `ServerParameters`, and the
+     * `Context.*` values the query reads, worked out for this user, zone and day. Empty when the
+     * run has neither, so the fingerprint is exactly what it was before either existed.
+     * @returns null when the query reads `Context.Now`: such a result is never reused
+     */
+    private queryCacheServerSegment(params: RunQueryParams, contextUser: UserInfo | undefined, auth: QueryCacheAuthorization): Record<string, unknown> | null {
+        const segment: Record<string, unknown> = {};
+        if (params.ServerParameters && Object.keys(params.ServerParameters).length > 0) {
+            segment.__serverParameters = params.ServerParameters;
+        }
+        // ponytail: an unresolvable query (not in metadata) adds no Context segment. The TTL gate then
+        // serves only the slot's warmer, so users stay apart, but a date value can be stale for up to
+        // the slot's TTL across midnight. Resolve the SQL here too if that ever matters.
+        const tokens = auth.resolvable ? auth.contextTokens ?? [] : [];
+        if (tokens.length > 0) {
+            // A browser's server works out dates in the zone the browser sends; a server run uses its own TimeZone or UTC.
+            const timeZone = params.TimeZone ?? (this.ProviderType === ProviderType.Network ? GetLocalTimeZone() : undefined);
+            const values = QueryContextCacheValues(tokens, { User: contextUser ?? this.CurrentUser, TimeZone: timeZone });
+            if (values === null) {
+                return null;
+            }
+            segment.__context = values;
+        }
+        return segment;
     }
 
     public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
@@ -2567,6 +2622,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // (the fingerprint carries no DataSource segment). Keeping materialized out of this layer
             // means the only staleness is the refresh cadence the snapshot already advertises.
             && !IsMaterializedDataSource(params.DataSource)
+            // A RequireApproved run must check the approval on every run; a cached slot would skip it.
+            && !params.RequireApproved
             && LocalCacheManager.Instance.IsInitialized;
         let queryFingerprint: string | undefined;
         let queryDefinition: QueryDefinitionSignature | undefined;
@@ -2578,28 +2635,34 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const queryAuth = this.ResolveQueryCacheAuthorization(params, contextUser);
             // MaxRows/StartRow shape the result set — they MUST distinguish cache slots,
             // so fold them into the parameters portion of the fingerprint.
+            // Server-set values (ServerParameters, the Context.* values the query reads) shape the
+            // result too, so one user's slot never answers another user or another day.
+            const serverSegment = this.queryCacheServerSegment(params, contextUser, queryAuth);
             const fingerprintParams: Record<string, unknown> = {
                 ...(params.Parameters ?? {}),
                 __maxRows: params.MaxRows ?? -1,
-                __startRow: params.StartRow ?? 0
+                __startRow: params.StartRow ?? 0,
+                ...serverSegment
             };
-            queryFingerprint = LocalCacheManager.Instance.GenerateRunQueryFingerprint(
-                // The RESOLVED identity when metadata resolves, so a request by ID, by name, or by
-                // both shares one slot (and a query's slots can be found by its ID). The caller's
-                // identity otherwise.
-                queryAuth.resolvable ? queryAuth.queryId : params.QueryID,
-                queryAuth.resolvable ? queryAuth.queryName : params.QueryName,
-                fingerprintParams, this.InstanceConnectionString,
-                // B46: the full category path is a DISTINGUISHING element. Canonical resolved
-                // path when metadata resolves; the caller-stated path otherwise (runtime-created
-                // queries) — either way, same-named queries in different categories get
-                // different slots.
-                queryAuth.resolvable ? queryAuth.categoryPath : params.CategoryPath
-            );
+            if (serverSegment !== null) {
+                queryFingerprint = LocalCacheManager.Instance.GenerateRunQueryFingerprint(
+                    // The RESOLVED identity when metadata resolves, so a request by ID, by name, or by
+                    // both shares one slot (and a query's slots can be found by its ID). The caller's
+                    // identity otherwise.
+                    queryAuth.resolvable ? queryAuth.queryId : params.QueryID,
+                    queryAuth.resolvable ? queryAuth.queryName : params.QueryName,
+                    fingerprintParams, this.InstanceConnectionString,
+                    // B46: the full category path is a DISTINGUISHING element. Canonical resolved
+                    // path when metadata resolves; the caller-stated path otherwise (runtime-created
+                    // queries) — either way, same-named queries in different categories get
+                    // different slots.
+                    queryAuth.resolvable ? queryAuth.categoryPath : params.CategoryPath
+                );
+            }
             queryDefinition = queryAuth.definition;
             // TTL-enforced, and a miss when the slot was written under another query definition.
-            const cached = await LocalCacheManager.Instance.GetRunQueryResult(queryFingerprint, queryDefinition);
-            if (cached) {
+            const cached = queryFingerprint ? await LocalCacheManager.Instance.GetRunQueryResult(queryFingerprint, queryDefinition) : null;
+            if (cached && queryFingerprint) {
                 const serveFromSlot = (): RunQueryResult => ({
                     QueryID: cached.queryId ?? params.QueryID ?? '',
                     QueryName: params.QueryName ?? '',
@@ -3324,6 +3387,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // and before cache fingerprinting so injected filters affect the cache key.
         params = await this.RunPreRunViewHooks(params, contextUser);
 
+        // A stored view's property values are worked out before the cache lookup, so the
+        // fingerprint keys on them. After hooks, so a hook can set ServerProperties.
+        await this.PrepareRunViewProperties(params, contextUser);
+
         // Field-level security: reject predicates referencing unreadable fields. Runs AFTER
         // hooks so injected filters are scanned too, and BEFORE the cache lookup so a rejected
         // request never consults (or warms) a cache slot.
@@ -3498,6 +3565,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Run registered PreRunView hooks on each param in the batch
         for (let i = 0; i < params.length; i++) {
             params[i] = await this.RunPreRunViewHooks(params[i], contextUser);
+            await this.PrepareRunViewProperties(params[i], contextUser);
             // Field-level security predicate gate, same contract as the single-view path.
             // One bad view rejects the whole batch — a batch is one caller request, and
             // silently returning partial results would hide the denial.
@@ -3551,7 +3619,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Server-side providers trust the cache completely and fall through to the
         // traditional flow which returns cached data immediately on hit.
         if (!this.TrustLocalCacheCompletely) {
-            const useSmartCacheCheck = params.some(p => p.CacheLocal);
+            // The cache-check transport carries dynamic runs only, so a batch holding a run with view
+            // properties takes the ordinary path, where the view and its properties reach the server.
+            const useSmartCacheCheck = params.some(p => p.CacheLocal) && !params.some(ProviderBase.carriesViewProperties);
             if (useSmartCacheCheck && LocalCacheManager.Instance.IsInitialized) {
                 return this.prepareSmartCacheCheckParams(params, telemetryEventId, contextUser);
             }
@@ -4352,6 +4422,19 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 totalResultCount: totalResults
             });
         }
+    }
+
+    /**
+     * Works out a stored view's property values ({@link RunViewParams.Properties},
+     * {@link RunViewParams.ServerProperties}, and each property's default) before the run's cache
+     * lookup, so the result-cache fingerprint keys on the values the run will actually use. Called
+     * on the run's own params copy, after the PreRunView hooks. Must never throw: a run whose
+     * properties would be refused is left for the provider's run path to refuse with its message.
+     *
+     * Does nothing here. A database provider, which resolves token defaults on the server, overrides it.
+     */
+    protected async PrepareRunViewProperties(_params: RunViewParams, _contextUser?: UserInfo): Promise<void> {
+        // The client sends Properties as they are; the server resolves them.
     }
 
     /**

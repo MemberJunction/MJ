@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChanges, ChangeDetectorRef, HostListener } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { EntityInfo, EntityFieldInfo, EntityAlternateBaseViewInfo, EntityFieldTSType, Metadata, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityAlternateBaseViewInfo, EntityFieldTSType, Metadata, IsDateOnlySQLType, FormatDateOnly, ToPlainJSON, UserViewProperty, ValidateUserViewProperties } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
 import {
   MJUserViewEntityExtended,
@@ -93,6 +93,8 @@ export interface ViewSaveEvent {
   CardDisplayState?: ViewCardState | null;
   /** Optional timeline display preferences (dateFieldName, segmentGrouping, orientation) */
   TimelineState?: ViewTimelineState | null;
+  /** The view's declared properties; an empty list means none. Absent on events that save no view (defaults). */
+  Properties?: UserViewProperty[];
 }
 
 /**
@@ -315,7 +317,10 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   private _localSaving: boolean = false;
 
   // UI state
-  public ActiveTab: 'columns' | 'sorting' | 'filters' | 'aggregates' | 'settings' | 'display' = 'columns';
+  public ActiveTab: 'columns' | 'sorting' | 'filters' | 'aggregates' | 'properties' | 'settings' | 'display' = 'columns';
+
+  /** The view's declared properties being edited (a copy; the view changes only on save). */
+  public Properties: UserViewProperty[] = [];
   @Input() IsSaving: boolean = false;
   public ColumnSearchText: string = '';
 
@@ -683,6 +688,9 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
         this.SmartFilterEnabled = true;
       }
     }
+
+    const declared = this.ViewEntity?.PropertiesObject;
+    this.Properties = declared ? ToPlainJSON(declared) : [];
 
     // Auto-enable Advanced Mode if this view uses any advanced features
     const hasConditionalRules = this.Columns.some(c => (c.format?.conditionalRules?.length ?? 0) > 0);
@@ -2071,7 +2079,13 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     if (this.VisibleColumns.length === 0) {
       errors.push('At least one column must be visible');
     }
+    errors.push(...this.PropertyErrors);
     return errors;
+  }
+
+  /** Problems with the view's properties, each naming the property; any one blocks saving. */
+  get PropertyErrors(): string[] {
+    return ValidateUserViewProperties(this.Properties, (this.Entity?.Fields ?? []).filter(f => !f.IsBinaryFieldType).map(f => f.Name));
   }
 
   /**
@@ -2085,7 +2099,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    * Whether the form is valid for save-as-new (name can default to 'New View')
    */
   get IsValidForSaveAsNew(): boolean {
-    return this.VisibleColumns.length > 0;
+    return this.VisibleColumns.length > 0 && this.PropertyErrors.length === 0;
   }
 
   /**
@@ -2105,7 +2119,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   /**
    * Build the ViewSaveEvent payload with all Unified View Studio & progressive disclosure settings
    */
-  private buildSaveEvent(saveAsNew: boolean, overrideName?: string): ViewSaveEvent {
+  private buildSaveEvent(saveAsNew: boolean, overrideName?: string, includeProperties: boolean = true): ViewSaveEvent {
     const existingTimeline = this.ViewEntity?.ParsedDisplayState?.timeline;
     const timelineState: ViewTimelineState | null = this.TimelineDateField
       ? {
@@ -2141,7 +2155,8 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       CardDisplayState: {
         cardSize: this.CardSize
       },
-      TimelineState: timelineState
+      TimelineState: timelineState,
+      ...(includeProperties ? { Properties: [...this.Properties] } : {})
     };
   }
 
@@ -2197,7 +2212,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     if (this.IsSaving || this._localSaving) return;
 
     this._localSaving = true;
-    this.SaveDefaults.emit(this.buildSaveEvent(false, 'Default'));
+    this.SaveDefaults.emit(this.buildSaveEvent(false, 'Default', false));
   }
 
   // Delete confirmation state
@@ -2237,7 +2252,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   /**
    * Set the active tab
    */
-  SetActiveTab(tab: 'columns' | 'sorting' | 'filters' | 'aggregates' | 'settings' | 'display'): void {
+  SetActiveTab(tab: 'columns' | 'sorting' | 'filters' | 'aggregates' | 'properties' | 'settings' | 'display'): void {
     this.ActiveTab = tab === 'settings' ? 'filters' : tab;
     this.FormatEditingColumn = null; // Close format editor when switching tabs
     this.ShowAddColumnsDrawer = false;

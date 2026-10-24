@@ -288,6 +288,24 @@
             <span>{{ IsAdvancedMode ? 'Display & Modes' : 'Display' }}</span>
           </span>
         </button>
+
+        @if (ViewEntity || DefaultSaveAsNew || IsCreatingNamedView) {
+          <button
+            type="button"
+            role="tab"
+            class="rail-nav-btn"
+            [class.active]="ActiveTab === 'properties'"
+            [attr.aria-selected]="ActiveTab === 'properties'"
+            (click)="SetActiveTab('properties')">
+            <span class="rail-btn-left">
+              <i class="fa-solid fa-sliders"></i>
+              <span>Properties</span>
+            </span>
+            @if (Properties.length > 0) {
+              <span class="rail-badge">{{ Properties.length }}</span>
+            }
+          </button>
+        }
       </div>
 
       <!-- Active View Recipe Box in Bottom of Left Rail (Advanced Mode only) -->
@@ -2063,6 +2081,18 @@
         </div>
       </div>
     }
+      <!-- Properties Tab -->
+      @if (ActiveTab === 'properties') {
+        <div class="tab-content">
+          <div class="config-section">
+            <div class="section-header">
+              <i class="fa-solid fa-sliders"></i>
+              <span>Properties</span>
+            </div>
+            <mj-view-properties-editor [Entity]="Entity" [(Properties)]="Properties" [Disabled]="!CanEdit"></mj-view-properties-editor>
+          </div>
+        </div>
+      }
     </div>
   </div>
 

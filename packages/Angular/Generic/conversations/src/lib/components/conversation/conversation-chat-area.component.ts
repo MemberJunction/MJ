@@ -61,6 +61,8 @@ import {
   type DateJumpPeriod,
   type DateJumpOutcome
 } from '../../utils/date-jump';
+import { CompareMessagesByCreatedAt, UpsertMessageById } from '../../utils/message-list-order';
+import { SavePinState } from '../../utils/pin-state';
 import { InjectFrameZone } from '../../util/frame-zone';
 import { MessageListComponent } from '../message/message-list.component';
 import { IsForkPointOrEarlier } from '../../utils/conversation-branching';
@@ -2187,6 +2189,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.syncSendSlot();
   }
   private _inProgressMessageIds: string[] = [];
+  /** Tracks the ID each in-progress reply entity was last registered under so adopting the server's row ID drops the local placeholder UUID. */
+  private inProgressIdByEntity?: WeakMap<MJConversationDetailEntity, string>;
 
   // ── The composer's send slot as the stop control ──────────────────────────────────────
   // While replies are in flight the composer's send slot is the stop control (one run: "Stop
@@ -4319,19 +4323,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     // Check if message already exists in the array (by ID) to prevent duplicates
     // Messages can be emitted multiple times as they're updated (e.g., status changes)
-    const existingIndex = this.messages.findIndex(m => UUIDsEqual(m.ID, message.ID));
+    // An agent reply's placeholder takes the server row's ID when the run is acknowledged; a refresh may already have
+    // brought that row in, so other copies of the ID are dropped.
+    const upsert = UpsertMessageById(this.messages, message);
+    this.messages = upsert.Messages;
 
-    if (existingIndex >= 0) {
-      // Update existing message in place (replace with updated version)
-      this.messages = [
-        ...this.messages.slice(0, existingIndex),
-        message,
-        ...this.messages.slice(existingIndex + 1)
-      ];
-    } else {
-      // Add new message to the list
-      this.messages = [...this.messages, message];
-
+    if (!upsert.Existed) {
       // Ensure current user is in the avatar map for new messages
       this.ensureCurrentUserInAvatarMap();
 
@@ -4355,8 +4352,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // row does not stay In-Progress until the conversation is opened again. Register the row
     // for the live callback either way — an update of an existing In-Progress row included.
     if (message.Status === 'In-Progress' && message.ID) {
-      if (!this.InProgressMessageIds.some((id) => UUIDsEqual(id, message.ID))) {
-        this.InProgressMessageIds = [...this.InProgressMessageIds, message.ID];
+      const entityMap = (this.inProgressIdByEntity ??= new WeakMap());
+      const previousId = entityMap.get(message);
+      entityMap.set(message, message.ID);
+      const withoutPrevious =
+        previousId && !UUIDsEqual(previousId, message.ID)
+          ? this.InProgressMessageIds.filter((id) => !UUIDsEqual(id, previousId))
+          : this.InProgressMessageIds;
+      if (!withoutPrevious.some((id) => UUIDsEqual(id, message.ID))) {
+        this.InProgressMessageIds = [...withoutPrevious, message.ID];
+      } else if (withoutPrevious !== this.InProgressMessageIds) {
+        this.InProgressMessageIds = withoutPrevious;
       }
       const recentCompletion = this.streamingService.GetRecentCompletion(message.ID);
       if (recentCompletion) {
@@ -4369,7 +4375,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     // Where the viewport goes: a fresh send follows — an in-place update of a message that
     // is already on screen must not re-run the send path's scroll.
-    this.followTranscript(existingIndex >= 0 ? 'update' : 'new', message);
+    this.followTranscript(upsert.Existed ? 'update' : 'new', message);
 
     // Force change detection — zone.js 0.15 no longer patches graphql-ws WebSocket callbacks,
     // so progress updates that arrive via PubSub run outside Angular's zone. Without this,
@@ -4636,8 +4642,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         }
       }
 
-      this.messages = Array.from(merged.values())
-        .sort((a, b) => (a.__mj_CreatedAt?.getTime() || 0) - (b.__mj_CreatedAt?.getTime() || 0));
+      this.messages = Array.from(merged.values()).sort(CompareMessagesByCreatedAt);
 
       // Find newly discovered messages (delegated agents)
       const newMessages = engineDetails.filter(m => !existingMessageIds.has(m.ID));
@@ -7068,7 +7073,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     message.IsPinned = false;
     this.cdr.detectChanges();
     try {
-      await message.Save();
+      if (!(await SavePinState(this.ProviderToUse, message.ID, false))) {
+        throw new Error(`the pin on message ${message.ID} could not be saved`);
+      }
       this.OnMessagePinToggled(message);
     } catch (err) {
       console.error('Failed to unpin message from panel:', err);

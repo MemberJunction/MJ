@@ -1344,6 +1344,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     if (event.CardDisplayState?.cardSize) {
       newView.CardStateObject = { cardSize: event.CardDisplayState.cardSize };
     }
+    this.applyProperties(newView, event);
 
     const before: WorkspaceCancelableEvent<ViewSaveOperation> = { Data: { View: newView, IsNew: true }, Cancel: false };
     this.BeforeViewSave.emit(before);
@@ -1370,6 +1371,13 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     this.SelectedViewChange.emit(newView);
     this.AfterViewSave.emit({ View: newView, IsNew: true });
     return true;
+  }
+
+  /** Copies the designer's properties onto the view; an empty list stores null, as a view without properties has. */
+  private applyProperties(view: MJUserViewEntityExtended, event: ViewSaveEvent): void {
+    if (event.Properties !== undefined) {
+      view.PropertiesObject = event.Properties.length > 0 ? event.Properties : null;
+    }
   }
 
   /**
@@ -1410,6 +1418,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     if (event.CardDisplayState?.cardSize) {
       view.CardStateObject = { ...(view.CardStateObject ?? {}), cardSize: event.CardDisplayState.cardSize };
     }
+    this.applyProperties(view, event);
 
     const before: WorkspaceCancelableEvent<ViewSaveOperation> = { Data: { View: view, IsNew: false }, Cancel: false };
     this.BeforeViewSave.emit(before);
@@ -1849,6 +1858,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     newView.AlternateBaseView = sourceView.AlternateBaseView;
     newView.SmartFilterEnabled = sourceView.SmartFilterEnabled || false;
     newView.SmartFilterPrompt = sourceView.SmartFilterPrompt || '';
+    newView.Properties = sourceView.Properties;
 
     const saved = await newView.Save();
     if (!saved) {

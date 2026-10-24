@@ -21,6 +21,8 @@
 import {
     BaseEntity,
     EntityInfo,
+    RunQueryParams,
+    RunQueryResult,
     RunViewParams,
     RunViewResult,
     UserInfo,
@@ -94,6 +96,14 @@ export class WireTestGraphQLProvider extends GraphQLDataProvider {
     /** Public gateway to the REAL protected InternalRunViews. */
     public CallInternalRunViews<T>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
         return this.InternalRunViews<T>(params, contextUser);
+    }
+
+    public CallInternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
+        return this.InternalRunQuery(params, contextUser);
+    }
+
+    public CallInternalRunQueries(params: RunQueryParams[], contextUser?: UserInfo): Promise<RunQueryResult[]> {
+        return this.InternalRunQueries(params, contextUser);
     }
 }
 

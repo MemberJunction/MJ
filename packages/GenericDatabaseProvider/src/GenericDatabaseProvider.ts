@@ -84,9 +84,17 @@ import {
     ExternalDataSourceReadRouter,
     resolveQueryResultEnricher,
     QueryInfo,
+    FindQueryContextTokens,
+    ContextToken,
+    FieldSecurityError,
+    UserViewProperty,
+    ViewPropertyValues,
+    ValidateUserViewProperties,
+    ResolveViewPropertyValues,
+    BuildViewPropertyFilter,
 } from '@memberjunction/core';
 
-import { BytesToBase64, IndexByUUID, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
+import { BytesToBase64, GroupByUUID, IndexByUUID, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, SQLExpressionValidator, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { QueryPagingEngine } from './queryPagingEngine.js';
 // QueryParameterProcessor is now called internally by RenderPipeline
 import { createHash } from 'node:crypto';
@@ -102,6 +110,7 @@ import { SaveCoercedValue, SaveCallBinding, SaveSQLFragment, SaveReturnContext }
 import type { RecordChangePayload } from '@memberjunction/core';
 
 import {
+    GetQueryApprovalStateAsync,
     MJEntityAIActionEntity,
     MJQueryEntityExtended,
     MJQueryParameterEntity,
@@ -2423,9 +2432,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             let viewEntity: MJUserViewEntityExtended | null = null;
             let entityInfo: EntityInfo | null = null;
 
-            if (params.ViewEntity) viewEntity = params.ViewEntity as MJUserViewEntityExtended;
-            else if (params.ViewID && params.ViewID.length > 0) viewEntity = await ViewInfo.GetViewEntity(params.ViewID, contextUser) ?? null;
-            else if (params.ViewName && params.ViewName.length > 0) viewEntity = await ViewInfo.GetViewEntityByName(params.ViewName, contextUser) ?? null;
+            viewEntity = await this.LoadRunViewEntity(params, contextUser);
 
             if (!viewEntity) {
                 if (!params.EntityName || params.EntityName.length === 0) throw new Error('EntityName is required when ViewID or ViewName is not provided');
@@ -2438,6 +2445,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
             this.CheckUserReadPermissions(entityInfo.Name, user);
 
+            // A stored view's properties: refused here (Success:false, naming the property) before any SQL runs.
+            const propertyFilter = this.BuildViewPropertyFilter(viewEntity, entityInfo, params, user);
+
             // ── External data source dispatch ──
             // Entities backed by an external data source are proxied live through a
             // driver and have no view/sproc in the MJ DB, so delegate before any SQL
@@ -2449,6 +2459,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 // Refuse params we can't honor remotely rather than silently dropping them — most
                 // importantly AfterKey, which would otherwise return the same page on every call.
                 this.assertExternalRunViewParamsSupported(params, entityInfo.Name, viewEntity);
+                if (propertyFilter) {
+                    throw new Error(`View properties are not supported for external-data-source entity '${entityInfo.Name}'.`);
+                }
                 // A saved view's stored WhereClause/OrderBy live on viewEntity, not params, and the
                 // normal SQL path that applies them runs below this early return — so fold them in
                 // here, else a UserView over an external entity silently returns unfiltered rows.
@@ -2567,6 +2580,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 if (!this.ValidateUserProvidedSQLClause(extraFilter))
                     throw new Error(`Invalid Extra Filter: ${extraFilter}, contains one more for forbidden keywords`);
                 whereSQL = bHasWhere ? `${whereSQL} AND (${extraFilter})` : `(${extraFilter})`;
+                bHasWhere = true;
+            }
+
+            // 2b. View properties: one typed predicate per property with a value, after the view's
+            //     own clause and ExtraFilter. Row-level security is still ANDed on below.
+            if (propertyFilter.length > 0) {
+                whereSQL = bHasWhere ? `${whereSQL} AND (${propertyFilter})` : `(${propertyFilter})`;
                 bHasWhere = true;
             }
 
@@ -2911,6 +2931,107 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 Success: false,
                 ErrorMessage: e instanceof Error ? e.message : String(e),
             } as RunViewResult<T>;
+        }
+    }
+
+    /** The stored view a run names (ViewEntity, else ViewID, else ViewName), or null for an entity run. */
+    protected async LoadRunViewEntity(params: RunViewParams, contextUser?: UserInfo): Promise<MJUserViewEntityExtended | null> {
+        if (params.ViewEntity) return params.ViewEntity as MJUserViewEntityExtended;
+        if (params.ViewID && params.ViewID.length > 0) return await ViewInfo.GetViewEntity(params.ViewID, contextUser) ?? null;
+        if (params.ViewName && params.ViewName.length > 0) return await ViewInfo.GetViewEntityByName(params.ViewName, contextUser) ?? null;
+        return null;
+    }
+
+    /**
+     * Works out a stored view's property values before the cache lookup (see
+     * {@link ProviderBase.PrepareRunViewProperties}). The resolved values, token defaults included,
+     * replace `Properties` and `ServerProperties`, so the fingerprint keys on what the run will use,
+     * and RunViewCore resolving them again yields the same predicates. A run that would be refused
+     * is left as it is and kept out of the cache; RunViewCore refuses it with its message. A view
+     * that cannot be loaded is left to RunViewCore too, which reports it as it always has.
+     */
+    protected override async PrepareRunViewProperties(params: RunViewParams, contextUser?: UserInfo): Promise<void> {
+        if (!params.ViewEntity && !params.ViewID && !params.ViewName) {
+            return; // an entity run: RunViewCore refuses any properties it carries
+        }
+        let viewEntity: MJUserViewEntityExtended | null;
+        try {
+            viewEntity = await this.LoadRunViewEntity(params, contextUser);
+        } catch {
+            return;
+        }
+        const entityInfo = viewEntity ? this.EntityByID(viewEntity.EntityID) : undefined;
+        const user = contextUser ?? this.CurrentUser;
+        if (!viewEntity || !entityInfo || !user) {
+            return;
+        }
+        try {
+            const resolved = this.ResolveRunViewPropertyValues(viewEntity, entityInfo, params, user);
+            if (resolved) {
+                params.ServerProperties = resolved.Values;
+                delete params.Properties;
+            }
+        } catch {
+            params.BypassCache = true;
+        }
+    }
+
+    /**
+     * Checks a stored view's declared properties and works out each one's value for this run.
+     * @returns null when the view declares none and the run sends none
+     * @throws on a malformed definition, any refusal {@link ResolveViewPropertyValues} makes, or a
+     *   property with a value whose target field the user cannot read
+     */
+    protected ResolveRunViewPropertyValues(
+        viewEntity: MJUserViewEntityExtended | null,
+        entityInfo: EntityInfo,
+        params: RunViewParams,
+        user: UserInfo,
+    ): { Declared: UserViewProperty[]; Values: ViewPropertyValues } | null {
+        const declared: UserViewProperty[] = viewEntity?.PropertiesObject ?? [];
+        const sent = params.Properties !== undefined || params.ServerProperties !== undefined;
+        if (!viewEntity) {
+            if (sent) throw new Error('Properties apply only to a stored view: run it by ViewID, ViewName or ViewEntity.');
+            return null;
+        }
+        if (declared.length === 0 && !sent) {
+            return null;
+        }
+        const definitionErrors = ValidateUserViewProperties(declared, entityInfo.Fields.map(f => f.Name));
+        if (definitionErrors.length > 0) {
+            throw new Error(`View '${viewEntity.Name ?? viewEntity.ID}' has invalid properties: ${definitionErrors.join(' ')}`);
+        }
+        const values = ResolveViewPropertyValues(declared, params.Properties, params.ServerProperties, { User: user, TimeZone: params.TimeZone });
+        this.assertViewPropertyFieldsReadable(declared, values, entityInfo, user);
+        return { Declared: declared, Values: values };
+    }
+
+    /**
+     * The WHERE clause a stored view's properties add to this run: '' when there are none.
+     * Screened like any caller clause, though it is built only from typed literals.
+     */
+    protected BuildViewPropertyFilter(viewEntity: MJUserViewEntityExtended | null, entityInfo: EntityInfo, params: RunViewParams, user: UserInfo): string {
+        const resolved = this.ResolveRunViewPropertyValues(viewEntity, entityInfo, params, user);
+        if (!resolved) {
+            return '';
+        }
+        const filter = BuildViewPropertyFilter(resolved.Declared, resolved.Values, entityInfo.Fields.map(f => f.Name), this.Dialect);
+        if (filter.length > 0 && !this.ValidateUserProvidedSQLClause(filter)) {
+            throw new Error(`Invalid view property filter: contains one or more forbidden keywords`);
+        }
+        return filter;
+    }
+
+    /** The field-security check other predicates get: a property with a value may not filter a field the user cannot read. */
+    private assertViewPropertyFieldsReadable(declared: UserViewProperty[], values: ViewPropertyValues, entityInfo: EntityInfo, user: UserInfo): void {
+        if (!entityInfo.EnableFieldLevelSecurity) {
+            return;
+        }
+        const denied = entityInfo.GetDeniedReadFields(user);
+        for (const property of declared) {
+            if (values[property.Name] !== null && denied.has(property.Target.Field.trim().toLowerCase())) {
+                throw new FieldSecurityError(property.Target.Field, entityInfo.Name);
+            }
         }
     }
 
@@ -4712,6 +4833,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 authorized: !user || query.UserCanRun(user).canRun,
                 categoryPath: query.CategoryPath,
                 queryName: query.Name,
+                contextTokens: this.queryContextTokens(query),
                 queryId: query.ID,
                 definition: this.QueryDefinitionSignatureFor(query)
             };
@@ -4816,6 +4938,67 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         if (query.Status !== 'Approved') {
             LogStatus(`WARNING: Executing query '${query.Name}' (ID: ${query.ID}) with status '${query.Status}'. Query has not been approved.`);
         }
+    }
+
+    /**
+     * For a `RequireApproved` run: refuses unless the query, and every query it composes, has a
+     * current approval — status Approved and a stored fingerprint equal to the fingerprint of the
+     * definition this run executes. The fingerprint is worked out here, from the same
+     * `QueryEngine` metadata the run renders, never from a caller's value.
+     *
+     * @throws Error naming the first query whose approval is not current
+     */
+    protected async ValidateQueryApprovalAsync(query: MJQueryEntityExtended, render: RenderResult): Promise<void> {
+        if (RenderPipeline.HasCompositionTokens(query.GetPlatformSQL(this.PlatformKey)) && !render.HasCompositions) {
+            throw new Error(`Query '${query.Name}' (ID: ${query.ID}) composes other queries, which requires a context user so every composed query's approval can be verified.`);
+        }
+        const engine = QueryEngine.Instance;
+        const depsByQueryID = GroupByUUID(engine.Dependencies, d => d.QueryID);
+        const queriesByID = IndexByUUID(engine.Queries);
+        const composedIDs = new UUIDSet(render.CTEs.map(c => c.QueryID));
+        const queue = [query.ID, ...render.CTEs.map(c => c.QueryID)];
+        while (queue.length > 0) {
+            const currentID = queue.shift()!;
+            for (const dep of depsByQueryID.Get(currentID) ?? []) {
+                if (dep.DependsOnQueryID && !composedIDs.Has(dep.DependsOnQueryID) && !UUIDsEqual(dep.DependsOnQueryID, query.ID)) {
+                    composedIDs.Add(dep.DependsOnQueryID);
+                    queue.push(dep.DependsOnQueryID);
+                }
+            }
+        }
+        const toVerify: MJQueryEntityExtended[] = [query];
+        for (const cte of render.CTEs) {
+            const found = queriesByID.Get(cte.QueryID);
+            if (!found) {
+                throw new Error(`Query '${cte.QueryName || cte.QueryID}' composed by '${query.Name}' is not a saved query in QueryEngine, so its approval cannot be verified.`);
+            }
+        }
+        for (const depID of composedIDs) {
+            const found = queriesByID.Get(depID);
+            if (!found) {
+                throw new Error(`Query dependency (ID: ${depID}) composed by '${query.Name}' is not found in QueryEngine, so its approval cannot be verified.`);
+            }
+            toVerify.push(found);
+        }
+        for (const q of toVerify) {
+            const state = await GetQueryApprovalStateAsync(q);
+            if (state !== 'Current') {
+                const reason = state === 'NotApproved'
+                    ? `its status is '${q.Status}'`
+                    : 'its definition changed after it was approved (or it was approved before approvals were fingerprinted)';
+                throw new Error(`Query '${q.Name}' (ID: ${q.ID}) is not approved in its current form: ${reason}. The run requires an approved query.`);
+            }
+        }
+    }
+
+    /** The context tokens a query reads, with every query it composes, as the `QueryEngine` holds them. */
+    private queryContextTokens(query: MJQueryEntityExtended): ContextToken[] {
+        const engine = QueryEngine.Instance;
+        return FindQueryContextTokens(
+            query.ID,
+            id => [engine.Queries.find(q => UUIDsEqual(q.ID, id))?.SQL, ...engine.QuerySQLs.filter(s => UUIDsEqual(s.QueryID, id)).map(s => s.SQL)],
+            id => engine.Dependencies.filter(d => UUIDsEqual(d.QueryID, id)).map(d => d.DependsOnQueryID)
+        );
     }
 
     /**
@@ -5120,8 +5303,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         query: MJQueryEntityExtended,
         params: RunQueryParams,
         contextUser?: UserInfo,
+        contextValues?: Record<string, string>,
     ): Promise<{ sql: string; parameters: unknown[] } | null> {
         if (!IsMaterializedDataSource(params.DataSource)) return null; // not opted in → live
+        // A snapshot is shared by every caller and was built without this caller's Context (user, date), so a
+        // run whose template read Context is served live: its rows depend on who runs it and when.
+        if (contextValues && Object.keys(contextValues).length > 0) return null;
         if (query.ExternalDataSourceID) return null;                   // external source → materialized table is local; live
         // The query<->materialization link lives in the MaterializedResultQuery join table — there is no
         // Query.MaterializedResultID column (that direct FK, paired with MaterializedResult.SourceQueryID,
@@ -5212,7 +5399,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             schemaName: mat.SchemaName,
             viewName: mat.ViewName,
             spec,
-            paramValues: params.Parameters,
+            // Server-set parameters take their values from ServerParameters (a caller value for one was
+            // already refused when the template rendered), so the row filter sees both.
+            paramValues: params.ServerParameters ? { ...params.Parameters, ...params.ServerParameters } : params.Parameters,
             paramTypes,
             isPostgres: this.PlatformKey === 'postgresql',
         });
@@ -5221,6 +5410,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         // Route ad-hoc SQL queries to dedicated handler
         if (params.SQL) {
+            if (params.RequireApproved) {
+                return {
+                    Success: false,
+                    QueryID: '',
+                    QueryName: 'Ad-Hoc Query',
+                    Results: [],
+                    RowCount: 0,
+                    TotalRowCount: 0,
+                    ExecutionTime: 0,
+                    ErrorMessage: 'Ad-hoc SQL has no approved query definition and cannot run when RequireApproved is set.',
+                };
+            }
             return this.ExecuteAdhocQuery(params, contextUser);
         }
 
@@ -5230,16 +5431,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             const query = this.findAndValidateQuery(params, contextUser);
 
             // Process parameters (composition + Nunjucks templates)
-            const resolved = this.processQueryParameters(query, params.Parameters, contextUser);
+            const resolved = this.processQueryParameters(query, params.Parameters, contextUser, params);
             finalSQL = resolved.finalSQL;
             const appliedParameters = resolved.appliedParameters;
+
+            // Opt-in: the approval must be current for the definition about to run
+            if (params.RequireApproved) {
+                await this.ValidateQueryApprovalAsync(query, resolved.renderResult);
+            }
 
             // ── Phase 2: materialized read redirect (plan §5) ──
             // If the caller opted into DataSource:'Materialized' and this query has a fresh, Active
             // RowFilterBroad materialization, serve from the materialized table with the row-filter params
             // injected as BOUND predicates. On ANY uncertainty tryBuildMaterializedQueryPlan returns null and
             // we fall through to the live execution below — a materialized read can never diverge from live.
-            const matPlan = await this.tryBuildMaterializedQueryPlan(query, params, contextUser);
+            const matPlan = await this.tryBuildMaterializedQueryPlan(query, params, contextUser, resolved.renderResult.ContextValues);
             if (matPlan) {
                 // Use a LOCAL for the materialized SQL — never overwrite `finalSQL` (which stays the
                 // live-rendered SQL), so a fallback below runs the live path unchanged.
@@ -5324,7 +5530,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             // credential should be least-privilege). Do not assume EDS RLS covers the Query path.
             if (query.ExternalDataSourceID) {
                 const externalRouter = this.resolveExternalReadRouterOrThrow(`Query '${query.Name}'`);
-                return await this.runExternalQueryWithCache(query, finalSQL, params, externalRouter, contextUser);
+                return await this.runExternalQueryWithCache(query, finalSQL, params, externalRouter, contextUser, resolved.renderResult.ContextValues);
             }
 
             // Execute query — use SQL-level paging when requested, else fetch all rows
@@ -5596,13 +5802,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         query: MJQueryEntityExtended,
         parameters?: Record<string, string>,
         contextUser?: UserInfo,
+        serverSet?: Pick<RunQueryParams, 'ServerParameters' | 'TimeZone'>,
     ): { finalSQL: string; appliedParameters: Record<string, string>; renderResult: RenderResult } {
         const result = RenderPipeline.Run(
             query.GetPlatformSQL(this.PlatformKey),
             {
                 Platform: this.PlatformKey as DatabasePlatform,
-                ContextUser: contextUser,
+                ContextUser: contextUser ?? this.CurrentUser,
                 Parameters: parameters,
+                ServerParameters: serverSet?.ServerParameters,
+                TimeZone: serverSet?.TimeZone,
                 UsesTemplate: query.UsesTemplate ?? false,
                 QueryInfo: {
                     SQL: query.SQL ?? '',
@@ -5647,10 +5856,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         params: RunQueryParams,
         router: ExternalDataSourceReadRouter,
         contextUser?: UserInfo,
+        contextValues?: Record<string, string>,
     ): Promise<RunQueryResult> {
         const externalDataSourceID = query.ExternalDataSourceID!;
         const ttlSeconds = await router.GetCacheTTLSeconds(externalDataSourceID, contextUser, this);
-        const cacheable = !params.SQL && ttlSeconds > 0 && LocalCacheManager.Instance.IsInitialized;
+        // A result that read Context.Now depends on the instant it ran and is never reused.
+        const cacheable = !params.SQL && ttlSeconds > 0 && LocalCacheManager.Instance.IsInitialized && !(contextValues && 'Now' in contextValues);
 
         let fingerprint: string | undefined;
         let definition: QueryDefinitionSignature | undefined;
@@ -5661,6 +5872,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 __maxRows: params.MaxRows ?? -1,
                 __startRow: params.StartRow ?? 0,
                 __eds: externalDataSourceID,
+                // What the server set shapes the result too, so one user's slot never answers another's.
+                ...this.serverSetFingerprintSegment(params, contextValues),
             };
             fingerprint = LocalCacheManager.Instance.GenerateRunQueryFingerprint(query.ID, query.Name, fingerprintParams, this.InstanceConnectionString, query.CategoryPath);
             definition = this.QueryDefinitionSignatureFor(query);
@@ -5705,6 +5918,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             ).catch(e => LogError(`External RunQuery cache write failed: ${e}`));
         }
         return { ...checked, Results: paginatedResult as RunQueryResult['Results'], RowCount: paginatedResult.length, TotalRowCount: totalRowCount };
+    }
+
+    /**
+     * The result-cache fingerprint segment for what the server set on a run: its `ServerParameters`
+     * and the `Context` values the template read. Empty when there are neither, so the fingerprint
+     * is exactly what it was before either existed.
+     */
+    private serverSetFingerprintSegment(params: RunQueryParams, contextValues?: Record<string, string>): Record<string, unknown> {
+        const segment: Record<string, unknown> = {};
+        if (params.ServerParameters && Object.keys(params.ServerParameters).length > 0) {
+            segment.__serverParameters = params.ServerParameters;
+        }
+        if (contextValues && Object.keys(contextValues).length > 0) {
+            segment.__context = contextValues;
+        }
+        return segment;
     }
 
     protected warnIfExternalQueryFieldsMissing(query: MJQueryEntityExtended, result: RunQueryResult): RunQueryResult {

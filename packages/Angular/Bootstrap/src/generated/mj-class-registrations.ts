@@ -36,7 +36,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (457 classes)
+// @memberjunction/core-entities (459 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -163,6 +163,8 @@ import {
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
+    MJCalendarEventLinkEntity,
+    MJCalendarSyncStateEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -594,8 +596,9 @@ import {
     RecordProcessRunnerUXComponent,
 } from '@memberjunction/ng-entity-action-ux';
 
-// @memberjunction/ng-entity-viewer (4 classes)
+// @memberjunction/ng-entity-viewer (5 classes)
 import {
+    CalendarViewType,
     CardsViewType,
     GridViewType,
     MapViewType,
@@ -607,10 +610,12 @@ import {
     ClusterViewType,
 } from '@memberjunction/ng-clustering';
 
-// @memberjunction/ng-dashboard-viewer (8 classes)
+// @memberjunction/ng-dashboard-viewer (10 classes)
 import {
     ArtifactConfigPanelComponent,
     ArtifactPartComponent,
+    ComponentConfigPanelComponent,
+    ComponentPartComponent,
     QueryConfigPanelComponent,
     QueryPartComponent,
     ViewConfigPanelComponent,
@@ -999,6 +1004,8 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
+    MJCalendarEventLinkEntity,
+    MJCalendarSyncStateEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -1059,12 +1066,12 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCountryEntity,
     MJCredentialCategoryEntity,
     MJCredentialEntity,
-    MJCredentialTypeEntity,
-    MJDashboardCategoryEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCredentialTypeEntity,
+    MJDashboardCategoryEntity,
     MJDashboardCategoryLinkEntity,
     MJDashboardCategoryPermissionEntity,
     MJDashboardEntity,
@@ -1263,12 +1270,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
     MJSearchScopeTestQueryEntity,
-    MJSignatureAccountEntity,
-    MJSignatureProviderEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSignatureAccountEntity,
+    MJSignatureProviderEntity,
     MJSignatureRequestDocumentEntity,
     MJSignatureRequestEntity,
     MJSignatureRequestLogEntity,
@@ -1396,6 +1403,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     SkillCommandProvider,
     WhiteboardArtifactViewerComponent,
     RecordProcessRunnerUXComponent,
+    CalendarViewType,
     CardsViewType,
     GridViewType,
     MapViewType,
@@ -1403,6 +1411,8 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ClusterViewType,
     ArtifactConfigPanelComponent,
     ArtifactPartComponent,
+    ComponentConfigPanelComponent,
+    ComponentPartComponent,
     QueryConfigPanelComponent,
     QueryPartComponent,
     ViewConfigPanelComponent,
@@ -1464,15 +1474,15 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJTestSuiteFormComponentExtended,
     MJTestSuiteRunFormComponentExtended,
     MLModelFormComponentExtended,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     MLModelFormPolicy,
     ProjectHierarchyPanel,
     QueryCategoryHierarchyPanel,
     RecordProcessCategoryHierarchyPanel,
     RecordProcessFormComponentExtended,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     RecordProcessFormPolicy,
     RubricAuthorPanel,
     RubricDiffPanel,
@@ -1632,7 +1642,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 745;
+export const CLASS_REGISTRATIONS_COUNT = 750;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
