@@ -952,6 +952,23 @@ describe('GeminiLLM — generation config by model version', () => {
       expect(create.mock.calls[0][0].config).toBeUndefined();
     });
 
+    it('merges modelSpecificResponseFormat (e.g. thinkingConfig) alongside responseFormat JSON and Any', async () => {
+      await run({
+        model: 'gemini-3.6-flash',
+        responseFormat: 'JSON',
+        modelSpecificResponseFormat: { thinkingConfig: { thinkingLevel: 'MINIMAL' } },
+      });
+      expect(requestConfig().responseMimeType).toBe('application/json');
+      expect(thinkingConfig(0)).toEqual({ thinkingLevel: 'MINIMAL' });
+
+      await run({
+        model: 'gemini-3.6-flash',
+        responseFormat: 'Any',
+        modelSpecificResponseFormat: { thinkingConfig: { thinkingLevel: 'MINIMAL' } },
+      });
+      expect(thinkingConfig(1)).toEqual({ thinkingLevel: 'MINIMAL' });
+    });
+
     it('retries a rejected MINIMAL with LOW, then sends LOW for MINIMAL and still sends the other levels', async () => {
       sendMessage.mockRejectedValueOnce(badRequest());
       const first = await run({ model: 'gemini-3.8-flash', effortLevel: 'minimal' });

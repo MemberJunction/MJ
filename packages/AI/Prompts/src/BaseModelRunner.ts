@@ -1234,8 +1234,10 @@ export abstract class BaseModelRunner {
           model,
           5000,
           'prompt-model',
-          preferredVendorId,
-          pm.Priority
+          pm.VendorID || preferredVendorId,
+          pm.Priority,
+          pm.EffortLevel ?? undefined,
+          pm.PromptConfigurationObject
         );
         candidates.push(...modelCandidates);
       }
@@ -1285,8 +1287,10 @@ export abstract class BaseModelRunner {
             model,
             basePriority,
             'prompt-model',
-            preferredVendorId,
-            pm.Priority
+            pm.VendorID || preferredVendorId,
+            pm.Priority,
+            pm.EffortLevel ?? undefined,
+            pm.PromptConfigurationObject
           );
           candidates.push(...modelCandidates);
         }
@@ -1318,8 +1322,10 @@ export abstract class BaseModelRunner {
           model,
           1000, // Lowest priority tier
           'prompt-model',
-          preferredVendorId,
-          pm.Priority
+          pm.VendorID || preferredVendorId,
+          pm.Priority,
+          pm.EffortLevel ?? undefined,
+          pm.PromptConfigurationObject
         );
         candidates.push(...modelCandidates);
       }
@@ -1415,7 +1421,9 @@ export abstract class BaseModelRunner {
     basePriority: number,
     source: ModelVendorCandidate['source'],
     preferredVendorId?: string,
-    promptModelPriority?: number
+    promptModelPriority?: number,
+    effortLevel?: number,
+    promptModelConfiguration?: AIPromptConfiguration | null
   ): ModelVendorCandidate[] {
     const modelCandidates: ModelVendorCandidate[] = [];
 
@@ -1436,10 +1444,12 @@ export abstract class BaseModelRunner {
           vendorName: preferredVendor.Vendor,
           driverClass: preferredVendor.DriverClass || model.DriverClass,
           apiName: preferredVendor.APIName || model.APIName,
+          effortLevel,
           supportsEffortLevel: preferredVendor.SupportsEffortLevel ?? model.SupportsEffortLevel ?? false,
           isPreferredVendor: true,
           priority: basePriority + 1000, // Boost priority for preferred vendor
-          source
+          source,
+          promptModelConfiguration
         });
       }
     }
@@ -1453,10 +1463,12 @@ export abstract class BaseModelRunner {
           vendorName: vendor.Vendor,
           driverClass: vendor.DriverClass || model.DriverClass,
           apiName: vendor.APIName || model.APIName,
+          effortLevel,
           supportsEffortLevel: vendor.SupportsEffortLevel ?? model.SupportsEffortLevel ?? false,
           isPreferredVendor: false,
           priority: basePriority + (vendor.Priority || 0),
-          source
+          source,
+          promptModelConfiguration
         });
       }
     }
@@ -1467,10 +1479,12 @@ export abstract class BaseModelRunner {
         model,
         driverClass: model.DriverClass,
         apiName: model.APIName,
+        effortLevel,
         supportsEffortLevel: model.SupportsEffortLevel ?? false,
         isPreferredVendor: false,
         priority: basePriority,
-        source
+        source,
+        promptModelConfiguration
       });
     }
 

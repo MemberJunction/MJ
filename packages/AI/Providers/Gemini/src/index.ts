@@ -563,15 +563,11 @@ export class GeminiLLM extends BaseLLM {
             this.warnUnsupportedSampling(modelName, 'topK', params.topK);
         }
 
-        switch (params.responseFormat) {
-            case 'JSON':
-                modelOptions.responseMimeType = 'application/json';
-                break;
-            case 'ModelSpecific':
-                if (params.modelSpecificResponseFormat) {
-                    Object.assign(modelOptions, params.modelSpecificResponseFormat);
-                }
-                break;
+        if (params.modelSpecificResponseFormat) {
+            Object.assign(modelOptions, params.modelSpecificResponseFormat);
+        }
+        if (params.responseFormat === 'JSON') {
+            modelOptions.responseMimeType = 'application/json';
         }
 
         if (params.stopSequences != null && params.stopSequences.length > 0) {

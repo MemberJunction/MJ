@@ -322,6 +322,8 @@ export class AgentRunner {
             let conversationId: string;
             let userMessageDetailId: string;
             let agentResponseDetailId: string | undefined;
+            let isNewConversation = false;
+            let pendingRenameTask: (() => Promise<void>) | undefined;
 
             // If conversationDetailId is provided, use it (UI-created agent response detail)
             if (options.conversationDetailId) {
@@ -376,34 +378,20 @@ export class AgentRunner {
                 conversationId = options.conversationId || '';
 
                 if (!conversationId) {
+                    isNewConversation = true;
                     LogStatus('Creating new conversation');
                     const conversation = await md.GetEntityObject<MJConversationEntity>(
                         'MJ: Conversations',
                         contextUser
                     );
 
-                    // Smart conversation naming:
-                    // 1. Use provided name if given
-                    // 2. Otherwise, use AI prompt to generate a good name from user message
-                    // 3. Fallback to "Chat with [AgentName]"
-                    let conversationName = options.conversationName;
-                    let conversationDescription: string | null = null;
-
-                    if (!conversationName && options.userMessage) {
-                        // Try to generate a name using the "Name Conversation" prompt (same as UI)
-                        const nameResult = await this.generateConversationName(options.userMessage, contextUser, md, params);
-                        if (nameResult) {
-                            conversationName = nameResult.name;
-                            conversationDescription = nameResult.description;
-                        }
-                    }
-
-                    if (!conversationName) {
-                        conversationName = `Chat with ${params.agent.Name}`;
-                    }
-
-                    conversation.Name = conversationName;
-                    conversation.Description = conversationDescription || ''; // Set description too (like UI does)
+                    // Save immediately with provided name or fallback so agent execution does not block
+                    // on the ~1,000ms "Name Conversation" LLM call. When no name was provided, fire
+                    // generateConversationName in parallel with RunAgent and persist the updated name
+                    // in the sequential post-execution write phase before returning.
+                    const initialConversationName = options.conversationName || `Chat with ${params.agent.Name}`;
+                    conversation.Name = initialConversationName;
+                    conversation.Description = '';
                     conversation.UserID = params.userId || contextUser.ID;
                     conversation.Status = 'Available';
                     conversation.DataContextID = null; // Can be set by caller if needed
@@ -418,7 +406,24 @@ export class AgentRunner {
                     }
 
                     conversationId = conversation.ID;
-                    LogStatus(`Created conversation ${conversationId}: ${conversationName}`);
+                    LogStatus(`Created conversation ${conversationId}: ${initialConversationName}`);
+
+                    if (!options.conversationName && options.userMessage) {
+                        const userMessageForNaming = options.userMessage;
+                        const nameGenerationPromise = this.generateConversationName(userMessageForNaming, contextUser, md, params);
+                        pendingRenameTask = async () => {
+                            try {
+                                const nameResult = await nameGenerationPromise;
+                                if (nameResult?.name) {
+                                    conversation.Name = nameResult.name;
+                                    conversation.Description = nameResult.description || '';
+                                    await conversation.Save();
+                                }
+                            } catch (renameErr) {
+                                LogError(`Background conversation naming failed for ${conversationId}: ${renameErr}`, undefined, renameErr);
+                            }
+                        };
+                    }
                 }
 
                 // Step 2: Create conversation detail for user message
@@ -531,11 +536,10 @@ export class AgentRunner {
             const runBranchId = params.ConversationBranchID ?? agentResponseDetail?.BranchID ?? undefined;
 
             // Gather all artifacts on the run's branch path of this conversation for the ArtifactToolManager.
-            // Per design doc Section 8.8: in the in-conversation flow, "the agent continues
-            // the conversation with the artifact already available." This means ALL artifacts
-            // on that path (both agent-produced Output and user-attached Input) should
-            // be available to the agent via artifact tools.
-            const inputArtifacts = await this.gatherConversationArtifacts(conversationId, contextUser, params.ConversationHistoryFrom, runBranchId);
+            // Brand-new conversations created right above have zero prior artifacts, so skip the 3 DB queries.
+            const inputArtifacts = isNewConversation
+                ? []
+                : await this.gatherConversationArtifacts(conversationId, contextUser, params.ConversationHistoryFrom, runBranchId);
 
             const modifiedParams: ExecuteAgentParams<C> = {
                 ...params,
@@ -596,12 +600,6 @@ export class AgentRunner {
                     await agentResponseDetail.EnsureSaveComplete();
 
                     LogStatus('Updating agent response detail with final result');
-
-                    // Reload to get any updates from agent execution
-                    const loaded = await agentResponseDetail.Load(agentResponseDetailId);
-                    if (!loaded) {
-                        LogError(`Failed to reload agent response detail ${agentResponseDetailId}`);
-                    }
 
                     const finalState = AgentRunner.ResolveFinalDetailState(agentResult);
                     agentResponseDetail.Message = finalState.Message;
@@ -736,6 +734,9 @@ export class AgentRunner {
             // no report." Sequential execution removes the interleave; all writes still complete
             // before we return, so the resolver's 'complete' event still guarantees the client sees
             // every write.
+            if (pendingRenameTask) {
+                await pendingRenameTask();
+            }
             await updateDetail();
             const payloadArtifact = await processArtifacts();
             const fileArtifacts = await processFileArtifacts();
