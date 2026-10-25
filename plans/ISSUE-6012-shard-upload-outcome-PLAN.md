@@ -17,7 +17,7 @@
 - Do not change `RecordingShardDrain.ts`.
 - Do not change `MAX_SHARD_UPLOAD_ATTEMPTS`, `MAX_CONCURRENT_FLUSHES`, `MAX_RETAINED_SHARDS`, `SHARD_UPLOAD_TIMEOUT_MS`.
 - Do not change the keepalive path (`trackKeepalive`, `SendRecordingTerminal`) in `RealtimeSessionRuntime.ts`.
-- Reason strings: `Retry` without a throw → `transport or server error; will be retried`; thrown error → `describeFailure(error)`; `Refused` → `server refused the shard for good`.
+- Reason strings: `Retry` without a throw → ~~`transport or server error; will be retried`~~ **superseded:** the code uses `transport or server error, not a refusal`, because the same reason ends the give-up line, where "will be retried" is false (see the `RETRY_REASON` doc comment in `RecordingShardQueue.ts` and the PR's wording ruling); thrown error → `describeFailure(error)`; `Refused` → `server refused the shard for good`.
 - No console warn in `src` may contain `server refused the shard` except on the `Refused` path.
 
 ## Review Focus
@@ -57,7 +57,7 @@
 **Files:**
 - Test: `packages/RealtimeRuntime/src/__tests__/RealtimeSessionRuntime.recording.test.ts`
 
-- [ ] **Step 1:** Widen `startRecorded`'s `script` parameter to `FakeUploadOutcome[]`. Add test `sends a shard the server refused for good once from the queue, and the recovery drain still clears it from the store`: `startRecorded(['refused'])`; `Capture(WINDOW - 2)`, advance `FLUSH_MS` three times; expect uploads of index 0 = 1 (on next it is 3). Then `Capture(WINDOW - 2)`, advance `FLUSH_MS`; expect `store.Keys` = `[]` (shard 1's ack triggers the recovery drain, which re-sends shard 0 and deletes it).
+- [ ] **Step 1:** Widen `startRecorded`'s `script` parameter to `FakeUploadOutcome[]`. Add test `sends a shard the server refused for good once from the queue, and the recovery drain still clears it from the store`: `startRecorded(['refused'])` (**superseded:** the test scripts `['refused', 'stored', 'refused']`, so the drain's re-send is refused too and the test proves the drain deletes a refused shard); `Capture(WINDOW - 2)`, advance `FLUSH_MS` three times; expect uploads of index 0 = 1 (on next it is 3). Then `Capture(WINDOW - 2)`, advance `FLUSH_MS`; expect `store.Keys` = `[]` (shard 1's ack triggers the recovery drain, which re-sends shard 0 and deletes it).
 - [ ] **Step 2:** Run against Task 1's code; expected PASS (and FAIL if the queue still retries `Refused`; confirm by checking the count assertion on `next` behavior by reasoning: three queue attempts).
 - [ ] **Step 3:** Commit.
 

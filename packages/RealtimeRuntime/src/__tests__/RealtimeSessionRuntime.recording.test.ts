@@ -191,7 +191,7 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
         await runtime.EndRealtimeSession();
     });
 
-    it('keeps a refused shard in the store and resends it under the same index', async () => {
+    it('keeps a shard whose upload failed (Retry) in the store and resends it under the same index', async () => {
         const { runtime, store, transport, recorder } = await startRecorded(['unavailable']);
         recorder.Capture(WINDOW);
         await vi.advanceTimersByTimeAsync(FLUSH_MS);
@@ -221,7 +221,7 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
         await expect(runtime.DrainPendingRecordingShards()).resolves.toBe(0); // once per instance
     });
 
-    it('leaves a pending shard whose drain upload is refused, and defers the drain while there is no transport', async () => {
+    it('leaves a pending shard whose drain upload failed (Retry), and defers the drain while there is no transport', async () => {
         const store = new FakeShardStore();
         await store.Put({ UserID: null, SessionID: 'old', Index: 0, Bytes: new Uint8Array([9]), SavedAt: 1 });
         const runtime = new FakeRecordingRuntime(new FakeRecordingHost(), store, null);
@@ -415,7 +415,7 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
     });
 
     it('SendRecordingTerminal stores the shards it sealed only after the handler returns, and keeps them while nothing acknowledges them', async () => {
-        // The tail's terminal is refused and its queue retry refused too, so the tail must stay stored.
+        // The tail's terminal is not acknowledged and its queue retry fails too, so the tail must stay stored.
         const { runtime, store, transport, recorder, log } = await startRecorded(['unavailable']);
         recorder.Capture(FULL_SHARD + 7);
         transport.TerminalAck = false;
@@ -433,7 +433,7 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
         await runtime.EndRealtimeSession();
     });
 
-    it('a keepalive window that is refused falls back to the queue under the same index', async () => {
+    it('a keepalive window whose upload failed (Retry) falls back to the queue under the same index', async () => {
         const { runtime, store, transport, recorder } = await startRecorded(['unavailable']);
         recorder.Capture(FULL_SHARD + 7);
         runtime.SendRecordingTerminal();
@@ -610,7 +610,7 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
     });
 
     it('drains at the next session start what the previous teardown left in the store', async () => {
-        // The terminal is refused and so is the tail's retry as an ordinary shard: it stays stored.
+        // The terminal is not acknowledged and the tail's retry as an ordinary shard fails: it stays stored.
         const { runtime, store, transport, recorder } = await startRecorded(['unavailable']);
         recorder.Capture(5);
         transport.TerminalAck = false;
@@ -620,7 +620,7 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
         transport.TerminalAck = true;
         await runtime.StartRealtimeSessionFromResult(mintedSession('session-2'));
         await vi.advanceTimersByTimeAsync(0);
-        // The refused retry, then the drain at session start.
+        // The failed retry, then the drain at session start.
         expect(transport.Uploads.map((u) => `${u.SessionID}/${u.Index}`)).toEqual(['session-1/0', 'session-1/0']);
         expect(store.Keys).toEqual([]);
         await runtime.EndRealtimeSession();
