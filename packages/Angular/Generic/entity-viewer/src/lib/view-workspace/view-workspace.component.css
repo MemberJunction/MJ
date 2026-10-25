@@ -27,6 +27,7 @@
   border-bottom: 1px solid var(--mj-border-default);
   background: var(--mj-bg-surface);
   flex-shrink: 0;
+  position: relative;
 }
 
 /* Pushes the view-type switcher to the right end of the toolbar row */
@@ -35,7 +36,10 @@
   min-width: 0;
 }
 
-/* Data renderer fills remaining space */
+/* Data renderer fills remaining space.
+   Do not set z-index or isolation here so fixed-position modals inside
+   mj-entity-data-grid (Export, Merge, Recycle Bin) participate in the
+   document stacking context and overlay the toolbar and header. */
 .workspace-body {
   flex: 1 1 auto;
   min-height: 0;

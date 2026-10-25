@@ -111,6 +111,7 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJScopedNotificationConfigs', sectionName: 'Scoped Notification Configs', isExpanded: false },
             { sectionKey: 'mJInteractionLinks', sectionName: 'Interaction Links', isExpanded: false },
             { sectionKey: 'mJCalendarEventLinks', sectionName: 'Calendar Event Links', isExpanded: false },
+            { sectionKey: 'mJEntityAlternateBaseViews', sectionName: 'Entity Alternate Base Views', isExpanded: false },
             { sectionKey: 'mJFeatureValues', sectionName: 'Feature Values', isExpanded: false }
         ]);
     }

@@ -44,6 +44,15 @@ export class BaseEnginePropertyConfig extends BaseInfo {
      */
     Filter?: string;
     /**
+     * Optional semantic `Name` of a registered `EntityAlternateBaseView` on the target entity
+     * (for example, `'Active'`). Applies only when `Type` is `'entity'`.
+     *
+     * When set, `BaseEngine` passes `AlternateBaseView` to `RunViewParams` and disables
+     * immediate in-memory array mutation on save events (forcing a full database refresh
+     * so updated records that fall out of the alternate view's SQL predicate are removed).
+     */
+    AlternateBaseView?: string;
+    /**
      * Optional, filters to apply to each item in a dataset, only applies when type is 'dataset' and is optional in those cases.
      */
     DatasetItemFilters?: DatasetItemFilterType[];
@@ -1415,7 +1424,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     protected classifyEventForConfig(config: BaseEnginePropertyConfig, event: BaseEntityEvent): EntityEventDisposition {
         if (event.type === 'save') {
             if (event.saveSubType === 'update' || event.saveSubType === 'create') {
-                if (this.isEntityAlreadyInArray(config, event.baseEntity)) {
+                // When AlternateBaseView is set on the config, the SQL view applies a canonical
+                // WHERE/JOIN predicate — an in-memory update can cause the record to fall out of
+                // the alternate view (e.g. Status changed from 'Active' to 'Inactive'), so we
+                // must refresh from the database rather than only notifying in place.
+                if (!config.AlternateBaseView && this.isEntityAlreadyInArray(config, event.baseEntity)) {
                     return { action: 'notify', changeType: event.saveSubType === 'create' ? 'add' : 'update' };
                 }
             }
@@ -1613,6 +1626,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         // - For creates: the new entity might not match the filter
         // - For updates: the entity might now match or no longer match the filter
         if (config.Filter) {
+            return false;
+        }
+
+        // An AlternateBaseView applies a canonical SQL WHERE/JOIN in the database view;
+        // immediate in-memory mutations cannot evaluate that SQL predicate.
+        if (config.AlternateBaseView) {
             return false;
         }
 
@@ -2122,6 +2141,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             ResultType: config.ResultType || this.EngineDefaultResultType,
             ExtraFilter: config.Filter,
             OrderBy: config.OrderBy,
+            ...(config.AlternateBaseView ? { AlternateBaseView: config.AlternateBaseView } : {}),
             IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
             _fromEngine: true,   // Mark as engine-initiated to avoid false positive telemetry warnings
             CacheLocal: config.CacheLocal,

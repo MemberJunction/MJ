@@ -46,6 +46,7 @@
     "@memberjunction/export-engine": "6.2.0-edge.5",
     "@memberjunction/global": "6.2.0-edge.5",
     "@memberjunction/ng-base-types": "6.2.0-edge.5",
+    "@memberjunction/ng-code-editor": "6.2.0-edge.5",
     "@memberjunction/ng-entity-action-ux": "6.2.0-edge.5",
     "@memberjunction/ng-export-service": "6.2.0-edge.5",
     "@memberjunction/ng-filter-builder": "6.2.0-edge.5",
