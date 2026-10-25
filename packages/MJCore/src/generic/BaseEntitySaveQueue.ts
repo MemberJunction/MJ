@@ -85,6 +85,16 @@ export class BaseEntitySaveQueue {
         return options;
     }
 
+    /**
+     * Resolves once every save queued so far for `entity` has settled (at once when none is pending);
+     * never rejects — a failed save is already logged here. For a caller that holds the entity's ID and
+     * must write a dependent row (a foreign key to it) from a *different* queue: `InsertAfter` only
+     * orders writes within this queue.
+     */
+    public Settled(entity: BaseEntity): Promise<void> {
+        return this.queue.Settled(entity);
+    }
+
     /** Awaits all pending saves and returns failure diagnostics. Call at the run/goal finalize boundary. */
     public Flush(): Promise<SerialTaskFlushResult> {
         return this.queue.flush();
