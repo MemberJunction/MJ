@@ -140,6 +140,11 @@ export type RunViewGenericParams = {
    */
   includeBinaryFields?: boolean;
   /**
+   * Optional registered Alternate Base View logical Name (from `EntityAlternateBaseView.Name`)
+   * for this entity. Propagated to `RunViewParams.AlternateBaseView`.
+   */
+  alternateBaseView?: string;
+  /**
    * The client's values for a stored view's properties. Propagated to `RunViewParams.Properties`.
    * There is deliberately no server-properties field: those are set only by server code.
    */

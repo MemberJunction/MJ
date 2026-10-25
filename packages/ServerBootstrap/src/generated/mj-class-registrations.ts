@@ -245,7 +245,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (458 classes)
+// @memberjunction/core-entities (459 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -465,6 +465,7 @@ import {
     MJEntityActionInvocationEntity,
     MJEntityActionInvocationTypeEntity,
     MJEntityActionParamEntity,
+    MJEntityAlternateBaseViewEntity,
     MJEntityCommunicationFieldEntity,
     MJEntityCommunicationMessageTypeEntity,
     MJEntityDocumentEntity,
@@ -1377,7 +1378,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (63 classes)
+// @memberjunction/core-entities-server (64 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1406,6 +1407,7 @@ import {
     MJDashboardEntityServer,
     MJDataContextItemEntityServer,
     MJDuplicateRunEntityServer,
+    MJEntityAlternateBaseViewEntityServer,
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
@@ -2017,6 +2019,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJEntityActionInvocationEntity,
     MJEntityActionInvocationTypeEntity,
     MJEntityActionParamEntity,
+    MJEntityAlternateBaseViewEntity,
     MJEntityCommunicationFieldEntity,
     MJEntityCommunicationMessageTypeEntity,
     MJEntityDocumentEntity,
@@ -2124,11 +2127,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
     MJQueryDependencyEntity,
-    MJQueryEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJQueryEntity,
     MJQueryEntityEntity,
     MJQueryEntityExtended,
     MJQueryFieldEntity,
@@ -2328,11 +2331,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetActivitiesByContactAction,
     LogActivityAction,
     MergeContactsAction,
-    CreateJotFormAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    CreateJotFormAction,
     CreateSurveyMonkeyAction,
     CreateTypeformAction,
     ExportGoogleFormsCSVAction,
@@ -2532,11 +2535,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     GetRubricSubjectAction,
     HumanRubricEvaluator,
     LLMRubricEvaluator,
-    SubmitHumanRubricAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    SubmitHumanRubricAction,
     AzureAISearchProvider,
     BGEReRanker,
     CohereReRanker,
@@ -2678,6 +2681,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJDashboardEntityServer,
     MJDataContextItemEntityServer,
     MJDuplicateRunEntityServer,
+    MJEntityAlternateBaseViewEntityServer,
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
@@ -2735,12 +2739,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     FeaturePipelineGoldenSetDriver,
     LLMFeaturePipelineDriver,
     StewardFeaturePipelineVersionAction,
-    IntegrationTestDriver,
-    BraveWebSearchProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    IntegrationTestDriver,
+    BraveWebSearchProvider,
     DuckDuckGoWebSearchProvider,
     GoogleCustomSearchWebSearchProvider,
     PerplexityWebSearchProvider,
@@ -2950,7 +2954,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1193;
+export const CLASS_REGISTRATIONS_COUNT = 1195;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

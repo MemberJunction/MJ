@@ -50,6 +50,7 @@ export * from './custom/MJAPIApplicationScopeEntityServer.server';
 export * from './custom/MJRowLevelSecurityFilterEntityServer.server';
 export * from './custom/MJEntityFieldPermissionEntityServer.server';
 export * from './custom/MJEntityEntityServer.server';
+export * from './custom/MJEntityAlternateBaseViewEntityServer.server';
 export * from './custom/fieldPermissionDelta';
 export * from './custom/fieldPermissionReconciler';
 export * from './custom/rowFilterValidation';

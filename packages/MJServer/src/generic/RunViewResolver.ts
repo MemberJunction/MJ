@@ -209,6 +209,13 @@ export class RunViewByIDInput {
   })
   IncludeBinaryFields?: boolean;
 
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'Optional registered Alternate Base View logical Name (from EntityAlternateBaseView.Name) for this entity. When set, overrides both a saved UserView DisplayState.alternateBaseView pin and the entity default BaseView. Pass an empty string ("") to force the entity default BaseView over a saved UserView pin.',
+  })
+  AlternateBaseView?: string;
+
   @Field(() => GraphQLJSONObject, {
     nullable: true,
     description:
@@ -344,6 +351,13 @@ export class RunViewByNameInput {
   })
   IncludeBinaryFields?: boolean;
 
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'Optional registered Alternate Base View logical Name (from EntityAlternateBaseView.Name) for this entity. When set, overrides both a saved UserView DisplayState.alternateBaseView pin and the entity default BaseView. Pass an empty string ("") to force the entity default BaseView over a saved UserView pin.',
+  })
+  AlternateBaseView?: string;
+
   @Field(() => GraphQLJSONObject, {
     nullable: true,
     description:
@@ -464,6 +478,13 @@ export class RunDynamicViewInput {
       'Optional, when true the binary fields of the entity (varbinary / bytea columns) are returned, as base64 strings. They are omitted by default because they are usually large and lists rarely read them. A binary field named explicitly in Fields is always returned.',
   })
   IncludeBinaryFields?: boolean;
+
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'Optional registered Alternate Base View logical Name (from EntityAlternateBaseView.Name) for this entity. When set, routes the dynamic view read through the named alternate base view instead of the entity default BaseView.',
+  })
+  AlternateBaseView?: string;
 }
 
 @InputType()
@@ -607,6 +628,13 @@ export class RunViewGenericInput {
       'Optional, when true the binary fields of the entity (varbinary / bytea columns) are returned, as base64 strings. They are omitted by default because they are usually large and lists rarely read them. A binary field named explicitly in Fields is always returned.',
   })
   IncludeBinaryFields?: boolean;
+
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'Optional registered Alternate Base View logical Name (from EntityAlternateBaseView.Name) for this entity. When set, overrides both a saved UserView DisplayState.alternateBaseView pin and the entity default BaseView. Pass an empty string ("") to force the entity default BaseView over a saved UserView pin.',
+  })
+  AlternateBaseView?: string;
 
   @Field(() => GraphQLJSONObject, {
     nullable: true,
@@ -1292,6 +1320,7 @@ export class RunViewResolver extends ResolverBase {
           // DataSource must be forwarded on this transport too (same as the InternalRunView/RunViews maps):
           // otherwise a CacheLocal batch's DataSource:'Materialized' request silently reads the live view.
           DataSource: item.params.DataSource,
+          AlternateBaseView: item.params.AlternateBaseView,
           IncludeBinaryFields: item.params.IncludeBinaryFields,
           // BypassCache likewise — the input type (RunDynamicViewInput) has always declared it, and its
           // own description promises "the pre-check cache lookup is skipped". Dropping it here left the
