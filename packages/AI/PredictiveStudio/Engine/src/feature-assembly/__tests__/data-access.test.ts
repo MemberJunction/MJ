@@ -29,3 +29,19 @@ describe('RunViewDataAccess.fetchRows — row cap', () => {
     expect(provider.Params[0].MaxRows).toBe(25);
   });
 });
+
+describe('RunViewDataAccess.fetchRows — match count', () => {
+  it('returns the database match count alongside the rows', async () => {
+    class CountingProvider {
+      async RunView<T>(_params: RunViewParams): Promise<RunViewResult<T>> {
+        return { Success: true, Results: [] as T[], RowCount: 0, TotalRowCount: 1734, ExecutionTime: 0, ErrorMessage: '' } as RunViewResult<T>;
+      }
+    }
+    // Test double: RunViewDataAccess calls only RunView on its provider.
+    const res = await new RunViewDataAccess(USER, new CountingProvider() as unknown as IMetadataProvider).fetchRows({
+      EntityName: 'Members',
+      MaxRows: 1000,
+    });
+    expect(res.TotalRowCount).toBe(1734);
+  });
+});
