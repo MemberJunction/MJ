@@ -643,6 +643,158 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             expect(savedValues['Notes']).toBe('Large untouched notes payload');
         });
 
+        it('includes server-derived fields (WhereClause, SmartFilterWhereClause, SmartFilterExplanation) in UpdateMJUserView selection set when SmartFilterPrompt is modified', async () => {
+            const entityId = 'A1B2C3D4-0000-4000-8000-000000000099';
+            const userViewEntityInfo = new EntityInfo({
+                ID: entityId,
+                Name: 'MJ: User Views',
+                BaseTable: 'UserView',
+                BaseView: 'vwUserViews',
+                SchemaName: '__mj',
+                Status: 'Active',
+                EntityFields: [
+                    {
+                        ID: `EF-${entityId}-1`,
+                        EntityID: entityId,
+                        Name: 'ID',
+                        Type: 'uniqueidentifier',
+                        IsPrimaryKey: true,
+                        AllowsNull: false,
+                        AllowUpdateAPI: false,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 1,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-2`,
+                        EntityID: entityId,
+                        Name: 'Name',
+                        Type: 'nvarchar',
+                        AllowsNull: false,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 2,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-3`,
+                        EntityID: entityId,
+                        Name: 'SmartFilterEnabled',
+                        Type: 'bit',
+                        AllowsNull: false,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 3,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-4`,
+                        EntityID: entityId,
+                        Name: 'SmartFilterPrompt',
+                        Type: 'nvarchar',
+                        AllowsNull: true,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 4,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-5`,
+                        EntityID: entityId,
+                        Name: 'WhereClause',
+                        Type: 'nvarchar',
+                        AllowsNull: true,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 5,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-6`,
+                        EntityID: entityId,
+                        Name: 'SmartFilterWhereClause',
+                        Type: 'nvarchar',
+                        AllowsNull: true,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 6,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-7`,
+                        EntityID: entityId,
+                        Name: 'SmartFilterExplanation',
+                        Type: 'nvarchar',
+                        AllowsNull: true,
+                        AllowUpdateAPI: true,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 7,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: `EF-${entityId}-8`,
+                        EntityID: entityId,
+                        Name: '__mj_UpdatedAt',
+                        Type: 'datetimeoffset',
+                        AllowsNull: false,
+                        AllowUpdateAPI: false,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        Sequence: 8,
+                        Status: 'Active',
+                    },
+                ],
+            });
+            provider.RegisterTestEntity(userViewEntityInfo);
+
+            const view = new TestCustomerEntity(userViewEntityInfo, provider);
+            view.LoadFromData({
+                ID: 'A014C770-33C8-42DC-9E6A-E420E4ABE067',
+                Name: 'AI Agents — Active Agents',
+                SmartFilterEnabled: true,
+                SmartFilterPrompt: '',
+                WhereClause: '',
+                SmartFilterWhereClause: null,
+                SmartFilterExplanation: null,
+                __mj_UpdatedAt: UPDATED_AT,
+            });
+
+            // User enters a Smart Filter prompt on the client; WhereClause is generated server-side during MJUserViewEntityServer.Save()
+            view.Set('SmartFilterPrompt', 'Starts with A, eh?');
+            GraphQLWire.EnqueueResponse(
+                saveResponse('UpdateMJUserView', {
+                    ID: 'A014C770-33C8-42DC-9E6A-E420E4ABE067',
+                    SmartFilterPrompt: 'Starts with A, eh?',
+                    WhereClause: "Name LIKE 'A%'",
+                    SmartFilterWhereClause: "Name LIKE 'A%'",
+                    SmartFilterExplanation: "Filtering for AI agents whose names begin with the letter 'A'.",
+                    _mj__UpdatedAt: UPDATED_AT.toISOString(),
+                })
+            );
+
+            const savedValues = (await provider.Save(view, user, new EntitySaveOptions())) as Record<string, unknown>;
+
+            const doc = GraphQLWire.LastRequest.document;
+            expect(doc).toContain('SmartFilterPrompt');
+            expect(doc).toContain('WhereClause');
+            expect(doc).toContain('SmartFilterWhereClause');
+            expect(doc).toContain('SmartFilterExplanation');
+            expect(doc).not.toContain('Name');
+
+            const input = lastInputRecord();
+            expect(Object.keys(input).sort()).toEqual(['ID', 'OldValues___', 'SmartFilterPrompt']);
+            expect(savedValues['WhereClause']).toBe("Name LIKE 'A%'");
+            expect(savedValues['SmartFilterWhereClause']).toBe("Name LIKE 'A%'");
+            expect(savedValues['SmartFilterExplanation']).toBe("Filtering for AI agents whose names begin with the letter 'A'.");
+        });
+
         it('includes virtual fields in the Update selection set when a foreign key field is dirty', async () => {
             const entityId = 'A1B2C3D4-0000-4000-8000-000000000021';
             const fkEntityInfo = new EntityInfo({

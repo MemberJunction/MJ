@@ -7584,6 +7584,9 @@ importers:
       '@memberjunction/ng-base-types':
         specifier: 6.2.0-edge.5
         version: link:../base-types
+      '@memberjunction/ng-code-editor':
+        specifier: 6.2.0-edge.5
+        version: link:../code-editor
       '@memberjunction/ng-entity-action-ux':
         specifier: 6.2.0-edge.5
         version: link:../entity-action-ux

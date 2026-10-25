@@ -656,6 +656,7 @@ export class ResolverBase {
           viewInput.BypassCache,
           viewInput.DataSource,
           viewInput.IncludeBinaryFields,
+          viewInput.AlternateBaseView,
           viewInput.Properties
         );
       }
@@ -704,6 +705,7 @@ export class ResolverBase {
         viewInput.BypassCache,
         viewInput.DataSource,
         viewInput.IncludeBinaryFields,
+        viewInput.AlternateBaseView,
         viewInput.Properties
       );
     } catch (err) {
@@ -752,7 +754,8 @@ export class ResolverBase {
         undefined,
         viewInput.BypassCache,
         viewInput.DataSource,
-        viewInput.IncludeBinaryFields
+        viewInput.IncludeBinaryFields,
+        viewInput.AlternateBaseView
       );
     } catch (err) {
       console.log(err);
@@ -827,6 +830,7 @@ export class ResolverBase {
           bypassCache: viewInput.BypassCache,
           dataSource: viewInput.DataSource,
           includeBinaryFields: viewInput.IncludeBinaryFields,
+          alternateBaseView: viewInput.AlternateBaseView,
           properties: viewInput.Properties,
         });
       } catch (err) {
@@ -1207,6 +1211,7 @@ export class ResolverBase {
     bypassCache?: boolean,
     dataSource?: 'Live' | 'Materialized',
     includeBinaryFields?: boolean,
+    alternateBaseView?: string,
     properties?: ViewPropertyValues
   ) {
     try {
@@ -1290,6 +1295,7 @@ export class ResolverBase {
           BypassCache: bypassCache,
           DataSource: dataSource,
           IncludeBinaryFields: includeBinaryFields,
+          AlternateBaseView: alternateBaseView,
           Properties: properties,
           TimeZone: userPayload?.TimeZone,
         },
@@ -1453,6 +1459,7 @@ export class ResolverBase {
           BypassCache: param.bypassCache,
           DataSource: param.dataSource,
           IncludeBinaryFields: param.includeBinaryFields,
+          AlternateBaseView: param.alternateBaseView,
           Properties: param.properties,
           TimeZone: param.userPayload?.TimeZone,
         });

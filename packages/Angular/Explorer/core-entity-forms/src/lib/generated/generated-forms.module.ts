@@ -216,6 +216,7 @@ import { MJEntityActionFormComponent } from "./Entities/MJEntityAction/mjentitya
 import { MJEntityActionInvocationFormComponent } from "./Entities/MJEntityActionInvocation/mjentityactioninvocation.form.component";
 import { MJEntityActionInvocationTypeFormComponent } from "./Entities/MJEntityActionInvocationType/mjentityactioninvocationtype.form.component";
 import { MJEntityActionParamFormComponent } from "./Entities/MJEntityActionParam/mjentityactionparam.form.component";
+import { MJEntityAlternateBaseViewFormComponent } from "./Entities/MJEntityAlternateBaseView/mjentityalternatebaseview.form.component";
 import { MJEntityCommunicationFieldFormComponent } from "./Entities/MJEntityCommunicationField/mjentitycommunicationfield.form.component";
 import { MJEntityCommunicationMessageTypeFormComponent } from "./Entities/MJEntityCommunicationMessageType/mjentitycommunicationmessagetype.form.component";
 import { MJEntityDocumentFormComponent } from "./Entities/MJEntityDocument/mjentitydocument.form.component";
@@ -640,6 +641,7 @@ declarations: [
     MJContentFileTypeFormComponent,
     MJContentProcessRunFormComponent,
     MJDataContextFormComponent,
+    MJEntityAlternateBaseViewFormComponent,
     MJOAuthAuthServerMetadataCacheFormComponent,
     MJResourcePermissionFormComponent,
     MJRubricVersionFormComponent

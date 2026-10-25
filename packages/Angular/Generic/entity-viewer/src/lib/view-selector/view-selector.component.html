@@ -26,13 +26,13 @@
       <div class="vs-panel">
         <!-- Panel Header -->
         <div class="vs-panel-header">
-          <i class="fa-solid fa-table-list vs-header-icon"></i>
-          <span class="vs-panel-title">Views</span>
+          <i class="fa-solid fa-layer-group vs-header-icon"></i>
+          <span class="vs-panel-title">Saved Views</span>
           @if (Entity) {
-            <span class="vs-Entity-badge">{{ Entity.DisplayNameOrName }}</span>
+            <span class="vs-entity-badge">{{ Entity.DisplayNameOrName }}</span>
           }
           <button class="vs-close-btn" (click)="CloseDropdown()" title="Close">
-            <i class="fa-solid fa-times"></i>
+            <i class="fa-solid fa-xmark"></i>
           </button>
         </div>
 
@@ -41,7 +41,7 @@
           <input
             type="text"
             class="vs-search-input"
-            placeholder="Search views..."
+            placeholder="Filter views by name or description..."
             [(ngModel)]="SearchText"
             (keydown.escape)="SearchText = ''"
           />
@@ -53,17 +53,31 @@
           <div class="vs-section">
             <div
               class="vs-card"
-              [class.active]="!SelectedViewID"
+              [class.active]="!SelectedViewID && !SelectedAlternateBaseView"
               (click)="SelectDefault()">
-              <div class="vs-card-icon" [class.active]="!SelectedViewID">
-                <i class="fa-solid fa-table"></i>
+              <div class="vs-card-icon" [class.active]="!SelectedViewID && !SelectedAlternateBaseView">
+                <i class="fa-solid fa-table-cells"></i>
               </div>
               <div class="vs-card-content">
-                <div class="vs-card-name">(Default)</div>
+                <div class="vs-card-top">
+                  <span class="vs-card-name-text">(Default)</span>
+                  <span class="vs-default-badge">Personal Layout</span>
+                </div>
+                <div class="vs-card-desc">All records with your personal default columns &amp; sort order</div>
               </div>
-              @if (!SelectedViewID) {
-                <i class="fa-solid fa-check vs-card-check"></i>
-              }
+              <div class="vs-card-right">
+                <div class="vs-card-actions">
+                  <button
+                    class="vs-action-btn"
+                    (click)="OnConfigureDefaultLayout($event)"
+                    title="Customize Personal Default Layout">
+                    <i class="fa-solid fa-sliders"></i>
+                  </button>
+                </div>
+                @if (!SelectedViewID && !SelectedAlternateBaseView) {
+                  <i class="fa-solid fa-check vs-card-check"></i>
+                }
+              </div>
             </div>
           </div>
 
@@ -81,55 +95,71 @@
                   [class.active]="SelectedViewID === view.id"
                   (click)="SelectView(view)">
                   <div class="vs-card-icon" [class.active]="SelectedViewID === view.id">
-                    <i class="fa-solid fa-table-list"></i>
+                    @if (view.isDefault) {
+                      <i class="fa-solid fa-star"></i>
+                    } @else {
+                      <i class="fa-solid fa-layer-group"></i>
+                    }
                   </div>
                   <div class="vs-card-content">
-                    <div class="vs-card-name">
-                      {{ view.name }}
+                    <div class="vs-card-top">
+                      <span class="vs-card-name-text">{{ view.name }}</span>
                       @if (view.isDefault) {
                         <span class="vs-default-badge">Default</span>
+                      }
+                      @if (view.isShared) {
+                        <span class="vs-shared-badge">Shared</span>
                       }
                     </div>
                     @if (view.entity.Description) {
                       <div class="vs-card-desc">{{ view.entity.Description }}</div>
                     }
-                    @if (GetViewFilterCount(view) > 0 || GetViewColumnCount(view) > 0 || GetViewSortInfo(view)) {
+                    @if (GetViewFilterCount(view) > 0 || GetViewColumnCount(view) > 0 || GetViewSortInfo(view) || GetViewAlternateBaseViewLabel(view) || view.entity.SmartFilterEnabled || view.entity.CustomWhereClause) {
                       <div class="vs-card-meta">
-                        @if (GetViewFilterCount(view) > 0) {
-                          <span><i class="fa-solid fa-filter"></i> {{ GetViewFilterCount(view) }} filter{{ GetViewFilterCount(view) !== 1 ? 's' : '' }}</span>
+                        @if (GetViewAlternateBaseViewLabel(view)) {
+                          <span class="vs-meta-pill"><i class="fa-solid fa-database"></i> {{ GetViewAlternateBaseViewLabel(view) }}</span>
+                        }
+                        @if (view.entity.SmartFilterEnabled) {
+                          <span class="vs-meta-pill"><i class="fa-solid fa-wand-magic-sparkles"></i> Smart Filter</span>
+                        } @else if (view.entity.CustomWhereClause) {
+                          <span class="vs-meta-pill"><i class="fa-solid fa-code"></i> Custom SQL</span>
+                        } @else if (GetViewFilterCount(view) > 0) {
+                          <span class="vs-meta-pill"><i class="fa-solid fa-filter"></i> {{ GetViewFilterCount(view) }} filter{{ GetViewFilterCount(view) !== 1 ? 's' : '' }}</span>
                         }
                         @if (GetViewColumnCount(view) > 0) {
-                          <span><i class="fa-solid fa-table-columns"></i> {{ GetViewColumnCount(view) }} col{{ GetViewColumnCount(view) !== 1 ? 's' : '' }}</span>
+                          <span class="vs-meta-pill"><i class="fa-solid fa-table-columns"></i> {{ GetViewColumnCount(view) }} col{{ GetViewColumnCount(view) !== 1 ? 's' : '' }}</span>
                         }
                         @if (GetViewSortInfo(view)) {
-                          <span><i class="fa-solid fa-arrow-down-short-wide"></i> {{ GetViewSortInfo(view) }}</span>
+                          <span class="vs-meta-pill"><i class="fa-solid fa-arrow-down-short-wide"></i> {{ GetViewSortInfo(view) }}</span>
                         }
                       </div>
                     }
                   </div>
-                  <div class="vs-card-actions">
-                    <button
-                      class="vs-action-btn"
-                      (click)="OnDuplicateView(view.id, $event)"
-                      title="Duplicate">
-                      <i class="fa-regular fa-copy"></i>
-                    </button>
-                    <button
-                      class="vs-action-btn"
-                      (click)="OnConfigureViewById(view.id, $event)"
-                      title="Configure">
-                      <i class="fa-solid fa-sliders"></i>
-                    </button>
-                    <button
-                      class="vs-action-btn"
-                      (click)="OnOpenViewInTab(view.id, $event)"
-                      title="Open in Tab">
-                      <i class="fa-solid fa-up-right-from-square"></i>
-                    </button>
+                  <div class="vs-card-right">
+                    <div class="vs-card-actions">
+                      <button
+                        class="vs-action-btn"
+                        (click)="OnConfigureViewById(view.id, $event)"
+                        title="Edit View in Studio">
+                        <i class="fa-solid fa-sliders"></i>
+                      </button>
+                      <button
+                        class="vs-action-btn"
+                        (click)="OnDuplicateView(view.id, $event)"
+                        title="Duplicate View">
+                        <i class="fa-regular fa-copy"></i>
+                      </button>
+                      <button
+                        class="vs-action-btn"
+                        (click)="OnOpenViewInTab(view.id, $event)"
+                        title="Open in Tab">
+                        <i class="fa-solid fa-up-right-from-square"></i>
+                      </button>
+                    </div>
+                    @if (SelectedViewID === view.id) {
+                      <i class="fa-solid fa-check vs-card-check"></i>
+                    }
                   </div>
-                  @if (SelectedViewID === view.id) {
-                    <i class="fa-solid fa-check vs-card-check"></i>
-                  }
                 </div>
               }
             </div>
@@ -148,12 +178,12 @@
                   class="vs-card"
                   [class.active]="SelectedViewID === view.id"
                   (click)="SelectView(view)">
-                  <div class="vs-card-icon shared">
-                    <i class="fa-solid fa-users"></i>
+                  <div class="vs-card-icon shared" [class.active]="SelectedViewID === view.id">
+                    <i class="fa-solid fa-globe"></i>
                   </div>
                   <div class="vs-card-content">
-                    <div class="vs-card-name">
-                      {{ view.name }}
+                    <div class="vs-card-top">
+                      <span class="vs-card-name-text">{{ view.name }}</span>
                       @if (!view.userCanEdit) {
                         <span class="vs-shared-badge">View Only</span>
                       } @else {
@@ -163,36 +193,51 @@
                     @if (view.entity.Description) {
                       <div class="vs-card-desc">{{ view.entity.Description }}</div>
                     }
-                    @if (GetViewFilterCount(view) > 0 || GetViewColumnCount(view) > 0) {
+                    @if (GetViewFilterCount(view) > 0 || GetViewColumnCount(view) > 0 || GetViewAlternateBaseViewLabel(view) || view.entity.SmartFilterEnabled || view.entity.CustomWhereClause) {
                       <div class="vs-card-meta">
-                        @if (GetViewFilterCount(view) > 0) {
-                          <span><i class="fa-solid fa-filter"></i> {{ GetViewFilterCount(view) }} filter{{ GetViewFilterCount(view) !== 1 ? 's' : '' }}</span>
+                        @if (GetViewAlternateBaseViewLabel(view)) {
+                          <span class="vs-meta-pill"><i class="fa-solid fa-database"></i> {{ GetViewAlternateBaseViewLabel(view) }}</span>
+                        }
+                        @if (view.entity.SmartFilterEnabled) {
+                          <span class="vs-meta-pill"><i class="fa-solid fa-wand-magic-sparkles"></i> Smart Filter</span>
+                        } @else if (view.entity.CustomWhereClause) {
+                          <span class="vs-meta-pill"><i class="fa-solid fa-code"></i> Custom SQL</span>
+                        } @else if (GetViewFilterCount(view) > 0) {
+                          <span class="vs-meta-pill"><i class="fa-solid fa-filter"></i> {{ GetViewFilterCount(view) }} filter{{ GetViewFilterCount(view) !== 1 ? 's' : '' }}</span>
                         }
                         @if (GetViewColumnCount(view) > 0) {
-                          <span><i class="fa-solid fa-table-columns"></i> {{ GetViewColumnCount(view) }} col{{ GetViewColumnCount(view) !== 1 ? 's' : '' }}</span>
+                          <span class="vs-meta-pill"><i class="fa-solid fa-table-columns"></i> {{ GetViewColumnCount(view) }} col{{ GetViewColumnCount(view) !== 1 ? 's' : '' }}</span>
                         }
                       </div>
                     }
                   </div>
-                  <div class="vs-card-actions">
-                    <button
-                      class="vs-action-btn"
-                      (click)="OnDuplicateView(view.id, $event)"
-                      title="Duplicate as My View">
-                      <i class="fa-regular fa-copy"></i>
-                    </button>
-                    @if (view.userCanEdit) {
+                  <div class="vs-card-right">
+                    <div class="vs-card-actions">
+                      @if (view.userCanEdit) {
+                        <button
+                          class="vs-action-btn"
+                          (click)="OnConfigureViewById(view.id, $event)"
+                          title="Edit View in Studio">
+                          <i class="fa-solid fa-sliders"></i>
+                        </button>
+                      }
                       <button
                         class="vs-action-btn"
-                        (click)="OnConfigureViewById(view.id, $event)"
-                        title="Configure">
-                        <i class="fa-solid fa-sliders"></i>
+                        (click)="OnDuplicateView(view.id, $event)"
+                        title="Duplicate as My View">
+                        <i class="fa-regular fa-copy"></i>
                       </button>
+                      <button
+                        class="vs-action-btn"
+                        (click)="OnOpenViewInTab(view.id, $event)"
+                        title="Open in Tab">
+                        <i class="fa-solid fa-up-right-from-square"></i>
+                      </button>
+                    </div>
+                    @if (SelectedViewID === view.id) {
+                      <i class="fa-solid fa-check vs-card-check"></i>
                     }
                   </div>
-                  @if (SelectedViewID === view.id) {
-                    <i class="fa-solid fa-check vs-card-check"></i>
-                  }
                 </div>
               }
             </div>
@@ -224,21 +269,21 @@
           }
         </div>
 
-        <!-- Panel Footer -->
+        <!-- Panel Footer (MJ Convention: Primary action on LEFT, Secondary on RIGHT) -->
         <div class="vs-panel-footer">
           <button
             class="vs-panel-btn primary"
-            (click)="OnQuickSave()"
-            title="Save current view configuration">
+            (click)="OnCreateNewView()"
+            title="Create a new saved view in the View Studio">
             <i class="fa-solid fa-plus"></i>
-            <span>New View</span>
+            <span>New Saved View</span>
           </button>
           <button
             class="vs-panel-btn"
-            (click)="OnResetToDefault()"
-            title="Reset to default view">
-            <i class="fa-solid fa-arrow-rotate-left"></i>
-            <span>Reset to Default</span>
+            (click)="OnConfigureDefaultLayout($event)"
+            title="Customize your personal default layout">
+            <i class="fa-solid fa-sliders"></i>
+            <span>Default Layout</span>
           </button>
         </div>
       </div>

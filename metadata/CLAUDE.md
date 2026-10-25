@@ -123,6 +123,40 @@ Whenever an entity has a polymorphic foreign-key pair (a column storing a record
 - **Why**: Forms (`<mj-form-field>`), grids (`<mj-entity-data-grid>`), cards (`<mj-entity-cards>`), and record detail panels (`<mj-entity-record-detail-panel>`) rely strictly on the hard metadata link `EntityField.EntityIDFieldName` (never heuristics) to resolve target record names, render clickable record links, and scope edit-mode FK search pickers.
 - **Remember**: CodeGen already created both rows, so each record's `primaryKey` is an `@lookup` to it (rule 1): the entity by `Name`, the field by `EntityID` + `Name`. Without the field's `primaryKey`, push tries to insert a second `RecordID` field instead of updating this one. Do not add `sync` blocks.
 
+#### Entity Alternate Base Views (`metadata/entities/.alternate-base-views.json`)
+When an entity defines one or more **Alternate Base Views** (`MJ: Entity Alternate Base Views` — governed SQL views that maintain 100% column parity with the entity's canonical `BaseView` while returning a curated row subset), create the physical `CREATE OR ALTER VIEW` in a SQL migration and register the metadata in `metadata/entities/.alternate-base-views.json` under `relatedEntities["MJ: Entity Alternate Base Views"]` (never inline `INSERT INTO EntityAlternateBaseView` in a migration):
+```json
+{
+  "fields": {
+    "Name": "MJ: Users"
+  },
+  "relatedEntities": {
+    "MJ: Entity Alternate Base Views": [
+      {
+        "fields": {
+          "EntityID": "@parent:ID",
+          "Name": "Active",
+          "DisplayName": "Active Users",
+          "Description": "Users with IsActive = 1. Excludes deactivated user accounts from pickers, assignments, notifications, and active user queries.",
+          "ViewName": "vwUsersActive",
+          "CachePolicy": "Default",
+          "Status": "Active",
+          "Sequence": 1
+        },
+        "primaryKey": {
+          "ID": "8D1544F7-988A-4450-9A26-40513B71F329"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "@lookup:MJ: Entities.Name=MJ: Users"
+  }
+}
+```
+- **Primary keys**: The parent `MJ: Entities` record already exists (created by CodeGen), so its `primaryKey` is `"ID": "@lookup:MJ: Entities.Name=..."`. Each `MJ: Entity Alternate Base Views` child is created by this file, so its `primaryKey` is a hardcoded UUID from CLI `uuidgen`. Do not add `sync` blocks.
+- **Derivation (`ParentID`) & `CachePolicy`**: If a view selects from another alternate base view on the same entity (e.g., `DueNow` selecting from `Active`), set `ParentID` to the parent alternate base view's UUID (or let `MJEntityAlternateBaseViewEntityServer` auto-link it via SQL AST inspection on save). Set `"CachePolicy": "Bypass"` whenever the view's predicate depends on wall-clock functions (`GETUTCDATE()`) or joins external tables. Full guide: [`guides/ALTERNATE_BASE_VIEWS_GUIDE.md`](../guides/ALTERNATE_BASE_VIEWS_GUIDE.md).
+
 ### 5. Template Variable Conventions
 Agent prompt templates receive these standard variables:
 - `{{ agentName }}`: The agent's name

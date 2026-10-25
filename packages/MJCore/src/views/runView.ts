@@ -5,6 +5,7 @@ import { BaseEntity } from '../generic/baseEntity';
 import { PlatformSQL, IsPlatformSQL } from '../generic/platformSQL';
 import { CompositeKey } from '../generic/compositeKey';
 import type { CacheChangedEvent } from '../generic/localCacheManager';
+import { IsExplicitBaseViewOverride } from '../generic/alternateBaseViews';
 import { ViewPropertyValues, ViewPropertyValuesKey } from './viewProperties';
 
 /**
@@ -173,6 +174,22 @@ export class RunViewParams {
      * view won't exist). The enum (vs. a bare boolean) leaves room for future modes without a breaking change.
      */
     DataSource?: 'Live' | 'Materialized';
+    /**
+     * optional - semantic `Name` of a registered `EntityAlternateBaseView` on the target entity
+     * (for example, `'Active'` or `'Open'`).
+     *
+     * When set, `RunView` routes the read (and any parallel aggregate or count query) against the
+     * alternate view's physical SQL view (`EntityAlternateBaseView.ViewName` in `EffectiveSchemaName`)
+     * instead of `entity.BaseView`.
+     *
+     * **Precedence & Composition:**
+     * - Explicit `params.AlternateBaseView` overrides any `AlternateBaseView` pinned inside a saved
+     *   `UserView.DisplayState` JSON.
+     * - Mutually exclusive with `DataSource: 'Materialized'` (throws a descriptive error when combined).
+     * - Entity `CanRead`, Row-Level Security (RLS), and Field-Level Security (FLS) apply identically
+     *   on top of the alternate base view.
+     */
+    AlternateBaseView?: string;
     /**
      * An optional SQL WHERE clause that you can add to the existing filters on a stored view. For dynamic views, you can either
      * run a view without a filter (if the entity definition allows it with AllowAllRowsAPI=1) or filter with any valid SQL WHERE clause.
@@ -616,6 +633,11 @@ export class RunViewParams {
         // IsMaterializedDataSource so undefined/'Live' are treated as equal (no spurious reload) while a switch to
         // (or from) 'Materialized' is not — matching the read-routing decision everywhere else.
         if (IsMaterializedDataSource(a.DataSource) !== IsMaterializedDataSource(b.DataSource)) return false;
+        // Switching AlternateBaseView (case-insensitive, trimmed) changes the underlying SQL view and MUST trigger
+        // a reload. An explicit empty string (`""`) overrides a saved User View's pinned `DisplayState.alternateBaseView`
+        // back to `BaseView` and therefore differs from `undefined` (which inherits the saved view's pin).
+        if (IsExplicitBaseViewOverride(a) !== IsExplicitBaseViewOverride(b)) return false;
+        if (NormalizeAlternateBaseViewName(a.AlternateBaseView) !== NormalizeAlternateBaseViewName(b.AlternateBaseView)) return false;
 
         // Compare ViewEntity by reference (deep comparison would be expensive)
         if (a.ViewEntity !== b.ViewEntity) return false;
@@ -703,6 +725,14 @@ export class RunViewParams {
  */
 export function IsMaterializedDataSource(dataSource: string | null | undefined): boolean {
     return typeof dataSource === 'string' && dataSource.trim().toLowerCase() === 'materialized';
+}
+
+/**
+ * Normalizes an `AlternateBaseView` name for comparison and cache-key construction:
+ * trims whitespace and lowercases. Returns `''` when the input is null, undefined, or whitespace-only.
+ */
+export function NormalizeAlternateBaseViewName(name: string | null | undefined): string {
+    return typeof name === 'string' ? name.trim().toLowerCase() : '';
 }
 
 /**
