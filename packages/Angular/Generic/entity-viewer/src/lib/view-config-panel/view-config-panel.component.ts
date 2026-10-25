@@ -478,15 +478,19 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       this.PendingFilterModeSwitch = null;
       // Re-initialize from entity to get fresh state
       this.initializeFromEntity();
+    } else if (
+      changes['Entity'] ||
+      changes['ViewEntity'] ||
+      changes['DefaultSaveAsNew'] ||
+      changes['PendingNewViewAlternateBaseView'] ||
+      (changes['CurrentGridState'] && !this.IsOpen)
+    ) {
+      this.initializeFromEntity();
     }
 
     // BUG-003: Reset local saving guard when isSaving transitions from true to false
     if (changes['IsSaving'] && !this.IsSaving && changes['IsSaving'].previousValue === true) {
       this._localSaving = false;
-    }
-
-    if (changes['Entity'] || changes['ViewEntity'] || changes['CurrentGridState'] || changes['DefaultSaveAsNew'] || changes['PendingNewViewAlternateBaseView']) {
-      this.initializeFromEntity();
     }
 
     // Apply external filter state when it changes (from dashboard-level dialog)
@@ -1244,7 +1248,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     if (this.CustomWhereClause && this.WhereClause.trim()) {
       return 'Custom SQL';
     }
-    if (this.FilterMode === 'smart' && this.SmartFilterPrompt.trim()) {
+    if ((this.FilterMode === 'smart' || this.SmartFilterEnabled) && this.SmartFilterPrompt.trim()) {
       return 'AI Smart Filter';
     }
     const count = this.GetFilterCount();
@@ -1259,7 +1263,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    */
   get HasActiveFilterChip(): boolean {
     return (this.CustomWhereClause && !!this.WhereClause.trim()) ||
-           (this.FilterMode === 'smart' && !!this.SmartFilterPrompt.trim()) ||
+           ((this.FilterMode === 'smart' || this.SmartFilterEnabled) && !!this.SmartFilterPrompt.trim()) ||
            this.GetFilterCount() > 0;
   }
 
@@ -2611,6 +2615,11 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    */
   get GeneratedSqlWhereClause(): string {
     if (this.FilterMode === 'smart' || this.SmartFilterEnabled) {
+      const savedPrompt = (this.ViewEntity?.SmartFilterPrompt ?? '').trim();
+      const currentPrompt = this.SmartFilterPrompt.trim();
+      if (!currentPrompt || currentPrompt !== savedPrompt) {
+        return '';
+      }
       if (this.ViewEntity?.SmartFilterWhereClause) {
         return this.ViewEntity.SmartFilterWhereClause;
       }

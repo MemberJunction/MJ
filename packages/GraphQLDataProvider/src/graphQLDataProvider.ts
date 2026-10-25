@@ -335,6 +335,39 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     private static readonly _globalStoreKey = '___SINGLETON__GraphQLDataProvider';
 
     /**
+     * Writable fields on specific entities that are computed or mutated server-side inside
+     * `BaseEntity.Save()` subclasses (e.g. `MJUserViewEntityServer` generating `WhereClause`,
+     * `SmartFilterWhereClause`, and `SmartFilterExplanation` via AI or stamping approval fields).
+     * Even when clean on the client, these fields must be requested in the GraphQL `Update`
+     * selection set so the client entity and local engine caches receive the server-derived values.
+     */
+    private static readonly _serverDerivedUpdateFieldsByEntity: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+        [
+            'MJ: User Views',
+            new Set([
+                'WhereClause',
+                'SmartFilterWhereClause',
+                'SmartFilterExplanation',
+                'ApprovedByUserID',
+                'ApprovedAt',
+                'ApprovedFingerprint',
+            ]),
+        ],
+        [
+            'MJ: Queries',
+            new Set([
+                'ApprovedByUserID',
+                'ApprovedAt',
+                'ApprovedFingerprint',
+                'UsesTemplate',
+                'TechnicalDescription',
+                'EmbeddingVector',
+                'EmbeddingModelID',
+            ]),
+        ],
+    ]);
+
+    /**
      * Returns the singleton instance of GraphQLDataProvider.
      * Uses the Global Object Store to guarantee a single instance across the
      * entire process, even if bundlers duplicate this module.
@@ -2448,6 +2481,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     (!isNonActiveField(f) || isFieldWrittenForSave(f)) &&
                     (!filterToDirtyOnly || this.isFieldDirtyOnChain(entity, f))
                 )));
+            const serverDerivedFields = GraphQLDataProvider._serverDerivedUpdateFieldsByEntity.get(entity.EntityInfo.Name);
             const returnFields = entity.Fields.filter(f => {
                 if (isDeniedRead(f.Name)) {
                     return false;
@@ -2460,6 +2494,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         f.IsPrimaryKey ||
                         f.EntityFieldInfo.IsSpecialDateField ||
                         this.isFieldDirtyOnChain(entity, f) ||
+                        Boolean(serverDerivedFields?.has(f.Name)) ||
                         (!f.NotLoaded &&
                             !f.EntityFieldInfo.IsBinaryFieldType &&
                             (Boolean(f.EntityFieldInfo.IsVirtual) ||

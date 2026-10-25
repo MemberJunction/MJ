@@ -2237,38 +2237,7 @@
 
 /
 
-/* Live Preview Summary Bar & Panel Footer */
-.live-preview-dock {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 9px 20px;
-  background: var(--mj-bg-surface-sunken);
-  border-top: 1px solid var(--mj-border-default);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: var(--mj-text-muted);
-  flex-shrink: 0;
-}
-
-.preview-dock-left {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.preview-dock-left i {
-  color: var(--mj-status-success);
-}
-
-.preview-dock-right {
-  font-size: 10.5px;
-  color: var(--mj-text-muted);
-  white-space: nowrap;
-}
-
+/* Panel Footer */
 .panel-footer {
   display: flex;
   align-items: center;

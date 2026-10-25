@@ -2106,17 +2106,6 @@
     <mj-alert Variant="error" Size="sm" class="view-config-validation-pos">At least one column must be visible</mj-alert>
   }
 
-  <!-- Live Preview Summary Bar (Advanced Mode only) -->
-  @if (IsAdvancedMode) {
-    <div class="live-preview-dock">
-      <span class="preview-dock-left">
-        <i class="fa-solid fa-bolt"></i>
-        <span>LIVE WORKBENCH — {{ VisibleColumns.length }} VISIBLE COLUMNS · {{ FilterChipLabel | uppercase }}</span>
-      </span>
-      <span class="preview-dock-right">UPDATES AUTOMATICALLY ON SAVE</span>
-    </div>
-  }
-
   <!-- ============================================================ -->
   <!-- PANEL FOOTER                                                 -->
   <!-- ============================================================ -->

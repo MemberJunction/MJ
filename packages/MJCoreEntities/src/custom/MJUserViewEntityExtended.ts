@@ -592,7 +592,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
 
         // if we get here, we need to update the WhereClause, first check to see if we have a Smart Filter or not
         if (this.SmartFilterEnabled && (this.SmartFilterEnabled === true || this.SmartFilterEnabled === 1) &&
-            this.SmartFilterPrompt && this.SmartFilterPrompt.length > 0) {
+            this.SmartFilterPrompt && this.SmartFilterPrompt.trim().length > 0) {
             if (this.SmartFilterImplemented) {
                 // The following block of code is only intended to execute when we're in an execution context where the 
                 // lowest level sub-class supports SmartFilter WHere Clause generation, which is determined by the class
@@ -621,6 +621,10 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
             }
         }
         else {
+            if (this.IsSaved && (!this.SmartFilterPrompt || this.SmartFilterPrompt.trim().length === 0)) {
+                this.SmartFilterWhereClause = '';
+                this.SmartFilterExplanation = '';
+            }
             const compiled = this.GenerateWhereClause(this.FilterState, this.ViewEntityInfo);
             // On a brand-new record an empty FilterState is just the NewRecord() seed. Callers that build a view
             // programmatically (view.NewRecord(); view.WhereClause = '...'; await view.Save()) rely on that clause
