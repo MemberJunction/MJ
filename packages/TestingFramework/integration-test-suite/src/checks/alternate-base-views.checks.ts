@@ -441,8 +441,16 @@ async function checkRunViewFailsClosedOnInvalidOrDisabledAbv(ctx: IntegrationChe
                 `Error message must reject Materialized + AlternateBaseView, got: ${materializedMsg}`,
             );
 
-            // Verify explicit AlternateBaseView: "" overrides a ViewEntity's Disabled pin back to BaseView
-            const fakePinnedViewEntity = {
+            // Verify explicit AlternateBaseView: "" overrides a ViewEntity's Disabled pin back to BaseView.
+            //
+            // The pin is read through `Get('DisplayState')`, so `Get` must answer from the fixture's own
+            // fields rather than special-casing one of them: a `Get` that returns null for DisplayState
+            // leaves the resolver seeing NO pin, and this assertion then passes whether the override
+            // works or not (issue #6038). `ViewEntityInfo` is set for the same reason the real resolvers
+            // set it — `getRunTimeViewFieldArray` reads `viewEntity.ViewEntityInfo` whenever a ViewEntity
+            // is supplied, and without it the field-list pass throws and is swallowed, so the check would
+            // exercise a degraded `SELECT *` path instead of the one it is written to prove.
+            const pinnedViewFields = {
                 ID: '00000000-0000-4000-8000-00000000AB05',
                 EntityID: entity!.ID,
                 AlternateBaseView: 'DisabledTestView',
@@ -452,7 +460,11 @@ async function checkRunViewFailsClosedOnInvalidOrDisabledAbv(ctx: IntegrationChe
                 SmartFilterWhereClause: '',
                 CustomWhereClause: false,
                 OrderByClause: '',
-                Get: (field: string) => (field === 'EntityID' ? entity!.ID : null),
+            };
+            const fakePinnedViewEntity = {
+                ...pinnedViewFields,
+                ViewEntityInfo: entity!,
+                Get: (field: string) => (pinnedViewFields as Record<string, unknown>)[field] ?? null,
             };
             const overrideRes = await rv.RunView(
                 {
