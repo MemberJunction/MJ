@@ -4,6 +4,7 @@ import os from 'os';
 import path from 'path';
 import { DiscoverRequest, DiscoveredItem, LocatorFetchRequest } from '@memberjunction/content-pipeline-base';
 import { AutotagLocalFileSystem } from '../LocalFileSystem/generic/AutotagLocalFileSystem';
+import { AutotagCloudStorage } from '../CloudStorage/providers/AutotagCloudStorage';
 
 /** Fetch must stay inside the source root: a locator is a row anyone who can edit an item can change. */
 describe('AutotagLocalFileSystem Discover and Fetch', () => {
@@ -77,5 +78,33 @@ describe('AutotagLocalFileSystem Discover and Fetch', () => {
             items.push(item);
         }
         expect(items).toHaveLength(0);
+    });
+});
+
+describe('AutotagCloudStorage Fetch PathPrefix confinement', () => {
+    it('refuses an object key outside PathPrefix or containing traversal segments, and allows keys inside PathPrefix', async () => {
+        const driver = new AutotagCloudStorage();
+        (driver as unknown as { ResolveStorageDriver: () => Promise<unknown> }).ResolveStorageDriver = async () => ({
+            GetObject: async ({ fullPath }: { fullPath: string }) => Buffer.from(`bytes:${fullPath}`),
+        });
+
+        const callFetch = (url: string, pathPrefix = 'tenant-a/docs') =>
+            driver.Fetch({
+                URL: url,
+                SourceURL: 's3://bucket',
+                ContentSourceID: 'S1',
+                Parameters: { PathPrefix: pathPrefix, FileStorageProviderKey: 'test-s3' },
+                Configuration: {},
+                ContextUser: {} as never,
+                Provider: {} as never,
+                Signal: new AbortController().signal,
+            } as LocatorFetchRequest);
+
+        await expect(callFetch('tenant-b/docs/secret.pdf')).rejects.toThrow(/outside the source's PathPrefix/);
+        await expect(callFetch('tenant-a/docs-other/secret.pdf')).rejects.toThrow(/outside the source's PathPrefix/);
+        await expect(callFetch('tenant-a/docs/../secret.pdf')).rejects.toThrow(/not a valid cloud storage object key/);
+
+        const allowed = await callFetch('tenant-a/docs/report.pdf');
+        expect(new TextDecoder().decode(allowed.Content)).toBe('bytes:tenant-a/docs/report.pdf');
     });
 });

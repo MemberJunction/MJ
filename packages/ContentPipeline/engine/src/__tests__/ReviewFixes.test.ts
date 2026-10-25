@@ -144,6 +144,22 @@ describe('the hydrator publishes the statuses the gates read', () => {
         expect(record.GetExtension<Date>('Pipeline', 'lastDiscoveredAt')?.toISOString()).toBe(discoveredAt.toISOString());
         expect(record.GetExtension<Date>('Pipeline', 'lastSyncedAt')?.toISOString()).toBe(syncedAt.toISOString());
     });
+
+    it('carries VectorRecordID through on both Content Item and Content Item Chunk so Delete and re-Embed find the stored vector', () => {
+        const fullHydrator = new WorkingRecordHydrator({} as never, {} as never) as unknown as {
+            FromEntity(entity: 'Content Item' | 'Content Item Chunk', entityObject: unknown): WorkingRecord;
+        };
+        const item = fullHydrator.FromEntity(
+            'Content Item',
+            row({ ID: 'I1', URL: 'https://x.test/a', VectorRecordID: 'vec-item-1' }, ['URL', 'VectorRecordID']),
+        );
+        const chunk = fullHydrator.FromEntity(
+            'Content Item Chunk',
+            row({ ID: 'C1', ContentItemID: 'I1', VectorRecordID: 'vec-chunk-1' }, ['ContentItemID', 'VectorRecordID']),
+        );
+        expect(item.GetExtension<string>('Pipeline', 'vectorRecordID')).toBe('vec-item-1');
+        expect(chunk.GetExtension<string>('Pipeline', 'vectorRecordID')).toBe('vec-chunk-1');
+    });
 });
 
 describe('Extract SHA-256 checksum comparison and custom Columns / Request escape hatches', () => {

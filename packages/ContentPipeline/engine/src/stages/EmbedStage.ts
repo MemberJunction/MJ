@@ -90,6 +90,9 @@ export abstract class BaseEmbedStage extends BasePipelineStage {
 
     /** Route, embed and store the whole page. A record that cannot be routed fails alone. */
     public override async Finalize(records: readonly WorkingRecord[], context: StageContext): Promise<FinalizeResult[]> {
+        if (context.IsTest) {
+            return records.map((record) => ({ Key: record.Identity.Key, Outcome: Outcome.Complete() }));
+        }
         const outcomes: FinalizeResult[] = [];
         const routes = await RouteVectorRecords(records, this.infrastructure(context), context.Provider, context.ContextUser);
         const itemIDs = records.map(OwningItemID).filter((id): id is string => !!id);

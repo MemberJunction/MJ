@@ -175,16 +175,11 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     public get ContentSourceTypeParams(): MJContentSourceTypeParamEntity[] { return this._contentSourceTypeParams; }
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<unknown> {
-        // Content Types, Content Source Types, and Content File Types are delegated to
+        // Content Types, Content Source Types, Content File Types, and Content Type Attributes are delegated to
         // KnowledgeHubMetadataEngine (avoid redundant loading). Only cache entities unique to this engine.
-        await KnowledgeHubMetadataEngine.Instance.Config(forceRefresh, contextUser);
+        await KnowledgeHubMetadataEngine.Instance.Config(forceRefresh, contextUser, provider);
 
         const configs: Partial<BaseEnginePropertyConfig>[] = [
-            {
-                Type: 'entity',
-                EntityName: 'MJ: Content Type Attributes',
-                PropertyName: '_contentTypeAttributes',
-            },
             {
                 Type: 'entity',
                 EntityName: 'MJ: Content Source Type Params',

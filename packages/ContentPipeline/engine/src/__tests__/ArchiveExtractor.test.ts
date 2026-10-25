@@ -170,9 +170,11 @@ describe('HtmlExtractor', () => {
         expect(result.Blocks[0].Text).not.toContain('x()');
     });
 
-    it('takes the document title when it has one', async () => {
-        const result = await new HtmlExtractor().Extract(html('<html><head><title>Quarterly</title></head><body><p>Body.</p></body></html>'));
-        expect(result.Blocks[0].Title).toBe('Quarterly');
+    it('takes the document title when it has one and decodes HTML entities', async () => {
+        const result = await new HtmlExtractor().Extract(
+            html('<html><head><title>Tom &amp; Jerry</title></head><body><p>Body.</p></body></html>'),
+        );
+        expect(result.Blocks[0].Title).toBe('Tom & Jerry');
     });
 
     it('reports no blocks for a document that yields no text, rather than an empty one', async () => {
@@ -195,11 +197,27 @@ describe('real archive formats', () => {
         expect(result.Blocks.find((b) => b.Key === 'b.html')?.FileType).toBe('html');
     });
 
-    it('treats a plain gzip as the one file it compresses, named from the archive', async () => {
-        const result = await extract(new Uint8Array(gzipSync('a,b\n1,2')), {}, 'https://x.test/report.csv.gz', 'gz');
+    it('treats a plain gzip as the one file it compresses, named from the archive or nested fragment', async () => {
+        const gzBytes = new Uint8Array(gzipSync('a,b\n1,2'));
+        const budget = { RemainingMembers: 5, RemainingBytes: 1000, CurrentDepth: 1, MaxDepth: 3 };
+        const result = await new ArchiveExtractor().Extract({
+            ...request(),
+            Tuning: TUNING,
+            ArchiveBudget: budget,
+            Content: gzBytes,
+            URL: 'https://x.test/bundle.zip#data/report.csv.gz',
+            FileType: 'gz',
+        });
         expect(result.Blocks).toHaveLength(1);
         expect(result.Blocks[0].Key).toBe('report.csv');
         expect(result.Blocks[0].FileType).toBe('csv');
+        expect(budget.RemainingMembers).toBe(4);
+        expect(budget.RemainingBytes).toBe(1000 - 'a,b\n1,2'.length);
+    });
+
+    it('refuses a gzip that expands past RemainingBytes', async () => {
+        const gzBytes = new Uint8Array(gzipSync('x'.repeat(2000)));
+        await expect(extract(gzBytes, { MaxArchiveBytes: '500' }, 'https://x.test/big.txt.gz', 'gz')).rejects.toThrow();
     });
 
     it('REFUSES an archive when no limits are configured anywhere, rather than unpacking it unbounded', async () => {
@@ -228,12 +246,22 @@ describe('real archive formats', () => {
         );
     });
 
-    it('refuses an archive that expands past the size limit', async () => {
+    it('refuses an archive that expands past the size limit, even when the central-directory uncompressedSize is forged', async () => {
         const zip = new JSZip();
-        zip.file('big.txt', 'x'.repeat(5000));
-        await expect(
-            extract(await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' }), { MaxArchiveBytes: '1000' }),
-        ).rejects.toThrow(/limit/);
+        zip.file('big.txt', 'x'.repeat(50_000));
+        const zipBytes = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
+        await expect(extract(zipBytes, { MaxArchiveBytes: '1000' })).rejects.toThrow(/expands past the limit of 1000 bytes/);
+
+        // Forge every occurrence of the 32-bit little-endian uncompressed size (50,000 = 0x0000c350) down to 100 bytes
+        // so the pre-inflate header check passes and the streaming byte counter must stop the inflate.
+        const forged = new Uint8Array(zipBytes);
+        const view = new DataView(forged.buffer, forged.byteOffset, forged.byteLength);
+        for (let i = 0; i <= forged.byteLength - 4; i++) {
+            if (view.getUint32(i, true) === 50_000) {
+                view.setUint32(i, 100, true);
+            }
+        }
+        await expect(extract(forged, { MaxArchiveBytes: '1000' })).rejects.toThrow(/expands past the limit of 1000 bytes/);
     });
 
     it('shares ArchiveBudget across nested archives so inner archives cannot bypass MaxArchiveMembers or MaxArchiveBytes', async () => {
@@ -252,6 +280,7 @@ describe('real archive formats', () => {
             Content: await zipA.generateAsync({ type: 'uint8array' }),
         });
         expect(budget.RemainingMembers).toBe(1);
+        expect(budget.RemainingBytes).toBe(1000 - 'alpha'.length - 'beta'.length);
 
         await expect(
             new ArchiveExtractor().Extract({

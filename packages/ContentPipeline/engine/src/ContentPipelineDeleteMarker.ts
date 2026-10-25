@@ -47,8 +47,13 @@ export class ContentPipelineDeleteMarker {
             // Thrown, not swallowed: the item's own delete must not complete with dependents unmarked.
             throw new Error(`Loading the dependents of '${contentItemID}' failed: ${chunks.ErrorMessage || children.ErrorMessage}`);
         }
-        const marked = await this.mark('MJ: Content Item Chunks', chunks.Results as { ID: string }[], user);
-        return marked + (await this.mark('MJ: Content Items', children.Results as { ID: string }[], user));
+        const chunksOutcome = await this.mark('MJ: Content Item Chunks', chunks.Results as { ID: string }[], user);
+        const childrenOutcome = await this.mark('MJ: Content Items', children.Results as { ID: string }[], user);
+        const failed = chunksOutcome.Failed + childrenOutcome.Failed;
+        if (failed > 0) {
+            throw new Error(`Could not mark ${failed} dependent(s) of '${contentItemID}' for deletion`);
+        }
+        return chunksOutcome.Marked + childrenOutcome.Marked;
     }
 
     /** Mark one record for deletion; the Delete stage then owns its outside-system cleanup. */
@@ -57,12 +62,18 @@ export class ContentPipelineDeleteMarker {
         if (!user) {
             throw new Error('ContentPipelineDeleteMarker: a context user is required');
         }
-        return (await this.mark(entityName, [{ ID: recordID }], user)) === 1;
+        const outcome = await this.mark(entityName, [{ ID: recordID }], user);
+        return outcome.Marked === 1 && outcome.Failed === 0;
     }
 
-    /** Set `DeleteStatus = 'Pending'` on each row. */
-    private async mark(entityName: PipelineEntityName, rows: readonly { ID: string }[], contextUser: UserInfo): Promise<number> {
+    /** Set `DeleteStatus = 'Pending'` on each row, tracking both marked and failed counts. */
+    private async mark(
+        entityName: PipelineEntityName,
+        rows: readonly { ID: string }[],
+        contextUser: UserInfo,
+    ): Promise<{ Marked: number; Failed: number }> {
         let marked = 0;
+        let failed = 0;
         for (const row of rows) {
             try {
                 const entityObject = await this.provider.GetEntityObject<MJContentItemEntity | MJContentItemChunkEntity>(entityName, contextUser);
@@ -73,16 +84,18 @@ export class ContentPipelineDeleteMarker {
                 if (await entityObject.Save()) {
                     marked++;
                 } else {
+                    failed++;
                     LogError(`ContentPipelineDeleteMarker: could not mark ${entityName} '${row.ID}': ${entityObject.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                 }
             } catch (error) {
-                // One unmarkable dependent must not stop the rest; the next Delete run picks it up.
+                // Attempt all dependents before failing, so one transient error still marks the rest.
+                failed++;
                 LogError(
                     `ContentPipelineDeleteMarker: could not mark ${entityName} '${row.ID}': ` +
                         `${error instanceof Error ? error.message : String(error)}`,
                 );
             }
         }
-        return marked;
+        return { Marked: marked, Failed: failed };
     }
 }

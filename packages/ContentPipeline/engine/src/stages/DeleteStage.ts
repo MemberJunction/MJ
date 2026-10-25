@@ -10,7 +10,7 @@
  */
 
 import { BaseEntity, CompositeKey, LogError, RunView } from '@memberjunction/core';
-import { MJFileEntity } from '@memberjunction/core-entities';
+import { MJContentItemEntity, MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 import { RegisterClass } from '@memberjunction/global';
 import { ContentVectorInfrastructure } from '@memberjunction/content-autotagging';
@@ -136,6 +136,7 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
                 return null;
             }
             await resolved.Driver.DeleteObject(resolved.ObjectKey);
+            await this.detachFileFromRecord(record, context);
             // Row after object: a failure between leaves a row pointing at nothing, not an object nothing points at.
             if (!(await file.Delete())) {
                 LogError(`DeleteStage: removed the kept copy '${fileID}' but not its row: ${file.LatestResult?.CompleteMessage ?? 'unknown error'}`);
@@ -150,6 +151,23 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
         }
     }
 
+    /** Clear `FileID` on the owning Content Item before deleting its `MJ: Files` row, so `FK_ContentItem_File` does not block `spDeleteFile`. */
+    private async detachFileFromRecord(record: WorkingRecord, context: StageContext): Promise<void> {
+        const recordID = record.Identity.RecordID;
+        if (record.Entity !== 'Content Item' || !recordID) {
+            return;
+        }
+        try {
+            const item = await context.Provider.GetEntityObject<MJContentItemEntity>('MJ: Content Items', context.ContextUser);
+            if (await item.InnerLoad(CompositeKey.FromID(recordID))) { // first-pk-ok: MJ core content entity, single-column ID
+                item.FileID = null;
+                await item.Save();
+            }
+        } catch {
+            // Best-effort detach before `file.Delete()`; if `file.Delete()` still fails, it logs above.
+        }
+    }
+
     /**
      * Remove the record's vector, driven by the `VectorRecordID` receipt Embed wrote, and routed the
      * way Embed routed the write — without the namespace Pinecone reports success and removes nothing.
@@ -161,6 +179,9 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
         const vectorRecordID = record.GetExtension<string>('Pipeline', 'vectorRecordID');
         if (!vectorRecordID) {
             return false;
+        }
+        if (context.IsTest) {
+            return true;
         }
         const routes = await RouteVectorRecords([record], this.infrastructure(context), context.Provider, context.ContextUser);
         const route = routes.get(record.Identity.Key) ?? { Error: 'no route was resolved' };
@@ -262,10 +283,17 @@ export class DeleteContentItemStage extends BaseDeleteStage {
 
     protected override async markDependents(record: WorkingRecord, context: StageContext): Promise<number> {
         const recordID = record.Identity.RecordID;
-        if (!recordID) {
+        if (!recordID || context.IsTest) {
             return 0;
         }
-        const service = new ContentPipelineDeleteMarker(context.Provider, context.ContextUser);
-        return service.MarkDependentsOf(recordID);
+        try {
+            const service = new ContentPipelineDeleteMarker(context.Provider, context.ContextUser);
+            return await service.MarkDependentsOf(recordID);
+        } catch (error) {
+            throw new TransientStageError(
+                error instanceof Error ? error.message : String(error),
+                { cause: error },
+            );
+        }
     }
 }

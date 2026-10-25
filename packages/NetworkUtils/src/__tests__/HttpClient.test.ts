@@ -433,3 +433,36 @@ describe('HttpRequest stream response + error handling', () => {
         expect(cancel).not.toHaveBeenCalled();
     });
 });
+
+describe('HttpRequest StripHeadersOnCrossOriginRedirect', () => {
+    it('strips headers on a cross-origin redirect when ValidateUrl is true', async () => {
+        StubFetch([
+            { status: 302, headers: { location: 'https://93.184.216.35/dest' } },
+            { status: 200, body: '{"ok":true}' },
+        ]);
+        await HttpGet('https://93.184.216.34/start', {
+            ValidateUrl: true,
+            StripHeadersOnCrossOriginRedirect: true,
+            Headers: { 'X-Api-Key': 'secret' },
+        });
+        expect(calls).toHaveLength(2);
+        expect(calls[0].init.headers).toEqual({ 'X-Api-Key': 'secret' });
+        expect(calls[1].init.headers).toBeUndefined();
+    });
+
+    it('strips headers on a cross-origin redirect even when ValidateUrl is false', async () => {
+        StubFetch([
+            { status: 302, headers: { location: 'https://other.example.net/dest' } },
+            { status: 200, body: '{"ok":true}' },
+        ]);
+        await HttpGet('https://source.example.com/start', {
+            ValidateUrl: false,
+            StripHeadersOnCrossOriginRedirect: true,
+            Headers: { 'X-Api-Key': 'secret' },
+        });
+        expect(calls).toHaveLength(2);
+        expect(calls[0].init.headers).toEqual({ 'X-Api-Key': 'secret' });
+        expect(calls[1].init.headers).toBeUndefined();
+    });
+});
+

@@ -251,6 +251,16 @@ describe('ExtractStage — failure classification', () => {
         await expect(new ExtractStage().Run(record, contextWith())).rejects.toThrow(/Cannot fetch/);
     });
 
+    it('treats HTTP 408, 425, and 429 as transient so rate-limited or timed-out fetches retry', async () => {
+        for (const status of [408, 425, 429]) {
+            fetchContent.mockRejectedValueOnce(
+                new HttpError(`Request failed with status code ${status}`, { Status: status, Url: 'https://x.test/page.html', Method: 'GET' }),
+            );
+            const record = itemAt('https://x.test/page.html');
+            await expect(new ExtractStage().Run(record, contextWith())).rejects.toThrow(/Fetching/);
+        }
+    });
+
     it('treats a network blip as transient', async () => {
         fetchContent.mockRejectedValue(new Error('socket hang up'));
         const record = itemAt('https://x.test/page.html');

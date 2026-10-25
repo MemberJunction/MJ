@@ -7,7 +7,7 @@
 
 import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { ResolveSegmenter } from '@memberjunction/ai-segmentation';
+import { ResolveSegmenter, SegmentationOptions } from '@memberjunction/ai-segmentation';
 import {
     BasePipelineStage,
     Outcome,
@@ -59,8 +59,9 @@ export class SegmentStage extends BasePipelineStage {
         try {
             result = await segmenter.Segment({
                 Text: text,
+                ContextUser: context.ContextUser,
                 Options: resolved.Options,
-            } as never);
+            });
         } catch (error) {
             throw new TransientStageError(
                 `Segmenting with '${segmenter.Key}' failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -114,7 +115,7 @@ export class SegmentStage extends BasePipelineStage {
     private async resolveSegmentation(
         record: WorkingRecord,
         context: StageContext,
-    ): Promise<{ SegmenterKey: string | null; Confidence: ResolvedConfidenceScale; Options: Record<string, unknown> }> {
+    ): Promise<{ SegmenterKey: string | null; Confidence: ResolvedConfidenceScale; Options: SegmentationOptions }> {
         const itemColumns = record.GetExtension<Record<string, unknown>>('Pipeline', 'columns');
         const fromColumns = typeof itemColumns?.SegmenterKeyOverride === 'string' && itemColumns.SegmenterKeyOverride.trim().length > 0
             ? itemColumns.SegmenterKeyOverride.trim()
@@ -128,7 +129,7 @@ export class SegmentStage extends BasePipelineStage {
             return {
                 SegmenterKey: itemOverride ?? runKey,
                 Confidence: ResolveConfidence(context.Configuration),
-                Options: (context.Configuration.SegmentationOptions as Record<string, unknown>) ?? {},
+                Options: (context.Configuration.SegmentationOptions as SegmentationOptions) ?? {},
             };
         }
         const knowledge = KnowledgeHubMetadataEngine.Instance;

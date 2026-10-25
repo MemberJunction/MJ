@@ -4,8 +4,6 @@
  * @module @memberjunction/content-pipeline-base
  */
 
-import path from 'node:path';
-
 /** Where a resolved file type came from, most authoritative first. */
 export type FileTypeEvidence = 'Declared' | 'ByteCorrection' | 'Signature' | 'Extension' | 'SourceDefault';
 
@@ -42,7 +40,7 @@ export function ResolveFileType(inputs: FileTypeInputs): ResolvedFileType {
         const corrected = signature !== null && signature !== declared && inputs.SignatureIsUnambiguous === true;
         return corrected ? { FileType: signature, Evidence: 'ByteCorrection' } : { FileType: declared, Evidence: 'Declared' };
     }
-    const extension = normalize(path.extname(inputs.FileName?.split(/[?#]/)[0] ?? '').slice(1));
+    const extension = normalize(extensionOf(inputs.FileName?.split(/[?#]/)[0] ?? ''));
     if (signature && (inputs.SignatureIsUnambiguous !== false || !extension)) {
         return { FileType: signature, Evidence: 'Signature' };
     }
@@ -53,20 +51,34 @@ export function ResolveFileType(inputs: FileTypeInputs): ResolvedFileType {
     return sourceDefault ? { FileType: sourceDefault, Evidence: 'SourceDefault' } : { FileType: null, Evidence: null };
 }
 
+/** Maximum UTF-16 code units sampled by {@link IsPlausibleText} so large unknown files stay O(1) in memory. */
+const PLAUSIBLE_TEXT_SAMPLE_LIMIT = 65536;
+
 /** Whether a plain-text fallback read is real text, so mojibake never reaches tags, chunks or vectors. */
 export function IsPlausibleText(text: string, minimumPrintableRatio = 0.85): boolean {
     if (text.length === 0) {
         return false;
     }
+    const sample = text.length > PLAUSIBLE_TEXT_SAMPLE_LIMIT ? text.slice(0, PLAUSIBLE_TEXT_SAMPLE_LIMIT) : text;
     let printable = 0;
-    for (const char of text) {
+    let total = 0;
+    for (const char of sample) {
+        total++;
         const code = char.codePointAt(0) ?? 0;
         // Tab, newline, carriage return, or anything from space upward that is not a C1 control.
         if (code === 9 || code === 10 || code === 13 || (code >= 32 && !(code >= 127 && code <= 159))) {
             printable++;
         }
     }
-    return printable / [...text].length >= minimumPrintableRatio;
+    return total > 0 && printable / total >= minimumPrintableRatio;
+}
+
+/** Extract the file extension (without the leading dot), matching `path.extname(p).slice(1)` without a Node dependency. */
+function extensionOf(filePath: string): string {
+    const lastSep = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
+    const base = lastSep >= 0 ? filePath.slice(lastSep + 1) : filePath;
+    const dot = base.lastIndexOf('.');
+    return dot > 0 ? base.slice(dot + 1) : '';
 }
 
 /** Lowercase and trim, mapping empty to null. */

@@ -59,7 +59,7 @@ All active source drivers and shared AI/vector helpers have been unified with th
 | Capability | Active Pipeline Component | Legacy Status |
 |---|---|---|
 | **Source Drivers** | `AutotagBase` subclasses (`AutotagLocalFileSystem`, `AutotagCloudStorage`, `AutotagRSSFeed`, `AutotagWebsite`, `AutotagEntity`) implement `Discover(request)` for `DiscoverStage` and `Fetch(request)` for `ExtractStage` | `Autotag()` and `SetContentItemsToProcess()` are marked `@deprecated` |
-| **Document Parsing** | [`@memberjunction/document-parsing`](../packages/DocumentParsing/src/index.ts) (`ParsePDF`, `ParseDOCX`, `ParseXLSX`) invoked by `DocumentExtractor` in `ExtractStage` | Legacy `AutotagBaseEngine` parse methods delegate here |
+| **Document Parsing** | [`@memberjunction/document-parsing`](../packages/DocumentParsing/src/index.ts) (`ParsePdf`, `ParseWord`, `ParseSpreadsheet`) invoked by `DocumentExtractor` in `ExtractStage` | Legacy `AutotagBaseEngine` parse methods delegate here |
 | **Metadata Caching** | `KnowledgeHubMetadataEngine` (`@memberjunction/core-entities`) caches `MJ: Content Sources`, `MJ: Content Types`, `MJ: Content Type Attributes`, `MJ: Content Source Types`, `MJ: Content File Types`, and `MJ: Entity Documents` | `AutotagBaseEngine` delegates to `KnowledgeHubMetadataEngine` |
 | **LLM Classification & Custom Attributes** | `ManagedPromptClassifier` (`TagStage`) calls `ContentAutotagPrompt` (`GetContentAutotagPrompt`, `BuildContentAutotagPromptData`, `GetContentTypeAttributePrompt`, `RunContentAutotagPrompt` with `ContentType.AIModelID` override) and persists `MJ: Content Item Tags` + `MJ: Content Item Attributes` | `AutotagBaseEngine` is marked `@deprecated` |
 | **Taxonomy Promotion** | `ContentItemTagBridge` & `TagEngine` (`@memberjunction/tag-engine`) resolve free-text tags into `MJ: Tags` and create `MJ: Tagged Items` during `TagStage` | Unified into `@memberjunction/tag-engine` |
@@ -106,10 +106,11 @@ erDiagram
     ContentFileType {
         uuid ID PK
         string Name
-        string Extension
+        string FileExtension
         string MIMEType
         string ExtractorKey
         text ByteSignature
+        bit IsText
     }
     ContentItem {
         uuid ID PK
@@ -117,8 +118,10 @@ erDiagram
         uuid ContentTypeID FK
         uuid ContentFileTypeID FK
         uuid ContentSourceTypeID FK
-        uuid ParentContentItemID FK
+        uuid ParentID FK
         uuid EntityRecordDocumentID FK
+        uuid VectorIndexID FK
+        string VectorRecordID
         string Name
         string URL
         text Text
@@ -214,7 +217,7 @@ sequenceDiagram
 
 ### Strict Separation of Concerns
 
-1. **Stages never touch the database directly** for the working record. They read and mutate an in-memory `WorkingRecord` (`Propose`, `SetExtension`, `ProduceChild`) and return a `StageOutcome`.
+1. **Stages never touch the database directly** for the working record. They read and mutate an in-memory `WorkingRecord` (`Propose`, `SetExtension`, `AddChild`) and return a `StageOutcome`.
 2. **`WorkingRecordHydrator` and `WorkingRecordCommitter` own persistence.** Only the hydrator and committer translate between `WorkingRecord` fields and `MJContentSourceEntity`, `MJContentItemEntity`, and `MJContentItemChunkEntity`.
 3. **Cold-start resilience.** Every stage runs against a freshly hydrated `WorkingRecord` with no assumption that an earlier stage ran in the same process. When `Stages` chains multiple stages in a test run (e.g. `["Discover", "Extract"]`), `PipelineProcessor` passes produced records in memory from stage to stage without writing to the database.
 
@@ -238,7 +241,7 @@ record.Propose('Title', discoveredTitle, confidence.DiscoveredTitle, 'Discover')
 record.Propose('Title', extractedTitle, confidence.ExtractorTitle, 'Extract');
 ```
 
-A proposal wins **only if its confidence score is greater than or equal to** the field's recorded score in `FieldConfidence` (a JSON column persisted on `MJ: Content Items`). Because `ExtractorTitle` (`6`) outranks `DiscoveredTitle` (`4`) by default, a title extracted from the document body upgrades a raw filename discovered from a directory listing — while a source that has authoritative listing titles (like an Entity or curated RSS feed) can override `"Confidence": { "DiscoveredTitle": 8 }` on the `ContentSource` so the listing title wins.
+Across stages, a proposal wins **only if its confidence score is strictly greater than** the field's hydrated score in `FieldConfidence` (a JSON column persisted on `MJ: Content Items`); within the same stage invocation, an equal-or-higher score (`>=`) can refine a proposal made earlier in that same run. Because `ExtractorTitle` (`6`) outranks `DiscoveredTitle` (`4`) by default, a title extracted from the document body upgrades a raw filename discovered from a directory listing — while a source that has authoritative listing titles (like an Entity or curated RSS feed) can override `"Confidence": { "DiscoveredTitle": 8 }` on the `ContentSource` so the listing title wins.
 
 ### Default `ConfidenceScale`
 
@@ -304,11 +307,11 @@ Every stage resolves its driver keys (`ExtractorKey`, `SegmenterKey`, `Classifie
 #### Safeguards in `Discover` and `Sync`
 
 - **Clock-Skew Overlap (`ClockSkewOverlapMs`)**: Defaults to `60,000` ms (60 seconds). Subtracted from `LastDiscoveredAt` when computing `request.Since` so items committed just before the watermark on a clock-drifted remote server are never missed. Also subtracted from `walkStartedAt` during `Sync` so items created concurrently during the walk are never falsely marked as orphans.
-- **Mass-Deletion Circuit Breaker (`MaxSyncRemovalShare`)**: Defaults to `0.5` (50%). If a `Sync` walk would mark more than 50% of a source's active top-level items as `DeleteStatus = 'Pending'` (for example, when an upstream API returns a partial outage response), `PipelineProcessor` aborts orphan marking for that source and logs a warning.
+- **Mass-Deletion Circuit Breaker (`MaxSyncRemovalShare`)**: Defaults to `0.5` (50%). If a `Sync` walk would mark more than 50% of a source's active top-level items as `DeleteStatus = 'Pending'` (for example, when an upstream API returns a partial outage response), `DiscoverStage` returns `Outcome.Fatal(...)`, halting the sync and marking the source failed without queuing mass deletions.
 - **Inline Text Checksum Optimization**: When a driver supplies inline `Text` during `Discover`, `DiscoverStage` computes its SHA-256 `Checksum` immediately. If the item already exists with the identical SHA-256 checksum and `ExtractionStatus = 'Complete'`, `WorkingRecordCommitter` skips resetting `ExtractionStatus` to `'Pending'` — avoiding redundant downstream work on every `Sync` or `Discover` pass. If item metadata (`Name`, `Description`, or driver `Columns`) changed while the text checksum stayed the same and `EmbeddingStatus = 'Complete'`, it promotes `EmbeddingStatus` to `'MetadataOnly'`.
-- **Two Driver Channels (`Columns` vs `Request`)**:
+- **Driver Channels (`Columns` and `Request`)**:
   - `DiscoveredItem.Columns`: Whitelisted entity columns on `MJ: Content Items` (`EntityRecordDocumentID` and custom schema columns; framework-owned status, checksum, and audit columns are blocked by `FRAMEWORK_OWNED_COLUMNS`).
-  - `DiscoveredItem.Request`: Per-item fetch recipe (`Method`, `Headers`, `Body`) persisted into `ContentItem.Configuration` (`__fetchRequest`) and consumed by `ContentFetcher` during `Extract`.
+  - `DiscoveredItem.Request`: Explicit reprocessing hint (`'MetadataChanged' | 'Reextract' | 'Reprocess'`) telling the committer how far back in the pipeline to reset an existing item.
 
 #### Registering a Custom Source Driver
 
@@ -367,16 +370,16 @@ Before fetching bytes, `AccessResolver` resolves any `AccessCredentials` configu
 
 #### Step 2: File-Type Detection & `ExtractorCascade`
 
-If the driver did not already supply inline text, `ExtractStage` inspects magic byte signatures (`MatchByteSignature`) and MIME/extension rules loaded from the 39 rows in `MJ: Content File Types` (`DetectionCatalog`), then selects an extractor via `ExtractorCascade`:
+If the driver did not already supply inline text, `ExtractStage` inspects magic byte signatures (`DetectByteSignature`) and MIME/extension rules loaded from the 39 rows in `MJ: Content File Types` (`DetectionCatalog`), then selects an extractor via `ExtractorCascade`:
 
 | Extractor Key | Class | Supported Formats |
 |---|---|---|
 | `PlainText` | `PlainTextExtractor` | UTF-8 / text formats (`.txt`, `.md`, `.csv`, `.json`, `.yaml`, source code) validated by `IsPlausibleText` |
 | `Html` | `HtmlExtractor` | HTML / XHTML pages (strips script/style chrome, extracts title & structural text) |
 | `Pdf` / `Word` / `Spreadsheet` | `DocumentExtractor` | PDF, `.docx`, and `.xlsx` via [`@memberjunction/document-parsing`](../packages/DocumentParsing/src/index.ts) |
-| `Archive` | `ArchiveExtractor` | `.zip` and `.tar` / `.tar.gz` archives — recursively extracts members as child `WorkingRecord` items under a shared whole-tree `ArchiveBudget` (`MaxArchiveMembers`, `MaxArchiveBytes`, `MaxArchiveDepth`) that fails closed if any limit is exceeded |
+| `Archive` | `ArchiveExtractor` | `.zip` and `.gz` archives — recursively extracts members as child `WorkingRecord` items under a shared whole-tree `ArchiveBudget` (`MaxArchiveMembers`, `MaxArchiveBytes`, `MaxArchiveDepth`) that fails closed if any limit is exceeded |
 
-Non-text binary media (images, audio, video) that are not archives can be persisted as durable copies in `FileStorageEngine` (`KeepOriginalBytes` + `RenderStorageObjectKey` validated by `IsSafeStorageObjectKey`) and routed down the multimodal path.
+Non-text binary media (images, audio, video) that are not archives can be persisted as durable copies in `FileStorageEngine` (`ExtractStage.persistDurableCopy` using `ResolveObjectKey` from `@memberjunction/content-pipeline-base`) and routed down the multimodal path.
 
 #### Step 3: SHA-256 Content Checksum Reconciliation
 
@@ -461,9 +464,9 @@ See the **[Taxonomy & Tagging Guide](TAXONOMY_TAGGING_GUIDE.md)** for full detai
 `SegmentStage` splits `ContentItem.Text` into `MJ: Content Item Chunks` using [`@memberjunction/ai-segmentation`](CONTENT_SEGMENTATION_GUIDE.md):
 1. Resolves `SegmenterKey` through the 5-level configuration cascade (`StructuralText`, `AdaptiveBoundary`, `SemanticText`, `Transcript`, `FixedWindow`, or `SuggestSegmenterKey` auto-selection).
 2. Calls `segmenter.Segment(...)` using the target embedding model's token budget.
-3. **Chunk Reconciliation on Commit**:
-   - Matching or updated chunk positions upsert `MJ: Content Item Chunks` with `EmbeddingStatus = 'Pending'` (if text changed).
-   - **Surplus Chunks**: If a re-segmentation produces fewer chunks than the item previously had (e.g., 5 chunks instead of 8), the surplus old chunks (indices 5..7) are marked `DeleteStatus = 'Pending'` so the `Delete Chunks` process removes their stale vectors from the vector database before purging the rows.
+3. **Chunk Replacement & Retirement on Commit (`supersededChunks`)**:
+   - New chunk rows produced by `SegmentStage` are inserted as `MJ: Content Item Chunks` with `EmbeddingStatus = 'Pending'`.
+   - **Superseded Chunks**: Any prior live chunks on the item are retired by `WorkingRecordCommitter.supersededChunks` — chunks that already have a `VectorRecordID` (or non-Pending `EmbeddingStatus`) are marked `DeleteStatus = 'Pending'` so the `Delete Chunks` process removes their stale vectors from the vector database before purging the rows, while unembedded pending chunks are deleted immediately.
 
 ---
 
@@ -477,7 +480,7 @@ See the **[Taxonomy & Tagging Guide](TAXONOMY_TAGGING_GUIDE.md)** for full detai
 
 #### Five-Step Vector Index Resolution Cascade
 
-`ContentVectorInfrastructure.ResolveVectorTarget` resolves the target `MJ: Vector Indexes` row and embedding `MJ: AI Models` row in strict priority order:
+`ContentVectorInfrastructure.Resolve` resolves the target `MJ: Vector Indexes` row and embedding `MJ: AI Models` row in strict priority order:
 
 1. **Content Source**: `ContentSource.VectorIndexID` (using `ContentSource.EmbeddingModelID` if set, otherwise falling back to the vector index's own `VectorIndex.EmbeddingModelID`).
 2. **Content Type**: `ContentType.VectorIndexID` (using `ContentType.EmbeddingModelID` if set, otherwise `VectorIndex.EmbeddingModelID`).

@@ -140,3 +140,87 @@ describe('what is left behind once the vector is gone', () => {
         expect(new DeleteStage().StatusForOutcome('Failed')).toBeNull();
     });
 });
+
+describe('DeleteContentItemStage — dependent marking and dry-run isolation', () => {
+    it('fails transiently (leaving the item Pending) when any dependent Save returns false or throws, after attempting all dependents', async () => {
+        const { DeleteContentItemStage } = await import('../stages/DeleteStage.js');
+        const states: Record<string, string | null> = { C1: null, C2: null, K1: null };
+
+        const makeProvider = (mode: 'all-false' | 'throws' | 'partial' | 'all-ok') => ({
+            EntityByName: () => undefined,
+            RunViews: async () => [
+                { Success: true, Results: [{ ID: 'C1' }, { ID: 'C2' }] },
+                { Success: true, Results: [{ ID: 'K1' }] },
+            ],
+            GetEntityObject: async (_entityName: string) => {
+                let loadedId = '';
+                const obj = {
+                    DeleteStatus: null as string | null,
+                    LatestResult: { CompleteMessage: 'save refused' },
+                    InnerLoad: async (key: { KeyValuePairs: { Value: string }[] }) => {
+                        loadedId = key.KeyValuePairs[0].Value;
+                        return true;
+                    },
+                    Save: async () => {
+                        if (mode === 'all-false') {
+                            return false;
+                        }
+                        if (mode === 'throws') {
+                            throw new Error('deadlock');
+                        }
+                        if (mode === 'partial' && loadedId === 'C2') {
+                            return false;
+                        }
+                        states[loadedId] = obj.DeleteStatus;
+                        return true;
+                    },
+                };
+                return obj;
+            },
+        });
+
+        const itemRecord = () => new WorkingRecord(new WorkingRecordIdentity('Content Item', 'https://x.test/item', 'ITEM-1'));
+
+        await expect(
+            new DeleteContentItemStage().Run(itemRecord(), { ...contextWith(), Provider: makeProvider('all-false') as never }),
+        ).rejects.toThrow(/Could not mark 3 dependent\(s\)/);
+
+        await expect(
+            new DeleteContentItemStage().Run(itemRecord(), { ...contextWith(), Provider: makeProvider('throws') as never }),
+        ).rejects.toThrow(/Could not mark 3 dependent\(s\)/);
+
+        states.C1 = null;
+        states.C2 = null;
+        states.K1 = null;
+        await expect(
+            new DeleteContentItemStage().Run(itemRecord(), { ...contextWith(), Provider: makeProvider('partial') as never }),
+        ).rejects.toThrow(/Could not mark 1 dependent\(s\)/);
+        expect(states).toEqual({ C1: 'Pending', C2: null, K1: 'Pending' });
+
+        states.C1 = null;
+        states.C2 = null;
+        states.K1 = null;
+        const okOutcome = await new DeleteContentItemStage().Run(itemRecord(), {
+            ...contextWith(),
+            Provider: makeProvider('all-ok') as never,
+        });
+        expect(okOutcome.Status).toBe('Complete');
+        expect(states).toEqual({ C1: 'Pending', C2: 'Pending', K1: 'Pending' });
+    });
+
+    it('skips vector deletion and dependent marking when IsTest is true', async () => {
+        const { DeleteContentItemStage } = await import('../stages/DeleteStage.js');
+        const runViews = vi.fn();
+        const item = new WorkingRecord(new WorkingRecordIdentity('Content Item', 'https://x.test/item', 'ITEM-1'));
+        item.SetExtension('Pipeline', 'vectorRecordID', 'vec-test-1');
+
+        const outcome = await new DeleteContentItemStage().Run(item, {
+            ...contextWith(),
+            IsTest: true,
+            Provider: { EntityByName: () => undefined, RunViews: runViews } as never,
+        });
+        expect(outcome.Status).toBe('Complete');
+        expect(runViews).not.toHaveBeenCalled();
+    });
+});
+

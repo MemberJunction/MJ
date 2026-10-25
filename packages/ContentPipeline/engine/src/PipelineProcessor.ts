@@ -198,8 +198,14 @@ export class PipelineProcessor implements IRecordProcessor {
                     budget.Expired && rawOutcome.Status === 'Complete'
                         ? Outcome.Retry(`${this.lastStage.Name} ran out of its ${this.config.StageBudgetMs}ms budget`)
                         : rawOutcome;
-                const committed = entry ? await this.persist(entry.Working, outcome, context) : null;
-                results.set(entry?.RecordID ?? Key, this.toRecordResult(outcome, started, committed));
+                try {
+                    const committed = entry ? await this.persist(entry.Working, outcome, context) : null;
+                    results.set(entry?.RecordID ?? Key, this.toRecordResult(outcome, started, committed));
+                } catch (commitError) {
+                    const failedOutcome = this.classify(commitError);
+                    const committed = entry ? await this.persist(entry.Working, failedOutcome, context).catch(() => null) : null;
+                    results.set(entry?.RecordID ?? Key, this.toRecordResult(failedOutcome, started, committed));
+                }
             }
         } catch (error) {
             const outcome = this.classify(error);

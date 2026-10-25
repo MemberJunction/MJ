@@ -44,7 +44,8 @@ class TestAccessDriver extends BaseAccessDriver {
 @RegisterClass(BaseAccessDriver, 'test-access-failing')
 class FailingAccessDriver extends BaseAccessDriver {
     public readonly Key = 'test-access-failing';
-    public async Connect(): Promise<AccessArtifact> {
+    public async Connect(request: AccessRequest): Promise<AccessArtifact> {
+        connects.push(request);
         throw new Error('the identity provider said no');
     }
 }
@@ -158,12 +159,15 @@ describe('sessions are cached per source AND per role', () => {
         expect(connects).toHaveLength(2);
     });
 
-    it('re-opens an expired session rather than handing back a dead one', async () => {
+    it('re-opens an expired session once across concurrent callers rather than stampeding', async () => {
         const r = resolver();
         const config = configuration({}, { AccessDriverKey: 'test-access' });
         expiresAt = new Date(Date.now() - 1000);
         await r.Artifact('S1', DEFAULT_ACCESS_ROLE, config);
-        await r.Artifact('S1', DEFAULT_ACCESS_ROLE, config);
+        expect(connects).toHaveLength(1);
+
+        expiresAt = new Date(Date.now() + 60_000);
+        await Promise.all(Array.from({ length: 20 }, () => r.Artifact('S1', DEFAULT_ACCESS_ROLE, config)));
         expect(connects).toHaveLength(2);
     });
 
@@ -172,6 +176,16 @@ describe('sessions are cached per source AND per role', () => {
         const config = configuration({}, { AccessDriverKey: 'test-access-failing' });
         await expect(r.Artifact('S1', DEFAULT_ACCESS_ROLE, config)).rejects.toThrow();
         await expect(r.Artifact('S1', DEFAULT_ACCESS_ROLE, config)).rejects.toThrow();
+        expect(connects).toHaveLength(2);
+    });
+
+    it('re-opens after Evict is called for a source', async () => {
+        const r = resolver();
+        const config = configuration({}, { AccessDriverKey: 'test-access' });
+        await r.Artifact('S1', DEFAULT_ACCESS_ROLE, config);
+        r.Evict('S1');
+        await r.Artifact('S1', DEFAULT_ACCESS_ROLE, config);
+        expect(connects).toHaveLength(2);
     });
 });
 

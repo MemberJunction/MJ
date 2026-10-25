@@ -225,14 +225,18 @@ export class AccessResolver {
                 if (!this.expired(session.Artifact)) {
                     return session;
                 }
-                byRole.delete(role);
+                if (byRole.get(role) === existing) {
+                    byRole.delete(role);
+                }
                 return this.session(contentSourceID, role, resolved);
             });
         }
         const promise = this.open(contentSourceID, role, resolved).catch((error: unknown) => {
             // A failed exchange must not be cached, or one transient outage poisons the rest of the
             // run for this source.
-            byRole.delete(role);
+            if (byRole.get(role) === promise) {
+                byRole.delete(role);
+            }
             throw error;
         });
         byRole.set(role, promise);

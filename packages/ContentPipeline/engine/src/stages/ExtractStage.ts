@@ -91,7 +91,7 @@ export class ExtractStage extends BasePipelineStage {
             case 'NonText':
                 return this.handleNonText(record, read.FileType, source, fetched, context);
             case 'NoExtractor':
-                return this.fallbackText(record, fetched.Content, source.Confidence, context)
+                return this.fallbackText(record, fetched.Content, source, context)
                     ? Outcome.Complete(`read as plain text (no extractor for '${read.FileType || 'unknown'}')`)
                     : Outcome.Fatal(`No extractor handles '${read.FileType || 'unknown'}' and a plain-text read is unreadable`);
             case 'Read':
@@ -266,7 +266,7 @@ export class ExtractStage extends BasePipelineStage {
             return this.keepOrComplete(child, bytes, source, context);
         }
         if (read.Kind === 'NoExtractor') {
-            if (!this.fallbackText(child, bytes, source.Confidence, context)) {
+            if (!this.fallbackText(child, bytes, source, context)) {
                 child.MarkComplete();
             }
             return;
@@ -314,12 +314,18 @@ export class ExtractStage extends BasePipelineStage {
     }
 
     /** The last-resort plain-text read, sanity-checked so mojibake never reaches tags, chunks and vectors. */
-    private fallbackText(record: WorkingRecord, content: Uint8Array, confidence: ResolvedConfidenceScale, context: StageContext): boolean {
+    private fallbackText(record: WorkingRecord, content: Uint8Array, source: ResolvedSource, context: StageContext): boolean {
         const text = new TextDecoder('utf-8', { fatal: false }).decode(content);
-        if (!IsPlausibleText(text, ResolveTuning(context.Configuration).MinimumPrintableRatio)) {
+        const tuning = ResolveTuning(
+            source.Resolved?.TypeConfiguration,
+            source.Resolved?.Configuration,
+            source.Resolved?.Settings,
+            context.Configuration,
+        );
+        if (!IsPlausibleText(text, tuning.MinimumPrintableRatio)) {
             return false;
         }
-        record.Propose('Text', text, confidence.FallbackText, `${EXTRACT_STAGE}.PlainTextFallback`);
+        record.Propose('Text', text, source.Confidence.FallbackText, `${EXTRACT_STAGE}.PlainTextFallback`);
         record.SetExtension(EXTRACT_STAGE, 'isFallback', true);
         record.SetExtension('Pipeline', 'checksum', this.sha256Text(text));
         return true;
@@ -381,13 +387,15 @@ export class ExtractStage extends BasePipelineStage {
         }
     }
 
-    /** A 4xx, an unregistered driver or a locator outside its source will never succeed; anything else might. */
+    /** A permanent 4xx (excluding 408/425/429), an unregistered driver or a locator outside its source will never succeed; anything else might. */
     private classifyFetchError(url: string, error: unknown): Error {
         if (error instanceof FatalStageError) {
             return error;
         }
         const message = messageOf(error);
-        const clientError = IsHttpError(error) && error.Status >= 400 && error.Status < 500;
+        const transientClientStatuses = new Set([408, 425, 429]);
+        const clientError =
+            IsHttpError(error) && error.Status >= 400 && error.Status < 500 && !transientClientStatuses.has(error.Status);
         if (clientError || /outside|not found|does not exist|ENOENT/i.test(message)) {
             return new FatalStageError(`Cannot fetch '${url}': ${message}`);
         }

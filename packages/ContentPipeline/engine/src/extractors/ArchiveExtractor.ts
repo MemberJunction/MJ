@@ -28,6 +28,12 @@ export interface ArchiveMember {
     Content: Uint8Array;
 }
 
+/** JSZip's runtime `ZipObject` shape beyond its public `.d.ts`: central-directory size and chunked stream helper. */
+interface JSZipInternalObject extends JSZip.JSZipObject {
+    _data?: { uncompressedSize?: number };
+    internalStream?(type: 'uint8array'): JSZip.JSZipStreamHelper<Uint8Array>;
+}
+
 /** Reads zip and gzip. A deployment needing another format subclasses `Unpack` at the same key. */
 @RegisterClass(BaseContentExtractor, ARCHIVE_EXTRACTOR)
 export class ArchiveExtractor extends BaseContentExtractor {
@@ -78,8 +84,10 @@ export class ArchiveExtractor extends BaseContentExtractor {
             budget.RemainingMembers -= 1;
             const inflated = gunzipSync(request.Content, { maxOutputLength: budget.RemainingBytes });
             budget.RemainingBytes -= inflated.byteLength;
-            // `report.csv.gz` holds `report.csv`.
-            const name = path.posix.basename(request.URL.split(/[?#]/)[0]).replace(/\.gz$/i, '') || 'content';
+            // `report.csv.gz` holds `report.csv`; a nested `bundle.zip#data/report.csv.gz` uses the fragment's member path.
+            const hashIndex = request.URL.lastIndexOf('#');
+            const sourcePath = hashIndex >= 0 ? request.URL.slice(hashIndex + 1) : request.URL.split(/[?#]/)[0];
+            const name = path.posix.basename(sourcePath).replace(/\.gz$/i, '') || 'content';
             return [{ Path: name, Content: new Uint8Array(inflated) }];
         }
         throw new Error(`'${request.FileType}' is not an archive format this reads (zip, gz)`);
@@ -94,14 +102,78 @@ export class ArchiveExtractor extends BaseContentExtractor {
         budget.RemainingMembers -= files.length;
         const members: ArchiveMember[] = [];
         for (const file of files) {
-            const content = await file.async('uint8array');
-            if (content.length > budget.RemainingBytes) {
-                throw new Error(`the archive expands past the limit of ${budget.RemainingBytes} bytes`);
-            }
-            budget.RemainingBytes -= content.length;
+            const content = await this.inflateZipMember(file, budget);
             members.push({ Path: file.name, Content: content });
         }
         return members;
+    }
+
+    /**
+     * Inflate one ZIP member while bounding memory to `budget.RemainingBytes`:
+     * 1. Fast-fail against JSZip's central-directory `uncompressedSize` before inflating.
+     * 2. Stream chunks via `internalStream('uint8array')`, pausing and rejecting immediately if the
+     *    actual inflated bytes exceed `budget.RemainingBytes` (defending against forged headers).
+     */
+    private async inflateZipMember(file: JSZip.JSZipObject, budget: ArchiveBudget): Promise<Uint8Array> {
+        const internal = file as JSZipInternalObject;
+        const declaredSize = internal._data?.uncompressedSize;
+        if (typeof declaredSize === 'number' && declaredSize > budget.RemainingBytes) {
+            throw new Error(`the archive expands past the limit of ${budget.RemainingBytes} bytes`);
+        }
+        if (typeof internal.internalStream === 'function') {
+            return new Promise<Uint8Array>((resolve, reject) => {
+                const chunks: Uint8Array[] = [];
+                let total = 0;
+                let settled = false;
+                const stream = internal.internalStream!('uint8array');
+                stream
+                    .on('data', (chunk: Uint8Array) => {
+                        if (settled) {
+                            return;
+                        }
+                        total += chunk.byteLength;
+                        if (total > budget.RemainingBytes) {
+                            settled = true;
+                            stream.pause();
+                            reject(new Error(`the archive expands past the limit of ${budget.RemainingBytes} bytes`));
+                            return;
+                        }
+                        chunks.push(chunk);
+                    })
+                    .on('end', () => {
+                        if (settled) {
+                            return;
+                        }
+                        settled = true;
+                        budget.RemainingBytes -= total;
+                        if (chunks.length === 1) {
+                            resolve(chunks[0]);
+                            return;
+                        }
+                        const merged = new Uint8Array(total);
+                        let offset = 0;
+                        for (const chunk of chunks) {
+                            merged.set(chunk, offset);
+                            offset += chunk.byteLength;
+                        }
+                        resolve(merged);
+                    })
+                    .on('error', (err: Error) => {
+                        if (settled) {
+                            return;
+                        }
+                        settled = true;
+                        reject(err);
+                    })
+                    .resume();
+            });
+        }
+        const content = await file.async('uint8array');
+        if (content.length > budget.RemainingBytes) {
+            throw new Error(`the archive expands past the limit of ${budget.RemainingBytes} bytes`);
+        }
+        budget.RemainingBytes -= content.length;
+        return content;
     }
 
     /**

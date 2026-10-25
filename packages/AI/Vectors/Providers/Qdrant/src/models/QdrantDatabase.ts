@@ -486,7 +486,7 @@ export class QdrantDatabase extends VectorDBBase {
             return this.wrapSuccessResponse(null);
         } catch (ex) {
             LogError('Error updating records in Qdrant', undefined, ex);
-            return this.wrapFailureResponse('Failed to update records');
+            return this.wrapFailureResponse(ex instanceof Error ? ex.message : 'Failed to update records');
         }
     }
 

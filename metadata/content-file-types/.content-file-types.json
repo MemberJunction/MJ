@@ -101,7 +101,7 @@
     "fields": {
       "Name": "MP4",
       "FileExtension": ".mp4",
-      "ByteSignature": "{\"Magic\":[102,116,121,112],\"Offset\":4,\"Unambiguous\":true}",
+      "ByteSignature": "{\"Magic\":[102,116,121,112],\"Offset\":4,\"Unambiguous\":false}",
       "IsText": false
     },
     "primaryKey": {

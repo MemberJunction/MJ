@@ -48,8 +48,9 @@ export class HtmlExtractor extends BaseContentExtractor {
      * unterminated tag cannot make this scan the whole body repeatedly.
      */
     private titleOf(html: string): string | null {
-        const match = /<title[^>]*>([^<]{0,300})/i.exec(html.slice(0, 8192));
-        const title = match?.[1]?.trim();
-        return title && title.length > 0 ? title : null;
+        const match = /<title[^>]*>([^<]{0,300})/i.exec(html);
+        const raw = match?.[1];
+        const title = raw ? TextExtractor.ExtractFromHTML(raw).trim() : '';
+        return title.length > 0 ? title : null;
     }
 }
