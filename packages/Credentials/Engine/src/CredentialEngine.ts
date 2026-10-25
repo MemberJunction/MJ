@@ -23,13 +23,16 @@ import {
     ResolvedCredential,
     StoreCredentialOptions,
     CredentialValidationResult,
-    CredentialAccessDetails
+    CredentialAccessDetails,
+    UserDelegatedOAuthCredentialValues,
+    StoreUserDelegatedCredentialOptions
 } from "./types";
 import {
     CredentialExpirationConfig,
     CredentialExpirationEvaluation,
     CredentialExpiredError,
     CredentialNotFoundError,
+    CredentialOwnerMismatchError,
     DEFAULT_EXPIRATION_CONFIG,
     EvaluateExpiration
 } from "./expiration";
@@ -384,7 +387,19 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
                     this.warnIfExpiringOrExpired(credential, expiration);
 
                     // Values field is already decrypted by BaseEntity via field-level encryption
-                    values = this.parseCredentialValues(credential.Values) as T;
+                    const parsedValues = this.parseCredentialValues(credential.Values);
+                    // Enforce strict OwnerUserID isolation for user-delegated (3LO) credentials
+                    if (parsedValues.ownerUserId) {
+                        const requestingUserId = options.contextUser?.ID ?? null;
+                        if (!requestingUserId || !UUIDsEqual(parsedValues.ownerUserId, requestingUserId)) {
+                            throw new CredentialOwnerMismatchError(
+                                credential.Name,
+                                parsedValues.ownerUserId,
+                                requestingUserId
+                            );
+                        }
+                    }
+                    values = parsedValues as T;
                     source = 'database';
                 } else {
                     throw new CredentialNotFoundError(credentialName);
@@ -674,6 +689,180 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         contextUser: UserInfo
     ): Promise<CredentialValidationResult> {
         return this.ValidateCredential(credentialId, contextUser);
+    }
+
+    // ====================================
+    // Per-User Delegated OAuth (3LO) Isolation
+    // ====================================
+
+    /**
+     * Builds the canonical, isolated credential name for a user-delegated OAuth 2.0 (`3LO`) token.
+     */
+    public BuildUserDelegatedCredentialName(providerName: string, ownerUserId: string): string {
+        return `UserOAuth3LO:${providerName.trim()}:${ownerUserId.trim().toLowerCase()}`;
+    }
+
+    /**
+     * Stores or rotates a per-user delegated OAuth 2.0 (`3LO`) credential with strict `ownerUserId`
+     * isolation bound inside the encrypted `Values` payload.
+     */
+    public async StoreUserDelegatedCredential(
+        options: StoreUserDelegatedCredentialOptions,
+        contextUser: UserInfo
+    ): Promise<MJCredentialEntity> {
+        this.TryThrowIfNotLoaded();
+
+        if (!contextUser?.ID || !UUIDsEqual(options.ownerUserId, contextUser.ID)) {
+            throw new CredentialOwnerMismatchError(
+                this.BuildUserDelegatedCredentialName(options.providerName, options.ownerUserId),
+                options.ownerUserId,
+                contextUser?.ID ?? null
+            );
+        }
+
+        const credentialName = this.BuildUserDelegatedCredentialName(options.providerName, options.ownerUserId);
+        const payload: UserDelegatedOAuthCredentialValues = {
+            ownerUserId: options.ownerUserId,
+            principalEmail: options.principalEmail.trim().toLowerCase(),
+            providerName: options.providerName.trim(),
+            accessToken: options.accessToken,
+            refreshToken: options.refreshToken ?? '',
+            tokenType: options.tokenType ?? 'Bearer',
+            scope: options.scope ?? '',
+            tenantId: options.tenantId ?? '',
+            issuedAt: new Date().toISOString(),
+        };
+
+        const existing = this._credentials.find(
+            (c) => c.Name.trim().toLowerCase() === credentialName.toLowerCase()
+        );
+        if (existing) {
+            await this.enqueueCredentialWrite(existing.ID, async () => {
+                const md = this.ProviderToUse;
+                const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
+                const loaded = await credEntity.Load(existing.ID);
+                if (!loaded) {
+                    throw new Error(`Credential not found: ${existing.ID}`);
+                }
+                credEntity.Values = JSON.stringify(payload);
+                credEntity.IsActive = true;
+                credEntity.ExpiresAt = options.expiresAt ?? null;
+                const saved = await credEntity.Save();
+                if (!saved) {
+                    throw new Error('Failed to update user-delegated credential');
+                }
+                await this.logAccess(credEntity, contextUser, {
+                    operation: 'Update',
+                    subsystem: 'UserDelegatedOAuth3LO',
+                    success: true,
+                });
+                await this.RefreshItem('_credentials');
+            });
+            return this.GetCredentialById(existing.ID)!;
+        }
+
+        const requestedTypeName = options.credentialTypeName ?? 'OAuth2 Client Credentials';
+        const fallbackType = this.GetCredentialTypeByName(requestedTypeName) ?? this._credentialTypes[0];
+        if (!fallbackType) {
+            throw new Error(`No credential type available to store user-delegated credential for ${options.providerName}`);
+        }
+
+        const md = this.ProviderToUse;
+        const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
+        credEntity.NewRecord();
+        credEntity.CredentialTypeID = fallbackType.ID;
+        credEntity.Name = credentialName;
+        credEntity.Description = `Per-user 3LO OAuth credential for ${options.principalEmail} on ${options.providerName}`;
+        credEntity.Values = JSON.stringify(payload);
+        credEntity.IsDefault = false;
+        credEntity.IsActive = true;
+        credEntity.CategoryID = options.categoryId ?? null;
+        credEntity.ExpiresAt = options.expiresAt ?? null;
+
+        const saved = await credEntity.Save();
+        if (!saved) {
+            throw new Error('Failed to save user-delegated credential');
+        }
+
+        await this.logAccess(credEntity, contextUser, {
+            operation: 'Create',
+            subsystem: 'UserDelegatedOAuth3LO',
+            success: true,
+        });
+        await this.RefreshItem('_credentials');
+        return credEntity;
+    }
+
+    /**
+     * Resolves a user-delegated OAuth 2.0 (`3LO`) credential for `contextUser`, enforcing that
+     * `ownerUserId` in the encrypted payload matches `contextUser.ID`.
+     */
+    public async GetUserDelegatedCredential(
+        providerName: string,
+        contextUser: UserInfo
+    ): Promise<ResolvedCredential<UserDelegatedOAuthCredentialValues> | null> {
+        this.TryThrowIfNotLoaded();
+        if (!contextUser?.ID) {
+            return null;
+        }
+        const credentialName = this.BuildUserDelegatedCredentialName(providerName, contextUser.ID);
+        const match = this._credentials.find(
+            (c) => c.Name.trim().toLowerCase() === credentialName.toLowerCase() && c.IsActive
+        );
+        if (!match) {
+            return null;
+        }
+        return this.GetCredential<UserDelegatedOAuthCredentialValues>(credentialName, {
+            credentialId: match.ID,
+            contextUser,
+            subsystem: 'UserDelegatedOAuth3LO',
+        });
+    }
+
+    /**
+     * Deactivates and clears the encrypted token values for a user's delegated OAuth (`3LO`) credential.
+     */
+    public async RevokeUserDelegatedCredential(
+        providerName: string,
+        contextUser: UserInfo
+    ): Promise<boolean> {
+        this.TryThrowIfNotLoaded();
+        if (!contextUser?.ID) {
+            return false;
+        }
+        const credentialName = this.BuildUserDelegatedCredentialName(providerName, contextUser.ID);
+        const match = this._credentials.find(
+            (c) => c.Name.trim().toLowerCase() === credentialName.toLowerCase() && c.IsActive
+        );
+        if (!match) {
+            return false;
+        }
+
+        // Verify ownership before revoking
+        const parsed = this.parseCredentialValues(match.Values);
+        if (parsed.ownerUserId && !UUIDsEqual(parsed.ownerUserId, contextUser.ID)) {
+            throw new CredentialOwnerMismatchError(credentialName, parsed.ownerUserId, contextUser.ID);
+        }
+
+        await this.enqueueCredentialWrite(match.ID, async () => {
+            const md = this.ProviderToUse;
+            const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
+            const loaded = await credEntity.Load(match.ID);
+            if (!loaded) return;
+            credEntity.IsActive = false;
+            credEntity.Values = JSON.stringify({
+                ownerUserId: contextUser.ID,
+                revokedAt: new Date().toISOString(),
+            });
+            await credEntity.Save();
+            await this.logAccess(credEntity, contextUser, {
+                operation: 'Delete',
+                subsystem: 'UserDelegatedOAuth3LO',
+                success: true,
+            });
+            await this.RefreshItem('_credentials');
+        });
+        return true;
     }
 
     // ====================================

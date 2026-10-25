@@ -6,6 +6,8 @@ import { MJAIAgentRequestEntity } from '@memberjunction/core-entities';
 import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 
+const APPROVAL_REQUEST_TYPE_ID = '015B94A7-8817-4FF2-98FB-7F0513F4591F';
+
 /**
  * Structured payload stored inside `MJAIAgentRequestEntity.Comments` (and reflected in `Request`)
  * for Chief-of-Staff-to-Chief-of-Staff or Chief-of-Staff-to-User follow-ups across workstreams.
@@ -146,6 +148,7 @@ export class ChiefOfStaffInterAgentRequestAction extends BaseAction {
                 contextUser
             );
             requestEntity.AgentID = agent.ID;
+            requestEntity.RequestTypeID = APPROVAL_REQUEST_TYPE_ID;
             requestEntity.RequestedAt = new Date();
             requestEntity.RequestForUserID = targetUserId;
             requestEntity.Status = 'Requested';

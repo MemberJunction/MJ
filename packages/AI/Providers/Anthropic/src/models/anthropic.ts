@@ -776,14 +776,17 @@ export class AnthropicLLM extends BaseLLM {
                 }
             }
 
-            // Append assistant prefill message if specified
-            const messagesForApi = this.appendPrefillMessage(nonSystemMsgs, params.assistantPrefill);
-
             // Thinking, in whichever form the model accepts, if an effort level is set. Resolved before
             // the messages are formatted: earlier turns' thinking blocks are replayed only when this
             // request thinks too.
             const thinking = AnthropicLLM.thinkingForHistory(
-                BuildAnthropicThinking({ model: params.model, effortLevel: params.effortLevel, budgetTokens: thinkingBudget }), messagesForApi, params.model);
+                BuildAnthropicThinking({ model: params.model, effortLevel: params.effortLevel, budgetTokens: thinkingBudget }), nonSystemMsgs, params.model);
+
+            // Append assistant prefill message only when permitted.
+            // Anthropic rejects assistant message prefill ("This model does not support assistant message prefill")
+            // whenever thinking is enabled or on models that take adaptive thinking (Claude 4.6+, Claude 5).
+            const canPrefill = params.assistantPrefill && !thinking.thinking && !UsesAdaptiveThinking(params.model);
+            const messagesForApi = this.appendPrefillMessage(nonSystemMsgs, canPrefill ? params.assistantPrefill : undefined);
 
             // Create the request parameters
             const createParams: MessageCreateParams = {
@@ -793,12 +796,13 @@ export class AnthropicLLM extends BaseLLM {
                 messages: this.formatMessagesWithCaching(messagesForApi, params.enableCaching ?? true, thinking.thinking !== undefined)
             };
 
-            // Add temperature if specified. Note that Claude 4.5 Opus doesn't support temperature changes when extended thinking is enabled.
-            // Skip the temperature set in that case.
+            // Add temperature if specified. Note that Anthropic requires temperature to be 1 or omitted
+            // whenever extended thinking or adaptive thinking is enabled.
             if (params.temperature != null) {
-                //2025-11-25: With thinking enabled on Claude 4.5 Opus, temperature must be 1.
-                if (!(params.model.toLowerCase().startsWith('claude-opus-4-5') && thinkingBudget !== undefined)) {
+                if (!thinking.thinking) {
                     createParams.temperature = params.temperature;
+                } else if (params.temperature === 1) {
+                    createParams.temperature = 1;
                 }
             }
 
@@ -1034,7 +1038,7 @@ export class AnthropicLLM extends BaseLLM {
         // Create the request parameters
         const createParams: any = {
             model: params.model,
-            max_tokens: params.maxOutputTokens,
+            max_tokens: params.maxOutputTokens || 32000,
             stream: true as const
         };
 
@@ -1076,8 +1080,6 @@ export class AnthropicLLM extends BaseLLM {
             );
         }
         
-        // Append assistant prefill message if specified, then add messages with caching applied
-        const messagesForApi = this.appendPrefillMessage(nonSystemMsgs, params.assistantPrefill);
         // Add thinking, in whichever form the model accepts, if an effort level is set. The budget
         // form needs a caller-supplied budget of at least 1024 tokens (and below max_tokens); the
         // adaptive form (Claude 4.6+, all of Claude 5) has no budget at all. Resolved before the
@@ -1086,7 +1088,13 @@ export class AnthropicLLM extends BaseLLM {
             model: params.model,
             effortLevel: params.effortLevel,
             budgetTokens: params.reasoningBudgetTokens >= 1024 ? params.reasoningBudgetTokens : undefined
-        }), messagesForApi, params.model);
+        }), nonSystemMsgs, params.model);
+
+        // Append assistant prefill message only when permitted.
+        // Anthropic rejects assistant message prefill ("This model does not support assistant message prefill")
+        // whenever thinking is enabled or on models that take adaptive thinking (Claude 4.6+, Claude 5).
+        const canPrefill = params.assistantPrefill && !streamingThinking.thinking && !UsesAdaptiveThinking(params.model);
+        const messagesForApi = this.appendPrefillMessage(nonSystemMsgs, canPrefill ? params.assistantPrefill : undefined);
         createParams.messages = this.formatMessagesWithCaching(
             messagesForApi,
             params.enableCaching ?? true,
@@ -1094,6 +1102,10 @@ export class AnthropicLLM extends BaseLLM {
         );
         if (streamingThinking.thinking) {
             createParams.thinking = streamingThinking.thinking;
+            // Anthropic requires temperature to be 1 or omitted whenever thinking is enabled or in adaptive mode
+            if (createParams.temperature !== undefined && createParams.temperature !== 1) {
+                delete createParams.temperature;
+            }
         }
         if (streamingThinking.output_config) {
             createParams.output_config = streamingThinking.output_config;

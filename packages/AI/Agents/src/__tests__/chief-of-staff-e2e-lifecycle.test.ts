@@ -55,6 +55,9 @@ describe('Chief of Staff End-to-End Metadata, Policy & Security Lifecycle', () =
         expect(DetectVolatilePlaceholders(templateContent)).toEqual([]);
         expect(templateContent).toContain('Schedule Next Agent Wake');
         expect(templateContent).toContain('Configure Agent User Policy');
+        expect(templateContent).toContain('MJ_BizApps_Tasks: Tasks');
+        expect(templateContent).toContain('MJ_BizApps_Tasks: Task Check Ins');
+        expect(templateContent).toContain('MJ_BizApps_Issues: Issues');
     });
 
     it('enforces onboarding policy, RLS/FLS entity narrowing, time windows, and action approval gates end-to-end', () => {

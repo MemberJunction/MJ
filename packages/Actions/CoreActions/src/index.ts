@@ -138,6 +138,7 @@ export * from './custom/ai/configure-agent-user-policy.action';
 export * from './custom/ai/chief-of-staff-inter-agent-request.action';
 export * from './custom/ai/prepare-chief-of-staff-outbound-call.action';
 export * from './custom/ai/chief-of-staff-calendar-email.action';
+export * from './custom/ai/communication-oauth-service';
 
 // User Management Actions
 export * from './custom/user-management/check-user-permission.action';

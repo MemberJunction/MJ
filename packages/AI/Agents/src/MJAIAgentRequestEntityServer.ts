@@ -19,6 +19,7 @@ import { MJAIAgentRequestEntity, MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJC
 import { AgentResponseForm, ConversationUtility, MJAIAgentEntityExtended, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 import { ChatMessage } from '@memberjunction/ai';
 import { AgentRunner } from './AgentRunner';
+import { AgentWakeTriggerService } from './AgentWakeTriggerService';
 
 /** Statuses that indicate a human has responded */
 const RESPONDED_STATUSES = ['Approved', 'Rejected', 'Responded'];
@@ -28,6 +29,7 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         // Capture pre-save state to detect status transitions
         const statusField = this.GetFieldByName('Status');
+        const wasNewRecord = !this.IsSaved;
         const wasRequested = statusField?.OldValue === 'Requested' || (!this.IsSaved && statusField?.Value === 'Requested');
         const isNowResponded = RESPONDED_STATUSES.includes(this.Status);
 
@@ -58,6 +60,32 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
             this.resumeAgent().catch(error => {
                 LogError(`Failed to resume agent for request ${this.ID}: ${(error as Error).message}`, undefined, error);
             });
+        } else if (
+            this.OriginatingAgentRunID == null &&
+            this.ResumingAgentRunID == null &&
+            this.OriginatingTaskID == null &&
+            this.AgentID != null
+        ) {
+            const md = this.ProviderToUse as unknown as IMetadataProvider;
+            if (wasRequested && isNowResponded) {
+                // Action-created approval or inter-agent request was resolved — schedule immediate AgentWake
+                AgentWakeTriggerService.Instance.TriggerWakeOnAgentRequestResolution(
+                    this,
+                    this.ContextCurrentUser,
+                    md
+                ).catch(error => {
+                    LogError(`Failed to schedule resolution wake for request ${this.ID}: ${(error as Error).message}`, undefined, error);
+                });
+            } else if (wasNewRecord && this.Status === 'Requested') {
+                // Newly created peer-to-peer InterAgentCoS request — schedule immediate AgentWake for target user's CoS
+                AgentWakeTriggerService.Instance.TriggerWakeOnIncomingInterAgentRequest(
+                    this,
+                    this.ContextCurrentUser,
+                    md
+                ).catch(error => {
+                    LogError(`Failed to schedule incoming inter-agent wake for request ${this.ID}: ${(error as Error).message}`, undefined, error);
+                });
+            }
         }
 
         return true;

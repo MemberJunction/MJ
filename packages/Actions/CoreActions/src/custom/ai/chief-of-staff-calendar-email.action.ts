@@ -22,6 +22,8 @@ import {
     UpdateCalendarEventParams,
 } from '@memberjunction/communication-types';
 
+const APPROVAL_REQUEST_TYPE_ID = '015B94A7-8817-4FF2-98FB-7F0513F4591F';
+
 /**
  * Result of evaluating whether the enterprise communication provider is permitted
  * and able to access a user's personal mailbox or utility agent inbox.
@@ -373,6 +375,7 @@ export abstract class BaseUserScopedCommunicationAction extends BaseAction {
             if (agentId) {
                 req.AgentID = agentId;
             }
+            req.RequestTypeID = APPROVAL_REQUEST_TYPE_ID;
             req.RequestedAt = new Date();
             req.Status = 'Requested';
             req.Priority = 50;

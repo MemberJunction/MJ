@@ -82,11 +82,12 @@ export class UpdateRecordAction extends BaseRecordMutationAction {
 
             // Set each field value
             for (const [fieldName, fieldValue] of Object.entries(fields)) {
-                if (fieldName in entity!) {
-                    const currentValue = entity!.Get(fieldName);
+                const resolvedName = this.resolveEntityFieldName(entity!, fieldName, entityInfo);
+                if (resolvedName) {
+                    const currentValue = entity!.Get(resolvedName);
                     if (currentValue !== fieldValue) {
-                        entity!.Set(fieldName, fieldValue);
-                        updatedFields[fieldName] = {
+                        entity!.Set(resolvedName, fieldValue);
+                        updatedFields[resolvedName] = {
                             oldValue: currentValue,
                             newValue: fieldValue
                         };

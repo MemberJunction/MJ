@@ -27,6 +27,8 @@ export interface ChiefOfStaffOutboundCallBrief {
     maxDurationSeconds: number;
 }
 
+const APPROVAL_REQUEST_TYPE_ID = '015B94A7-8817-4FF2-98FB-7F0513F4591F';
+
 const CORE_CALL_PROHIBITIONS: ReadonlyArray<string> = [
     'Always state upfront that you are an AI assistant calling on the user\'s behalf.',
     'Do not make financial commitments or authorize payments not explicitly listed in authorizedBounds.',
@@ -145,6 +147,7 @@ export class PrepareChiefOfStaffOutboundCallAction extends BaseAction {
                     contextUser
                 );
                 approvalReq.AgentID = agent.ID;
+                approvalReq.RequestTypeID = APPROVAL_REQUEST_TYPE_ID;
                 approvalReq.RequestedAt = new Date();
                 approvalReq.RequestForUserID = contextUser.ID;
                 approvalReq.Status = 'Requested';

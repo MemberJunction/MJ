@@ -604,7 +604,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Optional related entity name (e.g., 'MJ: Tasks' or 'MJ: Issues')",
+            "Description": "Optional related entity name (e.g., 'MJ_BizApps_Tasks: Tasks' or 'MJ_BizApps_Issues: Issues')",
             "IsRequired": false
           },
           "primaryKey": {

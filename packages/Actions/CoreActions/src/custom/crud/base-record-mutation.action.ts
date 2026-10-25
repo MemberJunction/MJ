@@ -1,6 +1,6 @@
 import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
-import { BaseEntity, IMetadataProvider, Metadata, LogError, CompositeKey } from "@memberjunction/core";
+import { BaseEntity, EntityInfo, IMetadataProvider, Metadata, LogError, CompositeKey } from "@memberjunction/core";
 
 /**
  * Abstract base class for record mutation actions (Create, Update, Delete).
@@ -157,12 +157,52 @@ export abstract class BaseRecordMutationAction extends BaseAction {
     }
 
     /**
+     * Resolve a field name against entity metadata (`EntityInfo.Fields` / `BaseEntity.GetFieldByName`)
+     * or prototype properties (`fieldName in entity`).
+     *
+     * Dynamic and OpenApp entities (such as `MJ_BizApps_Tasks: Tasks`) that do not have a generated
+     * TypeScript subclass registered in `ClassFactory` are instantiated as generic `BaseEntity`
+     * instances. On a generic `BaseEntity`, fields live in `entity.Fields` / `entityInfo.Fields`
+     * rather than as JS getter/setter properties on the prototype (`fieldName in entity === false`).
+     */
+    protected resolveEntityFieldName(
+        entity: BaseEntity,
+        fieldName: string,
+        entityInfo?: Pick<EntityInfo, 'Fields'>
+    ): string | null {
+        const normalized = fieldName.trim().toLowerCase();
+        const infoFields = entityInfo?.Fields ?? entity.EntityInfo?.Fields;
+        if (Array.isArray(infoFields)) {
+            const matched = infoFields.find(f => f.Name.trim().toLowerCase() === normalized);
+            if (matched) {
+                return matched.Name;
+            }
+        }
+        if (typeof entity.GetFieldByName === 'function') {
+            const field = entity.GetFieldByName(fieldName);
+            if (field) {
+                return field.Name;
+            }
+        }
+        if (fieldName in entity) {
+            return fieldName;
+        }
+        return null;
+    }
+
+    /**
      * Set field values on an entity
      */
-    protected setFieldValues(entity: BaseEntity, fields: Record<string, any>, entityName: string): void {
+    protected setFieldValues(
+        entity: BaseEntity,
+        fields: Record<string, any>,
+        entityName: string,
+        entityInfo?: Pick<EntityInfo, 'Fields'>
+    ): void {
         for (const [fieldName, fieldValue] of Object.entries(fields)) {
-            if (fieldName in entity) {
-                entity.Set(fieldName, fieldValue);
+            const resolvedName = this.resolveEntityFieldName(entity, fieldName, entityInfo);
+            if (resolvedName) {
+                entity.Set(resolvedName, fieldValue);
             } else {
                 LogError(`Field '${fieldName}' does not exist on entity '${entityName}'`);
             }

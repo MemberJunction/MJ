@@ -69,7 +69,7 @@ export class CreateRecordAction extends BaseRecordMutationAction {
             entity!.NewRecord();
             
             // Set field values using base class method
-            this.setFieldValues(entity!, fields, entityName);
+            this.setFieldValues(entity!, fields, entityName, entityInfo);
 
             // Save the record
             const saveResult = await entity!.Save();
