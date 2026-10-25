@@ -1173,7 +1173,11 @@ GO
      *  - **Unrestrictable targets** (PKs, `__mj_` columns, the security/identity entities) are
      *    filtered defensively even though save-time guards should make such rows impossible.
      */
-    private generateFieldSecurityDenies(entity: EntityInfo): string {
+    private generateFieldSecurityDenies(
+        entity: EntityInfo,
+        targetSchemaName: string = entity.SchemaName,
+        targetViewName: string = entity.BaseView,
+    ): string {
         const context = this._fieldSecurityRunContext;
         if (!context) return '';
         if (!entity.EnableFieldLevelSecurity) return ''; // rules retained but inactive — mirror nothing
@@ -1203,27 +1207,58 @@ GO
         }
         let sOutput = '';
         for (const [sqlName, columns] of [...deniedColumnsByRole.entries()].sort(([a], [b]) => ordinalCompare(a, b))) {
-            sOutput += `\nDENY SELECT (${columns.map(c => `[${c}]`).join(', ')}) ON [${entity.SchemaName}].[${entity.BaseView}] TO [${sqlName}]`;
+            sOutput += `\nDENY SELECT (${columns.map(c => `[${c}]`).join(', ')}) ON [${targetSchemaName}].[${targetViewName}] TO [${sqlName}]`;
         }
         return sOutput;
     }
 
     /** @inheritdoc */
-    generateViewPermissions(entity: EntityInfo): string {
+    override GenerateViewPermissionsForTarget(
+        entity: EntityInfo,
+        targetSchemaName: string,
+        targetViewName: string,
+    ): string {
         let sOutput = '';
         for (const ep of entity.Permissions) {
             if (ep.RoleSQLName && ep.RoleSQLName.length > 0) {
-                sOutput += (sOutput === '' ? `GRANT SELECT ON [${entity.SchemaName}].[${entity.BaseView}] TO ` : ', ') + `[${ep.RoleSQLName}]`;
+                sOutput += (sOutput === '' ? `GRANT SELECT ON [${targetSchemaName}].[${targetViewName}] TO ` : ', ') + `[${ep.RoleSQLName}]`;
             } else {
                 this.logAppTierOnlyRoleSkip(ep.Role);
             }
         }
         // Order matters: wipe (REVOKE within the managed scope) → assert grants → assert
         // field-security DENYs. The whole body executes every run via applyPermissions.
-        const revokes = this.generateManagedPermissionRevokes(entity.SchemaName, entity.BaseView);
+        const revokes = this.generateManagedPermissionRevokes(targetSchemaName, targetViewName);
         const grants = (sOutput === '' ? '' : '\n') + sOutput;
-        const denies = this.generateFieldSecurityDenies(entity);
+        const denies = this.generateFieldSecurityDenies(entity, targetSchemaName, targetViewName);
         return revokes + grants + denies;
+    }
+
+    /** @inheritdoc */
+    override GenerateDisabledViewRevokePermissionsForTarget(
+        entity: EntityInfo,
+        targetSchemaName: string,
+        targetViewName: string,
+    ): string {
+        const revokes = this.generateManagedPermissionRevokes(targetSchemaName, targetViewName);
+        if (revokes.trim().length > 0) {
+            return revokes;
+        }
+        const roles: string[] = [];
+        for (const ep of entity.Permissions) {
+            if (ep.RoleSQLName && ep.RoleSQLName.length > 0 && !roles.includes(ep.RoleSQLName)) {
+                roles.push(ep.RoleSQLName);
+            }
+        }
+        if (roles.length === 0) {
+            return '';
+        }
+        return `\nREVOKE SELECT ON [${targetSchemaName}].[${targetViewName}] FROM ${roles.map((r) => `[${r}]`).join(', ')}`;
+    }
+
+    /** @inheritdoc */
+    generateViewPermissions(entity: EntityInfo): string {
+        return this.GenerateViewPermissionsForTarget(entity, entity.SchemaName, entity.BaseView);
     }
 
     /**
@@ -1851,6 +1886,19 @@ ORDER BY
     /** @inheritdoc */
     generateViewRefreshSQL(schema: string, viewName: string): string {
         return `EXEC sp_refreshview '${schema}.${viewName}';`;
+    }
+
+    /** @inheritdoc */
+    override getViewDependenciesSQL(schema: string, viewName: string): string {
+        const escapedSchema = EscapeSQLString(schema);
+        const escapedView = EscapeSQLString(viewName);
+        return `SELECT
+    COALESCE(OBJECT_SCHEMA_NAME(d.referenced_id), d.referenced_schema_name, '${escapedSchema}') AS ReferencedSchema,
+    COALESCE(OBJECT_NAME(d.referenced_id), d.referenced_entity_name) AS ReferencedObject,
+    COALESCE(o.type_desc, 'UNKNOWN') AS ReferencedType
+FROM sys.sql_expression_dependencies d
+LEFT JOIN sys.objects o ON o.object_id = d.referenced_id
+WHERE d.referencing_id = OBJECT_ID('[${escapedSchema}].[${escapedView}]')`;
     }
 
     /** @inheritdoc */

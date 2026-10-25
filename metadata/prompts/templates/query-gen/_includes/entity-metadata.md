@@ -11,6 +11,12 @@ The following entities are available for your query. Key rules:
 ## {{ entity.entityName }}
 **Schema.View**: `[{{ entity.schemaName }}].[{{ entity.baseView }}]`
 {% if entity.description %}- **Description**: {{ entity.description | safe }}{% endif %}
+{% if entity.alternateBaseViews and entity.alternateBaseViews.length > 0 %}
+**Alternate Base Views** (canonical row subsets with the same columns as `[{{ entity.schemaName }}].[{{ entity.baseView }}]` — prefer these when the question targets that subset):
+{% for abv in entity.alternateBaseViews %}
+- `{{ abv.name }}` (`[{{ abv.schemaName }}].[{{ abv.viewName }}]`){% if abv.displayName and abv.displayName != abv.name %} — *{{ abv.displayName }}*{% endif %}{% if abv.parentName %} (derived from `{{ abv.parentName }}`){% endif %}{% if abv.description %}: {{ abv.description | safe }}{% endif %}
+{% endfor %}
+{% endif %}
 
 **Available Fields**:
 {% for field in entity.fields %}

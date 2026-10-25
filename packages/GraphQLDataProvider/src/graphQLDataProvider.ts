@@ -17,7 +17,8 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
          KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider, ReadableFieldsTransportKey,
          SearchEntityParams, EntitySearchResult, ScoredCandidate, RemoteOpInvokeOptions, RemoteOpResult, RemoteOpProgress,
-         GetLocalTimeZone, TIME_ZONE_HEADER, ViewPropertyValues, ResolveMJAPIURL } from "@memberjunction/core";
+         GetLocalTimeZone, TIME_ZONE_HEADER, ViewPropertyValues, ResolveMJAPIURL,
+         GetEffectiveAlternateBaseViewName } from "@memberjunction/core";
 import { MJGlobal, MJEventType, UUIDsEqual, GetGlobalObjectStore, DeserializeValidationErrors } from "@memberjunction/global";
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
@@ -332,6 +333,39 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * use GetGlobalObjectStore() directly with the same key format.
      */
     private static readonly _globalStoreKey = '___SINGLETON__GraphQLDataProvider';
+
+    /**
+     * Writable fields on specific entities that are computed or mutated server-side inside
+     * `BaseEntity.Save()` subclasses (e.g. `MJUserViewEntityServer` generating `WhereClause`,
+     * `SmartFilterWhereClause`, and `SmartFilterExplanation` via AI or stamping approval fields).
+     * Even when clean on the client, these fields must be requested in the GraphQL `Update`
+     * selection set so the client entity and local engine caches receive the server-derived values.
+     */
+    private static readonly _serverDerivedUpdateFieldsByEntity: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+        [
+            'MJ: User Views',
+            new Set([
+                'WhereClause',
+                'SmartFilterWhereClause',
+                'SmartFilterExplanation',
+                'ApprovedByUserID',
+                'ApprovedAt',
+                'ApprovedFingerprint',
+            ]),
+        ],
+        [
+            'MJ: Queries',
+            new Set([
+                'ApprovedByUserID',
+                'ApprovedAt',
+                'ApprovedFingerprint',
+                'UsesTemplate',
+                'TechnicalDescription',
+                'EmbeddingVector',
+                'EmbeddingModelID',
+            ]),
+        ],
+    ]);
 
     /**
      * Returns the singleton instance of GraphQLDataProvider.
@@ -1157,6 +1191,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // so the default request is unchanged.
                 if (params.IncludeBinaryFields !== undefined)
                     innerParams.IncludeBinaryFields = params.IncludeBinaryFields;
+                // AlternateBaseView selects a registered EntityAlternateBaseView by Name, or "" to
+                // force the entity's default BaseView over a saved UserView pin. Also forwards a
+                // ViewEntity pin when ViewEntity itself is not serialized over the wire.
+                const singleEffectiveAbv = GetEffectiveAlternateBaseViewName(params) ?? params.AlternateBaseView;
+                if (singleEffectiveAbv !== undefined)
+                    innerParams.AlternateBaseView = singleEffectiveAbv;
 
                 if (!dynamicView) {
                     innerParams.ExcludeUserViewRunID = params.ExcludeUserViewRunID ? params.ExcludeUserViewRunID : "";
@@ -1361,6 +1401,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     if (param.IncludeBinaryFields !== undefined) {
                         innerParam.IncludeBinaryFields = param.IncludeBinaryFields;
                     }
+                    const batchEffectiveAbv = GetEffectiveAlternateBaseViewName(param) ?? param.AlternateBaseView;
+                    if (batchEffectiveAbv !== undefined) {
+                        innerParam.AlternateBaseView = batchEffectiveAbv;
+                    }
 
                     if (!dynamicView) {
                         innerParam.ExcludeUserViewRunID = param.ExcludeUserViewRunID || "";
@@ -1487,6 +1531,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     // a CacheLocal batch routes through this smart-cache-check path, so omitting it silently
                     // downgrades a DataSource:'Materialized' request to a live read.
                     DataSource: item.params.DataSource,
+                    // AlternateBaseView must be forwarded on the smart-cache-check batch transport too
+                    // (including a ViewEntity pin when ViewEntity itself is not serialized over the wire):
+                    // otherwise a CacheLocal batch requesting an alternate base view silently reads BaseView.
+                    AlternateBaseView: GetEffectiveAlternateBaseViewName(item.params) ?? item.params.AlternateBaseView,
                     // Forwarded on this transport too, so a CacheLocal batch that asked for binary
                     // fields gets them (the slot fingerprint already distinguishes the two widths).
                     IncludeBinaryFields: item.params.IncludeBinaryFields,
@@ -2433,6 +2481,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     (!isNonActiveField(f) || isFieldWrittenForSave(f)) &&
                     (!filterToDirtyOnly || this.isFieldDirtyOnChain(entity, f))
                 )));
+            const serverDerivedFields = GraphQLDataProvider._serverDerivedUpdateFieldsByEntity.get(entity.EntityInfo.Name);
             const returnFields = entity.Fields.filter(f => {
                 if (isDeniedRead(f.Name)) {
                     return false;
@@ -2445,6 +2494,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         f.IsPrimaryKey ||
                         f.EntityFieldInfo.IsSpecialDateField ||
                         this.isFieldDirtyOnChain(entity, f) ||
+                        Boolean(serverDerivedFields?.has(f.Name)) ||
                         (!f.NotLoaded &&
                             !f.EntityFieldInfo.IsBinaryFieldType &&
                             (Boolean(f.EntityFieldInfo.IsVirtual) ||

@@ -118,6 +118,7 @@ export * from './checks/metadata-sync.checks';
 export * from './checks/metadata-sync-push.checks';
 export * from './checks/codegen-determinism.checks';
 export * from './checks/layered-base-views.checks';
+export * from './checks/alternate-base-views.checks';
 export * from './checks/rubrics.checks';
 export * from './checks/realtime-deterministic.checks';
 export * from './checks/realtime-session-guard.checks';
