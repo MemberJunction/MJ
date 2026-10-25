@@ -1092,6 +1092,120 @@ describe('ActionEngineServer', () => {
         });
     });
 
+    describe('LogEntryPersisted (#6014)', () => {
+        /** A log entity whose every Save waits on `gate`, so a test controls when the row "lands". */
+        function gatedLog(gate: Promise<void>, saves: string[]) {
+            return {
+                ID: 'log-1',
+                NewRecord: vi.fn(),
+                LatestResult: { CompleteMessage: '' },
+                set ActionID(_v: string) {},
+                set StartedAt(_v: Date) {},
+                set UserID(_v: string) {},
+                set Params(_v: string) {},
+                set ResultParams(_v: string) {},
+                set ResultCode(_v: string | undefined) {},
+                set Message(_v: string | undefined) {},
+                set EndedAt(_v: Date) {},
+                set RetentionPeriod(_v: unknown) {},
+                async Save() {
+                    await gate;
+                    saves.push('saved');
+                    return true;
+                },
+            };
+        }
+        const params = (skip: boolean) => ({
+            Action: { ID: 'action-1', Name: 'Test', DriverClass: 'TestAction' },
+            ContextUser: { ID: 'user-1', Name: 'Test' },
+            Filters: [],
+            Params: [],
+            SkipActionLog: skip,
+        });
+        const isSettled = async (p: Promise<void>) => {
+            let done = false;
+            void p.then(() => { done = true; });
+            await new Promise((r) => setTimeout(r, 5));
+            return done;
+        };
+
+        it('resolves only after the log entity\'s Save resolved, on the normal path', async () => {
+            let release!: () => void;
+            const gate = new Promise<void>((r) => { release = r; });
+            const saves: string[] = [];
+            const entity = gatedLog(gate, saves);
+            (Metadata as unknown as ReturnType<typeof vi.fn>).mockImplementation(function () {
+                return { GetEntityObject: vi.fn().mockResolvedValue(entity) };
+            });
+            vi.spyOn(engine as never, 'ValidateInputs' as never).mockResolvedValue(true as never);
+            vi.spyOn(engine as never, 'RunFilters' as never).mockResolvedValue(true as never);
+            mockClassFactory.CreateInstance.mockReturnValue(new TestAction());
+            ((engine as unknown as { base: Record<string, unknown> }).base)['_ActionResultCodes'] = [];
+
+            const result = await engine.RunAction(params(false) as never);
+
+            expect(result.LogEntry).toBe(entity);
+            expect(result.LogEntryPersisted).toBeInstanceOf(Promise);
+            expect(await isSettled(result.LogEntryPersisted!)).toBe(false);
+            expect(saves).toEqual([]);
+
+            release();
+            await result.LogEntryPersisted;
+            // Both the 'started' INSERT and the 'ended' UPDATE have landed.
+            expect(saves).toEqual(['saved', 'saved']);
+        });
+
+        it('is set on the validation-failure path (StartAndEndActionLog)', async () => {
+            let release!: () => void;
+            const gate = new Promise<void>((r) => { release = r; });
+            const saves: string[] = [];
+            const entity = gatedLog(gate, saves);
+            (Metadata as unknown as ReturnType<typeof vi.fn>).mockImplementation(function () {
+                return { GetEntityObject: vi.fn().mockResolvedValue(entity) };
+            });
+            vi.spyOn(engine as never, 'ValidateInputs' as never).mockResolvedValue(false as never);
+
+            const result = await engine.RunAction(params(false) as never);
+
+            expect(result.Success).toBe(false);
+            expect(result.LogEntry).toBe(entity);
+            expect(result.LogEntryPersisted).toBeInstanceOf(Promise);
+            expect(await isSettled(result.LogEntryPersisted!)).toBe(false);
+
+            release();
+            await result.LogEntryPersisted;
+            // The single force-persisted UPDATE is the write that creates the row.
+            expect(saves).toEqual(['saved']);
+        });
+
+        it('is absent when SkipActionLog is true', async () => {
+            vi.spyOn(engine as never, 'ValidateInputs' as never).mockResolvedValue(true as never);
+            vi.spyOn(engine as never, 'RunFilters' as never).mockResolvedValue(true as never);
+            mockClassFactory.CreateInstance.mockReturnValue(new TestAction());
+            ((engine as unknown as { base: Record<string, unknown> }).base)['_ActionResultCodes'] = [];
+
+            const result = await engine.RunAction(params(true) as never);
+
+            expect(result.Success).toBe(true);
+            expect(result.LogEntry).toBeUndefined();
+            expect(result.LogEntryPersisted).toBeUndefined();
+        });
+
+        it('is absent when FailuresOnly drops the LogEntry of a successful run', async () => {
+            vi.spyOn(engine as never, 'ValidateInputs' as never).mockResolvedValue(true as never);
+            vi.spyOn(engine as never, 'RunFilters' as never).mockResolvedValue(true as never);
+            vi.spyOn(engine as never, 'ResolveLoggingMode' as never).mockReturnValue('FailuresOnly' as never);
+            mockClassFactory.CreateInstance.mockReturnValue(new TestAction());
+            ((engine as unknown as { base: Record<string, unknown> }).base)['_ActionResultCodes'] = [];
+
+            const result = await engine.RunAction(params(false) as never);
+
+            expect(result.Success).toBe(true);
+            expect(result.LogEntry).toBeUndefined();
+            expect(result.LogEntryPersisted).toBeUndefined();
+        });
+    });
+
     describe('StartAndEndActionLog', () => {
         it('should call StartActionLog with saveRecord=false then EndActionLog', async () => {
             const mockLogEntity = { Save: vi.fn().mockResolvedValue(true) };
