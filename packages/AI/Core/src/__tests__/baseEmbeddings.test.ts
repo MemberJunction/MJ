@@ -448,6 +448,55 @@ describe('BaseEmbeddings.DimensionsParam', () => {
     });
 });
 
+/**
+ * A refusal is a configuration error, so the per-text path must not treat it as a transient
+ * failure. Retrying it sleeps through the backoff to reach the same answer, and degrading it to an
+ * empty result is what the refusal exists to replace: the runner reads an empty result as
+ * "No vectors returned", classifies it Retriable and fails over to another vendor, which fails the
+ * same way. Both layers arrived with embedding cancellation; the refusal arrived with #5234.
+ */
+describe('BaseEmbeddings.EmbedTexts and a refused width on the per-text path', () => {
+    /** Per-text driver (no native batch) whose EmbedText refuses a width its model can't produce. */
+    class RefusingEmbeddings extends BaseEmbeddings {
+        public attempts = 0;
+        protected override get EmbeddingModels(): readonly EmbeddingModelInfo[] {
+            return [{ Model: 'fixed', Description: 'one width, rejects dimensions', OutputDimension: 1536, AcceptsDimensions: false }];
+        }
+        public async EmbedText(params: EmbedTextParams): Promise<EmbedTextResult> {
+            this.attempts++;
+            this.DimensionsParam(params.model ?? '', params.dimensions);
+            return { object: 'object', model: 'fixed', ModelUsage: new ModelUsage(1, 0), vector: [0.1] };
+        }
+        public async GetEmbeddingModels(): Promise<string[]> {
+            return ['fixed'];
+        }
+    }
+
+    it('throws the refusal instead of degrading to an empty result, and does not retry it', async () => {
+        const e = new RefusingEmbeddings('k');
+
+        await expect(e.EmbedTexts({ texts: ['a'], model: 'fixed', dimensions: 512 })).rejects.toThrow(EmbeddingDimensionsError);
+        expect(e.attempts).toBe(1); // one attempt; 3 would mean the refusal was retried through the backoff
+    });
+
+    it('still degrades an ordinary per-text failure, which retry and the error contract own', async () => {
+        class FailingEmbeddings extends RefusingEmbeddings {
+            public override async EmbedText(_params: EmbedTextParams): Promise<EmbedTextResult> {
+                this.attempts++;
+                throw new Error('503 upstream unavailable');
+            }
+            protected override get embedRetryBaseDelayMs(): number {
+                return 0; // no real sleeping in a unit test
+            }
+        }
+        const e = new FailingEmbeddings('k');
+
+        const r = await e.EmbedTexts({ texts: ['a'], model: 'fixed', dimensions: 1536 });
+        expect(r.vectors).toEqual([]);
+        expect(e.attempts).toBe(3); // the initial attempt plus maxEmbedTextsRetries
+    });
+});
+
 /** The classification a thrown cancellation error carries. */
 function errorTypeOf(error: Error & { errorInfo?: AIErrorInfo }): string | undefined {
     return error.errorInfo?.errorType;

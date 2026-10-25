@@ -12,4 +12,5 @@ Embedding drivers no longer send `dimensions` to a model that rejects it when th
 - OpenAI lists text-embedding-3-large (up to 3072), text-embedding-3-small (up to 1536) and ada-002 (1536 only). `GetEmbeddingModels` reports `AcceptsDimensions`.
 - Azure applies ada-002's width when it's called with no model name and uses its default. A named model is a deployment, which could be any model, so its width is sent as requested.
 - Bedrock lists Titan Embed Text V1 (1536 only) and V2 (256, 512 or 1024). The Cohere path never sends `dimensions` and is unchanged.
+- On the per-text path, a refusal is neither retried through the backoff nor degraded to an empty result. `EmbedTexts`' error contract still degrades an ordinary per-text failure, and still rethrows a cancellation; a refused width now joins the cancellation as the second exception, because degrading it is exactly what the refusal replaces.
 - The OpenAI change reaches deployments whose ada-002 model or vendor row sets `APIName` to `text-embedding-ada-002`. The stock rows leave `APIName` empty, so the driver is called with no model name and uses its default, `text-embedding-3-small` (#5237).
