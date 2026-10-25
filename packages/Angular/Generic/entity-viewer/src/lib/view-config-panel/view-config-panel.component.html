@@ -2180,19 +2180,6 @@
       }
     </div>
 
-    <div class="footer-status-hint">
-      @if ((!ViewEntity || IsSaveAsNewFlow) && !IsCreatingNamedView) {
-        <i class="fa-solid fa-user-check"></i>
-        <span>Saving updates your personal <strong>{{ Entity?.DisplayNameOrName || 'Entity' }} (Default)</strong> layout across devices.</span>
-      } @else if (IsCreatingNamedView) {
-        <i class="fa-solid fa-bookmark"></i>
-        <span>Creates a new saved view <strong>{{ ViewName || 'Untitled View' }}</strong> for {{ Entity?.DisplayNameOrName || 'this entity' }}.</span>
-      } @else {
-        <i class="fa-solid fa-layer-group"></i>
-        <span>Editing saved view <strong>{{ ViewName }}</strong>.</span>
-      }
-    </div>
-
     <!-- Cancel button on RIGHT -->
     <button type="button" class="footer-btn cancel-btn" (click)="OnClose()">
       Cancel

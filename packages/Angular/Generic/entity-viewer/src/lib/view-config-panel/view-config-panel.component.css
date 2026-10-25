@@ -873,13 +873,6 @@
   border-color: var(--mj-brand-primary);
 }
 
-/
-
-/
-
-/
-
-/
 /* Panel Content */
 .panel-content {
   flex: 1;
@@ -1619,8 +1612,6 @@
 .view-config-alert-pos-mb { margin-bottom: 12px; }
 .view-config-validation-pos { margin: 0 16px 12px; }
 
-/
-
 /* Smart Filter Section */
 .smart-filter-section {
   padding: 0;
@@ -1799,8 +1790,6 @@
   background: var(--mj-brand-primary-hover);
   border-color: var(--mj-brand-primary-hover);
 }
-
-/
 
 /* Aggregates List */
 .aggregates-list {
@@ -2235,8 +2224,6 @@
   flex-shrink: 0;
 }
 
-/
-
 /* Panel Footer */
 .panel-footer {
   display: flex;
@@ -2254,29 +2241,6 @@
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
-}
-
-.footer-status-hint {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 12px;
-  color: var(--mj-text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.footer-status-hint i {
-  color: var(--mj-brand-primary);
-  flex-shrink: 0;
-}
-
-.footer-status-hint strong {
-  color: var(--mj-text-secondary);
-  font-weight: 600;
 }
 
 .footer-btn {
@@ -2325,7 +2289,9 @@
 }
 
 /* ============================================================
-   FILTERS & SOURCE TAB {
+   FILTERS & SOURCE TAB, INLINE FILTER BUILDER & PROGRESSIVE DISCLOSURE
+   ============================================================ */
+.source-section {
   padding-bottom: 14px;
   border-bottom: 1px solid var(--mj-border-default);
 }
