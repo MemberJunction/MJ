@@ -1,10 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass, SQLExpressionValidator } from "@memberjunction/global";
-import { BaseAction } from "@memberjunction/actions";
-import { MJGlobal } from "@memberjunction/global";
-import { BaseEntity, LogError } from "@memberjunction/core";
-import { QueryCompositionEngine, QueryPagingEngine } from "@memberjunction/generic-database-provider";
-import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
+import { ActionEngineServer, BaseAction } from "@memberjunction/actions";
+import { LogError, type UserInfo } from "@memberjunction/core";
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -14,20 +11,24 @@ import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
  * Action that executes read-only SQL SELECT queries for research purposes with
  * security validation.
  *
- * Security Features:
- * - SELECT-only enforcement (rejects INSERT, UPDATE, DELETE, DROP, etc.)
- * - Dangerous operation detection (EXEC, xp_, sp_, dynamic SQL, etc.)
- * - Query timeout protection
- * - Audit logging of all queries
- * - Result size limiting
+ * Security — the same gates as the ExecuteAdhocQuery resolver:
+ * - Scope-limited sessions (magic-link and widget guests, resource-scoped links) are refused: raw SQL
+ *   never applies the row-level filters that confine them.
+ * - The SQL runs only on the host's read-only database login
+ *   ({@link ActionEngineServer.GetReadOnlyProvider}), never on the read-write pool; with no read-only
+ *   login configured the action refuses.
+ * - The host's ad-hoc SQL checks ({@link ActionEngineServer.AdhocSQLAuthorizer}) must accept the SQL:
+ *   MJServer registers ExecuteAdhocQuery's own check, so the SQL must be one read statement and every
+ *   table it reads an entity view the caller may read in full. The host also limits the timeout.
+ * - It runs through the provider's ad-hoc read path (`RunQuery` with `SQL`), which accepts one read
+ *   statement only, refuses functions that read outside the query, and enforces the timeout and row
+ *   limit in the database.
+ * - The dangerous-keyword screen (SQLExpressionValidator) runs first.
  *
  * Performance Features:
  * - Configurable row limits to prevent overwhelming results
  * - Execution time tracking
  * - Validation warnings for potentially slow queries
- *
- * Note: SQL syntax validation is handled by SQL Server during execution.
- * This provides more accurate error messages than a JavaScript parser.
  *
  * @example
  * ```typescript
@@ -70,13 +71,28 @@ export class RunAdhocQueryAction extends BaseAction {
                 } as ActionResultSimple;
             }
 
-            const maxRows = this.getNumericParam(params, "maxrows", 1000);
-            const timeout = this.getNumericParam(params, "timeout", 30);
-            const dataFormat = this.getStringParam(params, "dataformat") || 'csv';
+            // Raw SQL never applies the row-level filters that confine a scope-limited session, so
+            // there is no narrower read to fall back to, only refusal.
+            if (this.isScopeLimitedPrincipal(params.ContextUser)) {
+                return this.permissionDenied('Run Ad-hoc Query is not permitted for scope-limited sessions.');
+            }
+            const authorizer = ActionEngineServer.Instance.AdhocSQLAuthorizer;
+            if (!authorizer) {
+                return this.permissionDenied('Ad-hoc query execution is not configured on this server: no ad-hoc SQL authorizer is registered.');
+            }
+            const readOnlyProvider = await ActionEngineServer.Instance.GetReadOnlyProvider();
+            if (!readOnlyProvider) {
+                return this.permissionDenied('No read-only data source is available for ad-hoc query execution: the read-only database login is not configured on this server.');
+            }
+
+            const maxRows = this.positiveOrDefault(this.getNumericParam(params, "maxrows", 1000), 1000);
+            const requestedTimeout = this.getNumericParam(params, "timeout", 0);
+            const timeout = authorizer.ClampTimeoutSeconds(requestedTimeout > 0 ? requestedTimeout : undefined);
+            const dataFormat = this.getStringParam(params, "dataformat") || this.getStringParam(params, "outputformat") || 'csv';
             const analysisRequest = this.getStringParam(params, "analysisrequest");
             const returnType = this.getStringParam(params, "returntype") ||
                 (analysisRequest ? 'data and analysis' : 'data only');
-            const columnMaxLength = this.getNumericParam(params, "columnmaxlength", 50); // Default: 50 chars, 0 = no limit
+            const columnMaxLength = this.getNumericParam(params, "columnmaxlength", 200); // Default: 200 chars, 0 = no limit
 
             // Normalize literal escape sequences — agent-generated SQL may have
             // literal \n instead of real newlines from double-escaped JSON
@@ -93,41 +109,34 @@ export class RunAdhocQueryAction extends BaseAction {
                 } as ActionResultSimple;
             }
 
-            // Resolve {{query:"..."}} composition macros if present
-            const resolvedQuery = this.resolveCompositionTokens(normalizedQuery, params);
-
-            // Ensure query returns limited results
-            const limitedQuery = this.ensureRowLimit(resolvedQuery, maxRows);
-
-            const dataProvider = BaseEntity.Provider as SQLServerDataProvider;
+            // The host's checks for caller SQL, on the SQL as it will run.
+            const refusal = authorizer.Authorize(normalizedQuery, readOnlyProvider, params.ContextUser);
+            if (refusal) {
+                return this.authorizationRefusal(refusal);
+            }
 
             try {
-                // Execute the query with timeout
+                // Execute on the read-only login through the provider's ad-hoc read path, which renders
+                // the SQL, requires a single read statement, and applies the row limit and timeout in
+                // the database.
                 const queryStartTime = Date.now();
 
-                const results = await Promise.race([
-                    dataProvider.ExecuteSQL(limitedQuery, null, {
-                        description: 'Run Ad-hoc Query',
-                        ignoreLogging: false,
-                        isMutation: false
-                    }, params.ContextUser),
-                    new Promise((_, reject) =>
-                        setTimeout(() => reject(new Error('Query timeout exceeded')), timeout * 1000)
-                    )
-                ]) as any;
+                const queryResult = await readOnlyProvider.RunQuery({
+                    SQL: normalizedQuery,
+                    MaxRows: maxRows,
+                    TimeoutSeconds: timeout
+                }, params.ContextUser);
+                if (!queryResult.Success) {
+                    return this.queryFailure(queryResult.ErrorMessage, timeout);
+                }
+                const results = queryResult.Results;
 
                 const executionTimeMs = Date.now() - queryStartTime;
 
                 // Get column metadata
-                const columns = results && results.columns
-                    ? Object.entries(results.columns).map(([name, col]: [string, any]) => ({
-                        ColumnName: name,
-                        DataType: col.type?.name || 'unknown',
-                        IsNullable: col.nullable !== false
-                    }))
-                    : [];
+                const columns = this.describeColumns(results);
 
-                const wasTruncated = results.length >= maxRows;
+                const wasTruncated = queryResult.TotalRowCount > results.length || results.length >= maxRows;
 
                 // Generate validation warnings
                 const warnings = this.generateValidationWarnings(query, results.length, executionTimeMs);
@@ -141,6 +150,8 @@ export class RunAdhocQueryAction extends BaseAction {
                         ? this.trimResultColumns(results, columnMaxLength)
                         : results;
                     formattedData = JSON.stringify(trimmedResults, null, 2);
+                } else if (dataFormat === 'markdown' || dataFormat === 'table') {
+                    formattedData = this.formatAsMarkdownTable(results, columnMaxLength);
                 }
 
                 // Perform analysis if requested
@@ -191,11 +202,37 @@ export class RunAdhocQueryAction extends BaseAction {
                     warnings,
                     returnType,
                     formattedData,
-                    analysis
+                    analysis,
+                    columnMaxLength
                 );
 
+                // Populate structured output parameters on params.Params so Flow steps and callers can map them
+                this.setOutputParam(params, "Results", results);
+                if (formattedData !== undefined) {
+                    this.setOutputParam(params, "FormattedResults", formattedData);
+                }
+                this.setOutputParam(params, "RowCount", results.length);
+                this.setOutputParam(params, "Columns", columns);
+                this.setOutputParam(params, "ExecutionTimeMs", executionTimeMs);
+                this.setOutputParam(params, "TotalTimeMs", totalExecutionTime);
+                this.setOutputParam(params, "WasTruncated", wasTruncated);
+                if (analysis !== undefined) {
+                    this.setOutputParam(params, "Analysis", analysis);
+                }
+
                 // Build result object based on return type
-                const resultData = {
+                const resultData: ActionResultSimple & {
+                    Columns?: Array<{ ColumnName: string; DataType: string; IsNullable: boolean }>;
+                    RowCount?: number;
+                    ExecutionTimeMs?: number;
+                    TotalTimeMs?: number;
+                    WasTruncated?: boolean;
+                    ValidationWarnings?: string[];
+                    Query?: string;
+                    Results?: unknown;
+                    Analysis?: string;
+                    AnalysisError?: string;
+                } = {
                     Success: true,
                     ResultCode: "SUCCESS",
                     Message: message,
@@ -205,52 +242,26 @@ export class RunAdhocQueryAction extends BaseAction {
                     TotalTimeMs: totalExecutionTime,
                     WasTruncated: wasTruncated,
                     ValidationWarnings: warnings,
-                    Query: limitedQuery
-                } as ActionResultSimple;
+                    Query: normalizedQuery
+                };
 
                 // Add data and/or analysis to results based on returnType
                 if (returnType === 'data only' || returnType === 'data and analysis') {
-                    (resultData as any).Results = formattedData || results;
+                    resultData.Results = formattedData || results;
                 }
                 if (returnType === 'analysis only' || returnType === 'data and analysis') {
-                    (resultData as any).Analysis = analysis;
+                    resultData.Analysis = analysis;
                 }
                 // The data still stands; say why there is no analysis instead of leaving it silently empty.
                 if (analysisError) {
-                    const withError = resultData as ActionResultSimple & { AnalysisError?: string };
-                    withError.AnalysisError = analysisError;
-                    withError.Message = `${withError.Message}\n\nThe analysis could not be produced: ${analysisError}`;
+                    resultData.AnalysisError = analysisError;
+                    resultData.Message = `${resultData.Message}\n\nThe analysis could not be produced: ${analysisError}`;
                 }
 
                 return resultData;
 
-            } catch (queryError: any) {
-                // Handle query timeout
-                if (queryError.message && queryError.message.includes('timeout')) {
-                    return {
-                        Success: false,
-                        ResultCode: "QUERY_TIMEOUT",
-                        Message: `Query execution exceeded ${timeout} second timeout. Consider optimizing query or increasing timeout parameter.`
-                    } as ActionResultSimple;
-                }
-
-                // Handle permission errors
-                if (queryError.message &&
-                    (queryError.message.toLowerCase().includes('permission') ||
-                     queryError.message.toLowerCase().includes('denied'))) {
-                    return {
-                        Success: false,
-                        ResultCode: "PERMISSION_DENIED",
-                        Message: `Insufficient permissions to execute query: ${queryError.message}`
-                    } as ActionResultSimple;
-                }
-
-                // Handle other database errors
-                return {
-                    Success: false,
-                    ResultCode: "DATABASE_ERROR",
-                    Message: `Database error occurred: ${queryError.message || String(queryError)}`
-                } as ActionResultSimple;
+            } catch (queryError) {
+                return this.queryFailure(queryError instanceof Error ? queryError.message : String(queryError), timeout);
             }
 
         } catch (error) {
@@ -264,34 +275,82 @@ export class RunAdhocQueryAction extends BaseAction {
     }
 
     /**
-     * Ensures query has a row limit to prevent overwhelming results.
-     *
-     * The prior regex `query.replace(/^(\s*SELECT\s+)/i, \`$1TOP ${maxRows} \`)`
-     * produced INVALID T-SQL for `SELECT DISTINCT …` inputs — it injected
-     * `TOP N` between `SELECT` and `DISTINCT`, but T-SQL requires
-     * `SELECT DISTINCT TOP N …` (DISTINCT first). The agent's "Run Ad-hoc
-     * Query" tool routinely emits DISTINCT and was getting stuck in retry
-     * loops because every SQL it tried got mangled. The same regex also
-     * silently dropped the cap on WITH/CTE inputs and only capped the first
-     * branch of UNION/INTERSECT/EXCEPT queries.
-     *
-     * Delegating to QueryPagingEngine.WrapWithMaxRows uses the AST-based
-     * row-cap path with full DISTINCT / set-op / CTE / TOP-PERCENT / WITH-TIES
-     * handling. Same function used by RenderPipeline for saved queries.
+     * True when the session's read authority is narrower than its roles: an anonymous magic-link or
+     * widget guest, or a session pinned to one shared resource. The same test as MJServer's
+     * `IsScopeLimitedPrincipal`; a missing user fails closed.
      */
-    private ensureRowLimit(query: string, maxRows: number): string {
-        try {
-            const provider = BaseEntity.Provider as SQLServerDataProvider;
-            const platform = (provider?.PlatformKey ?? 'sqlserver') as 'sqlserver' | 'postgresql';
-            return QueryPagingEngine.WrapWithMaxRows(query, maxRows, platform);
-        } catch {
-            // Ultimate safety net: if WrapWithMaxRows throws, fall back to a
-            // DISTINCT-aware regex (still better than the original).
-            const hasTop = /SELECT\s+TOP\s+\d+/i.test(query);
-            const hasOffsetFetch = /OFFSET\s+\d+\s+ROWS\s+FETCH/i.test(query);
-            if (hasTop || hasOffsetFetch) return query;
-            return query.replace(/^(\s*SELECT\s+(?:DISTINCT\s+|ALL\s+)?)/i, `$1TOP ${maxRows} `);
+    private isScopeLimitedPrincipal(user: UserInfo | undefined): boolean {
+        if (!user) {
+            return true;
         }
+        if (user.IsMagicLinkAnonymous) {
+            return true;
+        }
+        const scope = user.MagicLinkScope;
+        return !!(scope?.ResourceID || scope?.ResourceType);
+    }
+
+    private permissionDenied(message: string): ActionResultSimple {
+        return { Success: false, ResultCode: 'PERMISSION_DENIED', Message: message };
+    }
+
+    /** The value when it is a positive number, else the default. */
+    private positiveOrDefault(value: number, defaultValue: number): number {
+        return Number.isFinite(value) && value > 0 ? value : defaultValue;
+    }
+
+    /** Maps the host's refusal of the SQL to the action's result codes. */
+    private authorizationRefusal(message: string): ActionResultSimple {
+        const statementCode = this.statementRefusalCode(message);
+        return statementCode
+            ? { Success: false, ResultCode: statementCode, Message: message }
+            : { Success: false, ResultCode: "PERMISSION_DENIED", Message: `Not permitted to run this query: ${message}` };
+    }
+
+    /** The result code for SQL refused for its shape or for a function it calls; null for any other refusal. */
+    private statementRefusalCode(message: string): 'NOT_SELECT_STATEMENT' | 'DANGEROUS_QUERY' | null {
+        if (/single read query|read-only statement|write statement|write\/DDL|multiple statements/i.test(message)) {
+            return "NOT_SELECT_STATEMENT";
+        }
+        return /may not call/i.test(message) ? "DANGEROUS_QUERY" : null;
+    }
+
+    /** Maps a failed run to the action's result codes. */
+    private queryFailure(errorMessage: string, timeoutSeconds: number): ActionResultSimple {
+        if (/time(d)?\s?out/i.test(errorMessage)) {
+            return {
+                Success: false,
+                ResultCode: "QUERY_TIMEOUT",
+                Message: `Query execution exceeded ${timeoutSeconds} second timeout. Consider optimizing query or increasing timeout parameter.`
+            };
+        }
+        const statementCode = this.statementRefusalCode(errorMessage);
+        if (statementCode) {
+            return { Success: false, ResultCode: statementCode, Message: errorMessage };
+        }
+        if (/permission|denied/i.test(errorMessage)) {
+            return { Success: false, ResultCode: "PERMISSION_DENIED", Message: `Insufficient permissions to execute query: ${errorMessage}` };
+        }
+        return { Success: false, ResultCode: "DATABASE_ERROR", Message: `Database error occurred: ${errorMessage}` };
+    }
+
+    /** Column names and value types, read from the returned rows. */
+    private describeColumns(rows: Record<string, unknown>[]): Array<{ ColumnName: string; DataType: string; IsNullable: boolean }> {
+        if (rows.length === 0) {
+            return [];
+        }
+        return Object.keys(rows[0]).map(name => ({
+            ColumnName: name,
+            DataType: this.describeValueType(rows.find(row => row[name] != null)?.[name]),
+            IsNullable: rows.some(row => row[name] == null)
+        }));
+    }
+
+    private describeValueType(value: unknown): string {
+        if (value === null || value === undefined) {
+            return 'unknown';
+        }
+        return value instanceof Date ? 'datetime' : typeof value;
     }
 
     /**
@@ -345,7 +404,7 @@ export class RunAdhocQueryAction extends BaseAction {
                 if (columnMaxLength > 0 && value != null) {
                     const stringValue = String(value);
                     if (stringValue.length > columnMaxLength) {
-                        value = stringValue.substring(0, columnMaxLength) + '...';
+                        value = stringValue.substring(0, columnMaxLength) + '[...truncated]';
                     }
                 }
                 return this.formatCSVValue(value);
@@ -369,7 +428,7 @@ export class RunAdhocQueryAction extends BaseAction {
      * - All string values are quoted and escaped
      * - Numbers and booleans are converted to strings and quoted
      */
-    private formatCSVValue(value: any): string {
+    private formatCSVValue(value: unknown): string {
         if (value == null) {
             return '""';
         }
@@ -384,6 +443,36 @@ export class RunAdhocQueryAction extends BaseAction {
         return `"${escaped}"`;
     }
 
+    private formatAsMarkdownTable(results: Record<string, unknown>[], columnMaxLength: number = 0): string {
+        if (results.length === 0) return '*No rows returned*';
+
+        const headers = Object.keys(results[0]);
+        const headerRow = `| ${headers.join(' | ')} |`;
+        const separatorRow = `| ${headers.map(() => '---').join(' | ')} |`;
+
+        let wasColumnTruncated = false;
+        const dataRows = results.map(row => {
+            const values = headers.map(header => {
+                let value = row[header];
+                if (value == null) return '';
+
+                let strVal = String(value);
+                if (columnMaxLength > 0 && strVal.length > columnMaxLength) {
+                    strVal = strVal.substring(0, columnMaxLength) + '[...truncated]';
+                    wasColumnTruncated = true;
+                }
+                return strVal.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\n/g, ' ');
+            });
+            return `| ${values.join(' | ')} |`;
+        });
+
+        const table = [headerRow, separatorRow, ...dataRows].join('\n');
+        if (wasColumnTruncated) {
+            return `${table}\n\n*Note: Column values longer than ${columnMaxLength} characters were truncated with \`[...truncated]\`. Pass \`ColumnMaxLength: 0\` for full values.*`;
+        }
+        return table;
+    }
+
     /**
      * Trims columns in result set to maximum length
      * Used for JSON format results to prevent verbose fields from overwhelming context
@@ -391,12 +480,12 @@ export class RunAdhocQueryAction extends BaseAction {
      * @param maxLength Maximum length for string values
      * @returns New array with trimmed values
      */
-    private trimResultColumns(results: any[], maxLength: number): any[] {
+    private trimResultColumns(results: Record<string, unknown>[], maxLength: number): Record<string, unknown>[] {
         return results.map(row => {
-            const trimmedRow: any = {};
+            const trimmedRow: Record<string, unknown> = {};
             for (const [key, value] of Object.entries(row)) {
                 if (value != null && typeof value === 'string' && value.length > maxLength) {
-                    trimmedRow[key] = value.substring(0, maxLength) + '...';
+                    trimmedRow[key] = value.substring(0, maxLength) + '[...truncated]';
                 } else {
                     trimmedRow[key] = value;
                 }
@@ -494,26 +583,6 @@ export class RunAdhocQueryAction extends BaseAction {
     }
 
     /**
-     * Resolves {{query:"..."}} composition macros in ad-hoc SQL.
-     * This enables agents to write SQL that references saved reusable queries
-     * using the same composition syntax as stored queries.
-     */
-    private resolveCompositionTokens(sql: string, params: RunActionParams): string {
-        const engine = new QueryCompositionEngine();
-        if (!engine.HasCompositionTokens(sql)) {
-            return sql;
-        }
-
-        const result = engine.ResolveComposition(
-            sql,
-            'sqlserver',
-            params.ContextUser
-        );
-
-        return result.ResolvedSQL;
-    }
-
-    /**
      * Helper to get string parameter value
      */
     private getStringParam(params: RunActionParams, paramName: string): string | undefined {
@@ -539,11 +608,22 @@ export class RunAdhocQueryAction extends BaseAction {
         return defaultValue;
     }
 
+    private setOutputParam(params: RunActionParams, name: string, value: unknown): void {
+        const existing = params.Params.find(
+            p => p.Name.toLowerCase() === name.toLowerCase() && (p.Type === 'Output' || p.Type === 'Both')
+        );
+        if (existing) {
+            existing.Value = value;
+        } else {
+            params.Params.push({ Name: name, Type: 'Output', Value: value });
+        }
+    }
+
     /**
      * Build detailed message with query results for agent consumption
      */
     private buildDetailedMessage(
-        results: any[],
+        results: Record<string, unknown>[],
         columns: Array<{ ColumnName: string; DataType: string; IsNullable: boolean }>,
         executionTimeMs: number,
         totalTimeMs: number,
@@ -551,7 +631,8 @@ export class RunAdhocQueryAction extends BaseAction {
         warnings: string[],
         returnType: string,
         formattedData?: string,
-        analysis?: string
+        analysis?: string,
+        columnMaxLength: number = 0
     ): string {
         const lines: string[] = [];
 
@@ -563,6 +644,9 @@ export class RunAdhocQueryAction extends BaseAction {
 
         if (wasTruncated) {
             lines.push(`**Note:** Results were truncated to maximum row limit`);
+        }
+        if (columnMaxLength > 0 && formattedData?.includes('[...truncated]')) {
+            lines.push(`**Note:** Column values longer than ${columnMaxLength} characters were truncated with \`[...truncated]\`. Pass \`ColumnMaxLength: 0\` for full values.`);
         }
 
         lines.push(`\n---\n`);

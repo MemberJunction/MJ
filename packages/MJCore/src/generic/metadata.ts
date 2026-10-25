@@ -1,4 +1,4 @@
-import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, EntityMergeOptions, ILocalStorageProvider, IMetadataProvider, IRunViewProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType, FullTextSearchParams, FullTextSearchResult, SearchEntityParams, EntitySearchResult } from "./interfaces";
+import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, EntityMergeOptions, GetRecordDependenciesOptions, ILocalStorageProvider, IMetadataProvider, IRunViewProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType, FullTextSearchParams, FullTextSearchResult, SearchEntityParams, EntitySearchResult } from "./interfaces";
 import { EntityDependency, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo"
 import { ApplicationInfo } from "./applicationInfo"
 import { BaseEntity } from "./baseEntity"
@@ -339,9 +339,12 @@ export class Metadata {
      * you can use the utility method GetEntityDependencies(), which doesn't check for dependencies on a specific record, but rather gets the metadata in one shot that can be used for dependency checking.
      * @param entityName the name of the entity to check
      * @param primaryKey the primary key value to check
+     * @param options optional filtering options for dependency discovery
      */
-    public async GetRecordDependencies(entityName: string, primaryKey: CompositeKey): Promise<RecordDependency[]> { 
-        return await Metadata.Provider.GetRecordDependencies(entityName, primaryKey);  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
+    public async GetRecordDependencies(entityName: string, primaryKey: CompositeKey, options?: GetRecordDependenciesOptions): Promise<RecordDependency[]> { 
+        return await (options !== undefined
+            ? Metadata.Provider.GetRecordDependencies(entityName, primaryKey, options)  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
+            : Metadata.Provider.GetRecordDependencies(entityName, primaryKey));  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     /**

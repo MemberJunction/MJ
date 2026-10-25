@@ -46,6 +46,24 @@ describe('AzureEmbedding.EmbedTexts (real BaseEmbeddings dispatch → embedBatch
     });
 });
 
+/** Builds the error `fetch` and the SDKs reject an aborted request with. */
+function abortError(): Error {
+    const error = new Error('This operation was aborted');
+    error.name = 'AbortError';
+    return error;
+}
+
+/** The classification a cancellation error carries, read from the error a call rejected with. */
+async function rejectionTypeOf(operation: Promise<unknown>): Promise<string | undefined> {
+    try {
+        await operation;
+    } catch (error) {
+        const info: { errorType?: string } | undefined = (error as { errorInfo?: { errorType?: string } }).errorInfo;
+        return info?.errorType;
+    }
+    throw new Error('expected the call to reject');
+}
+
 /**
  * The `dimensions` parameter (#5234). With no model name the driver calls its default,
  * text-embedding-ada-002, which has one width and rejects `dimensions`. A named model is a deployment,
@@ -84,5 +102,33 @@ describe('AzureEmbedding and the dimensions parameter', () => {
         await e.EmbedTexts({ texts: ['a'], model: 'my-embedding-deployment', dimensions: 512 });
 
         expect(mockPost.mock.calls[0][0].body).toMatchObject({ model: 'my-embedding-deployment', dimensions: 512 });
+    });
+});
+
+describe('AzureEmbedding cancellation', () => {
+    let e: AzureEmbedding;
+    beforeEach(() => {
+        mockPost.mockReset();
+        e = new AzureEmbedding('k');
+        e.SetAdditionalSettings({ endpoint: 'https://example.openai.azure.com' });
+    });
+
+    it('forwards the CancellationToken to post() as its abortSignal', async () => {
+        mockPost.mockResolvedValue(postResponse([[1, 0]]));
+        const controller = new AbortController();
+        await e.EmbedTexts({ texts: ['a'], model: 'm', CancellationToken: controller.signal });
+        await e.EmbedText({ text: 'a', model: 'm', CancellationToken: controller.signal });
+        expect(mockPost.mock.calls[0][0]).toMatchObject({ abortSignal: controller.signal });
+        expect(mockPost.mock.calls[1][0]).toMatchObject({ abortSignal: controller.signal });
+    });
+
+    it('reports an aborted request as cancelled rather than as an empty result', async () => {
+        const controller = new AbortController();
+        mockPost.mockImplementation(async () => {
+            controller.abort('stop');
+            throw abortError();
+        });
+        expect(await rejectionTypeOf(e.EmbedTexts({ texts: ['a', 'b'], model: 'm', CancellationToken: controller.signal }))).toBe('Cancelled');
+        expect(await rejectionTypeOf(e.EmbedText({ text: 'a', model: 'm', CancellationToken: controller.signal }))).toBe('Cancelled');
     });
 });

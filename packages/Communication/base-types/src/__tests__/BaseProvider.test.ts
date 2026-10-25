@@ -250,6 +250,42 @@ describe('BaseCommunicationProvider', () => {
             expect(result.Events).toEqual([]);
         });
 
+        /**
+         * A provider with no calendar must say so per operation, by name, rather than look like an
+         * empty calendar or a write that went nowhere.
+         */
+        describe('calendar operations a provider does not implement', () => {
+            const target = { Identifier: 'someone@example.com' };
+            const start = new Date('2026-10-01T15:00:00Z');
+            const end = new Date('2026-10-01T16:00:00Z');
+            const calls: [string, () => Promise<{ Success: boolean; ErrorMessage?: string }>][] = [
+                ['CreateEvent', () => provider.CreateEvent({ Target: target, Event: { Subject: 'x', Start: start, End: end } })],
+                ['UpdateEvent', () => provider.UpdateEvent({ Target: target, ExternalEventID: 'e1', Changes: { Subject: 'y' } })],
+                ['CancelEvent', () => provider.CancelEvent({ Target: target, ExternalEventID: 'e1' })],
+                ['GetEvent', () => provider.GetEvent({ Target: target, ExternalEventID: 'e1' })],
+                ['SyncEvents', () => provider.SyncEvents({ Target: target })],
+            ];
+
+            it.each(calls)('%s refuses, naming the provider, the operation and the calendar', async (operation, call) => {
+                const result = await call();
+                expect(result.Success).toBe(false);
+                expect(result.ErrorMessage).toContain(`TestProvider does not support ${operation}`);
+                expect(result.ErrorMessage).toContain('someone@example.com');
+            });
+
+            it('SyncEvents refuses with an empty change list rather than a missing one', async () => {
+                const result = await provider.SyncEvents({ Target: target, SyncToken: 'tok' });
+                expect(result.Changes).toEqual([]);
+                expect(result.NextSyncToken).toBeUndefined();
+            });
+
+            it('does not report the calendar operations as supported', () => {
+                for (const op of ['CreateEvent', 'UpdateEvent', 'CancelEvent', 'GetEvent', 'SyncEvents'] as const) {
+                    expect(provider.SupportsOperation(op)).toBe(false);
+                }
+            });
+        });
+
         it('MarkAsRead should return not supported', async () => {
             const result = await provider.MarkAsRead({ MessageIDs: ['msg-1', 'msg-2'], IsRead: true });
             expect(result.Success).toBe(false);
@@ -292,6 +328,86 @@ describe('BaseCommunicationProvider', () => {
         it('should show credentials provided: false when no credentials', async () => {
             const result = await provider.GetSingleMessage({ MessageID: 'msg-1' });
             expect(result.ErrorMessage).toContain('credentials provided: false');
+        });
+
+        it('GetFreeBusy should return not supported with empty Schedules', async () => {
+            const result = await provider.GetFreeBusy({
+                Schedules: ['alice@example.com', 'bob@example.com'],
+                StartDateTime: new Date('2026-10-18T09:00:00Z'),
+                EndDateTime: new Date('2026-10-18T17:00:00Z'),
+            });
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('does not support GetFreeBusy');
+            expect(result.ErrorMessage).toContain('Schedules: 2');
+            expect(result.Schedules).toEqual([]);
+        });
+
+        it('FindMeetingTimes should return not supported with empty Suggestions', async () => {
+            const result = await provider.FindMeetingTimes({
+                Identifier: 'alice@example.com',
+                Attendees: [{ Email: 'bob@example.com', Required: true }],
+                StartDateTime: new Date('2026-10-18T09:00:00Z'),
+                EndDateTime: new Date('2026-10-18T17:00:00Z'),
+                DurationMinutes: 30,
+            });
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('does not support FindMeetingTimes');
+            expect(result.ErrorMessage).toContain('alice@example.com');
+            expect(result.Suggestions).toEqual([]);
+        });
+
+        it('CreateCalendarEvent should return not supported', async () => {
+            const result = await provider.CreateCalendarEvent({
+                Identifier: 'alice@example.com',
+                Subject: 'Q4 Strategy Review',
+                StartTime: new Date('2026-10-18T14:00:00Z'),
+                EndTime: new Date('2026-10-18T15:00:00Z'),
+            });
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('does not support CreateCalendarEvent');
+            expect(result.ErrorMessage).toContain('Q4 Strategy Review');
+        });
+
+        it('UpdateCalendarEvent should return not supported', async () => {
+            const result = await provider.UpdateCalendarEvent({
+                Identifier: 'alice@example.com',
+                EventID: 'evt-123',
+                Subject: 'Updated Title',
+            });
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('does not support UpdateCalendarEvent');
+            expect(result.ErrorMessage).toContain('evt-123');
+        });
+
+        it('RespondToCalendarEvent should return not supported', async () => {
+            const result = await provider.RespondToCalendarEvent({
+                Identifier: 'alice@example.com',
+                EventID: 'evt-123',
+                Response: 'Accept',
+            });
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('does not support RespondToCalendarEvent');
+            expect(result.ErrorMessage).toContain('Accept');
+        });
+
+        it('CancelCalendarEvent should return not supported', async () => {
+            const result = await provider.CancelCalendarEvent({
+                Identifier: 'alice@example.com',
+                EventID: 'evt-123',
+            });
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('does not support CancelCalendarEvent');
+            expect(result.ErrorMessage).toContain('evt-123');
+        });
+
+        it('VerifyMailboxAccess should return not supported with false flags', async () => {
+            const result = await provider.VerifyMailboxAccess({
+                Identifier: 'alice@example.com',
+            });
+            expect(result.Success).toBe(false);
+            expect(result.CanReadMail).toBe(false);
+            expect(result.CanReadCalendar).toBe(false);
+            expect(result.ErrorMessage).toContain('does not support VerifyMailboxAccess');
         });
     });
 

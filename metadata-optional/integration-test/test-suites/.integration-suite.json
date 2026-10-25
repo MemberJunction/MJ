@@ -1220,6 +1220,28 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT124 - Feature Pipeline Key, Cache and Versions (core)",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CB5BABC8-DCD5-412A-9F6B-29ABF1D9B320"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT126 - Feature Value Only Outputs",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E4D70105-00D2-4F2B-BECA-47FB2A82A390"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT112 - Realtime Session Identity Verification",
             "Sequence": 50,
             "Status": "Active"
@@ -1302,6 +1324,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT122 - Agent Prompt Cancellation",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7A7D504D-15A9-45A2-9BD7-2F7DB12C3E8F"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT108 - Cloudflare Clef Decision Models",
             "Sequence": 48,
             "Status": "Active"
@@ -1335,6 +1368,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT121 - SubQ Snap and Mercury Decide Decision Models",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "92D27276-9AD6-4D1F-BA85-7895757F5349"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT96 - Record Cloning",
             "Sequence": 71,
             "Status": "Active"
@@ -1352,6 +1396,61 @@
           },
           "primaryKey": {
             "ID": "B88AFB7E-06E4-47D4-BC45-8DDE8FF215A8"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT116 - Search Origin-Record Gate",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7482F42F-151A-4A5B-84D6-D8BE3B407057"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT117 - Agent Pre-Execution RAG Permission Gate",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "FFC8D637-7E5C-4984-8001-7F0CA59B7541"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT118 - Search Provider Trust and Unresolvable Scopes",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "4A7C2445-4C2A-4E58-ACC2-066293F00776"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT119 - Agent Run Audience",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F7DCC04D-1FDC-451E-A975-FF19E193A30C"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT123 - Search Scope Bound",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "4CF85E49-88E4-4441-A919-2A3FECD4906D"
           }
         },
         {
@@ -1396,6 +1495,94 @@
           },
           "primaryKey": {
             "ID": "3DA009D7-6777-438C-B45A-66BE07808056"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT113 - LiveKit Room Agent Vision Consent",
+            "Sequence": 75,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "84E2D287-9A54-49AC-859C-D796DA5E6182"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT115 - Conversation Message Authorship (client transport)",
+            "Sequence": 76,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3F27D8A1-8E70-49A6-86FF-858A80446494"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT136 - View Properties over GraphQL",
+            "Sequence": 75,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3E05F35F-E69D-49A8-B641-6C8C08BF2243"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT120 - Server-Set Query Parameters and Approvals",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "DE6D8FB0-92C7-4454-9618-87412D144E56"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT127 - Calendar Event Links and Sync",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "286A13C7-2C5D-4243-8918-336AF1C8FFB2"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT128 - Performance and Agent Overhead Benchmark",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B4E9102C-58D3-4A7E-91F2-3C85A71D6E04"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT130 - Native Tool Loop (scripted model)",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "19516008-6F25-49C0-BEAA-59762CC20B21"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT132 - Alternate Base Views",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C855524F-A408-4F8B-BD04-4BE96B59C3C1"
           }
         }
       ]
@@ -1631,7 +1818,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT63 - Agent Wire Callback (fire-and-forget)",
-            "Sequence": 16,
+            "Sequence": 19,
             "Status": "Active"
           },
           "primaryKey": {
@@ -1655,6 +1842,39 @@
           "sync": {
             "lastModified": "2026-09-09T11:23:36.834Z",
             "checksum": "804747ad27abd437764b0d85a464b9e73f7964bd1b3da6c62cba0620196b60ff"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT114 - AI Vendor Effort Levels",
+            "Sequence": 16,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B3816AC6-B2DA-43DD-A091-34A51B833CF0"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT129 - Native Tool Calling and Action Param Schemas",
+            "Sequence": 17,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "275B45D4-EB50-4AC0-8872-E04845D47A24"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT131 - Native Tool Loop (live providers)",
+            "Sequence": 18,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B4E0BF50-AACE-4F59-9B07-F3CA6EE1EC7C"
           }
         }
       ]

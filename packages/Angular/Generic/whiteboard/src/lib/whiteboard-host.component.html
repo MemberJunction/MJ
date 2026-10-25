@@ -50,10 +50,12 @@
         </div>
       }
     </span>
-    <button type="button" class="head-btn" [class.on]="FocusMode" (click)="ToggleFocus()">
-      <i [class]="FocusMode ? 'fa-solid fa-compress' : 'fa-solid fa-expand'"></i>
-      {{ FocusMode ? 'Show thread' : 'Focus board' }}
-    </button>
+    @if (ShowFocusToggle) {
+      <button type="button" class="head-btn" [class.on]="FocusMode" (click)="ToggleFocus()">
+        <i [class]="FocusMode ? 'fa-solid fa-compress' : 'fa-solid fa-expand'"></i>
+        {{ FocusMode ? 'Back to tab' : 'Move to stage' }}
+      </button>
+    }
     <button type="button" class="head-btn head-btn--more" title="More"><i class="fa-solid fa-ellipsis"></i></button>
   </div>
 </div>
@@ -88,6 +90,7 @@
     [ActiveTool]="Tool"
     [ToolRoster]="ToolRoster"
     [PenColor]="PenColor"
+    [PenColors]="PenPalette"
     [PenWidth]="PenWidth"
     [ShapeKind]="ShapeKind"
     [TextSize]="TextSize"

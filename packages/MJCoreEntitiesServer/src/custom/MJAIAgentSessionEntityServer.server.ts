@@ -6,11 +6,15 @@ import { FindProtectedSessionConfigChanges, IsTrustedSessionConfigWriteActive } 
 /**
  * Server-side `MJ: AI Agent Sessions` entity.
  *
- * Its single job is to keep the **server-authoritative keys** inside `Config` (the janitor's
+ * It keeps the **server-authoritative keys** inside `Config` (the janitor's
  * `maxSessionDeadlineIso`, the `identityVerification` state) out of the session owner's reach. The
  * owner can legitimately write the row — the `UI` and `Widget Guest` roles hold `CanUpdate` on their
  * own sessions — so the protection has to live at the entity, where the generated CRUD mutations,
- * `StartAgentSession(configJson)` and every other path converge on `Save()`.
+ * `StartAgentSession(configJson)` and every other path converge on `Save`.
+ *
+ * The recording ledger's columns need no subclass: they are protected in metadata
+ * (`AllowUpdateAPI=false`, #6010), so an entity save cannot write them and only the ledger's stored
+ * procedures do.
  *
  * See {@link FindProtectedSessionConfigChanges} for what is protected and why, and
  * `RunWithTrustedSessionConfigWrites` for how server code opts in.

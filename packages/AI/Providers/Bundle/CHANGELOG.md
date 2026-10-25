@@ -1,5 +1,132 @@
 # @memberjunction/ai-provider-bundle
 
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [1419678]
+- Updated dependencies [55184f1]
+- Updated dependencies [e5675dc]
+- Updated dependencies [c6d1232]
+- Updated dependencies [542795b]
+- Updated dependencies [230cdad]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [ce758af]
+- Updated dependencies [72dd65c]
+- Updated dependencies [04fec10]
+  - @memberjunction/ai-recommendations-rex@6.2.0-edge.5
+  - @memberjunction/ai-gemini@6.2.0-edge.5
+  - @memberjunction/ai-vertex@6.2.0-edge.5
+  - @memberjunction/ai-ollama@6.2.0-edge.5
+  - @memberjunction/ai-systemone@6.2.0-edge.5
+  - @memberjunction/ai-inception@6.2.0-edge.5
+  - @memberjunction/ai-cloudflare@6.2.0-edge.5
+  - @memberjunction/ai-anthropic@6.2.0-edge.5
+  - @memberjunction/ai-azure@6.2.0-edge.5
+  - @memberjunction/ai-bedrock@6.2.0-edge.5
+  - @memberjunction/ai-betty-bot@6.2.0-edge.5
+  - @memberjunction/ai-blackforestlabs@6.2.0-edge.5
+  - @memberjunction/ai-cerebras@6.2.0-edge.5
+  - @memberjunction/ai-cohere@6.2.0-edge.5
+  - @memberjunction/ai-elevenlabs@6.2.0-edge.5
+  - @memberjunction/ai-fireworks@6.2.0-edge.5
+  - @memberjunction/ai-groq@6.2.0-edge.5
+  - @memberjunction/ai-heygen@6.2.0-edge.5
+  - @memberjunction/ai-lmstudio@6.2.0-edge.5
+  - @memberjunction/ai-local-embeddings@6.2.0-edge.5
+  - @memberjunction/ai-mistral@6.2.0-edge.5
+  - @memberjunction/ai-openai@6.2.0-edge.5
+  - @memberjunction/ai-xai@6.2.0-edge.5
+  - @memberjunction/ai-assemblyai@6.2.0-edge.5
+  - @memberjunction/ai-deepinfra@6.2.0-edge.5
+  - @memberjunction/ai-inworld@6.2.0-edge.5
+  - @memberjunction/ai-llamacpp@6.2.0-edge.5
+  - @memberjunction/ai-minimax@6.2.0-edge.5
+  - @memberjunction/ai-openrouter@6.2.0-edge.5
+  - @memberjunction/ai-siliconflow@6.2.0-edge.5
+  - @memberjunction/ai-zhipu@6.2.0-edge.5
+  - @memberjunction/ai-vectors-pinecone@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Minor Changes
+
+- 10c2311: Add the Clef and Kev decision models and two drivers to reach them. `CloudflareDecision`, in the new `@memberjunction/ai-cloudflare` package, calls Cloudflare's Clef and Clef-flash on Workers AI (`@cf/cloudflare/clef`, `@cf/cloudflare/clef-flash`); its account ID comes from a `<accountId>:<apiToken>` key, a credential's `accountId`, or `CLOUDFLARE_ACCOUNT_ID`, and `CLOUDFLARE_WORKERS_AI_BASE_URL` or a credential's `endpoint` routes it through an AI Gateway. `SystemOneDecision`, in the new `@memberjunction/ai-systemone` package, calls any server with a `/v1/systemone` route (Kev's own server, llama.cpp's `llama-server`, TypeSafe), with the endpoint from an `API Key with Endpoint` credential or `SYSTEMONE_BASE_URL` and an optional bearer token. The System One wire mapping that Jev, Kev and Clef share moves out of `OpenRouterDecision` into a new `BaseSystemOneDecision` in `@memberjunction/ai`; `OpenRouterDecision` keeps its behaviour, statics and constructor, except that a key resolved from an AI Credential binding now sends the credential's `apiKey` as the bearer token instead of the credential's JSON, and a key that starts with `{` but is not valid JSON now fails before any request instead of being sent whole as the token. Metadata adds the `Cloudflare` and `System One Endpoint` vendors, the `Clef` and `Clef-flash` models, and `Kev-0.8B`, `Kev-4B`, `Kev-9B` and `Kev-27B` (Kev-4B also on OpenRouter, as `jaredpalmer/kev-4b-20260924`), with their limits and prices. The `Default Decision` prompt's bindings are unchanged. The one change in default behaviour: as active `Decision` models, the new models join the power-matched fallback candidates of any Decision prompt that does not require specific models, after its bound models, and only when their credentials resolve. `Default Decision` fails over across models (its `FailoverStrategy` is the column default, `SameModelDifferentVendor`, which `AIDecisionRunner` treats as the whole candidate list), so a call reaches one of them when every credentialed candidate ahead of it (Jev, when its key is set, and `LLM Decision`) has failed with an error that allows failover. Kev-4B on OpenRouter resolves with the OpenRouter key Jev already uses. A missing account ID, token or endpoint, or an API key that starts with `{` but is not valid JSON (a legacy `AI_VENDOR_API_KEY__*` value or runtime `apiKeys` entry; bound AI Credentials always arrive as valid JSON), fails a call before any request with a `NoCredentials` error that allows failover, so a misconfigured fallback does not stop the failover loop and a malformed key's text is never sent as a token.
+
+  `BaseModelRunner` in `@memberjunction/ai-prompts` now finds a `ModelVendor` credential binding on any Active row of a model on a vendor, Inference Provider rows first, both when it checks whether a candidate has a credential and when it resolves one. It used to read only the first Active row, so for any model with both a Model Developer row and an Inference Provider row on one vendor (Clef and Clef-flash on Cloudflare, and many existing models, such as Claude 4.5 Opus on Anthropic, Grok 4 on x.ai, Gemini 3 Flash on Google and the OpenAI embedding models), a credential bound to the Inference Provider row was found only when that row happened to load first, which depends on the rows' keys. A binding on another model's row still does not apply. The fix applies to every runner built on `BaseModelRunner` (prompts and agents, embeddings, rerankers, image and media generation, and decisions), not only to decisions.
+
+### Patch Changes
+
+- Updated dependencies [293c316]
+- Updated dependencies [155aa45]
+- Updated dependencies [4412e85]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1da00cb]
+- Updated dependencies [0dbd455]
+- Updated dependencies [961d529]
+- Updated dependencies [10c2311]
+- Updated dependencies [af6f892]
+- Updated dependencies [69e19c5]
+- Updated dependencies [7316ac3]
+- Updated dependencies [91be34f]
+- Updated dependencies [f5e317c]
+- Updated dependencies [6055792]
+- Updated dependencies [8ef5e86]
+- Updated dependencies [a1eaf42]
+- Updated dependencies [596855c]
+- Updated dependencies [fdf6669]
+- Updated dependencies [111a5f3]
+- Updated dependencies [4c682c1]
+- Updated dependencies [7e86ce0]
+- Updated dependencies [584fc44]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [95e5dd9]
+- Updated dependencies [ecc5658]
+- Updated dependencies [8bac4d6]
+- Updated dependencies [7dc604e]
+- Updated dependencies [5a3de97]
+- Updated dependencies [8704df6]
+- Updated dependencies [5345e3d]
+- Updated dependencies [22c9074]
+- Updated dependencies [5dc3752]
+- Updated dependencies [5e21f50]
+- Updated dependencies [35ed7b5]
+- Updated dependencies [e293b68]
+- Updated dependencies [8a9d203]
+  - @memberjunction/ai-gemini@6.2.0-edge.4
+  - @memberjunction/ai-vertex@6.2.0-edge.4
+  - @memberjunction/ai-openrouter@6.2.0-edge.4
+  - @memberjunction/ai-cloudflare@6.2.0-edge.4
+  - @memberjunction/ai-systemone@6.2.0-edge.4
+  - @memberjunction/ai-openai@6.2.0-edge.4
+  - @memberjunction/ai-assemblyai@6.2.0-edge.4
+  - @memberjunction/ai-elevenlabs@6.2.0-edge.4
+  - @memberjunction/ai-inworld@6.2.0-edge.4
+  - @memberjunction/ai-recommendations-rex@6.2.0-edge.4
+  - @memberjunction/ai-vectors-pinecone@6.2.0-edge.4
+  - @memberjunction/ai-anthropic@6.2.0-edge.4
+  - @memberjunction/ai-azure@6.2.0-edge.4
+  - @memberjunction/ai-bedrock@6.2.0-edge.4
+  - @memberjunction/ai-betty-bot@6.2.0-edge.4
+  - @memberjunction/ai-blackforestlabs@6.2.0-edge.4
+  - @memberjunction/ai-cerebras@6.2.0-edge.4
+  - @memberjunction/ai-cohere@6.2.0-edge.4
+  - @memberjunction/ai-deepinfra@6.2.0-edge.4
+  - @memberjunction/ai-fireworks@6.2.0-edge.4
+  - @memberjunction/ai-groq@6.2.0-edge.4
+  - @memberjunction/ai-heygen@6.2.0-edge.4
+  - @memberjunction/ai-inception@6.2.0-edge.4
+  - @memberjunction/ai-lmstudio@6.2.0-edge.4
+  - @memberjunction/ai-llamacpp@6.2.0-edge.4
+  - @memberjunction/ai-local-embeddings@6.2.0-edge.4
+  - @memberjunction/ai-minimax@6.2.0-edge.4
+  - @memberjunction/ai-mistral@6.2.0-edge.4
+  - @memberjunction/ai-ollama@6.2.0-edge.4
+  - @memberjunction/ai-siliconflow@6.2.0-edge.4
+  - @memberjunction/ai-zhipu@6.2.0-edge.4
+  - @memberjunction/ai-xai@6.2.0-edge.4
+
 ## 6.2.0-edge.3
 
 ### Patch Changes

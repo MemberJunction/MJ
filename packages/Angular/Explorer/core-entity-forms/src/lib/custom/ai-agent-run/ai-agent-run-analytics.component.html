@@ -84,6 +84,10 @@
                     @if (inputCost > 0 || outputCost > 0) {
                       <span>input {{ formatCost(inputCost) }} &middot; output {{ formatCost(outputCost) }}</span>
                     }
+                    <!-- Priced per minute on its own line, so it is not part of the output figure above. -->
+                    @if (AvatarVideoCost > 0) {
+                      <span class="avatar-video-cost">avatar video {{ FormatCost(AvatarVideoCost) }}</span>
+                    }
                     @if (cacheSavings > 0) {
                       <span class="success">saved {{ formatCost(cacheSavings) }} ({{ cacheSavingsPct | number:'1.0-0' }}%) via cache</span>
                     }

@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
+    InboundVideoRateOf,
+    InboundVideoStreamsOf,
+    IsPcmAudioMimeType,
     RealtimeModalityRegistry,
     RealtimeTrackKey,
     ResolveMaxInboundVideoStreams,
@@ -226,5 +229,62 @@ describe('ResolveMaxInboundVideoStreams', () => {
         for (const bad of [0, -2, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
             expect(ResolveMaxInboundVideoStreams(true, bad), String(bad)).toBe(1);
         }
+    });
+});
+
+describe('InboundVideoStreamsOf', () => {
+    const audioIn: RealtimeTrackDescriptor = { Modality: 'audio', Direction: 'inbound' };
+    const videoIn: RealtimeTrackDescriptor = { Modality: 'video', Direction: 'inbound', Encoding: 'image/jpeg' };
+    const videoOut: RealtimeTrackDescriptor = { Modality: 'video', Direction: 'outbound' };
+
+    it('is zero for a session that declares no capabilities, which counts as audio only', () => {
+        expect(InboundVideoStreamsOf(undefined)).toBe(0);
+        expect(InboundVideoStreamsOf(null)).toBe(0);
+        expect(InboundVideoStreamsOf({ CanReconfigureTurnMode: false })).toBe(0);
+    });
+
+    it('is zero when the session takes audio only, or sends video without taking it', () => {
+        expect(InboundVideoStreamsOf({ CanReconfigureTurnMode: false, SupportedInboundTracks: [audioIn] })).toBe(0);
+        expect(InboundVideoStreamsOf({ CanReconfigureTurnMode: false, SupportedInboundTracks: [audioIn], SupportedOutboundTracks: [videoOut] })).toBe(0);
+        expect(InboundVideoStreamsOf({ CanReconfigureTurnMode: false, SupportedInboundTracks: [audioIn], MaxInboundVideoStreams: 2 })).toBe(0);
+    });
+
+    it('is the declared stream ceiling when the session takes inbound video, one when it declares none', () => {
+        expect(InboundVideoStreamsOf({ CanReconfigureTurnMode: false, SupportedInboundTracks: [audioIn, videoIn] })).toBe(1);
+        expect(InboundVideoStreamsOf({ CanReconfigureTurnMode: false, SupportedInboundTracks: [videoIn], MaxInboundVideoStreams: 2 })).toBe(2);
+        expect(InboundVideoStreamsOf({ CanReconfigureTurnMode: false, SupportedInboundTracks: [videoIn], MaxInboundVideoStreams: -1 })).toBe(1);
+    });
+});
+
+describe('InboundVideoRateOf', () => {
+    const audioIn: RealtimeTrackDescriptor = { Modality: 'audio', Direction: 'inbound', Rate: 16000 };
+    const videoIn = (rate?: number): RealtimeTrackDescriptor => ({ Modality: 'video', Direction: 'inbound', Encoding: 'image/jpeg', Rate: rate });
+
+    it('is the declared rate of the inbound video track', () => {
+        expect(InboundVideoRateOf({ CanReconfigureTurnMode: false, SupportedInboundTracks: [audioIn, videoIn(1)] })).toBe(1);
+        expect(InboundVideoRateOf({ CanReconfigureTurnMode: false, SupportedInboundTracks: [videoIn(2.5)] })).toBe(2.5);
+    });
+
+    it("is undefined without capabilities or an inbound video track, and never reads the audio track's rate", () => {
+        expect(InboundVideoRateOf(undefined)).toBeUndefined();
+        expect(InboundVideoRateOf(null)).toBeUndefined();
+        expect(InboundVideoRateOf({ CanReconfigureTurnMode: false })).toBeUndefined();
+        expect(InboundVideoRateOf({ CanReconfigureTurnMode: false, SupportedInboundTracks: [audioIn] })).toBeUndefined();
+    });
+
+    it('is undefined when the video track declares no rate, or one that is not a positive finite number', () => {
+        for (const rate of [undefined, 0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+            expect(InboundVideoRateOf({ CanReconfigureTurnMode: false, SupportedInboundTracks: [videoIn(rate)] })).toBeUndefined();
+        }
+    });
+});
+
+describe('IsPcmAudioMimeType', () => {
+    it.each(['audio/pcm', 'audio/pcm;rate=24000', 'audio/pcm; rate=16000', 'AUDIO/PCM;rate=24000'])('accepts %s', (mime) => {
+        expect(IsPcmAudioMimeType(mime)).toBe(true);
+    });
+
+    it.each(['video/mp4', 'image/jpeg', 'audio/mpeg', 'audio/pcmx', 'audio/wav', ''])('rejects %s', (mime) => {
+        expect(IsPcmAudioMimeType(mime)).toBe(false);
     });
 });

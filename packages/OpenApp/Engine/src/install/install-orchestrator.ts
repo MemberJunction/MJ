@@ -4,9 +4,8 @@
  * Sequences the install flow, upgrade flow, and remove flow.
  * Each step is delegated to a specialized handler.
  */
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase, PassthroughInstallOptions, AppHookPayload, AppStatus, InstallAction } from '../types/open-app-types.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
@@ -15,11 +14,13 @@ import { CheckMJVersionCompatibility, IsValidUpgrade } from '../dependency/versi
 import { ResolveDependencyGraph } from '../dependency/dependency-graph-builder.js';
 import type { ManifestFetcher, RootApp } from '../dependency/dependency-graph-builder.js';
 import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-resolver.js';
-import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions, type MigrationDownloadResult } from '../github/github-client.js';
+import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, DescribeUnresolvedVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions, type MigrationDownloadResult } from '../github/github-client.js';
 import semver from 'semver';
 import { CheckCanMigrateAppSchema, CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName, MJ_APP_SCHEMA_PREFIX, type SchemaNameValidation } from './schema-manager.js';
 import { RunFkGraphTeardown, BuildRootDoomedPredicate } from './entity-teardown.js';
+import { OfferTemplateUser } from './template-user.js';
 import { ExtractApplicationIds } from './migration-application-ids.js';
+import { CreateAppTempDir } from './temp-dir.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
 import { AddAppPackages, RemoveAppPackages, RunPackageInstallAsync, BumpPrefixedDependencies, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
 import { BuildHookResolutionBases, ResolveHookModule } from './hook-module-resolver.js';
@@ -468,6 +469,11 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
           Manifest: manifest,
         }, context, manifest);
       }
+      // Step 16c: Offer the app's template user to the installer (never fatal).
+      if (manifest.templateUser) {
+        Callbacks?.OnProgress?.('Template User', `Setting up ${manifest.displayName}'s template user...`);
+        await OfferTemplateUser(manifest, context);
+      }
       await SetAppStep(context.ContextUser, createdAppId!, 'HooksRun');
     }
 
@@ -722,14 +728,16 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
 
     // Step 1: Fetch new manifest
     const explicitUpgradeVersion = options.Version;
-    const targetVersion = explicitUpgradeVersion ?? (await GetLatestVersion(existingApp.RepositoryURL, context.GitHubOptions, existingApp.Subpath ?? undefined));
+    const targetVersion = explicitUpgradeVersion ?? (await GetLatestVersion(existingApp.RepositoryURL, context.GitHubOptions, existingApp.Subpath ?? undefined, existingApp.Name));
     if (!targetVersion) {
-      return BuildFailureResult('Upgrade', options.AppName, '', 'Schema', startTime, 'Could not determine target version');
+      // An empty listing may be a repo this credential cannot see (GitHub 404s it) — say which.
+      const reason = await DescribeUnresolvedVersion(existingApp.RepositoryURL, context.GitHubOptions, existingApp.Subpath ?? undefined);
+      return BuildFailureResult('Upgrade', options.AppName, '', 'Schema', startTime, reason);
     }
 
     // If an explicit version was requested, validate the tag exists on GitHub
     if (explicitUpgradeVersion) {
-      const tagResult = await ValidateGitHubTag(existingApp.RepositoryURL, targetVersion, context.GitHubOptions, existingApp.Subpath ?? undefined);
+      const tagResult = await ValidateGitHubTag(existingApp.RepositoryURL, targetVersion, context.GitHubOptions, existingApp.Subpath ?? undefined, existingApp.Name);
       if (!tagResult.Exists) {
         return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Schema', startTime, tagResult.ErrorMessage ?? `Version ${targetVersion} not found`);
       }
@@ -756,7 +764,7 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
     const subpath = existingApp.Subpath ?? undefined;
 
     Callbacks?.OnProgress?.('Fetch', `Fetching manifest for ${options.AppName} v${targetVersion}...`);
-    const fetchResult = await FetchManifestFromGitHub(existingApp.RepositoryURL, targetVersion, context.GitHubOptions, subpath);
+    const fetchResult = await FetchManifestFromGitHub(existingApp.RepositoryURL, targetVersion, context.GitHubOptions, subpath, existingApp.Name);
     if (!fetchResult.Success || !fetchResult.ManifestJSON) {
       return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Schema', startTime, fetchResult.ErrorMessage ?? 'Failed to fetch manifest');
     }
@@ -1326,6 +1334,7 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
         await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
         return BuildFailureResult('Remove', options.AppName, existingApp.Version, 'Schema', startTime, combined);
       }
+      await DeleteAppDependencies(context.ContextUser, existingApp.ID);
       await SetAppStep(context.ContextUser, existingApp.ID, 'DbCleanupDone');
     }
 
@@ -1892,8 +1901,7 @@ async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorCo
   }
 
   context.Callbacks?.OnProgress?.('Migration', 'Downloading migration files...');
-  const tempDir = join(tmpdir(), `mj-app-${manifest.name}-${Date.now()}`);
-  mkdirSync(tempDir, { recursive: true });
+  const tempDir = CreateAppTempDir(manifest.name);
 
   try {
     // Live DB platform — selects the Skyway provider for RunAppMigrations below.
@@ -1959,12 +1967,11 @@ async function HandleTeardown(manifest: MJAppManifest, context: OrchestratorCont
 
   const platform = context.DatabaseProvider.Dialect.PlatformKey;
   const dir = platform === 'postgresql' ? `${teardownDir}-pg` : teardownDir;
-  const tempDir = join(tmpdir(), `mj-app-${manifest.name}-teardown-${Date.now()}`);
-  mkdirSync(tempDir, { recursive: true });
+  const tempDir = CreateAppTempDir(manifest.name, 'teardown');
 
   try {
     context.Callbacks?.OnProgress?.('Metadata', 'Downloading teardown scripts...');
-    const download = await DownloadMigrations(manifest.repository, manifest.version, dir, tempDir, context.GitHubOptions, subpath);
+    const download = await DownloadMigrations(manifest.repository, manifest.version, dir, tempDir, context.GitHubOptions, subpath, manifest.name);
     if (!download.Success) {
       return { Success: false, ErrorMessage: `Failed to download teardown scripts: ${download.ErrorMessage}` };
     }
@@ -2022,17 +2029,26 @@ async function DownloadAppMigrations(
   const isPG = context.DatabaseProvider.Dialect.PlatformKey === 'postgresql';
 
   if (isPG) {
-    const pgDir = `${baseDir.replace(/\/+$/, '')}-pg`;
-    const pgResult = await DownloadMigrations(manifest.repository, manifest.version, pgDir, tempDir, context.GitHubOptions, subpath);
+    let end = baseDir.length;
+    while (end > 0 && baseDir.charCodeAt(end - 1) === 47) {
+      end--;
+    }
+    const pgDir = `${baseDir.slice(0, end)}-pg`;
+    const pgResult = await DownloadMigrations(manifest.repository, manifest.version, pgDir, tempDir, context.GitHubOptions, subpath, manifest.name);
     // Use the PG-specific set only if it exists AND has files; otherwise fall
     // back to the declared directory (a 404 yields Success:false, an empty dir
     // yields Success:true with no files — both mean "no PG variant here").
+    //
+    // `manifest.name` matters MORE here than anywhere else: this probe reads a 404 as "no PG
+    // variant", so a ref that does not exist is indistinguishable from a repo that ships no `-pg`
+    // set. Without the app name, a package-tagged monorepo app's PG migrations are skipped
+    // silently on this line before the declared directory fails loudly on the next one.
     if (pgResult.Success && (pgResult.Files?.length ?? 0) > 0) {
       return pgResult;
     }
   }
 
-  return DownloadMigrations(manifest.repository, manifest.version, baseDir, tempDir, context.GitHubOptions, subpath);
+  return DownloadMigrations(manifest.repository, manifest.version, baseDir, tempDir, context.GitHubOptions, subpath, manifest.name);
 }
 
 /**
@@ -2527,8 +2543,7 @@ async function ExtractDeclaredApplicationIds(
   }
   let tempDir: string | undefined;
   try {
-    tempDir = join(tmpdir(), `mj-app-${manifest.name}-appids-${Date.now()}`);
-    mkdirSync(tempDir, { recursive: true });
+    tempDir = CreateAppTempDir(manifest.name, 'appids');
     const download = await DownloadAppMigrations(manifest, context, tempDir, subpath);
     if (!download.Success) {
       return [];

@@ -403,6 +403,34 @@ Semantic color pill for categorical values. Colors are auto-detected based on va
 </mj-entity-data-grid>
 ```
 
+## Unified View Studio (`mj-view-config-panel`) & Alternate Base View Integration
+
+`ViewConfigPanelComponent` (`mj-view-config-panel`) is the full-screen **Unified View Studio** used by `mj-view-workspace` and `mj-entity-viewer` when creating or configuring a User View or customizing a user's `(Default)` layout.
+
+### Progressive Disclosure: Regular Mode vs. Advanced Mode
+
+- **Direct Entry Flow**: Clicking **+ Create New View** or **Configure View** opens the full-screen Unified View Studio directly (with explicit **Personal Default Layout** vs. **Save as Named View** intent switching when starting from `(Default)`), eliminating intermediate creation popups.
+- **Regular Mode (`Advanced Mode: OFF`)**: Provides a clean, guided experience across all five tabs:
+  - **Columns**: Focused active-columns list with on-demand **Add Columns** and **Column Inspector** drawers (hiding `__mj_*` system audit columns by default).
+  - **Filters**: AI **Smart Filter** (natural-language prompt) and visual **Rule Builder** (`<mj-filter-builder>`).
+  - **Sorting**: Multi-level sort pipeline with searchable field pickers and intuitive direction cards.
+  - **Aggregates**: Two-card workbench (**Summary Cards** + **Column Totals**) with an integrated right-side **Slide-In Drawer** (`mj-aggregate-setup-dialog`).
+  - **Display**: Visual choice cards for **Grid**, **Cards**, and **Timeline** layout preferences.
+- **Advanced Mode (`Advanced Mode: ON`, persisted per user via `UserInfoEngine`)**: Unlocks power-user and data-engineering controls across all tabs:
+  - **Data Source (Base View vs. Alternate SQL View)**: Lets view authors pin an entity's governed **Alternate Base View** (`DisplayState.alternateBaseView`) or keep the canonical `BaseView`, with live badge and SQL view metadata.
+  - **SQL WHERE Clause Mode**: Third filter mode using `<mj-code-editor Language="sql">` that previews the generated SQL `WHERE` clause from Smart Filter or Rule Builder in read-only mode, with an explicit one-way **Override SQL WHERE Clause** toggle for custom hand-authored SQL.
+  - **Custom SQL Aggregates, SQL Type Badges & System Audit Columns**: Exposes custom SQL aggregate expressions, SQL data-type pills (`nvarchar`, `datetimeoffset`, `bit`, etc.), `__mj_*` system columns, conditional formatting rules, and the bottom **Live Workbench** summary dock.
+
+### Why Custom Rich Searchable Dropdowns & Choice Cards Are Used Instead of `<mj-combobox>` / `<mj-dropdown>`
+
+Standard `<mj-combobox>` and `<mj-dropdown>` components render single-line text items. In the Unified View Studio (`Sorting` field picker, `Data Source` Alternate Base View picker, `Aggregates` drawer, and `Display` mode selectors), users need multi-line option cards that surface:
+- Human-readable metadata descriptions (`EntityField.Description` and `EntityAlternateBaseView.Description`)
+- SQL data-type pills and physical view names in Advanced Mode
+- `__mj_*` system-field indicators
+- Automatic viewport-aware flip-up positioning (`dropUp`) inside scrollable containers
+
+Accordingly, these pickers intentionally use purpose-built custom searchable dropdowns (`role="listbox"` / `role="option"`) and visual choice cards (`role="radiogroup"` / `role="radio"`) with full keyboard navigation (`ArrowDown`/`ArrowUp`/`Enter`/`Escape` containment) rather than generic single-line comboboxes.
+
 ## Type Exports
 
 ```typescript

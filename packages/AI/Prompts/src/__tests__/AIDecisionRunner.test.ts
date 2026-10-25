@@ -127,7 +127,7 @@ const h = vi.hoisted(() => {
     GetHighestPriorityContent: () => { ID: string; TemplateText: string } | null;
   }> = [];
 
-  const mockRenderTemplate = vi.fn(async (_template: unknown, _content: unknown, data: Record<string, unknown>) => {
+  const mockRenderTemplate = vi.fn(async (_template: unknown, _content: unknown, data: Record<string, unknown>, _skipValidation?: boolean, _skipFeedback?: boolean, _options?: { autoescape?: boolean }) => {
     return {
       Success: true,
       Output: `Rendered state for entity ${data?.entityId ?? 'default'}`,
@@ -566,6 +566,33 @@ describe('AIDecisionRunner', () => {
     expect(result.status).toBe('Failed');
     expect(result.errorMessage).toMatch(/requires.*Decision/i);
     expect(result.Answers).toEqual({});
+  });
+
+  it('renders the state template raw when templateAutoescape is false', async () => {
+    const params = new AIDecisionParams();
+    params.prompt = makeDecisionPrompt({ TemplateID: TEMPLATE_ID });
+    params.Questions = defaultQuestions;
+    params.data = { entityId: 'Affineur & Owner' };
+    params.provider = fakeProvider;
+    params.templateAutoescape = false;
+
+    h.mockRenderTemplate.mockClear();
+    await runner.ExecuteDecision(params);
+
+    expect(h.mockRenderTemplate.mock.calls[0][5]).toEqual({ autoescape: false });
+  });
+
+  it('renders the state template with the engine default when templateAutoescape is unset', async () => {
+    const params = new AIDecisionParams();
+    params.prompt = makeDecisionPrompt({ TemplateID: TEMPLATE_ID });
+    params.Questions = defaultQuestions;
+    params.data = { entityId: 'Affineur & Owner' };
+    params.provider = fakeProvider;
+
+    h.mockRenderTemplate.mockClear();
+    await runner.ExecuteDecision(params);
+
+    expect(h.mockRenderTemplate.mock.calls[0][5]).toBeUndefined();
   });
 
   // 4. Template rendering path: when State is omitted from params, renders template and passes rendered string to driver
@@ -1085,6 +1112,56 @@ describe('AIDecisionRunner', () => {
 
     expect(result.success).toBe(false);
     expect(result.cancelled).toBe(true);
+  });
+
+  describe('13b. a driver that throws when its call is aborted', () => {
+    /** Throws an AbortError the moment the call's signal aborts, as fetch-based drivers do. */
+    const throwWhenAborted = async (driverParams: DecisionParams): Promise<DecisionResult> => {
+      await new Promise<void>(resolve => {
+        const signal = driverParams.CancellationToken;
+        if (!signal || signal.aborted) {
+          resolve();
+          return;
+        }
+        signal.addEventListener('abort', () => resolve(), { once: true });
+      });
+      throw Object.assign(new Error('This operation was aborted'), { name: 'AbortError' });
+    };
+
+    function abortParams(): AIDecisionParams {
+      const params = new AIDecisionParams();
+      params.prompt = makeDecisionPrompt({ FailoverStrategy: 'None' });
+      params.Questions = defaultQuestions;
+      params.State = 'Test state';
+      params.provider = fakeProvider;
+      return params;
+    }
+
+    it('is reported as Cancelled when the caller aborted', async () => {
+      const controller = new AbortController();
+      mockDriver.decideOverride = throwWhenAborted;
+      const params = abortParams();
+      params.cancellationToken = controller.signal;
+      setTimeout(() => controller.abort('user stopped'), 5);
+
+      const result = await runner.ExecuteDecision(params);
+
+      expect(result.success).toBe(false);
+      expect(result.cancelled).toBe(true);
+      expect(result.DecisionResult?.errorInfo).toMatchObject({ errorType: 'Cancelled', canFailover: false });
+    });
+
+    it("is reported as a retriable network error when the runner's timeout aborted it", async () => {
+      mockDriver.decideOverride = throwWhenAborted;
+      const params = abortParams();
+      params.timeoutMS = 10;
+
+      const result = await runner.ExecuteDecision(params);
+
+      expect(result.success).toBe(false);
+      expect(result.cancelled).toBe(false);
+      expect(result.DecisionResult?.errorInfo).toMatchObject({ errorType: 'NetworkError', canFailover: true });
+    });
   });
 
   describe("14. a decision answered through a child run carries that run's cost", () => {

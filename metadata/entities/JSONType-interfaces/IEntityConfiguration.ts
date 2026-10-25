@@ -16,6 +16,18 @@
  *
  * @see guides/FORMS_ARCHITECTURE_GUIDE.md §7d
  */
+/**
+ * Controls which columns a save operation (`spCreate` / `spUpdate` and provider save wrappers)
+ * returns from the database:
+ * - `'full'` (default): Re-queries `SELECT * FROM <BaseView>` after `INSERT`/`UPDATE` so all
+ *   columns (including virtual/joined columns) are returned from the database.
+ * - `'datestamps_only'`: Returns only the primary key column(s) plus `__mj_CreatedAt` and
+ *   `__mj_UpdatedAt` (when present on the entity) directly from `<BaseTable>`, avoiding the
+ *   expensive `BaseView` JOINs and large column reads while still returning exact DB-generated
+ *   keys and timestamps for optimistic concurrency / inconsistency checks.
+ */
+export type EntitySaveReturnMode = 'full' | 'datestamps_only';
+
 export interface IEntityConfiguration {
     /**
      * Presentation / chrome. Null = host defaults (`Layout: auto`,
@@ -36,6 +48,14 @@ export interface IEntityConfiguration {
      * policy says Deep, unless NotCloneable is true.
      */
     Clone?: IEntityCloneConfiguration;
+
+    /**
+     * Controls which columns a save operation (`spCreate` / `spUpdate`) returns from the database.
+     * - `'full'` (default when omitted): Re-queries `SELECT * FROM <BaseView>` after `INSERT`/`UPDATE`.
+     * - `'datestamps_only'`: Selects only the primary key(s) and `__mj_CreatedAt`/`__mj_UpdatedAt`
+     *   directly from `<BaseTable>`, preserving in-memory field values on the saved entity.
+     */
+    SaveReturnMode?: EntitySaveReturnMode;
 }
 
 /**
@@ -158,6 +178,13 @@ export interface IEntityCloneConfiguration {
     Enabled?: boolean;
     /** Hard refusal: this entity's rows are never created by the clone engine, as root or as child. Overrides every relationship policy. Use for audit, run, credential and metadata entities. */
     NotCloneable?: boolean;
+    /**
+     * Lets a NotCloneable entity's rows be copied after all, but only as children of a template copy: a
+     * clone run under a preset with `TemplateSourceField` whose source record has that flag set. Use for
+     * rows that are private to a person (conversations, dashboard preferences) and must never be copied
+     * from one user to another, yet belong in a template built to be copied.
+     */
+    CloneableFromTemplate?: boolean;
     /** Shown to users and returned in warnings when NotCloneable or Enabled=false. */
     NotCloneableReason?: string;
     /** Authorization name checked with ancestors. Default 'Clone Records'; resolved per §9.1. */
@@ -319,5 +346,13 @@ export interface IClonePreset {
     Options?: Record<string, unknown>;
     /** Edge policy overrides, keyed by related entity name. */
     Relationships?: Record<string, { Policy: 'Deep' | 'Reference' | 'Skip' }>;
+    /**
+     * Makes this a template preset. Names a boolean field on the root entity; the preset is offered and
+     * applied only when the source record has it set (e.g. `IsTemplate` on `MJ: Users`), and the plan is
+     * blocked otherwise. A template preset may open edges the configuration Locks and copy children whose
+     * entity is `CloneableFromTemplate`: those protections keep a person's private records from being
+     * copied to someone else, which does not apply to a record built to be copied.
+     */
+    TemplateSourceField?: string;
 }
 

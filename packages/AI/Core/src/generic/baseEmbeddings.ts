@@ -1,5 +1,6 @@
 import { FileCapabilities } from './baseLLM';
 import { BaseModel, ModelUsage } from './baseModel';
+import { AbortableDelay, CreateCancellationError, IsRequestAborted, ThrowIfAborted } from './cancellation';
 import { ChatMessageContent, ChatMessageContentBlock } from './chat.types';
 import { EmbedContentParams, EmbedContentResult, EmbedTextParams, EmbedTextResult, EmbedTextsParams, EmbedTextsResult } from './embed.types';
 import { AIErrorInfo } from './errorTypes';
@@ -245,8 +246,13 @@ export abstract class BaseEmbeddings extends BaseModel {
      * empty result — the per-text graceful-degrade — is allowed): a native `embedBatch` that drops
      * or reorders vectors, or any other collapse, throws here rather than letting a misaligned array
      * reach index-based consumers (e.g. EntityVectorSyncer).
+     *
+     * CANCELLATION: once `params.CancellationToken` fires, no further batch or text is sent and this
+     * throws a cancellation error (see `CreateCancellationError`) instead of degrading to an empty
+     * result, since an empty result would read as a model failure. An aborted text is never retried.
      */
     public async EmbedTexts(params: EmbedTextsParams): Promise<EmbedTextsResult> {
+        ThrowIfAborted(params.CancellationToken, this.constructor.name);
         const result = this.SupportsBatchEmbeddings ? await this.embedBatch(params) : await this.embedPerText(params);
         const expected = (params.texts ?? []).length;
         if (expected > 0 && result.vectors.length !== 0 && result.vectors.length !== expected) {
@@ -279,23 +285,32 @@ export abstract class BaseEmbeddings extends BaseModel {
      * as failed.
      *
      * ERROR CONTRACT (deliberate — change here if a different policy is wanted): mirrors the
-     * per-provider Gemini fix. On ANY per-text failure that survives retry (EmbedText throws OR yields
-     * an empty vector) we return an EMPTY result rather than throwing, so batch pipelines that don't
-     * wrap EmbedTexts (e.g. EntityVectorSyncer) degrade gracefully instead of aborting. To make it
-     * fully fail-loud instead, replace the two `emptyEmbedTextsResult(...)` returns below with `throw`.
+     * per-provider Gemini fix. On any other per-text failure that survives retry (EmbedText throws OR
+     * yields an empty vector) we return an EMPTY result rather than throwing, so batch pipelines that
+     * don't wrap EmbedTexts (e.g. EntityVectorSyncer) degrade gracefully instead of aborting. An aborted
+     * request (cancelled or timed out) is the exception: it is rethrown (see {@link EmbedTexts}). To
+     * make it fully fail-loud instead, replace the two `emptyEmbedTextsResult(...)` returns below with
+     * `throw`.
      */
     protected async embedPerText(params: EmbedTextsParams): Promise<EmbedTextsResult> {
         const { texts, ...rest } = params;
         const items = texts ?? [];
+        const signal = params.CancellationToken;
 
         let results: EmbedTextResult[];
         try {
             results = await this.runWithConcurrency(
                 items,
-                (text) => this.retryEmbedText(() => this.EmbedText({ ...rest, text })),
+                (text) => {
+                    // Checked before each text, so a cancelled batch issues no further calls.
+                    ThrowIfAborted(signal, this.constructor.name);
+                    return this.retryEmbedText(() => this.EmbedText({ ...rest, text }), signal);
+                },
                 this.maxEmbedTextsConcurrency,
             );
         } catch (error) {
+            // A cancellation is the caller's decision, not a failed text: it is thrown, not degraded.
+            this.ThrowIfRequestAborted(error, signal);
             // Graceful degrade (see error contract above) — but never silently: log why it failed.
             console.error(`${this.constructor.name}.EmbedTexts: per-text embedding failed:`, error);
             return this.emptyEmbedTextsResult(params.model);
@@ -361,12 +376,16 @@ export abstract class BaseEmbeddings extends BaseModel {
      * result; after the final attempt returns whatever it produced (or rethrows its error) so the caller's
      * existing empty-vector / throw handling still applies. This is what keeps one transient 429/500 from
      * failing the whole batch.
+     *
+     * An aborted `signal` ends the retries: no attempt starts once it has fired, the backoff wait
+     * rejects as soon as it fires, and a failure caused by an abort is rethrown rather than retried.
      */
-    protected async retryEmbedText(attempt: () => Promise<EmbedTextResult>): Promise<EmbedTextResult> {
+    protected async retryEmbedText(attempt: () => Promise<EmbedTextResult>, signal?: AbortSignal): Promise<EmbedTextResult> {
         let lastError: unknown;
         for (let n = 0; n <= this.maxEmbedTextsRetries; n++) {
+            ThrowIfAborted(signal, this.constructor.name);
             if (n > 0) {
-                await this.sleep(this.embedRetryBaseDelayMs * 2 ** (n - 1));
+                await this.sleep(this.embedRetryBaseDelayMs * 2 ** (n - 1), signal);
             }
             try {
                 const result = await attempt();
@@ -377,7 +396,7 @@ export abstract class BaseEmbeddings extends BaseModel {
                 return result; // success, or the final empty result after exhausting retries
             } catch (error) {
                 lastError = error;
-                if (n >= this.maxEmbedTextsRetries) {
+                if (n >= this.maxEmbedTextsRetries || IsRequestAborted(error, signal)) {
                     throw error; // out of retries — let the caller's catch degrade the batch
                 }
             }
@@ -386,9 +405,27 @@ export abstract class BaseEmbeddings extends BaseModel {
         throw lastError instanceof Error ? lastError : new Error('retryEmbedText exhausted without a result');
     }
 
-    /** Sleep helper for retry backoff, isolated so tests can override `embedRetryBaseDelayMs` to avoid real delays. */
-    protected sleep(ms: number): Promise<void> {
-        return new Promise((resolve) => setTimeout(resolve, ms));
+    /**
+     * Sleep helper for retry backoff, isolated so tests can override `embedRetryBaseDelayMs` to avoid
+     * real delays. Rejects with a cancellation error as soon as `signal` fires.
+     */
+    protected sleep(ms: number, signal?: AbortSignal): Promise<void> {
+        return AbortableDelay(ms, signal);
+    }
+
+    /**
+     * Rethrows a failure caused by an aborted request as a cancellation error: one classified
+     * `Cancelled` (never retried or failed over), or a retriable `NetworkError` when the signal was
+     * aborted by a timeout. Does nothing for any other failure. A driver that catches its SDK's
+     * errors calls this first, so an abort is reported as such instead of as an empty result.
+     *
+     * @param error The error the request failed with.
+     * @param signal The request's `CancellationToken`.
+     */
+    protected ThrowIfRequestAborted(error: unknown, signal?: AbortSignal | null): void {
+        if (IsRequestAborted(error, signal)) {
+            throw CreateCancellationError({ signal, provider: this.constructor.name });
+        }
     }
 
     /**
@@ -401,6 +438,7 @@ export abstract class BaseEmbeddings extends BaseModel {
     public async EmbedContent(params: EmbedContentParams): Promise<EmbedContentResult> {
         // Base (text-only) behavior: reject unsupported media via ValidateContentSupported — caps are
         // null here, so any non-text block throws — then flatten text blocks and delegate to EmbedText.
+        ThrowIfAborted(params.CancellationToken, this.constructor.name);
         this.ValidateContentSupported(params.content);
         const content = params.content;
         const text = typeof content === 'string' ? content : content.map((block: ChatMessageContentBlock) => block.content).join('\n');

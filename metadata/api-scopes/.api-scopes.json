@@ -203,6 +203,24 @@
   },
   {
     "fields": {
+      "Name": "trusted",
+      "FullPath": "agent:trusted",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=agent",
+      "Category": "Agents",
+      "Description": "Let this key's agent runs set their own scope (PrimaryScopeEntityName, PrimaryScopeRecordID, SecondaryScopes) and agent-type parameters (__agentTypePromptParams) through the data argument. Without it those keys are removed, as for a browser session. Grant only to a server-to-server integration that chooses the tenant itself. full_access does not include it.",
+      "ResourceType": "Agent",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "F6C0BE2C-7CB3-4586-AB3E-86D485DAF433"
+    },
+    "sync": {
+      "lastModified": "2026-10-20T23:18:41.520Z",
+      "checksum": "ffc7f66f28e06dea0ccb966655be6de7ef1e06ae8c79f8df54615ceb800f9ecd"
+    }
+  },
+  {
+    "fields": {
       "Name": "entity",
       "FullPath": "entity",
       "ParentID": null,

@@ -20,6 +20,13 @@ The per-table analysis proposed removing these FKs. Review each one and decide w
    - **Removal reason**: {{ proposal.reasoning }}
 {% endfor %}
 
+{% if seedExcerpt %}
+## Notes from the operator about this data
+Written by the person running the analysis. Treat them as evidence about how tables relate and which columns are keys; they do not override what the data and constraints show.
+
+{{ seedExcerpt }}
+
+{% endif %}
 ## Review Guidelines
 
 Consider the FULL relationship graph when making decisions:

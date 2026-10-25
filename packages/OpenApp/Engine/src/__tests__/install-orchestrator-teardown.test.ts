@@ -16,6 +16,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+// The template-user step loads the record-cloning engine, which this file's mocks don't provide for.
+vi.mock('../install/template-user.js', () => ({
+    OfferTemplateUser: vi.fn(),
+    NamesFromEmail: vi.fn(),
+    TEMPLATE_USER_ENV: {},
+}));
 vi.mock('../github/github-client.js', () => ({
     FetchManifestFromGitHub: vi.fn(),
     DownloadMigrations: vi.fn(),
@@ -163,7 +169,9 @@ describe('RemoveApp — migrations-model teardown (HandleTeardown)', () => {
         expect(result.Success).toBe(true);
         // SQL Server → the plain teardown dir, at the persisted version + subpath.
         expect(DownloadMigrations).toHaveBeenCalledWith(
-            'https://github.com/acme/mj-apps', '1.2.0', 'migrations-teardown', expect.any(String), expect.anything(), 'CRM/Acme',
+            // 7th arg is the manifest's own name, so the teardown ref resolves from the tag that
+            // EXISTS rather than the folder form a package-tagged monorepo never publishes.
+            'https://github.com/acme/mj-apps', '1.2.0', 'migrations-teardown', expect.any(String), expect.anything(), 'CRM/Acme', 'acme-connector',
         );
         // ${mjSchema} resolved to the core schema default (__mj) and executed via the provider.
         expect(executeSQL).toHaveBeenCalledTimes(1);
@@ -173,7 +181,7 @@ describe('RemoveApp — migrations-model teardown (HandleTeardown)', () => {
     it('reads the -pg teardown dir on PostgreSQL', async () => {
         await RemoveApp({ AppName: 'acme-connector' }, ctxFor('postgresql'));
         expect(DownloadMigrations).toHaveBeenCalledWith(
-            'https://github.com/acme/mj-apps', '1.2.0', 'migrations-teardown-pg', expect.any(String), expect.anything(), 'CRM/Acme',
+            'https://github.com/acme/mj-apps', '1.2.0', 'migrations-teardown-pg', expect.any(String), expect.anything(), 'CRM/Acme', 'acme-connector',
         );
     });
 

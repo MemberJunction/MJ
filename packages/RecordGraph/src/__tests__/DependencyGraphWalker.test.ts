@@ -161,6 +161,48 @@ describe('DependencyGraphWalker', () => {
             expect(rootNode.Children[0]?.DiscoveringEdge?.Kind).toBe('Collection');
         });
 
+        it('reads children oldest first when the child tracks creation time, so a copy keeps their order', async () => {
+            const timedChild = { ...childEntity, Fields: [...(childEntity.Fields ?? []), { Name: '__mj_CreatedAt' } as EntityFieldInfo] } as EntityInfo;
+            const list = [parentEntity as EntityInfo, timedChild];
+            const provider = {
+                Entities: list,
+                EntityByName: (name: string) => list.find(e => e.Name === name) ?? null,
+                EntityByID: (id: string) => list.find(e => e.ID === id) ?? null,
+            } as IMetadataProvider;
+            mockRunViewInstance
+                .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'parent-1' }] })
+                .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'child-1', ParentID: 'parent-1' }] });
+
+            const { CompositeKey } = await import('@memberjunction/core');
+            await new DependencyGraphWalker(provider).WalkDependents(
+                'ParentEntity',
+                new CompositeKey([{ FieldName: 'ID', Value: 'parent-1' }]),
+                { RequireTrackRecordChanges: false },
+                mockUser
+            );
+
+            const childQuery = mockRunViewInstance.mock.calls.find(([p]) => p.EntityName === 'ChildEntity')?.[0];
+            expect(childQuery?.OrderBy).toBe('__mj_CreatedAt');
+        });
+
+        it('leaves the order to the database for a child without creation time', async () => {
+            mockRunViewInstance
+                .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'parent-1' }] })
+                .mockResolvedValueOnce({ Success: true, Results: [] });
+
+            const { CompositeKey } = await import('@memberjunction/core');
+            await new DependencyGraphWalker(mockProvider).WalkDependents(
+                'ParentEntity',
+                new CompositeKey([{ FieldName: 'ID', Value: 'parent-1' }]),
+                { RequireTrackRecordChanges: false },
+                mockUser
+            );
+
+            const childQuery = mockRunViewInstance.mock.calls.find(([p]) => p.EntityName === 'ChildEntity')?.[0];
+            expect(childQuery).toBeDefined();
+            expect(childQuery?.OrderBy).toBeUndefined();
+        });
+
         it('respects EdgePolicy returning Skip', async () => {
             const walker = new DependencyGraphWalker(mockProvider);
 

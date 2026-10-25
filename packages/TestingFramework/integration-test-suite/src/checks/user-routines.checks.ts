@@ -119,7 +119,7 @@ async function makeDispatcherContext(ctx: IntegrationCheckContext): Promise<Sche
     schedule.Configuration = JSON.stringify({ MaxConcurrentRoutines: 2 });
     const run = await provider.GetEntityObject<MJScheduledJobRunEntity>('MJ: Scheduled Job Runs', user);
     run.NewRecord();
-    return { Schedule: schedule, Run: run, ContextUser: user };
+    return { Schedule: schedule, Run: run, ContextUser: user, Provider: provider };
 }
 
 export const UserRoutinesChecks: NamedCheck[] = [

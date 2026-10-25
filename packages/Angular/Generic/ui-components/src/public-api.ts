@@ -31,6 +31,7 @@ export * from './lib/page-body/page-body.component';
 export * from './lib/stat-badge/stat-badge.component';
 export * from './lib/refresh-button/refresh-button.component';
 export * from './lib/filter-popover/filter-popover.component';
+export * from './lib/menu/menu.component';
 export * from './lib/page-search/page-search.component';
 export * from './lib/filter-chip/filter-chip.component';
 export * from './lib/filter-field/filter-field.component';
@@ -50,3 +51,5 @@ export * from './lib/page-header-interior/page-header-interior.component';
 export * from './lib/page-body-interior/page-body-interior.component';
 export * from './lib/empty-state/empty-state.component';
 export * from './lib/card-grid/card-grid.component';
+export * from './lib/burst-cluster-strip/burst-cluster-strip.component';
+

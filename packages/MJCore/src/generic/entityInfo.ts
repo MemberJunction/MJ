@@ -1,6 +1,7 @@
 import { BaseInfo } from "./baseInfo"
 import { Metadata } from "./metadata"
 import { IMetadataProvider } from "./interfaces"
+import { MetadataProviderFor } from "./infoProviderResolution"
 import { RunViewParams } from "../views/runView"
 import { BaseEntity } from "./baseEntity"
 import { RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityInfo"
@@ -8,12 +9,13 @@ import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, SQLMaxByteLength,
 import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
 import { CompositeKey } from "./compositeKey"
-import { WarningManager, SafeJSONParse, UUIDsEqual, ordinalCompare, GeneratePluralName } from "@memberjunction/global"
+import { WarningManager, SafeJSONParse, UUIDsEqual, NormalizeUUID, ordinalCompare, GeneratePluralName } from "@memberjunction/global"
 import {
     ParseEntityConfiguration,
     ParseEntityRelationshipConfiguration,
     ParseEntityFieldConfiguration,
     ReadRelationshipJoinFields,
+    type EntitySaveReturnMode,
     type IEntityConfiguration,
     type IEntityRelationshipConfiguration,
     type IEntityFieldConfiguration,
@@ -366,6 +368,203 @@ export class EntityOrganicKeyRelatedEntityInfo extends BaseInfo {
 
 }
 
+/**
+ * Metadata describing a governed alternate SQL view on an entity that maintains 100% column
+ * parity with the entity's canonical `BaseView` while applying a curated canonical filter
+ * or join (for example, `Active` members or `Open` orders).
+ *
+ * Alternate base views can form a same-entity derivation hierarchy via {@link ParentID}
+ * (for example, `ActiveAutoRenew` selecting from `vwActiveMembers`).
+ *
+ * Maps to the `MJ: Entity Alternate Base Views` metadata entity.
+ */
+export class EntityAlternateBaseViewInfo extends BaseInfo {
+    ID: string = null;
+    EntityID: string = null;
+    ParentID: string | null = null;
+    Name: string = null;
+    DisplayName: string | null = null;
+    Description: string = null;
+    SchemaName: string | null = null;
+    ViewName: string = null;
+    CachePolicy: 'Default' | 'Bypass' = 'Default';
+    Status: 'Active' | 'Deprecated' | 'Disabled' = 'Active';
+    Sequence: number = 0;
+
+    __mj_CreatedAt: Date = null;
+    __mj_UpdatedAt: Date = null;
+
+    // Virtual fields from vwEntityAlternateBaseViews
+    Entity: string = null;
+    Parent: string | null = null;
+    RootParentID: string | null = null;
+
+    private _entitySchemaName: string | null = null;
+    // Named without matching `ParentView` / `ChildViews` getter names so `BaseInfo.toJSON()`
+    // does not serialize parent<->child object references into a circular JSON graph.
+    private _resolvedParentViewRef: EntityAlternateBaseViewInfo | undefined = undefined;
+    private _resolvedChildViewsList: EntityAlternateBaseViewInfo[] = [];
+
+    /**
+     * The parent alternate base view on the same entity when {@link ParentID} is set,
+     * or `undefined` for a top-level alternate base view.
+     */
+    get ParentView(): EntityAlternateBaseViewInfo | undefined {
+        return this._resolvedParentViewRef;
+    }
+
+    /**
+     * Direct child alternate base views on the same entity that derive from this view via {@link ParentID}.
+     */
+    get ChildViews(): EntityAlternateBaseViewInfo[] {
+        return this._resolvedChildViewsList;
+    }
+
+    /**
+     * Effective database schema name for this alternate base view: uses {@link SchemaName}
+     * when explicitly populated, falling back to the parent entity's `SchemaName`.
+     */
+    get EffectiveSchemaName(): string {
+        const explicit = this.SchemaName?.trim();
+        if (explicit && explicit.length > 0) {
+            return explicit;
+        }
+        return this._entitySchemaName ?? '';
+    }
+
+    /**
+     * Human-friendly label for UI surfaces: returns {@link DisplayName} when set,
+     * falling back to {@link Name}.
+     */
+    get EffectiveDisplayName(): string {
+        const display = this.DisplayName?.trim();
+        if (display && display.length > 0) {
+            return display;
+        }
+        return this.Name;
+    }
+
+    /**
+     * True when this alternate base view (and every ancestor in its {@link ParentView} chain)
+     * has `Status` equal to `'Active'` or `'Deprecated'`. Disabled views (or views derived
+     * from a disabled or missing ancestor) return `false`.
+     */
+    get IsUsable(): boolean {
+        return this.checkIsUsable(new Set<string>());
+    }
+
+    private checkIsUsable(visited: Set<string>): boolean {
+        if (this.Status !== 'Active' && this.Status !== 'Deprecated') {
+            return false;
+        }
+        if (!this.ParentID) {
+            return true;
+        }
+        if (!this._resolvedParentViewRef) {
+            return false; // ParentID is set but parent view was not found on the entity
+        }
+        const key = NormalizeUUID(this.ID);
+        if (key && visited.has(key)) {
+            return false; // Defensive cycle guard
+        }
+        if (key) {
+            visited.add(key);
+        }
+        return this._resolvedParentViewRef.checkIsUsable(visited);
+    }
+
+    /**
+     * True when this view (or any ancestor in its {@link ParentView} chain) has
+     * `Status === 'Deprecated'`. Deprecated alternate base views remain usable at runtime
+     * so existing views and queries do not break, but emit a deprecation warning.
+     */
+    get IsDeprecated(): boolean {
+        return this.checkIsDeprecated(new Set<string>());
+    }
+
+    private checkIsDeprecated(visited: Set<string>): boolean {
+        if (this.Status === 'Deprecated') {
+            return true;
+        }
+        if (!this._resolvedParentViewRef) {
+            return false;
+        }
+        const key = NormalizeUUID(this.ID);
+        if (key && visited.has(key)) {
+            return false;
+        }
+        if (key) {
+            visited.add(key);
+        }
+        return this._resolvedParentViewRef.checkIsDeprecated(visited);
+    }
+
+    /**
+     * True when `CachePolicy === 'Bypass'` on this view or any ancestor in its {@link ParentView}
+     * chain, instructing `ProviderBase` to skip local/server result caching for reads through
+     * this alternate base view (used when the view reads the clock or joins other tables whose
+     * updates do not fire `BaseEntity` events on this entity).
+     */
+    get IsBypassCache(): boolean {
+        return this.checkIsBypassCache(new Set<string>());
+    }
+
+    private checkIsBypassCache(visited: Set<string>): boolean {
+        if (this.CachePolicy === 'Bypass') {
+            return true;
+        }
+        if (!this._resolvedParentViewRef) {
+            return false;
+        }
+        const key = NormalizeUUID(this.ID);
+        if (key && visited.has(key)) {
+            return false;
+        }
+        if (key) {
+            visited.add(key);
+        }
+        return this._resolvedParentViewRef.checkIsBypassCache(visited);
+    }
+
+    /**
+     * Links `ParentView` and `ChildViews` references across the alternate base views belonging
+     * to a single entity and stamps the owning entity's `SchemaName` fallback.
+     */
+    public static LinkHierarchy(views: EntityAlternateBaseViewInfo[], entitySchemaName?: string | null): void {
+        const byId = new Map<string, EntityAlternateBaseViewInfo>();
+        for (const v of views) {
+            if (entitySchemaName !== undefined) {
+                v._entitySchemaName = entitySchemaName;
+            }
+            v._resolvedParentViewRef = undefined;
+            v._resolvedChildViewsList = [];
+            if (v.ID) {
+                byId.set(NormalizeUUID(v.ID), v);
+            }
+        }
+        for (const v of views) {
+            if (v.ParentID && !UUIDsEqual(v.ParentID, v.ID)) {
+                const parent = byId.get(NormalizeUUID(v.ParentID));
+                if (parent) {
+                    v._resolvedParentViewRef = parent;
+                    parent._resolvedChildViewsList.push(v);
+                }
+            }
+        }
+    }
+
+    constructor(initData: Record<string, unknown> = null, entitySchemaName?: string | null) {
+        super();
+        if (entitySchemaName !== undefined) {
+            this._entitySchemaName = entitySchemaName;
+        }
+        if (initData) {
+            this.copyInitData(initData);
+        }
+    }
+}
+
+
 export const EntityPermissionType = {
     Read: 'Read',
     Create: 'Create',
@@ -477,11 +676,16 @@ export class EntityPermissionInfo extends BaseInfo{
                 break;
         }
         if (fID && fID.length > 0) 
-            return Metadata.Provider.RowLevelSecurityFilters.find(f => UUIDsEqual(f.ID, fID));  // global-provider-ok: stateless info class — proxies to global metadata
+            return MetadataProviderFor(this)?.RowLevelSecurityFilters?.find(f => UUIDsEqual(f.ID, fID));
     }
 
-    constructor (initData: any) {
+    /**
+     * @param initData - the raw permission row
+     * @param md - the provider that owns this metadata; RLS filters resolve through it (see {@link BaseInfo.OwningProvider})
+     */
+    constructor (initData: any, md?: IMetadataProvider) {
         super();
+        this.SetOwningProvider(md);
         this.copyInitData(initData);
     }
 }
@@ -1597,15 +1801,17 @@ export class EntityFieldInfo extends BaseInfo {
     ): EntityFieldUserPermissionInfo {
         const allow = { CanRead: false, CanUpdate: false, CanCreate: false };
         const deny = { CanRead: false, CanUpdate: false, CanCreate: false };
+        const userRoleIds = getUserRoleIdSet(user);
 
-        for (const fp of rules) {
-            const roleMatch: UserRoleInfo = user?.UserRoles?.find((r) => UUIDsEqual(r.RoleID, fp.RoleID));
-            if (!roleMatch) {
-                continue; // user does not hold this role
+        if (userRoleIds.size > 0) {
+            for (const fp of rules) {
+                if (!fp.RoleID || !userRoleIds.has(fp.RoleID.trim().toLowerCase())) {
+                    continue; // user does not hold this role
+                }
+                EntityFieldInfo.applyAccessToBuckets(fp.ReadAccess, allow, deny, 'CanRead');
+                EntityFieldInfo.applyAccessToBuckets(fp.UpdateAccess, allow, deny, 'CanUpdate');
+                EntityFieldInfo.applyAccessToBuckets(fp.CreateAccess, allow, deny, 'CanCreate');
             }
-            EntityFieldInfo.applyAccessToBuckets(fp.ReadAccess, allow, deny, 'CanRead');
-            EntityFieldInfo.applyAccessToBuckets(fp.UpdateAccess, allow, deny, 'CanUpdate');
-            EntityFieldInfo.applyAccessToBuckets(fp.CreateAccess, allow, deny, 'CanCreate');
         }
 
         const effective: EntityFieldUserPermissionInfo = {
@@ -1647,21 +1853,29 @@ export class EntityFieldInfo extends BaseInfo {
         }
     }
 
+    private _valueListTypeEnumCache: EntityFieldValueListType | undefined = undefined;
+
     /**
      * Returns the ValueListType using the EntityFieldValueListType enum.
      */
     get ValueListTypeEnum(): EntityFieldValueListType {
-        if (this.ValueListType == null)
-            return EntityFieldValueListType.None;
-        else  {
-            // iterate through list of possibilities from enum and compare lcase
-            for (let enumMember in EntityFieldValueListType) {
-                if (typeof EntityFieldValueListType[enumMember] === 'string' && 
-                    enumMember.toLowerCase().trim() === this.ValueListType.toLowerCase().trim()) {
-                    return EntityFieldValueListType[enumMember as keyof typeof EntityFieldValueListType];
-                }
+        if (this._valueListTypeEnumCache !== undefined) {
+            return this._valueListTypeEnumCache;
+        }
+        if (this.ValueListType == null) {
+            this._valueListTypeEnumCache = EntityFieldValueListType.None;
+            return this._valueListTypeEnumCache;
+        }
+        const target = this.ValueListType.toLowerCase().trim();
+        for (const enumMember in EntityFieldValueListType) {
+            if (typeof EntityFieldValueListType[enumMember] === 'string' &&
+                enumMember.toLowerCase().trim() === target) {
+                this._valueListTypeEnumCache = EntityFieldValueListType[enumMember as keyof typeof EntityFieldValueListType];
+                return this._valueListTypeEnumCache;
             }
         }
+        this._valueListTypeEnumCache = EntityFieldValueListType.None;
+        return this._valueListTypeEnumCache;
     }
 
     /**
@@ -2181,24 +2395,36 @@ export class EntityFieldInfo extends BaseInfo {
         return this.IsCreatedAtField || this.IsUpdatedAtField || this.IsDeletedAtField;
     }
 
+    private _isCreatedAtFieldCache: boolean | undefined = undefined;
+    private _isUpdatedAtFieldCache: boolean | undefined = undefined;
+    private _isDeletedAtFieldCache: boolean | undefined = undefined;
+    private _isUniqueIdentifierCache: boolean | undefined = undefined;
+    private _fixedWidthColumnCache: boolean | undefined = undefined;
+
     /**
      * Returns true if the field is the CreatedAt field, a special field that is used to track the creation date of a record. This is only used when the entity has TrackRecordChanges=1
      */
     get IsCreatedAtField(): boolean {
-        return this.Name.trim().toLowerCase() === EntityInfo.CreatedAtFieldName.trim().toLowerCase();
+        if (this._isCreatedAtFieldCache !== undefined) return this._isCreatedAtFieldCache;
+        this._isCreatedAtFieldCache = this.Name.trim().toLowerCase() === EntityInfo.CreatedAtFieldName.trim().toLowerCase();
+        return this._isCreatedAtFieldCache;
     }
     /**
      * Returns true if the field is the UpdatedAt field, a special field that is used to track the last update date of a record. This is only used when the entity has TrackRecordChanges=1
      */
     get IsUpdatedAtField(): boolean {
-        return this.Name.trim().toLowerCase() === EntityInfo.UpdatedAtFieldName.trim().toLowerCase();
+        if (this._isUpdatedAtFieldCache !== undefined) return this._isUpdatedAtFieldCache;
+        this._isUpdatedAtFieldCache = this.Name.trim().toLowerCase() === EntityInfo.UpdatedAtFieldName.trim().toLowerCase();
+        return this._isUpdatedAtFieldCache;
     }
 
     /**
      * Returns true if the field is the DeletedAt field, a special field that is used to track the deletion date of a record. This is only used when the entity has DeleteType=Soft
      */
     get IsDeletedAtField(): boolean {
-        return this.Name.trim().toLowerCase() === EntityInfo.DeletedAtFieldName.trim().toLowerCase();
+        if (this._isDeletedAtFieldCache !== undefined) return this._isDeletedAtFieldCache;
+        this._isDeletedAtFieldCache = this.Name.trim().toLowerCase() === EntityInfo.DeletedAtFieldName.trim().toLowerCase();
+        return this._isDeletedAtFieldCache;
     }
 
     /**
@@ -2208,8 +2434,10 @@ export class EntityFieldInfo extends BaseInfo {
      * `uuid`, so a `uniqueidentifier`-only check would miss every UUID column.
      */
     get IsUniqueIdentifier(): boolean {
+        if (this._isUniqueIdentifierCache !== undefined) return this._isUniqueIdentifierCache;
         const t = this.Type.trim().toLowerCase();
-        return t === 'uniqueidentifier' || t === 'uuid';
+        this._isUniqueIdentifierCache = t === 'uniqueidentifier' || t === 'uuid';
+        return this._isUniqueIdentifierCache;
     }
 
     /**
@@ -2223,7 +2451,9 @@ export class EntityFieldInfo extends BaseInfo {
      * (un-padded) form of the value.
      */
     get FixedWidthColumn(): boolean {
-        return IsFixedWidthStringSQLType(this.Type);
+        if (this._fixedWidthColumnCache !== undefined) return this._fixedWidthColumnCache;
+        this._fixedWidthColumnCache = IsFixedWidthStringSQLType(this.Type);
+        return this._fixedWidthColumnCache;
     }
 
     /**
@@ -2364,10 +2594,15 @@ export class EntityFieldInfo extends BaseInfo {
         return FormatValue(this.Type, value, decimals, currency, maxLength, trailingChars);
     }
 
+    private static readonly CHILD_INIT_KEYS: ReadonlySet<string> = new Set([
+        'EntityFieldValues', '_EntityFieldValues',
+        'EntityFieldPermissions', '_FieldPermissions', 'FieldPermissions',
+    ]);
+
     constructor(initData: any = null) {
         super();
         if (initData) {
-            this.copyInitData(initData);
+            this.copyInitData(initData, EntityFieldInfo.CHILD_INIT_KEYS);
 
             // Lazy-construct EntityFieldValueInfo objects — stash raw data now,
             // construct typed instances on first access via the getter.
@@ -2463,7 +2698,144 @@ export class EntityFieldInfo extends BaseInfo {
             normalizedValue.includes(func)
         );
     }
+
+    private static readonly PG_TYPED_LITERAL_REGEX = /^'((?:[^']|'')*)'::[A-Za-z][\w "()\[\],]*$/;
+    private _parsedDefaultValueCache: {
+        source: unknown;
+        hasValue: boolean;
+        value: unknown;
+        isCurrentDateFunction: boolean;
+    } | undefined = undefined;
+
+    /**
+     * Parses a field's SQL DefaultValue into its runtime JS representation.
+     * Exposed as a static helper so unit tests passing plain-object mocks for EntityFieldInfo
+     * work identically to real EntityFieldInfo instances.
+     */
+    public static ParseDefaultValue(
+        field: Pick<EntityFieldInfo, 'DefaultValue' | 'TSType' | 'Entity' | 'Name'> & Partial<Pick<EntityFieldInfo, 'IsUniqueIdentifier' | 'IsSpecialDateField' | 'Type'>>
+    ): { source: unknown; hasValue: boolean; value: unknown; isCurrentDateFunction: boolean } {
+        const rawDefault = field.DefaultValue;
+        if (!rawDefault) {
+            return { source: rawDefault, hasValue: true, value: null, isCurrentDateFunction: false };
+        }
+
+        if (field.TSType === EntityFieldTSType.Boolean) {
+            const val = typeof rawDefault === 'string' &&
+                (rawDefault.trim() === '1' || rawDefault.trim().toLowerCase() === 'true');
+            return { source: rawDefault, hasValue: true, value: val, isCurrentDateFunction: false };
+        }
+
+        if (field.TSType === EntityFieldTSType.Number) {
+            const num = Number(rawDefault);
+            if (!isNaN(num)) {
+                return { source: rawDefault, hasValue: true, value: num, isCurrentDateFunction: false };
+            }
+            if (typeof rawDefault === 'string' && rawDefault.trim().toLowerCase() === 'null') {
+                return { source: rawDefault, hasValue: true, value: null, isCurrentDateFunction: false };
+            }
+            return { source: rawDefault, hasValue: false, value: undefined, isCurrentDateFunction: false };
+        }
+
+        const isUniqueId = field.IsUniqueIdentifier !== undefined
+            ? field.IsUniqueIdentifier
+            : (typeof field.Type === 'string' && (field.Type.trim().toLowerCase() === 'uniqueidentifier' || field.Type.trim().toLowerCase() === 'uuid'));
+        if (isUniqueId) {
+            return { source: rawDefault, hasValue: true, value: null, isCurrentDateFunction: false };
+        }
+
+        if (field.TSType === EntityFieldTSType.Date) {
+            if (typeof rawDefault === 'string' && rawDefault.trim().length > 0) {
+                const temp = new Date(rawDefault);
+                if (!isNaN(temp.getTime())) {
+                    return { source: rawDefault, hasValue: true, value: temp, isCurrentDateFunction: false };
+                }
+                if (EntityFieldInfo.IsDefaultValueSQLCurrentDateFunction(rawDefault)) {
+                    if (field.IsSpecialDateField) {
+                        return { source: rawDefault, hasValue: true, value: null, isCurrentDateFunction: false };
+                    }
+                    return { source: rawDefault, hasValue: true, value: null, isCurrentDateFunction: true };
+                }
+                throw new Error(`Invalid default value for ${field.Entity}.${field.Name} of ${rawDefault}. Default values for date fields must be a valid date or a getdate() type default`);
+            }
+            return { source: rawDefault, hasValue: false, value: undefined, isCurrentDateFunction: false };
+        }
+
+        const dv = typeof rawDefault === 'string' ? rawDefault.trim() : String(rawDefault);
+        const m = dv.match(EntityFieldInfo.PG_TYPED_LITERAL_REGEX);
+        const strVal = m ? m[1].replace(/''/g, "'") : rawDefault;
+        return { source: rawDefault, hasValue: true, value: strVal, isCurrentDateFunction: false };
+    }
+
+    /**
+     * Parses and memoizes the SQL DefaultValue into its runtime JS representation once per
+     * EntityFieldInfo instead of re-parsing (trimming, regex matching, Number/Date parsing)
+     * on every EntityField instantiation.
+     */
+    public GetParsedDefaultValue(): { hasValue: boolean; value: unknown; isCurrentDateFunction: boolean } {
+        const rawDefault = this.DefaultValue;
+        if (this._parsedDefaultValueCache !== undefined && this._parsedDefaultValueCache.source === rawDefault) {
+            return this._parsedDefaultValueCache;
+        }
+        this._parsedDefaultValueCache = EntityFieldInfo.ParseDefaultValue(this);
+        return this._parsedDefaultValueCache;
+    }
 }
+
+const _emptyStringSet: Set<string> = new Set<string>();
+const _userRoleIdSetCache = new WeakMap<UserInfo, {
+    rolesRef: UserRoleInfo[] | undefined;
+    rolesLen: number;
+    firstRoleId: string | undefined;
+    roleIds: Set<string>;
+}>();
+
+function getUserRoleIdSet(user: UserInfo | null | undefined): Set<string> {
+    if (!user?.UserRoles || user.UserRoles.length === 0) {
+        return _emptyStringSet;
+    }
+    const roles = user.UserRoles;
+    const len = roles.length;
+    const firstId = roles[0]?.RoleID;
+    const cached = _userRoleIdSetCache.get(user);
+    if (cached && cached.rolesRef === roles && cached.rolesLen === len && cached.firstRoleId === firstId) {
+        return cached.roleIds;
+    }
+    const roleIds = new Set<string>();
+    for (let i = 0; i < len; i++) {
+        const rid = roles[i]?.RoleID;
+        if (rid) {
+            roleIds.add(rid.trim().toLowerCase());
+        }
+    }
+    _userRoleIdSetCache.set(user, { rolesRef: roles, rolesLen: len, firstRoleId: firstId, roleIds });
+    return roleIds;
+}
+
+const _entityFieldIndexCache = new WeakMap<EntityInfo, {
+    fieldsRef: EntityFieldInfo[];
+    fieldsLen: number;
+    byName: Map<string, number>;
+    byCodeName: Map<string, number>;
+}>();
+
+const _entityDeniedFieldsCache = new WeakMap<EntityInfo, WeakMap<UserInfo, {
+    fieldsRef: EntityFieldInfo[];
+    fieldsLen: number;
+    totalPerms: number;
+    rolesRef: UserRoleInfo[] | undefined;
+    rolesLen: number;
+    read?: Set<string>;
+    update?: Set<string>;
+    create?: Set<string>;
+}>>();
+
+const _entityChildEntitiesCache = new WeakMap<EntityInfo, {
+    provider: IMetadataProvider | undefined;
+    entitiesRef: EntityInfo[] | undefined;
+    entitiesLen: number;
+    children: EntityInfo[];
+}>();
 
 
 
@@ -2532,6 +2904,15 @@ export class EntitySettingInfo extends BaseInfo {
  * Catalog of all entities across all schemas.
  * Contains comprehensive metadata about each entity including its database mappings, security settings, and UI preferences.
  */
+/** Backing list for {@link EntityInfo.ConfigurableAtCreationAttributes}. */
+const ENTITY_CONFIGURABLE_AT_CREATION_ATTRIBUTES = [
+    'IncludeInAPI', 'AllowUserSearchAPI', 'AllowCaching', 'TrackRecordChanges', 'AuditRecordAccess',
+    'AuditViewRuns', 'AllowAllRowsAPI', 'AllowCreateAPI', 'AllowUpdateAPI', 'AllowDeleteAPI', 'UserViewMaxRows',
+] as const satisfies readonly (keyof EntityInfo)[];
+
+/** One of the entity flags in {@link EntityInfo.ConfigurableAtCreationAttributes}. */
+export type EntityConfigurableAtCreationAttribute = typeof ENTITY_CONFIGURABLE_AT_CREATION_ATTRIBUTES[number];
+
 export class EntityInfo extends BaseInfo {
     /**
      * Unique identifier for the entity
@@ -3083,6 +3464,34 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
+     * Controls which columns a save operation (`spCreate` / `spUpdate`) returns from the database
+     * for this entity. Defaults to `'full'` when `Configuration.SaveReturnMode` is omitted or not
+     * `'datestamps_only'`.
+     */
+    get SaveReturnMode(): EntitySaveReturnMode {
+        return this.ConfigurationObject?.SaveReturnMode === 'datestamps_only' ? 'datestamps_only' : 'full';
+    }
+
+    /**
+     * Returns the ordered list of base-table fields returned by a `'datestamps_only'` save:
+     * the entity's primary key field(s), followed by `__mj_CreatedAt` and `__mj_UpdatedAt`
+     * when those columns exist on the entity's base table.
+     */
+    get DatestampReturnFields(): EntityFieldInfo[] {
+        const result: EntityFieldInfo[] = [...this.PrimaryKeys];
+        const pkNames = new Set(result.map(k => k.Name.trim().toLowerCase()));
+        const createdAt = this.Fields.find(
+            f => !f.IsVirtual && f.IsCreatedAtField && !pkNames.has(f.Name.trim().toLowerCase()),
+        );
+        if (createdAt) result.push(createdAt);
+        const updatedAt = this.Fields.find(
+            f => !f.IsVirtual && f.IsUpdatedAtField && !pkNames.has(f.Name.trim().toLowerCase()),
+        );
+        if (updatedAt) result.push(updatedAt);
+        return result;
+    }
+
+    /**
      * Returns true if cloning is explicitly enabled for this entity as a ROOT record.
      */
     get CloneEnabled(): boolean {
@@ -3211,6 +3620,7 @@ export class EntityInfo extends BaseInfo {
     private _settings: EntitySettingInfo[]
     private _fieldCategories: Record<string, FieldCategoryInfo> | null = null
     private _organicKeys: EntityOrganicKeyInfo[] = []
+    private _alternateBaseViews: EntityAlternateBaseViewInfo[] = []
     HasIdField: boolean = false
 
     /** @deprecated Use {@link HasIdField}. */
@@ -3293,7 +3703,7 @@ export class EntityInfo extends BaseInfo {
      * `size === 0` as the single "nothing to do" condition.
      */
     public GetDeniedReadFields(user: UserInfo): Set<string> {
-        return this.getDeniedFields(user, (p) => !p.CanRead);
+        return this.getCachedDeniedFields(user, 'read', (p) => !p.CanRead);
     }
 
     /**
@@ -3366,7 +3776,7 @@ export class EntityInfo extends BaseInfo {
      * actually need rather than relying on that.
      */
     public GetDeniedUpdateFields(user: UserInfo): Set<string> {
-        return this.getDeniedFields(user, (p) => !p.CanUpdate);
+        return this.getCachedDeniedFields(user, 'update', (p) => !p.CanUpdate);
     }
 
     /**
@@ -3377,7 +3787,57 @@ export class EntityInfo extends BaseInfo {
      * create-denied field is dropped and the column takes its default.
      */
     public GetDeniedCreateFields(user: UserInfo): Set<string> {
-        return this.getDeniedFields(user, (p) => !p.CanCreate);
+        return this.getCachedDeniedFields(user, 'create', (p) => !p.CanCreate);
+    }
+
+    private getCachedDeniedFields(
+        user: UserInfo,
+        verb: 'read' | 'update' | 'create',
+        isDenied: (permissions: EntityFieldUserPermissionInfo) => boolean
+    ): Set<string> {
+        if (!this.EnableFieldLevelSecurity) {
+            return new Set<string>();
+        }
+        if (!user || typeof user !== 'object') {
+            return this.getDeniedFields(user, isDenied);
+        }
+        let totalPerms = 0;
+        for (let i = 0; i < this._fields.length; i++) {
+            totalPerms += this._fields[i].FieldPermissions.length;
+        }
+        const rolesRef = user.UserRoles;
+        const rolesLen = rolesRef?.length ?? 0;
+
+        let byUser = _entityDeniedFieldsCache.get(this);
+        if (!byUser) {
+            byUser = new WeakMap();
+            _entityDeniedFieldsCache.set(this, byUser);
+        }
+        let entry = byUser.get(user);
+        if (
+            !entry ||
+            entry.fieldsRef !== this._fields ||
+            entry.fieldsLen !== this._fields.length ||
+            entry.totalPerms !== totalPerms ||
+            entry.rolesRef !== rolesRef ||
+            entry.rolesLen !== rolesLen
+        ) {
+            entry = {
+                fieldsRef: this._fields,
+                fieldsLen: this._fields.length,
+                totalPerms,
+                rolesRef,
+                rolesLen,
+            };
+            byUser.set(user, entry);
+        }
+        const existing = entry[verb];
+        if (existing !== undefined) {
+            return existing;
+        }
+        const computed = this.getDeniedFields(user, isDenied);
+        entry[verb] = computed;
+        return computed;
     }
 
     /**
@@ -3433,13 +3893,72 @@ export class EntityInfo extends BaseInfo {
     public FieldByName(name: string): EntityFieldInfo | undefined {
         if (name == null) return undefined;
         if (this._fieldByNameMap === null) {
+            const fields = this._fields ?? this.Fields ?? [];
             const map = new Map<string, EntityFieldInfo>();
-            for (const f of this._fields) {
+            for (const f of fields) {
                 if (f.Name != null) map.set(f.Name.trim().toLowerCase(), f);
             }
             this._fieldByNameMap = map;
         }
         return this._fieldByNameMap.get(name.trim().toLowerCase());
+    }
+
+    private ensureFieldIndexEntry(): { byName: Map<string, number>; byCodeName: Map<string, number> } {
+        const fields = this._fields ?? this.Fields ?? [];
+        let entry = _entityFieldIndexCache.get(this);
+        if (!entry || entry.fieldsRef !== fields || entry.fieldsLen !== fields.length) {
+            const byName = new Map<string, number>();
+            const byCodeName = new Map<string, number>();
+            for (let i = 0; i < fields.length; i++) {
+                const f = fields[i];
+                if (f.Name != null) {
+                    const nameKey = f.Name.trim().toLowerCase();
+                    if (!byName.has(nameKey)) {
+                        byName.set(nameKey, i);
+                    }
+                    const rawCodeName = f.CodeName ?? f.Name;
+                    const codeKey = rawCodeName.trim().toLowerCase();
+                    if (!byCodeName.has(codeKey)) {
+                        byCodeName.set(codeKey, i);
+                    }
+                }
+            }
+            entry = { fieldsRef: fields, fieldsLen: fields.length, byName, byCodeName };
+            _entityFieldIndexCache.set(this, entry);
+        }
+        return entry;
+    }
+
+    /**
+     * O(1) case-insensitive lookup of a field's positional index in `Fields` by `Name`.
+     * Shared across all `BaseEntity` instances of this `EntityInfo` so individual entity
+     * instances do not need to allocate their own `Map<string, EntityField>` on hydration.
+     */
+    public FieldIndexByName(name: string): number {
+        if (!name) return -1;
+        return this.ensureFieldIndexEntry().byName.get(name.trim().toLowerCase()) ?? -1;
+    }
+
+    /**
+     * O(1) case-insensitive lookup of a field's positional index in `Fields` by `CodeName`.
+     */
+    public FieldIndexByCodeName(codeName: string): number {
+        if (!codeName) return -1;
+        return this.ensureFieldIndexEntry().byCodeName.get(codeName.trim().toLowerCase()) ?? -1;
+    }
+
+    /**
+     * O(1) case-insensitive field lookup by `CodeName`. Uses the shared `_entityFieldIndexCache`
+     * index so GraphQL resolvers and mutation handlers can resolve client `CodeName` keys without
+     * linear `Fields.find(...)` scans.
+     *
+     * @param codeName field CodeName (matched case-insensitively, whitespace-trimmed)
+     * @returns the matching EntityFieldInfo, or undefined if not found
+     */
+    public FieldByCodeName(codeName: string): EntityFieldInfo | undefined {
+        const idx = this.FieldIndexByCodeName(codeName);
+        const fields = this._fields ?? this.Fields;
+        return idx >= 0 && fields ? fields[idx] : undefined;
     }
 
     /**
@@ -3635,6 +4154,59 @@ export class EntityInfo extends BaseInfo {
         return this._organicKeys;
     }
 
+    /**
+     * Gets all registered alternate base views for this entity, sorted by `Sequence`, `Name`, and `ID`.
+     * Alternate base views maintain 100% column parity with {@link BaseView} while applying a
+     * curated canonical filter or join.
+     * @returns {EntityAlternateBaseViewInfo[]} Array of alternate base view metadata definitions
+     */
+    get AlternateBaseViews(): EntityAlternateBaseViewInfo[] {
+        return this._alternateBaseViews;
+    }
+
+    /**
+     * Finds a registered alternate base view on this entity by its semantic `Name`
+     * (case-insensitive, whitespace-trimmed).
+     *
+     * @param name Semantic name of the alternate base view (for example, `'Active'`).
+     * @returns The matching {@link EntityAlternateBaseViewInfo}, or `undefined` if not found.
+     */
+    public GetAlternateBaseView(name: string | null | undefined): EntityAlternateBaseViewInfo | undefined {
+        const trimmed = name?.trim().toLowerCase();
+        if (!trimmed) {
+            return undefined;
+        }
+        return this._alternateBaseViews.find(v => v.Name?.trim().toLowerCase() === trimmed);
+    }
+
+    /**
+     * Finds a registered alternate base view on this entity by its physical SQL `ViewName`
+     * (and optional `schemaName`), matched case-insensitively and whitespace-trimmed.
+     *
+     * @param viewName Physical SQL view name (for example, `'vwActiveMembers'`).
+     * @param schemaName Optional schema name; when supplied, must match `EffectiveSchemaName` case-insensitively.
+     * @returns The matching {@link EntityAlternateBaseViewInfo}, or `undefined` if not found.
+     */
+    public GetAlternateBaseViewByViewName(
+        viewName: string | null | undefined,
+        schemaName?: string | null,
+    ): EntityAlternateBaseViewInfo | undefined {
+        const trimmedView = viewName?.trim().toLowerCase();
+        if (!trimmedView) {
+            return undefined;
+        }
+        const trimmedSchema = schemaName?.trim().toLowerCase();
+        return this._alternateBaseViews.find(v => {
+            if (v.ViewName?.trim().toLowerCase() !== trimmedView) {
+                return false;
+            }
+            if (trimmedSchema && trimmedSchema.length > 0) {
+                return v.EffectiveSchemaName.trim().toLowerCase() === trimmedSchema;
+            }
+            return true;
+        });
+    }
+
     private static __createdAtFieldName = '__mj_CreatedAt';
     private static __updatedAtFieldName = '__mj_UpdatedAt';
     private static __deletedAtFieldName = '__mj_DeletedAt';
@@ -3655,6 +4227,15 @@ export class EntityInfo extends BaseInfo {
      */
     public static get DeletedAtFieldName(): string {
         return EntityInfo.__deletedAtFieldName;
+    }
+
+    /**
+     * Entity flags that a per-table entry in CodeGen's additionalSchemaInfo config may set when CodeGen first
+     * creates the entity, overriding the global `newEntityDefaults`. Typed against `EntityInfo`, so a name that
+     * stops being an entity property fails to compile.
+     */
+    public static get ConfigurableAtCreationAttributes(): readonly EntityConfigurableAtCreationAttribute[] {
+        return ENTITY_CONFIGURABLE_AT_CREATION_ATTRIBUTES;
     }
 
     /**
@@ -3780,7 +4361,7 @@ export class EntityInfo extends BaseInfo {
      */
     get ParentEntityInfo(): EntityInfo | null {
         if (!this.ParentID) return null;
-        const p = Metadata.Provider;  // global-provider-ok: stateless info class — proxies to global metadata
+        const p = MetadataProviderFor(this);
         if (p?.EntityByID) {
             return p.EntityByID(this.ParentID) ?? null;
         }
@@ -3797,7 +4378,23 @@ export class EntityInfo extends BaseInfo {
      * only one child type is allowed per parent record (disjoint subtypes).
      */
     get ChildEntities(): EntityInfo[] {
-        return Metadata.Provider?.Entities?.filter(e => UUIDsEqual(e.ParentID, this.ID)) ?? [];  // global-provider-ok: stateless info class — proxies to global metadata
+        const provider = MetadataProviderFor(this);
+        const entities = provider?.Entities;
+        if (!entities || entities.length === 0) {
+            return [];
+        }
+        const cached = _entityChildEntitiesCache.get(this);
+        if (cached && cached.provider === provider && cached.entitiesRef === entities && cached.entitiesLen === entities.length) {
+            return cached.children;
+        }
+        const children = entities.filter(e => UUIDsEqual(e.ParentID, this.ID));
+        _entityChildEntitiesCache.set(this, {
+            provider,
+            entitiesRef: entities,
+            entitiesLen: entities.length,
+            children,
+        });
+        return children;
     }
 
     /**
@@ -3988,25 +4585,22 @@ export class EntityInfo extends BaseInfo {
      */
     public GetUserPermisions(user: UserInfo ): EntityUserPermissionInfo {
         try {
-            const permissionList: EntityPermissionInfo[] =[];
-
-            for (let j: number = 0; j < this.Permissions.length; j++) {
-                const ep: EntityPermissionInfo = this.Permissions[j];
-                const roleMatch: UserRoleInfo = user.UserRoles?.find((r) => UUIDsEqual(r.RoleID, ep.RoleID))
-                if (roleMatch) // user has this role
-                    permissionList.push(ep)
-            }
-
-            // Aggregate Allow and Deny separately, then subtract Deny from Allow per action.
+            const _ = user.UserRoles; // preserve throw-on-null behavior
+            const userRoleIds = getUserRoleIdSet(user);
             const allow = { CanCreate: false, CanRead: false, CanUpdate: false, CanDelete: false };
             const deny = { CanCreate: false, CanRead: false, CanUpdate: false, CanDelete: false };
-            for (const ep of permissionList) {
-                const isDeny = ep.IsDeny;
-                const bucket = isDeny ? deny : allow;
-                bucket.CanCreate = bucket.CanCreate || !!ep.CanCreate;
-                bucket.CanRead   = bucket.CanRead   || !!ep.CanRead;
-                bucket.CanUpdate = bucket.CanUpdate || !!ep.CanUpdate;
-                bucket.CanDelete = bucket.CanDelete || !!ep.CanDelete;
+
+            if (userRoleIds.size > 0) {
+                for (let j: number = 0; j < this.Permissions.length; j++) {
+                    const ep: EntityPermissionInfo = this.Permissions[j];
+                    if (ep.RoleID && userRoleIds.has(ep.RoleID.trim().toLowerCase())) {
+                        const bucket = ep.IsDeny ? deny : allow;
+                        bucket.CanCreate = bucket.CanCreate || !!ep.CanCreate;
+                        bucket.CanRead   = bucket.CanRead   || !!ep.CanRead;
+                        bucket.CanUpdate = bucket.CanUpdate || !!ep.CanUpdate;
+                        bucket.CanDelete = bucket.CanDelete || !!ep.CanDelete;
+                    }
+                }
             }
 
             // An API-driven action also requires that the entity ALLOWS that action at all
@@ -4030,6 +4624,46 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
+     * Checks whether the specified user has the requested permission (`Read`, `Create`, `Update`, or `Delete`)
+     * on this entity. When `this.Permissions` is empty/uninitialized (e.g., in lightweight unit-test fixtures),
+     * returns `true` so unconfigured fixtures are not blocked.
+     */
+    public CheckPermissions(user: UserInfo, type: EntityPermissionType, throwError: boolean = false): boolean {
+        if (!user || !this.Permissions || this.Permissions.length === 0) {
+            return true;
+        }
+        const perms = this.GetUserPermisions(user);
+        if (!perms) {
+            if (throwError) {
+                throw new Error(`Permission check failed for user on entity ${this.Name}`);
+            }
+            return false;
+        }
+        let allowed = false;
+        switch (type) {
+            case EntityPermissionType.Read:
+                allowed = perms.CanRead;
+                break;
+            case EntityPermissionType.Create:
+                allowed = perms.CanCreate;
+                break;
+            case EntityPermissionType.Update:
+                allowed = perms.CanUpdate;
+                break;
+            case EntityPermissionType.Delete:
+                allowed = perms.CanDelete;
+                break;
+            default:
+                allowed = false;
+                break;
+        }
+        if (!allowed && throwError) {
+            throw new Error(`User does not have ${type} permission on ${this.Name}`);
+        }
+        return allowed;
+    }
+
+    /**
      * Determines if a given user, for a given permission type, is exempt from RowLevelSecurity or not.
      *
      * A permission row confers an exemption only for an operation it GRANTS (the matching `Can*`
@@ -4044,13 +4678,17 @@ export class EntityInfo extends BaseInfo {
      * @returns 
      */
     public UserExemptFromRowLevelSecurity(user: UserInfo, type: EntityPermissionType): boolean {
+        const _ = user.UserRoles; // preserve throw-on-null behavior if user is null/undefined
+        const userRoleIds = getUserRoleIdSet(user);
+        if (userRoleIds.size === 0) {
+            return false;
+        }
         for (let j: number = 0; j < this.Permissions.length; j++) {
             const ep: EntityPermissionInfo = this.Permissions[j];
             if (ep.IsDeny) {
                 continue; // a Deny row's Can* flags are denials, never grants — it cannot exempt anyone
             }
-            const roleMatch: UserRoleInfo = user.UserRoles?.find((r) => UUIDsEqual(r.RoleID, ep.RoleID))
-            if (roleMatch) { // user has this role 
+            if (ep.RoleID && userRoleIds.has(ep.RoleID.trim().toLowerCase())) { // user has this role 
                 switch (type) {
                     case EntityPermissionType.Create:
                         if (ep.CanCreate && !ep.CreateRLSFilterID)
@@ -4093,14 +4731,18 @@ export class EntityInfo extends BaseInfo {
      * @returns 
      */
     public GetUserRowLevelSecurityInfo(user: UserInfo, type: EntityPermissionType): RowLevelSecurityFilterInfo[] {
+        const _ = user.UserRoles; // preserve throw-on-null behavior if user is null/undefined
         const rlsList: RowLevelSecurityFilterInfo[] = [];
+        const userRoleIds = getUserRoleIdSet(user);
+        if (userRoleIds.size === 0) {
+            return rlsList;
+        }
         for (let j: number = 0; j < this.Permissions.length; j++) {
             const ep: EntityPermissionInfo = this.Permissions[j];
             if (ep.IsDeny) {
                 continue; // never a grant — see the doc comment
             }
-            const roleMatch: UserRoleInfo = user.UserRoles?.find((r) => UUIDsEqual(r.RoleID, ep.RoleID))
-            if (roleMatch) { // user has this role
+            if (ep.RoleID && userRoleIds.has(ep.RoleID.trim().toLowerCase())) { // user has this role
                 let matchObject: RowLevelSecurityFilterInfo = null;
                 switch (type) {
                     case EntityPermissionType.Create:
@@ -4220,7 +4862,7 @@ export class EntityInfo extends BaseInfo {
         const clauses = [...mine]
             .sort((a, b) => a.FilterID.localeCompare(b.FilterID)) // deterministic order for the cache fingerprint (INV-2)
             .map(b => {
-                const filter = Metadata.Provider.RowLevelSecurityFilters.find(f => UUIDsEqual(f.ID, b.FilterID)); // global-provider-ok: same resolution path as RLSFilter() above — stateless info class proxying to global metadata
+                const filter = MetadataProviderFor(this)?.RowLevelSecurityFilters?.find(f => UUIDsEqual(f.ID, b.FilterID));
                 if (!filter) {
                     LogError(`API-key row filter ${b.FilterID} for entity ${this.Name} not found in metadata — resolving to (1=0)`);
                     return '(1=0)';
@@ -4421,7 +5063,7 @@ export class EntityInfo extends BaseInfo {
 
         // Resolve the spoke entity's own organic key (matching by Name) to pull its
         // per-column normalization. Falls back to the hub's expression if not found.
-        const spokeOrganicKey = EntityInfo.resolveSpokeOrganicKey(relatedEntity, organicKey);
+        const spokeOrganicKey = EntityInfo.resolveSpokeOrganicKey(relatedEntity, organicKey, record.EntityInfo?.OwningProvider);
 
         for (let i = 0; i < matchFields.length; i++) {
             const value = record.Get(matchFields[i]);
@@ -4582,10 +5224,26 @@ export class EntityInfo extends BaseInfo {
     }
 
 
-    constructor(initData: any = null) {
+    private static readonly CHILD_INIT_KEYS: ReadonlySet<string> = new Set([
+        'EntityFields', '_Fields', 'Fields',
+        'EntityPermissions', '_Permissions', 'Permissions',
+        'EntitySettings', '_Settings', 'Settings',
+        'EntityRelationships', '_RelatedEntities', 'RelatedEntities',
+        'EntityOrganicKeys', '_OrganicKeys', 'OrganicKeys',
+        'EntityAlternateBaseViews', '_AlternateBaseViews', 'AlternateBaseViews',
+    ]);
+
+    /**
+     * @param initData - the raw entity row (or another EntityInfo being re-instantiated)
+     * @param md - the provider that owns this metadata. Sibling lookups ({@link ParentEntityInfo},
+     *   {@link ChildEntities}, RLS filters) resolve through it rather than the global provider, so
+     *   they stay correct in a multi-provider process. Optional for backward compatibility.
+     */
+    constructor(initData: any = null, md?: IMetadataProvider) {
         super();
+        this.SetOwningProvider(md);
         if (initData) {
-            this.copyInitData(initData);
+            this.copyInitData(initData, EntityInfo.CHILD_INIT_KEYS);
 
             // do some special handling to create class instances instead of just data objects
             // copy the Entity Fields (accept EntityFields, _Fields, or Fields as input names)
@@ -4618,7 +5276,9 @@ export class EntityInfo extends BaseInfo {
             const ef = initData.EntityFields || initData._Fields || initData.Fields;
             if (ef) {
                 for (let j = 0; j < ef.length; j++) {
-                    this._fields.push(new EntityFieldInfo(ef[j]));
+                    const field = new EntityFieldInfo(ef[j]);
+                    field.SetOwningProvider(md);
+                    this._fields.push(field);
                 }
             }
 
@@ -4627,7 +5287,7 @@ export class EntityInfo extends BaseInfo {
             const ep = initData.EntityPermissions || initData._Permissions || initData.Permissions;
             if (ep) {
                 for (let j = 0; j < ep.length; j++) {
-                    this._permissions.push(new EntityPermissionInfo(ep[j]));
+                    this._permissions.push(new EntityPermissionInfo(ep[j], md));
                 }
             }
 
@@ -4677,6 +5337,23 @@ export class EntityInfo extends BaseInfo {
                 for (const item of ok) {
                     this._organicKeys.push(new EntityOrganicKeyInfo(item));
                 }
+            }
+
+            // copy the Alternate Base Views (sorted by Sequence, Name, ID, then linked via ParentID)
+            this._alternateBaseViews = [];
+            const abv = initData.EntityAlternateBaseViews || initData._AlternateBaseViews || initData.AlternateBaseViews;
+            if (abv && Array.isArray(abv)) {
+                for (const item of abv) {
+                    const viewInfo = new EntityAlternateBaseViewInfo(item as Record<string, unknown>, this.SchemaName);
+                    viewInfo.SetOwningProvider(md);
+                    this._alternateBaseViews.push(viewInfo);
+                }
+                this._alternateBaseViews.sort((a, b) => {
+                    const aSeq = a.Sequence !== null && a.Sequence !== undefined ? a.Sequence : 0;
+                    const bSeq = b.Sequence !== null && b.Sequence !== undefined ? b.Sequence : 0;
+                    return (aSeq - bSeq) || ordinalCompare(a.Name, b.Name) || ordinalCompare(a.ID, b.ID);
+                });
+                EntityAlternateBaseViewInfo.LinkHierarchy(this._alternateBaseViews, this.SchemaName);
             }
 
             this.prepareSpecialFields();
@@ -4817,6 +5494,11 @@ export class RecordDependency {
      * Undefined for hard foreign keys.
      */
     EntityIDFieldName?: string
+    /**
+     * Friendly display name of the foreign-key or soft-link field on {@link RelatedEntityName}
+     * (populated from `EntityFieldInfo.DisplayNameOrName` when available).
+     */
+    FieldDisplayName?: string
 }
 
 /**

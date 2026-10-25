@@ -1,10 +1,10 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine, Subscription, Root, ResolverFilterData, ID, Int } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { MJConversationDetailEntity, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity, ArtifactMetadataEngine, ConversationEngine } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationDetailEntityExtended, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity, ArtifactMetadataEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { RouteArtifact } from './artifact-routing.js';
 import { AgentRunner, ArtifactToolManager } from '@memberjunction/ai-agents';
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData, ContinuationAnnouncementText } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
@@ -13,6 +13,7 @@ import { StartLivenessPulse } from '../generic/FireAndForgetHeartbeat.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
 import { ResolveWidgetGuestRunContext, ElevateUserPayload } from '../realtimeWidget/widgetGuestElevation.js';
+import { IsTrustedAgentRunCaller } from './agent-run-data-guard.js';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { GetAttachmentService } from '@memberjunction/aiengine';
 import { NotificationEngine } from '@memberjunction/notifications';
@@ -29,6 +30,17 @@ const INLINE_SIZE_CAP = 100 * 1024;
 /** Progress metadata is an untyped bag. A run is an object that carries an ID field. */
 function isAgentRunEntity(value: unknown): value is MJAIAgentRunEntityExtended {
     return typeof value === 'object' && value !== null && 'ID' in value;
+}
+
+/** What a conversation turn asks for, before its agent runs (see `RunAIAgentFromConversationDetail`). */
+interface ConversationTurnRequest {
+    UserMessageId: string;
+    AgentId: string;
+    MaxHistoryMessages: number;
+    HistoryFrom?: Date;
+    ReplyParentId?: string;
+    AnnouncedByAgentId?: string;
+    ReplyBranchId?: string | null;
 }
 
 @ObjectType()
@@ -252,6 +264,14 @@ export class RunAIAgentResolver extends ResolverBase {
             throw new Error(`AI Agent "${agentEntity.Name}" is not active (Status: ${agentEntity.Status})`);
         }
 
+        // Enforce agent run permissions for the calling user
+        if (currentUser && typeof AIEngine.Instance.CanUserRunAgent === 'function') {
+            const canRun = await AIEngine.Instance.CanUserRunAgent(agentEntity.ID, currentUser);
+            if (!canRun) {
+                throw new Error(`User does not have permission to run AI Agent "${agentEntity.Name}" (${agentEntity.ID})`);
+            }
+        }
+
         return agentEntity;
     }
 
@@ -293,7 +313,14 @@ export class RunAIAgentResolver extends ResolverBase {
         taskGraphDebug?: string,
         /** History floor for a conversation run — threaded into ExecuteAgentParams.ConversationHistoryFrom,
          *  so the framework's own conversation reads (retrieval tools, artifacts, compaction) honour it too. */
-        conversationHistoryFrom?: Date
+        conversationHistoryFrom?: Date,
+        /** ExecuteAgentParams.TrustReservedRunData: true only for a caller IsTrustedAgentRunCaller accepts. */
+        trustReservedRunData: boolean = false,
+        /** The conversation branch of the run — threaded into ExecuteAgentParams.ConversationBranchID. */
+        conversationBranchId?: string | null,
+        /** The reply row this request created on the server for the run (`conversationDetailId` is its ID). The run
+         *  writes into this instance, so its writes carry the server-authored marker and the user it was made as. */
+        replyDetail?: MJConversationDetailEntityExtended
     ): Promise<AIAgentRunResult> {
         const startTime = Date.now();
         // Best-effort handle for persistInFlightAgentFailure. Populated from a
@@ -337,7 +364,7 @@ export class RunAIAgentResolver extends ResolverBase {
 
             // The publisher owns every status message. The resolver still copies the run into
             // agentRunRef, including noise steps, for the fire-and-forget liveness pulse.
-            const statusPublisher = new AgentRunStatusPublisher(pubSub, userPayload, sessionId);
+            const statusPublisher = new AgentRunStatusPublisher(pubSub, userPayload, sessionId, conversationDetailId);
             const publishProgress = statusPublisher.OnProgress;
 
             // Execute the agent in conversation context - handles conversation, artifacts, etc.
@@ -362,12 +389,16 @@ export class RunAIAgentResolver extends ResolverBase {
                 requestedSkillIDs: requestedSkillIDs,
                 taskGraphDebug: parseTaskGraphDebug(taskGraphDebug),
                 ConversationHistoryFrom: conversationHistoryFrom,
+                ...(conversationBranchId ? { ConversationBranchID: conversationBranchId } : {}),
                 data: parsedData,
+                // Whether the run may read the reserved data keys (scope, agent-type params); BaseAgent drops them otherwise.
+                TrustReservedRunData: trustReservedRunData,
                 context: {
                     dataSource: dataSource
                 }
             }, {
                 conversationDetailId: conversationDetailId, // Use existing if provided
+                agentResponseDetail: replyDetail, // the reply row this request created, when it did
                 conversationId: conversationId, // LATENCY OPT #2: pre-resolved to skip redundant load in AgentRunner
                 userMessage: userMessage, // Provide user message when conversationDetailId not provided
                 createArtifacts: createArtifacts || false,
@@ -461,7 +492,7 @@ export class RunAIAgentResolver extends ResolverBase {
 
             // Fire-and-forget clients otherwise leave the run Running and the
             // conversation detail In-Progress (Explorer red-pill timer).
-            await this.persistInFlightAgentFailure(p, userPayload, agentRunRef.current, conversationDetailId, errorMessage);
+            await this.persistInFlightAgentFailure(p, userPayload, agentRunRef.current, conversationDetailId, errorMessage, replyDetail);
 
             const errorResult = {
                 success: false,
@@ -487,7 +518,9 @@ export class RunAIAgentResolver extends ResolverBase {
         userPayload: UserPayload,
         run: MJAIAgentRunEntityExtended | null | undefined,
         conversationDetailId: string | undefined,
-        errorMessage: string
+        errorMessage: string,
+        /** The run's reply row, when this request created it: written in place, as the server. */
+        replyDetail?: MJConversationDetailEntityExtended
     ): Promise<void> {
         try {
             if (run && run.Status === 'Running') {
@@ -504,10 +537,11 @@ export class RunAIAgentResolver extends ResolverBase {
                 return;
             }
             if (conversationDetailId) {
-                const detail = await provider.GetEntityObject<MJConversationDetailEntity>(
+                const detail = replyDetail ?? await provider.GetEntityObject<MJConversationDetailEntity>(
                     'MJ: Conversation Details',
                     user
                 );
+                await detail.EnsureSaveComplete(); // the run may still be saving into the same reply instance
                 if (await detail.Load(conversationDetailId) && detail.Status === 'In-Progress') {
                     await detail.EnsureSaveComplete();
                     detail.Status = 'Error';
@@ -561,6 +595,9 @@ export class RunAIAgentResolver extends ResolverBase {
         await this.CheckAPIKeyScopeAuthorization('agent:execute', agentId, userPayload);
 
         const p = GetReadWriteProvider(providers);
+        // Only the system user or an API key holding the agent:trusted scope may set a run's scope and agent-type
+        // params through data; for anyone else BaseAgent drops those keys (ExecuteAgentParams.TrustReservedRunData).
+        const trustRunData = await IsTrustedAgentRunCaller({ UserPayload: userPayload, IsWidgetGuestRun: false, AgentID: agentId });
 
         if (fireAndForget) {
             // Fire-and-forget mode: start execution in background, return immediately.
@@ -569,7 +606,8 @@ export class RunAIAgentResolver extends ResolverBase {
                 p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
                 data, payload, lastRunId, autoPopulateLastRunPayload, configurationId,
                 conversationDetailId, createArtifacts || false, createNotification || false,
-                sourceArtifactId, sourceArtifactVersionId, undefined /*conversationId*/, planMode, requestedSkillIDs, taskGraphDebug
+                sourceArtifactId, sourceArtifactVersionId, undefined /*conversationId*/, planMode, requestedSkillIDs, taskGraphDebug,
+                undefined /*conversationHistoryFrom*/, trustRunData
             );
 
             LogStatus(`🔥 Fire-and-forget: Agent ${agentId} execution started in background for session ${sessionId}`);
@@ -604,7 +642,9 @@ export class RunAIAgentResolver extends ResolverBase {
             undefined, // runRef
             planMode,
             requestedSkillIDs,
-            taskGraphDebug
+            taskGraphDebug,
+            undefined, // conversationHistoryFrom
+            trustRunData
         );
     }
 
@@ -637,6 +677,9 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('requestedSkillIDs', () => [String], { nullable: true }) requestedSkillIDs?: string[]
     ): Promise<AIAgentRunResult> {
         const p = GetReadWriteProvider(providers);
+        // @RequireSystemUser admits only the system user, whom the rule trusts; it is still asked, so every
+        // resolver entry that takes a client's data decides the same way.
+        const trustRunData = await IsTrustedAgentRunCaller({ UserPayload: userPayload, IsWidgetGuestRun: false, AgentID: agentId });
         return this.executeAIAgent(
             p,
             dataSource,
@@ -659,7 +702,10 @@ export class RunAIAgentResolver extends ResolverBase {
             undefined, // conversationId (not pre-resolved on this path)
             undefined, // runRef
             planMode,
-            requestedSkillIDs
+            requestedSkillIDs,
+            undefined, // taskGraphDebug
+            undefined, // conversationHistoryFrom
+            trustRunData
         );
     }
 
@@ -749,6 +795,45 @@ export class RunAIAgentResolver extends ResolverBase {
         } catch (error) {
             LogError(`Failed to create completion notification: ${(error as Error).message}`);
             // Don't throw - notification failure shouldn't fail the agent run
+        }
+    }
+
+    /**
+     * The ID of this agent's newest root run in the conversation IF the user stopped it, else
+     * null. The query spans the runs that could be the predecessor (settled, or stopped by the
+     * user) and the newest decides, so a stopped run that a later settled run already followed
+     * is not chained to again. Uses the same filter and recognizer as `BaseAgent.findUserStoppedPredecessorRunId`
+     * (`MJAIAgentRunEntityExtended.BuildStoppedPredecessorFilter` / `IsUserStopped`), which carries the stopped run's
+     * completed results into the new run's context, so the two cannot pick different runs.
+     * Fail-soft: a lookup failure means no chaining, never a failed turn.
+     */
+    private async findUserStoppedPredecessorRunId(
+        conversationId: string,
+        agentId: string,
+        branchId: string | null,
+        contextUser: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<string | null> {
+        try {
+            // The run must have replied on this turn's branch path: a run stopped on a sibling branch is not
+            // this path's history. The trunk needs no branch rows; a branch needs them to walk its ancestry.
+            const branches = branchId ? await ConversationEngine.LoadBranchesFresh(conversationId, contextUser, provider) : [];
+            const rv = RunView.FromMetadataProvider(provider);
+            const newest = await rv.RunView<{ ID: string; Status: string; CancellationReason: string | null }>({
+                EntityName: 'MJ: AI Agent Runs',
+                ExtraFilter: MJAIAgentRunEntityExtended.BuildStoppedPredecessorFilter(conversationId, agentId, branchId, branches),
+                OrderBy: '__mj_CreatedAt DESC',
+                MaxRows: 1,
+                Fields: ['ID', 'Status', 'CancellationReason'],
+                ResultType: 'simple',
+                // The row this looks for was written by the Stop button moments ago; read the database, not a cache.
+                BypassCache: true,
+            }, contextUser);
+            const run = newest.Success ? newest.Results?.[0] : undefined;
+            return run && MJAIAgentRunEntityExtended.IsUserStopped(run.Status, run.CancellationReason) ? run.ID : null;
+        } catch (error) {
+            LogError(`findUserStoppedPredecessorRunId failed; the turn runs unchained: ${error instanceof Error ? error.message : String(error)}`);
+            return null;
         }
     }
 
@@ -858,16 +943,27 @@ export class RunAIAgentResolver extends ResolverBase {
     }
 
     /**
-     * Optimized mutation that loads conversation history server-side.
-     * This avoids sending large attachment data from client to server.
+     * Runs an agent's turn in a conversation: the server loads the history (attachments included, so the client never
+     * sends them), creates the agent's reply row, and runs the agent into it.
      *
-     * @param conversationDetailId - The conversation detail ID (user's message already saved)
+     * Only the server writes agent replies (A19). The reply row (`Role` `AI`, In-Progress, its `ParentID` the user's
+     * message) is created here, as the person asking, before the run starts. In fire-and-forget mode the
+     * acknowledgement names it, `{ accepted, fireAndForget, conversationDetailId, createdAt }`, and is returned before
+     * the run publishes anything; every progress, streaming and completion message carries the same
+     * `conversationDetailId`. In synchronous mode the result's `agentRun.ConversationDetailID` names it.
+     *
+     * Threading, both optional: `replyParentId` puts the reply under another message of the same conversation the
+     * caller can read (MJ's chat threads a delegate's reply under the manager's); `announcedByAgentId` has the server
+     * first post that agent's fixed line "Continuing with **{agent}** for refinement..." and thread the reply under
+     * it, and the acknowledgement then also carries `announcementDetailId`.
+     *
+     * @param userMessageId - The person's message this turn answers, already saved.
      * @param agentId - The agent to execute
      * @param maxHistoryMessages - Maximum number of history messages to include (default: 20)
      */
     @Mutation(() => AIAgentRunResult)
     async RunAIAgentFromConversationDetail(
-        @Arg('conversationDetailId') conversationDetailId: string,
+        @Arg('userMessageId') userMessageId: string,
         @Arg('agentId') agentId: string,
         @Ctx() { userPayload, providers, dataSource }: AppContext,
         @Arg('sessionId') sessionId: string,
@@ -890,11 +986,17 @@ export class RunAIAgentResolver extends ResolverBase {
          *  run's own conversation reads honour it too. Omitted (clients send it only when set, so an
          *  older client never does), the run reads the whole conversation as before. An unreadable
          *  value fails the request rather than being dropped. */
-        @Arg('agentHistoryFrom', { nullable: true }) agentHistoryFrom?: string
+        @Arg('agentHistoryFrom', { nullable: true }) agentHistoryFrom?: string,
+        /** The message the reply threads under, when not the user's message: one in the same conversation the
+         *  caller can read. */
+        @Arg('replyParentId', { nullable: true }) replyParentId?: string,
+        /** An active agent (MJ's chat passes its conversation manager) whose fixed line "Continuing with
+         *  **{agent}** for refinement..." the server posts before the reply, which then threads under it. */
+        @Arg('announcedByAgentId', { nullable: true }) announcedByAgentId?: string,
+        /** The fork the reply and history run on, when the turn forks from `userMessageId` (such as Regenerate).
+         *  Checked to be a branch of the conversation whose path holds `userMessageId`. */
+        @Arg('replyBranchId', { nullable: true }) replyBranchId?: string
     ): Promise<AIAgentRunResult> {
-        // Check API key scope authorization for agent execution
-        await this.CheckAPIKeyScopeAuthorization('agent:execute', agentId, userPayload);
-
         const p = GetReadWriteProvider(providers);
         const currentUser = this.GetUserFromPayload(userPayload);
 
@@ -912,61 +1014,85 @@ export class RunAIAgentResolver extends ResolverBase {
         // no grants to WRITE the AI run entities and cannot run an arbitrary agent under elevation.
         // Conversation OWNERSHIP is still enforced under the guest principal below: the guest loads its
         // own ConversationDetail through the Widget Guest RLS filters, so a detail id from another
-        // session resolves to "not found" before any elevated work happens.
+        // session resolves to "not found" before any elevated work happens. The reply row is written
+        // as the guest too, never as the elevated principal, which owns no guest's conversation.
         const widgetElevation = await ResolveWidgetGuestRunContext(userPayload, p);
         const effectiveAgentId = widgetElevation ? widgetElevation.PinnedAgentId : agentId;
+        // Check API key scope authorization for agent execution against the resolved agent id.
+        await this.CheckAPIKeyScopeAuthorization('agent:execute', effectiveAgentId, userPayload);
+        // A widget guest has one pinned agent and never posts a continuation announcement as another agent;
+        // an API-key caller must hold agent:execute for the announcing agent as well as the running agent.
+        const effectiveAnnouncedByAgentId = widgetElevation ? undefined : announcedByAgentId;
+        if (effectiveAnnouncedByAgentId) {
+            await this.CheckAPIKeyScopeAuthorization('agent:execute', effectiveAnnouncedByAgentId, userPayload);
+        }
         const effectiveUserPayload = widgetElevation ? ElevateUserPayload(userPayload, widgetElevation.ElevatedUser) : userPayload;
+        // Only the system user or an API key holding the agent:trusted scope may set a run's scope and agent-type
+        // params through data (ExecuteAgentParams.TrustReservedRunData). Judged on the caller's own payload: a widget
+        // guest runs under an elevated server principal but is never trusted.
+        const trustRunData = await IsTrustedAgentRunCaller({
+            UserPayload: userPayload, IsWidgetGuestRun: widgetElevation !== null, AgentID: agentId,
+        });
 
         try {
             // Parsed before anything loads: a floor the caller asked for must never be dropped.
             const historyFrom = parseAgentHistoryFrom(agentHistoryFrom);
+            const turn = await this.startConversationTurn(p, currentUser, {
+                UserMessageId: userMessageId,
+                AgentId: effectiveAgentId,
+                MaxHistoryMessages: maxHistoryMessages || 20,
+                HistoryFrom: historyFrom,
+                ReplyParentId: replyParentId,
+                AnnouncedByAgentId: effectiveAnnouncedByAgentId,
+                ReplyBranchId: replyBranchId
+            });
+            const reply = turn.Reply;
+            // The turn's branch (the message's own branch, or a validated fork whose path holds the message)
+            // decides which path the run reads.
+            const branchId = turn.BranchId;
 
-            // LATENCY OPTIMIZATION (Opt #2 + #3): Load ConversationDetail once here to extract
-            // conversationId, then pass it downstream. Previously this record was loaded multiple
-            // times: once in loadConversationHistoryWithAttachments (just to get conversationId),
-            // once in AgentRunner (same reason), and once in createCompletionNotification. Now we
-            // load it a single time and thread conversationId through the call chain.
-            const currentDetail = await p.GetEntityObject<MJConversationDetailEntity>(
-                'MJ: Conversation Details',
-                currentUser
-            );
-            if (!await currentDetail.Load(conversationDetailId)) {
-                throw new Error(`Conversation detail ${conversationDetailId} not found`);
+            // A turn that follows a run the user STOPPED continues that run rather than starting
+            // over: chain it by LastRunID (the chat client never sends one) and, when the caller
+            // supplied no payload, roll the stopped run's FinalPayload into this run's start.
+            let effectiveLastRunId = lastRunId;
+            let effectiveAutoPopulate = autoPopulateLastRunPayload;
+            if (!effectiveLastRunId) {
+                const stoppedRunId = await this.findUserStoppedPredecessorRunId(turn.ConversationId, effectiveAgentId, branchId, currentUser, p);
+                if (stoppedRunId) {
+                    effectiveLastRunId = stoppedRunId;
+                    if (effectiveAutoPopulate === undefined && payload == null) {
+                        effectiveAutoPopulate = true;
+                    }
+                    LogStatus(`↩️ Continuing from user-stopped run ${stoppedRunId} (chained by LastRunID)`);
+                }
             }
-            const conversationId = currentDetail.ConversationID;
-
-            // Load conversation history with attachments from DB
-            const messages = await this.loadConversationHistoryWithAttachments(
-                conversationId,
-                currentUser,
-                maxHistoryMessages || 20,
-                p,
-                // The UI creates the agent-response placeholder row ('⏳ ...') before invoking
-                // this mutation — exclude it so the model never sees an empty assistant turn.
-                [conversationDetailId],
-                historyFrom
-            );
-
-            // Convert to JSON string for the existing executeAIAgent method
-            const messagesJson = JSON.stringify(messages);
 
             if (fireAndForget) {
                 // Fire-and-forget mode: start execution in background, return immediately.
                 // The client will receive the result via WebSocket PubSub completion event.
                 this.executeAgentInBackground(
-                    p, dataSource, effectiveAgentId, effectiveUserPayload, messagesJson, sessionId, pubSub,
-                    data, payload, lastRunId, autoPopulateLastRunPayload, configurationId,
-                    conversationDetailId, createArtifacts || false, createNotification || false,
-                    sourceArtifactId, sourceArtifactVersionId, conversationId, planMode, requestedSkillIDs,
+                    p, dataSource, effectiveAgentId, effectiveUserPayload, turn.MessagesJson, sessionId, pubSub,
+                    data, payload, effectiveLastRunId, effectiveAutoPopulate, configurationId,
+                    reply.ID, createArtifacts || false, createNotification || false,
+                    sourceArtifactId, sourceArtifactVersionId, turn.ConversationId, planMode, requestedSkillIDs,
                     undefined, // taskGraphDebug
-                    historyFrom
+                    historyFrom,
+                    trustRunData,
+                    branchId,
+                    reply
                 );
 
                 LogStatus(`🔥 Fire-and-forget: Agent ${effectiveAgentId} execution started in background for session ${sessionId}`);
 
                 return {
                     success: true,
-                    result: JSON.stringify({ accepted: true, fireAndForget: true })
+                    result: JSON.stringify({
+                        accepted: true,
+                        fireAndForget: true,
+                        conversationDetailId: reply.ID,
+                        createdAt: reply.__mj_CreatedAt,
+                        ...(turn.Announcement ? { announcementDetailId: turn.Announcement.ID } : {})
+                    })
                 };
             }
 
@@ -976,26 +1102,29 @@ export class RunAIAgentResolver extends ResolverBase {
                 dataSource,
                 effectiveAgentId,
                 effectiveUserPayload,
-                messagesJson,
+                turn.MessagesJson,
                 sessionId,
                 pubSub,
                 data,
                 payload,
                 undefined, // templateData
-                lastRunId,
-                autoPopulateLastRunPayload,
+                effectiveLastRunId,
+                effectiveAutoPopulate,
                 configurationId,
-                conversationDetailId,
+                reply.ID,
                 createArtifacts || false,
                 createNotification || false,
                 sourceArtifactId,
                 sourceArtifactVersionId,
-                conversationId, // LATENCY OPT #2: pass pre-resolved conversationId
+                turn.ConversationId, // LATENCY OPT #2: pass pre-resolved conversationId
                 undefined, // runRef
                 planMode,
                 requestedSkillIDs,
                 undefined, // taskGraphDebug
-                historyFrom
+                historyFrom,
+                trustRunData,
+                branchId,
+                reply
             );
         } catch (error) {
             const errorMessage = (error as Error).message || 'Unknown error loading conversation history';
@@ -1006,6 +1135,127 @@ export class RunAIAgentResolver extends ResolverBase {
                 result: JSON.stringify({ success: false, errorMessage })
             };
         }
+    }
+
+    /**
+     * Everything a conversation turn needs before its agent runs: the user's message (read as the caller, so a
+     * message they can't see is "not found"), the conversation history, the optional announcement line, and the reply
+     * row, created last so the history never holds the empty reply. Every row is written as `user`, the person asking,
+     * and marked as server-authored by {@link AgentRunner.CreateAgentReplyDetail}.
+     */
+    private async startConversationTurn(
+        p: DatabaseProviderBase,
+        user: UserInfo,
+        request: ConversationTurnRequest
+    ): Promise<{ ConversationId: string; BranchId: string | null; MessagesJson: string; Reply: MJConversationDetailEntityExtended; Announcement?: MJConversationDetailEntityExtended }> {
+        // LATENCY OPTIMIZATION (Opt #2 + #3): the user's message is loaded once here for its conversation and
+        // branch, which are threaded through the call chain rather than reloaded downstream.
+        const placement = await this.loadPlacementOf(p, user, request.UserMessageId);
+        const conversationId = placement.ConversationId;
+        const branchId = request.ReplyBranchId
+            ? await this.validateReplyBranch(p, user, conversationId, placement, request.ReplyBranchId)
+            : placement.BranchId;
+        const parentId = request.ReplyParentId
+            ? await this.validateReplyParent(p, user, request.ReplyParentId, conversationId)
+            : request.UserMessageId;
+        const messages = await this.loadConversationHistoryWithAttachments(conversationId, user, request.MaxHistoryMessages, p, undefined, request.HistoryFrom, branchId);
+        const runner = new AgentRunner(p);
+        const announcement = request.AnnouncedByAgentId
+            ? await this.postContinuationAnnouncement(runner, user, conversationId, branchId, parentId, request.AnnouncedByAgentId, request.AgentId)
+            : undefined;
+        const reply = await runner.CreateAgentReplyDetail({
+            conversationId,
+            branchId,
+            agentId: request.AgentId,
+            contextUser: user,
+            parentId: announcement?.ID ?? parentId,
+            provider: p
+        });
+        return { ConversationId: conversationId, BranchId: branchId, MessagesJson: JSON.stringify(messages), Reply: reply, Announcement: announcement };
+    }
+
+    /** The conversation, branch (null is Main) and sequence of a message, read as `user`; throws when they can't read it. */
+    private async loadPlacementOf(
+        p: DatabaseProviderBase,
+        user: UserInfo,
+        messageId: string
+    ): Promise<{ ConversationId: string; BranchId: string | null; Sequence: number }> {
+        const message = await p.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', user);
+        if (!await message.Load(messageId)) {
+            throw new Error(`Conversation detail ${messageId} not found`);
+        }
+        return { ConversationId: message.ConversationID, BranchId: message.BranchID ?? null, Sequence: message.Sequence ?? -1 };
+    }
+
+    /**
+     * When a turn forks from an earlier message (such as Regenerate), the reply and history run on the fork while the
+     * user's message stays on the branch it was written on. Checks that `replyBranchId` is a branch of the turn's
+     * conversation whose path holds the user's message (`IsRowOnBranchPath` rather than exact `ForkFromSequence`
+     * equality is deliberate: `ConversationEngine.ForkPointFrom` sets `ForkFromSequence = message.Sequence` and the
+     * fork belongs to this conversation); returns `replyBranchId`, or throws before any row is created.
+     */
+    private async validateReplyBranch(
+        p: DatabaseProviderBase,
+        user: UserInfo,
+        conversationId: string,
+        userMessage: { BranchId: string | null; Sequence: number },
+        replyBranchId: string
+    ): Promise<string> {
+        if (UUIDsEqual(replyBranchId, userMessage.BranchId)) {
+            return replyBranchId;
+        }
+        if (userMessage.Sequence < 0) {
+            throw new Error(`Conversation detail is not on branch ${replyBranchId}'s path, so the reply cannot be written on that branch`);
+        }
+        const branches = await ConversationEngine.LoadBranchesFresh(conversationId, user, p);
+        const chain = ConversationEngine.BuildBranchChain(branches, replyBranchId);
+        if (!ConversationEngine.IsRowOnBranchPath({ BranchID: userMessage.BranchId, Sequence: userMessage.Sequence }, chain)) {
+            throw new Error(`Conversation detail is not on branch ${replyBranchId}'s path, so the reply cannot be written on that branch`);
+        }
+        return replyBranchId;
+    }
+
+    /**
+     * A reply's parent is part of what the reply says, so the server sets it, from a checked input: a message the
+     * caller can read, in the turn's own conversation. Returns its ID; throws otherwise.
+     */
+    private async validateReplyParent(p: DatabaseProviderBase, user: UserInfo, parentId: string, conversationId: string): Promise<string> {
+        const { ConversationId: parentConversationId } = await this.loadPlacementOf(p, user, parentId);
+        if (!UUIDsEqual(parentConversationId, conversationId)) {
+            throw new Error(`Conversation detail ${parentId} is not in this turn's conversation, so the reply cannot thread under it`);
+        }
+        return parentId;
+    }
+
+    /**
+     * Posts the announcing agent's line, "Continuing with **{agent}** for refinement...", as a completed reply of the
+     * announcing agent. Its text is fixed and names the agent from metadata, so a caller chooses only whether it is
+     * posted and by which active agent, never what it says.
+     */
+    private async postContinuationAnnouncement(
+        runner: AgentRunner,
+        user: UserInfo,
+        conversationId: string,
+        branchId: string | null,
+        parentId: string,
+        announcerId: string,
+        agentId: string
+    ): Promise<MJConversationDetailEntityExtended> {
+        await AIEngine.Instance.Config(false, user);
+        const announcer = AIEngine.Instance.GetAgentByID(announcerId);
+        if (!announcer || announcer.Status !== 'Active') {
+            throw new Error(`Agent ${announcerId} cannot announce the turn: it is not an active agent`);
+        }
+        const agentName = AIEngine.Instance.GetAgentByID(agentId)?.Name ?? 'the agent';
+        return runner.CreateAgentReplyDetail({
+            conversationId,
+            branchId,
+            agentId: announcer.ID,
+            contextUser: user,
+            parentId,
+            message: ContinuationAnnouncementText(agentName),
+            status: 'Complete'
+        });
     }
 
     /**
@@ -1217,7 +1467,13 @@ export class RunAIAgentResolver extends ResolverBase {
         requestedSkillIDs?: string[],
         taskGraphDebug?: string,
         /** History floor — threaded through to ExecuteAgentParams.ConversationHistoryFrom. */
-        conversationHistoryFrom?: Date
+        conversationHistoryFrom?: Date,
+        /** ExecuteAgentParams.TrustReservedRunData — see executeAIAgent. */
+        trustReservedRunData: boolean = false,
+        /** The conversation branch of the run — threaded through to ExecuteAgentParams.ConversationBranchID. */
+        conversationBranchId?: string | null,
+        /** The reply row this request created for the run — see executeAIAgent. */
+        replyDetail?: MJConversationDetailEntityExtended
     ): void {
         // Ref the liveness pulse reads to enrich heartbeats once the run is created.
         const runRef: { current: MJAIAgentRunEntityExtended | null } = { current: null };
@@ -1237,7 +1493,7 @@ export class RunAIAgentResolver extends ResolverBase {
             data, payload, undefined, lastRunId, autoPopulateLastRunPayload,
             configurationId, conversationDetailId, createArtifacts, createNotification,
             sourceArtifactId, sourceArtifactVersionId, conversationId, runRef, planMode, requestedSkillIDs, taskGraphDebug,
-            conversationHistoryFrom
+            conversationHistoryFrom, trustReservedRunData, conversationBranchId, replyDetail
         ).catch((error: unknown) => {
             // Background execution failed unexpectedly (executeAIAgent has its own try-catch,
             // so this would only fire for truly unexpected errors).
@@ -1246,7 +1502,7 @@ export class RunAIAgentResolver extends ResolverBase {
 
             // Publish error completion event so the client knows the agent failed.
             // The publisher is created inside executeAIAgent, which rejected before returning one.
-            new AgentRunStatusPublisher(pubSub, userPayload, sessionId).PublishFailure(conversationDetailId, errorMessage);
+            new AgentRunStatusPublisher(pubSub, userPayload, sessionId, conversationDetailId).PublishFailure(conversationDetailId, errorMessage);
         }).finally(() => pulse.Stop());
     }
 
@@ -1277,7 +1533,9 @@ export class RunAIAgentResolver extends ResolverBase {
         provider: IMetadataProvider,
         excludeDetailIds?: string[],
         /** History floor: only rows written at or after it are loaded, and no summary is used. */
-        historyFrom?: Date
+        historyFrom?: Date,
+        /** The branch whose path to load; null reads the trunk. */
+        branchId?: string | null
     ): Promise<ChatMessage[]> {
         // Context windowing (summary boundary + raw tail, or legacy last-N when no
         // summary exists) shares ONE fold implementation with all other callers —
@@ -1294,7 +1552,7 @@ export class RunAIAgentResolver extends ResolverBase {
         //      the agent against zero history.
         //   4. A history floor (`historyFrom`) is applied in the query, so rows before it never
         //      leave the database, and again in the assembly, which then skips the summary.
-        const rows = await ConversationEngine.LoadWindowRowsFresh(conversationId, contextUser, provider, historyFrom);
+        const rows = await ConversationEngine.LoadWindowRowsFresh(conversationId, contextUser, provider, historyFrom, branchId);
         const window = ConversationEngine.AssembleContextWindow(rows, {
             maxTailMessages: maxMessages,
             excludeDetailIds,

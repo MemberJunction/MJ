@@ -22,18 +22,28 @@
 import fs from 'node:fs/promises';
 import type { PackageManagerType } from './PackageManager.js';
 export interface InstallConfig {
+  // ── Database platform ────────────────────────────────────────────────
+
+  /**
+   * Database platform (default: `'sqlserver'`). Decides the default port, the
+   * setup script the database phase generates and runs, and — for
+   * `'postgresql'` — the `DB_PLATFORM` / `dbPlatform` settings written to `.env`
+   * and `mj.config.cjs`. Set with `MJ_INSTALL_DB_PLATFORM`.
+   */
+  DatabasePlatform: 'sqlserver' | 'postgresql';
+
   // ── Database ──────────────────────────────────────────────────────────
 
-  /** SQL Server hostname or IP address (default: `"localhost"`). */
+  /** Database hostname or IP address (default: `"localhost"`). */
   DatabaseHost: string;
 
-  /** SQL Server TCP port (default: `1433`). */
+  /** Database TCP port (default: `1433` for SQL Server, `5432` for PostgreSQL). */
   DatabasePort: number;
 
   /** Target database name (common value: `"MemberJunction"`; no auto-applied default). */
   DatabaseName: string;
 
-  /** Whether to trust self-signed TLS certificates (common for local dev instances). */
+  /** Whether to trust self-signed TLS certificates (SQL Server only; common for local dev instances). */
   DatabaseTrustCert: boolean;
 
   // ── CodeGen credentials ───────────────────────────────────────────────
@@ -111,9 +121,10 @@ export interface InstallConfig {
    * Authentication provider selection.
    * - `'entra'` — Microsoft Entra (MSAL) authentication.
    * - `'auth0'` — Auth0 authentication.
+   * - `'local'` — Local development mock JWT authentication (localhost only, never for production).
    * - `'none'` — skip authentication setup (default for fresh installs).
    */
-  AuthProvider: 'entra' | 'auth0' | 'none';
+  AuthProvider: 'entra' | 'auth0' | 'local' | 'none';
 
   /**
    * Provider-specific configuration values (e.g., TenantID, ClientID, Domain).
@@ -133,6 +144,9 @@ export interface InstallConfig {
 
   /** Mistral API key for AI features. Leave blank to skip. */
   MistralKey?: string;
+
+  /** Google Gemini API key for AI features. Leave blank to skip. */
+  GeminiKey?: string;
 
   /**
    * Base64-encoded 32-byte encryption key used for MJ field-level encryption.
@@ -201,6 +215,7 @@ const ENV_VAR_MAP: ReadonlyArray<{
   Field: keyof InstallConfig;
   Parse: (value: string) => unknown;
 }> = [
+  { EnvVar: 'MJ_INSTALL_DB_PLATFORM',       Field: 'DatabasePlatform', Parse: (v) => ParseDatabasePlatform(v) },
   { EnvVar: 'MJ_INSTALL_DB_HOST',           Field: 'DatabaseHost',     Parse: (v) => v },
   { EnvVar: 'MJ_INSTALL_DB_PORT',           Field: 'DatabasePort',     Parse: (v) => parseInt(v, 10) },
   { EnvVar: 'MJ_INSTALL_DB_NAME',           Field: 'DatabaseName',     Parse: (v) => v },
@@ -217,6 +232,7 @@ const ENV_VAR_MAP: ReadonlyArray<{
   { EnvVar: 'MJ_INSTALL_OPENAI_KEY',        Field: 'OpenAIKey',        Parse: (v) => v },
   { EnvVar: 'MJ_INSTALL_ANTHROPIC_KEY',     Field: 'AnthropicKey',     Parse: (v) => v },
   { EnvVar: 'MJ_INSTALL_MISTRAL_KEY',       Field: 'MistralKey',       Parse: (v) => v },
+  { EnvVar: 'MJ_INSTALL_GEMINI_KEY',        Field: 'GeminiKey',        Parse: (v) => v },
   { EnvVar: 'MJ_INSTALL_BASE_ENCRYPTION_KEY', Field: 'BaseEncryptionKey', Parse: (v) => v },
   { EnvVar: 'MJ_INSTALL_MODE',              Field: 'InstallMode',       Parse: (v) => v as InstallConfig['InstallMode'] },
   { EnvVar: 'MJ_INSTALL_PACKAGE_MANAGER',   Field: 'PackageManager',    Parse: (v) => v as InstallConfig['PackageManager'] },
@@ -238,6 +254,23 @@ const AUTH_ENV_VAR_MAP: ReadonlyArray<{
   { EnvVar: 'MJ_INSTALL_AUTH0_CLIENT_ID',       Key: 'ClientID' },
   { EnvVar: 'MJ_INSTALL_AUTH0_CLIENT_SECRET',   Key: 'ClientSecret' },
 ];
+
+/**
+ * Parse a database platform name. Accepts exactly the values MemberJunction's
+ * own `DB_PLATFORM` accepts — `sqlserver` or `postgresql`, any case — so the
+ * installer never writes a value MJAPI, CodeGen, or `mj migrate` would reject.
+ *
+ * @param value - Raw value from `MJ_INSTALL_DB_PLATFORM` or a config file.
+ * @returns The normalized platform.
+ * @throws When the value is anything else.
+ */
+export function ParseDatabasePlatform(value: string): InstallConfig['DatabasePlatform'] {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'sqlserver' || normalized === 'postgresql') {
+    return normalized;
+  }
+  throw new Error(`Invalid database platform '${value}'. Use 'sqlserver' or 'postgresql'.`);
+}
 
 /**
  * Parse a string environment variable as a boolean.
@@ -306,10 +339,11 @@ export function resolveFromEnvironment(): PartialInstallConfig {
 
 /** Canonical PascalCase keys accepted in `install.config.json`. */
 const KNOWN_KEYS: ReadonlySet<string> = new Set<string>([
-  'DatabaseHost', 'DatabasePort', 'DatabaseName', 'DatabaseTrustCert',
+  'DatabasePlatform', 'DatabaseHost', 'DatabasePort', 'DatabaseName', 'DatabaseTrustCert',
+  'DatabaseAdminUser', 'DatabaseAdminPassword',
   'CodeGenUser', 'CodeGenPassword', 'APIUser', 'APIPassword',
   'APIPort', 'ExplorerPort', 'AuthProvider', 'AuthProviderValues',
-  'OpenAIKey', 'AnthropicKey', 'MistralKey', 'BaseEncryptionKey', 'InstallMode', 'CreateNewUser',
+  'OpenAIKey', 'AnthropicKey', 'MistralKey', 'GeminiKey', 'BaseEncryptionKey', 'InstallMode', 'CreateNewUser',
   'PackageManager',
 ]);
 
@@ -334,6 +368,7 @@ const LEGACY_KEY_ALIASES: Readonly<Record<string, string>> = Object.freeze({
   openAIAPIKey: 'OpenAIKey',
   anthropicAPIKey: 'AnthropicKey',
   mistralAPIKey: 'MistralKey',
+  geminiAPIKey: 'GeminiKey',
 });
 
 /**
@@ -396,7 +431,7 @@ export async function LoadConfigFile(filePath: string): Promise<PartialInstallCo
 
     // 1. Canonical PascalCase key
     if (KNOWN_KEYS.has(key)) {
-      (config as Record<string, unknown>)[key] = value;
+      (config as Record<string, unknown>)[key] = key === 'DatabasePlatform' ? ParseDatabasePlatform(String(value)) : value;
       recognized++;
       continue;
     }
@@ -488,11 +523,13 @@ function applyLegacyAuthKey(
   authValues: Record<string, string>
 ): void {
   if (key === 'authType' && typeof value === 'string') {
-    const upper = value.toUpperCase();
+    const upper = value.trim().toUpperCase();
     if (upper === 'MSAL' || upper === 'ENTRA') {
       config.AuthProvider = 'entra';
     } else if (upper === 'AUTH0') {
       config.AuthProvider = 'auth0';
+    } else if (upper === 'LOCAL') {
+      config.AuthProvider = 'local';
     } else if (upper === 'NONE' || value === '') {
       config.AuthProvider = 'none';
     }

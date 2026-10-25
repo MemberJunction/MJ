@@ -43,8 +43,20 @@ export class RealtimeAgentBannerComponent {
    */
   @Input() Compact = false;
 
+  /**
+   * Whether to suppress the turn-state pill and redundant "speaking as" label in the banner
+   * because the center hero orb is already displaying the agent's name and live turn state.
+   */
+  @Input() HideState = false;
+
   /** Display name of the agent the voice session fronts (e.g. "Sage"). */
   @Input() AgentName = 'the agent';
+
+  /**
+   * What the state label says in the `'error'` state when the call said why it ended (`DescribeCallEnd`'s `Label`, such
+   * as "Time limit reached"); `null` keeps "Connection error".
+   */
+  @Input() ErrorLabel: string | null = null;
 
   /**
    * Display name of the realtime model the live session runs on (e.g. "GPT Realtime 2").
@@ -91,6 +103,9 @@ export class RealtimeAgentBannerComponent {
 
   /** Whether the Minimize control renders (live sessions only). */
   @Input() ShowMinimize = false;
+
+  /** Review only: whether the "Start live session" action renders. */
+  @Input() ShowStartLive = true;
 
   /** The user's current interface-density override (selected state in the gear popover). */
   @Input() Density: RealtimeUxDensity = 'auto';
@@ -209,7 +224,7 @@ export class RealtimeAgentBannerComponent {
       case 'listening': return 'Listening';
       case 'speaking': return `${this.AgentName} is speaking…`;
       case 'thinking': return 'Working on it…';
-      case 'error': return 'Connection error';
+      case 'error': return this.ErrorLabel ?? 'Connection error';
       case 'closed': return 'Call ended';
       default: return '';
     }

@@ -291,7 +291,7 @@ describe('TransformSimpleObjectToEntityObject — IS-A parents on the entity-obj
 
     /**
      * Caches Product Types the way a BaseEngine does: an entity-object RunView of the type rows,
-     * which holds all but the first in raw mode, without built fields.
+     * which holds all rows in raw mode, without built fields.
      */
     async function cacheProductTypes(typeIDs: string[] = [MEETING_TYPE_ID, PUBLICATION_TYPE_ID]): Promise<LoadHintTestEntity[]> {
         const typeRows = typeIDs.map(id => store.ViewRow(provider.EntityByName('Product Types')!, id)!);
@@ -377,7 +377,7 @@ describe('TransformSimpleObjectToEntityObject — IS-A parents on the entity-obj
 
         expectEverySubtypeLinked(results);
         expect(provider.Count('FindISAChildEntity')).toBe(0);
-        expect(rawBefore).toBe(typeIDs.length - 1);
+        expect(rawBefore).toBe(typeIDs.length);
         expect(cachedTypes.filter(type => type.RawModeActive).length).toBe(rawBefore);
     });
 });

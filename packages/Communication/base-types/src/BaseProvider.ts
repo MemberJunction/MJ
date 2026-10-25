@@ -2,6 +2,16 @@ import { BaseEntity, UserInfo } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { MJCommunicationProviderEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationRunEntity, MJTemplateEntityExtended } from "@memberjunction/core-entities";
 import { ProviderCredentialsBase } from "./CredentialUtils";
+import type {
+    CalendarEventResult,
+    CalendarTarget,
+    CancelEventParams,
+    CreateEventParams,
+    GetEventParams,
+    SyncEventsParams,
+    SyncEventsResult,
+    UpdateEventParams
+} from "./Calendar";
 
 /**
  * Information about a single recipient
@@ -404,6 +414,157 @@ export type GetEventsResult<T = Record<string, any>> = BaseMessageResult & {
      * caller logging attendance needs occurrences; one listing "what meetings exist" may not.
      */
     RecurrenceExpanded?: boolean;
+};
+
+/**
+ * Normalized free/busy slot within a schedule window.
+ */
+export type FreeBusyScheduleSlot = {
+    StartTime: Date;
+    EndTime: Date;
+    Status: 'Free' | 'Tentative' | 'Busy' | 'OutOfOffice' | 'WorkingElsewhere' | 'Unknown';
+    Subject?: string;
+};
+
+export type GetFreeBusyParams<T = Record<string, unknown>> = {
+    /** Acting user mailbox identifier (e.g., contextUser.Email). */
+    Identifier?: string;
+    /** Target email addresses whose schedules should be queried. */
+    Schedules: string[];
+    StartDateTime: Date;
+    EndDateTime: Date;
+    /** Interval granularity in minutes (defaults to 30). */
+    AvailabilityViewIntervalMinutes?: number;
+    ContextData?: T;
+};
+
+export type GetFreeBusyResult<T = Record<string, unknown>> = BaseMessageResult & {
+    Schedules: Array<{
+        ScheduleID: string;
+        AvailabilityView?: string;
+        Slots: FreeBusyScheduleSlot[];
+        Error?: string;
+    }>;
+    SourceData?: T[];
+};
+
+export type MeetingTimeSuggestion = {
+    StartTime: Date;
+    EndTime: Date;
+    Confidence: number;
+    OrganizerAvailability?: string;
+    AttendeeAvailability: Array<{ Email: string; Availability: string }>;
+    SuggestionReason?: string;
+};
+
+export type FindMeetingTimesParams<T = Record<string, unknown>> = {
+    /** Organizer mailbox identifier (e.g., contextUser.Email). */
+    Identifier?: string;
+    Attendees: Array<{ Email: string; Required?: boolean }>;
+    StartDateTime: Date;
+    EndDateTime: Date;
+    DurationMinutes: number;
+    MaxCandidates?: number;
+    MinimumAttendeePercentage?: number;
+    ContextData?: T;
+};
+
+export type FindMeetingTimesResult<T = Record<string, unknown>> = BaseMessageResult & {
+    Suggestions: MeetingTimeSuggestion[];
+    EmptySuggestionsReason?: string;
+    SourceData?: T;
+};
+
+export type CreateCalendarEventParams<T = Record<string, unknown>> = {
+    /** Organizer mailbox identifier (e.g., contextUser.Email). */
+    Identifier?: string;
+    Subject: string;
+    Body?: string;
+    IsHTML?: boolean;
+    StartTime: Date;
+    EndTime: Date;
+    TimeZone?: string;
+    Location?: string;
+    Attendees?: Array<{ Email: string; Name?: string; Required?: boolean }>;
+    IsOnlineMeeting?: boolean;
+    /** When true, validates and builds the payload without calling the external provider API. */
+    DryRun?: boolean;
+    ContextData?: T;
+};
+
+export type CreateCalendarEventResult<T = Record<string, unknown>> = BaseMessageResult & {
+    Event?: GetEventsEvent;
+    OnlineMeetingUrl?: string | null;
+    DryRun?: boolean;
+    SourceData?: T;
+};
+
+export type UpdateCalendarEventParams<T = Record<string, unknown>> = {
+    /** Organizer mailbox identifier (e.g., contextUser.Email). */
+    Identifier?: string;
+    EventID: string;
+    Subject?: string;
+    Body?: string;
+    IsHTML?: boolean;
+    StartTime?: Date;
+    EndTime?: Date;
+    TimeZone?: string;
+    Location?: string;
+    Attendees?: Array<{ Email: string; Name?: string; Required?: boolean }>;
+    DryRun?: boolean;
+    ContextData?: T;
+};
+
+export type UpdateCalendarEventResult<T = Record<string, unknown>> = BaseMessageResult & {
+    Event?: GetEventsEvent;
+    DryRun?: boolean;
+    SourceData?: T;
+};
+
+export type RespondToCalendarEventParams<T = Record<string, unknown>> = {
+    /** Attendee mailbox identifier (e.g., contextUser.Email). */
+    Identifier?: string;
+    EventID: string;
+    Response: 'Accept' | 'TentativelyAccept' | 'Decline';
+    Comment?: string;
+    SendResponse?: boolean;
+    DryRun?: boolean;
+    ContextData?: T;
+};
+
+export type RespondToCalendarEventResult = BaseMessageResult & {
+    DryRun?: boolean;
+};
+
+export type CancelCalendarEventParams<T = Record<string, unknown>> = {
+    /** Organizer mailbox identifier (e.g., contextUser.Email). */
+    Identifier?: string;
+    EventID: string;
+    Comment?: string;
+    DryRun?: boolean;
+    ContextData?: T;
+};
+
+export type CancelCalendarEventResult = BaseMessageResult & {
+    DryRun?: boolean;
+};
+
+/**
+ * Parameters for probing whether the configured enterprise credential has permission
+ * to read mail and/or calendar for a specific user mailbox (Exchange RBAC / Workspace scope check).
+ */
+export type VerifyMailboxAccessParams = {
+    Identifier: string;
+    CheckMailRead?: boolean;
+    CheckCalendarRead?: boolean;
+};
+
+export type VerifyMailboxAccessResult = BaseMessageResult & {
+    Identifier: string;
+    CanReadMail: boolean;
+    CanReadCalendar: boolean;
+    MailErrorMessage?: string;
+    CalendarErrorMessage?: string;
 };
 
 export type ForwardMessageParams = {
@@ -1182,7 +1343,19 @@ export type ProviderOperation =
     | 'RenewSubscription'
     | 'DeleteSubscription'
     | 'ParseNotification'
-    | 'GetEvents';
+    | 'GetEvents'
+    | 'CreateEvent'
+    | 'UpdateEvent'
+    | 'CancelEvent'
+    | 'GetEvent'
+    | 'SyncEvents'
+    | 'GetFreeBusy'
+    | 'FindMeetingTimes'
+    | 'CreateCalendarEvent'
+    | 'UpdateCalendarEvent'
+    | 'RespondToCalendarEvent'
+    | 'CancelCalendarEvent'
+    | 'VerifyMailboxAccess';
 
 
 /**
@@ -1393,6 +1566,167 @@ export abstract class BaseCommunicationProvider {
             Success: false,
             Events: [],
             ErrorMessage: `${this.ProviderName} does not support GetEvents (Identifier: ${params.Identifier || 'none'}, credentials provided: ${!!credentials})`
+        };
+    }
+
+    // ========================================================================
+    // CALENDAR EVENTS - create, update, cancel, read one, sync (see Calendar.ts)
+    // Concrete for the same reason GetEvents is: a provider without a calendar inherits a refusal
+    // that names itself and the operation, instead of failing to compile. A provider that supports
+    // them overrides each one, lists it in getSupportedOperations(), and runs CalendarTargetError
+    // first: these operations never act on a default account.
+    // ========================================================================
+
+    /**
+     * Creates an event in the target calendar. With attendees, the provider sends the invitations.
+     * @param params - the calendar (required) and the event
+     * @param credentials - optional per-request credentials override
+     */
+    public async CreateEvent(params: CreateEventParams, credentials?: ProviderCredentialsBase): Promise<CalendarEventResult> {
+        return { Success: false, ErrorMessage: this.calendarRefusal('CreateEvent', params.Target, credentials) };
+    }
+
+    /**
+     * Changes the given fields of an event. A changed attendee list replaces the old one.
+     * @param params - the calendar (required), the event's ID in it, and the changes
+     * @param credentials - optional per-request credentials override
+     */
+    public async UpdateEvent(params: UpdateEventParams, credentials?: ProviderCredentialsBase): Promise<CalendarEventResult> {
+        return { Success: false, ErrorMessage: this.calendarRefusal('UpdateEvent', params.Target, credentials) };
+    }
+
+    /**
+     * Cancels an event. An event that is already gone counts as cancelled.
+     * @param params - the calendar (required), the event's ID in it, and an optional comment
+     * @param credentials - optional per-request credentials override
+     */
+    public async CancelEvent(params: CancelEventParams, credentials?: ProviderCredentialsBase): Promise<BaseMessageResult> {
+        return { Success: false, ErrorMessage: this.calendarRefusal('CancelEvent', params.Target, credentials) };
+    }
+
+    /**
+     * Reads one event, with each attendee's response.
+     * @param params - the calendar (required) and the event's ID in it
+     * @param credentials - optional per-request credentials override
+     */
+    public async GetEvent(params: GetEventParams, credentials?: ProviderCredentialsBase): Promise<CalendarEventResult> {
+        return { Success: false, ErrorMessage: this.calendarRefusal('GetEvent', params.Target, credentials) };
+    }
+
+    /**
+     * Reads what changed in a calendar since a sync token, or the whole window when there is none.
+     * @param params - the calendar (required), the token from the last sync, and the window for a full sync
+     * @param credentials - optional per-request credentials override
+     */
+    public async SyncEvents(params: SyncEventsParams, credentials?: ProviderCredentialsBase): Promise<SyncEventsResult> {
+        return { Success: false, Changes: [], ErrorMessage: this.calendarRefusal('SyncEvents', params.Target, credentials) };
+    }
+
+    /** The message every calendar operation a provider does not override returns. */
+    private calendarRefusal(operation: string, target: CalendarTarget | undefined, credentials?: ProviderCredentialsBase): string {
+        return `${this.ProviderName} does not support ${operation} (Identifier: ${target?.Identifier || 'none'}, credentials provided: ${!!credentials})`;
+    }
+
+    /**
+     * Queries free/busy schedule slots for one or more email addresses.
+     * Override in subclasses that support this operation.
+     */
+    public async GetFreeBusy(
+        params: GetFreeBusyParams,
+        credentials?: ProviderCredentialsBase
+    ): Promise<GetFreeBusyResult> {
+        return {
+            Success: false,
+            Schedules: [],
+            ErrorMessage: `${this.ProviderName} does not support GetFreeBusy (Schedules: ${params.Schedules?.length ?? 0}, credentials provided: ${!!credentials})`
+        };
+    }
+
+    /**
+     * Suggests optimal meeting times across attendees within a time window.
+     * Override in subclasses that support this operation.
+     */
+    public async FindMeetingTimes(
+        params: FindMeetingTimesParams,
+        credentials?: ProviderCredentialsBase
+    ): Promise<FindMeetingTimesResult> {
+        return {
+            Success: false,
+            Suggestions: [],
+            ErrorMessage: `${this.ProviderName} does not support FindMeetingTimes (Identifier: ${params.Identifier || 'none'}, credentials provided: ${!!credentials})`
+        };
+    }
+
+    /**
+     * Creates a new calendar event and optionally sends invitations or creates an online meeting link.
+     * Override in subclasses that support this operation.
+     */
+    public async CreateCalendarEvent(
+        params: CreateCalendarEventParams,
+        credentials?: ProviderCredentialsBase
+    ): Promise<CreateCalendarEventResult> {
+        return {
+            Success: false,
+            ErrorMessage: `${this.ProviderName} does not support CreateCalendarEvent (Subject: ${params.Subject}, credentials provided: ${!!credentials})`
+        };
+    }
+
+    /**
+     * Updates an existing calendar event.
+     * Override in subclasses that support this operation.
+     */
+    public async UpdateCalendarEvent(
+        params: UpdateCalendarEventParams,
+        credentials?: ProviderCredentialsBase
+    ): Promise<UpdateCalendarEventResult> {
+        return {
+            Success: false,
+            ErrorMessage: `${this.ProviderName} does not support UpdateCalendarEvent (EventID: ${params.EventID}, credentials provided: ${!!credentials})`
+        };
+    }
+
+    /**
+     * Responds to a calendar invitation (Accept, TentativelyAccept, or Decline).
+     * Override in subclasses that support this operation.
+     */
+    public async RespondToCalendarEvent(
+        params: RespondToCalendarEventParams,
+        credentials?: ProviderCredentialsBase
+    ): Promise<RespondToCalendarEventResult> {
+        return {
+            Success: false,
+            ErrorMessage: `${this.ProviderName} does not support RespondToCalendarEvent (EventID: ${params.EventID}, Response: ${params.Response}, credentials provided: ${!!credentials})`
+        };
+    }
+
+    /**
+     * Cancels a calendar event organized by the target mailbox.
+     * Override in subclasses that support this operation.
+     */
+    public async CancelCalendarEvent(
+        params: CancelCalendarEventParams,
+        credentials?: ProviderCredentialsBase
+    ): Promise<CancelCalendarEventResult> {
+        return {
+            Success: false,
+            ErrorMessage: `${this.ProviderName} does not support CancelCalendarEvent (EventID: ${params.EventID}, credentials provided: ${!!credentials})`
+        };
+    }
+
+    /**
+     * Probes whether the configured enterprise credential is authorized to read mail and/or
+     * calendar for a specific mailbox (Exchange RBAC / Workspace scope preflight check).
+     */
+    public async VerifyMailboxAccess(
+        params: VerifyMailboxAccessParams,
+        credentials?: ProviderCredentialsBase
+    ): Promise<VerifyMailboxAccessResult> {
+        return {
+            Success: false,
+            Identifier: params.Identifier,
+            CanReadMail: false,
+            CanReadCalendar: false,
+            ErrorMessage: `${this.ProviderName} does not support VerifyMailboxAccess (Identifier: ${params.Identifier}, credentials provided: ${!!credentials})`
         };
     }
 
