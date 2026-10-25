@@ -445,6 +445,10 @@ describe('RecordingShardQueue', () => {
       expect(gaveUp).toHaveBeenCalledTimes(1);
       const last = warn.mock.calls.map((c) => String(c[0])).at(-1);
       expect(last).toContain('server refused the shard for good');
+      // The attempts-cap line would also carry the refusal as its reason, so only the refusal line's own
+      // wording proves the refusal branch ran before the cap.
+      expect(last).toContain('will not be re-sent by the queue');
+      expect(last).not.toContain('Dropping');
     });
 
     it('a refusal that lands after Close is not reported to the owner', async () => {
