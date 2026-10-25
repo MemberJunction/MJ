@@ -3,12 +3,10 @@ import { RegisterClass } from "@memberjunction/global";
 import { OpenAI } from "openai";
 
 /**
- * An OpenAI embedding model, as {@link OpenAIEmbedding.GetEmbeddingModels} lists it. OpenAI's API
+ * OpenAI's embedding models, as {@link OpenAIEmbedding.GetEmbeddingModels} lists them. OpenAI's API
  * reference on `dimensions`: "Only supported in `text-embedding-3` and later models."
  */
-export type OpenAIEmbeddingModelInfo = EmbeddingModelInfo;
-
-const OPENAI_EMBEDDING_MODELS: readonly OpenAIEmbeddingModelInfo[] = [
+const OPENAI_EMBEDDING_MODELS: readonly EmbeddingModelInfo[] = [
     {
         Model: 'text-embedding-3-large',
         Description: "Most capable embedding model for both english and non-english tasks",
@@ -55,7 +53,7 @@ export class OpenAIEmbedding extends BaseEmbeddings {
         return true;
     }
 
-    protected override get EmbeddingModels(): readonly OpenAIEmbeddingModelInfo[] {
+    protected override get EmbeddingModels(): readonly EmbeddingModelInfo[] {
         return OPENAI_EMBEDDING_MODELS;
     }
 
@@ -130,7 +128,7 @@ export class OpenAIEmbedding extends BaseEmbeddings {
     }
 
     //openAI doesnt have an endpoint we can call
-    public async GetEmbeddingModels(): Promise<OpenAIEmbeddingModelInfo[]> {
+    public async GetEmbeddingModels(): Promise<EmbeddingModelInfo[]> {
         return OPENAI_EMBEDDING_MODELS.map((m) => ({ ...m }));
     }
 }

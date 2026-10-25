@@ -427,6 +427,7 @@ describe('BaseEmbeddings.DimensionsParam', () => {
         expect(() => e.Dimensions('fixed', 512)).toThrow(EmbeddingDimensionsError);
         expect(() => e.Dimensions('fixed', 512)).toThrow("Embedding model 'fixed' can't produce 512-dimension vectors; it supports only 1536.");
         expect(() => e.Dimensions('ranged', 4096)).toThrow('it supports 1 to 3072');
+        expect(() => e.Dimensions('ranged', -1)).toThrow('it supports 1 to 3072');
         expect(() => e.Dimensions('listed', 768)).toThrow('it supports 256, 512, 1024');
     });
 

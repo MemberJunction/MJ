@@ -84,6 +84,9 @@ describe('AzureEmbedding and the dimensions parameter', () => {
         expect(mockPost.mock.calls[0][0].body).toMatchObject({ model: 'text-embedding-ada-002' });
         expect(mockPost.mock.calls[0][0].body).not.toHaveProperty('dimensions');
         expect(r.vectors[0]).toHaveLength(1536);
+
+        await e.EmbedTexts({ texts: ['a'], model: 'text-embedding-ada-002', dimensions: 1536 });
+        expect(mockPost.mock.calls[1][0].body).not.toHaveProperty('dimensions');
     });
 
     it('does the same for a single text', async () => {

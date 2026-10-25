@@ -182,7 +182,7 @@ export abstract class BaseEmbeddings extends BaseModel {
             if (!info.SupportedDimensions.includes(dimensions)) {
                 throw new EmbeddingDimensionsError(model, dimensions, info.SupportedDimensions.join(', '));
             }
-        } else if (dimensions > info.OutputDimension) {
+        } else if (dimensions < 1 || dimensions > info.OutputDimension) {
             throw new EmbeddingDimensionsError(model, dimensions, `1 to ${info.OutputDimension}`);
         }
         return { dimensions };

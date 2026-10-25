@@ -40,17 +40,6 @@ export class AzureEmbedding extends BaseEmbeddings {
         return [DEFAULT_MODEL_INFO];
     }
 
-    /**
-     * The `dimensions` request parameter for a call. With no model name the driver calls
-     * {@link DEFAULT_MODEL}, so the shared rule applies. A named deployment gets the width as requested.
-     */
-    private dimensionsFor(model: string | null | undefined, dimensions?: number): { dimensions?: number } {
-        if (model) {
-            return dimensions ? { dimensions } : {};
-        }
-        return this.DimensionsParam(DEFAULT_MODEL, dimensions);
-    }
-
     /** Native batch endpoint: Azure AI Inference embeds an array of inputs in one request. */
     public override get SupportsBatchEmbeddings(): boolean {
         return true;
@@ -123,8 +112,9 @@ export class AzureEmbedding extends BaseEmbeddings {
         }
         
         const startTime = new Date();
+        const model = params.model || DEFAULT_MODEL;
         // Outside the try: a width the default model can't produce throws before any API call.
-        const dimensionsParam = this.dimensionsFor(params.model, params.dimensions);
+        const dimensionsParam = this.DimensionsParam(model, params.dimensions);
         
         try {
             // Call Azure AI embeddings API
@@ -132,7 +122,7 @@ export class AzureEmbedding extends BaseEmbeddings {
                 abortSignal: params.CancellationToken,
                 body: {
                     input: [params.text], // API requires array
-                    model: params.model || DEFAULT_MODEL,
+                    model,
                     ...dimensionsParam
                 }
             });
@@ -204,8 +194,9 @@ export class AzureEmbedding extends BaseEmbeddings {
         }
         
         const startTime = new Date();
+        const model = params.model || DEFAULT_MODEL;
         // Outside the try: a width the default model can't produce throws before any API call.
-        const dimensionsParam = this.dimensionsFor(params.model, params.dimensions);
+        const dimensionsParam = this.DimensionsParam(model, params.dimensions);
         
         try {
             // Ensure we have text input
@@ -218,7 +209,7 @@ export class AzureEmbedding extends BaseEmbeddings {
                 abortSignal: params.CancellationToken,
                 body: {
                     input: params.texts,
-                    model: params.model || DEFAULT_MODEL,
+                    model,
                     ...dimensionsParam
                 }
             });
