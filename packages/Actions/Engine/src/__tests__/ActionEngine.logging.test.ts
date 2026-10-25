@@ -142,7 +142,7 @@ const PARAM_DEF_ID = 'PA710000-0000-0000-0000-000000000006';
 interface EngineInternals {
     ActionParams: MJActionParamEntity[];
     ActionResultCodes: unknown[];
-    _logQueue: { Insert: (e: unknown) => void; Update: (e: unknown, mutate: () => void) => void };
+    _logQueue: { Insert: (e: unknown) => void; Update: (e: unknown, mutate: () => void) => void; Settled: (e: unknown) => Promise<void> };
 }
 
 /**
@@ -160,7 +160,9 @@ function engine(paramDefinitions: MJActionParamEntity[] = []): ActionEngineServe
     const inserted: unknown[] = [];
     internals._logQueue = {
         Insert: (row: unknown) => { inserted.push(row); },
-        Update: (_row: unknown, mutate: () => void) => { mutate(); }
+        Update: (_row: unknown, mutate: () => void) => { mutate(); },
+        // Writes apply synchronously above, so every row has already "landed".
+        Settled: () => Promise.resolve()
     };
     (e as unknown as { _inserted: unknown[] })._inserted = inserted;
     return e;

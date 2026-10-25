@@ -21,7 +21,7 @@ import e from 'express';
 import type { RequestHandler, Request, Response, NextFunction } from 'express';
 import { DatabaseProviderBase, UserInfo, type IMetadataProvider, type MagicLinkScope, type ReturningVisitorContext, type WidgetGuestContext } from '@memberjunction/core';
 import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
-import { Metadata } from '@memberjunction/core';
+import { Metadata, IsValidTimeZone, TIME_ZONE_HEADER } from '@memberjunction/core';
 import { IdentityClaimEngineServer } from '@memberjunction/core-entities-server';
 import { UUIDsEqual } from '@memberjunction/global';
 import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
@@ -636,6 +636,15 @@ function parseRequestHostname(origin: string | undefined): string | undefined {
   }
 }
 
+/**
+ * The caller's IANA time zone from the `x-mj-timezone` header, or undefined when the header is
+ * absent, repeated, or names no zone this runtime knows (callers then use UTC).
+ */
+function readTimeZoneHeader(req: IncomingMessage): string | undefined {
+  const value = req.headers[TIME_ZONE_HEADER];
+  return typeof value === 'string' && IsValidTimeZone(value) ? value : undefined;
+}
+
 function extractAuthInputs(req: IncomingMessage): {
   bearerToken: string;
   sessionId: string;
@@ -643,6 +652,7 @@ function extractAuthInputs(req: IncomingMessage): {
   systemApiKey: string;
   userApiKey: string;
   requestContext: RequestContext;
+  timeZone: string | undefined;
 } {
   const sessionIdRaw = req.headers['x-session-id'];
   const requestDomain = parseRequestHostname(req.headers.origin);
@@ -667,6 +677,7 @@ function extractAuthInputs(req: IncomingMessage): {
     systemApiKey,
     userApiKey,
     requestContext,
+    timeZone: readTimeZoneHeader(req),
   };
 }
 
@@ -691,7 +702,7 @@ export function CreateUnifiedAuthMiddleware(
     }
 
     try {
-      const { bearerToken, sessionId, requestDomain, systemApiKey, userApiKey, requestContext } =
+      const { bearerToken, sessionId, requestDomain, systemApiKey, userApiKey, requestContext, timeZone } =
         extractAuthInputs(req);
 
       const userPayload = await GetUserPayload(
@@ -708,6 +719,9 @@ export function CreateUnifiedAuthMiddleware(
       if (!userPayload) {
         res.status(401).json({ error: 'Invalid token' });
         return;
+      }
+      if (timeZone) {
+        userPayload.TimeZone = timeZone;
       }
 
       // Attach to request for downstream consumers

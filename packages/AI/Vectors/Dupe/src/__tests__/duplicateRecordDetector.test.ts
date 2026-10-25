@@ -216,6 +216,7 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
                         queryIndex: vi.fn().mockResolvedValue({ success: true, data: { matches: [] } }),
                         QueryIndex: vi.fn().mockResolvedValue({ success: true, data: { matches: [] } }),
                         HybridQuery: vi.fn().mockResolvedValue({ success: true, data: { matches: [] } }),
+                        BuildMetadataFilter: vi.fn((options: { EntityDocumentIDs?: string[] }) => ({ EntityDocumentID: { $in: options.EntityDocumentIDs } })),
                         SupportsHybridSearch: false,
                     }),
                 },
@@ -523,6 +524,10 @@ describe('DuplicateRecordDetector', () => {
             req.EntityID = 'entity-1';
             req.EntityDocumentID = 'doc-1';
             req.ListID = 'list-1';
+            // A synced index returns each record as its own nearest neighbour; an index that returns
+            // nothing for every record fails the run (see the document-scope tests below).
+            vi.spyOn(detector as unknown as { executeVectorQuery: () => Promise<object> }, 'executeVectorQuery')
+                .mockResolvedValue({ success: true, data: { matches: [{ id: 'm1', score: 1.0, metadata: { RecordID: 'rec-1', Entity: 'Contacts', TemplateID: 't-1' } }] } });
 
             const response = await detector.GetDuplicateRecords(req, user);
             expect(response.Status).toBe('Success');

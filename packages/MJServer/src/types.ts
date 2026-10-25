@@ -1,4 +1,4 @@
-import { AggregateExpression, CompositeKey, DatabaseProviderBase, UserInfo } from '@memberjunction/core';
+import { AggregateExpression, CompositeKey, DatabaseProviderBase, UserInfo, ViewPropertyValues } from '@memberjunction/core';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { GraphQLSchema } from 'graphql';
 import sql from 'mssql';
@@ -39,6 +39,12 @@ export type UserPayload = {
    * this user, because only a conversation's owner (or a grantee) may write its messages (MJ#4791).
    */
   ElevatedFrom?: UserInfo;
+  /**
+   * The caller's IANA time zone, from the request's `x-mj-timezone` header, when it names a zone
+   * this runtime knows. Undefined when the header is absent or invalid; callers then use UTC. The
+   * view and query resolvers pass it on as `RunViewParams.TimeZone` / `RunQueryParams.TimeZone`.
+   */
+  TimeZone?: string;
 };
 
 /**
@@ -139,6 +145,11 @@ export type RunViewGenericParams = {
    * Propagated to `RunViewParams.IncludeBinaryFields`.
    */
   includeBinaryFields?: boolean;
+  /**
+   * The client's values for a stored view's properties. Propagated to `RunViewParams.Properties`.
+   * There is deliberately no server-properties field: those are set only by server code.
+   */
+  properties?: ViewPropertyValues;
 };
 
 

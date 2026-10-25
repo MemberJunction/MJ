@@ -68,6 +68,8 @@ import { EntityEmbeddedChecks } from '../checks/entity-embedded.checks';
 import { EntityGraphClientChecks } from '../checks/entity-graph-client.checks';
 import { JSONTypeLiveSyncChecks, JSONTypeLiveSyncClientChecks } from '../checks/jsontype-live-sync.checks';
 import { SelfAvatarClientChecks } from '../checks/self-avatar-client.checks';
+import { ViewPropertiesClientChecks } from '../checks/view-properties-client.checks';
+import { CalendarEventLinksChecks } from '../checks/calendar-event-links.checks';
 import { ConversationAuthorshipClientChecks } from '../checks/conversation-authorship-client.checks';
 import { RecordCloningChecks } from '../checks/record-cloning.checks';
 import { BinaryFieldsChecks } from '../checks/binary-fields.checks';
@@ -208,6 +210,8 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT91)
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
         ['self-avatar-client', SelfAvatarClientChecks, 6], // AV1-AV6 self-service avatar mutation over the wire via per-user API keys (IT106)
+        ['view-properties-client', ViewPropertiesClientChecks, 5], // VP1-VP5 User View properties over the wire: values, locked refusal, token default, RLS on top, cache keying (IT136)
+        ['calendar-event-links', CalendarEventLinksChecks, 2], // CL1 UI role over GraphQL reads but cannot create; CL2 links, sync with a moved time and an RSVP, resync on a refused token, cancel (IT127)
         ['conversation-authorship-client', ConversationAuthorshipClientChecks, 12], // CA1-CA12 who a conversation message is from, owner + Edit grantee over the wire via per-user API keys; CA7-CA10 are the bypasses: forged OldValues___, transaction variables, role casing, moving a message; CA11-CA12 only the server writes agent replies (IT115)
         ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)
         ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
@@ -270,7 +274,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-decisions-switch': 9,
         'agent-external-harness': 7,
         'agent-loop-live': 7,
-        'agent-loop-standin': 11,
+        'agent-loop-standin': 14,
         'agent-memory-guards': 5,
         'agent-note-cache-types': 5,
         'agent-payload-guards': 9,
@@ -297,6 +301,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'cache-architecture': 11,
         'cache-gauntlet': 8,
         'cache-immutability': 15,
+        'calendar-event-links': 2,
         'class-resolution': 5,
         'client-cache': 14,
         'cloudflare-clef': 6,
@@ -346,6 +351,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'predictive-studio': 5,
         'prompt-eval-harness': 7,
         'prompt-runner': 1,
+        'query-approvals': 5,
         'queue': 7,
         'realtime-deterministic': 20,
         'realtime-session-guard': 2,
@@ -393,6 +399,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'user-elevation': 4,
         'user-routines': 16,
         'view-execution': 12,
+        'view-properties-client': 5,
         'view-security': 4,
         'work-queue-runtime': 19,
         'workflow-demo-agents': 5,
@@ -419,7 +426,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(133);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(136);
     });
 });
 

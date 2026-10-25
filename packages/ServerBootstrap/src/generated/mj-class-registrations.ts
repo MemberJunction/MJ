@@ -245,7 +245,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (456 classes)
+// @memberjunction/core-entities (458 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -372,6 +372,8 @@ import {
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
+    MJCalendarEventLinkEntity,
+    MJCalendarSyncStateEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -721,12 +723,6 @@ import {
     RingCentralBridge,
 } from '@memberjunction/ai-bridge-ringcentral';
 
-// @memberjunction/ai-bridge-server (2 classes)
-import {
-    LoopbackBridge,
-    OpenAISipBridge,
-} from '@memberjunction/ai-bridge-server';
-
 // @memberjunction/ai-bridge-teams (1 classes)
 import {
     TeamsBridge,
@@ -775,6 +771,12 @@ import {
 import {
     MJCommunicationProviderEntityExtended,
 } from '@memberjunction/communication-types';
+
+// @memberjunction/ai-bridge-server (2 classes)
+import {
+    LoopbackBridge,
+    OpenAISipBridge,
+} from '@memberjunction/ai-bridge-server';
 
 // @memberjunction/communication-ms-graph (1 classes)
 import {
@@ -1375,7 +1377,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (63 classes)
+// @memberjunction/core-entities-server (64 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1402,6 +1404,7 @@ import {
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
     MJConversationEntityServer,
+    MJDashboardEntityServer,
     MJDataContextItemEntityServer,
     MJDuplicateRunEntityServer,
     MJEntityDocumentEntityServer,
@@ -1918,11 +1921,13 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
-    MJClusterAnalysisClusterEntity,
+    MJCalendarEventLinkEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCalendarSyncStateEntity,
+    MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
     MJCollectionEntity,
@@ -2121,12 +2126,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQueryCategoryEntity,
     MJQueryDependencyEntity,
     MJQueryEntity,
-    MJQueryEntityEntity,
-    MJQueryEntityExtended,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJQueryEntityEntity,
+    MJQueryEntityExtended,
     MJQueryFieldEntity,
     MJQueryParameterEntity,
     MJQueryPermissionEntity,
@@ -2261,8 +2266,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJEntityActionEntityExtended,
     LiveKitBridge,
     RingCentralBridge,
-    LoopbackBridge,
-    OpenAISipBridge,
     TeamsBridge,
     TwilioBridge,
     VonageBridge,
@@ -2284,6 +2287,8 @@ const CLASS_REGISTRATIONS_2: any[] = [
     TimePerMinutePriceUnitType,
     RexRecommendationsProvider,
     MJCommunicationProviderEntityExtended,
+    LoopbackBridge,
+    OpenAISipBridge,
     MSGraphProvider,
     SendGridProvider,
     DataContextItemServer,
@@ -2325,12 +2330,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     LogActivityAction,
     MergeContactsAction,
     CreateJotFormAction,
-    CreateSurveyMonkeyAction,
-    CreateTypeformAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    CreateSurveyMonkeyAction,
+    CreateTypeformAction,
     ExportGoogleFormsCSVAction,
     ExportJotFormCSVAction,
     ExportSurveyMonkeyCSVAction,
@@ -2529,12 +2534,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     HumanRubricEvaluator,
     LLMRubricEvaluator,
     SubmitHumanRubricAction,
-    AzureAISearchProvider,
-    BGEReRanker,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    AzureAISearchProvider,
+    BGEReRanker,
     CohereReRanker,
     ElasticsearchSearchProvider,
     EntitySearchProvider,
@@ -2672,6 +2677,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
     MJConversationEntityServer,
+    MJDashboardEntityServer,
     MJDataContextItemEntityServer,
     MJDuplicateRunEntityServer,
     MJEntityDocumentEntityServer,
@@ -2732,13 +2738,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     LLMFeaturePipelineDriver,
     StewardFeaturePipelineVersionAction,
     IntegrationTestDriver,
-    BraveWebSearchProvider,
-    DuckDuckGoWebSearchProvider,
-    GoogleCustomSearchWebSearchProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    BraveWebSearchProvider,
+    DuckDuckGoWebSearchProvider,
+    GoogleCustomSearchWebSearchProvider,
     PerplexityWebSearchProvider,
     TavilyWebSearchProvider,
     WebSearchQueryServerOperation,
@@ -2946,7 +2952,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1191;
+export const CLASS_REGISTRATIONS_COUNT = 1194;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
@@ -2994,7 +3000,6 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/actions-base',
     '@memberjunction/ai-bridge-livekit',
     '@memberjunction/ai-bridge-ringcentral',
-    '@memberjunction/ai-bridge-server',
     '@memberjunction/ai-bridge-teams',
     '@memberjunction/ai-bridge-twilio',
     '@memberjunction/ai-bridge-vonage',
@@ -3002,6 +3007,7 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-engine-base',
     '@memberjunction/ai-recommendations-rex',
     '@memberjunction/communication-types',
+    '@memberjunction/ai-bridge-server',
     '@memberjunction/communication-ms-graph',
     '@memberjunction/communication-sendgrid',
     '@memberjunction/data-context-server',

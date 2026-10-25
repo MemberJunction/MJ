@@ -23,6 +23,7 @@ import {
   RunViewParams,
   RunViewResult,
   UserInfo,
+  ViewPropertyValues,
 } from '@memberjunction/core';
 import { MJAuditLogEntity, MJErrorLogEntity, MJUserViewEntityExtended, UserViewEngine } from '@memberjunction/core-entities';
 
@@ -70,6 +71,7 @@ const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
   'mj: data context items',
   'mj: conversations',
   'mj: ai agent sessions',
+  'mj: ai agent runs',
 ]);
 
 export class ResolverBase {
@@ -653,7 +655,8 @@ export class ResolverBase {
             : undefined,
           viewInput.BypassCache,
           viewInput.DataSource,
-          viewInput.IncludeBinaryFields
+          viewInput.IncludeBinaryFields,
+          viewInput.Properties
         );
       }
       else {
@@ -700,7 +703,8 @@ export class ResolverBase {
         undefined,
         viewInput.BypassCache,
         viewInput.DataSource,
-        viewInput.IncludeBinaryFields
+        viewInput.IncludeBinaryFields,
+        viewInput.Properties
       );
     } catch (err) {
       console.log(err);
@@ -823,6 +827,7 @@ export class ResolverBase {
           bypassCache: viewInput.BypassCache,
           dataSource: viewInput.DataSource,
           includeBinaryFields: viewInput.IncludeBinaryFields,
+          properties: viewInput.Properties,
         });
       } catch (err) {
         LogError(err);
@@ -1201,7 +1206,8 @@ export class ResolverBase {
     afterKey?: CompositeKey,
     bypassCache?: boolean,
     dataSource?: 'Live' | 'Materialized',
-    includeBinaryFields?: boolean
+    includeBinaryFields?: boolean,
+    properties?: ViewPropertyValues
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
@@ -1284,6 +1290,8 @@ export class ResolverBase {
           BypassCache: bypassCache,
           DataSource: dataSource,
           IncludeBinaryFields: includeBinaryFields,
+          Properties: properties,
+          TimeZone: userPayload?.TimeZone,
         },
         user
       );
@@ -1445,6 +1453,8 @@ export class ResolverBase {
           BypassCache: param.bypassCache,
           DataSource: param.dataSource,
           IncludeBinaryFields: param.includeBinaryFields,
+          Properties: param.properties,
+          TimeZone: param.userPayload?.TimeZone,
         });
       }
 

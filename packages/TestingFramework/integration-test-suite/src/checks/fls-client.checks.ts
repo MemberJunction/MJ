@@ -123,16 +123,30 @@ function newSecondaryGraphQLProvider(): GraphQLDataProvider {
 
 /** Build a SECONDARY GraphQL provider authenticated by a user API key (separate connection). */
 async function buildUserKeyProvider(rawKey: string): Promise<IMetadataProvider> {
+    return buildSecondaryProvider(undefined, rawKey);
+}
+
+/**
+ * Build a SECONDARY GraphQL provider authenticated by the system API key (MJ_API_KEY). For a
+ * server-transport bundle that must write THROUGH MJAPI, so MJAPI's own caches (its user cache
+ * above all) see the rows; the process-global provider is untouched.
+ */
+export async function BuildSystemKeyProvider(): Promise<IMetadataProvider> {
+    return buildSecondaryProvider(LoadClientConfig().MJAPIKey, undefined);
+}
+
+/** A separate connection authenticated by exactly one key: the system key or a user API key. */
+async function buildSecondaryProvider(systemKey: string | undefined, userKey: string | undefined): Promise<IMetadataProvider> {
     const client = LoadClientConfig();
     const provider = newSecondaryGraphQLProvider();
     const config = new GraphQLProviderConfigData(
-        '',                       // no JWT — the user API key is the credential
+        '',                       // no JWT — the API key is the credential
         client.Url,
         '',                       // no websocket needed
         async () => '',           // no token to refresh
         undefined, undefined, undefined,
-        undefined,                // NO system key — this connection must be only the user
-        rawKey
+        systemKey,                // undefined for a user key — that connection must be only the user
+        userKey
     );
     const ok = await provider.Config(config, undefined, true /* separateConnection */);
     if (!ok) {
