@@ -70,7 +70,7 @@ function mintedSession(agentSessionId = 'session-1'): StartRealtimeClientSession
 }
 
 /** A runtime with fake store + transport sharing one ordered call log, and a recorded session started. */
-async function startRecorded(script: ('stored' | 'unavailable' | 'network-error')[] = []) {
+async function startRecorded(script: FakeUploadOutcome[] = []) {
     expect(FakeRealtimeClient).toBeDefined();
     const log: string[] = [];
     const store = new FakeShardStore(log);
@@ -160,6 +160,24 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
         await vi.advanceTimersByTimeAsync(FLUSH_MS);
 
         // Every shard reached the server before End, so the terminal finds nothing missing.
+        expect(store.Keys).toEqual([]);
+        await runtime.EndRealtimeSession();
+    });
+
+    it('sends a shard the server refused for good once from the queue, and the recovery drain still clears it from the store', async () => {
+        const { runtime, store, transport, recorder } = await startRecorded(['refused']);
+        recorder.Capture(WINDOW - 2);
+        for (let tick = 0; tick < 3; tick++) {
+            await vi.advanceTimersByTimeAsync(FLUSH_MS);
+        }
+        // Only shard 0 exists so far: the queue does not retry a refusal on the later ticks.
+        expect(transport.Uploads.map((u) => u.Index)).toEqual([0]);
+        expect(store.Keys).toEqual(['session-1/0']);
+
+        recorder.Capture(WINDOW - 2);
+        await vi.advanceTimersByTimeAsync(FLUSH_MS);
+        // Shard 1's ack starts the recovery drain, which re-sends shard 0 from the store.
+        expect(transport.Uploads.map((u) => u.Index)).toEqual([0, 1, 0]);
         expect(store.Keys).toEqual([]);
         await runtime.EndRealtimeSession();
     });

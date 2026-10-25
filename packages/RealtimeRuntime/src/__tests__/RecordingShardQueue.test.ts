@@ -8,6 +8,7 @@ import {
   type ShardUpload,
 } from '../session/RecordingShardQueue';
 import type { RecordingShard } from '../session/RecordingShardWindow';
+import type { RecordingUploadOutcome } from '../session/RecordingTransport';
 
 interface Deferred<T> {
   Promise: Promise<T>;
@@ -38,9 +39,9 @@ interface UploadCall {
   Marker: number;
 }
 
-/** An upload that records its calls and answers from `outcome` (default: stored). */
+/** An upload that records its calls and answers from `outcome` (default: acked); an Error is thrown. */
 function recordingUpload(
-  outcome: (call: UploadCall, attempt: number) => boolean | Error = () => true,
+  outcome: (call: UploadCall, attempt: number) => RecordingUploadOutcome | Error = () => 'Acked',
 ): { Upload: ShardUpload; Calls: UploadCall[] } {
   const calls: UploadCall[] = [];
   const upload: ShardUpload = async (shard) => {
@@ -74,8 +75,8 @@ describe('RecordingShardQueue', () => {
     expect(queue.RetainedCount).toBe(0);
   });
 
-  it('resends a refused shard with the same index and bytes, before the new shard', async () => {
-    const { Upload, Calls } = recordingUpload((call, attempt) => !(call.Index === 0 && attempt === 1));
+  it('resends a failed shard with the same index and bytes, before the new shard', async () => {
+    const { Upload, Calls } = recordingUpload((call, attempt) => (call.Index === 0 && attempt === 1 ? 'Retry' : 'Acked'));
     const queue = new RecordingShardQueue(Upload);
     await queue.Flush([shardOf(0, 7)]);
     expect(queue.RetainedCount).toBe(1);
@@ -90,7 +91,7 @@ describe('RecordingShardQueue', () => {
 
   it('retains a shard whose upload threw', async () => {
     const { Upload, Calls } = recordingUpload((call, attempt) =>
-      call.Index === 0 && attempt === 1 ? new Error('network down') : true,
+      call.Index === 0 && attempt === 1 ? new Error('network down') : 'Acked',
     );
     const queue = new RecordingShardQueue(Upload);
     await queue.Flush([shardOf(0)]);
@@ -102,7 +103,7 @@ describe('RecordingShardQueue', () => {
 
   describe('Close (the recording ended)', () => {
     it('discards retained shards, and a later flush sends nothing', async () => {
-      const { Upload, Calls } = recordingUpload(() => false);
+      const { Upload, Calls } = recordingUpload(() => 'Retry');
       const queue = new RecordingShardQueue(Upload);
       await queue.Flush([shardOf(0)]);
       expect(queue.RetainedCount).toBe(1);
@@ -116,13 +117,13 @@ describe('RecordingShardQueue', () => {
     });
 
     it('stops a flush already in flight from sending the rest of its batch', async () => {
-      const held = createDeferred<boolean>();
+      const held = createDeferred<RecordingUploadOutcome>();
       const calls: number[] = [];
       let slow = false;
       const upload: ShardUpload = async (shard) => {
-        if (!slow) return false; // first round: two refused shards stay retained
+        if (!slow) return 'Retry'; // first round: two failed shards stay retained
         calls.push(shard.Index);
-        return shard.Index === 0 ? held.Promise : true;
+        return shard.Index === 0 ? held.Promise : 'Acked';
       };
       const queue = new RecordingShardQueue(upload);
       await queue.Flush([shardOf(0), shardOf(1)]);
@@ -133,19 +134,19 @@ describe('RecordingShardQueue', () => {
       await settle();
       expect(calls).toEqual([0]); // shard 0's resend is on the wire
       queue.Close(); // the user hangs up
-      held.Resolve(false);
+      held.Resolve('Retry');
       await inFlight;
       expect(calls).toEqual([0]); // shards 1 and 2 are never sent
       expect(queue.RetainedCount).toBe(0);
     });
 
     it('does not retain a shard whose in-flight upload fails after Close, and says it stays in the store', async () => {
-      const held = createDeferred<boolean>();
+      const held = createDeferred<RecordingUploadOutcome>();
       let first = true;
       const upload: ShardUpload = async () => {
         if (first) {
           first = false;
-          return false;
+          return 'Retry';
         }
         return held.Promise;
       };
@@ -154,7 +155,7 @@ describe('RecordingShardQueue', () => {
       const inFlight = queue.Flush([]);
       await settle();
       queue.Close();
-      held.Resolve(false);
+      held.Resolve('Retry');
       await inFlight;
       expect(queue.RetainedCount).toBe(0);
       const message = warn.mock.calls.map((c) => String(c[0])).find((m) => m.includes('after the recording ended'));
@@ -164,7 +165,7 @@ describe('RecordingShardQueue', () => {
   });
 
   it('drops a shard after MAX_SHARD_UPLOAD_ATTEMPTS failures, warns that it stays in the store, and keeps later indexes', async () => {
-    const { Upload, Calls } = recordingUpload((call) => call.Index !== 0);
+    const { Upload, Calls } = recordingUpload((call) => (call.Index === 0 ? 'Retry' : 'Acked'));
     const gaveUp = vi.fn<(shards: RecordingShard[]) => void>();
     const queue = new RecordingShardQueue(Upload, gaveUp);
     await queue.Flush([shardOf(0)]);
@@ -184,7 +185,7 @@ describe('RecordingShardQueue', () => {
   });
 
   it('retries retained shards even when a flush brings no fresh shards', async () => {
-    const { Upload, Calls } = recordingUpload((call, attempt) => !(call.Index === 0 && attempt === 1));
+    const { Upload, Calls } = recordingUpload((call, attempt) => (call.Index === 0 && attempt === 1 ? 'Retry' : 'Acked'));
     const queue = new RecordingShardQueue(Upload);
     await queue.Flush([shardOf(0)]);
     await queue.Flush([]);
@@ -197,12 +198,12 @@ describe('RecordingShardQueue', () => {
     const active = new Map<number, number>();
     const gates: Array<Deferred<void>> = [];
     let maxActiveForAnyIndex = 0;
-    let refuseFirstOfShardZero = true;
+    let failFirstOfShardZero = true;
     const upload: ShardUpload = async (shard) => {
       const index = shard.Index;
-      if (index === 0 && refuseFirstOfShardZero) {
-        refuseFirstOfShardZero = false;
-        return false;
+      if (index === 0 && failFirstOfShardZero) {
+        failFirstOfShardZero = false;
+        return 'Retry';
       }
       active.set(index, (active.get(index) ?? 0) + 1);
       maxActiveForAnyIndex = Math.max(maxActiveForAnyIndex, active.get(index) ?? 0);
@@ -211,7 +212,7 @@ describe('RecordingShardQueue', () => {
       await gate.Promise;
       active.set(index, (active.get(index) ?? 1) - 1);
       stored.add(index);
-      return true;
+      return 'Acked';
     };
     const queue = new RecordingShardQueue(upload);
     await queue.Flush([shardOf(0)]);
@@ -229,7 +230,7 @@ describe('RecordingShardQueue', () => {
   });
 
   it('keeps RetainedCount at MAX_SHARD_UPLOAD_ATTEMPTS - 1 or fewer when uploads always fail', async () => {
-    const { Upload } = recordingUpload(() => false);
+    const { Upload } = recordingUpload(() => 'Retry');
     const queue = new RecordingShardQueue(Upload);
     for (let i = 0; i < 10; i++) {
       await queue.Flush([shardOf(i)]);
@@ -239,15 +240,15 @@ describe('RecordingShardQueue', () => {
   });
 
   it('retries retained shards in index order even when they failed out of order', async () => {
-    const firstRound: Record<number, Deferred<boolean>> = {
-      0: createDeferred<boolean>(),
-      1: createDeferred<boolean>(),
+    const firstRound: Record<number, Deferred<RecordingUploadOutcome>> = {
+      0: createDeferred<RecordingUploadOutcome>(),
+      1: createDeferred<RecordingUploadOutcome>(),
     };
     const seen: number[] = [];
     let firstRoundOver = false;
     const upload: ShardUpload = async (shard) => {
       seen.push(shard.Index);
-      return firstRoundOver ? true : firstRound[shard.Index].Promise;
+      return firstRoundOver ? 'Acked' : firstRound[shard.Index].Promise;
     };
     const queue = new RecordingShardQueue(upload);
     const flush1 = queue.Flush([shardOf(0)]);
@@ -255,9 +256,9 @@ describe('RecordingShardQueue', () => {
     const flush2 = queue.Flush([shardOf(1)]);
     await settle();
     // Shard 1 fails before shard 0 does.
-    firstRound[1].Resolve(false);
+    firstRound[1].Resolve('Retry');
     await settle();
-    firstRound[0].Resolve(false);
+    firstRound[0].Resolve('Retry');
     await Promise.all([flush1, flush2]);
     expect(queue.RetainedCount).toBe(2);
 
@@ -270,7 +271,7 @@ describe('RecordingShardQueue', () => {
   describe('capacity', () => {
     it('retains fresh shards, uploads nothing, when MAX_CONCURRENT_FLUSHES are in flight', async () => {
       expect(MAX_CONCURRENT_FLUSHES).toBe(2);
-      const gate = createDeferred<boolean>();
+      const gate = createDeferred<RecordingUploadOutcome>();
       const uploaded: number[] = [];
       const upload: ShardUpload = (shard) => {
         uploaded.push(shard.Index);
@@ -287,7 +288,7 @@ describe('RecordingShardQueue', () => {
       expect(uploaded).toEqual([0, 1]);
       expect(queue.RetainedCount).toBe(2);
 
-      gate.Resolve(true);
+      gate.Resolve('Acked');
       await Promise.all([flush1, flush2]);
       // Capacity released: the next flush sends the retained shards oldest first.
       uploaded.length = 0;
@@ -297,7 +298,7 @@ describe('RecordingShardQueue', () => {
     });
 
     it('caps retained shards at MAX_RETAINED_SHARDS, dropping the oldest with a warn', async () => {
-      const gate = createDeferred<boolean>();
+      const gate = createDeferred<RecordingUploadOutcome>();
       const gaveUp = vi.fn<(shards: RecordingShard[]) => void>();
       const queue = new RecordingShardQueue(() => gate.Promise, gaveUp);
       const flushes = [queue.Flush([shardOf(0)]), queue.Flush([shardOf(1)])];
@@ -311,12 +312,12 @@ describe('RecordingShardQueue', () => {
       expect(dropWarnings).toHaveLength(3);
       expect(dropWarnings[0]).toContain('shard(s) 2 ');
       expect(dropWarnings[0]).toContain('IndexedDB');
-      gate.Resolve(true);
+      gate.Resolve('Acked');
       await Promise.all(flushes);
     });
 
     it('warns once per capacity stall, not once per skipped flush', async () => {
-      const gate = createDeferred<boolean>();
+      const gate = createDeferred<RecordingUploadOutcome>();
       const queue = new RecordingShardQueue(() => gate.Promise);
       const flushes = [queue.Flush([shardOf(0)]), queue.Flush([shardOf(1)])];
       await settle();
@@ -325,7 +326,7 @@ describe('RecordingShardQueue', () => {
       const stallWarnings = warn.mock.calls.filter((c) => String(c[0]).includes('at capacity'));
       expect(stallWarnings).toHaveLength(1);
       expect(String(stallWarnings[0][0])).toContain('in flight');
-      gate.Resolve(true);
+      gate.Resolve('Acked');
       await Promise.all(flushes);
     });
   });
@@ -344,7 +345,7 @@ describe('RecordingShardQueue', () => {
       const calls: number[] = [];
       const upload: ShardUpload = (shard) => {
         calls.push(shard.Index);
-        return hang ? new Promise<boolean>(() => undefined) : Promise.resolve(true);
+        return hang ? new Promise<RecordingUploadOutcome>(() => undefined) : Promise.resolve<RecordingUploadOutcome>('Acked');
       };
       const queue = new RecordingShardQueue(upload);
       const flush = queue.Flush([shardOf(0)]);
@@ -368,7 +369,7 @@ describe('RecordingShardQueue', () => {
       try {
         let rejectLate!: (reason: Error) => void;
         const slow: ShardUpload = () =>
-          new Promise<boolean>((_, reject) => {
+          new Promise<RecordingUploadOutcome>((_, reject) => {
             rejectLate = reject;
           });
         const queue = new RecordingShardQueue(slow);
@@ -393,24 +394,76 @@ describe('RecordingShardQueue', () => {
     });
   });
 
-  it('makes exactly MAX_SHARD_UPLOAD_ATTEMPTS attempts for a refused shard, never one more', async () => {
-    const { Upload, Calls } = recordingUpload(() => false);
+  it('makes exactly MAX_SHARD_UPLOAD_ATTEMPTS attempts for a Retry outcome, never one more, and no warn says refused', async () => {
+    const { Upload, Calls } = recordingUpload(() => 'Retry');
     const queue = new RecordingShardQueue(Upload);
     await queue.Flush([shardOf(0)]);
     for (let i = 0; i < 5; i++) await queue.Flush([]);
     expect(Calls.filter((c) => c.Index === 0)).toHaveLength(MAX_SHARD_UPLOAD_ATTEMPTS);
+    const messages = warn.mock.calls.map((c) => String(c[0]));
+    expect(messages.filter((m) => m.includes('refused'))).toEqual([]);
+    expect(messages.find((m) => m.includes('Dropping'))).toContain('transport or server error');
   });
 
-  it('makes exactly MAX_SHARD_UPLOAD_ATTEMPTS attempts for a shard whose upload throws', async () => {
-    const { Upload, Calls } = recordingUpload(() => new Error('boom'));
+  it('makes exactly MAX_SHARD_UPLOAD_ATTEMPTS attempts for a shard whose upload throws, and the warns carry the thrown message', async () => {
+    const { Upload, Calls } = recordingUpload(() => new Error('socket hang up'));
     const queue = new RecordingShardQueue(Upload);
     await queue.Flush([shardOf(0)]);
     for (let i = 0; i < 5; i++) await queue.Flush([]);
     expect(Calls.filter((c) => c.Index === 0)).toHaveLength(MAX_SHARD_UPLOAD_ATTEMPTS);
+    const messages = warn.mock.calls.map((c) => String(c[0]));
+    expect(messages).toHaveLength(MAX_SHARD_UPLOAD_ATTEMPTS);
+    expect(messages.every((m) => m.includes('socket hang up'))).toBe(true);
   });
 
-  it('resolves, never rejects, for a throwing upload and a refusing upload', async () => {
+  describe('Refused (the server will never take the shard)', () => {
+    it('gives up after one attempt: removes the shard, tells the owner once, and the warn names the refusal', async () => {
+      const { Upload, Calls } = recordingUpload((call) => (call.Index === 0 ? 'Refused' : 'Acked'));
+      const gaveUp = vi.fn<(shards: RecordingShard[]) => void>();
+      const queue = new RecordingShardQueue(Upload, gaveUp);
+      await queue.Flush([shardOf(0)]);
+      for (let i = 1; i < MAX_SHARD_UPLOAD_ATTEMPTS; i++) await queue.Flush([]);
+      expect(Calls.filter((c) => c.Index === 0)).toHaveLength(1);
+      expect(queue.Unacknowledged()).toEqual([]);
+      expect(queue.RetainedCount).toBe(0);
+      expect(gaveUp.mock.calls.map((c) => c[0].map((shard) => shard.Index))).toEqual([[0]]);
+      const messages = warn.mock.calls.map((c) => String(c[0]));
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toContain('shard 0');
+      expect(messages[0]).toContain('server refused the shard for good');
+      expect(messages[0]).toContain('not be re-sent');
+      await queue.Flush([shardOf(1)]);
+      expect(Calls[Calls.length - 1]).toEqual({ Index: 1, Marker: 1 });
+    });
+
+    it('a refusal on the last allowed attempt is still reported as a refusal', async () => {
+      const { Upload } = recordingUpload((_, attempt) => (attempt < MAX_SHARD_UPLOAD_ATTEMPTS ? 'Retry' : 'Refused'));
+      const gaveUp = vi.fn<(shards: RecordingShard[]) => void>();
+      const queue = new RecordingShardQueue(Upload, gaveUp);
+      await queue.Flush([shardOf(0)]);
+      for (let i = 1; i < MAX_SHARD_UPLOAD_ATTEMPTS; i++) await queue.Flush([]);
+      expect(gaveUp).toHaveBeenCalledTimes(1);
+      const last = warn.mock.calls.map((c) => String(c[0])).at(-1);
+      expect(last).toContain('server refused the shard for good');
+    });
+
+    it('a refusal that lands after Close is not reported to the owner', async () => {
+      const held = createDeferred<RecordingUploadOutcome>();
+      const gaveUp = vi.fn<(shards: RecordingShard[]) => void>();
+      const queue = new RecordingShardQueue(() => held.Promise, gaveUp);
+      const inFlight = queue.Flush([shardOf(0)]);
+      await settle();
+      queue.Close();
+      held.Resolve('Refused');
+      await inFlight;
+      expect(gaveUp).not.toHaveBeenCalled();
+      expect(warn.mock.calls.map((c) => String(c[0])).find((m) => m.includes('after the recording ended'))).toContain('refused');
+    });
+  });
+
+  it('resolves, never rejects, for a throwing, a failing and a refused upload', async () => {
     await expect(new RecordingShardQueue(recordingUpload(() => new Error('upload')).Upload).Flush([shardOf(0)])).resolves.toBeUndefined();
-    await expect(new RecordingShardQueue(recordingUpload(() => false).Upload).Flush([shardOf(0)])).resolves.toBeUndefined();
+    await expect(new RecordingShardQueue(recordingUpload(() => 'Retry').Upload).Flush([shardOf(0)])).resolves.toBeUndefined();
+    await expect(new RecordingShardQueue(recordingUpload(() => 'Refused').Upload).Flush([shardOf(0)])).resolves.toBeUndefined();
   });
 });

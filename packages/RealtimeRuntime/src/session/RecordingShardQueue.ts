@@ -9,16 +9,35 @@
  * is not lost: it stays in the IndexedDB store, and the owner is told so it can re-send it from there
  * once uploads succeed again (or a later load drains it).
  *
+ * The queue is told why an upload failed, not only that it did (#6012): a `Retry` outcome (dead
+ * network, 5xx, expired token) is retried, while a `Refused` outcome is final and the shard is given
+ * up on at once — the transport's contract says re-sending it is pointless.
+ *
  * @module @memberjunction/realtime-runtime
  */
 import type { RecordingShard } from './RecordingShardWindow';
-
-/** Resolves true when the server stored the shard; false or a throw are both failures. */
-export type ShardUpload = (shard: RecordingShard) => Promise<boolean>;
+import type { RecordingUploadOutcome } from './RecordingTransport';
 
 /**
- * Told about shards the queue stops retrying while the recording is live (attempts used up, or the
- * retry list overflowed). They are still in the store; the owner re-sends them once uploads work.
+ * Sends one shard and resolves the transport's outcome: `Acked` (stored), `Retry` (may succeed later;
+ * retried up to {@link MAX_SHARD_UPLOAD_ATTEMPTS}), or `Refused` (final; given up on after this one
+ * attempt). A throw counts as `Retry`, with the thrown error as the logged reason.
+ */
+export type ShardUpload = (shard: RecordingShard) => Promise<RecordingUploadOutcome>;
+
+/**
+ * Warn reason for a `Retry` outcome with no thrown error. The transport has already logged the status
+ * or fetch error on its own line, so this only must not read as a server refusal. It carries no
+ * "will be retried": the same reason ends the give-up line, where that would be false.
+ */
+const RETRY_REASON = 'transport or server error; the transport logged the cause';
+
+/** Warn reason for a `Refused` outcome. */
+const REFUSED_REASON = 'server refused the shard for good';
+
+/**
+ * Told about shards the queue stops retrying while the recording is live (attempts used up, the
+ * server refused the shard for good, or the retry list overflowed). They are still in the store; the owner re-sends them once uploads work.
  */
 export type ShardsGivenUp = (shards: RecordingShard[]) => void;
 
@@ -176,7 +195,7 @@ export class RecordingShardQueue {
     );
   }
 
-  private async uploadWithTimeout(shard: RecordingShard): Promise<boolean> {
+  private async uploadWithTimeout(shard: RecordingShard): Promise<RecordingUploadOutcome> {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const deadline = new Promise<never>((_, reject) => {
       timer = setTimeout(() => reject(new Error(`upload timed out after ${SHARD_UPLOAD_TIMEOUT_MS}ms`)), SHARD_UPLOAD_TIMEOUT_MS);
@@ -191,14 +210,16 @@ export class RecordingShardQueue {
   private async send(pending: PendingShard): Promise<void> {
     const { Shard: shard } = pending;
     pending.Attempts++;
-    let stored = false;
-    let failure: unknown = 'server refused the shard';
+    let outcome: RecordingUploadOutcome;
+    let failure: unknown;
     try {
-      stored = await this.uploadWithTimeout(shard);
+      outcome = await this.uploadWithTimeout(shard);
+      failure = outcome === 'Refused' ? REFUSED_REASON : RETRY_REASON;
     } catch (error) {
+      outcome = 'Retry';
       failure = error;
     }
-    if (stored) {
+    if (outcome === 'Acked') {
       this.outstanding.delete(shard.Index);
       return;
     }
@@ -207,6 +228,15 @@ export class RecordingShardQueue {
         `[RealtimeSession] Recording shard ${shard.Index} upload failed after the recording ended (${describeFailure(failure)}); not retried — it stays in the local store and is drained later:`,
         failure,
       );
+      return;
+    }
+    // Checked before the attempts cap, so a refusal on the last attempt still reads as a refusal.
+    if (outcome === 'Refused') {
+      console.warn(
+        `[RealtimeSession] Recording shard ${shard.Index} upload failed (${REFUSED_REASON}); it will not be re-sent by the queue — it stays in the local store until a store drain settles it.`,
+      );
+      this.outstanding.delete(shard.Index);
+      this.onGivenUp([shard]);
       return;
     }
     if (pending.Attempts >= MAX_SHARD_UPLOAD_ATTEMPTS) {
