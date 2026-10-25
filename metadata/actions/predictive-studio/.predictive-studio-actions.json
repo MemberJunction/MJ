@@ -41,7 +41,7 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": false,
-            "Description": "Optional cap on the number of training rows pulled from the target entity."
+            "Description": "Optional row cap for the training read. Training reads every row of the target entity; a MaxRows smaller than the rows in scope is refused with READ_CAP_EXCEEDED rather than training on a sample. Omit it unless you want that check."
           },
           "primaryKey": {
             "ID": "1AEC4C95-D252-462D-9DD7-F287F8B5D6F5"
@@ -150,6 +150,39 @@
           "sync": {
             "lastModified": "2026-07-01T17:33:33.786Z",
             "checksum": "ac4d7db737c1a1d30ccf3e9f2606eb6b0b42315a264022637d8273276bdd3b37"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "READ_CAP_EXCEEDED",
+            "IsSuccess": false,
+            "Description": "Training refused: the MaxRows parameter is smaller than the rows in scope, so the model would be trained on a fraction of its scope. Omit MaxRows and train again; training reads every row of the target entity. The same code the PredictiveStudio.TrainModel operation returns."
+          },
+          "primaryKey": {
+            "ID": "CA1C5767-E6E5-4DCA-9E4B-CE775C8D1A0A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "AS_OF_NO_EFFECT",
+            "IsSuccess": false,
+            "Description": "Training refused: the as-of setting asks for point-in-time assembly that training cannot perform, so the model would be identical to Mode 'none'. The same code the PredictiveStudio.TrainModel operation returns."
+          },
+          "primaryKey": {
+            "ID": "204E62AB-B4E7-42A8-84B8-19ADDDF5DC9E"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_EVALUATION_SETTING",
+            "IsSuccess": false,
+            "Description": "Training refused: the pipeline's ValidationStrategy.MajorityBaselineRule is not a known value ('enforce' or 'warn'). Fix or remove it (removing it uses 'enforce') and train again. The same code the PredictiveStudio.TrainModel operation returns."
+          },
+          "primaryKey": {
+            "ID": "9645CFEB-B686-4C0C-B7E1-F217C750443B"
           }
         }
       ]
@@ -332,6 +365,39 @@
             "lastModified": "2026-07-01T17:33:33.987Z",
             "checksum": "871358e050276f2ea70e3171f7395ea7dc28b2c4cf8646362baa368555c77cf2"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "READ_CAP_EXCEEDED",
+            "IsSuccess": false,
+            "Description": "Scoring refused: an explicit row cap would cut the scope short. The same code the PredictiveStudio.ScoreRecordSet operation returns."
+          },
+          "primaryKey": {
+            "ID": "6AC78B9A-2098-4601-8EE0-4F138C1B2918"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MODEL_NOT_SCORABLE",
+            "IsSuccess": false,
+            "Description": "Scoring refused: the model's status does not allow scoring. Only Validated and Published models score; a trained Draft must be promoted to Validated first, and an Archived model cannot score. The same code the PredictiveStudio.ScoreRecordSet operation returns."
+          },
+          "primaryKey": {
+            "ID": "FFA2645F-430A-4BBD-B3DE-9950E2CBBE27"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MODEL_NEEDS_TRAINING",
+            "IsSuccess": false,
+            "Description": "Scoring refused: the model has no trained artifact yet. The same code the PredictiveStudio.ScoreRecordSet operation returns."
+          },
+          "primaryKey": {
+            "ID": "7BF3C847-3B6C-48B4-BE64-F15C1767883A"
+          }
         }
       ]
     },
@@ -350,10 +416,10 @@
     ],
     "fields": {
       "Name": "Run Experiment Session",
-      "Description": "Executes an approved modeling plan as an experiment session — running its proposed experiments in waves to completion or until the budget bound, maintaining a leaderboard. Outputs the session id, the best (winning) model id, the final leaderboard, and why the session stopped.",
+      "Description": "Disabled: experiment sessions are switched off; returns EXPERIMENT_SESSIONS_UNAVAILABLE. Executes an approved modeling plan as an experiment session — running its proposed experiments in waves to completion or until the budget bound, maintaining a leaderboard. Outputs the session id, the best (winning) model id, the final leaderboard, and why the session stopped.",
       "Type": "Custom",
       "DriverClass": "PredictiveStudioRunExperimentAction",
-      "Status": "Active",
+      "Status": "Disabled",
       "IconClass": "fa-solid fa-flask"
     },
     "relatedEntities": {
@@ -544,6 +610,17 @@
           "sync": {
             "lastModified": "2026-07-01T17:33:34.223Z",
             "checksum": "394b48a26dab19517dc7881cac75b3b2a45a59c747ec5c199d8bd54ffadfa50c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EXPERIMENT_SESSIONS_UNAVAILABLE",
+            "IsSuccess": false,
+            "Description": "Experiment sessions are switched off; the action refuses before reading any parameter. The same code the PredictiveStudio.StartExperimentSession operation returns."
+          },
+          "primaryKey": {
+            "ID": "FDC52D3E-68A6-476B-9F80-9F2E149271D2"
           }
         }
       ]
