@@ -26,11 +26,12 @@ import type { RecordingUploadOutcome } from './RecordingTransport';
 export type ShardUpload = (shard: RecordingShard) => Promise<RecordingUploadOutcome>;
 
 /**
- * Warn reason for a `Retry` outcome with no thrown error. The transport has already logged the status
- * or fetch error on its own line, so this only must not read as a server refusal. It carries no
- * "will be retried": the same reason ends the give-up line, where that would be false.
+ * Warn reason for a `Retry` outcome with no thrown error. A real transport has already logged the
+ * status or fetch error on its own line (with no transport at all, the runtime warned once at start),
+ * so this only must not read as a server refusal. It carries no "will be retried": the same reason
+ * ends the give-up line, where that would be false.
  */
-const RETRY_REASON = 'transport or server error; the transport logged the cause';
+const RETRY_REASON = 'transport or server error, not a refusal';
 
 /** Warn reason for a `Refused` outcome. */
 const REFUSED_REASON = 'server refused the shard for good';

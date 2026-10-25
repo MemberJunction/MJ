@@ -165,7 +165,8 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
     });
 
     it('sends a shard the server refused for good once from the queue, and the recovery drain still clears it from the store', async () => {
-        const { runtime, store, transport, recorder } = await startRecorded(['refused']);
+        // Shard 0 refused by the queue's upload, shard 1 stored, shard 0 refused again by the drain.
+        const { runtime, store, transport, recorder } = await startRecorded(['refused', 'stored', 'refused']);
         recorder.Capture(WINDOW - 2);
         for (let tick = 0; tick < 3; tick++) {
             await vi.advanceTimersByTimeAsync(FLUSH_MS);
@@ -176,7 +177,7 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
 
         recorder.Capture(WINDOW - 2);
         await vi.advanceTimersByTimeAsync(FLUSH_MS);
-        // Shard 1's ack starts the recovery drain, which re-sends shard 0 from the store.
+        // Shard 1's ack starts the recovery drain, which re-sends shard 0 and deletes it on the refusal.
         expect(transport.Uploads.map((u) => u.Index)).toEqual([0, 1, 0]);
         expect(store.Keys).toEqual([]);
         await runtime.EndRealtimeSession();
