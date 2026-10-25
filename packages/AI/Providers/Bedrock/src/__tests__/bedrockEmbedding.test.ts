@@ -97,6 +97,16 @@ describe('BedrockEmbedding and the dimensions parameter', () => {
         expect(mockSend).toHaveBeenCalledTimes(1);
     });
 
+    it('carries a Titan V2 width through EmbedTexts to every per-text call', async () => {
+        // EmbedTexts is the path AIEmbeddingRunner uses, and Titan has no batch endpoint, so the width
+        // has to survive the hand-off to each EmbedText. Asserted per text: dropping `dimensions` from
+        // that inner call would otherwise hand a 512-wide index 1024-wide vectors with nothing failing.
+        await new BedrockEmbedding('id:secret').EmbedTexts({ texts: ['a', 'b'], model: 'amazon.titan-embed-text-v2:0', dimensions: 512 });
+
+        expect(sentBody(0)).toEqual({ inputText: 'a', dimensions: 512 });
+        expect(sentBody(1)).toEqual({ inputText: 'b', dimensions: 512 });
+    });
+
     it('does not send dimensions on the Cohere path', async () => {
         mockSend.mockResolvedValue({ body: encode({ embeddings: [[1, 0]], tokens: 1 }) });
         await new BedrockEmbedding('id:secret').EmbedTexts({ texts: ['a'], model: 'cohere.embed-english-v3', dimensions: 1536 });
