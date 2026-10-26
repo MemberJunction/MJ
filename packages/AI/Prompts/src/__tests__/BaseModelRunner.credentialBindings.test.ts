@@ -77,6 +77,19 @@ vi.mock('@memberjunction/credentials', async (importOriginal) => {
             Instance: {
                 Config: vi.fn().mockResolvedValue(undefined),
                 getCredentialById: (id: string) => ({ ID: id, Name: id, IsActive: true, ExpiresAt: null }),
+                // The runner asks the engine whether a credential is still usable rather than comparing
+                // ExpiresAt itself; a credential with no ExpiresAt (or one in the future) is usable.
+                GetExpirationStatus: (c: { ExpiresAt: Date | null }) => {
+                    const expired = c.ExpiresAt != null && new Date(c.ExpiresAt).getTime() < Date.now();
+                    return {
+                        status: expired ? 'expired' : 'valid',
+                        expiresAt: c.ExpiresAt ?? null,
+                        msUntilExpiration: null,
+                        daysUntilExpiration: null,
+                        withinGrace: false,
+                        usable: !expired,
+                    };
+                },
                 getCredential: vi.fn(async (_name: string, options: { credentialId: string }) => ({ values: { apiKey: `key-of-${options.credentialId}` } })),
             },
         },

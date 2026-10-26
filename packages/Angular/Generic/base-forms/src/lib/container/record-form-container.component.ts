@@ -4,10 +4,10 @@ import {
   ContentChildren, QueryList, AfterContentInit, DoCheck, OnDestroy,
   ViewChild, ViewEncapsulation, ElementRef
 } from '@angular/core';
-import { BaseEntity, CompositeKey, EntityInfo, LogError, RunView, type FormChromeRule, type FormInclusion } from '@memberjunction/core';
-import { EscapeSQLString, UUIDsEqual, type ValidationErrorInfo } from '@memberjunction/global';
+import { BaseEntity, BaseEntityEvent, CompositeKey, EntityField, EntityInfo, KeyValuePair, LogError, RunView, type FormChromeRule, type FormInclusion } from '@memberjunction/core';
+import { EscapeSQLString, MJGlobal, UUIDsEqual, type ValidationErrorInfo } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { UserInfoEngine } from '@memberjunction/core-entities';
+import { UserInfoEngine, MJRecordChangeEntity } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
@@ -35,9 +35,21 @@ import { RestoreVersionEvent, RecordChangesComponent } from '@memberjunction/ng-
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ListManagementResult } from '@memberjunction/ng-list-management';
 import { FormSlotCoordinator } from '../panel-slot/form-slot-coordinator.service';
-import { BuildFormCompositionSnapshot } from '../chrome/form-composition-snapshot';
+import { BuildFormCompositionSnapshot, type FormAgentLinksSummary, type FormAgentRecordState } from '../chrome/form-composition-snapshot';
 import { FormCompositionRegistry } from '../chrome/form-composition-registry';
 import { FormPanelAdminService } from '../panel-manager/form-panel-admin.service';
+import { MjRecordLinksComponent } from '../links/record-links.component';
+import { TOOLBAR_PINS_SETTING_KEY, DEFAULT_PINNED_TOOLBAR_ACTIONS } from '../toolbar/form-toolbar.component';
+import {
+  BaseFormToolbarAction,
+  type FormToolbarActionLifecycleContext,
+  ResolveFormToolbarActionsForEntity,
+} from '../toolbar/base-form-toolbar-action';
+import { RecordLinksToolbarAction } from '../toolbar/actions/record-links-toolbar-action';
+
+// Ensure built-in RecordLinksToolbarAction is never tree-shaken before ClassFactory registration
+const _BUILTIN_TOOLBAR_ACTIONS = [RecordLinksToolbarAction];
+void _BUILTIN_TOOLBAR_ACTIONS;
 import type { FormChromeSpec } from '../chrome/form-chrome';
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
 import { ResolveFormChrome, OrderChromeGroups, OrderMoreSectionKeys, MoveChromeGroupInSectionOrder, OverlayChromeSectionOrder } from '../chrome/resolve-form-chrome';
@@ -89,7 +101,13 @@ import {
   type FormCountPlan,
   type FormCountResults,
 } from '../section-counts/form-section-counts';
-import { FormRecordRefreshCoordinator } from '../form-record-refresh.coordinator';
+import {
+   FormRecordRefreshCoordinator,
+  type FormFieldConflict,
+  type FormVersionPreviewState,
+  type FormVersionPreviewFieldDiff,
+  type FormSingleFieldRestoreRequest,
+} from '../form-record-refresh.coordinator';
 import { FormFieldEditCoordinator } from '../form-field-edit.coordinator';
 import type { DuplicateEntryCandidate } from '@memberjunction/graphql-dataprovider';
 import { FormSectionIndicatorCoordinator } from '../section-indicators/form-section-indicator-coordinator.service';
@@ -188,6 +206,16 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   /** The form whose duplicate-check answers this container already re-renders on. */
   private duplicateNoticeWiredFor: BaseFormComponent | null = null;
 
+  // ---- Cross-tab / remote live update state ----
+  public RemoteUpdatePill: {
+    Kind: 'refreshed' | 'stale-while-editing';
+    Summary: string;
+    ChangedFields: string[];
+  } | null = null;
+  private remoteUpdatePillTimer: ReturnType<typeof setTimeout> | null = null;
+  private remoteRefreshInFlight = false;
+  private lastLocalSaveAt = 0;
+
   // ---- Internal State ----
 
   /** Reference to the record changes drawer (when visible) for triggering refresh after save */
@@ -205,6 +233,27 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   /** Number of tags on this record */
   TagCount = 0;
+
+  /** Controls visibility of links slide-in drawer */
+  ShowRecordLinks = false;
+
+  /** Number of linked records on this record */
+  LinkCount = 0;
+
+  /** Structured summary of outgoing + incoming links for the AI agent context */
+  LinksSummary: FormAgentLinksSummary | null = null;
+
+  /** Active historical version being previewed inline across form fields (Time-Travel Preview) */
+  ActiveVersionPreview: FormVersionPreviewState | null = null;
+  private activePreviewSourceChange: MJRecordChangeEntity | null = null;
+  private liveRecordPreviewStash: Map<string, { value: unknown; oldValue: unknown }> | null = null;
+  private previewableChangesCache: MJRecordChangeEntity[] = [];
+
+  /** Unique list of field diffs for the active version preview banner chips */
+  PreviewChangedFieldChips: FormVersionPreviewFieldDiff[] = [];
+
+  /** Number of active field conflicts during edit mode */
+  ConflictCount = 0;
 
   /** Controls visibility of attachments slide panel */
   ShowAttachmentsPanel = false;
@@ -369,6 +418,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   @Output() BeforeSectionActivate = new EventEmitter<BeforeSectionActivateEventArgs>();
   @Output() AfterSectionActivated = new EventEmitter<AfterSectionActivatedEventArgs>();
 
+  /** Emitted when the user clicks "Ask AI" in the form toolbar to open the AI overlay with record context */
+  @Output() AskAIRequested = new EventEmitter<void>();
+
   // ---- Content Children ----
 
   @ContentChildren(MjCollapsiblePanelComponent, { descendants: true })
@@ -472,8 +524,13 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     const registered = this.Fc?.RegisteredToolbarItems && this.Fc.RegisteredToolbarItems.length > 0
       ? this.Fc.RegisteredToolbarItems
       : this.RegisteredToolbarItems;
+    const pluggable = this.pluggableToolbarItemConfigs(registered);
     const manage = this.managePanelsToolbarItem();
-    return manage ? [...registered, manage] : [...registered];
+    return [
+      ...pluggable,
+      ...registered,
+      ...(manage ? [manage] : []),
+    ];
   }
 
   /** Memoised so the toolbar's identity check does not see a new object every pass. */
@@ -779,6 +836,13 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       this.cdr.markForCheck();
     });
 
+    // A section that draws itself only once its data has loaded mounts inside a slot
+    // after `slots.changes` fired, so none of the triggers above see it. The rail is
+    // worked out from the sections on the page: file the newcomer (or drop the leaver).
+    this.chrome.SectionsChanged.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      this.scheduleChromeResolve();
+    });
+
     this.restoreChromePrefs();
     this.scheduleChromeResolve();
 
@@ -786,6 +850,18 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.watchRecordChanges();
 
     this.wireDuplicateEntryCheck();
+    this.wireRemoteRecordInvalidation();
+    this.recordRefresh.ConflictsChanged$.pipe(takeUntil(this.destroy$)).subscribe((conflicts) => {
+      this.ConflictCount = conflicts.size;
+      this.cdr.markForCheck();
+    });
+    this.recordRefresh.VersionPreviewChanged$.pipe(takeUntil(this.destroy$)).subscribe((preview) => {
+      this.ActiveVersionPreview = preview;
+      this.cdr.markForCheck();
+    });
+    this.recordRefresh.SingleFieldRestoreRequested$.pipe(takeUntil(this.destroy$)).subscribe((req) => {
+      void this.onSingleFieldRestoreRequested(req);
+    });
   }
 
   /**
@@ -820,6 +896,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   ngOnDestroy(): void {
     this.destroyed = true;
+    this.destroyToolbarActions();
     // A count or chrome-rule result still in flight then matches nothing and is dropped.
     this.countRequestToken++;
     this.chromeRulesForEntityId = null;
@@ -827,6 +904,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     if (this.chromeResolveTimer) {
       clearTimeout(this.chromeResolveTimer);
       this.chromeResolveTimer = null;
+    }
+    if (this.remoteUpdatePillTimer) {
+      clearTimeout(this.remoteUpdatePillTimer);
+      this.remoteUpdatePillTimer = null;
     }
     this.panelNavReset$.next();
     this.panelNavReset$.complete();
@@ -1328,6 +1409,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       HiddenContributionKeys: hiddenContributionKeys,
       SlotsPresent: this.Fc?.OwnsEntireFormBody ? [] : this.slots.PresentSlots,
       ChromeRuleCount: this.chromeRules.length,
+      RecordState: this.buildAgentRecordState(record),
+      Links: this.LinksSummary ?? undefined,
     });
     // The builder emits a fixed key order, so equal snapshots have equal JSON.
     const json = JSON.stringify(snapshot);
@@ -1937,6 +2020,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * All queries run in parallel for performance.
    */
   private badgeCountsLoaded = false;
+  private toolbarActions: BaseFormToolbarAction[] = [];
+  private toolbarActionsEntityName: string | null = null;
+  private toolbarActionsInitRecord: BaseEntity | null = null;
 
   private loadBadgeCounts(): void {
     if (this.badgeCountsLoaded) return;
@@ -1947,6 +2033,260 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.badgeCountsLoaded = true;
     // Fire and forget — counts land while the form renders; nothing awaits them.
     void this.loadFormCounts(record);
+    void this.PrewarmToolbarActions(record);
+  }
+
+  /**
+   * Returns the instantiated {@link BaseFormToolbarAction} plugins matching the active entity.
+   */
+  public GetToolbarActions(): readonly BaseFormToolbarAction[] {
+    return this.ensureToolbarActions();
+  }
+
+  private ensureToolbarActions(): BaseFormToolbarAction[] {
+    const entityInfo = this.EffectiveEntityInfo;
+    const entityName = entityInfo?.Name ?? null;
+    if (entityName !== this.toolbarActionsEntityName) {
+      this.destroyToolbarActions();
+      this.toolbarActionsEntityName = entityName;
+      this.toolbarActions = ResolveFormToolbarActionsForEntity(entityInfo);
+      this.toolbarActionsInitRecord = null;
+    }
+
+    const record = this.EffectiveRecord;
+    if (record && record.EntityInfo && this.toolbarActionsInitRecord !== record) {
+      this.toolbarActionsInitRecord = record;
+      for (const action of this.toolbarActions) {
+        const ctx = this.buildToolbarActionContext(action, record);
+        if (action.IsApplicable(ctx)) {
+          void action.OnInit(ctx);
+        }
+      }
+    }
+    return this.toolbarActions;
+  }
+
+  private destroyToolbarActions(): void {
+    for (const action of this.toolbarActions) {
+      try {
+        action.OnDestroy();
+      } catch {
+        // Ignore teardown errors
+      }
+    }
+    this.toolbarActions = [];
+    this.toolbarActionsEntityName = null;
+    this.toolbarActionsInitRecord = null;
+  }
+
+  private pluggableToolbarItemConfigs(explicitItems: readonly FormToolbarItemConfig[]): FormToolbarItemConfig[] {
+    const record = this.EffectiveRecord;
+    const entityInfo = this.EffectiveEntityInfo;
+    if (!record || !entityInfo) return [];
+
+    const explicitKeys = new Set(explicitItems.map((i) => i.Key.trim().toLowerCase()));
+    const actions = this.ensureToolbarActions();
+    const out: FormToolbarItemConfig[] = [];
+
+    for (const action of actions) {
+      const keyLower = action.Metadata.Key.trim().toLowerCase();
+      if (explicitKeys.has(keyLower)) continue;
+      if (keyLower === 'links' && this.EffectiveToolbarConfig.ShowLinksButton === false) {
+        continue;
+      }
+      if (keyLower === 'links') {
+        action.IsActive = this.ShowRecordLinks;
+        if (this.LinkCount > 0) {
+          action.Badge = this.LinkCount;
+        }
+      }
+      const ctx = this.buildToolbarActionContext(action, record);
+      if (!action.IsApplicable(ctx)) continue;
+
+      out.push(
+        action.ToToolbarItemConfig((event?: MouseEvent) => {
+          const execCtx = this.buildToolbarActionContext(action, this.EffectiveRecord ?? record);
+          return action.OnExecute(execCtx, event);
+        })
+      );
+    }
+    return out;
+  }
+
+  private buildToolbarActionContext(
+    action: BaseFormToolbarAction,
+    recordOverride?: BaseEntity
+  ): FormToolbarActionLifecycleContext {
+    const record = (recordOverride ?? this.EffectiveRecord)!;
+    const entityInfo = (this.EffectiveEntityInfo ?? record?.EntityInfo)!;
+    const isPinned = this.IsToolbarActionPinned(action.Metadata.Key);
+    const isVisibleOnBar = action.Metadata.Pinnable === false || isPinned;
+
+    return {
+      Record: record,
+      EntityInfo: entityInfo,
+      Provider: this.ProviderToUse,
+      EditMode: this.EffectiveEditMode,
+      IsDirty: this.EffectiveIsDirty,
+      IsPinned: isPinned,
+      IsVisibleOnBar: isVisibleOnBar,
+      FormComponent: this.Fc,
+      SetBadge: (badge: string | number | null | undefined) => {
+        action.Badge = badge ?? undefined;
+        if (action.Metadata.Key === 'links') {
+          this.LinkCount = typeof badge === 'number' ? badge : 0;
+        }
+      },
+      SetLoading: (loading: boolean) => {
+        action.IsLoading = loading;
+      },
+      SetDisabled: (disabled: boolean, reason?: string) => {
+        action.Disabled = disabled;
+        action.DisabledReason = reason;
+      },
+      SetActive: (active: boolean) => {
+        action.IsActive = active;
+      },
+      SetRecordLinksDrawerOpen: (open: boolean) => {
+        this.ShowRecordLinks = open;
+      },
+      IsRecordLinksDrawerOpen: () => this.ShowRecordLinks,
+      SetLinksSummary: (summary: FormAgentLinksSummary) => {
+        this.LinksSummary = summary;
+        this.LinkCount = summary.TotalCount;
+        this.scheduleChromeResolve();
+      },
+      RequestChangeDetection: () => {
+        this.cdr.markForCheck();
+      },
+    };
+  }
+
+  /**
+   * Returns true when the given toolbar action key is pinned for the current user
+   * (either in their saved `mj.form.toolbar.pinnedActions` setting or in `DefaultPinnedActions`).
+   */
+  public IsToolbarActionPinned(key: string): boolean {
+    try {
+      const provider = this.ProviderToUse;
+      const engine = provider
+        ? (UserInfoEngine.GetProviderInstance<UserInfoEngine>(provider, UserInfoEngine) as UserInfoEngine)
+        : UserInfoEngine.Instance;
+      const activeEngine = engine?.Loaded ? engine : UserInfoEngine.Instance;
+      const raw = activeEngine?.GetSetting(TOOLBAR_PINS_SETTING_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { Pinned?: unknown };
+        if (Array.isArray(parsed.Pinned)) {
+          return parsed.Pinned.includes(key);
+        }
+      }
+    } catch {
+      // Fall back to default pinned actions
+    }
+    const defaults = this.EffectiveToolbarConfig?.DefaultPinnedActions ?? DEFAULT_PINNED_TOOLBAR_ACTIONS;
+    return defaults.includes(key);
+  }
+
+  /**
+   * Returns true when the 'links' toolbar action is pinned for the current user.
+   */
+  public IsLinksActionPinned(): boolean {
+    return this.IsToolbarActionPinned('links');
+  }
+
+  /**
+   * Invoked when the user pins or unpins an action in `<mj-form-toolbar>`.
+   * Notifies the corresponding {@link BaseFormToolbarAction} via `OnPinStateChanged`.
+   */
+  public OnToolbarActionPinChanged(event: { Key: string; Pinned: boolean }): void {
+    const record = this.EffectiveRecord;
+    if (!record?.EntityInfo) return;
+    const actions = this.ensureToolbarActions();
+    const matched = actions.find((a) => a.Metadata.Key.toLowerCase() === event.Key.toLowerCase());
+    if (!matched) return;
+    const ctx = this.buildToolbarActionContext(matched, record);
+    void matched.OnPinStateChanged(ctx, event.Pinned);
+  }
+
+  /**
+   * Runs `OnPrewarm` across all applicable {@link BaseFormToolbarAction} plugins for the active record.
+   */
+  public async PrewarmToolbarActions(record: BaseEntity): Promise<void> {
+    if (!record?.EntityInfo) return;
+    const actions = this.ensureToolbarActions();
+    await Promise.all(
+      actions.map(async (action) => {
+        const ctx = this.buildToolbarActionContext(action, record);
+        if (!action.IsApplicable(ctx)) return;
+        await action.OnPrewarm(ctx);
+      })
+    );
+  }
+
+  private async prewarmRecordLinks(record: BaseEntity): Promise<void> {
+    if (!record?.IsSaved || !record.EntityInfo) return;
+    const actions = this.ensureToolbarActions();
+    const linksAction = actions.find((a) => a.Metadata.Key === 'links');
+    if (linksAction) {
+      const ctx = this.buildToolbarActionContext(linksAction, record);
+      if (linksAction.IsApplicable(ctx)) {
+        await linksAction.OnPrewarm(ctx);
+      }
+    }
+  }
+
+  private buildAgentRecordState(record: BaseEntity | null | undefined): FormAgentRecordState | undefined {
+    if (!record || !Array.isArray(record.Fields) || record.Fields.length === 0) {
+      return undefined;
+    }
+    const entityInfo = record.EntityInfo;
+    const nameField = entityInfo?.NameField?.Name;
+    const rawDisplayName = nameField
+      ? record.Fields.find((f) => f.Name === nameField)?.Value
+      : undefined;
+    const recordDisplayName =
+      rawDisplayName !== null && rawDisplayName !== undefined && String(rawDisplayName).trim().length > 0
+        ? String(rawDisplayName).trim()
+        : record.PrimaryKey?.ToConcatenatedString?.() || null;
+
+    const keyFields: Record<string, string | number | boolean | null> = {};
+    let count = 0;
+    for (const field of record.Fields) {
+      if (count >= 16) break;
+      if (field.Name.startsWith('__mj_')) continue;
+      const val = field.Value;
+      if (val === null || val === undefined || val === '') continue;
+      if (typeof val === 'string') {
+        if (val.length > 160) {
+          keyFields[field.Name] = `${val.slice(0, 157)}...`;
+        } else {
+          keyFields[field.Name] = val;
+        }
+        count++;
+      } else if (typeof val === 'number' || typeof val === 'boolean') {
+        keyFields[field.Name] = val;
+        count++;
+      } else if (val instanceof Date && !isNaN(val.getTime())) {
+        keyFields[field.Name] = val.toISOString();
+        count++;
+      }
+    }
+
+    return {
+      DisplayName: recordDisplayName,
+      RecordDisplayName: recordDisplayName,
+      EditMode: this.EffectiveEditMode,
+      IsDirty: this.EffectiveIsDirty,
+      Dirty: this.EffectiveIsDirty,
+      DirtyFields: this.EffectiveDirtyFieldNames,
+      DirtyFieldNames: this.EffectiveDirtyFieldNames,
+      HasExternalUpdateConflict: this.ConflictCount > 0,
+      PreviewingHistoricalChangeID: this.ActiveVersionPreview?.ChangeID ?? null,
+      ConflictCount: this.ConflictCount,
+      VersionCount: this.VersionCount,
+      TagCount: this.TagCount,
+      KeyFields: keyFields,
+    };
   }
 
   /**
@@ -2144,6 +2484,12 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * Edit mode change: delegate to FormComponent if available, otherwise re-emit.
    */
   OnEditModeChange(editMode: boolean): void {
+    if (editMode && this.ActiveVersionPreview) {
+      this.OnExitVersionPreview();
+    }
+    if (!editMode) {
+      this.recordRefresh.ClearAllConflicts();
+    }
     if (this.Fc) {
       if (editMode) {
         this.Fc.StartEditMode();
@@ -2166,11 +2512,15 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       this.cdr.markForCheck();
 
       try {
+        this.lastLocalSaveAt = Date.now();
         await this.Fc.SaveRecord(true);
+        this.lastLocalSaveAt = Date.now();
+        this.recordRefresh.ClearAllConflicts();
 
         // After successful save, refresh version count badge and record changes drawer
         this.refreshAfterSave();
       } finally {
+        this.lastLocalSaveAt = Date.now();
         // Use microtask timing to avoid ExpressionChangedAfterItHasBeenCheckedError
         await Promise.resolve();
         this.ngZone.run(() => {
@@ -2205,6 +2555,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * Cancel: delegate to FormComponent if available, otherwise re-emit.
    */
   OnCancelRequested(): void {
+    this.recordRefresh.ClearAllConflicts();
     if (this.Fc?.CancelEdit) {
       this.Fc.CancelEdit();
       this.cdr.markForCheck();
@@ -2252,6 +2603,382 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   /**
+   * Listens for cross-tab (`remote-invalidate`) and cross-instance (`save`) BaseEntity events
+   * for the currently open record.
+   *
+   * - When NOT in Edit Mode (and clean): auto-refreshes the record in place, highlights any
+   *   changed fields via {@link FormRecordRefreshCoordinator.NotifyRemoteUpdate}, and displays
+   *   a non-intrusive slide-in pill that auto-dismisses after a few seconds.
+   * - When IN Edit Mode (or dirty): never overwrites unsaved work; shows a non-intrusive notice
+   *   pill offering a one-click Reload action.
+   */
+  private wireRemoteRecordInvalidation(): void {
+    MJGlobal.Instance.GetEventListener(false)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((e) => {
+        if (this.destroyed || e.eventCode !== BaseEntity.BaseEventCode) return;
+        const entityEvt = e.args as BaseEntityEvent | undefined;
+        if (!entityEvt) return;
+
+        const record = this.EffectiveRecord;
+        if (!record || !record.IsSaved || !record.EntityInfo) return;
+
+        if (entityEvt.type === 'save' && entityEvt.baseEntity === record) {
+          this.lastLocalSaveAt = Date.now();
+          return;
+        }
+
+        let matchesCurrentRecord = false;
+        if (entityEvt.type === 'remote-invalidate') {
+          // Ignore server echo from a save that just occurred on this form instance
+          if (Date.now() - this.lastLocalSaveAt < 2000) return;
+
+          const payload = entityEvt.payload as {
+            action?: 'save' | 'delete';
+            entityName?: string;
+            primaryKeyValues?: string;
+          } | undefined;
+          const eventEntityName = entityEvt.entityName || payload?.entityName;
+          if (!payload || payload.action !== 'save' || !eventEntityName || !payload.primaryKeyValues) return;
+          if (eventEntityName.trim().toLowerCase() !== record.EntityInfo.Name.trim().toLowerCase()) return;
+          matchesCurrentRecord = this.matchesRemotePrimaryKey(record, payload.primaryKeyValues);
+        } else if (entityEvt.type === 'save' && entityEvt.baseEntity && entityEvt.baseEntity !== record) {
+          if (entityEvt.baseEntity.EntityInfo?.Name === record.EntityInfo.Name) {
+            matchesCurrentRecord = entityEvt.baseEntity.PrimaryKey.Equals(record.PrimaryKey);
+          }
+        }
+
+        if (!matchesCurrentRecord || this.IsSaving || this.remoteRefreshInFlight) return;
+
+        this.ngZone.run(() => {
+          if (this.EffectiveEditMode || this.EffectiveIsDirty) {
+            void this.PerformLiveEditModeMerge(record);
+          } else {
+            void this.performLiveRemoteRefresh(record);
+          }
+        });
+      });
+  }
+
+  private matchesRemotePrimaryKey(record: BaseEntity, primaryKeyValuesRaw: string): boolean {
+    const trimmed = primaryKeyValuesRaw.trim();
+    if (!trimmed) return false;
+    // MJServer serializes primaryKeyValues as JSON.stringify(entityObject.PrimaryKey.KeyValuePairs)
+    if (trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmed) as Array<{ FieldName?: string; Value?: unknown }>;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const pairs = parsed
+            .filter((kv): kv is { FieldName: string; Value: unknown } => typeof kv?.FieldName === 'string')
+            .map((kv) => new KeyValuePair(kv.FieldName, kv.Value));
+          if (pairs.length > 0) {
+            const incomingKey = CompositeKey.FromKeyValuePairs(pairs);
+            if (incomingKey.Equals(record.PrimaryKey)) return true;
+            if (pairs.length === 1 && UUIDsEqual(String(pairs[0].Value ?? ''), String(record.PrimaryKey.Values()))) {
+              return true;
+            }
+          }
+        }
+      } catch {
+        // Fall through to URL segment / string comparisons below
+      }
+    }
+    const incomingFromSegment = CompositeKey.FromURLSegment(record.EntityInfo, trimmed);
+    return (
+      incomingFromSegment.Equals(record.PrimaryKey) ||
+      UUIDsEqual(trimmed, record.PrimaryKey.ToConcatenatedString()) ||
+      UUIDsEqual(trimmed, String(record.PrimaryKey.Values()))
+    );
+  }
+
+  private async performLiveRemoteRefresh(record: BaseEntity): Promise<void> {
+    if (this.remoteRefreshInFlight || this.destroyed) return;
+    this.remoteRefreshInFlight = true;
+    try {
+      const beforeValues: Record<string, unknown> = { ...record.GetAll() };
+      const refreshed = await record.Refresh();
+      if (!refreshed || this.destroyed) return;
+
+      const afterValues: Record<string, unknown> = record.GetAll();
+      const changedFieldSet = new Set<string>();
+      const changedLabels: string[] = [];
+
+      for (const field of record.EntityInfo.Fields) {
+        const beforeVal = beforeValues[field.Name];
+        const afterVal = afterValues[field.Name];
+        const beforeStr = beforeVal instanceof Date ? beforeVal.toISOString() : String(beforeVal ?? '');
+        const afterStr = afterVal instanceof Date ? afterVal.toISOString() : String(afterVal ?? '');
+        if (beforeStr !== afterStr) {
+          changedFieldSet.add(field.Name.toLowerCase());
+          if (field.CodeName) {
+            changedFieldSet.add(field.CodeName.toLowerCase());
+          }
+          if (!field.Name.startsWith('__mj_')) {
+            changedLabels.push(field.DisplayNameOrName);
+          }
+        }
+      }
+
+      this.badgeCountsLoaded = false;
+      this.loadBadgeCounts();
+      if (this.ShowRecordChanges && this.recordChangesDrawer) {
+        this.recordChangesDrawer.Refresh();
+      }
+      this.recordRefresh.NotifyRemoteUpdate(record, changedFieldSet);
+      this.scheduleChromeResolve();
+
+      const summary =
+        changedLabels.length === 1
+          ? `Updated live · ${changedLabels[0]} changed`
+          : changedLabels.length > 1
+            ? `Updated live · ${changedLabels.slice(0, 2).join(', ')}${changedLabels.length > 2 ? ` +${changedLabels.length - 2} more` : ''} changed`
+            : 'Updated live';
+
+      this.showRemoteUpdatePill(
+        {
+          Kind: 'refreshed',
+          Summary: summary,
+          ChangedFields: changedLabels,
+        },
+        true,
+      );
+
+      this.Fc?.cdr?.detectChanges();
+      this.cdr.detectChanges();
+    } catch (err) {
+      LogError(`Live form auto-refresh failed for ${record.EntityInfo.Name}: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      this.remoteRefreshInFlight = false;
+    }
+  }
+
+  /**
+   * Performs a field-by-field live merge when a remote update arrives while the user is in Edit Mode:
+   * - Clean fields (`!field.Dirty`) whose server value changed are silently auto-merged in place and stay clean.
+   * - Dirty fields (`field.Dirty`) whose current user edit matches the new server value converge cleanly.
+   * - Dirty fields (`field.Dirty`) whose current user edit differs from the new server value preserve the user's
+   *   edit, update `OldValue` to the new server baseline, and raise a {@link FormFieldConflict}.
+   */
+  public async PerformLiveEditModeMerge(record: BaseEntity): Promise<void> {
+    if (this.remoteRefreshInFlight || this.destroyed) return;
+    this.remoteRefreshInFlight = true;
+    try {
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const pk = record.PrimaryKey as (CompositeKey & { WhereClause?: () => string }) | undefined;
+      const whereClause =
+        typeof pk?.ToWhereClause === 'function'
+          ? pk.ToWhereClause()
+          : typeof pk?.WhereClause === 'function'
+            ? pk.WhereClause()
+            : '';
+      const result = await rv.RunView<Record<string, unknown>>({
+        EntityName: record.EntityInfo.Name,
+        ExtraFilter: whereClause,
+        ResultType: 'simple',
+        BypassCache: true,
+        MaxRows: 1,
+      });
+
+      if (!result?.Success || !Array.isArray(result.Results) || result.Results.length === 0 || this.destroyed) {
+        return;
+      }
+
+      const remoteRow = result.Results[0];
+      const changedFieldSet = new Set<string>();
+      const autoMergedPreviousValues = new Map<string, unknown>();
+      const conflicts = new Map<string, FormFieldConflict>();
+      const autoMergedLabels: string[] = [];
+      const conflictLabels: string[] = [];
+
+      for (const field of record.Fields) {
+        if (!(field.Name in remoteRow)) {
+          continue;
+        }
+        const remoteVal = remoteRow[field.Name];
+
+        // Always update system timestamp fields (__mj_UpdatedAt, __mj_CreatedAt)
+        if (field.Name.startsWith('__mj_')) {
+          if (this.formatComparableValue(remoteVal) !== this.formatComparableValue(field.Value)) {
+            if (field.ReadOnly && typeof field.ResetNeverSetFlag === 'function') {
+              field.ResetNeverSetFlag();
+            }
+            field.Value = remoteVal;
+            field.ResetOldValue();
+          }
+          continue;
+        }
+
+        const remoteDiffersFromBaseline =
+          this.formatComparableValue(remoteVal) !== this.formatComparableValue(field.OldValue);
+        if (!remoteDiffersFromBaseline) {
+          continue;
+        }
+
+        if (!field.Dirty) {
+          // Clean locally: silently auto-merge and keep Dirty === false
+          const previousVal = field.Value;
+          autoMergedPreviousValues.set(field.Name.toLowerCase(), previousVal);
+          if (field.CodeName) {
+            autoMergedPreviousValues.set(field.CodeName.toLowerCase(), previousVal);
+          }
+          if (field.ReadOnly && typeof field.ResetNeverSetFlag === 'function') {
+            field.ResetNeverSetFlag();
+          }
+          field.Value = remoteVal;
+          field.ResetOldValue();
+          changedFieldSet.add(field.Name.toLowerCase());
+          if (field.CodeName) {
+            changedFieldSet.add(field.CodeName.toLowerCase());
+          }
+          const fieldWithLabel = field as EntityField & { DisplayNameOrName?: string };
+          autoMergedLabels.push(
+            field.EntityFieldInfo?.DisplayNameOrName || fieldWithLabel.DisplayNameOrName || field.Name
+          );
+        } else {
+          // Dirty locally: check if user edit converged with remote value
+          if (this.formatComparableValue(field.Value) === this.formatComparableValue(remoteVal)) {
+            field.Value = remoteVal;
+            field.ResetOldValue();
+            this.recordRefresh.ResolveConflict(field.Name);
+          } else {
+            // True conflict: preserve user's edit, update OldValue baseline to remoteVal
+            const previousServerValue = field.OldValue;
+            const userVal = field.Value;
+            field.Value = remoteVal;
+            field.ResetOldValue();
+            field.Value = userVal;
+
+            const conflict: FormFieldConflict = {
+              fieldName: field.Name,
+              previousServerValue,
+              incomingServerValue: remoteVal,
+              localEditedValue: userVal,
+            };
+            conflicts.set(field.Name.toLowerCase(), conflict);
+            changedFieldSet.add(field.Name.toLowerCase());
+            if (field.CodeName) {
+              changedFieldSet.add(field.CodeName.toLowerCase());
+            }
+            const fieldWithLabel = field as EntityField & { DisplayNameOrName?: string };
+            conflictLabels.push(
+              field.EntityFieldInfo?.DisplayNameOrName || fieldWithLabel.DisplayNameOrName || field.Name
+            );
+          }
+        }
+      }
+
+      if (changedFieldSet.size > 0 || conflicts.size > 0) {
+        this.recordRefresh.NotifyRemoteUpdate(
+          record,
+          changedFieldSet,
+          autoMergedPreviousValues,
+          conflicts,
+        );
+      }
+
+      if (conflictLabels.length > 0 && autoMergedLabels.length > 0) {
+        this.showRemoteUpdatePill(
+          {
+            Kind: 'stale-while-editing',
+            Summary: `${autoMergedLabels.length} field${autoMergedLabels.length === 1 ? '' : 's'} updated live · ${conflictLabels.length} ${conflictLabels.length === 1 ? 'conflict needs' : 'conflicts need'} review`,
+            ChangedFields: [...autoMergedLabels, ...conflictLabels],
+          },
+          false,
+        );
+      } else if (conflictLabels.length > 0) {
+        this.showRemoteUpdatePill(
+          {
+            Kind: 'stale-while-editing',
+            Summary: `${conflictLabels.length} ${conflictLabels.length === 1 ? 'conflict needs' : 'conflicts need'} review (${conflictLabels.slice(0, 2).join(', ')})`,
+            ChangedFields: conflictLabels,
+          },
+          false,
+        );
+      } else if (autoMergedLabels.length > 0) {
+        const summary =
+          autoMergedLabels.length === 1
+            ? `Updated live · ${autoMergedLabels[0]} changed`
+            : `Updated live · ${autoMergedLabels.slice(0, 2).join(', ')}${autoMergedLabels.length > 2 ? ` +${autoMergedLabels.length - 2} more` : ''} changed`;
+        this.showRemoteUpdatePill(
+          {
+            Kind: 'refreshed',
+            Summary: summary,
+            ChangedFields: autoMergedLabels,
+          },
+          true,
+        );
+      }
+
+      this.Fc?.cdr?.detectChanges();
+      this.cdr.detectChanges();
+    } catch (err) {
+      LogError(`Live edit-mode merge failed for ${record.EntityInfo.Name}: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      this.remoteRefreshInFlight = false;
+    }
+  }
+
+  private formatComparableValue(val: unknown): string {
+    if (val === null || val === undefined) {
+      return '';
+    }
+    if (val instanceof Date) {
+      return isNaN(val.getTime()) ? '' : val.toISOString();
+    }
+    if (typeof val === 'string') {
+      const trimmed = val.trim();
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(trimmed)) {
+        const parsed = new Date(trimmed);
+        if (!isNaN(parsed.getTime())) {
+          return parsed.toISOString();
+        }
+      }
+      return trimmed;
+    }
+    return String(val);
+  }
+
+  private showRemoteUpdatePill(
+    pill: { Kind: 'refreshed' | 'stale-while-editing'; Summary: string; ChangedFields: string[] },
+    autoDismiss: boolean,
+  ): void {
+    if (this.remoteUpdatePillTimer) {
+      clearTimeout(this.remoteUpdatePillTimer);
+      this.remoteUpdatePillTimer = null;
+    }
+    this.RemoteUpdatePill = pill;
+    this.cdr.markForCheck();
+    if (autoDismiss) {
+      this.remoteUpdatePillTimer = setTimeout(() => {
+        this.remoteUpdatePillTimer = null;
+        if (!this.destroyed) {
+          this.RemoteUpdatePill = null;
+          this.cdr.markForCheck();
+        }
+      }, 4500);
+    }
+  }
+
+  public OnDismissRemoteUpdatePill(): void {
+    if (this.remoteUpdatePillTimer) {
+      clearTimeout(this.remoteUpdatePillTimer);
+      this.remoteUpdatePillTimer = null;
+    }
+    this.RemoteUpdatePill = null;
+    this.cdr.markForCheck();
+  }
+
+  public async OnReloadFromRemotePill(): Promise<void> {
+    this.OnDismissRemoteUpdatePill();
+    const record = this.EffectiveRecord;
+    if (!record) return;
+    if (this.Fc && this.EffectiveEditMode) {
+      this.Fc.EndEditMode();
+    }
+    await this.performLiveRemoteRefresh(record);
+  }
+
+  /**
    * Delete, Favorite, History, Lists, ShowChanges: always re-emit for host app.
    */
   OnDeleteRequested(): void {
@@ -2267,6 +2994,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     const beforeEvent = new BeforeHistoryViewEventArgs();
     this.BeforeHistoryView.emit(beforeEvent);
     if (beforeEvent.Cancel) return;
+
+    // Ensure live record fields are restored before opening the history/restore drawer
+    this.restoreLiveRecordFromPreviewStash(this.EffectiveRecord);
 
     // If not cancelled, show built-in record changes drawer
     this.ShowRecordChanges = true;
@@ -2317,6 +3047,406 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   OnTagsPanelWidthChanged(width: number): void {
     this.TagsPanelWidth = width;
     UserInfoEngine.Instance.SetSettingDebounced(MjRecordFormContainerComponent.TAGS_WIDTH_KEY, String(width));
+  }
+
+  OnToggleRecordLinks(): void {
+    this.ShowRecordLinks = !this.ShowRecordLinks;
+    this.cdr.detectChanges();
+  }
+
+  OnRecordLinksClosed(): void {
+    this.ShowRecordLinks = false;
+    this.cdr.detectChanges();
+  }
+
+  OnLinkCountChanged(count: number): void {
+    this.LinkCount = count;
+    this.cdr.markForCheck();
+  }
+
+  OnLinksSummaryChanged(summary: FormAgentLinksSummary): void {
+    this.LinksSummary = summary;
+    this.scheduleChromeResolve();
+    this.cdr.markForCheck();
+  }
+
+  OnAskAIRequested(): void {
+    // Publish the freshest composition snapshot (including current dirty edits + links) before opening AI
+    this.resolveChrome();
+    this.Fc?.AskAIRequested.emit();
+    this.AskAIRequested.emit();
+  }
+
+  // ---- In-Form Time-Travel Historical Version Preview ----
+
+  OnPreviewVersionSelected(
+    event: MJRecordChangeEntity | { Change: MJRecordChangeEntity; Index?: number; TotalCount?: number } | null
+  ): void {
+    if (!event) {
+      this.OnExitVersionPreview();
+      return;
+    }
+    const change = 'Change' in event ? event.Change : event;
+    if (this.recordChangesDrawer) {
+      this.previewableChangesCache = this.recordChangesDrawer.GetPreviewableChanges();
+    }
+    const previewable = this.previewableChangesCache;
+    const currentIndex =
+      'Change' in event && typeof event.Index === 'number'
+        ? event.Index
+        : Math.max(0, previewable.findIndex((c) => UUIDsEqual(c.ID, change.ID)));
+    const totalCount =
+      'Change' in event && typeof event.TotalCount === 'number'
+        ? event.TotalCount
+        : Math.max(1, previewable.length);
+
+    const record = this.EffectiveRecord;
+    if (!record || !Array.isArray(record.Fields)) return;
+
+    // Close the slide-in Record Changes drawer automatically so the form is 100%
+    // bright, unobstructed, and full-width under the Time-Travel Scrubber Bar.
+    this.ShowRecordChanges = false;
+
+    if (this.EffectiveEditMode && !this.EffectiveIsDirty) {
+      this.OnEditModeChange(false);
+    }
+
+    // Restore live baseline first if stepping from one previewed version to another,
+    // then capture a fresh stash of the true live values before rehydrating `record`.
+    if (this.liveRecordPreviewStash) {
+      this.restoreLiveRecordFromPreviewStash(record);
+    }
+    this.liveRecordPreviewStash = new Map();
+    for (const field of record.Fields) {
+      this.liveRecordPreviewStash.set(field.Name, {
+        value: field.Value,
+        oldValue: field.OldValue,
+      });
+    }
+
+    const parsedSnapshot: Record<string, unknown> = {};
+    if (change.FullRecordJSON) {
+      try {
+        const raw = JSON.parse(change.FullRecordJSON) as Record<string, unknown>;
+        for (const [k, v] of Object.entries(raw)) {
+          parsedSnapshot[k.toLowerCase()] = v;
+        }
+      } catch {
+        // Fallback to ChangesJSON below
+      }
+    }
+    if (change.ChangesJSON) {
+      try {
+        const rawChanges = JSON.parse(change.ChangesJSON) as Record<
+          string,
+          { field?: string; newValue?: unknown }
+        >;
+        for (const [k, v] of Object.entries(rawChanges)) {
+          const fieldKey = (v?.field || k).toLowerCase();
+          if (v && 'newValue' in v) {
+            parsedSnapshot[fieldKey] = v.newValue;
+          }
+        }
+      } catch {
+        // Ignore malformed ChangesJSON
+      }
+    }
+
+    // Synthesize calculated composite name fields (e.g. DisplayName / FullName on People)
+    // because FullRecordJSON is captured before SQL Server recomputes computed columns.
+    this.synthesizeCalculatedSnapshotFields(record, parsedSnapshot);
+
+    const snapshotValues: Record<string, unknown> = {};
+    const fieldDiffs = new Map<string, FormVersionPreviewFieldDiff>();
+    const diffChips: FormVersionPreviewFieldDiff[] = [];
+    let diffCount = 0;
+
+    for (const field of record.Fields) {
+      if (field.Name.startsWith('__mj_')) continue;
+      const lowerName = field.Name.toLowerCase();
+      const lowerCode = field.CodeName ? field.CodeName.toLowerCase() : null;
+      const liveBaseline = this.liveRecordPreviewStash.get(field.Name)?.value ?? field.Value;
+      const hasHist =
+        lowerName in parsedSnapshot || (lowerCode !== null && lowerCode in parsedSnapshot);
+      const histVal = hasHist
+        ? lowerName in parsedSnapshot
+          ? parsedSnapshot[lowerName]
+          : parsedSnapshot[lowerCode!]
+        : liveBaseline;
+
+      snapshotValues[field.Name] = histVal;
+      snapshotValues[lowerName] = histVal;
+      if (field.CodeName) {
+        snapshotValues[field.CodeName] = histVal;
+      }
+      if (lowerCode) {
+        snapshotValues[lowerCode] = histVal;
+      }
+
+      if (!field.EntityFieldInfo?.IsPrimaryKey) {
+        if (this.formatComparableValue(histVal) !== this.formatComparableValue(liveBaseline)) {
+          const fieldWithLabel = field as EntityField & { DisplayNameOrName?: string };
+          const diff: FormVersionPreviewFieldDiff = {
+            FieldName: field.Name,
+            DisplayName:
+              field.EntityFieldInfo?.DisplayNameOrName || fieldWithLabel.DisplayNameOrName || field.Name,
+            HistoricalValue: histVal,
+            CurrentLiveValue: liveBaseline,
+            IsChanged: true,
+          };
+          fieldDiffs.set(lowerName, diff);
+          if (lowerCode) {
+            fieldDiffs.set(lowerCode, diff);
+          }
+          diffChips.push(diff);
+          diffCount++;
+        }
+
+        // Rehydrate the in-memory BaseEntity field (including ReadOnly/calculated fields)
+        // so custom header panels (e.g. PersonHeaderPanel / bizapps-person-identity) and
+        // calculated fields reflect the previewed historical snapshot while keeping Dirty=false.
+        if (field.ReadOnly && typeof field.ResetNeverSetFlag === 'function') {
+          field.ResetNeverSetFlag();
+        }
+        field.Value = histVal;
+        if (typeof field.ResetOldValue === 'function') {
+          field.ResetOldValue();
+        }
+      }
+    }
+
+    const changedAt =
+      change.ChangedAt instanceof Date
+        ? change.ChangedAt
+        : new Date(String(change.ChangedAt));
+    const versionLabel = !isNaN(changedAt.getTime())
+      ? `${changedAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} · ${changedAt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`
+      : String(change.ChangedAt ?? '');
+
+    this.activePreviewSourceChange = change;
+    this.PreviewChangedFieldChips = diffChips;
+    this.recordRefresh.SetVersionPreview({
+      ChangeID: change.ID,
+      ChangedAt: changedAt,
+      ChangedByUser: change.User || 'System',
+      UserName: change.User || 'System',
+      VersionLabel: versionLabel,
+      ChangeType: change.Type || 'Update',
+      Type: change.Type || 'Update',
+      Source: change.Source || 'Internal',
+      Summary: change.ChangesDescription || change.Comments || '',
+      Comments: change.ChangesDescription || change.Comments || '',
+      SnapshotValues: snapshotValues,
+      FieldDiffs: fieldDiffs,
+      DiffCount: diffCount,
+      CurrentIndex: currentIndex,
+      TotalRestoreableCount: totalCount,
+    });
+    this.scheduleChromeResolve();
+    this.Fc?.cdr?.markForCheck();
+    this.cdr.markForCheck();
+  }
+
+  private synthesizeCalculatedSnapshotFields(
+    record: BaseEntity,
+    parsedSnapshot: Record<string, unknown>
+  ): void {
+    const stash = this.liveRecordPreviewStash;
+    if (!stash) return;
+
+    const getLive = (name: string): string => {
+      const f = record.Fields.find((fld) => fld.Name.toLowerCase() === name.toLowerCase());
+      if (!f) return '';
+      const val = stash.get(f.Name)?.value ?? f.Value;
+      return val !== null && val !== undefined ? String(val).trim() : '';
+    };
+    const getHist = (name: string): string => {
+      const key = name.toLowerCase();
+      if (key in parsedSnapshot) {
+        const val = parsedSnapshot[key];
+        return val !== null && val !== undefined ? String(val).trim() : '';
+      }
+      return getLive(name);
+    };
+
+    const hasFirstLast =
+      record.Fields.some((f) => f.Name.toLowerCase() === 'firstname') &&
+      record.Fields.some((f) => f.Name.toLowerCase() === 'lastname');
+    if (!hasFirstLast) return;
+
+    const liveFirst = getLive('FirstName');
+    const liveMiddle = getLive('MiddleName');
+    const liveLast = getLive('LastName');
+    const liveSuffix = getLive('Suffix');
+
+    const histFirst = getHist('FirstName');
+    const histMiddle = getHist('MiddleName');
+    const histLast = getHist('LastName');
+    const histSuffix = getHist('Suffix');
+
+    const namePartsChanged =
+      histFirst !== liveFirst ||
+      histMiddle !== liveMiddle ||
+      histLast !== liveLast ||
+      histSuffix !== liveSuffix;
+    if (!namePartsChanged) return;
+
+    for (const calcFieldName of ['DisplayName', 'FullName', 'FirstLast']) {
+      const calcField = record.Fields.find((f) => f.Name.toLowerCase() === calcFieldName.toLowerCase());
+      if (!calcField || !calcField.ReadOnly) continue;
+
+      const calcKey = calcField.Name.toLowerCase();
+      const liveCalcVal = getLive(calcField.Name);
+      const snapshotCalcVal =
+        calcKey in parsedSnapshot && parsedSnapshot[calcKey] != null
+          ? String(parsedSnapshot[calcKey]).trim()
+          : '';
+
+      // If FullRecordJSON still holds the pre-save / live calculated value (or is empty),
+      // synthesize the historical composite name from the historical name parts.
+      if (!snapshotCalcVal || snapshotCalcVal === liveCalcVal) {
+        const liveWithMiddle = [liveFirst, liveMiddle, liveLast, liveSuffix].filter(Boolean).join(' ');
+        const includeMiddle = Boolean(liveMiddle && liveCalcVal === liveWithMiddle);
+        const synthesized = (
+          includeMiddle
+            ? [histFirst, histMiddle, histLast, histSuffix]
+            : [histFirst, histLast, histSuffix]
+        )
+          .filter(Boolean)
+          .join(' ');
+        if (synthesized) {
+          parsedSnapshot[calcKey] = synthesized;
+        }
+      }
+    }
+  }
+
+  private restoreLiveRecordFromPreviewStash(record?: BaseEntity | null): void {
+    const target = record ?? this.EffectiveRecord;
+    const stash = this.liveRecordPreviewStash;
+    if (!stash || !target || !Array.isArray(target.Fields)) {
+      this.liveRecordPreviewStash = null;
+      return;
+    }
+    for (const field of target.Fields) {
+      const saved = stash.get(field.Name);
+      if (!saved) continue;
+      if (field.ReadOnly && typeof field.ResetNeverSetFlag === 'function') {
+        field.ResetNeverSetFlag();
+      }
+      field.Value = saved.oldValue;
+      if (typeof field.ResetOldValue === 'function') {
+        field.ResetOldValue();
+      }
+      if (this.formatComparableValue(saved.value) !== this.formatComparableValue(saved.oldValue)) {
+        if (field.ReadOnly && typeof field.ResetNeverSetFlag === 'function') {
+          field.ResetNeverSetFlag();
+        }
+        field.Value = saved.value;
+      }
+    }
+    this.liveRecordPreviewStash = null;
+  }
+
+  public FormatPreviewDiffValue(val: unknown): string {
+    if (val === null || val === undefined || val === '') return '(empty)';
+    if (typeof val === 'boolean') return val ? 'Yes' : 'No';
+    if (val instanceof Date) {
+      return isNaN(val.getTime()) ? '(empty)' : val.toLocaleDateString();
+    }
+    const str = String(val).trim();
+    if (!str) return '(empty)';
+    if (str.length > 36) return `${str.slice(0, 33)}...`;
+    return str;
+  }
+
+  OnStepVersionPreview(delta: number): void {
+    const preview = this.ActiveVersionPreview;
+    if (!preview) return;
+    const previewable =
+      this.recordChangesDrawer?.GetPreviewableChanges() ?? this.previewableChangesCache;
+    if (previewable.length === 0) return;
+    const nextIndex = (preview.CurrentIndex ?? 0) + delta;
+    if (nextIndex < 0 || nextIndex >= previewable.length) return;
+    const targetChange = previewable[nextIndex];
+    this.OnPreviewVersionSelected({
+      Change: targetChange,
+      Index: nextIndex,
+      TotalCount: previewable.length,
+    });
+  }
+
+  OnReopenHistoryFromPreview(): void {
+    this.restoreLiveRecordFromPreviewStash(this.EffectiveRecord);
+    this.ShowRecordChanges = true;
+    this.Fc?.cdr?.markForCheck();
+    this.cdr.markForCheck();
+  }
+
+  OnRestorePreviewedVersion(): void {
+    if (!this.activePreviewSourceChange) return;
+    const targetChange = this.activePreviewSourceChange;
+    this.restoreLiveRecordFromPreviewStash(this.EffectiveRecord);
+    this.ShowRecordChanges = true;
+    this.cdr.detectChanges();
+    this.recordChangesDrawer?.OpenRestoreForChange(targetChange);
+  }
+
+  OnExitVersionPreview(): void {
+    this.restoreLiveRecordFromPreviewStash(this.EffectiveRecord);
+    this.activePreviewSourceChange = null;
+    this.PreviewChangedFieldChips = [];
+    this.recordRefresh.SetVersionPreview(null);
+    this.scheduleChromeResolve();
+    this.Fc?.cdr?.markForCheck();
+    this.cdr.markForCheck();
+  }
+
+  private async onSingleFieldRestoreRequested(req: FormSingleFieldRestoreRequest): Promise<void> {
+    const record = this.EffectiveRecord;
+    if (!record || !Array.isArray(record.Fields)) return;
+    const targetField = record.Fields.find(
+      (f) =>
+        f.Name.toLowerCase() === req.FieldName.toLowerCase() ||
+        (f.CodeName && f.CodeName.toLowerCase() === req.FieldName.toLowerCase())
+    );
+    if (!targetField) return;
+
+    const savedSourceChange = this.activePreviewSourceChange;
+    const savedIndex = this.ActiveVersionPreview?.CurrentIndex;
+    const savedTotal = this.ActiveVersionPreview?.TotalRestoreableCount;
+
+    // Restore live field baseline before saving the single restored field
+    this.restoreLiveRecordFromPreviewStash(record);
+
+    const changeId = req.SourceChangeID || req.ChangeID || '';
+    try {
+      targetField.Value = req.HistoricalValue;
+      record.SetRestoreContext(changeId, `Restored ${req.FieldName} from version preview`);
+      try {
+        const saved = await record.Save();
+        if (saved) {
+          this.notificationService.CreateSimpleNotification(
+            `Restored ${targetField.EntityFieldInfo?.DisplayNameOrName || targetField.Name} from historical version`,
+            'info',
+            3000,
+          );
+          this.loadVersionCount(record);
+          if (savedSourceChange) {
+            this.OnPreviewVersionSelected({
+              Change: savedSourceChange,
+              Index: savedIndex,
+              TotalCount: savedTotal,
+            });
+          }
+          this.cdr.markForCheck();
+        }
+      } finally {
+        record.ClearRestoreContext();
+      }
+    } catch (err) {
+      LogError(`Single-field restore failed for ${req.FieldName}: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   OnAttachmentsPanelToggled(): void {
@@ -2373,6 +3503,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   async OnRestoreRequested(event: RestoreVersionEvent): Promise<void> {
     const record = this.EffectiveRecord;
     if (!record) return;
+    this.OnExitVersionPreview();
 
     try {
       // Apply each selected snapshot field

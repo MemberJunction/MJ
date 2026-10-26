@@ -568,10 +568,10 @@ describe('EntityDocumentConfiguration', () => {
     const templateContent = { ID: 'TPL-1' };
 
     describe('addSystemMetadata', () => {
-      it('should set RecordID / Entity / TemplateID when not explicit', () => {
+      it('should set RecordID / Entity / EntityDocumentID / TemplateID when not explicit', () => {
         const metadata: Record<string, string | number | boolean> = {};
         syncer.testAddSystemMetadata(metadata, { __mj_compositeKey: 'ID|abc' }, entityDocument, templateContent, false);
-        expect(metadata).toEqual({ RecordID: 'ID|abc', Entity: 'Content Items', TemplateID: 'TPL-1' });
+        expect(metadata).toEqual({ RecordID: 'ID|abc', Entity: 'Content Items', EntityDocumentID: 'DOC-1', TemplateID: 'TPL-1' });
       });
 
       it('should add nothing when explicit', () => {

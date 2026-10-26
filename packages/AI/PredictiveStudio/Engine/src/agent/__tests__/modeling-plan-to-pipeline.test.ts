@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { DOMINANCE_THRESHOLD_DEFAULT, type ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
+import { DOMINANCE_THRESHOLD_DEFAULT, InvalidMajorityBaselineRuleError, type ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 import { ModelingPlanToPipelineConfig } from '../modeling-plan-to-pipeline';
+import { AsOfSettingHasNoEffectError } from '../../training/as-of-refusal';
 
 /**
  * The mapper is the deterministic heart of the agent's builder — it turns the conversation-accumulated
@@ -153,5 +154,42 @@ describe('modelingPlanToPipelineConfig', () => {
       FeaturePipelineRef: 'JobFunctionSeniorityPipeline',
       Columns: ['JobFunction', 'SeniorityLevel'],
     });
+  });
+});
+
+describe('modelingPlanToPipelineConfig — evaluation settings and refusals (I2)', () => {
+  const target = baseSpec().TargetDefinition;
+
+  it('carries TimeIndexColumn and MajorityBaselineRule onto the pipeline validation strategy', () => {
+    const cfg = ModelingPlanToPipelineConfig(baseSpec({
+      ValidationStrategy: { Strategy: 'holdout', LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex', MajorityBaselineRule: 'warn' },
+    }));
+    expect(cfg.validation).toEqual({ Strategy: 'holdout', TestSize: undefined, K: undefined, LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex', MajorityBaselineRule: 'warn' });
+  });
+
+  it('leaves both settings off when the plan does not set them', () => {
+    const cfg = ModelingPlanToPipelineConfig(baseSpec());
+    expect(cfg.validation).not.toHaveProperty('TimeIndexColumn');
+    expect(cfg.validation).not.toHaveProperty('MajorityBaselineRule');
+  });
+
+  it('refuses an unknown MajorityBaselineRule before any pipeline row exists', () => {
+    // An LLM-authored plan can carry any string; the stored JSON is not held to the union.
+    const spec = baseSpec();
+    spec.ValidationStrategy = JSON.parse('{"Strategy":"holdout","LockedHoldoutFraction":0.2,"MajorityBaselineRule":"off"}');
+    expect(() => ModelingPlanToPipelineConfig(spec)).toThrow(InvalidMajorityBaselineRuleError);
+  });
+
+  for (const asOf of [{ Mode: 'column' as const, Column: 'StartDate' }, { Mode: 'offset' as const, OffsetDays: 30 }]) {
+    it(`refuses AsOfStrategy.Mode='${asOf.Mode}' (training would ignore it) before any pipeline row exists`, () => {
+      const spec = baseSpec({ TargetDefinition: { ...target, AsOfStrategy: asOf } });
+      expect(() => ModelingPlanToPipelineConfig(spec)).toThrow(AsOfSettingHasNoEffectError);
+      expect(() => ModelingPlanToPipelineConfig(spec)).toThrow(/modeling plan's TargetDefinition\.AsOfStrategy/);
+    });
+  }
+
+  it("keeps Mode='none' and an absent AsOfStrategy", () => {
+    expect(ModelingPlanToPipelineConfig(baseSpec({ TargetDefinition: { ...target, AsOfStrategy: { Mode: 'none' } } })).asOf).toEqual({ Mode: 'none' });
+    expect(ModelingPlanToPipelineConfig(baseSpec()).asOf).toEqual({ Mode: 'none' });
   });
 });

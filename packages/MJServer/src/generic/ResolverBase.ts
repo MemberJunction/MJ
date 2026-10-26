@@ -23,8 +23,17 @@ import {
   RunViewParams,
   RunViewResult,
   UserInfo,
+  ViewPropertyValues,
 } from '@memberjunction/core';
-import { MJAuditLogEntity, MJErrorLogEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
+import { MJAuditLogEntity, MJErrorLogEntity, MJUserViewEntityExtended, UserViewEngine } from '@memberjunction/core-entities';
+
+/**
+ * Extended RunViewResult carrying a non-enumerable reference to the resolved view entity
+ * so downstream resolvers (e.g. RunViewResolver) do not re-query `MJ: User Views` a third time.
+ */
+export type RunViewResultWithResolvedView<T = unknown> = RunViewResult<T> & {
+  _resolvedViewEntity?: MJUserViewEntityExtended;
+};
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import { ClientClauseScreen, UserCache, type EntityBaseViewAllowList } from '@memberjunction/generic-database-provider';
 import { PubSubEngine, AuthorizationError } from 'type-graphql';
@@ -56,6 +65,7 @@ const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
   'mj: record changes',
   'mj: conversation details',
   'mj: data context items',
+  'mj: ai agent runs',
 ]);
 
 export class ResolverBase {
@@ -559,6 +569,53 @@ export class ResolverBase {
     }
   }
 
+  /**
+   * Resolves a User View by name, consulting the in-memory {@link UserViewEngine} cache first
+   * and falling back to a database `RunView` only on a cache miss.
+   */
+  protected async resolveUserViewByName(
+    viewName: string,
+    provider: DatabaseProviderBase,
+    contextUser?: UserInfo,
+  ): Promise<MJUserViewEntityExtended | null> {
+    if (UserViewEngine.Instance.Loaded) {
+      const cached = UserViewEngine.Instance.GetViewByName(viewName);
+      if (cached) {
+        return cached;
+      }
+    }
+    const rv = provider as unknown as IRunViewProvider;
+    const result = await rv.RunView<MJUserViewEntityExtended>({
+      EntityName: 'MJ: User Views',
+      // SECURITY: the view name is client-supplied and lands inside a SQL literal.
+      ExtraFilter: "Name='" + EscapeSQLString(viewName) + "'",
+    }, contextUser);
+    if (result && result.Success && result.Results.length > 0) {
+      return result.Results[0];
+    }
+    return null;
+  }
+
+  /**
+   * Resolves a User View by ID, consulting the in-memory {@link UserViewEngine} cache first
+   * and falling back to an entity `Load()` only on a cache miss.
+   */
+  protected async resolveUserViewByID(
+    viewID: string,
+    provider: DatabaseProviderBase,
+    contextUser?: UserInfo,
+  ): Promise<MJUserViewEntityExtended | null> {
+    if (UserViewEngine.Instance.Loaded) {
+      const cached = UserViewEngine.Instance.GetViewById(viewID);
+      if (cached) {
+        return cached;
+      }
+    }
+    const viewInfo = await provider.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views', contextUser);
+    await viewInfo.Load(viewID);
+    return viewInfo;
+  }
+
   async RunViewByNameGeneric(viewInput: RunViewByNameInput, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
     try {
       // Log aggregate input for debugging
@@ -566,14 +623,8 @@ export class ResolverBase {
         LogStatus(`[ResolverBase] RunViewByNameGeneric received aggregates: viewName=${viewInput.ViewName}, aggregateCount=${viewInput.Aggregates.length}, aggregates=${JSON.stringify(viewInput.Aggregates.map(a => ({ expression: a.expression, alias: a.alias })))}`);
       }
 
-      const rv = provider as any as IRunViewProvider;
-      const result = await rv.RunView<MJUserViewEntityExtended>({
-        EntityName: 'MJ: User Views',
-        // SECURITY: the view name is client-supplied and lands inside a SQL literal.
-        ExtraFilter: "Name='" + EscapeSQLString(viewInput.ViewName) + "'",
-      }, userPayload.userRecord);
-      if (result && result.Success && result.Results.length > 0) {
-        const viewInfo = result.Results[0];
+      const viewInfo = await this.resolveUserViewByName(viewInput.ViewName, provider, userPayload.userRecord);
+      if (viewInfo) {
         return this.RunViewGenericInternal(
           provider,
           viewInfo,
@@ -598,7 +649,9 @@ export class ResolverBase {
             : undefined,
           viewInput.BypassCache,
           viewInput.DataSource,
-          viewInput.IncludeBinaryFields
+          viewInput.IncludeBinaryFields,
+          viewInput.AlternateBaseView,
+          viewInput.Properties
         );
       }
       else {
@@ -619,8 +672,10 @@ export class ResolverBase {
       }
 
       const contextUser = this.GetUserFromPayload(userPayload);
-      const viewInfo = await provider.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views', contextUser);
-      await viewInfo.Load(viewInput.ViewID);
+      const viewInfo = await this.resolveUserViewByID(viewInput.ViewID, provider, contextUser);
+      if (!viewInfo) {
+        return null;
+      }
       return this.RunViewGenericInternal(
         provider,
         viewInfo,
@@ -643,7 +698,9 @@ export class ResolverBase {
         undefined,
         viewInput.BypassCache,
         viewInput.DataSource,
-        viewInput.IncludeBinaryFields
+        viewInput.IncludeBinaryFields,
+        viewInput.AlternateBaseView,
+        viewInput.Properties
       );
     } catch (err) {
       console.log(err);
@@ -691,7 +748,8 @@ export class ResolverBase {
         undefined,
         viewInput.BypassCache,
         viewInput.DataSource,
-        viewInput.IncludeBinaryFields
+        viewInput.IncludeBinaryFields,
+        viewInput.AlternateBaseView
       );
     } catch (err) {
       console.log(err);
@@ -712,15 +770,14 @@ export class ResolverBase {
         let viewInfo: MJUserViewEntityExtended | null = null;
 
         if (viewInput.ViewName) {
-          viewInfo = this.safeFirstArrayElement(await this.findBy(provider, 'MJ: User Views', { Name: viewInput.ViewName }, userPayload.userRecord));
+          viewInfo = await this.resolveUserViewByName(viewInput.ViewName, provider, userPayload.userRecord);
           // Populate EntityName on the input so callers (e.g. RunViews resolver) can
           // look up the entity without re-querying the view
           if (viewInfo && !viewInput.EntityName) {
             viewInput.EntityName = viewInfo.Entity;
           }
         } else if (viewInput.ViewID) {
-          viewInfo = await provider.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views', contextUser);
-          await viewInfo.Load(viewInput.ViewID);
+          viewInfo = await this.resolveUserViewByID(viewInput.ViewID, provider, contextUser);
           // Populate EntityName on the input so callers can look up the entity
           if (viewInfo && !viewInput.EntityName) {
             viewInput.EntityName = viewInfo.Entity;
@@ -767,6 +824,8 @@ export class ResolverBase {
           bypassCache: viewInput.BypassCache,
           dataSource: viewInput.DataSource,
           includeBinaryFields: viewInput.IncludeBinaryFields,
+          alternateBaseView: viewInput.AlternateBaseView,
+          properties: viewInput.Properties,
         });
       } catch (err) {
         LogError(err);
@@ -1145,7 +1204,9 @@ export class ResolverBase {
     afterKey?: CompositeKey,
     bypassCache?: boolean,
     dataSource?: 'Live' | 'Materialized',
-    includeBinaryFields?: boolean
+    includeBinaryFields?: boolean,
+    alternateBaseView?: string,
+    properties?: ViewPropertyValues
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
@@ -1207,6 +1268,7 @@ export class ResolverBase {
         {
           ViewID: viewInfo.ID,
           ViewName: viewInfo.Name,
+          ViewEntity: viewInfo.ID ? viewInfo : undefined,
           EntityName: viewInfo.Entity,
           ExtraFilter: extraFilter,
           OrderBy: orderBy,
@@ -1227,9 +1289,21 @@ export class ResolverBase {
           BypassCache: bypassCache,
           DataSource: dataSource,
           IncludeBinaryFields: includeBinaryFields,
+          AlternateBaseView: alternateBaseView,
+          Properties: properties,
+          TimeZone: userPayload?.TimeZone,
         },
         user
       );
+
+      if (result && typeof result === 'object') {
+        Object.defineProperty(result, '_resolvedViewEntity', {
+          value: viewInfo,
+          enumerable: false,
+          configurable: true,
+          writable: true,
+        });
+      }
 
       // Log aggregate results for debugging
       if (aggregates?.length) {
@@ -1261,7 +1335,8 @@ export class ResolverBase {
         await this.ArrayFilterEncryptedFieldsForAPI(
           viewInfo.Entity,
           result.Results as Record<string, unknown>[],
-          user
+          user,
+          md
         );
       }
 
@@ -1357,6 +1432,7 @@ export class ResolverBase {
         runViewParams.push({
           ViewID: param.viewInfo.ID,
           ViewName: param.viewInfo.Name,
+          ViewEntity: param.viewInfo.ID ? param.viewInfo : undefined,
           EntityName: param.viewInfo.Entity,
           ExtraFilter: param.extraFilter,
           OrderBy: param.orderBy,
@@ -1377,6 +1453,9 @@ export class ResolverBase {
           BypassCache: param.bypassCache,
           DataSource: param.dataSource,
           IncludeBinaryFields: param.includeBinaryFields,
+          AlternateBaseView: param.alternateBaseView,
+          Properties: param.properties,
+          TimeZone: param.userPayload?.TimeZone,
         });
       }
 
@@ -1398,7 +1477,8 @@ export class ResolverBase {
             await this.ArrayFilterEncryptedFieldsForAPI(
               entityName,
               runViewResult.Results as Record<string, unknown>[],
-              contextUser
+              contextUser,
+              md
             );
           }
         }

@@ -64,7 +64,7 @@ export class ActionRecordProcessor implements IRecordProcessor {
     }
 
     public async ProcessRecord(record: RecordRef, context: RecordProcessorContext): Promise<RecordResult> {
-        await ActionEngineServer.Instance.Config(false, context.contextUser);
+        await ActionEngineServer.Instance.Config(false, context.ContextUser);
         const action = ActionEngineServer.Instance.Actions.find((a) => UUIDsEqual(a.ID, this.actionID));
         if (!action) {
             return { Status: 'Failed', ErrorMessage: `Action '${this.actionID}' not found` };
@@ -72,10 +72,20 @@ export class ActionRecordProcessor implements IRecordProcessor {
 
         const result = await ActionEngineServer.Instance.RunAction({
             Action: action,
-            ContextUser: context.contextUser,
+            ContextUser: context.ContextUser,
             Params: ActionRecordProcessor.buildActionParams(this.inputMapping, record),
             Filters: [],
         });
+
+        // The detail row the tracker writes from this result carries ActionExecutionLogID, which has a
+        // foreign key to the log row — and the engine writes that row fire-and-forget on its own queue,
+        // which the tracker's queue cannot wait on. The promise settles after the log row's 'ended' UPDATE
+        // too (on the validation-failure and FailuresOnly paths that UPDATE is the write that creates the
+        // row), so every logged record waits about one log round-trip, not only when the action beat the
+        // INSERT.
+        if (result.LogEntryPersisted) {
+            await result.LogEntryPersisted;
+        }
 
         return {
             Status: result.Success ? 'Succeeded' : 'Failed',

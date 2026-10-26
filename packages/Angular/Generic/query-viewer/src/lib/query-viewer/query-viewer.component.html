@@ -81,6 +81,7 @@
     <!-- Grid -->
     @if (QueryInfo) {
       <mj-query-data-grid
+        [Provider]="Provider"
         [QueryInfo]="QueryInfo"
         [Data]="QueryData"
         [ExportDataProvider]="FetchAllRowsForExport"
@@ -104,7 +105,8 @@
   <!-- Parameter form panel -->
   <mj-query-parameter-form
     [QueryInfo]="QueryInfo"
-    [InitialValues]="SavedParams"
+    [InitialValues]="ParameterFormValues"
+    [ReadOnlyParameters]="ReadOnlyParameters"
     [IsOpen]="ShowParamsPanel"
     (ParametersSubmit)="OnParametersSubmit($event)"
     (Close)="OnParamsPanelClose()">
@@ -112,6 +114,7 @@
 
   <!-- Query info panel -->
   <mj-query-info-panel
+    [Provider]="Provider"
     [QueryInfo]="QueryInfo"
     [Visible]="ShowInfoPanel"
     (Close)="CloseInfoPanel()"

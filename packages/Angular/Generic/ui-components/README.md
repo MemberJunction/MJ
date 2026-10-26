@@ -356,6 +356,31 @@ Config-driven filter stack: `Fields: FilterFieldConfig[]` with `type: 'text' | '
 ### `mj-applied-filters` — MJAppliedFiltersComponent
 "Filtered by …" removable chip row. Renders nothing when `Filters` is empty, so it's safe to place unconditionally. `(Remove)`, `(ClearAll)`.
 
+### `mj-burst-cluster-strip` — MJBurstClusterStripComponent
+General-purpose, domain-agnostic **Burst-Aware Cluster Strip** for irregular and multi-year time-series data. Groups chronologically adjacent events into active session bursts separated by non-linear quiet-time gap connectors (`⋯ 11 mos quiet ⋯`), and automatically scales to multi-year histories via adaptive era coalescing (`Year` → `Quarter/Month` → `Session Burst`) with semantic **Click-to-Zoom** drill-down and a breadcrumb back pill.
+
+- **Two generic data-binding modes** (zero domain coupling):
+  1. Pre-normalized `[Items]="items"` (`MJBurstClusterItem<T>[]` with `{ ID, Timestamp, Category?, Tooltip?, Weight?, Data? }`).
+  2. Arbitrary raw objects via `[Data]="rows"` + `[FieldMap]="{ ID: '...', Timestamp: '...', Category: r => r.Type, Tooltip: r => r.Summary }"` (or individual `[IdField]`, `[TimestampField]`, `[CategoryField]`, `[TooltipField]`, `[WeightField]` inputs).
+- **Grouping & resolution inputs**: `Resolution` (`'auto' | 'session' | 'day' | 'week' | 'month' | 'quarter' | 'year'`), `CoalesceStrategy` (`'adaptive-era' | 'merge-closest'`), `SessionGapHours` (default `6`), `GroupSameCalendarDay` (default `true`), `MaxClusters` (default `5`), `EraZoomThreshold` (default `10`), `AllowZoom` (default `true`), `MaxPipsPerCluster` (default `12`), `MinGapQuietHours` (default `48`).
+- **Display inputs**: `Categories` (`MJBurstClusterCategory[]`), `Title`, `TitleIcon`, `ItemSingularNoun`, `ItemPluralNoun`, `ShowHeader`, `ShowLegend`, `ShowGapConnectors`, `ShowPips`, `ShowProportionalBar`, `SubtitleFormatter`, `[(SelectedClusterKey)]`.
+- **Imperative methods**: `SelectCluster(key)`, `ToggleCluster(key)`, `ClearSelection()`, `ZoomIntoCluster(key)`, `ZoomOut(depth?)`, `ResetZoom()`, `Rebuild()`, `GetSelectedItems()`, `GetSelectedData()`, `GetSelectedIDs()`, `GetClusterByKey(key)`.
+- **Cancellable `Before*` / `After*` lifecycle events**: `BeforeClusterSelect` / `AfterClusterSelect`, `BeforeSelectionClear` / `AfterSelectionClear`, `BeforeZoomChange` / `AfterZoomChange`, `BeforeClustersRebuild` / `AfterClustersRebuild`, `PipClicked`, and `FilterChanged`.
+
+```html
+<mj-burst-cluster-strip
+  Title="Person Activity"
+  ItemSingularNoun="activity"
+  ItemPluralNoun="activities"
+  [Data]="activities"
+  [FieldMap]="{ ID: 'ID', Timestamp: 'OccurredAt', Category: 'ActivityType' }"
+  [Categories]="activityCategories"
+  Resolution="auto"
+  CoalesceStrategy="adaptive-era"
+  (BeforeClusterSelect)="onBeforeSelect($event)"
+  (FilterChanged)="onTimelineFilterChanged($event)" />
+```
+
 ---
 
 ## Contributing

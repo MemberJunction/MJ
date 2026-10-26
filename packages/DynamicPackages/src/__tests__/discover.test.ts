@@ -133,3 +133,102 @@ describe('DiscoverAppManifestPackages / FindWorkspacePackageDir', () => {
         expect(FindWorkspacePackageDir(repoDir, 'missing-dir', '@acme/crm-server')).toBeNull();
     });
 });
+
+describe('DiscoverAppManifestPackages — platform routing (#4428)', () => {
+    /** Writes an mj-app.json into a fresh temp dir and returns the dir. */
+    function writePlatformManifest(manifest: unknown): string {
+        const dir = mkdtempSync(path.join(tmpdir(), 'dp-platform-'));
+        writeFileSync(path.join(dir, 'mj-app.json'), JSON.stringify(manifest));
+        return dir;
+    }
+
+    /**
+     * Mirrors ResolvePackagePlatform in
+     * packages/OpenApp/Engine/src/manifest/package-platform.ts — keep the two in lockstep.
+     */
+    const manifest = {
+        name: 'acme',
+        packages: {
+            server: [{ name: '@acme/server', role: 'bootstrap', startupExport: 'LoadServer' }],
+            client: [{ name: '@acme/ng', role: 'bootstrap', startupExport: 'LoadClient' }],
+            shared: [
+                { name: '@acme/entities', role: 'library' },
+                { name: '@acme/actions', role: 'library', platform: 'node' },
+                { name: '@acme/legacy-actions', role: 'actions' },
+            ],
+        },
+    };
+
+    it('omits node-only shared packages from the client tier', () => {
+        const dir = writePlatformManifest(manifest);
+        try {
+            const found = DiscoverAppManifestPackages(dir, 'client');
+            const names = found!.Entries.map((e) => e.Entry.PackageName);
+
+            expect(names).toContain('@acme/ng');
+            expect(names).toContain('@acme/entities');
+            expect(names).not.toContain('@acme/actions');
+            expect(names).not.toContain('@acme/legacy-actions');
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('keeps node-only shared packages on the server tier', () => {
+        const dir = writePlatformManifest(manifest);
+        try {
+            const names = DiscoverAppManifestPackages(dir, 'server')!.Entries.map((e) => e.Entry.PackageName);
+
+            expect(names).toContain('@acme/server');
+            expect(names).toContain('@acme/entities');
+            expect(names).toContain('@acme/actions');
+            expect(names).toContain('@acme/legacy-actions');
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
+    it.each([['Node'], [''], [null], [5]])(
+        'rejects an invalid platform value %j, naming the package and the value, instead of dropping the package',
+        (platform) => {
+            const dir = writePlatformManifest({
+                name: 'acme',
+                packages: { shared: [{ name: '@acme/entities', role: 'library' }, { name: '@acme/typo', role: 'library', platform }] },
+            });
+            try {
+                const expected = `packages.shared[1] "@acme/typo" has an invalid "platform" value ${JSON.stringify(platform)}`;
+                expect(() => DiscoverAppManifestPackages(dir, 'server')).toThrow(expected);
+                expect(() => DiscoverAppManifestPackages(dir, 'client')).toThrow(expected);
+                expect(() => DiscoverAppManifestPackages(dir, 'server')).toThrow(path.join(dir, 'mj-app.json'));
+            } finally {
+                rmSync(dir, { recursive: true, force: true });
+            }
+        }
+    );
+
+    it('skips a null or non-object package entry and still loads the rest of the manifest, as before the platform axis', () => {
+        const dir = writePlatformManifest({
+            name: 'acme',
+            packages: { shared: [null, 'not-an-object', { name: '@acme/entities', role: 'library' }] },
+        });
+        try {
+            expect(DiscoverAppManifestPackages(dir, 'server')!.Entries.map((e) => e.Entry.PackageName)).toEqual(['@acme/entities']);
+            expect(DiscoverAppManifestPackages(dir, 'client')!.Entries.map((e) => e.Entry.PackageName)).toEqual(['@acme/entities']);
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+    });
+
+    it('omits browser-only shared packages from the server tier', () => {
+        const dir = writePlatformManifest({
+            name: 'acme',
+            packages: { shared: [{ name: '@acme/widgets', role: 'library', platform: 'browser' }] },
+        });
+        try {
+            expect(DiscoverAppManifestPackages(dir, 'server')!.Entries.map((e) => e.Entry.PackageName)).not.toContain('@acme/widgets');
+            expect(DiscoverAppManifestPackages(dir, 'client')!.Entries.map((e) => e.Entry.PackageName)).toContain('@acme/widgets');
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+    });
+});

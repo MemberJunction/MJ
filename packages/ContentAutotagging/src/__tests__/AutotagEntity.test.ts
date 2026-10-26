@@ -137,6 +137,7 @@ vi.mock('@memberjunction/tag-engine-base', () => ({
     TagEngineBase: { Instance: { Config: vi.fn() } }
 }));
 
+import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { AutotagEntity } from '../Entity/generic/AutotagEntity';
 
 describe('AutotagEntity', () => {
@@ -145,6 +146,8 @@ describe('AutotagEntity', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         provider = new AutotagEntity();
+        vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'Config').mockResolvedValue(undefined);
+        vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'GetEntityDocumentByID').mockReturnValue(undefined);
         mockEngineInstance.TaxonomyContext = null;
         mockEngineInstance.OnContentItemTagSaved = null;
     });
@@ -185,10 +188,8 @@ describe('AutotagEntity', () => {
             };
             mockEngineInstance.getAllContentSources.mockResolvedValueOnce([source]);
 
-            // SetContentItemsToProcess returns 0 new items (no modified entity records)
-            // — first call: LoadEntityDocument returns null → 0 new items
+            // SetContentItemsToProcess returns 0 new items: the Entity Document is not in the cache.
             mockRunView
-                .mockResolvedValueOnce({ Success: true, Results: [] })
                 // GetUntaggedContentItems: returns 3 untagged items
                 .mockResolvedValueOnce({
                     Success: true,
@@ -364,6 +365,10 @@ describe('AutotagEntity', () => {
             EntityID: 'ent-1'
         };
 
+        beforeEach(() => {
+            vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'GetEntityDocumentByID').mockReturnValue(mockEntityDoc as never);
+        });
+
         const mockRecord = {
             PrimaryKey: { Values: () => 'rec-1' },
             GetAll: () => ({ Name: 'John Doe', Email: 'john@example.com' }),
@@ -375,7 +380,6 @@ describe('AutotagEntity', () => {
 
             // Set up RunView to return entity doc, no existing ERDs, no existing items, and one modified record
             mockRunView
-                .mockResolvedValueOnce({ Success: true, Results: [mockEntityDoc] }) // LoadEntityDocument
                 .mockResolvedValueOnce({ Success: true, Results: [mockRecord] })    // GetModifiedRecords
                 .mockResolvedValueOnce({ Success: true, Results: [] })              // LoadExistingERDs
                 .mockResolvedValueOnce({ Success: true, Results: [] });             // LoadExistingContentItems
@@ -400,7 +404,6 @@ describe('AutotagEntity', () => {
             };
 
             mockRunView
-                .mockResolvedValueOnce({ Success: true, Results: [mockEntityDoc] })     // LoadEntityDocument
                 .mockResolvedValueOnce({ Success: true, Results: [mockRecord] })         // GetModifiedRecords
                 .mockResolvedValueOnce({ Success: true, Results: [existingERD] })        // LoadExistingERDs
                 .mockResolvedValueOnce({ Success: true, Results: [existingContentItem] }); // LoadExistingContentItems
@@ -430,7 +433,6 @@ describe('AutotagEntity', () => {
             mockParse.mockReset();
             mockParse.mockResolvedValue('Rendered template text for the record.');
             mockRunView
-                .mockResolvedValueOnce({ Success: true, Results: [mockEntityDoc] }) // LoadEntityDocument
                 .mockResolvedValueOnce({ Success: true, Results: [row] })           // GetModifiedRecords
                 .mockResolvedValueOnce({ Success: true, Results: [] })              // LoadExistingERDs
                 .mockResolvedValueOnce({ Success: true, Results: [] });             // LoadExistingContentItems

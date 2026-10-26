@@ -94,6 +94,19 @@
             "lastModified": "2026-06-09T06:32:36.558Z",
             "checksum": "c531fa39bc0c9ff676c5e0f38c3d10471bb1b61f28e034e84f4d798ad7a86301"
           }
+        },
+        {
+          "fields": {
+            "JSONType": "IUserViewProperty",
+            "JSONTypeIsArray": true,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IUserViewProperty.ts"
+          },
+          "_comments": [
+            "Properties — the view's declared, typed inputs, each driving one predicate on a target field"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: User Views&Name=Properties"
+          }
         }
       ]
     },

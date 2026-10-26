@@ -6,6 +6,7 @@ import { renderComponentFixture, query, queryAll, text, click, typeInto, capture
 import { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
 import { ValidationErrorInfo } from '@memberjunction/global';
 import { MjFormFieldComponent } from './form-field.component';
+import { MjRecordLinkDirective } from '../links/record-link.directive';
 import { FORM_SECTION_FIELD_HOST, type FormSectionFieldHost } from '../section-indicators/form-section-field-host';
 import { FormFieldEditCoordinator, type FormFieldEdit } from '../form-field-edit.coordinator';
 
@@ -110,7 +111,7 @@ function render(
   setup?: (c: MjFormFieldComponent) => void,
 ): ComponentFixture<MjFormFieldComponent> {
   return renderComponentFixture(MjFormFieldComponent, {
-    declarations: [MjFormFieldComponent],
+    declarations: [MjFormFieldComponent, MjRecordLinkDirective],
     imports: [CommonModule, StubMarkdownComponent, StubCodeEditorComponent, StubSafeRichHtmlPipe],
     inputs,
     setup,

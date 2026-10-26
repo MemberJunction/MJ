@@ -144,7 +144,7 @@ type SelectModelResult = {
   vendorDriverClass?: string;
   vendorApiName?: string;
   selectionInfo?: {
-    modelsConsidered: Array<{ model: { ID: string }; vendor?: { ID: string }; available: boolean; unavailableReason?: string }>;
+    modelsConsidered: Array<{ model: { ID: string }; vendor?: { ID: string }; available: boolean; unavailableReason?: string; driverClass?: string }>;
     selectionReason: string;
     fallbackUsed: boolean;
   };
@@ -363,6 +363,23 @@ describe('selectModel — credential gating, short-circuit & forceFullModelEvalu
     expect(notEvaluated.length).toBe(0);
     // With all common drivers configured, more than one candidate is available.
     expect(considered.filter(c => c.available).length).toBeGreaterThan(1);
+  });
+
+  it('records the driver class on every considered row, probed and short-circuited alike', async () => {
+    // The driver class is what makes a long candidate list readable: 101 rows over ONE class is
+    // a key-delivery problem, 101 rows over twelve is a chain problem, and the message that an
+    // operator reads (buildNoModelFoundMessage) can only say which if selection records it.
+    //
+    // BOTH push sites matter. The short-circuited tail is pushed from a different statement to
+    // the probed candidates, and it is the tail that dominates a long list — miss it and the
+    // count that gets reported is a handful of rows, not the 101 the operator is looking at.
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default' }));
+    const considered = r.selectionInfo!.modelsConsidered;
+    const notEvaluated = considered.filter(c => (c.unavailableReason ?? '').startsWith('Not evaluated'));
+
+    expect(considered.length).toBeGreaterThan(1);
+    expect(notEvaluated.length).toBeGreaterThan(0);
+    expect(considered.every(c => typeof c.driverClass === 'string' && c.driverClass.length > 0)).toBe(true);
   });
 
   it('short-circuit still returns the correct first-available model when the top candidate is uncredentialed', async () => {
@@ -681,5 +698,65 @@ describe('ParallelExecutionCoordinator — reuses base execution path (no drift)
     expect(per.additionalParameters).toEqual({ temperature: 0.1, topP: 0.9 }); // per-model merged in
     per.onStreaming?.({ content: 'tok', isComplete: false });
     expect(onContent).toHaveBeenCalledWith('tok', false);              // OnContent bridged via onStreaming
+  });
+
+  it('coalesces rapid streaming token chunks within the 35ms window and flushes immediately on completion (MJ-AI-9)', async () => {
+    const runner = new AIPromptRunner();
+    const receivedChunks: Array<{ content: string; isComplete: boolean; modelName?: string }> = [];
+
+    type RunnerStreamingInternals = {
+      executeModel: (
+        model: unknown,
+        renderedPrompt: string,
+        prompt: unknown,
+        params: Record<string, unknown>,
+        vendorId: string | null,
+        conversationMessages?: unknown[],
+        templateMessageRole?: string,
+        cancellationToken?: AbortSignal,
+        vendorDriverClass?: string,
+        vendorApiName?: string
+      ) => Promise<unknown>;
+      ResolveCredentialForExecution: () => Promise<string>;
+      buildMessageArray: () => unknown[];
+      runChatCompletionBounded: (llm: unknown, chatParams: { streamingCallbacks?: { OnContent?: (c: string, d: boolean) => void } }) => Promise<unknown>;
+    };
+
+    const internals = runner as unknown as RunnerStreamingInternals;
+    vi.spyOn(internals, 'ResolveCredentialForExecution').mockResolvedValue('test-key');
+    vi.spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance').mockReturnValue({
+      GetFileCapabilities: () => ({}),
+      SupportsAssistantPrefill: false,
+    } as never);
+    vi.spyOn(internals, 'buildMessageArray').mockReturnValue([]);
+    vi.spyOn(internals, 'runChatCompletionBounded').mockImplementation(async (_llm, chatParams) => {
+      const onContent = chatParams.streamingCallbacks?.OnContent;
+      // First chunk should emit immediately
+      onContent?.('Hello', false);
+      // Rapid subsequent chunks in same tick should be buffered and coalesced
+      onContent?.(' ', false);
+      onContent?.('world', false);
+      onContent?.('!', true);
+      return { success: true, data: { choices: [{ message: { content: 'Hello world!' } }], usage: {} } };
+    });
+
+    await internals.executeModel(
+      { ID: 'm1', Name: 'Model One', DriverClass: 'OpenAILLM', APIName: 'gpt-4o' },
+      'rendered',
+      makePrompt(),
+      { onStreaming: (c: { content: string; isComplete: boolean; modelName?: string }) => receivedChunks.push(c) },
+      'v1',
+      [],
+      'system',
+      undefined,
+      'OpenAILLM',
+      'gpt-4o'
+    );
+
+    // 4 rapid token emissions were coalesced into 2 callbacks: immediate first chunk + flushed completion chunk
+    expect(receivedChunks).toEqual([
+      { content: 'Hello', isComplete: false, modelName: 'Model One' },
+      { content: ' world!', isComplete: true, modelName: 'Model One' },
+    ]);
   });
 });

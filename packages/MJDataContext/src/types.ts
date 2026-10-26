@@ -296,7 +296,25 @@ export class DataContextItem {
                     this.RecordName = v.Name;
                     this.EntityID = v.ViewEntityInfo.ID; // if we get here, we overwrite whateer we had above because we have the actual view metadata.
                     this.ViewEntity = v;
-                    this.SQL =  `SELECT * FROM [${v.ViewEntityInfo.SchemaName}].[${v.ViewEntityInfo.BaseView}]${v.WhereClause && v.WhereClause.length > 0 ? ' WHERE ' + v.WhereClause : ''}`;
+                    const pinnedAbvName = v.AlternateBaseView?.trim();
+                    let altView: ReturnType<typeof v.ViewEntityInfo.GetAlternateBaseView>;
+                    if (pinnedAbvName) {
+                        const candidateAltView = v.ViewEntityInfo.GetAlternateBaseView(pinnedAbvName);
+                        if (!candidateAltView) {
+                            throw new Error(
+                                `User View "${v.Name}" pins AlternateBaseView "${pinnedAbvName}", which is not registered on entity "${v.ViewEntityInfo.Name}".`,
+                            );
+                        }
+                        if (!candidateAltView.IsUsable) {
+                            throw new Error(
+                                `User View "${v.Name}" pins AlternateBaseView "${candidateAltView.Name}", which is disabled and cannot be used.`,
+                            );
+                        }
+                        altView = candidateAltView;
+                    }
+                    const targetSchema = altView ? altView.EffectiveSchemaName : v.ViewEntityInfo.SchemaName;
+                    const targetView = altView ? altView.ViewName : v.ViewEntityInfo.BaseView;
+                    this.SQL =  `SELECT * FROM [${targetSchema}].[${targetView}]${v.WhereClause && v.WhereClause.length > 0 ? ' WHERE ' + v.WhereClause : ''}`;
                 }
                 break;
         }
@@ -323,6 +341,9 @@ export class DataContextItem {
             const viewParams: RunViewParams = { IgnoreMaxRows: true }; // ignore max rows for both types
             viewParams.Fields = this.ViewEntity.ViewEntityInfo.Fields.map((f) => f.Name); // include all fields
             viewParams.ViewID = this.ViewID;
+            if (this.ViewEntity.AlternateBaseView) {
+                viewParams.AlternateBaseView = this.ViewEntity.AlternateBaseView;
+            }
             const viewResult = await rv.RunView(viewParams, contextUser);
             if (viewResult && viewResult.Success) {
                 this.Data = viewResult.Results;

@@ -220,6 +220,20 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    */
   @Input() AvatarNoticeLabels: AvatarNoticeOverrides | null = null;
 
+  /**
+   * Whether the top "Audio only: this voice model can't show an avatar" notice banner is shown when
+   * an audio-only call connects. Default `false` so standard voice sessions stay calm and uncluttered
+   * unless a host explicitly opts into showing avatar capability notices.
+   */
+  @Input() ShowAvatarNotice = false;
+
+  /**
+   * Whether the bottom "Agent can see" perception chip is always shown even when only background channel
+   * bridges exist. Default `false`: the chip is only shown when the user actively captures their camera or
+   * screen ({@link CameraOn} / {@link Sharing}), or when explicitly enabled via `[ShowPerceptionChip]="true"`.
+   */
+  @Input() ShowPerceptionChip = false;
+
   // ── Declarative UI configuration (host controls every aspect of the surface) ──
   //
   // Each input is a thin, PascalCase setter over a private slot in {@link _uiInputs}.
@@ -816,11 +830,11 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /**
    * Why this live call shows no avatar its agent asked for, while the notice shows: from the moment the call connects
-   * until the user dismisses it or it hides itself. `null` otherwise, and always in review.
+   * until the user dismisses it or it hides itself. `null` otherwise, when {@link ShowAvatarNotice} is off, and always in review.
    */
   public get AvatarNotice(): RealtimeAvatarNotice | null {
     const notice = this.avatarNotice;
-    return notice && notice !== this.avatarNoticeDone && !this.IsReviewing ? notice : null;
+    return this.ShowAvatarNotice && notice && notice !== this.avatarNoticeDone && !this.IsReviewing ? notice : null;
   }
 
   /**
@@ -866,6 +880,23 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /** The video sources the agent can or could see right now (see {@link RealtimeSessionService.VideoSources$}). */
   public VideoSources: readonly VideoSourceState[] = [];
+
+  /**
+   * The video sources surfaced to `<mj-realtime-perception-chip>`.
+   * By default (`ShowPerceptionChip = false`), the chip only appears when the user has an active camera or
+   * screen capture (`CameraOn`, `Sharing`, or an enabled `'camera'` / `'screen'` source), preventing
+   * background channel bridges from cluttering pure-voice calls.
+   */
+  public get VisibleVideoSources(): readonly VideoSourceState[] {
+    const hasUserCapture =
+      this.CameraOn ||
+      this.Sharing ||
+      this.VideoSources.some((s) => (s.Kind === 'camera' || s.Kind === 'screen') && s.Enabled);
+    if (!this.ShowPerceptionChip && !hasUserCapture) {
+      return [];
+    }
+    return this.VideoSources;
+  }
 
   /** The user's camera and screen share (see {@link RealtimeSessionService.Captures$}). */
   public CaptureStates: RealtimeCaptureStates = REALTIME_CAPTURES_OFF;
