@@ -1844,7 +1844,12 @@ export class MemoryManagerAgent extends BaseAgent {
                     note.SourceConversationDetailID = MemoryManagerAgent.isValidUUID(extracted.sourceConversationDetailId) ? extracted.sourceConversationDetailId! : null;
                     note.SourceAIAgentRunID = extracted.sourceAgentRunId || null;
 
-                    // Apply scope: Lean towards user-specific memories by default
+                    // Apply scope: Lean towards user-specific memories by default.
+                    // A company or global note is read by every user in that scope, yet its content
+                    // was extracted from ONE user's conversation, which may hold values field-level
+                    // or row-level security keeps from the others. Nothing here re-checks the content
+                    // against the other readers' permissions, so promoting a note past user scope
+                    // shares what its source user could see.
                     const scopeLevel = extracted.scopeLevel || 'user';
 
                     if (scopeLevel === 'global') {

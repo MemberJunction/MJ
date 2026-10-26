@@ -11,6 +11,7 @@ import { EntitiesOnlyProvider } from '@memberjunction/unit-testing';
 import { RecordRef } from '@memberjunction/record-set-processor-base';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionRecordProcessor, AgentRecordProcessor, FieldRulesProcessor, WriteBackProcessor } from '../index';
+import { TemplateEngineServer } from '@memberjunction/templates';
 
 const record: RecordRef = { EntityID: 'ENT-1', RecordID: 'c1', Record: { ID: 'c1', Name: 'Ada', Tier: 3 } };
 
@@ -167,5 +168,31 @@ describe('FieldRulesProcessor on a dry run', () => {
         const result = await processor.ProcessRecord({ EntityID: 'E', RecordID: 'w1' }, { ContextUser: new UserInfo(), Provider: provider, DryRun: true });
         expect(result.Status).toBe('Succeeded');
         expect(apply.mock.calls[0][2]).toEqual({ DryRun: true });
+    });
+});
+
+describe('FieldRulesProcessor entity-document source', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    /** Exposes the protected resolver an `entityDocument` rule source calls. */
+    class ResolverProbe extends FieldRulesProcessor {
+        public Resolver(context: Parameters<FieldRulesProcessor['ProcessRecord']>[1]) {
+            return (this as unknown as { buildEntityDocumentResolver(c: typeof context): (a: { EntityDocumentID: string; Record: Record<string, unknown> }) => Promise<string> })
+                .buildEntityDocumentResolver(context);
+        }
+    }
+
+    it('renders the document as the run user, never as whoever configured the shared template engine', async () => {
+        const engine = TemplateEngineServer.Instance;
+        vi.spyOn(engine, 'Config').mockResolvedValue(undefined);
+        const render = vi.spyOn(engine, 'RenderTemplateSimple').mockResolvedValue({ Success: true, Output: 'doc', Message: undefined });
+        const user = new UserInfo();
+        const provider = new EntitiesOnlyProvider([]);
+        vi.spyOn(provider, 'GetEntityObject').mockResolvedValue({ Load: async () => true, TemplateText: 'Name {{ Name }}' } as never);
+
+        const text = await new ResolverProbe({ RuleSet: { Rules: [] } }).Resolver({ ContextUser: user, Provider: provider })({ EntityDocumentID: 'doc-1', Record: { Name: 'Ada' } });
+
+        expect(text).toBe('doc');
+        expect(render.mock.calls[0][2]).toEqual({ autoescape: false, ContextUser: user });
     });
 });
