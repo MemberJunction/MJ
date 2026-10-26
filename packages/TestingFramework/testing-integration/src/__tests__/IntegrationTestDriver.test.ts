@@ -28,6 +28,7 @@ vi.mock('../bootstrap', () => ({
 
 import { IntegrationTestDriver } from '../IntegrationTestDriver';
 import { IntegrationCheckRegistry } from '../check-registry';
+import { SkipCheck, TestRunner } from '../test-runner';
 import type { DriverExecutionContext, IOracle } from '@memberjunction/testing-engine';
 import type { MJTestEntity, MJTestRunEntity } from '@memberjunction/core-entities';
 import type { UserInfo } from '@memberjunction/core';
@@ -59,6 +60,25 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         reg.Register({ Id: 'unitmix.B', Name: 'mixB', Fn: async () => { throw new Error('boom'); } });
         reg.Register({ Id: 'unitmut.A', Name: 'mutA', Fn: async () => { /* pass */ } });
         reg.Register({ Id: 'unitmut.M', Name: 'mutM', RequiresMutation: true, Fn: async () => { /* pass */ } });
+        reg.Register({ Id: 'unitskip.A', Name: 'skipA', Fn: async () => { /* pass */ } });
+        reg.Register({ Id: 'unitskip.S', Name: 'skipS', Fn: async () => SkipCheck('REST is off') });
+    });
+
+    it('a check that calls SkipCheck at run time is recorded as SKIPPED, not as a pass', async () => {
+        const result = await new IntegrationTestDriver().Execute(makeContext({ checks: [{ type: 'unitskip' }] }));
+        const skipped = result.oracleResults.find(o => o.oracleType === 'unitskip.S');
+        expect((skipped?.details as Record<string, unknown>)?.Skipped).toBe(true);
+        expect(skipped?.message).toContain('REST is off');
+        expect(result.passedChecks).toBe(1);
+        expect(result.totalChecks).toBe(1);
+        expect(result.skippedChecks).toBe(1);
+    });
+
+    it('the tsx TestRunner records a SkipCheck as skipped and not failed', async () => {
+        const runner = new TestRunner('unit');
+        runner.Test('skips', async () => SkipCheck('not provisioned'));
+        expect(await runner.Run()).toBe(0);
+        expect(runner.LastOutcomes[0]).toMatchObject({ Name: 'skips', Passed: true, Skipped: true });
     });
 
     it('expands a bundle and runs its checks in registration order → Passed, score 1', async () => {

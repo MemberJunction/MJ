@@ -1,5 +1,5 @@
 import { LogStatus } from "@memberjunction/core";
-import { IShutdownable } from "@memberjunction/global";
+import { IShutdownable, UUIDsEqual } from "@memberjunction/global";
 
 export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled' | 'failed';
 
@@ -64,6 +64,11 @@ export class TaskStore implements IShutdownable {
     private readonly _tasks: Map<string, Task> = new Map();
     private readonly _listeners: Map<string, Set<(task: Task) => void>> = new Map();
     private readonly _abortControllers: Map<string, AbortController> = new Map();
+    /**
+     * The ID of the user each task was created for. Kept beside the task rather than on it,
+     * because the task is the wire shape returned to clients.
+     */
+    private readonly _owners: Map<string, string> = new Map();
     private readonly _sweepIntervalMs: number;
     private readonly _retentionMs: number;
     private _timer: ReturnType<typeof setInterval> | null = null;
@@ -104,6 +109,7 @@ export class TaskStore implements IShutdownable {
         }
         this._abortControllers.clear();
         this._listeners.clear();
+        this._owners.clear();
         this._tasks.clear();
     }
 
@@ -126,6 +132,7 @@ export class TaskStore implements IShutdownable {
                 this._tasks.delete(id);
                 this._listeners.delete(id);
                 this._abortControllers.delete(id);
+                this._owners.delete(id);
                 evicted++;
             }
         }
@@ -203,9 +210,28 @@ export class TaskStore implements IShutdownable {
         return true;
     }
 
-    public Set(id: string, task: Task): this {
+    /**
+     * Stores a task.
+     * @param ownerUserId The user the task was created for. Only that user can retrieve it
+     *   through {@link GetForUser}; a task stored without an owner is retrievable by no one.
+     *   Omit it when replacing a stored task, to keep its owner.
+     */
+    public Set(id: string, task: Task, ownerUserId?: string): this {
         this._tasks.set(id, task);
+        if (ownerUserId) {
+            this._owners.set(id, ownerUserId);
+        }
         return this;
+    }
+
+    /**
+     * The task with this ID when it belongs to `userId`, otherwise undefined. A task that belongs
+     * to someone else is indistinguishable from one that does not exist, so a caller cannot learn
+     * another user's task IDs, nor read, continue or cancel their tasks.
+     */
+    public GetForUser(id: string, userId: string): Task | undefined {
+        const owner = this._owners.get(id);
+        return owner && UUIDsEqual(owner, userId) ? this._tasks.get(id) : undefined;
     }
 
     /** @deprecated Use {@link Set}. */
@@ -231,6 +257,7 @@ export class TaskStore implements IShutdownable {
     public Delete(id: string): boolean {
         this._listeners.delete(id);
         this._abortControllers.delete(id);
+        this._owners.delete(id);
         return this._tasks.delete(id);
     }
 

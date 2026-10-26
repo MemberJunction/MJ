@@ -1,4 +1,4 @@
-import { LogError, LogStatus, UserInfo } from "@memberjunction/core";
+import { EntityInfo, LogError, LogStatus, ProjectEntityValueRowsForUser, UserInfo } from "@memberjunction/core";
 import { ToEpochMs, UUIDsEqual } from "@memberjunction/global";
 import { MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJAIAgentNoteTypeEntity, InjectableNoteStatusSQLList } from "@memberjunction/core-entities";
 import { AIEngine, NoteEmbeddingMetadata, ExampleEmbeddingMetadata, ExampleMatchResult } from "@memberjunction/aiengine";
@@ -107,6 +107,13 @@ export interface GetExamplesParams {
     /** Inject only shared examples (no `UserID`). See {@link GetNotesParams.SharedOnly}. */
     SharedOnly?: boolean;
 }
+
+/** The note fields the injected prompt text is built from; a field the reader may not read is absent. */
+type NoteView = Partial<Pick<MJAIAgentNoteEntity,
+    'Status' | 'Type' | 'Note' | '__mj_CreatedAt' | 'AgentID' | 'UserID' | 'CompanyID' | 'PrimaryScopeRecordID' | 'SecondaryScopes'>>;
+
+/** The example fields the injected prompt text is built from; a field the reader may not read is absent. */
+type ExampleView = Partial<Pick<MJAIAgentExampleEntity, 'ExampleInput' | 'ExampleOutput' | 'SuccessScore'>>;
 
 /** The fields of a note or example the vector pre-filter reads: its user and its multi-tenant scope. */
 type ScopedMemoryFields = Pick<MJAIAgentNoteEntity, 'UserID' | 'PrimaryScopeEntityID' | 'PrimaryScopeRecordID' | 'SecondaryScopes'>;
@@ -870,11 +877,18 @@ export class AgentContextInjector {
      * contained upstream by the write-path guards (descriptive types only,
      * scope clamp, per-run cap, TTL).
      *
+     * The notes come from the AI engine's cache, which holds every field whoever the run is for.
+     * Pass the run's user as `contextUser` and the text carries only the fields that user may read:
+     * a note whose body they may not read is left out, and an unreadable scope field reads as unset.
+     * Without a user the notes render in full, which is right only for server-internal callers.
+     *
      * @param notes - Array of notes to format
      * @param includeMemoryPolicy - Whether to include the memory policy preamble (default: true)
+     * @param contextUser - The user the run is for; the text is limited to the fields they may read
      */
-    FormatNotesForInjection(notes: MJAIAgentNoteEntity[], includeMemoryPolicy: boolean = true): string {
-        if (notes.length === 0) return '';
+    FormatNotesForInjection(notes: MJAIAgentNoteEntity[], includeMemoryPolicy: boolean = true, contextUser?: UserInfo): string {
+        const views = this.noteViewsForReader(notes, contextUser).filter(n => 'Note' in n);
+        if (views.length === 0) return '';
 
         const lines: string[] = [];
 
@@ -897,8 +911,8 @@ export class AgentContextInjector {
             lines.push('');
         }
 
-        const provisional = notes.filter(n => n.Status === 'Provisional');
-        const established = notes.filter(n => n.Status !== 'Provisional');
+        const provisional = views.filter(n => n.Status === 'Provisional');
+        const established = views.filter(n => n.Status !== 'Provisional');
 
         if (provisional.length > 0) {
             lines.push(`📝 RECENT NOTES (${provisional.length} provisional — newest signal)`);
@@ -920,8 +934,34 @@ export class AgentContextInjector {
         return lines.join('\n');
     }
 
+    /** The fields each note renders from, without those `contextUser` may not read. */
+    private noteViewsForReader(notes: MJAIAgentNoteEntity[], contextUser: UserInfo | undefined): NoteView[] {
+        const views: NoteView[] = notes.map(n => ({
+            Status: n.Status, Type: n.Type, Note: n.Note, __mj_CreatedAt: n.__mj_CreatedAt, AgentID: n.AgentID,
+            UserID: n.UserID, CompanyID: n.CompanyID, PrimaryScopeRecordID: n.PrimaryScopeRecordID, SecondaryScopes: n.SecondaryScopes,
+        }));
+        return this.projectForReader(notes[0]?.EntityInfo, views, contextUser);
+    }
+
+    /** The fields each example renders from, without those `contextUser` may not read. */
+    private exampleViewsForReader(examples: MJAIAgentExampleEntity[], contextUser: UserInfo | undefined): ExampleView[] {
+        const views: ExampleView[] = examples.map(e => ({
+            ExampleInput: e.ExampleInput, ExampleOutput: e.ExampleOutput, SuccessScore: e.SuccessScore,
+        }));
+        return this.projectForReader(examples[0]?.EntityInfo, views, contextUser);
+    }
+
+    /** Field values keyed by field name, projected to what `contextUser` may read; unchanged without a user. */
+    private projectForReader<T extends object>(entityInfo: EntityInfo | undefined, rows: T[], contextUser: UserInfo | undefined): T[] {
+        if (!contextUser || rows.length === 0) {
+            return rows;
+        }
+        // The notes and examples are the AI engine's cached rows, so its provider resolves their metadata.
+        return ProjectEntityValueRowsForUser(AIEngine.Instance.Provider, entityInfo, rows, contextUser) ?? rows;
+    }
+
     /** Render one note (and its scope line) into the injection output. */
-    private appendNoteLines(lines: string[], note: MJAIAgentNoteEntity, provisional: boolean): void {
+    private appendNoteLines(lines: string[], note: NoteView, provisional: boolean): void {
         const date = this.formatNoteDate(note);
         lines.push(`[${note.Type}${date ? `, ${date}` : ''}]${provisional ? ' (provisional)' : ''} ${note.Note}`);
 
@@ -947,14 +987,14 @@ export class AgentContextInjector {
      * model what it needs for recency arithmetic. Kept private to this single
      * consumer — promote to @memberjunction/global if a second consumer appears.
      */
-    private formatNoteDate(note: MJAIAgentNoteEntity): string {
+    private formatNoteDate(note: NoteView): string {
         return note.__mj_CreatedAt ? new Date(note.__mj_CreatedAt).toISOString().slice(0, 10) : '';
     }
 
     /**
      * Determine multi-tenant secondary scope description for a note
      */
-    private determineSecondaryScope(note: MJAIAgentNoteEntity): string | null {
+    private determineSecondaryScope(note: NoteView): string | null {
         // Check for secondary scoping (takes precedence over MJ scoping)
         if (!note.PrimaryScopeRecordID) {
             return null; // No secondary scope, fall back to MJ scope
@@ -970,21 +1010,27 @@ export class AgentContextInjector {
     }
 
     /**
-     * Format examples for injection into agent prompt
+     * Format examples for injection into agent prompt. As for {@link FormatNotesForInjection}, pass
+     * the run's user as `contextUser` and the text carries only the fields that user may read; an
+     * example with neither input nor output readable is left out.
+     *
+     * @param examples - Array of examples to format
+     * @param contextUser - The user the run is for; the text is limited to the fields they may read
      */
-    FormatExamplesForInjection(examples: MJAIAgentExampleEntity[]): string {
-        if (examples.length === 0) return '';
+    FormatExamplesForInjection(examples: MJAIAgentExampleEntity[], contextUser?: UserInfo): string {
+        const views = this.exampleViewsForReader(examples, contextUser).filter(e => 'ExampleInput' in e || 'ExampleOutput' in e);
+        if (views.length === 0) return '';
 
         const lines: string[] = [
-            `💡 RELEVANT EXAMPLES (${examples.length})`,
+            `💡 RELEVANT EXAMPLES (${views.length})`,
             ''
         ];
 
-        for (let i = 0; i < examples.length; i++) {
-            const example = examples[i];
+        for (let i = 0; i < views.length; i++) {
+            const example = views[i];
             lines.push(`Example ${i + 1}:`);
-            lines.push(`Q: ${example.ExampleInput}`);
-            lines.push(`A: ${example.ExampleOutput}`);
+            lines.push(`Q: ${example.ExampleInput ?? ''}`);
+            lines.push(`A: ${example.ExampleOutput ?? ''}`);
 
             if (example.SuccessScore) {
                 lines.push(`  (Success Score: ${example.SuccessScore}/100)`);
@@ -1000,7 +1046,7 @@ export class AgentContextInjector {
     /**
      * Determine human-readable scope description for a note
      */
-    private determineNoteScope(note: MJAIAgentNoteEntity): string {
+    private determineNoteScope(note: NoteView): string {
         if (note.AgentID && note.UserID && note.CompanyID) {
             return 'Agent + User + Company specific';
         }
