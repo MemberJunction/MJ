@@ -16,7 +16,9 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
          KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider, ReadableFieldsTransportKey,
-         SearchEntityParams, EntitySearchResult, ScoredCandidate, RemoteOpInvokeOptions, RemoteOpResult, RemoteOpProgress, ResolveMJAPIURL } from "@memberjunction/core";
+         SearchEntityParams, EntitySearchResult, ScoredCandidate, RemoteOpInvokeOptions, RemoteOpResult, RemoteOpProgress,
+         GetLocalTimeZone, TIME_ZONE_HEADER, ViewPropertyValues, ResolveMJAPIURL,
+         GetEffectiveAlternateBaseViewName } from "@memberjunction/core";
 import { MJGlobal, MJEventType, UUIDsEqual, GetGlobalObjectStore, DeserializeValidationErrors } from "@memberjunction/global";
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
@@ -333,6 +335,39 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     private static readonly _globalStoreKey = '___SINGLETON__GraphQLDataProvider';
 
     /**
+     * Writable fields on specific entities that are computed or mutated server-side inside
+     * `BaseEntity.Save()` subclasses (e.g. `MJUserViewEntityServer` generating `WhereClause`,
+     * `SmartFilterWhereClause`, and `SmartFilterExplanation` via AI or stamping approval fields).
+     * Even when clean on the client, these fields must be requested in the GraphQL `Update`
+     * selection set so the client entity and local engine caches receive the server-derived values.
+     */
+    private static readonly _serverDerivedUpdateFieldsByEntity: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+        [
+            'MJ: User Views',
+            new Set([
+                'WhereClause',
+                'SmartFilterWhereClause',
+                'SmartFilterExplanation',
+                'ApprovedByUserID',
+                'ApprovedAt',
+                'ApprovedFingerprint',
+            ]),
+        ],
+        [
+            'MJ: Queries',
+            new Set([
+                'ApprovedByUserID',
+                'ApprovedAt',
+                'ApprovedFingerprint',
+                'UsesTemplate',
+                'TechnicalDescription',
+                'EmbeddingVector',
+                'EmbeddingModelID',
+            ]),
+        ],
+    ]);
+
+    /**
      * Returns the singleton instance of GraphQLDataProvider.
      * Uses the Global Object Store to guarantee a single instance across the
      * entire process, even if bundlers duplicate this module.
@@ -524,6 +559,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         // CRITICAL: Always set this instance's _configData first
         // This ensures BuildDatasetFilterFromConfig() can access ConfigData.IncludeSchemas
         this._configData = configData;
+        this.setTimeZoneHeader();
 
         // An instance that is not the global singleton (built while the global-store slot was
         // parked) owns its own connection, even when a re-entry path omits the flag:
@@ -559,6 +595,18 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // This ensures ExecuteGQL() can use this._client.request()
             this._sessionId = GraphQLDataProvider.Instance._sessionId;
             this._client = GraphQLDataProvider.Instance._client;
+        }
+    }
+
+    /**
+     * Sends this runtime's IANA time zone on every request (`x-mj-timezone`), so the server works
+     * date tokens out in the caller's zone. A value the host set first is kept; where `Intl` gives
+     * no zone, nothing is sent and the server uses UTC.
+     */
+    private setTimeZoneHeader(): void {
+        const timeZone = GetLocalTimeZone();
+        if (timeZone && !this._dynamicHeaders.has(TIME_ZONE_HEADER)) {
+            this.SetDynamicHeader(TIME_ZONE_HEADER, timeZone);
         }
     }
 
@@ -665,6 +713,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     /**************************************************************************/
     protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQuery()
+        this.refuseServerOnlyQueryParams(params);
         if (params.SQL) {
             return this.RunAdhocQuery(params.SQL, params.MaxRows, params.TimeoutSeconds, params.StartRow);
         }
@@ -676,6 +725,16 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         else {
             throw new Error("No SQL, QueryID, or QueryName provided to RunQuery");
+        }
+    }
+
+    /**
+     * `RequireApproved` and `ServerParameters` are honoured only by server code, and no GraphQL run
+     * input carries them, so a browser run that sets either throws rather than running without it.
+     */
+    private refuseServerOnlyQueryParams(params: RunQueryParams): void {
+        if (params.RequireApproved || params.ServerParameters !== undefined) {
+            throw new Error('RequireApproved and ServerParameters are set only by server code; a run sent from the browser cannot carry them.');
         }
     }
 
@@ -722,6 +781,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     protected async InternalRunQueries(params: RunQueryParams[], contextUser?: UserInfo): Promise<RunQueryResult[]> {
         // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQueries()
         // Make a single batch GraphQL call for efficiency (single network roundtrip)
+        params.forEach(p => this.refuseServerOnlyQueryParams(p));
         const query = gql`
             query RunQueriesBatch($input: [RunQueryInput!]!) {
                 RunQueries(input: $input) {
@@ -883,6 +943,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         contextUser?: UserInfo
     ): Promise<RunQueriesWithCacheCheckResponse<T>> {
         try {
+            params.forEach(item => this.refuseServerOnlyQueryParams(item.params));
             const sendDefinition = this._definitionHashUnsupportedUntil == null || Date.now() >= this._definitionHashUnsupportedUntil;
             try {
                 return await this.executeRunQueriesWithCacheCheck<T>(params, sendDefinition);
@@ -1130,6 +1191,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // so the default request is unchanged.
                 if (params.IncludeBinaryFields !== undefined)
                     innerParams.IncludeBinaryFields = params.IncludeBinaryFields;
+                // AlternateBaseView selects a registered EntityAlternateBaseView by Name, or "" to
+                // force the entity's default BaseView over a saved UserView pin. Also forwards a
+                // ViewEntity pin when ViewEntity itself is not serialized over the wire.
+                const singleEffectiveAbv = GetEffectiveAlternateBaseViewName(params) ?? params.AlternateBaseView;
+                if (singleEffectiveAbv !== undefined)
+                    innerParams.AlternateBaseView = singleEffectiveAbv;
 
                 if (!dynamicView) {
                     innerParams.ExcludeUserViewRunID = params.ExcludeUserViewRunID ? params.ExcludeUserViewRunID : "";
@@ -1137,6 +1204,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     innerParams.OverrideExcludeFilter = params.OverrideExcludeFilter ? params.OverrideExcludeFilter : '';
                     innerParams.SaveViewResults = params.SaveViewResults ? params.SaveViewResults : false;
                 }
+                this.applyViewPropertiesToInput(params, innerParams, dynamicView);
 
                 // Include Aggregates if provided
                 if (params.Aggregates && params.Aggregates.length > 0) {
@@ -1236,6 +1304,23 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
+    /**
+     * Puts a run's view-property values on its GraphQL input. Only a stored-view run takes them,
+     * and `ServerProperties` never leave the server, so either mistake throws rather than being dropped.
+     */
+    private applyViewPropertiesToInput(params: RunViewParams, input: { Properties?: ViewPropertyValues }, dynamicView: boolean): void {
+        if (params.ServerProperties !== undefined) {
+            throw new Error('ServerProperties are set only by server code; send client values in Properties.');
+        }
+        if (params.Properties === undefined) {
+            return;
+        }
+        if (dynamicView) {
+            throw new Error('Properties apply only to a stored view: run it by ViewID or ViewName.');
+        }
+        input.Properties = params.Properties;
+    }
+
     protected async InternalRunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
 
         try {
@@ -1316,6 +1401,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     if (param.IncludeBinaryFields !== undefined) {
                         innerParam.IncludeBinaryFields = param.IncludeBinaryFields;
                     }
+                    const batchEffectiveAbv = GetEffectiveAlternateBaseViewName(param) ?? param.AlternateBaseView;
+                    if (batchEffectiveAbv !== undefined) {
+                        innerParam.AlternateBaseView = batchEffectiveAbv;
+                    }
 
                     if (!dynamicView) {
                         innerParam.ExcludeUserViewRunID = param.ExcludeUserViewRunID || "";
@@ -1323,6 +1412,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         innerParam.OverrideExcludeFilter = param.OverrideExcludeFilter || '';
                         innerParam.SaveViewResults = param.SaveViewResults || false;
                     }
+                    this.applyViewPropertiesToInput(param, innerParam, dynamicView);
 
                     // Include Aggregates if provided
                     if (param.Aggregates && param.Aggregates.length > 0) {
@@ -1441,6 +1531,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     // a CacheLocal batch routes through this smart-cache-check path, so omitting it silently
                     // downgrades a DataSource:'Materialized' request to a live read.
                     DataSource: item.params.DataSource,
+                    // AlternateBaseView must be forwarded on the smart-cache-check batch transport too
+                    // (including a ViewEntity pin when ViewEntity itself is not serialized over the wire):
+                    // otherwise a CacheLocal batch requesting an alternate base view silently reads BaseView.
+                    AlternateBaseView: GetEffectiveAlternateBaseViewName(item.params) ?? item.params.AlternateBaseView,
                     // Forwarded on this transport too, so a CacheLocal batch that asked for binary
                     // fields gets them (the slot fingerprint already distinguishes the two widths).
                     IncludeBinaryFields: item.params.IncludeBinaryFields,
@@ -2387,6 +2481,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     (!isNonActiveField(f) || isFieldWrittenForSave(f)) &&
                     (!filterToDirtyOnly || this.isFieldDirtyOnChain(entity, f))
                 )));
+            const serverDerivedFields = GraphQLDataProvider._serverDerivedUpdateFieldsByEntity.get(entity.EntityInfo.Name);
             const returnFields = entity.Fields.filter(f => {
                 if (isDeniedRead(f.Name)) {
                     return false;
@@ -2399,6 +2494,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         f.IsPrimaryKey ||
                         f.EntityFieldInfo.IsSpecialDateField ||
                         this.isFieldDirtyOnChain(entity, f) ||
+                        Boolean(serverDerivedFields?.has(f.Name)) ||
                         (!f.NotLoaded &&
                             !f.EntityFieldInfo.IsBinaryFieldType &&
                             (Boolean(f.EntityFieldInfo.IsVirtual) ||

@@ -1,6 +1,8 @@
 import { BaseSingleton, MJGlobal, MJEventType } from "@memberjunction/global";
 import { AggregateResult, DatasetItemFilterType, DatasetResultType, IMetadataProvider, ILocalStorageProvider, LocalStorageWriteOptions } from "./interfaces";
-import { AggregateExpression, RunViewParams, IsMaterializedDataSource } from "../views/runView";
+import { AggregateExpression, RunViewParams, IsMaterializedDataSource, NormalizeAlternateBaseViewName } from "../views/runView";
+import { GetEffectiveAlternateBaseViewName } from "./alternateBaseViews";
+import { ViewPropertyValuesKey } from "../views/viewProperties";
 import { LogError, LogStatusEx, LogWarning } from "./logging";
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 import { Metadata } from "./metadata";
@@ -1056,6 +1058,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             const seg = parts[i];
             if (!seg) {
                 continue;
+            }
+            if (seg.startsWith('abv:')) {
+                return true;           // alternate base view applies a canonical WHERE/JOIN — never maintain in place on save
             }
             if (seg.startsWith('imr:')) {
                 continue;          // widens the set — safe to maintain
@@ -2531,6 +2536,15 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             parts.push('bin:1');
         }
 
+        // SkipTotalRowCount segment. A call that skips the fallback COUNT stores a result whose
+        // TotalRowCount was never counted, so it must not share a slot with the otherwise
+        // identical counted call (each would be served the other's TotalRowCount). Appended only
+        // when true, so every existing fingerprint stays byte-for-byte identical. Not allowlisted
+        // in hasNarrowingSegment, so such a slot is invalidated on save rather than maintained.
+        if (params.SkipTotalRowCount === true) {
+            parts.push('strc:1');
+        }
+
         // DataSource segment. RunViewParams.DataSource:'Materialized' routes the read to the entity's
         // materialized snapshot view (GetEffectiveBaseView), a DIFFERENT physical source than the default
         // live base view — so a Live read and a Materialized read of the same entity/filter/orderBy MUST
@@ -2539,6 +2553,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // identical and no existing cache entries are invalidated.
         if (IsMaterializedDataSource(params.DataSource)) {
             parts.push('ds:materialized');
+        }
+
+        // AlternateBaseView segment. Routing a read through an alternate base view (explicitly via
+        // params.AlternateBaseView or pinned inside a loaded params.ViewEntity's DisplayState JSON)
+        // targets a different physical SQL view with its own canonical WHERE/JOIN, so it MUST NOT
+        // share a cache slot with the entity's canonical BaseView or another alternate view.
+        // Appended only when non-empty so canonical reads keep their exact pre-existing fingerprint.
+        const effectiveAbv = NormalizeAlternateBaseViewName(GetEffectiveAlternateBaseViewName(params));
+        if (effectiveAbv.length > 0) {
+            parts.push(`abv:${effectiveAbv}`);
         }
 
         // Keyset (AfterKey) seek cursor MUST be part of the fingerprint. Each keyset page
@@ -2591,6 +2615,18 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const viewKey = (params.ViewID || params.ViewName || params.ViewEntity?.PrimaryKey?.ToConcatenatedString() || '').trim();
         if (viewKey.length > 0) {
             parts.push(`vw:${viewKey}`);
+        }
+
+        // View-property segment. A stored view's property values (RunViewParams.Properties and
+        // ServerProperties) each add a predicate the provider builds, so one chapter's run must
+        // never be served another chapter's slot. On the server the provider has already replaced
+        // both with the resolved values (token defaults included) before this runs. The values go
+        // in as canonical JSON rather than a hash: a 32-bit hash of values a client partly chooses
+        // could be steered onto another run's slot. Appended ONLY when a value is present, so every
+        // run without properties keeps its exact fingerprint.
+        const propertyKey = ViewPropertyValuesKey(params.Properties, params.ServerProperties);
+        if (propertyKey.length > 0) {
+            parts.push(`vp:${propertyKey}`);
         }
 
         // Dataset namespace. `GetDatasetByName` caches each dataset ITEM's rows through this same

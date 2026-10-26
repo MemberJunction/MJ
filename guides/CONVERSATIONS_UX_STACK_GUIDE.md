@@ -590,8 +590,9 @@ async function main() {
     const runner = ConversationsRuntime.Instance.AgentRunner;
     const result = await runner.processMessage({
         conversationId: 'abc',
-        message: 'Generate the weekly report',
-        conversationDetailId: 'msg-1',
+        message: userMessage, // the user's saved MJ: Conversation Details row
+        // Only the server writes agent replies: it creates the reply row and names it here.
+        onReplyAccepted: (reply) => console.log(`reply row ${reply.ConversationDetailId}`),
         applicationId: null,
     });
 

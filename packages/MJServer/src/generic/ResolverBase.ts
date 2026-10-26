@@ -23,6 +23,7 @@ import {
   RunViewParams,
   RunViewResult,
   UserInfo,
+  ViewPropertyValues,
 } from '@memberjunction/core';
 import { MJAuditLogEntity, MJErrorLogEntity, MJUserViewEntityExtended, UserViewEngine } from '@memberjunction/core-entities';
 
@@ -49,7 +50,7 @@ import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, ReplaceByteArraysWi
 import { SQLParser, IsBalancedSQLFragment, LexSQL } from '@memberjunction/sql-parser';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import { EncryptionEngine, IsEncryptionKeyUnavailable, ReportEncryptionKeyUnavailable } from '@memberjunction/encryption';
-import { PUSH_STATUS_UPDATES_TOPIC, PublishStatusUpdate } from './PushStatusResolver.js';
+import { PUSH_STATUS_UPDATES_TOPIC, PublishStatusUpdate, StatusUpdateOwnerID } from './PushStatusResolver.js';
 import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData } from './CacheInvalidationResolver.js';
 import { PubSubManager } from './PubSubManager.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
@@ -59,11 +60,18 @@ import { Subscription } from 'rxjs';
  * Entities whose update is always hydrated from the stored row, never from the client's `OldValues___`, though they
  * do not track record changes: their server-side write rules compare against the prior state, which a client could
  * otherwise supply itself (lower-case names). See `ResolverBase.MustLoadTruthFromDatabase`.
+ *
+ * `mj: conversations` and `mj: ai agent sessions` carry the anonymous realtime-session ownership key
+ * (`ExternalID` / `ConversationID`), which their server entities refuse an anonymous visitor to change — a rule
+ * that decides on `Dirty`, so the baseline must be the stored row, not a client-supplied one (#4931).
  */
 const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
   'mj: record changes',
   'mj: conversation details',
   'mj: data context items',
+  'mj: conversations',
+  'mj: ai agent sessions',
+  'mj: ai agent runs',
 ]);
 
 export class ResolverBase {
@@ -647,7 +655,9 @@ export class ResolverBase {
             : undefined,
           viewInput.BypassCache,
           viewInput.DataSource,
-          viewInput.IncludeBinaryFields
+          viewInput.IncludeBinaryFields,
+          viewInput.AlternateBaseView,
+          viewInput.Properties
         );
       }
       else {
@@ -694,7 +704,9 @@ export class ResolverBase {
         undefined,
         viewInput.BypassCache,
         viewInput.DataSource,
-        viewInput.IncludeBinaryFields
+        viewInput.IncludeBinaryFields,
+        viewInput.AlternateBaseView,
+        viewInput.Properties
       );
     } catch (err) {
       console.log(err);
@@ -742,7 +754,8 @@ export class ResolverBase {
         undefined,
         viewInput.BypassCache,
         viewInput.DataSource,
-        viewInput.IncludeBinaryFields
+        viewInput.IncludeBinaryFields,
+        viewInput.AlternateBaseView
       );
     } catch (err) {
       console.log(err);
@@ -817,6 +830,8 @@ export class ResolverBase {
           bypassCache: viewInput.BypassCache,
           dataSource: viewInput.DataSource,
           includeBinaryFields: viewInput.IncludeBinaryFields,
+          alternateBaseView: viewInput.AlternateBaseView,
+          properties: viewInput.Properties,
         });
       } catch (err) {
         LogError(err);
@@ -1195,7 +1210,9 @@ export class ResolverBase {
     afterKey?: CompositeKey,
     bypassCache?: boolean,
     dataSource?: 'Live' | 'Materialized',
-    includeBinaryFields?: boolean
+    includeBinaryFields?: boolean,
+    alternateBaseView?: string,
+    properties?: ViewPropertyValues
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
@@ -1278,6 +1295,9 @@ export class ResolverBase {
           BypassCache: bypassCache,
           DataSource: dataSource,
           IncludeBinaryFields: includeBinaryFields,
+          AlternateBaseView: alternateBaseView,
+          Properties: properties,
+          TimeZone: userPayload?.TimeZone,
         },
         user
       );
@@ -1439,6 +1459,9 @@ export class ResolverBase {
           BypassCache: param.bypassCache,
           DataSource: param.dataSource,
           IncludeBinaryFields: param.includeBinaryFields,
+          AlternateBaseView: param.alternateBaseView,
+          Properties: param.properties,
+          TimeZone: param.userPayload?.TimeZone,
         });
       }
 
@@ -1621,16 +1644,17 @@ export class ResolverBase {
 
   /**
    * Publishes a push-status update to the client on {@link PUSH_STATUS_UPDATES_TOPIC}, stamping the
-   * authenticated owner's user ID from `userPayload` so the subscription filter can bind delivery
-   * to identity (see B49 / `statusUpdatesFilter`). The ergonomic wrapper every resolver should use
-   * instead of calling `pubSub.publish` on the topic directly — it makes omitting identity
-   * impossible. Non-resolver publishers (services, the liveness heartbeat) call the shared
-   * `publishStatusUpdate()` function directly with an explicit `ownerUserId`.
+   * owner key of `userPayload` (`StatusUpdateOwnerID`: the request's user, or the widget guest an
+   * elevated payload stands in for) so the subscription filter can bind delivery to identity (see B49 /
+   * `StatusUpdatesFilter`). The ergonomic wrapper every resolver should use instead of calling
+   * `pubSub.publish` on the topic directly — it makes omitting identity impossible. Non-resolver
+   * publishers (services, the liveness heartbeat) call the shared `PublishStatusUpdate()` function
+   * directly with an explicit `ownerUserId`.
    */
   protected PublishStatusUpdate(pubSub: PubSubEngine, sessionId: string, message: string | undefined, userPayload: UserPayload): void {
     PublishStatusUpdate(pubSub, {
       sessionId,
-      ownerUserId: userPayload?.userRecord?.ID ?? '',
+      ownerUserId: StatusUpdateOwnerID(userPayload),
       message,
     });
   }

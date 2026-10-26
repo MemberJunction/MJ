@@ -97,6 +97,11 @@ describe('ResolverBase.MustLoadTruthFromDatabase & hasCompleteOldValues', () => 
         expect(probe.MustLoad({ Name: ' mj: conversation details ', TrackRecordChanges: false }, true)).toBe(true);
     });
 
+    it("always loads a conversation and an agent session, so client OldValues cannot hide a change to the anonymous ownership key (#4931)", () => {
+        expect(probe.MustLoad({ Name: 'MJ: Conversations', TrackRecordChanges: false }, true)).toBe(true);
+        expect(probe.MustLoad({ Name: 'MJ: AI Agent Sessions', TrackRecordChanges: false }, true)).toBe(true);
+    });
+
     it('still trusts OldValues on other untracked entities without field security when OldValues___ covers all writable fields', () => {
         const fields = buildTagEntityFields();
         const completeOldValues = [

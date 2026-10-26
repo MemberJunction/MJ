@@ -91,7 +91,7 @@ import { FindSystemUserFieldAccessViolations, UserCache } from '@memberjunction/
  * `CloneUserForSessionContext` carries it onto the per-session clone.)
  *
  * NOT COVERED, deliberately: a magic-link session's SYNTHESIZED roles (`context.ts`
- * `buildMagicLinkSessionUser`) count as roles held, so a scope-limited principal is measured by the
+ * `BuildMagicLinkSessionUser`) count as roles held, so a scope-limited principal is measured by the
  * same rule as any other caller. Narrowing scope-limited principals further is a magic-link concern,
  * not a role-elevation one — `IsScopeLimitedPrincipal` lives in MJServer, which this package cannot
  * import, and duplicating its predicate here would put one decision in two places. Such a session

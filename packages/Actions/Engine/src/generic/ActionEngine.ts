@@ -950,6 +950,12 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
          logEntity.ResultCode = resultCode;
          logEntity.Message = message;
       });
+      // The row lands later, but its ID is already out — a caller that inserts a row with a foreign key to
+      // it (a Process Run Detail) waits on this. Set here, not at each return: every path that returns a
+      // LogEntry ends through this method (the normal and catch paths of InternalRunAction, and
+      // StartAndEndActionLog, whose force-persisted UPDATE is the write that creates the row), and the
+      // FailuresOnly-success path that drops the LogEntry never reaches it.
+      result.LogEntryPersisted = this._logQueue.Settled(logEntity);
    }
 
    protected async StartAndEndActionLog(params: RunActionParams, result: ActionResult, inputSnapshot?: string): Promise<MJActionExecutionLogEntity> {

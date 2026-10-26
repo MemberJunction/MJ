@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Integration Tests",
-      "Description": "Parent suite for the metadata-driven Integration Test TestType (graduated from packages/MJServer/integration-test-scripts). Tiering is expressed as sibling child suites: 'Integration Tests — Deterministic' is the credential-free, blocking tier; 'Integration Tests — Live Model' is the opt-in, token-costing tier. The mutation axis is NOT a separate suite — mutation checks live inside the deterministic suite's tests and are gated at runtime by the driver reading RUN_MUTATION_TESTS.",
+      "Description": "Parent suite for the metadata-driven Integration Test TestType (graduated from packages/MJServer/integration-test-scripts). Tiering is expressed as sibling child suites: 'Integration Tests \u2014 Deterministic' is the credential-free, blocking tier; 'Integration Tests \u2014 Live Model' is the opt-in, token-costing tier. The mutation axis is NOT a separate suite \u2014 mutation checks live inside the deterministic suite's tests and are gated at runtime by the driver reading RUN_MUTATION_TESTS.",
       "Status": "Active"
     },
     "primaryKey": {
@@ -15,9 +15,9 @@
   },
   {
     "fields": {
-      "Name": "Integration Tests — Deterministic",
+      "Name": "Integration Tests \u2014 Deterministic",
       "ParentID": "@lookup:MJ: Test Suites.Name=Integration Tests",
-      "Description": "The blocking, credential-free integration tier. Members run with no LLM credentials against a live DB/transport. Mutation-class checks (S17/S23/S24, C10) are ordinary members gated at runtime by RUN_MUTATION_TESTS — they appear here but only fire when the driver sees the env gate. IT03 (client/GraphQL) is seeded Skip until MJAPI is provisioned in CI (Phase 5). ORDERING INVARIANT: client-transport members are sequenced LAST — bootstrapIntegrationClient rebinds the process's global provider to GraphQL, so no server-transport member may run after the first client one.",
+      "Description": "The blocking, credential-free integration tier. Members run with no LLM credentials against a live DB/transport. Mutation-class checks (S17/S23/S24, C10) are ordinary members gated at runtime by RUN_MUTATION_TESTS \u2014 they appear here but only fire when the driver sees the env gate. IT03 (client/GraphQL) is seeded Skip until MJAPI is provisioned in CI (Phase 5). ORDERING INVARIANT: client-transport members are sequenced LAST \u2014 bootstrapIntegrationClient rebinds the process's global provider to GraphQL, so no server-transport member may run after the first client one.",
       "Status": "Active"
     },
     "relatedEntities": {
@@ -1522,6 +1522,39 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT136 - View Properties over GraphQL",
+            "Sequence": 75,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3E05F35F-E69D-49A8-B641-6C8C08BF2243"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT120 - Server-Set Query Parameters and Approvals",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "DE6D8FB0-92C7-4454-9618-87412D144E56"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT127 - Calendar Event Links and Sync",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "286A13C7-2C5D-4243-8918-336AF1C8FFB2"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT128 - Performance and Agent Overhead Benchmark",
             "Sequence": 49,
             "Status": "Active"
@@ -1540,6 +1573,28 @@
           "primaryKey": {
             "ID": "19516008-6F25-49C0-BEAA-59762CC20B21"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT132 - Alternate Base Views",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C855524F-A408-4F8B-BD04-4BE96B59C3C1"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT137 - Content Pipeline Lifecycle",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "34786189-124D-43ED-B148-FACFA4446A51"
+          }
         }
       ]
     },
@@ -1553,7 +1608,7 @@
   },
   {
     "fields": {
-      "Name": "Integration Tests — Live Model",
+      "Name": "Integration Tests \u2014 Live Model",
       "ParentID": "@lookup:MJ: Test Suites.Name=Integration Tests",
       "Description": "The opt-in integration tier (RUN_AGENT_TESTS=1). Members are prompt/agent deep-verifier checks that incur LLM token cost and are never run by the default CI gate. Each is tier='live-model', so the driver skips-as-Passed unless RUN_AGENT_TESTS is set.",
       "Status": "Active"

@@ -49,6 +49,16 @@ import {
   NormalizedNotification,
   ParseNotificationResult,
   BaseMessageResult,
+  CalendarEventResult,
+  CalendarTarget,
+  CalendarTargetError,
+  CalendarUpdateError,
+  CancelEventParams,
+  CreateEventParams,
+  GetEventParams,
+  SyncEventsParams,
+  SyncEventsResult,
+  UpdateEventParams,
   GetEventsParams,
   GetEventsResult,
   GetEventsEvent,
@@ -70,6 +80,7 @@ import { RegisterClass, MJLruCache } from "@memberjunction/global";
 import { LogError, LogStatus } from "@memberjunction/core";
 import * as Config from "./config";
 import googleApis from 'googleapis';
+import { BuildGoogleEventBody, ToCalendarChange, ToCalendarEvent } from "./calendar";
 
 /**
  * Credentials for Gmail provider using OAuth2.
@@ -109,6 +120,10 @@ interface ResolvedGmailCredentials {
 interface CachedGmailClient {
   client: googleApis.gmail_v1.Gmail;
   userEmail: string | null;
+  /** The OAuth2 client both APIs authenticate with, so a calendar client can share its tokens. */
+  auth: InstanceType<typeof googleApis.google.auth.OAuth2>;
+  /** Built on first calendar use only, so mail-only callers never construct it. */
+  calendar?: googleApis.calendar_v3.Calendar;
 }
 
 /**
@@ -117,6 +132,9 @@ interface CachedGmailClient {
  * {@link SubscriptionCapabilities.MaxLifetimeMinutes}.
  */
 const GMAIL_MAX_SUBSCRIPTION_MINUTES = 10080;
+
+/** A guard against a misbehaving sync stream, not a real limit. */
+const GOOGLE_MAX_SYNC_PAGES = 1000;
 
 /**
  * Provider-specific extras for a Gmail push subscription, passed via
@@ -218,9 +236,9 @@ export class GmailProvider extends BaseCommunicationProvider {
   }
 
   /**
-   * Creates a Gmail client with the given credentials
+   * Creates a Gmail client with the given credentials, keeping its OAuth2 client for the calendar
    */
-  private createGmailClient(creds: ResolvedGmailCredentials): googleApis.gmail_v1.Gmail {
+  private createGmailClient(creds: ResolvedGmailCredentials): CachedGmailClient {
     // Create OAuth2 client
     const oauth2Client = new googleApis.google.auth.OAuth2(
       creds.clientId,
@@ -234,10 +252,11 @@ export class GmailProvider extends BaseCommunicationProvider {
     });
 
     // Create Gmail API client
-    return googleApis.google.gmail({
+    const client = googleApis.google.gmail({
       version: 'v1',
       auth: oauth2Client
     });
+    return { client, userEmail: null, auth: oauth2Client };
   }
 
   /**
@@ -252,10 +271,7 @@ export class GmailProvider extends BaseCommunicationProvider {
 
     if (isEnvCredentials) {
       if (!this.envGmailClient) {
-        this.envGmailClient = {
-          client: this.createGmailClient(creds),
-          userEmail: null
-        };
+        this.envGmailClient = this.createGmailClient(creds);
       }
       return this.envGmailClient;
     }
@@ -265,10 +281,7 @@ export class GmailProvider extends BaseCommunicationProvider {
     let cached = this.clientCache.Get(cacheKey);
 
     if (!cached) {
-      cached = {
-        client: this.createGmailClient(creds),
-        userEmail: null
-      };
+      cached = this.createGmailClient(creds);
       this.clientCache.Set(cacheKey, cached);
     }
 
@@ -882,6 +895,11 @@ export class GmailProvider extends BaseCommunicationProvider {
       'RenewSubscription',
       'DeleteSubscription',
       'ParseNotification',
+      'CreateEvent',
+      'UpdateEvent',
+      'CancelEvent',
+      'GetEvent',
+      'SyncEvents',
       'GetEvents',
       'GetFreeBusy',
       'CreateCalendarEvent',
@@ -1374,6 +1392,152 @@ export class GmailProvider extends BaseCommunicationProvider {
         ErrorMessage: `Error verifying mailbox access for ${identifier}: ${errorMessage}`
       };
     }
+  }
+
+  // ========================================================================
+  // GOOGLE CALENDAR
+  // On this provider rather than a separate one because it is the same Google account and the same
+  // OAuth2 client: the `MJ: Communication Providers` row named 'Gmail' already stands for the
+  // account, and a calendar link points at that row. The calendar client is built from the same
+  // OAuth2 client on first use.
+  //
+  // SCOPES: the refresh token must carry https://www.googleapis.com/auth/calendar.events (or the
+  // broader .../auth/calendar). A token consented for Gmail scopes only gets 403 here, and the account
+  // has to consent again with the calendar scope added.
+  //
+  // WHOSE CALENDAR: the refresh token decides the account, and Target.Identifier names the calendar.
+  // Target.CalendarID defaults to Target.Identifier, not 'primary': a Google account's primary
+  // calendar ID is its address, so for the token's own account the two are the same calendar, and for
+  // anyone else Google answers 404 instead of writing into the token owner's calendar (the deployment
+  // default these operations must never fall back to).
+  // ========================================================================
+
+  /** Inserts an event and sends invitations to its attendees (`sendUpdates: 'all'`). */
+  public override async CreateEvent(params: CreateEventParams, credentials?: GmailCredentials): Promise<CalendarEventResult> {
+    return this.calendarCall<CalendarEventResult>('CreateEvent', params.Target, credentials, (message) => ({ Success: false, ErrorMessage: message }), async (calendar, calendarId) => {
+      const response = await calendar.events.insert({
+        calendarId,
+        sendUpdates: 'all',
+        ...(params.Event.IsOnlineMeeting ? { conferenceDataVersion: 1 } : {}),
+        requestBody: BuildGoogleEventBody(params.Event)
+      });
+      return { Success: true, Event: ToCalendarEvent(response.data) };
+    });
+  }
+
+  /** Patches the given fields and sends the update to attendees. */
+  public override async UpdateEvent(params: UpdateEventParams, credentials?: GmailCredentials): Promise<CalendarEventResult> {
+    const changeError = CalendarUpdateError(params.Changes);
+    if (changeError) return { Success: false, ErrorMessage: changeError };
+    return this.calendarCall<CalendarEventResult>('UpdateEvent', params.Target, credentials, (message) => ({ Success: false, ErrorMessage: message }), async (calendar, calendarId) => {
+      const response = await calendar.events.patch({
+        calendarId,
+        eventId: params.ExternalEventID,
+        sendUpdates: 'all',
+        ...(params.Changes.IsOnlineMeeting ? { conferenceDataVersion: 1 } : {}),
+        requestBody: BuildGoogleEventBody(params.Changes, true)
+      });
+      return { Success: true, Event: ToCalendarEvent(response.data) };
+    });
+  }
+
+  /**
+   * Deletes the event with `sendUpdates: 'all'`: from the organizer's calendar that cancels it for
+   * everyone; from an attendee's it removes that copy only. Google has no cancellation comment, so
+   * `Comment` is not sent. An event already gone (404 or 410) counts as cancelled.
+   */
+  public override async CancelEvent(params: CancelEventParams, credentials?: GmailCredentials): Promise<BaseMessageResult> {
+    const failure = (message: string, err?: unknown): BaseMessageResult => {
+      const status = this.httpStatus(err);
+      return status === 404 || status === 410 ? { Success: true } : { Success: false, ErrorMessage: message };
+    };
+    return this.calendarCall('CancelEvent', params.Target, credentials, failure, async (calendar, calendarId) => {
+      await calendar.events.delete({ calendarId, eventId: params.ExternalEventID, sendUpdates: 'all' });
+      return { Success: true };
+    });
+  }
+
+  /** Reads one event with each attendee's response. */
+  public override async GetEvent(params: GetEventParams, credentials?: GmailCredentials): Promise<CalendarEventResult> {
+    return this.calendarCall<CalendarEventResult>('GetEvent', params.Target, credentials, (message) => ({ Success: false, ErrorMessage: message }), async (calendar, calendarId) => {
+      const response = await calendar.events.get({ calendarId, eventId: params.ExternalEventID });
+      return { Success: true, Event: ToCalendarEvent(response.data) };
+    });
+  }
+
+  /**
+   * Incremental sync through `events.list`. With no token, a full read of the window (open-ended when
+   * the window is not given); with one, only what changed. Recurring events are expanded
+   * (`singleEvents`), on every request, since Google wants the same parameters on the incremental
+   * reads as on the full one. Pages are followed until the `nextSyncToken`. An expired token is a
+   * 410 Gone: that comes back as `ResyncRequired`.
+   */
+  public override async SyncEvents(params: SyncEventsParams, credentials?: GmailCredentials): Promise<SyncEventsResult> {
+    const failure = (message: string, err?: unknown): SyncEventsResult => ({
+      Success: false,
+      Changes: [],
+      ErrorMessage: message,
+      ResyncRequired: !!params.SyncToken && this.httpStatus(err) === 410
+    });
+    return this.calendarCall('SyncEvents', params.Target, credentials, failure, async (calendar, calendarId) => {
+      const result: SyncEventsResult = { Success: true, Changes: [] };
+      let pageToken: string | undefined;
+      for (let page = 0; page < GOOGLE_MAX_SYNC_PAGES; page++) {
+        const response = await calendar.events.list(this.syncListParams(calendarId, params, pageToken));
+        result.Changes.push(...(response.data.items ?? []).map(ToCalendarChange));
+        pageToken = response.data.nextPageToken ?? undefined;
+        if (!pageToken) {
+          result.NextSyncToken = response.data.nextSyncToken ?? undefined;
+          break;
+        }
+      }
+      return result.NextSyncToken ? result : failure('Google Calendar sync ended without a nextSyncToken; nothing was applied.');
+    });
+  }
+
+  /** The `events.list` parameters for one page. A sync token excludes the window, as Google requires. */
+  private syncListParams(calendarId: string, params: SyncEventsParams, pageToken: string | undefined): googleApis.calendar_v3.Params$Resource$Events$List {
+    return {
+      calendarId,
+      singleEvents: true,
+      ...(params.SyncToken
+        ? { syncToken: params.SyncToken }
+        : {
+            ...(params.WindowStart ? { timeMin: params.WindowStart.toISOString() } : {}),
+            ...(params.WindowEnd ? { timeMax: params.WindowEnd.toISOString() } : {})
+          }),
+      ...(pageToken ? { pageToken } : {})
+    };
+  }
+
+  /**
+   * The shared shape of every calendar call: refuse a missing target before any I/O, build the
+   * calendar client from the account's OAuth2 client, and turn a thrown error into a result.
+   */
+  private async calendarCall<T extends BaseMessageResult>(
+    operation: string,
+    target: CalendarTarget | undefined,
+    credentials: GmailCredentials | undefined,
+    failure: (message: string, err?: unknown) => T,
+    work: (calendar: googleApis.calendar_v3.Calendar, calendarId: string) => Promise<T>
+  ): Promise<T> {
+    const refusal = CalendarTargetError(operation, target);
+    if (refusal || !target) return failure(refusal ?? `${operation} needs a Target.`);
+    try {
+      const cached = this.getGmailClient(this.resolveCredentials(credentials));
+      cached.calendar ??= googleApis.google.calendar({ version: 'v3', auth: cached.auth });
+      return await work(cached.calendar, target.CalendarID?.trim() || target.Identifier.trim());
+    } catch (err) {
+      return failure(`Google Calendar ${operation} failed for ${target.Identifier}: ${err instanceof Error ? err.message : String(err)}`, err);
+    }
+  }
+
+  /** The HTTP status on a googleapis (Gaxios) error: `.code`, `.status` or `.response.status`. */
+  private httpStatus(error: unknown): number | undefined {
+    if (typeof error !== 'object' || error === null) return undefined;
+    const err = error as { code?: unknown; status?: unknown; response?: { status?: unknown } };
+    const status = Number(err.response?.status ?? err.status ?? err.code);
+    return Number.isFinite(status) ? status : undefined;
   }
 
   // ========================================================================

@@ -1,0 +1,53 @@
+{
+  "id": "C4",
+  "namespace": "d276c184-84a4-4a09-82a0-8a22f0a15263",
+  "seed": 2202,
+  "description": "Fictitious support-ticket escalation with three leakage traps (target proxy, time-shifted label, high-cardinality ID).",
+  "kind": "binary",
+  "nEntities": 3000,
+  "periodsPerEntity": 4,
+  "startYear": 2021,
+  "stateFeature": "PrevEscalated",
+  "features": {
+    "SeverityZ": {
+      "dist": "normal",
+      "mean": 0,
+      "sd": 1
+    },
+    "Tier": {
+      "dist": "int",
+      "lo": 1,
+      "hi": 3
+    },
+    "AfterHours": {
+      "dist": "bernoulli",
+      "p": 0.3
+    },
+    "NoiseZ": {
+      "dist": "normal",
+      "mean": 0,
+      "sd": 1
+    }
+  },
+  "betas": {
+    "SeverityZ": 1.0,
+    "Tier": 0.3,
+    "AfterHours": 0.5,
+    "NoiseZ": 0.0,
+    "PrevEscalated": 2.5
+  },
+  "intercept": -2.5,
+  "traps": {
+    "proxy": {
+      "column": "ProxyOfTarget",
+      "flipP": 0.05
+    },
+    "nextPeriod": {
+      "column": "NextPeriodFlag"
+    },
+    "highCardId": {
+      "column": "TicketCode"
+    }
+  },
+  "sizingNote": "3,000 entities x 4 visible periods = 12,000 rows (Ruling Q9: >= 10,000). A fifth, hidden period per entity only feeds NextPeriodFlag and is dropped. At this size the proxy agreement (0.95) has SE 0.0020 and the nonzero betas have z-scores from 9.4 (Tier) to 42 (PrevEscalated), so leakage detection (S2/S3) is judged against clearly visible legitimate signal."
+}

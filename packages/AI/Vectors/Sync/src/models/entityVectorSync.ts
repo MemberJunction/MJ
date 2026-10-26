@@ -803,8 +803,11 @@ export class EntityVectorSyncer extends VectorBase {
   }
 
   /**
-   * Adds the system-injected RecordID / Entity / TemplateID keys — omitted entirely
-   * under the 'explicit' strategy, where metadata contains only configured fields.
+   * Adds the system-injected RecordID / Entity / EntityDocumentID / TemplateID keys — omitted
+   * entirely under the 'explicit' strategy, where metadata contains only configured fields.
+   *
+   * EntityDocumentID is what scopes a query to one document when several documents share an
+   * index (`SharedIndexFilterOptions.EntityDocumentIDs`) — duplicate detection filters on it.
    */
   protected addSystemMetadata(
     metadata: Record<string, string | number | boolean>,
@@ -816,6 +819,7 @@ export class EntityVectorSyncer extends VectorBase {
     if (explicit) return;
     metadata['RecordID'] = String(embeddingItem.__mj_compositeKey ?? '');
     metadata['Entity'] = entityDocument.Entity;
+    metadata['EntityDocumentID'] = entityDocument.ID;
     metadata['TemplateID'] = templateContent.ID;
   }
 

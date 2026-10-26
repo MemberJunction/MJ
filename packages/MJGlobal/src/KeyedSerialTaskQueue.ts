@@ -53,7 +53,8 @@ export class KeyedSerialTaskQueue {
      * @param opts.after Optional dependency key — the task waits for this key's latest task to settle
      *   before running, in addition to waiting for its own key's prior tasks. Use this to honour
      *   cross-instance ordering constraints like self-referencing foreign keys (e.g. a child step's
-     *   INSERT must land after its parent step's INSERT).
+     *   INSERT must land after its parent step's INSERT). This is the in-queue form of the wait; when the
+     *   dependent write lives in a *different* queue, use {@link Settled} instead.
      */
     public Enqueue<T>(key: object, task: () => Promise<T>, opts?: { label?: string; isOk?: (v: T) => boolean; after?: object }): Promise<T | undefined> {
         const prior = this.tails.get(key) ?? Promise.resolve();
@@ -85,6 +86,18 @@ export class KeyedSerialTaskQueue {
         this.inFlight.add(tracked);
 
         return settled.then((o) => (o.ok ? o.value : undefined));
+    }
+
+    /**
+     * Resolves once every task enqueued so far for `key` has settled — at once when the key has no
+     * pending task. The cross-queue form of `Enqueue`'s `after` option: `after` can only see keys in this
+     * instance, so a caller that must order a write in another queue behind this key awaits this instead.
+     *
+     * A pure read: it never rejects (a failed task is already tallied and routed to `onError`), and it
+     * neither enqueues anything nor delays later tasks. Tasks enqueued after the call are not awaited.
+     */
+    public Settled(key: object): Promise<void> {
+        return this.tails.get(key) ?? Promise.resolve();
     }
 
     /** @deprecated Use {@link Enqueue}. */
