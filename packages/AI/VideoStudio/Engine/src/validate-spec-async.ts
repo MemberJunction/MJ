@@ -22,6 +22,7 @@ import {
     VideoSpecValidationOptions,
     VideoSpecValidationResult,
 } from '@memberjunction/video-studio-core';
+import { IsEphemeralFileID } from './storage.js';
 
 /** Maximum number of validated file IDs queried in a single `MJ: Files` `RunView` call. */
 export const FILE_VALIDATION_BATCH_SIZE = 500;
@@ -155,6 +156,9 @@ function collectFileReferences(spec: VideoGenerationSpec, errors: VideoSpecValid
             return;
         }
         const trimmed = typeof rawId === 'string' ? rawId.trim() : String(rawId);
+        if (IsEphemeralFileID(trimmed)) {
+            return;
+        }
         if (!IsValidUUID(trimmed)) {
             errors.push({
                 Code: 'InvalidFileID',

@@ -558,6 +558,76 @@ describe('VideoStudioPreProductionAgent (VS-AGT-3)', () => {
         expect(result.finalStep.message).toContain('Never fill in a placeholder or invent');
     });
 
+    it('missing storage account succeeds with ephemeral inline AudioFileID and CaptionsFileID when RunNarrationPipeline returns synthesized Clips in memory', async () => {
+        vi.spyOn(dataSnapshotModule, 'CaptureDataSnapshot').mockResolvedValue({
+            Snapshot: {
+                AsOf: '2026-04-17T01:00:00.000Z',
+                Sources: ['Inline:arr'],
+                Inline: { arr: 12500000 },
+            },
+            Values: { arr: 12500000 },
+            Issues: [],
+        });
+
+        vi.spyOn(narrationPipelineModule, 'RunNarrationPipeline').mockImplementation(
+            async (inputSpec) => {
+                const updated = structuredClone(inputSpec);
+                updated.Audio.Narration!.Script[0].DurationSeconds = 3.2;
+                updated.Audio.Narration!.Script[0].StartSeconds = 0;
+                updated.Audio.Narration!.Script[1].DurationSeconds = 3.5;
+                updated.Audio.Narration!.Script[1].StartSeconds = 4;
+                return {
+                    Spec: updated,
+                    Clips: [
+                        {
+                            LineKey: 'Line 1',
+                            MimeType: 'audio/mpeg',
+                            Data: Buffer.from('fake-mp3-bytes-1'),
+                            PromptRunID: 'run-tts-inline-1',
+                        },
+                        {
+                            LineKey: 'Line 2',
+                            MimeType: 'audio/mpeg',
+                            Data: Buffer.from('fake-mp3-bytes-2'),
+                            PromptRunID: 'run-tts-inline-2',
+                        },
+                    ],
+                    CaptionsVtt: 'WEBVTT\n\n00:00.000 --> 00:03.200\nARR reached $12.5M.\n',
+                    Issues: [
+                        {
+                            Severity: 'Warning',
+                            Code: 'ClipNotStored',
+                            LineKey: 'Line 1',
+                            Message:
+                                'Narration clip for line "Line 1" could not be stored in MJ Storage; keeping bytes in memory.',
+                        },
+                        {
+                            Severity: 'Warning',
+                            Code: 'ClipNotStored',
+                            LineKey: 'Line 2',
+                            Message:
+                                'Narration clip for line "Line 2" could not be stored in MJ Storage; keeping bytes in memory.',
+                        },
+                    ],
+                };
+            },
+        );
+
+        const { execute } = createAgentWithStepTracking();
+        const spec = makeBaseSpec();
+        spec.Assets.Approved = [];
+        spec.Beats[0].AssetRefs = [];
+
+        const result = await execute(spec);
+
+        expect(result.finalStep.step).toBe('Success');
+        const nextSpec = result.finalStep.newPayload;
+        const audioFileId = nextSpec.Audio.Narration?.Script[0]?.AudioFileID;
+        expect(audioFileId).toMatch(/^inline:/);
+        expect(nextSpec.Audio.Narration?.Script[0]?.StagedPath).toBe('audio/line-1.mp3');
+        expect(nextSpec.Output?.CaptionsFileID).toMatch(/^inline:/);
+    });
+
     it('passes archetype FilmBounds to RunNarrationPipeline and finalizes step with success=false when a step throws', async () => {
         vi.spyOn(dataSnapshotModule, 'CaptureDataSnapshot').mockRejectedValueOnce(
             new Error('Database connection lost during snapshot'),

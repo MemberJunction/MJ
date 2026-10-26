@@ -31,14 +31,14 @@ export const DEFAULT_DOCKER_PIDS_LIMIT = 512;
 /** Default `/dev/shm` size in megabytes (`--shm-size <n>m`) for `DockerRenderDriver` containers (`VS-RND-4`). */
 export const DEFAULT_DOCKER_SHM_SIZE_MB = 1024;
 
-/** Default inline MP4 storage cap in bytes when no MJStorage account is configured (0 = disabled by default, `VS-ART-2`). */
-export const VIDEO_STUDIO_INLINE_MAX_BYTES = 0;
+/** Default inline MP4 storage cap in bytes when no MJStorage account is configured (2 MiB = 2,097,152 bytes, Plan §11.2). */
+export const VIDEO_STUDIO_INLINE_MAX_BYTES = 2 * 1024 * 1024;
 
 /**
  * Normalized PascalCase settings for Video Studio output storage (`VS-ART-2`).
  */
 export interface VideoStudioOutputSettings {
-    /** Maximum rendered MP4 size in bytes permitted for inline `InlineBase64` fallback (default: 0 / disabled). */
+    /** Maximum rendered MP4 size in bytes permitted for inline `InlineBase64` fallback (default: 2 MiB). */
     InlineMaxBytes: number;
 }
 
@@ -511,23 +511,36 @@ export function ReadVideoStudioOutputSettings(searchFrom: string = process.cwd()
     }
 
     const videoStudioSection = rawConfig.videoStudio as RawVideoStudioConfig;
-    if (videoStudioSection.outputs === undefined || videoStudioSection.outputs === null) {
-        return defaults;
-    }
-    if (!isPlainObject(videoStudioSection.outputs)) {
-        LogWarning('videoStudio.outputs in mj.config is not an object; using default output settings.');
-        return defaults;
+    if (videoStudioSection.outputs !== undefined && videoStudioSection.outputs !== null) {
+        if (!isPlainObject(videoStudioSection.outputs)) {
+            LogWarning('videoStudio.outputs in mj.config is not an object; using default output settings.');
+            return defaults;
+        }
+        const outputsSection = videoStudioSection.outputs as RawVideoStudioOutputsConfig;
+        const inlineMaxBytes = readNonNegativeNumber(
+            outputsSection.inlineMaxBytes,
+            'videoStudio.outputs.inlineMaxBytes',
+            VIDEO_STUDIO_INLINE_MAX_BYTES,
+        );
+        return {
+            InlineMaxBytes: inlineMaxBytes,
+        };
     }
 
-    const outputsSection = videoStudioSection.outputs as RawVideoStudioOutputsConfig;
-    const inlineMaxBytes = readNonNegativeNumber(
-        outputsSection.inlineMaxBytes,
-        'videoStudio.outputs.inlineMaxBytes',
-        VIDEO_STUDIO_INLINE_MAX_BYTES,
-    );
+    if (isPlainObject(videoStudioSection.render)) {
+        const renderSection = videoStudioSection.render as RawVideoStudioOutputsConfig;
+        if (renderSection.inlineMaxBytes !== undefined && renderSection.inlineMaxBytes !== null) {
+            const inlineMaxBytes = readNonNegativeNumber(
+                renderSection.inlineMaxBytes,
+                'videoStudio.render.inlineMaxBytes',
+                VIDEO_STUDIO_INLINE_MAX_BYTES,
+            );
+            return {
+                InlineMaxBytes: inlineMaxBytes,
+            };
+        }
+    }
 
-    return {
-        InlineMaxBytes: inlineMaxBytes,
-    };
+    return defaults;
 }
 

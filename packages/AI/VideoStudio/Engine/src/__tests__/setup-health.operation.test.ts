@@ -330,6 +330,34 @@ describe('VideoStudioSetupHealthServerOperation (VS-UX-3)', () => {
       expect(render?.Action).toContain('ffmpeg');
     });
 
+    it('reports Error with Chromium browser:install action when worker reports missing Chromium headless shell', async () => {
+      const chromiumErr =
+        'Chromium headless shell binary was not found. Run `pnpm --filter @memberjunction/video-studio-render-worker run browser:install` or set CHROME_PATH.';
+      VideoRenderEngine.Instance.UseDriver(
+        new FakeRenderDriver({
+          Health: {
+            Healthy: false,
+            NodeVersion: 'v24.18.0',
+            HyperFramesVersion: '0.8.134',
+            FfmpegVersion: '7.1.1',
+            Errors: [chromiumErr],
+          },
+        }),
+      );
+      const op = new TestableSetupHealthOperation(runnerStub);
+
+      const res = await op.ExecuteServer({}, makeServerContext());
+
+      expect(res.Success).toBe(true);
+      expect(res.Output?.Healthy).toBe(false);
+      const render = res.Output?.Checks.find((c) => c.Key === 'Render');
+      expect(render?.Status).toBe('Error');
+      expect(render?.Message).toContain(chromiumErr);
+      expect(render?.Details).toEqual([chromiumErr]);
+      expect(render?.Action).toContain('browser:install');
+      expect(render?.Action).toContain('CHROME_PATH');
+    });
+
     it('reports Error when Health() exceeds RenderTimeoutMs while allowing background start to continue', async () => {
       vi.useFakeTimers();
       try {

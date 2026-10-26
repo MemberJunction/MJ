@@ -53,10 +53,13 @@ module.exports = {
       },
     },
     outputs: {
-      // Max MP4 bytes allowed to fall back to InlineBase64 when MJStorage fails (default: 0, disabled).
-      // Setting this above 0 puts the base64 into the spec payload and every later root prompt
-      // (about 1.4M characters per MB) and is meant for local testing only.
-      inlineMaxBytes: 0,
+      // Max MP4 bytes allowed to fall back to InlineBase64 when no FileStorageAccount resolves or MJStorage fails
+      // (default: 2097152 / 2 MB; set to 0 to disable InlineBase64 fallback).
+      // VideoStudioAgent strips Output.Videos[*].InlineBase64 ('[inline-mp4]') from _CURRENT_PAYLOAD during the loop
+      // and restores the real base64 bytes when the run exits (Delivered, G4 Plan, or Failed).
+      // Intra-run intermediate files (narration clips, captions, poster, contact sheets) fall back to a bounded
+      // in-process ephemeral store ('inline:<uuid>') when no FileStorageAccount is configured.
+      inlineMaxBytes: 2097152,
     },
   },
 };
@@ -66,7 +69,7 @@ module.exports = {
 
 | Driver (`videoStudio.render.driver`) | Description | Network Isolation (`Driver.IsNetworkIsolated`) |
 | --- | --- | --- |
-| `LocalWorker` *(default)* | Managed local child process (`LocalWorkerRenderDriver`). Spawns `@memberjunction/video-studio-render-worker` (`mj-video-render-worker`) on `127.0.0.1:0` with a sanitized environment allowlist (`BuildWorkerEnv` — never passes MJAPI database or vendor secrets) and a fresh 32-byte random bearer token per spawn. Cannot run as root (`uid === 0`): the worker refuses root unless `VIDEO_STUDIO_RENDER_ALLOW_ROOT=1` is set, and `BuildWorkerEnv` never forwards that variable. | `false` — **Development / single-node trusted compositions only.** Logs a one-time startup warning (`LOCAL_WORKER_NETWORK_WARNING`) when selected. |
+| `LocalWorker` *(default)* | Managed local child process (`LocalWorkerRenderDriver`). Spawns `@memberjunction/video-studio-render-worker` (`mj-video-render-worker`) on `127.0.0.1:0` with a sanitized environment allowlist (`BuildWorkerEnv` — never passes MJAPI database or vendor secrets) and a fresh 32-byte random bearer token per spawn. Cannot run as root (`uid === 0`): the worker refuses root unless `VIDEO_STUDIO_RENDER_ALLOW_ROOT=1` is set, and `BuildWorkerEnv` never forwards that variable. Requires **`ffmpeg`** on `PATH` and a **Chromium headless shell** (`pnpm --filter @memberjunction/video-studio-render-worker run browser:install` or `CHROME_PATH`); `@memberjunction/video-studio-render-worker` is a standalone package (not a runtime dependency of `@memberjunction/video-studio`), resolved automatically in monorepo checkouts or via `npm install @memberjunction/video-studio-render-worker` / `videoStudio.render.local.workerEntry` on npm-installed hosts. | `false` — **Development / single-node trusted compositions only.** Logs a one-time startup warning (`LOCAL_WORKER_NETWORK_WARNING`) when selected. |
 | `Remote` | Stateless HTTP/HTTPS client (`RemoteRenderDriver`) targeting one or more external render worker endpoints via `RenderWorkerHttpClient`. Configured via `videoStudio.render.remote.url` / `.urls` / `.token` (`urls` takes precedence when both `url` and `urls` are set; falls back to `VIDEO_STUDIO_RENDER_URL` / `VIDEO_STUDIO_RENDER_TOKEN` when neither is set; `mj.config.cjs` wins over env). `Health()` probes every worker in the pool without advancing the per-job rotation and reports `Healthy: true` only when all workers are healthy. Logs a one-time warning per distinct worker URL per driver instance if a plain `http://` URL targets a non-loopback host because the bundle's frozen data snapshot travels in the request body. | `false` — `RemoteRenderDriver.IsNetworkIsolated` is always `false` (`VideoRenderDriverBase.IsNetworkIsolated`). |
 | `Docker` | Hardened one-container-per-job driver (`DockerRenderDriver`, Linux/macOS host only) provisioned via `@memberjunction/ai-agent-harness` (`DockerSandboxProvider`). Runs `node /app/dist/main.js run <op>` over a bind-mounted workspace with `--network none`, `--read-only`, `--tmpfs /tmp:rw,size=256m`, `--cap-drop ALL`, `--security-opt no-new-privileges`, `--cpus`, `--memory`, `--pids-limit`, and `--shm-size`, passing only `TMPDIR` and `HOME` in the process environment. Fails closed on Windows (`process.platform === 'win32'`) and directs operators to `Remote`. | `true` — **Required boundary for untrusted compositions (Decision 4 / D15).** |
 

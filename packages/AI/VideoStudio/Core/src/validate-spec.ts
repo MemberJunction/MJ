@@ -1619,8 +1619,33 @@ export function RestoreStrippedFormatKeys<T extends Partial<VideoGenerationSpec>
         }
     }
 
-    if (spec.Output && typeof spec.Output === 'object' && spec.Output.Source) {
-        spec.Output.Source = restoreFormatKeyMap(spec.Output.Source);
+    if (spec.Output && typeof spec.Output === 'object') {
+        if (spec.Output.Source) {
+            spec.Output.Source = restoreFormatKeyMap(spec.Output.Source);
+        }
+        if (spec.Output.Videos) {
+            spec.Output.Videos = restoreFormatKeyMap(spec.Output.Videos);
+        }
+        if (spec.Output.ContactSheetFileIDs) {
+            spec.Output.ContactSheetFileIDs = restoreFormatKeyMap(spec.Output.ContactSheetFileIDs);
+        }
+        if (
+            spec.Output.RenderMetadata &&
+            typeof spec.Output.RenderMetadata === 'object' &&
+            spec.Output.RenderMetadata.DurationByFormat
+        ) {
+            spec.Output.RenderMetadata.DurationByFormat = restoreFormatKeyMap(
+                spec.Output.RenderMetadata.DurationByFormat,
+            );
+        }
+    }
+
+    if (Array.isArray(spec.Review?.Rounds)) {
+        for (const round of spec.Review.Rounds) {
+            if (round && typeof round === 'object' && round.ContactSheetFileIDs) {
+                round.ContactSheetFileIDs = restoreFormatKeyMap(round.ContactSheetFileIDs);
+            }
+        }
     }
 
     return spec;

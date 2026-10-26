@@ -391,7 +391,9 @@ export class HyperFramesRenderBackend implements RenderBackend {
         try {
             const browserBin = resolveBrowserBinary();
             if (!browserBin) {
-                errors.push('Chromium headless shell binary was not found.');
+                errors.push(
+                    'Chromium headless shell binary was not found. Run `pnpm --filter @memberjunction/video-studio-render-worker run browser:install` or set CHROME_PATH.',
+                );
             } else {
                 chromiumVersion = await probeBinaryFirstLine(browserBin, ['--version']);
             }

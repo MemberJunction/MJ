@@ -4,9 +4,94 @@
  * @module @memberjunction/video-studio
  */
 
+import { randomUUID } from 'node:crypto';
 import { IMetadataProvider, IRunViewProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
 import { EscapeSQLString, IsValidUUID } from '@memberjunction/global';
 import { FileStorageEngine, StorageFileLocation } from '@memberjunction/storage';
+
+/**
+ * Prefix applied to ephemeral in-process file identifiers minted when no
+ * `FileStorageAccount` resolves during a run (Plan §11.2, §14).
+ */
+export const INLINE_EPHEMERAL_FILE_PREFIX = 'inline:' as const;
+
+const MAX_EPHEMERAL_FILES = 256;
+
+/**
+ * Metadata and content stored in the bounded in-process ephemeral file store.
+ */
+export interface EphemeralFileEntry {
+    /** Raw file content bytes. */
+    Bytes: Buffer;
+    /** Optional MIME type recorded when the file was stored. */
+    ContentType?: string;
+    /** Optional file name recorded when the file was stored. */
+    FileName?: string;
+}
+
+const ephemeralFiles = new Map<string, EphemeralFileEntry>();
+
+/**
+ * Returns `true` when `fileId` is a valid in-process ephemeral file identifier (`inline:<uuid>`).
+ */
+export function IsEphemeralFileID(fileId: unknown): fileId is string {
+    if (typeof fileId !== 'string') {
+        return false;
+    }
+    const trimmed = fileId.trim();
+    if (!trimmed.startsWith(INLINE_EPHEMERAL_FILE_PREFIX)) {
+        return false;
+    }
+    const uuidPart = trimmed.slice(INLINE_EPHEMERAL_FILE_PREFIX.length);
+    return IsValidUUID(uuidPart);
+}
+
+/**
+ * Stores a file buffer in the bounded in-process ephemeral store when no persistent
+ * `FileStorageAccount` resolves, returning an `inline:<uuid>` identifier that can be
+ * read by downstream stages (`Render`, `Critic`) within the same process.
+ */
+export function StoreEphemeralFile(
+    content: Buffer,
+    contentType?: string,
+    fileName?: string,
+): string {
+    if (ephemeralFiles.size >= MAX_EPHEMERAL_FILES) {
+        const oldestKey = ephemeralFiles.keys().next().value;
+        if (oldestKey !== undefined) {
+            ephemeralFiles.delete(oldestKey);
+        }
+    }
+    const id = `${INLINE_EPHEMERAL_FILE_PREFIX}${randomUUID()}`;
+    const trimmedType = typeof contentType === 'string' && contentType.trim().length > 0
+        ? contentType.trim()
+        : undefined;
+    const trimmedName = typeof fileName === 'string' && fileName.trim().length > 0
+        ? fileName.trim()
+        : undefined;
+    ephemeralFiles.set(id, {
+        Bytes: Buffer.from(content),
+        ...(trimmedType ? { ContentType: trimmedType } : {}),
+        ...(trimmedName ? { FileName: trimmedName } : {}),
+    });
+    return id;
+}
+
+/**
+ * Returns the optional `ContentType` and `FileName` for an in-process ephemeral file if still in memory.
+ */
+export function GetEphemeralFileMetadata(
+    fileId: string,
+): { ContentType?: string; FileName?: string } | undefined {
+    const entry = ephemeralFiles.get(fileId.trim());
+    if (!entry) {
+        return undefined;
+    }
+    return {
+        ...(entry.ContentType ? { ContentType: entry.ContentType } : {}),
+        ...(entry.FileName ? { FileName: entry.FileName } : {}),
+    };
+}
 
 /**
  * Input parameters for {@link StoreFile}.
@@ -73,12 +158,14 @@ type StoredFileLocationRow = StorageFileLocation & {
 
 /**
  * Loads an `MJ: Files` row (including `ContentType`) as `contextUser` and reads its bytes
- * through `FileStorageEngine.ResolveFileObject(..., 'Read')` and `Driver.GetObject`.
+ * through `FileStorageEngine.ResolveFileObject(..., 'Read')` and `Driver.GetObject`, or reads
+ * from the in-process ephemeral store when `fileId` has the `inline:` prefix.
  *
- * Throws when `fileId` is not a valid UUID, when the `MJ: Files` row is missing or denied,
- * when no storage account resolves for the provider, or when storage access is refused.
+ * Throws when `fileId` is not a valid UUID (or `inline:<uuid>`), when the `MJ: Files` row is
+ * missing or denied, when no storage account resolves for the provider, or when storage access
+ * is refused.
  *
- * @param fileId - The `MJ: Files` record ID to read.
+ * @param fileId - The `MJ: Files` record ID or `inline:<uuid>` ephemeral ID to read.
  * @param contextUser - The caller whose entity and storage permissions govern the read.
  * @param provider - Optional metadata provider override.
  * @returns The file content `Buffer` and optional `ContentType` from `MJ: Files.ContentType`.
@@ -88,6 +175,16 @@ export async function ReadStoredFileWithType(
     contextUser: UserInfo,
     provider?: IMetadataProvider,
 ): Promise<StoredFileWithType> {
+    if (IsEphemeralFileID(fileId)) {
+        const ephemeral = ephemeralFiles.get(fileId.trim());
+        if (!ephemeral) {
+            throw new Error(`Ephemeral inline file not found in memory: ${fileId}`);
+        }
+        return {
+            Bytes: Buffer.from(ephemeral.Bytes),
+            ...(ephemeral.ContentType ? { ContentType: ephemeral.ContentType } : {}),
+        };
+    }
     if (!IsValidUUID(fileId)) {
         throw new Error(`Invalid file ID: ${fileId}`);
     }
@@ -153,5 +250,3 @@ export async function ReadStoredFile(
     const stored = await ReadStoredFileWithType(fileId, contextUser, provider);
     return stored.Bytes;
 }
-
-

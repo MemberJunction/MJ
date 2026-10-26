@@ -13,6 +13,7 @@ import { RunView, type RunViewParams, type RunViewResult, type UserInfo } from '
 import { BrandKitEngine, VideoStudioEngine } from '@memberjunction/core-entities';
 import type { VideoGenerationSpec } from '@memberjunction/video-studio-core';
 import {
+    INLINE_VIDEO_BASE64_SENTINEL,
     LoadVideoStudioAgent,
     VIDEO_STUDIO_STAGES,
     VideoStudioAgent,
@@ -542,5 +543,114 @@ describe('VideoStudioAgent conversation attachment intake (VS-AGT-6)', () => {
 
         expect(getSeededPayload()?.Assets?.Approved).toEqual([]);
     });
-});
 
+    it('strips Output.Videos[*].InlineBase64 to [inline-mp4] during the root loop and restores the raw base64 on Delivered exit with the Storage warning in HumanReviewNotes', async () => {
+        const { CreateDeliveredSpecFixture } = await import('./fixtures/delivered-spec.fixture.js');
+        const harness = createHarness(['Video Studio']);
+        const rawMp4Base6416x9 = Buffer.from('00000018667479706d703432-inline-mp4-16x9').toString('base64');
+        const rawMp4Base649x16 = Buffer.from('00000018667479706d703432-inline-mp4-9x16').toString('base64');
+
+        const fullDelivered = CreateDeliveredSpecFixture();
+        const savedReview = structuredClone(fullDelivered.Review);
+
+        const specAfterRender: Partial<VideoGenerationSpec> = structuredClone(fullDelivered);
+        specAfterRender.Status = 'RoughCut';
+        specAfterRender.Output!.PosterFileID = 'inline:11111111-1111-4111-8111-111111111111';
+        specAfterRender.Output!.ContactSheetFileIDs = {
+            '16:9': ['inline:22222222-2222-4222-8222-222222222222'],
+            '9:16': ['inline:33333333-3333-4333-8333-333333333333'],
+        };
+        delete specAfterRender.Output!.Videos['16:9']!.FileID;
+        specAfterRender.Output!.Videos['16:9']!.InlineBase64 = rawMp4Base6416x9;
+        delete specAfterRender.Output!.Videos['9:16']!.FileID;
+        specAfterRender.Output!.Videos['9:16']!.InlineBase64 = rawMp4Base649x16;
+
+        const driver = harness.agent as unknown as {
+            ApplyStageResult: (
+                params: ExecuteAgentParams,
+                stageName: string,
+                payload: Partial<VideoGenerationSpec>,
+                stageSucceeded?: boolean,
+            ) => Partial<VideoGenerationSpec>;
+            validateSuccessNextStep: (
+                params: ExecuteAgentParams,
+                nextStep: BaseAgentNextStep<Partial<VideoGenerationSpec>>,
+                currentPayload: Partial<VideoGenerationSpec>,
+                agentRun: MJAIAgentRunEntityExtended,
+                currentStep: MJAIAgentRunStepEntityExtended,
+            ) => Promise<BaseAgentNextStep<Partial<VideoGenerationSpec>>>;
+        };
+
+        const params: ExecuteAgentParams = {
+            agent: harness.agentEntity,
+            contextUser: harness.contextUser,
+            conversationMessages: [],
+        };
+
+        // 1. After Render finishes, ApplyStageResult replaces InlineBase64 with the sentinel in the loop payload
+        const afterRenderLoopPayload = driver.ApplyStageResult(
+            params,
+            'Video Studio - Render',
+            specAfterRender,
+            true,
+        );
+        expect(afterRenderLoopPayload.Output?.Videos?.['16:9']?.InlineBase64).toBe(
+            INLINE_VIDEO_BASE64_SENTINEL,
+        );
+        expect(afterRenderLoopPayload.Output?.Videos?.['9:16']?.InlineBase64).toBe(
+            INLINE_VIDEO_BASE64_SENTINEL,
+        );
+        expect(JSON.stringify(afterRenderLoopPayload)).not.toContain(rawMp4Base6416x9);
+        expect(JSON.stringify(afterRenderLoopPayload)).not.toContain(rawMp4Base649x16);
+
+        // 2. Critic passes G5 on the loop payload (still holding the sentinel)
+        const afterCriticInput: Partial<VideoGenerationSpec> = {
+            ...afterRenderLoopPayload,
+            Review: {
+                Gates: afterRenderLoopPayload.Review?.Gates ?? [],
+                Scores: savedReview.Scores,
+                Rounds: savedReview.Rounds,
+            },
+        };
+        const afterCriticLoopPayload = driver.ApplyStageResult(
+            params,
+            'Video Studio - Critic',
+            afterCriticInput,
+            true,
+        );
+        expect(afterCriticLoopPayload.Output?.Videos?.['16:9']?.InlineBase64).toBe(
+            INLINE_VIDEO_BASE64_SENTINEL,
+        );
+
+        // 3. On Success exit, validateSuccessNextStep restores the full InlineBase64 and includes the Storage warning
+        const stepEntity = {
+            ID: 'step-final',
+            StepType: 'Validation',
+            StepName: 'Success Validation',
+        } as unknown as MJAIAgentRunStepEntityExtended;
+        const deliveredStep = await driver.validateSuccessNextStep(
+            params,
+            {
+                step: 'Success',
+                terminate: true,
+                previousPayload: afterCriticLoopPayload,
+                newPayload: afterCriticLoopPayload,
+            },
+            afterCriticLoopPayload,
+            harness.agentRun,
+            stepEntity,
+        );
+
+        expect(deliveredStep.step).toBe('Success');
+        expect(deliveredStep.newPayload?.Status).toBe('Delivered');
+        expect(deliveredStep.newPayload?.Output?.Videos?.['16:9']?.InlineBase64).toBe(
+            rawMp4Base6416x9,
+        );
+        expect(deliveredStep.newPayload?.Output?.Videos?.['9:16']?.InlineBase64).toBe(
+            rawMp4Base649x16,
+        );
+        expect(deliveredStep.newPayload?.Review?.HumanReviewNotes).toContain(
+            'Stored inline in the database, not in file storage',
+        );
+    });
+});

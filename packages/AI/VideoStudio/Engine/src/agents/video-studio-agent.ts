@@ -71,6 +71,13 @@ export const VIDEO_STUDIO_STAGES = [
 
 export type VideoStudioStageName = (typeof VIDEO_STUDIO_STAGES)[number];
 
+/**
+ * Sentinel value placed in `Output.Videos[*].InlineBase64` inside the root `Video Studio`
+ * loop payload (`_CURRENT_PAYLOAD`) so inline MP4 base64 is not sent to LLM prompts during
+ * the loop and is restored on terminal exit (`Delivered`, `G4` `Plan`, `Failed`).
+ */
+export const INLINE_VIDEO_BASE64_SENTINEL = '[inline-mp4]' as const;
+
 const STAGE_PROGRESS_PERCENTAGE: Readonly<Record<string, number>> = {
     'Video Studio - Director': 15,
     'Video Studio - Art Director': 30,
@@ -145,6 +152,7 @@ export class VideoStudioAgent extends BaseAgent {
     private _initialRoundCount: number = 0;
     // INTERIM: PayloadManager drops keys that contain a dot (plan-notes 37)
     private _lastSubAgentPayload: Partial<VideoGenerationSpec> | undefined;
+    private _inlineVideoBase64ByFormat: Partial<Record<VideoFormat, string>> = {};
 
     protected override async ExecuteSubAgent<SC = any, SR = any>(
         params: ExecuteAgentParams<SC>,
@@ -240,7 +248,18 @@ export class VideoStudioAgent extends BaseAgent {
             payload: seeded as unknown as P,
         };
 
-        return super.executeAgentInternal(nextParams, config);
+        const outcome = await super.executeAgentInternal(nextParams, config);
+        if (outcome.finalStep?.newPayload && typeof outcome.finalStep.newPayload === 'object') {
+            this.restoreInlineVideoBase64(
+                outcome.finalStep.newPayload as unknown as Partial<VideoGenerationSpec>,
+            );
+        }
+        if (this.AgentRun?.FinalPayloadObject && typeof this.AgentRun.FinalPayloadObject === 'object') {
+            this.restoreInlineVideoBase64(
+                this.AgentRun.FinalPayloadObject as Partial<VideoGenerationSpec>,
+            );
+        }
+        return outcome;
     }
 
     protected override async executeNextStep<P = any>(
@@ -278,6 +297,18 @@ export class VideoStudioAgent extends BaseAgent {
                         },
                         ...(candidatePayload.Output ?? {}),
                         Source: structuredClone(this._lastSubAgentPayload.Output.Source),
+                    };
+                } else if (
+                    stageSucceeded &&
+                    canonicalStage === 'Video Studio - Render' &&
+                    this._lastSubAgentPayload?.Output
+                ) {
+                    candidatePayload.Output = {
+                        ...(candidatePayload.Output ?? {}),
+                        ...structuredClone(this._lastSubAgentPayload.Output),
+                        ...(candidatePayload.Output?.Source
+                            ? { Source: candidatePayload.Output.Source }
+                            : {}),
                     };
                 }
                 this._lastSubAgentPayload = undefined;
@@ -325,7 +356,11 @@ export class VideoStudioAgent extends BaseAgent {
 
         if (stageSucceeded) {
             ClearStaleEvidence(canonicalStage, cloned);
+            if (!cloned.Output?.Videos || Object.keys(cloned.Output.Videos).length === 0) {
+                this._inlineVideoBase64ByFormat = {};
+            }
         }
+        this.stripInlineVideoBase64(cloned);
 
         const effectiveMode = this.resolveEffectiveInteractionMode(cloned);
         const gates = EvaluateGates(cloned, {
@@ -680,6 +715,7 @@ export class VideoStudioAgent extends BaseAgent {
         });
         if (terminalFailure) {
             spec.Status = DeriveStatus(spec, gates);
+            this.restoreInlineVideoBase64(spec);
             return {
                 ...baseResult,
                 step: 'Failed',
@@ -710,6 +746,7 @@ export class VideoStudioAgent extends BaseAgent {
             );
             spec.Review.Gates = pausedGates;
             spec.Status = DeriveStatus(spec, pausedGates);
+            this.restoreInlineVideoBase64(spec);
             return {
                 step: 'Plan' as BaseAgentNextStep<P>['step'],
                 terminate: false,
@@ -744,6 +781,7 @@ export class VideoStudioAgent extends BaseAgent {
         }
 
         spec.Status = 'Delivered';
+        this.restoreInlineVideoBase64(spec);
         spec.Review.HumanReviewNotes = ComposeHumanReviewNotes(spec);
         const provenance = BuildGenerationProvenanceSummary(spec);
         if (spec.Output) {
@@ -795,6 +833,39 @@ export class VideoStudioAgent extends BaseAgent {
     // Private / Protected Helpers
     // -----------------------------------------------------------------------
 
+    private stripInlineVideoBase64(spec: Partial<VideoGenerationSpec>): void {
+        const videos = spec.Output?.Videos;
+        if (!videos || typeof videos !== 'object') {
+            return;
+        }
+        for (const [fmt, video] of Object.entries(videos)) {
+            if (
+                video &&
+                typeof video.InlineBase64 === 'string' &&
+                video.InlineBase64.trim().length > 0 &&
+                video.InlineBase64 !== INLINE_VIDEO_BASE64_SENTINEL
+            ) {
+                this._inlineVideoBase64ByFormat[fmt as VideoFormat] = video.InlineBase64;
+                video.InlineBase64 = INLINE_VIDEO_BASE64_SENTINEL;
+            }
+        }
+    }
+
+    private restoreInlineVideoBase64(spec: Partial<VideoGenerationSpec>): void {
+        const videos = spec.Output?.Videos;
+        if (!videos || typeof videos !== 'object') {
+            return;
+        }
+        for (const [fmt, video] of Object.entries(videos)) {
+            if (video && video.InlineBase64 === INLINE_VIDEO_BASE64_SENTINEL) {
+                const raw = this._inlineVideoBase64ByFormat[fmt as VideoFormat];
+                if (raw) {
+                    video.InlineBase64 = raw;
+                }
+            }
+        }
+    }
+
     private async warmEngines(params: ExecuteAgentParams): Promise<void> {
         await VideoStudioEngine.Instance.Config(false, params.contextUser, this.ProviderToUse);
         await BrandKitEngine.Instance.Config(false, params.contextUser, this.ProviderToUse);
@@ -804,8 +875,10 @@ export class VideoStudioAgent extends BaseAgent {
         params: ExecuteAgentParams,
         settings: VideoStudioSettings,
     ): Partial<VideoGenerationSpec> {
+        this._inlineVideoBase64ByFormat = {};
         this.captureCallerMode(params);
         const seeded = structuredClone((params.payload ?? {}) as Partial<VideoGenerationSpec>);
+        this.stripInlineVideoBase64(seeded);
         this._startedWithBrief = Boolean(seeded.Film?.OneSentence?.trim());
 
         seeded.SpecVersion = VIDEO_STUDIO_SPEC_VERSION;

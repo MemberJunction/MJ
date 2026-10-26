@@ -77,6 +77,7 @@ export {
 } from './render/video-render-engine.js';
 
 export {
+    INLINE_VIDEO_BASE64_SENTINEL,
     LoadVideoStudioAgent,
     VIDEO_STUDIO_STAGES,
     VideoStudioAgent,

@@ -560,7 +560,7 @@ describe('VideoStudioRenderAgent (VS-AGT-3)', () => {
         expect(result.finalStep.message).toContain('[Audio] MissingRenderedAudioTrack:');
     });
 
-    it('StoreFile returning undefined fails with the exact storage-account guidance message', async () => {
+    it('StoreFile returning undefined falls back to ephemeral inline IDs for poster/contact sheets and InlineBase64 for MP4 under the default 2 MB cap', async () => {
         const fakeDriver = new FakeRenderDriver();
         VideoRenderEngine.Instance.UseDriver(fakeDriver);
         vi.spyOn(storageModule, 'StoreFile').mockResolvedValue(undefined);
@@ -570,8 +570,26 @@ describe('VideoStudioRenderAgent (VS-AGT-3)', () => {
 
         const result = await execute(spec);
 
-        expect(result.finalStep.step).toBe('Failed');
-        expect(result.finalStep.message).toBe(NO_STORAGE_ACCOUNT_ERROR_MESSAGE);
+        expect(result.finalStep.step).toBe('Success');
+        const out = result.finalStep.newPayload.Output;
+        expect(out?.PosterFileID).toBeDefined();
+        expect(storageModule.IsEphemeralFileID(out?.PosterFileID)).toBe(true);
+        const posterBytes = await storageModule.ReadStoredFile(out!.PosterFileID!, mockUser);
+        expect(posterBytes.byteLength).toBeGreaterThan(0);
+
+        const sheets16x9 = out?.ContactSheetFileIDs?.['16:9'] ?? [];
+        expect(sheets16x9.length).toBeGreaterThan(0);
+        for (const sheetId of sheets16x9) {
+            expect(storageModule.IsEphemeralFileID(sheetId)).toBe(true);
+            const sheetBytes = await storageModule.ReadStoredFile(sheetId, mockUser);
+            expect(sheetBytes.byteLength).toBeGreaterThan(0);
+        }
+
+        const expectedBase64 = Buffer.from(FAKE_DRIVER_MP4_BYTES).toString('base64');
+        expect(out?.Videos['16:9']?.FileID).toBeUndefined();
+        expect(out?.Videos['16:9']?.InlineBase64).toBe(expectedBase64);
+        expect(out?.Videos['9:16']?.FileID).toBeUndefined();
+        expect(out?.Videos['9:16']?.InlineBase64).toBe(expectedBase64);
     });
 
     it('params.cancellationToken abort propagates to driver.Render and ends Failed', async () => {
@@ -641,7 +659,11 @@ describe('VideoStudioRenderAgent (VS-AGT-3)', () => {
         expect(result.finalStep.newPayload.Output?.Videos['16:9']?.InlineBase64).toBeUndefined();
     });
 
-    it('VS-ART-2: default config (inlineMaxBytes = 0) with StoreFile returning undefined for a 1 MB MP4 fails with setup hint', async () => {
+    it('VS-ART-2: when inlineMaxBytes is configured to 0, StoreFile returning undefined for a 1 MB MP4 fails with setup hint', async () => {
+        vi.spyOn(renderSettingsModule, 'ReadVideoStudioOutputSettings').mockReturnValue({
+            InlineMaxBytes: 0,
+        });
+
         const oneMbBytes = Buffer.alloc(1024 * 1024, 0x42);
         const fakeDriver = new FakeRenderDriver();
         const originalRender = fakeDriver.Render.bind(fakeDriver);

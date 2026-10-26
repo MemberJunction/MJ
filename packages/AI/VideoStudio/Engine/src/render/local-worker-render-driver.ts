@@ -587,13 +587,9 @@ export class LocalWorkerRenderDriver extends VideoRenderDriverBase {
             pollTimeout.unref();
             try {
                 const health = await client.Health(pollController.signal);
-                if (health.Healthy) {
+                if (health && typeof health.Healthy === 'boolean') {
                     return;
                 }
-                lastReason =
-                    Array.isArray(health.Errors) && health.Errors.length > 0
-                        ? health.Errors.join('; ')
-                        : 'worker reported Healthy: false (HTTP 503)';
             } catch (error) {
                 lastReason = error instanceof Error ? error.message : String(error);
             } finally {
@@ -608,7 +604,7 @@ export class LocalWorkerRenderDriver extends VideoRenderDriverBase {
         throw new VideoRenderError(
             'WorkerUnavailable',
             buildWorkerUnavailableMessage(
-                `Render worker /health did not return HTTP 200 within ${startupTimeoutMs}ms (${lastReason}). stderr: ${getStderrTail().trim()}`,
+                `Render worker /health did not respond within ${startupTimeoutMs}ms (${lastReason}). stderr: ${getStderrTail().trim()}`,
             ),
         );
     }

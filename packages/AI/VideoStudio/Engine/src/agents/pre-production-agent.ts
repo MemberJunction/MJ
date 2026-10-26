@@ -27,6 +27,11 @@ import type {
 } from '../narration/narration-timeline.js';
 import { SanitizeStageKey } from '../render/bundle.js';
 import { ResolveVideoStudioSettings } from '../settings.js';
+import {
+    GetEphemeralFileMetadata,
+    IsEphemeralFileID,
+    StoreEphemeralFile,
+} from '../storage.js';
 
 const NEVER_INVENT_ESCALATION_NOTE =
     'Ask the caller to supply the missing data, parameter, or asset. Never fill in a placeholder or invent the value.';
@@ -155,7 +160,7 @@ async function resolveAssetExtensionsFromStorage(
                 `Cannot stage asset "${asset.Key}": asset has neither FileID nor ArtifactVersionID.`,
             );
         }
-        if (fileId) {
+        if (fileId && !IsEphemeralFileID(fileId)) {
             if (!IsValidUUID(fileId)) {
                 throw new Error(
                     `Cannot stage asset "${asset.Key}": FileID "${fileId}" is not a valid UUID.`,
@@ -227,12 +232,21 @@ async function resolveAssetExtensionsFromStorage(
         const avId = asset.ArtifactVersionID?.trim();
         const avRow = avId && IsValidUUID(avId) ? avByID.Get(avId) : undefined;
         const effectiveFileId = fileId || avRow?.FileID?.trim() || undefined;
+        const ephemeralMeta =
+            effectiveFileId && IsEphemeralFileID(effectiveFileId)
+                ? GetEphemeralFileMetadata(effectiveFileId)
+                : undefined;
         const fileRow =
             effectiveFileId && IsValidUUID(effectiveFileId)
                 ? fileByID.Get(effectiveFileId)
                 : undefined;
 
-        if (fileId && !fileRow) {
+        if (fileId && IsEphemeralFileID(fileId) && !ephemeralMeta) {
+            throw new Error(
+                `Cannot stage asset "${asset.Key}": ephemeral inline file "${fileId}" was not found in memory.`,
+            );
+        }
+        if (fileId && !IsEphemeralFileID(fileId) && !fileRow) {
             throw new Error(
                 `Cannot stage asset "${asset.Key}": MJ: Files record "${fileId}" was not found.`,
             );
@@ -244,14 +258,16 @@ async function resolveAssetExtensionsFromStorage(
         }
 
         const ext =
+            mapMimeToExtension(ephemeralMeta?.ContentType) ??
             mapMimeToExtension(fileRow?.ContentType) ??
             mapMimeToExtension(avRow?.MimeType) ??
+            extractExtensionFromFileName(ephemeralMeta?.FileName) ??
             extractExtensionFromFileName(fileRow?.Name) ??
             extractExtensionFromFileName(avRow?.Name);
 
         if (!ext) {
-            const reportedMime = (fileRow?.ContentType ?? avRow?.MimeType ?? '').trim() || 'none';
-            const reportedName = (fileRow?.Name ?? avRow?.Name ?? '').trim() || 'none';
+            const reportedMime = (ephemeralMeta?.ContentType ?? fileRow?.ContentType ?? avRow?.MimeType ?? '').trim() || 'none';
+            const reportedName = (ephemeralMeta?.FileName ?? fileRow?.Name ?? avRow?.Name ?? '').trim() || 'none';
             throw new Error(
                 `Cannot stage asset "${asset.Key}": stored file has unrecognized ContentType "${reportedMime}" and file Name "${reportedName}" has no supported extension.`,
             );
@@ -549,9 +565,29 @@ export class VideoStudioPreProductionAgent extends BaseAgent {
                 CredentialScope: params.CredentialScope,
             });
 
-            const hasNarrationFailure = narrationResult.Issues.some(
-                (issue) => issue.Severity === 'Error' || issue.Code === 'ClipNotStored',
-            );
+            const narrationLines = Array.isArray(narrationResult.Spec.Audio?.Narration?.Script)
+                ? narrationResult.Spec.Audio.Narration.Script
+                : [];
+            for (const line of narrationLines) {
+                if (!line.AudioFileID?.trim()) {
+                    const clip = narrationResult.Clips.find((c) => c.LineKey === line.Key);
+                    if (clip && clip.Data && clip.Data.byteLength > 0) {
+                        const ephemeralId = StoreEphemeralFile(
+                            Buffer.from(clip.Data),
+                            clip.MimeType || 'audio/mpeg',
+                            `narration-${line.Key}.mp3`,
+                        );
+                        line.AudioFileID = ephemeralId;
+                        clip.FileID = ephemeralId;
+                    }
+                }
+            }
+
+            const hasUnresolvedClip = narrationLines.some((line) => !line.AudioFileID?.trim());
+            const hasNarrationFailure =
+                narrationResult.Issues.some((issue) => issue.Severity === 'Error') ||
+                (hasUnresolvedClip &&
+                    narrationResult.Issues.some((issue) => issue.Code === 'ClipNotStored'));
             if (hasNarrationFailure) {
                 const message = formatPreProductionFailureMessage(
                     'Narration',
@@ -572,7 +608,16 @@ export class VideoStudioPreProductionAgent extends BaseAgent {
             if (workingSpec.Film && narrationResult.Spec.Film) {
                 workingSpec.Film.DurationSeconds = narrationResult.Spec.Film.DurationSeconds;
             }
-            if (narrationResult.CaptionsFileID) {
+            const effectiveCaptionsFileId =
+                narrationResult.CaptionsFileID ??
+                (narrationResult.CaptionsVtt?.trim() && workingSpec.Audio.Captions !== 'None'
+                    ? StoreEphemeralFile(
+                          Buffer.from(narrationResult.CaptionsVtt, 'utf8'),
+                          'text/vtt',
+                          'captions.vtt',
+                      )
+                    : undefined);
+            if (effectiveCaptionsFileId) {
                 const existingRenderMeta = workingSpec.Output?.RenderMetadata ?? {
                     Renderer: 'HyperFrames' as const,
                     RendererVersion: workingSpec.Render?.RendererVersion ?? '',
@@ -585,13 +630,13 @@ export class VideoStudioPreProductionAgent extends BaseAgent {
                     ...(workingSpec.Output ?? {}),
                     Videos: workingSpec.Output?.Videos ?? {},
                     RenderMetadata: existingRenderMeta,
-                    CaptionsFileID: narrationResult.CaptionsFileID,
+                    CaptionsFileID: effectiveCaptionsFileId,
                 };
             }
 
             await finishStep(currentStep, true, {
                 FilmDurationSeconds: workingSpec.Film?.DurationSeconds,
-                CaptionsFileID: narrationResult.CaptionsFileID ?? null,
+                CaptionsFileID: effectiveCaptionsFileId ?? null,
                 Issues: narrationResult.Issues,
             });
             currentStep = null;

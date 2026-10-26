@@ -5,7 +5,10 @@ import type { AddressInfo } from 'node:net';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { RENDER_WORKER_ROUTES } from '@memberjunction/video-studio-core';
+import {
+    RENDER_WORKER_PORT_PREFIX,
+    RENDER_WORKER_ROUTES,
+} from '@memberjunction/video-studio-core';
 import {
     DEFAULT_DOCKER_CPUS,
     DEFAULT_DOCKER_MEMORY_MB,
@@ -277,6 +280,65 @@ describe('LocalWorkerRenderDriver lifecycle and security', () => {
         const vErr = caught as VideoRenderError;
         expect(vErr.Code).toBe('WorkerUnavailable');
         expect(vErr.message).toContain('@memberjunction/video-studio-render-worker');
+    });
+
+    it('resolves Health() immediately with worker Errors when /health answers HTTP 503 (e.g. missing Chromium) instead of spinning until StartupMs expires', async () => {
+        const os = await import('node:os');
+        const fsPromises = await import('node:fs/promises');
+        const tmpDir = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'mj-unhealthy-worker-'));
+        const workerPath = path.join(tmpDir, 'unhealthy-worker.mjs');
+        await fsPromises.writeFile(
+            workerPath,
+            `import http from 'node:http';
+const host = process.env.VIDEO_STUDIO_RENDER_HOST ?? '127.0.0.1';
+const server = http.createServer((req, res) => {
+    res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8', 'Connection': 'close' });
+    res.end(JSON.stringify({
+        Healthy: false,
+        NodeVersion: process.version,
+        HyperFramesVersion: '0.8.134',
+        FfmpegVersion: '7.1.1',
+        Errors: ['Chromium headless shell binary was not found. Run \`pnpm --filter @memberjunction/video-studio-render-worker run browser:install\` or set CHROME_PATH.'],
+    }));
+});
+server.listen(0, host, () => {
+    const port = server.address().port;
+    process.stdout.write('${RENDER_WORKER_PORT_PREFIX}' + port + '\\n');
+});
+process.on('SIGTERM', () => { process.exit(0); });
+`,
+            'utf8',
+        );
+
+        try {
+            const driver = trackDriver(
+                new LocalWorkerRenderDriver({
+                    Driver: 'LocalWorker',
+                    Timeouts: {
+                        StartupMs: 60_000,
+                        RenderMs: 60_000,
+                        RequestMs: 10_000,
+                    },
+                    Local: {
+                        WorkerEntry: workerPath,
+                    },
+                    Remote: {},
+                    Docker: DEFAULT_DOCKER_SETTINGS,
+                }),
+            );
+
+            const startMs = Date.now();
+            const health = await driver.Health();
+            const elapsedMs = Date.now() - startMs;
+
+            expect(elapsedMs).toBeLessThan(5_000);
+            expect(health.Healthy).toBe(false);
+            expect(health.Errors).toContain(
+                'Chromium headless shell binary was not found. Run `pnpm --filter @memberjunction/video-studio-render-worker run browser:install` or set CHROME_PATH.',
+            );
+        } finally {
+            await fsPromises.rm(tmpDir, { recursive: true, force: true });
+        }
     });
 
     it('RenderWorkerHttpClient decodes multi-byte UTF-8 characters split across two NDJSON TCP chunks without corruption', async () => {

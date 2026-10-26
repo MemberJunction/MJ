@@ -49,7 +49,7 @@ export const MAX_SETUP_HEALTH_RENDER_TIMEOUT_MS = 30_000;
 
 /** Exact error message when no file storage account is configured for Video Studio. */
 export const SETUP_HEALTH_NO_STORAGE_MESSAGE =
-    'No file storage account. Pre-Production, contact sheets and delivery need one; only a failed MP4 upload falls back to inline storage, capped at 2 MB.' as const;
+    'No file storage account. Runs fall back to inline storage (capped at 2 MB) with a delivery warning; configure a storage account before sharing productions.' as const;
 
 /** Exact remediation action when no explicit storage account is configured for Video Studio. */
 export const SETUP_HEALTH_STORAGE_ACTION =
@@ -221,15 +221,24 @@ export class VideoStudioSetupHealthServerOperation extends VideoStudioSetupHealt
         return driver.constructor?.name || 'LocalWorker';
     }
 
-    private resolveDriverAction(driverName: string): string {
+    private resolveDriverAction(driverName: string, errors?: readonly string[]): string {
         switch (driverName) {
             case 'Remote':
                 return 'Check VIDEO_STUDIO_RENDER_URL and verify the remote render worker is reachable.';
             case 'Docker':
                 return `Start Docker and build the render image (${DOCKER_RENDER_IMAGE_BUILD_COMMAND}).`;
             case 'LocalWorker':
-            default:
+            default: {
+                const hasChromiumError = Boolean(errors?.some((e) => /chromium|chrome|browser/i.test(e)));
+                const hasFfmpegError = Boolean(errors?.some((e) => /ffmpeg/i.test(e)));
+                if (hasChromiumError && !hasFfmpegError) {
+                    return 'Install the Chromium headless shell (`pnpm --filter @memberjunction/video-studio-render-worker run browser:install` or set CHROME_PATH).';
+                }
+                if (hasChromiumError && hasFfmpegError) {
+                    return 'Install ffmpeg and the Chromium headless shell (`pnpm --filter @memberjunction/video-studio-render-worker run browser:install` or set CHROME_PATH).';
+                }
                 return 'Install ffmpeg and check @memberjunction/video-studio-render-worker.';
+            }
         }
     }
 
@@ -284,12 +293,13 @@ export class VideoStudioSetupHealthServerOperation extends VideoStudioSetupHealt
         }
 
         if (!raceOutcome.Healthy) {
+            const detailSummary = raceOutcome.Errors.length > 0 ? `: ${raceOutcome.Errors.join('; ')}` : '.';
             return {
                 Key: 'Render',
                 Status: 'Error',
                 Title: 'Render Worker',
-                Message: `Render worker is unhealthy (driver ${driverName}).`,
-                Action: driverAction,
+                Message: `Render worker is unhealthy (driver ${driverName})${detailSummary}`,
+                Action: this.resolveDriverAction(driverName, raceOutcome.Errors),
                 Details: raceOutcome.Errors.length > 0 ? [...raceOutcome.Errors] : undefined,
             };
         }

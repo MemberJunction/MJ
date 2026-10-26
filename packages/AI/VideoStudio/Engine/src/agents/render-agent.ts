@@ -25,7 +25,7 @@ import {
 import { ReadVideoStudioOutputSettings } from '../render/render-settings.js';
 import { VideoRenderEngine } from '../render/video-render-engine.js';
 import { ResolveVideoStudioSettings } from '../settings.js';
-import { StoreFile } from '../storage.js';
+import { StoreEphemeralFile, StoreFile } from '../storage.js';
 
 /**
  * Exact error message emitted when `StoreFile` returns `undefined` (no storage account resolved).
@@ -255,25 +255,17 @@ export class VideoStudioRenderAgent extends BaseAgent {
                         stillsResult.Stills[stillsResult.Stills.length - 1];
                     if (posterStill) {
                         const posterBytes = Buffer.from(posterStill.ImageBase64, 'base64');
-                        const storedPosterFileId = await StoreFile({
-                            Content: posterBytes,
-                            FileName: 'poster.png',
-                            MimeType: posterStill.MimeType || 'image/png',
-                            Description: `Poster frame (${fmt})`,
-                            ContextUser: contextUser,
-                            Provider: this.ProviderToUse,
-                            StorageAccountID: storageAccountId,
-                        });
-                        if (!storedPosterFileId) {
-                            await finishStep(
-                                currentStep,
-                                false,
-                                undefined,
-                                NO_STORAGE_ACCOUNT_ERROR_MESSAGE,
-                            );
-                            currentStep = null;
-                            return failRun(NO_STORAGE_ACCOUNT_ERROR_MESSAGE);
-                        }
+                        const posterMime = posterStill.MimeType || 'image/png';
+                        const storedPosterFileId =
+                            (await StoreFile({
+                                Content: posterBytes,
+                                FileName: 'poster.png',
+                                MimeType: posterMime,
+                                Description: `Poster frame (${fmt})`,
+                                ContextUser: contextUser,
+                                Provider: this.ProviderToUse,
+                                StorageAccountID: storageAccountId,
+                            })) ?? StoreEphemeralFile(posterBytes, posterMime, 'poster.png');
                         workingSpec.Output.PosterFileID = storedPosterFileId;
                         posterStoredForFirstFormat = true;
                     }
@@ -310,25 +302,18 @@ export class VideoStudioRenderAgent extends BaseAgent {
                 for (let idx = 0; idx < orderedSheets.length; idx++) {
                     const sheet = orderedSheets[idx];
                     const sheetBytes = Buffer.from(sheet.ImageBase64, 'base64');
-                    const storedSheetFileId = await StoreFile({
-                        Content: sheetBytes,
-                        FileName: `contact-sheet-${fmtSlug}-${idx + 1}.png`,
-                        MimeType: sheet.MimeType || 'image/png',
-                        Description: `Contact sheet ${idx + 1} (${fmt}, ${sheet.Kind})`,
-                        ContextUser: contextUser,
-                        Provider: this.ProviderToUse,
-                        StorageAccountID: storageAccountId,
-                    });
-                    if (!storedSheetFileId) {
-                        await finishStep(
-                            currentStep,
-                            false,
-                            undefined,
-                            NO_STORAGE_ACCOUNT_ERROR_MESSAGE,
-                        );
-                        currentStep = null;
-                        return failRun(NO_STORAGE_ACCOUNT_ERROR_MESSAGE);
-                    }
+                    const sheetFileName = `contact-sheet-${fmtSlug}-${idx + 1}.png`;
+                    const sheetMime = sheet.MimeType || 'image/png';
+                    const storedSheetFileId =
+                        (await StoreFile({
+                            Content: sheetBytes,
+                            FileName: sheetFileName,
+                            MimeType: sheetMime,
+                            Description: `Contact sheet ${idx + 1} (${fmt}, ${sheet.Kind})`,
+                            ContextUser: contextUser,
+                            Provider: this.ProviderToUse,
+                            StorageAccountID: storageAccountId,
+                        })) ?? StoreEphemeralFile(sheetBytes, sheetMime, sheetFileName);
                     formatSheetFileIDs.push(storedSheetFileId);
                     allSheetFileIDs.push(storedSheetFileId);
                 }
