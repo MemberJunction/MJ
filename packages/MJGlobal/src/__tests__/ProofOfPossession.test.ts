@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createHash } from 'node:crypto';
 import {
     CreateProofOfPossessionKey,
@@ -34,6 +34,13 @@ async function proof(key: ProofOfPossessionKey, overrides: { Method?: string; Ur
     });
 }
 
+/** Signs an arbitrary header and payload with the key, so a test can change one part and still pass the signature check. */
+async function signed(key: ProofOfPossessionKey, header: Record<string, unknown>, payload: Record<string, unknown>): Promise<string> {
+    const input = `${encodePart(header)}.${encodePart(payload)}`;
+    const signature = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key.PrivateKey, new TextEncoder().encode(input));
+    return `${input}.${Buffer.from(signature).toString('base64url')}`;
+}
+
 function verify(jwt: string, overrides: { AccessToken?: string; NowSeconds?: number } = {}) {
     return VerifyProofOfPossessionJwt(jwt, {
         Method: 'POST',
@@ -50,6 +57,18 @@ describe('CreateProofOfPossessionKey', () => {
         expect(key.PrivateKey.extractable).toBe(false);
         await expect(crypto.subtle.exportKey('jwk', key.PrivateKey)).rejects.toThrow();
         expect(key.PublicJwk).toEqual({ kty: 'EC', crv: 'P-256', x: expect.any(String), y: expect.any(String) });
+    });
+});
+
+describe('without Web Crypto (a page outside a secure context)', () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    it('fails with a message a page author can act on: serve the page over HTTPS', async () => {
+        vi.stubGlobal('crypto', {});
+        await expect(CreateProofOfPossessionKey()).rejects.toThrow(/HTTPS/);
+        await expect(CreateProofOfPossessionKey()).rejects.not.toThrow(/Node\.js/);
     });
 });
 
@@ -100,13 +119,26 @@ describe('VerifyProofOfPossessionJwt', () => {
         expect(await verify(await proof(key, { NowSeconds: NOW + 61 }))).toEqual({ Valid: false, Reason: 'stale' });
     });
 
-    it('refuses a header that names another algorithm or type, or carries a private key', async () => {
+    it('refuses a header that names another algorithm or type, or carries a private key, even when validly signed', async () => {
         const key = await CreateProofOfPossessionKey();
-        const [, payload, signature] = (await proof(key)).split('.');
-        const withHeader = (header: Record<string, unknown>) => `${encodePart(header)}.${payload}.${signature}`;
-        expect((await verify(withHeader({ typ: 'dpop+jwt', alg: 'none', jwk: key.PublicJwk }))).Valid).toBe(false);
-        expect((await verify(withHeader({ typ: 'JWT', alg: 'ES256', jwk: key.PublicJwk }))).Valid).toBe(false);
-        expect((await verify(withHeader({ typ: 'dpop+jwt', alg: 'ES256', jwk: { ...key.PublicJwk, d: 'secret' } }))).Valid).toBe(false);
+        const payload = decodePart((await proof(key)).split('.')[1]);
+        expect(await verify(await signed(key, { typ: 'dpop+jwt', alg: 'none', jwk: key.PublicJwk }, payload))).toEqual({ Valid: false, Reason: 'malformed' });
+        expect(await verify(await signed(key, { typ: 'JWT', alg: 'ES256', jwk: key.PublicJwk }, payload))).toEqual({ Valid: false, Reason: 'malformed' });
+        expect(await verify(await signed(key, { typ: 'dpop+jwt', alg: 'ES256', jwk: { ...key.PublicJwk, d: 'secret' } }, payload))).toEqual({ Valid: false, Reason: 'malformed' });
+    });
+
+    it('accepts a proof re-signed by its own key (control for the header and claim tests)', async () => {
+        const key = await CreateProofOfPossessionKey();
+        const [header, payload] = (await proof(key)).split('.');
+        expect((await verify(await signed(key, decodePart(header), decodePart(payload)))).Valid).toBe(true);
+    });
+
+    it('refuses a validly signed proof with no iat, or a non-numeric one', async () => {
+        const key = await CreateProofOfPossessionKey();
+        const header = decodePart((await proof(key)).split('.')[0]);
+        const { iat: _iat, ...withoutIat } = decodePart((await proof(key)).split('.')[1]);
+        expect(await verify(await signed(key, header, withoutIat))).toEqual({ Valid: false, Reason: 'stale' });
+        expect(await verify(await signed(key, header, { ...withoutIat, iat: String(NOW) }))).toEqual({ Valid: false, Reason: 'stale' });
     });
 
     it('refuses malformed input without throwing', async () => {

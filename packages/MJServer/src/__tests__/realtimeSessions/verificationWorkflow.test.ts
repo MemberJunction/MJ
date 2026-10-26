@@ -96,6 +96,7 @@ class FakePorts implements VerificationPorts {
             AgentSessionID: SESSION_ID,
             OwnerUserID: OWNER,
             ConversationExternalID: null,
+            ConversationReadable: false,
             Status: 'Active',
             ConfigRaw: JSON.stringify({ targetAgentID: 'target-1' }),
             StartedAtMs: T0,
@@ -236,6 +237,17 @@ describe('RealtimeSessionVerificationWorkflow', () => {
         it('refuses a closed session', async () => {
             ports.AddSession({ Status: 'Closed' });
             expect(await workflow.RequestVerification(REQUEST, principal())).toMatchObject({ ErrorCode: 'session_closed' });
+        });
+
+        it("lets a named owner holding a link scope use an unstamped conversation only when it can read that conversation", async () => {
+            // A conversation started outside any link carries no ExternalID. The owner's own row-level security
+            // decides: readable is allowed, unreadable is refused like a missing session.
+            const linkHolder = principal({ MagicLinkScope: { ResourceID: 'invite-scope-1' } });
+            ports.AddSession({ ConversationExternalID: null, ConversationReadable: false });
+            expect(await workflow.RequestVerification(REQUEST, linkHolder)).toMatchObject({ ErrorCode: 'session_not_found' });
+
+            ports.AddSession({ ConversationExternalID: null, ConversationReadable: true });
+            expect(await workflow.RequestVerification(REQUEST, linkHolder)).toMatchObject({ Success: true });
         });
 
         it('treats an already-verified session as success without sending anything', async () => {

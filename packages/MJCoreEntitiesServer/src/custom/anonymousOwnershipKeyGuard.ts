@@ -1,8 +1,8 @@
-import { ValidationErrorInfo, ValidationErrorType } from '@memberjunction/core';
+import { ValidationErrorInfo, ValidationErrorType, type TransactionVariable } from '@memberjunction/core';
 
 /** The slice of a transaction group the guard reads: its variables. */
 export interface GuardedTransactionGroup {
-    Variables: ReadonlyArray<{ EntityObject: unknown; Type: string; FieldName: string }>;
+    Variables: ReadonlyArray<Pick<TransactionVariable, 'EntityObject' | 'Type' | 'FieldName'>>;
 }
 
 /**

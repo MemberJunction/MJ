@@ -145,7 +145,6 @@ describe('WidgetSessionService — ResolvePerInstanceRateLimit', () => {
 
 describe('WidgetSessionService — RefreshGuestSession preserves mj_sid (#4931)', () => {
   const WIDGET_ID = '11111111-1111-4111-8111-111111111111';
-  const OTHER_WIDGET_ID = '22222222-2222-4222-8222-222222222222';
   const APP_ID = '33333333-3333-4333-8333-333333333333';
   const ROLE_ID = '00000000-0000-4000-8000-000000000099';
   const AGENT_ID = '44444444-4444-4444-8444-444444444444';
@@ -247,96 +246,6 @@ describe('WidgetSessionService — RefreshGuestSession preserves mj_sid (#4931)'
     });
     expect(refreshed.success).toBe(true);
     expect(refreshed.sessionId).toBe('sid-recent-exp');
-  });
-
-  it('rejects RefreshGuestSession with uniform 403 not_found when bearerToken is missing, tampered, expired past grace, wrong widget, or non-anonymous', async () => {
-    const service = new WidgetSessionService('https://mj.example.com', makeConfig());
-    const nowSeconds = Math.floor(Date.now() / 1000);
-
-    // 1. Missing bearerToken
-    const missing = await service.RefreshGuestSession({
-      widgetKey: 'pk_live_test',
-      origin: 'https://acme.com',
-    });
-    expect(missing).toMatchObject({ success: false, errorCode: 'not_found' });
-
-    // 2. Tampered signature
-    const minted = await service.MintGuestSession({
-      widgetKey: 'pk_live_test',
-      origin: 'https://acme.com',
-    });
-    const tampered = await service.RefreshGuestSession({
-      widgetKey: 'pk_live_test',
-      origin: 'https://acme.com',
-      BearerToken: minted.token!.slice(0, -4) + 'AAAA',
-    });
-    expect(tampered).toMatchObject({ success: false, errorCode: 'not_found' });
-
-    // 3. Expired past REFRESH_GRACE_SECONDS (301s ago)
-    const tooOldToken = MagicLinkKeyManager.Instance.Sign({
-      iss: 'https://mj.example.com',
-      aud: 'mj-magic-link',
-      sub: 'magic-link|sid-old',
-      email: 'anonymous@magic-link.local',
-      iat: nowSeconds - 1201,
-      exp: nowSeconds - (REFRESH_GRACE_SECONDS + 1),
-      mj_magic_link: true,
-      mj_anon: true,
-      mj_sid: 'sid-old',
-      mj_widget_id: WIDGET_ID,
-      mj_app_id: APP_ID,
-      mj_role: 'Widget Guest',
-    });
-    const expiredBeyondGrace = await service.RefreshGuestSession({
-      widgetKey: 'pk_live_test',
-      origin: 'https://acme.com',
-      BearerToken: tooOldToken,
-    });
-    expect(expiredBeyondGrace).toMatchObject({ success: false, errorCode: 'not_found' });
-
-    // 4. Wrong mj_widget_id
-    const wrongWidgetToken = MagicLinkKeyManager.Instance.Sign({
-      iss: 'https://mj.example.com',
-      aud: 'mj-magic-link',
-      sub: 'magic-link|sid-other-widget',
-      email: 'anonymous@magic-link.local',
-      iat: nowSeconds,
-      exp: nowSeconds + 900,
-      mj_magic_link: true,
-      mj_anon: true,
-      mj_sid: 'sid-other-widget',
-      mj_widget_id: OTHER_WIDGET_ID,
-      mj_app_id: APP_ID,
-      mj_role: 'Widget Guest',
-    });
-    const wrongWidget = await service.RefreshGuestSession({
-      widgetKey: 'pk_live_test',
-      origin: 'https://acme.com',
-      BearerToken: wrongWidgetToken,
-    });
-    expect(wrongWidget).toMatchObject({ success: false, errorCode: 'not_found' });
-
-    // 5. Non-anonymous magic-link token (mj_anon: false)
-    const nonAnonToken = MagicLinkKeyManager.Instance.Sign({
-      iss: 'https://mj.example.com',
-      aud: 'mj-magic-link',
-      sub: 'magic-link|sid-non-anon',
-      email: 'verified@example.com',
-      iat: nowSeconds,
-      exp: nowSeconds + 900,
-      mj_magic_link: true,
-      mj_anon: false,
-      mj_sid: 'sid-non-anon',
-      mj_widget_id: WIDGET_ID,
-      mj_app_id: APP_ID,
-      mj_role: 'Widget Guest',
-    });
-    const nonAnon = await service.RefreshGuestSession({
-      widgetKey: 'pk_live_test',
-      origin: 'https://acme.com',
-      BearerToken: nonAnonToken,
-    });
-    expect(nonAnon).toMatchObject({ success: false, errorCode: 'not_found' });
   });
 });
 
@@ -464,6 +373,76 @@ describe('WidgetSessionService — RefreshGuestSession re-applies every mint che
     const service = new WidgetSessionService(ISSUER, makeConfig());
     const refreshed = await refresh(service, signGuestToken({ iss: 'https://other-deployment.example' }));
     expect(refreshed).toMatchObject({ success: false, errorCode: 'not_found' });
+  });
+
+  describe('each refusal is for exactly one defect in an otherwise valid token and proof', () => {
+    // Every case below is the positive control ('accepts a valid token passed as BearerToken') with one thing
+    // changed, and carries a valid proof made by the key the token is bound to. A token missing some other piece
+    // would be refused before the check under test ran, and the test would pass with that check deleted.
+    const OTHER_WIDGET_ID = '22222222-2222-4222-8222-222222222222';
+
+    /** `token` with its payload rewritten and its original signature kept. */
+    function withForgedPayload(token: string, changes: Record<string, unknown>): string {
+      const [header, payload, signature] = token.split('.');
+      const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as Record<string, unknown>;
+      const forged = Buffer.from(JSON.stringify({ ...claims, ...changes }), 'utf8').toString('base64url');
+      return `${header}.${forged}.${signature}`;
+    }
+
+    it('refuses a missing token, even with a valid proof', async () => {
+      const service = new WidgetSessionService(ISSUER, makeConfig());
+      const refreshed = await service.RefreshGuestSession({
+        widgetKey: 'pk_live_test',
+        origin: ORIGIN,
+        Proof: await proofFor(key, signGuestToken()),
+      });
+      expect(refreshed).toMatchObject({ success: false, errorCode: 'not_found' });
+    });
+
+    it('refuses a token whose payload was changed after signing', async () => {
+      const service = new WidgetSessionService(ISSUER, makeConfig());
+      const refreshed = await refresh(service, withForgedPayload(signGuestToken(), { mj_sid: 'sid-forged' }));
+      expect(refreshed).toMatchObject({ success: false, errorCode: 'not_found' });
+    });
+
+    it('refuses a token that expired one second past REFRESH_GRACE_SECONDS', async () => {
+      const service = new WidgetSessionService(ISSUER, makeConfig());
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      const token = signGuestToken({ iat: nowSeconds - 1201, exp: nowSeconds - (REFRESH_GRACE_SECONDS + 1), mj_sid_iat: nowSeconds - 1201 });
+      expect(await refresh(service, token)).toMatchObject({ success: false, errorCode: 'not_found' });
+    });
+
+    it('refuses a token without exp', async () => {
+      const service = new WidgetSessionService(ISSUER, makeConfig());
+      expect(await refresh(service, signGuestToken({ exp: undefined }))).toMatchObject({ success: false, errorCode: 'not_found' });
+    });
+
+    it('refuses a token minted for another widget', async () => {
+      const service = new WidgetSessionService(ISSUER, makeConfig());
+      expect(await refresh(service, signGuestToken({ mj_widget_id: OTHER_WIDGET_ID }))).toMatchObject({ success: false, errorCode: 'not_found' });
+    });
+
+    it('refuses a non-anonymous magic-link token (mj_anon false or absent)', async () => {
+      const service = new WidgetSessionService(ISSUER, makeConfig());
+      expect(await refresh(service, signGuestToken({ mj_anon: false }))).toMatchObject({ success: false, errorCode: 'not_found' });
+      expect(await refresh(service, signGuestToken({ mj_anon: undefined }))).toMatchObject({ success: false, errorCode: 'not_found' });
+    });
+
+    it('refuses a token whose mj_sid is blank', async () => {
+      const service = new WidgetSessionService(ISSUER, makeConfig());
+      expect(await refresh(service, signGuestToken({ mj_sid: '   ' }))).toMatchObject({ success: false, errorCode: 'not_found' });
+    });
+
+    it('refuses a proof signed two minutes ago, and accepts one signed 30 seconds ago (REFRESH_PROOF_MAX_SKEW_SECONDS)', async () => {
+      // Fixed ages, not ones derived from REFRESH_PROOF_MAX_SKEW_SECONDS: a test that moved with the constant could
+      // not catch it widening.
+      const service = new WidgetSessionService(ISSUER, makeConfig());
+      const token = signGuestToken();
+      const proofSignedSecondsAgo = (age: number) =>
+        CreateProofOfPossessionJwt(key, { Method: 'POST', Url: REFRESH_URL, AccessToken: token, NowSeconds: Math.floor(Date.now() / 1000) - age });
+      expect(await refresh(service, token, ORIGIN, await proofSignedSecondsAgo(120))).toMatchObject({ success: false, errorCode: 'not_found' });
+      expect(await refresh(service, token, ORIGIN, await proofSignedSecondsAgo(30))).toMatchObject({ success: true, sessionId: 'sid-live' });
+    });
   });
 
   describe('hard end of a guest session (MAX_GUEST_SESSION_SECONDS)', () => {
@@ -648,6 +627,14 @@ describe('WidgetSessionService — RefreshGuestSession re-applies every mint che
       expect(res.status).toBe(200);
       const body = (await res.json()) as { token: string };
       expect((jwt.decode(body.token) as jwt.JwtPayload).cnf).toEqual({ jkt: thumbprint });
+    });
+
+    it('returns 403 for a bare token without the Bearer scheme, even with a valid proof', async () => {
+      const url = await startRouter();
+      const token = signGuestToken();
+      const res = await post(url, { widgetKey: 'pk_live_test' }, token, await proofFor(key, token, url));
+      expect(res.status).toBe(403);
+      expect(await res.json()).toMatchObject({ success: false, errorCode: 'not_found' });
     });
 
     it('returns 403 without a DPoP header', async () => {

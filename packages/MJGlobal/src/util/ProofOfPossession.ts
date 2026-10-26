@@ -41,8 +41,11 @@ export interface ProofOfPossessionRequest {
 export interface ProofOfPossessionExpectation {
     Method: string;
     /**
-     * The path the proof must name, matched as a suffix of the proof URL's path. A suffix rather than the full
-     * URL because the server cannot always know the public origin and base path a proxy put in front of it.
+     * The path the proof must name, matched as a suffix of the proof URL's path. This binds a proof to one
+     * endpoint, so a proof made for another route of the same API cannot be reused here. The origin and any
+     * base path are not compared: one API can be reached under several public origins and base paths (a
+     * proxy, `MJAPI_BASE_PATH`), and the caller cannot reliably list them. Leaving them open grants nothing,
+     * because only the holder of the bound key can sign a proof, and `ath` ties the proof to one token.
      */
     PathSuffix: string;
     /** The bearer token presented with the proof. */
@@ -212,7 +215,7 @@ function decodeBase64Url(part: string): Uint8Array | null {
 
 function requireCrypto(): Crypto {
     if (typeof crypto === 'undefined' || !crypto.subtle) {
-        throw new Error('Web Crypto API not available: proof of possession needs a secure context (HTTPS or localhost) or Node.js 15+.');
+        throw new Error('Web Crypto API not available: proof of possession needs a secure context. Serve the page over HTTPS (or from localhost).');
     }
     return crypto;
 }

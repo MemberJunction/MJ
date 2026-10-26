@@ -454,13 +454,12 @@ export class SessionManager {
 
     // ----- internals -------------------------------------------------------------------------
 
-    /** Throws {@link SessionAuthorizationError} unless the user has `CanRun` on the agent. */
     /**
-     * Refuses an anonymous caller binding a new session to a conversation that is not its own. Every anonymous
+     * Throws {@link SessionAuthorizationError} unless the anonymous caller owns the conversation it wants to bind a
+     * new session to: the conversation, read as the caller, loads, and its `ExternalID` equals the caller's scope
+     * identity ({@link ResolveSessionScopeIdentity}). A caller with no scope identity is refused. Every anonymous
      * visitor shares one Anonymous user, so row-level security alone may let one visitor read another's
-     * conversation; the session gates would then refuse the visitor its own new session, but the session row
-     * and its relays would already point into the other visitor's conversation. The conversation is read as
-     * the caller, so an unreadable one is refused too.
+     * conversation; without this check the new session row and its relays would point into that conversation.
      */
     private async assertAnonymousOwnsConversation(conversationID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<void> {
         const conversation = await provider.GetEntityObject<MJConversationEntity>(CONVERSATION_ENTITY, contextUser);
@@ -472,6 +471,7 @@ export class SessionManager {
         }
     }
 
+    /** Throws {@link SessionAuthorizationError} unless the user has `CanRun` on the agent. */
     private async assertCanRun(agentID: string, contextUser: UserInfo): Promise<void> {
         const canRun = await AIAgentPermissionHelper.HasPermission(agentID, contextUser, 'run');
         if (!canRun) {
