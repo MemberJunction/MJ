@@ -23,5 +23,8 @@ export * from './components/schedules/schedules.component';
 export * from './components/widgets/integration-card.component';
 export * from './components/widgets/run-history-panel.component';
 
+// Bootstrap Wizard
+export * from './components/bootstrap-wizard/bootstrap-wizard.component';
+
 // Module
 export * from './integration.module';

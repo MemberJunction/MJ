@@ -125,6 +125,16 @@
               <button mjButton variant="outline" (click)="OnMenuAction('edit', summary)">
                 Configure
               </button>
+              @if (IsSqlServerIntegration(summary)) {
+                <button mjButton
+                        variant="outline"
+                        class="bootstrap-action-btn"
+                        (click)="OpenBootstrapWizard(summary.Integration, $event)"
+                        title="Bootstrap from Azure SQL Server Backup">
+                  <i class="fa-solid fa-cloud-arrow-down"></i>
+                  Bootstrap
+                </button>
+              }
               @if (IsConnectionActive(summary)) {
                 <div class="sync-menu-wrapper">
                   <button mjButton variant="primary"
@@ -235,6 +245,16 @@
             <button class="detail-edit-btn" (click)="OpenEditPanel(SelectedSummary)" title="Configure">
               <i class="fa-solid fa-pen-to-square"></i>
             </button>
+            @if (IsSqlServerIntegration(SelectedSummary)) {
+              <button mjButton
+                      variant="outline"
+                      class="bootstrap-action-btn"
+                      (click)="OpenBootstrapWizard(SelectedSummary.Integration, $event)"
+                      title="Bootstrap from Azure SQL Server Backup">
+                <i class="fa-solid fa-cloud-arrow-down"></i>
+                Bootstrap
+              </button>
+            }
             @if (IsConnectionActive(SelectedSummary)) {
               <div class="sync-menu-wrapper">
                 <button mjButton variant="primary"
@@ -1140,5 +1160,12 @@
     </div>
   </div>
 }
+    <!-- Bootstrap Wizard Modal -->
+    <app-bootstrap-wizard
+      [IsOpen]="BootstrapWizardOpen"
+      [CompanyIntegration]="SelectedBootstrapIntegration"
+      (Closed)="CloseBootstrapWizard()"
+      (Completed)="OnBootstrapCompleted($event)">
+    </app-bootstrap-wizard>
   </mj-page-body>
 </mj-page-layout>

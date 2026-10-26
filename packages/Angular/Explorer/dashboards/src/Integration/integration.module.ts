@@ -33,6 +33,7 @@ import { SchedulesComponent } from './components/schedules/schedules.component';
 import { IntegrationCardComponent } from './components/widgets/integration-card.component';
 import { RunHistoryPanelComponent } from './components/widgets/run-history-panel.component';
 import { VisualFieldEditorComponent } from './components/visual-editor/visual-editor.component';
+import { BootstrapWizardComponent } from './components/bootstrap-wizard/bootstrap-wizard.component';
 import { IntegrationDataService } from './services/integration-data.service';
 
 @NgModule({
@@ -45,7 +46,8 @@ import { IntegrationDataService } from './services/integration-data.service';
     SchedulesComponent,
     IntegrationCardComponent,
     RunHistoryPanelComponent,
-    VisualFieldEditorComponent
+    VisualFieldEditorComponent,
+    BootstrapWizardComponent
   ],
   imports: [
     CommonModule,
@@ -83,7 +85,8 @@ import { IntegrationDataService } from './services/integration-data.service';
     SchedulesComponent,
     IntegrationCardComponent,
     RunHistoryPanelComponent,
-    VisualFieldEditorComponent
+    VisualFieldEditorComponent,
+    BootstrapWizardComponent
   ]
 })
 export class IntegrationModule { }

@@ -13,6 +13,7 @@ import {
   IntegrationSummary,
   EntityMapRow
 } from '../../services/integration-data.service';
+import { BootstrapResultSummary } from '../bootstrap-wizard/bootstrap-wizard.component';
 import {
   BuildConnectionsAgentContext,
   ResolveIntegrationSurface,
@@ -137,6 +138,10 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   DetailFilteredMaps: EntityMapRow[] = [];
   DetailSearchTerm = '';
   IsDetailLoading = false;
+
+  // Bootstrap Wizard state
+  BootstrapWizardOpen = false;
+  SelectedBootstrapIntegration: MJCompanyIntegrationEntity | null = null;
 
   // Schedule state (for the selected integration)
   ScheduledJobID: string | null = null;
@@ -624,6 +629,38 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
       this.EditCredentialID = result.credential.ID;
     }
     this.cdr.detectChanges();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Bootstrap Wizard
+  // ---------------------------------------------------------------------------
+
+  IsSqlServerIntegration(summary: IntegrationSummary | null | undefined): boolean {
+    if (!summary) return false;
+    const intName = summary.Integration?.Integration?.toLowerCase() ?? '';
+    const srcType = summary.SourceType?.Name?.toLowerCase() ?? '';
+    const name = summary.Integration?.Name?.toLowerCase() ?? '';
+    const driver = summary.Integration?.DriverClassName?.toLowerCase() ?? '';
+    return intName.includes('sql') || srcType.includes('sql') || name.includes('sql') || driver.includes('sql');
+  }
+
+  OpenBootstrapWizard(integration: MJCompanyIntegrationEntity, event?: MouseEvent): void {
+    if (event) {
+      event.stopPropagation();
+    }
+    this.SelectedBootstrapIntegration = integration;
+    this.BootstrapWizardOpen = true;
+    this.cdr.detectChanges();
+  }
+
+  CloseBootstrapWizard(): void {
+    this.BootstrapWizardOpen = false;
+    this.SelectedBootstrapIntegration = null;
+    this.cdr.detectChanges();
+  }
+
+  async OnBootstrapCompleted(_result: BootstrapResultSummary): Promise<void> {
+    await this.LoadData();
   }
 
   // ---------------------------------------------------------------------------

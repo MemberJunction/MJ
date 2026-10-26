@@ -216,6 +216,16 @@ mj-empty-state {
   font-size: 13px;
 }
 
+.bootstrap-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bootstrap-action-btn i {
+  font-size: 13px;
+}
+
 /* Sync dropdown menu */
 .sync-menu-wrapper {
   position: relative;

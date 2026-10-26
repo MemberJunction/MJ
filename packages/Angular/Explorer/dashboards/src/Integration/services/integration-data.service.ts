@@ -870,6 +870,76 @@ export class IntegrationDataService {
     return { Success: result.Success, Message: result.Message ?? '' };
   }
 
+  /** Run the SQL Server Backup Bootstrap action */
+  async RunBootstrapFromBackup(
+    companyIntegrationID: string,
+    options: {
+      BackupUrls: string;
+      SasToken?: string;
+      StorageCredentialID?: string;
+      StagingDatabaseName?: string;
+      DropStagingDbOnComplete?: boolean;
+      BatchSize?: number;
+    }
+  ): Promise<{
+    Success: boolean;
+    Message: string;
+    BackupStartDate?: string;
+    StagingDatabaseName?: string;
+    TablesProcessed?: number;
+    TotalRowsTransferred?: number;
+    DurationSeconds?: number;
+    StagingDatabaseDropped?: boolean;
+  }> {
+    const actionID = await this.lookupActionID('Bootstrap SQL Server Integration From Backup');
+    if (!actionID) {
+      return {
+        Success: false,
+        Message: 'Action "Bootstrap SQL Server Integration From Backup" not found. Ensure the action is registered.'
+      };
+    }
+
+    const provider = this.Provider as unknown as GraphQLDataProvider;
+    const actionClient = new GraphQLActionClient(provider);
+    const params = [
+      { Name: 'CompanyIntegrationID', Value: companyIntegrationID, Type: 'Input' as const },
+      { Name: 'BackupUrls', Value: options.BackupUrls, Type: 'Input' as const },
+    ];
+    if (options.SasToken) {
+      params.push({ Name: 'SasToken', Value: options.SasToken, Type: 'Input' as const });
+    }
+    if (options.StorageCredentialID) {
+      params.push({ Name: 'StorageCredentialID', Value: options.StorageCredentialID, Type: 'Input' as const });
+    }
+    if (options.StagingDatabaseName) {
+      params.push({ Name: 'StagingDatabaseName', Value: options.StagingDatabaseName, Type: 'Input' as const });
+    }
+    if (options.DropStagingDbOnComplete !== undefined) {
+      params.push({ Name: 'DropStagingDbOnComplete', Value: options.DropStagingDbOnComplete ? 'true' : 'false', Type: 'Input' as const });
+    }
+    if (options.BatchSize) {
+      params.push({ Name: 'BatchSize', Value: String(options.BatchSize), Type: 'Input' as const });
+    }
+
+    const result = await actionClient.RunAction(actionID, params);
+
+    const getParamVal = (name: string): string | undefined => {
+      const p = result.Params?.find((item: { Name: string }) => item.Name.toLowerCase() === name.toLowerCase());
+      return p?.Value != null ? String(p.Value) : undefined;
+    };
+
+    return {
+      Success: result.Success,
+      Message: result.Message ?? '',
+      BackupStartDate: getParamVal('BackupStartDate'),
+      StagingDatabaseName: getParamVal('StagingDatabaseName') ?? options.StagingDatabaseName,
+      TablesProcessed: getParamVal('TablesProcessed') ? Number(getParamVal('TablesProcessed')) : undefined,
+      TotalRowsTransferred: getParamVal('TotalRowsTransferred') ? Number(getParamVal('TotalRowsTransferred')) : undefined,
+      DurationSeconds: getParamVal('DurationSeconds') ? Number(getParamVal('DurationSeconds')) : undefined,
+      StagingDatabaseDropped: getParamVal('StagingDatabaseDropped') === '1' || getParamVal('StagingDatabaseDropped') === 'true',
+    };
+  }
+
   /** Load schedule data for all company integrations (includes new scheduling fields) */
   async LoadSchedules(_provider?: IRunViewProvider | null): Promise<MJCompanyIntegrationEntity[]> {
     await IntegrationEngineBase.Instance.Config(false);
