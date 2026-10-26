@@ -206,6 +206,10 @@ export function BuildWidgetGuestClaims(args: {
   guestRoleName: string;
   nowSeconds: number;
   ttlSeconds: number;
+  /** When `sessionId` was first minted (`mj_sid_iat`); a refresh passes the original. Defaults to `nowSeconds`. */
+  sessionStartedAtSeconds?: number;
+  /** Thumbprint of the widget's proof key (`cnf.jkt`). Without it the token cannot be refreshed. */
+  proofKeyThumbprint?: string;
   /**
    * Host-asserted identity for a `host-identity` session. Its email/name are carried as
    * INFORMATIONAL claims only — the principal-resolving `email`/`sub` remain the shared
@@ -248,6 +252,10 @@ export function BuildWidgetGuestClaims(args: {
   });
   // Additive widget claim — lets the synthesized principal be bound to one widget.
   claims.mj_widget_id = args.widgetId;
+  claims.mj_sid_iat = args.sessionStartedAtSeconds ?? args.nowSeconds;
+  if (args.proofKeyThumbprint) {
+    claims.cnf = { jkt: args.proofKeyThumbprint };
+  }
   if (args.hostIdentity) {
     claims.given_name = args.hostIdentity.firstName ?? claims.given_name;
     claims.family_name = args.hostIdentity.lastName ?? claims.family_name;

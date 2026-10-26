@@ -135,10 +135,11 @@ export const ShippedAgentsLiveChecks: NamedCheck[] = [
             fx.ConversationDetailIds.push(detail.ID);
 
             // Pass ConversationId, NOT conversationDetailId: the resolver treats a supplied
-            // conversationDetailId as the caller's ALREADY-CREATED agent-response row (the real UI
-            // pre-creates it client-side) and only updates it — so handing it the Role='User' row
-            // would update that row in place and never produce a Role='AI' detail. With
-            // ConversationId the server owns both details, which is what this check asserts.
+            // conversationDetailId as an ALREADY-CREATED agent-response row and only updates it — so
+            // handing it the Role='User' row would update that row in place and never produce a
+            // Role='AI' detail. The real UI no longer pre-creates the reply row: the server creates
+            // it (AgentRunner.CreateAgentReplyDetail, marked as server-authored). With ConversationId
+            // the server owns both details, which is what this check asserts.
             const runId = await runAndVerify(ctx, sage, 'Reply with the single word: pong.', { ConversationId: conversation.ID });
 
             const run = await new RunView().RunView<{ ConversationID: string | null }>({

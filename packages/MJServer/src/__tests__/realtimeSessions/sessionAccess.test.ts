@@ -27,24 +27,54 @@ describe('AuthorizeSessionAccess', () => {
         expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: null }, { ID: '' })).toEqual({ Allowed: false, Reason: 'not_owner' });
     });
 
-    describe('anonymous widget guests (one shared Anonymous user)', () => {
-        const guest = (scope?: string) => ({ ID: OWNER, IsMagicLinkAnonymous: true, MagicLinkScope: scope ? { ResourceID: scope } : undefined });
+    describe('anonymous visitors (one shared Anonymous user, per-visitor AnonymousVisitorID)', () => {
+        const guest = (visitorId?: string, resourceScope?: string) => ({
+            ID: OWNER,
+            IsMagicLinkAnonymous: true,
+            AnonymousVisitorID: visitorId,
+            MagicLinkScope: resourceScope ? { ResourceID: resourceScope } : visitorId ? { ResourceID: visitorId } : undefined,
+        });
 
-        it('allows a guest whose signed scope matches the conversation ExternalID', () => {
+        it('allows a visitor whose AnonymousVisitorID matches the conversation ExternalID', () => {
             expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'scope-1' }, guest('scope-1'))).toEqual({ Allowed: true });
         });
 
-        it('refuses a different guest (same Anonymous user id, different scope) — the cross-guest leak', () => {
+        it('refuses a different widget guest (same Anonymous user id, different visitor id) — the cross-guest leak', () => {
             expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'scope-1' }, guest('scope-2'))).toEqual({
                 Allowed: false,
                 Reason: 'scope_mismatch',
             });
         });
 
-        it('refuses an anonymous principal with no scope at all', () => {
-            expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'scope-1' }, guest())).toEqual({
+        it('refuses an anonymous principal with neither a resource scope nor an AnonymousVisitorID', () => {
+            expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'scope-1' }, guest(undefined))).toEqual({
                 Allowed: false,
                 Reason: 'scope_missing',
+            });
+        });
+
+        describe('identity per token kind: MagicLinkScope.ResourceID when the token carries one, else mj_sid', () => {
+            it('widget guest (ResourceID == mj_sid): matches its own sessionId', () => {
+                expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'sid-w' }, guest('sid-w', 'sid-w'))).toEqual({ Allowed: true });
+            });
+
+            it('anonymous invite WITH a ResourceID: identity is the ResourceID, not its per-redemption mj_sid', () => {
+                const visitor = guest('sid-redemption-1', 'invite-scope-R');
+                expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'invite-scope-R' }, visitor)).toEqual({ Allowed: true });
+                expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'sid-redemption-1' }, visitor)).toEqual({
+                    Allowed: false,
+                    Reason: 'scope_mismatch',
+                });
+            });
+
+            it('anonymous invite WITHOUT a ResourceID: identity is mj_sid, so two redemptions are told apart', () => {
+                const first = { ID: OWNER, IsMagicLinkAnonymous: true, AnonymousVisitorID: 'sid-r1' };
+                const second = { ID: OWNER, IsMagicLinkAnonymous: true, AnonymousVisitorID: 'sid-r2' };
+                expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'sid-r1' }, first)).toEqual({ Allowed: true });
+                expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'sid-r1' }, second)).toEqual({
+                    Allowed: false,
+                    Reason: 'scope_mismatch',
+                });
             });
         });
 
@@ -66,6 +96,28 @@ describe('AuthorizeSessionAccess', () => {
         const scoped = { ID: OWNER, MagicLinkScope: { ResourceID: 'share-1' } };
         expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'share-1' }, scoped)).toEqual({ Allowed: true });
         expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'other' }, scoped)).toEqual({ Allowed: false, Reason: 'scope_mismatch' });
+    });
+
+    describe('a NAMED principal with a resource scope on a conversation with no scope stamp', () => {
+        const scoped = { ID: OWNER, MagicLinkScope: { ResourceID: 'share-1' } };
+
+        it('is allowed when it could read the conversation (e.g. one started from the Conversations app)', () => {
+            expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: null, ConversationReadable: true }, scoped)).toEqual({ Allowed: true });
+        });
+
+        it('is refused when it could not read the conversation, or readability is unknown (fail closed)', () => {
+            expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: null, ConversationReadable: false }, scoped)).toEqual({ Allowed: false, Reason: 'scope_mismatch' });
+            expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: null }, scoped)).toEqual({ Allowed: false, Reason: 'scope_mismatch' });
+        });
+
+        it('still refuses a conversation stamped with another scope, readable or not', () => {
+            expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: 'share-2', ConversationReadable: true }, scoped)).toEqual({ Allowed: false, Reason: 'scope_mismatch' });
+        });
+
+        it('does not extend to an anonymous visitor, which an unstamped conversation cannot identify', () => {
+            const visitor = { ID: OWNER, IsMagicLinkAnonymous: true, AnonymousVisitorID: 'sid-1' };
+            expect(AuthorizeSessionAccess({ SessionUserID: OWNER, ConversationExternalID: null, ConversationReadable: true }, visitor)).toEqual({ Allowed: false, Reason: 'scope_mismatch' });
+        });
     });
 
     it('does not require a scope of a named principal without one, whatever the conversation says', () => {
@@ -99,6 +151,7 @@ describe('LoadSessionForAccess', () => {
         const loaded = await LoadSessionForAccess(SESSION_ID, USER, provider);
         expect(loaded?.Session.ID).toBe(SESSION_ID);
         expect(loaded?.ConversationExternalID).toBe('scope-1');
+        expect(loaded?.ConversationReadable).toBe(true);
     });
 
     it('returns null for a malformed id without touching the database', async () => {
@@ -114,16 +167,25 @@ describe('LoadSessionForAccess', () => {
     it('reports a null scope id when the session has no conversation', async () => {
         const loaded = await LoadSessionForAccess(SESSION_ID, USER, fakeProvider({ session: { ID: SESSION_ID, UserID: OWNER, ConversationID: null } }));
         expect(loaded?.ConversationExternalID).toBeNull();
+        expect(loaded?.ConversationReadable).toBe(false);
     });
 
     it('reports a null scope id when the conversation is unreadable, so a scoped caller is refused downstream', async () => {
         const unreadable = await LoadSessionForAccess(SESSION_ID, USER, fakeProvider({ session: { ID: SESSION_ID, UserID: OWNER, ConversationID: CONVERSATION_ID }, conversation: null }));
         expect(unreadable?.ConversationExternalID).toBeNull();
+        expect(unreadable?.ConversationReadable).toBe(false);
         const throwing = await LoadSessionForAccess(
             SESSION_ID,
             USER,
             fakeProvider({ session: { ID: SESSION_ID, UserID: OWNER, ConversationID: CONVERSATION_ID }, conversation: {}, conversationThrows: true }),
         );
         expect(throwing?.ConversationExternalID).toBeNull();
+        expect(throwing?.ConversationReadable).toBe(false);
+    });
+
+    it('reports a readable conversation that carries no scope stamp', async () => {
+        const loaded = await LoadSessionForAccess(SESSION_ID, USER, fakeProvider({ session: { ID: SESSION_ID, UserID: OWNER, ConversationID: CONVERSATION_ID }, conversation: { ExternalID: null } }));
+        expect(loaded?.ConversationExternalID).toBeNull();
+        expect(loaded?.ConversationReadable).toBe(true);
     });
 });

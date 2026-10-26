@@ -91,6 +91,7 @@ import { RunWithTrustedSessionConfigWrites } from '@memberjunction/core-entities
 import { BuildMintConfigStamps, LoadInheritedVerifiedIdentity } from '../realtimeSessions/sessionConfigStamps.js';
 import { ParseConfigObject } from '../realtimeSessions/verificationCore.js';
 import { LoadOwnedRealtimeSession } from '../realtimeSessions/ownedRealtimeSession.js';
+import { AuthorizeSessionAccess, LoadSessionForAccess } from '../realtimeSessions/sessionAccess.js';
 
 /**
  * Progress steps worth narrating to the realtime model — mirrors the normal agent-run path's filter
@@ -106,7 +107,6 @@ const SIGNIFICANT_PROGRESS_STEPS = ['prompt_execution', 'action_execution', 'sub
 const MAX_USAGE_DETAILS_JSON_LENGTH = 4096;
 
 /** Entity name — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
-const SESSION_ENTITY = 'MJ: AI Agent Sessions';
 const CO_AGENT_ENTITY = 'MJ: AI Agent Co Agents';
 const CONVERSATION_DETAIL_ENTITY = 'MJ: Conversation Details';
 const CHANNEL_ENTITY = 'MJ: AI Agent Channels';
@@ -668,10 +668,18 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         contextUser: UserInfo,
         provider: IMetadataProvider,
     ): Promise<void> {
+        let inheritedVerified: Awaited<ReturnType<typeof LoadInheritedVerifiedIdentity>> = undefined;
+        try {
+            inheritedVerified = await LoadInheritedVerifiedIdentity(lastSessionId, contextUser, provider);
+        } catch (error) {
+            LogError(
+                `StartRealtimeClientSession: failed to load inherited verified identity for prior session ${lastSessionId}: ${(error as Error).message}`,
+            );
+        }
         const plan = BuildMintConfigStamps({
             EffectiveRealtime: this.readEffectiveRealtime(effectiveConfigJson),
             ExistingConfigRaw: session.Config_,
-            InheritedVerified: await LoadInheritedVerifiedIdentity(lastSessionId, contextUser, provider),
+            InheritedVerified: inheritedVerified,
             NowMs: Date.now(),
         });
         if (!plan) {
@@ -2075,14 +2083,18 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             return null;
         }
         try {
-            const prior = await provider.GetEntityObject<MJAIAgentSessionEntity>(SESSION_ENTITY, contextUser);
-            if (!(await prior.Load(lastSessionId))) {
+            const loaded = await LoadSessionForAccess(lastSessionId, contextUser, provider);
+            if (!loaded) {
                 LogError(`StartRealtimeClientSession: prior session ${lastSessionId} not found — skipping channel-state restore.`);
                 return null;
             }
-            if (!UUIDsEqual(prior.UserID, contextUser.ID)) {
+            const access = AuthorizeSessionAccess(
+                { SessionUserID: loaded.Session.UserID, ConversationExternalID: loaded.ConversationExternalID, ConversationReadable: loaded.ConversationReadable },
+                contextUser,
+            );
+            if (!access.Allowed) {
                 LogError(
-                    `StartRealtimeClientSession: prior session ${lastSessionId} is not owned by user ${contextUser.ID} — ` +
+                    `StartRealtimeClientSession: prior session ${lastSessionId} is not owned by user ${contextUser.ID} (${access.Reason}) — ` +
                         'skipping channel-state restore.',
                 );
                 return null;
@@ -2289,24 +2301,28 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 break;
             }
             visited.add(key);
-            const leg = await provider.GetEntityObject<MJAIAgentSessionEntity>(SESSION_ENTITY, contextUser);
-            if (!(await leg.Load(cursor))) {
+            const loaded = await LoadSessionForAccess(cursor, contextUser, provider);
+            if (!loaded) {
                 if (legIDs.length === 0) {
                     LogError(`StartRealtimeClientSession: prior session ${cursor} not found — skipping transcript hydration.`);
                 }
                 break;
             }
-            if (!UUIDsEqual(leg.UserID, contextUser.ID)) {
+            const access = AuthorizeSessionAccess(
+                { SessionUserID: loaded.Session.UserID, ConversationExternalID: loaded.ConversationExternalID, ConversationReadable: loaded.ConversationReadable },
+                contextUser,
+            );
+            if (!access.Allowed) {
                 if (legIDs.length === 0) {
                     LogError(
-                        `StartRealtimeClientSession: prior session ${cursor} is not owned by user ${contextUser.ID} — ` +
+                        `StartRealtimeClientSession: prior session ${cursor} is not owned by user ${contextUser.ID} (${access.Reason}) — ` +
                             'skipping transcript hydration.',
                     );
                 }
                 break;
             }
-            legIDs.push(leg.ID);
-            cursor = leg.LastSessionID ?? null;
+            legIDs.push(loaded.Session.ID);
+            cursor = loaded.Session.LastSessionID ?? null;
         }
         return legIDs;
     }
