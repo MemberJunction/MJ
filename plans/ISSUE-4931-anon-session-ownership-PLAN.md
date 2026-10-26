@@ -6,6 +6,7 @@
 >
 > | Plan says | As shipped |
 > |---|---|
+> | keep a deprecated `buildMagicLinkSessionUser` alias | no alias: the function was module-private before this change, so only `BuildMagicLinkSessionUser` is exported |
 > | `CloneSessionUserForRequest` | `CloneUserForSessionContext` (`packages/MJServer/src/auth/sessionUserClone.ts`) |
 > | `WidgetSessionMintInput.bearerToken` | `MintGuestSessionInput.BearerToken` (no camelCase alias) |
 > | `jwt.verify(…, issuer: this.config.issuer, …)` | `issuer: this.publicUrl` (the issuer the mint signs), with `algorithms`, `audience` and the manual grace window |
@@ -13,12 +14,14 @@
 > | a bad, expired-past-grace or other-widget refresh token returns `errorCode: 'invalid_key'` / "Widget is unavailable for this origin." | it returns the uniform `{ success: false, errorCode: 'not_found', error: 'Unknown widget key.' }` (HTTP 403); an origin rejection keeps `EvaluateWidgetMint`'s own code |
 > | `renewGuestToken` passes `this.guestSession?.Token` to `this.config.guestSource.Refresh(…)` | it passes `this.guest.token` to `this.guestSource.Refresh(…)` through `mintGuest` |
 > | anonymous identity = `AnonymousVisitorID` (`mj_sid`) everywhere | `ResolveSessionScopeIdentity` (`realtimeSessions/sessionAccess.ts`): the token's `MagicLinkScope.ResourceID` when it carries one, else `mj_sid`; used by both `SessionManager` (the `ExternalID` stamp) and `AuthorizeSessionAccess`, so a resource-scoped anonymous invite visitor keeps matching the `{{ScopeResourceID}}` row filters |
-> | (not in the plan) | `MJ: Conversations` / `MJ: AI Agent Sessions` server entities refuse an anonymous visitor changing `ExternalID` / `ConversationID` on an existing row (`MJCoreEntitiesServer/src/custom/anonymousOwnershipKeyGuard.ts`), including through a transaction group's `'Use'` variable on that field or on `ID`; the protected-`Config` check refuses a `'Use'` variable on `Config` |
+> | (not in the plan) | `MJ: Conversations` / `MJ: AI Agent Sessions` server entities refuse an anonymous visitor changing `ExternalID` / `ConversationID` on an existing row (`MJCoreEntitiesServer/src/custom/anonymousOwnershipKeyGuard.ts`), including through a transaction group's `'Use'` variable on that field or on `ID`; the protected-`Config` check refuses a `'Use'` variable on `Config` or on `ID` |
 > | (not in the plan) | A guest session ends 12 h after its first mint: the token carries `mj_sid_iat`, refresh copies it, and refresh is refused once less than `MIN_REFRESHED_TOKEN_SECONDS` (120 s) remain (`MAX_GUEST_SESSION_SECONDS`); the web widget waits at least 5 s between refreshes |
 > | (not in the plan) | Refresh is bound to a key that never leaves the browser: the mint body carries `proofKey` (a public P-256 JWK), the token `cnf.jkt` (its RFC 7638 thumbprint), and refresh needs a `DPoP` proof signed by that key (`@memberjunction/global` `ProofOfPossession.ts`); on 401/403 the web widget mints a new session (`WidgetSessionError`) |
 > | (not in the plan) | A named user with a resource-scoped link may also use its own session on a conversation with no `ExternalID`, when it can read that conversation (`LoadSessionConversationScope`) |
 > | (not in the plan) | `SessionManager.CreateSession` refuses an anonymous caller that supplies a conversation that is not its own |
-> | (not in the plan) | A widget guest's agent reply is written as the guest (`RunAgentInConversation`'s `ConversationWriter`, from `UserPayload.ElevatedFrom`), and a reply that cannot be saved fails the run |
+> | (not in the plan) | A widget guest's agent reply is written as the guest (`RunAgentInConversation`'s `ConversationWriter`, from `UserPayload.ElevatedFrom`), and a reply that cannot be saved fails the run after its artifact and media steps still run; the resolver publishes the failure as the run's completion |
+> | (not in the plan) | Status events reach the visitor that owns them: they are stamped with `StatusUpdateOwnerID(userPayload)` (the guest for an elevated widget run) and an anonymous connection matches only on `StatusUpdateOwnerKey` (`id|scope`), so another visitor's events are not delivered (`generic/PushStatusResolver.ts`) |
+> | (not in the plan) | `ResolverBase`'s `ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW` adds `MJ: Conversations` and `MJ: AI Agent Sessions`, so the ownership-key guards compare against the stored row |
 > | (not in the plan) | `@memberjunction/realtime-widget`'s `build` also runs `bundle` (`dist/embed/mj-widget.js`) |
 > | `__tests__/agentSessions/SessionManager.createConversation.test.ts` | `__tests__/SessionManager.test.ts` |
 > | `__tests__/realtimeSessions/ownedRealtimeSession.test.ts` | `__tests__/realtimeSessions/ownedRealtimeSession.anonymous.test.ts` |
