@@ -827,6 +827,14 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.enqueueOrRun(() => this.sendTriggeringUserTurn(instructions, 'narration', false));
     }
 
+    /** A spoken TURN: the same realtime-text trigger as the update, with the reply kept `normal` (MJ#4591). */
+    public RequestSpokenTurn(instructions: string): void {
+        if (!this.session) {
+            return;
+        }
+        this.enqueueOrRun(() => this.sendTriggeringUserTurn(instructions, 'normal', false));
+    }
+
     /**
      * Feeds an executed tool's result back via `sendToolResponse`, supplying the function name
      * cached from the originating tool call (Gemini requires it; the contract only carries the
