@@ -31,6 +31,7 @@ import {
     MJUserRoutineEntity_IRoutineWakeConfiguration,
 } from '@memberjunction/core-entities';
 import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
+import { UserCache } from '@memberjunction/generic-database-provider';
 
 /**
  * Type of `resumeState` derived directly from `MJUserRoutineEntity_IRoutineWakeConfiguration`.
@@ -42,6 +43,9 @@ export type AgentWakeResumeState = NonNullable<MJUserRoutineEntity_IRoutineWakeC
  */
 export interface InterAgentCoordinationEnvelopeShape {
     interAgentCoordination?: boolean;
+    /** Written by `ChiefOfStaffInterAgentEnvelope` (`Send Chief of Staff Inter-Agent Request`). */
+    protocolVersion?: string;
+    /** @deprecated older envelopes; prefer `protocolVersion`. */
     envelopeVersion?: string;
     senderUserID?: string;
     senderUserName?: string;
@@ -52,6 +56,9 @@ export interface InterAgentCoordinationEnvelopeShape {
     targetUserEmail?: string;
     deliveryMode?: 'InterAgentCoS' | 'DirectUserRequest';
     subject?: string;
+    /** Message body as written by `ChiefOfStaffInterAgentEnvelope`. */
+    message?: string;
+    /** @deprecated older envelopes; prefer `message`. */
     messageBody?: string;
     workstreamKey?: string | null;
     createdAt?: string;
@@ -291,7 +298,7 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
             senderUserName: envelope.senderUserName ?? null,
             senderAgentID: envelope.senderAgentID ?? request.AgentID,
             subject: envelope.subject ?? null,
-            messageBody: envelope.messageBody ?? request.Request,
+            messageBody: envelope.message ?? envelope.messageBody ?? request.Request,
             workstreamKey,
         };
 
@@ -532,6 +539,79 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
         return null;
     }
 
+    /**
+     * `MJ: User Routines` are private to their owner: the entity server rejects a save by a non-Owner-type
+     * user for a routine they do not own, and row-level security hides other users' rows from the lookup.
+     * A wake for another user (inter-agent arrival or resolution) therefore runs as the scheduler's system
+     * user, which the ownership gate exempts. A wake for the caller's own agent stays in the caller's scope.
+     */
+    private resolveRoutineSaveUser(targetUserID: string, contextUser: UserInfo): UserInfo {
+        if (UUIDsEqual(contextUser.ID, targetUserID) || contextUser.Type?.trim().toLowerCase() === 'owner') {
+            return contextUser;
+        }
+        const systemUser = UserCache.Instance.GetSystemUser();
+        if (!systemUser) {
+            LogStatus(
+                `[AgentWakeTriggerService] No system user in UserCache; saving cross-user wake routine as ${contextUser.ID}, which the ownership gate may reject.`
+            );
+            return contextUser;
+        }
+        return systemUser;
+    }
+
+    /**
+     * Events that must reach the agent on the next wake. While a routine is still waiting for the dispatcher
+     * (`Status = 'Active'` with a `NextRunAt`), a new event is appended to the queue already stored in its
+     * `resumeState.pendingEvents` rather than replacing it, so two approvals clicked within one sweep both
+     * arrive. Once the dispatcher has claimed the routine (`NextRunAt` nulled, later `Disabled`), the queue
+     * starts over. The same request in the same status is queued once.
+     */
+    private buildPendingEvents(
+        routine: MJUserRoutineEntity,
+        existingConfig: Partial<MJUserRoutineEntity_IRoutineWakeConfiguration>,
+        newEvent: AgentWakeResumeState
+    ): AgentWakeResumeState[] {
+        const isUnclaimedPending = routine.Status === 'Active' && routine.NextRunAt != null && !!routine.ID;
+        const prior = isUnclaimedPending ? this.readPendingEvents(existingConfig.resumeState) : [];
+        const key = this.wakeEventKey(newEvent);
+        const deduped = prior.filter((e) => this.wakeEventKey(e) !== key);
+        return [...deduped, newEvent];
+    }
+
+    private readPendingEvents(resumeState: Record<string, unknown> | undefined): AgentWakeResumeState[] {
+        if (!resumeState) {
+            return [];
+        }
+        const queued = resumeState['pendingEvents'];
+        if (Array.isArray(queued)) {
+            return queued.filter((e): e is AgentWakeResumeState => typeof e === 'object' && e !== null);
+        }
+        // A row written before the queue existed holds a single event at the top level.
+        return typeof resumeState['triggerType'] === 'string' ? [resumeState] : [];
+    }
+
+    private wakeEventKey(event: AgentWakeResumeState): string {
+        const id = event['requestID'] ?? event['messageID'] ?? '';
+        return `${String(event['triggerType'] ?? '')}:${String(id)}:${String(event['status'] ?? '')}`.toLowerCase();
+    }
+
+    private buildCoalescedWakeReason(workstreamKey: string, latestReason: string, pendingEvents: AgentWakeResumeState[]): string {
+        if (pendingEvents.length <= 1) {
+            return latestReason;
+        }
+        const lines = pendingEvents.map((e, i) => `${i + 1}. ${this.describeWakeEvent(e)}`);
+        return `${pendingEvents.length} events require action in workstream "${workstreamKey}" (all listed in resumeState.pendingEvents):\n${lines.join('\n')}`;
+    }
+
+    private describeWakeEvent(event: AgentWakeResumeState): string {
+        const trigger = String(event['triggerType'] ?? 'Event');
+        const id = event['requestID'] ?? event['messageID'];
+        const status = event['status'] ? ` ${String(event['status'])}` : '';
+        const subject = event['subject'] ?? event['request'];
+        const subjectText = typeof subject === 'string' && subject.trim().length > 0 ? ` — ${subject.trim().slice(0, 120)}` : '';
+        return `${trigger}${status}${id ? ` (${String(id)})` : ''}${subjectText}`;
+    }
+
     private async upsertImmediateWakeRoutine(params: {
         targetUserID: string;
         targetAgentID: string;
@@ -544,6 +624,7 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
     }): Promise<AgentWakeTriggerResult> {
         try {
             const md: IMetadataProvider = params.metadataProvider ?? Metadata.Provider;
+            const saveUser = this.resolveRoutineSaveUser(params.targetUserID, params.contextUser);
             const rv = RunView.FromMetadataProvider(md);
             const safeUserId = EscapeSQLString(params.targetUserID);
             const safeAgentId = EscapeSQLString(params.targetAgentID);
@@ -556,7 +637,7 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
                     MaxRows: 25,
                     ResultType: 'entity_object',
                 },
-                params.contextUser
+                saveUser
             );
 
             let routine: MJUserRoutineEntity | null = null;
@@ -575,7 +656,7 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
             if (!routine) {
                 routine = await md.GetEntityObject<MJUserRoutineEntity>(
                     'MJ: User Routines',
-                    params.contextUser
+                    saveUser
                 );
                 routine.NewRecord();
                 routine.UserID = params.targetUserID;
@@ -590,23 +671,27 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
 
             const existingConfig: Partial<MJUserRoutineEntity_IRoutineWakeConfiguration> =
                 routine.WakeConfigurationObject ?? {};
+            const pendingEvents = this.buildPendingEvents(routine, existingConfig, params.resumeState);
+            const wakeReason = this.buildCoalescedWakeReason(params.workstreamKey, params.wakeReason, pendingEvents);
+            // Latest event stays at the top level for consumers that predate the queue; the full list rides alongside.
+            const coalescedResumeState: AgentWakeResumeState = { ...params.resumeState, pendingEvents };
             const updatedConfig: MJUserRoutineEntity_IRoutineWakeConfiguration = {
                 ...existingConfig,
                 workstreamKey: params.workstreamKey,
-                wakeReason: params.wakeReason,
-                resumeState: params.resumeState,
+                wakeReason,
+                resumeState: coalescedResumeState,
             };
 
             routine.Status = 'Active';
             routine.NextRunAt = params.now;
-            routine.InitialMessage = `[AgentWake:${params.workstreamKey}] Resume workstream "${params.workstreamKey}": ${params.wakeReason}`;
+            routine.InitialMessage = `[AgentWake:${params.workstreamKey}] Resume workstream "${params.workstreamKey}": ${wakeReason}`;
             routine.StartingPayload = JSON.stringify({
                 workstreamKey: params.workstreamKey,
-                wakeReason: params.wakeReason,
-                resumeState: params.resumeState,
+                wakeReason,
+                resumeState: coalescedResumeState,
             });
             routine.WakeConfigurationObject = updatedConfig;
-            routine.Description = params.wakeReason;
+            routine.Description = wakeReason;
 
             const saved = await routine.Save();
             if (!saved) {

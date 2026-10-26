@@ -11,6 +11,11 @@ import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
 import { AgentWakeTriggerService } from '../AgentWakeTriggerService';
 
 const runViewMock = vi.fn();
+const SYSTEM_USER_ID = '00000000-0000-0000-0000-0000000005E5';
+const systemUser = { ID: SYSTEM_USER_ID, Name: 'System', Email: 'system@mj.local', Type: 'Owner', IsActive: true, UserRoles: [] } as unknown as UserInfo;
+vi.mock('@memberjunction/generic-database-provider', () => ({
+    UserCache: { Instance: { GetSystemUser: () => systemUser } },
+}));
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
     return {
@@ -199,7 +204,7 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
 
             const interAgentEnvelope = {
                 interAgentCoordination: true,
-                envelopeVersion: '1.0',
+                protocolVersion: '1.0',
                 senderUserID: USER_ALICE_ID,
                 senderUserName: 'Alice Executive',
                 senderAgentID: COS_AGENT_ID,
@@ -207,7 +212,7 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
                 targetUserName: 'Bob Peer',
                 deliveryMode: 'InterAgentCoS',
                 subject: 'Confirm Q4 Launch Dependencies',
-                messageBody: 'Can Bob confirm engineering readiness by Friday?',
+                message: 'Can Bob confirm engineering readiness by Friday?',
                 workstreamKey: 'q4-launch-sync',
             };
 
@@ -238,6 +243,7 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
                 requestID: 'req-inter-agent-1',
                 senderUserID: USER_ALICE_ID,
                 subject: 'Confirm Q4 Launch Dependencies',
+                messageBody: 'Can Bob confirm engineering readiness by Friday?',
             });
 
             // Step B: Resolved InterAgentCoS request wakes Alice's (sender's) Chief of Staff
@@ -267,6 +273,150 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
                 response: 'Confirmed — engineering is ready for Friday.',
                 targetUserID: USER_BOB_ID,
             });
+        });
+    });
+
+    describe('1b. Routine save context (ownership gate on MJ: User Routines)', () => {
+        const interAgentEnvelope = {
+            interAgentCoordination: true,
+            protocolVersion: '1.0',
+            senderUserID: USER_ALICE_ID,
+            senderUserName: 'Alice Executive',
+            senderAgentID: COS_AGENT_ID,
+            targetUserID: USER_BOB_ID,
+            subject: 'Cross-user wake',
+            message: 'Please confirm.',
+            workstreamKey: 'cross-user',
+        };
+
+        it('saves a wake routine for another user as the system user, not as the requester', async () => {
+            const { provider, savedRoutines, capturedContextUsers } = createMockMetadataProvider();
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(createPolicy({ UserID: USER_BOB_ID }));
+            runViewMock.mockResolvedValue({ Success: true, Results: [] });
+
+            const incomingReq = {
+                ID: 'req-cross-user',
+                AgentID: COS_AGENT_ID,
+                RequestForUserID: USER_BOB_ID,
+                Status: 'Requested',
+                Request: 'x',
+                Comments: JSON.stringify(interAgentEnvelope),
+            } as unknown as MJAIAgentRequestEntity;
+
+            const result = await AgentWakeTriggerService.Instance.TriggerWakeOnIncomingInterAgentRequest(
+                incomingReq,
+                aliceUser,
+                provider,
+                FIXED_NOW
+            );
+
+            expect(result.triggered).toBe(true);
+            expect(savedRoutines[0].UserID).toBe(USER_BOB_ID);
+            expect(capturedContextUsers[0].ID).toBe(SYSTEM_USER_ID);
+            // the existing-routine lookup must also run with a user that can see Bob's routines
+            const lookupCall = runViewMock.mock.calls.find((c) => String(c[0]?.EntityName) === 'MJ: User Routines');
+            expect(lookupCall?.[1]?.ID).toBe(SYSTEM_USER_ID);
+        });
+
+        it('saves a wake routine for the requester themselves as the requester', async () => {
+            const { provider, savedRoutines, capturedContextUsers } = createMockMetadataProvider();
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(createPolicy({ UserID: USER_ALICE_ID }));
+            runViewMock.mockResolvedValue({ Success: true, Results: [] });
+
+            const ownReq = {
+                ID: 'req-own',
+                AgentID: COS_AGENT_ID,
+                RequestForUserID: USER_ALICE_ID,
+                Status: 'Approved',
+                Request: 'Approve draft',
+                Comments: null,
+                ResponseByUserID: USER_ALICE_ID,
+            } as unknown as MJAIAgentRequestEntity;
+
+            const result = await AgentWakeTriggerService.Instance.TriggerWakeOnAgentRequestResolution(
+                ownReq,
+                aliceUser,
+                provider,
+                FIXED_NOW
+            );
+
+            expect(result.triggered).toBe(true);
+            expect(savedRoutines[0].UserID).toBe(USER_ALICE_ID);
+            expect(capturedContextUsers[0].ID).toBe(USER_ALICE_ID);
+        });
+    });
+
+    describe('1c. Coalesced wakes carry every event since the last dispatcher claim', () => {
+        function approvedRequest(id: string, text: string): MJAIAgentRequestEntity {
+            return {
+                ID: id,
+                AgentID: COS_AGENT_ID,
+                RequestForUserID: USER_ALICE_ID,
+                Status: 'Approved',
+                Request: text,
+                Comments: null,
+                ResponseByUserID: USER_ALICE_ID,
+            } as unknown as MJAIAgentRequestEntity;
+        }
+
+        /** Second and later lookups return the routine the first call created, as the database would. */
+        function serveExistingRoutines(savedRoutines: MockRoutineEntity[]): void {
+            runViewMock.mockImplementation(async (params: { EntityName: string }) => ({
+                Success: true,
+                Results: params.EntityName === 'MJ: User Routines' ? [...new Set(savedRoutines)] : [],
+            }));
+        }
+
+        it('appends a second approval to an unclaimed pending wake instead of overwriting it', async () => {
+            const { provider, savedRoutines } = createMockMetadataProvider();
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(createPolicy({ UserID: USER_ALICE_ID }));
+            serveExistingRoutines(savedRoutines);
+
+            await AgentWakeTriggerService.Instance.TriggerWakeOnAgentRequestResolution(
+                approvedRequest('req-A', 'Send partner announcement email'), aliceUser, provider, FIXED_NOW);
+            await AgentWakeTriggerService.Instance.TriggerWakeOnAgentRequestResolution(
+                approvedRequest('req-B', 'Confirm Friday vendor meeting'), aliceUser, provider, new Date(FIXED_NOW.getTime() + 15_000));
+
+            expect(new Set(savedRoutines).size).toBe(1);
+            const routine = savedRoutines[0];
+            const pending = routine.WakeConfigurationObject?.resumeState?.['pendingEvents'] as Array<Record<string, unknown>>;
+            expect(pending.map((e) => e['requestID'])).toEqual(['req-A', 'req-B']);
+            // latest event stays at the top level for consumers that predate the queue
+            expect(routine.WakeConfigurationObject?.resumeState?.['requestID']).toBe('req-B');
+            expect(routine.InitialMessage).toContain('2 events');
+            expect(JSON.parse(routine.StartingPayload ?? '{}').resumeState.pendingEvents).toHaveLength(2);
+        });
+
+        it('starts a fresh event list once the dispatcher has claimed the previous wake', async () => {
+            const { provider, savedRoutines } = createMockMetadataProvider();
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(createPolicy({ UserID: USER_ALICE_ID }));
+            serveExistingRoutines(savedRoutines);
+
+            await AgentWakeTriggerService.Instance.TriggerWakeOnAgentRequestResolution(
+                approvedRequest('req-A', 'A'), aliceUser, provider, FIXED_NOW);
+            // the dispatcher's claim nulls NextRunAt; after the run the row is Disabled
+            savedRoutines[0].NextRunAt = null;
+            savedRoutines[0].Status = 'Disabled';
+            await AgentWakeTriggerService.Instance.TriggerWakeOnAgentRequestResolution(
+                approvedRequest('req-B', 'B'), aliceUser, provider, new Date(FIXED_NOW.getTime() + 120_000));
+
+            const pending = savedRoutines[0].WakeConfigurationObject?.resumeState?.['pendingEvents'] as Array<Record<string, unknown>>;
+            expect(pending.map((e) => e['requestID'])).toEqual(['req-B']);
+            expect(savedRoutines[0].Status).toBe('Active');
+        });
+
+        it('does not queue the same request and status twice', async () => {
+            const { provider, savedRoutines } = createMockMetadataProvider();
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(createPolicy({ UserID: USER_ALICE_ID }));
+            serveExistingRoutines(savedRoutines);
+
+            await AgentWakeTriggerService.Instance.TriggerWakeOnAgentRequestResolution(
+                approvedRequest('req-A', 'A'), aliceUser, provider, FIXED_NOW);
+            await AgentWakeTriggerService.Instance.TriggerWakeOnAgentRequestResolution(
+                approvedRequest('req-A', 'A'), aliceUser, provider, new Date(FIXED_NOW.getTime() + 1_000));
+
+            const pending = savedRoutines[0].WakeConfigurationObject?.resumeState?.['pendingEvents'] as Array<Record<string, unknown>>;
+            expect(pending).toHaveLength(1);
         });
     });
 
