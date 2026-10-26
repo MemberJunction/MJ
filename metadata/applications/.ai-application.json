@@ -15,13 +15,6 @@
         "isDefault": true
       },
       {
-        "Label": "Chief of Staff",
-        "Icon": "fa-solid fa-user-tie",
-        "ResourceType": "Custom",
-        "DriverClass": "ChiefOfStaffDashboard",
-        "isDefault": false
-      },
-      {
         "Label": "Agents",
         "Icon": "fa-solid fa-robot",
         "ResourceType": "Custom",

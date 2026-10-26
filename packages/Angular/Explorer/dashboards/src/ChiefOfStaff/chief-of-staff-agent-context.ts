@@ -20,7 +20,8 @@ import type {
     MJUserRoutineEntity,
     MJAIAgentRequestEntity,
 } from '@memberjunction/core-entities';
-import { GroupByUUID, UUIDsEqual } from '@memberjunction/global';
+import type { RunViewParams } from '@memberjunction/core';
+import { EscapeSQLString, GroupByUUID, UUIDsEqual } from '@memberjunction/global';
 import {
     AGENT_CONTEXT_NAME_LIST_CAP,
     BoundNameList,
@@ -72,7 +73,6 @@ export interface BizAppsTaskRecordLike {
     Description: string | null;
     Status: string;
     Priority: string | null;
-    PriorityTier: string | null;
     IsPriority: boolean | number | null;
     HealthStatus: TaskHealthStatus | null;
     ConfidenceScore: number | null;
@@ -230,6 +230,117 @@ export function NormalizeTaskHealth(task: BizAppsTaskRecordLike): TaskHealthStat
     return 'OnTrack';
 }
 
+/**
+ * Percent progress from `BaselineValue` toward `TargetValue`, clamped to 0-100.
+ * Honors `MetricDirection` implicitly: a Down target (target < baseline) measures reduction.
+ * Returns null when there is no target or the target equals the baseline (no measurable span).
+ */
+export function ComputeTaskMetricPercent(task: BizAppsTaskRecordLike): number | null {
+    if (task.TargetValue == null) {
+        return null;
+    }
+    const baseline = task.BaselineValue ?? 0;
+    const span = task.TargetValue - baseline;
+    if (span === 0) {
+        return null;
+    }
+    const current = task.CurrentValue ?? baseline;
+    const raw = ((current - baseline) / span) * 100;
+    return Math.max(0, Math.min(100, Math.round(raw)));
+}
+
+/** ExtraFilters for the cockpit's three core-entity queries. Every clause is bound to the current user: the cockpit never shows another user's Chief of Staff data. */
+export interface CockpitScopeFilters {
+    Policy: string;
+    Routines: string;
+    Requests: string;
+}
+
+export function BuildCockpitScopeFilters(currentUserId: string): CockpitScopeFilters {
+    const user = EscapeSQLString(currentUserId);
+    return {
+        Policy: `AgentID = '${CHIEF_OF_STAFF_AGENT_ID}' AND UserID = '${user}'`,
+        Routines: `UserID = '${user}' AND (RoutineType = 'AgentWake' OR TargetID = '${CHIEF_OF_STAFF_AGENT_ID}')`,
+        Requests: `AgentID = '${CHIEF_OF_STAFF_AGENT_ID}' AND RequestForUserID = '${user}' AND (RequestType IS NULL OR RequestType <> 'Information')`,
+    };
+}
+
+/** OpenApp entity holding the person linked to the signed-in MJ user (`LinkedUserID`). */
+export const BIZAPPS_PEOPLE_ENTITY_NAME = 'MJ_BizApps_Common: People';
+/** OpenApp entity linking tasks to the people assigned to them. */
+export const BIZAPPS_TASK_ASSIGNMENTS_ENTITY_NAME = 'MJ_BizApps_Tasks: Task Assignments';
+
+/** CSS modifier for a task priority badge, keyed by the Tasks `Priority` value list (Critical/High/Medium/Low). */
+export function GetTaskPriorityClass(priority: string | null): string {
+    switch ((priority ?? '').toLowerCase()) {
+        case 'critical':
+            return 'priority-critical';
+        case 'high':
+            return 'priority-high';
+        case 'low':
+            return 'priority-low';
+        default:
+            return 'priority-normal';
+    }
+}
+
+/** Minimal RunView surface the task-scope resolver needs; `RunView` from @memberjunction/core satisfies it. */
+export interface TaskScopeQueryRunner {
+    RunView<T>(params: RunViewParams): Promise<{ Success: boolean; Results: T[]; ErrorMessage?: string }>;
+}
+
+export type PersonTaskScope =
+    | { HasLinkedPerson: false }
+    | { HasLinkedPerson: true; PersonID: string; Filter: string };
+
+/**
+ * Resolve the BizApps person linked to `currentUserId` and the filter that limits the Tasks query to work
+ * that person created or is assigned to. Throws when either lookup fails so the caller can show the error.
+ */
+export async function ResolvePersonTaskScope(
+    runner: TaskScopeQueryRunner,
+    currentUserId: string,
+): Promise<PersonTaskScope> {
+    const people = await runner.RunView<{ ID: string }>({
+        EntityName: BIZAPPS_PEOPLE_ENTITY_NAME,
+        ExtraFilter: `LinkedUserID = '${EscapeSQLString(currentUserId)}'`,
+        Fields: ['ID'],
+        MaxRows: 1,
+        ResultType: 'simple',
+    });
+    if (!people.Success) {
+        throw new Error(people.ErrorMessage ?? 'Failed to resolve the linked person.');
+    }
+    const personID = people.Results[0]?.ID;
+    if (!personID) {
+        return { HasLinkedPerson: false };
+    }
+    const assignments = await runner.RunView<{ TaskID: string }>({
+        EntityName: BIZAPPS_TASK_ASSIGNMENTS_ENTITY_NAME,
+        ExtraFilter: `PersonID = '${EscapeSQLString(personID)}'`,
+        Fields: ['TaskID'],
+        ResultType: 'simple',
+    });
+    if (!assignments.Success) {
+        throw new Error(assignments.ErrorMessage ?? 'Failed to load task assignments.');
+    }
+    const assignedTaskIDs = assignments.Results.map((a) => a.TaskID).filter((id) => !!id);
+    return { HasLinkedPerson: true, PersonID: personID, Filter: BuildPersonScopedTaskFilter(personID, assignedTaskIDs) };
+}
+
+/**
+ * ExtraFilter for `MJ_BizApps_Tasks: Tasks` limiting rows to work the given person created or is assigned to.
+ * `assignedTaskIDs` come from `MJ_BizApps_Tasks: Task Assignments` for the same person.
+ */
+export function BuildPersonScopedTaskFilter(personID: string, assignedTaskIDs: readonly string[]): string {
+    const createdClause = `CreatedByPersonID = '${EscapeSQLString(personID)}'`;
+    if (assignedTaskIDs.length === 0) {
+        return createdClause;
+    }
+    const idList = assignedTaskIDs.map((id) => `'${EscapeSQLString(id)}'`).join(', ');
+    return `${createdClause} OR ID IN (${idList})`;
+}
+
 export function FormatTaskMetricProgress(task: BizAppsTaskRecordLike): string | null {
     if (task.TargetValue == null && task.CurrentValue == null) {
         return null;
@@ -261,9 +372,8 @@ export function CalculateChiefOfStaffMetrics(
         }
     }
 
-    // If no root tasks had IsPriority=true, fall back to all root tasks so the cockpit still shows top-level work.
-    const rootsToDisplay =
-        priorityTasks.length > 0 ? priorityTasks : tasks.filter((t) => !t.ParentID);
+    // Only qualifying objectives are shown; an empty list renders the tab's empty state rather than unrelated root tasks.
+    const rootsToDisplay = priorityTasks;
 
     let onTrackCount = 0;
     let atRiskCount = 0;
@@ -279,8 +389,11 @@ export function CalculateChiefOfStaffMetrics(
             (c) => c.Status === 'Completed' || c.Status === 'Done' || (c.PercentComplete ?? 0) >= 100,
         ).length;
 
+        const metricPercent = ComputeTaskMetricPercent(root);
         const rawPercent =
-            typeof root.PercentComplete === 'number' && root.PercentComplete > 0
+            metricPercent !== null
+                ? metricPercent
+                : typeof root.PercentComplete === 'number' && root.PercentComplete > 0
                 ? root.PercentComplete
                 : children.length > 0
                   ? Math.round((completedChildren / children.length) * 100)

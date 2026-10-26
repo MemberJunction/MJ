@@ -3,7 +3,7 @@
     "Name": "Chief of Staff",
     "Description": "Executive cockpit for your personal Chief of Staff AI agent — manage strategic priority objectives, pending approvals, autonomous wake routines, and governance policy.",
     "Icon": "fa-solid fa-user-tie",
-    "DefaultForNewUser": true,
+    "DefaultForNewUser": false,
     "DefaultSequence": 15,
     "Color": "#1565c0",
     "DefaultNavItems": [

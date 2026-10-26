@@ -25,8 +25,10 @@ import { TabConfig } from '@memberjunction/ng-ui-components';
 import {
     BizAppsTaskRecordLike,
     BuildChiefOfStaffAgentContext,
+    BuildCockpitScopeFilters,
     CalculateChiefOfStaffMetrics,
     CHIEF_OF_STAFF_AGENT_ID,
+    GetTaskPriorityClass,
     ChiefOfStaffMetrics,
     ChiefOfStaffTab,
     HealthFilter,
@@ -38,6 +40,7 @@ import {
     PolicyGovernanceSummary,
     PolicyMessagingChannelModeValue,
     PolicyPhoneChannelModeValue,
+    ResolvePersonTaskScope,
     PolicyStatusValue,
     PriorityObjectiveCardViewModel,
     RequestSummaryItem,
@@ -113,6 +116,8 @@ export class ChiefOfStaffDashboardComponent
     public PolicyDirty = false;
 
     public Tasks: BizAppsTaskRecordLike[] = [];
+    /** False when the signed-in user has no `MJ_BizApps_Common: People` record linked via `LinkedUserID`; the Priorities tab then shows guidance instead of tasks. */
+    public HasLinkedPerson = true;
     public Routines: MJUserRoutineEntity[] = [];
     public Requests: MJAIAgentRequestEntity[] = [];
     public Metrics: ChiefOfStaffMetrics = CalculateChiefOfStaffMetrics([], [], []);
@@ -373,66 +378,42 @@ export class ChiefOfStaffDashboardComponent
         try {
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const currentUserId = this.ProviderToUse.CurrentUser?.ID;
+            if (!currentUserId) {
+                // Every cockpit query is user-scoped; without a user there is nothing safe to show.
+                this.showBanner('error', 'No signed-in user is available; the cockpit cannot load.');
+                return;
+            }
 
             const bizAppsTasksEntity = this.bizAppsTasksEntityInfo;
-
-            const policyFilter = currentUserId
-                ? `AgentID = '${CHIEF_OF_STAFF_AGENT_ID}' AND UserID = '${currentUserId}'`
-                : `AgentID = '${CHIEF_OF_STAFF_AGENT_ID}'`;
-
-            const routineFilter = currentUserId
-                ? `UserID = '${currentUserId}' AND (RoutineType = 'AgentWake' OR TargetID = '${CHIEF_OF_STAFF_AGENT_ID}')`
-                : `RoutineType = 'AgentWake' OR TargetID = '${CHIEF_OF_STAFF_AGENT_ID}'`;
-
-            const requestFilter = currentUserId
-                ? `(AgentID = '${CHIEF_OF_STAFF_AGENT_ID}' OR RequestForUserID = '${currentUserId}') AND (RequestType IS NULL OR RequestType <> 'Information')`
-                : `AgentID = '${CHIEF_OF_STAFF_AGENT_ID}' AND (RequestType IS NULL OR RequestType <> 'Information')`;
+            const scope = BuildCockpitScopeFilters(currentUserId);
 
             const viewParams: RunViewParams[] = [
                 {
                     EntityName: 'MJ: AI Agent User Policies',
-                    ExtraFilter: policyFilter,
+                    ExtraFilter: scope.Policy,
                     OrderBy: '__mj_UpdatedAt DESC',
                     ResultType: 'entity_object',
                 },
                 {
                     EntityName: 'MJ: User Routines',
-                    ExtraFilter: routineFilter,
+                    ExtraFilter: scope.Routines,
                     OrderBy: 'NextRunAt ASC, Name ASC',
                     ResultType: 'entity_object',
                 },
                 {
                     EntityName: 'MJ: AI Agent Requests',
-                    ExtraFilter: requestFilter,
+                    ExtraFilter: scope.Requests,
                     OrderBy: 'Priority DESC, RequestedAt DESC',
                     MaxRows: 100,
                     ResultType: 'entity_object',
                 },
             ];
 
-            if (bizAppsTasksEntity) {
-                const fieldNames = new Set(
-                    (bizAppsTasksEntity.Fields ?? []).map((f) => f.Name.toLowerCase()),
-                );
-                const orderParts: string[] = [];
-                if (fieldNames.has('ispriority')) {
-                    orderParts.push('IsPriority DESC');
-                }
-                if (fieldNames.has('dueat')) {
-                    orderParts.push('DueAt ASC');
-                }
-                if (fieldNames.has('name')) {
-                    orderParts.push('Name ASC');
-                }
-                viewParams.push({
-                    EntityName: BIZAPPS_TASKS_ENTITY_NAME,
-                    OrderBy:
-                        orderParts.length > 0
-                            ? orderParts.join(', ')
-                            : 'DueAt ASC, Name ASC',
-                    MaxRows: 250,
-                    ResultType: 'simple',
-                });
+            const taskScopeFilter = bizAppsTasksEntity
+                ? await this.resolveTaskScopeFilter(rv, currentUserId)
+                : null;
+            if (bizAppsTasksEntity && taskScopeFilter) {
+                viewParams.push(this.buildTasksViewParams(bizAppsTasksEntity, taskScopeFilter));
             }
 
             const results = await rv.RunViews(viewParams);
@@ -1052,46 +1033,6 @@ export class ChiefOfStaffDashboardComponent
         }
     }
 
-    public OnDataAccessModeChange(event: Event): void {
-        if (event.target instanceof HTMLSelectElement) {
-            this.DraftPolicy.DefaultDataAccessMode = event.target
-                .value as PolicyDataAccessModeValue;
-            this.MarkPolicyDirty();
-        }
-    }
-
-    public OnEmailChannelModeChange(event: Event): void {
-        if (event.target instanceof HTMLSelectElement) {
-            this.DraftPolicy.EmailChannelMode = event.target
-                .value as PolicyEmailChannelModeValue;
-            this.MarkPolicyDirty();
-        }
-    }
-
-    public OnCalendarChannelModeChange(event: Event): void {
-        if (event.target instanceof HTMLSelectElement) {
-            this.DraftPolicy.CalendarChannelMode = event.target
-                .value as PolicyCalendarChannelModeValue;
-            this.MarkPolicyDirty();
-        }
-    }
-
-    public OnPhoneChannelModeChange(event: Event): void {
-        if (event.target instanceof HTMLSelectElement) {
-            this.DraftPolicy.PhoneChannelMode = event.target
-                .value as PolicyPhoneChannelModeValue;
-            this.MarkPolicyDirty();
-        }
-    }
-
-    public OnMessagingChannelModeChange(event: Event): void {
-        if (event.target instanceof HTMLSelectElement) {
-            this.DraftPolicy.MessagingChannelMode = event.target
-                .value as PolicyMessagingChannelModeValue;
-            this.MarkPolicyDirty();
-        }
-    }
-
     public OnThresholdInputEvent(event: Event): void {
         if (event.target instanceof HTMLInputElement) {
             this.OnThresholdInput(event.target.value);
@@ -1195,6 +1136,48 @@ export class ChiefOfStaffDashboardComponent
     public DismissBanner(): void {
         this.FeedbackBanner = null;
         this.cdr.markForCheck();
+    }
+
+    /**
+     * Resolve the filter scoping Tasks to the signed-in user's linked person. Returns null (and clears
+     * `HasLinkedPerson`) when no person is linked, or when the lookup fails after surfacing the error.
+     */
+    private async resolveTaskScopeFilter(rv: RunView, currentUserId: string): Promise<string | null> {
+        try {
+            const scope = await ResolvePersonTaskScope(rv, currentUserId);
+            this.HasLinkedPerson = scope.HasLinkedPerson;
+            return scope.HasLinkedPerson ? scope.Filter : null;
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            this.showBanner('error', `Failed to resolve your People record for Priorities & OKRs: ${msg}`);
+            return null;
+        }
+    }
+
+    private buildTasksViewParams(tasksEntity: EntityInfo, extraFilter: string): RunViewParams {
+        const fieldNames = new Set((tasksEntity.Fields ?? []).map((f) => f.Name.toLowerCase()));
+        const orderParts: string[] = [];
+        if (fieldNames.has('ispriority')) {
+            orderParts.push('IsPriority DESC');
+        }
+        if (fieldNames.has('dueat')) {
+            orderParts.push('DueAt ASC');
+        }
+        if (fieldNames.has('name')) {
+            orderParts.push('Name ASC');
+        }
+        return {
+            EntityName: BIZAPPS_TASKS_ENTITY_NAME,
+            ExtraFilter: extraFilter,
+            OrderBy: orderParts.length > 0 ? orderParts.join(', ') : 'DueAt ASC, Name ASC',
+            MaxRows: 250,
+            ResultType: 'simple',
+        };
+    }
+
+    /** Badge class for a task's `Priority` (Critical/High/Medium/Low). */
+    public GetTaskPriorityClass(priority: string | null): string {
+        return GetTaskPriorityClass(priority);
     }
 
     private showBanner(type: 'success' | 'error', message: string): void {

@@ -2,12 +2,19 @@ import { describe, it, expect } from 'vitest';
 import {
     AGENT_REQUEST_TYPE_APPROVAL_ID,
     AGENT_REQUEST_TYPE_INFORMATION_ID,
+    CHIEF_OF_STAFF_AGENT_ID,
     BizAppsTaskRecordLike,
     BuildChiefOfStaffAgentContext,
+    BuildCockpitScopeFilters,
+    BuildPersonScopedTaskFilter,
     CalculateChiefOfStaffMetrics,
+    ComputeTaskMetricPercent,
+    GetTaskPriorityClass,
     IsApprovalRequest,
     PolicyGovernanceSummary,
     RequestSummaryItem,
+    ResolvePersonTaskScope,
+    TaskScopeQueryRunner,
     ResolvePriorityObjectiveByIDOrName,
     RoutineSummaryItem,
     ValidateChiefOfStaffTabParam,
@@ -24,7 +31,6 @@ function makeBaseTask(overrides: Partial<BizAppsTaskRecordLike>): BizAppsTaskRec
         Description: '12-week platform launch plan',
         Status: 'In Progress',
         Priority: 'High',
-        PriorityTier: 'P1',
         IsPriority: true,
         HealthStatus: 'OnTrack',
         ConfidenceScore: 85,
@@ -124,7 +130,9 @@ describe('CalculateChiefOfStaffMetrics', () => {
         expect(metrics.PriorityObjectiveCount).toBe(1);
         expect(metrics.SubtaskCount).toBe(2);
         expect(metrics.OnTrackCount).toBe(1);
-        expect(metrics.AveragePriorityProgress).toBe(50);
+        // Metric drives progress when a target exists: (3 - 0) / (12 - 0) = 25%, not the milestone ratio.
+        expect(metrics.AveragePriorityProgress).toBe(25);
+        expect(metrics.PriorityCards[0].EffectivePercentComplete).toBe(25);
         expect(metrics.AverageConfidenceScore).toBe(80);
         expect(metrics.PendingApprovalCount).toBe(1);
         expect(metrics.HighPriorityPendingCount).toBe(1);
@@ -286,5 +294,173 @@ describe('Validation & Resolution Helpers', () => {
 
         const miss = ResolvePriorityObjectiveByIDOrName(metrics.PriorityCards, 'nonexistent');
         expect(miss.ok).toBe(false);
+    });
+});
+
+describe('ComputeTaskMetricPercent', () => {
+    it('returns progress toward an Up target measured from the baseline', () => {
+        const task = makeBaseTask({ BaselineValue: 0, TargetValue: 12, CurrentValue: 3, MetricDirection: 'Up' });
+        expect(ComputeTaskMetricPercent(task)).toBe(25);
+    });
+
+    it('returns progress toward a Down target (reduce from baseline)', () => {
+        const task = makeBaseTask({ BaselineValue: 100, TargetValue: 50, CurrentValue: 75, MetricDirection: 'Down' });
+        expect(ComputeTaskMetricPercent(task)).toBe(50);
+    });
+
+    it('returns null when the task has no target or the target equals the baseline', () => {
+        expect(ComputeTaskMetricPercent(makeBaseTask({ TargetValue: null, CurrentValue: 3 }))).toBeNull();
+        expect(ComputeTaskMetricPercent(makeBaseTask({ BaselineValue: 12, TargetValue: 12, CurrentValue: 3 }))).toBeNull();
+    });
+
+    it('clamps overshoot and regression to the 0-100 range', () => {
+        expect(ComputeTaskMetricPercent(makeBaseTask({ BaselineValue: 0, TargetValue: 10, CurrentValue: 14 }))).toBe(100);
+        expect(ComputeTaskMetricPercent(makeBaseTask({ BaselineValue: 0, TargetValue: 10, CurrentValue: -2 }))).toBe(0);
+    });
+});
+
+describe('CalculateChiefOfStaffMetrics progress sources and scoping', () => {
+    it('falls back to milestone completion when the objective has no metric target', () => {
+        const parent = makeBaseTask({
+            ID: '11111111-0000-0000-0000-000000000020',
+            TargetValue: null,
+            CurrentValue: null,
+            BaselineValue: null,
+        });
+        const done = makeBaseTask({
+            ID: '11111111-0000-0000-0000-000000000021',
+            ParentID: parent.ID,
+            Status: 'Completed',
+            PercentComplete: 100,
+            TargetValue: null,
+            CurrentValue: null,
+        });
+        const open = makeBaseTask({
+            ID: '11111111-0000-0000-0000-000000000022',
+            ParentID: parent.ID,
+            Status: 'Open',
+            PercentComplete: 0,
+            TargetValue: null,
+            CurrentValue: null,
+        });
+        const metrics = CalculateChiefOfStaffMetrics([parent, done, open], [], []);
+        expect(metrics.PriorityCards[0].EffectivePercentComplete).toBe(50);
+    });
+
+    it('shows no cards when no root task qualifies as a priority objective', () => {
+        const plainRoot = makeBaseTask({
+            ID: '11111111-0000-0000-0000-000000000030',
+            Name: 'Renew parking pass',
+            IsPriority: null,
+            Type: 'General',
+            TaskType: null,
+            HealthStatus: null,
+            PlanningPeriod: null,
+        });
+        const metrics = CalculateChiefOfStaffMetrics([plainRoot], [], []);
+        expect(metrics.PriorityObjectiveCount).toBe(0);
+        expect(metrics.PriorityCards).toEqual([]);
+    });
+});
+
+describe('BuildPersonScopedTaskFilter', () => {
+    it('matches tasks the person created or is assigned to', () => {
+        const filter = BuildPersonScopedTaskFilter('AAAAAAAA-0000-0000-0000-000000000001', [
+            'BBBBBBBB-0000-0000-0000-000000000001',
+            'BBBBBBBB-0000-0000-0000-000000000002',
+        ]);
+        expect(filter).toBe(
+            "CreatedByPersonID = 'AAAAAAAA-0000-0000-0000-000000000001' OR ID IN ('BBBBBBBB-0000-0000-0000-000000000001', 'BBBBBBBB-0000-0000-0000-000000000002')",
+        );
+    });
+
+    it('omits the assignment clause when the person has no assignments', () => {
+        expect(BuildPersonScopedTaskFilter('AAAAAAAA-0000-0000-0000-000000000001', [])).toBe(
+            "CreatedByPersonID = 'AAAAAAAA-0000-0000-0000-000000000001'",
+        );
+    });
+
+    it('escapes single quotes in identifiers', () => {
+        expect(BuildPersonScopedTaskFilter("x'y", ["a'b"])).toBe("CreatedByPersonID = 'x''y' OR ID IN ('a''b')");
+    });
+});
+
+describe('GetTaskPriorityClass', () => {
+    it('maps the Tasks Priority value list onto the cockpit badge classes', () => {
+        expect(GetTaskPriorityClass('Critical')).toBe('priority-critical');
+        expect(GetTaskPriorityClass('High')).toBe('priority-high');
+        expect(GetTaskPriorityClass('Medium')).toBe('priority-normal');
+        expect(GetTaskPriorityClass('Low')).toBe('priority-low');
+        expect(GetTaskPriorityClass(null)).toBe('priority-normal');
+    });
+});
+
+describe('ResolvePersonTaskScope', () => {
+    function makeRunner(responses: Record<string, Array<Record<string, string>>>): TaskScopeQueryRunner & { Calls: string[] } {
+        const calls: string[] = [];
+        return {
+            Calls: calls,
+            RunView: async <T>(params: { EntityName: string; ExtraFilter?: string }) => {
+                calls.push(`${params.EntityName} :: ${params.ExtraFilter ?? ''}`);
+                return { Success: true, Results: (responses[params.EntityName] ?? []) as T[] };
+            },
+        };
+    }
+
+    it('resolves the linked person and builds a filter over created and assigned tasks', async () => {
+        const runner = makeRunner({
+            'MJ_BizApps_Common: People': [{ ID: 'PPPPPPPP-0000-0000-0000-000000000001' }],
+            'MJ_BizApps_Tasks: Task Assignments': [{ TaskID: 'TTTTTTTT-0000-0000-0000-000000000001' }],
+        });
+        const scope = await ResolvePersonTaskScope(runner, 'UUUUUUUU-0000-0000-0000-000000000001');
+        expect(scope.HasLinkedPerson).toBe(true);
+        if (scope.HasLinkedPerson) {
+            expect(scope.PersonID).toBe('PPPPPPPP-0000-0000-0000-000000000001');
+            expect(scope.Filter).toBe(
+                "CreatedByPersonID = 'PPPPPPPP-0000-0000-0000-000000000001' OR ID IN ('TTTTTTTT-0000-0000-0000-000000000001')",
+            );
+        }
+        expect(runner.Calls[0]).toBe("MJ_BizApps_Common: People :: LinkedUserID = 'UUUUUUUU-0000-0000-0000-000000000001'");
+        expect(runner.Calls[1]).toBe("MJ_BizApps_Tasks: Task Assignments :: PersonID = 'PPPPPPPP-0000-0000-0000-000000000001'");
+    });
+
+    it('reports no linked person without querying assignments', async () => {
+        const runner = makeRunner({});
+        const scope = await ResolvePersonTaskScope(runner, 'UUUUUUUU-0000-0000-0000-000000000001');
+        expect(scope.HasLinkedPerson).toBe(false);
+        expect(runner.Calls.length).toBe(1);
+    });
+
+    it('throws when the people lookup fails so the caller can surface the error', async () => {
+        const runner: TaskScopeQueryRunner = {
+            RunView: async () => ({ Success: false, Results: [], ErrorMessage: 'boom' }),
+        };
+        await expect(ResolvePersonTaskScope(runner, 'UUUUUUUU-0000-0000-0000-000000000001')).rejects.toThrow('boom');
+    });
+});
+
+describe('BuildCockpitScopeFilters', () => {
+    const USER = 'UUUUUUUU-0000-0000-0000-000000000001';
+
+    it('scopes policy, routines, and requests to the current user and the Chief of Staff agent', () => {
+        const f = BuildCockpitScopeFilters(USER);
+        expect(f.Policy).toBe(`AgentID = '${CHIEF_OF_STAFF_AGENT_ID}' AND UserID = '${USER}'`);
+        expect(f.Routines).toBe(
+            `UserID = '${USER}' AND (RoutineType = 'AgentWake' OR TargetID = '${CHIEF_OF_STAFF_AGENT_ID}')`,
+        );
+        expect(f.Requests).toBe(
+            `AgentID = '${CHIEF_OF_STAFF_AGENT_ID}' AND RequestForUserID = '${USER}' AND (RequestType IS NULL OR RequestType <> 'Information')`,
+        );
+    });
+
+    it('never produces a clause that is not bound to the user', () => {
+        const f = BuildCockpitScopeFilters(USER);
+        for (const clause of [f.Policy, f.Routines, f.Requests]) {
+            expect(clause).toContain(USER);
+        }
+    });
+
+    it('escapes the user id', () => {
+        expect(BuildCockpitScopeFilters("a'b").Policy).toContain("UserID = 'a''b'");
     });
 });

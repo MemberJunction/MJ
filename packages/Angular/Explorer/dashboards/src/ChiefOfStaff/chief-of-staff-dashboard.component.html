@@ -245,6 +245,9 @@
                                                 <span class="cos-priority-tag {{ GetPriorityTierClass(req.Priority) }}">
                                                     {{ GetPriorityTierLabel(req.Priority) }} ({{ req.Priority }})
                                                 </span>
+                                                @if (req.RequestType) {
+                                                    <span class="cos-meta-badge">{{ req.RequestType }}</span>
+                                                }
                                                 <span class="cos-timestamp">
                                                     {{ req.RequestedAt | date:'short' }}
                                                 </span>
@@ -356,8 +359,8 @@
                     <mj-empty-state
                         [Variant]="Metrics.PriorityCards.length === 0 ? 'empty' : 'no-results'"
                         Icon="fa-solid fa-bullseye"
-                        [Title]="Metrics.PriorityCards.length === 0 ? 'No Priority Objectives Tracked Yet' : 'No Priority Objectives Match Your Filter'"
-                        [Message]="Metrics.PriorityCards.length === 0 ? 'Chat with your Chief of Staff to onboard your quarterly priorities and milestone schedule.' : 'Try clearing your search or health filter.'"
+                        [Title]="!HasLinkedPerson ? 'No People Record Linked to Your User' : Metrics.PriorityCards.length === 0 ? 'No Priority Objectives Tracked Yet' : 'No Priority Objectives Match Your Filter'"
+                        [Message]="!HasLinkedPerson ? 'Priorities are read from tasks you created or are assigned to. Ask an administrator to link your People record to your user account.' : Metrics.PriorityCards.length === 0 ? 'Chat with your Chief of Staff to onboard your quarterly priorities and milestone schedule.' : 'Try clearing your search or health filter.'"
                         [ActionText]="Metrics.PriorityCards.length === 0 ? '' : 'Clear Filters'"
                         ActionIcon="fa-solid fa-rotate-left"
                         (Action)="ClearFilters()">
@@ -378,6 +381,11 @@
                                         </button>
                                         <div>
                                             <div class="cos-priority-card__badges">
+                                                @if (card.Task.Priority) {
+                                                    <span class="cos-priority-tag {{ GetTaskPriorityClass(card.Task.Priority) }}">
+                                                        <i class="fa-solid fa-flag"></i> {{ card.Task.Priority }}
+                                                    </span>
+                                                }
                                                 <span class="cos-health-pill cos-health-pill--{{ card.EffectiveHealth.toLowerCase() }}">
                                                     <i class="{{ GetHealthBadgeIcon(card.EffectiveHealth) }}"></i>
                                                     {{ GetHealthBadgeLabel(card.EffectiveHealth) }}
@@ -528,6 +536,9 @@
                                                 <span class="cos-priority-tag {{ GetPriorityTierClass(req.Priority) }}">
                                                     {{ GetPriorityTierLabel(req.Priority) }} ({{ req.Priority }})
                                                 </span>
+                                                @if (req.RequestType) {
+                                                    <span class="cos-meta-badge"><i class="fa-solid fa-tag"></i> {{ req.RequestType }}</span>
+                                                }
                                                 <span class="cos-status-chip cos-status-chip--requested">
                                                     {{ req.Status }}
                                                 </span>
@@ -764,15 +775,9 @@
 
                             <label class="cos-form-field">
                                 <span class="cos-form-field__label">Default Data Access Mode</span>
-                                <select class="cos-select"
-                                        [value]="DraftPolicy.DefaultDataAccessMode"
-                                        (change)="OnDataAccessModeChange($event)">
-                                    @for (opt of DataAccessModeOptions; track opt.Value) {
-                                        <option [value]="opt.Value" [selected]="DraftPolicy.DefaultDataAccessMode === opt.Value">
-                                            {{ opt.Label }}
-                                        </option>
-                                    }
-                                </select>
+                                <mj-dropdown [Data]="DataAccessModeOptions" TextField="Label" ValueField="Value" [ValuePrimitive]="true"
+                                             [(ngModel)]="DraftPolicy.DefaultDataAccessMode" (ValueChange)="MarkPolicyDirty()">
+                                </mj-dropdown>
                             </label>
                         </div>
                     </section>
@@ -793,60 +798,36 @@
                                 <span class="cos-form-field__label">
                                     <i class="fa-solid fa-envelope"></i> Email Channel Mode
                                 </span>
-                                <select class="cos-select"
-                                        [value]="DraftPolicy.EmailChannelMode"
-                                        (change)="OnEmailChannelModeChange($event)">
-                                    @for (opt of EmailChannelOptions; track opt.Value) {
-                                        <option [value]="opt.Value" [selected]="DraftPolicy.EmailChannelMode === opt.Value">
-                                            {{ opt.Label }}
-                                        </option>
-                                    }
-                                </select>
+                                <mj-dropdown [Data]="EmailChannelOptions" TextField="Label" ValueField="Value" [ValuePrimitive]="true"
+                                             [(ngModel)]="DraftPolicy.EmailChannelMode" (ValueChange)="MarkPolicyDirty()">
+                                </mj-dropdown>
                             </label>
 
                             <label class="cos-form-field">
                                 <span class="cos-form-field__label">
                                     <i class="fa-regular fa-calendar"></i> Calendar Channel Mode
                                 </span>
-                                <select class="cos-select"
-                                        [value]="DraftPolicy.CalendarChannelMode"
-                                        (change)="OnCalendarChannelModeChange($event)">
-                                    @for (opt of CalendarChannelOptions; track opt.Value) {
-                                        <option [value]="opt.Value" [selected]="DraftPolicy.CalendarChannelMode === opt.Value">
-                                            {{ opt.Label }}
-                                        </option>
-                                    }
-                                </select>
+                                <mj-dropdown [Data]="CalendarChannelOptions" TextField="Label" ValueField="Value" [ValuePrimitive]="true"
+                                             [(ngModel)]="DraftPolicy.CalendarChannelMode" (ValueChange)="MarkPolicyDirty()">
+                                </mj-dropdown>
                             </label>
 
                             <label class="cos-form-field">
                                 <span class="cos-form-field__label">
                                     <i class="fa-solid fa-phone"></i> Phone Channel Mode
                                 </span>
-                                <select class="cos-select"
-                                        [value]="DraftPolicy.PhoneChannelMode"
-                                        (change)="OnPhoneChannelModeChange($event)">
-                                    @for (opt of PhoneChannelOptions; track opt.Value) {
-                                        <option [value]="opt.Value" [selected]="DraftPolicy.PhoneChannelMode === opt.Value">
-                                            {{ opt.Label }}
-                                        </option>
-                                    }
-                                </select>
+                                <mj-dropdown [Data]="PhoneChannelOptions" TextField="Label" ValueField="Value" [ValuePrimitive]="true"
+                                             [(ngModel)]="DraftPolicy.PhoneChannelMode" (ValueChange)="MarkPolicyDirty()">
+                                </mj-dropdown>
                             </label>
 
                             <label class="cos-form-field">
                                 <span class="cos-form-field__label">
                                     <i class="fa-solid fa-comments"></i> Messaging Channel Mode
                                 </span>
-                                <select class="cos-select"
-                                        [value]="DraftPolicy.MessagingChannelMode"
-                                        (change)="OnMessagingChannelModeChange($event)">
-                                    @for (opt of MessagingChannelOptions; track opt.Value) {
-                                        <option [value]="opt.Value" [selected]="DraftPolicy.MessagingChannelMode === opt.Value">
-                                            {{ opt.Label }}
-                                        </option>
-                                    }
-                                </select>
+                                <mj-dropdown [Data]="MessagingChannelOptions" TextField="Label" ValueField="Value" [ValuePrimitive]="true"
+                                             [(ngModel)]="DraftPolicy.MessagingChannelMode" (ValueChange)="MarkPolicyDirty()">
+                                </mj-dropdown>
                             </label>
                         </div>
                     </section>
