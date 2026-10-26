@@ -59,6 +59,16 @@ export interface MagicLinkJWTClaims {
   /** Opaque per-session id — correlates one anonymous session's activity across audit rows without a real user. */
   mj_sid?: string;  // case-violation-ok-legacy-back-compat: snake_case mirrors an external payload — the remote spelling is the contract, not MJ convention
   /**
+   * When `mj_sid` was first minted (epoch seconds). Set on widget guest tokens and copied unchanged by every
+   * refresh, so the server can refuse to renew a session past its hard end (`MAX_GUEST_SESSION_SECONDS`).
+   */
+  mj_sid_iat?: number;  // case-violation-ok-legacy-back-compat: snake_case mirrors an external payload — the remote spelling is the contract, not MJ convention
+  /**
+   * Confirmation (RFC 7800 / RFC 9449): the RFC 7638 thumbprint of the key the widget registered at mint.
+   * Refreshing a widget guest token requires a proof signed by that key, so a copied token cannot be renewed.
+   */
+  cnf?: { jkt: string };  // case-violation-ok-legacy-back-compat: the claim name is fixed by RFC 7800, part of the wire shape
+  /**
    * Public web widget instance id (additive — set only for widget guest sessions
    * minted by WidgetSessionService). Binds the synthesized guest principal to one
    * widget instance so its pinned agent / guest role can be locked down. Absent on

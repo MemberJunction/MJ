@@ -46,7 +46,7 @@ import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
 import { CreateRealtimeRecordingRouter, REALTIME_RECORDING_MOUNT_PATH } from './rest/RealtimeRecordingHandler.js';
 import { LoadOwnedRealtimeSession } from './realtimeSessions/ownedRealtimeSession.js';
-import { LoadSessionConversationExternalID } from './realtimeSessions/sessionAccess.js';
+import { LoadSessionConversationScope } from './realtimeSessions/sessionAccess.js';
 import { RecordingAssemblyScheduler } from './realtimeSessions/RecordingAssemblyScheduler.js';
 import {
   RealtimeSessionEventService,
@@ -1062,7 +1062,8 @@ const setupComplete$ = new ReplaySubject(1);
           // fires for server-internal saves too (agents, actions, orchestrator), which are exactly
           // the ones no browser session asked for.
           recordData:
-            beEvent.type === 'save' && MayBroadcastRecordData(entityName)
+            beEvent.type === 'save' && MayBroadcastRecordData(entityName, beEvent.baseEntity.EntityInfo)
+              // fls-guard: MayBroadcastRecordData refuses FLS entities and Record Changes
               ? JSON.stringify(beEvent.baseEntity.GetAll())
               : undefined,
         });
@@ -2253,7 +2254,7 @@ function mountRealtimeRecordingRoutes(app: Application): boolean {
       return user ? { ContextUser: user, Provider: provider } : null;
     },
     LoadOwnedSession: LoadOwnedRealtimeSession,
-    LoadConversationExternalID: LoadSessionConversationExternalID,
+    LoadConversationScope: LoadSessionConversationScope,
     CreateLedger: (ledgerProvider, contextUser) => new SqlRealtimeRecordingLedger(ledgerProvider, contextUser),
     Scheduler: RecordingAssemblyScheduler.Instance,
     GraceMs: graceMs,

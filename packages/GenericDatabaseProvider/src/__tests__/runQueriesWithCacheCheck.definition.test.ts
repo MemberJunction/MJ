@@ -59,6 +59,11 @@ class DefinitionCheckProvider extends GenericDatabaseProviderTestBase {
         Status: 'Approved',
         CacheValidationSQL: 'SELECT MAX(__mj_UpdatedAt) AS MaxUpdatedAt, COUNT(*) AS RowCount FROM t',
         UserCanRun: () => ({ canRun: true, deniedEntities: [] }),
+        UserCanRunRenderedSQL: () => ({ canRun: true, deniedEntities: [] }),
+        SQL: 'SELECT Amount FROM t',
+        UsesTemplate: false,
+        QueryParameters: [],
+        GetPlatformSQL: () => 'SELECT Amount FROM t',
     } as unknown as MJQueryEntityExtended;
 
     protected override resolveQuery(_params: RunQueryParams): MJQueryEntityExtended | undefined {
