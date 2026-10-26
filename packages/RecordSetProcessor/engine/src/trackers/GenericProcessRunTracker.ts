@@ -86,7 +86,15 @@ export class GenericProcessRunTracker implements IProcessRunTracker {
         detail.AIAgentRunID = result.AIAgentRunID ?? null;
         // Fire-and-forget — the detail write must not block the per-record loop, and a failed write must
         // not abort the run (the queue logs failures; CompleteRun flushes + reports the count).
-        this.detailQueue.Insert(detail);
+        // ActionExecutionLogID has a foreign key to a log row the Action engine may still be writing, so
+        // that save waits for it inside the queue: the FK cannot lose the race, the loop does not wait,
+        // and CompleteRun's flush still covers it. Each detail is its own key, so one wait holds no other
+        // detail back.
+        if (result.ActionExecutionLogPersisted) {
+            this.detailQueue.InsertWhen(detail, result.ActionExecutionLogPersisted);
+        } else {
+            this.detailQueue.Insert(detail);
+        }
     }
 
     public async Checkpoint(handle: RunHandle, cursor: ProcessCursor, counts: RunCounts, _contextUser: UserInfo, _provider?: IMetadataProvider): Promise<boolean> {

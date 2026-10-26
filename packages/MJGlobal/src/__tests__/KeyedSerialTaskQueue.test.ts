@@ -267,6 +267,18 @@ describe('KeyedSerialTaskQueue', () => {
             expect(order).toEqual(['task']);
         });
 
+        it('keeps per-key order when `ready` rejects before the prior task finishes', async () => {
+            const q = new KeyedSerialTaskQueue();
+            const key = {};
+            const order: string[] = [];
+
+            void q.Enqueue(key, async () => { await delay(20); order.push('prior'); });
+            void q.Enqueue(key, async () => { order.push('next'); }, { ready: Promise.reject(new Error('log write failed')) });
+            await q.Flush();
+
+            expect(order).toEqual(['prior', 'next']);
+        });
+
         it('holds back only its own key, not other keys', async () => {
             const q = new KeyedSerialTaskQueue();
             const order: string[] = [];

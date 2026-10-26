@@ -78,6 +78,15 @@ export interface RecordResult {
     AttemptCount?: number;
     /** Deep-trace link to an Action Execution Log, when the work was an Action. */
     ActionExecutionLogID?: string;
+    /**
+     * Resolves once the `MJ: Action Execution Logs` row named by {@link ActionExecutionLogID} has been
+     * written. The Action engine writes that row fire-and-forget, so the ID can name a row that does not
+     * exist yet. A tracker that stores `ActionExecutionLogID` in a foreign key must not save the row
+     * before this resolves; it should queue the wait with the save rather than await it here, so the
+     * per-record loop never blocks on the log write. Never rejects. A live promise, never serialized;
+     * set only by the Action record processor.
+     */
+    ActionExecutionLogPersisted?: Promise<void>;
     /** Deep-trace link to an AI Agent Run, when the work was an Agent. */
     AIAgentRunID?: string;
     /** Deep-trace link to an AI Prompt Run, when the work was an Infer-and-Write-Back. */
