@@ -42,15 +42,22 @@ export class HtmlExtractor extends BaseContentExtractor {
     }
 
     /**
-     * The document's own `<title>`.
-     *
-     * Bounded and non-greedy, and matched against the head of the document only, so a page with an
-     * unterminated tag cannot make this scan the whole body repeatedly.
+     * The document's own `<title>`, located via linear `indexOf` scan so an unterminated `<title`
+     * tag cannot trigger polynomial regex backtracking.
      */
     private titleOf(html: string): string | null {
-        const match = /<title[^>]*>([^<]{0,300})/i.exec(html);
-        const raw = match?.[1];
-        const title = raw ? TextExtractor.ExtractFromHTML(raw).trim() : '';
+        const lower = html.toLowerCase();
+        const openStart = lower.indexOf('<title');
+        if (openStart < 0) {
+            return null;
+        }
+        const openEnd = lower.indexOf('>', openStart + 6);
+        if (openEnd < 0) {
+            return null;
+        }
+        const closeStart = lower.indexOf('</title>', openEnd + 1);
+        const raw = html.slice(openEnd + 1, closeStart >= 0 ? closeStart : openEnd + 301);
+        const title = TextExtractor.ExtractFromHTML(raw).trim();
         return title.length > 0 ? title : null;
     }
 }

@@ -9,7 +9,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { StageContext, WorkingRecord, WorkingRecordIdentity } from '@memberjunction/content-pipeline-base';
-import { DeleteStage } from '../stages/DeleteStage.js';
+import { DeleteContentItemStage, DeleteStage } from '../stages/DeleteStage.js';
 import { PipelineProcessor } from '../PipelineProcessor.js';
 import type { WorkingRecordCommitter } from '../WorkingRecordCommitter.js';
 import type { WorkingRecordHydrator } from '../WorkingRecordHydrator.js';
@@ -143,7 +143,6 @@ describe('what is left behind once the vector is gone', () => {
 
 describe('DeleteContentItemStage — dependent marking and dry-run isolation', () => {
     it('fails transiently (leaving the item Pending) when any dependent Save returns false or throws, after attempting all dependents', async () => {
-        const { DeleteContentItemStage } = await import('../stages/DeleteStage.js');
         const states: Record<string, string | null> = { C1: null, C2: null, K1: null };
 
         const makeProvider = (mode: 'all-false' | 'throws' | 'partial' | 'all-ok') => ({
@@ -209,7 +208,6 @@ describe('DeleteContentItemStage — dependent marking and dry-run isolation', (
     });
 
     it('skips vector deletion and dependent marking when IsTest is true', async () => {
-        const { DeleteContentItemStage } = await import('../stages/DeleteStage.js');
         const runViews = vi.fn();
         const item = new WorkingRecord(new WorkingRecordIdentity('Content Item', 'https://x.test/item', 'ITEM-1'));
         item.SetExtension('Pipeline', 'vectorRecordID', 'vec-test-1');

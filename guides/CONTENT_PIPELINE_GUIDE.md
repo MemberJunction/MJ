@@ -107,7 +107,6 @@ erDiagram
         uuid ID PK
         string Name
         string FileExtension
-        string MIMEType
         string ExtractorKey
         text ByteSignature
         bit IsText
@@ -120,8 +119,10 @@ erDiagram
         uuid ContentSourceTypeID FK
         uuid ParentID FK
         uuid EntityRecordDocumentID FK
-        uuid VectorIndexID FK
+        uuid FileID FK
         string VectorRecordID
+        string ExtractorKey
+        string ExtractorKeyOverride
         string Name
         string URL
         text Text
@@ -139,7 +140,6 @@ erDiagram
         int Sequence
         text Text
         text Decorator
-        uuid VectorIndexID FK
         string VectorRecordID
         string EmbeddingStatus
         string DeleteStatus
@@ -271,10 +271,10 @@ Any scale key can be overridden under `Configuration.Confidence` (at the Source 
 
 ## 5. Five-Level Configuration Precedence
 
-Every stage resolves its driver keys (`ExtractorKey`, `SegmenterKey`, `ClassifierKey`, `AccessDriverKey`), confidence overrides (`Confidence`), and operational tuning (`Tuning`) through a single 5-level cascade implemented in [`ContentSourceConfigurationResolver`](../packages/ContentPipeline/engine/src/ContentSourceConfigurationResolver.ts):
+Each stage resolves its driver keys (`ExtractorKey`, `SegmenterKey`, `ClassifierKey`, `AccessDriverKey`), confidence overrides (`Confidence`), and operational tuning (`Tuning`) through a 5-level cascade backed by [`ContentSourceConfigurationResolver`](../packages/ContentPipeline/engine/src/ContentSourceConfigurationResolver.ts):
 
 ```
-1. Item Override          (e.g., ContentItem.ExtractorKeyOverride / ClassifierKeyOverride / SegmenterKeyOverride)
+1. Item Override          (ContentItem.ExtractorKeyOverride for ExtractStage)
        ↓
 2. Run Configuration      (StageContext.Configuration, from RecordProcess.Configuration.Options)
        ↓
@@ -377,7 +377,7 @@ If the driver did not already supply inline text, `ExtractStage` inspects magic 
 | `PlainText` | `PlainTextExtractor` | UTF-8 / text formats (`.txt`, `.md`, `.csv`, `.json`, `.yaml`, source code) validated by `IsPlausibleText` |
 | `Html` | `HtmlExtractor` | HTML / XHTML pages (strips script/style chrome, extracts title & structural text) |
 | `Pdf` / `Word` / `Spreadsheet` | `DocumentExtractor` | PDF, `.docx`, and `.xlsx` via [`@memberjunction/document-parsing`](../packages/DocumentParsing/src/index.ts) |
-| `Archive` | `ArchiveExtractor` | `.zip` and `.gz` archives — recursively extracts members as child `WorkingRecord` items under a shared whole-tree `ArchiveBudget` (`MaxArchiveMembers`, `MaxArchiveBytes`, `MaxArchiveDepth`) that fails closed if any limit is exceeded |
+| `Archive` | `ArchiveExtractor` | `.zip` and `.gz` archives — recursively extracts members as child `WorkingRecord` items under a shared whole-tree `ArchiveBudget` (`MaxArchiveMembers`, `MaxArchiveBytes`, `MaxArchiveDepth`; `MaxArchiveMembers` and `MaxArchiveBytes` have no default and must be configured on the source or run, failing closed if unset or exceeded) |
 
 Non-text binary media (images, audio, video) that are not archives can be persisted as durable copies in `FileStorageEngine` (`ExtractStage.persistDurableCopy` using `ResolveObjectKey` from `@memberjunction/content-pipeline-base`) and routed down the multimodal path.
 
@@ -490,7 +490,7 @@ See the **[Taxonomy & Tagging Guide](TAXONOMY_TAGGING_GUIDE.md)** for full detai
 
 #### Full Embed vs `MetadataOnly` Refresh
 
-- **`EmbeddingStatus = 'Pending'`**: Calls `AIEmbeddingRunner` once per batch, writes vectors + rich metadata (`ContentVectorMetadata`: `Entity`, `RecordID`, `ContentItemID`, `ContentSourceID`, `ContentTypeID`, `Title`, `Description`, `URL`, `Tags`, plus any custom columns) via `vectorDB.CreateRecords(records, namespace)`, and records `VectorIndexID` and `VectorRecordID` on each `MJ: Content Item Chunks` row.
+- **`EmbeddingStatus = 'Pending'`**: Calls `AIEmbeddingRunner` once per batch, writes vectors + rich metadata (`ContentVectorMetadata`: `Entity`, `RecordID`, `ContentItemID`, `ContentSourceID`, `ContentTypeID`, `Title`, `Description`, `URL`, `Tags`, plus any custom columns) via `vectorDB.CreateRecords(records, namespace)`, and records `VectorRecordID` on each `MJ: Content Item Chunks` (or `MJ: Content Items`) row.
 - **`EmbeddingStatus = 'MetadataOnly'`**: Skips the embedding model call entirely and calls `vectorDB.UpdateRecord({ id, values: [], metadata }, namespace)` to refresh the vector's metadata payload in place (supported across Pinecone, Qdrant, and pgvector).
 
 ---
@@ -504,9 +504,9 @@ See the **[Taxonomy & Tagging Guide](TAXONOMY_TAGGING_GUIDE.md)** for full detai
 Deletion is two-phased (`DeleteStatus = 'Pending'` → vector & storage cleanup → row delete or `'Deleted'` tombstone) so external vectors and stored files are never orphaned when a database row is removed:
 
 1. **`Content Pipeline — Delete` (`DeleteContentItemStage`)**:
-   - Removes any item-level vector from the vector index (`VectorIndexID` / `VectorRecordID` in the resolved namespace) and deletes any durable copy from `FileStorageEngine`.
+   - Removes any item-level vector from the vector index (`VectorRecordID` in the resolved namespace) and deletes any durable copy from `FileStorageEngine`.
    - Marks all child `MJ: Content Item Chunks` and archive-member child `MJ: Content Items` as `DeleteStatus = 'Pending'` via `ContentPipelineDeleteMarker`.
-   - Transitions the item's `DeleteStatus` to `'Deleted'` (or hard-deletes unreferenced rows). If external vector removal fails, the item stays `DeleteStatus = 'Pending'` so the next run retries.
+   - Transitions the item's `DeleteStatus` to `'Deleted'` (or hard-deletes unreferenced rows). If external vector removal or dependent marking fails, the item stays `DeleteStatus = 'Pending'` so the next run retries.
 2. **`Content Pipeline — Delete Chunks` (`DeleteStage`)**:
    - Calls `vectorDB.DeleteRecords([vectorRecordID], namespace)` for each pending chunk.
    - Attempts to hard-delete the `MJ: Content Item Chunks` row. If a foreign key reference exists (for example, an audit or citation log pointing to the chunk), it falls back to keeping the row as a tombstone with `DeleteStatus = 'Deleted'` and `VectorRecordID = null`.
@@ -515,7 +515,7 @@ Deletion is two-phased (`DeleteStatus = 'Pending'` → vector & storage cleanup 
 
 ## 7. Content Source Configuration & UI Panels
 
-Each `MJ: Content Sources` record has a typed `Configuration` JSON column (`IContentSourceConfiguration`) that controls taxonomy bridging, driver keys, run budgets, and website crawler behavior:
+Each `MJ: Content Sources` record has a `Configuration` JSON column that controls taxonomy bridging, driver keys, run budgets, and website crawler behavior:
 
 | Property | Type | Default | Description |
 |---|---|---|---|
@@ -586,7 +586,7 @@ Setting `"IsTest": true` in `RecordProcess.Configuration` (or running a Record P
 - **Unit Tests**:
   - `packages/ContentPipeline/base/src/__tests__/` — `WorkingRecord`, `Confidence`, `ByteSignature`, `FileTypeResolution`, `DurableCopy`, `PlausibleText`, `ArchiveBudget`, `PipelineTuning`, and `StageOutcome`.
   - `packages/ContentPipeline/engine/src/__tests__/` — `PipelineProcessor`, `WorkingRecordHydrator`, `WorkingRecordCommitter`, `AccessResolver`, `ContentFetcher`, `ExtractorCascade`, `ArchiveExtractor`, `DocumentExtractor`, `DiscoverStage`, `ExtractStage`, `TagStage` (including custom `MJ: Content Item Attributes` persistence), `SegmentStage`, `EmbedStage`, and `DeleteStage`.
-  - `packages/ContentAutotagging/src/__tests__/` — Driver `Discover` and `Fetch` implementations (`AutotagLocalFileSystem`, `AutotagCloudStorage`, `AutotagRSSFeed`, `AutotagWebsite`, `AutotagEntity`), `ContentVectorInfrastructure`, and `ContentVectorMetadata`.
+  - `packages/ContentAutotagging/src/__tests__/` — Driver `Discover` and `Fetch` implementations (`AutotagLocalFileSystem`, `AutotagCloudStorage`, `AutotagWebsite`, `AutotagEntity`) and `ContentVectorInfrastructure`.
 - **Integration Tests (`@memberjunction/integration-test-suite`)**:
-  - [`content-pipeline.checks.ts`](../packages/TestingFramework/integration-test-suite/src/checks/content-pipeline.checks.ts) (`IT137`, checks `CP1`–`CP15`) — Validates schema columns/constraints, the 39 `MJ: Content File Types` rows and baseline IDs, the 9 shipped `MJ: Record Processes`, stage registration, hydrate/commit round-trips, `FieldConfidence` persistence, SHA-256 checksum short-circuiting, `MetadataOnly` promotion, chunk surplus marking, and `DryRun` write withholding against a live SQL Server instance.
+  - [`content-pipeline.checks.ts`](../packages/TestingFramework/integration-test-suite/src/checks/content-pipeline.checks.ts) (`IT137`, checks `CP1`–`CP15`) — Validates hydrate/commit round-trips, `FieldConfidence` persistence, SHA-256 checksum short-circuiting, `MetadataOnly` promotion, superseded chunk retirement, orphan reconciliation, and two-phase deletion against a live SQL Server instance.
   - [`content-vectorization.checks.ts`](../packages/TestingFramework/integration-test-suite/src/checks/content-vectorization.checks.ts) (`IT67`, checks `CV1`–`CV10`) — Validates vector index resolution cascade, `ContentVectorMetadata`, and end-to-end vectorization infrastructure.

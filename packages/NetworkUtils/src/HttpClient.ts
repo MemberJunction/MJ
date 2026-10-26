@@ -475,14 +475,6 @@ export async function HttpRequest<T = unknown>(config: HttpRequestConfig): Promi
                 MaxRedirects: maxRedirects,
                 StripHeadersOnCrossOriginRedirect: config.StripHeadersOnCrossOriginRedirect,
             });
-        } else if (config.StripHeadersOnCrossOriginRedirect && maxRedirects > 0) {
-            response = await fetchFollowingRedirects(url, {
-                method,
-                headers,
-                body,
-                signal: controller.signal,
-                maxRedirects,
-            });
         } else {
             response = await fetch(url, {
                 method,
@@ -969,52 +961,6 @@ export class HttpClient {
      */
     public async Head<T = unknown>(url: string, config?: Omit<HttpRequestConfig, "Url" | "Method" | "Body">): Promise<HttpResponse<T>> {
         return await this.Request<T>({ ...config, Url: url, Method: "HEAD", ResponseType: "none" });
-    }
-}
-
-const REDIRECT_STATUSES: ReadonlySet<number> = new Set([301, 302, 303, 307, 308]);
-
-async function fetchFollowingRedirects(
-    initialUrl: string,
-    opts: {
-        method: string;
-        headers: Record<string, string>;
-        body: BodyInit | undefined;
-        signal: AbortSignal;
-        maxRedirects: number;
-    },
-): Promise<Response> {
-    const originalOrigin = new URL(initialUrl).origin;
-    let currentUrl = initialUrl;
-    let currentHeaders: Record<string, string> | undefined = opts.headers;
-    let hops = 0;
-
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-        if (new URL(currentUrl).origin !== originalOrigin) {
-            currentHeaders = undefined;
-        }
-        const response = await fetch(currentUrl, {
-            method: opts.method,
-            ...(currentHeaders ? { headers: currentHeaders } : {}),
-            body: opts.body,
-            signal: opts.signal,
-            redirect: "manual",
-        });
-        if (!REDIRECT_STATUSES.has(response.status)) {
-            return response;
-        }
-        const location = response.headers.get("location");
-        if (!location) {
-            return response;
-        }
-        if (hops >= opts.maxRedirects) {
-            void response.body?.cancel();
-            throw new Error(`Exceeded maximum of ${opts.maxRedirects} redirects while fetching ${initialUrl}`);
-        }
-        void response.body?.cancel();
-        hops++;
-        currentUrl = new URL(location, currentUrl).href;
     }
 }
 
