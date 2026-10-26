@@ -10,7 +10,7 @@
 | Field | Value |
 |---|---|
 | PR | 3 of 6 — Honest training: Prediction Unit, as-of assembly, Training Snapshot, Evaluation Protocol, Trainer/Evaluator |
-| Status | refreshing |
+| Status | plan-PR-open |
 | Tier | Ready |
 | Anchored to | MJ `origin/next` @ `6e2b57017b` (2026-10-26, the kickoff cut; all 167 §5.7 anchors verified at this tip, §12) |
 | Last refresh | 2026-10-26, Claude Opus 5.5 (kickoff refresh, triggers a+b+d: anchors, §8.2/§8.3 run), `6e2b57017b` |
@@ -132,9 +132,6 @@ export DYLD_LIBRARY_PATH=/opt/homebrew/opt/libomp/lib      # macOS
 pnpm run test:python                                       # → all passed (count recorded in §11)
 ```
 
-If PR 2's setup script is not on the branch yet (refresh trigger (b) not run), use the explicit form:
-`rm -rf .venv && python3.11 -m venv .venv && .venv/bin/python -m pip install -r src/python/requirements.txt`.
-
 For the trainer milestones (M5–M10):
 
 - Python tests run through the package script, which sets `cwd=src/python` and `DYLD_LIBRARY_PATH` for libomp:
@@ -199,6 +196,9 @@ packages/MJCoreEntities/src/generated/**
 packages/MJServer/src/generated/**
 packages/Angular/Explorer/core-entity-forms/src/lib/generated/**
 packages/ServerBootstrap/src/generated/mj-class-registrations.ts
+packages/ServerBootstrapLite/src/generated/mj-class-registrations.ts
+packages/Angular/Bootstrap/src/generated/mj-class-registrations.ts
+packages/Angular/BootstrapLite/src/generated/mj-class-registrations.ts
 # Predictive Studio UI: model forms, the Studio dashboards (M11.1 components under PredictiveStudio/components/), the
 # experiment viewer plugin and its leaderboard rows, the dashboards' PS tests, the PS browser spec
 packages/Angular/Explorer/core-entity-forms/src/lib/custom/MLModels/**
@@ -217,15 +217,19 @@ packages/TestingFramework/integration-test-suite/rigs/ps-inproc-agent-builder.ts
 packages/TestingFramework/integration-test-suite/rigs/ps-inproc-operate-flow.ts
 packages/TestingFramework/integration-test-suite/rigs/ps-inproc-scheduled-scoring.ts
 packages/TestingFramework/integration-test-suite/rigs/ps-inproc-scored-query.ts
-# Local storage driver (M4.1 only: src/drivers/LocalFileSystemStorage.ts, src/__tests__/LocalFileSystemStorage.test.ts, src/index.ts)
-packages/MJStorage/src/**
-# The product migration: the glob for the name M1 fixes, and the name M1.3 writes today
-migrations/v6/V*__v6.*.x__Predictive_Studio_Honest_Training*.sql
-migrations/v6/V202610201200__v6.2.x__PS_Honest_Training_Schema.sql
-# Metadata: Predictive Studio rows only (file-storage-providers/.local-file-system.json and .mj-sync.json,
-# actions/predictive-studio/.predictive-studio-actions.json, remote-operations/.remote-operations.json and the two
-# predictive-studio-train-model types)
-metadata/**
+# Local storage driver (M4.1) and the integration tier's canonical provider list (M4.1 Step 3, check ST1)
+packages/MJStorage/src/drivers/LocalFileSystemStorage.ts
+packages/MJStorage/src/__tests__/LocalFileSystemStorage.test.ts
+packages/MJStorage/src/index.ts
+packages/TestingFramework/integration-test-suite/src/checks/storage.checks.ts
+# The product migration: M1.3 names it with the execution-time timestamp (§5.3; V<yyyymmddhhmm> newer than every file
+# in migrations/v6/ at that moment)
+migrations/v6/V*__v6.*.x__PS_Honest_Training_Schema.sql
+# Metadata: the Predictive Studio rows the milestones name (M4.1, M11.3, M11.4)
+metadata/file-storage-providers/.local-file-system.json
+metadata/file-storage-providers/.mj-sync.json
+metadata/actions/predictive-studio/.predictive-studio-actions.json
+metadata/remote-operations/.remote-operations.json
 metadata/remote-operations/types/predictive-studio-*.ts
 # Docs, the plan copy, the changeset, the lockfile
 guides/PREDICTIVE_STUDIO_GUIDE.md
@@ -240,6 +244,19 @@ Paths the milestones named that this block leaves out (2026-10-26 check of every
 only change was the dependency on that package) and three `ng-core-entity-forms` paths outside `MLModels/` (M11.2's
 record panels, `custom-forms.module.ts`, `package.json`; the panels now live in
 `dashboards/src/PredictiveStudio/record-panels/`, owner 2026-10-26, D3-74).
+
+Read-only references in §6 that this block deliberately leaves out (each is run, read, cited or a directory a command
+`cd`s into or diffs; none is changed on the branch; 2026-10-26 re-check of every §6 path against the globs above):
+`e2e/README.md`, `e2e/overlay/prime-auth.mjs`, `e2e/playwright.config.ts` (M10.4/M11.2 run them), `packages/MJAPI/.env`
+(the test user's credentials are read from it), `packages/MJCoreEntitiesServer/src/custom/MJRecordChangeEntityServer.server.ts`
+(M2 cites its `CheckPermissions`), `metadata/ml-algorithms/.ml-algorithms.json` (M2 cites its catalog names),
+`plans/PR-3-honest-training.md` and `plans/PR-4-honest-serving.md` (plans-repo files), and the bare directories
+`packages/Angular`, `packages/Angular/Bootstrap`, `packages/Angular/BootstrapLite`, `packages/ServerBootstrap`,
+`packages/MJStorage`, `packages/MJCoreEntitiesServer`, `packages/AI/PredictiveStudio`,
+`packages/Angular/Explorer/dashboards`, `packages/Angular/Explorer/core-entity-forms/src/lib/custom`,
+`packages/Angular/Generic/artifacts`, `packages/TestingFramework/integration-test-suite` (and its `src/checks/`) and
+`metadata-optional/integration-test` (and its `test-suites/`). `TruthSuite/metadata/entities/.pstruth-c1-entities.json`
+is under `packages/AI/PredictiveStudio/**`.
 
 - **Deprecated aliases go when you touch their file (program D-053, ruling CQ-2; no shims, standards §3).** A task that
   modifies a Predictive Studio source file (`packages/AI/PredictiveStudio/**/src/**`,
@@ -261,8 +278,12 @@ record panels, `custom-forms.module.ts`, `package.json`; the panels now live in
 - Metadata rows are JSON under `metadata/` with `uuidgen` primary keys, never INSERTs in migrations.
 - Never commit `mj.config.cjs`, `mj.config.json`, `packages/GeneratedEntities/**`, `packages/MJAPI/src/generated/**`,
   `packages/MJExplorer/src/app/generated/**`, `.env*`. Do commit `packages/MJCoreEntities/src/generated/**`,
-  `packages/MJServer/src/generated/**`, `packages/Angular/Explorer/core-entity-forms/src/lib/generated/**` and
-  `packages/ServerBootstrap/src/generated/mj-class-registrations.ts` when CodeGen or the manifest changes them.
+  `packages/MJServer/src/generated/**`, `packages/Angular/Explorer/core-entity-forms/src/lib/generated/**` and the
+  class-registration manifests `packages/ServerBootstrap/src/generated/mj-class-registrations.ts`,
+  `packages/ServerBootstrapLite/src/generated/mj-class-registrations.ts`,
+  `packages/Angular/Bootstrap/src/generated/mj-class-registrations.ts` and
+  `packages/Angular/BootstrapLite/src/generated/mj-class-registrations.ts` (CodeGen/prebuild-owned) when CodeGen or the
+  manifest prebuild changes them.
 - Entity names carry the `MJ: ` prefix. Never hand-edit generated files. Use generated properties, never
   `.Get()`/`.Set()`; no `any`, no `as any`, no `unknown` as a shortcut (parsers take `JsonValue`, §5.4).
 - Public members, exported functions and interface **methods** are PascalCase; private members camelCase; persisted
@@ -343,6 +364,12 @@ land together, `Status: "Active"`, in the flipping commit (D3-62). A flipped gat
 moves to the shipped `Predictive Studio Gates — Pending` suite with `Status: "Pending"` only with the owner's explicit
 yes (D-062) and a §9.1 decision, and never a gate of `Training (statistical)` (those pass before merge, D3-63); that
 is the only use of `Pending` in this PR. PR 2's G0.2, G0.3 (owned by PR 4) and G0.6 stay there; PR 3 never activates them.
+
+**Mutation evidence** (D-064). Each flipped gate's mutation run is recorded twice: the plan's step line
+`**Mutation check <gate id>:** <product change> → \`<dataset> -> <criterion>\` fails` (written in advance, §6), and, once
+run, the failing `PsGate.Assert` text in the milestone's §11 handoff entry as its own line
+`**Mutation output G<id>:** <pasted assertion>`. `tools/milestone-exit.mjs` fails the milestone for a changed gate row
+whose id lacks either line.
 
 **A check body** (the shipped form; G0.10 is the model):
 
@@ -707,8 +734,8 @@ gate reference (plans repo `reference/`). "Test name" is the row `Name`; "Check 
 `packages/TestingFramework/integration-test-suite/src/checks/` and names what its body measures: the harness (TS) or
 sidecar pytest nodes through `PsGatePytest.Run` (paths relative to `Sidecar/src/python/`; "written M<k>" marks a node
 that exists before its gate does). "Suite" abbreviates `Predictive Studio Gates — <Suite>`. "Mutation check" names the
-product change under which the check fails (D-064); the flipping task records it as `**Mutation check G<id>:** …` with
-its failing output. The statistical gates' mutation checks run at a reduced seed count (owner, 2026-10-26).
+product change under which the check fails (D-064); the flipping task records it as `**Mutation check G<id>:** …` and
+its failing output in §11 as `**Mutation output G<id>:** <pasted assertion>`. The statistical gates' mutation checks run at a reduced seed count (owner, 2026-10-26).
 Every gate is tier `mutation` (it trains, promotes or writes); none needs a live model.
 
 | Gate | Threshold (verbatim) | Dataset | Test name | Tier | Suite | Check file | Flipped in | Mutation check |
@@ -820,8 +847,9 @@ Assignment notes (recorded as D3-11):
     → 4 pass, 1 skipped (IT125, `live-model`; the tier is on by default, so without a key and without the opt-out it
     runs and fails): PR 1's four gate rows G7.1 `C1 -> C2.1`, G7.2
     `C1 -> C2.2`, G7.3 `C1 -> C2.3`, G7.5 `C1 -> C2.5`, and `IT125 - Job-title classifier consistency (live)`.
-  - `Integration Tests — Deterministic` → 114 tests in the suite at `479ee0d93d` (row count of
-    `.integration-suite.json`; M1's start records the run's pass/fail/skip counts, which every milestone keeps), incl.
+  - `Integration Tests — Deterministic` → 117 tests in the suite at the cut tip `6e2b57017b` (row count:
+    `git show 6e2b57017b:metadata-optional/integration-test/test-suites/.integration-suite.json | jq '.[] | select(.fields.Name=="Integration Tests — Deterministic") | .relatedEntities["MJ: Test Suite Tests"] | length'`
+    → `117`; M1's start records the run's pass/fail/skip counts, which every milestone keeps), incl.
     IT14 "Predictive Studio Stack Seams": `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Integration Tests — Deterministic"`.
   - `Predictive Studio Gates — Pending` (G0.2 `W2 -> C1.1`, G0.3 `W3 -> C1.1`, owned by PR 4 since D-030; G0.6
     `W1 -> S9.3`, an LLM judge): never activated by PR 3 and not part of its exit; PR 3's gate and leakage audit are
@@ -835,7 +863,9 @@ Assignment notes (recorded as D3-11):
   (`promote-model.gate.ts` `ALLOWED_TRANSITIONS`); the pickle allow-list (`artifacts.py:72`); seeded determinism;
   Record Changes audit; maintenance's "recommend, never promote"; #5295's promote-gate artifact check and scoring
   `Preflight` (the parts of D-012 that D-029/D-030 did not supersede). #5295's auto-train keeps training and publishing
-  unattended through PR 3 (D-030: PR 2 does not contain it); no PR 3 task touches `auto-train.ts`, and PR 4 routes it
+  unattended through PR 3 (D-030: PR 2 does not contain it). PR 3's only change to `Engine/src/scoring/auto-train.ts` is
+  M3.6's caller move: its `TrainModelViaEngine` calls (`:35,51 (doc),73` on `next`) become
+  `TrainingDelegation.TrainModelViaEngine` (signature unchanged, D-047/D-052), with no behaviour change; PR 4 routes it
   through the lifecycle gate (D-029).
 
 ### 4.4 Out of scope (owner)
@@ -1071,8 +1101,13 @@ The M11.1 components and the Studio sections and record panels of M11.2 are list
 
 ### 5.2 Data model — the migration (exact T-SQL)
 
-File: `migrations/v6/V202610201200__v6.2.x__PS_Honest_Training_Schema.sql` (if `next` has moved to a newer series
-when M1 starts, use that series and a current timestamp; the folder is `v6` either way). This is the hand-written part;
+File: `migrations/v6/V<yyyymmddhhmm>__v6.<minor>.x__PS_Honest_Training_Schema.sql`, named by M1.3 at execution time:
+`<yyyymmddhhmm>` is the current UTC time when M1.3 starts, and it must sort after the newest `V…` file in
+`migrations/v6/` at that moment (§8.2 A-SERIES timestamp check); `<minor>` is the newest series on `next` (today
+`v6.2.x`; the folder is `v6` either way). Example: at the kickoff cut the newest file is
+`V202610252000__v6.2.x__Content_Pipeline_Framework.sql`, so a migration written at 2026-10-27 09:15 UTC is
+`V202610270915__v6.2.x__PS_Honest_Training_Schema.sql`. The §2.5 allowlist matches it as
+`migrations/v6/V*__v6.*.x__PS_Honest_Training_Schema.sql`. This is the hand-written part;
 §5.3 appends the CodeGen output. All new tables keep `TrackRecordChanges = 1` (CodeGen's default for new entities), so
 every unit, protocol and snapshot write is audited in `MJ: Record Changes`.
 
@@ -1385,7 +1420,7 @@ GO
    entities and Angular forms, and a SQL capture `migrations/v6/CodeGen_Run_<timestamp>.sql`).
 2. Append the capture to the migration after **at least 50 blank lines** and the standard header:
    ```bash
-   M=migrations/v6/V202610201200__v6.2.x__PS_Honest_Training_Schema.sql
+   M=$(ls migrations/v6/V*__v6.*.x__PS_Honest_Training_Schema.sql)   # the one file M1.3 Step 2 created (§5.2 naming)
    C=$(ls migrations/v6/CodeGen_Run_*.sql)
    { for i in $(seq 1 60); do echo; done
      printf '/* =====================================================================================\n'
@@ -1405,12 +1440,13 @@ GO
    `git status --short packages/MJCoreEntities packages/MJServer packages/Angular` shows no change against the files
    step 1 generated.
 5. Commit the generated TypeScript (`packages/MJCoreEntities/src/generated/entities/__mj.ts`,
-   `packages/MJServer/src/generated/**`, `packages/Angular/Explorer/core-entity-forms/src/lib/generated/**`) with the
-   migration; never `packages/MJAPI/src/generated/**`, `packages/GeneratedEntities/**`, `mj.config.*`.
+   `packages/MJServer/src/generated/**`, `packages/Angular/Explorer/core-entity-forms/src/lib/generated/**`, and the
+   four `mj-class-registrations.ts` manifests §2.5 lists when the prebuild changes them) with the migration; never `packages/MJAPI/src/generated/**`, `packages/GeneratedEntities/**`, `mj.config.*`.
 
 The same procedure applies to any later milestone that adds DDL. None is planned after M1: M2–M12 add no table or
-column (M9–M11 add metadata JSON only). A milestone that finds it needs a column writes a second migration with its
-own appended capture under this procedure and records the decision in §9.
+column (M9–M11 add metadata JSON only). A milestone that finds it needs a column stops and asks the owner (D-062): a
+second migration is a scope addition, written under this procedure only after the owner's explicit yes (recorded in
+§9.3).
 
 ### 5.4 Interfaces and types (signatures; implementations are in the milestone tasks)
 
@@ -1842,7 +1878,7 @@ sqlcmd -S "$DB_HOST,$DB_PORT" -U "$DB_USERNAME" -P "$DB_PASSWORD" -C -d "$DB_DAT
 ```bash
 MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Containment"       # → 10 of 10 passed
 MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Feature Pipelines" # → 5 of 5 passed (RUN_AGENT_TESTS=0: 4 passed, 1 skipped)
-MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Integration Tests — Deterministic"           # → 114 tests; the pass/fail/skip counts M1's start recorded, no new failure
+MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Integration Tests — Deterministic"           # → 117 tests; the pass/fail/skip counts M1's start recorded, no new failure
 ```
 
 **Gate flip** (§2.7, D3-62, D3-59). A gate task flips each of its gates with these steps, in the milestone's one
@@ -1850,7 +1886,7 @@ checkpoint commit, with the names §4.1 and the task's gate table fix (row file,
 
 1. **Row** `metadata-optional/integration-test/tests/gates/<row file>`, the shipped G0.10 row's shape
    (`.gate-W1-S5.4.json`): `TypeID` `"@lookup:MJ: Test Types.Name=Integration Test"`, `Name` `"<dataset> -> <criterion>"`,
-   `Description` `"Gate G<id> (owner PR 3, phase <1|2>, dataset <dataset>, criterion <criterion>): <§4.1 threshold
+   `Description` `"Gate G<id> (phase <1|2>, dataset <dataset>, criterion <criterion>): <§4.1 threshold
    verbatim>. It fails when <§4.1 "Mutation check">."` (what it proves), `Status` `"Active"`, `Tags`
    `"[\"gate\",\"G<id>\",\"owner:PR3\",\"phase:<1|2>\",\"dataset:<dataset>\",\"criterion:<criterion>\"]"` (a `#k` criterion without its space: `criterion:S2.1#2`),
    `InputDefinition` `{}`, `ExpectedOutcomes` `{ "summary": "<one sentence of the pass condition>" }`, `Configuration`
@@ -1874,8 +1910,10 @@ checkpoint commit, with the names §4.1 and the task's gate table fix (row file,
 6. **Runtime check**: the pins/parity command (→ 0 failed), `pnpm mj sync push --dir=metadata-optional/integration-test --ci`
    (→ exit 0), restart MJAPI (§2.3), the one-gate command (→ pass, its `Detail` and `Measured` recorded in §11).
 7. **Mutation check** — its own step line of the form `**Mutation check <gate id>:** <§4.1's product change> → \`<dataset> -> <criterion>\` fails`:
-   make the product change, run the one-gate command once, paste the failing `PsGate.Assert` text into §11, undo the
-   change, re-run → pass (D-064, conventions §5a; `tools/milestone-exit.mjs` greps the line).
+   make the product change, run the one-gate command once, record the failing `PsGate.Assert` text in §11 (the
+   milestone's handoff entry) as its own line `**Mutation output G<id>:** <pasted assertion>`, undo the change, re-run →
+   pass (D-064, conventions §5a). `tools/milestone-exit.mjs`'s `mutation-checks` passes a changed gate row only when the
+   plan has its mutation-check step line AND §11 has its non-empty `**Mutation output G<id>:**` line.
 
 **Gate bodies.** A harness body is the task's measurement, verbatim, as a static of the subject's helper class in
 `integration-test-suite/src/checks/ps-gates/ps-gate-<subject>.ts` returning the truth suite's `GateMeasurement`
@@ -1942,7 +1980,7 @@ protocol disagree. #4166/#4104 reconciliation is recorded (D3-01).
 
 **Milestone start:** the §6 preamble's steps; M1 is the first, so before any change it also records in §11 the
 baseline the later milestones compare with: the keep-list run's three counts (Containment 10 of 10, Feature Pipelines
-5 of 5, Deterministic: its pass/fail/skip counts of 114) and
+5 of 5, Deterministic: its pass/fail/skip counts of 117 — the run-based count is taken here) and
 `cd packages/TestingFramework/integration-test-suite && pnpm test` → 0 failed (its count recorded).
 
 #### Task M1.1: Core JSON helpers and `TaskType`
@@ -2284,7 +2322,7 @@ export * from './json-value';
 export * from './task-type';
 ```
 
-- [ ] Step 4: `pnpm test -- task-type` → `9 passed`; `pnpm run build; echo "build exit=$?"` → `build exit=0`.
+- [ ] Step 4: `pnpm test -- task-type` → `8 passed` (the eight `it()` blocks of Step 1's file); `pnpm run build; echo "build exit=$?"` → `build exit=0`.
 
 #### Task M1.2: Core unit, assembly and protocol contracts with parsers
 
@@ -3356,7 +3394,8 @@ Append to `Core/src/index.ts`: `export * from './prediction-unit'; export * from
 
 #### Task M1.3: Migration and CodeGen
 
-**Files:** Create `migrations/v6/V202610201200__v6.2.x__PS_Honest_Training_Schema.sql` (§5.2 + appended CodeGen) ·
+**Files:** Create `migrations/v6/V<yyyymmddhhmm>__v6.<minor>.x__PS_Honest_Training_Schema.sql` (named at execution
+time, §5.2; §5.2 + appended CodeGen) ·
 Regenerated `packages/MJCoreEntities/src/generated/entities/__mj.ts`, `packages/MJServer/src/generated/**`,
 `packages/Angular/Explorer/core-entity-forms/src/lib/generated/**`
 
@@ -3366,7 +3405,9 @@ Regenerated `packages/MJCoreEntities/src/generated/entities/__mj.ts`, `packages/
   sqlcmd -S "$DB_HOST,$DB_PORT" -U "$DB_USERNAME" -P "$DB_PASSWORD" -C -d "$DB_DATABASE" -h -1 -W -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM sys.tables t JOIN sys.schemas s ON s.schema_id=t.schema_id WHERE s.name='__mj' AND t.name IN ('PredictionUnit','EvaluationProtocol','TrainingSnapshot'); SELECT COUNT(*) FROM __mj.Entity WHERE Name IN ('MJ: Prediction Units','MJ: Evaluation Protocols','MJ: Training Snapshots');"
   ```
   Expected now: `0` and `0`.
-- [ ] Step 2: Write the migration with exactly §5.2's SQL. Run `pnpm mj migrate` → `Successfully applied 1 migration`.
+- [ ] Step 2: Name the file now (§5.2): `V$(date -u +%Y%m%d%H%M)__v6.2.x__PS_Honest_Training_Schema.sql` (the newer series
+  if A-SERIES found one), then run §8.2 A-SERIES's timestamp check with that name → it prints that name. Write the
+  migration with exactly §5.2's SQL. Run `pnpm mj migrate` → `Successfully applied 1 migration`.
 - [ ] Step 3: Run `pnpm mj codegen`, then append the capture exactly as §5.3 steps 2–3. Gates:
   `node .github/scripts/check-migration-entityfield-sequence.mjs` → `0 finding(s)`; `npm run check:codegen-tail` → exit 0.
 - [ ] Step 4: Re-run step 1's query → `3` and `3`. Then the column check:
@@ -3719,11 +3760,11 @@ export * from './custom/MJTrainingSnapshotEntityServer.server';
 
 - [ ] Step 1: Re-check both PRs: `gh pr view 4166 --json state,mergedAt`; `gh pr view 4104 --json state,mergedAt`.
 - [ ] Step 2: If **neither is merged** (the state at plan time): nothing to code; record in §11 that D3-01 holds.
-- [ ] Step 3: If **#4104 merged**: its `FeatureStepKind` adds `'action'` and its `ProblemType` is unchanged. Add
+- [ ] Step 3: Tick as n/a when #4104 stays closed (Step 1's output; the state at the kickoff refresh). If **#4104 merged**: its `FeatureStepKind` adds `'action'` and its `ProblemType` is unchanged. Add
   `'action'` to M3's unsupported-step refusal list (an Action-computed feature has no as-of semantics until it
   declares a dated source; `unsupported-step-kind`), and regenerate entities after merging `next` (its component
   entities collide only in generated files — re-run §5.3 step 4 to prove the generated output is consistent).
-- [ ] Step 4: If **#4166 merged**: `ProblemType` gains `'sequence'` (HMM latent state, no label window). PR 3 does not
+- [ ] Step 4: Tick as n/a when #4166 stays closed (Step 1's output; the state at the kickoff refresh). If **#4166 merged**: `ProblemType` gains `'sequence'` (HMM latent state, no label window). PR 3 does not
   add a `sequence` `TaskKind` (D3-01): a pipeline whose `ProblemType = 'sequence'` is treated as a legacy pipeline,
   trained by #4166's path until M11, and M11 migrates it to `Status = 'Archived'` with a `Notes` line naming D3-01 — it
   cannot be expressed as a Prediction Unit. Widen `TaskTypeRules.LegacyProblemTypeForTask`'s return type to the generated
@@ -6054,7 +6095,7 @@ export class UnitFixtures {
   `IEntityFactory` are exported by `@memberjunction/predictive-studio` (`Engine/src/training/seams.ts`, `types.ts`,
   re-exported through `training/index.ts`), a dependency PR 2's TruthSuite `package.json` already declares.
 - [ ] Step 4: **Gate rows and check files** (§6 preamble, Gate flip 1–2; names from §4.1). Each row is written
-  `Status: "Active"`, `Description` = "Gate G<id> (owner PR 3, phase <p>, dataset <dataset>, criterion <criterion>):
+  `Status: "Active"`, `Description` = "Gate G<id> (phase <p>, dataset <dataset>, criterion <criterion>):
   <§4.1 threshold verbatim>. It fails when <§4.1 mutation check>.", `ExpectedOutcomes.summary` = the one-line threshold
   below; each check file holds the one `NamedCheck` the table names:
 
@@ -6086,12 +6127,12 @@ export class UnitFixtures {
   `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Prediction Units"` → 6 of 6 passed.
   The PR 3 row count (§6 preamble) → `6`.
   Measured values to see and record in §11: `G1.1 matched=4873 extra=0`, `G1.2 censoredRowsExcluded=1756 resolvedRows=4873`, `G1.3 censoredRowsExcluded=2147 censoredInMatrix=0` with |meanPrediction − meanTrue| ≤ 0.05 (record both means), `G1.6 v2Version=2 v2LabelVersion=2 modelUnitVersion=1 inPlaceRefused=true`, `G1.7 refusal=single-valued-target modelCreated=false`, `G1.8 refusedContinuous=true countRunStatus=Completed`.
-- [ ] Step 9: **Mutation check G1.1:** `PredictionUnitRowReader.Read` ignores the unit's row `filter` (extra keys > 0) → `C1 -> S1.1` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 10: **Mutation check G1.2:** `PredictionUnitRowReader.Read` skips the `exclude-unresolved` censoring step (stored excluded count 0, not 1,756) → `C1 -> S2.2` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 11: **Mutation check G1.3:** `PredictionUnitRowReader.Read` skips the censoring step (censored rows in training > 0) → `W5 -> S2.2` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 12: **Mutation check G1.6:** `PredictionUnit.LabelDefinitionChanged` returns false (the label edit creates no version 2) → `C1 -> S2.3` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 13: **Mutation check G1.7:** `UnitTargetValidator.ValidateUnitTargets` drops the one-class check (training starts) → `W1 -> S1.4` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 14: **Mutation check G1.8:** `UnitTargetValidator.ValidateUnitTargets` drops the count-declared-continuous rule (D3-12) (the Poisson target is accepted as continuous) → `R3 -> S1.4` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
+- [ ] Step 9: **Mutation check G1.1:** `PredictionUnitRowReader.Read` ignores the unit's row `filter` (extra keys > 0) → `C1 -> S1.1` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G1.1:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 10: **Mutation check G1.2:** `PredictionUnitRowReader.Read` skips the `exclude-unresolved` censoring step (stored excluded count 0, not 1,756) → `C1 -> S2.2` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G1.2:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 11: **Mutation check G1.3:** `PredictionUnitRowReader.Read` skips the censoring step (censored rows in training > 0) → `W5 -> S2.2` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G1.3:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 12: **Mutation check G1.6:** `PredictionUnit.LabelDefinitionChanged` returns false (the label edit creates no version 2) → `C1 -> S2.3` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G1.6:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 13: **Mutation check G1.7:** `UnitTargetValidator.ValidateUnitTargets` drops the one-class check (training starts) → `W1 -> S1.4` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G1.7:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 14: **Mutation check G1.8:** `UnitTargetValidator.ValidateUnitTargets` drops the count-declared-continuous rule (D3-12) (the Poisson target is accepted as continuous) → `R3 -> S1.4` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G1.8:** <pasted assertion>`; undo; re-run → pass).
 - [ ] Step 15: Runtime DB checks (after Step 8's runs):
   ```bash
   sqlcmd … -Q "SET NOCOUNT ON; SELECT TOP 6 p.Name, r.Status, JSON_VALUE(r.ValidationResults,'$.status') AS s, JSON_VALUE(r.ValidationResults,'$.unitResolution.censoredRowsExcluded') AS censored, JSON_VALUE(r.ValidationResults,'$.refusal.reason.kind') AS refusal FROM __mj.MLTrainingRun r JOIN __mj.MLTrainingPipeline p ON p.ID=r.PipelineID WHERE p.PredictionUnitID IS NOT NULL ORDER BY r.__mj_CreatedAt DESC; SELECT LineageRootID, Version, LabelVersion, LabelWindowDays FROM __mj.PredictionUnit WHERE Name LIKE N'C1 renewal%' ORDER BY Version;"
@@ -7955,7 +7996,7 @@ export class W4StatusHistory {
   (`JoinDate` resolves to `date-parts ['days-since-decision']` = the reference's tenure in days; `prior_lapse` has no
   windowed form and is left out — §9 R3-04 records the parity gap M10 must check against G2.7.)
 - [ ] Step 4: **Gate rows and check files** (§6 preamble, Gate flip 1–2; names from §4.1). Each row is written
-  `Status: "Active"`, `Description` = "Gate G<id> (owner PR 3, phase <p>, dataset <dataset>, criterion <criterion>):
+  `Status: "Active"`, `Description` = "Gate G<id> (phase <p>, dataset <dataset>, criterion <criterion>):
   <§4.1 threshold verbatim>. It fails when <§4.1 mutation check>.", `ExpectedOutcomes.summary` = the one-line threshold
   below; each check file holds the one `NamedCheck` the table names:
 
@@ -7983,10 +8024,10 @@ export class W4StatusHistory {
   `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Prediction Units"` → 10 of 10 passed.
   The PR 3 row count (§6 preamble) → `10`.
   Measured values to see and record in §11: `G1.4 excludedOrFlagged=4 asOfEqual=rows`, `G1.5 sameRefused=true lagAccepted=true`, `G1.9 stoppedNamingColumn=true modelCreated=false`, `G1.12 compared=100 mismatches=0`; and `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Containment"` → 10 of 10 passed (G0.8 now through `UNIT_REQUIRED` / `AS_OF_NO_EFFECT`, M3.6).
-- [ ] Step 9: **Mutation check G1.4:** `AsOfFeatureAssembler` reads a `record-changes` column's current value instead of its history at the decision date (as-of mismatches > 0) → `W4 -> S2.1 #2` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 10: **Mutation check G1.5:** `AsOfFeatureAssembler` drops the same-period `PeriodOffsets` refusal (`SamePeriodTarget` accepted) → `T3 -> S-T.1` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 11: **Mutation check G1.9:** `FeatureResolver.EncodingFor` coerces a string to `Number(x) || 0` (coerced values > 0, no error) → `W1 -> S7.5 #2` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 12: **Mutation check G1.12:** `MLModelInferenceProcessor.AssembleForScoring` reads current values instead of calling `AsOfFeatureAssembler` (mismatches > 0) → `C1 -> S3.1` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
+- [ ] Step 9: **Mutation check G1.4:** `AsOfFeatureAssembler` reads a `record-changes` column's current value instead of its history at the decision date (as-of mismatches > 0) → `W4 -> S2.1 #2` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G1.4:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 10: **Mutation check G1.5:** `AsOfFeatureAssembler` drops the same-period `PeriodOffsets` refusal (`SamePeriodTarget` accepted) → `T3 -> S-T.1` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G1.5:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 11: **Mutation check G1.9:** `FeatureResolver.EncodingFor` coerces a string to `Number(x) || 0` (coerced values > 0, no error) → `W1 -> S7.5 #2` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G1.9:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 12: **Mutation check G1.12:** `MLModelInferenceProcessor.AssembleForScoring` reads current values instead of calling `AsOfFeatureAssembler` (mismatches > 0) → `C1 -> S3.1` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G1.12:** <pasted assertion>`; undo; re-run → pass).
 - [ ] Step 13: Runtime DB checks (after Step 8's runs):
   ```bash
   sqlcmd … -Q "SET NOCOUNT ON; SELECT TOP 8 a.Name, r.Status, JSON_VALUE(r.ValidationResults,'$.refusal.stage') stage, JSON_VALUE(r.ValidationResults,'$.refusal.reason.kind') kind, COALESCE(JSON_VALUE(r.ValidationResults,'$.refusal.reason.field'), JSON_VALUE(r.ValidationResults,'$.refusal.reason.column')) col FROM __mj.MLTrainingRun r JOIN __mj.MLAlgorithm a ON a.ID=r.AlgorithmID ORDER BY r.__mj_CreatedAt DESC; SELECT COUNT(*) FROM __mj.RecordChange rc JOIN __mj.Entity e ON e.ID=rc.EntityID WHERE e.BaseTable='W4_Person' AND e.SchemaName='pstruth';"
@@ -9607,7 +9648,7 @@ export class HarnessSidecar {
   @memberjunction/predictive-studio-truth-suite run build` and `cd packages/TestingFramework/integration-test-suite &&
   pnpm run build` → exit 0 each.
 - [ ] Step 5: **Gate rows and check files** (§6 preamble, Gate flip 1–2; names from §4.1). Each row is written
-  `Status: "Active"`, `Description` = "Gate G<id> (owner PR 3, phase <p>, dataset <dataset>, criterion <criterion>):
+  `Status: "Active"`, `Description` = "Gate G<id> (phase <p>, dataset <dataset>, criterion <criterion>):
   <§4.1 threshold verbatim>. It fails when <§4.1 mutation check>.", `ExpectedOutcomes.summary` = the one-line threshold
   below; each check file holds the one `NamedCheck` the table names:
 
@@ -9631,8 +9672,8 @@ export class HarnessSidecar {
   `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Prediction Units"` → 12 of 12 passed.
   The PR 3 row count (§6 preamble) → `12`.
   Measured values to see and record in §11: `G1.10 manifestRows=16776 contentHashVerified=true maxAbsDiff<=1e-9`, `G1.11 resolved=20`; and `C1 -> S1.1`, `C1 -> S2.2`, `W5 -> S2.2` re-run one at a time → pass with the snapshot assertions of Step 3.
-- [ ] Step 10: **Mutation check G1.10:** `SnapshotRetrainer.Retrain` drops the logged seed from its request (retrained holdout metric differs by > 1e-9) → `W1 -> S5.5` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 11: **Mutation check G1.11:** `AsOfFeatureAssembler` writes `ValueProvenance` without `computedAt` (resolved < 20 of 20) → `W1 -> S3.2` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
+- [ ] Step 10: **Mutation check G1.10:** `SnapshotRetrainer.Retrain` drops the logged seed from its request (retrained holdout metric differs by > 1e-9) → `W1 -> S5.5` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G1.10:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 11: **Mutation check G1.11:** `AsOfFeatureAssembler` writes `ValueProvenance` without `computedAt` (resolved < 20 of 20) → `W1 -> S3.2` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G1.11:** <pasted assertion>`; undo; re-run → pass).
 - [ ] Step 12: Runtime DB and storage checks (after Step 9's runs):
   ```bash
   sqlcmd … -Q "SET NOCOUNT ON; SELECT TOP 3 s.ManifestRowCount, s.HoldoutRowCount, s.CensoredRowsExcluded, s.LabelKnownRowsExcluded, s.ReadComplete, LEN(s.ContentHash), p.Name FROM __mj.TrainingSnapshot s JOIN __mj.FileStorageProvider p ON p.ID=s.StorageProviderID ORDER BY s.__mj_CreatedAt DESC; SELECT COUNT(*) FROM __mj.MLTrainingRun WHERE TrainingSnapshotID IS NOT NULL; SELECT f.Name, f.ProviderKey, f.Status FROM __mj.[File] f WHERE f.ProviderKey LIKE 'predictive-studio/training-snapshots/%' ORDER BY f.__mj_CreatedAt DESC OFFSET 0 ROWS FETCH NEXT 3 ROWS ONLY;"
@@ -14771,7 +14812,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('ps-gate-w1-s5-4-3', PsGate.
 
   G2.27's and G2.31's check files are the §6 preamble's pytest form with the node and `expectedCases` Step 6's table gives.
 - [ ] Step 6: **Gate rows and check files** (§6 preamble, Gate flip 1–2; names from §4.1). Each row is written
-  `Status: "Active"`, `Description` = "Gate G<id> (owner PR 3, phase <p>, dataset <dataset>, criterion <criterion>):
+  `Status: "Active"`, `Description` = "Gate G<id> (phase <p>, dataset <dataset>, criterion <criterion>):
   <§4.1 threshold verbatim>. It fails when <§4.1 mutation check>.", `ExpectedOutcomes.summary` = the one-line threshold
   below; each check file holds the one `NamedCheck` the table names:
 
@@ -14797,9 +14838,9 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('ps-gate-w1-s5-4-3', PsGate.
   `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Training"` → 3 of 3 passed.
   The PR 3 row count (§6 preamble) → `15`.
   Measured values to see and record in §11: G2.27 `collected=1 passed=1`, G2.31 `collected=2 passed=2`, G2.32 `collected=1 passed=1 lineageRefused=true runStatus=Failed`.
-- [ ] Step 11: **Mutation check G2.27:** the target encoder is fitted on all rows before the folds (the shuffled-label AUC interval excludes 0.5) → `W8 -> S3.4` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 12: **Mutation check G2.31:** the random forest and MLP estimators drop `random_state` (predictions differ) → `W1 -> S5.4 #2` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 13: **Mutation check G2.32:** `TrainerRunRecorder.ApplyTrainerResultToRun` skips `TrainerContract.CodeVersionGaps` (a lineage-incomplete run completes) → `W1 -> S5.4 #3` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
+- [ ] Step 11: **Mutation check G2.27:** the target encoder is fitted on all rows before the folds (the shuffled-label AUC interval excludes 0.5) → `W8 -> S3.4` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.27:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 12: **Mutation check G2.31:** the random forest and MLP estimators drop `random_state` (predictions differ) → `W1 -> S5.4 #2` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.31:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 13: **Mutation check G2.32:** `TrainerRunRecorder.ApplyTrainerResultToRun` skips `TrainerContract.CodeVersionGaps` (a lineage-incomplete run completes) → `W1 -> S5.4 #3` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.32:** <pasted assertion>`; undo; re-run → pass).
 - [ ] Step 14: Runtime check (F-L4-5: W8 under 2 GB and 10 s) — from `src/python`:
   `PYTHONPATH=$MJ/packages/AI/PredictiveStudio/TruthSuite/python /usr/bin/time -l $MJ/packages/AI/PredictiveStudio/TruthSuite/.venv/bin/python -m pytest -p no:cacheprovider -q "tests/gates/test_trainer_contract_gates.py::test_W8_S3_4_target_encoding_is_in_fold"`
   (Linux: `/usr/bin/time -v`). Expected: passes; `real` under 10 s and `maximum resident set size` under 2 GB
@@ -18803,7 +18844,7 @@ def test_C2_S6_2_2_difference_interval_coverage() -> None:
   for 14 of 15 family × seed cells; LightGBM s43 measured 0.7999 and is hidden (allowed by the gate's "a family that
   fails is hidden").
 - [ ] Step 4: **Gate rows and check files** (§6 preamble, Gate flip 1–2; names from §4.1). Each row is written
-  `Status: "Active"`, `Description` = "Gate G<id> (owner PR 3, phase <p>, dataset <dataset>, criterion <criterion>):
+  `Status: "Active"`, `Description` = "Gate G<id> (phase <p>, dataset <dataset>, criterion <criterion>):
   <§4.1 threshold verbatim>. It fails when <§4.1 mutation check>.", `ExpectedOutcomes.summary` = the one-line threshold
   below; each check file holds the one `NamedCheck` the table names:
 
@@ -18854,20 +18895,20 @@ def test_C2_S6_2_2_difference_interval_coverage() -> None:
   `Predictive Studio Gates — Training (statistical)` is not run here (D3-63: it runs once on the final head, M12.1); its 1 member(s) are checked by the pins/parity test and the mutation check below.
   The PR 3 row count (§6 preamble) → `29`.
   Measured values to see and record in §11: G2.39 `collected=15 passed=15` (LightGBM s43 measured slope 0.7999 and is hidden, which the threshold allows); G2.33 `collected=3 passed=3`; every other deterministic gate `collected=1 passed=1`.
-- [ ] Step 9: **Mutation check G2.15:** the count task's objective falls back to squared error (deviance above 1.1713 or negative predictions) → `R3 -> S4.3` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 10: **Mutation check G2.16:** the Tweedie objective falls back to squared error (negative predictions > 0) → `R2p -> S4.3` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 11: **Mutation check G2.17:** prediction intervals come from training residuals instead of the calibration rows (coverage outside the band) → `R1 -> S6.6` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 12: **Mutation check G2.18:** `/predict` drops the `probabilities` class vector (0 of 3,000 rows carry it) → `C3 -> S4.1` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 13: **Mutation check G2.19:** `METRIC_DIRECTION` ranks on accuracy (the constant predictor ranks above better-log-loss models) → `C2 -> S4.1` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 14: **Mutation check G2.21:** the trainer result omits precision@k (not reported) → `C2 -> S1.2` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 15: **Mutation check G2.28:** the cross-family RMSE refusal is removed (the request is accepted) → `R2-real -> S4.4` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 16: **Mutation check G2.33:** the stored metric rows drop the difference's bounds (< 3 of 3 seeds) → `W7 -> S6.2` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 17: **Mutation check G2.34:** the AUC bootstrap reports a 68% interval (ratio below 0.67) → `C2 -> S6.2` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 18: **Mutation check G2.35:** the difference interval is centred on the model's score alone (not paired with dummy) (coverage below 372; run at 40 seeds, band scaled) → `C2 -> S6.2 #2` fails, run with `PS_SEED_LIMIT=40` (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 19: **Mutation check G2.36:** slice results drop their interval (< 100% of slices) → `C1 -> S6.4` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 20: **Mutation check G2.37:** post-cutoff periods are merged into one slice (< 100% of periods) → `D1c -> S6.4` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 21: **Mutation check G2.38:** `/predict` returns the class vector in sorted, not declared, order (per-class AUC off by > 0.03) → `W9 -> S6.3` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 22: **Mutation check G2.39:** `TrainerContract.CalibrationHidesFamily` returns false (a family with slope outside 0.8–1.2 is shown) → `W1 -> S6.3` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
+- [ ] Step 9: **Mutation check G2.15:** the count task's objective falls back to squared error (deviance above 1.1713 or negative predictions) → `R3 -> S4.3` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.15:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 10: **Mutation check G2.16:** the Tweedie objective falls back to squared error (negative predictions > 0) → `R2p -> S4.3` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.16:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 11: **Mutation check G2.17:** prediction intervals come from training residuals instead of the calibration rows (coverage outside the band) → `R1 -> S6.6` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.17:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 12: **Mutation check G2.18:** `/predict` drops the `probabilities` class vector (0 of 3,000 rows carry it) → `C3 -> S4.1` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.18:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 13: **Mutation check G2.19:** `METRIC_DIRECTION` ranks on accuracy (the constant predictor ranks above better-log-loss models) → `C2 -> S4.1` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.19:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 14: **Mutation check G2.21:** the trainer result omits precision@k (not reported) → `C2 -> S1.2` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.21:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 15: **Mutation check G2.28:** the cross-family RMSE refusal is removed (the request is accepted) → `R2-real -> S4.4` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.28:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 16: **Mutation check G2.33:** the stored metric rows drop the difference's bounds (< 3 of 3 seeds) → `W7 -> S6.2` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.33:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 17: **Mutation check G2.34:** the AUC bootstrap reports a 68% interval (ratio below 0.67) → `C2 -> S6.2` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.34:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 18: **Mutation check G2.35:** the difference interval is centred on the model's score alone (not paired with dummy) (coverage below 372; run at 40 seeds, band scaled) → `C2 -> S6.2 #2` fails, run with `PS_SEED_LIMIT=40` (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.35:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 19: **Mutation check G2.36:** slice results drop their interval (< 100% of slices) → `C1 -> S6.4` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.36:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 20: **Mutation check G2.37:** post-cutoff periods are merged into one slice (< 100% of periods) → `D1c -> S6.4` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.37:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 21: **Mutation check G2.38:** `/predict` returns the class vector in sorted, not declared, order (per-class AUC off by > 0.03) → `W9 -> S6.3` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.38:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 22: **Mutation check G2.39:** `TrainerContract.CalibrationHidesFamily` returns false (a family with slope outside 0.8–1.2 is shown) → `W1 -> S6.3` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.39:** <pasted assertion>`; undo; re-run → pass).
 - [ ] Step 23: Runtime check — the same 30 tests through the live server: `PS_SIDECAR_URL=http://127.0.0.1:4391
   PREDICTIVE_STUDIO_PYTHON=$TS_PY PYTHONPATH=$MJ/packages/AI/PredictiveStudio/TruthSuite/python pnpm run test:python -- -p no:cacheprovider tests/gates/test_evaluation_score_gates.py` → 30 passed.
 
@@ -20124,7 +20165,7 @@ def test_W8_S9_4_noise_carries_at_most_ten_percent(server: FileServer) -> None:
   reference, the drop-column rule names `Status`; W8's noise columns carry ≤ 10% of held-out importance and
   `MemberNumber` is flagged `high-cardinality-id`). Measured ≈ 30 s. No product implementation in this task.
 - [ ] Step 4: **Gate rows and check files** (§6 preamble, Gate flip 1–2; names from §4.1). Each row is written
-  `Status: "Active"`, `Description` = "Gate G<id> (owner PR 3, phase <p>, dataset <dataset>, criterion <criterion>):
+  `Status: "Active"`, `Description` = "Gate G<id> (phase <p>, dataset <dataset>, criterion <criterion>):
   <§4.1 threshold verbatim>. It fails when <§4.1 mutation check>.", `ExpectedOutcomes.summary` = the one-line threshold
   below; each check file holds the one `NamedCheck` the table names:
 
@@ -20150,9 +20191,9 @@ def test_W8_S9_4_noise_carries_at_most_ten_percent(server: FileServer) -> None:
   `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Training"` → 19 of 19 passed.
   The PR 3 row count (§6 preamble) → `32`.
   Measured values to see and record in §11: G2.9 `collected=1 passed=1`, G2.10 `collected=5 passed=5` (4 parametrized single-candidate runs + the oracle node), G2.40 `collected=1 passed=1`; record the measured values the nodes print.
-- [ ] Step 9: **Mutation check G2.9:** the trainer's leakage audit skips the implausible-gain rule (`ProxyOfTarget` unflagged) → `C4 -> S2.4` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 10: **Mutation check G2.10:** the leakage audit stops aggregating one-hot shares to the source column (flagged < 4 of 4) → `W3 -> S2.4` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 11: **Mutation check G2.40:** importance is computed on training rows (noise share > 10%) → `W8 -> S9.4` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
+- [ ] Step 9: **Mutation check G2.9:** the trainer's leakage audit skips the implausible-gain rule (`ProxyOfTarget` unflagged) → `C4 -> S2.4` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.9:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 10: **Mutation check G2.10:** the leakage audit stops aggregating one-hot shares to the source column (flagged < 4 of 4) → `W3 -> S2.4` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.10:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 11: **Mutation check G2.40:** importance is computed on training rows (noise share > 10%) → `W8 -> S9.4` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.40:** <pasted assertion>`; undo; re-run → pass).
 - [ ] Step 12: Runtime check — `PS_SIDECAR_URL=http://127.0.0.1:4391 PREDICTIVE_STUDIO_PYTHON=$MJ/packages/AI/PredictiveStudio/TruthSuite/.venv/bin/python PYTHONPATH=$MJ/packages/AI/PredictiveStudio/TruthSuite/python pnpm run test:python --
   -p no:cacheprovider tests/gates/test_leakage_importance_gates.py` → 7 passed through the live server.
 
@@ -21265,7 +21306,7 @@ Produces the six M8 gates (§4.1): five flipped `Active` in `Predictive Studio G
 `Predictive Studio Gates — Training (statistical)` (its full 400-seed run is M12.1's, D3-63).
 
 - [ ] Step 1: **Gate rows and check files** (§6 preamble, Gate flip 1–2; names from §4.1). Each row is written
-  `Status: "Active"`, `Description` = "Gate G<id> (owner PR 3, phase <p>, dataset <dataset>, criterion <criterion>):
+  `Status: "Active"`, `Description` = "Gate G<id> (phase <p>, dataset <dataset>, criterion <criterion>):
   <§4.1 threshold verbatim>. It fails when <§4.1 mutation check>.", `ExpectedOutcomes.summary` = the one-line threshold
   below; each check file holds the one `NamedCheck` the table names:
 
@@ -21300,12 +21341,12 @@ Produces the six M8 gates (§4.1): five flipped `Active` in `Predictive Studio G
   `Predictive Studio Gates — Training (statistical)` is not run here (D3-63: it runs once on the final head, M12.1); its 2 member(s) are checked by the pins/parity test and the mutation check below.
   The PR 3 row count (§6 preamble) → `38`.
   Measured values to see and record in §11: each deterministic gate `collected=1 passed=1`; record the MASE, Diebold–Mariano and Ljung–Box values the nodes print.
-- [ ] Step 6: **Mutation check G2.11:** the forecast gate drops the paired-MASE lower-bound requirement (lightgbm graded above naïve) → `T4 -> S-T.3` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 7: **Mutation check G2.12:** the rolling-origin holdout uses a random row split (the MASE threshold or the paired test fails) → `T1p -> S-T.2` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 8: **Mutation check G2.13:** the bootstrap resamples rows instead of entity clusters (coverage below 372; run at 40 seeds, band scaled) → `T2p -> S-T.5` fails, run with `PS_SEED_LIMIT=40` (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 9: **Mutation check G2.14:** the residual check skips Ljung–Box on pooled panel residuals (T2p not flagged) → `T2p -> S-T.6` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 10: **Mutation check G2.20:** seasonal naïve reads the whole series instead of the origin's training window (mismatches > 0) → `T1p -> S-T.3` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 11: **Mutation check G2.26:** the blocked inner folds drop the gap h (shared keys across a boundary > 0 or the RMSE leaves the band) → `T2p -> S-T.4` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
+- [ ] Step 6: **Mutation check G2.11:** the forecast gate drops the paired-MASE lower-bound requirement (lightgbm graded above naïve) → `T4 -> S-T.3` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.11:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 7: **Mutation check G2.12:** the rolling-origin holdout uses a random row split (the MASE threshold or the paired test fails) → `T1p -> S-T.2` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.12:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 8: **Mutation check G2.13:** the bootstrap resamples rows instead of entity clusters (coverage below 372; run at 40 seeds, band scaled) → `T2p -> S-T.5` fails, run with `PS_SEED_LIMIT=40` (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.13:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 9: **Mutation check G2.14:** the residual check skips Ljung–Box on pooled panel residuals (T2p not flagged) → `T2p -> S-T.6` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.14:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 10: **Mutation check G2.20:** seasonal naïve reads the whole series instead of the origin's training window (mismatches > 0) → `T1p -> S-T.3` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.20:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 11: **Mutation check G2.26:** the blocked inner folds drop the gap h (shared keys across a boundary > 0 or the RMSE leaves the band) → `T2p -> S-T.4` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.26:** <pasted assertion>`; undo; re-run → pass).
 
 **Mutation checks (M8)** (as M1; AI-run, ruling S1):
 
@@ -24248,7 +24289,7 @@ export class EvaluationProtocolGates {
   pytest form; the names are Step 3's table's.
 
 - [ ] Step 3: **Gate rows and check files** (§6 preamble, Gate flip 1–2; names from §4.1). Each row is written
-  `Status: "Active"`, `Description` = "Gate G<id> (owner PR 3, phase <p>, dataset <dataset>, criterion <criterion>):
+  `Status: "Active"`, `Description` = "Gate G<id> (phase <p>, dataset <dataset>, criterion <criterion>):
   <§4.1 threshold verbatim>. It fails when <§4.1 mutation check>.", `ExpectedOutcomes.summary` = the one-line threshold
   below; each check file holds the one `NamedCheck` the table names:
 
@@ -24287,14 +24328,14 @@ export class EvaluationProtocolGates {
   `Predictive Studio Gates — Training (statistical)` is not run here (D3-63: it runs once on the final head, M12.1); its 3 member(s) are checked by the pins/parity test and the mutation check below.
   The PR 3 row count (§6 preamble) → `46`.
   Measured values to see and record in §11: `G2.29 runs=2 protocolBeforeRun=2 refusedWithoutProtocol=true runsWithoutProtocol=0`, `G2.6 holdoutKeys=1205 afterCutoff=1205 inTraining=0 matchedReference=1205 extra=0`, `G2.41 holdoutRows=6950 |auc−0.6447|≤0.02 meanPredictedMinusObserved≥0.15`, `G2.23 sharedRowIds=0 inFoldResampling=true`, `G2.24/G2.25 sharedEntityKeys=0 innerFoldsDisjoint=true`, `G2.30 collected=1 passed=1` (15 grouped folds per candidate, intervals, nothing pruned); with `PS_SEED_LIMIT=20`, G2.4 `collected=1 passed=1` (mean optimism below +0.0104). The C1 corpus is loaded first (`load-c1-corpus.ts`, M2.1).
-- [ ] Step 8: **Mutation check G2.29:** `ProtocolSearchGuard.RequireProtocolForSearch` accepts a null protocol (refusedWithoutProtocol false) → `W1 -> S5.1` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 9: **Mutation check G2.6:** `DateCarvedCarver` carves the trailing fraction in read order (holdout keys before the cutoff > 0) → `C1 -> S6.1` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 10: **Mutation check G2.41:** the `out_of_time` carve uses the decision date instead of the declared `StartDate` (holdout ≠ 6,950 rows) → `W6 -> S6.1` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 11: **Mutation check G2.23:** the class reweighting is fitted before the inner folds are cut (the in-fold node fails) → `C2 -> S2.5` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 12: **Mutation check G2.24:** new-entity mode carves rows instead of entities (shared entity keys > 0) → `T2p -> S2.6` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 13: **Mutation check G2.25:** new-entity mode carves rows instead of entities (shared member keys > 0) → `C1 -> S2.6` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 14: **Mutation check G2.30:** the pruning rule compares point estimates instead of bounds (a candidate is pruned while its upper bound reaches the leader) → `W1 -> S5.3` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 15: **Mutation check G2.4:** `InnerScoreSelection.RankByInnerScore` ranks on the locked-holdout score (winner optimism ≥ +0.0104; run at 20 seeds) → `W2 -> S5.2` fails, run with `PS_SEED_LIMIT=20` (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
+- [ ] Step 8: **Mutation check G2.29:** `ProtocolSearchGuard.RequireProtocolForSearch` accepts a null protocol (refusedWithoutProtocol false) → `W1 -> S5.1` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.29:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 9: **Mutation check G2.6:** `DateCarvedCarver` carves the trailing fraction in read order (holdout keys before the cutoff > 0) → `C1 -> S6.1` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.6:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 10: **Mutation check G2.41:** the `out_of_time` carve uses the decision date instead of the declared `StartDate` (holdout ≠ 6,950 rows) → `W6 -> S6.1` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.41:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 11: **Mutation check G2.23:** the class reweighting is fitted before the inner folds are cut (the in-fold node fails) → `C2 -> S2.5` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.23:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 12: **Mutation check G2.24:** new-entity mode carves rows instead of entities (shared entity keys > 0) → `T2p -> S2.6` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.24:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 13: **Mutation check G2.25:** new-entity mode carves rows instead of entities (shared member keys > 0) → `C1 -> S2.6` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.25:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 14: **Mutation check G2.30:** the pruning rule compares point estimates instead of bounds (a candidate is pruned while its upper bound reaches the leader) → `W1 -> S5.3` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.30:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 15: **Mutation check G2.4:** `InnerScoreSelection.RankByInnerScore` ranks on the locked-holdout score (winner optimism ≥ +0.0104; run at 20 seeds) → `W2 -> S5.2` fails, run with `PS_SEED_LIMIT=20` (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.4:** <pasted assertion>`; undo; re-run → pass).
 - [ ] Step 16: Runtime DB check of the stored carves (after Step 7's runs):
   ```bash
   sqlcmd "${S[@]}" -Q "SET NOCOUNT ON; SELECT TOP 6 p.Name, JSON_VALUE(r.ValidationResults,'$.carve.kind') k, JSON_VALUE(r.ValidationResults,'$.carve.cutoff') c, JSON_VALUE(r.ValidationResults,'$.carve.holdoutRowCount') h, JSON_VALUE(r.ValidationResults,'$.carve.newEntity.sharedEntityKeys') shared FROM __mj.MLTrainingRun r JOIN __mj.MLTrainingPipeline p ON p.ID=r.PipelineID WHERE p.PredictionUnitID IS NOT NULL ORDER BY r.__mj_CreatedAt DESC"
@@ -26267,7 +26308,7 @@ export class GateOutcomeMeasures {
   pnpm run truth:data -- --set n400 --only W2-noise   # → "world/W2-noise: 400 seed(s) in …s"
   ```
 - [ ] Step 3: **Gate rows and check files** (§6 preamble, Gate flip 1–2; names from §4.1). Each row is written
-  `Status: "Active"`, `Description` = "Gate G<id> (owner PR 3, phase <p>, dataset <dataset>, criterion <criterion>):
+  `Status: "Active"`, `Description` = "Gate G<id> (phase <p>, dataset <dataset>, criterion <criterion>):
   <§4.1 threshold verbatim>. It fails when <§4.1 mutation check>.", `ExpectedOutcomes.summary` = the one-line threshold
   below; each check file holds the one `NamedCheck` the table names:
 
@@ -26306,13 +26347,13 @@ export class GateOutcomeMeasures {
   `Predictive Studio Gates — Training (statistical)` is not run here (D3-63: it runs once on the final head, M12.1); its 6 member(s) are checked by the pins/parity test and the mutation check below.
   The PR 3 row count (§6 preamble) → `53`.
   Measured values to see and record in §11: G2.8 `collected=1 passed=1` (dummy, one-feature and GLM baselines with intervals, `keep-simple-baseline`, shuffled labels `no-signal`); G2.5 `stored=3 violations=0 storedMetricsWithoutBounds=0` (the stored half of G2.33); G2.7 `outcome=keep-simple-baseline shipped=glm missingSubgroups=0 missingPeriods=0 slicesWithoutInterval=0` (the stored halves of G2.36/G2.37 on C1's declared slices) `precisionAtCapacityStored=true` (the stored half of G2.21, C1 declares `capacityPerPeriod: 150`); G2.22 `scored=true` and the outcome/reason pair; with `PS_SEED_LIMIT=40`, G2.1, G2.2, G2.3 `collected=1 passed=1` (record each wall time in §11; M12.1 runs them at 400 seeds).
-- [ ] Step 8: **Mutation check G2.1:** `GateRules.BeatsByMargin` tests the point estimate instead of the interval's lower bound (publications above the bound; run at 40 seeds) → `N1c -> S6.5` fails, run with `PS_SEED_LIMIT=40` (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 9: **Mutation check G2.2:** `GateRules.BeatsByMargin` tests the point estimate (publications above the bound; run at 40 seeds) → `N1r -> S6.5` fails, run with `PS_SEED_LIMIT=40` (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 10: **Mutation check G2.3:** `GateRules.BeatsByMargin` tests the point estimate (publications above the bound; run at 40 seeds) → `W2 -> S6.5` fails, run with `PS_SEED_LIMIT=40` (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 11: **Mutation check G2.5:** `GateRules.ApplyGateGuards` drops the minority-class guard (`model` on a seed with < 20 minority rows) → `W7 -> S4.2 #2` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 12: **Mutation check G2.7:** `GateRules.DecideGate` drops the best-baseline comparison (outcome `model`) → `C1 -> S4.2` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 13: **Mutation check G2.8:** the sidecar's baselines return no interval (stored baselines with intervals < 3 of 3) → `C2 -> S4.5` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
-- [ ] Step 14: **Mutation check G2.22:** the snapshot omits `INCUMBENT_SCORE_COLUMN` (no comparator stored) → `C1 -> S1.3` fails (run once; paste the failing `PsGate.Assert` text into §11; undo; re-run → pass).
+- [ ] Step 8: **Mutation check G2.1:** `GateRules.BeatsByMargin` tests the point estimate instead of the interval's lower bound (publications above the bound; run at 40 seeds) → `N1c -> S6.5` fails, run with `PS_SEED_LIMIT=40` (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.1:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 9: **Mutation check G2.2:** `GateRules.BeatsByMargin` tests the point estimate (publications above the bound; run at 40 seeds) → `N1r -> S6.5` fails, run with `PS_SEED_LIMIT=40` (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.2:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 10: **Mutation check G2.3:** `GateRules.BeatsByMargin` tests the point estimate (publications above the bound; run at 40 seeds) → `W2 -> S6.5` fails, run with `PS_SEED_LIMIT=40` (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.3:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 11: **Mutation check G2.5:** `GateRules.ApplyGateGuards` drops the minority-class guard (`model` on a seed with < 20 minority rows) → `W7 -> S4.2 #2` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.5:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 12: **Mutation check G2.7:** `GateRules.DecideGate` drops the best-baseline comparison (outcome `model`) → `C1 -> S4.2` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.7:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 13: **Mutation check G2.8:** the sidecar's baselines return no interval (stored baselines with intervals < 3 of 3) → `C2 -> S4.5` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.8:** <pasted assertion>`; undo; re-run → pass).
+- [ ] Step 14: **Mutation check G2.22:** the snapshot omits `INCUMBENT_SCORE_COLUMN` (no comparator stored) → `C1 -> S1.3` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G2.22:** <pasted assertion>`; undo; re-run → pass).
 - [ ] Step 15: Run every PR 3 deterministic suite: `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite
   "Predictive Studio Gates — Prediction Units"` → 12 of 12 passed; `… suite "Predictive Studio Gates — Training"` → 35
   of 35 passed. All 53 rows now exist `Active` (the PR 3 row count → `53`); `Predictive Studio Gates — Training
@@ -28258,8 +28299,10 @@ export const PS_RECORD_PANELS = [PSProtocolLineagePanel, PSUnitVersionsPanel, PS
 
 - [ ] Step 4: Run; expected pass. dashboards `pnpm test` (nav +1) → 0 failed, `pnpm run build` for dashboards → exit 0;
   `npm run check:ui`; `npm run check:standards` (ui-layers: dashboards is a `surface` package; it navigates through
-  `NavigationService` only); `git diff --name-only origin/next...HEAD -- packages/Angular/Explorer/core-entity-forms/src/lib/custom packages/Angular/Bootstrap packages/Angular/BootstrapLite`
-  → no output (D3-74: no forms-package change; the class manifests are unchanged).
+  `NavigationService` only); no diff against M10's checkpoint commit (M1's CodeGen may legitimately have changed the
+  Bootstrap manifests on the branch, so the comparison is M11's own work, not `origin/next`):
+  `M10=$(git log --format=%H -1 --grep='^feat(ps): PR 3 M10 ' origin/ps/pr-3-honest-training); git diff --name-only "$M10" -- packages/Angular/Explorer/core-entity-forms/src/lib/custom packages/Angular/Bootstrap packages/Angular/BootstrapLite`
+  → no output (D3-74: no forms-package change in M11; the class manifests are unchanged by M11).
 
 - [ ] Step 5: Runtime verification (MJAPI 4031, Explorer 4231; database `MJ_PS_PR3_<agent>` with the C1 corpus and the
   M10 gate runs present), as automated Playwright tests with assertions (D3-45) plus `sqlcmd` checks of what they saved.
@@ -29766,7 +29809,7 @@ loop and the review-quiet period (D-068) run before merge; the PR-4 refresh is t
   `pnpm run build; echo "build exit=$?"` → `build exit=0`.
 - [ ] Step 2: The keep-list run (§6 preamble): Containment → 10 of 10 passed; Feature Pipelines → 5 of 5 passed (with
   `RUN_AGENT_TESTS=0`: 4 passed, 1 skipped); `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm run test:integration`
-  (= `pnpm mj test suite "Integration Tests — Deterministic"`) → ≥ 114 tests (§4.3's count at `479ee0d93d`), 0 failed,
+  (= `pnpm mj test suite "Integration Tests — Deterministic"`) → ≥ 117 tests (§4.3's count at `6e2b57017b`), 0 failed,
   and no test that passed at M1's start fails now (record the pass/fail/skip counts beside M1's).
 - [ ] Step 3: Unit suites, each `pnpm test` → `N passed / 0 failed / K skipped` recorded:
   `packages/AI/PredictiveStudio/{Core,Engine,Sidecar,TruthSuite}`, `packages/MJCoreEntitiesServer`, `packages/MJStorage`,
@@ -29883,7 +29926,8 @@ checkboxes, so the milestone exit at the checkpoint sees M12's tasks complete, a
 
 1. `gh pr ready` (a human merges).
 2. Final §11 entry (counts, measured gate values, statistical wall times, database state, servers stopped)
-  and `program/STATUS.md` (plans repo): PR 3 `ready for review`, then `merged` after the merge.
+  and `program/STATUS.md` (plans repo, its status vocabulary): after `gh pr ready` PR 3 stays `implementing`; after
+  the merge `implementing` → `merged`.
 3. After the merge: refresh trigger (b) for **PR 4** — append to `plans/PR-4-honest-serving.md` §12 (plans
   repo, or its MJ copy if it has started) the names PR 3 shipped (§5.1 as merged, any D3-xx that changed them) and set
   its status to `refreshing` in `program/STATUS.md`.
@@ -29893,7 +29937,7 @@ checkboxes, so the milestone exit at the checkpoint sees M12's tasks complete, a
   12 passed; `… "Predictive Studio Gates — Training"` → 35 of 35 passed; `… "Predictive Studio Gates — Training
   (statistical)"` → 6 of 6 passed (M12.1, wall time recorded).
 - The PR 3 row count (§6 preamble) → `53`; `cd packages/TestingFramework/integration-test-suite && pnpm test` → 0 failed.
-- The keep-list run → Containment 10 of 10 passed, Feature Pipelines 5 of 5 passed; `pnpm run test:integration` → ≥ 114
+- The keep-list run → Containment 10 of 10 passed, Feature Pipelines 5 of 5 passed; `pnpm run test:integration` → ≥ 117
   tests, 0 failed (M12.2).
 - The unit suites and repo gates of M12.2 Steps 3 and 5 with their counts; `npm run check:changeset` → exit 0.
 
@@ -29922,7 +29966,7 @@ checkboxes, so the milestone exit at the checkpoint sees M12's tasks complete, a
 | Truth suite (unit) | `cd packages/AI/PredictiveStudio/TruthSuite && pnpm test` | 0 failed |
 | UI (M10.4, M11) | `pnpm test` in `packages/Angular/Explorer/dashboards` (M11.1's components under `src/PredictiveStudio/components/`) and `packages/Angular/Generic/artifacts`; build `packages/Angular/Explorer/core-entity-forms` | 0 failed; build exit 0 |
 | Live engine integration | `pnpm --filter @memberjunction/predictive-studio run test:integration` | all passed |
-| Integration tier | `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm run test:integration` (= `pnpm mj test suite "Integration Tests — Deterministic"`) | ≥ 114 tests (§4.3), 0 failed; no test that passed at M1's start fails |
+| Integration tier | `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm run test:integration` (= `pnpm mj test suite "Integration Tests — Deterministic"`) | ≥ 117 tests (§4.3), 0 failed; no test that passed at M1's start fails |
 | Gate checks: pins and parity | `cd packages/TestingFramework/integration-test-suite && pnpm run build && pnpm test` | 0 failed (`check-registry.test.ts` bundle total 207 after M10, + any bundle `next` added; `sibling-parity.test.ts`; `ps-gate-pytest.test.ts` 4) |
 | PR 3 rows | `sqlcmd … -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM __mj.Test WHERE Tags LIKE '%owner:PR3%' AND Status='Active'"` (§6 preamble) | `53` after M10 (6, 10, 12, 15, 29, 32, 38, 46 after M2–M9) |
 | PR 3 gates: Prediction Units | `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Prediction Units"` | 12 of 12 passed from M4 (6 after M2, 10 after M3) |
@@ -29997,6 +30041,11 @@ non-`ok` anchors and re-read the code → run §8.2 → update design/tasks/§9 
 - [x] A-SERIES: `ls $MJ/migrations/v6 | grep -E '^V[0-9]{12}__' | tail -1` → a `v6.2.x` name (else use the newer series
   in M1's migration name).
   → *Observed at `origin/next` `6e2b57017b` (2026-10-26):* ok — `V202610252000__v6.2.x__Content_Pipeline_Framework.sql` (worktree and `origin/next`).
+  Timestamp check (run again at M1.3 Step 2, before `pnpm mj migrate`):
+  `{ ls $MJ/migrations/v6 | grep -E '^V[0-9]{12}__' | sort | tail -1; echo "<the M1.3 migration name>"; } | sort | tail -1`
+  → the M1.3 migration name (it sorts after the newest existing file; `mj migrate` runs with `outOfOrder: false` by default, `packages/MJCLI/src/config.ts`, so an older version is not applied on a database already past it).
+  `ls $MJ/migrations/v6 | grep -E '^V[0-9]{12}__' | sort | tail -1` → at the kickoff cut
+  `V202610252000__v6.2.x__Content_Pipeline_Framework.sql`, so the timestamp must be `> 202610252000`.
 - [x] A-4166/A-4104: `gh pr view 4166 --json state,mergedAt -q '[.state,.mergedAt]|@tsv'`, the same for 4104 → `OPEN`,
   or `CLOSED` with an empty `mergedAt` (neither merged: D3-01 holds, M1.5 Step 2); a `MERGED` state runs M1.5 steps 3–4.
   → *Observed at `origin/next` `6e2b57017b` (2026-10-26):* corrected — `CLOSED` / `CLOSED`, both unmerged (`mergedAt` null; closed 2026-10-21T02:24Z). Neither merged, so D3-01 holds and M1.5 takes its Step 2 path; the design holds, and the expected value now reads `OPEN`, or `CLOSED` with `mergedAt` null (a merged state runs M1.5 steps 3–4).
@@ -30515,22 +30564,21 @@ Product-direction questions keep a working automated default; the others are dec
 - Q3-14 (decided): M11.3 creates the unit, then the protocol, then saves the pipeline without a transaction; a failed
   pipeline save leaves immutable orphan rows that nothing trains on, listed in the report row (`failed`, with both ids).
 
-- Q3-15 (scope, D-062 (4); decided by the owner 2026-10-26 → D3-74): M11.2 creates `packages/Angular/Explorer/core-entity-forms/src/lib/custom/PredictiveStudio/ps-protocol-panels.ts`
-  and modifies `core-entity-forms/src/lib/custom/custom-forms.module.ts` and `core-entity-forms/package.json` —
-  `ng-core-entity-forms` outside the `MLModels` folder. Default (implemented): removed from the task; owner decision
-  pending (D-062). (A home inside `src/lib/custom/MLModels/`, which the allowlist covers, is the obvious option to
-  offer.)
+- Q3-15 (scope, D-062 (4); decided by the owner 2026-10-26 → D3-74): M11.2's record panels were drafted in
+  `ng-core-entity-forms` outside the `MLModels` folder (plus its `custom-forms.module.ts` and `package.json`).
+  Decision (D3-74): M11.2 creates `packages/Angular/Explorer/dashboards/src/PredictiveStudio/record-panels/ps-protocol-panels.ts`
+  and does not modify `ng-core-entity-forms`.
 - Q3-16 (scope, D-062 (1)/(2); decided by the owner 2026-10-26 → D3-73): PR 2 as merged ships no `truthsuite.paths`, no `truthsuite.refpipe`, no
   `fixtures/reference/p5-golden.json`, no `fixtures/real/`, no 400-seed set and no `pyarrow`/`statsmodels` in either
   venv (§8.3 B-NOT-SHIPPED, B-SEEDS, A-PR2-VENV), yet M5.3–M10.5's gate tests read them (≈ 160 references; the
-  reference pipeline exists in ps-review `probes/refpipe`). Porting them is work no task in §6 holds. Default
-  (implemented): none — the tasks that read them stay as written and no port task is added; owner decision pending
-  (D-062).
+  reference pipeline exists in ps-review `probes/refpipe`). Decision (D3-73): PR 3 builds them in the TruthSuite
+  package — M2.1 Step 0 pins `pyarrow`, M5.2 ports `truthsuite.paths`, `truthsuite.refpipe`,
+  `fixtures/reference/p5-golden.json`, `fixtures/real/`, the `n400` seed set and the `statsmodels` pin (§2.4).
 - Q3-17 (scope, D-062 (4); decided by the owner 2026-10-26 → D3-74): M11.2's record panels in `ng-core-entity-forms` import M11.1's components, which D3-64
   places in `ng-dashboards`; `ng-dashboards` depends on `ng-core-entity-forms`, so that import is a dependency cycle,
-  and Q3-15's `MLModels/` home does not remove it. Default (implemented): removed from the task; owner decision pending
-  (D-062). (The option to offer: register the panels from `dashboards/src/PredictiveStudio/`, which the allowlist
-  covers, instead of from `ng-core-entity-forms`.)
+  and an `MLModels/` home does not remove it. Decision (D3-74): the panels live in
+  `dashboards/src/PredictiveStudio/record-panels/` and register with the Predictive Studio chunk
+  (`PSStudioResourceComponent.RecordPanels`), so there is no cycle and no new package.
 
 ### 9.4 Proposed program decisions and `reference/contracts/contracts.ts` changes (for `program/decisions.md`)
 
@@ -30579,7 +30627,7 @@ Product-direction questions keep a working automated default; the others are dec
 >
 > **Schema.** New `MJ: Prediction Units`, `MJ: Evaluation Protocols`, `MJ: Training Snapshots` (immutable version rows,
 > Record Changes audited); new columns on `MJ: ML Training Pipelines`, `MJ: ML Training Runs`, `MJ: Feature Values`.
-> One migration (`V202610201200__v6.2.x__PS_Honest_Training_Schema.sql`) with its CodeGen output. New storage driver
+> One migration (`V<yyyymmddhhmm>__v6.2.x__PS_Honest_Training_Schema.sql`, the name M1.3 wrote) with its CodeGen output. New storage driver
 > `Local File System Storage`. Existing pipelines are migrated to a unit and a protocol (M11).
 >
 > **Acceptance.** 53 planted-truth gates (Phase 1: 12, Phase 2: 41) land Active in their suites and pass; PR 2's
