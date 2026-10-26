@@ -11,16 +11,21 @@
  *   3. `AllowedOAuthTenantIDs` match on the token's tenant/workspace claim (`tid` / `hd`)
  *   4. Strict Principal Match (`tokenProfile.email === contextUser.Email`, case-insensitive) — blocks
  *      a user from linking a personal `@gmail.com` or another employee's mailbox to their corporate MJ identity
- * - **Per-User `OwnerUserID` Isolation in `CredentialEngine`**
+ * - **Per-User `OwnerUserID` Isolation in `CredentialEngine`** — credentials are stored through
+ *   `CredentialEngine.Instance` (`@memberjunction/credentials`) unless a caller injects another
+ *   `IUserDelegatedCredentialStore`
+ * - **Gates 1–3 are administrator settings on `MJ: Communication Providers`** (`AllowUserDelegatedOAuth`,
+ *   `AllowedEmailDomains`, `AllowedOAuthTenantIDs`); `ReadProviderUserOAuthGates` lifts them off the row
  * - **One-Click Disconnect & Token Revocation**
  *
  * @module @memberjunction/core-actions
  */
 
 import * as crypto from 'crypto';
-import { IMetadataProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { BaseSingleton, EscapeSQLString, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
-import { MJCredentialEntity } from '@memberjunction/core-entities';
+import { UserInfo } from '@memberjunction/core';
+import { BaseSingleton, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { MJCommunicationProviderEntity, MJCredentialEntity } from '@memberjunction/core-entities';
+import { CredentialEngine } from '@memberjunction/credentials';
 import { BaseUserScopedCommunicationAction } from './chief-of-staff-calendar-email.action';
 
 /**
@@ -92,6 +97,31 @@ export interface ProviderUserOAuthPolicyConfig {
     RevocationEndpoint?: string;
     RedirectUri: string;
     Scopes: string[];
+}
+
+/** The administrator-controlled gate fields of `ProviderUserOAuthPolicyConfig`, as stored on `MJ: Communication Providers`. */
+export type ProviderUserOAuthGates = Pick<
+    ProviderUserOAuthPolicyConfig,
+    'ProviderName' | 'AllowUserDelegatedOAuth' | 'AllowedEmailDomains' | 'AllowedOAuthTenantIDs'
+>;
+
+/**
+ * Lift Gates 1–3 off a `MJ: Communication Providers` row. `AllowedOAuthTenantIDs` is stored comma-separated
+ * and returned as a trimmed list, or null when the column is empty (no tenant restriction).
+ * The caller merges the result with the OAuth client settings (endpoints, client id, scopes) to form the
+ * full `ProviderUserOAuthPolicyConfig`.
+ */
+export function ReadProviderUserOAuthGates(provider: MJCommunicationProviderEntity): ProviderUserOAuthGates {
+    const tenantIDs = (provider.AllowedOAuthTenantIDs ?? '')
+        .split(',')
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0);
+    return {
+        ProviderName: provider.Name,
+        AllowUserDelegatedOAuth: provider.AllowUserDelegatedOAuth === true,
+        AllowedEmailDomains: provider.AllowedEmailDomains ?? null,
+        AllowedOAuthTenantIDs: tenantIDs.length > 0 ? tenantIDs : null,
+    };
 }
 
 /**
@@ -310,9 +340,8 @@ export class CommunicationUserOAuthService extends BaseSingleton<CommunicationUs
         policy: ProviderUserOAuthPolicyConfig;
         contextUser: UserInfo;
         transport: IOAuthTokenTransport;
+        /** Defaults to `CredentialEngine.Instance`. */
         credentialStore?: IUserDelegatedCredentialStore;
-        /** Provider the default credential store should use; falls back to the global provider. */
-        metadataProvider?: IMetadataProvider;
         nowMs?: number;
     }): Promise<OAuthCallbackResult> {
         const nowMs = params.nowMs ?? Date.now();
@@ -428,7 +457,7 @@ export class CommunicationUserOAuthService extends BaseSingleton<CommunicationUs
             };
         }
 
-        const store = params.credentialStore ?? this.createDefaultEntityCredentialStore(params.metadataProvider);
+        const store = this.resolveCredentialStore(params.credentialStore);
         const expiresAt = tokenResult.ExpiresInSeconds
             ? new Date(nowMs + tokenResult.ExpiresInSeconds * 1000)
             : undefined;
@@ -467,11 +496,10 @@ export class CommunicationUserOAuthService extends BaseSingleton<CommunicationUs
         policy: ProviderUserOAuthPolicyConfig;
         contextUser: UserInfo;
         transport?: IOAuthTokenTransport;
+        /** Defaults to `CredentialEngine.Instance`. */
         credentialStore?: IUserDelegatedCredentialStore;
-        /** Provider the default credential store should use; falls back to the global provider. */
-        metadataProvider?: IMetadataProvider;
     }): Promise<OAuthDisconnectResult> {
-        const store = params.credentialStore ?? this.createDefaultEntityCredentialStore(params.metadataProvider);
+        const store = this.resolveCredentialStore(params.credentialStore);
         const existing = await store.GetUserDelegatedCredential(
             params.policy.ProviderName,
             params.contextUser
@@ -506,102 +534,9 @@ export class CommunicationUserOAuthService extends BaseSingleton<CommunicationUs
         };
     }
 
-    private createDefaultEntityCredentialStore(provider?: IMetadataProvider): IUserDelegatedCredentialStore {
-        const md = provider ?? Metadata.Provider;
-        const buildName = (providerName: string, userId: string): string =>
-            `UserOAuth3LO:${providerName.trim()}:${userId.trim().toLowerCase()}`;
-
-        return {
-            StoreUserDelegatedCredential: async (options, contextUser) => {
-                if (!UUIDsEqual(options.ownerUserId, contextUser.ID)) {
-                    throw new Error('Credential owner mismatch');
-                }
-                const rv = RunView.FromMetadataProvider(md);
-                const name = buildName(options.providerName, options.ownerUserId);
-                const safeName = EscapeSQLString(name);
-                const existingRes = await rv.RunView<MJCredentialEntity>(
-                    {
-                        EntityName: 'MJ: Credentials',
-                        ExtraFilter: `Name='${safeName}'`,
-                        MaxRows: 1,
-                        ResultType: 'entity_object',
-                    },
-                    contextUser
-                );
-                const cred =
-                    existingRes.Success && existingRes.Results.length > 0
-                        ? existingRes.Results[0]
-                        : await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
-
-                const values: UserDelegatedOAuthStoredValues = {
-                    ownerUserId: options.ownerUserId,
-                    principalEmail: options.principalEmail.trim().toLowerCase(),
-                    providerName: options.providerName.trim(),
-                    accessToken: options.accessToken,
-                    refreshToken: options.refreshToken ?? '',
-                    tokenType: options.tokenType ?? 'Bearer',
-                    scope: options.scope ?? '',
-                    tenantId: options.tenantId ?? '',
-                    issuedAt: new Date().toISOString(),
-                };
-                cred.Name = name;
-                cred.Values = JSON.stringify(values);
-                cred.IsActive = true;
-                cred.IsDefault = false;
-                cred.ExpiresAt = options.expiresAt ?? null;
-                const saved = await cred.Save();
-                if (!saved) {
-                    throw new Error(
-                        `Failed to store delegated credential '${name}': ${cred.LatestResult?.CompleteMessage ?? 'unknown error'}`
-                    );
-                }
-                return { ID: cred.ID };
-            },
-            GetUserDelegatedCredential: async (providerName, contextUser) => {
-                const rv = RunView.FromMetadataProvider(md);
-                const safeName = EscapeSQLString(buildName(providerName, contextUser.ID));
-                const res = await rv.RunView<MJCredentialEntity>(
-                    {
-                        EntityName: 'MJ: Credentials',
-                        ExtraFilter: `Name='${safeName}' AND IsActive=1`,
-                        MaxRows: 1,
-                        ResultType: 'entity_object',
-                    },
-                    contextUser
-                );
-                if (!res.Success || res.Results.length === 0) {
-                    return null;
-                }
-                const parsed = SafeJSONParse<UserDelegatedOAuthStoredValues>(res.Results[0].Values);
-                if (!parsed || !UUIDsEqual(parsed.ownerUserId, contextUser.ID)) {
-                    throw new Error('Credential owner mismatch');
-                }
-                return { values: parsed };
-            },
-            RevokeUserDelegatedCredential: async (providerName, contextUser) => {
-                const rv = RunView.FromMetadataProvider(md);
-                const safeName = EscapeSQLString(buildName(providerName, contextUser.ID));
-                const res = await rv.RunView<MJCredentialEntity>(
-                    {
-                        EntityName: 'MJ: Credentials',
-                        ExtraFilter: `Name='${safeName}' AND IsActive=1`,
-                        MaxRows: 1,
-                        ResultType: 'entity_object',
-                    },
-                    contextUser
-                );
-                if (!res.Success || res.Results.length === 0) {
-                    return false;
-                }
-                const cred = res.Results[0];
-                cred.IsActive = false;
-                cred.Values = JSON.stringify({
-                    ownerUserId: contextUser.ID,
-                    revokedAt: new Date().toISOString(),
-                });
-                return cred.Save();
-            },
-        };
+    /** `CredentialEngine` owns delegated-credential naming, owner binding, encryption and audit; it is the default store. */
+    private resolveCredentialStore(injected: IUserDelegatedCredentialStore | undefined): IUserDelegatedCredentialStore {
+        return injected ?? CredentialEngine.Instance;
     }
 
     /** Clear pending in-memory authorization sessions (for unit testing). */

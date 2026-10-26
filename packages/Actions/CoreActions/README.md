@@ -396,7 +396,7 @@ AI-generated entity-specific child actions. These are maintained by CodeGen and 
 
 `CommunicationUserOAuthService` (`src/custom/ai/communication-oauth-service.ts`) is a `BaseSingleton` that lets an individual user connect their own Microsoft Graph or Google Workspace mailbox to MJ through three-legged OAuth, instead of the app-level credential the mailbox actions above use today. It is not an action; it is a service a host (MJServer route, test harness) drives directly.
 
-**Status: prototype, off by default.** The service is fully gated behind an in-memory policy object. There is no `AllowUserDelegatedOAuth` column on `MJ: Communication Providers` or anywhere else in the schema or metadata, and no admin UI. Posture 3 is disabled unless a caller explicitly constructs a `ProviderUserOAuthPolicyConfig` with `AllowUserDelegatedOAuth: true`. See "Current limitations" below before relying on it.
+**Status: prototype, off by default.** Gates 1 to 3 are administrator settings on `MJ: Communication Providers`: `AllowUserDelegatedOAuth` (bit, default 0), `AllowedEmailDomains` and `AllowedOAuthTenantIDs` (both comma-separated, optional). `ReadProviderUserOAuthGates(providerEntity)` lifts them into the gate fields of a `ProviderUserOAuthPolicyConfig`; the caller adds the OAuth client settings (endpoints, client id, redirect URI, scopes), which are not yet stored anywhere. Unless an administrator sets `AllowUserDelegatedOAuth = 1` on a provider, no user can initiate a personal OAuth flow. See "Current limitations" below before relying on it.
 
 ### Flow
 
@@ -441,15 +441,14 @@ Gates 2 and 3 are opt-in narrowing; Gates 1 and 4 always apply. All result codes
 
 - **`ProviderUserOAuthPolicyConfig`** -- the caller builds this: `ProviderName`, the four gate fields, `ClientId`/`ClientSecret`, `AuthorizationEndpoint`, `TokenEndpoint`, optional `RevocationEndpoint`, `RedirectUri`, `Scopes`.
 - **`IOAuthTokenTransport`** (required on callback) -- `ExchangeAuthorizationCode` must return a `VerifiedOAuthTokenExchangeResult` whose `PrincipalEmail` and `TenantID` come from a verified source (`id_token` claims or the provider's userinfo endpoint), because Gates 2 to 4 trust them. `RevokeToken` is optional.
-- **`IUserDelegatedCredentialStore`** (optional) -- `CredentialEngine.Instance` from `@memberjunction/credentials` satisfies this interface structurally and is the intended store. When omitted the service uses a built-in default that writes `MJ: Credentials` rows through `RunView`/`GetEntityObject` using `metadataProvider` (or the global provider).
+- **`IUserDelegatedCredentialStore`** (optional) -- defaults to `CredentialEngine.Instance` from `@memberjunction/credentials`, which owns credential naming (`UserOAuth3LO:<provider>:<ownerUserId>`), owner binding, the required credential type, encryption and audit logging. Inject another store only for tests.
 
 ### Current limitations
 
-- **No schema or metadata flag.** `AllowUserDelegatedOAuth`, `AllowedOAuthTenantIDs` and the endpoint settings exist only on the in-memory policy object. Nothing in `MJ: Communication Providers` turns this on, and there is no admin UI.
+- **No stored OAuth client settings and no admin UI beyond the generated form.** The gate fields live on `MJ: Communication Providers` (editable through its generated Explorer form), but `ClientId`, `ClientSecret`, endpoints, `RedirectUri` and `Scopes` still come from the caller.
 - **No built-in transport and no routes.** `IOAuthTokenTransport` has no shipped implementation. The file header mentions `/api/v1/communication-oauth/initiate` and `/callback`, but no MJServer routes exist yet; a host must build them with `ApiRoute()` and call the service.
 - **No consumer of the stored token.** The Microsoft Graph and Gmail communication providers still authenticate with app-level credentials; a connected 3LO credential is stored but not yet used by any mailbox action.
 - **Pending sessions are process-local.** The initiate/callback session map lives in memory, so both calls must reach the same process, and a restart drops in-flight authorizations.
-- **Default store is transitional.** The built-in store duplicates `CredentialEngine` logic and is slated to be replaced by delegation to the engine. Prefer injecting `credentialStore: CredentialEngine.Instance`, or call the engine directly, so audit logging and the engine's owner checks apply.
 
 ## Usage Examples
 

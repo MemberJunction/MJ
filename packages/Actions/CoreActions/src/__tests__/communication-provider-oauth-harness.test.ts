@@ -15,12 +15,22 @@ const {
     providerInstancesMap,
     runViewMock,
     getPolicyMock,
+    credentialEngineMock,
 } = vi.hoisted(() => ({
     agentsList: [{ ID: 'cos-agent-id', Name: 'Chief of Staff' }],
     providersList: [] as MJCommunicationProviderEntity[],
     providerInstancesMap: new Map<string, BaseCommunicationProvider>(),
     runViewMock: vi.fn(),
     getPolicyMock: vi.fn(),
+    credentialEngineMock: {
+        StoreUserDelegatedCredential: vi.fn(async () => ({ ID: 'cred-from-engine' })),
+        GetUserDelegatedCredential: vi.fn(async () => null),
+        RevokeUserDelegatedCredential: vi.fn(async () => true),
+    },
+}));
+
+vi.mock('@memberjunction/credentials', () => ({
+    CredentialEngine: { Instance: credentialEngineMock },
 }));
 
 vi.mock('@memberjunction/global', async (importOriginal) => ({
@@ -90,6 +100,7 @@ import {
     IOAuthTokenTransport,
     IUserDelegatedCredentialStore,
     ProviderUserOAuthPolicyConfig,
+    ReadProviderUserOAuthGates,
     StoreUserDelegatedOAuthInput,
 } from '../custom/ai/communication-oauth-service';
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
@@ -503,6 +514,66 @@ describe('Stage 8 Deliverable 4 — Posture 3 Per-User OAuth 2.0 (3LO) with PKCE
         expect(cbRes.Success).toBe(false);
         expect(cbRes.ResultCode).toBe('GATE_4_PRINCIPAL_EMAIL_MISMATCH');
         expect(cbRes.CredentialID).toBeNull();
+    });
+
+    it('reads the admin gates from the MJ: Communication Providers row (AllowUserDelegatedOAuth, domains, tenant allowlist)', () => {
+        const providerRow = {
+            Name: 'Microsoft Graph',
+            AllowUserDelegatedOAuth: true,
+            AllowedEmailDomains: 'company.com,subsidiary.com',
+            AllowedOAuthTenantIDs: ' tenant-corp-001 , tenant-corp-002 ,',
+        } as unknown as MJCommunicationProviderEntity;
+
+        expect(ReadProviderUserOAuthGates(providerRow)).toEqual({
+            ProviderName: 'Microsoft Graph',
+            AllowUserDelegatedOAuth: true,
+            AllowedEmailDomains: 'company.com,subsidiary.com',
+            AllowedOAuthTenantIDs: ['tenant-corp-001', 'tenant-corp-002'],
+        });
+
+        const closedRow = {
+            Name: 'Gmail',
+            AllowUserDelegatedOAuth: false,
+            AllowedEmailDomains: null,
+            AllowedOAuthTenantIDs: null,
+        } as unknown as MJCommunicationProviderEntity;
+        const gates = ReadProviderUserOAuthGates(closedRow);
+        expect(gates.AllowUserDelegatedOAuth).toBe(false);
+        expect(gates.AllowedOAuthTenantIDs).toBeNull();
+        expect(CommunicationUserOAuthService.Instance.InitiateAuthorizationFlow({ ...basePolicy, ...gates }, alice).ResultCode)
+            .toBe('GATE_1_USER_OAUTH_DISABLED');
+    });
+
+    it('stores through CredentialEngine.Instance when no credential store is injected', async () => {
+        credentialEngineMock.StoreUserDelegatedCredential.mockClear();
+        const initRes = CommunicationUserOAuthService.Instance.InitiateAuthorizationFlow(basePolicy, alice);
+        expect(initRes.Success).toBe(true);
+
+        const transport: IOAuthTokenTransport = {
+            ExchangeAuthorizationCode: vi.fn(async () => ({
+                AccessToken: 'at-engine',
+                PrincipalEmail: 'alice@company.com',
+                TenantID: 'tenant-corp-001',
+            })),
+        };
+        const cbRes = await CommunicationUserOAuthService.Instance.HandleOAuthCallback({
+            state: initRes.State!,
+            code: 'auth-code-engine',
+            policy: basePolicy,
+            contextUser: alice,
+            transport,
+        });
+
+        expect(cbRes.Success).toBe(true);
+        expect(cbRes.CredentialID).toBe('cred-from-engine');
+        expect(credentialEngineMock.StoreUserDelegatedCredential).toHaveBeenCalledTimes(1);
+        const [opts, user] = credentialEngineMock.StoreUserDelegatedCredential.mock.calls[0] as unknown as [
+            { ownerUserId: string; providerName: string },
+            UserInfo,
+        ];
+        expect(opts.ownerUserId).toBe(alice.ID);
+        expect(opts.providerName).toBe('Microsoft Graph');
+        expect(user.ID).toBe(alice.ID);
     });
 
     it('completes full PKCE (S256) flow, stores OwnerUserID-isolated credential, and supports one-click Disconnect & Revoke', async () => {
