@@ -169,7 +169,7 @@ describe('saved queries enforce field-level security on the rendered SQL', () =>
         provider = new QueryFlsProvider();
         provider.SeedEntities([peopleEntity(), payrollEntity(), projectsEntity()]);
         vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({ Queries: [], QueryDependencies: [] } as unknown as typeof Metadata.Provider);
-        vi.spyOn(QueryEngine, 'Instance', 'get').mockReturnValue({ Queries: [] } as unknown as QueryEngine);
+        vi.spyOn(QueryEngine, 'Instance', 'get').mockReturnValue({ Queries: [], QuerySQLs: [], Dependencies: [] } as unknown as QueryEngine);
     });
     afterEach(() => vi.restoreAllMocks());
 
@@ -240,7 +240,7 @@ describe('saved queries enforce field-level security on the rendered SQL', () =>
 
     it('checks the fully composed SQL of a composition', async () => {
         const dependency = makeQuery({ ID: 'q-dep', Name: 'Pay', SQL: 'SELECT ID, Salary FROM vwPeople', Reusable: true, CategoryPath: '/HR/' });
-        vi.spyOn(QueryEngine, 'Instance', 'get').mockReturnValue({ Queries: [dependency] } as unknown as QueryEngine);
+        vi.spyOn(QueryEngine, 'Instance', 'get').mockReturnValue({ Queries: [dependency], QuerySQLs: [], Dependencies: [] } as unknown as QueryEngine);
         const result = await runAs('SELECT ID FROM {{query:"HR/Pay"}} p', staff);
         expect(result.Success).toBe(false);
         expect(provider.Executed).toEqual([]);

@@ -89,7 +89,6 @@ import {
     QueryInfo,
     FindQueryContextTokens,
     ContextToken,
-    FieldSecurityError,
     UserViewProperty,
     ViewPropertyValues,
     ValidateUserViewProperties,
@@ -3186,7 +3185,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
     /** The field-security check other predicates get: a property with a value may not filter a field the user cannot read. */
     private assertViewPropertyFieldsReadable(declared: UserViewProperty[], values: ViewPropertyValues, entityInfo: EntityInfo, user: UserInfo): void {
-        if (!entityInfo.EnableFieldLevelSecurity) {
+        if (!entityInfo.FieldLevelSecurityApplies) {
             return;
         }
         const denied = entityInfo.GetDeniedReadFields(user);

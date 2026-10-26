@@ -484,11 +484,13 @@ describe('AutotagEntity', () => {
             mockParse.mockReset();
             mockParse.mockResolvedValue('Rendered template text for the record.');
             const row = { ID: 'emp-1', CodeName: 'Nightingale', Department: 'Research', Salary: 250000 };
+            vi.spyOn(KnowledgeHubMetadataEngine.Instance, 'GetEntityDocumentByID').mockReturnValue({
+                ID: 'doc-1', Name: 'Employee Doc', TemplateID: 'tmpl-1', VectorIndexID: 'vi-1', EntityID: 'ent-1',
+            } as never);
             mockRunView
-                .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'doc-1', Name: 'Employee Doc', TemplateID: 'tmpl-1', VectorIndexID: 'vi-1', EntityID: 'ent-1' }] })
-                .mockResolvedValueOnce({ Success: true, Results: [row] })
-                .mockResolvedValueOnce({ Success: true, Results: [] })
-                .mockResolvedValueOnce({ Success: true, Results: [] });
+                .mockResolvedValueOnce({ Success: true, Results: [row] })   // modified records
+                .mockResolvedValueOnce({ Success: true, Results: [] })      // existing ERDs
+                .mockResolvedValueOnce({ Success: true, Results: [] });     // existing content items
 
             const result = await provider.SetContentItemsToProcess([{
                 ID: 'src-1', Name: 'Employee Source', EntityID: 'ent-1', EntityDocumentID: 'doc-1', Configuration: null,

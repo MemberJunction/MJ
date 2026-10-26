@@ -123,7 +123,7 @@ describe('saved queries are rendered once per check that needs it', () => {
     beforeEach(() => {
         provider = new RenderCountProvider();
         vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({ Queries: [], QueryDependencies: [] } as unknown as typeof Metadata.Provider);
-        vi.spyOn(QueryEngine, 'Instance', 'get').mockReturnValue({ Queries: [], GetDefinitionSignature: () => undefined } as unknown as QueryEngine);
+        vi.spyOn(QueryEngine, 'Instance', 'get').mockReturnValue({ Queries: [], QuerySQLs: [], Dependencies: [], GetDefinitionSignature: () => undefined } as unknown as QueryEngine);
     });
     afterEach(() => vi.restoreAllMocks());
 

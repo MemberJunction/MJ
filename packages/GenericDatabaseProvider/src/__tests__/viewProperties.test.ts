@@ -126,6 +126,7 @@ function membersEntity(denied: string[] = []): EntityInfo {
         ExternalDataSourceID: null,
         UserViewMaxRows: 0,
         EnableFieldLevelSecurity: denied.length > 0,
+        FieldLevelSecurityApplies: denied.length > 0,
         GetDeniedReadFields: () => new Set(denied.map((d) => d.toLowerCase())),
         GetUserPermisions: () => ({ CanRead: true }),
         GetEffectiveRowFilterWhereClause: () => RLS,
@@ -214,12 +215,19 @@ describe('RunViewCore with view properties', () => {
     });
 
     it('applies the field-security check to a property target', async () => {
-        const { result, sql } = await run([chapter], { Properties: { Chapter: CHAPTER_A } }, ['ChapterID']);
-        expect(result.Success).toBe(false);
-        expect(result.ErrorMessage).toContain('ChapterID');
-        expect(sql).toEqual([]);
+        const entity = membersEntity(['ChapterID']);
+        const provider = new PropertiesTestProvider([entity]);
+        await expect(provider.Run({ ViewEntity: view([chapter], entity), Properties: { Chapter: CHAPTER_A } }, ADA)).rejects.toThrow(/ChapterID/);
+        expect(provider.ExecutedSQL).toEqual([]);
         const noValue = await run([chapter], {}, ['ChapterID']);
         expect(noValue.result.Success).toBe(true);
+    });
+
+    it('applies the field-security check on an IS-A child whose parent enables field security', async () => {
+        const entity = { ...membersEntity(['ChapterID']), EnableFieldLevelSecurity: false, FieldLevelSecurityApplies: true } as unknown as EntityInfo;
+        const provider = new PropertiesTestProvider([entity]);
+        await expect(provider.Run({ ViewEntity: view([chapter], entity), Properties: { Chapter: CHAPTER_A } }, ADA)).rejects.toThrow(/ChapterID/);
+        expect(provider.ExecutedSQL).toEqual([]);
     });
 });
 
