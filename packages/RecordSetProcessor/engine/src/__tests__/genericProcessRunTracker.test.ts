@@ -113,3 +113,53 @@ describe('GenericProcessRunTracker — the detail row waits for its Action log r
         expect(order).toEqual(['detail', 'run-header']);
     });
 });
+
+describe('GenericProcessRunTracker.Checkpoint — honours a pause another writer set', () => {
+    type RunRow = { ID: string; CancellationRequested: boolean; Status: string; ProcessedItems: number };
+    /**
+     * A run entity double over one stored row, with BaseEntity's real save shape: Save() writes every field
+     * of the in-memory entity (not only the changed ones), and Load() replaces the in-memory fields.
+     */
+    function runOverRow(row: RunRow) {
+        const run = {
+            ID: row.ID, CancellationRequested: row.CancellationRequested, Status: row.Status, ProcessedItems: row.ProcessedItems,
+            SuccessCount: 0, ErrorCount: 0, SkippedCount: 0, LastProcessedOffset: null as number | null, LastProcessedKey: null as string | null,
+            EndTime: null as Date | null, LatestResult: { CompleteMessage: '' },
+            Save: vi.fn(async () => {
+                row.CancellationRequested = run.CancellationRequested;
+                row.Status = run.Status;
+                row.ProcessedItems = run.ProcessedItems;
+                return true;
+            }),
+            Load: vi.fn(async () => {
+                run.CancellationRequested = row.CancellationRequested;
+                run.Status = row.Status;
+                run.ProcessedItems = row.ProcessedItems;
+                return true;
+            }),
+        };
+        return run;
+    }
+    const counts = (n: number) => ({ Processed: n, Success: n, Error: 0, Skipped: 0 });
+
+    it('pauses at the next checkpoint when CancellationRequested was set on the row since the last one', async () => {
+        const row: RunRow = { ID: 'run-1', CancellationRequested: false, Status: 'Running', ProcessedItems: 0 };
+        const run = runOverRow(row);
+        const runHandle: RunHandle = { ProcessRunID: 'run-1', run: run as unknown as MJProcessRunEntity };
+        const tracker = new GenericProcessRunTracker();
+
+        expect(await tracker.Checkpoint(runHandle, { Offset: 10 }, counts(10), user)).toBe(true);
+        row.CancellationRequested = true; // RecordProcess.PauseRun, through its own entity instance
+
+        expect(await tracker.Checkpoint(runHandle, { Offset: 20 }, counts(20), user)).toBe(false);
+        expect(row).toMatchObject({ CancellationRequested: true, Status: 'Paused', ProcessedItems: 20 });
+    });
+
+    it('keeps running and saves the counts when no pause was requested', async () => {
+        const row: RunRow = { ID: 'run-1', CancellationRequested: false, Status: 'Running', ProcessedItems: 0 };
+        const run = runOverRow(row);
+        const runHandle: RunHandle = { ProcessRunID: 'run-1', run: run as unknown as MJProcessRunEntity };
+        expect(await new GenericProcessRunTracker().Checkpoint(runHandle, { Offset: 10 }, counts(10), user)).toBe(true);
+        expect(row).toMatchObject({ CancellationRequested: false, Status: 'Running', ProcessedItems: 10 });
+    });
+});
