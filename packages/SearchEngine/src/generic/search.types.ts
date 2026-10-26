@@ -540,6 +540,16 @@ export interface SearchResultItem {
     MatchedAt: Date;
     /** Raw vector metadata as JSON string (contains all entity fields stored in vector DB) */
     RawMetadata?: string;
+    /**
+     * Optional passage-level spans extracted by a re-ranker that supports Context Focus
+     * (e.g., Cohere Rerank 5 `relevant_spans`).
+     */
+    RelevantSpans?: Array<{
+        start: number;
+        end: number;
+        score: number;
+        text: string;
+    }>;
     /** Discriminator for UI rendering: entity-record, storage-file, or content-item */
     ResultType: SearchResultType;
     /** ID of the SearchProvider metadata record that produced this result */
