@@ -33,8 +33,14 @@ const END_REMOTE_BROWSER_SESSION_MUTATION = `
   }
 `;
 
-/** The `browser_*` tools in the shape an agent run reads from `appContext.Capabilities.Tools`. */
-const BROWSER_TOOL_METADATA: ClientToolMetadata[] = REMOTE_BROWSER_TOOL_DEFINITIONS.map((def) => ({
+/**
+ * The `browser_*` tools a text conversation's agents get: all but AchieveGoal, whose goal loop clicks
+ * and navigates on its own, past the click guard (the server refuses goal runs for a conversation too).
+ */
+const TEXT_BROWSER_TOOLS = REMOTE_BROWSER_TOOL_DEFINITIONS.filter((def) => def.Name !== REMOTE_BROWSER_TOOL_NAMES.AchieveGoal);
+
+/** The text browser tools in the shape an agent run reads from `appContext.Capabilities.Tools`. */
+const BROWSER_TOOL_METADATA: ClientToolMetadata[] = TEXT_BROWSER_TOOLS.map((def) => ({
   Name: def.Name,
   Description: def.Description,
   InputSchema: (def.ParametersSchema ?? {}) as Record<string, unknown>,
@@ -69,11 +75,6 @@ export class ConversationRemoteBrowserController {
   constructor(options: ConversationRemoteBrowserControllerOptions = {}) {
     this.options = options;
     this.channel.Initialize(this.createChannelContext());
-  }
-
-  /** The underlying {@link RemoteBrowserChannel} instance driving the server browser. */
-  public get Channel(): RemoteBrowserChannel {
-    return this.channel;
   }
 
   /** The conversation whose browser is open, or `null` when none is. */
@@ -275,7 +276,7 @@ export class ConversationRemoteBrowserController {
     if (!agentClient) {
       return;
     }
-    for (const def of REMOTE_BROWSER_TOOL_DEFINITIONS) {
+    for (const def of TEXT_BROWSER_TOOLS) {
       let handler = this.handlers.get(def.Name);
       if (!handler) {
         handler = (params: Record<string, unknown>) => this.ExecuteBrowserTool(def.Name, params);

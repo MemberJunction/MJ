@@ -1915,21 +1915,32 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   public RemoteBrowserUrlInput: string = '';
   public IsRemoteBrowserNavigating: boolean = false;
 
-  public readonly RemoteBrowserController = new ConversationRemoteBrowserController({
-    OnAutoOpenSurface: () => this.OpenRemoteBrowserPanel(),
-    // Fires on open, close and a real URL change, never per screencast frame.
-    OnStateChange: () => {
-      this.RemoteBrowserUrlInput = this.RemoteBrowserController.CurrentUrl ?? '';
-      this.cdr.detectChanges();
-    },
-  });
+  /** The conversation's browser, built on first open so a chat area that never opens one pays nothing. */
+  private remoteBrowser: ConversationRemoteBrowserController | null = null;
+
+  private ensureRemoteBrowser(): ConversationRemoteBrowserController {
+    if (!this.remoteBrowser) {
+      const browser = new ConversationRemoteBrowserController({
+        OnAutoOpenSurface: () => this.OpenRemoteBrowserPanel(),
+        // Fires on open, close and a real URL change, never per screencast frame.
+        OnStateChange: () => {
+          this.RemoteBrowserUrlInput = browser.CurrentUrl ?? '';
+          this.cdr.detectChanges();
+        },
+      });
+      const provider = this.ProviderToUse;
+      browser.Initialize(this.agentClientService, provider instanceof GraphQLDataProvider ? provider : null);
+      this.remoteBrowser = browser;
+    }
+    return this.remoteBrowser;
+  }
 
   @ViewChild('conversationRemoteBrowserSurface')
   set ConversationRemoteBrowserSurface(surface: RemoteBrowserSurfaceComponent | undefined) {
     if (surface) {
-      this.RemoteBrowserController.BindSurface(surface);
+      this.remoteBrowser?.BindSurface(surface);
     } else {
-      this.RemoteBrowserController.UnbindSurface();
+      this.remoteBrowser?.UnbindSurface();
     }
   }
 
@@ -3138,7 +3149,6 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.artifactPermissionService.Provider = p;
     this.attachmentService.Provider = p;
     this.analyzeArtifactService.Provider = p;
-    this.RemoteBrowserController.Initialize(this.agentClientService, p instanceof GraphQLDataProvider ? p : null);
 
     // Subscribe to actionable commands from UICommandHandlerService so we can
     // intercept and locally handle commands that depend on the conversation
@@ -3560,7 +3570,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     window.removeEventListener('touchmove', this.boundOnResizeTouchMove);
     window.removeEventListener('touchend', this.boundOnResizeTouchEnd);
 
-    this.RemoteBrowserController?.Dispose();
+    this.remoteBrowser?.Dispose();
   }
 
   private isActiveConversation(conversationId: string | null | undefined): boolean {
@@ -3581,9 +3591,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.clearTurnTracking();
     this.ShowArtifactPanel = false;
     this.SelectedTaskGraphPanel = null;
-    // A conversation's browser ends with it: the next conversation starts without one.
-    this.ShowRemoteBrowserPanel = false;
-    void this.RemoteBrowserController?.Close();
+    // A conversation's browser ends with it: the next conversation starts without one. Reloading the SAME
+    // conversation (the overlay-to-workspace handoff) keeps it.
+    const browserConversation = this.remoteBrowser?.ConversationId;
+    if (!browserConversation || !UUIDsEqual(browserConversation, this._conversationId)) {
+      this.ShowRemoteBrowserPanel = false;
+      void this.remoteBrowser?.Close();
+    }
     this.SelectedArtifactId = null;
     this.SelectedVersionNumber = undefined;
     this.CanShareSelectedArtifact = false;
@@ -7413,7 +7427,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
     // Open before the drawer renders: binding its surface starts the screencast for this conversation.
-    this.RemoteBrowserController.Open(this.ConversationId);
+    this.ensureRemoteBrowser().Open(this.ConversationId);
     this.ShowArtifactPanel = false;
     this.SelectedTaskGraphPanel = null;
     this.SelectedArtifactId = null;
@@ -7428,7 +7442,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
     this.ShowRemoteBrowserPanel = false;
     this.resetArtifactPaneSizing();
-    void this.RemoteBrowserController.Close();
+    void this.remoteBrowser?.Close();
     this.cdr.detectChanges();
   }
 
@@ -7440,7 +7454,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.IsRemoteBrowserNavigating = true;
     this.cdr.detectChanges();
     try {
-      await this.RemoteBrowserController.Navigate(rawUrl);
+      await this.remoteBrowser?.Navigate(rawUrl);
     } finally {
       this.IsRemoteBrowserNavigating = false;
       this.cdr.detectChanges();
@@ -7452,7 +7466,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * chat area owns them). Cached: it is bound to an input, so a fresh object per check would re-fire it.
    */
   public get EffectiveAppContext(): Record<string, unknown> | null {
-    const controller = this.RemoteBrowserController;
+    const controller = this.remoteBrowser;
+    if (!controller) {
+      return this.AppContext;
+    }
     const owns = controller.ConversationId !== null && controller.OwnsTools;
     let memo = this.effectiveAppContextMemo;
     if (!memo || memo.Base !== this.AppContext || memo.Version !== controller.StateVersion || memo.Owns !== owns) {

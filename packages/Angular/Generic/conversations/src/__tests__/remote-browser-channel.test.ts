@@ -1363,6 +1363,7 @@ class FakeAgentClient {
 }
 
 describe('ConversationRemoteBrowserController', () => {
+  const TEXT_TOOL_COUNT = REMOTE_BROWSER_TOOL_DEFINITIONS.length - 1; // every tool but AchieveGoal
   let agentClient: FakeAgentClient;
   let calls: ServerCall[];
 
@@ -1420,14 +1421,23 @@ describe('ConversationRemoteBrowserController', () => {
 
     await first.Close();
     expect(second.OwnsTools).toBe(true);
-    expect(agentClient.Tools.size).toBe(REMOTE_BROWSER_TOOL_DEFINITIONS.length);
+    expect(agentClient.Tools.size).toBe(TEXT_TOOL_COUNT);
 
     // Only the owner advertises the tools to its conversation's agent runs.
     first.Open('conv-1');
     second.Open('conv-2');
     const tools = (c: ConversationRemoteBrowserController) => (c.WithBrowserContext(null)?.['Capabilities'] as { Tools?: unknown[] } | undefined)?.Tools;
     expect(tools(first)).toBeUndefined();
-    expect(tools(second)).toHaveLength(REMOTE_BROWSER_TOOL_DEFINITIONS.length);
+    expect(tools(second)).toHaveLength(TEXT_TOOL_COUNT);
+  });
+
+  it('never gives a text conversation AchieveGoal, whose goal loop would click past the guard', () => {
+    const c = controller();
+    c.Open('conv-1');
+    expect(agentClient.Tools.has(REMOTE_BROWSER_TOOL_NAMES.AchieveGoal)).toBe(false);
+    const advertised = (c.WithBrowserContext(null)?.['Capabilities'] as { Tools: Array<{ Name: string }> }).Tools.map((t) => t.Name);
+    expect(advertised).not.toContain(REMOTE_BROWSER_TOOL_NAMES.AchieveGoal);
+    expect(advertised).toContain(REMOTE_BROWSER_TOOL_NAMES.Fill);
   });
 
   it('adds only Open and CurrentUrl to the app context, keeping what the host already sent', () => {
