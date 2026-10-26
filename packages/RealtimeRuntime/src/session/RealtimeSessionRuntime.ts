@@ -1606,8 +1606,7 @@ export class RealtimeSessionRuntime {
     // published them on ActiveChannels$; skipping teardown would leave them undisposed, their tool
     // handlers registered, and their subscriptions live until the next start replaced them.
     this.agentSessionId = session.AgentSessionId ?? this.agentSessionId;
-    this.setConnectionState('error');
-    await this.teardown('error');
+    await this.endOnFailure();
   }
 
   /**
@@ -2234,8 +2233,21 @@ export class RealtimeSessionRuntime {
   private async failSessionStart(error: unknown): Promise<void> {
     console.error('[RealtimeSession] Failed to start session:', error);
     this.lastStartError = error instanceof Error ? error : new Error(String(error));
+    await this.endOnFailure();
+  }
+
+  /**
+   * Ends the call over a failure: a failed start, an unusable provider, or a fatal provider error.
+   *
+   * The teardown is claimed BEFORE `'error'` is published. `ConnectionState$` emits synchronously, and a
+   * host may end the call the moment it sees `'error'` (MobileApp's voice screen does); claimed first, that
+   * host's End joins this teardown instead of starting its own as `'explicit'`, so the row still closes as
+   * `Error` and `SessionEnded$` still says `'error'`. Teardown keeps a terminal `'error'` state.
+   */
+  private endOnFailure(): Promise<void> {
+    const ending = this.teardown('error');
     this.setConnectionState('error');
-    await this.teardown('error');
+    return ending;
   }
 
   /**
@@ -4173,10 +4185,9 @@ export class RealtimeSessionRuntime {
         // The driver is dead on the wire; nothing resumes after it says Fatal. End the call the way a
         // failed start ends: the row closes as Error, the microphone is released, the host is told
         // through SessionEnded$ (MJ#4629). A host's own End afterwards finds nothing to do.
-        this.setConnectionState('error');
         // Captured now: teardown nulls agentSessionId, and the failure it reports must name the session.
         const failedSessionId = this.agentSessionId;
-        void this.teardown('error').catch((teardownError: unknown) => {
+        void this.endOnFailure().catch((teardownError: unknown) => {
           console.error(`[RealtimeSession] Teardown after a fatal provider error failed for session ${failedSessionId}:`, teardownError);
         });
       }
