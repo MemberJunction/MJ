@@ -33,7 +33,7 @@ export interface RemoteBrowserFieldOption {
  * Structured metadata for a single form field discovered by a `browser_Inspect` action.
  */
 export interface RemoteBrowserFieldObservation {
-  /** Stable reference identifier within the current page observation (e.g. `'field-1'`). */
+  /** Stable reference identifier within the current page observation (e.g. `'f1'`). */
   Ref: string;
   /** Human-readable label resolved from `<label>`, `aria-label`, `placeholder`, or `name`. */
   Label: string;
@@ -59,7 +59,7 @@ export interface RemoteBrowserFieldObservation {
  * Structured metadata for an interactive button or link action discovered by `browser_Inspect`.
  */
 export interface RemoteBrowserActionObservation {
-  /** Stable reference identifier within the current page observation (e.g. `'action-1'`). */
+  /** Stable reference identifier within the current page observation (e.g. `'a1'`). */
   Ref: string;
   /** Visible text or accessible label of the control. */
   Label: string;
@@ -103,7 +103,7 @@ export interface RemoteBrowserPageObservation {
  * Input specification for filling a single form field via {@link RemoteBrowserFillAction}.
  */
 export interface RemoteBrowserFillFieldInput {
-  /** Target field `Ref` (e.g. `'field-1'`), `Name`, `id`, or visible `Label`. */
+  /** Target field `Ref` (e.g. `'f1'`), `Name`, `id`, or visible `Label`. */
   Target: string;
   /** Value to write (`string` for text/select/radio, `boolean` for checkbox). */
   Value: string | boolean;
@@ -138,7 +138,7 @@ export interface RemoteBrowserClickAction {
   Kind: 'click';
   /** Optional CSS selector identifying the element to click. */
   Selector?: string;
-  /** Optional element reference ID from the latest `inspect` observation (e.g. `'action-1'`, `'field-2'`). */
+  /** Optional element reference ID from the latest `inspect` observation (e.g. `'a1'`, `'f2'`). */
   Ref?: string;
   /** Optional visible button or link text to match and click. */
   Text?: string;
@@ -267,8 +267,6 @@ export interface RemoteBrowserActionResult {
   Observation?: RemoteBrowserPageObservation;
   /** Optional list of fields verified as filled (returned by `fill`). */
   Filled?: RemoteBrowserFilledFieldResult[];
-  /** Optional visible page text (returned by `getPageText`). */
-  PageText?: string;
 }
 
 /** One progress update from a goal run — emitted per perceive-act step (transport-neutral). */

@@ -120,9 +120,9 @@ describe('mapRemoteBrowserAction', () => {
     });
 
     it('maps click with Ref → ClickAction carrying [data-mj-browser-ref="..."] selector', () => {
-        const result = MapRemoteBrowserAction({ Kind: 'click', Ref: 'action-1' });
+        const result = MapRemoteBrowserAction({ Kind: 'click', Ref: 'a1' });
         expect(result).toBeInstanceOf(ClickAction);
-        expect((result as ClickAction).Selector).toBe('[data-mj-browser-ref="action-1"]');
+        expect((result as ClickAction).Selector).toBe('[data-mj-browser-ref="a1"]');
     });
 
     it('covers every RemoteBrowserAction.Kind (no kind silently unmapped)', () => {
@@ -135,12 +135,20 @@ describe('mapRemoteBrowserAction', () => {
             { Kind: 'back' },
             { Kind: 'forward' },
             { Kind: 'wait', Ms: 1 },
-            { Kind: 'inspect' },
-            { Kind: 'fill', Values: [{ Target: 'field-1', Value: 'Alice' }] },
-            { Kind: 'getPageText' },
         ];
         for (const action of samples) {
             expect(MapRemoteBrowserAction(action)).toBeDefined();
+        }
+    });
+
+    it('throws for the kinds the session runs in the page, which have no adapter action', () => {
+        const pageKinds: RemoteBrowserAction[] = [
+            { Kind: 'inspect' },
+            { Kind: 'fill', Values: [{ Target: 'f1', Value: 'Alice' }] },
+            { Kind: 'getPageText' },
+        ];
+        for (const action of pageKinds) {
+            expect(() => MapRemoteBrowserAction(action)).toThrow('has no adapter action');
         }
     });
 });

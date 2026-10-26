@@ -59,20 +59,11 @@ export class FakePlaywrightBrowserAdapter extends PlaywrightBrowserAdapter {
     public GetSelectionTextError: Error | null = null;
     /** Text returned from {@link GetVisibleText}; defaults to `'Visible page text'`. */
     public VisibleTextValue = 'Visible page text';
-    /** Title returned from {@link GetTitle}; defaults to `'Test Page'`. */
-    public TitleValue = 'Test Page';
-    /** Optional override for `InspectPageDom`. */
-    public InspectPageOverride?: (observationId: string) => Promise<import('@memberjunction/remote-browser-base').RemoteBrowserPageObservation>;
-    /** Optional override for `FillPageFields`. */
-    public FillFieldsOverride?: (
-        values: ReadonlyArray<import('@memberjunction/remote-browser-base').RemoteBrowserFillFieldInput>,
-        observationId: string,
-    ) => Promise<RemoteBrowserActionResult>;
-    /** Optional override for `ClickPageByRefOrText`. */
-    public ClickByRefOrTextOverride?: (
-        action: import('@memberjunction/remote-browser-base').RemoteBrowserClickAction,
-        observationId: string,
-    ) => Promise<RemoteBrowserActionResult>;
+    /**
+     * What {@link EvaluateInPage} returns under the node environment, where there is no DOM to run the
+     * in-page script against. Under jsdom the script runs against the test's own document instead.
+     */
+    public EvaluateFallback: object | null = null;
     /** Captured `onFrame` callback from {@link StartScreencast}, so a test can drive frames. */
     public LastOnFrame: ((frame: ScreencastFrame) => void) | null = null;
     /** Count of {@link StartAudioCapture} calls. */
@@ -114,8 +105,8 @@ export class FakePlaywrightBrowserAdapter extends PlaywrightBrowserAdapter {
         return this.VisibleTextValue;
     }
 
-    public override async GetTitle(): Promise<string> {
-        return this.TitleValue;
+    public override async EvaluateInPage<R, A>(fn: (arg: A) => R, arg: A): Promise<R | null> {
+        return typeof document === 'undefined' ? (this.EvaluateFallback as R | null) : fn(arg);
     }
 
     public override async GetSelectionText(): Promise<string> {

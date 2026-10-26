@@ -41,9 +41,9 @@ import { NormalizeNavigableUrl } from './dom-inspection';
  * executes. Exhaustive over `action.Kind`; lossless — every Base field that the enriched computer-use
  * action can carry (selector, coordinates, deltas, text, key, wait) is propagated.
  *
- * Note: Higher-level composite actions (`inspect`, `fill`, `getPageText`, and ref/text `click`) are
- * intercepted directly by {@link import('./cdp-remote-browser-session').CdpRemoteBrowserSession.ExecuteAction}
- * before reaching the low-level adapter; their fallback branches here keep the switch exhaustive.
+ * `inspect`, `fill` and `getPageText` read or write the DOM directly in
+ * {@link import('./cdp-remote-browser-session').CdpRemoteBrowserSession.ExecuteAction} and have no
+ * adapter action, so mapping one throws. A `click` by `Ref` maps to its `[data-mj-browser-ref]` selector.
  *
  * @param action The Base action to translate; narrow on `action.Kind`.
  * @returns The equivalent computer-use {@link BrowserAction}.
@@ -107,23 +107,9 @@ export function MapRemoteBrowserAction(action: RemoteBrowserAction): BrowserActi
             return mapped;
         }
         case 'inspect':
-        case 'getPageText': {
-            const mapped = new WaitAction();
-            mapped.DurationMs = 0;
-            return mapped;
-        }
-        case 'fill': {
-            const first = action.Values[0];
-            if (first) {
-                const mapped = new TypeAction();
-                mapped.Text = String(first.Value);
-                mapped.Selector = `[data-mj-browser-ref="${first.Target}"]`;
-                return mapped;
-            }
-            const mapped = new WaitAction();
-            mapped.DurationMs = 0;
-            return mapped;
-        }
+        case 'fill':
+        case 'getPageText':
+            throw new Error(`'${action.Kind}' has no adapter action; the session runs it in the page.`);
         default:
             // Exhaustive: `action` is `never` here. Adding a new `RemoteBrowserAction` member without
             // handling it above is a compile error, which is exactly what keeps this mapping lossless.

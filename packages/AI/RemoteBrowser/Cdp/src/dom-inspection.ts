@@ -1,16 +1,12 @@
 /**
- * @fileoverview Structured DOM perception (`inspect`), verified form filling (`fill`), ref/text click
- * resolution, and URL normalization for {@link CdpRemoteBrowserSession}.
+ * @fileoverview Structured DOM perception (`inspect`), verified form filling (`fill`), the click guard,
+ * and URL normalization for {@link CdpRemoteBrowserSession}.
  *
- * These helpers enable turn-based text LLMs to perceive and interact with live web pages deterministically
- * over the same CDP session that powers the live screencast and human takeover viewer:
- * - `NormalizeNavigableUrl` converts bare domains (`example.com`, `localhost:3000`) into valid URLs.
- * - `InspectPageDom` extracts visible text, form fields (`field-1`, `field-2`, ...), interactive actions
- *   (`action-1`, `action-2`, ...), and links, while redacting sensitive inputs (`password`, CVV, OTP, SSN).
- * - `FillPageFields` populates multiple form fields in a single round-trip using native prototype value
- *   setters (React/Angular/Vue compatible), dispatches `input`/`change`/`blur` events, and verifies values.
- * - `ClickPageByRefOrText` clicks an element by `Ref` or visible `Text` while guarding against
- *   autonomous clicks on destructive/submit/credential buttons.
+ * Everything that touches the page runs through ONE self-contained in-page script
+ * ({@link inPageBrowserScript}), so inspect, fill and the click guard share a single definition of what
+ * a visible field is, what a field is called, which fields are protected and which controls are
+ * destructive. Refs are `f1`, `f2`, … for fields and `a1`, `a2`, … for buttons and links; each
+ * inspect clears the previous refs, so a ref always names an element from the latest inspect.
  *
  * @module @memberjunction/remote-browser-cdp
  */
@@ -19,7 +15,6 @@ import { PlaywrightBrowserAdapter } from '@memberjunction/computer-use';
 import {
   RemoteBrowserActionObservation,
   RemoteBrowserActionResult,
-  RemoteBrowserClickAction,
   RemoteBrowserFieldObservation,
   RemoteBrowserFilledFieldResult,
   RemoteBrowserFillFieldInput,
@@ -27,54 +22,29 @@ import {
   RemoteBrowserPageObservation,
 } from '@memberjunction/remote-browser-base';
 
-/** Timeout bound (ms) for in-page DOM evaluation probes. */
-const DOM_EVALUATE_TIMEOUT_MS = 8000;
+/** Most page text an inspect returns (characters). */
+const INSPECT_TEXT_MAX_CHARS = 6000;
 
 /**
- * Minimal structural interface for the Playwright `Page.evaluate` surface used by DOM inspection/fill.
- * Defined self-contained here so `@memberjunction/remote-browser-cdp` needs no direct `playwright` dependency.
- */
-export interface IPlaywrightEvaluatablePage {
-  evaluate<R>(pageFunction: () => R | Promise<R>): Promise<R>;
-  evaluate<R, Arg>(pageFunction: (arg: Arg) => R | Promise<R>, arg: Arg): Promise<R>;
-}
-
-/**
- * Optional test-fake hooks that a {@link PlaywrightBrowserAdapter} double can implement to script
- * `inspect`, `fill`, and ref/text `click` outcomes without a live Playwright `Page`.
- */
-export interface IDomInspectableAdapterHooks {
-  /** Optional override for {@link InspectPageDom} used in unit tests. */
-  InspectPageOverride?: (observationId: string) => Promise<RemoteBrowserPageObservation>;
-  /** Optional override for {@link FillPageFields} used in unit tests. */
-  FillFieldsOverride?: (
-    values: ReadonlyArray<RemoteBrowserFillFieldInput>,
-    observationId: string,
-  ) => Promise<RemoteBrowserActionResult>;
-  /** Optional override for {@link ClickPageByRefOrText} used in unit tests. */
-  ClickByRefOrTextOverride?: (
-    action: RemoteBrowserClickAction,
-    observationId: string,
-  ) => Promise<RemoteBrowserActionResult>;
-}
-
-/**
- * Normalizes a user- or model-supplied URL string so bare domains (e.g. `'example.com'`,
- * `'httpbin.org/forms/post'`, `'localhost:4200'`) become valid navigable URLs.
+ * Normalizes a model- or user-supplied URL to an http(s) URL: bare domains (`example.com`,
+ * `httpbin.org/forms/post`) become `https://…` and local hosts (`localhost:4200`) `http://…`.
+ * `about:blank` passes through. Every other scheme (`file:`, `data:`, `chrome:`, `javascript:`, …)
+ * throws: it would let a prompt-injected agent read the API host's files or run script.
  *
  * @param rawUrl The raw URL or domain string.
- * @returns A normalized URL carrying an explicit scheme.
+ * @returns A normalized http(s) URL (or `about:blank`, or `''` for blank input).
  */
 export function NormalizeNavigableUrl(rawUrl: string): string {
   const trimmed = rawUrl.trim();
-  if (!trimmed) {
-    return trimmed;
-  }
-  if (/^(https?:\/\/|about:|data:|file:|blob:|chrome:)/i.test(trimmed)) {
+  if (!trimmed || trimmed.toLowerCase() === 'about:blank' || /^https?:\/\//i.test(trimmed)) {
     return trimmed;
   }
   if (trimmed.startsWith('//')) {
     return `https:${trimmed}`;
+  }
+  // `host:port` parses like a scheme but is a bare host, so it falls through to the rules below.
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed) && !/^[^/:?#]+:\d+(?:[/?#]|$)/.test(trimmed)) {
+    throw new Error(`Only http and https pages can be opened (got "${trimmed.slice(0, 40)}").`);
   }
   if (/^(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(\/|$)/i.test(trimmed)) {
     return `http://${trimmed}`;
@@ -82,36 +52,28 @@ export function NormalizeNavigableUrl(rawUrl: string): string {
   return `https://${trimmed}`;
 }
 
-/**
- * Extracts the underlying Playwright page from a {@link PlaywrightBrowserAdapter} when connected
- * to a real browser, or `null` when running against a test fake that does not launch Playwright.
- */
-function getAdapterPage(adapter: PlaywrightBrowserAdapter): IPlaywrightEvaluatablePage | null {
-  const candidate = (adapter as unknown as { page?: IPlaywrightEvaluatablePage | null }).page;
-  return candidate ?? null;
+/** The control a click resolves to, as the in-page guard sees it. */
+export interface ClickTarget {
+  /** Whether an element was found (always `false` for a point with nothing under it). */
+  Found: boolean;
+  /** The element's ref (`a3`, `f2`); set for a ref or text match so the click can target it exactly. */
+  Ref?: string;
+  /** The element's visible label. */
+  Label: string;
+  /** `true` for a submit, purchase, delete, sign-in or similar control a person must click. */
+  Destructive: boolean;
 }
 
-/**
- * Runs an async operation bounded by `timeoutMs`, returning `null` if the timer expires first.
- */
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    const expiry = new Promise<null>((resolve) => {
-      timer = setTimeout(() => resolve(null), timeoutMs);
-    });
-    return await Promise.race([promise, expiry]);
-  } finally {
-    if (timer !== undefined) {
-      clearTimeout(timer);
-    }
-  }
+/** What to resolve a click against: a ref or visible text from inspect, or a viewport point. */
+export interface ClickTargetQuery {
+  Ref?: string;
+  Text?: string;
+  X?: number;
+  Y?: number;
 }
 
-/**
- * Raw payload returned by the in-page DOM inspection script.
- */
-interface RawDomInspectionPayload {
+/** Raw inspect payload from the page. */
+interface RawInspection {
   url: string;
   title: string;
   text: string;
@@ -120,15 +82,41 @@ interface RawDomInspectionPayload {
   links: RemoteBrowserLinkObservation[];
 }
 
+/** Raw fill outcome from the page. */
+interface RawFillOutcome {
+  filled: RemoteBrowserFilledFieldResult[];
+  errors: string[];
+}
+
+/** One request to the in-page script. */
+type InPageRequest =
+  | { Op: 'inspect'; MaxTextChars: number }
+  | { Op: 'fill'; Values: ReadonlyArray<RemoteBrowserFillFieldInput> }
+  | { Op: 'resolveClick'; Query: ClickTargetQuery };
+
+/** The result type of each in-page op. */
+interface InPageResults {
+  inspect: RawInspection;
+  fill: RawFillOutcome;
+  resolveClick: ClickTarget;
+}
+
 /**
- * Self-contained browser-context function executed via `page.evaluate` to stamp stable `data-mj-browser-ref`
- * attributes and extract visible text, form fields, interactive controls, and links.
+ * The in-page script. Self-contained (it is serialized into the page by `page.evaluate`, so it can
+ * capture nothing from this module): every helper the three ops share is defined once, here.
  */
-function inPageInspectDom(): RawDomInspectionPayload {
-  const PROTECTED_PATTERN =
+function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome | ClickTarget {
+  type Control = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+  const REF_ATTR = 'data-mj-browser-ref';
+  const PROTECTED =
     /password|passcode|pin\b|otp|one[-_\s]?time|verification\s*code|cvv|cvc|csc|security\s*code|card\s*number|credit\s*card|debit\s*card|ssn|social\s*security|tax\s*id|routing\s*number|bank\s*account/i;
-  const DESTRUCTIVE_ACTION_PATTERN =
+  const DESTRUCTIVE =
     /\b(submit|purchase|buy\s+now|pay\b|place\s+order|checkout|delete|remove|destroy|cancel\s+account|close\s+account|confirm\s+order|authorize|wire\s+transfer|sign\s+in|log\s+in)\b/i;
+  const NON_FIELD_TYPES = ['hidden', 'submit', 'button', 'reset', 'image'];
+  const ACTION_SELECTOR = 'button, input[type="submit"], input[type="button"], a[href], [role="button"]';
+  const TEXT_CLICK_SELECTOR = `${ACTION_SELECTOR}, [role="link"], [role="tab"], [role="menuitem"], label, summary`;
+
+  const clean = (val: string | null | undefined, max = 160): string => (val ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 
   const isVisible = (el: Element): boolean => {
     const htmlEl = el as HTMLElement;
@@ -146,743 +134,341 @@ function inPageInspectDom(): RawDomInspectionPayload {
     return rect.width > 0 && rect.height > 0;
   };
 
-  const cleanText = (val: string | null | undefined, maxLen: number = 160): string =>
-    (val ?? '').replace(/\s+/g, ' ').trim().slice(0, maxLen);
+  const typeOf = (el: Element): string =>
+    el.tagName === 'INPUT' ? (el.getAttribute('type') || 'text').toLowerCase() : el.tagName.toLowerCase();
 
-  const resolveFieldLabel = (el: HTMLElement): string => {
-    const ariaLabel = cleanText(el.getAttribute('aria-label'));
-    if (ariaLabel) {
-      return ariaLabel;
-    }
-    const ariaLabelledBy = el.getAttribute('aria-labelledby');
-    if (ariaLabelledBy) {
-      const joined = ariaLabelledBy
-        .split(/\s+/)
-        .map((id) => document.getElementById(id)?.textContent ?? '')
-        .join(' ');
-      const cleaned = cleanText(joined);
-      if (cleaned) {
-        return cleaned;
-      }
-    }
-    if (el.id) {
-      try {
-        const explicitLabel = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
-        if (explicitLabel) {
-          const cleaned = cleanText(explicitLabel.textContent);
-          if (cleaned) {
-            return cleaned;
-          }
-        }
-      } catch {
-        // Ignore selector escape issues
-      }
-    }
-    const wrappingLabel = el.closest('label');
-    if (wrappingLabel) {
-      const clone = wrappingLabel.cloneNode(true) as HTMLElement;
-      clone.querySelectorAll('input, select, textarea, button').forEach((n) => n.remove());
-      const cleaned = cleanText(clone.textContent);
-      if (cleaned) {
-        return cleaned;
-      }
-    }
-    const placeholder = cleanText(el.getAttribute('placeholder'));
-    if (placeholder) {
-      return placeholder;
-    }
-    const nameAttr = cleanText(el.getAttribute('name'));
-    if (nameAttr) {
-      return nameAttr;
-    }
-    const titleAttr = cleanText(el.getAttribute('title'));
-    if (titleAttr) {
-      return titleAttr;
-    }
-    return cleanText(el.id) || el.tagName.toLowerCase();
-  };
-
-  const fields: RemoteBrowserFieldObservation[] = [];
-  let fieldCounter = 0;
-
-  const formControls = Array.from(
-    document.querySelectorAll('input, select, textarea'),
-  ) as Array<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>;
-
-  for (const control of formControls) {
-    if (!isVisible(control)) {
-      continue;
-    }
-    const tag = control.tagName.toLowerCase();
-    const inputType = tag === 'input' ? (control.getAttribute('type') || 'text').toLowerCase() : tag;
-    if (inputType === 'hidden' || inputType === 'submit' || inputType === 'button' || inputType === 'reset' || inputType === 'image') {
-      continue;
-    }
-
-    fieldCounter += 1;
-    const ref = `field-${fieldCounter}`;
-    control.setAttribute('data-mj-browser-ref', ref);
-
-    let label = resolveFieldLabel(control);
-    if (inputType === 'radio' || inputType === 'checkbox') {
-      const valAttr = cleanText((control as HTMLInputElement).value);
-      if (valAttr && valAttr.toLowerCase() !== 'on' && !label.toLowerCase().includes(valAttr.toLowerCase())) {
-        label = `${label} (${valAttr})`;
-      }
-    }
-
-    const nameOrId = cleanText(control.getAttribute('name') || control.id || '', 80) || undefined;
-    const autocomplete = cleanText(control.getAttribute('autocomplete') || '', 80);
-    const descriptor = `${label} ${nameOrId ?? ''} ${autocomplete} ${inputType}`;
-    const isProtected = inputType === 'password' || PROTECTED_PATTERN.test(descriptor);
-    const isDisabledOrReadOnly =
-      control.disabled ||
-      control.getAttribute('aria-disabled') === 'true' ||
-      ('readOnly' in control && Boolean((control as HTMLInputElement | HTMLTextAreaElement).readOnly));
-
-    const observation: RemoteBrowserFieldObservation = {
-      Ref: ref,
-      Label: label,
-      ...(nameOrId ? { Name: nameOrId } : {}),
-      Kind: inputType,
-      Required: Boolean(control.required || control.getAttribute('aria-required') === 'true'),
-      Writable: !isProtected && !isDisabledOrReadOnly,
-      ...(isProtected ? { Redacted: true } : {}),
-    };
-
-    if (inputType === 'checkbox' || inputType === 'radio') {
-      observation.Checked = Boolean((control as HTMLInputElement).checked);
-      observation.Value = (control as HTMLInputElement).value || (observation.Checked ? 'true' : 'false');
-    } else if (tag === 'select') {
-      const selectEl = control as HTMLSelectElement;
-      observation.Value = isProtected ? '[REDACTED]' : selectEl.value;
-      observation.Options = Array.from(selectEl.options)
-        .slice(0, 50)
-        .map((opt) => ({
-          Value: opt.value,
-          Label: cleanText(opt.text || opt.label || opt.value),
-        }));
-    } else {
-      const rawValue = (control as HTMLInputElement | HTMLTextAreaElement).value ?? '';
-      observation.Value = isProtected ? (rawValue ? '[REDACTED]' : '') : rawValue;
-    }
-
-    fields.push(observation);
-  }
-
-  const actions: RemoteBrowserActionObservation[] = [];
-  let actionCounter = 0;
-  const actionCandidates = Array.from(
-    document.querySelectorAll(
-      'button, input[type="submit"], input[type="button"], a[href], [role="button"]',
-    ),
-  ) as HTMLElement[];
-
-  for (const el of actionCandidates) {
-    if (!isVisible(el)) {
-      continue;
-    }
-    if ((el as HTMLButtonElement).disabled || el.getAttribute('aria-disabled') === 'true') {
-      continue;
-    }
-    const tag = el.tagName.toLowerCase();
-    const inputType = tag === 'input' ? (el.getAttribute('type') || '').toLowerCase() : '';
-    const label =
-      cleanText(
-        el.getAttribute('aria-label') ||
-          (tag === 'input' ? (el as HTMLInputElement).value : el.innerText || el.textContent) ||
-          el.getAttribute('title'),
-      ) || '';
-    if (!label) {
-      continue;
-    }
-
-    actionCounter += 1;
-    const ref = `action-${actionCounter}`;
-    el.setAttribute('data-mj-browser-ref', ref);
-
-    const role: 'button' | 'link' | 'submit' =
-      inputType === 'submit' || (tag === 'button' && (el.getAttribute('type') || 'submit').toLowerCase() === 'submit' && Boolean(el.closest('form')))
-        ? 'submit'
-        : tag === 'a'
-          ? 'link'
-          : 'button';
-    const destructive = role === 'submit' || DESTRUCTIVE_ACTION_PATTERN.test(label);
-
-    actions.push({
-      Ref: ref,
-      Label: label,
-      Role: role,
-      Destructive: destructive,
-    });
-    if (actions.length >= 60) {
-      break;
-    }
-  }
-
-  const links: RemoteBrowserLinkObservation[] = [];
-  const seenHrefs = new Set<string>();
-  const anchorNodes = Array.from(document.querySelectorAll('a[href]')) as HTMLAnchorElement[];
-  for (const a of anchorNodes) {
-    if (!isVisible(a)) {
-      continue;
-    }
-    const text = cleanText(a.innerText || a.textContent || a.getAttribute('aria-label'));
-    const href = a.href;
-    if (!text || !href || !/^https?:/i.test(href) || seenHrefs.has(href)) {
-      continue;
-    }
-    seenHrefs.add(href);
-    links.push({ Text: text, Href: href });
-    if (links.length >= 40) {
-      break;
-    }
-  }
-
-  const bodyText = (document.body?.innerText ?? '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 6000);
-
-  return {
-    url: window.location.href,
-    title: document.title ?? '',
-    text: bodyText,
-    fields,
-    actions,
-    links,
-  };
-}
-
-/**
- * Inspects the current page in `adapter` and returns a structured {@link RemoteBrowserPageObservation}.
- *
- * @param adapter The connected Playwright browser adapter.
- * @param observationId Monotonic observation identifier (e.g. `'obs-1'`).
- * @returns The structured page observation.
- */
-export async function InspectPageDom(
-  adapter: PlaywrightBrowserAdapter,
-  observationId: string,
-): Promise<RemoteBrowserPageObservation> {
-  const hooks = adapter as unknown as IDomInspectableAdapterHooks;
-  if (typeof hooks.InspectPageOverride === 'function') {
-    return hooks.InspectPageOverride(observationId);
-  }
-
-  const page = getAdapterPage(adapter);
-  if (page) {
-    const raw = await withTimeout(page.evaluate(inPageInspectDom), DOM_EVALUATE_TIMEOUT_MS);
-    if (raw) {
-      return {
-        ObservationID: observationId,
-        Url: raw.url || adapter.CurrentUrl,
-        Title: raw.title,
-        Text: raw.text,
-        Fields: raw.fields,
-        Actions: raw.actions,
-        Links: raw.links,
-      };
-    }
-  }
-
-  // Fallback for adapters without a direct Playwright Page (e.g. unit test fakes).
-  const [title, text] = await Promise.all([
-    adapter.GetTitle().catch(() => ''),
-    adapter.GetVisibleText().catch(() => ''),
-  ]);
-  return {
-    ObservationID: observationId,
-    Url: adapter.CurrentUrl,
-    Title: title,
-    Text: text,
-    Fields: [],
-    Actions: [],
-    Links: [],
-  };
-}
-
-/**
- * Raw outcome returned by the in-page form-fill script.
- */
-interface RawDomFillOutcome {
-  success: boolean;
-  filled: RemoteBrowserFilledFieldResult[];
-  errors: string[];
-}
-
-/**
- * Self-contained browser-context function executed via `page.evaluate` to populate multiple form fields
- * and verify their updated DOM state.
- */
-function inPageFillFields(
-  inputs: ReadonlyArray<{ Target: string; Value: string | boolean }>,
-): RawDomFillOutcome {
-  const PROTECTED_PATTERN =
-    /password|passcode|pin\b|otp|one[-_\s]?time|verification\s*code|cvv|cvc|csc|security\s*code|card\s*number|credit\s*card|debit\s*card|ssn|social\s*security|tax\s*id|routing\s*number|bank\s*account/i;
-
-  const cleanText = (val: string | null | undefined): string =>
-    (val ?? '').replace(/\s+/g, ' ').trim();
-
-  const resolveFieldLabel = (el: HTMLElement): string => {
-    const aria = cleanText(el.getAttribute('aria-label'));
+  const fieldLabel = (el: Control): string => {
+    const aria = clean(el.getAttribute('aria-label'));
     if (aria) {
       return aria;
     }
-    if (el.id) {
-      try {
-        const lbl = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
-        if (lbl && cleanText(lbl.textContent)) {
-          return cleanText(lbl.textContent);
-        }
-      } catch {
-        // ignore
-      }
+    const labelledBy = clean(
+      (el.getAttribute('aria-labelledby') ?? '')
+        .split(/\s+/)
+        .map((id) => (id ? document.getElementById(id)?.textContent ?? '' : ''))
+        .join(' '),
+    );
+    if (labelledBy) {
+      return labelledBy;
     }
-    const wrap = el.closest('label');
-    if (wrap) {
-      const clone = wrap.cloneNode(true) as HTMLElement;
-      clone.querySelectorAll('input, select, textarea, button').forEach((n) => n.remove());
-      const cleaned = cleanText(clone.textContent);
-      if (cleaned) {
-        return cleaned;
+    for (const label of Array.from(el.labels ?? [])) {
+      const copy = label.cloneNode(true) as HTMLElement;
+      copy.querySelectorAll('input, select, textarea, button').forEach((n) => n.remove());
+      const text = clean(copy.textContent);
+      if (text) {
+        return text;
       }
     }
     return (
-      cleanText(el.getAttribute('placeholder')) ||
-      cleanText(el.getAttribute('name')) ||
-      cleanText(el.id) ||
+      clean(el.getAttribute('placeholder')) ||
+      clean(el.getAttribute('name')) ||
+      clean(el.getAttribute('title')) ||
+      clean(el.id) ||
       el.tagName.toLowerCase()
     );
   };
 
-  const allControls = Array.from(
-    document.querySelectorAll('input, select, textarea'),
-  ) as Array<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>;
-
-  // Ensure every visible control has a data-mj-browser-ref if inspect wasn't run yet.
-  let autoIndex = 0;
-  for (const ctrl of allControls) {
-    const type = ctrl.tagName.toLowerCase() === 'input' ? (ctrl.getAttribute('type') || 'text').toLowerCase() : ctrl.tagName.toLowerCase();
-    if (type === 'hidden' || type === 'submit' || type === 'button' || type === 'reset' || type === 'image') {
-      continue;
-    }
-    autoIndex += 1;
-    if (!ctrl.getAttribute('data-mj-browser-ref')) {
-      ctrl.setAttribute('data-mj-browser-ref', `field-${autoIndex}`);
-    }
-  }
-
-  const findControl = (
-    targetRaw: string,
-    desiredValue: string | boolean,
-  ): HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null => {
-    const target = targetRaw.trim();
-    const targetLower = target.toLowerCase();
-
-    // 1. Exact ref match (`field-1`)
-    const byRef = allControls.find(
-      (c) => (c.getAttribute('data-mj-browser-ref') || '').toLowerCase() === targetLower,
-    );
-    if (byRef) {
-      return byRef;
-    }
-
-    // 2. Radio group matching when target matches name/label and desiredValue matches radio value/label
-    const desiredStr = String(desiredValue).trim().toLowerCase();
-    const radioCandidates = allControls.filter(
-      (c): c is HTMLInputElement =>
-        c.tagName.toLowerCase() === 'input' && (c.getAttribute('type') || '').toLowerCase() === 'radio',
-    );
-    const matchingRadioGroup = radioCandidates.filter((r) => {
-      const name = (r.getAttribute('name') || '').toLowerCase();
-      const label = resolveFieldLabel(r).toLowerCase();
-      return name === targetLower || label.includes(targetLower);
-    });
-    if (matchingRadioGroup.length > 1 && typeof desiredValue === 'string') {
-      const specificRadio = matchingRadioGroup.find(
-        (r) =>
-          r.value.toLowerCase() === desiredStr ||
-          resolveFieldLabel(r).toLowerCase().includes(desiredStr),
-      );
-      if (specificRadio) {
-        return specificRadio;
-      }
-    }
-
-    // 3. Exact id, name, aria-label, placeholder, or resolved label match
-    for (const c of allControls) {
-      const id = (c.id || '').toLowerCase();
-      const name = (c.getAttribute('name') || '').toLowerCase();
-      const label = resolveFieldLabel(c).toLowerCase();
-      const placeholder = (c.getAttribute('placeholder') || '').toLowerCase();
-      if (id === targetLower || name === targetLower || label === targetLower || placeholder === targetLower) {
-        return c;
-      }
-    }
-
-    // 4. Partial label / name / placeholder match
-    for (const c of allControls) {
-      const name = (c.getAttribute('name') || '').toLowerCase();
-      const label = resolveFieldLabel(c).toLowerCase();
-      const placeholder = (c.getAttribute('placeholder') || '').toLowerCase();
-      if (label.includes(targetLower) || targetLower.includes(label) || name.includes(targetLower) || placeholder.includes(targetLower)) {
-        return c;
-      }
-    }
-
-    return null;
+  const isProtected = (el: Control): boolean => {
+    const type = typeOf(el);
+    const descriptor = `${fieldLabel(el)} ${el.getAttribute('name') ?? ''} ${el.id} ${el.getAttribute('autocomplete') ?? ''} ${type}`;
+    return type === 'password' || PROTECTED.test(descriptor);
   };
 
-  const setNativeValue = (el: HTMLInputElement | HTMLTextAreaElement, value: string): void => {
-    const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-    const descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
-    if (descriptor && typeof descriptor.set === 'function') {
-      descriptor.set.call(el, value);
-    } else {
-      el.value = value;
-    }
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    el.dispatchEvent(new Event('change', { bubbles: true }));
-    el.dispatchEvent(new Event('blur', { bubbles: true }));
-  };
+  const isLocked = (el: Control): boolean =>
+    el.disabled || el.getAttribute('aria-disabled') === 'true' || ('readOnly' in el && Boolean(el.readOnly));
 
-  const filled: RemoteBrowserFilledFieldResult[] = [];
-  const errors: string[] = [];
+  const actionLabel = (el: HTMLElement): string =>
+    clean(el.getAttribute('aria-label') || (el.tagName === 'INPUT' ? (el as HTMLInputElement).value : el.innerText || el.textContent) || el.getAttribute('title'));
 
-  for (const item of inputs) {
-    const control = findControl(item.Target, item.Value);
-    if (!control) {
-      errors.push(`Field "${item.Target}" was not found on the current page.`);
-      continue;
-    }
+  const isSubmit = (el: HTMLElement): boolean =>
+    (el.tagName === 'INPUT' && typeOf(el) === 'submit') ||
+    (el.tagName === 'BUTTON' && (el.getAttribute('type') || 'submit').toLowerCase() === 'submit' && Boolean(el.closest('form')));
 
-    const ref = control.getAttribute('data-mj-browser-ref') || item.Target;
-    const label = resolveFieldLabel(control);
-    const tag = control.tagName.toLowerCase();
-    const inputType = tag === 'input' ? (control.getAttribute('type') || 'text').toLowerCase() : tag;
-    const nameOrId = `${control.getAttribute('name') || ''} ${control.id || ''} ${control.getAttribute('autocomplete') || ''}`;
+  const isDestructive = (el: HTMLElement): boolean => isSubmit(el) || DESTRUCTIVE.test(actionLabel(el));
 
-    if (inputType === 'password' || PROTECTED_PATTERN.test(`${label} ${nameOrId} ${inputType}`)) {
-      errors.push(
-        `Field "${label}" (${ref}) is a protected credential/payment input; ask the user to fill it via Collaborative takeover.`,
-      );
-      continue;
-    }
+  const visibleFields = (): Control[] =>
+    (Array.from(document.querySelectorAll('input, select, textarea')) as Control[]).filter(
+      (el) => !NON_FIELD_TYPES.includes(typeOf(el)) && isVisible(el),
+    );
 
-    if (
-      control.disabled ||
-      control.getAttribute('aria-disabled') === 'true' ||
-      ('readOnly' in control && Boolean((control as HTMLInputElement | HTMLTextAreaElement).readOnly))
-    ) {
-      errors.push(`Field "${label}" (${ref}) is disabled or read-only.`);
-      continue;
-    }
+  const byRef = (ref: string | undefined): HTMLElement | null =>
+    ref && /^[fa]\d+$/i.test(ref.trim()) ? document.querySelector<HTMLElement>(`[${REF_ATTR}="${ref.trim().toLowerCase()}"]`) : null;
 
-    if (inputType === 'checkbox' || inputType === 'radio') {
-      const inputEl = control as HTMLInputElement;
-      const shouldCheck =
-        typeof item.Value === 'boolean'
-          ? item.Value
-          : !/^(false|0|no|off|unchecked)$/i.test(String(item.Value).trim());
-      if (inputEl.checked !== shouldCheck) {
-        inputEl.click();
-        if (inputEl.checked !== shouldCheck) {
-          inputEl.checked = shouldCheck;
-          inputEl.dispatchEvent(new Event('input', { bubbles: true }));
-          inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+  if (req.Op === 'inspect') {
+    // A ref names an element from THIS inspect only: an old ref left on a now-hidden wizard step
+    // would otherwise be filled or clicked in place of the visible one.
+    document.querySelectorAll(`[${REF_ATTR}]`).forEach((el) => el.removeAttribute(REF_ATTR));
+
+    const fields: RemoteBrowserFieldObservation[] = visibleFields().map((control, i) => {
+      const ref = `f${i + 1}`;
+      control.setAttribute(REF_ATTR, ref);
+      const type = typeOf(control);
+      let label = fieldLabel(control);
+      if (type === 'radio' || type === 'checkbox') {
+        const value = clean(control.value);
+        if (value && value.toLowerCase() !== 'on' && !label.toLowerCase().includes(value.toLowerCase())) {
+          label = `${label} (${value})`;
         }
       }
-      filled.push({
+      const name = clean(control.getAttribute('name') || control.id, 80);
+      const isSecret = isProtected(control);
+      const field: RemoteBrowserFieldObservation = {
         Ref: ref,
         Label: label,
-        Value: String(inputEl.checked),
-      });
-      continue;
-    }
+        ...(name ? { Name: name } : {}),
+        Kind: type,
+        Required: control.required || control.getAttribute('aria-required') === 'true',
+        Writable: !isSecret && !isLocked(control),
+        ...(isSecret ? { Redacted: true } : {}),
+      };
+      if (type === 'checkbox' || type === 'radio') {
+        field.Checked = (control as HTMLInputElement).checked;
+        field.Value = control.value || String(field.Checked);
+      } else if (control.tagName === 'SELECT') {
+        const select = control as HTMLSelectElement;
+        field.Value = isSecret ? '[REDACTED]' : select.value;
+        field.Options = Array.from(select.options)
+          .slice(0, 50)
+          .map((opt) => ({ Value: opt.value, Label: clean(opt.text || opt.label || opt.value) }));
+      } else {
+        field.Value = isSecret ? (control.value ? '[REDACTED]' : '') : control.value;
+      }
+      return field;
+    });
 
-    if (tag === 'select') {
-      const selectEl = control as HTMLSelectElement;
-      const desired = String(item.Value).trim();
-      const desiredLower = desired.toLowerCase();
-      const options = Array.from(selectEl.options);
-      const matched =
-        options.find(
-          (o) =>
-            o.value.toLowerCase() === desiredLower ||
-            cleanText(o.text).toLowerCase() === desiredLower ||
-            cleanText(o.label).toLowerCase() === desiredLower,
-        ) ??
-        options.find(
-          (o) =>
-            cleanText(o.text).toLowerCase().includes(desiredLower) ||
-            o.value.toLowerCase().includes(desiredLower),
-        );
-      if (!matched) {
-        errors.push(
-          `Select field "${label}" (${ref}) has no option matching "${desired}". Available options: ${options
-            .map((o) => cleanText(o.text) || o.value)
-            .filter(Boolean)
-            .join(', ')}`,
-        );
+    const actions: RemoteBrowserActionObservation[] = [];
+    for (const el of Array.from(document.querySelectorAll<HTMLElement>(ACTION_SELECTOR))) {
+      if (!isVisible(el) || (el as HTMLButtonElement).disabled || el.getAttribute('aria-disabled') === 'true') {
         continue;
       }
-      selectEl.value = matched.value;
-      selectEl.dispatchEvent(new Event('input', { bubbles: true }));
-      selectEl.dispatchEvent(new Event('change', { bubbles: true }));
-      selectEl.dispatchEvent(new Event('blur', { bubbles: true }));
-      filled.push({
-        Ref: ref,
-        Label: label,
-        Value: cleanText(matched.text) || selectEl.value,
-      });
-      continue;
+      const label = actionLabel(el);
+      if (!label) {
+        continue;
+      }
+      const ref = `a${actions.length + 1}`;
+      el.setAttribute(REF_ATTR, ref);
+      actions.push({ Ref: ref, Label: label, Role: isSubmit(el) ? 'submit' : el.tagName === 'A' ? 'link' : 'button', Destructive: isDestructive(el) });
+      if (actions.length >= 60) {
+        break;
+      }
     }
 
-    const textEl = control as HTMLInputElement | HTMLTextAreaElement;
-    const strValue = String(item.Value);
-    textEl.focus();
-    setNativeValue(textEl, strValue);
-    filled.push({
-      Ref: ref,
-      Label: label,
-      Value: textEl.value,
-    });
+    const links: RemoteBrowserLinkObservation[] = [];
+    const seen = new Set<string>();
+    for (const a of Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]'))) {
+      const text = clean(a.innerText || a.textContent || a.getAttribute('aria-label'));
+      if (!text || !/^https?:/i.test(a.href) || seen.has(a.href) || !isVisible(a)) {
+        continue;
+      }
+      seen.add(a.href);
+      links.push({ Text: text, Href: a.href });
+      if (links.length >= 40) {
+        break;
+      }
+    }
+
+    const body = document.body as HTMLElement | null;
+    return {
+      url: window.location.href,
+      title: document.title ?? '',
+      text: (body?.innerText ?? body?.textContent ?? '').replace(/\n{3,}/g, '\n\n').trim().slice(0, req.MaxTextChars),
+      fields,
+      actions,
+      links,
+    };
   }
 
+  if (req.Op === 'fill') {
+    const controls = visibleFields();
+    const find = (targetRaw: string, desired: string | boolean): Control | null => {
+      const target = targetRaw.trim().toLowerCase();
+      if (/^f\d+$/.test(target)) {
+        // A ref only ever names the field the latest inspect stamped, and only while it is visible.
+        const ref = byRef(target);
+        return controls.find((c) => c === ref) ?? null;
+      }
+      // A radio group named by its group, with the value naming the option.
+      const radios = controls.filter((c) => typeOf(c) === 'radio' && ((c.getAttribute('name') ?? '').toLowerCase() === target || fieldLabel(c).toLowerCase().includes(target)));
+      if (radios.length > 1 && typeof desired === 'string') {
+        const want = desired.trim().toLowerCase();
+        const radio = radios.find((r) => r.value.toLowerCase() === want || fieldLabel(r).toLowerCase().includes(want));
+        if (radio) {
+          return radio;
+        }
+      }
+      const names = (c: Control) => [c.id, c.getAttribute('name') ?? '', fieldLabel(c), c.getAttribute('placeholder') ?? ''].map((s) => s.toLowerCase());
+      return (
+        controls.find((c) => names(c).includes(target)) ??
+        controls.find((c) => names(c).slice(1).some((n) => n && n.includes(target))) ??
+        null
+      );
+    };
+
+    const fire = (el: Element, ...types: string[]) => types.forEach((t) => el.dispatchEvent(new Event(t, { bubbles: true })));
+    const filled: RemoteBrowserFilledFieldResult[] = [];
+    const errors: string[] = [];
+
+    for (const item of req.Values) {
+      const control = find(item.Target, item.Value);
+      if (!control) {
+        errors.push(`Field "${item.Target}" was not found on the current page; inspect again for fresh refs.`);
+        continue;
+      }
+      const ref = control.getAttribute(REF_ATTR) || item.Target;
+      const label = fieldLabel(control);
+      if (isProtected(control)) {
+        errors.push(`Field "${label}" (${ref}) is a protected credential or payment input; ask the user to fill it in the browser.`);
+        continue;
+      }
+      if (isLocked(control)) {
+        errors.push(`Field "${label}" (${ref}) is disabled or read-only.`);
+        continue;
+      }
+      const type = typeOf(control);
+      if (type === 'checkbox' || type === 'radio') {
+        const input = control as HTMLInputElement;
+        const shouldCheck = typeof item.Value === 'boolean' ? item.Value : !/^(false|0|no|off|unchecked)$/i.test(String(item.Value).trim());
+        if (input.checked !== shouldCheck) {
+          input.click();
+          if (input.checked !== shouldCheck) {
+            input.checked = shouldCheck;
+            fire(input, 'input', 'change');
+          }
+        }
+        filled.push({ Ref: ref, Label: label, Value: String(input.checked) });
+        continue;
+      }
+      if (control.tagName === 'SELECT') {
+        const select = control as HTMLSelectElement;
+        const want = String(item.Value).trim().toLowerCase();
+        const options = Array.from(select.options);
+        const match =
+          options.find((o) => o.value.toLowerCase() === want || clean(o.text).toLowerCase() === want) ??
+          options.find((o) => clean(o.text).toLowerCase().includes(want) || o.value.toLowerCase().includes(want));
+        if (!match) {
+          errors.push(`Select field "${label}" (${ref}) has no option matching "${String(item.Value)}". Options: ${options.map((o) => clean(o.text) || o.value).filter(Boolean).join(', ')}`);
+          continue;
+        }
+        select.value = match.value;
+        fire(select, 'input', 'change', 'blur');
+        filled.push({ Ref: ref, Label: label, Value: clean(match.text) || select.value });
+        continue;
+      }
+      // The native setter, not `el.value =`: React and Vue track the value through it.
+      const text = control as HTMLInputElement | HTMLTextAreaElement;
+      const proto = text.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      text.focus();
+      Object.getOwnPropertyDescriptor(proto, 'value')?.set?.call(text, String(item.Value));
+      fire(text, 'input', 'change', 'blur');
+      filled.push({ Ref: ref, Label: label, Value: text.value });
+    }
+    return { filled, errors };
+  }
+
+  // resolveClick
+  const q = req.Query;
+  let el: HTMLElement | null = null;
+  if (q.Ref) {
+    el = byRef(q.Ref);
+  } else if (q.Text) {
+    const needle = q.Text.trim().toLowerCase();
+    const candidates = Array.from(document.querySelectorAll<HTMLElement>(TEXT_CLICK_SELECTOR)).filter(isVisible);
+    el =
+      candidates.find((c) => actionLabel(c).toLowerCase() === needle) ??
+      candidates.find((c) => {
+        const label = actionLabel(c).toLowerCase();
+        return Boolean(label) && (label.includes(needle) || needle.includes(label));
+      }) ??
+      null;
+    // Give a text match a ref so the click targets exactly this element.
+    if (el && !el.getAttribute(REF_ATTR)) {
+      const used = Array.from(document.querySelectorAll(`[${REF_ATTR}^="a"]`)).map((n) => Number((n.getAttribute(REF_ATTR) ?? '').slice(1)) || 0);
+      el.setAttribute(REF_ATTR, `a${Math.max(0, ...used) + 1}`);
+    }
+  } else if (typeof q.X === 'number' && typeof q.Y === 'number') {
+    const hit = document.elementFromPoint(q.X, q.Y) as HTMLElement | null;
+    el = hit?.closest<HTMLElement>(TEXT_CLICK_SELECTOR) ?? hit;
+  }
+  if (!el) {
+    return { Found: false, Label: q.Ref || q.Text || '', Destructive: false };
+  }
   return {
-    success: errors.length === 0 && filled.length > 0,
-    filled,
-    errors,
+    Found: true,
+    ...(q.Ref || q.Text ? { Ref: el.getAttribute(REF_ATTR) ?? undefined } : {}),
+    Label: actionLabel(el) || el.tagName.toLowerCase(),
+    Destructive: isDestructive(el),
   };
 }
 
 /**
- * Deterministically populates one or more form fields on the current page, verifies their values,
- * and returns a refreshed {@link RemoteBrowserPageObservation}.
+ * Runs one op of {@link inPageBrowserScript} through the adapter. Throws when the page cannot run it
+ * (no live page, or it outlived the adapter's action timeout).
+ */
+async function runInPage<K extends InPageRequest['Op']>(
+  adapter: PlaywrightBrowserAdapter,
+  req: Extract<InPageRequest, { Op: K }>,
+): Promise<InPageResults[K]> {
+  const result = await adapter.EvaluateInPage(inPageBrowserScript, req);
+  if (result === null) {
+    throw new Error('The page did not respond (no live page, or it timed out).');
+  }
+  return result as InPageResults[K];
+}
+
+/**
+ * Inspects the current page: fields (`f1`, …), buttons and links (`a1`, …), links with their URLs,
+ * and up to {@link INSPECT_TEXT_MAX_CHARS} characters of visible text.
  *
- * @param adapter The connected Playwright browser adapter.
- * @param values The list of `{ Target, Value }` entries to populate.
- * @param nextObservationId The observation ID to stamp on the post-fill observation.
- * @returns The action result carrying `Filled` and `Observation`.
+ * @param adapter The connected browser adapter.
+ * @param observationId The observation identifier to stamp (e.g. `'obs-1'`).
+ */
+export async function InspectPageDom(adapter: PlaywrightBrowserAdapter, observationId: string): Promise<RemoteBrowserPageObservation> {
+  const raw = await runInPage(adapter, { Op: 'inspect', MaxTextChars: INSPECT_TEXT_MAX_CHARS });
+  return {
+    ObservationID: observationId,
+    Url: raw.url || adapter.CurrentUrl,
+    Title: raw.title,
+    Text: raw.text,
+    Fields: raw.fields,
+    Actions: raw.actions,
+    Links: raw.links,
+  };
+}
+
+/**
+ * Fills fields by ref (`f1`), name, id or label, refusing protected and read-only fields, then
+ * inspects again so the result carries the page as it now is.
+ *
+ * @param adapter The connected browser adapter.
+ * @param values The fields and values to fill.
+ * @param observationId The observation identifier for the post-fill inspect.
  */
 export async function FillPageFields(
   adapter: PlaywrightBrowserAdapter,
   values: ReadonlyArray<RemoteBrowserFillFieldInput>,
-  nextObservationId: string,
+  observationId: string,
 ): Promise<RemoteBrowserActionResult> {
-  if (!values || values.length === 0) {
-    return {
-      Success: false,
-      CurrentUrl: adapter.CurrentUrl,
-      Detail: 'fill requires a non-empty Values array.',
-    };
+  if (values.length === 0) {
+    return { Success: false, CurrentUrl: adapter.CurrentUrl, Detail: 'fill requires at least one value.' };
   }
-
-  const hooks = adapter as unknown as IDomInspectableAdapterHooks;
-  if (typeof hooks.FillFieldsOverride === 'function') {
-    return hooks.FillFieldsOverride(values, nextObservationId);
-  }
-
-  const page = getAdapterPage(adapter);
-  if (!page) {
-    return {
-      Success: false,
-      CurrentUrl: adapter.CurrentUrl,
-      Detail: 'Live DOM page is not available for structured form filling.',
-    };
-  }
-
-  const outcome = await withTimeout(page.evaluate(inPageFillFields, values), DOM_EVALUATE_TIMEOUT_MS);
-  const observation = await InspectPageDom(adapter, nextObservationId);
-
-  if (!outcome) {
-    return {
-      Success: false,
-      CurrentUrl: observation.Url || adapter.CurrentUrl,
-      Detail: 'Timed out while filling form fields on the page.',
-      Observation: observation,
-    };
-  }
-
-  const detailParts: string[] = [];
-  if (outcome.filled.length > 0) {
-    detailParts.push(
-      `Filled ${outcome.filled.length} field(s): ${outcome.filled.map((f) => `${f.Label}="${f.Value}"`).join(', ')}.`,
-    );
-  }
-  if (outcome.errors.length > 0) {
-    detailParts.push(outcome.errors.join(' '));
-  }
-
+  const outcome = await runInPage(adapter, { Op: 'fill', Values: values });
+  const observation = await InspectPageDom(adapter, observationId);
+  const filledText = outcome.filled.length > 0 ? `Filled ${outcome.filled.length} field(s): ${outcome.filled.map((f) => `${f.Label}="${f.Value}"`).join(', ')}.` : '';
   return {
-    Success: outcome.success,
-    CurrentUrl: observation.Url || adapter.CurrentUrl,
-    Detail: detailParts.join(' ') || undefined,
+    Success: outcome.errors.length === 0 && outcome.filled.length > 0,
+    CurrentUrl: observation.Url,
+    Detail: [filledText, ...outcome.errors].filter(Boolean).join(' ') || undefined,
     Filled: outcome.filled,
     Observation: observation,
   };
 }
 
 /**
- * Raw resolution result from the in-page ref/text click lookup.
- */
-interface RawClickResolution {
-  found: boolean;
-  label: string;
-  destructive: boolean;
-  clicked: boolean;
-  error?: string;
-}
-
-/**
- * Self-contained browser-context function executed via `page.evaluate` to locate and click an element
- * by `Ref` (`data-mj-browser-ref`) or visible `Text`, refusing destructive/submit actions.
- */
-function inPageClickByRefOrText(arg: { ref?: string; text?: string }): RawClickResolution {
-  const DESTRUCTIVE_ACTION_PATTERN =
-    /\b(submit|purchase|buy\s+now|pay\b|place\s+order|checkout|delete|remove|destroy|cancel\s+account|close\s+account|confirm\s+order|authorize|wire\s+transfer|sign\s+in|log\s+in)\b/i;
-
-  const cleanText = (val: string | null | undefined): string =>
-    (val ?? '').replace(/\s+/g, ' ').trim();
-
-  let targetEl: HTMLElement | null = null;
-
-  if (arg.ref) {
-    const refTrimmed = arg.ref.trim();
-    targetEl = document.querySelector(`[data-mj-browser-ref="${CSS.escape(refTrimmed)}"]`) as HTMLElement | null;
-  }
-
-  if (!targetEl && arg.text) {
-    const needle = arg.text.trim().toLowerCase();
-    const candidates = Array.from(
-      document.querySelectorAll(
-        'button, a[href], input[type="submit"], input[type="button"], [role="button"], [role="link"], [role="tab"], [role="menuitem"], label, summary',
-      ),
-    ) as HTMLElement[];
-
-    targetEl =
-      candidates.find((el) => {
-        const label = cleanText(
-          el.getAttribute('aria-label') ||
-            (el.tagName.toLowerCase() === 'input' ? (el as HTMLInputElement).value : el.innerText || el.textContent),
-        ).toLowerCase();
-        return label === needle;
-      }) ??
-      candidates.find((el) => {
-        const label = cleanText(
-          el.getAttribute('aria-label') ||
-            (el.tagName.toLowerCase() === 'input' ? (el as HTMLInputElement).value : el.innerText || el.textContent),
-        ).toLowerCase();
-        return Boolean(label && (label.includes(needle) || needle.includes(label)));
-      }) ??
-      null;
-  }
-
-  if (!targetEl) {
-    return {
-      found: false,
-      label: arg.ref || arg.text || '',
-      destructive: false,
-      clicked: false,
-      error: `No clickable element matching ${arg.ref ? `ref "${arg.ref}"` : `text "${arg.text}"`} was found on the page.`,
-    };
-  }
-
-  const tag = targetEl.tagName.toLowerCase();
-  const inputType = tag === 'input' ? (targetEl.getAttribute('type') || '').toLowerCase() : '';
-  const label =
-    cleanText(
-      targetEl.getAttribute('aria-label') ||
-        (tag === 'input' ? (targetEl as HTMLInputElement).value : targetEl.innerText || targetEl.textContent) ||
-        targetEl.getAttribute('title'),
-    ) ||
-    arg.ref ||
-    arg.text ||
-    tag;
-
-  const isSubmit =
-    inputType === 'submit' ||
-    (tag === 'button' &&
-      (targetEl.getAttribute('type') || 'submit').toLowerCase() === 'submit' &&
-      Boolean(targetEl.closest('form')));
-  const isDestructive = isSubmit || DESTRUCTIVE_ACTION_PATTERN.test(label);
-
-  if (isDestructive) {
-    return {
-      found: true,
-      label,
-      destructive: true,
-      clicked: false,
-      error: `Refusing to automatically click submit/destructive control "${label}". Leave the prepared page ready and ask the user to click it via Collaborative takeover or confirm.`,
-    };
-  }
-
-  targetEl.scrollIntoView({ block: 'center', inline: 'center' });
-  targetEl.click();
-  return {
-    found: true,
-    label,
-    destructive: false,
-    clicked: true,
-  };
-}
-
-/**
- * Clicks an element on the current page identified by `action.Ref` or `action.Text`, enforcing
- * human-only guardrails on submit/destructive controls and returning an updated page observation.
+ * Resolves what a click would hit, so the session can refuse a destructive control before clicking.
  *
- * @param adapter The connected Playwright browser adapter.
- * @param action The click action carrying `Ref` or `Text`.
- * @param nextObservationId The observation ID to stamp on the post-click observation.
- * @returns The action result carrying `Observation`.
+ * @param adapter The connected browser adapter.
+ * @param query A ref or visible text from inspect, or a viewport point.
  */
-export async function ClickPageByRefOrText(
-  adapter: PlaywrightBrowserAdapter,
-  action: RemoteBrowserClickAction,
-  nextObservationId: string,
-): Promise<RemoteBrowserActionResult> {
-  const hooks = adapter as unknown as IDomInspectableAdapterHooks;
-  if (typeof hooks.ClickByRefOrTextOverride === 'function') {
-    return hooks.ClickByRefOrTextOverride(action, nextObservationId);
-  }
-
-  const page = getAdapterPage(adapter);
-  if (!page) {
-    return {
-      Success: false,
-      CurrentUrl: adapter.CurrentUrl,
-      Detail: 'Live DOM page is not available for Ref/Text click resolution.',
-    };
-  }
-
-  const resolution = await withTimeout(
-    page.evaluate(inPageClickByRefOrText, { ref: action.Ref, text: action.Text }),
-    DOM_EVALUATE_TIMEOUT_MS,
-  );
-  if (!resolution) {
-    return {
-      Success: false,
-      CurrentUrl: adapter.CurrentUrl,
-      Detail: 'Timed out while resolving Ref/Text click on the page.',
-    };
-  }
-
-  if (!resolution.clicked) {
-    const observation = await InspectPageDom(adapter, nextObservationId);
-    return {
-      Success: false,
-      CurrentUrl: observation.Url || adapter.CurrentUrl,
-      Detail: resolution.error || `Could not click "${resolution.label}".`,
-      Observation: observation,
-    };
-  }
-
-  // Allow brief settle for SPA route transitions or full-page navigations triggered by the click.
-  await adapter.WaitForLoadState('domcontentloaded').catch(() => {});
-  const observation = await InspectPageDom(adapter, nextObservationId);
-
-  return {
-    Success: true,
-    CurrentUrl: observation.Url || adapter.CurrentUrl,
-    Detail: `Clicked "${resolution.label}".`,
-    Observation: observation,
-  };
+export async function ResolveClickTarget(adapter: PlaywrightBrowserAdapter, query: ClickTargetQuery): Promise<ClickTarget> {
+  return runInPage(adapter, { Op: 'resolveClick', Query: query });
 }

@@ -22,6 +22,7 @@ import {
   RemoteBrowserActionResult,
   RemoteBrowserAudioChunk,
   RemoteBrowserCapabilityNotSupportedError,
+  RemoteBrowserClickAction,
   RemoteBrowserGoalResult,
   RemoteBrowserHumanInput,
   RemoteBrowserScreencastFrame,
@@ -29,15 +30,13 @@ import {
 } from '@memberjunction/remote-browser-base';
 import { ActionExecutionResult, PlaywrightBrowserAdapter, RunComputerUseParams, ScreencastFrame, ScreencastOptions } from '@memberjunction/computer-use';
 import { MapHumanInput, MapRemoteBrowserAction } from './map-action';
-import {
-  ClickPageByRefOrText,
-  FillPageFields,
-  InspectPageDom,
-  NormalizeNavigableUrl,
-} from './dom-inspection';
+import { FillPageFields, InspectPageDom, NormalizeNavigableUrl, ResolveClickTarget } from './dom-inspection';
 import { ICdpAudioCaptureHandle, ICdpSessionBackend } from './cdp-session-backend';
 import { ComputerUseGoalEngineFactory, DefaultComputerUseGoalEngineFactory } from './computer-use-goal-engine';
 import { WrapAdapterWithContext } from './context-injection';
+
+/** Most page text a `getPageText` action returns (characters); a long article otherwise floods the agent's context. */
+const PAGE_TEXT_MAX_CHARS = 20000;
 
 /**
  * The shared, CDP-backed live remote-browser session. Constructed by
@@ -168,10 +167,9 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
    * @inheritdoc
    */
   public async Navigate(url: string): Promise<RemoteBrowserActionResult> {
-    // Normalize bare domains (`example.com` -> `https://example.com`) before navigating.
-    const normalizedUrl = NormalizeNavigableUrl(url);
     try {
-      await this.adapter.Navigate(normalizedUrl);
+      // Bare domains become https:// URLs; any scheme but http(s) is refused.
+      await this.adapter.Navigate(NormalizeNavigableUrl(url));
       // Force an immediate live-view frame: CDP only emits a screencast frame on a repaint, so the
       // first navigation can otherwise leave the user staring at a blank surface (best-effort).
       await this.pushImmediateFrame();
@@ -189,72 +187,30 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
    * @inheritdoc
    */
   public async ExecuteAction(action: RemoteBrowserAction): Promise<RemoteBrowserActionResult> {
+    // Inspect, fill and page text read or write the DOM directly; their failures throw to the caller,
+    // which reports them (and recovers a dead browser) like any other action failure.
     if (action.Kind === 'inspect') {
-      try {
-        const observation = await InspectPageDom(this.adapter, this.nextObservationId());
-        return {
-          Success: true,
-          CurrentUrl: observation.Url || this.adapter.CurrentUrl,
-          Detail: `Inspected "${observation.Title || observation.Url}" (${observation.Fields.length} field(s), ${observation.Actions.length} action(s)).`,
-          Observation: observation,
-        };
-      } catch (err) {
-        return {
-          Success: false,
-          CurrentUrl: this.adapter.CurrentUrl,
-          Detail: this.errorDetail(err),
-        };
-      }
+      const observation = await InspectPageDom(this.adapter, this.nextObservationId());
+      return {
+        Success: true,
+        CurrentUrl: observation.Url,
+        Detail: `Inspected "${observation.Title || observation.Url}" (${observation.Fields.length} field(s), ${observation.Actions.length} action(s)).`,
+        Observation: observation,
+      };
     }
-
     if (action.Kind === 'fill') {
-      try {
-        const fillResult = await FillPageFields(this.adapter, action.Values, this.nextObservationId());
-        if (fillResult.Success || (fillResult.Filled && fillResult.Filled.length > 0)) {
-          await this.pushImmediateFrame();
-        }
-        return fillResult;
-      } catch (err) {
-        return {
-          Success: false,
-          CurrentUrl: this.adapter.CurrentUrl,
-          Detail: this.errorDetail(err),
-        };
+      const filled = await FillPageFields(this.adapter, action.Values, this.nextObservationId());
+      if (filled.Filled?.length) {
+        await this.pushImmediateFrame();
       }
+      return filled;
     }
-
     if (action.Kind === 'getPageText') {
-      try {
-        const text = await this.adapter.GetVisibleText();
-        return {
-          Success: true,
-          CurrentUrl: this.adapter.CurrentUrl,
-          Detail: text,
-          PageText: text,
-        };
-      } catch (err) {
-        return {
-          Success: false,
-          CurrentUrl: this.adapter.CurrentUrl,
-          Detail: this.errorDetail(err),
-        };
-      }
+      const text = (await this.adapter.GetVisibleText()).slice(0, PAGE_TEXT_MAX_CHARS);
+      return { Success: true, CurrentUrl: this.adapter.CurrentUrl, Detail: text };
     }
-
-    if (action.Kind === 'click' && !action.Selector && (action.Ref || action.Text)) {
-      try {
-        const clickResult = await ClickPageByRefOrText(this.adapter, action, this.nextObservationId());
-        if (clickResult.Success) {
-          await this.pushImmediateFrame();
-        }
-        return clickResult;
-      } catch (err) {
-        return {
-          Success: false,
-          CurrentUrl: this.adapter.CurrentUrl,
-          Detail: this.errorDetail(err),
-        };
-      }
+    if (action.Kind === 'click') {
+      return this.guardedClick(action);
     }
 
     const result = await this.adapter.ExecuteAction(MapRemoteBrowserAction(action));
@@ -591,6 +547,46 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
     if (this.features[featureName] !== true) {
       throw new RemoteBrowserCapabilityNotSupportedError(String(featureName), this.providerName || 'CdpRemoteBrowserSession');
     }
+  }
+
+  /**
+   * Clicks after checking what the click would hit: a submit, purchase, delete, sign-in or similar
+   * control is refused on EVERY path (ref, text, selector, coordinates) so a person clicks it. A ref
+   * or text target is clicked through its ref selector, a selector or point as given, so the click
+   * itself is always the adapter's real Playwright click.
+   */
+  private async guardedClick(action: RemoteBrowserClickAction): Promise<RemoteBrowserActionResult> {
+    const byInspect = Boolean(action.Ref || action.Text);
+    const target = await ResolveClickTarget(this.adapter, byInspect ? { Ref: action.Ref, Text: action.Text } : await this.clickPoint(action));
+    if (byInspect && !target.Found) {
+      return { Success: false, CurrentUrl: this.adapter.CurrentUrl, Detail: `No clickable element matches ${action.Ref ? `ref "${action.Ref}"` : `text "${action.Text}"`}; inspect again for fresh refs.` };
+    }
+    if (target.Destructive) {
+      return {
+        Success: false,
+        CurrentUrl: this.adapter.CurrentUrl,
+        Detail: `Refusing to click "${target.Label}": it submits, pays, deletes or signs in. Leave the page ready and ask the user to click it.`,
+      };
+    }
+    const click: RemoteBrowserClickAction = target.Ref ? { Kind: 'click', Ref: target.Ref } : action;
+    const result = await this.adapter.ExecuteAction(MapRemoteBrowserAction(click));
+    if (!result.Success || !byInspect) {
+      return this.toActionResult(result);
+    }
+    // Clicking by ref or text is the inspect-driven flow, so hand back the page as it now is.
+    await this.adapter.WaitForLoadState('domcontentloaded').catch(() => undefined);
+    await this.pushImmediateFrame();
+    const observation = await InspectPageDom(this.adapter, this.nextObservationId());
+    return { Success: true, CurrentUrl: observation.Url, Detail: `Clicked "${target.Label}".`, Observation: observation };
+  }
+
+  /** The viewport point a selector or coordinate click lands on (a selector resolves the way the click does). */
+  private async clickPoint(action: RemoteBrowserClickAction): Promise<{ X?: number; Y?: number }> {
+    if (!action.Selector) {
+      return { X: action.X, Y: action.Y };
+    }
+    const box = (await this.adapter.QueryElement(action.Selector)).BoundingBox;
+    return box ? { X: (box.XMin + box.XMax) / 2, Y: (box.YMin + box.YMax) / 2 } : {};
   }
 
   /**

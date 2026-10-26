@@ -66,6 +66,8 @@ describe('CdpRemoteBrowserSession — core', () => {
         failure.Success = false;
         failure.Error = 'element not found';
         adapter.NextExecuteResult = failure;
+        // The click guard finds nothing at the target (no DOM under node), so the click proceeds.
+        adapter.EvaluateFallback = { Found: false, Label: '', Destructive: false };
 
         const result = await session.ExecuteAction({ Kind: 'click', Selector: '#x' });
 
@@ -340,6 +342,8 @@ describe('CdpRemoteBrowserSession — immediate frame on navigation (Bug 1)', ()
 
     it('ExecuteAction does NOT force a frame for a non-navigation action (click)', async () => {
         const { session, adapter } = buildSession({});
+        // The click guard finds nothing at the target (no DOM under node), so the click proceeds.
+        adapter.EvaluateFallback = { Found: false, Label: '', Destructive: false };
         await session.ExecuteAction({ Kind: 'click', X: 1, Y: 1 });
         expect(adapter.CaptureScreencastFrameCount).toBe(0);
     });
@@ -354,113 +358,32 @@ describe('CdpRemoteBrowserSession — immediate frame on navigation (Bug 1)', ()
     });
 });
 
-describe('CdpRemoteBrowserSession — structured DOM perception & form filling', () => {
-    it('Navigate normalizes bare domains to https:// before delegating to the adapter', async () => {
+describe('CdpRemoteBrowserSession — navigation guard and page text', () => {
+    it('Navigate normalizes a bare domain to https:// before delegating to the adapter', async () => {
         const { session, adapter } = buildSession({});
         await session.Navigate('example.com');
         expect(adapter.NavigatedUrls).toEqual(['https://example.com']);
     });
 
-    it('ExecuteAction(inspect) returns a structured RemoteBrowserPageObservation with monotonic ObservationID', async () => {
+    it('Navigate refuses a non-http(s) scheme without touching the browser', async () => {
         const { session, adapter } = buildSession({});
-        adapter.CurrentUrlValue = 'https://httpbin.org/forms/post';
-        adapter.TitleValue = 'Order Form';
-        adapter.VisibleTextValue = 'Customer name: Telephone:';
-
-        const first = await session.ExecuteAction({ Kind: 'inspect' });
-        expect(first.Success).toBe(true);
-        expect(first.Observation).toEqual({
-            ObservationID: 'obs-1',
-            Url: 'https://httpbin.org/forms/post',
-            Title: 'Order Form',
-            Text: 'Customer name: Telephone:',
-            Fields: [],
-            Actions: [],
-            Links: [],
-        });
-
-        const second = await session.ExecuteAction({ Kind: 'inspect' });
-        expect(second.Observation?.ObservationID).toBe('obs-2');
+        const result = await session.Navigate('file:///proc/self/environ');
+        expect(result.Success).toBe(false);
+        expect(result.Detail).toContain('Only http and https');
+        expect(adapter.NavigatedUrls).toEqual([]);
     });
 
-    it('ExecuteAction(getPageText) returns the visible page text on PageText and Detail', async () => {
+    it('getPageText returns the visible text, capped so a long page cannot flood the context', async () => {
         const { session, adapter } = buildSession({});
-        adapter.VisibleTextValue = 'Welcome to MemberJunction';
+        adapter.VisibleTextValue = 'x'.repeat(25000);
         const result = await session.ExecuteAction({ Kind: 'getPageText' });
         expect(result.Success).toBe(true);
-        expect(result.PageText).toBe('Welcome to MemberJunction');
-        expect(result.Detail).toBe('Welcome to MemberJunction');
+        expect(result.Detail).toHaveLength(20000);
     });
 
-    it('ExecuteAction(fill) populates fields via FillPageFields and pushes an immediate screencast frame', async () => {
+    it('a click the guard cannot check (no page) is not made', async () => {
         const { session, adapter } = buildSession({});
-        adapter.FillFieldsOverride = async (values, observationId) => ({
-            Success: true,
-            CurrentUrl: 'https://httpbin.org/forms/post',
-            Detail: `Filled ${values.length} field(s).`,
-            Filled: values.map((v) => ({
-                Ref: v.Target,
-                Label: 'Customer name',
-                Value: String(v.Value),
-            })),
-            Observation: {
-                ObservationID: observationId,
-                Url: 'https://httpbin.org/forms/post',
-                Title: 'Order Form',
-                Text: 'Customer name',
-                Fields: [
-                    {
-                        Ref: 'field-1',
-                        Label: 'Customer name',
-                        Kind: 'text',
-                        Required: false,
-                        Writable: true,
-                        Value: 'Colin Brockman',
-                    },
-                ],
-                Actions: [],
-                Links: [],
-            },
-        });
-
-        const result = await session.ExecuteAction({
-            Kind: 'fill',
-            Values: [{ Target: 'field-1', Value: 'Colin Brockman' }],
-        });
-
-        expect(result.Success).toBe(true);
-        expect(result.Filled).toEqual([
-            { Ref: 'field-1', Label: 'Customer name', Value: 'Colin Brockman' },
-        ]);
-        expect(result.Observation?.ObservationID).toBe('obs-1');
-        expect(adapter.CaptureScreencastFrameCount).toBe(1);
-    });
-
-    it('ExecuteAction(click) with Ref or Text delegates to ClickPageByRefOrText and pushes a screencast frame', async () => {
-        const { session, adapter } = buildSession({});
-        adapter.ClickByRefOrTextOverride = async (action, observationId) => ({
-            Success: true,
-            CurrentUrl: 'https://example.org/iana',
-            Detail: `Clicked "${action.Text ?? action.Ref}".`,
-            Observation: {
-                ObservationID: observationId,
-                Url: 'https://example.org/iana',
-                Title: 'IANA',
-                Text: 'Example Domains',
-                Fields: [],
-                Actions: [],
-                Links: [],
-            },
-        });
-
-        const result = await session.ExecuteAction({
-            Kind: 'click',
-            Text: 'Learn more',
-        });
-
-        expect(result.Success).toBe(true);
-        expect(result.CurrentUrl).toBe('https://example.org/iana');
-        expect(result.Observation?.ObservationID).toBe('obs-1');
-        expect(adapter.CaptureScreencastFrameCount).toBe(1);
+        await expect(session.ExecuteAction({ Kind: 'click', X: 5, Y: 5 })).rejects.toThrow('did not respond');
+        expect(adapter.ExecutedActions).toEqual([]);
     });
 });
