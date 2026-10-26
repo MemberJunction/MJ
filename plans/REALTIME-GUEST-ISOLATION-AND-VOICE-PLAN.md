@@ -10,7 +10,7 @@
 
 **Spec:** the nine GitHub issues (read in the order of the title) plus the design decisions recorded per task below. Decided with Soham on 2026-10-26, one issue at a time, after a live or unit reproduction of each.
 
-**State on 2026-10-26 (end of SDD run):** Tasks 1 to 10 done and reviewed clean; Task 11 Step 1 done; Steps 2–3 (commit, PR) wait for Soham's go; Task 12 partly done; Task 13 blocked on permission to write to GitHub. Earlier note: Tasks 1 to 9 are IMPLEMENTED and green on branch `fix/realtime-guest-isolation-and-voice` in `~/Projects/mj-edge/MJ` (uncommitted, from `origin/next` 172c8396b2 with PR #6036's branch merged in). Five changesets are written. Tasks 10 to 13 remain: the final gates, review, commit and PR, host cleanup, and the Caliber follow-ups. MJ#5516 was reviewed and closed as not planned (one account per provider on every host; the design is in the closing comment).
+**State on 2026-10-26 (final):** Tasks 1 to 11 done; PR MJ#6065 open against `next`, stacked on #6036. Open: Task 12 (Caliber shim decision; smoke API back to `next` after merge) and Task 13 (Caliber issue + caliber#626 comment, blocked by the session's permission rules; drafts written). Earlier note: Tasks 1 to 9 are IMPLEMENTED and green on branch `fix/realtime-guest-isolation-and-voice` in `~/Projects/mj-edge/MJ` (uncommitted, from `origin/next` 172c8396b2 with PR #6036's branch merged in). Five changesets are written. Tasks 10 to 13 remain: the final gates, review, commit and PR, host cleanup, and the Caliber follow-ups. MJ#5516 was reviewed and closed as not planned (one account per provider on every host; the design is in the closing comment).
 
 ## Global Constraints
 
@@ -45,7 +45,7 @@
 **Evidence:** live, two guests minted from a `UI`-role widget on `MJ_Edge_Caliber`: before, guest 2's `RunAIAgentFromConversationDetail` on guest 1's message returned `success: true` and wrote an `AI` row into guest 1's conversation; after, `Not authorized: you do not own this conversation`, no row, and guest 1's own turn still succeeds. Script: scratchpad `repro-6032.mjs`.
 
 - [x] Red → green: `cd packages/MJServer && npx vitest run src/__tests__/realtimeSessions/sessionAccess.test.ts` → 33 passed.
-- [ ] Re-verify after rebase: same command, plus `npx vitest run src/__tests__/RunAIAgentResolver.conversationWriter.test.ts src/__tests__/RunAIAgentResolver.runDataGuard.test.ts` → 11 passed.
+- [x] Re-verified after merging `next` (2026-10-26, MJServer 2936 passed): same command, plus `npx vitest run src/__tests__/RunAIAgentResolver.conversationWriter.test.ts src/__tests__/RunAIAgentResolver.runDataGuard.test.ts` → 11 passed.
 
 ### Task 2: Widget mints only scope-isolated guest roles (MJ#6043)
 
@@ -135,8 +135,8 @@
 ### Task 11: Review, commit, PR
 
 - [x] **Step 1:** review done through superpowers:subagent-driven-development on 2026-10-26 (ledger: `.superpowers/sdd/REALTIME-GUEST-ISOLATION-AND-VOICE-PLAN/progress.md`): four task-group reviews, two fix rounds on the runtime (an End during the teardown wait was lost; a Fatal during Connect hid the start error, then a dead-socket go-live window), one fix round adding `RequestSpokenTurn` to the OpenAI Realtime protocol client, the server-bridged ElevenLabs string result and a resolver-level gate test, then a final whole-branch review and one fix wave (10-minute TTL on the ElevenLabs ensure cache, session ids in two catches, displaced JSDoc, stale comments, a teardown guard on the fatal handler, LiveKit refusal before the offer check). All reviews closed clean.
-- [ ] **Step 2:** commits — one per task (1 to 8) plus one for the changesets, each message naming the issue (`fix(server): … (MJ#6032)`), ending with the attribution line the session reminder gives. Commits need Soham's explicit go.
-- [ ] **Step 3:** PR to `next` with the `open-pr` skill. Body: one paragraph per issue (what was wrong, the decision, the evidence line), the two behaviour changes (Task 2's admin error, Task 5's automatic end on a fatal error), the server/runtime shipping-together note from Task 4, the pre-existing enterprise test failure, and `Closes #6032 #6043 #6044 #6013 #4629 #6025 #4591 #4806 #4803`.
+- [x] **Step 2:** committed 2026-10-26 as seven commits grouped by package (the runtime and ElevenLabs client files carry several tasks' hunks, so one-commit-per-task was not separable), then merged `origin/next` — one per task (1 to 8) plus one for the changesets, each message naming the issue (`fix(server): … (MJ#6032)`), ending with the attribution line the session reminder gives. Commits need Soham's explicit go.
+- [x] **Step 3:** opened as MJ#6065 against `next` (stacked on #6036) — PR to `next` with the `open-pr` skill. Body: one paragraph per issue (what was wrong, the decision, the evidence line), the two behaviour changes (Task 2's admin error, Task 5's automatic end on a fatal error), the server/runtime shipping-together note from Task 4, the pre-existing enterprise test failure, and `Closes #6032 #6043 #6044 #6013 #4629 #6025 #4591 #4806 #4803`.
 
 ### Task 12: Host cleanup (`~/Projects/mj-edge`)
 
