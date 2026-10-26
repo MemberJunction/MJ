@@ -36,7 +36,9 @@ function matchingKey(name: string): string {
  * matches all of the trimmed reference, and the reference's own key is the name's key.
  *
  * Code that resolves a caller's text to an entity field must use this rule, or a stricter one.
- * Then it never resolves a reference that the field-level security gate does not report.
+ * Then it never resolves a reference that the field-level security gate does not report: the
+ * gate (`FieldSecuritySQLGate` in `@memberjunction/core`) reports every reference this rule
+ * matches, and also those that match only after Unicode compatibility, accent and case folding.
  *
  * @param reference The identifier as the caller wrote it, without quoting delimiters
  * @param name The identifier to compare against, such as an entity field name
@@ -50,6 +52,11 @@ export function IdentifierMatches(reference: string, name: string): boolean {
 
 /**
  * Finds which of the supplied identifier names are referenced anywhere in a SQL fragment.
+ *
+ * The field-level security gate no longer uses this: it reads tokens with the database's own
+ * lexical rules (`FieldSecuritySQLGate` in `@memberjunction/core`), so text in string literals and
+ * comments is not a reference and each name is compared on its own. This stays for callers that
+ * want the plain textual search described below.
  *
  * Built for field-level security, where an `ExtraFilter` or `OrderBy` naming a field the user
  * cannot read must be rejected: output stripping alone is security theater, because

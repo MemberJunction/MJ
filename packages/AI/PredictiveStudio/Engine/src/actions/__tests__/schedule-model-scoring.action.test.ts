@@ -68,14 +68,17 @@ function validParams(extra: ActionParam[] = []): ActionParam[] {
   ];
 }
 
+/** Each required param, paired with a param list that omits it. */
+const MISSING_PARAM_CASES: Array<[string, ActionParam[]]> = [
+  ['ModelID', [{ Name: 'TargetEntityName', Type: 'Input', Value: 'Memberships' }, { Name: 'OutputField', Type: 'Input', Value: 'X' }, { Name: 'ScopeFilter', Type: 'Input', Value: 'x=1' }]],
+  ['TargetEntityName', [{ Name: 'ModelID', Type: 'Input', Value: 'm1' }, { Name: 'OutputField', Type: 'Input', Value: 'X' }, { Name: 'ScopeFilter', Type: 'Input', Value: 'x=1' }]],
+  ['ScopeFilter', [{ Name: 'ModelID', Type: 'Input', Value: 'm1' }, { Name: 'TargetEntityName', Type: 'Input', Value: 'Memberships' }, { Name: 'OutputField', Type: 'Input', Value: 'X' }]],
+];
+
 describe('PredictiveStudioScheduleModelScoringAction — validation', () => {
-  it.each([
-    ['ModelID', [{ Name: 'TargetEntityName', Type: 'Input', Value: 'Memberships' }, { Name: 'OutputField', Type: 'Input', Value: 'X' }, { Name: 'ScopeFilter', Type: 'Input', Value: 'x=1' }]],
-    ['TargetEntityName', [{ Name: 'ModelID', Type: 'Input', Value: 'm1' }, { Name: 'OutputField', Type: 'Input', Value: 'X' }, { Name: 'ScopeFilter', Type: 'Input', Value: 'x=1' }]],
-    ['ScopeFilter', [{ Name: 'ModelID', Type: 'Input', Value: 'm1' }, { Name: 'TargetEntityName', Type: 'Input', Value: 'Memberships' }, { Name: 'OutputField', Type: 'Input', Value: 'X' }]],
-  ] as const)('fails when %s is missing', async (_missing, list) => {
+  it.each(MISSING_PARAM_CASES)('fails when %s is missing', async (_missing, list) => {
     const scheduler = new MockScheduler(STUB_RESULT);
-    const result = await new TestableAction(scheduler.fn).run(params(list as ActionParam[]));
+    const result = await new TestableAction(scheduler.fn).run(params(list));
     expect(result.Success).toBe(false);
     expect(result.ResultCode).toBe('VALIDATION_ERROR');
     expect(scheduler.CallCount).toBe(0);

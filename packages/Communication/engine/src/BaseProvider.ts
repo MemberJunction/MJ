@@ -7,6 +7,8 @@ import { TemplateEngineServer } from '@memberjunction/templates';
  */
 export class ProcessedMessageServer extends ProcessedMessage {
     public async Process(forceTemplateRefresh?: boolean, contextUser?: UserInfo): Promise<{Success: boolean, Message?: string}> {
+        // every render runs as this message's user, so template extensions act for it and not for whichever caller last configured the shared template engine
+        const renderOptions = { ContextUser: contextUser };
         if (this.BodyTemplate || this.SubjectTemplate || this.HTMLBodyTemplate)
             await TemplateEngineServer.Instance.Config(forceTemplateRefresh, contextUser); // make sure the template engine is configured if we are using either template
 
@@ -19,7 +21,7 @@ export class ProcessedMessageServer extends ProcessedMessage {
                     Message: 'BodyTemplate does not have a Text option and this is required for processing the body of the message.'
                 };
 
-            const result = await TemplateEngineServer.Instance.RenderTemplate(this.BodyTemplate, regularContent, this.ContextData);
+            const result = await TemplateEngineServer.Instance.RenderTemplate(this.BodyTemplate, regularContent, this.ContextData, undefined, undefined, renderOptions);
             if (result && result.Success) {
                 this.ProcessedBody = result.Output;
             }
@@ -34,7 +36,7 @@ export class ProcessedMessageServer extends ProcessedMessage {
             if (!this.HTMLBodyTemplate && !this.HTMLBody) { // if we have an HTMLBodyTemplate, we will process it separately below
                 const htmlContent = this.BodyTemplate.GetHighestPriorityContent('HTML');
                 if (htmlContent) {
-                    const result = await TemplateEngineServer.Instance.RenderTemplate(this.BodyTemplate, htmlContent, this.ContextData);
+                    const result = await TemplateEngineServer.Instance.RenderTemplate(this.BodyTemplate, htmlContent, this.ContextData, undefined, undefined, renderOptions);
                     if (result && result.Success) {
                         this.ProcessedHTMLBody = result.Output;
                     }
@@ -60,7 +62,7 @@ export class ProcessedMessageServer extends ProcessedMessage {
             // process the subject template
             const htmlContent = this.HTMLBodyTemplate.GetHighestPriorityContent('HTML');
             if (htmlContent) {
-                const result = await TemplateEngineServer.Instance.RenderTemplate(this.HTMLBodyTemplate, htmlContent, this.ContextData);
+                const result = await TemplateEngineServer.Instance.RenderTemplate(this.HTMLBodyTemplate, htmlContent, this.ContextData, undefined, undefined, renderOptions);
                 if (result && result.Success) {
                     this.ProcessedHTMLBody = result.Output;
                 }
@@ -91,7 +93,7 @@ export class ProcessedMessageServer extends ProcessedMessage {
             // process the subject template
             const subjectContent = this.SubjectTemplate.GetHighestPriorityContent('HTML');
             if (subjectContent) {
-                const result = await TemplateEngineServer.Instance.RenderTemplate(this.SubjectTemplate, subjectContent, this.ContextData);
+                const result = await TemplateEngineServer.Instance.RenderTemplate(this.SubjectTemplate, subjectContent, this.ContextData, undefined, undefined, renderOptions);
                 if (result && result.Success) {
                     this.ProcessedSubject = result.Output;
                 }

@@ -1,0 +1,43 @@
+{
+  "name": "@memberjunction/predictive-studio-truth-suite",
+  "version": "6.2.0-edge.5",
+  "private": true,
+  "type": "module",
+  "license": "BUSL-1.1",
+  "description": "Predictive Studio planted-truth datasets and the harness the containment gate checks use. Repo-local test content; never published.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:db": "vitest run --config vitest.db.config.ts",
+    "test:regeneration": "vitest run --config vitest.regeneration.config.ts",
+    "test:python": "node scripts/run-pytest.mjs && node scripts/run-pytest.mjs --mypy",
+    "truth:loom": "node scripts/fetch-loom.mjs",
+    "truth:data": "tsx src/data/cli.ts",
+    "truth:provision": "node scripts/provision.mjs",
+    "truth:sidecar": "tsx scripts/sidecar.mts",
+    "setup:python": "node scripts/setup-python.mjs"
+  },
+  "dependencies": {
+    "@memberjunction/ai-core-plus": "6.2.0-edge.5",
+    "@memberjunction/core": "6.2.0-edge.5",
+    "@memberjunction/core-entities": "6.2.0-edge.5",
+    "@memberjunction/global": "6.2.0-edge.5",
+    "@memberjunction/graphql-dataprovider": "6.2.0-edge.5",
+    "@memberjunction/predictive-studio": "6.2.0-edge.5",
+    "@memberjunction/predictive-studio-core": "6.2.0-edge.5",
+    "@memberjunction/predictive-studio-sidecar": "6.2.0-edge.5",
+    "@memberjunction/testing-integration": "6.2.0-edge.5",
+    "mssql": "^12.2.0"
+  },
+  "devDependencies": {
+    "@types/mssql": "^9.1.9",
+    "@types/node": "24.10.11",
+    "dotenv": "^17.2.4",
+    "tsc-alias": "^1.8.10",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}

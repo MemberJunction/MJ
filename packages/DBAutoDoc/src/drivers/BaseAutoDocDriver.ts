@@ -18,6 +18,45 @@ import {
 } from '../types/driver.js';
 
 /**
+ * Outcome of a join-containment probe.
+ *
+ * A discriminated union on purpose: the success arm carries two counts and the
+ * failure arm carries a reason, so there is no representable value that lets a
+ * caller mistake "could not evaluate this join" for "this join matches nothing".
+ * Neither arm can carry a data value.
+ */
+export type DriverProbeOutcome =
+  | {
+      Ok: true;
+      /** Distinct non-null child values sampled (at most the requested sampleSize). */
+      SampledValues: number;
+      /** How many of those exist in the parent column. */
+      MatchedValues: number;
+    }
+  | {
+      Ok: false;
+      /** Human-readable cause, safe to persist — never contains a data value. */
+      Reason: string;
+      /** Provider error code where one is available (e.g. PostgreSQL SQLSTATE). */
+      Code?: string;
+    };
+
+/**
+ * How a probe compares values: the same comparison the emitted key will use at match time.
+ *
+ * A subset of the organic-key normalization strategies. `Custom` is deliberately absent: its
+ * expression is model-written SQL, so a probe does not execute it, and a candidate that needs
+ * it is reported as Unprobed before it reaches a driver.
+ */
+export type ProbeNormalization = 'ExactMatch' | 'Trim' | 'LowerCaseTrim';
+
+/** The normalization applied to each side of a probe. Both default to `ExactMatch`. */
+export interface ProbeNormalizationPair {
+  Child: ProbeNormalization;
+  Parent: ProbeNormalization;
+}
+
+/**
  * Abstract base class for database drivers
  * All provider-specific implementations must extend this class
  */
@@ -155,15 +194,12 @@ export abstract class BaseAutoDocDriver {
       maxSampleSize
     );
 
-    // Calculate total rows from null percentage if available
-    const totalRows = stats.nullCount > 0 && stats.nullPercentage > 0
-      ? Math.round(stats.nullCount / stats.nullPercentage)
-      : stats.nullCount + stats.distinctCount; // Estimate
-
     return {
       columnName,
       dataType: columnType,
-      totalRows,
+      // The drivers fill totalRows from a full-table COUNT(*). Never estimate it from distinct and
+      // null counts: that equals distinctCount for a non-null column, so duplicates would look unique.
+      totalRows: stats.totalRows,
       nullCount: stats.nullCount,
       distinctCount: stats.distinctCount,
       minValue: stats.min,
@@ -196,6 +232,11 @@ export abstract class BaseAutoDocDriver {
   /**
    * Test value overlap between two columns (for FK detection)
    * Returns percentage of source values that exist in target (0-1)
+   *
+   * NOTE: this returns a bare number and reports every failure as 0, which the
+   * caller's containment gate reads as a refutation. Prefer
+   * {@link ProbeJoinContainment}, whose result distinguishes "measured zero" from
+   * "could not measure".
    */
   public abstract testValueOverlap(  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
     sourceTable: string,  // format: "schema.table"
@@ -204,6 +245,29 @@ export abstract class BaseAutoDocDriver {
     targetColumn: string,
     sampleSize: number
   ): Promise<number>;
+
+  /**
+   * Probe whether a candidate key's child values exist in the parent column.
+   *
+   * Returns COUNTS ONLY — the number of distinct non-null child values sampled and
+   * how many of those exist in the parent. Implementations must never return, log,
+   * or otherwise surface a data value: the entire contract is two integers.
+   *
+   * Unlike {@link testValueOverlap}, a failure is reported as `{ ok: false, reason }`
+   * rather than as zero overlap, so a caller can tell a join that matches nothing
+   * from a join it was unable to evaluate. Implementations must not throw.
+   *
+   * `normalization` is applied to each side before comparing, so a key whose runtime
+   * match lower-cases or trims its values is measured the same way. Omitted means
+   * `ExactMatch` on both sides.
+   */
+  public abstract ProbeJoinContainment(
+    child: { Schema: string; Table: string; Column: string },
+    parent: { Schema: string; Table: string; Column: string },
+    sampleSize: number,
+    timeoutMs: number,
+    normalization?: ProbeNormalizationPair
+  ): Promise<DriverProbeOutcome>;
 
   /**
    * Check if a combination of columns is unique (for composite PK detection)

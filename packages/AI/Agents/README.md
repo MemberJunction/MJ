@@ -183,6 +183,7 @@ Consequences worth knowing before you debug one:
 - **The mode is on the run.** A completed `Decision` step named "Workflow runs in this run" or "Workflow runs on the task-graph dispatcher" records which engine ran it and why.
 - **A dispatched `Sub-Agent` node starts its own `AIAgentRun`**, linked from `Task.AgentRunID` and parented to the submitting run. If that sub-agent is itself a Flow agent, it runs in-process and returns its result to the task.
 - **A `Decision` step routes the same way in both modes.** Paths read its answers only through `decisions.<key>.<question>`; its `stepResult.result` is the payload, which carries no answers. A flow with a Decision step is compiled and validated before its first step in-run too, so an incomplete Choice fork, a decision read before it can answer, or one read through the payload is refused in both modes. An answer below its `minConfidence` stops an in-run flow (the dispatcher holds the fork, and `Retry` on the step asks again). A failed decision call is a failed step: the paths that read its answers are passed over, and a recovery path such as `stepResult.Success === false` is taken whatever its rank.
+- **Multiple starting steps are supported.** A Flow agent with more than one active `StartingStep: true` step (for example, a workflow saved from a task graph with parallel wave-1 roots) compiles all active starting steps as root nodes (`dependsOn: []`) in dispatch mode, and walks all starting branches sequentially before entering any downstream join step in `inRun` mode.
 - **Answers live in the run, not the payload.** A run started with `startAtStep` past a Decision step has no answers from it, so every path that reads that decision stops the run with the reason. Start at or before the Decision step to route on it.
 
 See the **[Workflows and Task Graphs Guide](../../../guides/WORKFLOW_AND_TASK_GRAPH_GUIDE.md)** for the full model: node kinds, exclusive groups, payload mappings, loops, failure semantics, observability, and a worked configuration example.
@@ -408,6 +409,24 @@ const result = await runner.ExecuteAgent({
 });
 ```
 
+### With Bound Action Parameters
+
+A host can fix some of an action's input parameters for the run, so the model can neither see nor change them. A bound parameter is left out of the action's description in the prompt, out of its native tool schema, out of the result echoed to the model and out of what Find Candidate Actions / Find Best Action report; at dispatch the bound value replaces whatever the model sent under that name, the override is logged with the run and step IDs, and the action's execution log marks the parameter `Bound`. Bindings reach every sub-agent run. A required parameter bound to nothing, or a binding that names a parameter the action does not have, refuses the action before it runs: the model is told only that the action is unavailable, and the action is locked out for the rest of the run. A binding keyed by anything other than a known Action ID fails the run at its start.
+
+```typescript
+const result = await runner.RunAgent({
+    agent: spaceAgent,
+    conversationMessages: messages,
+    contextUser: currentUser,
+    // Action ID → parameter name → value. The model is never told ChapterID exists.
+    boundActionParams: {
+        [listMembersActionId]: { ChapterID: space.ChapterID }
+    }
+});
+```
+
+**Limits.** Bindings are server-side only (no GraphQL input reaches them). A run with bindings has task graphs withheld, because a graph's action nodes are dispatched outside the agent's binding gate. A run stores its bindings on `MJ: AI Agent Runs.BoundActionParams`, and a run that continues another (`lastRunId`, including a resume from a stored request) applies them when its caller passes none; a prior run that cannot be read (missing, hidden from the context user, or holding bindings that do not parse to an object) fails the continuing run. `actionChanges` are not persisted, so a resumed run starts without them. Bindings hide a value from the model; they are not a boundary against the user, who can start an unbound run. The realtime client-direct action path and the `Execute Agent` action (along with Loop, Conditional, Retry and Parallel Execute when run without a `RunScope` that refuses them) dispatch without forwarding `boundActionParams`, so do not grant them to a bound agent. An action's own message text may mention a bound value. The rules are exported for hosts that dispatch actions themselves: `BindingsForAction`, `UnboundParams`, `IsBoundParamName`, `ApplyBoundActionParams`.
+
 ### With Memory Scope (Multi-Tenant)
 
 Multi-tenant deployments can isolate the agent's memory cohort (notes and examples) per request by passing scope fields on `ExecuteAgentParams`. The fields are top-level — there is no `userScope` wrapper:
@@ -465,7 +484,7 @@ const result = await runner.ExecuteAgent({
 
 Programmatic callers and multi-run workflows can opt into automatic post-run cleanup once an agent run settles via `ExecuteAgentParams.compactAfterRun`. When enabled (`true` or an `AgentPostRunCompactionConfig` object), `BaseAgent.finalizeAgentRun` executes a failure-isolated post-run compaction pass after pending step writes and the run record are saved:
 
-1. **Conversation Message Compaction** — When `params.conversationMessages.length >= messageCountThreshold` (default: `12`), older non-system messages (`[1 .. length - preserveRecentCount - 1]`) are compacted via `compactSingleMessage()` while preserving the initial user goal (`index 0`) and the most recent turns.
+1. **Conversation Message Compaction** — When `params.conversationMessages.length >= messageCountThreshold` (default: `20`), older volatile result messages (`IsVolatileResultMessage`: `action-result`, `client-tool-result`, `tool-result`, `sub-agent-result`, `loop-result`) in `[1 .. length - preserveRecentCount - 1]` are compacted via `compactMessage()` while preserving the initial user goal (`index 0`), ordinary `user`/`assistant` conversational turns, turns carrying `toolCalls`, and the most recent turns.
 2. **Scratchpad Pruning** — When the loop scratchpad contains more notes or completed tasks than `maxScratchpadNotes` (default: `20`), `ScratchpadManager.PruneNotes()` and `ScratchpadManager.EnforceTaskLimit()` prune the oldest low-priority note lines first (preserving `[HIGH]` / `[IMPORTANT]` / `[PINNED]` / `❗` / `⚠️` notes) and trim excess completed tasks.
 3. **Background Memory Extraction** — When `extractMemories !== false` and `agentRun.Success` is `true`, triggers background memory extraction (`triggerPostRunMemoryExtraction`) to harvest durable learnings from the completed run without blocking the caller.
 
@@ -502,7 +521,7 @@ In-memory caching is integrated into `AIEngine.EmbedText` to bypass redundant lo
 
 ### 3. Non-blocking Observability DB Logging
 Observability writes (`AIAgentRunStep` and `AIPromptRun` records) are non-blocking during step execution and settled at terminal boundaries:
-* **Per-entity and cross-step save chaining (`AgentRunStepSaveQueue`)**: Step creation (`createStepEntity`) and finalization (`finalizeStepEntity`) enqueue `INSERT` and `UPDATE` operations onto `_stepSaveQueue` without blocking the agent loop. Updates on a step are chained behind its initial `INSERT`, and child steps (`ParentID`) are chained behind their parent step's `INSERT`.
+* **Per-entity and cross-step save chaining (`AgentRunStepSaveQueue`)**: Step creation (`createStepEntity`, `createCompactionStep`) and finalization/updates (`finalizeStepEntity`, `updateCompactionStep`, `checkExecutionGuardrails`, `validateSuccessNextStep`, `handleFinalPayloadValidationFailure`) enqueue `INSERT` and `UPDATE` operations onto `_stepSaveQueue` without blocking the agent loop. Updates on a step are chained behind its initial `INSERT`, and `finalizeStepEntity` preserves pre-finalize step fields (such as `guardrailExceeded` in `OutputData` and `FinalPayloadValidationResult`/`FinalPayloadValidationMessages`) across post-INSERT reloads. Child steps (`ParentID`) are chained behind their parent step's `INSERT`.
 * **In-flight `PayloadAtStartSourceStepID` FK ordering (`FK_AIAgentRunStep_PayloadAtStartSourceStep`)**: `findPayloadAtStartSource` matches the latest non-`Running` step with `PayloadAtEnd` even when that source step's initial `INSERT` is still in flight (`!sourceStep.IsSaved`), avoiding redundant multi-kilobyte `PayloadAtStart` clones on fast sequential steps. When the matched source step is not yet saved, `createStepEntity` chains the new step's `INSERT` after `[parentStepEntity, payloadAtStartSource]` and attaches a `beforeInsert` safety fallback that restores inline `PayloadAtStart` (and clears `PayloadAtStartSourceStepID = null`) if the source step's `INSERT` failed.
 * **Complete terminal settlement**: `_stepSaveQueue.Flush()` and `_promptRunner.FlushPendingSaves()` are awaited across all terminal paths — normal completion (`finalizeAgentRun`), failure (`createFailureResult`), cancellation (`createCancelledResult`), and post-turn conversation compaction (`recordCompactionRunStep`) — before the final `agentRun.Save()` executes, ensuring no orphaned or `Running` steps/prompt runs remain in Flight when `ExecuteAgent()` resolves. Save failures are logged via `LogError` and folded into `agentRun.ErrorMessage` for visibility.
 

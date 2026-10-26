@@ -1,0 +1,28 @@
+{
+    "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#Collection(event)",
+    "@odata.nextLink": "https://graph.microsoft.com/v1.0/users/organizer%40contoso.com/calendarView/delta?$skiptoken=R0usmcCM996atia_s",
+    "value": [
+        {
+            "@odata.type": "#microsoft.graph.event",
+            "@odata.etag": "W/\"ZlnW4RIAV06KYYwlrfNZvQAALfZeRR==\"",
+            "id": "AAMkAGI1AGU4LTk4ZmEtNDhkMy1iYTU2LTQ5NzEwNjc5NTA2NgBGAAAAAAAt9AHjAAA=",
+            "lastModifiedDateTime": "2026-10-13T09:30:00.0000000Z",
+            "iCalUId": "040000008200E00074C5B7101A82E00800000000DA2B357D94B2DA0100000000000000001000000097B3A3D5A1E1C04B9F4E4B5E9C9D3F21",
+            "subject": "Board planning",
+            "bodyPreview": "Agenda attached.",
+            "isAllDay": false,
+            "isCancelled": false,
+            "isOrganizer": true,
+            "seriesMasterId": null,
+            "type": "singleInstance",
+            "start": { "dateTime": "2026-10-20T16:00:00.0000000", "timeZone": "UTC" },
+            "end": { "dateTime": "2026-10-20T17:00:00.0000000", "timeZone": "UTC" },
+            "location": { "displayName": "Room 4" },
+            "attendees": [
+                { "type": "required", "status": { "response": "none", "time": "0001-01-01T00:00:00Z" }, "emailAddress": { "name": "Ada Lovelace", "address": "ada@contoso.com" } },
+                { "type": "optional", "status": { "response": "none", "time": "0001-01-01T00:00:00Z" }, "emailAddress": { "name": "Grace Hopper", "address": "grace@fabrikam.com" } }
+            ],
+            "organizer": { "emailAddress": { "name": "Org Anizer", "address": "organizer@contoso.com" } }
+        }
+    ]
+}

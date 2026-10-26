@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { MJIntegrationObjectFieldEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: Integration Object Fields') // Tell MemberJunction about this class
 @Component({
@@ -18,7 +19,8 @@ export class MJIntegrationObjectFieldFormComponent extends BaseFormComponent {
             { sectionKey: 'objectMapping', sectionName: 'Object Mapping', isExpanded: true },
             { sectionKey: 'fieldIdentity', sectionName: 'Field Identity', isExpanded: true },
             { sectionKey: 'dataConstraints', sectionName: 'Data Constraints', isExpanded: true },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJCompanyIntegrationObjectFields', sectionName: 'Company Integration Object Fields', isExpanded: false }
         ]);
     }
 }

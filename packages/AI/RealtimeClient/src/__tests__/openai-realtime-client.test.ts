@@ -693,6 +693,46 @@ describe('OpenAIRealtimeClient', () => {
             expect(states).toEqual(['listening']); // still reflects the user holding the floor
         });
 
+        it('invokes the OnUserSpeechStart handler on input_audio_buffer.speech_started', () => {
+            let count = 0;
+            client.OnUserSpeechStart(() => { count++; });
+            channel.EmitServer({ type: 'input_audio_buffer.speech_started' });
+            expect(count).toBe(1);
+            channel.EmitServer({ type: 'input_audio_buffer.speech_started' });
+            expect(count).toBe(2);
+        });
+
+        it('raises OnUserSpeechStart alongside the interruption, before the listening state change', () => {
+            const log: string[] = [];
+            client.OnUserSpeechStart(() => log.push('userSpeechStart'));
+            client.OnInterruption(() => log.push('interruption'));
+            client.OnStateChange((s) => log.push(`state:${s}`));
+            channel.EmitServer({ type: 'response.created' });
+            log.length = 0; // ignore state changes from the response starting
+            channel.EmitServer({ type: 'input_audio_buffer.speech_started' });
+            expect(log).toContain('userSpeechStart');
+            expect(log).toContain('interruption');
+            expect(log.indexOf('userSpeechStart')).toBeLessThan(log.indexOf('state:listening'));
+        });
+
+        it('forwards item_id from input_audio_buffer.speech_started to OnUserSpeechStart and carries it as ItemId on the completed user transcript', () => {
+            const startedIds: Array<string | undefined> = [];
+            const { transcripts } = collect(client);
+            client.OnUserSpeechStart((itemId) => startedIds.push(itemId));
+
+            channel.EmitServer({ type: 'input_audio_buffer.speech_started', item_id: 'item_abc' });
+            channel.EmitServer({
+                type: 'conversation.item.input_audio_transcription.completed',
+                transcript: 'Hello from item abc',
+                item_id: 'item_abc',
+            });
+
+            expect(startedIds).toEqual(['item_abc']);
+            expect(transcripts).toEqual([
+                { Role: 'User', Text: 'Hello from item abc', IsFinal: true, Kind: 'normal', ItemId: 'item_abc' },
+            ]);
+        });
+
         it('should NOT emit on the cleared frame that follows a self-initiated cancel', () => {
             const { interruptions } = collect(client);
             channel.EmitServer({ type: 'response.created' });

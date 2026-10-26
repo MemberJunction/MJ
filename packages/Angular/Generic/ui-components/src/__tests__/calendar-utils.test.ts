@@ -109,6 +109,33 @@ describe('calendar-utils', () => {
       }
     });
 
+    it('should keep Sunday-first weeks when weekStartsOn is omitted (the datepicker default)', () => {
+      for (let month = 0; month < 12; month++) {
+        const anchor = new Date(2026, month, 1);
+        expect(BuildCalendarWeeks(anchor)).toEqual(BuildCalendarWeeks(anchor, 0));
+      }
+    });
+
+    it('should start each week on Monday when weekStartsOn is 1', () => {
+      // Sep 1, 2024 is a Sunday => a Monday-first grid starts on Monday Aug 26
+      const weeks = BuildCalendarWeeks(new Date(2024, 8, 1), 1);
+      expect(weeks.every(w => w.length === 7 && w[0].date.getDay() === 1)).toBe(true);
+      expect(weeks[0][0].dayNumber).toBe(26);
+      expect(weeks[0][6].dayNumber).toBe(1);
+      expect(weeks.flat().filter(d => d.isCurrentMonth)).toHaveLength(30);
+      // Sep 30, 2024 is a Monday: the last row starts on it and ends in October
+      const lastWeek = weeks[weeks.length - 1];
+      expect(lastWeek[0].dayNumber).toBe(30);
+      expect(lastWeek[6].isCurrentMonth).toBe(false);
+    });
+
+    it('should not add an empty trailing week when a Monday-first month ends on Sunday (May 2026)', () => {
+      // May 31, 2026 is a Sunday
+      const weeks = BuildCalendarWeeks(new Date(2026, 4, 1), 1);
+      expect(weeks[weeks.length - 1][6].dayNumber).toBe(31);
+      expect(weeks[weeks.length - 1][6].isCurrentMonth).toBe(true);
+    });
+
     it('should handle year transition (January 2025)', () => {
       const weeks = BuildCalendarWeeks(new Date(2025, 0, 1));
       // Leading non-current-month days should be December 2024

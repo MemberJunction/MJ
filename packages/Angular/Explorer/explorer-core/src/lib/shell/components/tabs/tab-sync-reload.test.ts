@@ -57,6 +57,7 @@ vi.mock('@memberjunction/ng-shared', () => ({
   GetRecordSourceContext: vi.fn(() => null),
   SafeDetectChanges: vi.fn(),
   ResolveRecordTypeIcon: vi.fn(() => ''),
+  ResolveRecordTabDisplayTitle: vi.fn((t: { title?: string }) => t?.title ?? ''),
 }));
 vi.mock('@memberjunction/core-entities', () => ({
   ResourceData: class {},
@@ -302,5 +303,30 @@ describe('main layout sync — reload only when the tab content changes', () => 
 
     expect(saved.resourceRecordId).toBe('ID|w-1');
     expect(h.cleanupTabComponent).not.toHaveBeenCalled();
+  });
+
+  it('reloads a dynamic view tab when AlternateBaseView changes on the tab configuration', async () => {
+    const dynamicView = tab('MJ: User Views', 'dynamic-users', {
+      Entity: 'MJ: Users',
+      isDynamic: true,
+    });
+    const h = createHarness(
+      dynamicView,
+      liveData('User Views', 'dynamic-users', 'ViewResource', dynamicView.configuration),
+    );
+    await load(h);
+
+    const switchedToAbv = tab('MJ: User Views', 'dynamic-users', {
+      Entity: 'MJ: Users',
+      AlternateBaseView: 'vwActiveUsers',
+      isDynamic: true,
+    });
+    h.setTab(switchedToAbv);
+
+    sync(h, switchedToAbv);
+
+    expect(h.cleanupTabComponent).toHaveBeenCalledWith('tab-1');
+    expect(h.markNotLoaded).toHaveBeenCalledWith('tab-1');
+    expect(h.loadTabContent).toHaveBeenCalledTimes(1);
   });
 });
