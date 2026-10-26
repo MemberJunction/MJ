@@ -96,7 +96,8 @@ export async function EvaluateInPage<R, A>(page: Page | null, fn: (arg: A) => R,
         // Playwright types the argument as `Unboxed<A>`, which a generic `A` cannot satisfy; for the plain
         // serializable arguments this takes, the two are the same type.
         const evaluate = page.evaluate.bind(page) as (pageFunction: (arg: A) => R, arg: A) => Promise<R>;
-        return await Promise.race([evaluate(fn, arg), expiry]);
+        // A page error is the same 'no answer' as a timeout, and the losing call must not reject unhandled.
+        return await Promise.race([evaluate(fn, arg).catch(() => null), expiry]);
     } finally {
         clearTimeout(timer);
     }

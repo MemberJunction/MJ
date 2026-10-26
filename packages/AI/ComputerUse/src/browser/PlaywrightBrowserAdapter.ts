@@ -49,6 +49,7 @@ import {
 } from './element-extraction.js';
 // ambiguous-selector narrowing, shared with SharedContextBrowserAdapter.
 import { ResolveActionLocator } from './selector-resolution.js';
+import { NavigationGuard } from './NavigationGuard.js';
 // warm-seed in-page storage helpers, shared with SharedContextBrowserAdapter.
 import { StorageSnapshot, CaptureStorageInPage, RestoreStorageInPage } from './page-storage.js';
 
@@ -258,6 +259,8 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
 
     /** Per-domain extra headers. Key = domain, Value = headers map */
     private domainHeaders: Map<string, Record<string, string>> = new Map();
+    /** Where navigation may go once {@link RestrictNavigation} is called; `null` = unrestricted. */
+    private navigationPolicy: { AllowedPrivateHosts: string[] | null } | null = null;
     /** Whether the route interceptor has been set up */
     private routeInterceptorActive: boolean = false;
 
@@ -412,7 +415,49 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
 
     public override async Navigate(url: string): Promise<void> {
         this.requirePage();
+        this.assertNavigable(url);
         await this.page!.goto(url, { waitUntil: 'load' });
+    }
+
+    /**
+     * Restricts where this browser may go, for a browser an agent drives (a test harness leaves it
+     * unrestricted). Navigation then opens only http(s) pages and `about:blank`. With
+     * `allowedPrivateHosts`, no request the page makes (navigation, redirect, followed link or
+     * subresource) may reach a loopback, link-local or private-network host unless it is listed, as
+     * `host` or `host:port`. Can be called again to replace the list.
+     */
+    public async RestrictNavigation(allowedPrivateHosts: string[] | null): Promise<void> {
+        this.navigationPolicy = { AllowedPrivateHosts: allowedPrivateHosts?.map((h) => h.trim().toLowerCase()) ?? null };
+        if (allowedPrivateHosts && !this.routeInterceptorActive) {
+            this.requirePage();
+            await this.setupRouteInterceptor();
+            this.routeInterceptorActive = true;
+        }
+    }
+
+    /** Throws when the navigation policy refuses `url`. */
+    private assertNavigable(url: string): void {
+        if (!this.navigationPolicy || url.trim().toLowerCase() === 'about:blank') {
+            return;
+        }
+        let parsed: URL;
+        try {
+            parsed = new URL(url);
+        } catch {
+            throw new Error(`Navigation refused: "${url}" is not a URL.`);
+        }
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+            throw new Error(`Navigation refused: only http and https pages can be opened (got ${parsed.protocol}).`);
+        }
+        if (this.isBlockedPrivateHost(parsed)) {
+            throw new Error(`Navigation refused: ${parsed.host} is on a private network.`);
+        }
+    }
+
+    /** Whether the policy's private-network rule blocks this http(s) URL. */
+    private isBlockedPrivateHost(url: URL): boolean {
+        const allowed = this.navigationPolicy?.AllowedPrivateHosts;
+        return !!allowed && NavigationGuard.IsPrivateNetworkHost(url.hostname) && !allowed.includes(url.host.toLowerCase()) && !allowed.includes(url.hostname.toLowerCase());
     }
 
     // ─── Screenshot ────────────────────────────────────────
@@ -848,6 +893,7 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
                 break;
 
             case 'Navigate':
+                this.assertNavigable(action.Url);
                 await page.goto(action.Url, { waitUntil: 'load' });
                 break;
 
@@ -1018,13 +1064,17 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
     }
 
     /**
-     * Set up a single route interceptor that handles all domain-scoped
-     * header injection. Matches every request URL against our domain
-     * headers map and adds matching headers.
+     * Set up the single route interceptor: it aborts a request the navigation policy's private-network
+     * rule blocks, and otherwise adds any domain-scoped extra headers. One interceptor, because a second
+     * one could run first and `continue()` past the other.
      */
     private async setupRouteInterceptor(): Promise<void> {
         await this.page!.route('**/*', async (route: Route) => {
             const requestUrl = route.request().url();
+            if (this.navigationPolicy?.AllowedPrivateHosts && /^https?:/i.test(requestUrl) && this.isBlockedPrivateHost(new URL(requestUrl))) {
+                await route.abort('blockedbyclient');
+                return;
+            }
             const requestDomain = this.ExtractDomain(requestUrl);
 
             // Find matching domain headers

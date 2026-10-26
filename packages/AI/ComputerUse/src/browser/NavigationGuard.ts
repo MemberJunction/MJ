@@ -98,6 +98,26 @@ export class NavigationGuard {
     }
 
     /**
+     * Whether `hostname` names this machine or a private network: `localhost` (and `*.localhost`), a
+     * dotless intranet name, or a loopback, private, shared, link-local or unique-local IP literal.
+     * Pass a parsed URL's `hostname`, so numeric IPv4 forms arrive normalized.
+     * ponytail: a public name that RESOLVES to a private address (DNS rebinding) passes; catching it
+     * needs a resolver check at connect time.
+     */
+    public static IsPrivateNetworkHost(hostname: string): boolean {
+        const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+        if (host === 'localhost' || host.endsWith('.localhost') || (!host.includes('.') && !host.includes(':'))) {
+            return true;
+        }
+        const v4 = /^(\d+)\.(\d+)\.\d+\.\d+$/.exec(host);
+        if (v4) {
+            const [a, b] = [Number(v4[1]), Number(v4[2])];
+            return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+        }
+        return host === '::' || host === '::1' || /^f[cd]/.test(host) || /^fe[89ab]/.test(host) || host.startsWith('::ffff:');
+    }
+
+    /**
      * Extract the hostname from a URL string.
      * Handles full URLs and bare domains gracefully.
      */
