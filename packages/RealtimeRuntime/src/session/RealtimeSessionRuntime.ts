@@ -2508,17 +2508,19 @@ export class RealtimeSessionRuntime {
       // Closes over this recording's session id and transport — never the runtime's current ones.
       Queue: new RecordingShardQueue(async (shard) => {
         if (!transport) {
-          return false;
+          return 'Retry';
         }
-        const acked = (await transport.UploadShard(sessionId, shard)) === 'Acked';
-        if (acked) {
+        // The outcome goes to the queue unchanged: it logs a different reason for each, and stops
+        // retrying a `Refused` shard at once (#6012).
+        const outcome = await transport.UploadShard(sessionId, shard);
+        if (outcome === 'Acked') {
           await this.deleteStoredShard(sessionId, shard.Index);
           if (shardsGivenUp) {
             shardsGivenUp = false;
             this.recoverStoredShardsAfterOutage(sessionId);
           }
         }
-        return acked;
+        return outcome;
       }, () => {
         shardsGivenUp = true;
       }),
