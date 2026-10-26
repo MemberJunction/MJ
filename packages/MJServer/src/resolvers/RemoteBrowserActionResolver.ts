@@ -45,6 +45,15 @@ import { AIPromptParams } from '@memberjunction/ai-core-plus';
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
 /** Entity name for turn-based text conversations that scope a live Remote Browser session. */
 const CONVERSATION_ENTITY = 'MJ: Conversations';
+/**
+ * What an owned browser scope supplies: an `MJ: AI Agent Sessions` row (a realtime call), or an owned
+ * `MJ: Conversations` row (text chat), which has no agent and no config.
+ */
+export interface OwnedBrowserScope {
+  ID: string;
+  AgentID: string | null;
+  Config_: string | null;
+}
 /** Entity name for the agent whose `TypeConfiguration` carries the remote-browser provider preference. */
 const AGENT_ENTITY = 'MJ: AI Agents';
 /**
@@ -694,6 +703,29 @@ export class RemoteBrowserActionResolver extends ResolverBase {
   }
 
   /**
+   * Ends the browser the caller's own session or conversation started, and forgets its stream
+   * bookkeeping. Ownership-gated. Idempotent: ending a scope that holds no browser resolves `false`.
+   * A text chat calls this when its browser drawer closes, the conversation changes, or the chat is
+   * destroyed, so a closed drawer never leaves a Chromium process (or a billed hosted browser) running.
+   *
+   * @param agentSessionID The `AIAgentSession` id or `Conversation` id.
+   * @returns `true` when a live browser was ended.
+   */
+  @Mutation(() => Boolean)
+  async EndRemoteBrowserSession(
+    @Arg('agentSessionID', () => String) agentSessionID: string,
+    @Ctx() { userPayload, providers }: AppContext,
+    @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
+  ): Promise<boolean> {
+    const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
+    await this.loadOwnedSession(agentSessionID, contextUser, provider);
+    const streamKey = this.streamKey(agentSessionID, instanceKey);
+    this.startedScreencasts.delete(streamKey);
+    this.startedAudioStreams.delete(streamKey);
+    return RemoteBrowserEngine.Instance.EndSessionForAgentSession(agentSessionID, instanceKey);
+  }
+
+  /**
    * Starts streaming the session browser's TAB AUDIO and PUSHES each encoded chunk to the calling user's
    * push-status topic — so a co-agent demoing a video/audio site is HEARD, not just seen. Ownership-gated.
    * Idempotent: a re-call for an already-streaming session is a no-op that reports `Streaming: true`.
@@ -1098,44 +1130,32 @@ export class RemoteBrowserActionResolver extends ResolverBase {
   }
 
   /**
-   * Loads the owning scope (`MJ: AI Agent Sessions` for realtime sessions, or `MJ: Conversations` for
-   * turn-based text conversations) and enforces inbound ownership: the record's `UserID` must equal the
-   * caller's. Throws when the record is missing or owned by another user.
+   * Loads the owning scope and enforces inbound ownership: an `MJ: AI Agent Sessions` row (a realtime
+   * call) or, failing that, an `MJ: Conversations` row (a text chat's browser). Its `UserID` must equal
+   * the caller's. Throws when neither exists or the one found belongs to another user.
    *
    * @param agentSessionID The `AIAgentSession` id or `Conversation` id.
-   * @returns The loaded, owned session entity (or a synthetic conversation-scoped session descriptor).
+   * @returns The owned scope.
    */
-  protected async loadOwnedSession(agentSessionID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<MJAIAgentSessionEntity> {
+  protected async loadOwnedSession(agentSessionID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<OwnedBrowserScope> {
     const session = await provider.GetEntityObject<MJAIAgentSessionEntity>(SESSION_ENTITY, contextUser);
     if (await session.Load(agentSessionID)) {
-      if (!UUIDsEqual(session.UserID, contextUser.ID)) {
-        throw new Error(`Not authorized: remote-browser session ${agentSessionID} is not owned by you.`);
-      }
+      this.assertOwner(session.UserID, agentSessionID, contextUser);
       return session;
     }
-
-    // Fallback: turn-based text chat scopes its live browser to an owned `MJ: Conversations` record.
-    try {
-      const conversation = await provider.GetEntityObject<MJConversationEntity>(CONVERSATION_ENTITY, contextUser);
-      if (conversation && (await conversation.Load(agentSessionID))) {
-        if (!UUIDsEqual(conversation.UserID, contextUser.ID)) {
-          throw new Error(`Not authorized: remote-browser session ${agentSessionID} is not owned by you.`);
-        }
-        return {
-          ID: conversation.ID,
-          UserID: conversation.UserID,
-          AgentID: '',
-          Config_: null,
-        } as unknown as MJAIAgentSessionEntity;
-      }
-    } catch (convErr) {
-      if (convErr instanceof Error && convErr.message.startsWith('Not authorized:')) {
-        throw convErr;
-      }
-      // Entity lookup unsupported or failed in stubbed provider — fall through to not-found below.
+    const conversation = await provider.GetEntityObject<MJConversationEntity>(CONVERSATION_ENTITY, contextUser);
+    if (!(await conversation.Load(agentSessionID))) {
+      throw new Error(`Remote-browser session ${agentSessionID} not found.`);
     }
+    this.assertOwner(conversation.UserID, agentSessionID, contextUser);
+    return { ID: conversation.ID, AgentID: null, Config_: null };
+  }
 
-    throw new Error(`Remote-browser session ${agentSessionID} not found.`);
+  /** Throws unless the scope's owner is the caller. */
+  private assertOwner(ownerUserID: string, agentSessionID: string, contextUser: UserInfo): void {
+    if (!UUIDsEqual(ownerUserID, contextUser.ID)) {
+      throw new Error(`Not authorized: remote-browser session ${agentSessionID} is not owned by you.`);
+    }
   }
 
   /**
@@ -1144,10 +1164,10 @@ export class RemoteBrowserActionResolver extends ResolverBase {
    * config, or unparseable JSON all yield `undefined`, letting the engine fall back to the single Active
    * provider.
    *
-   * @param session The owned session entity (supplies the agent id).
+   * @param session The owned scope (supplies the agent id; a conversation has none).
    * @returns The configured backend name, or `undefined` to let the engine auto-select.
    */
-  protected async resolveProviderName(session: MJAIAgentSessionEntity, contextUser: UserInfo, provider: IMetadataProvider): Promise<string | undefined> {
+  protected async resolveProviderName(session: OwnedBrowserScope, contextUser: UserInfo, provider: IMetadataProvider): Promise<string | undefined> {
     if (!session.AgentID) {
       return undefined;
     }
@@ -1258,49 +1278,22 @@ export class RemoteBrowserActionResolver extends ResolverBase {
   }
 
   /**
-   * Parses the `valuesJson` payload for a `fill` action. Accepts either a JSON array of
-   * `{ Target/target/ref/field, Value/value }` objects or a JSON object map `{ "field-1": "value" }`.
+   * Parses the `valuesJson` payload for a `fill` action: a JSON object mapping a field ref (`f1`) or
+   * label to its value (`string`, or `boolean` for a checkbox). Anything else yields no values.
    */
   private parseFillValues(valuesJson?: string): RemoteBrowserFillFieldInput[] {
-    if (!valuesJson || valuesJson.trim().length === 0) {
-      return [];
-    }
+    let parsed: unknown;
     try {
-      const parsed: unknown = JSON.parse(valuesJson);
-      if (Array.isArray(parsed)) {
-        const result: RemoteBrowserFillFieldInput[] = [];
-        for (const entry of parsed) {
-          if (!entry || typeof entry !== 'object') {
-            continue;
-          }
-          const rec = entry as Record<string, unknown>;
-          const targetRaw = rec.Target ?? rec.target ?? rec.ref ?? rec.Ref ?? rec.field ?? rec.name ?? rec.label;
-          const valueRaw = rec.Value ?? rec.value;
-          if (typeof targetRaw === 'string' && targetRaw.trim().length > 0 && valueRaw !== undefined && valueRaw !== null) {
-            result.push({
-              Target: targetRaw.trim(),
-              Value: typeof valueRaw === 'boolean' ? valueRaw : String(valueRaw),
-            });
-          }
-        }
-        return result;
-      }
-      if (parsed && typeof parsed === 'object') {
-        const result: RemoteBrowserFillFieldInput[] = [];
-        for (const [key, val] of Object.entries(parsed as Record<string, unknown>)) {
-          if (key.trim().length > 0 && val !== undefined && val !== null) {
-            result.push({
-              Target: key.trim(),
-              Value: typeof val === 'boolean' ? val : String(val),
-            });
-          }
-        }
-        return result;
-      }
-      return [];
+      parsed = JSON.parse(valuesJson ?? '');
     } catch {
       return [];
     }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return [];
+    }
+    return Object.entries(parsed as Record<string, unknown>)
+      .filter(([target, value]) => target.trim().length > 0 && value !== undefined && value !== null)
+      .map(([target, value]) => ({ Target: target.trim(), Value: typeof value === 'boolean' ? value : String(value) }));
   }
 
   /**

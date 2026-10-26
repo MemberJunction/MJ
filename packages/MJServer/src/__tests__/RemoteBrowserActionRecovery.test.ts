@@ -49,11 +49,14 @@ const startSessionMock = vi.fn<[], Promise<FakeSession>>(async () => deadSession
 // documented outcome for anything that is not a dead handle, so it is the default: the pre-existing
 // error-reporting contract must survive untouched for every ordinary failure.
 const recoverDeadSessionMock = vi.fn<[], Promise<FakeSession | null>>(async () => null);
+const endSessionMock = vi.fn(async (_agentSessionID: string) => true);
 vi.mock('@memberjunction/remote-browser-server', () => ({
+  NormalizeInstanceKey: (key?: string) => key?.trim() || null,
   RemoteBrowserEngine: {
     Instance: {
       StartSessionForAgentSession: (...args: unknown[]) => startSessionMock(...(args as [])),
       RecoverDeadAgentSession: (...args: unknown[]) => recoverDeadSessionMock(...(args as [])),
+      EndSessionForAgentSession: (agentSessionID: string) => endSessionMock(agentSessionID),
     },
   },
 }));
@@ -173,145 +176,92 @@ describe('RemoteBrowserActionResolver — dead-handle recovery on the action pat
 });
 
 describe('RemoteBrowserActionResolver — conversation-scoped ownership & structured text actions', () => {
-  it('loadOwnedSession falls back to MJ: Conversations when the ID is an owned conversation', async () => {
-    const userID = 'a1a1a1a1-0000-4000-8000-000000000001';
-    const convID = 'b2b2b2b2-0000-4000-8000-000000000002';
+  const userID = 'a1a1a1a1-0000-4000-8000-000000000001';
+  const otherUserID = 'c3c3c3c3-0000-4000-8000-000000000003';
+  const convID = 'b2b2b2b2-0000-4000-8000-000000000002';
 
-    const getEntityObject = vi.fn(async (entityName: string) => {
-      if (entityName === 'MJ: AI Agent Sessions') {
-        return {
-          Load: vi.fn(async () => false),
-        };
-      }
-      if (entityName === 'MJ: Conversations') {
-        return {
-          ID: convID,
-          UserID: userID,
-          Load: vi.fn(async (id: string) => id === convID),
-        };
-      }
-      return { Load: vi.fn(async () => false) };
-    });
-
+  /** A resolver whose provider has no agent session by that ID, only a conversation owned by `ownerID`. */
+  function conversationResolver(ownerID: string): RemoteBrowserActionResolver {
+    const getEntityObject = vi.fn(async (entityName: string) =>
+      entityName === 'MJ: Conversations'
+        ? { ID: convID, UserID: ownerID, Load: vi.fn(async (id: string) => id === convID) }
+        : { Load: vi.fn(async () => false) },
+    );
     class OwnershipResolver extends RemoteBrowserActionResolver {
       protected override requireUserAndProvider() {
-        return {
-          contextUser: { ID: userID },
-          provider: { GetEntityObject: getEntityObject },
-        } as never;
+        return { contextUser: { ID: userID }, provider: { GetEntityObject: getEntityObject } } as never;
       }
     }
+    return new OwnershipResolver();
+  }
 
-    const resolver = new OwnershipResolver();
+  it('acts on a conversation the caller owns', async () => {
     deadSession = makeSession();
     deadSession.ExecuteAction.mockResolvedValue({
       Success: true,
       CurrentUrl: 'https://httpbin.org/forms/post',
       Detail: 'Inspected',
-      Observation: {
-        ObservationID: 'obs-1',
-        Url: 'https://httpbin.org/forms/post',
-        Title: 'Order Form',
-        Text: 'Customer name',
-        Fields: [],
-        Actions: [],
-        Links: [],
-      },
+      Observation: { ObservationID: 'obs-1', Url: 'https://httpbin.org/forms/post', Title: 'Order Form', Text: '', Fields: [], Actions: [], Links: [] },
     });
     startSessionMock.mockReset().mockResolvedValue(deadSession);
 
-    const res = await resolver.ExecuteRemoteBrowserAction(convID, 'inspect', ctx);
+    const res = await conversationResolver(userID).ExecuteRemoteBrowserAction(convID, 'inspect', ctx);
     expect(res.Success).toBe(true);
-    expect(res.ObservationJson).toBeDefined();
     expect(JSON.parse(res.ObservationJson!).ObservationID).toBe('obs-1');
   });
 
-  it('ExecuteRemoteBrowserAction maps fill valuesJson (array or map) and returns FilledJson + ObservationJson', async () => {
+  it("refuses another user's conversation, for actions and for ending its browser", async () => {
+    startSessionMock.mockReset();
+    endSessionMock.mockClear();
+    const resolver = conversationResolver(otherUserID);
+    await expect(resolver.ExecuteRemoteBrowserAction(convID, 'inspect', ctx)).rejects.toThrow('Not authorized');
+    await expect(resolver.EndRemoteBrowserSession(convID, ctx)).rejects.toThrow('Not authorized');
+    expect(startSessionMock).not.toHaveBeenCalled();
+    expect(endSessionMock).not.toHaveBeenCalled();
+  });
+
+  it("ends the caller's own conversation browser", async () => {
+    endSessionMock.mockClear();
+    await expect(conversationResolver(userID).EndRemoteBrowserSession(convID, ctx)).resolves.toBe(true);
+    expect(endSessionMock).toHaveBeenCalledWith(convID);
+  });
+
+  it('maps a fill values object to field inputs and returns FilledJson + ObservationJson; any other shape is refused', async () => {
     const resolver = new TestableResolver();
     deadSession = makeSession();
     deadSession.ExecuteAction.mockResolvedValue({
       Success: true,
       CurrentUrl: 'https://httpbin.org/forms/post',
       Detail: 'Filled 1 field(s).',
-      Filled: [{ Ref: 'field-1', Label: 'Customer name', Value: 'Colin' }],
-      Observation: {
-        ObservationID: 'obs-2',
-        Url: 'https://httpbin.org/forms/post',
-        Title: 'Order Form',
-        Text: 'Customer name',
-        Fields: [],
-        Actions: [],
-        Links: [],
-      },
+      Filled: [{ Ref: 'f1', Label: 'Customer name', Value: 'Colin' }],
+      Observation: { ObservationID: 'obs-2', Url: 'https://httpbin.org/forms/post', Title: 'Order Form', Text: '', Fields: [], Actions: [], Links: [] },
     });
     startSessionMock.mockReset().mockResolvedValue(deadSession);
+    const fill = (valuesJson: string) =>
+      resolver.ExecuteRemoteBrowserAction('sess-1', 'fill', ctx, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, valuesJson);
 
-    const res = await resolver.ExecuteRemoteBrowserAction(
-      'sess-1',
-      'fill',
-      ctx,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      JSON.stringify({ 'field-1': 'Colin' }),
-    );
-
+    const res = await fill(JSON.stringify({ f1: 'Colin', f9: true }));
     expect(res.Success).toBe(true);
-    expect(deadSession.ExecuteAction).toHaveBeenCalledWith({
-      Kind: 'fill',
-      Values: [{ Target: 'field-1', Value: 'Colin' }],
-    });
-    expect(JSON.parse(res.FilledJson!)).toEqual([
-      { Ref: 'field-1', Label: 'Customer name', Value: 'Colin' },
-    ]);
+    expect(deadSession.ExecuteAction).toHaveBeenCalledWith({ Kind: 'fill', Values: [{ Target: 'f1', Value: 'Colin' }, { Target: 'f9', Value: true }] });
+    expect(JSON.parse(res.FilledJson!)).toEqual([{ Ref: 'f1', Label: 'Customer name', Value: 'Colin' }]);
+
+    expect((await fill(JSON.stringify([{ ref: 'f1', value: 'Colin' }]))).Success).toBe(false);
+    expect((await fill('not json')).Success).toBe(false);
   });
 
-  it('ExecuteRemoteBrowserAction maps getPageText and ref/text click', async () => {
+  it('maps getPageText and a ref/text click', async () => {
     const resolver = new TestableResolver();
     deadSession = makeSession();
-    deadSession.ExecuteAction.mockResolvedValue({
-      Success: true,
-      CurrentUrl: 'https://example.com/',
-      Detail: 'Example Domain',
-    });
+    deadSession.ExecuteAction.mockResolvedValue({ Success: true, CurrentUrl: 'https://example.com/', Detail: 'Example Domain' });
     startSessionMock.mockReset().mockResolvedValue(deadSession);
 
-    const textRes = await resolver.ExecuteRemoteBrowserAction('sess-1', 'getPageText', ctx);
-    expect(textRes.Success).toBe(true);
+    expect((await resolver.ExecuteRemoteBrowserAction('sess-1', 'getPageText', ctx)).Success).toBe(true);
     expect(deadSession.ExecuteAction).toHaveBeenCalledWith({ Kind: 'getPageText' });
 
     const clickRes = await resolver.ExecuteRemoteBrowserAction(
-      'sess-1',
-      'click',
-      ctx,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      'Learn more',
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      'action-1',
+      'sess-1', 'click', ctx, undefined, undefined, undefined, undefined, 'Learn more', undefined, undefined, undefined, undefined, undefined, 'a1',
     );
     expect(clickRes.Success).toBe(true);
-    expect(deadSession.ExecuteAction).toHaveBeenLastCalledWith({
-      Kind: 'click',
-      Selector: undefined,
-      Ref: 'action-1',
-      Text: 'Learn more',
-      X: undefined,
-      Y: undefined,
-    });
+    expect(deadSession.ExecuteAction).toHaveBeenLastCalledWith({ Kind: 'click', Selector: undefined, Ref: 'a1', Text: 'Learn more', X: undefined, Y: undefined });
   });
 });
