@@ -418,8 +418,8 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
     public override async Navigate(url: string): Promise<void> {
         this.requirePage();
         this.assertNavigable(url);
-        await this.page!.goto(url, { waitUntil: 'load' });
-        await this.refuseBlockedLanding();
+        const response = await this.page!.goto(url, { waitUntil: 'load' });
+        await this.refuseBlockedLanding(response?.url());
     }
 
     /**
@@ -429,9 +429,11 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
      * as `host` or `host:port`, excepted) is aborted, and a main-frame navigation that lands on one (a
      * redirect) is sent back to `about:blank`. Can be called again to replace the list.
      *
-     * ponytail: best effort, by hostname (see {@link NavigationGuard.IsPrivateNetworkHost}). Names that
-     * resolve to private addresses, WebSockets and service-worker fetches get through; real isolation
-     * is network egress rules on the machine the browser runs on.
+     * ponytail: best effort, by hostname, for the main frame (see {@link NavigationGuard.IsPrivateNetworkHost}).
+     * Gets through: names that resolve to private addresses, WebSockets, service-worker fetches, an
+     * iframe whose source redirects to a private host, redirects of the page's own requests, and the
+     * redirect request itself (only where it lands is refused). Real isolation is network egress rules
+     * on the machine the browser runs on.
      */
     public async RestrictNavigation(allowedPrivateHosts: string[] | null): Promise<void> {
         this.navigationPolicy = { AllowedPrivateHosts: allowedPrivateHosts?.map((h) => h.trim().toLowerCase().replace(/\.$/, '')) ?? null };
@@ -453,11 +455,17 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
         });
     }
 
-    /** Sends the page back to `about:blank` and refuses when a redirect landed it on a blocked host. */
-    private async refuseBlockedLanding(): Promise<void> {
-        const landed = this.page!.url();
+    /**
+     * Refuses when a redirect landed a navigation on a blocked host, and sends the page back to
+     * `about:blank`. Reads the landing from the navigation's response: the main-frame listener may
+     * already have moved the page away, so `page.url()` can read `about:blank` by now.
+     */
+    private async refuseBlockedLanding(responseUrl: string | undefined): Promise<void> {
+        const landed = responseUrl ?? this.page!.url();
         if (this.isBlockedLanding(landed)) {
-            await this.page!.goto('about:blank');
+            if (this.page!.url() !== 'about:blank') {
+                await this.page!.goto('about:blank');
+            }
             throw new Error(`Navigation refused: it was redirected to ${new URL(landed).host}, which is on a private network.`);
         }
     }
@@ -929,8 +937,7 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
 
             case 'Navigate':
                 this.assertNavigable(action.Url);
-                await page.goto(action.Url, { waitUntil: 'load' });
-                await this.refuseBlockedLanding();
+                await this.refuseBlockedLanding((await page.goto(action.Url, { waitUntil: 'load' }))?.url());
                 break;
 
             case 'GoBack':

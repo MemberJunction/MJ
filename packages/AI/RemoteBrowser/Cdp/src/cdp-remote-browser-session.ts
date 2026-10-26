@@ -222,7 +222,13 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
     // Enter and Space activate the focused control (Enter also submits a form through its default
     // button), so each is checked the way a click on what it activates is.
     for (const key of this.activatingKeys(action)) {
-      const refusal = this.refusal(await ResolveKeyTarget(this.adapter, key, action.Kind === 'type' ? action.Selector : undefined));
+      const target = await ResolveKeyTarget(this.adapter, key, action.Kind === 'type' ? action.Selector : undefined);
+      // Spaces typed among other text only matter on a button (a text field never trips the check), so a
+      // Playwright-only selector naming the field to type into is not refused for them.
+      if (key === 'space' && action.Kind === 'type' && action.Text !== ' ' && target.InvalidSelector) {
+        continue;
+      }
+      const refusal = this.refusal(target);
       if (refusal) {
         return refusal;
       }
@@ -625,7 +631,7 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
       return {
         Success: false,
         CurrentUrl: this.adapter.CurrentUrl,
-        Detail: `Refusing to activate "${target.Label}": it submits, pays, places an order, deletes or signs in. Leave the page ready and ask the user to do it.`,
+        Detail: `Refusing to activate "${target.Label}": it is labelled to submit, pay, place an order, confirm a payment, transfer, delete or sign in. Leave the page ready and ask the user to do it.`,
       };
     }
     return null;

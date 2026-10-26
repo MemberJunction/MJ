@@ -23,8 +23,16 @@ beforeEach(() => {
     currentUrl = 'about:blank';
     redirects = {};
     page = {
+        // Like Chromium: the page commits (firing framenavigated) before goto resolves with the landing's response.
         goto: vi.fn(async (url: string) => {
-            currentUrl = redirects[url] ?? url;
+            const landed = redirects[url] ?? url;
+            currentUrl = landed;
+            for (const call of page.on.mock.calls) {
+                if (call[0] === 'framenavigated') {
+                    (call[1] as FrameListener)(mainFrame);
+                }
+            }
+            return landed === 'about:blank' ? null : { url: () => landed };
         }),
         route: vi.fn().mockResolvedValue(undefined),
         on: vi.fn(),
@@ -96,12 +104,16 @@ describe('PlaywrightBrowserAdapter.RestrictNavigation', () => {
         expect(await request('https://example.com/a.js')).toBe('continued');
     });
 
-    it('refuses a navigation a redirect lands on a private host, and sends the page back to about:blank', async () => {
+    it('refuses a navigation a redirect lands on a private host, even after the listener has moved the page away', async () => {
         const adapter = await launched();
         await adapter.RestrictNavigation([]);
         redirects['https://short.example/x'] = 'http://169.254.169.254/latest/meta-data';
         await expect(adapter.Navigate('https://short.example/x')).rejects.toThrow('redirected to 169.254.169.254');
         expect(page.url()).toBe('about:blank');
+        const action = Object.assign(new NavigateAction(), { Url: 'https://short.example/x' });
+        const result = await adapter.ExecuteAction(action);
+        expect(result.Success).toBe(false);
+        expect(result.Error).toContain('redirected to 169.254.169.254');
     });
 
     it('sends the page back when a main-frame navigation it did not start (a followed link) lands on a private host', async () => {

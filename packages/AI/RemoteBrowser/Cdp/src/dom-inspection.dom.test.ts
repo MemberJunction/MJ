@@ -211,9 +211,10 @@ describe('Enter guard', () => {
         expect((await session.ExecuteAction({ Kind: 'type', Text: ' ' })).Success).toBe(false);
         expect(adapter.ExecutedActions).toEqual([]);
 
-        // Spaces typed into a text field are just text.
+        // Spaces typed into a text field are just text, whatever selector names the field.
         (document.getElementById('name') as HTMLInputElement).focus();
         expect((await session.ExecuteAction({ Kind: 'type', Text: 'Ada Lovelace' })).Success).toBe(true);
+        expect((await session.ExecuteAction({ Kind: 'type', Text: 'Ada Lovelace', Selector: '#name >> nth=0' })).Success).toBe(true);
     });
 
     it('lets Enter submit a search, and type text without a newline', async () => {
@@ -221,6 +222,41 @@ describe('Enter guard', () => {
         (document.getElementById('q') as HTMLInputElement).focus();
         expect((await session.ExecuteAction({ Kind: 'key', Key: 'Enter' })).Success).toBe(true);
         expect((await session.ExecuteAction({ Kind: 'type', Text: 'shoes' })).Success).toBe(true);
+    });
+});
+
+describe('guards reach into open shadow roots', () => {
+    let session: CdpRemoteBrowserSession;
+    let adapter: FakePlaywrightBrowserAdapter;
+    let root: ShadowRoot;
+    beforeEach(() => {
+        ({ session, adapter } = buildSession());
+        render(`<div id="host"></div>`);
+        root = document.getElementById('host')!.attachShadow({ mode: 'open' });
+        root.innerHTML = '<form><input id="qty" aria-label="Quantity"><button id="pay">Place your order</button></form>';
+    });
+    const refused = (detail: string | undefined) => expect(detail).toContain('Refusing to activate "Place your order"');
+
+    it('Space on a focused shadow-root button', async () => {
+        (root.getElementById('pay') as HTMLButtonElement).focus();
+        refused((await session.ExecuteAction({ Kind: 'key', Key: ' ' })).Detail);
+    });
+
+    it('Enter in a shadow-root field whose form submits through it', async () => {
+        (root.getElementById('qty') as HTMLInputElement).focus();
+        refused((await session.ExecuteAction({ Kind: 'key', Key: 'Enter' })).Detail);
+    });
+
+    it('a typed space aimed at it by selector', async () => {
+        refused((await session.ExecuteAction({ Kind: 'type', Text: ' ', Selector: '#pay' })).Detail);
+    });
+
+    it('a click at its point', async () => {
+        const host = document.getElementById('host')!;
+        document.elementFromPoint = () => host;
+        root.elementFromPoint = () => root.getElementById('pay');
+        refused((await session.ExecuteAction({ Kind: 'click', X: 20, Y: 20 })).Detail);
+        expect(adapter.ExecutedActions).toEqual([]);
     });
 });
 

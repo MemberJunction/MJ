@@ -206,6 +206,40 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
       (el) => !NON_FIELD_TYPES.includes(typeOf(el)) && isVisible(el),
     );
 
+  // Focus, a hit test and a selector all stop at a shadow host; these follow open shadow roots down to
+  // the element itself, as Playwright's CSS and a real key press or click do.
+  const deepQueryAll = (selector: string): HTMLElement[] => {
+    const found: HTMLElement[] = [];
+    const roots: Array<Document | ShadowRoot> = [document];
+    for (let i = 0; i < roots.length; i++) {
+      found.push(...Array.from(roots[i].querySelectorAll<HTMLElement>(selector)));
+      roots[i].querySelectorAll('*').forEach((n) => {
+        if (n.shadowRoot) {
+          roots.push(n.shadowRoot);
+        }
+      });
+    }
+    return found;
+  };
+  const deepActive = (): HTMLElement | null => {
+    let el = document.activeElement as HTMLElement | null;
+    while (el?.shadowRoot?.activeElement) {
+      el = el.shadowRoot.activeElement as HTMLElement;
+    }
+    return el;
+  };
+  const deepFromPoint = (x: number, y: number): HTMLElement | null => {
+    let el = document.elementFromPoint(x, y) as HTMLElement | null;
+    while (el?.shadowRoot) {
+      const inner = el.shadowRoot.elementFromPoint(x, y) as HTMLElement | null;
+      if (!inner || inner === el) {
+        break;
+      }
+      el = inner;
+    }
+    return el;
+  };
+
   const byRef = (ref: string | undefined): HTMLElement | null =>
     ref && /^[fa]\d+$/i.test(ref.trim()) ? document.querySelector<HTMLElement>(`[${REF_ATTR}="${ref.trim().toLowerCase()}"]`) : null;
 
@@ -385,7 +419,7 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
     // in a field also submits its form through the form's default button.
     let active: HTMLElement | null;
     try {
-      active = req.Selector ? document.querySelector<HTMLElement>(req.Selector) : (document.activeElement as HTMLElement | null);
+      active = req.Selector ? deepQueryAll(req.Selector)[0] ?? null : deepActive();
     } catch {
       return { Found: false, Label: req.Selector ?? '', Destructive: false, InvalidSelector: true };
     }
@@ -407,16 +441,7 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
     // an open shadow root, which Playwright's CSS also reaches).
     let matches: HTMLElement[];
     try {
-      matches = [];
-      const roots: Array<Document | ShadowRoot> = [document];
-      for (let i = 0; i < roots.length; i++) {
-        matches.push(...Array.from(roots[i].querySelectorAll<HTMLElement>(q.Selector)));
-        roots[i].querySelectorAll('*').forEach((n) => {
-          if (n.shadowRoot) {
-            roots.push(n.shadowRoot);
-          }
-        });
-      }
+      matches = deepQueryAll(q.Selector);
     } catch {
       return { Found: false, Label: q.Selector, Destructive: false, InvalidSelector: true };
     }
@@ -442,7 +467,7 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
       el.setAttribute(REF_ATTR, `a${Math.max(0, ...used) + 1}`);
     }
   } else if (typeof q.X === 'number' && typeof q.Y === 'number') {
-    const hit = document.elementFromPoint(q.X, q.Y) as HTMLElement | null;
+    const hit = deepFromPoint(q.X, q.Y);
     el = hit?.closest<HTMLElement>(TEXT_CLICK_SELECTOR) ?? hit;
   }
   if (!el) {
