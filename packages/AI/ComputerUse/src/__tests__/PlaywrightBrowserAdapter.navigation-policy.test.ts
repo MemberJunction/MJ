@@ -12,6 +12,8 @@ type RouteHandler = (route: { request: () => { url: () => string }; abort: (code
 type FrameListener = (frame: { url: () => string }) => void;
 const mainFrame = { url: () => currentUrl };
 let currentUrl = 'about:blank';
+/** Whether a navigation is in flight: a second one started meanwhile collides with it, as in Chromium. */
+let inFlight = false;
 /** Where a goto to each URL lands, standing in for a server's redirect. */
 let redirects: Record<string, string> = {};
 let page: {
@@ -21,10 +23,18 @@ let page: {
 
 beforeEach(() => {
     currentUrl = 'about:blank';
+    inFlight = false;
     redirects = {};
     page = {
-        // Like Chromium: the page commits (firing framenavigated) before goto resolves with the landing's response.
+        // Like Chromium: a navigation takes a moment, commits (firing framenavigated) before goto resolves with
+        // the landing's response, and one started while another is in flight is interrupted.
         goto: vi.fn(async (url: string) => {
+            if (inFlight) {
+                throw new Error('page.goto: Navigation is interrupted by another navigation');
+            }
+            inFlight = true;
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            inFlight = false;
             const landed = redirects[url] ?? url;
             currentUrl = landed;
             for (const call of page.on.mock.calls) {
@@ -114,6 +124,18 @@ describe('PlaywrightBrowserAdapter.RestrictNavigation', () => {
         const result = await adapter.ExecuteAction(action);
         expect(result.Success).toBe(false);
         expect(result.Error).toContain('redirected to 169.254.169.254');
+    });
+
+    it('a refused redirect leaves the next navigation free to run (its about:blank has finished first)', async () => {
+        const adapter = await launched();
+        await adapter.RestrictNavigation([]);
+        redirects['https://short.example/x'] = 'http://169.254.169.254/latest/meta-data';
+        await expect(adapter.Navigate('https://short.example/x')).rejects.toThrow('redirected to 169.254.169.254');
+        await adapter.Navigate('https://example.com/');
+        expect(page.url()).toBe('https://example.com/');
+        const action = Object.assign(new NavigateAction(), { Url: 'https://short.example/x' });
+        expect((await adapter.ExecuteAction(action)).Error).toContain('redirected to');
+        expect((await adapter.ExecuteAction(Object.assign(new NavigateAction(), { Url: 'https://example.org/' }))).Success).toBe(true);
     });
 
     it('sends the page back when a main-frame navigation it did not start (a followed link) lands on a private host', async () => {

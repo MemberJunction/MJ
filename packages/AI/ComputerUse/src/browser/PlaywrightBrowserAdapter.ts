@@ -263,6 +263,11 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
     private navigationPolicy: { AllowedPrivateHosts: string[] | null } | null = null;
     /** Whether the private-network route and landing check are installed. */
     private privateNetworkGuardActive = false;
+    /**
+     * The `about:blank` navigation the landing listener started for a blocked page. Awaited before the
+     * next navigation, which it would otherwise interrupt (or be interrupted by).
+     */
+    private pendingBlankNavigation: Promise<void> = Promise.resolve();
     /** Whether the route interceptor has been set up */
     private routeInterceptorActive: boolean = false;
 
@@ -418,6 +423,7 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
     public override async Navigate(url: string): Promise<void> {
         this.requirePage();
         this.assertNavigable(url);
+        await this.pendingBlankNavigation;
         const response = await this.page!.goto(url, { waitUntil: 'load' });
         await this.refuseBlockedLanding(response?.url());
     }
@@ -450,7 +456,7 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
         const page = this.page!;
         page.on('framenavigated', (frame) => {
             if (frame === page.mainFrame() && this.isBlockedLanding(frame.url())) {
-                void page.goto('about:blank').catch(() => undefined);
+                this.pendingBlankNavigation = page.goto('about:blank').then(() => undefined, () => undefined);
             }
         });
     }
@@ -463,6 +469,7 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
     private async refuseBlockedLanding(responseUrl: string | undefined): Promise<void> {
         const landed = responseUrl ?? this.page!.url();
         if (this.isBlockedLanding(landed)) {
+            await this.pendingBlankNavigation;
             if (this.page!.url() !== 'about:blank') {
                 await this.page!.goto('about:blank');
             }
@@ -937,6 +944,7 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
 
             case 'Navigate':
                 this.assertNavigable(action.Url);
+                await this.pendingBlankNavigation;
                 await this.refuseBlockedLanding((await page.goto(action.Url, { waitUntil: 'load' }))?.url());
                 break;
 
