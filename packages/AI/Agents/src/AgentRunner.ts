@@ -536,6 +536,10 @@ export class AgentRunner {
             const runBranchId = params.ConversationBranchID ?? agentResponseDetail?.BranchID ?? undefined;
 
             // Gather all artifacts on the run's branch path of this conversation for the ArtifactToolManager.
+            // Per design doc Section 8.8: in the in-conversation flow, "the agent continues
+            // the conversation with the artifact already available." This means ALL artifacts
+            // on that path (both agent-produced Output and user-attached Input) should
+            // be available to the agent via artifact tools.
             // Brand-new conversations created right above have zero prior artifacts, so skip the 3 DB queries.
             const inputArtifacts = isNewConversation
                 ? []
