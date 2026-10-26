@@ -3,7 +3,7 @@ import { Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
-import { MarkdownComponent, type MarkdownImageClickEvent } from './markdown.component';
+import { MarkdownComponent, type ImageClickedEventArgs } from './markdown.component';
 import { MarkdownModule } from '../markdown.module';
 import { MarkdownRenderEvent } from '@memberjunction/markdown-core';
 
@@ -153,7 +153,7 @@ describe('MarkdownComponent (DOM)', () => {
 
     async function renderImages(markdown: string, listen: boolean) {
       const f = render({ data: '' });
-      const events = listen ? capture<MarkdownImageClickEvent>(f.componentInstance.ImageClicked) : [];
+      const events = listen ? capture<ImageClickedEventArgs>(f.componentInstance.ImageClicked) : [];
       f.componentRef.setInput('data', markdown);
       f.detectChanges();
       await Promise.resolve();
@@ -165,8 +165,22 @@ describe('MarkdownComponent (DOM)', () => {
       const { img, events } = await renderImages(`![Pattern 5](${SRC})`, true);
       expect(img.classList.contains('mj-markdown-image-clickable')).toBe(true);
       expect(img.tabIndex).toBe(0);
+      expect(img.getAttribute('role')).toBe('button');
       img.click();
       expect(events).toEqual([{ Src: SRC, Alt: 'Pattern 5' }]);
+    });
+
+    it('leaves a decorative image alone (a mention badge avatar) and still wires a real one beside it', async () => {
+      const { img: avatar, events } = await renderImages(
+        `<span class="mention-badge"><img src="${SRC}a" alt="" role="presentation" />Sage</span> drew ![Chart](${SRC})`, true);
+      const chart = avatar.closest('.mj-markdown-container')!.querySelectorAll('img')[1] as HTMLImageElement;
+      expect(avatar.getAttribute('role')).toBe('presentation');
+      expect(avatar.classList.contains('mj-markdown-image-clickable')).toBe(false);
+      expect(avatar.hasAttribute('tabindex')).toBe(false);
+      avatar.click();
+      expect(events).toEqual([]);
+      chart.click();
+      expect(events).toEqual([{ Src: SRC, Alt: 'Chart' }]);
     });
 
     it('reports Enter and Space on a focused image, and no other key', async () => {
@@ -192,7 +206,7 @@ describe('MarkdownComponent (DOM)', () => {
       })
       class HostComponent {
         Md = `![Pattern 5](${SRC})`;
-        Events: MarkdownImageClickEvent[] = [];
+        Events: ImageClickedEventArgs[] = [];
       }
       TestBed.configureTestingModule({ imports: [HostComponent] });
       const f = TestBed.createComponent(HostComponent);

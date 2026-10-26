@@ -20,7 +20,7 @@ import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand,
 import { FormResponseUtils } from '@memberjunction/ng-forms';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { PlanModePreference } from '../../utils/plan-mode-preference';
-import { MarkdownService, type MarkdownImageClickEvent } from '@memberjunction/ng-markdown';
+import { MarkdownService, type ImageClickedEventArgs } from '@memberjunction/ng-markdown';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
@@ -1642,7 +1642,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
     // Generate HTML based on whether we have an icon
     if (logoURL) {
-      return `<span class="mention-badge ${typeClass}"${inlineStyle}${recordAttrs}><img src="${this.escapeHtml(logoURL)}" alt="" />${escapedName}${presetIndicator}</span>`;
+      return `<span class="mention-badge ${typeClass}"${inlineStyle}${recordAttrs}><img src="${this.escapeHtml(logoURL)}" alt="" role="presentation" />${escapedName}${presetIndicator}</span>`;
     } else if (iconClass) {
       return `<span class="mention-badge ${typeClass}"${inlineStyle}${recordAttrs}><i class="${this.escapeHtml(iconClass)}" aria-hidden="true"></i>${escapedName}${presetIndicator}</span>`;
     } else {
@@ -2632,7 +2632,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * An image in the message text was clicked: open it in the chat's image viewer, the way an
    * attachment thumbnail opens there.
    */
-  public OnMarkdownImageClicked(image: MarkdownImageClickEvent): void {
+  public OnMarkdownImageClicked(image: ImageClickedEventArgs): void {
     this.AttachmentClicked.emit({
       id: image.Src,
       type: 'Image',

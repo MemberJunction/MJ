@@ -124,7 +124,7 @@ export class YourModule {}
 | `rendered` | `MarkdownRenderEvent` | Emitted when rendering completes |
 | `headingClick` | `HeadingInfo` | Emitted when a heading is clicked |
 | `codeCopied` | `string` | Emitted when code is copied to clipboard |
-| `ImageClicked` | `MarkdownImageClickEvent` | Emitted when a rendered image (not one inside a link) is clicked or activated by keyboard; images react only while this is bound |
+| `ImageClicked` | `ImageClickedEventArgs` | Emitted when a rendered image (not one inside a link) is clicked or activated by keyboard; images react only while this is bound |
 
 Tall images can be capped by the host with the `--mj-markdown-image-max-height` CSS custom property (unset: no cap), for example `--mj-markdown-image-max-height: 360px` on a chat column.
 

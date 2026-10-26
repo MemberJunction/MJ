@@ -18,11 +18,13 @@ import { MarkdownService } from '../services/markdown.service';
 import { MarkdownConfig, DEFAULT_MARKDOWN_CONFIG, MarkdownRenderEvent, HeadingInfo } from '@memberjunction/markdown-core';
 
 /** A rendered image the reader clicked or activated: what a host needs to show it full size. */
-export interface MarkdownImageClickEvent {
-  /** The image's `src`, as rendered (absolute). */
-  Src: string;
-  /** Its alt text; '' when it has none. */
-  Alt: string;
+export class ImageClickedEventArgs {
+  constructor(
+    /** The image's `src`, as rendered (absolute). */
+    public readonly Src: string,
+    /** Its alt text; '' when it has none. */
+    public readonly Alt: string,
+  ) {}
 }
 // Collapsible section toggle is handled inline in setupCollapsibleListeners
 
@@ -410,7 +412,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
    * is bound to this output, so a host that does not listen keeps inert images. An image inside a
    * link keeps the link's behaviour and is not reported.
    */
-  @Output() ImageClicked = new EventEmitter<MarkdownImageClickEvent>();
+  @Output() ImageClicked = new EventEmitter<ImageClickedEventArgs>();
 
   /**
    * The sanitized HTML content to display
@@ -783,17 +785,18 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   }
 
   /**
-   * Report clicks on rendered images, except those inside a link, and make them reachable by
-   * keyboard. The class lets the stylesheet show them as zoomable, and marks an image already wired:
+   * Report clicks on rendered images, except those inside a link or marked decorative
+   * (`role="presentation"`, e.g. a mention badge's avatar), and make them reachable by keyboard. The class lets the stylesheet show them as zoomable, and marks an image already wired:
    * post-render processing can run twice over the same DOM (ngAfterViewInit and the render
    * microtask on first render), and a second listener would report every click twice.
    */
   private setupImageClickListeners(container: HTMLElement): void {
-    container.querySelectorAll('img').forEach((img) => {
+    container.querySelectorAll<HTMLImageElement>('img:not([role="presentation"])').forEach((img) => {
       if (img.closest('a') || img.classList.contains('mj-markdown-image-clickable')) return;
       img.classList.add('mj-markdown-image-clickable');
       img.tabIndex = 0;
-      const report = () => this.ImageClicked.emit({ Src: img.src, Alt: img.alt });
+      img.setAttribute('role', 'button');
+      const report = () => this.ImageClicked.emit(new ImageClickedEventArgs(img.src, img.alt));
       img.addEventListener('click', report);
       img.addEventListener('keydown', (event: KeyboardEvent) => {
         if (event.key !== 'Enter' && event.key !== ' ') return;
