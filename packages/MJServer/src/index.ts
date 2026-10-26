@@ -641,7 +641,7 @@ const setupComplete$ = new ReplaySubject(1);
           startupLog.LogIf('verbose', 'RSU in-process CodeGen runner initialized (PostgreSQL).');
 
           // Inject CodeGen output paths for targeted git staging
-          const { initializeConfig } = await import('@memberjunction/codegen-lib');
+          const { initializeConfig, ResolveAdditionalSchemaInfoPath } = await import('@memberjunction/codegen-lib');
           const cgConfig = initializeConfig(rsuWorkDir);
           const outputPaths = (cgConfig.output ?? []).map((o: { directory: string }) => o.directory);
           RuntimeSchemaManager.Instance.SetCodeGenOutputPaths(outputPaths);
@@ -650,9 +650,12 @@ const setupComplete$ = new ReplaySubject(1);
           // Point RSU's soft PK/FK writer at the SAME file CodeGen reads (mj.config.cjs
           // `additionalSchemaInfo`), or RSU writes soft PKs to its own default path while
           // CodeGen reads a different one and skips integration tables with "No primary key found".
-          if (cgConfig.additionalSchemaInfo) {
-            RuntimeSchemaManager.Instance.SetAdditionalSchemaInfoPath(cgConfig.additionalSchemaInfo);
-            startupLog.LogIf('verbose', `RSU additionalSchemaInfo path: ${cgConfig.additionalSchemaInfo}`);
+          // Inject the ABSOLUTE path CodeGen resolves (env override, else relative to the mj.config
+          // file's directory) so RSU, the resolvers and CodeGen agree whatever their cwd (#5858).
+          const resolvedSchemaInfoPath = ResolveAdditionalSchemaInfoPath();
+          if (resolvedSchemaInfoPath) {
+            RuntimeSchemaManager.Instance.SetAdditionalSchemaInfoPath(resolvedSchemaInfoPath);
+            startupLog.LogIf('verbose', `RSU additionalSchemaInfo path: ${resolvedSchemaInfoPath}`);
           } else if (RuntimeSchemaManager.Instance.IsEnabled) {
             // U5 — boot-time assert: RSU is enabled but CodeGen has NO additionalSchemaInfo path
             // configured, so RSU's soft-PK/FK writes land in a file CodeGen never reads. Every
@@ -660,7 +663,7 @@ const setupComplete$ = new ReplaySubject(1);
             // named, and actionable — grep for RSU_ADDITIONAL_SCHEMA_INFO_DIVERGENCE.
             console.error(
               `[RSU_ADDITIONAL_SCHEMA_INFO_DIVERGENCE] Runtime Schema Update is ENABLED but mj.config.cjs has no ` +
-              `'additionalSchemaInfo' setting — RSU writes soft PK/FK definitions to '${process.env.RSU_ADDITIONAL_SCHEMA_INFO_PATH ?? 'additionalSchemaInfo.json'}' ` +
+              `'additionalSchemaInfo' setting (and RSU_ADDITIONAL_SCHEMA_INFO_PATH is unset) — RSU writes soft PK/FK definitions to '${RuntimeSchemaManager.Instance.AdditionalSchemaInfoPath}' ` +
               `while CodeGen reads none, so resolved soft primary keys will be silently LOST at codegen time. ` +
               `Set 'additionalSchemaInfo' in mj.config.cjs to the same file so the write path and read path agree.`
             );
@@ -786,7 +789,7 @@ const setupComplete$ = new ReplaySubject(1);
           startupLog.LogIf('verbose', 'RSU in-process CodeGen runner initialized.');
 
           // Inject CodeGen output paths for targeted git staging
-          const { initializeConfig } = await import('@memberjunction/codegen-lib');
+          const { initializeConfig, ResolveAdditionalSchemaInfoPath } = await import('@memberjunction/codegen-lib');
           const codegenConfig = initializeConfig(rsuWorkDir);
           const outputPaths = (codegenConfig.output ?? []).map((o: { directory: string }) => o.directory);
           RuntimeSchemaManager.Instance.SetCodeGenOutputPaths(outputPaths);
@@ -796,14 +799,17 @@ const setupComplete$ = new ReplaySubject(1);
           // `additionalSchemaInfo`). Without this, RSU writes soft PKs to its own default
           // path while CodeGen reads a different one and skips every integration table
           // with "No primary key found".
-          if (codegenConfig.additionalSchemaInfo) {
-            RuntimeSchemaManager.Instance.SetAdditionalSchemaInfoPath(codegenConfig.additionalSchemaInfo);
-            startupLog.LogIf('verbose', `RSU additionalSchemaInfo path: ${codegenConfig.additionalSchemaInfo}`);
+          // Inject the ABSOLUTE path CodeGen resolves (env override, else relative to the mj.config
+          // file's directory) so RSU, the resolvers and CodeGen agree whatever their cwd (#5858).
+          const resolvedSchemaInfoPath = ResolveAdditionalSchemaInfoPath();
+          if (resolvedSchemaInfoPath) {
+            RuntimeSchemaManager.Instance.SetAdditionalSchemaInfoPath(resolvedSchemaInfoPath);
+            startupLog.LogIf('verbose', `RSU additionalSchemaInfo path: ${resolvedSchemaInfoPath}`);
           } else if (RuntimeSchemaManager.Instance.IsEnabled) {
             // U5 — boot-time assert: write path ≠ read path (see the PostgreSQL branch for detail).
             console.error(
               `[RSU_ADDITIONAL_SCHEMA_INFO_DIVERGENCE] Runtime Schema Update is ENABLED but mj.config.cjs has no ` +
-              `'additionalSchemaInfo' setting — RSU writes soft PK/FK definitions to '${process.env.RSU_ADDITIONAL_SCHEMA_INFO_PATH ?? 'additionalSchemaInfo.json'}' ` +
+              `'additionalSchemaInfo' setting (and RSU_ADDITIONAL_SCHEMA_INFO_PATH is unset) — RSU writes soft PK/FK definitions to '${RuntimeSchemaManager.Instance.AdditionalSchemaInfoPath}' ` +
               `while CodeGen reads none, so resolved soft primary keys will be silently LOST at codegen time. ` +
               `Set 'additionalSchemaInfo' in mj.config.cjs to the same file so the write path and read path agree.`
             );

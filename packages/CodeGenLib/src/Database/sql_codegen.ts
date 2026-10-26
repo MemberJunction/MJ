@@ -279,14 +279,30 @@ export class SQLCodeGenBase {
     /**
      * Map of `schema.routine` (lowercased) to its live `OBJECT_DEFINITION` text on SQL Server,
      * used by {@link isRoutineSaveReturnModeChanged} to detect when `Entity.Configuration.SaveReturnMode`
-     * changed via `mj sync push` without a physical table/column change.
+     * changed via `mj sync push` without a physical table/column change, and by
+     * {@link isRoutineDefinitionDrifted} to detect any other difference from the generated body.
      */
     protected existingRoutineDefinitions: Map<string, string> | null = null;
+
+    /**
+     * `schema.routine` keys of CRUD routines whose live definition differed from the body generated
+     * this run, so they were force-logged and re-executed. Reported once after generation.
+     */
+    protected driftedRoutines: Set<string> = new Set();
+
+    /**
+     * Names of LAYERED entities whose generated inner view was written to the migration log this
+     * run. Their application-owned outer view must be refreshed in the same migration, even when the
+     * entity is on neither the new nor the modified list (the inner view changed on its own).
+     */
+    protected layeredEntitiesWithLoggedInnerView: Set<string> = new Set();
 
     public async ManageSQLScriptsAndExecution(pool: CodeGenConnection, entities: EntityInfo[], directory: string, currentUser: UserInfo): Promise<boolean> {
         try {
             this.existingRoutines = null;
             this.existingRoutineDefinitions = null;
+            this.driftedRoutines = new Set();
+            this.layeredEntitiesWithLoggedInnerView = new Set();
             // Build list of entities qualified for forced regeneration if entityWhereClause is provided
             if (configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.entityWhereClause) {
                 this.filterEntitiesQualifiedForRegeneration = true; // Enable filtering
@@ -318,11 +334,15 @@ export class SQLCodeGenBase {
             //          objects like spCreate for a given entity might reference the vw for that entity
             StartSpinner('Running custom SQL scripts...');
             const startTime: Date = new Date();
-            if (! await this.RunCustomSQLScripts(pool, 'before-sql')) {
+            // A failed before-sql script fails the step but does not stop the run: the remaining steps
+            // still run so the final result lists every failure, not just the first.
+            const beforeScriptsSucceeded = await this.RunCustomSQLScripts(pool, 'before-sql');
+            if (!beforeScriptsSucceeded) {
                 FailSpinner('Failed to run custom SQL scripts');
-                return false;
             }
-            SucceedSpinner(`Custom SQL scripts completed (${(new Date().getTime() - startTime.getTime())/1000}s)`);
+            else {
+                SucceedSpinner(`Custom SQL scripts completed (${(new Date().getTime() - startTime.getTime())/1000}s)`);
+            }
 
             await this.loadExistingRoutines(pool, entities);
 
@@ -516,7 +536,7 @@ export class SQLCodeGenBase {
 
             // Initialize from entityGenSuccess so any per-batch failures from
             // STEP 2(b)/(c) carry forward instead of being lost. Bug 2 fix.
-            let overallSuccess = entityGenSuccess;
+            let overallSuccess = entityGenSuccess && beforeScriptsSucceeded;
             if (!executionSuccess) {
                 FailSpinner('Failed to execute entity SQL files');
                 TempBatchFile.cleanup(); // Cleanup on error
@@ -529,6 +549,23 @@ export class SQLCodeGenBase {
                 const step2eEndTime: Date = new Date();
                 SucceedSpinner(`SQL execution completed (${(step2eEndTime.getTime() - step2eStartTime.getTime())/1000}s)`);
             }
+            this.reportDriftedRoutines();
+
+            // STEP 2(f) - refresh every application-owned base view NOW, before STEP 3's field sync.
+            // SQL Server freezes a non-schemabound view's column list at CREATE time, so recreating a
+            // layered entity's inner view in STEP 2(e) does not update the outer view's sys.columns.
+            // STEP 3 decides which EntityField rows are orphaned from that outer view, so a stale
+            // outer view made it delete the rows for columns added this run (#4336). The same refresh
+            // is written to the migration log here, ahead of any field-sync SQL, so a replay of the
+            // migration runs in the same order. STEP 4.5 still emits its refresh as a safety net.
+            StartSpinner('Refreshing custom base views...');
+            if (! await this.RefreshCustomBaseViewsLive(pool, includedEntities)) {
+                FailSpinner('Failed to refresh one or more custom base views');
+                overallSuccess = false;
+            }
+            else {
+                SucceedSpinner('Custom base views refreshed');
+            }
 
             const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
             // STEP 3 - re-run the process to manage entity fields since the Step 1 and 2 above might have resulted in differences in base view columns compared to what we had at first
@@ -537,7 +574,11 @@ export class SQLCodeGenBase {
             //
             // Pass 1 (in manage-metadata.ts) already discovered all changes and populated _newEntityList ∪ _modifiedEntityList.
             // Pass 2 (this call) only re-runs to pick up new virtual fields from regenerated views and to apply advanced
-            // generation. Scoping to changed entities collapses the SP scans to seeks; an empty list means no work to do.
+            // generation. Scoping to changed entities collapses the SP scans to seeks; an empty list means no schema-sync
+            // work to do. The filter does NOT scope the orphan prune: Step 2 regenerated every included entity's base
+            // view, so a view can LOSE columns on an entity that is on neither list, and by definition that entity is
+            // outside the filter (#4050). manageEntityFields runs the prune unscoped, before its empty-filter fast exit,
+            // and folds the entities it pruned into this pass's scope.
             // forceRegeneration override skips the scoping so all entities get reprocessed (used when prompts change, etc.).
             //
             // The two lists only ever contain entities something changed on during THIS run, so an
@@ -545,6 +586,8 @@ export class SQLCodeGenBase {
             // record forms stay broken until someone runs forceRegeneration over the whole database.
             // The drift probe closes that: it asks the catalog which entities have a view-only
             // column with no EntityField and unions those in, so recovery is a normal run.
+            // Layered entities whose inner view was rebuilt this run are added as well: STEP 2(f) just
+            // refreshed their outer view, which can now expose columns that need EntityField rows.
             const driftEntities = configInfo.forceRegeneration?.enabled
                 ? []
                 : await manageMD.FindVirtualFieldDriftEntities(pool, configInfo.excludeSchemas);
@@ -554,6 +597,7 @@ export class SQLCodeGenBase {
                     ...ManageMetadataBase.newEntityList,
                     ...ManageMetadataBase.modifiedEntityList,
                     ...driftEntities,
+                    ...this.layeredEntitiesWithLoggedInnerView,
                 ])];
             StartSpinner('Managing entity fields metadata...');
             if (! await manageMD.manageEntityFields(pool, configInfo.excludeSchemas, true, true, currentUser, false, false, pass2EntityFilter)) {
@@ -1393,7 +1437,12 @@ export class SQLCodeGenBase {
         return body.replace(/\s+/g, ' ').trim();
     }
 
-    protected logSQLForNewOrModifiedEntity(entity: EntityInfo, sql: string, description: string, logSql: boolean = false, forceLog: boolean = false) {
+    /**
+     * Writes generated SQL to the migration log (and the temp batch executed on SQL Server) when the
+     * entity is new/modified, a force-regeneration rule matches, or `forceLog` is set. Returns whether
+     * the SQL was logged.
+     */
+    protected logSQLForNewOrModifiedEntity(entity: EntityInfo, sql: string, description: string, logSql: boolean = false, forceLog: boolean = false): boolean {
         // Check if we should log this SQL
         let shouldLog = forceLog;
 
@@ -1454,6 +1503,7 @@ export class SQLCodeGenBase {
         }
 
         LogIf(configInfo.verboseOutput, `SQL Generated for ${entity.Name}: ${description}`);
+        return shouldLog;
     }
 
     /**
@@ -1477,6 +1527,83 @@ export class SQLCodeGenBase {
             refreshSQL,
             'Refresh custom base views for modified entities so schema changes are picked up'
         );
+    }
+
+    /**
+     * Executes the custom base view refresh ({@link buildCustomBaseViewRefreshSQL}: inner view, then
+     * the guarded outer view, then its rebind and alternate views) against the live database for
+     * EVERY included entity whose base view is application-owned, and writes the refresh for the
+     * entities whose views changed this run into the migration log.
+     *
+     * Runs right after STEP 2(e), so the outer views expose the columns the regenerated inner views
+     * now have before STEP 3 compares EntityField rows against them (#4336). Every entity is
+     * attempted; failures are logged together and make the step return `false`.
+     *
+     * Only the entities on the new/modified lists, plus layered entities whose inner view was logged
+     * this run, go into the migration log. Logging every custom view on every run would make a
+     * capture non-empty when nothing changed.
+     */
+    public async RefreshCustomBaseViewsLive(pool: CodeGenConnection, includedEntities: EntityInfo[]): Promise<boolean> {
+        if (!this._dbProvider.NeedsViewRefresh) {
+            return true; // PostgreSQL rebinds layered views in its phased executor
+        }
+        const targets = this.getCustomBaseViewEntitiesForLiveRefresh(includedEntities);
+        if (targets.length === 0) {
+            return true;
+        }
+
+        const failures: string[] = [];
+        for (const entity of targets) {
+            const refreshSQL = this.buildCustomBaseViewRefreshSQL([entity]);
+            if (refreshSQL.trim().length === 0) {
+                continue;
+            }
+            try {
+                await pool.query(refreshSQL);
+            } catch (e) {
+                failures.push(`${entity.SchemaName}.${entity.BaseView} (${entity.Name}): ${e instanceof Error ? e.message : String(e)}`);
+            }
+        }
+
+        const toLog = targets.filter(e => this.shouldLogCustomBaseViewRefresh(e));
+        if (toLog.length > 0) {
+            await SQLLogging.AppendToSQLLogFile(
+                this.buildCustomBaseViewRefreshSQL(toLog),
+                'Refresh custom base views before entity field sync so new columns are not pruned'
+            );
+        }
+
+        if (failures.length > 0) {
+            logError(`Custom base view refresh failed for ${failures.length} of ${targets.length} view(s):\n${failures.map(f => `  - ${f}`).join('\n')}`);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Included entities whose base view is application-owned (fully custom or layered), that have a
+     * base view, are not virtual or externally sourced, and are in the custom-view refresh scope.
+     */
+    protected getCustomBaseViewEntitiesForLiveRefresh(includedEntities: EntityInfo[]): EntityInfo[] {
+        return includedEntities.filter(e =>
+            !e.BaseViewGenerated &&
+            e.IncludeInAPI &&
+            !e.VirtualEntity &&
+            !e.ExternalDataSourceID &&
+            !!e.BaseView &&
+            EntityInCustomBaseViewRefreshScope(
+                e.SchemaName,
+                configInfo.excludeSchemas ?? [],
+                configInfo.includeSchemas,
+            )
+        );
+    }
+
+    /** True when this run's migration log must carry the entity's custom base view refresh. */
+    protected shouldLogCustomBaseViewRefresh(entity: EntityInfo): boolean {
+        return ManageMetadataBase.newEntityList.includes(entity.Name) ||
+            ManageMetadataBase.modifiedEntityList.includes(entity.Name) ||
+            this.layeredEntitiesWithLoggedInnerView.has(entity.Name);
     }
 
     /**
@@ -1653,7 +1780,10 @@ export class SQLCodeGenBase {
                 const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('view', options.entity.SchemaName, options.entity.GeneratedViewName, false, true));
                 if (options.writeFiles) {
                     this.writeFileIfChanged(filePath, s);
-                    this.logSQLForNewOrModifiedEntity(options.entity, s, `Base View SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
+                    const viewLogged = this.logSQLForNewOrModifiedEntity(options.entity, s, `Base View SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
+                    if (viewLogged && options.entity.HasLayeredBaseView) {
+                        this.layeredEntitiesWithLoggedInnerView.add(options.entity.Name);
+                    }
                     files.push(filePath);
                 }
                 sRet += s + '\n' + this._dbProvider.BatchSeparator + '\n';
@@ -1693,6 +1823,8 @@ export class SQLCodeGenBase {
             // CREATE SP
             if (options.entity.AllowCreateAPI && !options.entity.VirtualEntity) {
                 const spName: string = this.GetSPName(options.entity, SPType.Create);
+                // Recomputed with the generated body below, so drift from the live definition counts too.
+                let routineForceLog = this.forceLogForRoutine(options.entity, spName, baseViewChanged);
                 // Only generate if spCreateGenerated is true (respects custom SPs where it's false)
                 // forceRegeneration only forces regeneration of SPs where spCreateGenerated=true
                 if (!options.onlyPermissions && options.entity.spCreateGenerated) {
@@ -1701,7 +1833,8 @@ export class SQLCodeGenBase {
                     if (options.writeFiles) {
                         const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, false, true))
                         this.writeFileIfChanged(filePath, s);
-                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spCreate SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, this.forceLogForRoutine(options.entity, spName, baseViewChanged));
+                        routineForceLog = this.forceLogForRoutine(options.entity, spName, baseViewChanged, s);
+                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spCreate SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, routineForceLog);
                         files.push(filePath);
                     }
                     sRet += s + '\n' + this._dbProvider.BatchSeparator + '\n';
@@ -1712,7 +1845,7 @@ export class SQLCodeGenBase {
                 if (options.writeFiles) {
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, true, true))
                     this.writeFileIfChanged(filePath, s);
-                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spCreate Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, this.forceLogForRoutine(options.entity, spName, baseViewChanged));
+                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spCreate Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, routineForceLog);
                     files.push(filePath);
                 }
 
@@ -1725,6 +1858,8 @@ export class SQLCodeGenBase {
             // UPDATE SP
             if (options.entity.AllowUpdateAPI && !options.entity.VirtualEntity) {
                 const spName: string = this.GetSPName(options.entity, SPType.Update);
+                // Recomputed with the generated body below, so drift from the live definition counts too.
+                let routineForceLog = this.forceLogForRoutine(options.entity, spName, baseViewChanged);
                 // Only generate if spUpdateGenerated is true (respects custom SPs where it's false)
                 // forceRegeneration only forces regeneration of SPs where spUpdateGenerated=true
                 if (!options.onlyPermissions && options.entity.spUpdateGenerated) {
@@ -1733,7 +1868,8 @@ export class SQLCodeGenBase {
                     if (options.writeFiles) {
                         const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, false, true))
                         this.writeFileIfChanged(filePath, s);
-                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spUpdate SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, this.forceLogForRoutine(options.entity, spName, baseViewChanged));
+                        routineForceLog = this.forceLogForRoutine(options.entity, spName, baseViewChanged, s);
+                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spUpdate SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, routineForceLog);
                         files.push(filePath);
                     }
                     sRet += s + '\n' + this._dbProvider.BatchSeparator + '\n';
@@ -1744,7 +1880,7 @@ export class SQLCodeGenBase {
                 if (options.writeFiles) {
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, true, true));
                     this.writeFileIfChanged(filePath, s);
-                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spUpdate Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, this.forceLogForRoutine(options.entity, spName, baseViewChanged));
+                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spUpdate Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, routineForceLog);
                     files.push(filePath);
                 }
 
@@ -1757,6 +1893,8 @@ export class SQLCodeGenBase {
             // DELETE SP
             if (options.entity.AllowDeleteAPI && !options.entity.VirtualEntity) {
                 const spName: string = this.GetSPName(options.entity, SPType.Delete);
+                // Recomputed with the generated body below, so drift from the live definition counts too.
+                let routineForceLog = this.forceLogForRoutine(options.entity, spName, baseViewChanged);
                 // Only generate if spDeleteGenerated is true (respects custom SPs where it's false)
                 // OR if this entity has cascade delete dependencies that require regeneration
                 // forceRegeneration only forces regeneration of SPs where spDeleteGenerated=true
@@ -1771,7 +1909,8 @@ export class SQLCodeGenBase {
                     if (options.writeFiles) {
                         const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, false, true))
                         this.writeFileIfChanged(filePath, s);
-                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spDelete SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, this.forceLogForRoutine(options.entity, spName, baseViewChanged));
+                        routineForceLog = this.forceLogForRoutine(options.entity, spName, baseViewChanged, s);
+                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spDelete SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, routineForceLog);
                         files.push(filePath);
                     }
                     sRet += s + '\n' + this._dbProvider.BatchSeparator + '\n';
@@ -1782,7 +1921,7 @@ export class SQLCodeGenBase {
                 if (options.writeFiles) {
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, true, true));
                     this.writeFileIfChanged(filePath, s);
-                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spDelete Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, this.forceLogForRoutine(options.entity, spName, baseViewChanged));
+                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spDelete Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, routineForceLog);
                     files.push(filePath);
                 }
 
@@ -1935,10 +2074,64 @@ export class SQLCodeGenBase {
         return !selectsFromBaseView;
     }
 
-    protected forceLogForRoutine(entity: EntityInfo, routineName: string, baseViewChanged: boolean): boolean {
+    /**
+     * Returns true when the live definition of the entity's spCreate / spUpdate / spDelete differs
+     * from `generatedSQL`, the body CodeGen generated for it this run, after both are normalized by
+     * the provider (comments, header, DROP batch, `GO` and whitespace removed).
+     *
+     * This catches drift that never reaches the new/modified entity lists: a column default or type
+     * synced by `R__RefreshMetadata` before CodeGen ran (#5636), or a cascade target whose column a
+     * migration dropped together with its EntityField row (#3343). Returns false when the live
+     * definitions were not loaded (PostgreSQL, or the catalog query failed), when the routine is
+     * missing (handled by {@link isRoutineMissing}), or when either side cannot be normalized.
+     */
+    protected isRoutineDefinitionDrifted(entity: EntityInfo, routineName: string, generatedSQL: string): boolean {
+        if (!this.existingRoutineDefinitions || !generatedSQL) {
+            return false;
+        }
+        const lowerRoutine = routineName.toLowerCase();
+        const crudNames = [SPType.Create, SPType.Update, SPType.Delete].map(t => this.GetSPName(entity, t).toLowerCase());
+        if (!crudNames.includes(lowerRoutine)) {
+            return false;
+        }
+        const key = `${entity.SchemaName}.${routineName}`.toLowerCase();
+        const liveDefinition = this.existingRoutineDefinitions.get(key);
+        if (!liveDefinition) {
+            return false;
+        }
+        const generated = this._dbProvider.NormalizeRoutineDefinitionForComparison(generatedSQL);
+        const live = this._dbProvider.NormalizeRoutineDefinitionForComparison(liveDefinition);
+        if (generated === null || live === null) {
+            return false;
+        }
+        if (generated !== live) {
+            this.driftedRoutines.add(key);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Whether a CRUD routine's SQL must be logged and executed regardless of the new/modified lists.
+     * `generatedSQL`, when given, is the body generated this run and enables the live-definition drift
+     * check ({@link isRoutineDefinitionDrifted}).
+     */
+    protected forceLogForRoutine(entity: EntityInfo, routineName: string, baseViewChanged: boolean, generatedSQL?: string): boolean {
         return baseViewChanged ||
                this.isRoutineMissing(entity.SchemaName, routineName) ||
-               this.isRoutineSaveReturnModeChanged(entity, routineName);
+               this.isRoutineSaveReturnModeChanged(entity, routineName) ||
+               (generatedSQL !== undefined && this.isRoutineDefinitionDrifted(entity, routineName, generatedSQL));
+    }
+
+    /** Logs the CRUD routines that were regenerated because their live definition had drifted. */
+    protected reportDriftedRoutines(): void {
+        if (this.driftedRoutines.size === 0) {
+            return;
+        }
+        const names = [...this.driftedRoutines].sort();
+        const shown = names.slice(0, 20).map(n => `  - ${n}`).join('\n');
+        const more = names.length > 20 ? `\n  … and ${names.length - 20} more` : '';
+        logStatus(`Regenerated ${names.length} CRUD routine(s) whose live definition differed from the generated body:\n${shown}${more}`);
     }
 
     public GetEntityPermissionFileNames(entity: EntityInfo): string[] {
