@@ -22,6 +22,47 @@ export type BridgeHandler = (args: unknown) => Promise<unknown> | unknown;
 export type BridgeHandlerMap = Record<string, BridgeHandler>;
 
 /**
+ * A file mounted into the sandbox environment (under `/data/<name>` in Python
+ * or `globalThis.files[<name>]` in JavaScript).
+ */
+export interface SandboxFile {
+    /**
+     * File name (basename only, e.g., `'dataset.csv'`)
+     */
+    name: string;
+
+    /**
+     * File content as a UTF-8 string or base64-encoded string
+     */
+    content: string;
+
+    /**
+     * Encoding of `content` (default: `'utf8'`)
+     */
+    encoding?: 'utf8' | 'base64';
+}
+
+/**
+ * A file produced by sandboxed code inside the `/output` directory.
+ */
+export interface SandboxOutputFile {
+    /**
+     * File name (relative to `/output`)
+     */
+    name: string;
+
+    /**
+     * Inferred MIME type (e.g., `'text/csv'`, `'image/png'`, `'image/svg+xml'`, `'application/json'`)
+     */
+    mimeType: string;
+
+    /**
+     * Base64-encoded file bytes
+     */
+    base64Data: string;
+}
+
+/**
  * Parameters for code execution.
  *
  * `bridgeHandlers` is the ONLY field that is NOT sent over IPC — functions
@@ -36,14 +77,19 @@ export interface CodeExecutionParams {
     code: string;
 
     /**
-     * Programming language (currently only 'javascript' supported)
+     * Programming language (`'javascript'` or `'python'`)
      */
-    language: 'javascript';
+    language: 'javascript' | 'python';
 
     /**
      * Input data available to the code via 'input' variable
      */
     inputData?: any;
+
+    /**
+     * Optional files to mount in the sandbox environment (`/data/<name>` in Python)
+     */
+    files?: SandboxFile[];
 
     /**
      * Maximum execution time in seconds (default: 30)
@@ -95,9 +141,14 @@ export interface CodeExecutionResult {
     output?: any;
     
     /**
-     * Console logs captured during execution
+     * Console logs / stdout lines captured during execution
      */
     logs?: string[];
+
+    /**
+     * Optional files written by the code to `/output`
+     */
+    files?: SandboxOutputFile[];
     
     /**
      * Error message if execution failed

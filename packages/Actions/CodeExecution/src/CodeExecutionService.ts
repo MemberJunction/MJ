@@ -19,9 +19,10 @@
 
 import { CodeExecutionParams, CodeExecutionResult } from './types';
 import { WorkerPool, WorkerPoolOptions } from './WorkerPool';
+import { PythonRunner } from './PythonRunner';
 
 /**
- * Service for executing JavaScript code in a secure sandbox
+ * Service for executing JavaScript and Python code in a secure sandbox
  *
  * This service manages a pool of worker processes that execute code with full isolation.
  * If a worker crashes due to catastrophic errors, it's automatically restarted without
@@ -29,6 +30,7 @@ import { WorkerPool, WorkerPoolOptions } from './WorkerPool';
  */
 export class CodeExecutionService {
     private workerPool: WorkerPool;
+    private pythonRunner: PythonRunner;
     private initialized: boolean = false;
     /**
      * Create a new CodeExecutionService
@@ -37,6 +39,7 @@ export class CodeExecutionService {
      */
     constructor(options: WorkerPoolOptions = {}) {
         this.workerPool = new WorkerPool(options);
+        this.pythonRunner = new PythonRunner();
     }
 
     /**
@@ -58,14 +61,14 @@ export class CodeExecutionService {
     }
 
     /**
-     * Execute JavaScript code in a sandboxed environment
+     * Execute JavaScript or Python code in a sandboxed environment
      *
      * The code runs in a worker process with full isolation. If the worker crashes
      * due to catastrophic errors, it will be automatically restarted without affecting
      * this call or the main application.
      *
-     * @param params - Execution parameters (code, language, input data, limits)
-     * @returns Execution result with output, logs, or error
+     * @param params - Execution parameters (code, language, input data, files, limits)
+     * @returns Execution result with output, logs, files, or error
      */
     async Execute(params: CodeExecutionParams): Promise<CodeExecutionResult> {
         // Auto-initialize if not already done
@@ -82,10 +85,14 @@ export class CodeExecutionService {
             };
         }
 
+        if (params.language === 'python') {
+            return this.pythonRunner.Execute(params);
+        }
+
         if (params.language !== 'javascript') {
             return {
                 success: false,
-                error: `Unsupported language: ${params.language}. Only 'javascript' is currently supported.`,
+                error: `Unsupported language: ${params.language}. Supported languages are 'javascript' and 'python'.`,
                 errorType: 'RUNTIME_ERROR'
             };
         }

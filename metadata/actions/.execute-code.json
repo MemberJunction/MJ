@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Execute Code",
-      "Description": "Executes JavaScript code in a secure sandboxed environment. Designed for AI agents to generate and run code for data analysis, transformations, and calculations. Supports lodash, date-fns, mathjs, papaparse, uuid, and validator libraries. No filesystem or network access.",
+      "Description": "Executes JavaScript or Python code in a secure sandboxed environment. Designed for AI agents to generate and run code for data analysis, CSV/tabular processing, transformations, and calculations. Supports lodash, date-fns, mathjs, papaparse, uuid, and validator in JavaScript, and pandas/numpy/csv/statistics/math in Python. No external filesystem or network access.",
       "DriverClass": "__ExecuteCode",
       "Type": "Custom",
       "Status": "Active",
@@ -18,7 +18,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "JavaScript code to execute. Code should set the 'output' variable with the result. Can access 'input' variable for input data. Can require allowed libraries (lodash, date-fns, mathjs, papaparse, uuid, validator). Required.",
+            "Description": "JavaScript or Python code to execute. Code can set the 'output' variable with the result or print to stdout, and can access 'input' (or 'input_data' in Python) for input data and '/data/...' for mounted files in Python. Required.",
             "IsRequired": true
           },
           "primaryKey": {
@@ -37,7 +37,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Programming language. Currently only 'javascript' is supported. Default: 'javascript'.",
+            "Description": "Programming language ('javascript' or 'python'). Default: 'javascript'.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -64,6 +64,20 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:15.696Z",
             "checksum": "4aa41fae2281093a2b4d02a3d99fef19e5abeb9773b9c9aa3274a2ceba4cdf95"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "files",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": true,
+            "Description": "Optional JSON array of input files to mount under /data/ in the Python sandbox ([{\"path\": \"dataset.csv\", \"content\": \"...\", \"encoding\": \"utf8\"}]), or output files produced in /output/.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C84A9E71-3F52-4D9A-9A2E-7182B6435F01"
           }
         },
         {
@@ -203,6 +217,17 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:15.785Z",
             "checksum": "839b9c8982c08ed37c3ae53356c14dba41ceb63a22fb6f8a86031cad3cc5b77e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_FILES",
+            "IsSuccess": false,
+            "Description": "The files parameter is not valid JSON."
+          },
+          "primaryKey": {
+            "ID": "D74281B6-143E-4A98-B61E-92045C81E2B4"
           }
         },
         {

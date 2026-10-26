@@ -12,13 +12,14 @@ import { RegisterClass } from '@memberjunction/global';
 import { RunActionParams, ActionResultSimple } from '@memberjunction/actions-base';
 import {
     CodeExecutionParams,
-    CodeExecutionResult
+    CodeExecutionResult,
+    SandboxFile
 } from '@memberjunction/code-execution';
 import { LogError } from '@memberjunction/core';
 import { ExecuteCodeServiceProvider } from './execute-code-service-provider';
 
 /**
- * Action for executing JavaScript code in a sandboxed environment
+ * Action for executing JavaScript or Python code in a sandboxed environment
  *
  * This is a THIN WRAPPER - all core logic lives in CodeExecutionService.
  * The action's job is simply to:
@@ -48,15 +49,16 @@ export class ExecuteCodeAction extends BaseAction {
     /**
      * Execute the action by delegating to CodeExecutionService
      *
-     * @param params - Action parameters including code, language, inputData
+     * @param params - Action parameters including code, language, inputData, files
      * @returns ActionResultSimple with execution results or errors
      */
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             // 1. Extract parameters (this is all the action does besides delegation)
             const code = this.getStringParam(params, "code");
-            const language = this.getStringParam(params, "language", "javascript") as 'javascript';
+            const language = (this.getStringParam(params, "language", "javascript") || "javascript").toLowerCase() as 'javascript' | 'python';
             const inputDataStr = this.getStringParam(params, "inputData");
+            const filesStr = this.getStringParam(params, "files");
             const timeout = this.getNumericParam(params, "timeout", 30);
             const memoryLimit = this.getNumericParam(params, "memoryLimit", 128);
 
@@ -83,6 +85,19 @@ export class ExecuteCodeAction extends BaseAction {
                 }
             }
 
+            let files: SandboxFile[] | undefined = undefined;
+            if (filesStr) {
+                try {
+                    files = JSON.parse(filesStr);
+                } catch (parseError) {
+                    return {
+                        Success: false,
+                        ResultCode: "INVALID_FILES",
+                        Message: `Failed to parse files as JSON: ${parseError instanceof Error ? parseError.message : String(parseError)}`
+                    };
+                }
+            }
+
             // 2. Delegate to service (DIRECT IMPORT - not another action!)
             // Reuse the shared, process-lifetime CodeExecutionService instead of
             // `new CodeExecutionService()` per call — that used to fork a fresh
@@ -93,6 +108,7 @@ export class ExecuteCodeAction extends BaseAction {
                 code,
                 language,
                 inputData,
+                files,
                 timeoutSeconds: timeout,
                 memoryLimitMB: memoryLimit
             };
@@ -115,6 +131,9 @@ export class ExecuteCodeAction extends BaseAction {
             if (result.logs && result.logs.length > 0) {
                 this.addOutputParam(params, "logs", result.logs);
             }
+            if (result.files && result.files.length > 0) {
+                this.addOutputParam(params, "files", result.files);
+            }
             if (result.executionTimeMs !== undefined) {
                 this.addOutputParam(params, "executionTimeMs", result.executionTimeMs);
             }
@@ -125,6 +144,7 @@ export class ExecuteCodeAction extends BaseAction {
                 Message: JSON.stringify({
                     output: result.output,
                     logs: result.logs,
+                    files: result.files,
                     executionTimeMs: result.executionTimeMs
                 })
             };

@@ -138,16 +138,28 @@ describe('CodeExecutionService', () => {
 
     it('should return error for unsupported language', async () => {
       const params = {
-        code: 'print("hello")',
-        language: 'python'
+        code: 'puts "hello"',
+        language: 'ruby'
       } as unknown as CodeExecutionParams;
 
       const result = await service.execute(params);
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('Unsupported language');
-      expect(result.error).toContain('python');
+      expect(result.error).toContain('ruby');
       expect(result.errorType).toBe('RUNTIME_ERROR');
+    });
+
+    it('should execute python code via PythonRunner', async () => {
+      const params: CodeExecutionParams = {
+        code: 'output = 21 * 2',
+        language: 'python'
+      };
+
+      const result = await service.execute(params);
+
+      expect(result.success).toBe(true);
+      expect(result.output).toBe(42);
     });
 
     it('should delegate valid requests to worker pool', async () => {
