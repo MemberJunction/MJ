@@ -13,12 +13,15 @@
  */
 import { Resolver, Mutation, Arg, Ctx, ObjectType, Field } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { UserInfo, IMetadataProvider, LogError } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
-import { MJAIAgentSessionEntity } from '@memberjunction/core-entities';
+import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
 import { SessionManager, SessionAuthorizationError } from '../agentSessions/index.js';
+import {
+    LoadOwnedRealtimeSession,
+    RealtimeSessionNotFoundError,
+    RealtimeSessionOwnershipError,
+} from '../realtimeSessions/ownedRealtimeSession.js';
 
 /** Result of {@link AgentSessionResolver.StartAgentSession}. */
 @ObjectType()
@@ -84,7 +87,7 @@ export class AgentSessionResolver extends ResolverBase {
         @Ctx() { userPayload, providers }: AppContext,
     ): Promise<boolean> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
-        await this.assertOwnership(agentSessionId, contextUser, provider);
+        await this.loadOwnedSession(agentSessionId, contextUser, provider);
         return this.sessionManager.CloseSession(agentSessionId, contextUser, provider);
     }
 
@@ -98,7 +101,7 @@ export class AgentSessionResolver extends ResolverBase {
         @Ctx() { userPayload, providers }: AppContext,
     ): Promise<boolean> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
-        await this.assertOwnership(agentSessionId, contextUser, provider);
+        await this.loadOwnedSession(agentSessionId, contextUser, provider);
         return this.sessionManager.Heartbeat(agentSessionId, contextUser, provider);
     }
 
@@ -117,22 +120,25 @@ export class AgentSessionResolver extends ResolverBase {
     }
 
     /**
-     * Inbound ownership gate (the one genuinely new session-authz primitive): the session's `UserID`
-     * must equal the caller's. Throws on mismatch or when the session can't be loaded.
+     * Inbound ownership gate: delegates to {@link LoadOwnedRealtimeSession} (which enforces both
+     * `UserID === contextUser.ID` and `AuthorizeSessionAccess` scope/visitor binding) and maps its
+     * typed errors to this resolver's message format.
      */
-    private async assertOwnership(
+    private async loadOwnedSession(
         agentSessionId: string,
         contextUser: UserInfo,
         provider: IMetadataProvider,
     ): Promise<void> {
-        const session = await provider.GetEntityObject<MJAIAgentSessionEntity>('MJ: AI Agent Sessions', contextUser);
-        const loaded = await session.Load(agentSessionId);
-        if (!loaded) {
-            throw new Error(`Agent session ${agentSessionId} not found`);
-        }
-        if (!UUIDsEqual(session.UserID, contextUser.ID)) {
-            LogError(`AgentSessionResolver: ownership check failed — user ${contextUser.ID} attempted to operate on session ${agentSessionId} owned by ${session.UserID}`);
-            throw new Error('Not authorized: you do not own this agent session');
+        try {
+            await LoadOwnedRealtimeSession(agentSessionId, contextUser, provider);
+        } catch (err) {
+            if (err instanceof RealtimeSessionNotFoundError) {
+                throw new Error(`Agent session ${agentSessionId} not found`);
+            }
+            if (err instanceof RealtimeSessionOwnershipError) {
+                throw new Error('Not authorized: you do not own this agent session');
+            }
+            throw err;
         }
     }
 }

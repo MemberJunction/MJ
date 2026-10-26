@@ -16,7 +16,7 @@ import type {
 } from '@memberjunction/ai-core-plus';
 import type { EntityInfo } from '@memberjunction/core';
 import type { UserPayload } from '../types.js';
-import { PublishStatusUpdate } from '../generic/PushStatusResolver.js';
+import { PublishStatusUpdate, StatusUpdateOwnerID } from '../generic/PushStatusResolver.js';
 import { ProjectEntityObjectForCaller } from '../generic/fieldSecurityTransport.js';
 
 const SIGNIFICANT_STEPS = ['prompt_execution', 'action_execution', 'subagent_execution', 'decision_processing'];
@@ -152,8 +152,9 @@ export class AgentRunStatusPublisher {
     }
 
     /**
-     * Completion for a failure that has no run. The fire-and-forget path uses this when
-     * `executeAIAgent` rejects. A host uses it the same way: when the turn throws
+     * Completion for a failure that has no run result. `executeAIAgent` sends it when the run
+     * throws (the agent could not start, the run failed, or its reply could not be saved), so a
+     * fire-and-forget client learns the reason. A host uses it the same way: when the turn throws
      * instead of returning a result, call `PublishFailure` with the reply row's id
      * and the error. That completion is what tells the chat the reply finished.
      */
@@ -190,7 +191,7 @@ export class AgentRunStatusPublisher {
     private publish(type: 'ExecutionProgress' | 'StreamingContent', data: unknown): void {
         PublishStatusUpdate(this.pubSub, {
             sessionId: this.userPayload.sessionId,
-            ownerUserId: this.userPayload?.userRecord?.ID ?? '',
+            ownerUserId: StatusUpdateOwnerID(this.userPayload),
             message: JSON.stringify({
                 resolver: 'RunAIAgentResolver',
                 type,

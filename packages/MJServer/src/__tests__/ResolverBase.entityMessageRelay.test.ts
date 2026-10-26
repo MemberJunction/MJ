@@ -37,6 +37,12 @@ vi.mock('../generic/PushStatusResolver.js', () => ({
     PublishStatusUpdate: (_pubSub: unknown, update: { sessionId: string; ownerUserId: string; message: string | undefined }) => {
         statusUpdates.push(update);
     },
+    // Mirrors the real StatusUpdateOwnerKey/StatusUpdateOwnerID (#4931): the elevated principal's
+    // key when the payload stands in for one, else the request user's. Anonymous visitors key on
+    // `id|scope`; these relay cases are all named users, so the ID is the whole key.
+    StatusUpdateOwnerKey: (user: { ID?: string } | null | undefined) => user?.ID ?? '',
+    StatusUpdateOwnerID: (payload: { ElevatedFrom?: { ID?: string }; userRecord?: { ID?: string } } | undefined) =>
+        payload?.ElevatedFrom?.ID ?? payload?.userRecord?.ID ?? '',
 }));
 vi.mock('../generic/RunViewResolver.js', () => ({ RunViewByIDInput: class {}, RunViewByNameInput: class {}, RunDynamicViewInput: class {} }));
 vi.mock('../generic/DeleteOptionsInput.js', () => ({ DeleteOptionsInput: class {} }));

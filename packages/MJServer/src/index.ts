@@ -46,7 +46,7 @@ import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
 import { CreateRealtimeRecordingRouter, REALTIME_RECORDING_MOUNT_PATH } from './rest/RealtimeRecordingHandler.js';
 import { LoadOwnedRealtimeSession } from './realtimeSessions/ownedRealtimeSession.js';
-import { LoadSessionConversationExternalID } from './realtimeSessions/sessionAccess.js';
+import { LoadSessionConversationScope } from './realtimeSessions/sessionAccess.js';
 import { RecordingAssemblyScheduler } from './realtimeSessions/RecordingAssemblyScheduler.js';
 import {
   RealtimeSessionEventService,
@@ -2254,7 +2254,7 @@ function mountRealtimeRecordingRoutes(app: Application): boolean {
       return user ? { ContextUser: user, Provider: provider } : null;
     },
     LoadOwnedSession: LoadOwnedRealtimeSession,
-    LoadConversationExternalID: LoadSessionConversationExternalID,
+    LoadConversationScope: LoadSessionConversationScope,
     CreateLedger: (ledgerProvider, contextUser) => new SqlRealtimeRecordingLedger(ledgerProvider, contextUser),
     Scheduler: RecordingAssemblyScheduler.Instance,
     GraceMs: graceMs,
