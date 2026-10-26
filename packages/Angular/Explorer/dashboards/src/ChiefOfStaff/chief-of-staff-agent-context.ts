@@ -20,6 +20,7 @@ import type {
     MJUserRoutineEntity,
     MJAIAgentRequestEntity,
 } from '@memberjunction/core-entities';
+import { GroupByUUID, UUIDsEqual } from '@memberjunction/global';
 import {
     AGENT_CONTEXT_NAME_LIST_CAP,
     BoundNameList,
@@ -187,11 +188,7 @@ export function IsApprovalRequest(req: {
     RequestTypeID?: MJAIAgentRequestEntity['RequestTypeID'] | undefined;
 }): boolean {
     const typeName = req.RequestType?.trim().toLowerCase() ?? '';
-    const typeId = req.RequestTypeID?.trim().toLowerCase() ?? '';
-    if (
-        typeName === 'information' ||
-        typeId === AGENT_REQUEST_TYPE_INFORMATION_ID.toLowerCase()
-    ) {
+    if (typeName === 'information' || UUIDsEqual(req.RequestTypeID, AGENT_REQUEST_TYPE_INFORMATION_ID)) {
         return false;
     }
     return true;
@@ -251,20 +248,14 @@ export function CalculateChiefOfStaffMetrics(
     requests: readonly RequestSummaryItem[],
     now: Date = new Date(),
 ): ChiefOfStaffMetrics {
-    const subtasksByParent = new Map<string, BizAppsTaskRecordLike[]>();
+    const subtasksByParent = GroupByUUID(
+        tasks.filter((t) => !!t.ParentID),
+        (t) => t.ParentID,
+    );
     const priorityTasks: BizAppsTaskRecordLike[] = [];
 
     for (const task of tasks) {
-        if (task.ParentID) {
-            const key = task.ParentID.trim().toLowerCase();
-            const list = subtasksByParent.get(key) ?? [];
-            list.push(task);
-            subtasksByParent.set(key, list);
-        }
-    }
-
-    for (const task of tasks) {
-        const hasChildren = subtasksByParent.has(task.ID.trim().toLowerCase());
+        const hasChildren = subtasksByParent.Has(task.ID);
         if (!task.ParentID && (IsTaskPriorityObjective(task) || hasChildren)) {
             priorityTasks.push(task);
         }
@@ -283,7 +274,7 @@ export function CalculateChiefOfStaffMetrics(
     let progressSum = 0;
 
     const priorityCards: PriorityObjectiveCardViewModel[] = rootsToDisplay.map((root) => {
-        const children = subtasksByParent.get(root.ID.trim().toLowerCase()) ?? [];
+        const children = subtasksByParent.Get(root.ID) ?? [];
         const completedChildren = children.filter(
             (c) => c.Status === 'Completed' || c.Status === 'Done' || (c.PercentComplete ?? 0) >= 100,
         ).length;
@@ -448,11 +439,11 @@ export function ResolvePriorityObjectiveByIDOrName(
         };
     }
     const ref = rawRef.trim();
-    const byId = cards.find((c) => equalsIgnoreCase(c.Task.ID, ref));
+    const byId = cards.find((c) => UUIDsEqual(c.Task.ID, ref));
     if (byId) {
         return { ok: true, value: byId };
     }
-    const byName = cards.find((c) => equalsIgnoreCase(c.Task.Name, ref));
+    const byName = cards.find((c) => c.Task.Name.trim().toLowerCase() === ref.toLowerCase());
     if (byName) {
         return { ok: true, value: byName };
     }
@@ -483,8 +474,4 @@ function availableObjectiveNames(cards: readonly PriorityObjectiveCardViewModel[
     const names = cards.slice(0, AGENT_CONTEXT_NAME_LIST_CAP).map((c) => c.Task.Name);
     const suffix = cards.length > AGENT_CONTEXT_NAME_LIST_CAP ? ', …' : '';
     return `Available priority objectives: ${names.join(', ')}${suffix}`;
-}
-
-function equalsIgnoreCase(a: string, b: string): boolean {
-    return a.trim().toLowerCase() === b.trim().toLowerCase();
 }

@@ -189,6 +189,84 @@ Every resolution records its `expirationStatus` in the audit log, so an auditor
 can answer "was any credential used while expired?" -- which matters precisely
 where such a use succeeds rather than failing loudly.
 
+## User-delegated (3LO) credentials
+
+Most credentials are shared, application-level secrets. A user-delegated
+credential is different: it holds an OAuth 2.0 token one specific user granted
+through a three-legged (`3LO`) consent flow, and only that user may ever read it.
+The engine stores these as ordinary `MJ: Credentials` rows with two extra rules:
+a reserved naming convention and an owner binding carried inside the encrypted
+`Values`. The flow that produces the token lives in `@memberjunction/core-actions`
+(`CommunicationUserOAuthService`) and is a prototype that is off by default; this
+section covers only the storage side.
+
+### Naming and stored shape
+
+The name is built by `BuildUserDelegatedCredentialName(providerName, ownerUserId)`
+and is always `UserOAuth3LO:<provider>:<ownerUserId>` (provider trimmed, user ID
+lower-cased), so one row exists per user per provider and a rotation overwrites
+rather than accumulates.
+
+`Values` is a `UserDelegatedOAuthCredentialValues` object: `ownerUserId`,
+`principalEmail`, `providerName`, `accessToken`, `refreshToken`, `tokenType`,
+`scope`, `tenantId`, `issuedAt`. Unless `credentialTypeName` is given, the row is
+filed under the `OAuth2 Client Credentials` type; it is never `IsDefault`.
+
+### Owner binding
+
+`ownerUserId` is the binding. On store, it must equal `contextUser.ID`; on read
+or revoke, the stored value must equal `contextUser.ID`. Any mismatch -- including
+a missing `contextUser` -- throws `CredentialOwnerMismatchError` (a
+`CredentialResolutionError` carrying `CredentialName`, `OwnerUserID` and
+`RequestingUserID`). An administrator does not get a bypass: the check is on the
+user identity, not a permission.
+
+### The four methods
+
+```typescript
+import { CredentialEngine, CredentialOwnerMismatchError } from '@memberjunction/credentials';
+
+const engine = CredentialEngine.Instance;
+
+// Store or rotate -- ownerUserId must be the calling user
+await engine.StoreUserDelegatedCredential({
+    providerName: 'Microsoft Graph',
+    ownerUserId: contextUser.ID,
+    principalEmail: contextUser.Email,
+    accessToken, refreshToken, scope, tenantId,
+    expiresAt: new Date(Date.now() + expiresInSeconds * 1000)
+}, contextUser);
+
+// Read -- null when the user has no active credential for this provider
+const cred = await engine.GetUserDelegatedCredential('Microsoft Graph', contextUser);
+if (cred) {
+    callGraph(cred.values.accessToken);
+}
+
+// Revoke -- deactivates the row and replaces the token values with { ownerUserId, revokedAt }
+const revoked = await engine.RevokeUserDelegatedCredential('Microsoft Graph', contextUser);
+```
+
+Each write is audit-logged under the `UserDelegatedOAuth3LO` subsystem (`Create`,
+`Update` or `Delete`), and `GetUserDelegatedCredential` goes through
+`GetCredential`, so reads inherit expiry enforcement and `Decrypt` audit entries.
+
+### Which paths enforce ownership (known gap)
+
+| Method | Owner check |
+|---|---|
+| `GetUserDelegatedCredential()` | Yes (via `GetCredential`) |
+| `GetCredential(name, { contextUser })` | Yes -- any credential whose values carry `ownerUserId` throws `CredentialOwnerMismatchError` for another user |
+| `StoreUserDelegatedCredential()` / `RevokeUserDelegatedCredential()` | Yes |
+| `GetCredentialById()`, `GetCredentialByName()`, `GetDefaultCredentialForType()`, the `Credentials` getter | **No** -- they return the cached `MJCredentialEntity`, whose decrypted `Values` is readable |
+
+The rule for callers is therefore: **always resolve a delegated credential through
+`GetUserDelegatedCredential` or `GetCredential(name, { contextUser })`.** The
+other read paths exist for administration and rotation tooling and do not yet
+enforce the binding; closing that gap is planned follow-up work. Until then,
+code that enumerates `Credentials` should treat any row whose name starts with
+`UserOAuth3LO:` as opaque.
+
 ## Pre-defined Credential Types
 
 | Type | Interface | Fields |

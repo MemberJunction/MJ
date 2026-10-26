@@ -21,7 +21,7 @@
  */
 
 import { IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { BaseSingleton, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
     MJAIAgentRequestEntity,
     MJAIAgentUserPolicyEntity,
@@ -470,8 +470,8 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
         }
 
         const rv = RunView.FromMetadataProvider(md);
-        const safeEmail = normalizedToAddress.replace(/'/g, "''");
-        const providerClause = providerID ? ` AND ProviderID='${providerID.replace(/'/g, "''")}'` : '';
+        const safeEmail = EscapeSQLString(normalizedToAddress);
+        const providerClause = providerID ? ` AND ProviderID='${EscapeSQLString(providerID)}'` : '';
         const res = await rv.RunView<MJAIBridgeAgentIdentityEntity>(
             {
                 EntityName: 'MJ: AI Bridge Agent Identities',
@@ -508,7 +508,7 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
         }
 
         const rv = RunView.FromMetadataProvider(md);
-        const safeEmail = normalizedFromAddress.replace(/'/g, "''");
+        const safeEmail = EscapeSQLString(normalizedFromAddress);
         const res = await rv.RunView<MJUserEntity>(
             {
                 EntityName: 'MJ: Users',
@@ -545,8 +545,8 @@ export class AgentWakeTriggerService extends BaseSingleton<AgentWakeTriggerServi
         try {
             const md: IMetadataProvider = params.metadataProvider ?? Metadata.Provider;
             const rv = RunView.FromMetadataProvider(md);
-            const safeUserId = params.targetUserID.replace(/'/g, "''");
-            const safeAgentId = params.targetAgentID.replace(/'/g, "''");
+            const safeUserId = EscapeSQLString(params.targetUserID);
+            const safeAgentId = EscapeSQLString(params.targetAgentID);
 
             const existingResult = await rv.RunView<MJUserRoutineEntity>(
                 {

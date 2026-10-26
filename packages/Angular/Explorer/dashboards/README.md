@@ -140,6 +140,30 @@ Architecture: the former 5,147-line monolith was decomposed into 6 tab component
 
 The Predictive Studio app (`src/PredictiveStudio/`) is a multi-section, lazy-loaded surface for training, comparing, deploying, and monitoring ML models (see the [Predictive Studio Guide](../../../../guides/PREDICTIVE_STUDIO_GUIDE.md)). Its sections include Home, Algorithm Catalog, Pipeline Builder, Experiments, Model Registry, Compare Runs, and **Models in Production** (`PSProductionResourceComponent` — deployed models, what each writes, schedule, last run, and a generic prediction-distribution mini-viz, all driven by `MJ: ML Model Scoring Bindings` + `MJ: Process Runs`). The panels read live engine data via `PredictiveStudioEngine`; Promote/Validate/Archive and experiment Pause/Resume/Cancel are wired to Remote Operations behind a confirm modal, and Home's "Ask the agent" CTA opens a docked, seeded Model-Dev-Agent chat. See [`src/PredictiveStudio/`](src/PredictiveStudio/) and the guide's [Business-User Experience](../../../../guides/PREDICTIVE_STUDIO_GUIDE.md#16-the-business-user-experience) section.
 
+### Chief of Staff Executive Cockpit
+
+The Chief of Staff cockpit (`src/ChiefOfStaff/`, driver class `ChiefOfStaffDashboard`; also registered as `ChiefOfStaffResource`) is the single-page control surface for a user's personal Chief of Staff agent. It is a direct `BaseResourceComponent` subclass with four `<mj-tab-nav>` tabs under a shared `<mj-page-header>` (stat badges for priorities / at-risk / pending approvals / active wakes, a `<mj-page-search>` and a refresh button).
+
+Tabs:
+- **Overview** (`overview`): KPI cards (priority objectives, average objective progress, pending approvals, governance posture) plus condensed panels for the top priority cards, the pending approval queue with inline Approve / Reject, and the next wake routines
+- **Priorities & OKRs** (`priorities`): one expandable card per priority objective with its child milestones/tasks, effective health, progress, metric progress label and overdue flag; a health filter row (`all`, `OnTrack`, `AtRisk`, `OffTrack`, `Completed`, `Paused`); clicking a task opens a quick-edit drawer (status, health, percent complete, confidence, due date, description) with an "open full record" escape hatch
+- **Approvals & Wakes** (`approvals-wakes`): the pending `MJ: AI Agent Requests` queue with Approve / Reject / Details (the Details dialog is `<mj-agent-request-dialog>`), a "Recent Resolved Decisions" list, and the user's AgentWake `MJ: User Routines` with Wake Now / Pause-Resume / open-record actions
+- **Governance Policy** (`governance`): the user's `MJ: AI Agent User Policies` row for the Chief of Staff agent as an editable draft — coordination mode, status, data-access mode, the four channel modes (email / calendar / phone / messaging), inter-agent coordination, the three approval guardrails, auto-approve amount threshold, display-name and standing-instructions overrides — with Save / Reset
+
+Data (one `RunViews` batch in `LoadCockpitData`):
+- `MJ: AI Agent User Policies` filtered to the Chief of Staff agent (`CHIEF_OF_STAFF_AGENT_ID`) and the current user
+- `MJ: User Routines` for the current user where `RoutineType = 'AgentWake'` or the target is the Chief of Staff agent
+- `MJ: AI Agent Requests` for the agent or the current user, excluding `Information` requests (max 100)
+- `MJ_BizApps_Tasks: Tasks` — only when that OpenApp entity is present in metadata (`EntityByName`); loaded as `simple` rows (max 250) and grouped into priority-objective cards by `CalculateChiefOfStaffMetrics`. The task primary key is derived from entity metadata via `CompositeKey.FromURLSegment`, never assumed to be `ID`
+
+Mutations (all `BaseEntity.Save()` with `LatestResult.CompleteMessage` surfaced in a banner): `QuickRespondToRequest` (sets `Status` to Approved/Rejected, `RespondedAt`, `ResponseSource = 'Dashboard'`, `ResponseByUserID`), `TriggerWakeNow` (sets the routine `Active` with `NextRunAt = now` for the scheduler's next tick), `ToggleRoutineStatus` (Active ↔ Paused), `SaveGovernancePolicy` (creates the policy row if none exists), and `SaveTaskEdits` (loads the task entity by key and saves the drawer draft).
+
+Deep links: `tab`, `search` and `health` round-trip through `UpdateQueryParams` / `OnQueryParamsChanged`; defaults (`overview`, empty search, `all`) are omitted from the URL.
+
+Where it appears: the default **Cockpit** nav item of the **Chief of Staff** application (`metadata/applications/.chief-of-staff-application.json`, alongside Agent Requests and Wake Routines) and a **Chief of Staff** nav item in the AI application (`metadata/applications/.ai-application.json`).
+
+Agent context and client tools (navigation / filter / search / inspect / refresh only — no mutations) are built by the pure helpers in [`src/ChiefOfStaff/chief-of-staff-agent-context.ts`](src/ChiefOfStaff/chief-of-staff-agent-context.ts); see the package `CLAUDE.md` registry row for the boundary.
+
 ### Additional Dashboards
 - **API Keys**: API key management with scopes, applications, and usage tracking
 - **Credentials**: Credential management with categories, types, and audit

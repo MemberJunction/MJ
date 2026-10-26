@@ -8,14 +8,14 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { filter, takeUntil } from 'rxjs/operators';
-import { CompositeKey, RunView, RunViewParams } from '@memberjunction/core';
+import { CompositeKey, EntityInfo, RunView, RunViewParams } from '@memberjunction/core';
 import {
     MJAIAgentRequestEntity,
     MJAIAgentUserPolicyEntity,
     MJUserRoutineEntity,
     ResourceData,
 } from '@memberjunction/core-entities';
-import { RegisterClass, UUIDsEqual, MJGlobal } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual, UUIDSet, MJGlobal } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { AgentRequestPanelResult } from '@memberjunction/ng-agent-requests';
@@ -48,6 +48,9 @@ import {
     ValidateHealthFilterParam,
     ValidateSearchQueryParam,
 } from './chief-of-staff-agent-context';
+
+/** OpenApp entity the cockpit reads and edits for priorities and OKRs. Not a core entity: never assume its key is `ID`. */
+const BIZAPPS_TASKS_ENTITY_NAME = 'MJ_BizApps_Tasks: Tasks';
 
 export interface GovernancePolicyDraft {
     DisplayNameOverride: string;
@@ -112,7 +115,7 @@ export class ChiefOfStaffDashboardComponent
     public Requests: MJAIAgentRequestEntity[] = [];
     public Metrics: ChiefOfStaffMetrics = CalculateChiefOfStaffMetrics([], [], []);
 
-    public ExpandedPriorityIDs = new Set<string>();
+    public ExpandedPriorityIDs = new UUIDSet();
     public SelectedRequest: MJAIAgentRequestEntity | null = null;
     public ShowRequestDialog = false;
 
@@ -369,9 +372,7 @@ export class ChiefOfStaffDashboardComponent
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const currentUserId = this.ProviderToUse.CurrentUser?.ID;
 
-            const bizAppsTasksEntity = this.ProviderToUse.Entities.find(
-                (e) => e.Name === 'MJ_BizApps_Tasks: Tasks',
-            );
+            const bizAppsTasksEntity = this.bizAppsTasksEntityInfo;
 
             const policyFilter = currentUserId
                 ? `AgentID = '${CHIEF_OF_STAFF_AGENT_ID}' AND UserID = '${currentUserId}'`
@@ -422,7 +423,7 @@ export class ChiefOfStaffDashboardComponent
                     orderParts.push('Name ASC');
                 }
                 viewParams.push({
-                    EntityName: 'MJ_BizApps_Tasks: Tasks',
+                    EntityName: BIZAPPS_TASKS_ENTITY_NAME,
                     OrderBy:
                         orderParts.length > 0
                             ? orderParts.join(', ')
@@ -465,8 +466,8 @@ export class ChiefOfStaffDashboardComponent
             this.recalculateMetrics();
 
             // Auto-expand the first priority card if none expanded yet
-            if (this.ExpandedPriorityIDs.size === 0 && this.Metrics.PriorityCards.length > 0) {
-                this.ExpandedPriorityIDs.add(this.Metrics.PriorityCards[0].Task.ID);
+            if (this.ExpandedPriorityIDs.Size === 0 && this.Metrics.PriorityCards.length > 0) {
+                this.ExpandedPriorityIDs.Add(this.Metrics.PriorityCards[0].Task.ID);
             }
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
@@ -610,23 +611,23 @@ export class ChiefOfStaffDashboardComponent
     }
 
     public TogglePriorityExpanded(taskId: string): void {
-        if (this.ExpandedPriorityIDs.has(taskId)) {
-            this.ExpandedPriorityIDs.delete(taskId);
+        if (this.ExpandedPriorityIDs.Has(taskId)) {
+            this.ExpandedPriorityIDs.Delete(taskId);
         } else {
-            this.ExpandedPriorityIDs.add(taskId);
+            this.ExpandedPriorityIDs.Add(taskId);
         }
         this.cdr.markForCheck();
     }
 
     public IsPriorityExpanded(taskId: string): boolean {
-        return this.ExpandedPriorityIDs.has(taskId);
+        return this.ExpandedPriorityIDs.Has(taskId);
     }
 
     public get CanOpenFullTaskForm(): boolean {
         if (!this.SelectedTask) return false;
         return !!MJGlobal.Instance.ClassFactory.GetRegistration(
             BaseFormComponent,
-            'MJ_BizApps_Tasks: Tasks',
+            BIZAPPS_TASKS_ENTITY_NAME,
         );
     }
 
@@ -635,23 +636,39 @@ export class ChiefOfStaffDashboardComponent
         return !this.SelectedTask.ParentID;
     }
 
+    private get bizAppsTasksEntityInfo(): EntityInfo | undefined {
+        return this.ProviderToUse.EntityByName(BIZAPPS_TASKS_ENTITY_NAME);
+    }
+
+    /**
+     * Builds the primary key for a BizApps task. Tasks is an OpenApp entity, so the key is
+     * derived from its metadata rather than assuming a column named `ID`. Returns null (and
+     * surfaces an error banner) when the entity is not installed in this environment.
+     */
+    private taskRecordKey(taskId: string): CompositeKey | null {
+        const entityInfo = this.bizAppsTasksEntityInfo;
+        if (!entityInfo) {
+            this.showBanner('error', 'The BizApps Tasks entity is not available in this environment.');
+            return null;
+        }
+        return CompositeKey.FromURLSegment(entityInfo, taskId);
+    }
+
     public get SelectedTaskSubtasks(): BizAppsTaskRecordLike[] {
         if (!this.SelectedTask) return [];
-        const id = this.SelectedTask.ID.trim().toLowerCase();
-        return this.Tasks.filter((t) => t.ParentID?.trim().toLowerCase() === id);
+        const id = this.SelectedTask.ID;
+        return this.Tasks.filter((t) => UUIDsEqual(t.ParentID, id));
     }
 
     public get SelectedTaskParent(): BizAppsTaskRecordLike | null {
         if (!this.SelectedTask || !this.SelectedTask.ParentID) return null;
-        const parentId = this.SelectedTask.ParentID.trim().toLowerCase();
-        return this.Tasks.find((t) => t.ID.trim().toLowerCase() === parentId) ?? null;
+        const parentId = this.SelectedTask.ParentID;
+        return this.Tasks.find((t) => UUIDsEqual(t.ID, parentId)) ?? null;
     }
 
     public OpenTaskRecord(taskId: string, event?: Event): void {
         event?.stopPropagation();
-        const task = this.Tasks.find(
-            (t) => t.ID.trim().toLowerCase() === taskId.trim().toLowerCase(),
-        );
+        const task = this.Tasks.find((t) => UUIDsEqual(t.ID, taskId));
         if (task) {
             this.SelectedTask = task;
             this.DraftTaskEdits = {
@@ -666,10 +683,10 @@ export class ChiefOfStaffDashboardComponent
             this.ShowTaskDrawer = true;
             this.cdr.markForCheck();
         } else {
-            this.navigationService.OpenEntityRecord(
-                'MJ_BizApps_Tasks: Tasks',
-                CompositeKey.FromID(taskId),
-            );
+            const key = this.taskRecordKey(taskId);
+            if (key) {
+                this.navigationService.OpenEntityRecord(BIZAPPS_TASKS_ENTITY_NAME, key);
+            }
         }
     }
 
@@ -682,10 +699,10 @@ export class ChiefOfStaffDashboardComponent
 
     public OpenFullTaskForm(): void {
         if (!this.SelectedTask) return;
-        this.navigationService.OpenEntityRecord(
-            'MJ_BizApps_Tasks: Tasks',
-            CompositeKey.FromID(this.SelectedTask.ID),
-        );
+        const key = this.taskRecordKey(this.SelectedTask.ID);
+        if (key) {
+            this.navigationService.OpenEntityRecord(BIZAPPS_TASKS_ENTITY_NAME, key);
+        }
     }
 
     public MarkTaskDirty(): void {
@@ -755,11 +772,15 @@ export class ChiefOfStaffDashboardComponent
 
         try {
             const taskId = this.SelectedTask.ID;
+            const key = this.taskRecordKey(taskId);
+            if (!key) {
+                return;
+            }
             const entity = await this.ProviderToUse.GetEntityObject(
-                'MJ_BizApps_Tasks: Tasks',
+                BIZAPPS_TASKS_ENTITY_NAME,
                 this.ProviderToUse.CurrentUser,
             );
-            const loaded = await entity.InnerLoad(CompositeKey.FromID(taskId));
+            const loaded = await entity.InnerLoad(key);
             if (!loaded) {
                 throw new Error('Task record could not be loaded.');
             }
@@ -782,10 +803,7 @@ export class ChiefOfStaffDashboardComponent
                 this.showBanner('success', `Task "${this.SelectedTask.Name}" updated successfully.`);
                 this.TaskDirty = false;
                 await this.LoadCockpitData();
-                this.SelectedTask =
-                    this.Tasks.find(
-                        (t) => t.ID.trim().toLowerCase() === taskId.trim().toLowerCase(),
-                    ) ?? null;
+                this.SelectedTask = this.Tasks.find((t) => UUIDsEqual(t.ID, taskId)) ?? null;
             } else {
                 const errText =
                     entity.LatestResult?.CompleteMessage ?? 'Failed to update task.';
@@ -1361,7 +1379,7 @@ export class ChiefOfStaffDashboardComponent
                     if (!resolved.ok) {
                         return { Success: false, ErrorMessage: resolved.error };
                     }
-                    this.ExpandedPriorityIDs.add(resolved.value.Task.ID);
+                    this.ExpandedPriorityIDs.Add(resolved.value.Task.ID);
                     this.OnTabChange('priorities');
                     return {
                         Success: true,
@@ -1399,6 +1417,5 @@ export class ChiefOfStaffDashboardComponent
 }
 
 export function LoadChiefOfStaffDashboard(): void {
-    // Prevents tree-shaking of ChiefOfStaffDashboardComponent
-    void UUIDsEqual;
+    // Intentionally empty: forces inclusion of the @RegisterClass side effect.
 }

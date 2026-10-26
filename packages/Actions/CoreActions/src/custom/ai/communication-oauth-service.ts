@@ -18,8 +18,8 @@
  */
 
 import * as crypto from 'crypto';
-import { Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { BaseSingleton, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { IMetadataProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { BaseSingleton, EscapeSQLString, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { MJCredentialEntity } from '@memberjunction/core-entities';
 import { BaseUserScopedCommunicationAction } from './chief-of-staff-calendar-email.action';
 
@@ -311,6 +311,8 @@ export class CommunicationUserOAuthService extends BaseSingleton<CommunicationUs
         contextUser: UserInfo;
         transport: IOAuthTokenTransport;
         credentialStore?: IUserDelegatedCredentialStore;
+        /** Provider the default credential store should use; falls back to the global provider. */
+        metadataProvider?: IMetadataProvider;
         nowMs?: number;
     }): Promise<OAuthCallbackResult> {
         const nowMs = params.nowMs ?? Date.now();
@@ -426,7 +428,7 @@ export class CommunicationUserOAuthService extends BaseSingleton<CommunicationUs
             };
         }
 
-        const store = params.credentialStore ?? this.createDefaultEntityCredentialStore();
+        const store = params.credentialStore ?? this.createDefaultEntityCredentialStore(params.metadataProvider);
         const expiresAt = tokenResult.ExpiresInSeconds
             ? new Date(nowMs + tokenResult.ExpiresInSeconds * 1000)
             : undefined;
@@ -466,8 +468,10 @@ export class CommunicationUserOAuthService extends BaseSingleton<CommunicationUs
         contextUser: UserInfo;
         transport?: IOAuthTokenTransport;
         credentialStore?: IUserDelegatedCredentialStore;
+        /** Provider the default credential store should use; falls back to the global provider. */
+        metadataProvider?: IMetadataProvider;
     }): Promise<OAuthDisconnectResult> {
-        const store = params.credentialStore ?? this.createDefaultEntityCredentialStore();
+        const store = params.credentialStore ?? this.createDefaultEntityCredentialStore(params.metadataProvider);
         const existing = await store.GetUserDelegatedCredential(
             params.policy.ProviderName,
             params.contextUser
@@ -502,7 +506,8 @@ export class CommunicationUserOAuthService extends BaseSingleton<CommunicationUs
         };
     }
 
-    private createDefaultEntityCredentialStore(): IUserDelegatedCredentialStore {
+    private createDefaultEntityCredentialStore(provider?: IMetadataProvider): IUserDelegatedCredentialStore {
+        const md = provider ?? Metadata.Provider;
         const buildName = (providerName: string, userId: string): string =>
             `UserOAuth3LO:${providerName.trim()}:${userId.trim().toLowerCase()}`;
 
@@ -511,10 +516,9 @@ export class CommunicationUserOAuthService extends BaseSingleton<CommunicationUs
                 if (!UUIDsEqual(options.ownerUserId, contextUser.ID)) {
                     throw new Error('Credential owner mismatch');
                 }
-                const md = new Metadata();
-                const rv = new RunView();
+                const rv = RunView.FromMetadataProvider(md);
                 const name = buildName(options.providerName, options.ownerUserId);
-                const safeName = name.replace(/'/g, "''");
+                const safeName = EscapeSQLString(name);
                 const existingRes = await rv.RunView<MJCredentialEntity>(
                     {
                         EntityName: 'MJ: Credentials',
@@ -545,12 +549,17 @@ export class CommunicationUserOAuthService extends BaseSingleton<CommunicationUs
                 cred.IsActive = true;
                 cred.IsDefault = false;
                 cred.ExpiresAt = options.expiresAt ?? null;
-                await cred.Save();
+                const saved = await cred.Save();
+                if (!saved) {
+                    throw new Error(
+                        `Failed to store delegated credential '${name}': ${cred.LatestResult?.CompleteMessage ?? 'unknown error'}`
+                    );
+                }
                 return { ID: cred.ID };
             },
             GetUserDelegatedCredential: async (providerName, contextUser) => {
-                const rv = new RunView();
-                const safeName = buildName(providerName, contextUser.ID).replace(/'/g, "''");
+                const rv = RunView.FromMetadataProvider(md);
+                const safeName = EscapeSQLString(buildName(providerName, contextUser.ID));
                 const res = await rv.RunView<MJCredentialEntity>(
                     {
                         EntityName: 'MJ: Credentials',
@@ -570,8 +579,8 @@ export class CommunicationUserOAuthService extends BaseSingleton<CommunicationUs
                 return { values: parsed };
             },
             RevokeUserDelegatedCredential: async (providerName, contextUser) => {
-                const rv = new RunView();
-                const safeName = buildName(providerName, contextUser.ID).replace(/'/g, "''");
+                const rv = RunView.FromMetadataProvider(md);
+                const safeName = EscapeSQLString(buildName(providerName, contextUser.ID));
                 const res = await rv.RunView<MJCredentialEntity>(
                     {
                         EntityName: 'MJ: Credentials',

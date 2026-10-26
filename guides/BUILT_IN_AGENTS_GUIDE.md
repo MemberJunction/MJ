@@ -125,6 +125,14 @@ flowchart TD
 | **`Chief of Staff Inter-Agent Request`** | Sends a structured coordination message or creates an approval request between two users' Chief of Staff agents without crossing user permission ceilings. |
 | **`Prepare Chief of Staff Outbound Call`** | Validates `PhoneChannelMode`, builds a mandatory AI disclosure greeting, and structures the call objective, fallback plan, and prohibited commitments before any outbound voice call. |
 
+**Event-driven wakes alongside the schedule.** The cron/adaptive routines above are not the only way a Chief of Staff wakes. `AgentWakeTriggerService` in `@memberjunction/ai-agents` reacts to specific events by writing a `OneShot` `RoutineType = 'AgentWake'` row to `MJ: User Routines` with `NextRunAt = now`, which the 1-minute `UserRoutineDispatcherDriver` sweep picks up — so an event wake lands within about a minute, not at the next scheduled slot. It is still a routine, not a direct agent call, and an existing routine for the same `workstreamKey` keeps whatever 3-Tier Wake Gate it already has. Today the events are:
+
+- An action-created `MJ: AI Agent Requests` row (`Manage My Calendar Event`, `Manage My Email Inbox and Drafts`, `Prepare Chief of Staff Outbound Call` approvals) moving from `Requested` to `Approved` / `Rejected` / `Responded` wakes the request owner's agent with the outcome in `resumeState`.
+- A new `InterAgentCoS` request from `Send Chief of Staff Inter-Agent Request` wakes the target user's Chief of Staff; its later resolution wakes the sender's. These cross-user paths currently need an Owner/system saving context (`MJUserRoutineEntityServer.validateOwnership`); a fix is pending.
+- An inbound email to an `MJ: AI Bridge Agent Identities` utility mailbox from a verified internal user can wake that user's agent via `RouteInboundUtilityMailboxWake` — available, but no ingestion path is wired to it yet.
+
+Triggers, user scoping, `resumeState` shapes, result codes and a code sample: [Event-Driven Agent Wakes](../packages/AI/Agents/README.md#event-driven-agent-wakes-agentwaketriggerservice) in the `@memberjunction/ai-agents` README.
+
 ### Why These Three Dependencies Exist
 
 1. **`bizapps-common` (`MJ_BizApps_Common: People`) — Bridging Security Principal to Org Identity**:

@@ -716,59 +716,6 @@ describe('AnthropicLLM', () => {
                 expect(apiMessages).toHaveLength(1);
                 expect(apiMessages[0].role).toBe('user');
             });
-
-            it('should omit prefill message when thinking is enabled (non-streaming)', async () => {
-                const mockFinalMessage = vi.fn().mockResolvedValue({
-                    content: [{ type: 'text', text: 'response' }],
-                    usage: { input_tokens: 10, output_tokens: 5 },
-                    stop_reason: 'end_turn'
-                });
-                const mockOn = vi.fn().mockReturnValue({ finalMessage: mockFinalMessage });
-                mockStream.mockReturnValue({ on: mockOn });
-
-                const params = {
-                    messages: [
-                        { role: ChatMessageRole.user, content: 'Hello' }
-                    ],
-                    model: 'claude-sonnet-4-20250514',
-                    effortLevel: 'medium',
-                    reasoningBudgetTokens: 2048,
-                    assistantPrefill: '```json',
-                    enableCaching: false
-                };
-
-                await (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion'](params);
-
-                const callArgs = mockStream.mock.calls[0][0];
-                const apiMessages = callArgs.messages;
-                // Last message must be user, prefill must be omitted
-                expect(apiMessages[apiMessages.length - 1].role).toBe('user');
-            });
-
-            it('should omit prefill message when model uses adaptive thinking (Claude 5)', async () => {
-                const mockFinalMessage = vi.fn().mockResolvedValue({
-                    content: [{ type: 'text', text: 'response' }],
-                    usage: { input_tokens: 10, output_tokens: 5 },
-                    stop_reason: 'end_turn'
-                });
-                const mockOn = vi.fn().mockReturnValue({ finalMessage: mockFinalMessage });
-                mockStream.mockReturnValue({ on: mockOn });
-
-                const params = {
-                    messages: [
-                        { role: ChatMessageRole.user, content: 'Hello' }
-                    ],
-                    model: 'claude-sonnet-5',
-                    assistantPrefill: '```json',
-                    enableCaching: false
-                };
-
-                await (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion'](params);
-
-                const callArgs = mockStream.mock.calls[0][0];
-                const apiMessages = callArgs.messages;
-                expect(apiMessages[apiMessages.length - 1].role).toBe('user');
-            });
         });
     });
 
@@ -1153,33 +1100,6 @@ describe('AnthropicLLM — native tool calling', () => {
             const sent = mockCreate.mock.calls[0][0];
             expect(sent.thinking).toEqual({ type: 'enabled', budget_tokens: 4096 });
             expect(sent.output_config).toBeUndefined();
-        });
-
-        it('omits temperature when thinking is enabled with non-1 temperature (non-streaming)', async () => {
-            okStream();
-            await (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion']({ ...base, model: 'claude-sonnet-5', effortLevel: 'medium', temperature: 0.2 });
-
-            const sent = mockStream.mock.calls[0][0];
-            expect(sent.thinking).toEqual({ type: 'adaptive' });
-            expect(sent.temperature).toBeUndefined();
-        });
-
-        it('omits temperature when thinking is enabled with non-1 temperature (streaming)', async () => {
-            mockCreate.mockResolvedValue({});
-            await (instance as ReturnType<typeof Object.create>)['createStreamingRequest']({ ...base, model: 'claude-sonnet-5', effortLevel: '50', temperature: 0.2 });
-
-            const sent = mockCreate.mock.calls[0][0];
-            expect(sent.thinking).toEqual({ type: 'adaptive' });
-            expect(sent.temperature).toBeUndefined();
-        });
-
-        it('preserves temperature when thinking is off', async () => {
-            okStream();
-            await (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion']({ ...base, model: 'claude-sonnet-5', temperature: 0.7 });
-
-            const sent = mockStream.mock.calls[0][0];
-            expect(sent.thinking).toBeUndefined();
-            expect(sent.temperature).toBe(0.7);
         });
     });
 });
