@@ -30,7 +30,7 @@ import {
 } from '@memberjunction/remote-browser-base';
 import { ActionExecutionResult, PlaywrightBrowserAdapter, RunComputerUseParams, ScreencastFrame, ScreencastOptions } from '@memberjunction/computer-use';
 import { MapHumanInput, MapRemoteBrowserAction } from './map-action';
-import { ClickTarget, FillPageFields, InspectPageDom, NormalizeNavigableUrl, ResolveClickTarget, ResolveEnterTarget } from './dom-inspection';
+import { ActivatingKey, ClickTarget, FillPageFields, InspectPageDom, NormalizeNavigableUrl, ResolveClickTarget, ResolveKeyTarget } from './dom-inspection';
 import { ICdpAudioCaptureHandle, ICdpSessionBackend } from './cdp-session-backend';
 import { ComputerUseGoalEngineFactory, DefaultComputerUseGoalEngineFactory } from './computer-use-goal-engine';
 import { WrapAdapterWithContext } from './context-injection';
@@ -219,10 +219,10 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
     if (action.Kind === 'click') {
       return this.guardedClick(action);
     }
-    // Enter submits a form through its default button, so it is checked the way a click on that button is.
-    if ((action.Kind === 'key' && /(^|\+)(numpad)?enter$/i.test(action.Key.trim())) || (action.Kind === 'type' && /[\r\n]/.test(action.Text))) {
-      const target = await ResolveEnterTarget(this.adapter, action.Kind === 'type' ? action.Selector : undefined);
-      const refusal = this.refusal(target);
+    // Enter and Space activate the focused control (Enter also submits a form through its default
+    // button), so each is checked the way a click on what it activates is.
+    for (const key of this.activatingKeys(action)) {
+      const refusal = this.refusal(await ResolveKeyTarget(this.adapter, key, action.Kind === 'type' ? action.Selector : undefined));
       if (refusal) {
         return refusal;
       }
@@ -592,6 +592,28 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
     await this.pushImmediateFrame();
     const observation = await InspectPageDom(this.adapter, this.nextObservationId());
     return { Success: true, CurrentUrl: observation.Url, Detail: `Clicked "${target.Label}".`, Observation: observation };
+  }
+
+  /** The activating keys an action presses: Enter (a newline is Enter) and Space, as keys or typed. */
+  private activatingKeys(action: RemoteBrowserAction): ActivatingKey[] {
+    if (action.Kind === 'key') {
+      const key = action.Key;
+      if (/^[\r\n]+$/.test(key) || /(^|\+)(numpad)?enter$/i.test(key.trim())) {
+        return ['enter'];
+      }
+      return key === ' ' || /(^|\+)space$/i.test(key.trim()) ? ['space'] : [];
+    }
+    if (action.Kind !== 'type') {
+      return [];
+    }
+    const keys: ActivatingKey[] = [];
+    if (/[\r\n]/.test(action.Text)) {
+      keys.push('enter');
+    }
+    if (action.Text.includes(' ')) {
+      keys.push('space');
+    }
+    return keys;
   }
 
   /** The failed result that stops an action the guard cannot check or must leave to a person; `null` to go ahead. */

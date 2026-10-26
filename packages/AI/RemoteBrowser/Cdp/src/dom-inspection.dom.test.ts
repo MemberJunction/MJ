@@ -150,6 +150,26 @@ describe('click guard', () => {
         expect((adapter.ExecutedActions[0] as ClickAction).Selector).toBe('button[type="button"]');
     });
 
+    it('finds a destructive match inside an open shadow root', async () => {
+        render(`<div id="host"></div>`);
+        const root = document.getElementById('host')!.attachShadow({ mode: 'open' });
+        root.innerHTML = '<button class="go">Place your order</button>';
+        expect((await session.ExecuteAction({ Kind: 'click', Selector: 'button.go' })).Detail).toContain('Refusing to activate "Place your order"');
+        expect(adapter.ExecutedActions).toEqual([]);
+    });
+
+    it('refuses order, transfer and payment-confirmation labels, and leaves plain Send and Confirm alone', async () => {
+        render(['Place your order', 'Transfer', 'Confirm payment', 'Send', 'Confirm'].map((l) => `<button type="button" data-visible>${l}</button>`).join(''));
+        const { Observation } = await session.ExecuteAction({ Kind: 'inspect' });
+        expect(Observation?.Actions.map((a) => [a.Label, a.Destructive])).toEqual([
+            ['Place your order', true],
+            ['Transfer', true],
+            ['Confirm payment', true],
+            ['Send', false],
+            ['Confirm', false],
+        ]);
+    });
+
     it('lets a form\'s ordinary submit button be clicked: only what its label says counts', async () => {
         render(`<form><input aria-label="Query" data-visible><button data-visible>Search</button></form>`);
         await session.ExecuteAction({ Kind: 'inspect' });
@@ -175,6 +195,25 @@ describe('Enter guard', () => {
         expect((await session.ExecuteAction({ Kind: 'key', Key: 'Enter' })).Detail).toContain('Refusing to activate "Pay now"');
         expect((await session.ExecuteAction({ Kind: 'type', Text: 'Ada\n', Selector: '#name' })).Success).toBe(false);
         expect(adapter.ExecutedActions).toEqual([]);
+    });
+
+    it('treats a newline key as Enter, and Space as activating the focused button', async () => {
+        render(ORDER_FORM.replace('<button type="button" data-visible>Next</button>', ''));
+        (document.getElementById('name') as HTMLInputElement).focus();
+        for (const key of ['\n', '\r', '\r\n']) {
+            expect((await session.ExecuteAction({ Kind: 'key', Key: key })).Success).toBe(false);
+        }
+        const pay = Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Pay now')!;
+        pay.focus();
+        for (const key of [' ', 'Space']) {
+            expect((await session.ExecuteAction({ Kind: 'key', Key: key })).Detail).toContain('Refusing to activate "Pay now"');
+        }
+        expect((await session.ExecuteAction({ Kind: 'type', Text: ' ' })).Success).toBe(false);
+        expect(adapter.ExecutedActions).toEqual([]);
+
+        // Spaces typed into a text field are just text.
+        (document.getElementById('name') as HTMLInputElement).focus();
+        expect((await session.ExecuteAction({ Kind: 'type', Text: 'Ada Lovelace' })).Success).toBe(true);
     });
 
     it('lets Enter submit a search, and type text without a newline', async () => {

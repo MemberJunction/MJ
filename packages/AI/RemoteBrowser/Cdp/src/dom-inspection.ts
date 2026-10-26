@@ -96,15 +96,18 @@ type InPageRequest =
   | { Op: 'inspect'; MaxTextChars: number }
   | { Op: 'fill'; Values: ReadonlyArray<RemoteBrowserFillFieldInput> }
   | { Op: 'resolveClick'; Query: ClickTargetQuery }
-  | { Op: 'resolveEnter'; Selector?: string };
+  | { Op: 'resolveKey'; Key: ActivatingKey; Selector?: string };
 
 /** The result type of each in-page op. */
 interface InPageResults {
   inspect: RawInspection;
   fill: RawFillOutcome;
   resolveClick: ClickTarget;
-  resolveEnter: ClickTarget;
+  resolveKey: ClickTarget;
 }
+
+/** A key that can activate a control: Enter (also submits a form) and Space. */
+export type ActivatingKey = 'enter' | 'space';
 
 /**
  * The in-page script. Self-contained (it is serialized into the page by `page.evaluate`, so it can
@@ -116,7 +119,7 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
   const PROTECTED =
     /password|passcode|pin\b|otp|one[-_\s]?time|verification\s*code|cvv|cvc|csc|security\s*code|card\s*number|number\s*on\s*card|credit\s*card|debit\s*card|cc-(number|csc|exp)|ssn|social\s*security|tax\s*id|routing\s*number|bank\s*account/i;
   const DESTRUCTIVE =
-    /\b(submit|purchase|buy\s+now|pay\b|place\s+order|checkout|delete|remove|destroy|cancel\s+account|close\s+account|confirm\s+order|authorize|wire\s+transfer|sign\s+in|log\s+in)\b/i;
+    /\b(submit|purchase|buy\s+now|pay\b|place\s+(your\s+)?order|checkout|delete|remove|destroy|cancel\s+account|close\s+account|confirm\s+(order|payment|purchase)|authorize|transfer|sign\s+in|log\s+in)\b/i;
   const NON_FIELD_TYPES = ['hidden', 'submit', 'button', 'reset', 'image'];
   const ACTION_SELECTOR = 'button, input[type="submit"], input[type="button"], a[href], [role="button"]';
   const TEXT_CLICK_SELECTOR = `${ACTION_SELECTOR}, [role="link"], [role="tab"], [role="menuitem"], label, summary`;
@@ -377,9 +380,9 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
     return { filled, errors };
   }
 
-  if (req.Op === 'resolveEnter') {
-    // Enter activates the focused control (or the one a typed action focuses first), or submits its
-    // form through the form's default button.
+  if (req.Op === 'resolveKey') {
+    // Enter and Space activate the focused control (or the one a typed action focuses first); Enter
+    // in a field also submits its form through the form's default button.
     let active: HTMLElement | null;
     try {
       active = req.Selector ? document.querySelector<HTMLElement>(req.Selector) : (document.activeElement as HTMLElement | null);
@@ -391,17 +394,29 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
     }
     const target = active.matches(ACTION_SELECTOR)
       ? active
-      : active.closest('form')?.querySelector<HTMLElement>('button:not([type]), button[type="submit"], input[type="submit"], input[type="image"]') ?? null;
+      : req.Key === 'enter'
+        ? active.closest('form')?.querySelector<HTMLElement>('button:not([type]), button[type="submit"], input[type="submit"], input[type="image"]') ?? null
+        : null;
     return target ? { Found: true, Label: actionLabel(target) || target.tagName.toLowerCase(), Destructive: isDestructive(target) } : { Found: false, Label: '', Destructive: false };
   }
 
   // resolveClick
   const q = req.Query;
   if (q.Selector) {
-    // Every match, not the first: the click may land on any of them (and on one below the fold).
+    // Every match, not the first: the click may land on any of them (one below the fold, or one inside
+    // an open shadow root, which Playwright's CSS also reaches).
     let matches: HTMLElement[];
     try {
-      matches = Array.from(document.querySelectorAll<HTMLElement>(q.Selector));
+      matches = [];
+      const roots: Array<Document | ShadowRoot> = [document];
+      for (let i = 0; i < roots.length; i++) {
+        matches.push(...Array.from(roots[i].querySelectorAll<HTMLElement>(q.Selector)));
+        roots[i].querySelectorAll('*').forEach((n) => {
+          if (n.shadowRoot) {
+            roots.push(n.shadowRoot);
+          }
+        });
+      }
     } catch {
       return { Found: false, Label: q.Selector, Destructive: false, InvalidSelector: true };
     }
@@ -515,9 +530,9 @@ export async function ResolveClickTarget(adapter: PlaywrightBrowserAdapter, quer
 }
 
 /**
- * Resolves what pressing Enter would activate: the focused control (or the one `selector` names, which
- * a typed action focuses first), or its form's default button.
+ * Resolves what pressing `key` would activate: the focused control (or the one `selector` names, which
+ * a typed action focuses first), or, for Enter in a field, its form's default button.
  */
-export async function ResolveEnterTarget(adapter: PlaywrightBrowserAdapter, selector?: string): Promise<ClickTarget> {
-  return runInPage(adapter, { Op: 'resolveEnter', Selector: selector });
+export async function ResolveKeyTarget(adapter: PlaywrightBrowserAdapter, key: ActivatingKey, selector?: string): Promise<ClickTarget> {
+  return runInPage(adapter, { Op: 'resolveKey', Key: key, Selector: selector });
 }
