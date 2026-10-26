@@ -785,6 +785,7 @@ export class AnthropicLLM extends BaseLLM {
             // Append assistant prefill message only when permitted.
             // Anthropic rejects assistant message prefill ("This model does not support assistant message prefill")
             // whenever thinking is enabled or on models that take adaptive thinking (Claude 4.6+, Claude 5).
+            // Docs: https://platform.claude.com/docs/en/build-with-claude/thinking#limits-and-feature-compatibility ("Response prefill and forced tool use")
             const canPrefill = params.assistantPrefill && !thinking.thinking && !UsesAdaptiveThinking(params.model);
             const messagesForApi = this.appendPrefillMessage(nonSystemMsgs, canPrefill ? params.assistantPrefill : undefined);
 
@@ -796,6 +797,7 @@ export class AnthropicLLM extends BaseLLM {
                 messages: this.formatMessagesWithCaching(messagesForApi, params.enableCaching ?? true, thinking.thinking !== undefined)
             };
 
+            // Docs: https://platform.claude.com/docs/en/build-with-claude/thinking#limits-and-feature-compatibility ("Sampling parameters")
             // Add temperature if specified. Note that Anthropic requires temperature to be 1 or omitted
             // whenever extended thinking or adaptive thinking is enabled.
             if (params.temperature != null) {
@@ -1093,6 +1095,7 @@ export class AnthropicLLM extends BaseLLM {
         // Append assistant prefill message only when permitted.
         // Anthropic rejects assistant message prefill ("This model does not support assistant message prefill")
         // whenever thinking is enabled or on models that take adaptive thinking (Claude 4.6+, Claude 5).
+        // Docs: https://platform.claude.com/docs/en/build-with-claude/thinking#limits-and-feature-compatibility ("Response prefill and forced tool use")
         const canPrefill = params.assistantPrefill && !streamingThinking.thinking && !UsesAdaptiveThinking(params.model);
         const messagesForApi = this.appendPrefillMessage(nonSystemMsgs, canPrefill ? params.assistantPrefill : undefined);
         createParams.messages = this.formatMessagesWithCaching(
@@ -1103,6 +1106,7 @@ export class AnthropicLLM extends BaseLLM {
         if (streamingThinking.thinking) {
             createParams.thinking = streamingThinking.thinking;
             // Anthropic requires temperature to be 1 or omitted whenever thinking is enabled or in adaptive mode
+            // Docs: https://platform.claude.com/docs/en/build-with-claude/thinking#limits-and-feature-compatibility ("Sampling parameters")
             if (createParams.temperature !== undefined && createParams.temperature !== 1) {
                 delete createParams.temperature;
             }
