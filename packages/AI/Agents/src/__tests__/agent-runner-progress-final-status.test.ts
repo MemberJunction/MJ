@@ -87,6 +87,14 @@ function makeRacyDetail(id: string): RacyDetail {
     return detail;
 }
 
+/** Records the Name each Save() of this entity wrote. */
+function recordSavedNames(entity: RacyDetail): unknown[] {
+    const names: unknown[] = [];
+    const save = entity.Save;
+    entity.Save = () => { names.push(entity.Name); return save(); };
+    return names;
+}
+
 function makeProvider(details: RacyDetail[]): IMetadataProvider {
     const queue = [...details];
     return { GetEntityObject: vi.fn(async () => queue.shift()) } as unknown as IMetadataProvider;
@@ -125,6 +133,7 @@ describe('AgentRunner.RunAgentInConversation — a progress save still committin
     it('runs generateConversationName in parallel with RunAgent and skips artifact queries on a brand-new conversation', async () => {
         const events: string[] = [];
         const convEntity = makeRacyDetail('conv-new');
+        const savedNames = recordSavedNames(convEntity);
         const userDetail = makeRacyDetail('user-detail');
         const agentDetail = makeRacyDetail('agent-detail');
         const loadSpy = vi.spyOn(agentDetail, 'Load');
@@ -157,11 +166,27 @@ describe('AgentRunner.RunAgentInConversation — a progress save still committin
         expect(events.indexOf('runAgent:start')).toBeLessThan(events.indexOf('rename:done'));
         // Brand-new conversation skips gatherConversationArtifacts DB queries
         expect(gatherSpy).not.toHaveBeenCalled();
-        // Conversation name & description are persisted before RunAgentInConversation returns
-        expect(convEntity.Name).toBe('Smart Title');
+        // Conversation name & description are saved before RunAgentInConversation returns
+        expect(savedNames).toEqual(['Chat with Betty', 'Smart Title']);
         expect(convEntity.Description).toBe('Smart Description');
         // Newly created agentResponseDetail is not redundantly reloaded before final Save
         expect(loadSpy).not.toHaveBeenCalled();
+    });
+
+    it('still saves the generated conversation name when the run throws', async () => {
+        const convEntity = makeRacyDetail('conv-new');
+        const savedNames = recordSavedNames(convEntity);
+        const runner = new AgentRunner(makeProvider([convEntity, makeRacyDetail('user-detail'), makeRacyDetail('agent-detail')]));
+        vi.spyOn(runner as unknown as RunAgentStub, 'generateConversationName').mockResolvedValue({ name: 'Smart Title', description: '' });
+        vi.spyOn(runner as unknown as RunAgentStub, 'RunAgent').mockRejectedValue(new Error('model down'));
+
+        await expect(runner.RunAgentInConversation({
+            agent: { ID: 'agent-1', Name: 'Betty' },
+            conversationMessages: [],
+            contextUser: USER,
+        } as unknown as ExecuteAgentParams, { userMessage: 'What are the membership tiers?' })).rejects.toThrow('model down');
+
+        expect(savedNames.at(-1)).toBe('Smart Title');
     });
 });
 

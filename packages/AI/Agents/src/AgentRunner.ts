@@ -374,13 +374,13 @@ export class AgentRunner {
         }
 
         let agentResponseDetail: MJConversationDetailEntityExtended | undefined;
+        let saveGeneratedName: (() => Promise<void>) | undefined;
 
         try {
             let conversationId: string;
             let userMessageDetailId: string;
             let agentResponseDetailId: string | undefined;
             let isNewConversation = false;
-            let pendingRenameTask: (() => Promise<void>) | undefined;
 
             if (options.agentResponseDetail) {
                 // The server created the reply row for this run (RunAIAgentFromConversationDetail): write into it.
@@ -451,8 +451,8 @@ export class AgentRunner {
 
                     // Save immediately with provided name or fallback so agent execution does not block
                     // on the ~1,000ms "Name Conversation" LLM call. When no name was provided, fire
-                    // generateConversationName in parallel with RunAgent and persist the updated name
-                    // in the sequential post-execution write phase before returning.
+                    // generateConversationName in parallel with RunAgent and save the generated name
+                    // after the run's own writes (in the finally below), before returning.
                     const initialConversationName = options.conversationName || `Chat with ${params.agent.Name}`;
                     conversation.Name = initialConversationName;
                     conversation.Description = '';
@@ -473,20 +473,7 @@ export class AgentRunner {
                     LogStatus(`Created conversation ${conversationId}: ${initialConversationName}`);
 
                     if (!options.conversationName && options.userMessage) {
-                        const userMessageForNaming = options.userMessage;
-                        const nameGenerationPromise = this.generateConversationName(userMessageForNaming, contextUser, md, params);
-                        pendingRenameTask = async () => {
-                            try {
-                                const nameResult = await nameGenerationPromise;
-                                if (nameResult?.name) {
-                                    conversation.Name = nameResult.name;
-                                    conversation.Description = nameResult.description || '';
-                                    await conversation.Save();
-                                }
-                            } catch (renameErr) {
-                                LogError(`Background conversation naming failed for ${conversationId}: ${renameErr}`, undefined, renameErr);
-                            }
-                        };
+                        saveGeneratedName = this.startConversationNaming(conversation, options.userMessage, contextUser, md, params);
                     }
                 }
 
@@ -788,9 +775,6 @@ export class AgentRunner {
             // no report." Sequential execution removes the interleave; all writes still complete
             // before we return, so the resolver's 'complete' event still guarantees the client sees
             // every write.
-            if (pendingRenameTask) {
-                await pendingRenameTask();
-            }
             await updateDetail();
             const payloadArtifact = await processArtifacts();
             const fileArtifacts = await processFileArtifacts();
@@ -827,7 +811,36 @@ export class AgentRunner {
                 }
             }
             throw error;
+        } finally {
+            // After the run's own writes, success or failure: the name call was already paid for.
+            await saveGeneratedName?.();
         }
+    }
+
+    /**
+     * Starts the "Name Conversation" prompt for a new conversation so it runs alongside the agent, and
+     * returns the step that saves the generated name. That step runs after the run's own writes, which
+     * share the request's connection. A failed generation or save keeps the initial name.
+     */
+    private startConversationNaming(
+        conversation: MJConversationEntity,
+        userMessage: string,
+        contextUser: UserInfo,
+        md: IMetadataProvider,
+        credentials: Pick<ExecuteAgentParams, 'configurationId' | 'apiKeys' | 'CredentialScope'>
+    ): () => Promise<void> {
+        const naming = this.generateConversationName(userMessage, contextUser, md, credentials);
+        return async () => {
+            const nameResult = await naming;
+            if (!nameResult?.name) {
+                return;
+            }
+            conversation.Name = nameResult.name;
+            conversation.Description = nameResult.description || '';
+            if (!(await conversation.Save())) {
+                LogError(`Failed to save the generated name of conversation ${conversation.ID}: ${AgentRunner.saveFailureReason(conversation)}`);
+            }
+        };
     }
 
     /**

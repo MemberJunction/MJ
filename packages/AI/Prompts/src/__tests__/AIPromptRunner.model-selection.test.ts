@@ -301,6 +301,26 @@ describe('selectModel — Specific strategy + AIPromptModel', () => {
     expect(winningCandidate?.promptModelConfiguration).toEqual(promptConfig);
   });
 
+  it('Default strategy: the caller\'s runtime vendor override beats the AIPromptModel VendorID', async () => {
+    catalog.promptModels.push(
+      makePromptModel({ PromptID: 'prompt-1', ModelID: MODEL.ClaudeOpus45, VendorID: VENDOR.Anthropic, Priority: 10 }),
+    );
+    loadCatalog(catalog);
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default' }), { vendorId: VENDOR.AmazonBedrock });
+    expect(r.model?.ID).toBe(MODEL.ClaudeOpus45);
+    expect(r.vendorDriverClass).toBe('BedrockLLM');
+  });
+
+  it('Default strategy: an AIPromptModel VendorID orders vendors within its model, never above a higher-Priority model', async () => {
+    catalog.promptModels.push(
+      makePromptModel({ PromptID: 'prompt-1', ModelID: MODEL.GPT5, Priority: 50 }),
+      makePromptModel({ PromptID: 'prompt-1', ModelID: MODEL.Gemini3Flash, VendorID: VENDOR.Google, Priority: 10 }),
+    );
+    loadCatalog(catalog);
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default' }));
+    expect(r.model?.ID).toBe(MODEL.GPT5);
+  });
+
   it('orders multiple prompt models by Priority (higher first)', async () => {
     catalog.promptModels.push(
       makePromptModel({ PromptID: 'prompt-1', ModelID: MODEL.GPT5Mini, VendorID: VENDOR.OpenAI, Priority: 1 }),

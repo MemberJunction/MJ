@@ -1234,10 +1234,8 @@ export abstract class BaseModelRunner {
           model,
           5000,
           'prompt-model',
-          pm.VendorID || preferredVendorId,
-          pm.Priority,
-          pm.EffortLevel ?? undefined,
-          pm.PromptConfigurationObject
+          preferredVendorId,
+          pm
         );
         candidates.push(...modelCandidates);
       }
@@ -1287,10 +1285,8 @@ export abstract class BaseModelRunner {
             model,
             basePriority,
             'prompt-model',
-            pm.VendorID || preferredVendorId,
-            pm.Priority,
-            pm.EffortLevel ?? undefined,
-            pm.PromptConfigurationObject
+            preferredVendorId,
+            pm
           );
           candidates.push(...modelCandidates);
         }
@@ -1322,10 +1318,8 @@ export abstract class BaseModelRunner {
           model,
           1000, // Lowest priority tier
           'prompt-model',
-          pm.VendorID || preferredVendorId,
-          pm.Priority,
-          pm.EffortLevel ?? undefined,
-          pm.PromptConfigurationObject
+          preferredVendorId,
+          pm
         );
         candidates.push(...modelCandidates);
       }
@@ -1415,24 +1409,29 @@ export abstract class BaseModelRunner {
 
   /**
    * Helper: Create candidates for a model with AIModelVendor priorities (legacy behavior).
+   * `preferredVendorId` is the caller's runtime vendor override and is boosted above every other
+   * candidate. A prompt-model row's own `VendorID` only leads this model's vendors: it takes the
+   * model's top vendor priority and goes first, so it never lifts the model above another one.
    */
   private createCandidatesForModel(
     model: MJAIModelEntityExtended,
     basePriority: number,
     source: ModelVendorCandidate['source'],
     preferredVendorId?: string,
-    promptModelPriority?: number,
-    effortLevel?: number,
-    promptModelConfiguration?: AIPromptConfiguration | null
+    promptModel?: MJAIPromptModelEntity
   ): ModelVendorCandidate[] {
     const modelCandidates: ModelVendorCandidate[] = [];
+    const effortLevel = promptModel?.EffortLevel ?? undefined;
+    const promptModelConfiguration = promptModel?.PromptConfigurationObject;
 
     // Get all vendors for this model - filter for inference providers only.
     // Uses the model's precomputed ModelVendors (grouped at engine load) rather than scanning
-    // the global ModelVendors array.
+    // the global ModelVendors array. The prompt-model row's vendor goes first, then by priority.
+    const isRowVendor = (vendorId: string) => UUIDsEqual(vendorId, promptModel?.VendorID);
     const modelVendors = model.ModelVendors
       .filter(mv => mv.Status === 'Active' && this.IsInferenceProvider(mv))
-      .sort((a, b) => b.Priority - a.Priority);
+      .sort((a, b) => Number(isRowVendor(b.VendorID)) - Number(isRowVendor(a.VendorID)) || b.Priority - a.Priority);
+    const topVendorPriority = Math.max(0, ...modelVendors.map(mv => mv.Priority || 0));
 
     // First, add preferred vendor if it exists
     if (preferredVendorId) {
@@ -1466,7 +1465,7 @@ export abstract class BaseModelRunner {
           effortLevel,
           supportsEffortLevel: vendor.SupportsEffortLevel ?? model.SupportsEffortLevel ?? false,
           isPreferredVendor: false,
-          priority: basePriority + (vendor.Priority || 0),
+          priority: basePriority + (isRowVendor(vendor.VendorID) ? topVendorPriority : (vendor.Priority || 0)),
           source,
           promptModelConfiguration
         });
@@ -1489,8 +1488,8 @@ export abstract class BaseModelRunner {
     }
 
     // Apply prompt model priority if provided (legacy blended approach)
-    if (promptModelPriority !== undefined) {
-      modelCandidates.forEach(c => c.priority += promptModelPriority * 10);
+    if (promptModel) {
+      modelCandidates.forEach(c => c.priority += promptModel.Priority * 10);
     }
 
     return modelCandidates;

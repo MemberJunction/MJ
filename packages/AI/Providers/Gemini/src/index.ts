@@ -563,7 +563,8 @@ export class GeminiLLM extends BaseLLM {
             this.warnUnsupportedSampling(modelName, 'topK', params.topK);
         }
 
-        if (params.modelSpecificResponseFormat) {
+        // Provider options (e.g. a thinkingConfig) ride along with JSON too, not only ModelSpecific.
+        if (params.modelSpecificResponseFormat && (params.responseFormat === 'ModelSpecific' || params.responseFormat === 'JSON')) {
             Object.assign(modelOptions, params.modelSpecificResponseFormat);
         }
         if (params.responseFormat === 'JSON') {
@@ -618,21 +619,26 @@ export class GeminiLLM extends BaseLLM {
 
     /**
      * Puts the `thinkingConfig` for `effortLevel` on the request (see {@link ResolveGeminiThinkingConfig}),
-     * or what replaced it after the model rejected it earlier in this process. Nothing is added when
-     * no effort is set; an effort that cannot be used is reported once.
+     * or what replaced it after the model rejected it earlier in this process. With no usable effort, a
+     * `thinkingConfig` already on the request (from `modelSpecificResponseFormat`) gets the same
+     * replacement, so a rejected setting is not re-sent on every call. An effort that cannot be used is
+     * reported once.
      */
     private applyThinkingConfig(requestConfig: Record<string, unknown>, modelName: string, effortLevel: string | undefined): void {
         const resolution = ResolveGeminiThinkingConfig(modelName, effortLevel);
         if (resolution.Ignored) {
             this.warnThinkingOnce(`${modelName}:${resolution.Ignored}`, `Gemini: ${resolution.Ignored}; sending no thinking setting, so the model thinks at its default.`);
         }
-        if (!resolution.Config) {
+        const wanted = resolution.Config ?? (requestConfig.thinkingConfig as ThinkingConfig | undefined);
+        if (!wanted) {
             return;
         }
-        const key = this.thinkingReplacementKey(modelName, resolution.Config);
-        const config = GeminiLLM._thinkingReplacements.has(key) ? GeminiLLM._thinkingReplacements.get(key) : resolution.Config;
+        const key = this.thinkingReplacementKey(modelName, wanted);
+        const config = GeminiLLM._thinkingReplacements.has(key) ? GeminiLLM._thinkingReplacements.get(key) : wanted;
         if (config) {
             requestConfig.thinkingConfig = config;
+        } else {
+            delete requestConfig.thinkingConfig;
         }
     }
 
