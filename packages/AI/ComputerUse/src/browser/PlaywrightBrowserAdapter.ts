@@ -39,6 +39,7 @@ import {
     WaitForLoadState,
     GetAccessibilitySnapshot,
     QueryElement,
+    EvaluateInPage,
 } from './page-perception.js';
 import { RetryPastDismissableOverlay } from './overlay-dismiss.js';
 import {
@@ -454,6 +455,10 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
 
     public override async GetAccessibilitySnapshot(): Promise<AccessibilityNode | null> {
         return GetAccessibilitySnapshot(this.page);
+    }
+
+    public override async EvaluateInPage<R, A>(fn: (arg: A) => R, arg: A): Promise<R | null> {
+        return EvaluateInPage(this.page, fn, arg, this.config.ActionTimeoutMs);
     }
 
     public override async QueryElement(selector: string): Promise<ElementInfo> {

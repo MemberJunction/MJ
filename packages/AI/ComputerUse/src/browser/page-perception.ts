@@ -79,6 +79,29 @@ export async function getTitle(page: Page | null): Promise<string> {
     return GetTitle(page);
 }
 
+/**
+ * Runs a self-contained function in the page and returns its result, or `null` when no page is open
+ * or the call outlives `timeoutMs`. `page.evaluate()` ignores `setDefaultTimeout()`, so the bound is
+ * what keeps a frozen renderer from parking the caller forever.
+ */
+export async function EvaluateInPage<R, A>(page: Page | null, fn: (arg: A) => R, arg: A, timeoutMs: number): Promise<R | null> {
+    if (!page) {
+        return null;
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+        const expiry = new Promise<null>(resolve => {
+            timer = setTimeout(() => resolve(null), timeoutMs);
+        });
+        // Playwright types the argument as `Unboxed<A>`, which a generic `A` cannot satisfy; for the plain
+        // serializable arguments this takes, the two are the same type.
+        const evaluate = page.evaluate.bind(page) as (pageFunction: (arg: A) => R, arg: A) => Promise<R>;
+        return await Promise.race([evaluate(fn, arg), expiry]);
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 /** Wait until the page reaches the given load state. No-op when no page is open. */
 export async function WaitForLoadState(
     page: Page | null,
