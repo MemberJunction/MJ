@@ -137,7 +137,7 @@ async function getCohereClientCtor(): Promise<new (opts: { token: string }) => C
  */
 class CohereScopeAIReranker extends AIBaseReranker {
     private _clientPromise: Promise<CohereClientLike>;
-    public lastCallSucceeded = false;
+    public LastCallSucceeded = false;
 
     constructor(apiKey: string, modelName: string) {
         super(apiKey, modelName);
@@ -145,7 +145,7 @@ class CohereScopeAIReranker extends AIBaseReranker {
     }
 
     protected async doRerank(params: RerankParams): Promise<RerankResult[]> {
-        this.lastCallSucceeded = false;
+        this.LastCallSucceeded = false;
         const client = await this._clientPromise;
         const responseResults = await this.executeSdkRerank(client, params);
         const minThreshold = typeof params.options?.['minRelevanceThreshold'] === 'number' &&
@@ -164,7 +164,7 @@ class CohereScopeAIReranker extends AIBaseReranker {
                 mapped.push(item);
             }
         }
-        this.lastCallSucceeded = true;
+        this.LastCallSucceeded = true;
         return mapped;
     }
 
@@ -346,7 +346,7 @@ export class CohereReRanker extends BaseReRanker {
                 return candidates.slice(0, topN);
             }
             const result = await super.ReRank(query, candidates, topN, contextUser, config);
-            if (apiReranker.lastCallSucceeded) {
+            if (apiReranker.LastCallSucceeded) {
                 this.reportCost(this.EstimateCostCents(candidates.length));
             }
             return result;
