@@ -225,7 +225,7 @@ export const REMOTE_BROWSER_TOOL_DEFINITIONS: RealtimeToolDefinition[] = [
   {
     Name: REMOTE_BROWSER_TOOL_NAMES.Click,
     Description:
-      'Click an element in the shared browser by ref from browser_Inspect (e.g. "a1"), by its visible text, by CSS selector, or by viewport x/y. A control labelled to submit, pay, place an order, delete or sign in is never clicked, however it is targeted; leave it for the user.',
+      'Click an element in the shared browser by ref from browser_Inspect (e.g. "a1"), by its visible text, by CSS selector, or by viewport x/y. A control labelled to submit, pay, place an order, confirm a payment, transfer, delete or sign in is never clicked, however it is targeted; leave it for the user.',
     ParametersSchema: {
       type: 'object',
       properties: {
@@ -251,7 +251,7 @@ export const REMOTE_BROWSER_TOOL_DEFINITIONS: RealtimeToolDefinition[] = [
   },
   {
     Name: REMOTE_BROWSER_TOOL_NAMES.Key,
-    Description: 'Press a single key in the shared browser (e.g. "Enter" to submit, "Tab" to move focus, "Escape" to dismiss). Enter is refused when it would activate a control labelled to submit, pay, place an order, delete or sign in.',
+    Description: 'Press a single key in the shared browser (e.g. "Enter" to submit, "Tab" to move focus, "Escape" to dismiss). Enter or Space is refused when it would activate a control labelled to submit, pay, place an order, confirm a payment, transfer, delete or sign in.',
     ParametersSchema: {
       type: 'object',
       properties: {
