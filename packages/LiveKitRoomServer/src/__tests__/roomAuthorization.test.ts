@@ -402,6 +402,26 @@ describe('RoomAuthorizationService', () => {
       expect(mockRunView).not.toHaveBeenCalled();
     });
 
+    it('refuses an anonymous visitor even though the session UserID is the shared Anonymous user (MJ#6044)', async () => {
+      // Every anonymous visitor authenticates as ONE shared user, so a UserID match proves nothing about which
+      // visitor owns the session. Anonymous visitors join rooms through the MJServer-issued token path, never here.
+      const anonymous = { ID: 'anon-user', Name: 'Anonymous', IsMagicLinkAnonymous: true, AnonymousVisitorID: 'sid-b' } as unknown as UserInfo;
+      const mockBridge = { ID: 'bridge-1', AgentSessionID: 'session-web-1' };
+      const mockSession = { ID: 'session-web-1', UserID: 'anon-user' };
+
+      mockRunViews.mockResolvedValueOnce([
+        { Success: true, Results: [] },
+        { Success: true, Results: [] },
+        { Success: true, Results: [] },
+        { Success: true, Results: [mockBridge] },
+      ]);
+      mockRunView.mockResolvedValueOnce({ Success: true, Results: [mockSession] });
+
+      const result = await service.AuthorizeRoomAccess('web-agent-room', anonymous, provider);
+      expect(result.Authorized).toBe(false);
+      expect(result.Reason).toMatch(/anonymous/i);
+    });
+
     it('refuses access when user is a stranger (not owner and has no accepted offer)', async () => {
       const mockBridge = {
         ID: 'bridge-1',

@@ -247,6 +247,15 @@ export class RoomAuthorizationService extends BaseSingleton<RoomAuthorizationSer
       // 2. Check if room is tied to an Interaction, has active agent sessions (e.g. web agent rooms), or has a SIP call prefix (never ad-hoc)
       const isSipCallRoom = trimmedRoom.startsWith(this.sipRoomPrefix);
       if (interactions.length > 0 || isSipCallRoom || agentSessionIDs.size > 0) {
+        // Never an anonymous visitor: every anonymous visitor is the ONE shared Anonymous user, so neither an
+        // offer's TargetUserID match below nor an owner's UserID match would tell visitors apart — either would
+        // admit every visitor to every visitor's session room (MJ#6044). Anonymous visitors reach their own room
+        // through the MJServer-issued session token path, which keys on the per-visitor scope id, not through
+        // this rule.
+        if (user.IsMagicLinkAnonymous) {
+          return { Authorized: false, Reason: 'Anonymous visitors cannot join a call or agent session room by ownership.' };
+        }
+
         // User with an Accepted offer for it
         const hasAcceptedOffer = offers.some(
           (o) => UUIDsEqual(o.TargetUserID, user.ID) && o.Status === 'Accepted',
@@ -255,7 +264,7 @@ export class RoomAuthorizationService extends BaseSingleton<RoomAuthorizationSer
           return { Authorized: true };
         }
 
-        // User who started it (the Interaction's or Agent Session's owner)
+        // User who started it (the Interaction's or Agent Session's owner).
         if (agentSessionIDs.size > 0) {
           const filter = [...agentSessionIDs].map((id) => `ID = '${EscapeSQLString(id)}'`).join(' OR ');
           const sessionResult = await rv.RunView<AgentSessionLookupRow>(
