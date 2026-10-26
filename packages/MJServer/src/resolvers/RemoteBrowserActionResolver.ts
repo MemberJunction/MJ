@@ -26,6 +26,7 @@ import { RemoteBrowserGoalRegistry } from '../agentSessions/remoteBrowserGoalReg
 import { SessionRunIDVerifier } from '../agentSessions/SessionRunIDVerifier.js';
 import { randomUUID } from 'node:crypto';
 import {
+  IRemoteBrowserSession,
   RemoteBrowserAction,
   RemoteBrowserAudioChunk,
   RemoteBrowserFillFieldInput,
@@ -41,6 +42,8 @@ import {
   RealtimeSessionOwnershipError,
 } from '../realtimeSessions/ownedRealtimeSession.js';
 import { AuthorizeSessionAccess } from '../realtimeSessions/sessionAccess.js';
+import { ConversationBrowsers } from '../agentSessions/conversationBrowsers.js';
+import { configInfo, type ConversationBrowserConfig } from '../config.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
@@ -56,6 +59,8 @@ export interface OwnedBrowserScope {
   ID: string;
   AgentID: string | null;
   Config_: string | null;
+  /** `true` for a text conversation's browser (the opt-in, capped, private-network-restricted kind). */
+  IsConversation?: boolean;
 }
 /** Entity name for the agent whose `TypeConfiguration` carries the remote-browser provider preference. */
 const AGENT_ENTITY = 'MJ: AI Agents';
@@ -360,7 +365,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
 
     const providerName = await this.resolveProviderName(session, contextUser, provider);
     try {
-      const liveSession = await RemoteBrowserEngine.Instance.StartSessionForAgentSession(agentSessionID, contextUser, providerName, instanceKey);
+      const liveSession = await this.startBrowser(agentSessionID, session, contextUser, providerName, instanceKey);
       const result = await liveSession.ExecuteAction(action);
       return {
         Success: result.Success,
@@ -434,6 +439,10 @@ export class RemoteBrowserActionResolver extends ResolverBase {
   ): Promise<RemoteBrowserGoalResultType> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
     const session = await this.loadOwnedSession(agentSessionID, contextUser, provider);
+    if (session.IsConversation) {
+      // A goal loop clicks and navigates on its own, past the click guard the browser_* tools go through.
+      return { Success: false, Status: 'Error', Detail: 'Goal runs are not available in a text conversation; use the browser_* tools.' };
+    }
     const providerName = await this.resolveProviderName(session, contextUser, provider);
     // Observability: nest this goal's many prompt runs under ONE "Browser goal" step on the realtime
     // co-agent run (when the session has one). Best-effort — a null step just means the goal runs unlinked.
@@ -657,7 +666,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
 
     const providerName = await this.resolveProviderName(session, contextUser, provider);
     try {
-      const liveSession = await RemoteBrowserEngine.Instance.StartSessionForAgentSession(agentSessionID, contextUser, providerName, instanceKey);
+      const liveSession = await this.startBrowser(agentSessionID, session, contextUser, providerName, instanceKey);
       await liveSession.StartScreencast((frame) =>
         this.publishFrame(pubSub, userPayload, agentSessionID, instanceKey, frame, liveSession.GetCurrentUrl()),
       );
@@ -725,7 +734,9 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     const streamKey = this.streamKey(agentSessionID, instanceKey);
     this.startedScreencasts.delete(streamKey);
     this.startedAudioStreams.delete(streamKey);
-    return RemoteBrowserEngine.Instance.EndSessionForAgentSession(agentSessionID, instanceKey);
+    const ended = await RemoteBrowserEngine.Instance.EndSessionForAgentSession(agentSessionID, instanceKey);
+    ConversationBrowsers.Release(agentSessionID);
+    return ended;
   }
 
   /**
@@ -760,7 +771,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
 
     const providerName = await this.resolveProviderName(session, contextUser, provider);
     try {
-      const liveSession = await RemoteBrowserEngine.Instance.StartSessionForAgentSession(agentSessionID, contextUser, providerName, instanceKey);
+      const liveSession = await this.startBrowser(agentSessionID, session, contextUser, providerName, instanceKey);
       await liveSession.StartAudioStream((chunk) => this.publishAudioChunk(pubSub, userPayload, agentSessionID, instanceKey, chunk));
       this.startedAudioStreams.set(streamKey, Date.now());
       return { Streaming: true };
@@ -1151,8 +1162,16 @@ export class RemoteBrowserActionResolver extends ResolverBase {
         throw err;
       }
     }
-    // Not a realtime session: a text chat scopes its browser to a conversation, under the same access rule
+    // Not a realtime session: a text chat scopes its browser to a conversation, which this server must opt
+    // into (each browser is a server Chromium or a billed hosted session), under the same access rule
     // (owner, and for an anonymous widget guest its scope id), loaded as the caller so its RLS applies too.
+    const settings = this.ConversationBrowserSettings();
+    if (!settings.enabled) {
+      throw new Error(`Remote-browser session ${agentSessionID} not found. Conversation browsers are not enabled on this server (realtime.conversationBrowser.enabled).`);
+    }
+    if (contextUser.IsMagicLinkAnonymous && !settings.allowAnonymous) {
+      throw new Error(`Not authorized: anonymous users cannot open a conversation browser on this server.`);
+    }
     const conversation = await provider.GetEntityObject<MJConversationEntity>(CONVERSATION_ENTITY, contextUser);
     if (!(await conversation.Load(agentSessionID))) {
       throw new Error(`Remote-browser session ${agentSessionID} not found.`);
@@ -1164,7 +1183,40 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     if (!access.Allowed) {
       throw new Error(`Not authorized: remote-browser session ${agentSessionID} is not owned by you.`);
     }
-    return { ID: conversation.ID, AgentID: null, Config_: null };
+    // Kept off the server's own network before any browser starts for it, and each use puts off its idle end.
+    await RemoteBrowserEngine.Instance.RestrictPrivateNetworkForAgentSession(agentSessionID, settings.allowedPrivateHosts);
+    ConversationBrowsers.Touch(agentSessionID);
+    return { ID: conversation.ID, AgentID: null, Config_: null, IsConversation: true };
+  }
+
+  /** This server's conversation-browser settings (a seam for tests). */
+  protected ConversationBrowserSettings(): ConversationBrowserConfig {
+    return configInfo.realtime.conversationBrowser;
+  }
+
+  /**
+   * Starts (or reuses) the scope's browser. A conversation's browser first counts against its owner's
+   * cap, and gives the slot back when it fails to start.
+   */
+  private async startBrowser(
+    agentSessionID: string,
+    scope: OwnedBrowserScope,
+    contextUser: UserInfo,
+    providerName: string | undefined,
+    instanceKey?: string,
+  ): Promise<IRemoteBrowserSession> {
+    if (scope.IsConversation) {
+      const settings = this.ConversationBrowserSettings();
+      ConversationBrowsers.Claim(agentSessionID, contextUser.ID, settings.maxPerUser, settings.idleMinutes);
+    }
+    try {
+      return await RemoteBrowserEngine.Instance.StartSessionForAgentSession(agentSessionID, contextUser, providerName, instanceKey);
+    } catch (err) {
+      if (scope.IsConversation && !RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID, instanceKey)) {
+        ConversationBrowsers.Release(agentSessionID);
+      }
+      throw err;
+    }
   }
 
   /**

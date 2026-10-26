@@ -871,6 +871,30 @@ const identityVerificationSchema = z.object({
   }).optional().default({}),
 }).passthrough();
 
+/**
+ * Remote browsers a TEXT conversation opens (`<mj-conversation-chat-area [AllowRemoteBrowser]>`), whose
+ * agents drive them through the `browser_*` tools. Realtime calls' browsers are not affected.
+ *
+ * Off by default: until `enabled` is true, every remote-browser operation on a conversation is refused,
+ * since each browser is a server Chromium process or a billed hosted session.
+ */
+const conversationBrowserSchema = z.object({
+  /** Master switch. When false, no conversation can open a browser. */
+  enabled: zodBooleanWithTransforms().default(false),
+  /** Also let anonymous principals (public widget guests, anonymous magic links) open one. */
+  allowAnonymous: zodBooleanWithTransforms().default(false),
+  /** Most conversation browsers one user may hold at once. Default 2. */
+  maxPerUser: z.coerce.number().int().positive().optional().default(2),
+  /** Minutes unused after which a conversation browser is ended (a reloaded or closed tab never ends its own). Default 15. */
+  idleMinutes: z.coerce.number().positive().optional().default(15),
+  /**
+   * Private hosts a conversation browser may still reach, as `host` or `host:port` (e.g. `localhost:4200`).
+   * Every other loopback, link-local or private-network host is refused, so an agent cannot reach the
+   * server's own network. Default none.
+   */
+  allowedPrivateHosts: z.array(z.string()).optional().default([]),
+}).passthrough();
+
 const realtimeSchema = z.object({
   /** Master switch. When false, the WebRTC SDP broker router is not mounted. Defaults to true. */
   enabled: zodBooleanWithTransforms().default(true),
@@ -881,6 +905,8 @@ const realtimeSchema = z.object({
    * is assembled anyway as `Partial` (gaps become silence). Defaults to 90.
    */
   recordingAssemblyGraceSeconds: z.coerce.number().positive().optional().default(90),
+  /** Remote browsers that text conversations open (off by default). */
+  conversationBrowser: conversationBrowserSchema.optional().default({}),
 }).passthrough();
 
 const devAuthSchema = z.object({
@@ -970,6 +996,7 @@ export type MagicLinkConfig = z.infer<typeof magicLinkSchema>;
 export type WidgetConfig = z.infer<typeof widgetSchema>;
 export type TelephonyConfig = z.infer<typeof telephonySchema>;
 export type RealtimeConfig = z.infer<typeof realtimeSchema>;
+export type ConversationBrowserConfig = z.infer<typeof conversationBrowserSchema>;
 export type IdentityVerificationConfig = z.infer<typeof identityVerificationSchema>;
 export type TwilioTelephonyConfig = z.infer<typeof twilioTelephonySchema>;
 export type VonageTelephonyConfig = z.infer<typeof vonageTelephonySchema>;

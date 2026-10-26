@@ -50,6 +50,7 @@ const startSessionMock = vi.fn<[], Promise<FakeSession>>(async () => deadSession
 // error-reporting contract must survive untouched for every ordinary failure.
 const recoverDeadSessionMock = vi.fn<[], Promise<FakeSession | null>>(async () => null);
 const endSessionMock = vi.fn(async (_agentSessionID: string) => true);
+const restrictMock = vi.fn(async (_agentSessionID: string, _allowedHosts: string[]) => undefined);
 vi.mock('@memberjunction/remote-browser-server', () => ({
   NormalizeInstanceKey: (key?: string) => key?.trim() || null,
   RemoteBrowserEngine: {
@@ -57,6 +58,8 @@ vi.mock('@memberjunction/remote-browser-server', () => ({
       StartSessionForAgentSession: (...args: unknown[]) => startSessionMock(...(args as [])),
       RecoverDeadAgentSession: (...args: unknown[]) => recoverDeadSessionMock(...(args as [])),
       EndSessionForAgentSession: (agentSessionID: string) => endSessionMock(agentSessionID),
+      RestrictPrivateNetworkForAgentSession: (agentSessionID: string, allowedHosts: string[]) => restrictMock(agentSessionID, allowedHosts),
+      GetSessionForAgentSession: () => undefined,
     },
   },
 }));
@@ -74,7 +77,12 @@ vi.mock('@memberjunction/ai-core-plus', async (importOriginal) => ({
   AIPromptParams: class {},
 }));
 
+// The resolver reads its conversation-browser settings from the server config; off, as by default.
+vi.mock('../config.js', () => ({ configInfo: { realtime: { conversationBrowser: { enabled: false } } } }));
+
 import { RemoteBrowserActionResolver } from '../resolvers/RemoteBrowserActionResolver.js';
+import { ConversationBrowsers } from '../agentSessions/conversationBrowsers.js';
+import type { ConversationBrowserConfig } from '../config.js';
 
 /** Bypasses the ownership/provider plumbing (covered elsewhere) so the recovery branch stands alone. */
 class TestableResolver extends RemoteBrowserActionResolver {
@@ -180,23 +188,83 @@ describe('RemoteBrowserActionResolver — conversation-scoped ownership & struct
   const otherUserID = 'c3c3c3c3-0000-4000-8000-000000000003';
   const convID = 'b2b2b2b2-0000-4000-8000-000000000002';
 
+  const ENABLED: ConversationBrowserConfig = { enabled: true, allowAnonymous: false, maxPerUser: 2, idleMinutes: 15, allowedPrivateHosts: ['localhost:4200'] };
+
   /**
-   * A resolver whose provider has no agent session by that ID, only a conversation owned by `ownerID`
-   * (stamped with `externalID`, an anonymous guest's scope id), called by `caller`.
+   * A resolver whose provider has no agent session by that ID, only conversations owned by `ownerID`
+   * (stamped with `externalID`, an anonymous guest's scope id), called by `caller`, under `settings`.
    */
-  function conversationResolver(ownerID: string, caller: Record<string, unknown> = { ID: userID }, externalID: string | null = null): RemoteBrowserActionResolver {
-    const getEntityObject = vi.fn(async (entityName: string) =>
-      entityName === 'MJ: Conversations'
-        ? { ID: convID, UserID: ownerID, ExternalID: externalID, Load: vi.fn(async (id: string) => id === convID) }
-        : { Load: vi.fn(async () => false) },
-    );
+  function conversationResolver(
+    ownerID: string,
+    caller: Record<string, unknown> = { ID: userID },
+    externalID: string | null = null,
+    settings: ConversationBrowserConfig = ENABLED,
+  ): RemoteBrowserActionResolver {
+    const getEntityObject = vi.fn(async (entityName: string) => {
+      if (entityName !== 'MJ: Conversations') {
+        return { Load: vi.fn(async () => false) };
+      }
+      const conversation = { ID: '', UserID: ownerID, ExternalID: externalID, Load: vi.fn(async (id: string) => {
+        conversation.ID = id;
+        return id.startsWith('b2b2b2b2');
+      }) };
+      return conversation;
+    });
     class OwnershipResolver extends RemoteBrowserActionResolver {
       protected override requireUserAndProvider() {
         return { contextUser: caller, provider: { GetEntityObject: getEntityObject } } as never;
       }
+      protected override ConversationBrowserSettings(): ConversationBrowserConfig {
+        return settings;
+      }
     }
     return new OwnershipResolver();
   }
+
+  beforeEach(() => {
+    recoverDeadSessionMock.mockReset().mockResolvedValue(null);
+    for (const id of [convID, convID2, convID3]) {
+      ConversationBrowsers.Release(id);
+    }
+  });
+  const convID2 = 'b2b2b2b2-0000-4000-8000-000000000012';
+  const convID3 = 'b2b2b2b2-0000-4000-8000-000000000013';
+
+  it('refuses every conversation operation while the server has not enabled conversation browsers', async () => {
+    startSessionMock.mockReset();
+    const off = conversationResolver(userID, { ID: userID }, null, { ...ENABLED, enabled: false });
+    await expect(off.ExecuteRemoteBrowserAction(convID, 'inspect', ctx)).rejects.toThrow('not enabled');
+    expect(startSessionMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses an anonymous guest its own conversation browser unless anonymous use is enabled', async () => {
+    deadSession = makeSession();
+    startSessionMock.mockReset().mockResolvedValue(deadSession);
+    const guest = { ID: userID, IsMagicLinkAnonymous: true, AnonymousVisitorID: 'visitor-a' };
+    await expect(conversationResolver(userID, guest, 'visitor-a').ExecuteRemoteBrowserAction(convID, 'inspect', ctx)).rejects.toThrow('anonymous');
+    expect(startSessionMock).not.toHaveBeenCalled();
+    const allowed = conversationResolver(userID, guest, 'visitor-a', { ...ENABLED, allowAnonymous: true });
+    expect((await allowed.ExecuteRemoteBrowserAction(convID, 'inspect', ctx)).Success).toBe(true);
+  });
+
+  it('caps the conversation browsers one user holds, keeps it off the private network, and refuses goal runs', async () => {
+    deadSession = makeSession();
+    startSessionMock.mockReset().mockResolvedValue(deadSession);
+    restrictMock.mockClear();
+    const resolver = conversationResolver(userID);
+    expect((await resolver.ExecuteRemoteBrowserAction(convID, 'inspect', ctx)).Success).toBe(true);
+    expect((await resolver.ExecuteRemoteBrowserAction(convID2, 'inspect', ctx)).Success).toBe(true);
+    expect((await resolver.ExecuteRemoteBrowserAction(convID, 'inspect', ctx)).Success).toBe(true); // already held
+    const third = await resolver.ExecuteRemoteBrowserAction(convID3, 'inspect', ctx);
+    expect(third.Success).toBe(false);
+    expect(third.Detail).toContain('the most this server allows');
+    expect(startSessionMock).toHaveBeenCalledTimes(3);
+    expect(restrictMock).toHaveBeenCalledWith(convID, ['localhost:4200']);
+
+    const goal = await resolver.ExecuteRemoteBrowserGoal(convID, 'buy the thing', ctx);
+    expect(goal.Success).toBe(false);
+    expect(goal.Detail).toContain('not available in a text conversation');
+  });
 
   it('acts on a conversation the caller owns', async () => {
     deadSession = makeSession();

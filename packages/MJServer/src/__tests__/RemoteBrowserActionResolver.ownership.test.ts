@@ -37,6 +37,9 @@ vi.mock('@memberjunction/ai-core-plus', async (importOriginal) => ({
     AIPromptParams: class {},
 }));
 
+// The resolver reads its conversation-browser settings from the server config; off, as by default.
+vi.mock('../config.js', () => ({ configInfo: { realtime: { conversationBrowser: { enabled: false } } } }));
+
 import { RemoteBrowserActionResolver, type OwnedBrowserScope } from '../resolvers/RemoteBrowserActionResolver.js';
 
 const uuid = (a: string, b: string) =>
