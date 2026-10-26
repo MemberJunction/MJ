@@ -162,7 +162,7 @@ Mutations (all `BaseEntity.Save()` with `LatestResult.CompleteMessage` surfaced 
 
 Deep links: `tab`, `search` and `health` round-trip through `UpdateQueryParams` / `OnQueryParamsChanged`; defaults (`overview`, empty search, `all`) are omitted from the URL.
 
-Where it appears: the default **Cockpit** nav item of the **Chief of Staff** application (`metadata/applications/.chief-of-staff-application.json`, alongside Agent Requests and Wake Routines). The application is opt-in (`DefaultForNewUser: false`); it is not registered in the AI application.
+Where it appears: the single **Cockpit** nav item of the **Chief of Staff** application (`metadata/applications/.chief-of-staff-application.json`). The application is opt-in (`DefaultForNewUser: false`) and is not registered in the AI application. It deliberately carries no other nav items: `DriverClass` values must be unique across all applications (integration check `app-wiring.AW4`), and the Agent Requests and Routines screens already belong to the AI and Routines applications; the cockpit's Approvals & Wakes tab links to those records directly.
 
 Not yet implemented from the Phase 2 plan: `QuietHoursStart` / `QuietHoursEnd` and `MaxAutonomousActionsPerRun` do not exist on `MJ: AI Agent User Policies` and are not shown; the plan's `IsPriorityObjective`, P0–P3 tiers, `CurrentMetricValue` / `TargetMetricValue` and `NextCheckInAt` names do not exist on the Tasks entity (the cockpit uses `Priority`, `CurrentValue` / `TargetValue` / `BaselineValue` and `NextCheckInDueAt`).
 

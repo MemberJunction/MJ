@@ -13,20 +13,6 @@
         "ResourceType": "Custom",
         "DriverClass": "ChiefOfStaffDashboard",
         "isDefault": true
-      },
-      {
-        "Label": "Agent Requests",
-        "Icon": "fa-solid fa-inbox",
-        "ResourceType": "Custom",
-        "DriverClass": "AIAgentRequestsResource",
-        "isDefault": false
-      },
-      {
-        "Label": "Wake Routines",
-        "Icon": "fa-solid fa-business-time",
-        "ResourceType": "Custom",
-        "DriverClass": "UserRoutines",
-        "isDefault": false
       }
     ]
   },
