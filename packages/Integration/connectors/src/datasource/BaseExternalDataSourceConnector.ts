@@ -204,7 +204,26 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
         const orderColumns = [meta.WatermarkField, ...meta.PrimaryKeyFields].filter(
             (c): c is string => typeof c === 'string' && c.length > 0,
         );
-        const offset = ctx.CurrentOffset ?? 0;
+
+        // Check if Keyset Seek Pagination is applicable
+        const canUseKeyset = meta.PrimaryKeyFields.length > 0;
+        let keysetFilter: string | undefined;
+        let useKeyset = false;
+
+        if (canUseKeyset && ctx.AfterKeyValue) {
+            const parsed = this.ParseKeysetMarker(ctx.AfterKeyValue, meta.PrimaryKeyFields, meta.WatermarkField);
+            if (parsed) {
+                keysetFilter = this.BuildKeysetFilter(parsed, meta.PrimaryKeyFields, meta.WatermarkField);
+                if (keysetFilter) {
+                    useKeyset = true;
+                }
+            }
+        }
+
+        // When using keyset seek, offset is always 0 (eliminating the deep OFFSET scan penalty);
+        // otherwise fallback to offset pagination via ctx.CurrentOffset.
+        const offset = useKeyset ? 0 : (ctx.CurrentOffset ?? 0);
+
         const result = await driver.RunView(
             dataSource,
             {
@@ -214,6 +233,7 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
                 incrementalSince: ctx.WatermarkValue && meta.WatermarkField
                     ? { Field: meta.WatermarkField, Value: ctx.WatermarkValue }
                     : undefined,
+                filter: keysetFilter,
                 defaultOrderByColumns: orderColumns.length ? orderColumns : undefined,
                 // Fetch one extra to detect HasMore without a separate COUNT.
                 maxRows: ctx.BatchSize + 1,
@@ -227,12 +247,169 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
 
         const hasMore = result.rows.length > ctx.BatchSize;
         const rows = hasMore ? result.rows.slice(0, ctx.BatchSize) : result.rows;
+
+        // Calculate next keyset seek marker from the final row in the batch
+        const lastRow = (hasMore && rows.length > 0) ? rows[rows.length - 1] : undefined;
+        const nextAfterKey = (canUseKeyset && lastRow)
+            ? this.ExtractKeysetMarker(lastRow, meta.PrimaryKeyFields, meta.WatermarkField)
+            : undefined;
+
         return {
             Records: rows.map(r => this.BuildRecord(r, ctx.ObjectName, meta.PrimaryKeyFields, meta.WatermarkField)),
             HasMore: hasMore,
-            NextOffset: hasMore ? offset + ctx.BatchSize : undefined,
+            NextOffset: useKeyset ? undefined : (hasMore ? offset + ctx.BatchSize : undefined),
+            NextAfterKeyValue: nextAfterKey,
             NewWatermarkValue: this.MaxWatermark(rows, meta.WatermarkField),
         };
+    }
+
+    /**
+     * Extracts a deterministic keyset/seek marker string from a source row for subsequent batch resumption.
+     * When multiple primary key fields exist, serializes as a deterministic JSON object.
+     * When a single primary key exists, serializes as a scalar string or JSON.
+     */
+    public ExtractKeysetMarker(
+        row: Record<string, unknown>,
+        primaryKeyFields: string[],
+        watermarkField?: string
+    ): string | undefined {
+        if (!row || primaryKeyFields.length === 0) {
+            return undefined;
+        }
+
+        const keys: Record<string, unknown> = {};
+        for (const pk of primaryKeyFields) {
+            if (row[pk] !== undefined) {
+                keys[pk] = row[pk];
+            }
+        }
+
+        // Include watermark field value if present on row to support (Watermark, PK) compound seeks
+        if (watermarkField && row[watermarkField] !== undefined) {
+            const rawWatermark = row[watermarkField];
+            const watermarkVal = rawWatermark instanceof Date
+                ? rawWatermark.toISOString()
+                : (typeof rawWatermark === 'string' ? rawWatermark : String(rawWatermark));
+            return JSON.stringify({ w: watermarkVal, k: keys });
+        }
+
+        // Pure primary key keyset
+        if (primaryKeyFields.length === 1) {
+            const singleVal = keys[primaryKeyFields[0]];
+            return singleVal !== undefined ? String(singleVal) : undefined;
+        }
+
+        return JSON.stringify({ k: keys });
+    }
+
+    /**
+     * Parses an `AfterKeyValue` string into structured watermark and primary key components.
+     * Handles both structured JSON payloads and legacy/scalar single PK strings.
+     */
+    public ParseKeysetMarker(
+        marker: string,
+        primaryKeyFields: string[],
+        watermarkField?: string
+    ): { Watermark?: string; Keys: Record<string, unknown> } | undefined {
+        if (!marker || primaryKeyFields.length === 0) {
+            return undefined;
+        }
+
+        const trimmed = marker.trim();
+        if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+            try {
+                const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+                if (parsed.k && typeof parsed.k === 'object') {
+                    return {
+                        Watermark: typeof parsed.w === 'string' ? parsed.w : undefined,
+                        Keys: parsed.k as Record<string, unknown>,
+                    };
+                }
+                // Direct key map (e.g. { "id": 123 })
+                const keys: Record<string, unknown> = {};
+                for (const pk of primaryKeyFields) {
+                    if (pk in parsed) {
+                        keys[pk] = parsed[pk];
+                    }
+                }
+                if (Object.keys(keys).length > 0) {
+                    return {
+                        Watermark: watermarkField && watermarkField in parsed ? String(parsed[watermarkField]) : undefined,
+                        Keys: keys,
+                    };
+                }
+            } catch {
+                // Fallback to scalar string interpretation
+            }
+        }
+
+        // Single primary key scalar string
+        if (primaryKeyFields.length === 1) {
+            return {
+                Keys: { [primaryKeyFields[0]]: trimmed },
+            };
+        }
+
+        return undefined;
+    }
+
+    /**
+     * Generates a SQL-compatible keyset seek filter expression based on the parsed marker,
+     * primary keys, and optional watermark field.
+     */
+    public BuildKeysetFilter(
+        markerData: { Watermark?: string; Keys: Record<string, unknown> },
+        primaryKeyFields: string[],
+        watermarkField?: string
+    ): string | undefined {
+        if (!markerData || primaryKeyFields.length === 0) {
+            return undefined;
+        }
+
+        const formatLiteral = (val: unknown): string => {
+            if (typeof val === 'number') return String(val);
+            if (typeof val === 'boolean') return val ? '1' : '0';
+            if (val === null || val === undefined) return "''";
+            const s = String(val);
+            if (/^-?\d+$/.test(s)) return s;
+            return `'${s.replace(/'/g, "''")}'`;
+        };
+
+        // Helper to build PK comparison: (k1 > v1) OR (k1 = v1 AND k2 > v2)...
+        const buildPkSeek = (keys: Record<string, unknown>): string | undefined => {
+            if (primaryKeyFields.length === 1) {
+                const pk = primaryKeyFields[0];
+                const val = keys[pk];
+                return val !== undefined ? `[${pk}] > ${formatLiteral(val)}` : undefined;
+            }
+
+            const clauses: string[] = [];
+            for (let i = 0; i < primaryKeyFields.length; i++) {
+                const andParts: string[] = [];
+                for (let j = 0; j < i; j++) {
+                    const prevKey = primaryKeyFields[j];
+                    andParts.push(`[${prevKey}] = ${formatLiteral(keys[prevKey])}`);
+                }
+                const currKey = primaryKeyFields[i];
+                andParts.push(`[${currKey}] > ${formatLiteral(keys[currKey])}`);
+                clauses.push(`(${andParts.join(' AND ')})`);
+            }
+            return clauses.length > 0 ? `(${clauses.join(' OR ')})` : undefined;
+        };
+
+        const pkCondition = buildPkSeek(markerData.Keys);
+        if (!pkCondition) {
+            return undefined;
+        }
+
+        // If watermark is also part of the seek (Watermark, PK):
+        if (watermarkField && markerData.Watermark) {
+            const wmLiteral = formatLiteral(markerData.Watermark);
+            // (Watermark > LastWatermark) OR (Watermark = LastWatermark AND PK > LastPK)
+            return `([${watermarkField}] > ${wmLiteral}) OR ([${watermarkField}] = ${wmLiteral} AND ${pkCondition})`;
+        }
+
+        return pkCondition;
     }
 
     /** Resolve the object's watermark + PK columns from the persisted IntegrationObject/Field cache. */
