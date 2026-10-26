@@ -42,22 +42,48 @@ export class HtmlExtractor extends BaseContentExtractor {
     }
 
     /**
-     * The document's own `<title>`, located via linear `indexOf` scan so an unterminated `<title`
-     * tag cannot trigger polynomial regex backtracking.
+     * The document's own `<title>`, located via linear scan over the original string (avoiding
+     * `.toLowerCase()` length changes on characters like `İ` U+0130 and polynomial regex
+     * backtracking), bounded to 300 raw characters before the next `<`, and clamped to 250
+     * characters to fit `MJ: Content Items.Name` (`nvarchar(250)`).
      */
     private titleOf(html: string): string | null {
-        const lower = html.toLowerCase();
-        const openStart = lower.indexOf('<title');
+        const openStart = this.indexOfTitleTag(html);
         if (openStart < 0) {
             return null;
         }
-        const openEnd = lower.indexOf('>', openStart + 6);
+        const openEnd = html.indexOf('>', openStart + 6);
         if (openEnd < 0) {
             return null;
         }
-        const closeStart = lower.indexOf('</title>', openEnd + 1);
-        const raw = html.slice(openEnd + 1, closeStart >= 0 ? closeStart : openEnd + 301);
-        const title = TextExtractor.ExtractFromHTML(raw).trim();
+        const maxEnd = Math.min(html.length, openEnd + 1 + 300);
+        const nextTag = html.indexOf('<', openEnd + 1);
+        const rawEnd = nextTag >= 0 && nextTag < maxEnd ? nextTag : maxEnd;
+        const raw = html.slice(openEnd + 1, rawEnd);
+        const title = TextExtractor.ExtractFromHTML(raw).trim().slice(0, 250).trim();
         return title.length > 0 ? title : null;
+    }
+
+    /** Find `<title` (followed by `>` or whitespace) in `html` without allocating a lowercased copy. */
+    private indexOfTitleTag(html: string): number {
+        const limit = html.length - 6;
+        for (let i = 0; i <= limit; i++) {
+            if (html.charCodeAt(i) !== 60) {
+                continue;
+            }
+            if (
+                (html.charCodeAt(i + 1) | 32) === 116 && // 't'
+                (html.charCodeAt(i + 2) | 32) === 105 && // 'i'
+                (html.charCodeAt(i + 3) | 32) === 116 && // 't'
+                (html.charCodeAt(i + 4) | 32) === 108 && // 'l'
+                (html.charCodeAt(i + 5) | 32) === 101    // 'e'
+            ) {
+                const next = html.charCodeAt(i + 6);
+                if (next === 62 || next === 32 || next === 9 || next === 10 || next === 13 || next === 47) {
+                    return i;
+                }
+            }
+        }
+        return -1;
     }
 }

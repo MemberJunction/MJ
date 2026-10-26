@@ -16,12 +16,17 @@ record.SetExtension('Extract.Html', 'headingDepth', 2);      // in memory, for a
 record.MarkComplete();                                       // nothing further needs to happen
 ```
 
-Stages read and write the record; only the hydrator and committer (in `@memberjunction/content-pipeline`)
-touch storage. That is what lets the same stage code run live or as a test.
+Stages read and write the record, while the hydrator and committer (in `@memberjunction/content-pipeline`)
+persist the working record's fields and child items. Stages that perform direct side effects beyond the
+working record (durable file copies, tag/attribute rows, embedding/vector store writes, and dependent
+deletion marking) suppress those writes when `StageContext.IsTest` is true so the same stage code can
+run live or as a dry-run test.
 
-**Confidence, not order.** Each well-known field carries an integer confidence and the stage that set it.
-A proposal wins only if its confidence is strictly higher, so two stages that know nothing of each other
-resolve a shared field on merit, in any order. The baseline scores live in `ConfidenceScale`, can be
+**Confidence, not order.** Each well-known field carries an integer confidence and the stage (`SetBy`) that
+set it. Across different stages (or different `SetBy` sub-sources in the same run), a proposal wins only if
+its confidence is strictly higher; when a stage re-executes on a hydrated field it previously wrote, it can
+refresh its own prior value at any confidence, and repeated proposals from the exact same `SetBy` within one
+run win at equal-or-higher confidence (`>=`). The baseline scores live in `ConfidenceScale`, can be
 overridden per source type, per source, or per run under `Configuration.Confidence` via `ResolveConfidence`,
 and are recorded per field in the `FieldConfidence` column:
 

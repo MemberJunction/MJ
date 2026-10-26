@@ -36,5 +36,6 @@ text) and the pipeline. Record Set Processing gains a per-work-type tracker pair
 on-change runs record the same detail rows as manual ones. Additionally, `AutotagLocalFileSystem` skips
 symbolic links and recurses into subfolders during tagging; `AutotagCloudStorage` normalizes extensions
 written with or without a leading dot and prefers the provider's first configured `MJ: File Storage Accounts`
-row over environment variables; and `TagEngine` drops blank tag names and updates the weight when
-re-tagging an existing item-tag pair.
+row over environment variables; `NormalizeAutotagKeywords` in `@memberjunction/content-autotagging` drops blank
+tag names; and `ContentItemTagBridge` in `@memberjunction/tag-engine` delegates `MJ: Tagged Items` creation to
+`TagEngine.CreateTaggedItem` (updating the stored weight on re-tagging).

@@ -115,4 +115,18 @@ describe('Embed routes each record by its own route', () => {
         expect(outcomes.find((o) => o.Key === 'a-1')?.Outcome.Status).toBe('Complete');
         expect(written.flatMap((w) => w.ids)).toEqual(['a-1']);
     });
+
+    it('dry-run (IsTest = true) still routes and reports route failures, without calling the embedding model or vector store', async () => {
+        written.length = 0;
+        const runEmbeddingSpy = vi.spyOn(AIEmbeddingRunner.prototype, 'RunEmbedding');
+        const outcomes = await new EmbedStage().Finalize!([chunk('a-1'), chunk('orphan-1')], {
+            ...context,
+            IsTest: true,
+        });
+
+        expect(outcomes.find((o) => o.Key === 'orphan-1')?.Outcome.Status).toBe('Failed');
+        expect(outcomes.find((o) => o.Key === 'a-1')?.Outcome.Status).toBe('Complete');
+        expect(runEmbeddingSpy).not.toHaveBeenCalled();
+        expect(written).toEqual([]);
+    });
 });

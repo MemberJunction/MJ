@@ -60,6 +60,8 @@ describe('ResolveFileType — precedence', () => {
 
     it('ignores a dotfile with no real extension', () => {
         expect(ResolveFileType({ FileName: '.gitignore' }).FileType).toBeNull();
+        expect(ResolveFileType({ FileName: 'C:\\dir\\.html' }).FileType).toBeNull();
+        expect(ResolveFileType({ FileName: 'C:\\docs\\report.pdf' }).FileType).toBe('pdf');
     });
 });
 

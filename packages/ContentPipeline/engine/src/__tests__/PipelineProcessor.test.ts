@@ -284,3 +284,59 @@ describe('PipelineProcessor Sync mode reconciliation and safeguards', () => {
         expect(marked).toEqual(['I3']);
     });
 });
+
+@RegisterClass(BasePipelineStage, 'ProcTestBatchStage')
+class ProcTestBatchStage extends BasePipelineStage {
+    public readonly Name = 'ProcTestBatchStage';
+    public readonly Entity: WorkingRecordEntity = 'Content Item Chunk';
+    public readonly StatusField = 'EmbeddingStatus';
+    public async Run(): Promise<StageOutcome> {
+        return Outcome.Complete();
+    }
+    public override async Finalize(records: readonly WorkingRecord[]) {
+        return records.map((r) => ({ Key: r.Identity.Key, Outcome: Outcome.Complete() }));
+    }
+}
+
+describe('PipelineProcessor — finalizeBatch per-record commit isolation', () => {
+    it('isolates a single record commit failure inside finalizeBatch without downgrading already-committed siblings or skipping remaining items', async () => {
+        const saves: string[] = [];
+        const batchStorage = {
+            Hydrator: () =>
+                ({
+                    Hydrate: async (_entity: WorkingRecordEntity, id: string) =>
+                        new WorkingRecord(new WorkingRecordIdentity('Content Item Chunk', `u/${id}`, id)),
+                }) as unknown as WorkingRecordHydrator,
+            Committer: () =>
+                ({
+                    Commit: async (record: WorkingRecord, _statusField: string | null, statusValue: string | null) => {
+                        const id = record.Identity.RecordID!;
+                        if (id === 'C2' && statusValue === 'Complete') {
+                            throw new Error('db down');
+                        }
+                        saves.push(`${id}=${statusValue}`);
+                        return { RecordID: id, ColumnsWritten: [], Created: false };
+                    },
+                }) as unknown as WorkingRecordCommitter,
+        };
+
+        const proc = new PipelineProcessor(
+            { Stages: ['ProcTestBatchStage'], IsTest: false, Configuration: {} },
+            batchStorage,
+        );
+        const results = await proc.ProcessBatch!(
+            [
+                { EntityID: 'E1', RecordID: 'C1' } as never,
+                { EntityID: 'E1', RecordID: 'C2' } as never,
+                { EntityID: 'E1', RecordID: 'C3' } as never,
+            ],
+            rsContext,
+        );
+
+        expect(results.get('C1')?.Status).toBe('Succeeded');
+        expect(results.get('C2')?.Status).toBe('Failed');
+        expect(results.get('C2')?.ErrorMessage).toContain('db down');
+        expect(results.get('C3')?.Status).toBe('Succeeded');
+        expect(saves).toEqual(['C1=Complete', 'C2=Failed', 'C3=Complete']);
+    });
+});

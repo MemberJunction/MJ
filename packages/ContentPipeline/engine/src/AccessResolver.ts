@@ -234,9 +234,7 @@ export class AccessResolver {
         const promise = this.open(contentSourceID, role, resolved).catch((error: unknown) => {
             // A failed exchange must not be cached, or one transient outage poisons the rest of the
             // run for this source.
-            if (byRole.get(role) === promise) {
-                byRole.delete(role);
-            }
+            byRole.delete(role);
             throw error;
         });
         byRole.set(role, promise);

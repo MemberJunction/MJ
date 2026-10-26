@@ -241,7 +241,12 @@ record.Propose('Title', discoveredTitle, confidence.DiscoveredTitle, 'Discover')
 record.Propose('Title', extractedTitle, confidence.ExtractorTitle, 'Extract');
 ```
 
-Across stages, a proposal wins **only if its confidence score is strictly greater than** the field's hydrated score in `FieldConfidence` (a JSON column persisted on `MJ: Content Items`); within the same stage invocation, an equal-or-higher score (`>=`) can refine a proposal made earlier in that same run. Because `ExtractorTitle` (`6`) outranks `DiscoveredTitle` (`4`) by default, a title extracted from the document body upgrades a raw filename discovered from a directory listing — while a source that has authoritative listing titles (like an Entity or curated RSS feed) can override `"Confidence": { "DiscoveredTitle": 8 }` on the `ContentSource` so the listing title wins.
+`WorkingRecord.Propose(field, value, confidence, setBy)` resolves proposals using three rules:
+1. **Cross-stage (or different `SetBy` sub-sources in the same run, such as `'Extract.Html'` vs. `'Extract.PlainTextFallback'`)**: A proposal wins **only if its confidence score is strictly greater (`>`)** than the current score in `FieldConfidence` (a JSON column persisted on `MJ: Content Items`).
+2. **Re-execution refresh on a hydrated field**: When a field has not yet been modified in the current run and the proposing stage's `SetBy` prefix (`setBy.split('.')[0]`) matches the hydrated `SetBy` prefix from a prior run, the proposal is accepted at **any** confidence (including lower) so a stage can refresh its own previous output when re-run.
+3. **Same `SetBy` within the same run**: Once a field has been modified in the current run, a subsequent proposal with the exact same `SetBy` string wins at **equal-or-higher (`>=`)** confidence.
+
+Because `ExtractorTitle` (`6`) outranks `DiscoveredTitle` (`4`) by default, a title extracted from the document body upgrades a raw filename discovered from a directory listing — while a source that has authoritative listing titles (like an Entity or curated RSS feed) can override `"Confidence": { "DiscoveredTitle": 8 }` on the `ContentSource` so the listing title wins.
 
 ### Default `ConfidenceScale`
 
@@ -285,6 +290,8 @@ Each stage resolves its driver keys (`ExtractorKey`, `SegmenterKey`, `Classifier
 5. File Type / Default    (ContentFileType.ExtractorKey, capability auto-detection, or built-in default)
 ```
 
+*(Note: For archive unpacking limits — `MaxArchiveMembers`, `MaxArchiveBytes`, and `MaxArchiveDepth` — explicit `MJ: Content Source Params` rows passed via `Parameters` take precedence over the `Tuning` cascade.)*
+
 ---
 
 ## 6. Stage-by-Stage Reference
@@ -307,7 +314,7 @@ Each stage resolves its driver keys (`ExtractorKey`, `SegmenterKey`, `Classifier
 #### Safeguards in `Discover` and `Sync`
 
 - **Clock-Skew Overlap (`ClockSkewOverlapMs`)**: Defaults to `60,000` ms (60 seconds). Subtracted from `LastDiscoveredAt` when computing `request.Since` so items committed just before the watermark on a clock-drifted remote server are never missed. Also subtracted from `walkStartedAt` during `Sync` so items created concurrently during the walk are never falsely marked as orphans.
-- **Mass-Deletion Circuit Breaker (`MaxSyncRemovalShare`)**: Defaults to `0.5` (50%). If a `Sync` walk would mark more than 50% of a source's active top-level items as `DeleteStatus = 'Pending'` (for example, when an upstream API returns a partial outage response), `DiscoverStage` returns `Outcome.Fatal(...)`, halting the sync and marking the source failed without queuing mass deletions.
+- **Mass-Deletion Circuit Breaker (`MaxSyncRemovalShare`)**: Defaults to `0.5` (50%). If a `Sync` walk would mark more than 50% of a source's active top-level items as `DeleteStatus = 'Pending'` (for example, when an upstream API returns a partial outage response), `PipelineProcessor.reconcileSyncOrphans` returns `Outcome.Fatal(...)`, failing the run-detail record for that source without queuing mass deletions (because `DiscoverStage.StatusField` is `null`, no status column is written on `MJ: Content Sources`).
 - **Inline Text Checksum Optimization**: When a driver supplies inline `Text` during `Discover`, `DiscoverStage` computes its SHA-256 `Checksum` immediately. If the item already exists with the identical SHA-256 checksum and `ExtractionStatus = 'Complete'`, `WorkingRecordCommitter` skips resetting `ExtractionStatus` to `'Pending'` — avoiding redundant downstream work on every `Sync` or `Discover` pass. If item metadata (`Name`, `Description`, or driver `Columns`) changed while the text checksum stayed the same and `EmbeddingStatus = 'Complete'`, it promotes `EmbeddingStatus` to `'MetadataOnly'`.
 - **Driver Channels (`Columns` and `Request`)**:
   - `DiscoveredItem.Columns`: Whitelisted entity columns on `MJ: Content Items` (`EntityRecordDocumentID` and custom schema columns; framework-owned status, checksum, and audit columns are blocked by `FRAMEWORK_OWNED_COLUMNS`).
@@ -370,14 +377,14 @@ Before fetching bytes, `AccessResolver` resolves any `AccessCredentials` configu
 
 #### Step 2: File-Type Detection & `ExtractorCascade`
 
-If the driver did not already supply inline text, `ExtractStage` inspects magic byte signatures (`DetectByteSignature`) and MIME/extension rules loaded from the 39 rows in `MJ: Content File Types` (`DetectionCatalog`), then selects an extractor via `ExtractorCascade`:
+If the driver did not already supply inline text, `ExtractStage` inspects magic byte signatures (`DetectByteSignature`) and filename extension mappings (`ResolveFileType`) loaded from the 39 rows in `MJ: Content File Types` (`DetectionCatalog`), then selects an extractor via `ExtractorCascade` (HTTP `content-type` headers captured by `ContentFetcher` are used only as the `mimeType` when saving a durable copy, not as file-type detection input):
 
 | Extractor Key | Class | Supported Formats |
 |---|---|---|
 | `PlainText` | `PlainTextExtractor` | UTF-8 / text formats (`.txt`, `.md`, `.csv`, `.json`, `.yaml`, source code) validated by `IsPlausibleText` |
 | `Html` | `HtmlExtractor` | HTML / XHTML pages (strips script/style chrome, extracts title & structural text) |
 | `Pdf` / `Word` / `Spreadsheet` | `DocumentExtractor` | PDF, `.docx`, and `.xlsx` via [`@memberjunction/document-parsing`](../packages/DocumentParsing/src/index.ts) |
-| `Archive` | `ArchiveExtractor` | `.zip` and `.gz` archives — recursively extracts members as child `WorkingRecord` items under a shared whole-tree `ArchiveBudget` (`MaxArchiveMembers`, `MaxArchiveBytes`, `MaxArchiveDepth`; `MaxArchiveMembers` and `MaxArchiveBytes` have no default and must be configured on the source or run, failing closed if unset or exceeded) |
+| `Archive` | `ArchiveExtractor` | `.zip` and `.gz` archives — recursively extracts members as child `WorkingRecord` items under a shared whole-tree `ArchiveBudget` (`MaxArchiveMembers`, `MaxArchiveBytes`, `MaxArchiveDepth`; `MaxArchiveMembers` and `MaxArchiveBytes` have no default and must be configured on the source `Parameters` or run/source `Tuning`, failing closed if unset or exceeded) |
 
 Non-text binary media (images, audio, video) that are not archives can be persisted as durable copies in `FileStorageEngine` (`ExtractStage.persistDurableCopy` using `ResolveObjectKey` from `@memberjunction/content-pipeline-base`) and routed down the multimodal path.
 
@@ -398,7 +405,7 @@ Non-text binary media (images, audio, video) that are not archives can be persis
 
 `TagStage` resolves a `BaseContentClassifier` via `ClassifierKey` (defaulting to `ManagedPromptClassifier`, registered under `'ManagedPrompt'`):
 1. Runs the managed **"Content Autotagging"** AI prompt via `ContentAutotagPrompt` (honoring `ContentType.AIModelID` when set, custom attribute prompts from `MJ: Content Type Attributes` via `KnowledgeHubMetadataEngine`, and taxonomy context from `TagEngine`).
-2. Diff-updates `MJ: Content Item Tags` (preserving existing tag rows and updating weights) and bridges new tags into the governed `MJ: Tags` taxonomy and `MJ: Tagged Items` via `ContentItemTagBridge` and `TagEngine`.
+2. Diff-updates `MJ: Content Item Tags` (preserving existing tag rows and updating weights) and bridges newly added tags into the governed `MJ: Tags` taxonomy and `MJ: Tagged Items` via `ContentItemTagBridge` and `TagEngine`.
 3. Upserts any custom attributes extracted by the prompt into `MJ: Content Item Attributes`.
 4. If the item's `EmbeddingStatus` is already `'Complete'` and tagging changed its tags, `TagStage` flags the item and its `Complete` chunks as `EmbeddingStatus = 'MetadataOnly'` so the vector store's metadata payload picks up the new tags on the next `Embed` run without re-running the embedding model.
 
@@ -441,14 +448,16 @@ The prompt instructs the model to assign relevance weights (`0.0`–`1.0`) and o
 }
 ```
 
-#### Taxonomy Modes & `TagEngine.ResolveTag`
+#### Taxonomy Bridging (`ContentItemTagBridge` vs `AutotagEntity`)
 
-`ContentItemTagBridge` resolves each saved `MJ: Content Item Tags` row into `MJ: Tags` and (for entity-backed items) `MJ: Tagged Items` using the source's `TagTaxonomyMode`:
+In `TagStage`, `ContentItemTagBridge.Bridge` resolves each newly saved `MJ: Content Item Tags` row into `MJ: Tags` by calling `TagEngine.Instance.ResolveTag` in `'auto-grow'` mode across the global taxonomy (`rootID = null`, cosine similarity threshold `0.8`), nesting newly created tags under the LLM-suggested `parentTag` when present, and then links the formal tag to the underlying entity record (when `EntityRecordDocumentID` is set) or the `MJ: Content Items` row via `TagEngine.Instance.CreateTaggedItem` (which also updates the stored weight on `MJ: Tagged Items` when re-tagging an existing pair).
+
+For direct entity autotagging via `AutotagEntity`, `TagEngine.ResolveTag` honors the source's configured `TagTaxonomyMode` (`'constrained'`, `'auto-grow'`, or `'free-flow'`), `TagRootID`, and `TagMatchThreshold` (default `0.9`):
 
 | Mode | Behavior | Use Case |
 |---|---|---|
 | `'constrained'` | Only matches existing tags in `MJ: Tags`. Returns `null` if no match meets `TagMatchThreshold`. | Strict corporate taxonomies where tag creation requires manual approval |
-| `'auto-grow'` | Matches existing tags first (exact case-insensitive name match, then semantic cosine similarity ≥ `TagMatchThreshold`). If no match, creates a new tag under the LLM-suggested `parentTag` or the source's `TagRootID`. | Recommended default — expands organically under a governed root |
+| `'auto-grow'` | Matches existing tags first (exact case-insensitive name match, then semantic cosine similarity ≥ threshold). If no match, creates a new tag under the LLM-suggested `parentTag` or `TagRootID`. | Recommended default — expands organically under a governed root |
 | `'free-flow'` | Matches existing tags first; if no match, creates a new root-level tag when no parent was suggested. | Exploratory tagging where any concept can become a top-level tag |
 
 See the **[Taxonomy & Tagging Guide](TAXONOMY_TAGGING_GUIDE.md)** for full details on taxonomy governance, scoping, and the suggestion queue.
@@ -464,9 +473,9 @@ See the **[Taxonomy & Tagging Guide](TAXONOMY_TAGGING_GUIDE.md)** for full detai
 `SegmentStage` splits `ContentItem.Text` into `MJ: Content Item Chunks` using [`@memberjunction/ai-segmentation`](CONTENT_SEGMENTATION_GUIDE.md):
 1. Resolves `SegmenterKey` through the 5-level configuration cascade (`StructuralText`, `AdaptiveBoundary`, `SemanticText`, `Transcript`, `FixedWindow`, or `SuggestSegmenterKey` auto-selection).
 2. Calls `segmenter.Segment(...)` using the target embedding model's token budget.
-3. **Chunk Replacement & Retirement on Commit (`supersededChunks`)**:
-   - New chunk rows produced by `SegmentStage` are inserted as `MJ: Content Item Chunks` with `EmbeddingStatus = 'Pending'`.
-   - **Superseded Chunks**: Any prior live chunks on the item are retired by `WorkingRecordCommitter.supersededChunks` — chunks that already have a `VectorRecordID` (or non-Pending `EmbeddingStatus`) are marked `DeleteStatus = 'Pending'` so the `Delete Chunks` process removes their stale vectors from the vector database before purging the rows, while unembedded pending chunks are deleted immediately.
+3. **Chunk Replacement & Retirement (`PipelineProcessor.supersededChunks`)**:
+   - Before committing the new chunk rows (`MJ: Content Item Chunks` with `EmbeddingStatus = 'Pending'`), `PipelineProcessor.supersededChunks` queries all existing live chunks for the item (`ContentItemID` where `DeleteStatus IS NULL`).
+   - After the new chunks commit without error, `PipelineProcessor.markOrphansForDeletion` passes every superseded chunk ID to `ContentPipelineDeleteMarker.MarkForDeletion`, setting `DeleteStatus = 'Pending'` on all prior chunks so the `Content Pipeline — Delete Chunks` process removes any stored vectors and hard-deletes unreferenced rows on its next run.
 
 ---
 
@@ -491,7 +500,7 @@ See the **[Taxonomy & Tagging Guide](TAXONOMY_TAGGING_GUIDE.md)** for full detai
 #### Full Embed vs `MetadataOnly` Refresh
 
 - **`EmbeddingStatus = 'Pending'`**: Calls `AIEmbeddingRunner` once per batch, writes vectors + rich metadata (`ContentVectorMetadata`: `Entity`, `RecordID`, `ContentItemID`, `ContentSourceID`, `ContentTypeID`, `Title`, `Description`, `URL`, `Tags`, plus any custom columns) via `vectorDB.CreateRecords(records, namespace)`, and records `VectorRecordID` on each `MJ: Content Item Chunks` (or `MJ: Content Items`) row.
-- **`EmbeddingStatus = 'MetadataOnly'`**: Skips the embedding model call entirely and calls `vectorDB.UpdateRecord({ id, values: [], metadata }, namespace)` to refresh the vector's metadata payload in place (supported across Pinecone, Qdrant, and pgvector).
+- **`EmbeddingStatus = 'MetadataOnly'`**: Skips the embedding model call entirely and calls `vectorDB.UpdateRecords(updates, indexName, providerConfig)` to refresh the vector's metadata payload in place (supported across Pinecone, Qdrant, and pgvector).
 
 ---
 
@@ -504,29 +513,29 @@ See the **[Taxonomy & Tagging Guide](TAXONOMY_TAGGING_GUIDE.md)** for full detai
 Deletion is two-phased (`DeleteStatus = 'Pending'` → vector & storage cleanup → row delete or `'Deleted'` tombstone) so external vectors and stored files are never orphaned when a database row is removed:
 
 1. **`Content Pipeline — Delete` (`DeleteContentItemStage`)**:
-   - Removes any item-level vector from the vector index (`VectorRecordID` in the resolved namespace) and deletes any durable copy from `FileStorageEngine`.
+   - Removes any item-level vector from the vector index (`VectorRecordID` in the resolved namespace) and deletes any durable copy from `FileStorageEngine` (first clearing `FileID = null` on the `MJ: Content Items` row so `FK_ContentItem_File` does not block `spDeleteFile`).
    - Marks all child `MJ: Content Item Chunks` and archive-member child `MJ: Content Items` as `DeleteStatus = 'Pending'` via `ContentPipelineDeleteMarker`.
-   - Transitions the item's `DeleteStatus` to `'Deleted'` (or hard-deletes unreferenced rows). If external vector removal or dependent marking fails, the item stays `DeleteStatus = 'Pending'` so the next run retries.
+   - Transitions the item's `DeleteStatus` to `'Deleted'`. If external vector removal, durable-copy detach, or dependent marking fails, the stage throws `TransientStageError` and leaves the item `DeleteStatus = 'Pending'` so the next run retries.
 2. **`Content Pipeline — Delete Chunks` (`DeleteStage`)**:
-   - Calls `vectorDB.DeleteRecords([vectorRecordID], namespace)` for each pending chunk.
+   - Calls `vectorDB.DeleteRecords([vector], indexName, providerConfig)` for each pending chunk.
    - Attempts to hard-delete the `MJ: Content Item Chunks` row. If a foreign key reference exists (for example, an audit or citation log pointing to the chunk), it falls back to keeping the row as a tombstone with `DeleteStatus = 'Deleted'` and `VectorRecordID = null`.
 
 ---
 
 ## 7. Content Source Configuration & UI Panels
 
-Each `MJ: Content Sources` record has a `Configuration` JSON column that controls taxonomy bridging, driver keys, run budgets, and website crawler behavior:
+Each `MJ: Content Sources` record has a `Configuration` JSON column that controls stage driver keys, confidence scores, operational tuning, direct-entity taxonomy settings, and website crawler behavior:
 
 | Property | Type | Default | Description |
 |---|---|---|---|
 | `ExtractorKey` / `SegmenterKey` / `ClassifierKey` / `AccessDriverKey` | `string` | stage default | Per-source stage driver overrides (level 3 in the 5-level cascade) |
 | `Confidence` | `Partial<Record<ConfidenceScaleKey, number>>` | `ConfidenceScale` | Per-source confidence score overrides |
 | `Tuning` | `PipelineTuning` | `DefaultPipelineTuning` | Per-source operational tuning (`ClockSkewOverlapMs`, `MaxSyncRemovalShare`, `MaxArchiveMembers`, `MaxArchiveBytes`, `MaxArchiveDepth`, `MinimumPrintableRatio`) |
-| `TagTaxonomyMode` | `'constrained' \| 'auto-grow' \| 'free-flow'` | `'auto-grow'` | Controls how unmatched tags are handled in `ContentItemTagBridge` |
-| `TagRootID` | `string \| null` | `null` | Root `MJ: Tags` ID for taxonomy scoping and child creation in `'auto-grow'` mode |
-| `TagMatchThreshold` | `number` | `0.9` | Minimum cosine similarity score (`0`–`1`) for semantic tag matching |
-| `ShareTaxonomyWithLLM` | `boolean` | `true` | Whether to inject the existing tag taxonomy into the classification prompt |
-| `MaxItemsPerRun` / `MaxNewTagsPerRun` / `MaxNewTagsPerItem` / `MaxTokensPerRun` / `MaxCostPerRun` | `number` | unlimited | Per-run / per-item budget caps |
+| `TagTaxonomyMode` | `'constrained' \| 'auto-grow' \| 'free-flow'` | `'auto-grow'` | Controls how unmatched tags are handled in `AutotagEntity` (`ContentItemTagBridge` in `TagStage` always uses `'auto-grow'`) |
+| `TagRootID` | `string \| null` | `null` | Root `MJ: Tags` ID for taxonomy scoping in `AutotagEntity` (`ContentItemTagBridge` searches globally with `rootID = null`) |
+| `TagMatchThreshold` | `number` | `0.9` (`0.8` in `ContentItemTagBridge`) | Minimum cosine similarity score (`0`–`1`) for semantic tag matching (`0.9` in `AutotagEntity`, fixed at `0.8` in `ContentItemTagBridge`) |
+| `ShareTaxonomyWithLLM` | `boolean` | `true` | Whether `AutotagEntity` injects the existing tag taxonomy into its classification prompt |
+| `MaxItemsPerRun` / `MaxNewTagsPerRun` / `MaxNewTagsPerItem` / `MaxTokensPerRun` / `MaxCostPerRun` | `number` | unlimited | Per-run / per-item budget caps used by `AutotagEntity` (`RunBudget`) |
 | `Website` | `IContentSourceWebsiteConfiguration` | — | Website crawler settings (`MaxDepth`, `CrawlSitesInLowerLevelDomain`, `CrawlOtherSitesInTopLevelDomain`, `URLPattern`, `RootURL`) |
 
 In MJ Explorer, these settings are surfaced automatically on the `MJ: Content Sources` form via two dynamically injected `BaseFormPanel` components in `@memberjunction/ng-core-entity-forms`:
@@ -579,14 +588,14 @@ Defined in [`metadata/record-processes/.content-pipeline.json`](../metadata/reco
 
 ### Test & Dry-Run Mode (`IsTest` / `DryRun`)
 
-Setting `"IsTest": true` in `RecordProcess.Configuration` (or running a Record Process with `DryRun = true`) executes the full stage logic — including multi-stage in-memory chaining such as `["Discover", "Extract"]` — while **withholding every database commit**. Produced child records and extracted fields are reported in `ProcessRunDetails` keyed by their URL so operators can preview discovery and extraction rules safely before running live.
+Setting `"IsTest": true` in `RecordProcess.Configuration` (or running a Record Process with `DryRun = true`) executes the full stage logic — including multi-stage in-memory chaining such as `["Discover", "Extract"]` and read-only vector index routing — while **withholding working-record commits and stage-level external writes**. Produced child records and extracted fields are reported in `ProcessRunDetails` keyed by their URL so operators can preview discovery and extraction rules safely before running live.
 
 ### Automated Test Coverage
 
 - **Unit Tests**:
-  - `packages/ContentPipeline/base/src/__tests__/` — `WorkingRecord`, `Confidence`, `ByteSignature`, `FileTypeResolution`, `DurableCopy`, `PlausibleText`, `ArchiveBudget`, `PipelineTuning`, and `StageOutcome`.
-  - `packages/ContentPipeline/engine/src/__tests__/` — `PipelineProcessor`, `WorkingRecordHydrator`, `WorkingRecordCommitter`, `AccessResolver`, `ContentFetcher`, `ExtractorCascade`, `ArchiveExtractor`, `DocumentExtractor`, `DiscoverStage`, `ExtractStage`, `TagStage` (including custom `MJ: Content Item Attributes` persistence), `SegmentStage`, `EmbedStage`, and `DeleteStage`.
-  - `packages/ContentAutotagging/src/__tests__/` — Driver `Discover` and `Fetch` implementations (`AutotagLocalFileSystem`, `AutotagCloudStorage`, `AutotagWebsite`, `AutotagEntity`) and `ContentVectorInfrastructure`.
+  - `packages/ContentPipeline/base/src/__tests__/` — `WorkingRecord.test.ts`, `ByteSignature.test.ts`, `FileTypeResolution.test.ts`, `DurableCopy.test.ts`, `PipelineTuning.test.ts`, and `Stage.test.ts`.
+  - `packages/ContentPipeline/engine/src/__tests__/` — `PipelineProcessor.test.ts`, `AccessResolver.test.ts`, `ContentFetcher.test.ts`, `ContentSourceConfigurationResolver.test.ts`, `DetectionCatalog.test.ts`, `ExtractorCascade.test.ts`, `ArchiveExtractor.test.ts`, `DiscoverStage.test.ts`, `ExtractStage.test.ts`, `TagSegmentStages.test.ts`, `EmbedStage.test.ts`, `EmbedRouting.test.ts`, `DeleteStage.test.ts`, `Filters.test.ts`, `Reprocessing.test.ts`, `ReviewFixes.test.ts`, and `TestMode.test.ts`.
+  - `packages/ContentAutotagging/src/__tests__/` — `AutotagBaseEngine.test.ts`, `AutotagEntity.test.ts`, `AutotagWebsite.test.ts`, `LocalFileSystemFetch.test.ts`, `ContentAutotagPrompt.test.ts`, `ContentDeduplication.test.ts`, `ContentVectorInfrastructure.test.ts`, `FieldPathResolver.test.ts`, `RunBudget.test.ts`, `ScopeContextResolver.test.ts`, and `content-types.test.ts`.
 - **Integration Tests (`@memberjunction/integration-test-suite`)**:
-  - [`content-pipeline.checks.ts`](../packages/TestingFramework/integration-test-suite/src/checks/content-pipeline.checks.ts) (`IT137`, checks `CP1`–`CP15`) — Validates hydrate/commit round-trips, `FieldConfidence` persistence, SHA-256 checksum short-circuiting, `MetadataOnly` promotion, superseded chunk retirement, orphan reconciliation, and two-phase deletion against a live SQL Server instance.
+  - [`content-pipeline.checks.ts`](../packages/TestingFramework/integration-test-suite/src/checks/content-pipeline.checks.ts) (`IT137`, checks `CP1`–`CP15`, `RequiresMutation: true`) — Validates end-to-end `Discover` item creation and `ForceDiscovery` clearing, `Extract` + `Segment` chunk production, `Embed` namespace routing and `VectorRecordID` receipts, unchanged walk/extract no-ops, re-segmentation superseding all prior chunks, `Delete` vector removal and unreferenced chunk row purge, `MetadataOnly` in-place vector updates, item cascade deletion, incremental `Since` window, `Columns` whitelist and framework-owned column refusal, nested archive depth limit, `Sync` orphan removal/revival/empty-walk circuit breaker, and `Access` session resolution plus cross-origin header stripping against SQL Server.
   - [`content-vectorization.checks.ts`](../packages/TestingFramework/integration-test-suite/src/checks/content-vectorization.checks.ts) (`IT67`, checks `CV1`–`CV10`) — Validates vector index resolution cascade, `ContentVectorMetadata`, and end-to-end vectorization infrastructure.

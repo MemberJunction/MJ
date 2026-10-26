@@ -120,60 +120,52 @@ export class ArchiveExtractor extends BaseContentExtractor {
         if (typeof declaredSize === 'number' && declaredSize > budget.RemainingBytes) {
             throw new Error(`the archive expands past the limit of ${budget.RemainingBytes} bytes`);
         }
-        if (typeof internal.internalStream === 'function') {
-            return new Promise<Uint8Array>((resolve, reject) => {
-                const chunks: Uint8Array[] = [];
-                let total = 0;
-                let settled = false;
-                const stream = internal.internalStream!('uint8array');
-                stream
-                    .on('data', (chunk: Uint8Array) => {
-                        if (settled) {
-                            return;
-                        }
-                        total += chunk.byteLength;
-                        if (total > budget.RemainingBytes) {
-                            settled = true;
-                            stream.pause();
-                            reject(new Error(`the archive expands past the limit of ${budget.RemainingBytes} bytes`));
-                            return;
-                        }
-                        chunks.push(chunk);
-                    })
-                    .on('end', () => {
-                        if (settled) {
-                            return;
-                        }
+        return new Promise<Uint8Array>((resolve, reject) => {
+            const chunks: Uint8Array[] = [];
+            let total = 0;
+            let settled = false;
+            const stream = internal.internalStream!('uint8array');
+            stream
+                .on('data', (chunk: Uint8Array) => {
+                    if (settled) {
+                        return;
+                    }
+                    total += chunk.byteLength;
+                    if (total > budget.RemainingBytes) {
                         settled = true;
-                        budget.RemainingBytes -= total;
-                        if (chunks.length === 1) {
-                            resolve(chunks[0]);
-                            return;
-                        }
-                        const merged = new Uint8Array(total);
-                        let offset = 0;
-                        for (const chunk of chunks) {
-                            merged.set(chunk, offset);
-                            offset += chunk.byteLength;
-                        }
-                        resolve(merged);
-                    })
-                    .on('error', (err: Error) => {
-                        if (settled) {
-                            return;
-                        }
-                        settled = true;
-                        reject(err);
-                    })
-                    .resume();
-            });
-        }
-        const content = await file.async('uint8array');
-        if (content.length > budget.RemainingBytes) {
-            throw new Error(`the archive expands past the limit of ${budget.RemainingBytes} bytes`);
-        }
-        budget.RemainingBytes -= content.length;
-        return content;
+                        stream.pause();
+                        reject(new Error(`the archive expands past the limit of ${budget.RemainingBytes} bytes`));
+                        return;
+                    }
+                    chunks.push(chunk);
+                })
+                .on('end', () => {
+                    if (settled) {
+                        return;
+                    }
+                    settled = true;
+                    budget.RemainingBytes -= total;
+                    if (chunks.length === 1) {
+                        resolve(chunks[0]);
+                        return;
+                    }
+                    const merged = new Uint8Array(total);
+                    let offset = 0;
+                    for (const chunk of chunks) {
+                        merged.set(chunk, offset);
+                        offset += chunk.byteLength;
+                    }
+                    resolve(merged);
+                })
+                .on('error', (err: Error) => {
+                    if (settled) {
+                        return;
+                    }
+                    settled = true;
+                    reject(err);
+                })
+                .resume();
+        });
     }
 
     /**

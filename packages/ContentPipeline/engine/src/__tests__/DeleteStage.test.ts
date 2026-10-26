@@ -8,6 +8,8 @@
  * revisits a Deleted row, so marking the second strands the artifact permanently.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ContentVectorInfrastructure } from '@memberjunction/content-autotagging';
+import { FileStorageEngine } from '@memberjunction/storage';
 import { StageContext, WorkingRecord, WorkingRecordIdentity } from '@memberjunction/content-pipeline-base';
 import { DeleteContentItemStage, DeleteStage } from '../stages/DeleteStage.js';
 import { PipelineProcessor } from '../PipelineProcessor.js';
@@ -207,18 +209,134 @@ describe('DeleteContentItemStage — dependent marking and dry-run isolation', (
         expect(states).toEqual({ C1: 'Pending', C2: 'Pending', K1: 'Pending' });
     });
 
-    it('skips vector deletion and dependent marking when IsTest is true', async () => {
+    it('resolves vector routes in dry-run mode (IsTest = true): reports Skipped when unroutable and skips DeleteRecords + dependent marking when routable', async () => {
+        const deleteRecords = vi.fn(async () => ({ success: true, message: '', data: null }));
         const runViews = vi.fn();
-        const item = new WorkingRecord(new WorkingRecordIdentity('Content Item', 'https://x.test/item', 'ITEM-1'));
-        item.SetExtension('Pipeline', 'vectorRecordID', 'vec-test-1');
 
-        const outcome = await new DeleteContentItemStage().Run(item, {
+        // 1. Unroutable record in IsTest = true still reports Skipped, matching live mode.
+        const unroutable = new WorkingRecord(new WorkingRecordIdentity('Content Item', 'https://x.test/unroutable', 'ITEM-UNROUTABLE'));
+        unroutable.SetExtension('Pipeline', 'vectorRecordID', 'vec-unroutable');
+        const unroutableOutcome = await new DeleteContentItemStage().Run(unroutable, {
             ...contextWith(),
             IsTest: true,
-            Provider: { EntityByName: () => undefined, RunViews: runViews } as never,
+            Provider: {
+                EntityByName: () => undefined,
+                RunView: async () => ({ Success: true, Results: [] }),
+                RunViews: runViews,
+            } as never,
         });
-        expect(outcome.Status).toBe('Complete');
+        expect(unroutableOutcome.Status).toBe('Skipped');
+
+        // 2. Routable record in IsTest = true completes without calling DeleteRecords or MarkDependentsOf.
+        vi.spyOn(ContentVectorInfrastructure.prototype, 'GroupByInfrastructure').mockImplementation(async (items) => {
+            return new Map([['m|idx', [...items]]]);
+        });
+        vi.spyOn(ContentVectorInfrastructure.prototype, 'Resolve').mockResolvedValue({
+            indexName: 'idx',
+            embeddingModelID: 'm',
+            embeddingModelName: 'm',
+            vectorDB: { IsReadOnly: false, DeleteRecords: deleteRecords },
+        } as never);
+        vi.spyOn(ContentVectorInfrastructure.prototype, 'BuildDirectives').mockResolvedValue({
+            Directives: new Map(),
+            Rejected: [],
+        });
+
+        const routable = new WorkingRecord(new WorkingRecordIdentity('Content Item', 'https://x.test/item', 'ITEM-1'));
+        routable.SetExtension('Pipeline', 'vectorRecordID', 'vec-test-1');
+        const routableOutcome = await new DeleteContentItemStage().Run(routable, {
+            ...contextWith(),
+            IsTest: true,
+            Provider: {
+                EntityByName: () => undefined,
+                RunView: async () => ({
+                    Success: true,
+                    Results: [{ ID: 'ITEM-1', ContentSourceID: 'S1', ContentTypeID: 'CT1', GetAll: () => ({}) }],
+                }),
+                RunViews: runViews,
+            } as never,
+        });
+        expect(routableOutcome.Status).toBe('Complete');
+        expect(deleteRecords).not.toHaveBeenCalled();
         expect(runViews).not.toHaveBeenCalled();
+    });
+
+    it('detaches FileID on the Content Item before deleting its MJ: Files row, and fails transiently if detach InnerLoad or Save returns false', async () => {
+        const events: string[] = [];
+        vi.spyOn(FileStorageEngine.Instance, 'ResolveFileObject').mockResolvedValue({
+            ObjectKey: 'copies/item-1.pdf',
+            Driver: {
+                DeleteObject: async () => {
+                    events.push('Driver.DeleteObject');
+                },
+            },
+        } as never);
+
+        const makeFileProvider = (itemLoadOk: boolean, itemSaveOk: boolean) => ({
+            EntityByName: () => undefined,
+            RunViews: async () => [
+                { Success: true, Results: [] },
+                { Success: true, Results: [] },
+            ],
+            GetEntityObject: async (entityName: string) => {
+                if (entityName === 'MJ: Files') {
+                    return {
+                        ProviderID: 'P1',
+                        LatestResult: { CompleteMessage: 'file delete error' },
+                        InnerLoad: async () => true,
+                        Delete: async () => {
+                            events.push('file.Delete');
+                            return true;
+                        },
+                    };
+                }
+                const itemObj = {
+                    FileID: 'FILE-1' as string | null,
+                    LatestResult: { CompleteMessage: 'item save refused' },
+                    InnerLoad: async () => itemLoadOk,
+                    Save: async () => {
+                        events.push(`item.Save(FileID=${String(itemObj.FileID)})`);
+                        return itemSaveOk;
+                    },
+                };
+                return itemObj;
+            },
+        });
+
+        const itemWithFile = () => {
+            const r = new WorkingRecord(new WorkingRecordIdentity('Content Item', 'https://x.test/item', 'ITEM-1'));
+            r.SetExtension('Pipeline', 'fileID', 'FILE-1');
+            return r;
+        };
+
+        // Happy path: clears FileID=null and saves BEFORE file.Delete()
+        events.length = 0;
+        const okOutcome = await new DeleteContentItemStage().Run(itemWithFile(), {
+            ...contextWith(),
+            Provider: makeFileProvider(true, true) as never,
+        });
+        expect(okOutcome.Status).toBe('Complete');
+        expect(events).toEqual(['Driver.DeleteObject', 'item.Save(FileID=null)', 'file.Delete']);
+
+        // InnerLoad failure throws TransientStageError before file.Delete
+        events.length = 0;
+        await expect(
+            new DeleteContentItemStage().Run(itemWithFile(), {
+                ...contextWith(),
+                Provider: makeFileProvider(false, true) as never,
+            }),
+        ).rejects.toThrow(/could not load Content Item 'ITEM-1' to clear FileID/);
+        expect(events).toEqual(['Driver.DeleteObject']);
+
+        // Save() returning false throws TransientStageError before file.Delete
+        events.length = 0;
+        await expect(
+            new DeleteContentItemStage().Run(itemWithFile(), {
+                ...contextWith(),
+                Provider: makeFileProvider(true, false) as never,
+            }),
+        ).rejects.toThrow(/could not clear FileID on Content Item 'ITEM-1': item save refused/);
+        expect(events).toEqual(['Driver.DeleteObject', 'item.Save(FileID=null)']);
     });
 });
 

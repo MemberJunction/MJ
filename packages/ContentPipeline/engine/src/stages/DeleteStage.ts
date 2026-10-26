@@ -157,14 +157,15 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
         if (record.Entity !== 'Content Item' || !recordID) {
             return;
         }
-        try {
-            const item = await context.Provider.GetEntityObject<MJContentItemEntity>('MJ: Content Items', context.ContextUser);
-            if (await item.InnerLoad(CompositeKey.FromID(recordID))) { // first-pk-ok: MJ core content entity, single-column ID
-                item.FileID = null;
-                await item.Save();
-            }
-        } catch {
-            // Best-effort detach before `file.Delete()`; if `file.Delete()` still fails, it logs above.
+        const item = await context.Provider.GetEntityObject<MJContentItemEntity>('MJ: Content Items', context.ContextUser);
+        if (!(await item.InnerLoad(CompositeKey.FromID(recordID)))) { // first-pk-ok: MJ core content entity, single-column ID
+            throw new Error(`could not load Content Item '${recordID}' to clear FileID`);
+        }
+        item.FileID = null;
+        if (!(await item.Save())) {
+            throw new Error(
+                `could not clear FileID on Content Item '${recordID}': ${item.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+            );
         }
     }
 
@@ -180,9 +181,6 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
         if (!vectorRecordID) {
             return false;
         }
-        if (context.IsTest) {
-            return true;
-        }
         const routes = await RouteVectorRecords([record], this.infrastructure(context), context.Provider, context.ContextUser);
         const route = routes.get(record.Identity.Key) ?? { Error: 'no route was resolved' };
         if (IsRouteFailure(route)) {
@@ -193,6 +191,9 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
         if (infra.vectorDB.IsReadOnly) {
             LogError(`DeleteStage: the vector database for '${record.Identity.Key}' is read-only, so its vector cannot be removed.`);
             return null;
+        }
+        if (context.IsTest) {
+            return true;
         }
         try {
             const vector = { id: vectorRecordID, values: [], ...(route.Directives ? { providerTemporaryDirectives: route.Directives } : {}) };

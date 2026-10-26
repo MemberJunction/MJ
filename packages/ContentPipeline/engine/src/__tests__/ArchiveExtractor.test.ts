@@ -177,6 +177,26 @@ describe('HtmlExtractor', () => {
         expect(result.Blocks[0].Title).toBe('Tom & Jerry');
     });
 
+    it('does not desync indices when characters before <title> change length under toLowerCase (e.g. U+0130 İ)', async () => {
+        const result = await new HtmlExtractor().Extract(
+            html('<html><head>İİİİİ<TITLE>Real</TITLE></head><body><p>Body.</p></body></html>'),
+        );
+        expect(result.Blocks[0].Title).toBe('Real');
+    });
+
+    it('stops at the next tag on an unterminated <title> and clamps long titles to 250 characters', async () => {
+        const unterminated = await new HtmlExtractor().Extract(
+            html('<html><head><title>My Page<meta charset="x"></head><body><h1>Heading</h1><p>Body text.</p></body></html>'),
+        );
+        expect(unterminated.Blocks[0].Title).toBe('My Page');
+
+        const longTitle = 'A'.repeat(290);
+        const clamped = await new HtmlExtractor().Extract(
+            html(`<html><head><title>${longTitle}</title></head><body><p>Body text.</p></body></html>`),
+        );
+        expect(clamped.Blocks[0].Title).toHaveLength(250);
+    });
+
     it('reports no blocks for a document that yields no text, rather than an empty one', async () => {
         const result = await new HtmlExtractor().Extract(html('<html><body><script>only()</script></body></html>'));
         expect(result.Blocks).toHaveLength(0);

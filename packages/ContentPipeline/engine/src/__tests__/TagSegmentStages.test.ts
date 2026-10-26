@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RegisterClass } from '@memberjunction/global';
 import { ContentItemTagBridge } from '@memberjunction/tag-engine';
+import { ResolveSegmenter } from '@memberjunction/ai-segmentation';
 import {
     BaseContentClassifier,
     ClassifiedTag,
@@ -269,5 +270,19 @@ describe('SegmentStage', () => {
         controller.abort();
         const outcome = await new SegmentStage().Run(item('text'), contextWith({}, controller.signal));
         expect(outcome.Status).toBe('Retry');
+    });
+
+    it('passes ContextUser into segmenter.Segment so server-side segmenters can invoke MJ services', async () => {
+        const segmentSpy = vi.spyOn(Object.getPrototypeOf(ResolveSegmenter()), 'Segment');
+        const sentinelUser = { ID: 'user-sentinel-42' };
+        const ctx = { ...contextWith(), ContextUser: sentinelUser as never };
+        const outcome = await new SegmentStage().Run(item('Segmented with user.'), ctx);
+        expect(outcome.Status).toBe('Complete');
+        expect(segmentSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                Text: 'Segmented with user.',
+                ContextUser: sentinelUser,
+            }),
+        );
     });
 });

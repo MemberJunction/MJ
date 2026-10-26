@@ -90,13 +90,8 @@ export abstract class BaseEmbedStage extends BasePipelineStage {
 
     /** Route, embed and store the whole page. A record that cannot be routed fails alone. */
     public override async Finalize(records: readonly WorkingRecord[], context: StageContext): Promise<FinalizeResult[]> {
-        if (context.IsTest) {
-            return records.map((record) => ({ Key: record.Identity.Key, Outcome: Outcome.Complete() }));
-        }
         const outcomes: FinalizeResult[] = [];
         const routes = await RouteVectorRecords(records, this.infrastructure(context), context.Provider, context.ContextUser);
-        const itemIDs = records.map(OwningItemID).filter((id): id is string => !!id);
-        const tags = await LoadContentItemTags(itemIDs, context.Provider, context.ContextUser);
 
         const groups = new Map<string, RoutedRecord[]>();
         for (const record of records) {
@@ -106,8 +101,18 @@ export abstract class BaseEmbedStage extends BasePipelineStage {
                 outcomes.push({ Key: record.Identity.Key, Outcome: Outcome.Fatal(route.Error) });
                 continue;
             }
+            if (context.IsTest) {
+                outcomes.push({ Key: record.Identity.Key, Outcome: Outcome.Complete() });
+                continue;
+            }
             groups.set(route.GroupKey, [...(groups.get(route.GroupKey) ?? []), { Record: record, Route: route }]);
         }
+        if (groups.size === 0) {
+            return outcomes;
+        }
+
+        const itemIDs = records.map(OwningItemID).filter((id): id is string => !!id);
+        const tags = await LoadContentItemTags(itemIDs, context.Provider, context.ContextUser);
 
         for (const group of groups.values()) {
             const full = group.filter((r) => this.plannedOperation(r.Record) === 'Full');

@@ -220,6 +220,25 @@ describe('ExtractStage — the plain-text fallback is sanity-checked', () => {
         await new ExtractStage().Run(record, contextWith());
         expect(record.GetConfidence('Text')).toBeLessThan(6);
     });
+
+    it("honours per-source Tuning.MinimumPrintableRatio in fallbackText rather than reading only run Configuration", async () => {
+        // 90% printable (9 'a's + 1 null byte) passes the 0.85 default but must fail when the source sets 0.99.
+        stubFetch('aaaaaaaaa\u0000');
+        vi.spyOn(ContentSourceConfigurationResolver.prototype, 'Resolve').mockResolvedValue({
+            ContentSourceID: 'SRC-1',
+            URL: 'https://x.test',
+            Settings: {},
+            Parameters: {},
+            Configuration: { Tuning: { MinimumPrintableRatio: 0.99 } },
+            Problems: [],
+            IsValid: true,
+        } as never);
+        const record = itemAt('https://x.test/file.bizarre');
+        record.SetExtension('Pipeline', 'contentSourceID', 'SRC-1');
+        const outcome = await new ExtractStage().Run(record, contextWith());
+        expect(outcome.Status).toBe('Failed');
+        expect(record.Get('Text')).toBeNull();
+    });
 });
 
 describe('ExtractStage — non-text content', () => {

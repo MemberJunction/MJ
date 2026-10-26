@@ -72,8 +72,10 @@ export interface StageContext {
     /** Configuration carried by the run (`Options` on the Record Process). */
     Configuration: Record<string, unknown>;
     /**
-     * Whether this run is a test. A stage never branches its logic on this — committing is the
-     * processor's business — but may record extra detail a live run would not want.
+     * Whether this run is a test (`DryRun`). The processor withholds working-record commits, and
+     * stages that perform direct side effects (durable-copy storage, tag/attribute row writes,
+     * embedding model calls, vector store writes/deletes, and dependent-deletion marking) check
+     * this flag to skip those external writes while still running read-only routing and validation.
      */
     IsTest: boolean;
     /**
