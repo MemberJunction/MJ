@@ -19,6 +19,8 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand, AutomaticCommand, ConversationUtility, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 import { FormResponseUtils } from '@memberjunction/ng-forms';
 import { MentionParserService } from '../../services/mention-parser.service';
+import { FormatAgentFailureForDisplay } from '../../utils/agent-failure-display';
+import { SavePinState } from '../../utils/pin-state';
 import { PlanModePreference } from '../../utils/plan-mode-preference';
 import { MarkdownService } from '@memberjunction/ng-markdown';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
@@ -773,6 +775,16 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Output() public taskGraphPanelRequested = this.TaskGraphPanelRequested;
 
   /**
+   * Fired when the user clicks the Workflow Context Header chip to jump to the originating
+   * workflow message (`message.ParentID`). Allows the virtualized message list / chat area to
+   * materialize off-screen messages before scrolling and highlighting.
+   */
+  @Output() public ScrollToMessageRequested = new EventEmitter<string>();
+
+  /** @deprecated Use {@link ScrollToMessageRequested}. */
+  @Output() public scrollToMessageRequested = this.ScrollToMessageRequested;
+
+  /**
    * True from the moment Stop was clicked until the message leaves In-Progress, so the button
    * reads "Stopping…" and cannot be clicked twice while the server catches up. Falls back to
    * false after {@link STOP_RETRY_AFTER_MS} if the run is still going, so a stop that did not
@@ -1322,8 +1334,15 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return formattedTime;
   }
 
+  /**
+   * Time since the message was created: its server creation time once it has one, else when it was first shown. An
+   * agent's reply first renders as a local placeholder, before the server acknowledges the run; it takes the reply
+   * row's creation time when the acknowledgement arrives, so the timer counts from when the server's row began.
+   */
   public get ElapsedTimeSinceLoad(): number {
-    return Date.now() - this._loadTime;
+    const createdAt = this.message?.__mj_CreatedAt;
+    // Never negative: the server's clock can run ahead of this browser's.
+    return Math.max(0, Date.now() - (createdAt ? new Date(createdAt).getTime() : this._loadTime));
   }
 
   /** @deprecated Use {@link ElapsedTimeSinceLoad}. */
@@ -1491,7 +1510,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * ngDoCheck to snapshot the value; templates read _stableDisplayMessage.
    */
   private computeDisplayMessage(): string {
-    const raw = this.message.Message || '';
+    const raw = this.displaySourceText();
 
     // ngDoCheck calls this every pass; an unchanged Message is the same string object, so this
     // compare is a pointer check and nothing below runs until the text changes.
@@ -1516,6 +1535,18 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     this._cachedDisplayMessage = transformed;
 
     return transformed;
+  }
+
+  /**
+   * The text the bubble renders from: the stored message, with a failed agent reply formatted as the chat has always
+   * shown one (see {@link FormatAgentFailureForDisplay}). Display only: the entity's text is never changed.
+   */
+  private displaySourceText(): string {
+    const raw = this.message.Message || '';
+    if (this.IsAIMessage && this.message.Status === 'Error') {
+      return FormatAgentFailureForDisplay(raw, this.AiAgentInfo?.name ?? 'Agent');
+    }
+    return raw;
   }
 
   /**
@@ -1931,9 +1962,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   private static readonly SUPPORTING_ARTIFACTS_EXPANDED_SETTING_KEY = 'mj.conversations.supportingArtifactsExpanded';
+  private static readonly EMPTY_ARTIFACTS: MessageArtifactRef[] = [];
 
   private _lastArtifactsInput: MessageArtifactRef[] | null = null;
-  private _sortedDisplayArtifactsCache: MessageArtifactRef[] = [];
+  private _sortedDisplayArtifactsCache: MessageArtifactRef[] = MessageItemComponent.EMPTY_ARTIFACTS;
+  private _supportingArtifactsCache: MessageArtifactRef[] = MessageItemComponent.EMPTY_ARTIFACTS;
+  private _lastSingleArtifact: MJArtifactEntity | null = null;
+  private _lastSingleArtifactVersion: MJArtifactVersionEntity | null = null;
+  private _singleArtifactCache: MessageArtifactRef[] = MessageItemComponent.EMPTY_ARTIFACTS;
 
   /**
    * Whether the Supporting Artifacts grid is expanded when a message has multiple artifacts.
@@ -1996,13 +2032,22 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
           return a.idx - b.idx;
         });
         this._sortedDisplayArtifactsCache = indexed.map((entry) => entry.item);
+        this._supportingArtifactsCache = this._sortedDisplayArtifactsCache.slice(0, -1);
       }
       return this._sortedDisplayArtifactsCache;
     }
     if (this.Artifact && this.artifactVersion) {
-      return [{ artifact: this.Artifact, version: this.artifactVersion }];
+      if (
+        this._lastSingleArtifact !== this.Artifact ||
+        this._lastSingleArtifactVersion !== this.artifactVersion
+      ) {
+        this._lastSingleArtifact = this.Artifact;
+        this._lastSingleArtifactVersion = this.artifactVersion;
+        this._singleArtifactCache = [{ artifact: this.Artifact, version: this.artifactVersion }];
+      }
+      return this._singleArtifactCache;
     }
-    return [];
+    return MessageItemComponent.EMPTY_ARTIFACTS;
   }
 
   /** @deprecated Use {@link DisplayArtifacts}. */
@@ -2016,7 +2061,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    */
   public get SupportingArtifacts(): MessageArtifactRef[] {
     const all = this.DisplayArtifacts;
-    return all.length > 1 ? all.slice(0, -1) : [];
+    return all.length > 1 ? this._supportingArtifactsCache : MessageItemComponent.EMPTY_ARTIFACTS;
   }
 
   /**
@@ -2411,7 +2456,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     this.message.IsPinned = !previousValue;
     this.cdRef.detectChanges();
 
-    const saved = await this.message.Save();
+    const saved = await SavePinState(this.ProviderToUse, this.message.ID, !previousValue);
     if (!saved) {
       // Revert on failure
       this.message.IsPinned = previousValue;
@@ -2791,16 +2836,260 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     }
   }
 
+  private static readonly EMPTY_WORKFLOW_TASKS: MJTaskEntity[] = [];
+  private _workflowCacheFingerprint: string | null = null;
+  private _workflowParentTaskCache: MJTaskEntity | null = null;
+  private _workflowStepsCache: MJTaskEntity[] = MessageItemComponent.EMPTY_WORKFLOW_TASKS;
+  private _workflowTitleCache: string = 'Agent Workflow';
+  private _workflowStatusCache: 'Running' | 'Complete' | 'Failed' | 'Cancelled' = 'Complete';
+  private _workflowCompletedStepCountCache: number = 0;
+  private _workflowSkippedStepCountCache: number = 0;
+  private _workflowProgressPercentCache: number = 0;
+  private _workflowParentTaskIdCache: string | null = null;
+  private _workflowStepSummariesCache: Map<string, string | null> = new Map<string, string | null>();
+
+  private computeWorkflowFingerprint(tasks: MJTaskEntity[] | null | undefined): string {
+    if (!tasks || tasks.length === 0) {
+      return '';
+    }
+    let fp = `${tasks.length}`;
+    for (let i = 0; i < tasks.length; i++) {
+      const t = tasks[i];
+      fp += `|${t.ID ?? ''}:${t.ParentID ?? ''}:${t.AgentID ?? ''}:${t.Name ?? ''}:${t.Status ?? ''}:${t.PercentComplete ?? ''}:${String(t.__mj_CreatedAt ?? '')}:${t.Description ?? ''}:${t.OutputPayload?.length ?? 0}:${t.OutputPayload?.slice(0, 64) ?? ''}`;
+    }
+    return fp;
+  }
+
+  private ensureWorkflowCache(): void {
+    const tasks = this.DetailTasks;
+    const fp = this.computeWorkflowFingerprint(tasks);
+    if (this._workflowCacheFingerprint === fp && this._workflowStepsCache) {
+      return;
+    }
+    this._workflowCacheFingerprint = fp;
+    if (!this._workflowStepSummariesCache) {
+      this._workflowStepSummariesCache = new Map<string, string | null>();
+    } else {
+      this._workflowStepSummariesCache.clear();
+    }
+
+    if (!tasks || tasks.length === 0) {
+      this._workflowParentTaskCache = null;
+      this._workflowStepsCache = MessageItemComponent.EMPTY_WORKFLOW_TASKS;
+      this._workflowTitleCache = 'Agent Workflow';
+      this._workflowStatusCache = 'Complete';
+      this._workflowCompletedStepCountCache = 0;
+      this._workflowSkippedStepCountCache = 0;
+      this._workflowProgressPercentCache = 0;
+      this._workflowParentTaskIdCache = null;
+      return;
+    }
+
+    // 1. Parent container task detection
+    let parent: MJTaskEntity | null = null;
+    if (tasks.length > 1) {
+      const parentIdsWithChildren = new UUIDSet(tasks.map((child) => child.ParentID));
+      const parentCandidate = tasks.find(
+        (t) => !t.ParentID && parentIdsWithChildren.Has(t.ID)
+      );
+      if (parentCandidate) {
+        parent = parentCandidate;
+      } else {
+        parent = tasks.find((t) => !t.ParentID && !t.AgentID) ?? null;
+      }
+    }
+    this._workflowParentTaskCache = parent;
+
+    // 2. Ordered executable steps
+    const steps = parent
+      ? tasks.filter((t) => !UUIDsEqual(t.ID, parent.ID))
+      : [...tasks];
+    steps.sort((a, b) => {
+      const aTime = a.__mj_CreatedAt ? new Date(a.__mj_CreatedAt).getTime() : 0;
+      const bTime = b.__mj_CreatedAt ? new Date(b.__mj_CreatedAt).getTime() : 0;
+      return aTime - bTime;
+    });
+    this._workflowStepsCache = steps;
+
+    // 3. Title & ParentTaskID
+    if (parent?.Name) {
+      this._workflowTitleCache = parent.Name;
+    } else if (steps.length === 1) {
+      this._workflowTitleCache = steps[0].Name || 'Agent Task';
+    } else {
+      this._workflowTitleCache = 'Agent Workflow';
+    }
+    this._workflowParentTaskIdCache =
+      parent?.ID ??
+      tasks.find((t) => !!t.ParentID)?.ParentID ??
+      null;
+
+    // 4. Status, counts, and progress percent in one pass
+    if (steps.length === 0) {
+      this._workflowStatusCache = 'Complete';
+      this._workflowCompletedStepCountCache = 0;
+      this._workflowSkippedStepCountCache = 0;
+      this._workflowProgressPercentCache = 0;
+    } else {
+      let hasFailed = false;
+      let hasRunning = false;
+      let allCancelled = true;
+      let completedCount = 0;
+      let skippedCount = 0;
+      let progressSum = 0;
+
+      for (const step of steps) {
+        const status = step.Status;
+        if (status !== 'Cancelled') {
+          allCancelled = false;
+        }
+        if (status === 'Failed') {
+          hasFailed = true;
+        } else if (status === 'In Progress' || status === 'Pending' || status === 'Deferred') {
+          hasRunning = true;
+        }
+        if (status === 'Complete') {
+          completedCount++;
+          progressSum += 100;
+        } else if (status === 'Skipped') {
+          skippedCount++;
+          progressSum += 100;
+        } else if (status === 'In Progress') {
+          progressSum += Math.max(15, Math.min(95, step.PercentComplete || 50));
+        }
+      }
+
+      if (hasFailed) {
+        this._workflowStatusCache = 'Failed';
+      } else if (hasRunning) {
+        this._workflowStatusCache = 'Running';
+      } else if (allCancelled) {
+        this._workflowStatusCache = 'Cancelled';
+      } else {
+        this._workflowStatusCache = 'Complete';
+      }
+      this._workflowCompletedStepCountCache = completedCount;
+      this._workflowSkippedStepCountCache = skippedCount;
+      this._workflowProgressPercentCache = Math.round(progressSum / steps.length);
+    }
+
+    // 5. Single forward pass O(S * K) step summary computation with running seenUpstream map
+    const seenUpstream = new Map<string, string>();
+    for (const step of steps) {
+      const { summary, parsedPayload } = this.computeSingleStepSummary(step, seenUpstream);
+      if (step.ID) {
+        this._workflowStepSummariesCache.set(step.ID, summary);
+      }
+      if (parsedPayload) {
+        for (const [k, v] of Object.entries(parsedPayload)) {
+          seenUpstream.set(k, JSON.stringify(v));
+        }
+      }
+    }
+  }
+
+  private computeSingleStepSummary(
+    step: MJTaskEntity,
+    seenUpstream: ReadonlyMap<string, string>
+  ): { summary: string | null; parsedPayload: Record<string, unknown> | null } {
+    let parsedPayload: Record<string, unknown> | null = null;
+    const rawPayload = step.OutputPayload?.trim();
+    if (rawPayload) {
+      try {
+        const parsed = JSON.parse(rawPayload) as unknown;
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          parsedPayload = parsed as Record<string, unknown>;
+        }
+      } catch {
+        // Non-JSON payload handled as raw string below
+      }
+    }
+
+    const desc = step.Description || '';
+    const outputMarker = desc.indexOf('--- Output ---');
+    if (outputMarker !== -1) {
+      const rawOutput = desc.slice(outputMarker + '--- Output ---'.length).trim();
+      if (rawOutput.length > 0 && !rawOutput.startsWith('output available (')) {
+        const summary = rawOutput.length > 360 ? rawOutput.slice(0, 360) + '…' : rawOutput;
+        return { summary, parsedPayload };
+      }
+    }
+
+    if (rawPayload) {
+      const deltaText = this.formatStepPayloadPreview(rawPayload, parsedPayload, seenUpstream);
+      if (deltaText) {
+        const summary = deltaText.length > 360 ? deltaText.slice(0, 360) + '…' : deltaText;
+        return { summary, parsedPayload };
+      }
+    }
+
+    const cleanDesc = desc.trim();
+    if (step.Status === 'Skipped') {
+      const summary = cleanDesc.length > 0
+        ? `Skipped (conditional prerequisite not met) — ${cleanDesc}`
+        : 'Skipped (conditional prerequisite not met)';
+      return { summary, parsedPayload };
+    }
+    return { summary: cleanDesc.length > 0 ? cleanDesc : null, parsedPayload };
+  }
+
+  private formatStepPayloadPreview(
+    rawPayload: string,
+    parsedPayload: Record<string, unknown> | null,
+    seenUpstream: ReadonlyMap<string, string>
+  ): string | null {
+    if (!rawPayload) {
+      return null;
+    }
+    if (!parsedPayload) {
+      return rawPayload;
+    }
+    const delta: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(parsedPayload)) {
+      if (seenUpstream.get(k) !== JSON.stringify(v)) {
+        delta[k] = v;
+      }
+    }
+    const source = Object.keys(delta).length > 0 ? delta : parsedPayload;
+    const synthesis = (typeof source.synthesis === 'object' && source.synthesis !== null && !Array.isArray(source.synthesis))
+      ? (source.synthesis as Record<string, unknown>)
+      : undefined;
+    const report = (typeof source.report === 'object' && source.report !== null && !Array.isArray(source.report))
+      ? (source.report as Record<string, unknown>)
+      : undefined;
+    const candidate =
+      source.summary ??
+      source.message ??
+      source.explanation ??
+      source.analysis ??
+      synthesis?.executiveSummary ??
+      report?.description ??
+      report?.name ??
+      source.title ??
+      source.queryName;
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim();
+    }
+    return JSON.stringify(source);
+  }
+
   /**
    * Smoothly scrolls the chat viewport to the originating workflow message (`this.message.ParentID`)
    * and briefly highlights it when the user clicks the Workflow Context Header chip.
    */
   public ScrollToOriginatingWorkflow(event: MouseEvent): void {
     event.stopPropagation();
-    if (!this.message?.ParentID || typeof document === 'undefined') {
+    if (!this.message?.ParentID) {
       return;
     }
     const targetId = this.message.ParentID;
+    if (this.ScrollToMessageRequested.observed) {
+      this.ScrollToMessageRequested.emit(targetId);
+      return;
+    }
+    if (typeof document === 'undefined') {
+      return;
+    }
     const candidates = Array.from(document.querySelectorAll<HTMLElement>('[data-message-id]'));
     const targetEl = candidates.find((el) => UUIDsEqual(el.getAttribute('data-message-id'), targetId));
     if (targetEl) {
@@ -2815,99 +3104,52 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * Prevents rendering the container parent task as a duplicate step card alongside its child steps.
    */
   public get WorkflowParentTask(): MJTaskEntity | null {
-    const tasks = this.DetailTasks;
-    if (!tasks || tasks.length <= 1) {
-      return null;
-    }
-    const parentIdsWithChildren = new UUIDSet(tasks.map((child) => child.ParentID));
-    const parentCandidate = tasks.find(
-      (t) => !t.ParentID && parentIdsWithChildren.Has(t.ID)
-    );
-    if (parentCandidate) {
-      return parentCandidate;
-    }
-    const unagentedRoot = tasks.find((t) => !t.ParentID && !t.AgentID);
-    return unagentedRoot ?? null;
+    this.ensureWorkflowCache();
+    return this._workflowParentTaskCache;
   }
 
   /**
    * Ordered executable workflow steps for this message (excluding the container parent row).
    */
   public get WorkflowSteps(): MJTaskEntity[] {
-    const tasks = this.DetailTasks;
-    if (!tasks || tasks.length === 0) {
-      return [];
-    }
-    const parent = this.WorkflowParentTask;
-    const steps = parent
-      ? tasks.filter((t) => !UUIDsEqual(t.ID, parent.ID))
-      : [...tasks];
-    return steps.sort((a, b) => {
-      const aTime = a.__mj_CreatedAt ? new Date(a.__mj_CreatedAt).getTime() : 0;
-      const bTime = b.__mj_CreatedAt ? new Date(b.__mj_CreatedAt).getTime() : 0;
-      return aTime - bTime;
-    });
+    this.ensureWorkflowCache();
+    return this._workflowStepsCache;
   }
 
   /** Title shown in the inline Workflow Execution Card header. */
   public get WorkflowTitle(): string {
-    if (this.WorkflowParentTask?.Name) {
-      return this.WorkflowParentTask.Name;
-    }
-    if (this.WorkflowSteps.length === 1) {
-      return this.WorkflowSteps[0].Name || 'Agent Task';
-    }
-    return 'Agent Workflow';
+    this.ensureWorkflowCache();
+    return this._workflowTitleCache;
   }
 
   /** Aggregate status of the workflow ('Running' | 'Complete' | 'Failed' | 'Cancelled'). */
   public get WorkflowStatus(): 'Running' | 'Complete' | 'Failed' | 'Cancelled' {
-    const steps = this.WorkflowSteps;
-    if (steps.length === 0) {
-      return 'Complete';
-    }
-    if (steps.some((s) => s.Status === 'Failed')) {
-      return 'Failed';
-    }
-    if (steps.some((s) => s.Status === 'In Progress' || s.Status === 'Pending' || s.Status === 'Deferred')) {
-      return 'Running';
-    }
-    if (steps.every((s) => s.Status === 'Cancelled')) {
-      return 'Cancelled';
-    }
-    return 'Complete';
+    this.ensureWorkflowCache();
+    return this._workflowStatusCache;
   }
 
   /** Whether any workflow step is still pending or actively executing. */
   public get HasActiveWorkflowTasks(): boolean {
-    return this.WorkflowSteps.length > 0 && this.WorkflowStatus === 'Running';
+    this.ensureWorkflowCache();
+    return this._workflowStepsCache.length > 0 && this._workflowStatusCache === 'Running';
   }
 
   /** Number of completed workflow steps. */
   public get WorkflowCompletedStepCount(): number {
-    return this.WorkflowSteps.filter((s) => s.Status === 'Complete').length;
+    this.ensureWorkflowCache();
+    return this._workflowCompletedStepCountCache;
   }
 
   /** Number of conditionally skipped workflow steps. */
   public get WorkflowSkippedStepCount(): number {
-    return this.WorkflowSteps.filter((s) => s.Status === 'Skipped').length;
+    this.ensureWorkflowCache();
+    return this._workflowSkippedStepCountCache;
   }
 
   /** Overall completion percentage (0-100) across all workflow steps. */
   public get WorkflowProgressPercent(): number {
-    const steps = this.WorkflowSteps;
-    if (steps.length === 0) {
-      return 0;
-    }
-    let sum = 0;
-    for (const step of steps) {
-      if (step.Status === 'Complete' || step.Status === 'Skipped') {
-        sum += 100;
-      } else if (step.Status === 'In Progress') {
-        sum += Math.max(15, Math.min(95, step.PercentComplete || 50));
-      }
-    }
-    return Math.round(sum / steps.length);
+    this.ensureWorkflowCache();
+    return this._workflowProgressPercentCache;
   }
 
   /** Formatted total duration for the workflow execution card. */
@@ -2942,11 +3184,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   /** Parent task ID for opening `<mj-task-graph-run-view>` in the right-side panel. */
   public get WorkflowParentTaskID(): string | null {
-    return (
-      this.WorkflowParentTask?.ID ??
-      (this.DetailTasks ?? []).find((t) => !!t.ParentID)?.ParentID ??
-      null
-    );
+    this.ensureWorkflowCache();
+    return this._workflowParentTaskIdCache;
   }
 
   /** Whether the completed workflow step list is expanded (always expanded while Running). */
@@ -3021,92 +3260,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   public GetWorkflowStepSummary(step: MJTaskEntity): string | null {
-    const desc = step.Description || '';
-    const outputMarker = desc.indexOf('--- Output ---');
-    if (outputMarker !== -1) {
-      const rawOutput = desc.slice(outputMarker + '--- Output ---'.length).trim();
-      if (rawOutput.length > 0 && !rawOutput.startsWith('output available (')) {
-        return rawOutput.length > 360 ? rawOutput.slice(0, 360) + '…' : rawOutput;
-      }
+    this.ensureWorkflowCache();
+    if (step?.ID && this._workflowStepSummariesCache.has(step.ID)) {
+      return this._workflowStepSummariesCache.get(step.ID) ?? null;
     }
-    if (step.OutputPayload) {
-      const deltaText = this.extractStepDeltaPreview(step);
-      if (deltaText) {
-        return deltaText.length > 360 ? deltaText.slice(0, 360) + '…' : deltaText;
-      }
-    }
-    const cleanDesc = desc.trim();
-    if (step.Status === 'Skipped') {
-      return cleanDesc.length > 0
-        ? `Skipped (conditional prerequisite not met) — ${cleanDesc}`
-        : 'Skipped (conditional prerequisite not met)';
-    }
-    return cleanDesc.length > 0 ? cleanDesc : null;
-  }
-
-  /**
-   * Strips upstream keys inherited unchanged from earlier workflow steps and extracts a concise
-   * human-readable summary from `step.OutputPayload`.
-   */
-  private extractStepDeltaPreview(step: MJTaskEntity): string | null {
-    const raw = step.OutputPayload?.trim();
-    if (!raw) {
-      return null;
-    }
-    try {
-      const steps = this.WorkflowSteps;
-      const seenUpstream = new Map<string, string>();
-      for (const prior of steps) {
-        if (UUIDsEqual(prior.ID, step.ID)) {
-          break;
-        }
-        if (prior.OutputPayload) {
-          try {
-            const priorObj = JSON.parse(prior.OutputPayload) as Record<string, unknown>;
-            if (priorObj && typeof priorObj === 'object' && !Array.isArray(priorObj)) {
-              for (const [k, v] of Object.entries(priorObj)) {
-                seenUpstream.set(k, JSON.stringify(v));
-              }
-            }
-          } catch {
-            // Ignore non-JSON upstream payload
-          }
-        }
-      }
-      const parsed = JSON.parse(raw) as Record<string, unknown>;
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        const delta: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(parsed)) {
-          if (seenUpstream.get(k) !== JSON.stringify(v)) {
-            delta[k] = v;
-          }
-        }
-        const source = Object.keys(delta).length > 0 ? delta : parsed;
-        const synthesis = (typeof source.synthesis === 'object' && source.synthesis !== null && !Array.isArray(source.synthesis))
-          ? (source.synthesis as Record<string, unknown>)
-          : undefined;
-        const report = (typeof source.report === 'object' && source.report !== null && !Array.isArray(source.report))
-          ? (source.report as Record<string, unknown>)
-          : undefined;
-        const candidate =
-          source.summary ??
-          source.message ??
-          source.explanation ??
-          source.analysis ??
-          synthesis?.executiveSummary ??
-          report?.description ??
-          report?.name ??
-          source.title ??
-          source.queryName;
-        if (typeof candidate === 'string' && candidate.trim()) {
-          return candidate.trim();
-        }
-        return JSON.stringify(source);
-      }
-    } catch {
-      return raw;
-    }
-    return raw;
+    return this.computeSingleStepSummary(step, new Map<string, string>()).summary;
   }
 
   public OpenWorkflowStepAgentRun(step: MJTaskEntity, event: MouseEvent): void {

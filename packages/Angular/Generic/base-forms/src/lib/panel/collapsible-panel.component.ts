@@ -632,6 +632,10 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
       this.updateVisibilityAndHighlighting();
     });
     this.registerIndicatorSource();
+    // A section that mounts after the rail was worked out (a slot panel that draws
+    // itself only once its data has loaded) has to be filed onto the rail, or a
+    // left-nav form never shows it.
+    this.chrome?.NotifySectionsChanged();
   }
 
   ngAfterContentInit(): void {
@@ -672,6 +676,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
 
   ngOnDestroy(): void {
     this.indicators?.Unregister(this);
+    this.chrome?.NotifySectionsChanged();
     for (const edits of this.hostedFields.values()) edits.unsubscribe();
     this.hostedFields.clear();
     this.fieldNavReset$.next();

@@ -19,8 +19,7 @@
 import { Resolver, Mutation, Query, Arg, Ctx, Float, Int, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { UserInfo, IMetadataProvider, LogError } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
-import { MJAIAgentSessionEntity, MJAIAgentEntity, MJConversationEntity } from '@memberjunction/core-entities';
+import { MJAIAgentEntity, MJConversationEntity } from '@memberjunction/core-entities';
 import { NormalizeInstanceKey, RemoteBrowserEngine } from '@memberjunction/remote-browser-server';
 import { BeginBrowserGoalStep, FinalizeBrowserGoalStep, ExtractCoAgentRunID } from '../agentSessions/remoteBrowserGoalEngine.js';
 import { RemoteBrowserGoalRegistry } from '../agentSessions/remoteBrowserGoalRegistry.js';
@@ -36,13 +35,17 @@ import {
 } from '@memberjunction/remote-browser-base';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
+import {
+  LoadOwnedRealtimeSession,
+  RealtimeSessionNotFoundError,
+  RealtimeSessionOwnershipError,
+} from '../realtimeSessions/ownedRealtimeSession.js';
+import { AuthorizeSessionAccess } from '../realtimeSessions/sessionAccess.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 
-/** Entity name — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
-const SESSION_ENTITY = 'MJ: AI Agent Sessions';
 /** Entity name for turn-based text conversations that scope a live Remote Browser session. */
 const CONVERSATION_ENTITY = 'MJ: Conversations';
 /**
@@ -1131,31 +1134,37 @@ export class RemoteBrowserActionResolver extends ResolverBase {
 
   /**
    * Loads the owning scope and enforces inbound ownership: an `MJ: AI Agent Sessions` row (a realtime
-   * call) or, failing that, an `MJ: Conversations` row (a text chat's browser). Its `UserID` must equal
-   * the caller's. Throws when neither exists or the one found belongs to another user.
+   * call, via `LoadOwnedRealtimeSession`) or, failing that, an `MJ: Conversations` row (a text chat's
+   * browser), both under `AuthorizeSessionAccess`. Throws when neither exists or the caller may not use it.
    *
    * @param agentSessionID The `AIAgentSession` id or `Conversation` id.
    * @returns The owned scope.
    */
   protected async loadOwnedSession(agentSessionID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<OwnedBrowserScope> {
-    const session = await provider.GetEntityObject<MJAIAgentSessionEntity>(SESSION_ENTITY, contextUser);
-    if (await session.Load(agentSessionID)) {
-      this.assertOwner(session.UserID, agentSessionID, contextUser);
-      return session;
+    try {
+      return await LoadOwnedRealtimeSession(agentSessionID, contextUser, provider);
+    } catch (err) {
+      if (err instanceof RealtimeSessionOwnershipError) {
+        throw new Error(`Not authorized: remote-browser session ${agentSessionID} is not owned by you.`);
+      }
+      if (!(err instanceof RealtimeSessionNotFoundError)) {
+        throw err;
+      }
     }
+    // Not a realtime session: a text chat scopes its browser to a conversation, under the same access rule
+    // (owner, and for an anonymous widget guest its scope id), loaded as the caller so its RLS applies too.
     const conversation = await provider.GetEntityObject<MJConversationEntity>(CONVERSATION_ENTITY, contextUser);
     if (!(await conversation.Load(agentSessionID))) {
       throw new Error(`Remote-browser session ${agentSessionID} not found.`);
     }
-    this.assertOwner(conversation.UserID, agentSessionID, contextUser);
-    return { ID: conversation.ID, AgentID: null, Config_: null };
-  }
-
-  /** Throws unless the scope's owner is the caller. */
-  private assertOwner(ownerUserID: string, agentSessionID: string, contextUser: UserInfo): void {
-    if (!UUIDsEqual(ownerUserID, contextUser.ID)) {
+    const access = AuthorizeSessionAccess(
+      { SessionUserID: conversation.UserID, ConversationExternalID: conversation.ExternalID, ConversationReadable: true },
+      contextUser,
+    );
+    if (!access.Allowed) {
       throw new Error(`Not authorized: remote-browser session ${agentSessionID} is not owned by you.`);
     }
+    return { ID: conversation.ID, AgentID: null, Config_: null };
   }
 
   /**

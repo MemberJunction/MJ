@@ -388,7 +388,7 @@ const NESTED_SCAN_BASELINE: Record<string, number> = {
     'MJCoreEntitiesServer/src/custom/MJApplicationEntityServer.server.ts': 1,
     'MJCoreEntitiesServer/src/custom/MJEntityFieldPermissionEntityServer.server.ts': 1,
     'MJCoreEntitiesServer/src/custom/MJUserRoleEntityServer.server.ts': 2,
-    'MJCoreEntitiesServer/src/custom/query-extraction/sync.ts': 7,
+    'MJCoreEntitiesServer/src/custom/query-extraction/sync.ts': 5,
     'MJCoreEntitiesServer/src/custom/rubrics/evaluationSubmit.ts': 2,
     'MJCoreEntitiesServer/src/custom/rubrics/versionPublish.ts': 1,
     'MJServer/src/resolvers/IntegrationDiscoveryResolver.ts': 1,

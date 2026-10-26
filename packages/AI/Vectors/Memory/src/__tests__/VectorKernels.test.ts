@@ -52,6 +52,16 @@ describe('VectorKernels', () => {
       expect(score('cosine', [1, 0], [0, 1])).toBe(0.5);
     });
 
+    it('reports cosine-similarity as the standard cosine in [-1, 1], as vector databases do', () => {
+      expect(score('cosine-similarity', a, b)).toBeCloseTo(1, 12);
+      expect(score('cosine-similarity', [1, 0], [-1, 0])).toBe(-1);
+      expect(score('cosine-similarity', [1, 0], [0, 1])).toBe(0);
+      // The same angle as `cosine`, on the other scale: cosine = (cosine-similarity + 1) / 2.
+      const x = [0.3, -1, 2];
+      const y = [1, 0.5, -0.2];
+      expect(score('cosine', x, y)).toBeCloseTo((score('cosine-similarity', x, y) + 1) / 2, 12);
+    });
+
     it('treats a zero vector as orthogonal under cosine', () => {
       expect(CosineFromNorms([0, 0], 0, 0, [1, 1], 0, 2, 2)).toBe(0);
     });
@@ -127,6 +137,15 @@ describe('VectorKernels', () => {
       expect(Array.from(search(withNaN, [1, 0], 'euclidean', null).Rows)).toEqual([1]);
     });
 
+    it('ranks cosine-similarity like cosine and applies its threshold on the [-1, 1] scale', () => {
+      const result = search(view, [1, 0], 'cosine-similarity', null);
+      expect(Array.from(result.Rows)).toEqual(Array.from(search(view, [1, 0], 'cosine', null).Rows));
+      expect(result.Scores[result.Scores.length - 1]).toBe(-1); // row 4 points the other way
+      // A threshold of 0 keeps the orthogonal row and drops the opposite one; on the 0-1 `cosine`
+      // scale the same 0 would keep every row.
+      expect(Array.from(search(view, [1, 0], 'cosine-similarity', null, 0).Rows)).toEqual([0, 2, 3, 1]);
+    });
+
     it('returns nothing for TopK of zero', () => {
       expect(search(view, [1, 0], 'cosine', 0).Rows.length).toBe(0);
     });
@@ -152,7 +171,7 @@ describe('SearchRows precision specialisations', () => {
   it('scores float32 and float64 data identically to MetricScore, zero vectors included', () => {
     const rows = [[0, 0, 0], [1, 2, 3], [-1, 0.5, 2], [3, 3, 3]];
     const query = Float64Array.from([0.5, -1, 2]);
-    for (const metric of ['cosine', 'euclidean', 'manhattan', 'dotproduct', 'jaccard', 'hamming'] as DistanceMetric[]) {
+    for (const metric of ['cosine', 'cosine-similarity', 'euclidean', 'manhattan', 'dotproduct', 'jaccard', 'hamming'] as DistanceMetric[]) {
       for (const ArrayType of [Float32Array, Float64Array]) {
         const base = viewOf(rows);
         const data = ArrayType.from(base.Data);

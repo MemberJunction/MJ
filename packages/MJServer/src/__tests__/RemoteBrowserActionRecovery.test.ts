@@ -180,16 +180,19 @@ describe('RemoteBrowserActionResolver — conversation-scoped ownership & struct
   const otherUserID = 'c3c3c3c3-0000-4000-8000-000000000003';
   const convID = 'b2b2b2b2-0000-4000-8000-000000000002';
 
-  /** A resolver whose provider has no agent session by that ID, only a conversation owned by `ownerID`. */
-  function conversationResolver(ownerID: string): RemoteBrowserActionResolver {
+  /**
+   * A resolver whose provider has no agent session by that ID, only a conversation owned by `ownerID`
+   * (stamped with `externalID`, an anonymous guest's scope id), called by `caller`.
+   */
+  function conversationResolver(ownerID: string, caller: Record<string, unknown> = { ID: userID }, externalID: string | null = null): RemoteBrowserActionResolver {
     const getEntityObject = vi.fn(async (entityName: string) =>
       entityName === 'MJ: Conversations'
-        ? { ID: convID, UserID: ownerID, Load: vi.fn(async (id: string) => id === convID) }
+        ? { ID: convID, UserID: ownerID, ExternalID: externalID, Load: vi.fn(async (id: string) => id === convID) }
         : { Load: vi.fn(async () => false) },
     );
     class OwnershipResolver extends RemoteBrowserActionResolver {
       protected override requireUserAndProvider() {
-        return { contextUser: { ID: userID }, provider: { GetEntityObject: getEntityObject } } as never;
+        return { contextUser: caller, provider: { GetEntityObject: getEntityObject } } as never;
       }
     }
     return new OwnershipResolver();
@@ -218,6 +221,13 @@ describe('RemoteBrowserActionResolver — conversation-scoped ownership & struct
     await expect(resolver.EndRemoteBrowserSession(convID, ctx)).rejects.toThrow('Not authorized');
     expect(startSessionMock).not.toHaveBeenCalled();
     expect(endSessionMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses an anonymous guest another guest's conversation, though both share the Anonymous user", async () => {
+    startSessionMock.mockReset();
+    const guest = { ID: userID, IsMagicLinkAnonymous: true, AnonymousVisitorID: 'visitor-b' };
+    await expect(conversationResolver(userID, guest, 'visitor-a').ExecuteRemoteBrowserAction(convID, 'inspect', ctx)).rejects.toThrow('Not authorized');
+    expect(startSessionMock).not.toHaveBeenCalled();
   });
 
   it("ends the caller's own conversation browser", async () => {

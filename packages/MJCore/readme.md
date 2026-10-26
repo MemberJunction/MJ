@@ -146,6 +146,7 @@ flowchart LR
 | `telemetryManager.ts` | `TelemetryManager` for operation tracking and pattern detection |
 | `queryCache.ts` / `QueryCacheConfig.ts` | LRU query result cache with TTL support |
 | `databaseProviderBase.ts` | `DatabaseProviderBase` for server-side SQL execution and transactions |
+| `BaseEntitySaveQueue.ts` | `BaseEntitySaveQueue` for per-record serialized fire-and-forget execution log saves with optional `saveReturnMode` |
 | `util.ts` | Utility functions: `TypeScriptTypeFromSQLType`, `FormatValue`, `CodeNameFromString` |
 | `runView.ts` | `RunView` class and `RunViewParams` for executing stored and dynamic views |
 | `viewInfo.ts` | View metadata classes: `ViewInfo`, `ViewColumnInfo`, `ViewFilterInfo` |
@@ -329,10 +330,17 @@ It is **not** enforced on the low-level `EntityField.Value` accessor. Framework-
 
 > Note: `EntityField.ActiveStatusAssertions` is retained as a **deprecated no-op** for backward compatibility. There is nothing to toggle at the field level anymore, since `EntityField.Value` no longer asserts.
 
+#### Lazy `EntityField` Hydration (`_raw` Fast Path)
+
+When records are loaded via `LoadFromData()` (for example, inside `RunView` with `ResultType: 'entity_object'`), `BaseEntity` stores the database row directly in an internal `_raw` reference without eagerly populating every `EntityField` value via `SetMany()`:
+
+- **Zero-allocation read path**: `Get()`, `GetAll()`, `Dirty`, and `FieldIsDirty()` read directly from `_raw` (with `EntityFieldInfo.DefaultValue` fallback and `NotLoaded` column awareness for partial `Fields` projections), avoiding $N \times F$ `EntityField` setter invocations across large result sets.
+- **Lazy hydration on mutation or `Fields` inspection**: The first call to `Set()`, `SetMany()`, `Revert()`, `Validate()`, `Save()`, or `entity.Fields` transparently hydrates `EntityField` instances from `_raw` and clears `_raw`, preserving full dirty tracking and `OldValue` history.
+
 #### Save and Delete
 
 ```typescript
-import { EntitySaveOptions } from '@memberjunction/core';
+import { EntitySaveOptions, BaseEntitySaveQueue } from '@memberjunction/core';
 
 // Simple save
 const success = await entity.Save();
@@ -344,6 +352,12 @@ options.SkipEntityAIActions = true;     // Skip AI-related actions
 options.SkipEntityActions = true;       // Skip entity actions
 options.SaveReturnMode = 'datestamps_only'; // Return only PK + __mj_CreatedAt/__mj_UpdatedAt
 await entity.Save(options);
+
+// Fire-and-forget per-entity save queue (e.g., high-write execution logs)
+const logQueue = new BaseEntitySaveQueue({ saveReturnMode: 'datestamps_only' });
+logQueue.Insert(stepEntity);
+logQueue.Update(stepEntity, (s) => { s.Status = 'Complete'; });
+await logQueue.Flush();
 
 // Delete
 await entity.Delete();

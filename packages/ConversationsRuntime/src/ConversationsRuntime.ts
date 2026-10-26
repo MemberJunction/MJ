@@ -83,8 +83,8 @@ import { IConversationsRuntimeContext } from './context/IConversationsRuntimeCon
  * // Process a message through the default conversation manager agent
  * const result = await ConversationsRuntime.Instance.AgentRunner.processMessage({
  *     conversationId,
- *     message,
- *     conversationDetailId,
+ *     message, // the user's saved message; the server creates the agent's reply row for it
+ *     onReplyAccepted: (reply) => showReply(reply.ConversationDetailId, reply.CreatedAt),
  *     applicationId,
  * });
  * ```

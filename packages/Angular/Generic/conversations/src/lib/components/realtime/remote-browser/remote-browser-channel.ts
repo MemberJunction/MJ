@@ -475,7 +475,13 @@ export class RemoteBrowserChannel extends BaseRealtimeChannelClient<RemoteBrowse
 
   private ensureVideoBridge(): ChannelInboundVideoBridge | null {
     if (!this.videoBridge && this.Context) {
-      this.videoBridge = new ChannelInboundVideoBridge(() => this.Context?.Client, this);
+      const descriptor = this.GetDescriptor();
+      this.videoBridge = new ChannelInboundVideoBridge(() => this.Context?.Client, this, {
+        SourceID: `${descriptor.Key}#${this.InstanceId}`,
+        Label: descriptor.DisplayName,
+        Kind: 'surface',
+        ChannelKey: descriptor.Key,
+      });
     }
     if (this.videoBridge && !this.videoBridge.IsActive && this.Context?.Client?.IsTrackEstablished('video', 'inbound')) {
       this.videoBridge.Start?.();

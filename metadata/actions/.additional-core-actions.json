@@ -5446,6 +5446,20 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "AlternateBaseView",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional logical Name of a registered Alternate Base View on the entity (e.g. 'Active', 'DueNow'). When provided, records are retrieved from that alternate view rather than the entity's BaseView.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C9417E55-68B2-4F81-97D1-689E2A1B4723"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "Records",
             "Type": "Output",
             "ValueType": "Scalar",

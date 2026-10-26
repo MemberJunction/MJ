@@ -173,4 +173,62 @@ describe('BaseEntitySaveQueue', () => {
         expect((await q.Flush()).failures).toBe(1);
         expect((await q.Flush()).failures).toBe(0);
     });
+
+    it('forwards saveReturnMode option to Insert, InsertAfter, and Update Save calls', async () => {
+        const q = new BaseEntitySaveQueue({ saveReturnMode: 'datestamps_only' });
+        const observedOptions: { ignoreDirtyState: boolean | undefined; saveReturnMode: string | undefined }[] = [];
+        const createEntity = (id: string): BaseEntity => ({
+            ID: id,
+            EntityInfo: { Name: 'Fake' },
+            LatestResult: { CompleteMessage: '' },
+            Save: vi.fn(async (saveOptions?: { IgnoreDirtyState?: boolean; SaveReturnMode?: string }) => {
+                observedOptions.push({
+                    ignoreDirtyState: saveOptions?.IgnoreDirtyState,
+                    saveReturnMode: saveOptions?.SaveReturnMode,
+                });
+                return true;
+            }),
+        } as unknown as BaseEntity);
+
+        const prereq = createEntity('prereq-1');
+        const child = createEntity('child-1');
+        q.Insert(prereq);
+        q.InsertAfter(child, [prereq]);
+        q.Update(child);
+        await q.Flush();
+
+        expect(observedOptions).toEqual([
+            { ignoreDirtyState: false, saveReturnMode: 'datestamps_only' },
+            { ignoreDirtyState: false, saveReturnMode: 'datestamps_only' },
+            { ignoreDirtyState: true, saveReturnMode: 'datestamps_only' },
+        ]);
+    });
+});
+
+describe('BaseEntitySaveQueue.Settled (#6014)', () => {
+    it('lets a caller in another queue wait for a parent INSERT before it inserts a child row', async () => {
+        const order: string[] = [];
+        let releaseParent!: () => void;
+        const parentSaved = new Promise<void>((r) => { releaseParent = r; });
+        const parent = {
+            ID: 'log-1', EntityInfo: { Name: 'MJ: Action Execution Logs' }, LatestResult: { CompleteMessage: '' },
+            Save: vi.fn(async () => { await parentSaved; order.push('parent-landed'); return true; }),
+        } as unknown as BaseEntity;
+        const child = {
+            ID: 'detail-1', EntityInfo: { Name: 'MJ: Process Run Details' }, LatestResult: { CompleteMessage: '' },
+            Save: vi.fn(async () => { order.push('child-insert'); return true; }),
+        } as unknown as BaseEntity;
+
+        const engineQueue = new BaseEntitySaveQueue();   // ActionEngine._logQueue
+        const trackerQueue = new BaseEntitySaveQueue();  // GenericProcessRunTracker.detailQueue
+        engineQueue.Insert(parent);                      // the fire-and-forget 'started' INSERT
+        const parentLanded = engineQueue.Settled(parent); // the new query under test
+
+        setTimeout(releaseParent, 10);                   // the parent INSERT is still in flight
+        await parentLanded;
+        trackerQueue.Insert(child);
+        await Promise.all([engineQueue.Flush(), trackerQueue.Flush()]);
+
+        expect(order).toEqual(['parent-landed', 'child-insert']);
+    });
 });

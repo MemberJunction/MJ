@@ -1,4 +1,4 @@
-import { CompositeKey, LogError, LogStatus, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
+import { CompositeKey, EntityInfo, EntityRelationshipInfo, GetIndexRestrictedFieldNames, LogError, LogStatus, OmitDeniedFieldKeys, RunView, UserInfo } from '@memberjunction/core';
 import { EscapeSQLString, MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJEntityDocumentEntity, MJTemplateContentEntity } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
@@ -63,8 +63,9 @@ export class EntityDocumentTemplateParser extends EntityDocumentTemplateParserBa
     }
 
     const reData = await obj.GetRelatedEntityDataExt(re, null, maxRows);
+    const relatedRows = this.withoutRestrictedRelatedValues(re, reData?.Data ?? [], ContextUser);
 
-    if (reData && reData.Data && reData.Data.length > 0) {
+    if (relatedRows.length > 0) {
       if (entityDocumentName && entityDocumentName.trim().length > 0) {
         // Resolve child entity document from cache
         const cache = EntityDocumentCache.Instance;
@@ -81,8 +82,8 @@ export class EntityDocumentTemplateParser extends EntityDocumentTemplateParserBa
           const batchSize = 10;
           const results: string[] = [];
 
-          for (let i = 0; i < reData.Data.length; i += batchSize) {
-            const batchPromises = reData.Data.slice(i, i + batchSize).map((data: Record<string, unknown>) => {
+          for (let i = 0; i < relatedRows.length; i += batchSize) {
+            const batchPromises = relatedRows.slice(i, i + batchSize).map((data: Record<string, unknown>) => {
               // D14: Child context gains __Parent pointing to the parent data context, chainable to arbitrary depth
               const childRecord: Record<string, unknown> = {
                 ...data,
@@ -100,11 +101,52 @@ export class EntityDocumentTemplateParser extends EntityDocumentTemplateParserBa
           return '';
         }
       } else {
-        return JSON.stringify({ Relationship: relationshipName, Data: reData.Data });
+        return JSON.stringify({ Relationship: relationshipName, Data: relatedRows });
       }
     } else {
       return '{ No Data for: ' + relationshipName + ' }';
     }
+  }
+
+  /**
+   * The related rows without the values that must stay out of a derived document. The rendered text is
+   * built once and read by many users (an Entity Record Document, autotag content, an inference's
+   * context), so two sets of fields are dropped:
+   * - the fields the render user may not read, and
+   * - the fields some role that can read the related entity may not read, even when the render user
+   *   can (the same rule vector sync applies to related rows).
+   *
+   * The join field (by name and by code name) is kept against the second rule: its value is the parent
+   * record's own key. The rows are copied where a value is dropped and never modified.
+   */
+  protected withoutRestrictedRelatedValues(
+    relationship: EntityRelationshipInfo,
+    rows: Record<string, unknown>[],
+    contextUser: UserInfo
+  ): Record<string, unknown>[] {
+    const relatedEntity = this.ProviderToUse.Entities.find((e) => UUIDsEqual(e.ID, relationship.RelatedEntityID));
+    if (!relatedEntity || rows.length === 0) {
+      return rows;
+    }
+    const restricted = this.relatedFieldsKeptOut(relatedEntity, relationship, contextUser);
+    return restricted.size === 0 ? rows : rows.map((row) => OmitDeniedFieldKeys(row, restricted));
+  }
+
+  /** The lowercased names of the related entity's fields {@link withoutRestrictedRelatedValues} drops. */
+  private relatedFieldsKeptOut(relatedEntity: EntityInfo, relationship: EntityRelationshipInfo, contextUser: UserInfo): Set<string> {
+    const restricted = GetIndexRestrictedFieldNames(relatedEntity);
+    const joinFieldName = (relationship.RelatedEntityJoinField ?? '').trim().toLowerCase();
+    const joinField = relatedEntity.Fields?.find((f) => f.Name.trim().toLowerCase() === joinFieldName);
+    restricted.delete(joinFieldName);
+    if (joinField?.CodeName) {
+      restricted.delete(joinField.CodeName.trim().toLowerCase());
+    }
+    if (relatedEntity.FieldLevelSecurityApplies) {
+      for (const name of relatedEntity.GetDeniedReadFields(contextUser)) {
+        restricted.add(name);
+      }
+    }
+    return restricted;
   }
 
   /**

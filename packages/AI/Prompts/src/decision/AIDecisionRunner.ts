@@ -31,6 +31,7 @@ import {
   AIDecisionRunResult,
 } from './decision-runner.types';
 import { LLMDecision } from './LLMDecision';
+import { AIPromptRunner } from '../AIPromptRunner';
 
 /**
  * The result of running a decision, the candidate that produced it (after any failover), and what
@@ -658,7 +659,7 @@ export class AIDecisionRunner extends BaseModelRunner {
       }
       const systemPlaceholders = await SystemPlaceholderManager.resolveAllPlaceholders(params);
       const mergedData = { ...systemPlaceholders, ...params.data, ...params.templateData };
-      const rendered = await TemplateEngineServer.Instance.RenderTemplate(template, content, mergedData, true, false);
+      const rendered = await TemplateEngineServer.Instance.RenderTemplate(template, content, mergedData, true, false, AIPromptRunner.RenderOptions(params));
       if (!rendered?.Success) {
         return { success: false, errorMessage: `Failed to render the template for prompt '${prompt.Name}': ${rendered?.Message ?? 'unknown error'}` };
       }

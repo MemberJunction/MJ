@@ -61,6 +61,8 @@ import {
   type DateJumpPeriod,
   type DateJumpOutcome
 } from '../../utils/date-jump';
+import { CompareMessagesByCreatedAt, UpsertMessageById } from '../../utils/message-list-order';
+import { SavePinState } from '../../utils/pin-state';
 import { InjectFrameZone } from '../../util/frame-zone';
 import { MessageListComponent } from '../message/message-list.component';
 import { IsForkPointOrEarlier } from '../../utils/conversation-branching';
@@ -2217,6 +2219,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.syncSendSlot();
   }
   private _inProgressMessageIds: string[] = [];
+  /** Tracks the ID each in-progress reply entity was last registered under so adopting the server's row ID drops the local placeholder UUID. */
+  private inProgressIdByEntity?: WeakMap<MJConversationDetailEntity, string>;
 
   // ── The composer's send slot as the stop control ──────────────────────────────────────
   // While replies are in flight the composer's send slot is the stop control (one run: "Stop
@@ -2488,8 +2492,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private readonly boundOnResizeTouchMove = this.onResizeTouchMove.bind(this);
   private readonly boundOnResizeTouchEnd = this.onResizeTouchEnd.bind(this);
 
-  // LocalStorage key
-  private readonly ARTIFACT_PANE_WIDTH_KEY = 'mj-conversations-artifact-pane-width';
+  // UserInfoEngine setting key for artifact pane width
+  private readonly ARTIFACT_PANE_WIDTH_KEY = 'mj.conversations.artifactPaneWidth';
 
   // Pinned messages panel state
   public ShowPinsPanel: boolean = false;
@@ -3731,13 +3735,28 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
   }
 
+  private _cachedInputsArray: Array<{conversationId: string; conversationName: string | null}> = [];
+  private _cachedInputsKey = '';
+
   /**
-   * Returns array of cached message-input metadata for rendering
+   * Returns array of cached message-input metadata for rendering.
    * This allows multiple message-input components to exist simultaneously (hidden)
-   * preserving their state when switching conversations
+   * preserving their state when switching conversations.
+   * Memoized on cache contents so template `@for` loops receive a stable array reference across CD ticks.
    */
   public GetCachedInputs(): Array<{conversationId: string; conversationName: string | null}> {
-    return Array.from(this.messageInputMetadataCache.values());
+    if (this.messageInputMetadataCache.size === 0) {
+      return this._cachedInputsArray.length === 0 ? this._cachedInputsArray : (this._cachedInputsArray = []);
+    }
+    let key = '';
+    for (const [id, meta] of this.messageInputMetadataCache.entries()) {
+      key += `${id}:${meta.conversationName ?? ''}|`;
+    }
+    if (key !== this._cachedInputsKey) {
+      this._cachedInputsKey = key;
+      this._cachedInputsArray = Array.from(this.messageInputMetadataCache.values());
+    }
+    return this._cachedInputsArray;
   }
 
   /** @deprecated Use {@link GetCachedInputs}. */
@@ -4340,19 +4359,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     // Check if message already exists in the array (by ID) to prevent duplicates
     // Messages can be emitted multiple times as they're updated (e.g., status changes)
-    const existingIndex = this.messages.findIndex(m => UUIDsEqual(m.ID, message.ID));
+    // An agent reply's placeholder takes the server row's ID when the run is acknowledged; a refresh may already have
+    // brought that row in, so other copies of the ID are dropped.
+    const upsert = UpsertMessageById(this.messages, message);
+    this.messages = upsert.Messages;
 
-    if (existingIndex >= 0) {
-      // Update existing message in place (replace with updated version)
-      this.messages = [
-        ...this.messages.slice(0, existingIndex),
-        message,
-        ...this.messages.slice(existingIndex + 1)
-      ];
-    } else {
-      // Add new message to the list
-      this.messages = [...this.messages, message];
-
+    if (!upsert.Existed) {
       // Ensure current user is in the avatar map for new messages
       this.ensureCurrentUserInAvatarMap();
 
@@ -4376,8 +4388,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // row does not stay In-Progress until the conversation is opened again. Register the row
     // for the live callback either way — an update of an existing In-Progress row included.
     if (message.Status === 'In-Progress' && message.ID) {
-      if (!this.InProgressMessageIds.some((id) => UUIDsEqual(id, message.ID))) {
-        this.InProgressMessageIds = [...this.InProgressMessageIds, message.ID];
+      const entityMap = (this.inProgressIdByEntity ??= new WeakMap());
+      const previousId = entityMap.get(message);
+      entityMap.set(message, message.ID);
+      const withoutPrevious =
+        previousId && !UUIDsEqual(previousId, message.ID)
+          ? this.InProgressMessageIds.filter((id) => !UUIDsEqual(id, previousId))
+          : this.InProgressMessageIds;
+      if (!withoutPrevious.some((id) => UUIDsEqual(id, message.ID))) {
+        this.InProgressMessageIds = [...withoutPrevious, message.ID];
+      } else if (withoutPrevious !== this.InProgressMessageIds) {
+        this.InProgressMessageIds = withoutPrevious;
       }
       const recentCompletion = this.streamingService.GetRecentCompletion(message.ID);
       if (recentCompletion) {
@@ -4390,7 +4411,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     // Where the viewport goes: a fresh send follows — an in-place update of a message that
     // is already on screen must not re-run the send path's scroll.
-    this.followTranscript(existingIndex >= 0 ? 'update' : 'new', message);
+    this.followTranscript(upsert.Existed ? 'update' : 'new', message);
 
     // Force change detection — zone.js 0.15 no longer patches graphql-ws WebSocket callbacks,
     // so progress updates that arrive via PubSub run outside Angular's zone. Without this,
@@ -4567,23 +4588,30 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
     if (event.agentRun) {
-      // Directly update map with fresh data from progress (no database query needed)
-      // Don't create new Map - message-list component needs to keep the same reference
-      this.AgentRunsByDetailId.set(event.conversationDetailId, event.agentRun);
+      const existingRun = this.AgentRunsByDetailId.get(event.conversationDetailId);
+      if (!existingRun || ShouldReplaceDetailAgentRun(existingRun, event.agentRun)) {
+        // Directly update map with fresh data from progress (no database query needed)
+        // Don't create new Map - message-list component needs to keep the same reference
+        this.AgentRunsByDetailId.set(event.conversationDetailId, event.agentRun);
 
-      // Also update ConversationEngine's cache for other consumers
-      if (event.conversationId) {
-        ConversationEngine.Instance.SetAgentRunForDetail(event.conversationId, event.conversationDetailId, event.agentRun);
+        // Also update ConversationEngine's cache for other consumers
+        if (event.conversationId) {
+          ConversationEngine.Instance.SetAgentRunForDetail(event.conversationId, event.conversationDetailId, event.agentRun);
+        }
       }
     }
     else {
       // no agent run, should have agentRunId
       await this.addAgentRunToMap(event.conversationId, event.conversationDetailId, event.agentRunId!);
+      return;
     }
 
-    // Force message list to re-render with updated agent run
-    // This ensures message components receive the fresh agent run data
-    this.messages = [...this.messages];
+    // Refresh the rendered message in place so its agentRun reference updates without
+    // cloning the entire messages array and triggering a full virtual-timeline rebuild.
+    const targetMessage = this.messages.find(m => UUIDsEqual(m.ID, event.conversationDetailId));
+    if (!targetMessage || !this.messageListComponent?.RefreshRenderedMessage(targetMessage, { markStreaming: false })) {
+      this.messages = [...this.messages];
+    }
     this.cdr.detectChanges();
   }
 
@@ -4650,8 +4678,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         }
       }
 
-      this.messages = Array.from(merged.values())
-        .sort((a, b) => (a.__mj_CreatedAt?.getTime() || 0) - (b.__mj_CreatedAt?.getTime() || 0));
+      this.messages = Array.from(merged.values()).sort(CompareMessagesByCreatedAt);
 
       // Find newly discovered messages (delegated agents)
       const newMessages = engineDetails.filter(m => !existingMessageIds.has(m.ID));
@@ -6250,9 +6277,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
             }
           }
 
-          // Force message list to re-render with updated agent run
-          // Keep same Map reference so message-list component can access updates
-          this.messages = [...this.messages];
+          // Refresh the target message in place when already rendered; fall back to
+          // shallow array copy only when the message is not yet mounted in the list.
+          const targetMessage = this.messages.find(m => UUIDsEqual(m.ID, conversationDetailId));
+          if (!targetMessage || !this.messageListComponent?.RefreshRenderedMessage(targetMessage, { markStreaming: false })) {
+            this.messages = [...this.messages];
+          }
           this.cdr.detectChanges();
 
         }
@@ -6553,11 +6583,21 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return this.HasSystemArtifacts;
   }
 
+  private _artifactsArrayCache: Array<{
+    artifactId: string;
+    versionId: string;
+    name: string;
+    versionCount: number;
+    visibility: string;
+    versions: Array<{versionId: string; versionNumber: number}>;
+  }> = [];
+  private _artifactsArrayKey = '';
+
   /**
-   * Get unique artifacts grouped by artifact ID (not by conversation detail)
-   * Returns the latest version info for each unique artifact with all versions
-   * Works with LazyArtifactInfo - uses display data without loading full entities
-   * Respects showSystemArtifacts toggle
+   * Get unique artifacts grouped by artifact ID (not by conversation detail).
+   * Returns the latest version info for each unique artifact with all versions.
+   * Works with LazyArtifactInfo - uses display data without loading full entities.
+   * Respects showSystemArtifacts toggle and memoizes the result across CD passes.
    */
   GetArtifactsArray(): Array<{
     artifactId: string;
@@ -6567,6 +6607,18 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     visibility: string;
     versions: Array<{versionId: string; versionNumber: number}>
   }> {
+    const effectiveMap = this.EffectiveArtifactsMap;
+    let sig = `${this.ShowSystemArtifacts ? 1 : 0}|${effectiveMap.size}|`;
+    for (const artifactList of effectiveMap.values()) {
+      for (const info of artifactList) {
+        sig += `${info.artifactVersionId}:${info.artifactName ?? ''};`;
+      }
+    }
+    if (sig === this._artifactsArrayKey) {
+      return this._artifactsArrayCache;
+    }
+    this._artifactsArrayKey = sig;
+
     const artifactMap = new Map<string, {
       artifactId: string;
       versionId: string;
@@ -6577,7 +6629,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     // Group by artifactId, collecting all version details
     // Use effectiveArtifactsMap to respect showSystemArtifacts toggle
-    for (const artifactList of this.EffectiveArtifactsMap.values()) {
+    for (const artifactList of effectiveMap.values()) {
       for (const info of artifactList) {
         const artifactId = info.artifactId;
         const versionId = info.artifactVersionId;
@@ -6605,7 +6657,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
 
     // Convert to array with version count, sorted by version number descending
-    return Array.from(artifactMap.values()).map(item => ({
+    this._artifactsArrayCache = Array.from(artifactMap.values()).map(item => ({
       artifactId: item.artifactId,
       versionId: item.versionId,
       name: item.name,
@@ -6613,6 +6665,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       versionCount: item.versions.length,
       versions: item.versions.sort((a, b) => b.versionNumber - a.versionNumber)
     }));
+    return this._artifactsArrayCache;
   }
 
   /** @deprecated Use {@link GetArtifactsArray}. */
@@ -7056,7 +7109,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     message.IsPinned = false;
     this.cdr.detectChanges();
     try {
-      await message.Save();
+      if (!(await SavePinState(this.ProviderToUse, message.ID, false))) {
+        throw new Error(`the pin on message ${message.ID} could not be saved`);
+      }
       this.OnMessagePinToggled(message);
     } catch (err) {
       console.error('Failed to unpin message from panel:', err);
@@ -7711,11 +7766,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
-   * LocalStorage persistence methods for artifact pane
+   * UserInfoEngine persistence methods for artifact pane width
    */
   private loadArtifactPaneWidth(): void {
     try {
-      const saved = localStorage.getItem(this.ARTIFACT_PANE_WIDTH_KEY);
+      const saved = UserInfoEngine.Instance?.GetSetting(this.ARTIFACT_PANE_WIDTH_KEY);
       if (saved) {
         const width = parseFloat(saved);
         if (!isNaN(width) && width >= 20 && width <= 70) {
@@ -7723,15 +7778,18 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         }
       }
     } catch (error) {
-      console.warn('Failed to load artifact pane width from localStorage:', error);
+      console.warn('Failed to load artifact pane width from UserInfoEngine:', error);
     }
   }
 
   private saveArtifactPaneWidth(): void {
     try {
-      localStorage.setItem(this.ARTIFACT_PANE_WIDTH_KEY, this.ArtifactPaneWidth.toString());
+      UserInfoEngine.Instance?.SetSettingDebounced(
+        this.ARTIFACT_PANE_WIDTH_KEY,
+        this.ArtifactPaneWidth.toString()
+      );
     } catch (error) {
-      console.warn('Failed to save artifact pane width to localStorage:', error);
+      console.warn('Failed to save artifact pane width to UserInfoEngine:', error);
     }
   }
 
@@ -9443,6 +9501,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private scrollToMessage(messageId: string): void {
     // Wait for DOM to update, then scroll
     setTimeout(() => {
+      if (this.messageListComponent?.ScrollToMessage(messageId)) {
+        return;
+      }
       const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
       if (messageElement) {
         messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });

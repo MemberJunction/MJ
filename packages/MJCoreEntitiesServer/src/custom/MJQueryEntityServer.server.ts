@@ -6,8 +6,16 @@ import {
     SimpleEmbeddingResult,
     DatabasePlatform,
 } from "@memberjunction/core";
-import { MJQuerySQLEntity, MJQueryEntityExtended, MJSQLDialectEntity, QueryEngine } from "@memberjunction/core-entities";
-import { Float32VectorToBase64, RegisterClass, MJGlobal, UUIDsEqual } from "@memberjunction/global";
+import {
+    ComputeQueryFingerprintAsync,
+    MJQueryParameterEntity,
+    MJQuerySQLEntity,
+    MJQueryEntityExtended,
+    MJSQLDialectEntity,
+    QueryDefinitionRows,
+    QueryEngine,
+} from "@memberjunction/core-entities";
+import { EscapeSQLString, Float32VectorToBase64, RegisterClass, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { EmbedTextLocalHelper } from "./util";
 import {
     RunExtractionPipeline,
@@ -18,6 +26,7 @@ import type { QuerySyncContext } from "./query-extraction";
 import { SQLParser } from "@memberjunction/sql-parser";
 import { GetDialect } from "@memberjunction/sql-dialect";
 import { resolveDbPlatformFromEnv } from "@memberjunction/generic-database-provider";
+import { ApplyApprovalRulesAsync, ApprovalRefusalResult } from "./approvalStamp";
 
 /**
  * Server-side query entity with embedding generation, SQL extraction pipeline,
@@ -88,6 +97,14 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
     // ─── Save / Delete Overrides ─────────────────────────────────────────────────
 
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
+        let approving: boolean;
+        try {
+            // Approving is a server act; a ReplayOnly save writes nothing, so it has nothing to stamp.
+            approving = !options?.ReplayOnly && await ApplyApprovalRulesAsync(this, 'Status', this.Status);
+        } catch (e) {
+            this.RegisterResultHistoryEntry(ApprovalRefusalResult(this, e));
+            return false;
+        }
         try {
             const sqlField = this.GetFieldByName('SQL');
             const nameField = this.GetFieldByName('Name');
@@ -120,12 +137,49 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
                 await this.cleanupEmptyQueryAsync();
             }
 
+            // The parameter and dialect rows are rewritten after the Query row, so the approved
+            // fingerprint is taken last, from the definition as stored.
+            if (approving) {
+                await this.stampApprovalFingerprintAsync(options);
+            }
+
             return true;
         } catch (e) {
             LogError('Failed to save query:', e);
             this.LatestResult?.Errors.push(e);
             return false;
         }
+    }
+
+    /**
+     * Stores the fingerprint of the definition just approved: this row's SQL, template flag and
+     * external source, with its dialect and parameter rows read back from the database. Until this
+     * write lands the approval is not current, so a failure here fails closed.
+     */
+    private async stampApprovalFingerprintAsync(options?: EntitySaveOptions): Promise<void> {
+        try {
+            this.ApprovedFingerprint = await ComputeQueryFingerprintAsync(this, await this.loadDefinitionRowsAsync());
+            if (!await super.Save(options)) {
+                LogError(`[MJQueryEntityServer] Query "${this.Name}" was approved but its fingerprint was not saved: ${this.LatestResult?.CompleteMessage}`);
+            }
+        } catch (e) {
+            LogError(`[MJQueryEntityServer] Query "${this.Name}" was approved but its fingerprint could not be computed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
+    /** This query's dialect and parameter rows as stored, bypassing every cache. */
+    private async loadDefinitionRowsAsync(): Promise<QueryDefinitionRows> {
+        type DefinitionRow = Pick<MJQuerySQLEntity, 'SQLDialectID' | 'SQL'> &
+            Pick<MJQueryParameterEntity, 'Name' | 'Type' | 'IsRequired' | 'ValidationFilters' | 'IsServerSet'>;
+        const filter = `QueryID='${EscapeSQLString(this.ID)}'`;
+        const [sqls, parameters] = await this.RunViewProviderToUse.RunViews<DefinitionRow>([
+            { EntityName: 'MJ: Query SQLs', ExtraFilter: filter, Fields: ['SQLDialectID', 'SQL'], ResultType: 'simple', BypassCache: true },
+            { EntityName: 'MJ: Query Parameters', ExtraFilter: filter, Fields: ['Name', 'Type', 'IsRequired', 'ValidationFilters', 'IsServerSet'], ResultType: 'simple', BypassCache: true },
+        ], this.ContextCurrentUser);
+        if (!sqls?.Success || !parameters?.Success) {
+            throw new Error(`could not read the query's definition rows: ${sqls?.ErrorMessage || parameters?.ErrorMessage}`);
+        }
+        return { SQLs: sqls.Results, Parameters: parameters.Results };
     }
 
     override async Delete(options?: EntitySaveOptions): Promise<boolean> {

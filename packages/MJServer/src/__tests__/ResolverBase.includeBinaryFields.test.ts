@@ -158,7 +158,7 @@ describe('IncludeBinaryFields forwarding — batch resolver path', () => {
     it('RunViewsGeneric → RunViewsGenericInternal forwards the per-view flag to provider.RunViews', async () => {
         const { provider, runViewsCalls } = recordingProvider();
         const inputs = [
-            { EntityName: ENTITY_NAME, ExtraFilter: '', OrderBy: '', IncludeBinaryFields: true },
+            { EntityName: ENTITY_NAME, ExtraFilter: '', OrderBy: '', IncludeBinaryFields: true, AlternateBaseView: 'Active Vectors' },
             { EntityName: ENTITY_NAME, ExtraFilter: '', OrderBy: '' },
         ] as (RunViewByNameInput & RunViewByIDInput & RunDynamicViewInput)[];
 
@@ -167,7 +167,29 @@ describe('IncludeBinaryFields forwarding — batch resolver path', () => {
         expect(runViewsCalls).toHaveLength(1);
         expect(runViewsCalls[0]).toHaveLength(2);
         expect(runViewsCalls[0][0].IncludeBinaryFields).toBe(true);
+        expect(runViewsCalls[0][0].AlternateBaseView).toBe('Active Vectors');
         expect(runViewsCalls[0][1].IncludeBinaryFields).toBeUndefined();
+        expect(runViewsCalls[0][1].AlternateBaseView).toBeUndefined();
+    });
+
+    it('RunDynamicViewGeneric, RunViewByNameGeneric, and RunViewByIDGeneric forward AlternateBaseView to provider.RunView', async () => {
+        const { provider, runViewCalls } = recordingProvider();
+        const probe = new Probe();
+
+        await probe.RunDynamicViewGeneric(
+            { EntityName: ENTITY_NAME, ExtraFilter: '', OrderBy: '', AlternateBaseView: 'Active Vectors' } as RunDynamicViewInput,
+            provider, fakePayload(), undefined as never,
+        );
+        await probe.RunViewByNameGeneric(
+            { ViewName: 'Saved View', ExtraFilter: '', OrderBy: '', AlternateBaseView: '' } as RunViewByNameInput,
+            provider, fakePayload(), undefined as never,
+        );
+        await probe.RunViewByIDGeneric(
+            { ViewID: 'view-1', ExtraFilter: '', OrderBy: '', AlternateBaseView: 'Draft Vectors' } as RunViewByIDInput,
+            provider, fakePayload(), undefined as never,
+        );
+
+        expect(runViewCalls.map(c => c.AlternateBaseView)).toEqual(['Active Vectors', '', 'Draft Vectors']);
     });
 });
 
