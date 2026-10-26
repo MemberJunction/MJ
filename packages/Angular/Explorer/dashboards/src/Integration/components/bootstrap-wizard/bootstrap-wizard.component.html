@@ -58,54 +58,278 @@
              ====================================================================== -->
         @if (CurrentStep === 1) {
           <div class="step-content">
+            <!-- Source Type Toggle -->
             <div class="form-section">
-              <label class="form-label required">Azure Blob Backup URL(s)</label>
-              <textarea
-                class="form-control"
-                rows="3"
-                placeholder="https://myaccount.blob.core.windows.net/backups/db_stripe1.bak, https://myaccount.blob.core.windows.net/backups/db_stripe2.bak"
-                [(ngModel)]="BackupUrls"
-              ></textarea>
-              <span class="form-hint">
-                Provide single URL or comma-separated URLs for multi-stripe backups.
-              </span>
+              <label class="form-label required">Backup Source Type</label>
+              <div class="source-type-selector">
+                <div
+                  class="source-type-card"
+                  [class.selected]="SourceType === 'azure'"
+                  (click)="SetSourceType('azure')"
+                >
+                  <div class="source-type-icon azure">
+                    <i class="fa-solid fa-cloud-arrow-down"></i>
+                  </div>
+                  <div class="source-type-info">
+                    <span class="source-type-title">Azure Blob Storage</span>
+                    <span class="source-type-desc">Direct URL restore from container via SAS token</span>
+                  </div>
+                  <div class="source-type-check">
+                    @if (SourceType === 'azure') {
+                      <i class="fa-solid fa-circle-check"></i>
+                    }
+                  </div>
+                </div>
+
+                <div
+                  class="source-type-card"
+                  [class.selected]="SourceType === 'local'"
+                  (click)="SetSourceType('local')"
+                >
+                  <div class="source-type-icon local">
+                    <i class="fa-solid fa-hard-drive"></i>
+                  </div>
+                  <div class="source-type-info">
+                    <span class="source-type-title">Local Disk File</span>
+                    <span class="source-type-desc">Direct file restore from SQL Server host storage (FROM DISK)</span>
+                  </div>
+                  <div class="source-type-check">
+                    @if (SourceType === 'local') {
+                      <i class="fa-solid fa-circle-check"></i>
+                    }
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div class="form-section">
-              <label class="form-label required">Authentication</label>
-              <div class="radio-toggle-group">
-                <label class="radio-label">
-                  <input type="radio" name="authMode" value="sas" [(ngModel)]="AuthMode" />
-                  <span>Direct SAS Token</span>
-                </label>
-                <label class="radio-label">
-                  <input type="radio" name="authMode" value="credential" [(ngModel)]="AuthMode" />
-                  <span>Credential Engine</span>
-                </label>
+            <!-- ================= AZURE BLOB STORAGE SECTION ================= -->
+            @if (SourceType === 'azure') {
+              <div class="form-section">
+                <label class="form-label required">Authentication</label>
+                <div class="radio-toggle-group">
+                  <label class="radio-label">
+                    <input type="radio" name="authMode" value="sas" [(ngModel)]="AuthMode" />
+                    <span>Direct SAS Token</span>
+                  </label>
+                  <label class="radio-label">
+                    <input type="radio" name="authMode" value="credential" [(ngModel)]="AuthMode" />
+                    <span>Credential Engine</span>
+                  </label>
+                </div>
+
+                @if (AuthMode === 'sas') {
+                  <input
+                    type="password"
+                    class="form-control"
+                    placeholder="sp=rl&st=2026-10-26T00:00:00Z&se=2026-10-27T00:00:00Z&sig=..."
+                    [(ngModel)]="SasToken"
+                  />
+                  <span class="form-hint">
+                    Container SAS token with Read (r) and List (l) permissions.
+                  </span>
+                } @else {
+                  <select class="form-control" [(ngModel)]="SelectedCredentialID">
+                    <option value="" disabled>-- Select a storage credential --</option>
+                    @for (cred of AvailableCredentials; track cred.ID) {
+                      <option [value]="cred.ID">{{ cred.Name }}</option>
+                    }
+                  </select>
+                  <span class="form-hint">
+                    Resolved via MemberJunction CredentialEngine.
+                  </span>
+                }
               </div>
 
-              @if (AuthMode === 'sas') {
-                <input
-                  type="password"
+              <!-- Interactive Azure Blob Browser -->
+              <div class="browser-card">
+                <div class="browser-header">
+                  <div class="browser-title">
+                    <i class="fa-solid fa-cloud-arrow-down"></i> Azure Blob Browser
+                  </div>
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-sm"
+                    [disabled]="IsBrowsingAzure"
+                    (click)="BrowseAzureBlobs()"
+                  >
+                    @if (IsBrowsingAzure) {
+                      <i class="fa-solid fa-spinner fa-spin"></i> Browsing Blobs...
+                    } @else {
+                      <i class="fa-solid fa-folder-open"></i> Browse Container Blobs
+                    }
+                  </button>
+                </div>
+
+                <div class="browser-inputs">
+                  <input
+                    type="text"
+                    class="form-control"
+                    placeholder="Container URL: https://myaccount.blob.core.windows.net/backups"
+                    [(ngModel)]="AzureContainerUrl"
+                  />
+                </div>
+
+                @if (AzureBrowseError) {
+                  <div class="browser-error-banner">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span>{{ AzureBrowseError }}</span>
+                  </div>
+                }
+
+                @if (AzureBlobs.length > 0) {
+                  <div class="browser-controls-row">
+                    <div class="search-input-box">
+                      <i class="fa-solid fa-magnifying-glass"></i>
+                      <input
+                        type="text"
+                        placeholder="Search blobs..."
+                        [(ngModel)]="AzureBlobSearch"
+                      />
+                    </div>
+                    <label class="filter-toggle-label">
+                      <input type="checkbox" [(ngModel)]="ShowOnlyBakBlobs" />
+                      <span>.bak files only</span>
+                    </label>
+                  </div>
+
+                  <div class="browser-items-list">
+                    @for (blob of FilteredAzureBlobs; track blob.Name) {
+                      <div
+                        class="browser-item-row"
+                        [class.selected]="SelectedAzureBlobs.has(blob.Name)"
+                        (click)="ToggleAzureBlob(blob.Name)"
+                      >
+                        <input
+                          type="checkbox"
+                          [checked]="SelectedAzureBlobs.has(blob.Name)"
+                          (click)="$event.stopPropagation(); ToggleAzureBlob(blob.Name)"
+                        />
+                        <i class="fa-solid fa-file-zipper file-icon"></i>
+                        <span class="file-name" [title]="blob.Name">{{ blob.Name }}</span>
+                        <span class="file-size-badge">{{ blob.SizeFormatted }}</span>
+                        <button
+                          type="button"
+                          class="btn-select-only"
+                          title="Select only this file"
+                          (click)="$event.stopPropagation(); SelectSingleAzureBlob(blob.Name)"
+                        >
+                          Select
+                        </button>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+
+              <div class="form-section">
+                <label class="form-label required">Azure Blob Backup URL(s)</label>
+                <textarea
                   class="form-control"
-                  placeholder="sp=rl&st=2026-10-26T00:00:00Z&se=2026-10-27T00:00:00Z&sig=..."
-                  [(ngModel)]="SasToken"
-                />
+                  rows="3"
+                  placeholder="https://myaccount.blob.core.windows.net/backups/db_stripe1.bak, https://myaccount.blob.core.windows.net/backups/db_stripe2.bak"
+                  [(ngModel)]="BackupUrls"
+                ></textarea>
                 <span class="form-hint">
-                  Container SAS token with Read (r) and List (l) permissions.
+                  Selected blobs appear here automatically. You may also enter or edit single or comma-separated URLs manually.
                 </span>
-              } @else {
-                <select class="form-control" [(ngModel)]="SelectedCredentialID">
-                  <option value="" disabled>-- Select a storage credential --</option>
-                  @for (cred of AvailableCredentials; track cred.ID) {
-                    <option [value]="cred.ID">{{ cred.Name }}</option>
+              </div>
+            }
+
+            <!-- ================= LOCAL DISK FILE SECTION ================= -->
+            @if (SourceType === 'local') {
+              <!-- Interactive Local File Browser -->
+              <div class="browser-card">
+                <div class="browser-header">
+                  <div class="browser-title">
+                    <i class="fa-solid fa-folder-tree"></i> Local Directory & File Browser
+                  </div>
+                  <span class="badge-hint">SQL Server Host Filesystem</span>
+                </div>
+
+                <div class="browser-inputs">
+                  <label class="form-label-inline">Host Directory:</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    [(ngModel)]="LocalServerDirectory"
+                    (change)="refreshLocalFiles()"
+                    placeholder="/var/opt/mssql/backup"
+                  />
+                </div>
+
+                <div class="preset-chips">
+                  <span class="preset-label">Quick Paths:</span>
+                  @for (preset of DirectoryPresets; track preset.path) {
+                    <button
+                      type="button"
+                      class="preset-chip"
+                      [class.active]="LocalServerDirectory === preset.path"
+                      (click)="SetLocalDirectory(preset.path)"
+                    >
+                      {{ preset.label }}
+                    </button>
                   }
-                </select>
+                </div>
+
+                <div class="browser-add-file-row">
+                  <input
+                    type="text"
+                    class="form-control"
+                    placeholder="Enter backup filename (e.g. MyDatabase.bak)"
+                    [(ngModel)]="CustomFileNameInput"
+                    (keyup.enter)="AddCustomLocalFile()"
+                  />
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-sm"
+                    [disabled]="!CustomFileNameInput.trim()"
+                    (click)="AddCustomLocalFile()"
+                  >
+                    <i class="fa-solid fa-plus"></i> Add File
+                  </button>
+                </div>
+
+                <div class="browser-items-list">
+                  @for (file of LocalBakFiles; track file.Name) {
+                    <div
+                      class="browser-item-row"
+                      [class.selected]="SelectedLocalFiles.has(file.Name)"
+                      (click)="ToggleLocalFile(file.Name)"
+                    >
+                      <input
+                        type="checkbox"
+                        [checked]="SelectedLocalFiles.has(file.Name)"
+                        (click)="$event.stopPropagation(); ToggleLocalFile(file.Name)"
+                      />
+                      <i class="fa-solid fa-hard-drive file-icon"></i>
+                      <span class="file-name" [title]="file.FullPath">{{ file.Name }}</span>
+                      <span class="file-size-badge">{{ file.SizeFormatted }}</span>
+                      <button
+                        type="button"
+                        class="btn-select-only"
+                        title="Select only this file"
+                        (click)="$event.stopPropagation(); SelectSingleLocalFile(file.Name)"
+                      >
+                        Select
+                      </button>
+                    </div>
+                  }
+                </div>
+              </div>
+
+              <div class="form-section">
+                <label class="form-label required">Local Backup File Path(s)</label>
+                <textarea
+                  class="form-control"
+                  rows="3"
+                  placeholder="/var/opt/mssql/backup/AdventureWorks2022.bak, /var/opt/mssql/backup/AdventureWorks2022_stripe2.bak"
+                  [(ngModel)]="BackupUrls"
+                ></textarea>
                 <span class="form-hint">
-                  Resolved via MemberJunction CredentialEngine.
+                  Selected local files appear here. You can also directly type or paste local paths accessible by SQL Server (e.g., C:\... or /var/...).
                 </span>
-              }
-            </div>
+              </div>
+            }
 
             <div class="form-row">
               <div class="form-section flex-1">
@@ -143,7 +367,7 @@
               <i class="fa-solid fa-circle-info"></i>
               <div>
                 <strong>Staging Architecture:</strong>
-                Data will be restored directly from Azure Blob into local database
+                Data will be restored directly from {{ SourceType === 'azure' ? 'Azure Blob URL(s)' : 'local disk file(s)' }} into local database
                 <code>[{{ StagingDatabaseName }}]</code>, then transferred to MemberJunction target tables using
                 set-based minimally-logged <code>INSERT INTO WITH (TABLOCK)</code>.
               </div>
@@ -213,7 +437,11 @@
               </div>
 
               <div class="execution-tips">
-                <p><i class="fa-solid fa-shield-halved"></i> Azure Blob blocks stream directly to local storage at NVMe speeds.</p>
+                @if (SourceType === 'azure') {
+                  <p><i class="fa-solid fa-shield-halved"></i> Azure Blob blocks stream directly to local storage at NVMe speeds.</p>
+                } @else {
+                  <p><i class="fa-solid fa-hard-drive"></i> Restoring directly from host disk storage at high-speed NVMe/SSD transfer rates.</p>
+                }
                 <p><i class="fa-solid fa-bolt"></i> Local set-based ETL bypasses the network and minimizes transaction log growth.</p>
               </div>
             } @else {

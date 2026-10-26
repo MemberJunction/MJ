@@ -124,7 +124,7 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseAction {
                 return {
                     Success: false,
                     ResultCode: 'INVALID_PARAMETER',
-                    Message: "Parameter 'BackupUrls' must contain at least one valid URL.",
+                    Message: "Parameter 'BackupUrls' must contain at least one valid URL or file path.",
                     Params: params.Params,
                 };
             }
@@ -135,18 +135,22 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseAction {
             const batchSize = this.getNumberParam(params, 'BatchSize', 500000);
             const entityMapIDs = this.getStringListParam(params, 'EntityMapIDs');
 
-            // 2. Resolve Azure Storage SAS Token
-            const sasToken = await this.resolveSasToken(params);
-            containerUrl = this.extractContainerUrl(backupUrls[0]);
-
-            // 3. Resolve SQL Execution Provider
+            // 2. Resolve SQL Execution Provider
             const sqlExecutor = this.getSqlExecutor();
 
-            // 4. Create SQL Server Storage Credential
-            LogStatus(`[BootstrapSQLServer] Ensuring credential for storage container '${containerUrl}'...`);
-            await this.ensureStorageCredential(sqlExecutor, containerUrl, sasToken, params.ContextUser);
+            // 3. Resolve Azure Storage SAS Token & Credential if URL sources are used
+            const hasUrl = backupUrls.some(u => this.isUrl(u));
+            if (hasUrl) {
+                const sasToken = await this.resolveSasToken(params);
+                const firstUrl = backupUrls.find(u => this.isUrl(u))!;
+                containerUrl = this.extractContainerUrl(firstUrl);
 
-            // 5. Inspect Backup Header & Filelist
+                // Create SQL Server Storage Credential
+                LogStatus(`[BootstrapSQLServer] Ensuring credential for storage container '${containerUrl}'...`);
+                await this.ensureStorageCredential(sqlExecutor, containerUrl, sasToken, params.ContextUser);
+            }
+
+            // 4. Inspect Backup Header & Filelist
             LogStatus(`[BootstrapSQLServer] Reading backup header from '${backupUrls[0]}'...`);
             const headerInfo = await this.readBackupHeader(sqlExecutor, backupUrls[0], params.ContextUser);
             LogStatus(`[BootstrapSQLServer] Backup Header: SourceDB='${headerInfo.DatabaseName}', BackupStartDate=${headerInfo.BackupStartDate.toISOString()}`);
@@ -154,9 +158,9 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseAction {
             const fileList = await this.readBackupFileList(sqlExecutor, backupUrls[0], params.ContextUser);
             const moveClauses = await this.buildMoveClauses(sqlExecutor, stagingDbName, fileList, params);
 
-            // 6. Direct Restore Database from Blob Storage URL
-            LogStatus(`[BootstrapSQLServer] Restoring staging database [${stagingDbName}] from ${backupUrls.length} backup URL(s)...`);
-            await this.restoreStagingDatabase(sqlExecutor, stagingDbName, backupUrls, moveClauses, params.ContextUser);
+            // 5. Direct Restore Database from Backup File(s) or Blob Storage URL(s)
+            LogStatus(`[BootstrapSQLServer] Restoring staging database [${stagingDbName}] from ${backupUrls.length} backup source(s)...`);
+            await this.executeDatabaseRestore(sqlExecutor, stagingDbName, backupUrls, moveClauses, params.ContextUser);
             stagingDbCreated = true;
 
             // 7. Load Active Entity Maps for Company Integration
@@ -210,8 +214,10 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseAction {
                 await this.dropStagingDatabase(sqlExecutor, stagingDbName, params.ContextUser);
                 stagingDbCreated = false;
 
-                LogStatus(`[BootstrapSQLServer] Cleaning up storage credential '${containerUrl}'...`);
-                await this.dropStorageCredential(sqlExecutor, containerUrl, params.ContextUser);
+                if (containerUrl) {
+                    LogStatus(`[BootstrapSQLServer] Cleaning up storage credential '${containerUrl}'...`);
+                    await this.dropStorageCredential(sqlExecutor, containerUrl, params.ContextUser);
+                }
             }
 
             const durationSec = Math.round((Date.now() - startTime) / 1000);
@@ -338,6 +344,13 @@ END`;
     }
 
     /**
+     * Checks if a given backup path is a web/blob URL (http:// or https://) or a local disk path.
+     */
+    public isUrl(path: string): boolean {
+        return path.startsWith('http://') || path.startsWith('https://');
+    }
+
+    /**
      * Reads header metadata from the primary backup stripe using RESTORE HEADERONLY.
      */
     protected async readBackupHeader(
@@ -345,8 +358,9 @@ END`;
         backupUrl: string,
         contextUser?: UserInfo
     ): Promise<SqlBackupHeaderInfo> {
-        const cleanUrl = backupUrl.replace(/'/g, "''");
-        const sql = `RESTORE HEADERONLY FROM URL = N'${cleanUrl}';`;
+        const cleanPath = backupUrl.replace(/'/g, "''");
+        const sourceClause = this.isUrl(backupUrl) ? `FROM URL = N'${cleanPath}'` : `FROM DISK = N'${cleanPath}'`;
+        const sql = `RESTORE HEADERONLY ${sourceClause};`;
         const rows = await executor.ExecuteSQL<Record<string, unknown>>(
             sql,
             undefined,
@@ -393,8 +407,9 @@ END`;
         backupUrl: string,
         contextUser?: UserInfo
     ): Promise<SqlBackupFileListEntry[]> {
-        const cleanUrl = backupUrl.replace(/'/g, "''");
-        const sql = `RESTORE FILELISTONLY FROM URL = N'${cleanUrl}';`;
+        const cleanPath = backupUrl.replace(/'/g, "''");
+        const sourceClause = this.isUrl(backupUrl) ? `FROM URL = N'${cleanPath}'` : `FROM DISK = N'${cleanPath}'`;
+        const sql = `RESTORE FILELISTONLY ${sourceClause};`;
         const rows = await executor.ExecuteSQL<Record<string, unknown>>(
             sql,
             undefined,
@@ -500,7 +515,7 @@ SELECT
     }
 
     /**
-     * Restores the staging database from the Azure Blob URL(s).
+     * Restores the staging database from backup file(s) or Azure Blob URL(s).
      */
     protected async restoreStagingDatabase(
         executor: ISqlExecutor,
@@ -509,14 +524,30 @@ SELECT
         moveClauses: string[],
         contextUser?: UserInfo
     ): Promise<void> {
+        return this.executeDatabaseRestore(executor, stagingDbName, backupUrls, moveClauses, contextUser);
+    }
+
+    /**
+     * Executes the RESTORE DATABASE command formatting each stripe as URL = N'...' or DISK = N'...'.
+     */
+    protected async executeDatabaseRestore(
+        executor: ISqlExecutor,
+        stagingDbName: string,
+        backupUrls: string[],
+        moveClauses: string[],
+        contextUser?: UserInfo
+    ): Promise<void> {
         const cleanDbName = stagingDbName.replace(/[\[\]]/g, '');
-        const fromUrls = backupUrls.map(u => `URL = N'${u.replace(/'/g, "''")}'`).join(',\n    ');
+        const fromSources = backupUrls.map(u => {
+            const clean = u.replace(/'/g, "''");
+            return this.isUrl(u) ? `URL = N'${clean}'` : `DISK = N'${clean}'`;
+        }).join(',\n    ');
         const moves = moveClauses.join(',\n    ');
 
         const sql = `
 RESTORE DATABASE [${cleanDbName}]
 FROM 
-    ${fromUrls}
+    ${fromSources}
 WITH 
     ${moves},
     REPLACE,

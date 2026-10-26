@@ -448,6 +448,93 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
         });
     });
 
+    describe('Local Disk File Support', () => {
+        it('correctly identifies URLs vs local disk paths via isUrl', () => {
+            expect(action.isUrl('https://account.blob.core.windows.net/container/backup.bak')).toBe(true);
+            expect(action.isUrl('http://storage.local/container/backup.bak')).toBe(true);
+            expect(action.isUrl('C:\\backups\\AdventureWorks.bak')).toBe(false);
+            expect(action.isUrl('/var/opt/mssql/backup/AdventureWorks.bak')).toBe(false);
+            expect(action.isUrl('D:/sql_backups/stripe1.bak')).toBe(false);
+        });
+
+        it('executes RESTORE HEADERONLY and FILELISTONLY using FROM DISK for local files', async () => {
+            const header = await action['readBackupHeader'](mockSql.executor, '/var/opt/mssql/backup/mydb.bak', makeUser());
+            expect(header.DatabaseName).toBe('AdventureWorks_Prod');
+
+            const headerSql = mockSql.executedSql.find(s => s.includes('RESTORE HEADERONLY'));
+            expect(headerSql).toBe("RESTORE HEADERONLY FROM DISK = N'/var/opt/mssql/backup/mydb.bak';");
+
+            const fileList = await action['readBackupFileList'](mockSql.executor, '/var/opt/mssql/backup/mydb.bak', makeUser());
+            expect(fileList).toHaveLength(2);
+
+            const fileListSql = mockSql.executedSql.find(s => s.includes('RESTORE FILELISTONLY'));
+            expect(fileListSql).toBe("RESTORE FILELISTONLY FROM DISK = N'/var/opt/mssql/backup/mydb.bak';");
+        });
+
+        it('formats multi-stripe local restores using DISK clause', async () => {
+            await action['executeDatabaseRestore'](
+                mockSql.executor,
+                'StagingDb',
+                ['C:\\backups\\part1.bak', 'C:\\backups\\part2.bak'],
+                ["MOVE N'Data' TO N'C:\\data\\StagingDb.mdf'"],
+                makeUser()
+            );
+
+            const restoreSql = mockSql.executedSql.find(s => s.includes('RESTORE DATABASE [StagingDb]'));
+            expect(restoreSql).toBeDefined();
+            expect(restoreSql).toContain("DISK = N'C:\\backups\\part1.bak'");
+            expect(restoreSql).toContain("DISK = N'C:\\backups\\part2.bak'");
+            expect(restoreSql).not.toContain('URL =');
+        });
+
+        it('formats mixed stripe restores correctly', async () => {
+            await action['executeDatabaseRestore']
+                (mockSql.executor,
+                'StagingDb',
+                ['https://blob.core.windows.net/b/part1.bak', 'C:\\backups\\part2.bak'],
+                ["MOVE N'Data' TO N'C:\\data\\StagingDb.mdf'"],
+                makeUser()
+            );
+
+            const restoreSql = mockSql.executedSql.find(s => s.includes('RESTORE DATABASE [StagingDb]'));
+            expect(restoreSql).toBeDefined();
+            expect(restoreSql).toContain("URL = N'https://blob.core.windows.net/b/part1.bak'");
+            expect(restoreSql).toContain("DISK = N'C:\\backups\\part2.bak'");
+        });
+
+        it('executes full action end-to-end with local disk file without requiring credentials', async () => {
+            const params = makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: '/var/opt/mssql/backup/AdventureWorks2022.bak',
+                StagingDatabaseName: 'MJ_Staging_LocalTest',
+                DropStagingDbOnComplete: 'true',
+            });
+
+            const result = await action['InternalRunAction'](params);
+
+            expect(result.Success).toBe(true);
+            expect(result.ResultCode).toBe('SUCCESS');
+            expect(result.Message).toContain('Successfully bootstrapped 1 table(s)');
+
+            // Credential resolution must NOT have been called
+            expect(mockGetCredentialByIdFn).not.toHaveBeenCalled();
+            expect(mockCredentialConfigFn).not.toHaveBeenCalled();
+
+            // SQL must NOT contain CREATE CREDENTIAL or DROP CREDENTIAL
+            const credSql = mockSql.executedSql.find(s => s.includes('CREDENTIAL'));
+            expect(credSql).toBeUndefined();
+
+            // SQL must contain RESTORE with FROM DISK
+            const restoreSql = mockSql.executedSql.find(s => s.includes('RESTORE DATABASE [MJ_Staging_LocalTest]'));
+            expect(restoreSql).toBeDefined();
+            expect(restoreSql).toContain("DISK = N'/var/opt/mssql/backup/AdventureWorks2022.bak'");
+
+            // Staging database should still be dropped
+            const dropDbSql = mockSql.executedSql.find(s => s.includes('DROP DATABASE [MJ_Staging_LocalTest]'));
+            expect(dropDbSql).toBeDefined();
+        });
+    });
+
     describe('Error Handling and Rollback Cleanup', () => {
         it('attempts to clean up staging database when an error occurs during ETL', async () => {
             mockSql = createMockSqlExecutor({ failOnInsert: true });
