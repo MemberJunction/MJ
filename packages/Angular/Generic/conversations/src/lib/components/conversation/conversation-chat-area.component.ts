@@ -400,6 +400,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   @Input() AllowForking = true;
 
   /**
+   * Host-level opt-in for the conversation's Remote Browser: the header's Browser button, its drawer,
+   * and the `browser_*` tools that let this conversation's agents drive it. Defaults false; a host
+   * that wants an agent-driven browser beside the chat sets true.
+   */
+  @Input() AllowRemoteBrowser = false;
+
+  /**
    * Host-level cap for stopping and continuing agent runs: the composer's Stop and Stop all, the
    * Stop pill on an in-progress reply, the Continue button on a stopped reply, and the "Continue,
    * or tell {agent} what to do differently" placeholder. Defaults true (current behavior). Hosts
@@ -1907,13 +1914,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   public IsRemoteBrowserNavigating: boolean = false;
 
   public readonly RemoteBrowserController = new ConversationRemoteBrowserController({
-    GetConversationId: () => this.ConversationId,
-    IsSurfaceOpen: () => this.ShowRemoteBrowserPanel,
     OnAutoOpenSurface: () => this.OpenRemoteBrowserPanel(),
+    // Fires on open, close and a real URL change, never per screencast frame.
     OnStateChange: () => {
-      if (this.RemoteBrowserController.CurrentUrl) {
-        this.RemoteBrowserUrlInput = this.RemoteBrowserController.CurrentUrl;
-      }
+      this.RemoteBrowserUrlInput = this.RemoteBrowserController.CurrentUrl ?? '';
       this.cdr.detectChanges();
     },
   });
@@ -1922,7 +1926,6 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   set ConversationRemoteBrowserSurface(surface: RemoteBrowserSurfaceComponent | undefined) {
     if (surface) {
       this.RemoteBrowserController.BindSurface(surface);
-      this.RemoteBrowserController.SetSurfaceVisible(true);
     } else {
       this.RemoteBrowserController.UnbindSurface();
     }
@@ -3131,10 +3134,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.artifactPermissionService.Provider = p;
     this.attachmentService.Provider = p;
     this.analyzeArtifactService.Provider = p;
-    this.RemoteBrowserController.InitializeClientWiring(
-      this.agentClientService,
-      p instanceof GraphQLDataProvider ? p : null,
-    );
+    this.RemoteBrowserController.Initialize(this.agentClientService, p instanceof GraphQLDataProvider ? p : null);
 
     // Subscribe to actionable commands from UICommandHandlerService so we can
     // intercept and locally handle commands that depend on the conversation
@@ -3577,7 +3577,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.clearTurnTracking();
     this.ShowArtifactPanel = false;
     this.SelectedTaskGraphPanel = null;
+    // A conversation's browser ends with it: the next conversation starts without one.
     this.ShowRemoteBrowserPanel = false;
+    void this.RemoteBrowserController?.Close();
     this.SelectedArtifactId = null;
     this.SelectedVersionNumber = undefined;
     this.CanShareSelectedArtifact = false;
@@ -7352,9 +7354,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   public OpenRemoteBrowserPanel(): void {
-    if (this.ShowRemoteBrowserPanel) {
+    if (this.ShowRemoteBrowserPanel || !this.AllowRemoteBrowser || !this.ConversationId) {
       return;
     }
+    // Open before the drawer renders: binding its surface starts the screencast for this conversation.
+    this.RemoteBrowserController.Open(this.ConversationId);
     this.ShowArtifactPanel = false;
     this.SelectedTaskGraphPanel = null;
     this.SelectedArtifactId = null;
@@ -7362,12 +7366,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.cdr.detectChanges();
   }
 
+  /** Closing the drawer ends the browser (hiding it behind an artifact does not). */
   public CloseRemoteBrowserPanel(): void {
     if (!this.ShowRemoteBrowserPanel) {
       return;
     }
     this.ShowRemoteBrowserPanel = false;
     this.resetArtifactPaneSizing();
+    void this.RemoteBrowserController.Close();
     this.cdr.detectChanges();
   }
 
@@ -7379,7 +7385,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.IsRemoteBrowserNavigating = true;
     this.cdr.detectChanges();
     try {
-      await this.RemoteBrowserController.NavigateAndInspect(rawUrl);
+      await this.RemoteBrowserController.Navigate(rawUrl);
     } finally {
       this.IsRemoteBrowserNavigating = false;
       this.cdr.detectChanges();
@@ -7387,32 +7393,20 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
-   * Returns `AppContext` enriched with the conversation's live Remote Browser state when the
-   * browser drawer is open or a browser page has been loaded in this conversation.
+   * `AppContext` plus the conversation's open browser (its URL, and the `browser_*` tools while this
+   * chat area owns them). Cached: it is bound to an input, so a fresh object per check would re-fire it.
    */
   public get EffectiveAppContext(): Record<string, unknown> | null {
-    const hasBrowserState =
-      this.ShowRemoteBrowserPanel ||
-      Boolean(this.RemoteBrowserController.CurrentUrl) ||
-      Boolean(this.RemoteBrowserController.LastObservation);
-    if (!hasBrowserState) {
-      return this.AppContext;
+    const controller = this.RemoteBrowserController;
+    const owns = controller.ConversationId !== null && controller.OwnsTools;
+    let memo = this.effectiveAppContextMemo;
+    if (!memo || memo.Base !== this.AppContext || memo.Version !== controller.StateVersion || memo.Owns !== owns) {
+      memo = { Base: this.AppContext, Version: controller.StateVersion, Owns: owns, Value: controller.WithBrowserContext(this.AppContext) };
+      this.effectiveAppContextMemo = memo;
     }
-    const base = this.AppContext ?? {};
-    const existingAdditional =
-      base['AdditionalContext'] && typeof base['AdditionalContext'] === 'object' && !Array.isArray(base['AdditionalContext'])
-        ? (base['AdditionalContext'] as Record<string, unknown>)
-        : {};
-    const snapshot = this.RemoteBrowserController.GetAppContextSnapshot();
-    return {
-      ...base,
-      remoteBrowser: snapshot,
-      AdditionalContext: {
-        ...existingAdditional,
-        remoteBrowser: snapshot,
-      },
-    };
+    return memo.Value;
   }
+  private effectiveAppContextMemo: { Base: Record<string, unknown> | null; Version: number; Owns: boolean; Value: Record<string, unknown> | null } | null = null;
 
   /**
    * Persists the currently displayed Task Graph in the chat side-panel as a reusable

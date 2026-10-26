@@ -100,7 +100,7 @@
             <span class="artifact-badge">{{ artifactCountDisplay }}</span>
           </button>
         }
-        @if (conversation) {
+        @if (AllowRemoteBrowser && conversation) {
           <button mjButton variant="flat" size="sm"
             class="remote-browser-toggle-btn"
             [class.active]="ShowRemoteBrowserPanel"

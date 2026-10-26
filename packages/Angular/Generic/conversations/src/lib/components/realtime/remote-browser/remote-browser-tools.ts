@@ -119,15 +119,11 @@ export function MapToolToAction(toolName: string, args: Record<string, ToolArgVa
     case REMOTE_BROWSER_TOOL_NAMES.Inspect:
       return { Kind: 'inspect' };
     case REMOTE_BROWSER_TOOL_NAMES.Fill: {
-      const rawValues = args['values'] ?? args['valuesJson'];
-      if (rawValues === undefined || rawValues === null) {
-        throw new RemoteBrowserToolArgError('browser_Fill requires a non-empty "values" object or array.');
+      const values = args['values'];
+      if (!values || typeof values !== 'object' || Array.isArray(values) || Object.keys(values).length === 0) {
+        throw new RemoteBrowserToolArgError('browser_Fill requires "values": an object mapping each field ref or label to its value.');
       }
-      const valuesJson = typeof rawValues === 'string' ? rawValues.trim() : JSON.stringify(rawValues);
-      if (!valuesJson || valuesJson === '{}' || valuesJson === '[]') {
-        throw new RemoteBrowserToolArgError('browser_Fill requires a non-empty "values" object or array.');
-      }
-      return { Kind: 'fill', ValuesJson: valuesJson };
+      return { Kind: 'fill', ValuesJson: JSON.stringify(values) };
     }
     case REMOTE_BROWSER_TOOL_NAMES.Click: {
       const selector = asString(args['selector']);
@@ -207,20 +203,20 @@ export const REMOTE_BROWSER_TOOL_DEFINITIONS: RealtimeToolDefinition[] = [
   {
     Name: REMOTE_BROWSER_TOOL_NAMES.Inspect,
     Description:
-      'Inspect the current page DOM and return structured observations: page title, headings, visible text excerpt, interactive form fields with stable refs (f1, f2, …), buttons/actions with refs (a1, a2, …) and destructive flags, and links (l1, l2, …). Call this before filling forms or clicking elements.',
+      'Inspect the current page. Returns its title and URL, up to 6,000 characters of its visible text, its form fields with refs (f1, f2, …), its buttons and links with refs (a1, a2, …) and a Destructive flag on any a person must click, and its links with their URLs. Refs come from the latest inspect only, so inspect again after the page changes. Call this before filling or clicking.',
     ParametersSchema: { type: 'object', properties: {} },
   },
   {
     Name: REMOTE_BROWSER_TOOL_NAMES.Fill,
     Description:
-      'Fill one or more form fields on the current page by ref, CSS selector, or label, and verify each field value after filling. Protected fields (passwords, credit cards, OTPs, SSNs) are automatically skipped so the user can enter them manually.',
+      'Fill form fields on the current page by ref (from browser_Inspect) or by label, then report each value as read back from the page. Password, card, one-time-code and similar fields are never filled; ask the user to fill those in the browser.',
     ParametersSchema: {
       type: 'object',
       properties: {
         values: {
           type: 'object',
           description:
-            'Map of field ref/selector/label to value (e.g. {"f1": "Ada Lovelace", "f2": "ada@example.com"}), or an array of {ref, value} objects.',
+            'Object mapping each field ref or label to its value, e.g. {"f1": "Ada Lovelace", "f2": "ada@example.com"}. Use true or false for a checkbox and the option text for a select.',
         },
       },
       required: ['values'],
@@ -229,11 +225,11 @@ export const REMOTE_BROWSER_TOOL_DEFINITIONS: RealtimeToolDefinition[] = [
   {
     Name: REMOTE_BROWSER_TOOL_NAMES.Click,
     Description:
-      'Click an element in the shared browser by inspect ref (e.g. "a1", "l1"), visible button/link text, CSS selector, or viewport x/y coordinates. Destructive or final-submission buttons are blocked so the user can review and click them manually.',
+      'Click an element in the shared browser by ref from browser_Inspect (e.g. "a1"), by its visible text, by CSS selector, or by viewport x/y. A control that submits, pays, deletes or signs in is never clicked, however it is targeted; leave it for the user.',
     ParametersSchema: {
       type: 'object',
       properties: {
-        ref: { type: 'string', description: 'Element ref returned by browser_Inspect (e.g. "a1", "l2").' },
+        ref: { type: 'string', description: 'Element ref returned by browser_Inspect (e.g. "a1").' },
         selector: { type: 'string', description: 'CSS selector of the element to click.' },
         text: { type: 'string', description: 'Visible text label of the button or link to click.' },
         x: { type: 'number', description: 'Viewport X in CSS px (used when no ref/selector/text is given).' },
