@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { MountWidget, BootstrapFromDocument } from '../loader.js';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { MountWidget, BootstrapFromDocument, StartEmbeddedWidget } from '../loader.js';
 import { WidgetSessionClient, type FetchLike } from '../session/widget-session-client.js';
 import { MockWidgetTransport } from '../transport/mock-widget-transport.js';
 import { WIDGET_TAG_NAME } from '../ui/support-widget-element.js';
 import { ReadVisitorKey } from '../session/visitor-key-cookie.js';
+import { CreateSkewedServer, ProofIat, SERVER_NOW_MS, TOKEN_TTL_SECONDS } from './support/skewed-server.js';
 
 const sessionBody = {
     success: true,
@@ -263,5 +264,68 @@ describe('bootstrapFromDocument', () => {
     it('returns null when no [data-widget-key] element is present', async () => {
         const result = await BootstrapFromDocument(document);
         expect(result).toBeNull();
+    });
+});
+
+describe('MountWidget on a device whose clock is off (#4931 review)', () => {
+    beforeEach(() => {
+        document.body.innerHTML = '';
+    });
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it.each([-90, 90, 1200])('refreshes the same session on schedule instead of restarting it (skew %i s)', async (skewSeconds) => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(SERVER_NOW_MS + skewSeconds * 1000);
+        const server = CreateSkewedServer();
+        const scheduled: Array<{ cb: () => void; delay: number }> = [];
+        const transport = new MockWidgetTransport();
+        await MountWidget(
+            { widgetKey: 'pk_skew', apiUrl: 'https://api.test' },
+            {
+                sessionClientFactory: (apiUrl: string, widgetKey: string) => new WidgetSessionClient(apiUrl, widgetKey, server.Fetch),
+                transportFactory: () => transport,
+                scheduler: (cb: () => void, delay: number) => scheduled.push({ cb, delay }),
+            },
+        );
+        scheduled[0].cb();
+        await vi.waitFor(() => expect(scheduled).toHaveLength(2));
+
+        expect(server.Urls).toEqual(['https://api.test/widget/session', 'https://api.test/widget/session/refresh']);
+        expect(Math.abs(ProofIat(server.Proofs[0]) - SERVER_NOW_MS / 1000)).toBeLessThanOrEqual(1);
+        expect(scheduled.map((s) => s.delay)).toEqual([(TOKEN_TTL_SECONDS - 60) * 1000, (TOKEN_TTL_SECONDS - 60) * 1000]);
+    });
+});
+
+describe('StartEmbeddedWidget on a page without Web Crypto (plain http) (#4931 review)', () => {
+    beforeEach(() => {
+        document.body.innerHTML = '<div data-widget-key="pk_http" data-api-url="https://api.test"></div>';
+    });
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        vi.restoreAllMocks();
+    });
+
+    it('resolves (no unhandled rejection), mounts nothing, and tells the host page it needs HTTPS', async () => {
+        vi.stubGlobal('crypto', {});
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        await expect(StartEmbeddedWidget(document)).resolves.toBeUndefined();
+
+        expect(document.querySelector(WIDGET_TAG_NAME)).toBeNull();
+        expect(consoleError).toHaveBeenCalledTimes(1);
+        expect(String(consoleError.mock.calls[0][0])).toMatch(/\[mj-widget\].*secure context.*HTTPS/i);
+    });
+
+    it('logs any other boot failure with its cause instead of rejecting', async () => {
+        document.body.innerHTML = '<div data-widget-key="pk_down" data-api-url="http://127.0.0.1:1"></div>';
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const failure = new TypeError('fetch failed');
+        vi.stubGlobal('fetch', () => Promise.reject(failure));
+
+        await expect(StartEmbeddedWidget(document)).resolves.toBeUndefined();
+
+        expect(consoleError).toHaveBeenCalledWith(expect.stringMatching(/\[mj-widget\] Could not start/), failure);
     });
 });

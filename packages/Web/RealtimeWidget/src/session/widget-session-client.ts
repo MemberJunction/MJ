@@ -58,6 +58,15 @@ export class WidgetSessionClient {
      * token copied off this page cannot be renewed elsewhere.
      */
     private proofKey: ProofOfPossessionKey | null = null;
+    /**
+     * How far the server's clock is ahead of this browser's (ms), learned from the `iat` of each token the server
+     * issues. A visitor's device clock can be minutes off, and the server refuses a refresh proof more than 60 s
+     * from its own time, so the proof's `iat` and the refresh timer both run on server time. The token's `iat`
+     * rather than the HTTP `Date` header, because a cross-origin embed cannot read `Date` (not CORS-safelisted).
+     * `WidgetKeyClient` (`@memberjunction/ng-realtime-widget`) does the same; the two packages share no code, so
+     * the duplication is deliberate.
+     */
+    private serverOffsetMs = 0;
 
     constructor(
         private readonly apiUrl: string,
@@ -181,7 +190,12 @@ export class WidgetSessionClient {
         }
         if (bearerToken) {
             headers['authorization'] = `Bearer ${bearerToken}`;
-            headers['dpop'] = await CreateProofOfPossessionJwt(key, { Method: 'POST', Url: url, AccessToken: bearerToken });
+            headers['dpop'] = await CreateProofOfPossessionJwt(key, {
+                Method: 'POST',
+                Url: url,
+                AccessToken: bearerToken,
+                NowSeconds: Math.floor((Date.now() + this.serverOffsetMs) / 1000),
+            });
         } else {
             request.proofKey = key.PublicJwk;
         }
@@ -190,10 +204,27 @@ export class WidgetSessionClient {
         if (!res.ok || !body?.success || !body.token) {
             throw new WidgetSessionError(`Widget session mint failed (${res.status}): ${body?.errorCode ?? body?.error ?? 'unknown'}`, res.status, body?.errorCode ?? null);
         }
+        this.learnServerOffset(body.token);
         return this.toSession(body);
     }
 
-    /** Maps the API response to the in-memory session, validating required fields. */
+    /**
+     * Records the server's clock offset from a token it just issued (`iat` is its "now"). The offset is off by the
+     * response's one-way latency, far inside the server's 60 s window. A token without a readable `iat` keeps the
+     * previous offset: the server stamps `iat` on every token it signs, so this is never a guess about server time.
+     */
+    private learnServerOffset(token: string): void {
+        const iat = ReadTokenIssuedAtSeconds(token);
+        if (iat !== null) {
+            this.serverOffsetMs = iat * 1000 - Date.now();
+        }
+    }
+
+    /**
+     * Maps the API response to the in-memory session, validating required fields. `expiresAtMs` is put on this
+     * browser's clock (the server's expiry less the learned offset), so `expiresAtMs - Date.now()` is the time the
+     * token really has left even on a device whose clock is off.
+     */
     private toSession(body: WidgetSessionResponse): WidgetSession {
         if (!body.widgetId || !body.applicationId || !body.pinnedAgentId) {
             throw new Error('Widget session response missing required fields (widgetId/applicationId/pinnedAgentId).');
@@ -201,7 +232,7 @@ export class WidgetSessionClient {
         const expiresAtMs = body.expiresAt ? Date.parse(body.expiresAt) : Number.NaN;
         return {
             token: body.token!,
-            expiresAtMs: Number.isFinite(expiresAtMs) ? expiresAtMs : Date.now() + 15 * 60_000,
+            expiresAtMs: Number.isFinite(expiresAtMs) ? expiresAtMs - this.serverOffsetMs : Date.now() + 15 * 60_000,
             widgetId: body.widgetId,
             applicationId: body.applicationId,
             pinnedAgentId: body.pinnedAgentId,
@@ -219,5 +250,27 @@ export class WidgetSessionClient {
 
     private trimmedApiUrl(): string {
         return this.apiUrl.replace(/\/+$/, '');
+    }
+}
+
+/**
+ * The `iat` (epoch seconds) of a JWT, read WITHOUT verifying it: the widget only needs the server's clock reading,
+ * and the server verifies the token itself. Null when the token is unreadable or carries no numeric `iat`.
+ */
+function ReadTokenIssuedAtSeconds(token: string): number | null {
+    const part = token.split('.')[1];
+    if (!part) {
+        return null;
+    }
+    try {
+        const base64 = part.replace(/-/g, '+').replace(/_/g, '/');
+        const payload: unknown = JSON.parse(atob(base64 + '='.repeat((4 - (base64.length % 4)) % 4)));
+        if (typeof payload !== 'object' || payload === null || !('iat' in payload)) {
+            return null;
+        }
+        return typeof payload.iat === 'number' && Number.isFinite(payload.iat) ? payload.iat : null;
+    } catch {
+        // Not base64 or not JSON: an unreadable token says nothing about the server's clock (see learnServerOffset).
+        return null;
     }
 }

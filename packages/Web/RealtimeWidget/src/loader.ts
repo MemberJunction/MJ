@@ -99,6 +99,29 @@ export async function BootstrapFromDocument(doc: Document = document): Promise<S
     });
 }
 
+/**
+ * What the embed bundle runs on load: {@link BootstrapFromDocument}, with any failure reported on the console
+ * instead of left as an unhandled rejection. The host page has nobody else to tell. Never rejects.
+ *
+ * The widget signs its session refreshes with a Web Crypto key, and browsers expose Web Crypto (`crypto.subtle`)
+ * only in a secure context (HTTPS, or localhost). On a plain-http page the widget cannot start, by design (there is
+ * no fallback without proof of possession), so that case gets a message the site owner can act on.
+ */
+export async function StartEmbeddedWidget(doc: Document = document): Promise<void> {
+    try {
+        await BootstrapFromDocument(doc);
+    } catch (error) {
+        if (typeof crypto === 'undefined' || !crypto.subtle) {
+            console.error(
+                '[mj-widget] The support widget needs a secure context (HTTPS, or localhost) for the Web Crypto API, which this page does not have, so it is not shown. Serve the page over HTTPS.',
+                error,
+            );
+            return;
+        }
+        console.error('[mj-widget] Could not start the support widget:', error);
+    }
+}
+
 /** @deprecated Use {@link BootstrapFromDocument}. */
 export async function bootstrapFromDocument(doc: Document = document): Promise<SupportWidgetElement | null> {
     return BootstrapFromDocument(doc);

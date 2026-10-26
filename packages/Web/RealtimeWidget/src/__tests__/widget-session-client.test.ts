@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { ComputeJwkThumbprint, ToProofPublicJwk, VerifyProofOfPossessionJwt } from '@memberjunction/global';
 import { WidgetSessionClient, type FetchLike } from '../session/widget-session-client.js';
 import type { WidgetSession } from '../types.js';
+import { CreateSkewedServer, ProofIat, SERVER_NOW_MS, TOKEN_TTL_SECONDS } from './support/skewed-server.js';
 
 /** Builds a FetchLike that returns a canned response + records the calls. */
 function fakeFetch(status: number, body: unknown): { fn: FetchLike; calls: Array<{ url: string; init?: RequestInit }> } {
@@ -222,5 +223,29 @@ describe('WidgetSessionClient.MsUntilRefresh', () => {
         const session = { expiresAtMs: 1_000_000 } as WidgetSession;
         expect(WidgetSessionClient.MsUntilRefresh(session, 990_000)).toBe(5_000);
         expect(WidgetSessionClient.MsUntilRefresh(session, 2_000_000)).toBe(5_000);
+    });
+});
+
+describe('WidgetSessionClient on a device whose clock is off (#4931 review)', () => {
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    // Zero skew is the baseline the skewed cases must match: a 900 s token refreshed 60 s early.
+    const BASELINE_DELAY_MS = (TOKEN_TTL_SECONDS - 60) * 1000;
+
+    it.each([0, -90, 90, -1200, 1200])('signs the refresh proof on server time and times the refresh like zero skew (skew %i s)', async (skewSeconds) => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(SERVER_NOW_MS + skewSeconds * 1000);
+        const server = CreateSkewedServer();
+        const client = new WidgetSessionClient('https://api.test', 'pk_test_1', server.Fetch);
+
+        const minted = await client.Mint();
+        expect(WidgetSessionClient.MsUntilRefresh(minted, Date.now())).toBe(BASELINE_DELAY_MS);
+
+        const refreshed = await client.Refresh(minted.token);
+        expect(Math.abs(ProofIat(server.Proofs[0]) - SERVER_NOW_MS / 1000)).toBeLessThanOrEqual(1);
+        expect(refreshed.sessionId).toBe(minted.sessionId);
+        expect(WidgetSessionClient.MsUntilRefresh(refreshed, Date.now())).toBe(BASELINE_DELAY_MS);
     });
 });

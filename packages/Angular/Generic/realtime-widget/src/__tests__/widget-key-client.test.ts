@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { ComputeJwkThumbprint, ToProofPublicJwk, VerifyProofOfPossessionJwt } from '@memberjunction/global';
 import { WidgetKeyClient, WidgetKeyError, DescribeMintFailure, type FetchLike } from '../lib/auth/widget-key-client';
 
@@ -137,5 +137,58 @@ describe('WidgetKeyClient', () => {
     await expect(offline.api.Mint()).rejects.toMatchObject({ code: 'network', status: null });
     const html = client({ ok: false, status: 502, json: async () => { throw new SyntaxError('Unexpected token <'); } });
     await expect(html.api.Mint()).rejects.toMatchObject({ status: 502 });
+  });
+});
+
+describe('WidgetKeyClient on a device whose clock is off (#4931 review)', () => {
+  const SERVER_NOW_MS = Date.UTC(2030, 0, 1, 12, 0, 0);
+  const SERVER_NOW_SECONDS = SERVER_NOW_MS / 1000;
+  const TTL_SECONDS = 900;
+  const part = (value: object): string => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const serverToken = `${part({ alg: 'none' })}.${part({ iat: SERVER_NOW_SECONDS, exp: SERVER_NOW_SECONDS + TTL_SECONDS })}.sig`;
+
+  /** A fake MJAPI on SERVER_NOW_MS that checks a refresh proof the way WidgetSessionService does (±60 s). */
+  function skewedServer() {
+    const proofs: string[] = [];
+    const urls: string[] = [];
+    const body = { ...GOOD, token: serverToken, expiresAt: new Date((SERVER_NOW_SECONDS + TTL_SECONDS) * 1000).toISOString() };
+    const fetchImpl: FetchLike = async (url, init) => {
+      urls.push(url);
+      if (url.endsWith('/refresh')) {
+        const proof = init?.headers['dpop'] ?? '';
+        proofs.push(proof);
+        const check = await VerifyProofOfPossessionJwt(proof, {
+          Method: 'POST',
+          PathSuffix: '/widget/session/refresh',
+          AccessToken: serverToken,
+          NowSeconds: SERVER_NOW_SECONDS,
+          MaxSkewSeconds: 60
+        });
+        if (!check.Valid) {
+          return { ok: false, status: 403, json: async () => ({ success: false, errorCode: check.Reason }) };
+        }
+      }
+      return { ok: true, status: 200, json: async () => body };
+    };
+    return { api: new WidgetKeyClient('https://api.example.com', 'pk_live_abc', fetchImpl), proofs, urls };
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it.each([0, -90, 90, 1200])('signs the refresh proof on server time and reports expiry on this clock (skew %i s)', async (skewSeconds) => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(SERVER_NOW_MS + skewSeconds * 1000);
+    const { api, proofs, urls } = skewedServer();
+
+    const minted = await api.Mint();
+    expect(minted.expiresAtMs - Date.now()).toBe(TTL_SECONDS * 1000);
+
+    const refreshed = await api.Refresh(minted.token);
+    const iat = (JSON.parse(Buffer.from(proofs[0].split('.')[1], 'base64url').toString('utf8')) as { iat: number }).iat;
+    expect(Math.abs(iat - SERVER_NOW_SECONDS)).toBeLessThanOrEqual(1);
+    expect(refreshed.expiresAtMs - Date.now()).toBe(TTL_SECONDS * 1000);
+    expect(urls).toEqual(['https://api.example.com/widget/session', 'https://api.example.com/widget/session/refresh']);
   });
 });
