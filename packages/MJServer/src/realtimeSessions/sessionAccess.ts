@@ -258,6 +258,37 @@ export async function AuthorizeConversationTurn(
 }
 
 /**
+ * Whether an anonymous caller owns any of a LiveKit room's agent sessions — the check MJServer registers with
+ * `RoomAuthorizationService.SetAnonymousSessionOwnerCheck` (`@memberjunction/livekit-room-server` cannot import
+ * this package). Each session is loaded as the caller (its row-level security applies) and decided by
+ * {@link AuthorizeSessionAccess}, the same decision every realtime gate makes, so a room admits exactly the visitor
+ * whose scope id its session's conversation carries (MJ#6044). Nothing to read, or no provider: refused.
+ */
+export async function AuthorizeAnonymousRoomSessions(
+    agentSessionIds: string[],
+    user: UserInfo,
+    provider: IMetadataProvider | undefined,
+): Promise<boolean> {
+    if (agentSessionIds.length === 0 || !provider) {
+        return false;
+    }
+    for (const agentSessionId of agentSessionIds) {
+        const loaded = await LoadSessionForAccess(agentSessionId, user, provider);
+        if (!loaded) {
+            continue;
+        }
+        const decision = AuthorizeSessionAccess(
+            { SessionUserID: loaded.Session.UserID, ConversationExternalID: loaded.ConversationExternalID, ConversationReadable: loaded.ConversationReadable },
+            user,
+        );
+        if (decision.Allowed) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
  * The session conversation's `ExternalID` alone; null when there is none or it cannot be read.
  * Prefer {@link LoadSessionConversationScope}, which also says whether the read succeeded.
  */

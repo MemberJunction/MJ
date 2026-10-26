@@ -402,24 +402,67 @@ describe('RoomAuthorizationService', () => {
       expect(mockRunView).not.toHaveBeenCalled();
     });
 
-    it('refuses an anonymous visitor even though the session UserID is the shared Anonymous user (MJ#6044)', async () => {
-      // Every anonymous visitor authenticates as ONE shared user, so a UserID match proves nothing about which
-      // visitor owns the session. Anonymous visitors join rooms through the MJServer-issued token path, never here.
+    describe('anonymous visitors (MJ#6044): every one is the ONE shared Anonymous user, so ownership is the scope check', () => {
       const anonymous = { ID: 'anon-user', Name: 'Anonymous', IsMagicLinkAnonymous: true, AnonymousVisitorID: 'sid-b' } as unknown as UserInfo;
-      const mockBridge = { ID: 'bridge-1', AgentSessionID: 'session-web-1' };
-      const mockSession = { ID: 'session-web-1', UserID: 'anon-user' };
+      const agentRoomBatch = () => [
+        { Success: true, Results: [] },
+        { Success: true, Results: [] },
+        { Success: true, Results: [] },
+        { Success: true, Results: [{ ID: 'bridge-1', AgentSessionID: 'session-web-1' }] },
+      ];
 
-      mockRunViews.mockResolvedValueOnce([
-        { Success: true, Results: [] },
-        { Success: true, Results: [] },
-        { Success: true, Results: [] },
-        { Success: true, Results: [mockBridge] },
-      ]);
-      mockRunView.mockResolvedValueOnce({ Success: true, Results: [mockSession] });
+      beforeEach(() => service.SetAnonymousSessionOwnerCheck(undefined));
 
-      const result = await service.AuthorizeRoomAccess('web-agent-room', anonymous, provider);
-      expect(result.Authorized).toBe(false);
-      expect(result.Reason).toMatch(/anonymous/i);
+      it("refuses another visitor: the shared UserID matches, but the room's session is not in that visitor's scope", async () => {
+        mockRunViews.mockResolvedValueOnce(agentRoomBatch());
+        mockRunView.mockResolvedValueOnce({ Success: true, Results: [{ ID: 'session-web-1', UserID: 'anon-user' }] });
+        const check = vi.fn(async () => false);
+        service.SetAnonymousSessionOwnerCheck(check);
+
+        const result = await service.AuthorizeRoomAccess('web-agent-room', anonymous, provider);
+        expect(result.Authorized).toBe(false);
+        expect(result.Reason).toMatch(/anonymous/i);
+        expect(check).toHaveBeenCalledWith(['session-web-1'], anonymous, provider);
+      });
+
+      it("lets the visitor who owns the room's agent session in, decided by the registered scope check", async () => {
+        mockRunViews.mockResolvedValueOnce(agentRoomBatch());
+        service.SetAnonymousSessionOwnerCheck(async (ids, who) => ids.includes('session-web-1') && who === anonymous);
+
+        const result = await service.AuthorizeRoomAccess('web-agent-room', anonymous, provider);
+        expect(result.Authorized).toBe(true);
+      });
+
+      it('refuses every anonymous visitor when no scope check is registered (fails closed)', async () => {
+        mockRunViews.mockResolvedValueOnce(agentRoomBatch());
+        mockRunView.mockResolvedValueOnce({ Success: true, Results: [{ ID: 'session-web-1', UserID: 'anon-user' }] });
+
+        const result = await service.AuthorizeRoomAccess('web-agent-room', anonymous, provider);
+        expect(result.Authorized).toBe(false);
+      });
+
+      it('refuses, and logs, when the scope check throws', async () => {
+        const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        mockRunViews.mockResolvedValueOnce(agentRoomBatch());
+        service.SetAnonymousSessionOwnerCheck(async () => { throw new Error('session read failed'); });
+
+        const result = await service.AuthorizeRoomAccess('web-agent-room', anonymous, provider);
+        expect(result.Authorized).toBe(false);
+        expect(logged.mock.calls.flat().join(' ')).toMatch(/web-agent-room.*session read failed|session read failed.*web-agent-room/);
+      });
+
+      it('refuses an anonymous caller in a call room that has no agent session to own (an accepted offer names the shared user)', async () => {
+        mockRunViews.mockResolvedValueOnce([
+          { Success: true, Results: [] },
+          { Success: true, Results: [{ ID: 'int-1', Status: 'Active', AgentSessionID: null }] },
+          { Success: true, Results: [{ ID: 'offer-1', Status: 'Accepted', TargetUserID: 'anon-user' }] },
+          { Success: true, Results: [] },
+        ]);
+        service.SetAnonymousSessionOwnerCheck(async () => true);
+
+        const result = await service.AuthorizeRoomAccess('phone-room', anonymous, provider);
+        expect(result.Authorized).toBe(false);
+      });
     });
 
     it('refuses access when user is a stranger (not owner and has no accepted offer)', async () => {
