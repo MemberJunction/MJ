@@ -66,8 +66,8 @@ describe('CdpRemoteBrowserSession — core', () => {
         failure.Success = false;
         failure.Error = 'element not found';
         adapter.NextExecuteResult = failure;
-        // The click guard finds nothing at the target (no DOM under node), so the click proceeds.
-        adapter.EvaluateFallback = { Found: false, Label: '', Destructive: false };
+        // No DOM under node: the click guard is told the selector matches one harmless element.
+        adapter.EvaluateFallback = { Found: true, Label: 'x', Destructive: false };
 
         const result = await session.ExecuteAction({ Kind: 'click', Selector: '#x' });
 

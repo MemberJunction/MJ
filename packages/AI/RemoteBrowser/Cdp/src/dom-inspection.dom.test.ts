@@ -88,6 +88,14 @@ describe('fill', () => {
         expect((document.querySelector('[name="f7"]') as HTMLInputElement).value).toBe('');
     });
 
+    it('protects a card field named only by its title or its autocomplete token', async () => {
+        render(`<input name="cc" title="Card number" data-visible><input name="pan" aria-label="PAN" autocomplete="cc-number" data-visible><input name="e" aria-label="Expires" autocomplete="cc-exp" data-visible>`);
+        const { Observation } = await session.ExecuteAction({ Kind: 'inspect' });
+        expect(Observation?.Fields.map((f) => f.Writable)).toEqual([false, false, false]);
+        const result = await session.ExecuteAction({ Kind: 'fill', Values: [{ Target: 'f1', Value: '4111' }, { Target: 'f2', Value: '4111' }, { Target: 'f3', Value: '12/30' }] });
+        expect(result.Filled).toEqual([]);
+    });
+
     it('does not fill a hidden input, even when named exactly', async () => {
         render(ORDER_FORM);
         const result = await session.ExecuteAction({ Kind: 'fill', Values: [{ Target: 'csrf', Value: 'forged' }] });
@@ -117,25 +125,35 @@ describe('click guard', () => {
         for (const target of [{ Ref: 'a2' }, { Text: 'pay now' }]) {
             const result = await session.ExecuteAction({ Kind: 'click', ...target });
             expect(result.Success).toBe(false);
-            expect(result.Detail).toContain('Refusing to click "Pay now"');
+            expect(result.Detail).toContain('Refusing to activate "Pay now"');
         }
         expect(adapter.ExecutedActions).toEqual([]);
     });
 
-    it('refuses a destructive control reached by coordinates or by selector', async () => {
+    it('refuses a destructive control reached by coordinates', async () => {
         const pay = Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Pay now')!;
         document.elementFromPoint = () => pay;
-        const box = new BoundingBox();
-        Object.assign(box, { XMin: 100, YMin: 100, XMax: 140, YMax: 120 });
-        const info = new ElementInfo();
-        Object.assign(info, { Exists: true, Visible: true, BoundingBox: box });
-        vi.spyOn(adapter, 'QueryElement').mockResolvedValue(info);
-
-        for (const action of [{ Kind: 'click', X: 120, Y: 110 }, { Kind: 'click', Selector: 'form button:last-child' }] as const) {
-            const result = await session.ExecuteAction(action);
-            expect(result.Success).toBe(false);
-        }
+        expect((await session.ExecuteAction({ Kind: 'click', X: 120, Y: 110 })).Success).toBe(false);
         expect(adapter.ExecutedActions).toEqual([]);
+    });
+
+    it('checks every match of a selector, on screen or not, and refuses a selector that is not plain CSS', async () => {
+        // "Next" matches first, but the click may land on "Pay now", which sits below the fold.
+        const both = await session.ExecuteAction({ Kind: 'click', Selector: 'form button' });
+        expect(both.Detail).toContain('Refusing to activate "Pay now"');
+        const playwrightOnly = await session.ExecuteAction({ Kind: 'click', Selector: 'text=Pay now' });
+        expect(playwrightOnly.Detail).toContain('not a plain CSS selector');
+        expect(adapter.ExecutedActions).toEqual([]);
+
+        const safe = await session.ExecuteAction({ Kind: 'click', Selector: 'button[type="button"]' });
+        expect(safe.Success).toBe(true);
+        expect((adapter.ExecutedActions[0] as ClickAction).Selector).toBe('button[type="button"]');
+    });
+
+    it('lets a form\'s ordinary submit button be clicked: only what its label says counts', async () => {
+        render(`<form><input aria-label="Query" data-visible><button data-visible>Search</button></form>`);
+        await session.ExecuteAction({ Kind: 'inspect' });
+        expect((await session.ExecuteAction({ Kind: 'click', Ref: 'a1' })).Success).toBe(true);
     });
 
     it('a text click on an element inspect gave no ref gets one, so the click hits exactly it', async () => {
@@ -143,6 +161,27 @@ describe('click guard', () => {
         const result = await session.ExecuteAction({ Kind: 'click', Text: 'More options' });
         expect(result.Success).toBe(true);
         expect((adapter.ExecutedActions[0] as ClickAction).Selector).toBe('[data-mj-browser-ref="a1"]');
+    });
+});
+
+describe('Enter guard', () => {
+    let session: CdpRemoteBrowserSession;
+    let adapter: FakePlaywrightBrowserAdapter;
+    beforeEach(() => ({ session, adapter } = buildSession()));
+
+    it('refuses Enter, pressed or typed, when it would submit through a "Pay now" default button', async () => {
+        render(ORDER_FORM.replace('<button type="button" data-visible>Next</button>', ''));
+        (document.getElementById('name') as HTMLInputElement).focus();
+        expect((await session.ExecuteAction({ Kind: 'key', Key: 'Enter' })).Detail).toContain('Refusing to activate "Pay now"');
+        expect((await session.ExecuteAction({ Kind: 'type', Text: 'Ada\n', Selector: '#name' })).Success).toBe(false);
+        expect(adapter.ExecutedActions).toEqual([]);
+    });
+
+    it('lets Enter submit a search, and type text without a newline', async () => {
+        render(`<form><input id="q" aria-label="Query" data-visible><button data-visible>Search</button></form>`);
+        (document.getElementById('q') as HTMLInputElement).focus();
+        expect((await session.ExecuteAction({ Kind: 'key', Key: 'Enter' })).Success).toBe(true);
+        expect((await session.ExecuteAction({ Kind: 'type', Text: 'shoes' })).Success).toBe(true);
     });
 });
 

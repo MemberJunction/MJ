@@ -30,7 +30,7 @@ import {
 } from '@memberjunction/remote-browser-base';
 import { ActionExecutionResult, PlaywrightBrowserAdapter, RunComputerUseParams, ScreencastFrame, ScreencastOptions } from '@memberjunction/computer-use';
 import { MapHumanInput, MapRemoteBrowserAction } from './map-action';
-import { FillPageFields, InspectPageDom, NormalizeNavigableUrl, ResolveClickTarget } from './dom-inspection';
+import { ClickTarget, FillPageFields, InspectPageDom, NormalizeNavigableUrl, ResolveClickTarget, ResolveEnterTarget } from './dom-inspection';
 import { ICdpAudioCaptureHandle, ICdpSessionBackend } from './cdp-session-backend';
 import { ComputerUseGoalEngineFactory, DefaultComputerUseGoalEngineFactory } from './computer-use-goal-engine';
 import { WrapAdapterWithContext } from './context-injection';
@@ -143,6 +143,13 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
     this.features = features ?? {};
     this.backend = backend;
     this.providerName = providerName;
+    // An agent drives this browser, so it opens only http(s) pages, however the navigation arrives.
+    void adapter.RestrictNavigation(null);
+  }
+
+  /** @inheritdoc */
+  public async RestrictPrivateNetwork(allowedHosts: string[]): Promise<void> {
+    await this.adapter.RestrictNavigation(allowedHosts);
   }
 
   /**
@@ -211,6 +218,14 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
     }
     if (action.Kind === 'click') {
       return this.guardedClick(action);
+    }
+    // Enter submits a form through its default button, so it is checked the way a click on that button is.
+    if ((action.Kind === 'key' && /(^|\+)(numpad)?enter$/i.test(action.Key.trim())) || (action.Kind === 'type' && /[\r\n]/.test(action.Text))) {
+      const target = await ResolveEnterTarget(this.adapter, action.Kind === 'type' ? action.Selector : undefined);
+      const refusal = this.refusal(target);
+      if (refusal) {
+        return refusal;
+      }
     }
 
     const result = await this.adapter.ExecuteAction(MapRemoteBrowserAction(action));
@@ -550,23 +565,22 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
   }
 
   /**
-   * Clicks after checking what the click would hit: a submit, purchase, delete, sign-in or similar
-   * control is refused on EVERY path (ref, text, selector, coordinates) so a person clicks it. A ref
-   * or text target is clicked through its ref selector, a selector or point as given, so the click
-   * itself is always the adapter's real Playwright click.
+   * Clicks after checking what the click would hit: a control labelled to submit, pay, place an order,
+   * delete or sign in is refused on EVERY path (ref, text, every match of a selector, the element at a
+   * point) so a person clicks it. A ref or text target is clicked through its ref selector, a selector
+   * or point as given, so the click itself is always the adapter's real Playwright click.
    */
   private async guardedClick(action: RemoteBrowserClickAction): Promise<RemoteBrowserActionResult> {
     const byInspect = Boolean(action.Ref || action.Text);
-    const target = await ResolveClickTarget(this.adapter, byInspect ? { Ref: action.Ref, Text: action.Text } : await this.clickPoint(action));
-    if (byInspect && !target.Found) {
-      return { Success: false, CurrentUrl: this.adapter.CurrentUrl, Detail: `No clickable element matches ${action.Ref ? `ref "${action.Ref}"` : `text "${action.Text}"`}; inspect again for fresh refs.` };
+    const query = byInspect ? { Ref: action.Ref, Text: action.Text } : action.Selector ? { Selector: action.Selector } : { X: action.X, Y: action.Y };
+    const target = await ResolveClickTarget(this.adapter, query);
+    if ((byInspect || action.Selector) && !target.Found && !target.InvalidSelector) {
+      const what = action.Ref ? `ref "${action.Ref}"` : action.Text ? `text "${action.Text}"` : `selector "${action.Selector}"`;
+      return { Success: false, CurrentUrl: this.adapter.CurrentUrl, Detail: `No clickable element matches ${what}; inspect again for fresh refs.` };
     }
-    if (target.Destructive) {
-      return {
-        Success: false,
-        CurrentUrl: this.adapter.CurrentUrl,
-        Detail: `Refusing to click "${target.Label}": it submits, pays, deletes or signs in. Leave the page ready and ask the user to click it.`,
-      };
+    const refusal = this.refusal(target);
+    if (refusal) {
+      return refusal;
     }
     const click: RemoteBrowserClickAction = target.Ref ? { Kind: 'click', Ref: target.Ref } : action;
     const result = await this.adapter.ExecuteAction(MapRemoteBrowserAction(click));
@@ -580,13 +594,19 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
     return { Success: true, CurrentUrl: observation.Url, Detail: `Clicked "${target.Label}".`, Observation: observation };
   }
 
-  /** The viewport point a selector or coordinate click lands on (a selector resolves the way the click does). */
-  private async clickPoint(action: RemoteBrowserClickAction): Promise<{ X?: number; Y?: number }> {
-    if (!action.Selector) {
-      return { X: action.X, Y: action.Y };
+  /** The failed result that stops an action the guard cannot check or must leave to a person; `null` to go ahead. */
+  private refusal(target: ClickTarget): RemoteBrowserActionResult | null {
+    if (target.InvalidSelector) {
+      return { Success: false, CurrentUrl: this.adapter.CurrentUrl, Detail: `"${target.Label}" is not a plain CSS selector, so it cannot be checked; use a ref from browser_Inspect or a CSS selector.` };
     }
-    const box = (await this.adapter.QueryElement(action.Selector)).BoundingBox;
-    return box ? { X: (box.XMin + box.XMax) / 2, Y: (box.YMin + box.YMax) / 2 } : {};
+    if (target.Destructive) {
+      return {
+        Success: false,
+        CurrentUrl: this.adapter.CurrentUrl,
+        Detail: `Refusing to activate "${target.Label}": it submits, pays, places an order, deletes or signs in. Leave the page ready and ask the user to do it.`,
+      };
+    }
+    return null;
   }
 
   /**

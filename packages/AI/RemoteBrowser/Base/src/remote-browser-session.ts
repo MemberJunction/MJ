@@ -597,6 +597,13 @@ export interface IRemoteBrowserSession {
    */
   Close(): Promise<void>;
 
+  /**
+   * Stops the browser reaching a loopback, link-local or private-network host (except `allowedHosts`,
+   * as `host` or `host:port`) by any request: navigation, redirect, followed link or subresource. For a
+   * browser that a text conversation's agents drive. Can be called again to replace the list.
+   */
+  RestrictPrivateNetwork?(allowedHosts: string[]): Promise<void>;
+
   // ── Capability-gated (feature-gated; engine checks SupportedFeatures first) ──
 
   /**

@@ -52,22 +52,25 @@ export function NormalizeNavigableUrl(rawUrl: string): string {
   return `https://${trimmed}`;
 }
 
-/** The control a click resolves to, as the in-page guard sees it. */
+/** The control a click (or an Enter key) resolves to, as the in-page guard sees it. */
 export interface ClickTarget {
   /** Whether an element was found (always `false` for a point with nothing under it). */
   Found: boolean;
   /** The element's ref (`a3`, `f2`); set for a ref or text match so the click can target it exactly. */
   Ref?: string;
-  /** The element's visible label. */
+  /** The element's visible label (for a selector, the first destructive match's, else the first match's). */
   Label: string;
-  /** `true` for a submit, purchase, delete, sign-in or similar control a person must click. */
+  /** `true` when its label says it submits, pays, places an order, deletes or signs in: a person must click it. */
   Destructive: boolean;
+  /** `true` when the selector is not plain CSS, so the page cannot check what it matches. */
+  InvalidSelector?: boolean;
 }
 
-/** What to resolve a click against: a ref or visible text from inspect, or a viewport point. */
+/** What to resolve a click against: a ref or visible text from inspect, a CSS selector, or a viewport point. */
 export interface ClickTargetQuery {
   Ref?: string;
   Text?: string;
+  Selector?: string;
   X?: number;
   Y?: number;
 }
@@ -92,13 +95,15 @@ interface RawFillOutcome {
 type InPageRequest =
   | { Op: 'inspect'; MaxTextChars: number }
   | { Op: 'fill'; Values: ReadonlyArray<RemoteBrowserFillFieldInput> }
-  | { Op: 'resolveClick'; Query: ClickTargetQuery };
+  | { Op: 'resolveClick'; Query: ClickTargetQuery }
+  | { Op: 'resolveEnter'; Selector?: string };
 
 /** The result type of each in-page op. */
 interface InPageResults {
   inspect: RawInspection;
   fill: RawFillOutcome;
   resolveClick: ClickTarget;
+  resolveEnter: ClickTarget;
 }
 
 /**
@@ -109,7 +114,7 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
   type Control = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
   const REF_ATTR = 'data-mj-browser-ref';
   const PROTECTED =
-    /password|passcode|pin\b|otp|one[-_\s]?time|verification\s*code|cvv|cvc|csc|security\s*code|card\s*number|credit\s*card|debit\s*card|ssn|social\s*security|tax\s*id|routing\s*number|bank\s*account/i;
+    /password|passcode|pin\b|otp|one[-_\s]?time|verification\s*code|cvv|cvc|csc|security\s*code|card\s*number|number\s*on\s*card|credit\s*card|debit\s*card|cc-(number|csc|exp)|ssn|social\s*security|tax\s*id|routing\s*number|bank\s*account/i;
   const DESTRUCTIVE =
     /\b(submit|purchase|buy\s+now|pay\b|place\s+order|checkout|delete|remove|destroy|cancel\s+account|close\s+account|confirm\s+order|authorize|wire\s+transfer|sign\s+in|log\s+in)\b/i;
   const NON_FIELD_TYPES = ['hidden', 'submit', 'button', 'reset', 'image'];
@@ -137,17 +142,20 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
   const typeOf = (el: Element): string =>
     el.tagName === 'INPUT' ? (el.getAttribute('type') || 'text').toLowerCase() : el.tagName.toLowerCase();
 
-  const fieldLabel = (el: Control): string => {
-    const aria = clean(el.getAttribute('aria-label'));
-    if (aria) {
-      return aria;
-    }
-    const labelledBy = clean(
+  const labelledByText = (el: Element): string =>
+    clean(
       (el.getAttribute('aria-labelledby') ?? '')
         .split(/\s+/)
         .map((id) => (id ? document.getElementById(id)?.textContent ?? '' : ''))
         .join(' '),
     );
+
+  const fieldLabel = (el: Control): string => {
+    const aria = clean(el.getAttribute('aria-label'));
+    if (aria) {
+      return aria;
+    }
+    const labelledBy = labelledByText(el);
     if (labelledBy) {
       return labelledBy;
     }
@@ -168,10 +176,13 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
     );
   };
 
+  // Every name a field carries, not just the one that won as its label: a title or autocomplete
+  // token can be the only thing that says "card number".
   const isProtected = (el: Control): boolean => {
     const type = typeOf(el);
-    const descriptor = `${fieldLabel(el)} ${el.getAttribute('name') ?? ''} ${el.id} ${el.getAttribute('autocomplete') ?? ''} ${type}`;
-    return type === 'password' || PROTECTED.test(descriptor);
+    const names = [fieldLabel(el), labelledByText(el), type, el.id]
+      .concat(['aria-label', 'title', 'placeholder', 'name', 'autocomplete'].map((a) => el.getAttribute(a) ?? ''));
+    return type === 'password' || PROTECTED.test(names.join(' '));
   };
 
   const isLocked = (el: Control): boolean =>
@@ -184,7 +195,8 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
     (el.tagName === 'INPUT' && typeOf(el) === 'submit') ||
     (el.tagName === 'BUTTON' && (el.getAttribute('type') || 'submit').toLowerCase() === 'submit' && Boolean(el.closest('form')));
 
-  const isDestructive = (el: HTMLElement): boolean => isSubmit(el) || DESTRUCTIVE.test(actionLabel(el));
+  // The label alone: "any submit button in a form" also refused Search and Add to cart.
+  const isDestructive = (el: HTMLElement): boolean => DESTRUCTIVE.test(actionLabel(el));
 
   const visibleFields = (): Control[] =>
     (Array.from(document.querySelectorAll('input, select, textarea')) as Control[]).filter(
@@ -365,8 +377,37 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
     return { filled, errors };
   }
 
+  if (req.Op === 'resolveEnter') {
+    // Enter activates the focused control (or the one a typed action focuses first), or submits its
+    // form through the form's default button.
+    let active: HTMLElement | null;
+    try {
+      active = req.Selector ? document.querySelector<HTMLElement>(req.Selector) : (document.activeElement as HTMLElement | null);
+    } catch {
+      return { Found: false, Label: req.Selector ?? '', Destructive: false, InvalidSelector: true };
+    }
+    if (!active || active.tagName === 'TEXTAREA' || active.isContentEditable) {
+      return { Found: false, Label: '', Destructive: false };
+    }
+    const target = active.matches(ACTION_SELECTOR)
+      ? active
+      : active.closest('form')?.querySelector<HTMLElement>('button:not([type]), button[type="submit"], input[type="submit"], input[type="image"]') ?? null;
+    return target ? { Found: true, Label: actionLabel(target) || target.tagName.toLowerCase(), Destructive: isDestructive(target) } : { Found: false, Label: '', Destructive: false };
+  }
+
   // resolveClick
   const q = req.Query;
+  if (q.Selector) {
+    // Every match, not the first: the click may land on any of them (and on one below the fold).
+    let matches: HTMLElement[];
+    try {
+      matches = Array.from(document.querySelectorAll<HTMLElement>(q.Selector));
+    } catch {
+      return { Found: false, Label: q.Selector, Destructive: false, InvalidSelector: true };
+    }
+    const hit = matches.find(isDestructive) ?? matches[0];
+    return hit ? { Found: true, Label: actionLabel(hit) || hit.tagName.toLowerCase(), Destructive: isDestructive(hit) } : { Found: false, Label: q.Selector, Destructive: false };
+  }
   let el: HTMLElement | null = null;
   if (q.Ref) {
     el = byRef(q.Ref);
@@ -467,8 +508,16 @@ export async function FillPageFields(
  * Resolves what a click would hit, so the session can refuse a destructive control before clicking.
  *
  * @param adapter The connected browser adapter.
- * @param query A ref or visible text from inspect, or a viewport point.
+ * @param query A ref or visible text from inspect, a CSS selector, or a viewport point.
  */
 export async function ResolveClickTarget(adapter: PlaywrightBrowserAdapter, query: ClickTargetQuery): Promise<ClickTarget> {
   return runInPage(adapter, { Op: 'resolveClick', Query: query });
+}
+
+/**
+ * Resolves what pressing Enter would activate: the focused control (or the one `selector` names, which
+ * a typed action focuses first), or its form's default button.
+ */
+export async function ResolveEnterTarget(adapter: PlaywrightBrowserAdapter, selector?: string): Promise<ClickTarget> {
+  return runInPage(adapter, { Op: 'resolveEnter', Selector: selector });
 }
