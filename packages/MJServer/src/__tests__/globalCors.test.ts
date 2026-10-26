@@ -58,7 +58,7 @@ async function startApp(extensions: ServerExtensionConfig[]): Promise<string> {
     app.use(CreateGlobalCorsMiddleware({ allowedOrigins: ['*'] }, GetCorsOwningServerExtensionRoots(extensions)));
     mountBallotExtension(app);
     app.get('/core', (_req, res) => { res.json({ ok: true }); });
-    server = app.listen(0);
+    server = app.listen(0, '127.0.0.1');
     await new Promise<void>((resolve) => server!.once('listening', () => resolve()));
     return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 }
@@ -138,7 +138,7 @@ describe('CreateGlobalCorsMiddleware', () => {
         const app = express();
         app.use(CreateGlobalCorsMiddleware({ allowedOrigins: ['*'], allowCredentials: true }));
         app.get('/core', (_req, res) => { res.json({ ok: true }); });
-        server = app.listen(0);
+        server = app.listen(0, '127.0.0.1');
         await new Promise<void>((resolve) => server!.once('listening', () => resolve()));
         const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
         const res = await fetch(`${base}/core`, { headers: { Origin: OTHER_ORIGIN } });
@@ -164,7 +164,7 @@ async function startAppWithGraphQLMount(withFallback: boolean): Promise<string> 
         app.use(CreateExtensionOwnedPreflightFallback(ownedRoots));
     }
     app.use('/', cors(), (_req, res) => { res.json({ graphql: true }); });
-    server = app.listen(0);
+    server = app.listen(0, '127.0.0.1');
     await new Promise<void>((resolve) => server!.once('listening', () => resolve()));
     return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 }

@@ -226,7 +226,7 @@ describe('realtime recording REST routes', () => {
         const app = express();
         app.use(REALTIME_RECORDING_MOUNT_PATH, CreateRealtimeRecordingRouter(deps));
         server = await new Promise<Server>(resolve => {
-            const s = app.listen(0, () => resolve(s));
+            const s = app.listen(0, '127.0.0.1', () => resolve(s));
         });
         baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}${REALTIME_RECORDING_MOUNT_PATH}`;
     }
