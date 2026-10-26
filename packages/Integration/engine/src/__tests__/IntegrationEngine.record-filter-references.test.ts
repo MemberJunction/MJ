@@ -32,7 +32,8 @@ const DIMENSION_VALUES_ENTITY = {
     Name: 'Dimension Values',
     Fields: [
         { Name: 'ID', RelatedEntityID: null },
-        { Name: 'DimensionID', RelatedEntityID: DIMENSIONS_ID },
+        { Name: 'DimensionID', RelatedEntityID: DIMENSIONS_ID, RelatedEntity: 'Dimensions' },
+        { Name: 'LegacyParentID', RelatedEntityID: DIMENSIONS_ID, RelatedEntity: null },
         { Name: 'Code', RelatedEntityID: null },
     ],
 };
@@ -45,6 +46,7 @@ function fakeProvider(): DatabaseProviderBase {
     });
     Object.defineProperty(p, 'Entities', { value: [{ ID: DIMENSIONS_ID, Name: 'Dimensions' }, DIMENSION_VALUES_ENTITY] });
     Object.defineProperty(p, 'EntityByName', { value: (n: string) => (n === 'Dimension Values' ? DIMENSION_VALUES_ENTITY : undefined) });
+    Object.defineProperty(p, 'EntityByID', { value: (id: string) => (id === DIMENSIONS_ID ? { ID: DIMENSIONS_ID, Name: 'Dimensions' } : undefined) });
     return p;
 }
 
@@ -113,7 +115,12 @@ describe('record filter wiring', () => {
 describe('reference resolution wiring', () => {
     it('takes the parent entity from the field metadata', () => {
         expect(engine.resolveReferenceFields(entityMap({ resolveReferences: ['dimensionid'] })))
-            .toEqual([{ Field: 'DimensionID', RelatedEntityID: DIMENSIONS_ID }]);
+            .toEqual([{ Field: 'DimensionID', RelatedEntityID: DIMENSIONS_ID, RelatedEntityName: 'Dimensions' }]);
+    });
+
+    it('falls back to the entity lookup when the field carries no related entity name', () => {
+        expect(engine.resolveReferenceFields(entityMap({ resolveReferences: ['LegacyParentID'] })))
+            .toEqual([{ Field: 'LegacyParentID', RelatedEntityID: DIMENSIONS_ID, RelatedEntityName: 'Dimensions' }]);
     });
 
     it('fails the map when the field is not a foreign key', () => {

@@ -4319,7 +4319,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
     /**
      * The destination fields to resolve from external to MJ ids (`Configuration.resolveReferences`),
-     * each with the entity it points at. Throws when a field is not a foreign key on the target entity:
+     * each with the entity it points at (ID for the record-map read, name for error messages, both
+     * looked up here once per map rather than per unresolved row). Throws when a field is not a foreign key on the target entity:
      * without a related entity there is no record map to resolve through.
      */
     private resolveReferenceFields(entityMap: ICompanyIntegrationEntityMap): ReferenceField[] {
@@ -4332,7 +4333,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             if (!field?.RelatedEntityID) {
                 throw new Error(`Entity map ${entityMap.ExternalObjectName}: resolveReferences names ${name}, which is not a foreign key on ${entityMap.Entity}.`);
             }
-            return { Field: field.Name, RelatedEntityID: field.RelatedEntityID };
+            const relatedEntityName = field.RelatedEntity || this.ProviderToUse.EntityByID(field.RelatedEntityID)?.Name || 'parent';
+            return { Field: field.Name, RelatedEntityID: field.RelatedEntityID, RelatedEntityName: relatedEntityName };
         });
     }
 
@@ -4374,8 +4376,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             LoadReferenceLookups(this.ProviderToUse, config.companyIntegration.ID, references, mapped, contextUser));
         const resolution = ApplyResolvedReferences(mapped, references.map(r => r.Field), lookups);
         for (const miss of resolution.Unresolved) {
-            const ref = references.find(r => r.Field === miss.Field);
-            const parentName = this.ProviderToUse.Entities.find(e => UUIDsEqual(e.ID, ref?.RelatedEntityID))?.Name ?? 'parent';
+            const parentName = references.find(r => r.Field === miss.Field)?.RelatedEntityName ?? 'parent';
             const message = DescribeUnresolvedReference(miss, parentName);
             result.RecordsErrored++;
             result.Errors.push({

@@ -37,6 +37,8 @@ export interface ReferenceField {
     Field: string;
     /** The parent entity's ID — whose record maps hold the external → MJ id pairs. */
     RelatedEntityID: string;
+    /** The parent entity's name, for error messages. */
+    RelatedEntityName: string;
 }
 
 /** Per destination field: external id (lower-cased) → parent's MJ record id. */
