@@ -889,8 +889,10 @@ const conversationBrowserSchema = z.object({
   idleMinutes: z.coerce.number().positive().optional().default(15),
   /**
    * Private hosts a conversation browser may still reach, as `host` or `host:port` (e.g. `localhost:4200`).
-   * Every other loopback, link-local or private-network host is refused, so an agent cannot reach the
-   * server's own network. Default none.
+   * Every other loopback, link-local or private-network HOSTNAME is refused, including where a redirect
+   * lands. This is a best-effort hostname check: a public name that resolves to a private address,
+   * WebSockets and service-worker fetches get through. For real isolation, run the browsers under
+   * network egress rules. Default none.
    */
   allowedPrivateHosts: z.array(z.string()).optional().default([]),
 }).passthrough();

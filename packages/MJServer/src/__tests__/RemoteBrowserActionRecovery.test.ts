@@ -230,6 +230,42 @@ describe('RemoteBrowserActionResolver — conversation-scoped ownership & struct
   const convID2 = 'b2b2b2b2-0000-4000-8000-000000000012';
   const convID3 = 'b2b2b2b2-0000-4000-8000-000000000013';
 
+  it('refuses an instance key for a conversation, which would key a second, uncounted browser', async () => {
+    startSessionMock.mockReset();
+    const resolver = conversationResolver(userID);
+    await expect(
+      resolver.ExecuteRemoteBrowserAction(convID, 'inspect', ctx, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, 'x'),
+    ).rejects.toThrow('instanceKey is not accepted');
+    await expect(resolver.EndRemoteBrowserSession(convID, ctx, 'x')).rejects.toThrow('instanceKey is not accepted');
+    expect(startSessionMock).not.toHaveBeenCalled();
+  });
+
+  it('applies the network policy when the browser starts, not on every poll', async () => {
+    deadSession = makeSession();
+    startSessionMock.mockReset().mockResolvedValue(deadSession);
+    restrictMock.mockClear();
+    const resolver = conversationResolver(userID);
+    await resolver.RemoteBrowserSnapshot(convID, ctx);
+    expect(restrictMock).not.toHaveBeenCalled();
+    await resolver.ExecuteRemoteBrowserAction(convID, 'inspect', ctx);
+    expect(restrictMock).toHaveBeenCalledWith(convID, ['localhost:4200']);
+  });
+
+  it('after the idle reaper ends a browser, the next open streams the new one instead of answering "already streaming"', async () => {
+    const streamingSession = { ...makeSession(), StartScreencast: vi.fn(async () => undefined) };
+    startSessionMock.mockReset().mockResolvedValue(streamingSession as never);
+    endSessionMock.mockClear();
+    const resolver = conversationResolver(userID, { ID: userID }, null, { ...ENABLED, idleMinutes: -1 });
+    const pubSub = { publish: vi.fn() } as never;
+
+    expect((await resolver.StartRemoteBrowserScreencast(convID, ctx, pubSub)).Streaming).toBe(true);
+    expect(await ConversationBrowsers.ReapIdle()).toBe(1);
+    expect(endSessionMock).toHaveBeenCalledWith(convID);
+
+    expect((await resolver.StartRemoteBrowserScreencast(convID, ctx, pubSub)).Streaming).toBe(true);
+    expect(streamingSession.StartScreencast).toHaveBeenCalledTimes(2);
+  });
+
   it('refuses every conversation operation while the server has not enabled conversation browsers', async () => {
     startSessionMock.mockReset();
     const off = conversationResolver(userID, { ID: userID }, null, { ...ENABLED, enabled: false });

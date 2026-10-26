@@ -24,7 +24,14 @@ export class ConversationBrowserLedger {
   private readonly held = new Map<string, HeldBrowser>();
   private reapTimer: ReturnType<typeof setInterval> | null = null;
 
-  constructor(private readonly now: () => number = Date.now) {}
+  /**
+   * How an idle browser is ended. The resolver points this at its own end path, so a reaped browser
+   * leaves no stream bookkeeping behind; until then the engine ends it directly.
+   */
+  public EndBrowser: (conversationID: string) => Promise<unknown> = (conversationID) =>
+    RemoteBrowserEngine.Instance.EndSessionForAgentSession(conversationID);
+
+  constructor(private readonly now: () => number = () => Date.now()) {}
 
   /**
    * Records that a conversation's browser is about to be used. A conversation the ledger does not hold
@@ -64,7 +71,7 @@ export class ConversationBrowserLedger {
     for (const conversationID of idle) {
       this.held.delete(conversationID);
       try {
-        await RemoteBrowserEngine.Instance.EndSessionForAgentSession(conversationID);
+        await this.EndBrowser(conversationID);
       } catch (err) {
         LogError(`[ConversationBrowsers] Failed to end the idle browser of conversation ${conversationID}: ${err instanceof Error ? err.message : String(err)}`);
       }
