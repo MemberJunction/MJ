@@ -7,7 +7,7 @@
  */
 
 export * from './types.js';
-export { WidgetSessionClient, type FetchLike } from './session/widget-session-client.js';
+export { WidgetSessionClient, WidgetSessionError, type FetchLike } from './session/widget-session-client.js';
 export type { IWidgetTransport, WidgetProgressCallback, WidgetTurnResult } from './transport/widget-transport.js';
 export { MockWidgetTransport } from './transport/mock-widget-transport.js';
 export { RuntimeWidgetTransport } from './transport/runtime-widget-transport.js';
