@@ -15,7 +15,7 @@ import type {
     ExecuteAgentResult,
 } from '@memberjunction/ai-core-plus';
 import type { UserPayload } from '../types.js';
-import { PublishStatusUpdate } from '../generic/PushStatusResolver.js';
+import { PublishStatusUpdate, StatusUpdateOwnerID } from '../generic/PushStatusResolver.js';
 
 const SIGNIFICANT_STEPS = ['prompt_execution', 'action_execution', 'subagent_execution', 'decision_processing'];
 
@@ -34,11 +34,15 @@ export class AgentRunStatusPublisher {
     /**
      * @param sessionId Session stamped on the message body. Defaults to the payload's session.
      *   The push itself is always addressed to `userPayload.sessionId`, matching the resolver.
+     * @param conversationDetailId The run's reply row. When set, every message carries it as
+     *   `conversationDetailId`, not only the completion, so a client that reconnects mid-run can
+     *   find its row. When omitted, messages are as before.
      */
     constructor(
         private readonly pubSub: PubSubEngine,
         private readonly userPayload: UserPayload,
         private readonly sessionId: string = userPayload.sessionId,
+        private readonly conversationDetailId?: string,
     ) {}
 
     /** Latest run observed from a progress event, including steps that are not published. */
@@ -66,6 +70,7 @@ export class AgentRunStatusPublisher {
                 sessionId: this.sessionId,
                 agentRunId: agentRun.ID,
                 type: 'progress',
+                ...this.replyRow(),
                 agentRun: agentRun.GetAll ? agentRun.GetAll() : agentRun,
                 progress: {
                     currentStep: progress.step,
@@ -93,6 +98,7 @@ export class AgentRunStatusPublisher {
                 sessionId: this.sessionId,
                 agentRunId: agentRun.ID,
                 type: 'streaming',
+                ...this.replyRow(),
                 agentRun: agentRun.GetAll ? agentRun.GetAll() : agentRun,
                 streaming: {
                     content: chunk.content,
@@ -122,6 +128,7 @@ export class AgentRunStatusPublisher {
                 sessionId: this.sessionId,
                 agentRunId: agentRun.ID,
                 type: 'partial_result',
+                ...this.replyRow(),
                 partialResult: {
                     currentStep: lastStep,
                     partialOutput: result.payload || undefined,
@@ -134,7 +141,7 @@ export class AgentRunStatusPublisher {
             agentRunId: agentRun?.ID || 'unknown',
             type: 'complete',
             timestamp: new Date(),
-            conversationDetailId: conversationDetailId || agentRun?.ConversationDetailID,
+            conversationDetailId: conversationDetailId || agentRun?.ConversationDetailID || this.conversationDetailId,
             success: result.success,
             errorMessage: agentRun?.ErrorMessage || undefined,
             result: resultJson || undefined,
@@ -142,8 +149,9 @@ export class AgentRunStatusPublisher {
     }
 
     /**
-     * Completion for a failure that has no run. The fire-and-forget path uses this when
-     * `executeAIAgent` rejects. A host uses it the same way: when the turn throws
+     * Completion for a failure that has no run result. `executeAIAgent` sends it when the run
+     * throws (the agent could not start, the run failed, or its reply could not be saved), so a
+     * fire-and-forget client learns the reason. A host uses it the same way: when the turn throws
      * instead of returning a result, call `PublishFailure` with the reply row's id
      * and the error. That completion is what tells the chat the reply finished.
      */
@@ -160,10 +168,15 @@ export class AgentRunStatusPublisher {
         });
     }
 
+    /** `{ conversationDetailId }` when this run has a reply row, otherwise nothing, so the message keeps its old shape. */
+    private replyRow(): { conversationDetailId?: string } {
+        return this.conversationDetailId ? { conversationDetailId: this.conversationDetailId } : {};
+    }
+
     private publish(type: 'ExecutionProgress' | 'StreamingContent', data: unknown): void {
         PublishStatusUpdate(this.pubSub, {
             sessionId: this.userPayload.sessionId,
-            ownerUserId: this.userPayload?.userRecord?.ID ?? '',
+            ownerUserId: StatusUpdateOwnerID(this.userPayload),
             message: JSON.stringify({
                 resolver: 'RunAIAgentResolver',
                 type,

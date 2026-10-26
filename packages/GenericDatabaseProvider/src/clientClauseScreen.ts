@@ -14,10 +14,10 @@ export interface ClientViewClauseSet {
 
 /**
  * The entity base views a client fragment may read. `Qualified` is keyed by `schema.view`, `Bare`
- * by view name alone; a bare name that exists in more than one schema maps to `null`.
+ * by view name alone; a name that collides across entities (or across schemas for `Bare`) maps to `null`.
  */
 export interface EntityBaseViewAllowList {
-    Qualified: Map<string, EntityInfo>;
+    Qualified: Map<string, EntityInfo | null>;
     Bare: Map<string, EntityInfo | null>;
 }
 
@@ -203,6 +203,40 @@ export class ClientClauseScreen {
     }
 
     /**
+     * Screens a full client-supplied SQL statement (ad-hoc query path) so every table reference
+     * resolves to an entity BaseView that `user` can read unscoped (CanRead, no row-level filter,
+     * no denied fields), with in-scope CTE references permitted.
+     */
+    public static AssertFullStatementUsesReadableEntityViews(
+        sqlText: string,
+        entities: readonly EntityInfo[],
+        dialect: SQLParserDialect,
+        user: UserInfo | undefined,
+        label = 'SQL',
+    ): void {
+        if (!user) {
+            throw new Error(`Invalid ${label}: no acting user resolved for ad-hoc SQL — refusing`);
+        }
+        ClientClauseScreen.AssertNoIdentifierAliasNames(sqlText, dialect, label);
+        ClientClauseScreen.AssertNoForbiddenFunctionCalls(sqlText, dialect, label);
+        const parser = new SQLParser(sqlText, dialect);
+        if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
+            throw new Error(`Invalid ${label}: not a safe read-only statement — refusing under uncertainty`);
+        }
+        if (ClientClauseScreen.AstContainsWriteNode(parser.AST)) {
+            throw new Error(`Invalid ${label}: write/DDL nested in a subquery is not permitted`);
+        }
+        const reads = ClientClauseScreen.CollectStatementReads(parser);
+        ClientClauseScreen.AssertEverySelectAccountedFor(sqlText, dialect, reads, label);
+        const allowed = ClientClauseScreen.BuildEntityBaseViewAllowList(entities);
+        for (const relation of reads.Relations) {
+            if (relation.IsCTEReference) continue;
+            const entity = ClientClauseScreen.AssertRelationReadable(allowed, relation, label, user);
+            if (entity) ClientClauseScreen.AssertUnscopedRead(entity, user, label);
+        }
+    }
+
+    /**
      * Applies {@link AssertClauseUsesEntityBaseViews} to every clause of a RunView request. A
      * platform-specific clause has every variant screened, each under its own platform's dialect.
      */
@@ -292,17 +326,46 @@ export class ClientClauseScreen {
         return !schema;
     }
 
-    /** Builds the base-view allow-list for a set of entities. */
+    /**
+     * Builds the base-view allow-list for a set of entities, including both each entity's
+     * canonical `BaseView` and any registered, usable `AlternateBaseViews` (D13).
+     * Disabled alternate base views (`!abv.IsUsable`) are excluded. Canonical `BaseView`
+     * entries are registered first and never overwritten by alternate base views; cross-entity
+     * collisions on `(schema, viewName)` map to `null` (fail-closed).
+     */
     public static BuildEntityBaseViewAllowList(entities: readonly EntityInfo[]): EntityBaseViewAllowList {
-        const qualified = new Map<string, EntityInfo>();
+        const qualified = new Map<string, EntityInfo | null>();
         const bare = new Map<string, EntityInfo | null>();
+        const canonicalQualifiedKeys = new Set<string>();
         for (const e of entities) {
             const view = ClientClauseScreen.StripIdentifierQuotes(e.BaseView);
             if (!view) continue;
             const schema = ClientClauseScreen.StripIdentifierQuotes(e.SchemaName);
             const bareKey = view.toLowerCase();
             bare.set(bareKey, bare.has(bareKey) ? null : e);
-            if (schema) qualified.set(`${schema}.${view}`.toLowerCase(), e);
+            if (schema) {
+                const qualKey = `${schema}.${view}`.toLowerCase();
+                canonicalQualifiedKeys.add(qualKey);
+                const existing = qualified.get(qualKey);
+                qualified.set(qualKey, existing === undefined || existing === e ? e : null);
+            }
+        }
+        for (const e of entities) {
+            for (const abv of e.AlternateBaseViews ?? []) {
+                if (!abv.IsUsable) continue;
+                const altView = ClientClauseScreen.StripIdentifierQuotes(abv.ViewName);
+                if (!altView) continue;
+                const altSchema = ClientClauseScreen.StripIdentifierQuotes(abv.EffectiveSchemaName || e.SchemaName);
+                const altBareKey = altView.toLowerCase();
+                const existingBare = bare.get(altBareKey);
+                bare.set(altBareKey, existingBare === undefined || existingBare === e ? e : null);
+                if (altSchema) {
+                    const qualKey = `${altSchema}.${altView}`.toLowerCase();
+                    if (canonicalQualifiedKeys.has(qualKey)) continue;
+                    const existingQual = qualified.get(qualKey);
+                    qualified.set(qualKey, existingQual === undefined || existingQual === e ? e : null);
+                }
+            }
         }
         return { Qualified: qualified, Bare: bare };
     }
@@ -322,12 +385,17 @@ export class ClientClauseScreen {
         label: string,
         user?: UserInfo,
     ): EntityInfo {
-        const entity = ClientClauseScreen.IsUnqualifiedSchema(schema)
+        const unqualified = ClientClauseScreen.IsUnqualifiedSchema(schema);
+        const entity = unqualified
             ? allowed.Bare.get(table.toLowerCase())
             : allowed.Qualified.get(`${schema}.${table}`.toLowerCase());
         const reference = `${schema ? schema + '.' : ''}${table}`;
         if (entity === null) {
-            throw new Error(`Invalid ${label}: '${table}' is a base view in more than one schema — qualify it with its schema`);
+            throw new Error(
+                unqualified
+                    ? `Invalid ${label}: '${table}' is a base view in more than one schema — qualify it with its schema`
+                    : `Invalid ${label}: '${reference}' is registered as a base view on more than one entity`,
+            );
         }
         if (!entity) {
             throw new Error(`Invalid ${label}: subquery must use an entity base view, not '${reference}'`);

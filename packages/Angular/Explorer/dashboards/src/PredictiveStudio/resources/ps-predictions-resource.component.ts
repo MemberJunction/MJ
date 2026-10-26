@@ -1,13 +1,14 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, inject } from '@angular/core';
 import { NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { CompositeKey, LogError, RunView, UserInfo } from '@memberjunction/core';
-import { MJConversationEntity, MJEnvironmentEntityExtended, MJMLModelEntity, MJProcessRunDetailEntity, MJListEntity, MJListDetailEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJEnvironmentEntityExtended, MJMLModelEntity, MJListEntity, MJListDetailEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { trustDots, trustEvidenceLine } from '@memberjunction/predictive-studio-core';
+import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
+import { TrustVerdicts, AtRiskRules, ImportanceDisplay, type AtRiskRow } from '@memberjunction/predictive-studio-core';
+import type { PredictionGridRowsLoadedEvent } from '../components/ps-predictions-grid.component';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { PSResourceBase } from './ps-resource-base';
 import { buildBusinessCatalog, type BusinessPredictionCard } from '../business-predictions.view-models';
-import { ParseAtRiskRows, TopGlobalDrivers, LabelFromRecord, type AtRiskRow } from '../at-risk.view-models';
 import { buildPredictionsAgentContext, resolvePSRecord, buildPSNotFoundError } from '../predictive-studio-agent-context';
 import { validateStringParam } from '../../shared/agent-tool-validation';
 import { BuildRecordIdFilter } from '../../shared/record-id-filter';
@@ -123,20 +124,27 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
                     @if (selected.canOpen) {
                       @if (drivers.length > 0) {
                         <div class="ps-drivers" data-testid="ps-drivers">
-                          <i class="fa-solid fa-lightbulb"></i> <strong>What's driving this:</strong>
+                          <i class="fa-solid fa-lightbulb"></i> <strong>Weighted most by this model:</strong>
                           @for (d of drivers; track d) { <span class="ps-driver-chip">{{ d }}</span> }
                         </div>
                       }
-                      <ps-predictions-grid
-                        data-testid="ps-atrisk-list"
-                        #atriskList
-                        [modelId]="selected.modelId"
-                        [runId]="latestRunId"
-                        [title]="selected.title"
-                        [entityName]="selectedTargetEntityName"
-                        [problemType]="selectedProblemType"
-                        height="580px">
-                      </ps-predictions-grid>
+                      <!-- Rendered once the latest run is resolved, so the grid reads that run once; its rows feed the counts, export and list. -->
+                      @if (LatestRunResolved) {
+                        <ps-predictions-grid
+                          data-testid="ps-atrisk-list"
+                          #atriskList
+                          [modelId]="selected.modelId"
+                          [runId]="LatestRunId"
+                          [title]="selected.title"
+                          [entityName]="selectedTargetEntityName"
+                          [problemType]="selectedProblemType"
+                          height="580px"
+                          (RowsLoaded)="OnAtRiskRowsLoaded($event)"
+                          (RowsLoadFailed)="OnAtRiskRowsLoadFailed($event)">
+                        </ps-predictions-grid>
+                      } @else {
+                        <mj-loading text="Finding the latest predictions…" size="small"></mj-loading>
+                      }
                     }
                     <div class="ps-action-bar" [class.locked]="!selected.canOpen" data-testid="ps-action-bar">
                       @if (selected.canOpen) {
@@ -148,6 +156,7 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
                         <div class="ps-action-locked"><i class="fa-solid fa-lock"></i> {{ selected.trust.gateReason }}</div>
                       }
                     </div>
+                    @if (selected.canOpen && AtRiskCapped) { <div class="ps-list-result muted" data-testid="ps-atrisk-capped">The latest run has more than {{ MaxRunDetailRowsLabel }} predictions; this list shows the first {{ MaxRunDetailRowsLabel }}.</div> }
                     @if (listResult) { <div class="ps-list-result muted" data-testid="ps-list-result">{{ listResult }}</div> }
                   </div>
                 }
@@ -440,7 +449,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   public set atRiskRows(value: AtRiskRow[]) {
     this.AtRiskRows = value;
   }
-  /** Plain-language "what's driving this" drivers for the open prediction (global feature importance). */
+  /** The features the model weighted most for the open prediction (coefficient models only). */
   public Drivers: string[] = [];
 
   /** @deprecated Use {@link Drivers}. */
@@ -451,6 +460,21 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   public set drivers(value: string[]) {
     this.Drivers = value;
   }
+  /**
+   * True when the latest run has more predictions than {@link PredictiveStudioEngine.MaxRunDetailRows}: the at-risk
+   * list holds only the first ones, and the workspace says so.
+   */
+  public AtRiskCapped = false;
+
+  /** The run-detail cap, formatted for the capped notice. */
+  public readonly MaxRunDetailRowsLabel = PredictiveStudioEngine.MaxRunDetailRowsLabel;
+
+  /** The most at-risk records "Send to a list" adds, highest risk first. */
+  public static readonly AtRiskListLimit = 200;
+
+  /** True once the open prediction's latest run is looked up (found or not): the grid then renders and reads it once. */
+  public LatestRunResolved = false;
+
   /** Whether the at-risk list is loading for the open prediction. */
   public AtRiskLoading = false;
 
@@ -522,6 +546,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
         HoldoutMetrics: m.HoldoutMetrics,
         Metrics: m.Metrics,
         ProblemType: m.ProblemType,
+        Lineage: m.Lineage,
         updatedAt: m.__mj_UpdatedAt ?? null,
       })),
     );
@@ -532,13 +557,13 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
     return this.Cards;
   }
 
-  public Dots(c: BusinessPredictionCard): number { return trustDots(c.trust.grade); }
+  public Dots(c: BusinessPredictionCard): number { return TrustVerdicts.TrustDots(c.trust.grade); }
 
   /** @deprecated Use {@link Dots}. */
   public dots(c: BusinessPredictionCard): number {
     return this.Dots(c);
   }
-  public Evidence(): string { return trustEvidenceLine({ noun: 'records' }); }
+  public Evidence(): string { return TrustVerdicts.TrustEvidenceLine({ noun: 'records' }); }
 
   /** @deprecated Use {@link Evidence}. */
   public evidence(): string {
@@ -557,9 +582,10 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
       Selected: this.Selected ? { Name: this.Selected.title, TrustGrade: this.Selected.trust.grade, CanOpen: this.Selected.canOpen } : null,
       AtRiskLoaded: this.View === 'workspace' && !this.AtRiskLoading && !this.AtRiskError,
       AtRiskCount: this.AtRiskRows.length,
-      HighRiskCount: this.AtRiskRows.filter((r) => r.band === 'high').length,
-      MediumRiskCount: this.AtRiskRows.filter((r) => r.band === 'medium').length,
-      LowRiskCount: this.AtRiskRows.filter((r) => r.band === 'low').length,
+      AtRiskCapped: this.AtRiskCapped,
+      HighRiskCount: this.AtRiskRows.filter((r) => r.Band === 'high').length,
+      MediumRiskCount: this.AtRiskRows.filter((r) => r.Band === 'medium').length,
+      LowRiskCount: this.AtRiskRows.filter((r) => r.Band === 'low').length,
       Drivers: this.Drivers,
     });
   }
@@ -639,9 +665,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
     if (!c.canOpen) return;
     this.Selected = c;
     this.View = 'workspace';
-    this.AtRiskRows = [];
-    this.Drivers = [];
-    this.AtRiskError = null;
+    this.resetAtRiskState();
     this.ListResult = null;
     // Mark loading BEFORE the publish below: otherwise AtRiskLoaded computes true for one publish with
     // atRiskRows still [], fabricating "0 at risk" to the agent for a list that hasn't been fetched yet.
@@ -656,37 +680,72 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
     return this.Open(c);
   }
 
-  /** Load the open prediction's plain-language drivers + its latest run's ranked at-risk rows. */
+  /** Clears everything derived from the previously open prediction, so a model switch never shows its rows or notices. */
+  private resetAtRiskState(): void {
+    this.AtRiskRows = [];
+    this.AtRiskCapped = false;
+    this.Drivers = [];
+    this.AtRiskError = null;
+    this.LatestRunId = null;
+    this.LatestRunResolved = false;
+  }
+
+  /**
+   * Load the open prediction's plain-language drivers and resolve its latest run. The run's rows are read once, by the
+   * embedded grid, and arrive through {@link OnAtRiskRowsLoaded}.
+   */
   private async loadAtRisk(c: BusinessPredictionCard): Promise<void> {
     const model = this.engine.PublishedModels.find((m) => UUIDsEqual(m.ID, c.modelId));
-    this.Drivers = TopGlobalDrivers(model?.FeatureImportance ?? null, 3);
+    this.Drivers = ImportanceDisplay.GlobalDriversShowable(model?.Lineage) ? AtRiskRules.TopGlobalDrivers(model?.FeatureImportance || null, 3) : [];
     this.AtRiskLoading = true;
     this.AtRiskError = null;
     this.cdrLocal.detectChanges();
     try {
       const provider = this.ProviderToUse;
-      const user = provider.CurrentUser ?? undefined;
-      const runs = await this.engine.LoadRecentRunsForModel(c.modelId, provider, user, { maxRows: 1 });
-      const latest = runs[0];
-      this.LatestRunId = latest?.ID ?? null;
-      if (latest?.ID) {
-        const res = await RunView.FromMetadataProvider(provider).RunView<MJProcessRunDetailEntity>(
-          { EntityName: 'MJ: Process Run Details', ExtraFilter: `ProcessRunID='${latest.ID}'`, MaxRows: 2137, ResultType: 'entity_object' },
-          user,
-        );
-        if (res.Success && this.Selected?.modelId === c.modelId) {
-          this.AtRiskRows = ParseAtRiskRows((res.Results ?? []).map((d) => ({ recordId: d.RecordID, ResultPayload: d.ResultPayload })));
-          await this.resolveAtRiskLabels(model);
-        }
-      }
+      const runs = await this.engine.LoadRecentRunsForModel(c.modelId, provider, provider.CurrentUser ?? undefined, { maxRows: 1 });
+      if (!this.isStillOpen(c)) return;
+      this.LatestRunId = runs[0]?.ID ?? null;
     } catch (err) {
       this.AtRiskError = err instanceof Error ? err.message : String(err);
+      this.AtRiskLoading = false;
       LogError(`PSPredictionsResource.loadAtRisk: ${this.AtRiskError}`);
     } finally {
-      this.AtRiskLoading = false;
-      this.publishAgentContext();
-      this.cdrLocal.detectChanges();
+      if (this.isStillOpen(c)) {
+        this.LatestRunResolved = true;
+        this.publishAgentContext();
+        this.cdrLocal.detectChanges();
+      }
     }
+  }
+
+  /** True while `c` is still the open prediction (a slow lookup must not overwrite a newer one's state). */
+  private isStillOpen(c: BusinessPredictionCard): boolean {
+    return this.View === 'workspace' && this.Selected !== null && UUIDsEqual(this.Selected.modelId, c.modelId);
+  }
+
+  /** The grid parsed the latest run: its rows drive the counts, the export, "Send to a list" and the agent context. */
+  public async OnAtRiskRowsLoaded(event: PredictionGridRowsLoadedEvent): Promise<void> {
+    const selected = this.Selected;
+    if (!selected) return;
+    // Copies: the label lookup below writes Label onto these rows, and the grid owns the originals.
+    this.AtRiskRows = event.Rows.map((r) => ({ ...r }));
+    this.AtRiskCapped = event.Capped;
+    this.AtRiskError = null;
+    const model = this.engine.PublishedModels.find((m) => UUIDsEqual(m.ID, selected.modelId));
+    await this.resolveAtRiskLabels(model);
+    this.AtRiskLoading = false;
+    this.publishAgentContext();
+    this.cdrLocal.detectChanges();
+  }
+
+  /** The grid could not read the latest run (it shows the error and a retry itself). */
+  public OnAtRiskRowsLoadFailed(message: string): void {
+    this.AtRiskRows = [];
+    this.AtRiskCapped = false;
+    this.AtRiskError = message;
+    this.AtRiskLoading = false;
+    this.publishAgentContext();
+    this.cdrLocal.detectChanges();
   }
 
   /** Retry loading the open prediction's at-risk list after a failure — bound to the at-risk error banner. */
@@ -744,13 +803,14 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
       if (!entity) return;
       // The target entity is arbitrary — its key can have any column name(s), including a composite key.
       const pkNames = entity.PrimaryKeys.map((pk) => pk.Name);
-      const targets = this.AtRiskRows.slice(0, 200); // the rows a user actually acts on
-      const ids = targets.map((r) => r.recordId);
-      // Only fetch the columns labelFromRecord can actually use — a broad no-Fields fetch pulls every
-      // column (incl. large text/JSON) of an arbitrary entity just to render a display name. Fall back
-      // to the broad fetch only when the entity has none of the candidate label fields.
-      const candidates = ['Name', 'FirstName', 'LastName', 'Email'];
-      const labelFields = candidates.filter((c) => entity.Fields.some((f) => f.Name.toLowerCase() === c.toLowerCase()));
+      const targets = this.AtRiskRows.slice(0, PSPredictionsResourceComponent.AtRiskListLimit); // the rows a user actually acts on
+      const ids = targets.map((r) => r.RecordID);
+      // Only fetch the columns LabelFromRecord can actually use (the entity's name field first) — a broad
+      // no-Fields fetch pulls every column (incl. large text/JSON) of an arbitrary entity just to render a
+      // display name. Fall back to the broad fetch only when the entity has none of the candidate label fields.
+      const nameField = entity.NameField?.Name || null;
+      const candidates = [...(nameField ? [nameField] : []), 'Name', 'FirstName', 'LastName', 'Email'];
+      const labelFields = entity.Fields.filter((f) => candidates.some((c) => c.toLowerCase() === f.Name.toLowerCase())).map((f) => f.Name);
       const res = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<Record<string, unknown>>(
         {
           EntityName: target.name,
@@ -765,8 +825,8 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
       const byId = new Map<string, Record<string, unknown>>();
       for (const row of res.Results ?? []) byId.set(NormalizeUUID(CompositeKey.FromEntityRecord(entity, row).ToCompactURLSegment()), row);
       for (const r of this.AtRiskRows) {
-        const rec = byId.get(NormalizeUUID(r.recordId));
-        if (rec) r.label = LabelFromRecord(rec);
+        const rec = byId.get(NormalizeUUID(r.RecordID));
+        if (rec) r.Label = AtRiskRules.LabelFromRecord(rec, nameField);
       }
     } catch (err) {
       LogError(`PSPredictionsResource.resolveAtRiskLabels (cosmetic — list keeps ids): ${err instanceof Error ? err.message : String(err)}`);
@@ -776,10 +836,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   public BackToCatalog(): void {
     this.View = 'catalog';
     this.Selected = null;
-    this.LatestRunId = null;
-    this.AtRiskRows = [];
-    this.Drivers = [];
-    this.AtRiskError = null;
+    this.resetAtRiskState();
     this.publishAgentContext();
     this.cdrLocal.detectChanges();
   }
@@ -814,8 +871,9 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
 
   /**
    * P1 #4 — "Send to a list" as a one-click server action (no agent sentence to parse): create an MJ List
-   * over the model's target entity and add the at-risk members (high/medium band, capped) so a team can
-   * act on it immediately (outreach campaign, tasks, etc.).
+   * over the model's target entity and add the at-risk members (risk at least `AT_RISK_LIST_MIN_RISK_PCT`, highest
+   * first, at most {@link AtRiskListLimit}) so a team can act on it immediately; the result line says how many of the
+   * qualifying records were added.
    */
   public async SendToList(): Promise<void> {
     if (this.CreatingList || this.AtRiskRows.length === 0 || !this.Selected) return;
@@ -831,7 +889,8 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
       const user = p.CurrentUser ?? undefined;
       const list = await p.GetEntityObject<MJListEntity>('MJ: Lists', user);
       // Minute-resolution timestamp so two sends on the same day don't produce identical-named lists.
-      list.Name = `At-Risk: ${this.Selected.title} (${new Date().toISOString().slice(0, 16).replace('T', ' ')})`;
+      const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
+      list.Name = AtRiskRules.FormatAtRiskListName(this.Selected.title, stamp);
       list.EntityID = entityId;
       if (user?.ID) list.UserID = user.ID;
       list.RefreshMode = 'Additive';
@@ -840,14 +899,15 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
         this.ListResult = `Couldn't create the list: ${list.LatestResult?.CompleteMessage ?? 'unknown error'}`;
         return;
       }
-      const members = this.AtRiskRows.filter((r) => r.band !== 'low').slice(0, 200);
+      const qualifying = AtRiskRules.SelectAtRiskListMembers(this.AtRiskRows, this.AtRiskRows.length).length;
+      const members = AtRiskRules.SelectAtRiskListMembers(this.AtRiskRows, PSPredictionsResourceComponent.AtRiskListLimit);
       let seq = 0;
       let added = 0;
       let firstFailure: string | null = null;
       for (const r of members) {
         const ld = await p.GetEntityObject<MJListDetailEntity>('MJ: List Details', user);
         ld.ListID = list.ID;
-        ld.RecordID = r.recordId;
+        ld.RecordID = r.RecordID;
         ld.Sequence = seq++;
         ld.Status = 'Active';
         if (await ld.Save()) {
@@ -859,7 +919,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
       const failed = members.length - added;
       this.ListResult =
         failed === 0
-          ? `Added ${added} at-risk record${added === 1 ? '' : 's'} to “${list.Name}”.`
+          ? `Added ${added} of ${qualifying} at-risk record${qualifying === 1 ? '' : 's'} (highest risk first) to “${list.Name}”.`
           : `Added ${added} of ${members.length} records to “${list.Name}” — ${failed} failed to add (first error: ${firstFailure}).`;
       if (failed > 0) LogError(`PSPredictionsResource.sendToList: ${failed}/${members.length} adds failed. First: ${firstFailure}`);
     } catch (err) {
@@ -890,8 +950,8 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   public ExportList(): void {
     if (this.AtRiskRows.length === 0) return;
     const csv = [
-      'Record,Likelihood %,Predicted',
-      ...this.AtRiskRows.map((r) => `${this.csvCell(r.label ?? r.recordId)},${r.riskPct},${this.csvCell(r.class ?? '')}`),
+      'Record,Risk %,Predicted',
+      ...this.AtRiskRows.map((r) => `${this.csvCell(r.Label || r.RecordID)},${r.RiskPct},${this.csvCell(r.Class || '')}`),
     ].join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     const a = document.createElement('a');

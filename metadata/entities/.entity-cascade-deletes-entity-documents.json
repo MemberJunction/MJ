@@ -1,0 +1,11 @@
+[
+  {
+    "fields": {
+      "Name": "MJ: Entity Documents",
+      "CascadeDeletes": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Entity Documents"
+    }
+  }
+]

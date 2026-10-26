@@ -532,19 +532,23 @@ export class PgVectorDatabase extends VectorDBBase {
      * @returns A {@link BaseResponse} indicating success or failure.
      * @throws Never throws; errors are caught and returned as a failure response.
      */
-    public async UpdateRecord(record: UpdateOptions): Promise<BaseResponse> {
+    public async UpdateRecord(
+        record: UpdateOptions,
+        indexName?: string,
+        _providerConfig?: Record<string, unknown>,
+    ): Promise<BaseResponse> {
         try {
             const pool = this.getPool();
-            const indexName = (record as Record<string, unknown>)['indexName'] as string;
-            if (!indexName) {
-                return this.wrapFailureResponse('indexName property is required on the UpdateOptions object');
+            const resolvedIndex = indexName || ((record as Record<string, unknown>)['indexName'] as string | undefined);
+            if (!resolvedIndex) {
+                return this.wrapFailureResponse('indexName is required on UpdateRecord or the UpdateOptions object');
             }
 
             const setClauses: string[] = [];
             const queryParams: unknown[] = [];
             let paramIndex = 1;
 
-            if (record.values) {
+            if (record.values && record.values.length > 0) {
                 setClauses.push(`embedding = $${paramIndex}::vector`);
                 queryParams.push(`[${record.values.join(',')}]`);
                 paramIndex++;
@@ -561,7 +565,7 @@ export class PgVectorDatabase extends VectorDBBase {
 
             queryParams.push(record.id);
             await pool.query(
-                `UPDATE ${this.qualifyTable(indexName)}
+                `UPDATE ${this.qualifyTable(resolvedIndex)}
                  SET ${setClauses.join(', ')}
                  WHERE id = $${paramIndex}`,
                 queryParams
@@ -576,17 +580,27 @@ export class PgVectorDatabase extends VectorDBBase {
     }
 
     /**
-     * Update records in batch. Currently delegates to {@link UpdateRecord} since the
-     * base class signature accepts a single {@link UpdateOptions} object.
+     * Update one or more vector records' embeddings and/or metadata.
      *
-     * @param records - The update options (single record).
+     * @param records - Single {@link UpdateOptions} or array of {@link UpdateOptions}.
+     * @param indexName - Optional target index (table) name.
+     * @param providerConfig - Optional provider configuration.
      * @returns A {@link BaseResponse} indicating success or failure.
      * @throws Never throws; errors are caught and returned as a failure response.
      */
-    public async UpdateRecords(records: UpdateOptions): Promise<BaseResponse> {
-        // The base class signature takes a single UpdateOptions, but the intent is batch.
-        // Delegate to UpdateRecord for now.
-        return this.UpdateRecord(records);
+    public async UpdateRecords(
+        records: UpdateOptions | UpdateOptions[],
+        indexName?: string,
+        providerConfig?: Record<string, unknown>,
+    ): Promise<BaseResponse> {
+        const list = Array.isArray(records) ? records : [records];
+        for (const rec of list) {
+            const result = await this.UpdateRecord(rec, indexName, providerConfig);
+            if (!result.success) {
+                return result;
+            }
+        }
+        return this.wrapSuccessResponse(null);
     }
 
     /**

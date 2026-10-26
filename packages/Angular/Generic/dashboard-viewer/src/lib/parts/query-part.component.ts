@@ -3,7 +3,9 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
 import { PanelConfig } from '../models/dashboard-types';
 import { MJQueryEntity } from '@memberjunction/core-entities';
-import { QueryViewerComponent, QueryEntityLinkClickEvent } from '@memberjunction/ng-query-viewer';
+import { QueryViewerComponent, QueryEntityLinkClickEvent, QueryParameterValues, QuerySelectionChangedEvent } from '@memberjunction/ng-query-viewer';
+import { PartInputProblemMessage, PartInputResolution, ROW_SELECTED_EVENT } from '../models/dashboard-properties';
+import { LoadPartInterface } from '../models/dashboard-part-interfaces';
 
 /**
  * Runtime renderer for Query dashboard parts.
@@ -43,17 +45,28 @@ import { QueryViewerComponent, QueryEntityLinkClickEvent } from '@memberjunction
               Size="compact" />
           }
         
+          @if (HasActiveSelection && !IsLoading && !ErrorMessage) {
+            <div class="part-selection-bar">
+              <button type="button" class="part-clear-selection" (click)="ClearSelection()">
+                <i class="fa-solid fa-xmark" aria-hidden="true"></i> Clear selection
+              </button>
+            </div>
+          }
+
           <!-- Query Viewer -->
           @if (!IsLoading && !ErrorMessage && hasQuery && queryId) {
             <div class="query-content">
               <mj-query-viewer
                 #queryViewer
+                [Provider]="Provider"
                 [QueryId]="queryId"
                 [AutoRun]="true"
                 [ShowToolbar]="showToolbar"
                 [PersistState]="true"
                 [PersistParameters]="true"
+                [MappedParameters]="MappedParameters"
                 (EntityLinkClick)="onEntityLinkClick($event)"
+                (SelectionChange)="OnSelectionChange($event)"
                 (QueryError)="onQueryError($event)">
               </mj-query-viewer>
             </div>
@@ -101,6 +114,31 @@ import { QueryViewerComponent, QueryEntityLinkClickEvent } from '@memberjunction
             width: 100%;
             height: 100%;
         }
+
+        .part-selection-bar {
+            display: flex;
+            justify-content: flex-end;
+            padding: 4px 8px;
+            border-bottom: 1px solid var(--mj-border-subtle);
+        }
+
+        .part-clear-selection {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 2px 10px;
+            border: 1px solid var(--mj-border-default);
+            border-radius: 12px;
+            background: var(--mj-bg-surface);
+            color: var(--mj-text-secondary);
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .part-clear-selection:hover {
+            background: var(--mj-bg-surface-hover);
+            color: var(--mj-text-primary);
+        }
     `]
 })
 export class QueryPartComponent extends BaseDashboardPart implements AfterViewInit, OnDestroy {
@@ -145,6 +183,15 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
     public set showToolbar(value) {
       this.ShowToolbar = value;
     }
+
+    /**
+     * Parameter values from the part's input mappings. They override the user's saved values, are
+     * never saved back into them, and show read-only. Null when the part has no mappings.
+     */
+    public MappedParameters: QueryParameterValues | null = null;
+
+    /** True while the part shows a problem with its mappings rather than a load error. */
+    private showingInputProblem = false;
 
     private queryEntity: MJQueryEntity | null = null;
     private autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -196,6 +243,7 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
                 }
             }
 
+            if (!(await this.applyQueryInputs(config))) return;
             this.HasQuery = true;
             this.ShowToolbar = (config?.['showParameterControls'] as boolean) !== false;
 
@@ -207,8 +255,62 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
 
             this.setLoading(false);
         } catch (error) {
+            this.showingInputProblem = false;
             this.setError(error instanceof Error ? error.message : 'Failed to load query');
         }
+    }
+
+    /**
+     * Works out the mapped parameter values. A part without mappings loads nothing more and runs as
+     * before. Returns false, showing why, when a mapping is broken or a mapped input has no value.
+     */
+    private async applyQueryInputs(config: PanelConfig | null): Promise<boolean> {
+        if (this.InputMappings.length === 0) {
+            this.MappedParameters = null;
+            return true;
+        }
+        const partInterface = await LoadPartInterface(config, this.ProviderToUse);
+        return this.showInputs(this.UpdateInputs(partInterface.Inputs));
+    }
+
+    /** Shows the inputs' problem, or takes their values. Returns false when the part stops. */
+    private showInputs(resolution: PartInputResolution | null): boolean {
+        const problem = PartInputProblemMessage(resolution);
+        this.showingInputProblem = problem !== null;
+        if (problem) {
+            this.setError(problem);
+            return false;
+        }
+        this.MappedParameters = resolution ? this.mappedValues(resolution) : null;
+        return true;
+    }
+
+    /**
+     * Every mapped parameter with its value, or null when nothing set it, so the query viewer never
+     * falls back to the user's saved value for a parameter the dashboard drives.
+     */
+    private mappedValues(resolution: PartInputResolution): QueryParameterValues {
+        const values: QueryParameterValues = {};
+        for (const mapping of this.InputMappings) {
+            values[mapping.Input] = resolution.Values[mapping.Input] ?? null;
+        }
+        return values;
+    }
+
+    /** New input values: the query viewer reruns the query with them. */
+    protected override ApplyInputs(resolution: PartInputResolution | null): void {
+        if (this.ErrorMessage && !this.showingInputProblem) return; // a load error stays until the next load
+        if (this.showInputs(resolution)) {
+            this.ErrorMessage = null;
+            this.HasQuery = !!this.QueryId;
+            this.cdr.detectChanges();
+        }
+    }
+
+    /** RowSelected: the selected row's columns; an empty selection clears it. */
+    public OnSelectionChange(event: QuerySelectionChangedEvent): void {
+        const row = event?.selectedRows?.[0];
+        this.EmitPartEvent(ROW_SELECTED_EVENT, row ? { ...row } : null);
     }
 
     public OnEntityLinkClick(event: QueryEntityLinkClickEvent): void {

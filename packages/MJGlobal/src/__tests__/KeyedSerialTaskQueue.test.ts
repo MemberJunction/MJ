@@ -180,4 +180,48 @@ describe('KeyedSerialTaskQueue', () => {
         await q.flush();
         expect(order).toEqual(['child']);
     });
+
+    describe('Settled (#6014)', () => {
+        it('resolves only after the key\'s latest task settles', async () => {
+            const q = new KeyedSerialTaskQueue();
+            const key = {};
+            const order: string[] = [];
+
+            q.Enqueue(key, async () => { await delay(10); order.push('first'); });
+            q.Enqueue(key, async () => { await delay(10); order.push('second'); });
+            await q.Settled(key);
+            order.push('settled');
+
+            expect(order).toEqual(['first', 'second', 'settled']);
+        });
+
+        it('resolves at once for a key with no task', async () => {
+            const q = new KeyedSerialTaskQueue();
+            const other = {};
+            q.Enqueue(other, () => delay(50));
+
+            let settled = false;
+            void q.Settled({}).then(() => { settled = true; });
+            await Promise.resolve();
+
+            expect(settled).toBe(true);
+            await q.Flush();
+        });
+
+        it('resolves (does not reject) when the key\'s task failed', async () => {
+            const q = new KeyedSerialTaskQueue();
+            const key = {};
+            q.Enqueue(key, async () => { await delay(5); throw new Error('boom'); });
+
+            await expect(q.Settled(key)).resolves.toBeUndefined();
+            expect((await q.Flush()).rejections).toBe(1);
+        });
+
+        it('is a pure read — it neither enqueues nor delays later tasks', async () => {
+            const q = new KeyedSerialTaskQueue();
+            const key = {};
+            await q.Settled(key);
+            expect(await q.Flush()).toEqual({ failures: 0, rejections: 0 });
+        });
+    });
 });

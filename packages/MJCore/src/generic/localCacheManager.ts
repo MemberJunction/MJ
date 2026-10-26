@@ -1,6 +1,8 @@
 import { BaseSingleton, MJGlobal, MJEventType } from "@memberjunction/global";
 import { AggregateResult, DatasetItemFilterType, DatasetResultType, IMetadataProvider, ILocalStorageProvider, LocalStorageWriteOptions } from "./interfaces";
-import { AggregateExpression, RunViewParams, IsMaterializedDataSource } from "../views/runView";
+import { AggregateExpression, RunViewParams, IsMaterializedDataSource, NormalizeAlternateBaseViewName } from "../views/runView";
+import { GetEffectiveAlternateBaseViewName } from "./alternateBaseViews";
+import { ViewPropertyValuesKey } from "../views/viewProperties";
 import { LogError, LogStatusEx, LogWarning } from "./logging";
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 import { Metadata } from "./metadata";
@@ -103,6 +105,8 @@ export interface CacheEntryInfo {
     rowCount?: number;
     /** Optional TTL expiry timestamp */
     expiresAt?: number;
+    /** Timestamp (epoch ms) when this entry was last verified against the backing database */
+    lastVerifiedAt?: number;
 }
 
 /**
@@ -172,6 +176,10 @@ export interface CachedRunViewData {
      * touching a scaffolding slot would freeze it and break the owner that mutates those rows.
      */
     providerInternalScaffolding?: boolean;
+    /** Timestamp (epoch ms) when this entry was initially cached */
+    cachedAt?: number;
+    /** Timestamp (epoch ms) when this entry was last verified against the backing database */
+    lastVerifiedAt?: number;
 }
 
 /**
@@ -207,6 +215,10 @@ export interface CachedRunViewResult {
      * forward. See {@link CachedRunViewData.providerInternalScaffolding}.
      */
     providerInternalScaffolding?: boolean;
+    /** Timestamp (epoch ms) when this entry was initially cached */
+    cachedAt?: number;
+    /** Timestamp (epoch ms) when this entry was last verified against the backing database */
+    lastVerifiedAt?: number;
 }
 
 /** A RunQuery result slot as stored. */
@@ -576,6 +588,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      */
     private _sharesReferences: boolean = false;
     private _registry: Map<string, CacheEntryInfo> = new Map();
+    private _lastVerifiedAt: Map<string, number> = new Map();
     private _initialized: boolean = false;
     private _initializePromise: Promise<void> | null = null;
     private _stats = { hits: 0, misses: 0 };
@@ -1045,6 +1058,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             const seg = parts[i];
             if (!seg) {
                 continue;
+            }
+            if (seg.startsWith('abv:')) {
+                return true;           // alternate base view applies a canonical WHERE/JOIN — never maintain in place on save
             }
             if (seg.startsWith('imr:')) {
                 continue;          // widens the set — safe to maintain
@@ -2520,6 +2536,15 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             parts.push('bin:1');
         }
 
+        // SkipTotalRowCount segment. A call that skips the fallback COUNT stores a result whose
+        // TotalRowCount was never counted, so it must not share a slot with the otherwise
+        // identical counted call (each would be served the other's TotalRowCount). Appended only
+        // when true, so every existing fingerprint stays byte-for-byte identical. Not allowlisted
+        // in hasNarrowingSegment, so such a slot is invalidated on save rather than maintained.
+        if (params.SkipTotalRowCount === true) {
+            parts.push('strc:1');
+        }
+
         // DataSource segment. RunViewParams.DataSource:'Materialized' routes the read to the entity's
         // materialized snapshot view (GetEffectiveBaseView), a DIFFERENT physical source than the default
         // live base view — so a Live read and a Materialized read of the same entity/filter/orderBy MUST
@@ -2528,6 +2553,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // identical and no existing cache entries are invalidated.
         if (IsMaterializedDataSource(params.DataSource)) {
             parts.push('ds:materialized');
+        }
+
+        // AlternateBaseView segment. Routing a read through an alternate base view (explicitly via
+        // params.AlternateBaseView or pinned inside a loaded params.ViewEntity's DisplayState JSON)
+        // targets a different physical SQL view with its own canonical WHERE/JOIN, so it MUST NOT
+        // share a cache slot with the entity's canonical BaseView or another alternate view.
+        // Appended only when non-empty so canonical reads keep their exact pre-existing fingerprint.
+        const effectiveAbv = NormalizeAlternateBaseViewName(GetEffectiveAlternateBaseViewName(params));
+        if (effectiveAbv.length > 0) {
+            parts.push(`abv:${effectiveAbv}`);
         }
 
         // Keyset (AfterKey) seek cursor MUST be part of the fingerprint. Each keyset page
@@ -2580,6 +2615,18 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const viewKey = (params.ViewID || params.ViewName || params.ViewEntity?.PrimaryKey?.ToConcatenatedString() || '').trim();
         if (viewKey.length > 0) {
             parts.push(`vw:${viewKey}`);
+        }
+
+        // View-property segment. A stored view's property values (RunViewParams.Properties and
+        // ServerProperties) each add a predicate the provider builds, so one chapter's run must
+        // never be served another chapter's slot. On the server the provider has already replaced
+        // both with the resolved values (token defaults included) before this runs. The values go
+        // in as canonical JSON rather than a hash: a 32-bit hash of values a client partly chooses
+        // could be steered onto another run's slot. Appended ONLY when a value is present, so every
+        // run without properties keeps its exact fingerprint.
+        const propertyKey = ViewPropertyValuesKey(params.Properties, params.ServerProperties);
+        if (propertyKey.length > 0) {
+            parts.push(`vp:${propertyKey}`);
         }
 
         // Dataset namespace. `GetDatasetByName` caches each dataset ITEM's rows through this same
@@ -2896,7 +2943,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
 
         // Persist results, maxUpdatedAt, aggregateResults, totalRowCount, and schemaHash
-        const data: CachedRunViewData = { results, maxUpdatedAt };
+        const initialNow = Date.now();
+        const data: CachedRunViewData = { results, maxUpdatedAt, cachedAt: initialNow, lastVerifiedAt: initialNow };
         if (options?.ProviderInternalScaffolding) {
             // Persisted so event-driven in-place maintenance carries the exemption forward.
             data.providerInternalScaffolding = true;
@@ -2958,10 +3006,12 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
         try {
             // Native object storage — IDB structured-clones, localStorage / Redis serialize internally.
-            const expiresAt = ttlMs ? Date.now() + ttlMs : undefined;
+            const writeNow = Date.now();
+            const expiresAt = ttlMs ? writeNow + ttlMs : undefined;
             await this._storageProvider.SetItem<CachedRunViewData>(fingerprint, data, CacheCategory.RunViewCache,
                 this.runViewWriteOptions(fingerprint, expiresAt));
 
+            this._lastVerifiedAt.set(fingerprint, writeNow);
             this.registerEntry({
                 key: fingerprint,
                 type: 'runview',
@@ -2975,8 +3025,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                     MaxRows: params.MaxRows,
                     HasAggregates: (params.Aggregates?.length ?? 0) > 0
                 },
-                cachedAt: Date.now(),
-                lastAccessedAt: Date.now(),
+                cachedAt: writeNow,
+                lastAccessedAt: writeNow,
+                lastVerifiedAt: writeNow,
                 accessCount: 1,
                 sizeBytes,
                 maxUpdatedAt,
@@ -3110,6 +3161,11 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         this.indexSlotThisProcessDidNotWrite(fingerprint);
         this._stats.hits++;
         const results = parsed.results || [];
+        const cachedAt = registryEntry?.cachedAt ?? parsed.cachedAt;
+        const lastVerifiedAt = this._lastVerifiedAt.get(fingerprint)
+            ?? registryEntry?.lastVerifiedAt
+            ?? parsed.lastVerifiedAt
+            ?? cachedAt;
         const result: CachedRunViewResult = {
             results,
             maxUpdatedAt: parsed.maxUpdatedAt,
@@ -3120,11 +3176,31 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             schemaStamp: parsed.schemaStamp,
             // Same carry-forward rationale: a maintained scaffolding slot must stay exempt.
             providerInternalScaffolding: parsed.providerInternalScaffolding,
+            cachedAt,
+            lastVerifiedAt,
         };
         if (parsed.aggregateResults) {
             result.aggregateResults = parsed.aggregateResults;
         }
         return result;
+    }
+
+    /**
+     * Updates the `lastVerifiedAt` timestamp for a cached RunView slot in O(1) time
+     * without re-cloning, re-freezing, or rewriting its stored row array.
+     *
+     * Used by server-side smart-cache verification after a lightweight SQL status probe
+     * (`MAX(__mj_UpdatedAt)`, `COUNT(*)`) confirms that a cached slot is still current.
+     *
+     * @param fingerprint - The cache fingerprint to touch
+     * @param timestamp - Verification timestamp in epoch ms (defaults to `Date.now()`)
+     */
+    public TouchRunViewResultVerifiedAt(fingerprint: string, timestamp: number = Date.now()): void {
+        this._lastVerifiedAt.set(fingerprint, timestamp);
+        const entry = this._registry.get(fingerprint);
+        if (entry) {
+            entry.lastVerifiedAt = timestamp;
+        }
     }
 
     /**
@@ -3316,11 +3392,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             );
 
             // Return with rowCount derived from merged results and aggregates if provided
+            const verifiedNow = this._lastVerifiedAt.get(fingerprint) ?? Date.now();
+            this._lastVerifiedAt.set(fingerprint, verifiedNow);
+            const registryEntry = this._registry.get(fingerprint);
             const result: CachedRunViewResult = {
                 results: mergedResults,
                 maxUpdatedAt: newMaxUpdatedAt,
                 rowCount: mergedResults.length,
-                totalRowCount: mergedTotalRowCount
+                totalRowCount: mergedTotalRowCount,
+                cachedAt: registryEntry?.cachedAt ?? verifiedNow,
+                lastVerifiedAt: verifiedNow
             };
             if (aggregateResults) {
                 result.aggregateResults = aggregateResults;
@@ -3520,9 +3601,13 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // reports for the same rows (the client smart-cache check compares the two). The caller's
         // value (the event time) is used only when the rows carry no timestamp column.
         const maxUpdatedAt = LocalCacheManager.MaxUpdatedAtOfRows(updatedResults) ?? newMaxUpdatedAt;
+        const now = Date.now();
+        const existingEntry = this._registry.get(fingerprint);
         const data: CachedRunViewData = {
             results: updatedResults,
-            maxUpdatedAt
+            maxUpdatedAt,
+            cachedAt: existingEntry?.cachedAt ?? now,
+            lastVerifiedAt: now
         };
         // Carry the schemaHash FORWARD — never recompute it here (B38).
         //
@@ -3566,15 +3651,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             this.freezeRowDataIfProviderSharesReferences(data);
         }
 
-        const existingEntry = this._registry.get(fingerprint);
         await this._storageProvider!.SetItem<CachedRunViewData>(fingerprint, data, CacheCategory.RunViewCache,
             this.runViewWriteOptions(fingerprint, existingEntry?.expiresAt));
 
+        this._lastVerifiedAt.set(fingerprint, now);
         if (existingEntry) {
             existingEntry.maxUpdatedAt = maxUpdatedAt;
             existingEntry.rowCount = updatedResults.length;
             existingEntry.sizeBytes = sizeBytes;
-            existingEntry.lastAccessedAt = Date.now();
+            existingEntry.lastAccessedAt = now;
+            existingEntry.lastVerifiedAt = now;
             this.debouncedPersistRegistry();
         }
 
@@ -3602,6 +3688,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             try {
                 await this._storageProvider.Remove(key, CacheCategory.RunViewCache);
                 this._registry.delete(key);
+                this._lastVerifiedAt.delete(key);
                 this.removeFromEntityIndex(key);
             } catch (e) {
                 LogError(`LocalCacheManager.InvalidateEntityCaches failed for key ${key}: ${e}`);
@@ -4066,6 +4153,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                     await this._storageProvider.Remove(entry.key + '_date', category);
                 }
                 this._registry.delete(entry.key);
+                this._lastVerifiedAt.delete(entry.key);
             } catch (e) {
                 LogError(`LocalCacheManager.ClearByType failed for key ${entry.key}: ${e}`);
             }
@@ -4097,6 +4185,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
 
         this._registry.clear();
+        this._lastVerifiedAt.clear();
         this._stats = { hits: 0, misses: 0 };
         await this.persistRegistry();
         return count;
@@ -4157,6 +4246,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      */
     private unregisterEntry(key: string): void {
         this._registry.delete(key);
+        this._lastVerifiedAt.delete(key);
         this.debouncedPersistRegistry();
     }
 
@@ -4430,6 +4520,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                     this.removeFromEntityIndex(entry.fingerprint);
                 }
                 this._registry.delete(key);
+                this._lastVerifiedAt.delete(key);
             } catch (e) {
                 // Continue evicting other entries
             }
@@ -4485,6 +4576,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 this.removeFromEntityIndex(entry.key);
                 bytesToFree -= entry.sizeBytes;
                 this._registry.delete(entry.key);
+                this._lastVerifiedAt.delete(entry.key);
             } catch {
                 // Continue evicting
             }
@@ -4603,5 +4695,6 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             this.removeFromEntityIndex(entry.fingerprint);
         }
         this._registry.delete(key);
+        this._lastVerifiedAt.delete(key);
     }
 }

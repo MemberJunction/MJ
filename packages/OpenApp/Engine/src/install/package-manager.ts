@@ -50,7 +50,14 @@ export interface PackageManagerOptions {
   ServerPackages: ManifestPackageEntry[];
   /** Client packages to add/remove */
   ClientPackages: ManifestPackageEntry[];
-  /** Shared packages (added to both server and client) */
+  /**
+   * Shared packages — dependency DECLARATION is added to both server and client `package.json`,
+   * deliberately not platform-routed. Declaring a dependency is not the same as bundling it: a
+   * Node-only shared package may still need to be a declared client dependency for type-only
+   * imports even though it must never be BUNDLED into the client. `dynamicPackages.client`
+   * (see `GetClientPackagesFromManifest`) is what decides bundling, filtered by platform (#4428);
+   * this list is not.
+   */
   SharedPackages: ManifestPackageEntry[];
   /** Package version (used as the semver range for each package) */
   Version: string;
@@ -106,7 +113,8 @@ export interface PackageOperationResult {
  * Distributes packages by role:
  * - Server packages -> server workspace(s)
  * - Client packages -> client workspace(s)
- * - Shared packages -> all workspaces
+ * - Shared packages -> all workspaces (dependency DECLARATION only — see `SharedPackages` on
+ *   {@link PackageManagerOptions}; this is intentional, not a missed platform-routing call site)
  *
  * @param options - Package manager configuration
  * @returns Operation result

@@ -1,7 +1,50 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, EntityAlternateBaseViewInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 import { TrimTrailingStatementTerminators } from '../Misc/sql_text';
+
+/**
+ * Topologically orders an entity's alternate base views by `ParentID` so parent
+ * alternate views are always refreshed/rebound before derived child alternate views.
+ * Preserves the input order (`Sequence, Name`) among siblings and roots, and safely
+ * terminates if a cycle is encountered.
+ */
+export function OrderAlternateBaseViewsTopologically(
+    views: readonly EntityAlternateBaseViewInfo[]
+): EntityAlternateBaseViewInfo[] {
+    if (views.length <= 1) {
+        return [...views];
+    }
+    const byId = new Map<string, EntityAlternateBaseViewInfo>();
+    for (const v of views) {
+        byId.set(v.ID.toLowerCase(), v);
+    }
+    const visited = new Set<string>();
+    const visiting = new Set<string>();
+    const result: EntityAlternateBaseViewInfo[] = [];
+
+    const visit = (v: EntityAlternateBaseViewInfo): void => {
+        const key = v.ID.toLowerCase();
+        if (visited.has(key) || visiting.has(key)) {
+            return;
+        }
+        visiting.add(key);
+        if (v.ParentID) {
+            const parent = byId.get(v.ParentID.toLowerCase());
+            if (parent) {
+                visit(parent);
+            }
+        }
+        visiting.delete(key);
+        visited.add(key);
+        result.push(v);
+    };
+
+    for (const v of views) {
+        visit(v);
+    }
+    return result;
+}
 
 // ─── CONNECTION ABSTRACTION ──────────────────────────────────────────────────
 
@@ -967,6 +1010,26 @@ export abstract class CodeGenDatabaseProvider {
      */
     abstract generateFullTextSearch(entity: EntityInfo, searchFields: EntityFieldInfo[], primaryKeyIndexName: string): FullTextSearchResult;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
+    /**
+     * Whether {@link generateFullTextSearch} embeds the table's PHYSICAL primary-key index name
+     * in the DDL it emits — and therefore whether CodeGen must look that name up before calling it.
+     *
+     * SQL Server: `true` — `CREATE FULLTEXT INDEX … KEY INDEX <name>` names a unique index on the
+     *   table, so the DDL literally cannot be composed without it.
+     * PostgreSQL: `false` (the default) — full-text search there is a GIN index over a `tsvector`
+     *   column, and the search function joins the base view on MJ's DECLARED primary keys. No
+     *   physical index name appears anywhere in the generated SQL.
+     *
+     * The default is `false` so that a provider which does not consume the value does not inherit a
+     * precondition it cannot satisfy. The lookup (`GetEntityPrimaryKeyIndexName`) THROWS when the
+     * table has no `PRIMARY KEY` constraint, which is legitimate on PostgreSQL — MJ's primary key
+     * may be a soft key declared only in metadata. Requiring the name unconditionally made full-text
+     * search unreachable on every such table, on a platform that never wanted the name.
+     */
+    get FullTextIndexNeedsPrimaryKeyIndexName(): boolean {
+        return false;
+    }
+
     // ─── RECURSIVE FUNCTIONS (HIERARCHY & ROOT ID) ──────────────────────
 
     /**
@@ -1055,6 +1118,31 @@ export abstract class CodeGenDatabaseProvider {
      * Generates GRANT SELECT permission for a base view.
      */
     abstract generateViewPermissions(entity: EntityInfo): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
+
+    /**
+     * Generates GRANT SELECT (and on SQL Server, managed-scope REVOKEs and column-level
+     * FLS DENY SELECTs) for a specific target view belonging to `entity` (e.g. a registered
+     * alternate base view). Defaults to `generateViewPermissions(entity)`.
+     */
+    GenerateViewPermissionsForTarget(
+        entity: EntityInfo,
+        _targetSchemaName: string,
+        _targetViewName: string,
+    ): string {
+        return this.generateViewPermissions(entity);
+    }
+
+    /**
+     * Generates REVOKE SELECT statements for a disabled alternate base view belonging to `entity`
+     * so disabling a previously active alternate base view revokes its database read grants.
+     */
+    GenerateDisabledViewRevokePermissionsForTarget(
+        _entity: EntityInfo,
+        _targetSchemaName: string,
+        _targetViewName: string,
+    ): string {
+        return '';
+    }
 
     /**
      * Generates GRANT EXECUTE permission for a CRUD routine.
@@ -1699,6 +1787,29 @@ export abstract class CodeGenDatabaseProvider {
     }
 
     /**
+     * SQL that rebinds an alternate base view after its entity's base view (or parent
+     * alternate view) has been regenerated. SQL Server: empty here — the alternate view
+     * is refreshed via {@link generateViewRefreshSQL}. PostgreSQL: invokes
+     * `__mj.spRebindLayeredOuterView` against the immediate inner view.
+     */
+    GenerateAlternateBaseViewRebindSQL(
+        _entity: EntityInfo,
+        _altViewSchema: string,
+        _altViewName: string,
+        _innerViewName: string,
+    ): string {
+        return '';
+    }
+
+    /**
+     * Returns SQL to query catalog dependencies of a view (`ReferencedSchema`, `ReferencedObject`, `ReferencedType`).
+     * Used by alternate base view parity/safety checks.
+     */
+    getViewDependenciesSQL(_schema: string, _viewName: string): string {  // case-violation-ok-legacy-back-compat: a subclass overrides this
+        return '';
+    }
+
+    /**
      * Wraps `innerSQL` so it runs only when the named view already exists.
      *
      * Used for objects CodeGen refreshes or grants on but does NOT create — specifically the
@@ -1865,7 +1976,10 @@ export abstract class CodeGenDatabaseProvider {
      *             rejects the view with `function does not exist`.
      *   Phase 1 = view DDL (viewSQL) — may invoke provider-specific recovery.
      *   Phase 2 = CRUD function DDL — ONLY runs if phase 1 succeeded.
-     *   Phase 3 = view permissions (viewPermSQL) — runs only if phase 2 succeeded.
+     *   Phase 3 = full-text search DDL (ftsSQL) — runs after the view phase
+     *             because the search function's result type is the base view.
+     *   Phase 4 = view permissions (viewPermSQL) — runs only if the earlier
+     *             phases succeeded.
      * The `success`/`phase` pair in the result identifies exactly where things
      * fell over so the caller doesn't have to bisect.
      */
@@ -1878,6 +1992,11 @@ export abstract class CodeGenDatabaseProvider {
         crudCreateSQL: string;
         crudUpdateSQL: string;
         crudDeleteSQL: string;
+        /** Full-text search DDL (tsvector column/trigger/index plus the search
+         *  function). Empty when the entity has no full-text search. Must run
+         *  AFTER the view phase — the search function `RETURNS SETOF <baseview>`,
+         *  so it cannot be created against a missing or stale view. */
+        ftsSQL: string;
         viewPermSQL: string;
         willRegenerate?: Set<string>;
     }): Promise<PhasedExecutionResult>;
@@ -2141,8 +2260,10 @@ export interface FieldResolutionGap {
 export interface PhasedExecutionResult {
     /** True only when every requested phase succeeded. */
     success: boolean;
-    /** Which phase failed. Null when `success` is true. */
-    phase: 'tvf' | 'view' | 'functions' | 'permissions' | null;
+    /** Which phase failed. Null when `success` is true. `fulltext-generate`
+     *  is the caller-side failure to GENERATE the full-text DDL, as distinct
+     *  from `fulltext`, the provider's failure to EXECUTE it. */
+    phase: 'tvf' | 'view' | 'functions' | 'fulltext-generate' | 'fulltext' | 'permissions' | null;
     /** Underlying error when `success` is false. */
     error?: Error;
 }
