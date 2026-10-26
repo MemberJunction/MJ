@@ -5,7 +5,7 @@ import { BaseLLM, ChatMessage, ChatMessageRole, ChatMessageContent, ChatMessageC
     SummarizeResult, ModelUsage, ErrorAnalyzer, parseBase64DataUrl, FileCapabilities,
     ChatToolCall, ChatReasoningBlock, CHAT_FINISH_REASON_TOOL_CALLS } from "@memberjunction/ai";
 import { RegisterClass, ToJSONSafe } from "@memberjunction/global";
-import { BuildAnthropicThinking, UsesAdaptiveThinking, type AnthropicThinkingRequest } from "./thinking-config";
+import { BuildAnthropicThinking, ResolveSamplingParams, UsesAdaptiveThinking, type AnthropicThinkingRequest } from "./thinking-config";
 
 /**
  * Sentinel a prompt can embed to tell the Anthropic adapter WHERE the stable, cacheable prefix ends
@@ -797,27 +797,13 @@ export class AnthropicLLM extends BaseLLM {
                 messages: this.formatMessagesWithCaching(messagesForApi, params.enableCaching ?? true, thinking.thinking !== undefined)
             };
 
-            // Add temperature only where Anthropic accepts it. Temperature is incompatible with thinking on every
-            // model, and adaptive-thinking models (Claude 4.6+, Claude 5) reject a non-default value "regardless of
-            // whether thinking is used" — including requests that carry no `thinking` block at all. 1 is the default.
+            // Sampling parameters only where Anthropic accepts them. Claude Opus 4.7/4.8, every Claude 5 and Mythos
+            // Preview reject a non-default temperature / top_p / top_k on every request, thinking or not — a different
+            // (and smaller) set than the adaptive-thinking models, since Claude 4.6 still accepts them while thinking is
+            // off. Older models reject temperature and top_k only while thinking is on. See `ResolveSamplingParams`.
             // Docs: https://platform.claude.com/docs/en/build-with-claude/thinking#limits-and-feature-compatibility ("Sampling parameters")
-            if (params.temperature != null) {
-                const samplingRestricted = thinking.thinking !== undefined || UsesAdaptiveThinking(params.model);
-                if (!samplingRestricted) {
-                    createParams.temperature = params.temperature;
-                } else if (params.temperature === 1) {
-                    createParams.temperature = 1;
-                }
-            }
+            Object.assign(createParams, ResolveSamplingParams(params.model, thinking.thinking !== undefined, params));
 
-            // Add supported parameters.
-
-            if (params.topP != null) {
-                createParams.top_p = params.topP;
-            }
-            if (params.topK != null) {
-                createParams.top_k = params.topK;
-            }
             if (params.stopSequences != null && params.stopSequences.length > 0) {
                 createParams.stop_sequences = params.stopSequences;
             }
@@ -1046,18 +1032,7 @@ export class AnthropicLLM extends BaseLLM {
             stream: true as const
         };
 
-        // Add temperature if specified
-        if (params.temperature != null) {
-            createParams.temperature = params.temperature;
-        }
-
-        // Add supported parameters
-        if (params.topP != null) {
-            createParams.top_p = params.topP;
-        }
-        if (params.topK != null) {
-            createParams.top_k = params.topK;
-        }
+        // Sampling parameters (temperature / top_p / top_k) are added after thinking is resolved, below.
         if (params.stopSequences != null && params.stopSequences.length > 0) {
             createParams.stop_sequences = params.stopSequences;
         }
@@ -1108,14 +1083,10 @@ export class AnthropicLLM extends BaseLLM {
         if (streamingThinking.thinking) {
             createParams.thinking = streamingThinking.thinking;
         }
-        // Temperature is incompatible with thinking on every model, and adaptive-thinking models (Claude 4.6+,
-        // Claude 5) reject a non-default value "regardless of whether thinking is used" — including requests that
-        // carry no `thinking` block at all. 1 is the default and stays.
+        // Sampling parameters only where Anthropic accepts them — the same rules as the non-streaming path, from
+        // the same helper, so the two paths cannot drift. See `ResolveSamplingParams` for the per-model rules.
         // Docs: https://platform.claude.com/docs/en/build-with-claude/thinking#limits-and-feature-compatibility ("Sampling parameters")
-        const samplingRestricted = streamingThinking.thinking !== undefined || UsesAdaptiveThinking(params.model);
-        if (samplingRestricted && createParams.temperature !== undefined && createParams.temperature !== 1) {
-            delete createParams.temperature;
-        }
+        Object.assign(createParams, ResolveSamplingParams(params.model, streamingThinking.thinking !== undefined, params));
         if (streamingThinking.output_config) {
             createParams.output_config = streamingThinking.output_config;
         }
