@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { CommonModule } from '@angular/common';
 import { EntityInfo } from '@memberjunction/core';
 import { renderComponentFixture, query, text, attr, createFakeProvider } from '@memberjunction/ng-test-utils';
+import { MjRecordLinkDirective } from '@memberjunction/ng-base-forms';
 import { EntityLinkPillComponent } from './entity-link-pill.component';
 
 /**
@@ -27,7 +28,8 @@ function render(inputs: Record<string, unknown>, opts: { resolves?: boolean; ent
   const resolved: EntityInfo | undefined = opts.resolves === false ? undefined : (opts.entity ?? ENTITY_STUB());
   const fixture = renderComponentFixture(EntityLinkPillComponent, {
     imports: [CommonModule],
-    declarations: [EntityLinkPillComponent],
+    // The pill's span hosts [mjRecordLink] (hover preview); without the directive its inputs throw NG0303.
+    declarations: [EntityLinkPillComponent, MjRecordLinkDirective],
     inputs: { Provider: createFakeProvider({ entityByName: () => resolved }), ...inputs },
   });
   fixture.detectChanges(false);

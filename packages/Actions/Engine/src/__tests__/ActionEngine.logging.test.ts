@@ -142,7 +142,7 @@ const PARAM_DEF_ID = 'PA710000-0000-0000-0000-000000000006';
 interface EngineInternals {
     ActionParams: MJActionParamEntity[];
     ActionResultCodes: unknown[];
-    _logQueue: { Insert: (e: unknown) => void; Update: (e: unknown, mutate: () => void) => void };
+    _logQueue: { Insert: (e: unknown) => void; Update: (e: unknown, mutate: () => void) => void; Settled: (e: unknown) => Promise<void> };
 }
 
 /**
@@ -160,7 +160,9 @@ function engine(paramDefinitions: MJActionParamEntity[] = []): ActionEngineServe
     const inserted: unknown[] = [];
     internals._logQueue = {
         Insert: (row: unknown) => { inserted.push(row); },
-        Update: (_row: unknown, mutate: () => void) => { mutate(); }
+        Update: (_row: unknown, mutate: () => void) => { mutate(); },
+        // Writes apply synchronously above, so every row has already "landed".
+        Settled: () => Promise.resolve()
     };
     (e as unknown as { _inserted: unknown[] })._inserted = inserted;
     return e;
@@ -421,5 +423,46 @@ describe('LoggingMode', () => {
         );
 
         expect(logRows).toHaveLength(0);
+    });
+
+    it('skips param redaction and JSON serialization inside SnapshotInputParams when SkipActionLog is true or LoggingMode is None (MJ-AI-13)', async () => {
+        const e = engine();
+        const paramDefsSpy = vi.spyOn(
+            e as unknown as { ParamDefinitionsFor: (p: RunActionParams) => MJActionParamEntity[] },
+            'ParamDefinitionsFor'
+        );
+
+        await e.RunAction(
+            runParams({
+                Params: [{ Name: 'Large', Value: { big: 'payload' }, Type: 'Input' }] as ActionParam[],
+                SkipActionLog: true
+            } as Partial<RunActionParams>)
+        );
+        await e.RunAction(
+            runParams({
+                Params: [{ Name: 'Large', Value: { big: 'payload' }, Type: 'Input' }] as ActionParam[],
+                Provenance: { LoggingMode: 'None' }
+            } as Partial<RunActionParams>)
+        );
+
+        expect(paramDefsSpy).not.toHaveBeenCalled();
+    });
+
+    it('instantiates BaseAction only once per RunAction even when Audience is evaluated (MJ-AI-14)', async () => {
+        class AudienceSupportingAction extends OutputWritingAction {
+            public override get SupportsAudience(): boolean {
+                return true;
+            }
+        }
+        mockClassFactory.CreateInstance.mockImplementation(() => new AudienceSupportingAction());
+        const e = engine();
+        const result = await e.RunAction(
+            runParams({
+                Audience: { Readers: [{ ID: 'reader-2' }] } as RunActionParams['Audience']
+            })
+        );
+
+        expect(result.Success).toBe(true);
+        expect(mockClassFactory.CreateInstance).toHaveBeenCalledTimes(1);
     });
 });

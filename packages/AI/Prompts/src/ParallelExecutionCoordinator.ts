@@ -1001,6 +1001,8 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
    */
   private buildPerTaskParams(params: AIPromptParams, task: ExecutionTask): AIPromptParams {
     const perTaskParams: AIPromptParams = Object.assign(Object.create(Object.getPrototypeOf(params)), params);
+    // A failover inside the task re-renders the prompt for its own tool-calling path through this copy.
+    this.ShareNativeRerender(params, perTaskParams);
 
     if (task.modelParameters) {
       perTaskParams.additionalParameters = { ...(params.additionalParameters ?? {}), ...task.modelParameters };
@@ -1091,6 +1093,11 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       promptRun.ExecutionTimeMS = executionTimeMS;
       promptRun.Success = modelResult.success;
       promptRun.Status = modelResult.success ? 'Completed' : 'Failed';
+      // A task whose attempt re-rendered its prompt records what it actually sent.
+      const rerenderedMessages = this.RerenderedMessagesFor(modelResult);
+      if (rerenderedMessages) {
+        promptRun.Messages = rerenderedMessages;
+      }
 
       if (modelResult.success) {
         promptRun.Result = modelResult.data?.choices?.[0]?.message?.content || '';

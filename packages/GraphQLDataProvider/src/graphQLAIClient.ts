@@ -686,7 +686,8 @@ export class GraphQLAIClient {
      * @example
      * ```typescript
      * const result = await aiClient.RunAIAgentFromConversationDetail({
-     *   conversationDetailId: "detail-id-123",
+     *   userMessageId: "user-message-id-123",
+     *   onAccepted: (reply) => console.log(`Reply row ${reply.ConversationDetailId}`),
      *   agentId: "agent-id",
      *   maxHistoryMessages: 20,
      *   createArtifacts: true,
@@ -700,8 +701,11 @@ export class GraphQLAIClient {
         params: RunAIAgentFromConversationDetailParams
     ): Promise<ExecuteAgentResult> {
         let requestAcknowledged = false;
+        // The reply row is the server's: the acknowledgement names it, and from then on it keys this run's
+        // completion, relevance and reconciliation. Messages that beat the ack are held until it arrives.
+        let replyId = '';
         try {
-            const mutation = this.buildConversationDetailMutation(params.agentHistoryFrom != null);
+            const mutation = this.buildConversationDetailMutation(params.agentHistoryFrom != null, params.replyBranchId != null);
             const variables = this.prepareConversationDetailVariables(params);
 
             return await FireAndForgetHelper.Execute<ExecuteAgentResult>({
@@ -710,28 +714,37 @@ export class GraphQLAIClient {
                 variables,
                 mutationFieldName: 'RunAIAgentFromConversationDetail',
                 operationLabel: 'RunAIAgentFromConversationDetail',
+                deferMessagesUntilAck: true,
                 validateAck: (ack) => {
-                    const ok = ack?.success === true;
-                    if (ok) {
+                    const reply = ack?.success === true ? this.readReplyAcknowledgement(ack) : null;
+                    if (reply) {
                         requestAcknowledged = true;
+                        replyId = reply.ConversationDetailId;
+                        params.onAccepted?.(reply);
                     }
-                    return ok;
+                    return reply != null;
                 },
                 isCompletionEvent: (parsed) =>
-                    this.isConversationDetailCompletionEvent(parsed, params.conversationDetailId),
+                    this.isConversationDetailCompletionEvent(parsed, replyId),
                 extractResult: (parsed) => this.extractAgentResult(parsed),
                 // Headless clients (no PushStatusUpdates channel) run synchronously; the resolver
                 // returns the full result inline in the mutation ack rather than over PubSub.
                 extractSyncResult: (ack) => this.extractAgentResultFromAck(ack),
+                // Only this run's progress: every message names its reply row now, and the session is shared by
+                // every run in flight. A message naming none still counts (fail open), as before.
                 onMessage: params.onProgress
-                    ? (parsed) => this.forwardConversationDetailProgress(parsed, params.onProgress!)
+                    ? (parsed) => {
+                        if (this.isMessageForConversationDetail(parsed, replyId)) {
+                            this.forwardConversationDetailProgress(parsed, params.onProgress!);
+                        }
+                    }
                     : undefined,
                 // Reconcile by the caller-known ConversationDetailID rather than a run id scraped off
                 // the shared session stream: that key is operation-specific, so concurrent
                 // conversation-detail runs on one session can never cross-resolve to each other.
                 isRelevantMessage: (parsed) =>
-                    this.isMessageForConversationDetail(parsed, params.conversationDetailId),
-                onStall: () => this.reconcileAgentRun(`ConversationDetailID='${params.conversationDetailId}'`),
+                    this.isMessageForConversationDetail(parsed, replyId),
+                onStall: () => this.reconcileAgentRun(replyId ? `ConversationDetailID='${replyId}'` : undefined),
                 createErrorResult: (msg) => this.createAgentErrorResult(msg, requestAcknowledged),
             });
         } catch (e) {
@@ -746,13 +759,17 @@ export class GraphQLAIClient {
      * of the document unless the caller set it: GraphQL validates every argument a document names,
      * so a server that predates the argument would reject the whole mutation even with the
      * variable unset.
+     * @param includeReplyBranchId Whether to declare and pass `replyBranchId`, omitted when unset for
+     * the same reason.
      */
-    private buildConversationDetailMutation(includeAgentHistoryFrom: boolean): string {
+    private buildConversationDetailMutation(includeAgentHistoryFrom: boolean, includeReplyBranchId = false): string {
         const historyFromVariable = includeAgentHistoryFrom ? ',\n                $agentHistoryFrom: String' : '';
         const historyFromArgument = includeAgentHistoryFrom ? ',\n                    agentHistoryFrom: $agentHistoryFrom' : '';
+        const replyBranchVariable = includeReplyBranchId ? ',\n                $replyBranchId: String' : '';
+        const replyBranchArgument = includeReplyBranchId ? ',\n                    replyBranchId: $replyBranchId' : '';
         return gql`
             mutation RunAIAgentFromConversationDetail(
-                $conversationDetailId: String!,
+                $userMessageId: String!,
                 $agentId: String!,
                 $sessionId: String!,
                 $maxHistoryMessages: Int,
@@ -767,10 +784,12 @@ export class GraphQLAIClient {
                 $createNotification: Boolean,
                 $sourceArtifactId: String,
                 $sourceArtifactVersionId: String,
-                $fireAndForget: Boolean${historyFromVariable}
+                $replyParentId: String,
+                $announcedByAgentId: String,
+                $fireAndForget: Boolean${historyFromVariable}${replyBranchVariable}
             ) {
                 RunAIAgentFromConversationDetail(
-                    conversationDetailId: $conversationDetailId,
+                    userMessageId: $userMessageId,
                     agentId: $agentId,
                     sessionId: $sessionId,
                     maxHistoryMessages: $maxHistoryMessages,
@@ -785,7 +804,9 @@ export class GraphQLAIClient {
                     createNotification: $createNotification,
                     sourceArtifactId: $sourceArtifactId,
                     sourceArtifactVersionId: $sourceArtifactVersionId,
-                    fireAndForget: $fireAndForget${historyFromArgument}
+                    replyParentId: $replyParentId,
+                    announcedByAgentId: $announcedByAgentId,
+                    fireAndForget: $fireAndForget${historyFromArgument}${replyBranchArgument}
                 ) {
                     success
                     errorMessage
@@ -803,7 +824,7 @@ export class GraphQLAIClient {
         params: RunAIAgentFromConversationDetailParams
     ): Record<string, unknown> {
         const variables: Record<string, unknown> = {
-            conversationDetailId: params.conversationDetailId,
+            userMessageId: params.userMessageId,
             agentId: params.agentId,
             sessionId: this._dataProvider.sessionId,
             fireAndForget: true
@@ -826,8 +847,32 @@ export class GraphQLAIClient {
         if (params.sourceArtifactId !== undefined) variables.sourceArtifactId = params.sourceArtifactId;
         if (params.sourceArtifactVersionId !== undefined) variables.sourceArtifactVersionId = params.sourceArtifactVersionId;
         if (params.agentHistoryFrom != null) variables.agentHistoryFrom = params.agentHistoryFrom.toISOString();
+        if (params.replyParentId) variables.replyParentId = params.replyParentId;
+        if (params.announcedByAgentId) variables.announcedByAgentId = params.announcedByAgentId;
+        if (params.replyBranchId) variables.replyBranchId = params.replyBranchId;
 
         return variables;
+    }
+
+    /**
+     * The reply row a fire-and-forget acknowledgement names (`result` is
+     * `{ accepted, conversationDetailId, createdAt }`), or null when it names none.
+     */
+    private readReplyAcknowledgement(ack: Record<string, unknown>): AgentReplyAcknowledgement | null {
+        const raw = typeof ack.result === 'string'
+            ? SafeJSONParse<{ conversationDetailId?: unknown; createdAt?: unknown; announcementDetailId?: unknown }>(ack.result)
+            : null;
+        const id = raw?.conversationDetailId;
+        if (typeof id !== 'string' || id.length === 0) {
+            return null;
+        }
+        const createdAt = typeof raw?.createdAt === 'string' || typeof raw?.createdAt === 'number' ? new Date(raw.createdAt) : new Date();
+        const announcementId = raw?.announcementDetailId;
+        return {
+            ConversationDetailId: id,
+            CreatedAt: Number.isNaN(createdAt.getTime()) ? new Date() : createdAt,
+            ...(typeof announcementId === 'string' && announcementId.length > 0 ? { AnnouncementDetailId: announcementId } : {})
+        };
     }
 
     // ===== Agent Event Matching =====
@@ -855,7 +900,8 @@ export class GraphQLAIClient {
         return parsed.resolver === 'RunAIAgentResolver' &&
             parsed.type === 'StreamingContent' &&
             data?.type === 'complete' &&
-            data?.conversationDetailId === conversationDetailId;
+            typeof data.conversationDetailId === 'string' &&
+            UUIDsEqual(data.conversationDetailId, conversationDetailId);
     }
 
     /**
@@ -2329,14 +2375,54 @@ interface RunDecisionResponse {
 }
 
 /**
+ * The agent reply row the server created for a run, as the acknowledgement of
+ * `RunAIAgentFromConversationDetail` names it.
+ */
+export interface AgentReplyAcknowledgement {
+    /** The reply row's ID. Every progress, streaming and completion message for the run carries it. */
+    ConversationDetailId: string;
+    /** When the server created the row: where the reply's duration timer starts. */
+    CreatedAt: Date;
+    /** The announcement line the server posted before the reply, when the run asked for one (`announcedByAgentId`). */
+    AnnouncementDetailId?: string;
+}
+
+/**
  * Parameters for running an AI agent from an existing conversation detail.
  * This is the optimized method that loads conversation history server-side.
  */
 export interface RunAIAgentFromConversationDetailParams {
     /**
-     * The ID of the conversation detail (user's message) to use as context
+     * The person's message this turn answers, already saved. The server creates the agent's reply row (only the server
+     * writes agent replies) and names it in the acknowledgement; see {@link onAccepted}.
      */
-    conversationDetailId: string;
+    userMessageId: string; // case-violation-ok-legacy-back-compat: mirrors the mutation's `userMessageId` argument, like every other member of this interface
+
+    /**
+     * Called once the server accepts the run, before any progress, with the reply row it created: its ID (which keys
+     * this run's progress and completion) and its creation time. Not called when a headless provider runs the turn
+     * synchronously; the result's `agentRun.ConversationDetailID` names the row then.
+     */
+    onAccepted?: (reply: AgentReplyAcknowledgement) => void; // case-violation-ok-legacy-back-compat: named like every other member of this interface
+
+    /**
+     * The message the reply threads under, when not the user's message (MJ's chat threads a delegate's reply under the
+     * manager's). The server checks it is a message of the same conversation the caller can read.
+     */
+    replyParentId?: string; // case-violation-ok-legacy-back-compat: mirrors the mutation's argument, like every other member of this interface
+
+    /**
+     * An active agent whose fixed line "Continuing with **{agent}** for refinement..." the server posts before the
+     * reply; the reply then threads under it, and {@link onAccepted} names it as `AnnouncementDetailId`.
+     */
+    announcedByAgentId?: string; // case-violation-ok-legacy-back-compat: mirrors the mutation's argument, like every other member of this interface
+
+    /**
+     * The branch the turn runs on when it forks off an earlier message on another branch (such as Regenerate, which
+     * creates a new fork before running the agent while the user's message stays on its original branch). The server
+     * verifies the user's message is on this branch's path before reading history or writing the reply on it.
+     */
+    replyBranchId?: string | null; // case-violation-ok-legacy-back-compat: mirrors the mutation's argument, like every other member of this interface
 
     /**
      * The ID of the AI agent to run

@@ -96,6 +96,7 @@
 
   <!-- Restore preview slide-in (reused from ng-record-changes) -->
   <mj-restore-preview-panel
+    [Provider]="Provider"
     [Visible]="PreviewVisible"
     [Mode]="'undelete'"
     [RecordChange]="SelectedEntry?.RecordChange ?? null"

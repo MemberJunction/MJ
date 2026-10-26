@@ -113,6 +113,7 @@ class AggregateTestProvider extends GenericDatabaseProviderTestBase {
     protected CoerceSaveFieldValue(): SaveCoercedValue { throw new Error('Not supported in this test double'); }
     protected RenderSaveCallBinding(): SaveCallBinding { throw new Error('Not supported in this test double'); }
     protected WrapSaveCallForResult(): SaveSQLFragment { throw new Error('Not supported in this test double'); }
+    protected ProjectSaveCallToDatestamps(): SaveSQLFragment { throw new Error('Not supported in this test double'); }
     protected WrapSaveCallWithRecordChange(): SaveSQLFragment { throw new Error('Not supported in this test double'); }
     async BeginTransaction(): Promise<void> {}
     async CommitTransaction(): Promise<void> {}

@@ -1852,6 +1852,14 @@ export interface RunViewByNameSystemUserInput {
      * Starting row number for pagination (optional, 0-based)
      */
     StartRow?: number;
+    /**
+     * Optional source-of-truth selector ('Live' or 'Materialized').
+     */
+    DataSource?: 'Live' | 'Materialized';
+    /**
+     * Optional registered Alternate Base View logical Name (from EntityAlternateBaseView.Name) for this entity.
+     */
+    AlternateBaseView?: string;
 }
 
 /**
@@ -1922,6 +1930,14 @@ export interface RunViewByIDSystemUserInput {
      * Starting row number for pagination (optional, 0-based)
      */
     StartRow?: number;
+    /**
+     * Optional source-of-truth selector ('Live' or 'Materialized').
+     */
+    DataSource?: 'Live' | 'Materialized';
+    /**
+     * Optional registered Alternate Base View logical Name (from EntityAlternateBaseView.Name) for this entity.
+     */
+    AlternateBaseView?: string;
 }
 
 /**
@@ -1984,6 +2000,14 @@ export interface RunDynamicViewSystemUserInput {
      * Starting row number for pagination (optional, 0-based)
      */
     StartRow?: number;
+    /**
+     * Optional source-of-truth selector ('Live' or 'Materialized').
+     */
+    DataSource?: 'Live' | 'Materialized';
+    /**
+     * Optional registered Alternate Base View logical Name (from EntityAlternateBaseView.Name) for this entity.
+     */
+    AlternateBaseView?: string;
 }
 
 /**
@@ -2051,6 +2075,14 @@ export interface RunViewSystemUserInput {
      * They are omitted by default; a binary field named in `Fields` is always returned. (optional)
      */
     IncludeBinaryFields?: boolean;
+    /**
+     * Optional source-of-truth selector ('Live' or 'Materialized').
+     */
+    DataSource?: 'Live' | 'Materialized';
+    /**
+     * Optional registered Alternate Base View logical Name (from EntityAlternateBaseView.Name) for this entity.
+     */
+    AlternateBaseView?: string;
 }
 
 

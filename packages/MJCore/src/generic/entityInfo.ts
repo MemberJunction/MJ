@@ -9,7 +9,7 @@ import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, SQLMaxByteLength,
 import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
 import { CompositeKey } from "./compositeKey"
-import { WarningManager, SafeJSONParse, UUIDsEqual, ordinalCompare, GeneratePluralName } from "@memberjunction/global"
+import { WarningManager, SafeJSONParse, UUIDsEqual, NormalizeUUID, ordinalCompare, GeneratePluralName } from "@memberjunction/global"
 import {
     ParseEntityConfiguration,
     ParseEntityRelationshipConfiguration,
@@ -367,6 +367,203 @@ export class EntityOrganicKeyRelatedEntityInfo extends BaseInfo {
     }
 
 }
+
+/**
+ * Metadata describing a governed alternate SQL view on an entity that maintains 100% column
+ * parity with the entity's canonical `BaseView` while applying a curated canonical filter
+ * or join (for example, `Active` members or `Open` orders).
+ *
+ * Alternate base views can form a same-entity derivation hierarchy via {@link ParentID}
+ * (for example, `ActiveAutoRenew` selecting from `vwActiveMembers`).
+ *
+ * Maps to the `MJ: Entity Alternate Base Views` metadata entity.
+ */
+export class EntityAlternateBaseViewInfo extends BaseInfo {
+    ID: string = null;
+    EntityID: string = null;
+    ParentID: string | null = null;
+    Name: string = null;
+    DisplayName: string | null = null;
+    Description: string = null;
+    SchemaName: string | null = null;
+    ViewName: string = null;
+    CachePolicy: 'Default' | 'Bypass' = 'Default';
+    Status: 'Active' | 'Deprecated' | 'Disabled' = 'Active';
+    Sequence: number = 0;
+
+    __mj_CreatedAt: Date = null;
+    __mj_UpdatedAt: Date = null;
+
+    // Virtual fields from vwEntityAlternateBaseViews
+    Entity: string = null;
+    Parent: string | null = null;
+    RootParentID: string | null = null;
+
+    private _entitySchemaName: string | null = null;
+    // Named without matching `ParentView` / `ChildViews` getter names so `BaseInfo.toJSON()`
+    // does not serialize parent<->child object references into a circular JSON graph.
+    private _resolvedParentViewRef: EntityAlternateBaseViewInfo | undefined = undefined;
+    private _resolvedChildViewsList: EntityAlternateBaseViewInfo[] = [];
+
+    /**
+     * The parent alternate base view on the same entity when {@link ParentID} is set,
+     * or `undefined` for a top-level alternate base view.
+     */
+    get ParentView(): EntityAlternateBaseViewInfo | undefined {
+        return this._resolvedParentViewRef;
+    }
+
+    /**
+     * Direct child alternate base views on the same entity that derive from this view via {@link ParentID}.
+     */
+    get ChildViews(): EntityAlternateBaseViewInfo[] {
+        return this._resolvedChildViewsList;
+    }
+
+    /**
+     * Effective database schema name for this alternate base view: uses {@link SchemaName}
+     * when explicitly populated, falling back to the parent entity's `SchemaName`.
+     */
+    get EffectiveSchemaName(): string {
+        const explicit = this.SchemaName?.trim();
+        if (explicit && explicit.length > 0) {
+            return explicit;
+        }
+        return this._entitySchemaName ?? '';
+    }
+
+    /**
+     * Human-friendly label for UI surfaces: returns {@link DisplayName} when set,
+     * falling back to {@link Name}.
+     */
+    get EffectiveDisplayName(): string {
+        const display = this.DisplayName?.trim();
+        if (display && display.length > 0) {
+            return display;
+        }
+        return this.Name;
+    }
+
+    /**
+     * True when this alternate base view (and every ancestor in its {@link ParentView} chain)
+     * has `Status` equal to `'Active'` or `'Deprecated'`. Disabled views (or views derived
+     * from a disabled or missing ancestor) return `false`.
+     */
+    get IsUsable(): boolean {
+        return this.checkIsUsable(new Set<string>());
+    }
+
+    private checkIsUsable(visited: Set<string>): boolean {
+        if (this.Status !== 'Active' && this.Status !== 'Deprecated') {
+            return false;
+        }
+        if (!this.ParentID) {
+            return true;
+        }
+        if (!this._resolvedParentViewRef) {
+            return false; // ParentID is set but parent view was not found on the entity
+        }
+        const key = NormalizeUUID(this.ID);
+        if (key && visited.has(key)) {
+            return false; // Defensive cycle guard
+        }
+        if (key) {
+            visited.add(key);
+        }
+        return this._resolvedParentViewRef.checkIsUsable(visited);
+    }
+
+    /**
+     * True when this view (or any ancestor in its {@link ParentView} chain) has
+     * `Status === 'Deprecated'`. Deprecated alternate base views remain usable at runtime
+     * so existing views and queries do not break, but emit a deprecation warning.
+     */
+    get IsDeprecated(): boolean {
+        return this.checkIsDeprecated(new Set<string>());
+    }
+
+    private checkIsDeprecated(visited: Set<string>): boolean {
+        if (this.Status === 'Deprecated') {
+            return true;
+        }
+        if (!this._resolvedParentViewRef) {
+            return false;
+        }
+        const key = NormalizeUUID(this.ID);
+        if (key && visited.has(key)) {
+            return false;
+        }
+        if (key) {
+            visited.add(key);
+        }
+        return this._resolvedParentViewRef.checkIsDeprecated(visited);
+    }
+
+    /**
+     * True when `CachePolicy === 'Bypass'` on this view or any ancestor in its {@link ParentView}
+     * chain, instructing `ProviderBase` to skip local/server result caching for reads through
+     * this alternate base view (used when the view reads the clock or joins other tables whose
+     * updates do not fire `BaseEntity` events on this entity).
+     */
+    get IsBypassCache(): boolean {
+        return this.checkIsBypassCache(new Set<string>());
+    }
+
+    private checkIsBypassCache(visited: Set<string>): boolean {
+        if (this.CachePolicy === 'Bypass') {
+            return true;
+        }
+        if (!this._resolvedParentViewRef) {
+            return false;
+        }
+        const key = NormalizeUUID(this.ID);
+        if (key && visited.has(key)) {
+            return false;
+        }
+        if (key) {
+            visited.add(key);
+        }
+        return this._resolvedParentViewRef.checkIsBypassCache(visited);
+    }
+
+    /**
+     * Links `ParentView` and `ChildViews` references across the alternate base views belonging
+     * to a single entity and stamps the owning entity's `SchemaName` fallback.
+     */
+    public static LinkHierarchy(views: EntityAlternateBaseViewInfo[], entitySchemaName?: string | null): void {
+        const byId = new Map<string, EntityAlternateBaseViewInfo>();
+        for (const v of views) {
+            if (entitySchemaName !== undefined) {
+                v._entitySchemaName = entitySchemaName;
+            }
+            v._resolvedParentViewRef = undefined;
+            v._resolvedChildViewsList = [];
+            if (v.ID) {
+                byId.set(NormalizeUUID(v.ID), v);
+            }
+        }
+        for (const v of views) {
+            if (v.ParentID && !UUIDsEqual(v.ParentID, v.ID)) {
+                const parent = byId.get(NormalizeUUID(v.ParentID));
+                if (parent) {
+                    v._resolvedParentViewRef = parent;
+                    parent._resolvedChildViewsList.push(v);
+                }
+            }
+        }
+    }
+
+    constructor(initData: Record<string, unknown> = null, entitySchemaName?: string | null) {
+        super();
+        if (entitySchemaName !== undefined) {
+            this._entitySchemaName = entitySchemaName;
+        }
+        if (initData) {
+            this.copyInitData(initData);
+        }
+    }
+}
+
 
 export const EntityPermissionType = {
     Read: 'Read',
@@ -2397,10 +2594,15 @@ export class EntityFieldInfo extends BaseInfo {
         return FormatValue(this.Type, value, decimals, currency, maxLength, trailingChars);
     }
 
+    private static readonly CHILD_INIT_KEYS: ReadonlySet<string> = new Set([
+        'EntityFieldValues', '_EntityFieldValues',
+        'EntityFieldPermissions', '_FieldPermissions', 'FieldPermissions',
+    ]);
+
     constructor(initData: any = null) {
         super();
         if (initData) {
-            this.copyInitData(initData);
+            this.copyInitData(initData, EntityFieldInfo.CHILD_INIT_KEYS);
 
             // Lazy-construct EntityFieldValueInfo objects — stash raw data now,
             // construct typed instances on first access via the getter.
@@ -3418,6 +3620,7 @@ export class EntityInfo extends BaseInfo {
     private _settings: EntitySettingInfo[]
     private _fieldCategories: Record<string, FieldCategoryInfo> | null = null
     private _organicKeys: EntityOrganicKeyInfo[] = []
+    private _alternateBaseViews: EntityAlternateBaseViewInfo[] = []
     HasIdField: boolean = false
 
     /** @deprecated Use {@link HasIdField}. */
@@ -3690,8 +3893,9 @@ export class EntityInfo extends BaseInfo {
     public FieldByName(name: string): EntityFieldInfo | undefined {
         if (name == null) return undefined;
         if (this._fieldByNameMap === null) {
+            const fields = this._fields ?? this.Fields ?? [];
             const map = new Map<string, EntityFieldInfo>();
-            for (const f of this._fields) {
+            for (const f of fields) {
                 if (f.Name != null) map.set(f.Name.trim().toLowerCase(), f);
             }
             this._fieldByNameMap = map;
@@ -3700,24 +3904,26 @@ export class EntityInfo extends BaseInfo {
     }
 
     private ensureFieldIndexEntry(): { byName: Map<string, number>; byCodeName: Map<string, number> } {
+        const fields = this._fields ?? this.Fields ?? [];
         let entry = _entityFieldIndexCache.get(this);
-        if (!entry || entry.fieldsRef !== this._fields || entry.fieldsLen !== this._fields.length) {
+        if (!entry || entry.fieldsRef !== fields || entry.fieldsLen !== fields.length) {
             const byName = new Map<string, number>();
             const byCodeName = new Map<string, number>();
-            for (let i = 0; i < this._fields.length; i++) {
-                const f = this._fields[i];
+            for (let i = 0; i < fields.length; i++) {
+                const f = fields[i];
                 if (f.Name != null) {
                     const nameKey = f.Name.trim().toLowerCase();
                     if (!byName.has(nameKey)) {
                         byName.set(nameKey, i);
                     }
-                    const codeKey = f.CodeName.trim().toLowerCase();
+                    const rawCodeName = f.CodeName ?? f.Name;
+                    const codeKey = rawCodeName.trim().toLowerCase();
                     if (!byCodeName.has(codeKey)) {
                         byCodeName.set(codeKey, i);
                     }
                 }
             }
-            entry = { fieldsRef: this._fields, fieldsLen: this._fields.length, byName, byCodeName };
+            entry = { fieldsRef: fields, fieldsLen: fields.length, byName, byCodeName };
             _entityFieldIndexCache.set(this, entry);
         }
         return entry;
@@ -3739,6 +3945,20 @@ export class EntityInfo extends BaseInfo {
     public FieldIndexByCodeName(codeName: string): number {
         if (!codeName) return -1;
         return this.ensureFieldIndexEntry().byCodeName.get(codeName.trim().toLowerCase()) ?? -1;
+    }
+
+    /**
+     * O(1) case-insensitive field lookup by `CodeName`. Uses the shared `_entityFieldIndexCache`
+     * index so GraphQL resolvers and mutation handlers can resolve client `CodeName` keys without
+     * linear `Fields.find(...)` scans.
+     *
+     * @param codeName field CodeName (matched case-insensitively, whitespace-trimmed)
+     * @returns the matching EntityFieldInfo, or undefined if not found
+     */
+    public FieldByCodeName(codeName: string): EntityFieldInfo | undefined {
+        const idx = this.FieldIndexByCodeName(codeName);
+        const fields = this._fields ?? this.Fields;
+        return idx >= 0 && fields ? fields[idx] : undefined;
     }
 
     /**
@@ -3932,6 +4152,59 @@ export class EntityInfo extends BaseInfo {
      */
     get OrganicKeys(): EntityOrganicKeyInfo[] {
         return this._organicKeys;
+    }
+
+    /**
+     * Gets all registered alternate base views for this entity, sorted by `Sequence`, `Name`, and `ID`.
+     * Alternate base views maintain 100% column parity with {@link BaseView} while applying a
+     * curated canonical filter or join.
+     * @returns {EntityAlternateBaseViewInfo[]} Array of alternate base view metadata definitions
+     */
+    get AlternateBaseViews(): EntityAlternateBaseViewInfo[] {
+        return this._alternateBaseViews;
+    }
+
+    /**
+     * Finds a registered alternate base view on this entity by its semantic `Name`
+     * (case-insensitive, whitespace-trimmed).
+     *
+     * @param name Semantic name of the alternate base view (for example, `'Active'`).
+     * @returns The matching {@link EntityAlternateBaseViewInfo}, or `undefined` if not found.
+     */
+    public GetAlternateBaseView(name: string | null | undefined): EntityAlternateBaseViewInfo | undefined {
+        const trimmed = name?.trim().toLowerCase();
+        if (!trimmed) {
+            return undefined;
+        }
+        return this._alternateBaseViews.find(v => v.Name?.trim().toLowerCase() === trimmed);
+    }
+
+    /**
+     * Finds a registered alternate base view on this entity by its physical SQL `ViewName`
+     * (and optional `schemaName`), matched case-insensitively and whitespace-trimmed.
+     *
+     * @param viewName Physical SQL view name (for example, `'vwActiveMembers'`).
+     * @param schemaName Optional schema name; when supplied, must match `EffectiveSchemaName` case-insensitively.
+     * @returns The matching {@link EntityAlternateBaseViewInfo}, or `undefined` if not found.
+     */
+    public GetAlternateBaseViewByViewName(
+        viewName: string | null | undefined,
+        schemaName?: string | null,
+    ): EntityAlternateBaseViewInfo | undefined {
+        const trimmedView = viewName?.trim().toLowerCase();
+        if (!trimmedView) {
+            return undefined;
+        }
+        const trimmedSchema = schemaName?.trim().toLowerCase();
+        return this._alternateBaseViews.find(v => {
+            if (v.ViewName?.trim().toLowerCase() !== trimmedView) {
+                return false;
+            }
+            if (trimmedSchema && trimmedSchema.length > 0) {
+                return v.EffectiveSchemaName.trim().toLowerCase() === trimmedSchema;
+            }
+            return true;
+        });
     }
 
     private static __createdAtFieldName = '__mj_CreatedAt';
@@ -4348,6 +4621,46 @@ export class EntityInfo extends BaseInfo {
             console.log(err)
             return null;
         }
+    }
+
+    /**
+     * Checks whether the specified user has the requested permission (`Read`, `Create`, `Update`, or `Delete`)
+     * on this entity. When `this.Permissions` is empty/uninitialized (e.g., in lightweight unit-test fixtures),
+     * returns `true` so unconfigured fixtures are not blocked.
+     */
+    public CheckPermissions(user: UserInfo, type: EntityPermissionType, throwError: boolean = false): boolean {
+        if (!user || !this.Permissions || this.Permissions.length === 0) {
+            return true;
+        }
+        const perms = this.GetUserPermisions(user);
+        if (!perms) {
+            if (throwError) {
+                throw new Error(`Permission check failed for user on entity ${this.Name}`);
+            }
+            return false;
+        }
+        let allowed = false;
+        switch (type) {
+            case EntityPermissionType.Read:
+                allowed = perms.CanRead;
+                break;
+            case EntityPermissionType.Create:
+                allowed = perms.CanCreate;
+                break;
+            case EntityPermissionType.Update:
+                allowed = perms.CanUpdate;
+                break;
+            case EntityPermissionType.Delete:
+                allowed = perms.CanDelete;
+                break;
+            default:
+                allowed = false;
+                break;
+        }
+        if (!allowed && throwError) {
+            throw new Error(`User does not have ${type} permission on ${this.Name}`);
+        }
+        return allowed;
     }
 
     /**
@@ -4911,6 +5224,15 @@ export class EntityInfo extends BaseInfo {
     }
 
 
+    private static readonly CHILD_INIT_KEYS: ReadonlySet<string> = new Set([
+        'EntityFields', '_Fields', 'Fields',
+        'EntityPermissions', '_Permissions', 'Permissions',
+        'EntitySettings', '_Settings', 'Settings',
+        'EntityRelationships', '_RelatedEntities', 'RelatedEntities',
+        'EntityOrganicKeys', '_OrganicKeys', 'OrganicKeys',
+        'EntityAlternateBaseViews', '_AlternateBaseViews', 'AlternateBaseViews',
+    ]);
+
     /**
      * @param initData - the raw entity row (or another EntityInfo being re-instantiated)
      * @param md - the provider that owns this metadata. Sibling lookups ({@link ParentEntityInfo},
@@ -4921,7 +5243,7 @@ export class EntityInfo extends BaseInfo {
         super();
         this.SetOwningProvider(md);
         if (initData) {
-            this.copyInitData(initData);
+            this.copyInitData(initData, EntityInfo.CHILD_INIT_KEYS);
 
             // do some special handling to create class instances instead of just data objects
             // copy the Entity Fields (accept EntityFields, _Fields, or Fields as input names)
@@ -5015,6 +5337,23 @@ export class EntityInfo extends BaseInfo {
                 for (const item of ok) {
                     this._organicKeys.push(new EntityOrganicKeyInfo(item));
                 }
+            }
+
+            // copy the Alternate Base Views (sorted by Sequence, Name, ID, then linked via ParentID)
+            this._alternateBaseViews = [];
+            const abv = initData.EntityAlternateBaseViews || initData._AlternateBaseViews || initData.AlternateBaseViews;
+            if (abv && Array.isArray(abv)) {
+                for (const item of abv) {
+                    const viewInfo = new EntityAlternateBaseViewInfo(item as Record<string, unknown>, this.SchemaName);
+                    viewInfo.SetOwningProvider(md);
+                    this._alternateBaseViews.push(viewInfo);
+                }
+                this._alternateBaseViews.sort((a, b) => {
+                    const aSeq = a.Sequence !== null && a.Sequence !== undefined ? a.Sequence : 0;
+                    const bSeq = b.Sequence !== null && b.Sequence !== undefined ? b.Sequence : 0;
+                    return (aSeq - bSeq) || ordinalCompare(a.Name, b.Name) || ordinalCompare(a.ID, b.ID);
+                });
+                EntityAlternateBaseViewInfo.LinkHierarchy(this._alternateBaseViews, this.SchemaName);
             }
 
             this.prepareSpecialFields();
@@ -5155,6 +5494,11 @@ export class RecordDependency {
      * Undefined for hard foreign keys.
      */
     EntityIDFieldName?: string
+    /**
+     * Friendly display name of the foreign-key or soft-link field on {@link RelatedEntityName}
+     * (populated from `EntityFieldInfo.DisplayNameOrName` when available).
+     */
+    FieldDisplayName?: string
 }
 
 /**

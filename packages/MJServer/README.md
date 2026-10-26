@@ -994,7 +994,33 @@ databaseSettings: {
 
 ### Authentication Token Caching
 
-Validated JWT tokens are cached using an LRU cache, avoiding repeated cryptographic verification for the same token within its lifetime.
+Validated JWT tokens are cached using an LRU cache (`AuthCache`), storing both the `UserPayload` and the decoded `jwt.JwtPayload` claims to avoid repeated cryptographic verification and base64 decoding for the same token within its lifetime.
+
+### Scalability & Cache Broadcast Architecture
+
+MJServer implements a 4-pillar horizontal and vertical scalability architecture. For full details, refer to the **[Server Scaling and Broadcast Architecture Guide](../../guides/SERVER_SCALING_AND_BROADCAST_ARCHITECTURE.md)**.
+
+#### 1. Pluggable Cache Invalidation Broadcast Providers (`CacheInvalidationBroadcastManager`)
+Every entity save/delete is assigned a monotonically increasing sequence number (`X-MJ-Cache-Seq` and `X-MJ-Server-ID` HTTP headers + `Sequence` field on `CacheInvalidationNotification`) and stored in a bounded ring buffer for deterministic client delta catch-up (`GetCacheInvalidationsSince(sinceSequence)`).
+
+Permission and RLS filtering is coalesced by **Role Fingerprint Bucket** ($O(\text{Roles})$ instead of $O(\text{Subscribers})$), and can be offloaded to managed cloud WebSocket planes registered via `@RegisterClass(BaseCacheInvalidationBroadcastProvider, ...)`:
+- **`SequencedRoleBucket`** (default): In-process + Redis Pub/Sub role-bucket memoization.
+- **`AzureWebPubSub`**: Offloads fan-out to Azure Web PubSub groups (`mj.role.<roleFingerprint>`).
+- **`AWSIoTCore`**: Offloads fan-out to AWS IoT Core MQTT topics (`mj/cache/role/<roleFingerprint>`).
+- **`GCPPubSub`**: Publishes role-bucketed messages to Google Cloud Pub/Sub topics with `roleFingerprint` attributes.
+
+#### 2. $O(1)$ Session-Scoped `PushStatusUpdates` Routing
+`PushStatusUpdates(sessionId)` routes status messages directly to per-session topics (`PUSH_STATUS_UPDATES:session:<sessionId>`) via `CreateSessionRoutingPubSub` and memoizes parsed JSON payloads via a `WeakMap` (`ParseStatusUpdateMessage`), eliminating $O(N \times M)$ cross-session filter scans and JSON re-parsing.
+
+#### 3. Zero-Copy Per-Request Context & Root-Only Middleware
+- **Root-Only `VariablesLoggingMiddleware`**: Applied exclusively to root `Query`, `Mutation`, and `Subscription` fields (`ApplyRootVariablesLoggingMiddleware`) rather than `globalMiddlewares`, avoiding per-field promise allocations on large result sets.
+- **Prototype-Delegated Metadata Shell**: Per-request providers reuse the global metadata graph via `Object.create(shared)` (`ProviderBase.CreateSharedMetadataShell`) and defer RxJS transaction subject allocation until `BeginTransaction()` is invoked.
+
+#### 4. Horizontal Scaling via `MJ_SERVER_ROLE`
+Split interactive GraphQL/REST traffic from background jobs across multi-replica deployments using `serverRole` (`MJ_SERVER_ROLE`):
+- **`all`** (default): Runs HTTP/GraphQL/WebSocket servers and all background workers (`ScheduledJobsService`, `KnowledgeHubIndexingBootstrap`, `ApplicationTrackRecordSyncBootstrap`).
+- **`api`**: Serves interactive HTTP/GraphQL/WebSocket traffic only; skips background cron and indexing workers.
+- **`worker`**: Runs background workers and a lightweight `/health` probe; skips interactive GraphQL/REST/MCP/A2A route mounting.
 
 ## Server Extensions
 

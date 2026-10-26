@@ -188,6 +188,26 @@ export class TagEngine extends BaseSingleton<TagEngine> {
         return this.Base.GetTaxonomyTree(rootID, ctx);
     }
 
+    /**
+     * The taxonomy as markdown headings (`#` root, `##` child, ...), the shape the autotagging prompt
+     * expects so the model can answer with paths like "Root / Child". Empty when there are no tags.
+     */
+    public GetTaxonomyMarkdown(): string {
+        const lines: string[] = [];
+        const render = (node: TagTreeNode, depth: number): void => {
+            lines.push(`${'#'.repeat(Math.min(depth, 6))} ${node.Name}`);
+            for (const child of node.Children ?? []) {
+                render(child, depth + 1);
+            }
+        };
+        if (this.Tags.length > 0) {
+            for (const root of this.GetTaxonomyTree()) {
+                render(root, 1);
+            }
+        }
+        return lines.join('\n');
+    }
+
     /** Create a new Tag entity, save it, and add to local cache */
     public async CreateTag(
         name: string,

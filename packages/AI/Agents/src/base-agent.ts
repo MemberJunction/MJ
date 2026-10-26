@@ -11,22 +11,27 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, MJAIPromptRunEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJConversationDetailEntityExtended, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, MJAIPromptRunEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
 import { BuildActionToolSet, CoerceActionArguments, FilterDeclarableActions, SanitizeToolName } from './native-tools/action-tool-builder';
 import { DescribeValueSchemaInline, GetStoredValueSchema } from './native-tools/action-param-schema';
+import { ApplyBoundActionParams, BindingsForAction, BoundParamsApplication, IsBoundParamName, UnboundParams } from './bound-action-params';
 import { BuildNativeToolSet, COMPLETE_TASK_TOOL, SUB_AGENT_TOOL_PREFIX, type NativeToolBinding } from './native-tools/control-tools';
-import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactToolResultContent, type NativeToolResult } from './native-tools/tool-result-turns';
+import { TurnToolCallingMode } from './native-tools/turn-mode';
+import { NATIVE_CONTROL_TEMPLATE_DATA, NATIVE_ONLY_TEMPLATE_FLAG, ResolveNativeControlConfig, type NativeControlConfig } from './native-tools/native-control-config';
+import type { AgentToolContext, AgentToolDefinition, AgentToolResult } from './native-tools/agent-tools';
+import { BuildFrameworkTools, type FrameworkToolAvailability, type FrameworkToolHost } from './native-tools/framework-tools';
+import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactAnsweredToolCallArguments, CompactToolResultContent, CompactToolResultContentAsync, type NativeToolResult } from './native-tools/tool-result-turns';
 import { LooksLikeLoopEnvelope } from './native-tools/dual-channel';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, ResolvePromptRunUserID, ResolvePayloadAtEnd } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase, ToPlainJSON } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
-import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
-import { ChatMessage, ChatMessageContent, AIErrorType, AIAPIKeyResolver, BaseRealtimeModel, GetAIAPIKey, CredentialScopeAllows, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
+import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult, GetSentPrefixFingerprint } from '@memberjunction/ai-prompts';
+import { BaseLLM, ChatMessage, ChatMessageContent, AIErrorType, AIAPIKeyResolver, BaseRealtimeModel, GetAIAPIKey, CredentialScopeAllows, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { ProviderRubricEngine } from '@memberjunction/rubrics';
 import { ExecuteSelfCheck, PickSelfCheckLink, type SelfCheckLink, type SelfCheckLinkRow } from './self-check';
 import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
-import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString, IsPlainObject, CleanAndParseJSON, IsValidUUID, IndexByUUID } from '@memberjunction/global';
+import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, UUIDSet, EscapeSQLString, IsPlainObject, CleanAndParseJSON, IsValidUUID, IndexByUUID } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
 import { CrushJSON, DescribeCrush, PartitionStablePrefix, type JsonValue } from '@memberjunction/context-crush';
 // AST-aware code reduction (CodeCompressor-inspired) — opt-in per agent type
@@ -88,11 +93,13 @@ import {
     MessageLifecycleEvent,
     AgentChatMessage,
     AgentChatMessageMetadata,
+    AgentToolCallRequest,
     AIModelSelectionInfo,
     ConversationUtility,
     ActionChange,
     ActionChangeScope,
     SubAgentChange,
+    BoundActionParams,
     MediaOutput,
     FileOutputRef,
     ParseFileOutputRef,
@@ -119,6 +126,7 @@ import {
     SkillAvailabilityPurpose,
     ArtifactDirective,
     AgentDecisionRequest,
+    AgentScratchpad,
     AgentDecisionResult,
     AgentDecisionAnswerSummary,
     AgentFinishIf,
@@ -279,10 +287,14 @@ interface MemoryWriteSkip {
     Told: string;
 }
 
-/** A message a Prompt step recorded in its InputData, with its serialized form at the time it was recorded. */
+/** A message a Prompt step recorded in its InputData, with its content/metadata snapshot at the time it was recorded. */
 interface RecordedPromptMessage {
     Message: ChatMessage;
-    Serialized: string;
+    ContentRef: ChatMessage['content'];
+    MetadataRef: AgentChatMessageMetadata | undefined;
+    WasCompacted: boolean | undefined;
+    CanExpand: boolean | undefined;
+    IsExpired: boolean | undefined;
 }
 
 /**
@@ -333,6 +345,11 @@ export interface ActionResultCrushConfig {
      * applies. Opt in per agent type via the `crushCodeLang` prompt param or a subclass override.
      */
     codeLang: CodeLang | undefined;
+    /**
+     * Actions whose results are never crushed, by Action name — large exact payloads such as code
+     * or specifications the model must read verbatim. Set with the `uncrushedActions` prompt param.
+     */
+    exemptActions?: ReadonlySet<string>;
 }
 
 /** One failed loop iteration (ForEach or While), or a loop that failed before its first iteration. */
@@ -495,6 +512,12 @@ export interface ExecuteSingleActionOptions {
      * call too.
      */
     skipCircuitBreaker?: boolean;
+    /**
+     * The run step (`MJ: AI Agent Run Steps`) this call is recorded under, named in the audit lines
+     * written when a bound parameter (`ExecuteAgentParams.boundActionParams`) overrides a value the
+     * model sent or refuses the call. Set by the actions step; a direct caller may leave it out.
+     */
+    StepID?: string;
 }
 
 /**
@@ -716,6 +739,10 @@ export class BaseAgent {
      * @private
      */
     private _lastVolatileStateMessage: AgentChatMessage | undefined;
+    /** The previous request's outgoing messages, as {@link messageFingerprint}s. */
+    private _lastSentFingerprints: string[] | undefined;
+    /** The previous request's system-prompt-and-tools fingerprint, from the prompt runner. */
+    private _lastSentPrefix: string | undefined;
 
     /**
      * The trailing-state retention mode once it has been decided for this run, frozen at the first
@@ -1027,6 +1054,154 @@ export class BaseAgent {
         blocked.RunParams = new RunActionParams();
         blocked.RunParams.Action = actionEntity;
         return blocked;
+    }
+
+    /**
+     * Applies the run's bound parameters to one call (`ExecuteAgentParams.boundActionParams`): a bound
+     * value replaces whatever the model sent under its name, and the override is logged with the run and
+     * step IDs. The rules are {@link ApplyBoundActionParams}'s; this adds only the log line.
+     */
+    private applyActionBindings(
+        params: ExecuteAgentParams,
+        action: AgentAction,
+        actionEntity: MJActionEntityExtended,
+        options?: ExecuteSingleActionOptions
+    ): BoundParamsApplication {
+        const bindings = BindingsForAction(params.boundActionParams, actionEntity.ID);
+        const application = ApplyBoundActionParams(action.params, bindings, actionEntity.Params?.Items ?? [], actionEntity.Name);
+        if (application.Overridden.length > 0) {
+            const names = application.Overridden.map((n) => `'${n}'`).join(', ');
+            this.logStatus(`   🔒 Action '${action.name}': the model supplied ${names}, which this run binds; the model's value is discarded (${this.whereInRun(options)})`, false, params);
+        }
+        return application;
+    }
+
+    /** "run <id>, step <id>" for an audit line. */
+    private whereInRun(options?: ExecuteSingleActionOptions): string {
+        return `run ${this._agentRun?.ID ?? 'n/a'}, step ${options?.StepID ?? 'n/a'}`;
+    }
+
+    /**
+     * The `ActionParam` array for one dispatch. Coerced against each param's declared schema on every
+     * path — envelope, native and flow — so `"640"` reaches an integer param as 640 whichever protocol
+     * produced it, while bound parameters keep their exact host-supplied value and carry the `Bound`
+     * marker into the execution log.
+     */
+    private toActionParams(application: Pick<BoundParamsApplication, 'Params' | 'Bound'>, actionEntity: MJActionEntityExtended): ActionParam[] {
+        const coerced = CoerceActionArguments(actionEntity.Params?.Items ?? [], application.Params);
+        return Object.entries(coerced).map(([key, value]) => {
+            const bound = application.Bound.includes(key);
+            const param: ActionParam = { Name: key, Value: bound ? application.Params[key] : value, Type: 'Input' };
+            if (bound) {
+                param.Bound = true;
+            }
+            return param;
+        });
+    }
+
+    /**
+     * A call its bindings refuse. The reason (a required parameter bound to nothing, or a binding that
+     * names no input of the action) is logged for the operator with the run and step IDs. The model is
+     * told only that the action is unavailable, because naming the parameter would reveal what is being
+     * hidden; and the action is locked out for the rest of the run the way a fatal configuration failure
+     * is, so the circuit breaker short-circuits every later call instead of the model being told to
+     * "adjust its parameters" for a refusal it cannot fix.
+     */
+    private refuseBoundAction(
+        params: ExecuteAgentParams,
+        action: AgentAction,
+        actionEntity: MJActionEntityExtended,
+        reason: string,
+        options?: ExecuteSingleActionOptions
+    ): ActionResult {
+        this.logError(`Bound action parameters refused '${actionEntity.Name}' (${this.whereInRun(options)}): ${reason}`, {
+            category: 'ActionExecution',
+            agent: params.agent,
+            metadata: { actionName: action.name, runId: this._agentRun?.ID, stepId: options?.StepID }
+        });
+        this._fatalActionFailures.add(action.name);
+        if (actionEntity.Name) {
+            this._fatalActionFailures.add(actionEntity.Name);
+        }
+        return this.buildBlockedActionResult(actionEntity, 'fatal',
+            `Action '${action.name}' is not available in this run's configuration. Do not call it again; use another tool or proceed with the data you have.`);
+    }
+
+    /** True when the run binds a parameter on at least one of these actions. */
+    private bindsAnyAction(actions: readonly MJActionEntityExtended[], bound: BoundActionParams | undefined): boolean {
+        return bound !== undefined && actions.some((a) => BindingsForAction(bound, a.ID) !== undefined);
+    }
+
+    /** True when the run has any bound action parameters at all. */
+    private hasBoundActionParams(bound: BoundActionParams | undefined): boolean {
+        return bound !== undefined && Object.keys(bound).length > 0;
+    }
+
+    /**
+     * The error that fails a run at its start when `boundActionParams` names an action that does not
+     * exist, so a host that keyed by name or mistyped an ID finds out at once rather than having the
+     * parameter it meant to hide shown to the model. Root run only: a sub-agent inherits bindings that
+     * were already checked. Needs the action engine configured (Phase 1 of {@link Execute}).
+     */
+    private boundActionParamsError(params: ExecuteAgentParams): string | null {
+        const bound = params.boundActionParams;
+        if (this._depth !== 0 || !bound || Object.keys(bound).length === 0) {
+            return null;
+        }
+        const known = new UUIDSet(ActionEngineServer.Instance.Actions.map((a) => a.ID));
+        const unknown = Object.keys(bound).filter((id) => !known.Has(id));
+        if (unknown.length === 0) {
+            return null;
+        }
+        return `boundActionParams names no known action: ${unknown.map((id) => `'${id}'`).join(', ')}. Keys are Action IDs.`;
+    }
+
+    /**
+     * Gives a run that continues another (`lastRunId`) the earlier run's stored bindings, when its caller
+     * passed none (an empty object counts as none, as everywhere else). Fails closed: a prior run that
+     * can't be read, or whose stored bindings don't parse, fails this run rather than starting it unbound.
+     */
+    private async inheritBoundActionParams(params: ExecuteAgentParams): Promise<void> {
+        if (this.hasBoundActionParams(params.boundActionParams) || !params.lastRunId) {
+            return;
+        }
+        this.assertLastRunIdIsUUID(params.lastRunId);
+        const result = await new RunView().RunView<{ BoundActionParams: string | null }>({
+            EntityName: 'MJ: AI Agent Runs',
+            ExtraFilter: `ID='${EscapeSQLString(params.lastRunId)}'`,
+            Fields: ['BoundActionParams'],
+            ResultType: 'simple',
+            BypassCache: true
+        }, params.contextUser);
+        if (!result.Success) {
+            throw new Error(`Could not read the bindings of run ${params.lastRunId}: ${result.ErrorMessage}`);
+        }
+        if (result.Results.length === 0) {
+            throw new Error(`Could not read the bindings of run ${params.lastRunId}: no such run is visible to this user`);
+        }
+        const stored = result.Results[0].BoundActionParams;
+        if (stored) {
+            const parsed: unknown = JSON.parse(stored);
+            if (!IsPlainObject(parsed)) {
+                throw new Error(`The stored bindings of run ${params.lastRunId} are not an object of action bindings`);
+            }
+            params.boundActionParams = parsed as BoundActionParams;
+        }
+    }
+
+    /**
+     * The model's parameters for one action as the progress line and the model-facing invocation record
+     * show them: minus any name the run binds, since a value the model wrote for a bound parameter was
+     * discarded and must not be shown as if it had been used. With no bindings, `Object.entries(aa.params)`.
+     */
+    private shownActionParamEntries(params: ExecuteAgentParams, aa: AgentAction): [string, unknown][] {
+        const entries = Object.entries(aa.params ?? {});
+        if (!params.boundActionParams) {
+            return entries;
+        }
+        const actionEntity = this.getEffectiveActionsForValidation(params.agent.ID).find((a) => a.Name === aa.name);
+        const bindings = BindingsForAction(params.boundActionParams, actionEntity?.ID ?? '');
+        return bindings ? entries.filter(([key]) => !IsBoundParamName(key, bindings)) : entries;
     }
 
     /**
@@ -1681,6 +1856,12 @@ export class BaseAgent {
      * "Run Ad-hoc Query". Left undefined on the envelope path so the loop can tell the two apart.
      */
     protected _nativeToolBindings: ReadonlyMap<string, NativeToolBinding> | undefined;
+    /** Results of the agent-tool calls the current prompt step ran, waiting for their call turn to be replayed. */
+    private _pendingAgentToolResults: { results: NativeToolResult[] } | undefined;
+    /** conversation_tool calls made on the current prompt turn, for the per-turn cap. */
+    private _conversationToolTurn: { turn: number; count: number } | undefined;
+    /** The parsed native control configuration, and the `TypeConfiguration` it was parsed from. */
+    private _nativeControl: { source: string | null; config: NativeControlConfig } | undefined;
     /** the model turn whose assistant call message has already been replayed into history (by reference). */
     private _lastNativeTurnAppended: BaseAgentNextStep['nativeTurn'] | undefined;
 
@@ -2149,7 +2330,7 @@ export class BaseAgent {
                     this._agentRun.ErrorMessage = existing
                         ? `${existing}\n\n[Data Preloading Warning] ${warningMessage}`
                         : `[Data Preloading Warning] ${warningMessage}`;
-                    await this._agentRun.Save();
+                    await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
                 }
             } else {
                 // All sources loaded successfully
@@ -2290,6 +2471,11 @@ export class BaseAgent {
         try {
             this.logStatus(`🤖 Starting execution of agent '${params.agent.Name}'`, true, params);
 
+            // A run that continues another keeps that run's bindings unless its caller gives its own.
+            // Without this, resuming a bound run (from a stored request, or a client's lastRunId)
+            // would show the model the parameters its original caller hid.
+            await this.inheritBoundActionParams(params);
+
             // =====================================================================================
             // LATENCY OPTIMIZATION (Opt #4): Parallelized initialization sequence.
             //
@@ -2336,6 +2522,8 @@ export class BaseAgent {
             this._lastModelSelectionInfo = undefined;
             this._lastVolatileStateMessage = undefined;
             this._resolvedTrailingStateMode = undefined;
+            this._lastSentFingerprints = undefined;
+            this._lastSentPrefix = undefined;
             this._turn1InsertionIndex = -1;
             this._runScope = undefined; // set again by initializeAgentRun, in Phase 1
             this.resetActionCircuitBreaker();
@@ -2426,6 +2614,19 @@ export class BaseAgent {
                 // appear as a phantom "running" record in the UI.
                 const errorMessage = `User ${params.contextUser.Email} does not have permission to run agent '${params.agent.Name}' (ID: ${params.agent.ID})`;
                 await this.failRunAtStart(errorMessage, params);
+            }
+
+            // A binding keyed by something other than a known Action ID fails the run here, before any
+            // prompt is built: silently ignoring it would show the model the parameter the host meant to hide.
+            const bindingError = this.boundActionParamsError(params);
+            if (bindingError) {
+                this.logStatus(`🚫 ${bindingError}`, false, params);
+                if (this._agentRun) {
+                    this._agentRun.Status = 'Failed';
+                    this._agentRun.ErrorMessage = bindingError;
+                    await this._agentRun.Save();
+                }
+                throw new Error(bindingError);
             }
 
             // Reset per-run state (sync, instant — no parallelization needed)
@@ -2657,6 +2858,9 @@ export class BaseAgent {
             this.skipHeldDecisions(params, this.runEndForHeldDecisions());
             this.releasePerRunDataCache();
             await this.finalizeRun(this.deriveRunOutcome());
+            if (this._agentRun?.ID) {
+                AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+            }
             // The run is over: a later direct ExecuteSingleAction resolves the scope and the audience from its own params.
             this.clearRunBoundState();
         }
@@ -2672,7 +2876,7 @@ export class BaseAgent {
         if (this._agentRun) {
             this._agentRun.Status = 'Failed';
             this._agentRun.ErrorMessage = errorMessage;
-            await this._agentRun.Save();
+            await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
         }
         throw new Error(errorMessage);
     }
@@ -3359,7 +3563,7 @@ export class BaseAgent {
             promptRun.Cancelled = false;
             promptRun.CacheHit = false;
 
-            if (!await promptRun.Save()) {
+            if (!await promptRun.Save({ SaveReturnMode: 'datestamps_only' })) {
                 this.logError(`Failed to create realtime AIPromptRun: ${promptRun.LatestResult?.CompleteMessage ?? 'unknown error'}`, {
                     agent: params.agent,
                     category: 'RealtimeSession'
@@ -3578,6 +3782,7 @@ export class BaseAgent {
                 data: params.data,
                 TrustReservedRunData: params.TrustReservedRunData, // the session's data, already vetted when it started
                 verbose: params.verbose,
+                boundActionParams: params.boundActionParams, // the target keeps the run's bindings, as every sub-agent run does
                 treeBudget: this.ensureTreeBudget(params),
                 // Progress streams BOTH to the runner's narration consumer (request.OnProgress —
                 // it paces SendContextNote/RequestSpokenUpdate over the live socket) AND to any
@@ -3795,8 +4000,9 @@ export class BaseAgent {
             // A closed entry (a prior turn's finalized row still tracked for streamed re-finals) means
             // THIS delta begins a NEW turn — fall through and create a fresh In-Progress row, replacing
             // the tracked entry below.
-            const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', params.contextUser);
+            const detail = await md.GetEntityObject<MJConversationDetailEntityExtended>('MJ: Conversation Details', params.contextUser);
             detail.NewRecord();
+            detail.MarkServerAuthoredReply(); // an agent turn is the server's to write; a person's turn is unaffected
             detail.ConversationID = conversationID;
             detail.Role = mjRole;
             detail.Message = transcript.Text;
@@ -3831,16 +4037,16 @@ export class BaseAgent {
         // (closed) rather than deleted, so a later streamed re-final can still update this same row and
         // the next interim/non-replacing-final correctly detects the turn boundary via `open`.
         const inFlight = this.realtimeInFlightTurns.get(roleKey);
-        let detail: MJConversationDetailEntity | null = null;
+        let detail: MJConversationDetailEntityExtended | null = null;
         if (inFlight && (transcript.ReplacesPrevious || inFlight.open)) {
-            const candidate = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', params.contextUser);
+            const candidate = await md.GetEntityObject<MJConversationDetailEntityExtended>('MJ: Conversation Details', params.contextUser);
             if (await candidate.Load(inFlight.id)) {
                 detail = candidate; // update the existing row in place → not a new turn
             }
         }
         let created = false;
         if (!detail) {
-            detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', params.contextUser);
+            detail = await md.GetEntityObject<MJConversationDetailEntityExtended>('MJ: Conversation Details', params.contextUser);
             detail.NewRecord();
             detail.ConversationID = conversationID;
             detail.Role = mjRole;
@@ -3850,6 +4056,7 @@ export class BaseAgent {
             }
             created = true;
         }
+        detail.MarkServerAuthoredReply();
         detail.Message = transcript.Text;
         detail.Status = 'Complete';
         detail.TurnEndedAt = new Date();
@@ -3997,10 +4204,11 @@ export class BaseAgent {
                 Provider: md,
                 Peaks: peaks.length > 0 ? peaks : undefined
             });
-            if (stored.FileID) {
+            if (stored.FileID && !stored.ErrorMessage) {
                 this.logStatus(`🎬 Realtime recording stored (${Math.round(encoded.DurationMs / 1000)}s, file ${stored.FileID}).`, true, params);
             } else {
-                // The store never throws, so its reason only reaches an operator if we log it here.
+                // The store never throws, so its reason only reaches an operator if we log it here. A
+                // FileID alongside an ErrorMessage is an uploaded file the session was not stamped with.
                 this.logError(`Failed to store realtime recording for session ${sessionID}: ${stored.ErrorMessage ?? 'no reason reported'}`, {
                     agent: params.agent, category: 'RealtimeSession'
                 });
@@ -4038,7 +4246,7 @@ export class BaseAgent {
                 },
             });
         }
-        if (!await promptRun.Save()) {
+        if (!await promptRun.Save({ SaveReturnMode: 'datestamps_only' })) {
             this.logError(`Failed to checkpoint realtime usage: ${promptRun.LatestResult?.CompleteMessage ?? 'unknown error'}`, {
                 category: 'RealtimeSession'
             });
@@ -4881,15 +5089,21 @@ export class BaseAgent {
      * 
      * @param {string} lastRunId - The ID of the last run to check
      * @param {UserInfo} [contextUser] - Optional user context
+     * @param {{ LastRunID?: string | null } | null} [preloadedLastRun] - Optional preloaded row for `lastRunId` (or null when already queried and not found) to avoid a duplicate RunView call
      * @private
      */
-    private async validateRunChain(lastRunId: string, contextUser?: UserInfo): Promise<void> {
+    private async validateRunChain(
+        lastRunId: string,
+        contextUser?: UserInfo,
+        preloadedLastRun?: { LastRunID?: string | null } | null
+    ): Promise<void> {
         const visitedRunIds = new Set<string>();
         visitedRunIds.add(this._agentRun!.ID); // Add current run ID
         
-        let currentRunId = lastRunId;
+        let currentRunId: string | null | undefined = lastRunId;
         const maxChainLength = 1000; // Reasonable limit to prevent infinite loops
         let chainLength = 0;
+        let rv: RunView | undefined;
         
         while (currentRunId) {
             // Check if we've seen this run ID before
@@ -4903,9 +5117,18 @@ export class BaseAgent {
             }
             
             visitedRunIds.add(currentRunId);
+
+            // Reuse the preloaded first-hop result when initializeAgentRun already queried lastRunId
+            if (chainLength === 1 && preloadedLastRun !== undefined) {
+                if (preloadedLastRun === null) {
+                    break;
+                }
+                currentRunId = preloadedLastRun.LastRunID;
+                continue;
+            }
             
             // Load the run to check its LastRunID
-            const rv = new RunView();
+            rv ??= new RunView();
             const result = await rv.RunView({
                 EntityName: 'MJ: AI Agent Runs',
                 ExtraFilter: `ID='${currentRunId}'`,
@@ -5172,7 +5395,7 @@ export class BaseAgent {
      */
     protected recordToolCallingInstrumentation(stepEntity: MJAIAgentRunStepEntityExtended, promptResult: AIPromptRunResult): void {
         try {
-            const mode = promptResult?.promptRun?.ToolCallingMode;
+            const mode = TurnToolCallingMode(promptResult);
             if (mode) {
                 stepEntity.ToolCallingMode = mode;
             }
@@ -5243,17 +5466,25 @@ export class BaseAgent {
      * action results as ONE tool turn — a tool_result block per call, paired by id — when the
      * turn's results go back natively; otherwise the markdown user message as before. An action that
      * cannot be paired with a call id keeps the markdown message for itself.
+     *
+     * A failed action's guidance (from `failureGuidance`) rides inside its own error result, where
+     * the model reads it as part of that call's outcome rather than as a separate instruction.
+     *
+     * @returns The summaries answered as native tool results — the caller still owes the rest any
+     *   guidance, as a message
      */
     protected appendActionResults(
         params: ExecuteAgentParams,
         summaries: ActionResultSummary[],
         resultsMessage: string,
         metadata: AgentChatMessageMetadata | undefined,
-        previousDecision: BaseAgentNextStep
-    ): void {
+        previousDecision: BaseAgentNextStep,
+        failureGuidance?: ReadonlyMap<ActionResultSummary, string>
+    ): ReadonlySet<ActionResultSummary> {
+        const answered = new Set<ActionResultSummary>();
         if (!previousDecision.nativeTurn?.sendResultsNatively) {
             params.conversationMessages.push({ role: 'user', content: resultsMessage, metadata } as AgentChatMessage);
-            return;
+            return answered;
         }
         const unpaired = [...(previousDecision.actions ?? [])];
         const results: NativeToolResult[] = [...this.payloadToolResult(previousDecision)];
@@ -5265,19 +5496,22 @@ export class BaseAgent {
                 orphans.push(summary);
                 continue;
             }
+            const guidance = failureGuidance?.get(summary);
             results.push({
                 toolCallId: action.toolCallId,
                 toolName: SanitizeToolName(summary.actionName),
-                content: this.formatActionResultsAsMarkdown([summary]),
+                content: this.formatActionResultsAsMarkdown([summary]) + (guidance ? `\n\n${guidance}` : ''),
                 isError: !summary.success
             });
+            answered.add(summary);
         }
         if (results.length > 0) {
-            params.conversationMessages.push(BuildToolResultTurn(results, metadata) as AgentChatMessage);
+            this.PushToolResultTurn(params, BuildToolResultTurn(results, metadata) as AgentChatMessage);
         }
         if (orphans.length > 0) {
             params.conversationMessages.push({ role: 'user', content: `Action results:\n${this.formatActionResultsAsMarkdown(orphans)}`, metadata } as AgentChatMessage);
         }
+        return answered;
     }
 
     /**
@@ -5304,19 +5538,60 @@ export class BaseAgent {
         }
         // Only the most recent assistant call turn can still be open — anything earlier was
         // answered by its own branch or closed by a previous pass through here.
-        let at = -1;
-        for (let i = messages.length - 1; i >= 0; i--) {
-            const candidate = messages[i] as AgentChatMessage;
-            if (candidate.role === 'assistant' && candidate.toolCalls?.length) {
-                at = i;
-                break;
-            }
-        }
+        const at = BaseAgent.lastToolCallTurnIndex(messages);
         if (at < 0) {
             return;
         }
+        const answered = BaseAgent.toolCallIdsAnsweredAfter(messages, at);
+        // A call with no id cannot be paired by any provider, so it cannot be answered here
+        // either — `extractOpenAICompatibleToolCalls` substitutes '' when a host omits the id.
+        const unanswered = ((messages[at] as AgentChatMessage).toolCalls ?? [])
+            .filter((call) => !!call.id && !answered.has(call.id));
+        if (unanswered.length === 0) {
+            return;
+        }
+        const synthetic = BuildToolResultTurn(
+            unanswered.map((call) => ({
+                toolCallId: call.id,
+                toolName: call.name,
+                content: 'Not executed — the agent did not run this call on this turn. See the message that follows.',
+                isError: true
+            })),
+            { turnAdded: this._promptTurnCount, messageType: 'action-result' }
+        ) as AgentChatMessage;
+        BaseAgent.insertToolResultsAfterCallTurn(messages, at, synthetic);
+    }
+
+    /**
+     * Appends a tool turn answering the latest call turn. When that call turn is already followed
+     * by a tool turn — declined calls, or agent-tool results, answered first — the results join it,
+     * because Anthropic takes every result for a call turn from the one message that follows it.
+     */
+    protected PushToolResultTurn(params: ExecuteAgentParams, results: AgentChatMessage): void {
+        const messages = params.conversationMessages;
+        const at = BaseAgent.lastToolCallTurnIndex(messages);
+        if (at >= 0 && at === messages.length - 2 && messages[at + 1].role === 'tool') {
+            BaseAgent.insertToolResultsAfterCallTurn(messages, at, results);
+            return;
+        }
+        messages.push(results);
+    }
+
+    /** The index of the most recent assistant turn that made tool calls, or -1. */
+    private static lastToolCallTurnIndex(messages: ChatMessage[]): number {
+        for (let i = messages.length - 1; i >= 0; i--) {
+            const candidate = messages[i] as AgentChatMessage;
+            if (candidate.role === 'assistant' && candidate.toolCalls?.length) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** The call ids that already have a `tool_result` in some message after the call turn. */
+    private static toolCallIdsAnsweredAfter(messages: ChatMessage[], callTurnIndex: number): Set<string> {
         const answered = new Set<string>();
-        for (let i = at + 1; i < messages.length; i++) {
+        for (let i = callTurnIndex + 1; i < messages.length; i++) {
             const content = messages[i].content;
             if (!Array.isArray(content)) {
                 continue;
@@ -5327,22 +5602,25 @@ export class BaseAgent {
                 }
             }
         }
-        // A call with no id cannot be paired by any provider, so it cannot be answered here
-        // either — `extractOpenAICompatibleToolCalls` substitutes '' when a host omits the id.
-        const unanswered = ((messages[at] as AgentChatMessage).toolCalls ?? [])
-            .filter((call) => !!call.id && !answered.has(call.id));
-        if (unanswered.length === 0) {
+        return answered;
+    }
+
+    /**
+     * Places a tool turn immediately after the assistant turn whose calls it answers.
+     *
+     * Anthropic requires every result for a call turn in the single message that follows it, and
+     * OpenAI requires the call turn to be followed by its tool messages — so a result appended after
+     * a retry message that already sits behind the call is rejected by both. When the message right
+     * after the call turn is already a tool turn, the results merge into it instead of opening a
+     * second one.
+     */
+    private static insertToolResultsAfterCallTurn(messages: ChatMessage[], callTurnIndex: number, results: AgentChatMessage): void {
+        const adjacent = messages[callTurnIndex + 1];
+        if (adjacent?.role === 'tool' && Array.isArray(adjacent.content) && Array.isArray(results.content)) {
+            messages[callTurnIndex + 1] = { ...adjacent, content: [...adjacent.content, ...results.content] };
             return;
         }
-        params.conversationMessages.push(BuildToolResultTurn(
-            unanswered.map((call) => ({
-                toolCallId: call.id,
-                toolName: call.name,
-                content: 'Not executed — the agent did not run this call on this turn. See the message that follows.',
-                isError: true
-            })),
-            { turnAdded: this._promptTurnCount, messageType: 'action-result' }
-        ) as AgentChatMessage);
+        messages.splice(callTurnIndex + 1, 0, results);
     }
 
     /**
@@ -5377,19 +5655,37 @@ export class BaseAgent {
             AIEngine.Instance.AgentActions.filter((aa) => UUIDsEqual(aa.AgentID, params.agent.ID))
         );
         const subAgents = this.getEffectiveSubAgentsForValidation(params.agent.ID);
-        if (actions.length === 0 && subAgents.length === 0) {
+        const agentTools = this.GetAgentTools(params);
+        const control = this.GetNativeControlConfig(params);
+        // A native-only agent declares its control and framework tools even with no Actions or
+        // sub-agents: tools are its only way to act.
+        if (actions.length === 0 && subAgents.length === 0 && agentTools.length === 0 && !control.NativeOnly) {
             return;
         }
         try {
-            const actionSet = BuildActionToolSet(actions, new Map(actions.map((a) => [a.ID, a.Params.Items])));
+            // A bound parameter (ExecuteAgentParams.boundActionParams) is left out of the tool's schema, so
+            // the model is never asked for it. With no bindings each action's full list is used, as before.
+            const paramsByAction = new Map(actions.map((a) => [a.ID, UnboundParams(a.Params.Items, BindingsForAction(params.boundActionParams, a.ID))]));
+            const actionSet = BuildActionToolSet(actions, paramsByAction);
             // Under implicit control flow the agent cannot know which model will answer, so it declares the full
             // set — Actions plus the control-flow tools (one per sub-agent, payload_change_request,
             // ask_user) — and NAMES the control ones. The runner keeps them only when the selected
             // model's LLM.NativeControlFlow resolves to 'implicit'; a hybrid model never sees them.
-            const toolSet = BuildNativeToolSet(actionSet, subAgents);
+            const frameworkTools = control.NativeOnly
+                ? BuildFrameworkTools(this.frameworkToolHost(params), this.frameworkToolAvailability(promptParams, params))
+                : [];
+            const toolSet = BuildNativeToolSet(actionSet, subAgents, control, agentTools, frameworkTools);
+            if (control.NativeOnly && promptParams.data) {
+                // The template renders the tools-only prompt when this is set AND the runner resolves implicit control flow.
+                promptParams.data[NATIVE_ONLY_TEMPLATE_FLAG] = true;
+                promptParams.data[NATIVE_CONTROL_TEMPLATE_DATA] = { Terminal: control.Terminal, PayloadChangeTool: control.PayloadChangeTool, AskUser: control.AskUser };
+            }
             promptParams.tools = toolSet.tools;
             promptParams.controlFlowToolNames = toolSet.controlToolNames;
             promptParams.toolChoice = this.resolveToolChoiceForTurn(params);
+            // Parallel calls stay on through each provider's own default (OpenAI, Anthropic and Gemini
+            // allow them when the flag is absent). Sending an explicit flag would reach providers
+            // whose models do not document it, and a rejected flag would strip every tool.
             this._nativeToolBindings = toolSet.byToolName;
         } catch (error) {
             // A tool-name collision is a metadata problem and a hard error at build time — but it
@@ -5397,6 +5693,230 @@ export class BaseAgent {
             // agent still does today. Surface it loudly and continue without tools.
             LogError(`Agent '${params.agent.Name}': could not declare native tools — ${error instanceof Error ? error.message : String(error)}`);
         }
+    }
+
+    /**
+     * The agent's own native tools — tools that read and write this agent's state, such as
+     * `write_section` / `edit_section`. None by default; a driver class overrides this.
+     *
+     * Declared beside the agent's Actions whenever the run declares native tools, and dispatched in
+     * every native mode. Each call runs as a `Tool` run step, in the order the model made the calls,
+     * and its {@link AgentToolResult.PayloadChange} is applied before the next call runs. See
+     * {@link AgentToolDefinition} for the contract.
+     *
+     * @param params The run parameters
+     * @returns The tools to declare this turn
+     */
+    protected GetAgentTools(params: ExecuteAgentParams): AgentToolDefinition[] {
+        return [];
+    }
+
+    /**
+     * Which framework capabilities a native-only agent gets as tools this turn — the same gates the
+     * hybrid prompt applies to the matching envelope fields and their documentation.
+     */
+    private frameworkToolAvailability(promptParams: AIPromptParams, params: ExecuteAgentParams): FrameworkToolAvailability {
+        const p = promptParams.data?.__agentTypePromptParams as Record<string, unknown> | undefined;
+        return {
+            // Each gate matches the one that renders the tool's docs, so a tool is never taught but undeclared.
+            Scratchpad: p?.includeScratchpadDocs !== false,
+            MemoryWrites: p?.includeMemoryWritesDocs !== false && this.memoryWriteSkip(params) === null,
+            ArtifactTools: p?.includeArtifactToolsDocs !== false && this._artifactToolManager.HasArtifacts(),
+            ConversationTools: p?.includeConversationToolsDocs !== false && this._conversationToolManager.IsAvailable,
+            Decisions: this.DecisionsEnabled(p) && p?.includeDecisionsDocs !== false
+        };
+    }
+
+    /** The capabilities behind the framework tools, bound to this run. */
+    private frameworkToolHost(params: ExecuteAgentParams): FrameworkToolHost {
+        return {
+            ApplyScratchpad: (changes) => this.applyScratchpadFromTool(changes),
+            WriteMemory: (note, type, scopeHint) => this.writeMemoryFromTool({ note, type, scopeHint }, params),
+            RunArtifactTool: (artifactId, tool, input) => this.runArtifactToolFromTool({ artifactId, tool, input }),
+            RunConversationTool: (tool, input) => this.runConversationToolFromTool(tool, input),
+            RunDecisions: (requests, payload) => this.runDecisionsFromTool(requests, payload, params)
+        };
+    }
+
+    private applyScratchpadFromTool(changes: AgentScratchpad): string {
+        this._scratchpadManager.ApplyScratchpadChanges(changes);
+        this._scratchpadManager.EnforceTaskLimit(50);
+        return `Scratchpad updated. ${this._scratchpadManager.GetTaskSummary()}`.trim();
+    }
+
+    private async writeMemoryFromTool(write: MemoryWriteRequest, params: ExecuteAgentParams): Promise<AgentToolResult> {
+        const skip = this.memoryWriteSkip(params);
+        if (skip) {
+            return { Content: `Not saved: ${skip.Told}.`, IsError: true };
+        }
+        const result = await this._memoryWriteManager.ExecuteWrite(write, this.memoryWriteOptions(params));
+        const failed = result.disposition === 'error' || result.disposition === 'rejected-type';
+        return { Content: `${result.disposition}${result.reason ? `: ${result.reason}` : ''}`, IsError: failed };
+    }
+
+    private async runArtifactToolFromTool(call: ArtifactToolCall): Promise<AgentToolResult> {
+        const stored = await this._artifactToolManager.ExecuteSingleToolCall(call);
+        return stored.result.success
+            ? { Content: this.capStandaloneToolResultText(RenderToolResultData(stored.result.data)), IsError: false }
+            : { Content: stored.result.errorMessage ?? `Artifact tool '${call.tool}' failed.`, IsError: true };
+    }
+
+    private async runConversationToolFromTool(tool: string, input: Record<string, unknown>): Promise<AgentToolResult> {
+        const name = ConversationToolNames.find((n) => n === tool);
+        if (!name) {
+            return { Content: `'${tool}' is not a conversation tool. Use one of: ${ConversationToolNames.join(', ')}.`, IsError: true };
+        }
+        // The same per-turn cap the envelope's conversationToolCalls has; summarizeRange is a model call.
+        if (this._conversationToolTurn?.turn !== this._promptTurnCount) {
+            this._conversationToolTurn = { turn: this._promptTurnCount, count: 0 };
+        }
+        if (++this._conversationToolTurn.count > MAX_CONVERSATION_TOOL_CALLS_PER_TURN) {
+            return { Content: `Skipped — per-turn cap of ${MAX_CONVERSATION_TOOL_CALLS_PER_TURN} conversation tool calls reached. Call it again on your next turn.`, IsError: true };
+        }
+        const ran = await this._conversationToolManager.ExecuteSingleToolCall({ tool: name, input: input as ConversationToolCall['input'] });
+        return ran.result.success
+            ? { Content: this.capStandaloneToolResultText(RenderToolResultData(ran.result.data)), IsError: false }
+            : { Content: ran.result.errorMessage ?? `Conversation tool '${tool}' failed.`, IsError: true };
+    }
+
+    private async runDecisionsFromTool(requests: AgentDecisionRequest[], payload: object, params: ExecuteAgentParams): Promise<AgentToolResult> {
+        const results = await this.executeDecisionRequestsAsSteps(requests, payload, this._agentTypePromptParams, params);
+        return { Content: JSON.stringify(results), IsError: results.length > 0 && results.every((r) => !r.success) };
+    }
+
+    /**
+     * Runs the turn's agent-tool calls in order, each as its own `Tool` run step, threading the
+     * payload through them so successive edits compose.
+     *
+     * @param calls The calls, in the order the model made them
+     * @param payload The payload before the first call
+     * @param params The run parameters
+     * @returns The payload after the last call, and one result per call, in call order
+     */
+    protected async ExecuteAgentToolCallsAsSteps<P>(
+        calls: AgentToolCallRequest[],
+        payload: P,
+        params: ExecuteAgentParams
+    ): Promise<{ payload: P; results: NativeToolResult[] }> {
+        let current = payload;
+        const results: NativeToolResult[] = [];
+        for (const call of calls) {
+            // A cancelled run stops between calls; the calls it never reached are answered as not run.
+            if (params.cancellationToken?.aborted) {
+                results.push({ toolCallId: call.toolCallId, toolName: call.toolName, content: 'Not executed: the run was cancelled.', isError: true });
+                continue;
+            }
+            const outcome = await this.executeAgentToolCallAsStep(call, current, params);
+            current = outcome.payload;
+            results.push(outcome.result);
+        }
+        return { payload: current, results };
+    }
+
+    /** One agent-tool call as a `Tool` run step: run it, apply its payload change, record both. */
+    private async executeAgentToolCallAsStep<P>(
+        call: AgentToolCallRequest,
+        payload: P,
+        params: ExecuteAgentParams
+    ): Promise<{ payload: P; result: NativeToolResult }> {
+        const step = await this.createStepEntity({
+            stepType: 'Tool',
+            stepName: `Agent Tool: ${call.toolName}`,
+            contextUser: params.contextUser,
+            inputData: { tool: call.toolName, arguments: call.arguments },
+            payloadAtStart: payload
+        });
+        // Whatever fails below, the step is finalized and the call answered — never left Running.
+        let outcome: { payload: P; content: string; isError: boolean } = { payload, content: '', isError: true };
+        try {
+            const ran = await this.runAgentTool(call, payload, params);
+            // payload_change_request keeps its single-call behaviour: the allowed parts apply.
+            const partial = this._nativeToolBindings?.get(call.toolName)?.kind === 'payloadChange';
+            const applied = !ran.IsError && ran.PayloadChange
+                ? this.applyAgentToolPayloadChange(payload, ran.PayloadChange, params, partial)
+                : { payload, error: undefined };
+            outcome = { payload: applied.payload, content: applied.error ?? ran.Content, isError: ran.IsError || applied.error !== undefined };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            LogError(`Agent '${params.agent?.Name}': applying agent tool '${call.toolName}' failed: ${message}`);
+            outcome = { payload, content: `The tool's change could not be applied: ${message}. Nothing was changed.`, isError: true };
+        } finally {
+            step.PayloadAtEnd = this.serializePayloadAtEnd(outcome.payload);
+            await this.finalizeStepEntity(step, !outcome.isError, outcome.isError ? outcome.content : undefined,
+                { tool: call.toolName, content: outcome.content, isError: outcome.isError });
+        }
+        return { payload: outcome.payload, result: { toolCallId: call.toolCallId, toolName: call.toolName, content: outcome.content, isError: outcome.isError } };
+    }
+
+    /** Calls the tool's handler; an undeclared tool or a thrown error becomes an error result. */
+    private async runAgentTool<P>(call: AgentToolCallRequest, payload: P, params: ExecuteAgentParams): Promise<AgentToolResult<P>> {
+        const binding = this._nativeToolBindings?.get(call.toolName);
+        if (binding?.kind === 'payloadChange') {
+            // One of several payload writes on a turn, run in call order with the agent's own tools.
+            return { Content: 'Payload change applied.', IsError: false, PayloadChange: call.arguments as AgentPayloadChangeRequest<P> };
+        }
+        if (binding?.kind !== 'agentTool') {
+            return { Content: `'${call.toolName}' is not one of this agent's tools.`, IsError: true };
+        }
+        try {
+            // A copy: the tool changes state through its PayloadChange, which PayloadSelfWritePaths
+            // checks — an edit made in place on the live payload would bypass that check.
+            const context: AgentToolContext<P> = { CurrentPayload: this.cloneSubAgentPayload(payload), Params: params, ContextUser: params.contextUser };
+            return await (binding.definition as AgentToolDefinition<P>).Execute(call.arguments, context);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            LogError(`Agent '${params.agent?.Name}': agent tool '${call.toolName}' threw: ${message}`);
+            return { Content: `The tool failed: ${message}`, IsError: true };
+        }
+    }
+
+    /**
+     * Applies an agent tool's payload change through PayloadManager, under the agent's
+     * `PayloadSelfWritePaths`. A change that touches a path the agent may not write is rejected
+     * whole — a partial write would leave the payload in a state the tool never described — and
+     * the reason goes back to the model as the call's error result.
+     *
+     * @param partial Apply the allowed parts and report the rest, as a single `payload_change_request`
+     *   on a turn always has; the model wrote that change itself, path by path
+     */
+    private applyAgentToolPayloadChange<P>(payload: P, change: AgentPayloadChangeRequest<P>, params: ExecuteAgentParams, partial = false): { payload: P; error?: string } {
+        const allowedPaths = params.agent.PayloadSelfWritePaths
+            ? JSON.parse(params.agent.PayloadSelfWritePaths)
+            : this.getDefaultPayloadSelfWritePaths();
+        const changeResult = this._payloadManager.applyAgentChangeRequest(payload, change, {
+            validateChanges: true,
+            logChanges: true,
+            agentName: params.agent.Name,
+            allowedPaths,
+            verbose: params.verbose === true || IsVerboseLoggingEnabled()
+        });
+        const blocked = changeResult.blockedOperations ?? [];
+        if (blocked.length > 0) {
+            const paths = [...new Set(blocked.map((b) => b.path))].join(', ');
+            return partial
+                ? { payload: changeResult.result, error: `Applied, except the paths this agent may not write: ${paths}.` }
+                : { payload, error: `Not applied: this agent may not write ${paths}. Nothing was changed.` };
+        }
+        return { payload: changeResult.result };
+    }
+
+    /**
+     * Answers the turn's agent-tool calls, directly after the call turn the loop just replayed. When
+     * the turn's results do not go back natively, the results become one user message instead.
+     */
+    private appendAgentToolResults(params: ExecuteAgentParams, step: BaseAgentNextStep): void {
+        const pending = this._pendingAgentToolResults;
+        this._pendingAgentToolResults = undefined;
+        if (!pending || pending.results.length === 0) {
+            return;
+        }
+        const metadata: AgentChatMessageMetadata = { turnAdded: this._promptTurnCount, messageType: 'action-result' };
+        if (step.nativeTurn?.sendResultsNatively && this._lastNativeTurnAppended === step.nativeTurn) {
+            this.PushToolResultTurn(params, BuildToolResultTurn(pending.results, metadata) as AgentChatMessage);
+            return;
+        }
+        const lines = pending.results.map((r) => `### ${r.toolName}${r.isError ? ' (failed)' : ''}\n${r.content}`);
+        params.conversationMessages.push({ role: 'user', content: `Tool results:\n\n${lines.join('\n\n')}`, metadata } as AgentChatMessage);
     }
 
     /**
@@ -5425,14 +5945,44 @@ export class BaseAgent {
      * address them. That belongs to the prompt, and is why the native-mode Actions section names
      * the cases explicitly.
      *
+     * **A text-terminal agent** (`NativeControl.Terminal: 'text'`) declares no `complete_task`: its
+     * answer is the plain-text reply, and its state changes went through its own tools on earlier
+     * turns. Its final turn is `'none'`, which asks for exactly that reply.
+     *
      * Subclasses may narrow this further; the base contract is that a forced terminal choice must
      * never be relaxed to `'auto'` on a turn the framework has already decided is terminal.
      *
      * @param params The run parameters, for the per-run iteration override
-     * @returns `{ name: 'complete_task' }` on the final permitted iteration, otherwise `'auto'`
+     * @returns On the final permitted iteration, `{ name: 'complete_task' }`, or `'none'` for a
+     *   text-terminal agent; otherwise `'auto'`
      */
     protected resolveToolChoiceForTurn(params: ExecuteAgentParams): ChatToolChoice {
-        return this.isFinalPermittedIteration(params) ? { name: COMPLETE_TASK_TOOL } : 'auto';
+        if (!this.isFinalPermittedIteration(params)) {
+            return 'auto';
+        }
+        return this.GetNativeControlConfig(params).Terminal === 'text' ? 'none' : { name: COMPLETE_TASK_TOOL };
+    }
+
+    /**
+     * The agent's native control configuration — which control tools it declares and how its run
+     * ends — from the `NativeControl` block of its `TypeConfiguration`. Defaults when there is none.
+     *
+     * Parsed once per distinct configuration; anything unusable is logged once and falls back to its
+     * default, so a typo never fails a run.
+     *
+     * @param params The run parameters, for the agent
+     */
+    protected GetNativeControlConfig(params: ExecuteAgentParams): NativeControlConfig {
+        const source = params.agent?.TypeConfiguration ?? null;
+        if (this._nativeControl && this._nativeControl.source === source) {
+            return this._nativeControl.config;
+        }
+        const { Config, Problems } = ResolveNativeControlConfig(source);
+        for (const problem of Problems) {
+            LogError(`Agent '${params.agent?.Name}': ${problem}`);
+        }
+        this._nativeControl = { source, config: Config };
+        return Config;
     }
 
     /**
@@ -5481,6 +6031,7 @@ export class BaseAgent {
             params.data,
             params.actionChanges,
             params.subAgentChanges,
+            params.boundActionParams,
             this.promptWithholding(params)
         );
 
@@ -5509,6 +6060,12 @@ export class BaseAgent {
         promptParams.contextUser = params.contextUser;
         // Last gate before the history goes back to the model: no tool call may be left dangling.
         this.reconcileUnansweredToolCalls(params);
+        if (this.GetNativeControlConfig(params).CompactToolArguments) {
+            const compacted = CompactAnsweredToolCallArguments(params.conversationMessages as AgentChatMessage[]);
+            if (compacted > 0) {
+                this.logStatus(`[NativeTools] Compacted the large arguments of ${compacted} older tool call(s)`, true, params);
+            }
+        }
         promptParams.conversationMessages = params.conversationMessages;
         promptParams.verbose = params.verbose; // Pass through verbose flag
 
@@ -5566,6 +6123,10 @@ export class BaseAgent {
             promptParams.data['_ARTIFACTS_ENABLED'] = this.isArtifactSupportEnabled(params.agent);
             if (artifactToolsEnabled && this._artifactToolManager.HasArtifacts()) {
                 promptParams.data['_ARTIFACT_MANIFEST'] = this._artifactToolManager.ToManifestString();
+                if (this.GetNativeControlConfig(params).NativeOnly) {
+                    // The native-only prompt (picked at render time) names the artifact_tool tool instead of artifactToolCalls.
+                    promptParams.data['_ARTIFACT_MANIFEST_NATIVE'] = this._artifactToolManager.ToManifestString({ nativeTools: true });
+                }
                 promptParams.data['_ARTIFACT_TOOLS'] = this._artifactToolManager.GetToolDocumentation();
                 promptParams.data['_ARTIFACT_TOOL_SUMMARY'] = this._artifactToolManager.GetSummary();
                 this.logStatus(`[ArtifactTools] Injected manifest into prompt: ${this._artifactToolManager.GetSummary()}`, true, params);
@@ -5579,6 +6140,9 @@ export class BaseAgent {
             const conversationToolsEnabled = agentTypePromptParams?.includeConversationToolsDocs !== false;
             if (conversationToolsEnabled && this._conversationToolManager.IsAvailable) {
                 promptParams.data['_CONVERSATION_TOOLS'] = this._conversationToolManager.GetToolDocumentation();
+                if (this.GetNativeControlConfig(params).NativeOnly) {
+                    promptParams.data['_CONVERSATION_TOOLS_NATIVE'] = this._conversationToolManager.GetToolDocumentation(true);
+                }
             }
 
             // Enable the memory-writes response field + docs only for agents that opted in
@@ -5715,8 +6279,91 @@ export class BaseAgent {
             }
             this._lastVolatileStateMessage = volatileStateMessage;
         }
+        if (promptParams.conversationMessages) {
+            promptParams.conversationMessages = this.dropReasoningBehindChangedHistory(params, promptParams.conversationMessages, promptParams);
+        }
 
         return promptParams;
+    }
+
+    /**
+     * Drops replayed reasoning that the history before it no longer matches.
+     *
+     * A driver with `ReplayedReasoningRequiresStablePrefix` accepts a replayed reasoning block
+     * only while every message before it is exactly what was sent when the block was produced.
+     * Expiry, compaction, message expansion and context recovery all rewrite earlier messages,
+     * and each would make the request fail. So the outgoing messages are compared with the
+     * previous request's: from the first message that was changed or removed, every call turn's
+     * reasoning is dropped — in this request and in the history, so later requests stay
+     * consistent. Messages the previous request did not have (the model's reply, new results)
+     * are not a change.
+     */
+    private dropReasoningBehindChangedHistory(params: ExecuteAgentParams, outgoing: ChatMessage[], promptParams: AIPromptParams): ChatMessage[] {
+        const fingerprints = outgoing.map(BaseAgent.messageFingerprint);
+        const previous = this._lastSentFingerprints;
+        this._lastSentFingerprints = fingerprints;
+        if (!this.replaysPrefixBoundReasoning()) {
+            return outgoing;
+        }
+        // The system prompt and tools are compared by the prompt runner, which renders the one and finalizes the other.
+        promptParams.ReplayedReasoningPrefix = this._lastSentPrefix;
+        if (!previous) {
+            return outgoing;
+        }
+        const changedAt = previous.findIndex((fingerprint, i) => fingerprints[i] !== fingerprint);
+        if (changedAt < 0) {
+            return outgoing;
+        }
+        const stale = new Set(outgoing.slice(changedAt).flatMap((m) => (m as AgentChatMessage).reasoning?.length ? ((m as AgentChatMessage).toolCalls ?? []).map((c) => c.id) : []));
+        if (stale.size === 0) {
+            return outgoing;
+        }
+        const withoutReasoning = (m: ChatMessage): ChatMessage => {
+            const { reasoning: _dropped, ...rest } = m as AgentChatMessage;
+            return rest;
+        };
+        const callsStale = (m: ChatMessage) => !!(m as AgentChatMessage).reasoning && ((m as AgentChatMessage).toolCalls ?? []).some((c) => stale.has(c.id));
+        // In place: the caller holds this array.
+        params.conversationMessages.forEach((m, i) => {
+            if (callsStale(m)) {
+                params.conversationMessages[i] = withoutReasoning(m);
+            }
+        });
+        this.logStatus(`Dropped replayed reasoning from ${stale.size} tool call(s): an earlier message changed since it was produced`, true, params);
+        return outgoing.map((m, i) => (i >= changedAt && callsStale(m) ? withoutReasoning(m) : m));
+    }
+
+    /** Whether this run replays reasoning to a driver that binds it to an unchanged request prefix. */
+    private replaysPrefixBoundReasoning(): boolean {
+        const selection = this._lastModelSelectionInfo;
+        return this._nativeToolBindings !== undefined
+            && this.DriverRequiresStableReasoningPrefix(selection?.ModelSelected, selection?.vendorSelected);
+    }
+
+    /**
+     * Keeps the system-prompt-and-tools fingerprint of the request just sent, for the next one. When
+     * it changed, the runner sent this request without replayed reasoning; the history drops it too,
+     * so no later request replays a block made under the old prompt or tools.
+     */
+    private trackSentPrefix(params: ExecuteAgentParams, promptResult: AIPromptRunResult): void {
+        const sent = GetSentPrefixFingerprint(promptResult.chatResult);
+        const previous = this._lastSentPrefix;
+        this._lastSentPrefix = sent;
+        if (previous === undefined || sent === undefined || sent === previous || !this.replaysPrefixBoundReasoning()) {
+            return;
+        }
+        params.conversationMessages.forEach((m, i) => {
+            const turn = m as AgentChatMessage;
+            if (turn.reasoning) {
+                const { reasoning: _dropped, ...rest } = turn;
+                params.conversationMessages[i] = rest;
+            }
+        });
+    }
+
+    /** What makes a message the same message to a provider — reasoning aside, which only this check removes. */
+    private static messageFingerprint(m: ChatMessage): string {
+        return JSON.stringify([m.role, m.content, (m as AgentChatMessage).toolCalls?.map((c) => [c.id, c.name, c.arguments])]);
     }
 
     /**
@@ -5784,7 +6431,9 @@ export class BaseAgent {
      * Which providers are which is METADATA, not code: the `PrefixPromptCache` flag in the model
      * catalog's `ModelConfiguration` cascade (Model Types < Models < Vendors' `Configuration.ModelDefaults`
      * < Model Vendors), read through {@link resolvePrefixPromptCache}. `true` means append-only;
-     * anything else means replace.
+     * anything else means replace. One exception comes from the driver, not the catalog: a run that
+     * declares native tools to a driver whose replayed reasoning needs the history before it
+     * unchanged is append-only too (see {@link ResolveAppendOnlyState}).
      *
      * Decided ONCE per run. An explicit `trailingStateMode` or a runtime model override answers
      * immediately. Otherwise the answer is frozen at the first model selection and reused for every
@@ -5814,7 +6463,11 @@ export class BaseAgent {
         if (promptParams.override?.modelId) {
             const model = AIEngine.Instance?.ModelsByID?.get(NormalizeUUID(promptParams.override.modelId));
             const vendor = promptParams.override.vendorId ? AIEngine.Instance?.VendorsByID?.get(NormalizeUUID(promptParams.override.vendorId)) : undefined;
-            return this.resolvePrefixPromptCache(model, vendor);
+            // Without a vendor the serving driver is not known yet: a catalog "yes" stands, anything
+            // else waits for the first selection below, which names the vendor.
+            if (vendor || this.resolvePrefixPromptCache(model, undefined)) {
+                return this.ResolveAppendOnlyState(model, vendor);
+            }
         }
 
         if (this._resolvedTrailingStateMode !== undefined) {
@@ -5823,12 +6476,41 @@ export class BaseAgent {
         if (this._lastModelSelectionInfo) {
             const model = this._lastModelSelectionInfo.ModelSelected;
             const vendor = this._lastModelSelectionInfo.vendorSelected;
-            this._resolvedTrailingStateMode = this.resolvePrefixPromptCache(model, vendor);
+            this._resolvedTrailingStateMode = this.ResolveAppendOnlyState(model, vendor);
             return this._resolvedTrailingStateMode;
         }
 
         // Turn 1, nothing known yet: replace-in-place, resolved for good on turn 2 (see above).
         return false;
+    }
+
+    /**
+     * Whether this run keeps its runtime-state fragments (append-only): the model sits behind a
+     * byte-prefix prompt cache, or the run declares native tools to a driver whose replayed
+     * reasoning is accepted only while the history before it is unchanged. In replace mode each
+     * request drops the previous fragment, and a thinking block produced after it would be replayed
+     * behind a changed history and rejected.
+     */
+    protected ResolveAppendOnlyState(model: MJAIModelEntityExtended | undefined, vendor: MJAIVendorEntity | undefined): boolean {
+        if (this.resolvePrefixPromptCache(model, vendor)) {
+            return true;
+        }
+        return this._nativeToolBindings !== undefined && this.DriverRequiresStableReasoningPrefix(model, vendor);
+    }
+
+    /** Whether the driver serving `model` on `vendor` binds replayed reasoning to the unchanged history before it. */
+    protected DriverRequiresStableReasoningPrefix(model: MJAIModelEntityExtended | undefined, vendor: MJAIVendorEntity | undefined): boolean {
+        if (!model || !vendor) {
+            return false;
+        }
+        const engine = AIEngine.Instance;
+        const modelVendor = (engine.ModelVendorsByModelID?.get(NormalizeUUID(model.ID)) ?? [])
+            .find(mv => UUIDsEqual(mv.VendorID, vendor.ID) && engine.IsInferenceProvider(mv));
+        if (!modelVendor?.DriverClass) {
+            return false;
+        }
+        const driver = MJGlobal.Instance.ClassFactory.GetRegistration(BaseLLM, modelVendor.DriverClass)?.SubClass as typeof BaseLLM | undefined;
+        return driver?.ReplayedReasoningRequiresStablePrefix === true;
     }
 
     /**
@@ -5959,6 +6641,20 @@ export class BaseAgent {
     }
 
     /**
+     * Per-instance memoization for runtime-state template delivery analysis and template-array indexing
+     * so multi-turn agent loops do not repeatedly scan template collections and strings on every turn.
+     * @private
+     */
+    private _lastRuntimeStateDeliveryCache: {
+        templateText: string;
+        markers: readonly string[];
+        delivery: 'trailing' | 'embedded' | 'unsupported';
+    } | null = null;
+    private _cachedTemplatesArrayRef: MJTemplateEntityExtended[] | null = null;
+    private _templateByIdMap: Map<string, MJTemplateEntityExtended> | null = null;
+    private _templateEngineConfiguredForRun = false;
+
+    /**
      * Decides, from the system prompt's UNRENDERED template text, whether the trailing runtime-state
      * fragment belongs on this request:
      *
@@ -5982,10 +6678,19 @@ export class BaseAgent {
         if (templateText === null) {
             return 'unknown';
         }
-        if (this.templateTextEmbedsVolatileState(templateText)) {
-            return 'embedded';
+        const markers = this.volatileTemplateMarkers;
+        if (
+            this._lastRuntimeStateDeliveryCache &&
+            this._lastRuntimeStateDeliveryCache.templateText === templateText &&
+            this._lastRuntimeStateDeliveryCache.markers === markers
+        ) {
+            return this._lastRuntimeStateDeliveryCache.delivery;
         }
-        return templateText.includes(`<${RUNTIME_STATE_TAG}>`) ? 'trailing' : 'unsupported';
+        const delivery: 'trailing' | 'embedded' | 'unsupported' = this.templateTextEmbedsVolatileState(templateText)
+            ? 'embedded'
+            : (templateText.includes(`<${RUNTIME_STATE_TAG}>`) ? 'trailing' : 'unsupported');
+        this._lastRuntimeStateDeliveryCache = { templateText, markers, delivery };
+        return delivery;
     }
 
     /**
@@ -6019,8 +6724,30 @@ export class BaseAgent {
             return null;
         }
         try {
-            await TemplateEngineServer.Instance.Config(false, contextUser);
-            const template = TemplateEngineServer.Instance.Templates?.find(t => UUIDsEqual(t.ID, prompt.TemplateID));
+            if (!this._agentRun || !this._templateEngineConfiguredForRun) {
+                await TemplateEngineServer.Instance.Config(false, contextUser);
+                if (this._agentRun) {
+                    this._templateEngineConfiguredForRun = true;
+                }
+            }
+            const templates = TemplateEngineServer.Instance.Templates;
+            if (!templates) {
+                return null;
+            }
+            let template: MJTemplateEntityExtended | undefined;
+            if (templates === this._cachedTemplatesArrayRef && this._templateByIdMap) {
+                template = this._templateByIdMap.get(NormalizeUUID(prompt.TemplateID));
+            } else {
+                this._cachedTemplatesArrayRef = templates;
+                const map = new Map<string, MJTemplateEntityExtended>();
+                for (const t of templates) {
+                    if (t?.ID) {
+                        map.set(NormalizeUUID(t.ID), t);
+                    }
+                }
+                this._templateByIdMap = map;
+                template = map.get(NormalizeUUID(prompt.TemplateID));
+            }
             return template?.GetHighestPriorityContent()?.TemplateText ?? null;
         } catch (e) {
             this.logError(e instanceof Error ? e : String(e), { category: 'RuntimeStateFragment', severity: 'warning' });
@@ -6774,10 +7501,12 @@ export class BaseAgent {
                 this._generalValidationRetryCount++;
             }
             
+            // A native complete_task keeps its turn and call id, so the refusal answers that call.
             return {
                 step: 'Retry',
                 terminate: false,
-                errorMessage: violationMessage
+                errorMessage: violationMessage,
+                ...(nextStep.nativeTurn ? { nativeTurn: nextStep.nativeTurn, payloadToolCallId: nextStep.payloadToolCallId } : {})
             };
         }
 
@@ -6854,11 +7583,14 @@ export class BaseAgent {
             // Validation passed
             this.logStatus(`✅ Final payload validation passed for agent ${agent.Name}`, true, params);
             
-            // Save success result to step
+            // Save success result to step via step save queue
             try {
                 currentStep.FinalPayloadValidationResult = 'Pass';
                 currentStep.FinalPayloadValidationMessages = null; // Clear any previous messages
-                await currentStep.Save();
+                this.queueStepSave(currentStep, (s) => {
+                    s.FinalPayloadValidationResult = 'Pass';
+                    s.FinalPayloadValidationMessages = null;
+                });
             } catch (error) {
                 this.logError(`Failed to save validation success result: ${error.message}`, {
                     category: 'PayloadValidation', 
@@ -6903,9 +7635,17 @@ export class BaseAgent {
     ): Promise<BaseAgentNextStep<P>> {
         const validationFeedback = `Final payload validation failed:\n${errorMessages.map((e, i) => `${i + 1}. ${e}`).join('\n')}`;
 
-        // Always save validation results to the new fields
+        // Always save validation results to the new fields via the step save queue
         try {
-            currentStep.FinalPayloadValidationMessages = errorMessages.join('; ');
+            const joinedMessages = errorMessages.join('; ');
+            currentStep.FinalPayloadValidationMessages = joinedMessages;
+            const queueValidationUpdate = (resultValue: MJAIAgentRunStepEntityExtended['FinalPayloadValidationResult']) => {
+                currentStep.FinalPayloadValidationResult = resultValue;
+                this.queueStepSave(currentStep, (s) => {
+                    s.FinalPayloadValidationMessages = joinedMessages;
+                    s.FinalPayloadValidationResult = resultValue;
+                });
+            };
             
             switch (mode) {
                 case 'Retry':
@@ -6918,8 +7658,7 @@ export class BaseAgent {
                         // Max retries exceeded, force to Fail
                         this.logStatus(`❌ Max validation retries (${maxRetries}) exceeded, forcing failure`, false, params);
                         
-                        currentStep.FinalPayloadValidationResult = 'Fail';
-                        await currentStep.Save();
+                        queueValidationUpdate('Fail');
                         
                         return {
                             ...nextStep,
@@ -6930,8 +7669,7 @@ export class BaseAgent {
                     }
                     
                     // Still have retries left
-                    currentStep.FinalPayloadValidationResult = 'Retry';
-                    await currentStep.Save();
+                    queueValidationUpdate('Retry');
                     
                     this.logStatus(`🔄 Validation retry ${this._validationRetryCount}/${maxRetries}`, true, params);
                     
@@ -6944,8 +7682,7 @@ export class BaseAgent {
 
                 case 'Fail':
                     // Convert success to error
-                    currentStep.FinalPayloadValidationResult = 'Fail';
-                    await currentStep.Save();
+                    queueValidationUpdate('Fail');
                     
                     return {
                         ...nextStep,
@@ -6958,16 +7695,14 @@ export class BaseAgent {
                     // Log warning but allow success
                     this.logStatus(`⚠️ WARNING: ${validationFeedback}`, false, params);
                     
-                    currentStep.FinalPayloadValidationResult = 'Warn';
-                    await currentStep.Save();
+                    queueValidationUpdate('Warn');
                     
                     return nextStep; // Return original success
 
                 default:
                     // Default to retry
                     this._validationRetryCount++;
-                    currentStep.FinalPayloadValidationResult = 'Retry';
-                    await currentStep.Save();
+                    queueValidationUpdate('Retry');
                     
                     return {
                         ...nextStep,
@@ -7209,20 +7944,27 @@ export class BaseAgent {
             // Log the guardrail violation
             this.logStatus(`⛔ Execution guardrail exceeded: ${guardrailResult.reason}`, false, params);
             
-            // Update the current step with guardrail information
+            // Update the current step with guardrail information via the step save queue
             try {
+                const guardrailExceeded = {
+                    type: guardrailResult.type,
+                    limit: guardrailResult.limit,
+                    current: guardrailResult.current,
+                    reason: guardrailResult.reason,
+                    timestamp: new Date().toISOString()
+                };
                 const outputData = currentStep.OutputData ? JSON.parse(currentStep.OutputData) : {};
                 currentStep.OutputData = JSON.stringify({
                     ...outputData,
-                    guardrailExceeded: {
-                        type: guardrailResult.type,
-                        limit: guardrailResult.limit,
-                        current: guardrailResult.current,
-                        reason: guardrailResult.reason,
-                        timestamp: new Date().toISOString()
-                    }
+                    guardrailExceeded
                 });
-                await currentStep.Save();
+                this.queueStepSave(currentStep, (s) => {
+                    const existingOutput = s.OutputData ? JSON.parse(s.OutputData) : {};
+                    s.OutputData = JSON.stringify({
+                        ...existingOutput,
+                        guardrailExceeded
+                    });
+                });
             } catch (error) {
                 this.logError(`Failed to save guardrail violation to step: ${error.message}`, {
                     category: 'Guardrails',
@@ -8503,36 +9245,110 @@ The context is now within limits. Please retry your request with the recovered c
 
         // the model's own call turn goes into history before anything answers it.
         this.appendNativeAssistantTurn(params, guardrailCheckedStep);
+        // the agent's own tools already ran in the prompt step; their results answer first.
+        this.appendAgentToolResults(params, guardrailCheckedStep);
 
         // if we need to retry make sure we add the retry message to the conversation messages
         if (guardrailCheckedStep.step === 'Retry' && guardrailCheckedStep.payloadToolCallId && guardrailCheckedStep.nativeTurn?.sendResultsNatively) {
             // A payload-only turn, or a complete_task that failed Success validation, is answered as a
             // tool result for that call — the feedback is what the model reads next.
-            params.conversationMessages.push(BuildToolResultTurn([{
+            // A complete_task that came back as a Retry was refused (Success validation, a self-check
+            // rubric): its feedback, wherever the step carries it, is that call's error result.
+            const toolName = this.nativeToolNameForCall(guardrailCheckedStep, guardrailCheckedStep.payloadToolCallId);
+            const refusedCompletion = toolName === COMPLETE_TASK_TOOL;
+            const feedback = guardrailCheckedStep.retryInstructions
+                || (refusedCompletion ? guardrailCheckedStep.message || guardrailCheckedStep.errorMessage : undefined);
+            this.PushToolResultTurn(params, BuildToolResultTurn([{
                 toolCallId: guardrailCheckedStep.payloadToolCallId,
-                toolName: this.nativeToolNameForCall(guardrailCheckedStep, guardrailCheckedStep.payloadToolCallId),
-                content: guardrailCheckedStep.retryInstructions || 'Payload change applied.',
-                isError: false
+                toolName,
+                content: feedback || (refusedCompletion ? 'The task is not complete yet.' : 'Payload change applied.'),
+                isError: refusedCompletion
             }], { turnAdded: this._promptTurnCount, messageType: 'action-result' }) as AgentChatMessage);
         } else if (guardrailCheckedStep.step === 'Success' && guardrailCheckedStep.payloadToolCallId && guardrailCheckedStep.nativeTurn?.sendResultsNatively) {
             // complete_task ended the run: answer the call so the history never ends on a dangling tool_use.
-            params.conversationMessages.push(BuildToolResultTurn([{
+            this.PushToolResultTurn(params, BuildToolResultTurn([{
                 toolCallId: guardrailCheckedStep.payloadToolCallId,
                 toolName: this.nativeToolNameForCall(guardrailCheckedStep, guardrailCheckedStep.payloadToolCallId),
                 content: 'Task complete.',
                 isError: false
             }], { turnAdded: this._promptTurnCount, messageType: 'action-result' }) as AgentChatMessage);
-        } else if (guardrailCheckedStep.step === 'Retry' && (guardrailCheckedStep.message || guardrailCheckedStep.errorMessage || guardrailCheckedStep.retryInstructions)) {
-            params.conversationMessages.push({
-                role: 'user',
-                content: `Retrying due to: ${guardrailCheckedStep.retryInstructions || guardrailCheckedStep.message || guardrailCheckedStep.errorMessage}`
-            });
-        }   
+        } else if (guardrailCheckedStep.step === 'Retry') {
+            const reason = guardrailCheckedStep.retryInstructions || guardrailCheckedStep.message || guardrailCheckedStep.errorMessage;
+            if (reason && !this.answerNativeRetryTurn(params, guardrailCheckedStep, reason)) {
+                params.conversationMessages.push({
+                    role: 'user',
+                    content: `Retrying due to: ${reason}`
+                });
+            }
+        }
 
         // Return the next step directly - execution handling is done in execute NextStep
         return guardrailCheckedStep;
     }
  
+    /**
+     * Answers a retried native tool-call turn in the protocol itself: every call gets an `is_error`
+     * result carrying the retry reason, and no user message follows.
+     *
+     * The call turn was just replayed by `appendNativeAssistantTurn`, so the result turn lands
+     * directly behind it — the adjacency Anthropic and OpenAI both require. Calls the turn already
+     * answered (its agent tools ran and reported) keep their results; the rest join that tool turn.
+     * Returns false when the turn's results do not go back natively, or no call is left to answer;
+     * the caller then sends the reason as a user message, and `reconcileUnansweredToolCalls`
+     * closes any call still open.
+     */
+    private answerNativeRetryTurn(params: ExecuteAgentParams, step: BaseAgentNextStep, reason: string): boolean {
+        const turn = step.nativeTurn;
+        const messages = params.conversationMessages;
+        const at = turn?.sendResultsNatively ? BaseAgent.lastToolCallTurnIndex(messages) : -1;
+        if (!turn || at < 0) {
+            return false;
+        }
+        const answered = BaseAgent.toolCallIdsAnsweredAfter(messages, at);
+        const calls = turn.toolCalls.filter((call) => !!call.id && !answered.has(call.id));
+        if (calls.length === 0) {
+            return false;
+        }
+        BaseAgent.insertToolResultsAfterCallTurn(messages, at, BuildToolResultTurn(
+            calls.map((call) => ({
+                toolCallId: call.id,
+                toolName: call.name,
+                content: `Not executed. ${reason}`,
+                isError: true
+            })),
+            { turnAdded: this._promptTurnCount, messageType: 'action-result' }
+        ) as AgentChatMessage);
+        return true;
+    }
+
+    /**
+     * A turn that wrote and then asked or completed, where a write failed: the question or
+     * completion is declined, and the turn becomes a plain "go again" Retry. The model made that
+     * call expecting its writes to land, so it reads the failure and decides again.
+     *
+     * @returns The step to process — `step` itself when nothing failed or it is not terminal
+     */
+    private declineTerminalAfterFailedWrite<P>(step: BaseAgentNextStep<P>, results: NativeToolResult[]): BaseAgentNextStep<P> {
+        const terminal = (step.step === 'Success' || step.step === 'Chat') && step.nativeTurn;
+        if (!terminal || !results.some((r) => r.isError && step.agentToolCalls?.some((c) => c.toolCallId === r.toolCallId))) {
+            return step;
+        }
+        const call = step.nativeTurn?.toolCalls.find((c) => {
+            const kind = this._nativeToolBindings?.get(c.name)?.kind;
+            return kind === 'complete' || kind === 'askUser';
+        });
+        if (call?.id) {
+            results.push({
+                toolCallId: call.id, toolName: call.name, isError: true,
+                content: `Not executed. A write on this turn failed (see its result). Fix it, then call ${call.name} again.`
+            });
+        }
+        return {
+            ...step, step: 'Retry', terminate: false, payloadToolCallId: undefined,
+            message: undefined, responseForm: undefined, retryInstructions: undefined
+        };
+    }
+
     /** The tool name the model used for a call on this turn — `payload_change_request` when it cannot be found. */
     private nativeToolNameForCall(step: BaseAgentNextStep, toolCallId: string): string {
         return step.nativeTurn?.toolCalls.find((c) => c.id === toolCallId)?.name ?? 'payload_change_request';
@@ -8872,7 +9688,7 @@ The context is now within limits. Please retry your request with the recovered c
         }
         if (decision.step === 'Actions' && decision.actions?.length) {
             if (!native) {
-                tail.push({ role: 'user', content: this.buildActionInvocationMessage(decision.actions) });
+                tail.push({ role: 'user', content: this.buildActionInvocationMessage(decision.actions, params) });
             }
             const summaries = this.summarizeStoppedRunActions(decision.actions, tailSteps);
             this.appendActionResults(scratch, summaries, this.buildActionResultsMessage(summaries), undefined, decision);
@@ -9673,6 +10489,21 @@ The context is now within limits. Please retry your request with the recovered c
         );
     }
 
+    /** Where and for whom a memory write lands — shared by the envelope field and the native tool. */
+    private memoryWriteOptions(params: ExecuteAgentParams): Parameters<MemoryWriteManager['ExecuteWrite']>[1] {
+        return {
+            agentId: params.agent.ID,
+            contextUser: params.contextUser,
+            agentRunId: this._agentRun?.ID,
+            conversationId: this._agentRun?.ConversationID || undefined,
+            conversationDetailId: params.conversationDetailId,
+            userId: params.userId || params.contextUser?.ID,
+            companyId: params.companyId,
+            verbose: params.verbose,
+            provider: this.ProviderToUse,
+        };
+    }
+
     /**
      * Executes a batch of in-flight memory writes, recording each as its own
      * `Tool` AIAgentRunStep (a sibling of the Prompt step that requested them)
@@ -9705,17 +10536,7 @@ The context is now within limits. Please retry your request with the recovered c
                 },
             });
 
-            const result = await this._memoryWriteManager.ExecuteWrite(write, {
-                agentId: params.agent.ID,
-                contextUser: params.contextUser,
-                agentRunId: this._agentRun?.ID,
-                conversationId: this._agentRun?.ConversationID || undefined,
-                conversationDetailId: params.conversationDetailId,
-                userId: params.userId || params.contextUser?.ID,
-                companyId: params.companyId,
-                verbose: params.verbose,
-                provider: this.ProviderToUse,
-            });
+            const result = await this._memoryWriteManager.ExecuteWrite(write, this.memoryWriteOptions(params));
 
             const failed = result.disposition === 'error' || result.disposition === 'rejected-type';
             await this.finalizeStepEntity(
@@ -9809,13 +10630,16 @@ The context is now within limits. Please retry your request with the recovered c
      */
     private async skipMemoryWrites(requestedWriteCount: number, skip: MemoryWriteSkip, params: ExecuteAgentParams): Promise<void> {
         this.logStatus(`[MemoryWrites] LLM emitted ${requestedWriteCount} memory write(s) but ${skip.Reason} — skipping`, true, params);
-        const skipStep = await this.createStepEntity({
+        await this.createStepEntity({
             stepType: 'Tool',
             stepName: `Memory Writes: skipped (${skip.Reason})`,
             contextUser: params.contextUser,
             inputData: { requestedWriteCount },
+            completed: {
+                success: true,
+                outputData: { skipped: true, reason: skip.Reason }
+            }
         });
-        await this.finalizeStepEntity(skipStep, true, undefined, { skipped: true, reason: skip.Reason });
         params.conversationMessages.push({
             role: 'user',
             content: `Memory write result: ${skip.Told} — the requested memories were NOT saved. Do not emit memoryWrites again.`,
@@ -10635,6 +11459,7 @@ The context is now within limits. Please retry your request with the recovered c
         extraData?: any,
         actionChanges?: ActionChange[],
         subAgentChanges?: SubAgentChange[],
+        boundActionParams?: BoundActionParams,
         withholding?: PromptWithholding
     ): Promise<AgentContextData> {
         try {
@@ -10677,7 +11502,7 @@ The context is now within limits. Please retry your request with the recovered c
                 const result = this.applyActionChanges([...catalog.baseActionsRaw], actionChanges, agent.ID, isRoot);
                 activeActions = result.actions.filter(a => a.Status === 'Active');
                 this._dynamicActionLimits = result.dynamicLimits;
-                actionDetails = this.formatActionDetails(activeActions);
+                actionDetails = this.formatActionDetails(activeActions, boundActionParams);
             } else {
                 // No actionChanges this step → no dynamically-added actions, hence no dynamic limits.
                 // gatherPromptTemplateData runs once per step, and _dynamicActionLimits is keyed to the
@@ -10685,6 +11510,12 @@ The context is now within limits. Please retry your request with the recovered c
                 // Resetting to {} is correct and required: it prevents a prior step's actionChanges limits
                 // from leaking into a step that has none. It is NOT relied upon to persist across steps.
                 this._dynamicActionLimits = {};
+                // A bound parameter (ExecuteAgentParams.boundActionParams) is left out of the catalog the model
+                // reads. The cached markdown describes every parameter, so a run that binds one on an active
+                // action renders the catalog for itself; a run with no bindings keeps the cached text untouched.
+                if (this.bindsAnyAction(activeActions, boundActionParams)) {
+                    actionDetails = this.formatActionDetails(activeActions, boundActionParams);
+                }
             }
             // Store for later validation in executeActionsStep
             this._effectiveActions = activeActions;
@@ -10706,7 +11537,9 @@ The context is now within limits. Please retry your request with the recovered c
             }
             // A run that withholds task graphs (an audience or a tenant: see taskGraphWithholdingReason) is not offered
             // them; a copy, so the cached base is never written. executeTasksStep refuses a graph the model writes anyway.
-            if (withholding?.TaskGraphs) {
+            // A bound run (ExecuteAgentParams.boundActionParams) is not offered them either: a graph's action
+            // nodes are dispatched outside the binding gate (executeTasksStep refuses one of those too).
+            if (withholding?.TaskGraphs || this.hasBoundActionParams(boundActionParams)) {
                 agentTypePromptParams = this.withoutTaskGraphs(agentTypePromptParams);
             }
             // Store for the finishIf gate, which runs after this prompt in executeActionsStep / executeNextStep
@@ -10730,7 +11563,7 @@ The context is now within limits. Please retry your request with the recovered c
             // decision judges only skills the policy offers, and an override that skips `super` keeps it.
             // The counts stay whole: they are what the model can call, and a narrowed list says what it hides.
             await this.ensureCatalogNarrowing(agent, _contextUser, agentTypePromptParams, activeActions, uniqueActiveSubAgents, availableSkills);
-            actionDetails = this.narrowedCatalogSection('action', activeActions, actionDetails, shown => this.formatActionDetails(shown));
+            actionDetails = this.narrowedCatalogSection('action', activeActions, actionDetails, shown => this.formatActionDetails(shown, boundActionParams));
             subAgentDetails = this.narrowedCatalogSection('agent', uniqueActiveSubAgents, subAgentDetails, shown => this.formatSubAgentDetails(shown));
             const skillsCatalog = this.narrowedCatalogSection('skill', availableSkills, this.formatSkillsCatalog(availableSkills), shown => this.formatSkillsCatalog(shown));
 
@@ -11881,19 +12714,6 @@ The context is now within limits. Please retry your request with the recovered c
         };
     }
 
-    /** The model's arguments as the engine's input parameters. */
-    private toEngineActionParams(action: AgentAction, actionEntity: MJActionEntityExtended): ActionParam[] {
-        // Coerced against each param's declared schema on every path — envelope, native and flow —
-        // so `"640"` reaches an integer param as 640 whichever protocol produced it. Harness
-        // stand-ins may build an Action literal without the related-record collection.
-        const coerced = CoerceActionArguments(actionEntity.Params?.Items ?? [], action.params);
-        return Object.entries(coerced).map(([key, value]) => ({
-            Name: key,
-            Value: value,
-            Type: 'Input' as const
-        }));
-    }
-
     /**
      * The action context for one dispatch: the agent's own context object, by reference (do NOT spread —
      * spreading destroys class instances, losing getters/methods on typed contexts like SkipAgentContext),
@@ -11908,6 +12728,12 @@ The context is now within limits. Please retry your request with the recovered c
         // named skill the run never activated. Always stamped — an empty array means "inside an
         // agent run, with no skill active", which is a different fact from "no agent at all".
         actionContext.ActiveSkillIDs = this.activeSkillIDsForRun(params);
+        // The run's bound parameters, for actions that describe other actions (Find Candidate Actions,
+        // Find Best Action) so they hide the same names the catalog hides. Stamped only when the run
+        // has bindings, so an unbound run's context is unchanged.
+        if (params.boundActionParams) {
+            actionContext.BoundActionParams = params.boundActionParams;
+        }
         if (this._resolvedStorageAccountId) {
             actionContext.__resolvedStorageAccountId = this._resolvedStorageAccountId;
         }
@@ -12008,12 +12834,18 @@ The context is now within limits. Please retry your request with the recovered c
      * This method executes one action using the MemberJunction Actions framework.
      * The full ActionResult objects are returned, allowing the caller to access result codes, output parameters,
      * and other execution details.
+     *
+     * The run's bound parameters (`ExecuteAgentParams.boundActionParams`) are applied first: a bound value
+     * replaces whatever the model sent under its name, and a call the bindings refuse (a required parameter
+     * bound to nothing, a binding naming no input of the action) returns a blocked `'fatal'` result without
+     * dispatching and locks the action out for the rest of the run.
      * 
      * @param {ExecuteAgentParams} params - Parameters from agent execution for context passing
      * @param {AgentAction} action - Action to execute
      * @param {UserInfo} [contextUser] - Optional user context for permissions
      * @param {ExecuteSingleActionOptions} [options] - `skipCircuitBreaker` bypasses the run-scoped
-     *   circuit breaker for callers that do their own failure accounting (the pipeline executor)
+     *   circuit breaker for callers that do their own failure accounting (the pipeline executor);
+     *   `StepID` names the run step in the audit lines a bound parameter writes
      * 
      * @returns {Promise<ActionResult>} ActionResult object from the action execution
      * 
@@ -12023,7 +12855,13 @@ The context is now within limits. Please retry your request with the recovered c
         contextUser?: UserInfo, options?: ExecuteSingleActionOptions): Promise<ActionResult> {
 
         const skipBreaker = options?.skipCircuitBreaker === true;
-        const normalizedParams = this.normalizeActionParams(action.params);
+        // Bound parameters first: what the model sent under a bound name is discarded here, and a call
+        // the bindings refuse never reaches the engine; it is locked out for the run instead.
+        const binding = this.applyActionBindings(params, action, actionEntity, options);
+        if (binding.Refusal) {
+            return this.refuseBoundAction(params, action, actionEntity, binding.Refusal, options);
+        }
+        const normalizedParams = this.normalizeActionParams(binding.HasBindings ? binding.Params : action.params);
 
         // Run-scoped circuit breaker: each rule short-circuits in 0ms with a result that carries the
         // rule that fired, so the failure directive can name it without consulting the history.
@@ -12051,7 +12889,7 @@ The context is now within limits. Please retry your request with the recovered c
             // Execute the action and return the full ActionResult
             const result = await ActionEngineServer.Instance.RunAction({
                 Action: actionEntity,
-                Params: this.toEngineActionParams(action, actionEntity),
+                Params: this.toActionParams(binding, actionEntity),
                 ContextUser: contextUser,
                 Filters: [],
                 SkipActionLog: false,
@@ -12127,7 +12965,7 @@ The context is now within limits. Please retry your request with the recovered c
             Params: [],
             RunParams: {
                 Action: actionEntity,
-                Params: this.toEngineActionParams(action, actionEntity),
+                Params: this.toActionParams({ Params: action.params ?? {}, Bound: [] }, actionEntity),
                 ContextUser: contextUser,
                 Filters: [],
             },
@@ -12175,8 +13013,9 @@ The context is now within limits. Please retry your request with the recovered c
             if (typed.role === 'assistant' && typed.toolCalls?.length) {
                 const answered = typed.toolCalls.every((call) => call.id && resolved.has(call.id));
                 if (!answered) {
-                    // Demote to prose rather than send a call this window never answers.
-                    const { toolCalls: _dropped, ...rest } = typed;
+                    // Demote to prose rather than send a call this window never answers. Its reasoning
+                    // goes too: the signatures were minted for the turn with its calls.
+                    const { toolCalls: _dropped, reasoning: _reasoning, ...rest } = typed;
                     kept.push({ ...rest, content: typed.content || '[tool call omitted for context management]' } as ChatMessage);
                     continue;
                 }
@@ -12405,6 +13244,7 @@ The context is now within limits. Please retry your request with the recovered c
                 treeBudget: this.ensureTreeBudget(params), // propagate shared cumulative root-tree budget to sub-agent
                 actionChanges: subAgentActionChanges, // propagate filtered action changes to sub-agent
                 subAgentChanges: subAgentSubAgentChanges, // propagate filtered sub-agent changes to sub-agent
+                boundActionParams: params.boundActionParams, // every sub-agent run keeps the caller's bindings, as it keeps actionChanges
                 PrimaryScopeEntityName: params.PrimaryScopeEntityName, // propagate scope to sub-agent
                 PrimaryScopeRecordID: params.PrimaryScopeRecordID,
                 companyId: params.companyId,
@@ -12534,22 +13374,27 @@ The context is now within limits. Please retry your request with the recovered c
      * Produces ~75% fewer tokens than the previous JSON format while preserving
      * all information the LLM needs to invoke actions correctly.
      *
+     * A parameter the run binds (`ExecuteAgentParams.boundActionParams`) is left out, so the model is
+     * never told it exists. With no bindings the output is the cached catalog's, unchanged.
+     *
      * @param {MJActionEntityExtended[]} actions - Array of action entities
+     * @param {BoundActionParams} [boundActionParams] - The run's bindings, when it has any
      * @returns {string} Markdown formatted string with action details
      * @private
      */
-    private formatActionDetails(actions: MJActionEntityExtended[]): string {
+    private formatActionDetails(actions: MJActionEntityExtended[], boundActionParams?: BoundActionParams): string {
         return actions.map(action => {
             const lines: string[] = [];
             lines.push(`### ${action.Name}`);
             lines.push(action.Description);
 
-            const inputParams = action.Params.Items
+            const visibleParams = UnboundParams(action.Params.Items, BindingsForAction(boundActionParams, action.ID));
+            const inputParams = visibleParams
                 .filter(p => {
                     const t = p.Type.trim().toLowerCase();
                     return t === 'input' || t === 'both';
                 });
-            const outputParams = action.Params.Items
+            const outputParams = visibleParams
                 .filter(p => {
                     const t = p.Type.trim().toLowerCase();
                     return t === 'output' || t === 'both';
@@ -12751,23 +13596,25 @@ The context is now within limits. Please retry your request with the recovered c
      * like one the loop wrote. See the Actions step for why it is a user-role annotation.
      * @protected
      */
-    protected buildActionInvocationMessage(actions: AgentAction[]): string {
+    protected buildActionInvocationMessage(actions: AgentAction[], params: ExecuteAgentParams): string {
         if (actions.length === 1) {
             const aa = actions[0];
-            if (!aa.params || Object.keys(aa.params).length === 0) {
+            const shownParams = this.shownActionParamEntries(params, aa);
+            if (shownParams.length === 0) {
                 return `[You invoked the **${aa.name}** action.]`;
             }
-            const paramsList = Object.entries(aa.params)
+            const paramsList = shownParams
                 .map(([key, value]) => `• **${key}**: ${this.formatParamValueForMessage(value)}`)
                 .join('\n');
             return `[You invoked the **${aa.name}** action with parameters:\n${paramsList}\n]`;
         }
         return `[You invoked **${actions.length} actions** in parallel:\n\n` + actions.map((aa, index) => {
             const actionText = `${index + 1}. **${aa.name}**`;
-            if (!aa.params || Object.keys(aa.params).length === 0) {
+            const shownParams = this.shownActionParamEntries(params, aa);
+            if (shownParams.length === 0) {
                 return actionText;
             }
-            const paramsList = Object.entries(aa.params)
+            const paramsList = shownParams
                 .map(([key, value]) => `   • **${key}**: ${this.formatParamValueForMessage(value)}`)
                 .join('\n');
             return `${actionText}\n${paramsList}`;
@@ -12814,11 +13661,12 @@ The context is now within limits. Please retry your request with the recovered c
             lines.push(`## ${a.actionName} ${marker}`);
             lines.push(`**Result:** ${a.resultCode} — ${a.message || '(no message)'}`);
 
-            // Format output params as bullet list
+            // Format output params as bullet list. An exempt action's values go out verbatim.
             if (a.params && a.params.length > 0) {
+                const crush = !this._actionResultCrush?.exemptActions?.has(a.actionName);
                 lines.push('**Output:**');
                 for (const p of a.params) {
-                    lines.push(`• \`${p.Name}\`: ${this.formatParamValueForResult(p.Value)}`);
+                    lines.push(`• \`${p.Name}\`: ${this.formatParamValueForResult(p.Value, 0, crush)}`);
                 }
             }
 
@@ -12885,7 +13733,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @returns Formatted string
      * @private
      */
-    private formatParamValueForResult(value: unknown, maxLength: number = 0): string {
+    private formatParamValueForResult(value: unknown, maxLength: number = 0, crush: boolean = true): string {
         if (value === null || value === undefined) {
             return '`null`';
         }
@@ -12900,11 +13748,11 @@ The context is now within limits. Please retry your request with the recovered c
             // safe no-op on non-JSON (crushParamValue's internal JSON.parse failure is
             // caught and returns null) — then opt-in AST code reduction (SQL/TS), then pass
             // through (optionally length-capped).
-            const crushedJson = this.crushParamValue(value);
+            const crushedJson = crush ? this.crushParamValue(value) : null;
             if (crushedJson !== null) {
                 return crushedJson;
             }
-            const crushedCode = this.crushCodeValue(value);
+            const crushedCode = crush ? this.crushCodeValue(value) : null;
             if (crushedCode !== null) {
                 return crushedCode;
             }
@@ -12914,7 +13762,7 @@ The context is now within limits. Please retry your request with the recovered c
         // Objects/arrays: compact JSON (no pretty-printing), optionally structurally
         // compressed via context-crush when crushing is enabled and the value is large.
         const stringValue = JSON.stringify(value);
-        const crushed = this.crushParamValue(stringValue);
+        const crushed = crush ? this.crushParamValue(stringValue) : null;
         if (crushed !== null) {
             return crushed;
         }
@@ -12940,7 +13788,9 @@ The context is now within limits. Please retry your request with the recovered c
         const requestedLang = agentTypePromptParams?.crushCodeLang;
         const codeLang: CodeLang | undefined =
             requestedLang === 'sql' || requestedLang === 'typescript' ? requestedLang : undefined;
-        return { threshold: BaseAgent.ACTION_RESULT_CRUSH_THRESHOLD, maxChars: undefined, codeLang };
+        const uncrushed = agentTypePromptParams?.uncrushedActions;
+        const exemptActions = new Set(Array.isArray(uncrushed) ? uncrushed.filter((name): name is string => typeof name === 'string') : []);
+        return { threshold: BaseAgent.ACTION_RESULT_CRUSH_THRESHOLD, maxChars: undefined, codeLang, exemptActions };
     }
 
     /**
@@ -13226,6 +14076,7 @@ The context is now within limits. Please retry your request with the recovered c
 
         // Handle autoPopulateLastRunPayload if requested
         let modifiedParams = params;
+        let preloadedLastRun: { LastRunID?: string | null } | null | undefined;
         if (params.lastRunId && params.autoPopulateLastRunPayload) {
             // Load the last run to get its FinalPayload
             const rv = new RunView();
@@ -13237,6 +14088,9 @@ The context is now within limits. Please retry your request with the recovered c
                 BypassCache: true
             }, params.contextUser);
             
+            if (lastRunResult.Success) {
+                preloadedLastRun = (lastRunResult.Results[0] as { LastRunID?: string | null } | undefined) ?? null;
+            }
             if (lastRunResult.Success && lastRunResult.Results.length > 0) {
                 const lastRun = lastRunResult.Results[0];
                 if (lastRun.FinalPayload) {
@@ -13262,6 +14116,7 @@ The context is now within limits. Please retry your request with the recovered c
         // Reset prompt turn counter for this execution
         this._promptTurnCount = 0;
         this._lastRecordedPromptStack = null;
+        this._templateEngineConfiguredForRun = false;
         this._heldDecisions = undefined;
         this._awaitingWorkflowTaskID = null;
 
@@ -13313,11 +14168,26 @@ The context is now within limits. Please retry your request with the recovered c
         // 0. It has to be recorded on the run itself because the run is the only thing that outlives
         // the dispatcher that started it, and the next graph this run submits reads it back.
         this._agentRun.ContinuationDepth = params.continuationDepth ?? 0;
-        
+        // Stored so a run that continues this one (lastRunId) applies the same bindings.
+        // Plain JSON.stringify on purpose: a binding that can't be stored must fail the run, not be dropped.
+        // Normalize `undefined` parameter values to `null` so JSON.stringify preserves the bound key
+        // (ApplyBoundActionParams treats `null` and `undefined` identically).
+        if (params.boundActionParams) {
+            const serialized = JSON.stringify(
+                params.boundActionParams,
+                (_key, value) => (value === undefined ? null : value)
+            );
+            if (typeof this._agentRun.SetServerBoundActionParams === 'function') {
+                this._agentRun.SetServerBoundActionParams(serialized);
+            } else {
+                this._agentRun.BoundActionParams = serialized;
+            }
+        }
+
         // Set LastRunID for run chaining (different from ParentRunID)
         if (params.lastRunId) {
-            // Check for circular references in the run chain
-            await this.validateRunChain(params.lastRunId, params.contextUser);
+            // Check for circular references in the run chain (reusing preloadedLastRun when available)
+            await this.validateRunChain(params.lastRunId, params.contextUser, preloadedLastRun);
             
             this._agentRun.LastRunID = params.lastRunId;
         }
@@ -13366,8 +14236,19 @@ The context is now within limits. Please retry your request with the recovered c
         this._runScope = this.validatedRunScope(params);
         this.writeRunScope(params, this._runScope);
 
-        // Save the agent run
-        if (!await this._agentRun.Save()) {
+        // Initialize hierarchy tracking before resolvePlanModeGate (which reads _depth) so the
+        // Plan Mode gate lookup can run concurrently with persisting the agent run record.
+        this._agentHierarchy = params.parentAgentHierarchy
+            ? [...params.parentAgentHierarchy, params.agent.Name || 'Unknown Agent']
+            : [params.agent.Name || 'Unknown Agent'];
+        this._depth = params.parentDepth !== undefined ? params.parentDepth + 1 : 0;
+        this._parentStepCounts = params.parentStepCounts || [];
+
+        const planModeGatePromise = this.resolvePlanModeGate(params);
+
+        // Save the agent run while resolvePlanModeGate runs concurrently
+        if (!await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' })) {
+            await planModeGatePromise.catch(() => undefined);
             const errorMessage = JSON.stringify(CopyScalarsAndArrays(this._agentRun.LatestResult));
             throw new Error(`Failed to create agent run record: Details: ${errorMessage}`);
         }
@@ -13390,17 +14271,9 @@ The context is now within limits. Please retry your request with the recovered c
             }
         }
 
-        // Initialize hierarchy tracking
-        this._agentHierarchy = params.parentAgentHierarchy
-            ? [...params.parentAgentHierarchy, params.agent.Name || 'Unknown Agent']
-            : [params.agent.Name || 'Unknown Agent'];
-        this._depth = params.parentDepth !== undefined ? params.parentDepth + 1 : 0;
-        this._parentStepCounts = params.parentStepCounts || [];
-
-        // Resolve Plan Mode gate state for this run (must happen before the main loop starts —
-        // gatherPromptTemplateData/validateNextStep both read _planModeActive/_planApproved — and
-        // after _depth is set above, since the gate only applies to root agents).
-        const planModeGate = await this.resolvePlanModeGate(params);
+        // Await Plan Mode gate state for this run (must happen before the main loop starts —
+        // gatherPromptTemplateData/validateNextStep both read _planModeActive/_planApproved).
+        const planModeGate = await planModeGatePromise;
         this._planModeActive = planModeGate.active;
         this._planApproved = planModeGate.approved;
 
@@ -13508,21 +14381,29 @@ The context is now within limits. Please retry your request with the recovered c
             const validationResult = await this.validateAgent(agent);
             
             if (validationResult) {
-                // Create validation step
-                const stepEntity = await this.createStepEntity({ stepType: 'Validation', stepName: 'Agent Validation', contextUser });
-                
-                
-                // Update step entity
-                await this.finalizeStepEntity(stepEntity, false, validationResult.agentRun?.ErrorMessage);
-                
+                // Create pre-completed validation step (single INSERT instead of INSERT + UPDATE)
+                await this.createStepEntity({
+                    stepType: 'Validation',
+                    stepName: 'Agent Validation',
+                    contextUser,
+                    completed: {
+                        success: false,
+                        errorMessage: validationResult.agentRun?.ErrorMessage ?? undefined
+                    }
+                });
+
                 return await this.createFailureResult(validationResult.agentRun?.ErrorMessage || 'Validation failed', contextUser);
             }
-            
-            // Validation successful - create success step
-            const stepEntity = await this.createStepEntity({ stepType: 'Validation', stepName: 'Agent Validation', contextUser });
-            
-            
-            await this.finalizeStepEntity(stepEntity, true);
+
+            // Validation successful - create pre-completed success step (single INSERT instead of INSERT + UPDATE)
+            await this.createStepEntity({
+                stepType: 'Validation',
+                stepName: 'Agent Validation',
+                contextUser,
+                completed: {
+                    success: true
+                }
+            });
             
             return null;
         } catch (error) {
@@ -13608,7 +14489,13 @@ The context is now within limits. Please retry your request with the recovered c
         // A start or end payload that repeats an earlier step's end is stored as a pointer to that step.
         const payloadAtStart = this.serializePayloadAtStart(params.payloadAtStart);
         const payloadAtStartSource = this.findPayloadAtStartSource(payloadAtStart);
-        const payloadAtEnd = this.serializePayloadAtEnd(params.payloadAtEnd);
+        const payloadAtEnd = (
+            params.payloadAtEnd !== undefined &&
+            params.payloadAtEnd === params.payloadAtStart &&
+            this.hasDefaultPayloadSerializers()
+        )
+            ? payloadAtStart
+            : this.serializePayloadAtEnd(params.payloadAtEnd);
         const payloadAtEndSource = this.findPayloadAtEndSource(payloadAtEnd);
         // Populate the started fields via the shared single-source-of-truth helper. Instance-specific
         // concerns (hierarchy breadcrumb, InputData context, payload serialization) are computed here.
@@ -13787,6 +14674,36 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Returns true when neither `serializePayloadAtStart` nor `serializePayloadAtEnd` has been
+     * overridden by a subclass, allowing unchanged start payloads to be reused as end payloads
+     * without a second `JSON.stringify` pass.
+     */
+    private hasDefaultPayloadSerializers(): boolean {
+        return (
+            this.serializePayloadAtStart === BaseAgent.prototype.serializePayloadAtStart &&
+            this.serializePayloadAtEnd === BaseAgent.prototype.serializePayloadAtEnd
+        );
+    }
+
+    /**
+     * Resolves a step's start payload from its own `PayloadAtStart` or the step referenced by
+     * `PayloadAtStartSourceStepID`.
+     */
+    private resolveStepPayloadAtStart(step: MJAIAgentRunStepEntityExtended | undefined): string | null {
+        if (!step) {
+            return null;
+        }
+        if (step.PayloadAtStart != null) {
+            return step.PayloadAtStart;
+        }
+        if (step.PayloadAtStartSourceStepID) {
+            const source = this._agentRun?.Steps?.find(s => UUIDsEqual(s.ID, step.PayloadAtStartSourceStepID));
+            return source?.PayloadAtEnd ?? null;
+        }
+        return null;
+    }
+
+    /**
      * Resolves a step's end payload from its own `PayloadAtEnd` or the step referenced by
      * `PayloadAtEndSourceStepID`.
      */
@@ -13865,21 +14782,54 @@ The context is now within limits. Please retry your request with the recovered c
         messages: ChatMessage[] | undefined
     ): { conversationMessages: ChatMessage[]; conversationMessagesDelta?: true } {
         const nonVolatile = (messages ?? []).filter(m => (m as AgentChatMessage)?.metadata?.volatileState !== true);
-        const recorded = nonVolatile.map(m => ({ Message: m, Serialized: JSON.stringify(m) }));
         const previous = this._lastRecordedPromptStack;
+        const isExtension = previous !== null && BaseAgent.isAppendOnlyExtension(previous, nonVolatile);
+        const recorded: RecordedPromptMessage[] = new Array(nonVolatile.length);
+        for (let i = 0; i < nonVolatile.length; i++) {
+            if (isExtension && i < previous.length) {
+                recorded[i] = previous[i];
+            } else {
+                const m = nonVolatile[i];
+                const meta = (m as AgentChatMessage).metadata;
+                recorded[i] = {
+                    Message: m,
+                    ContentRef: m.content,
+                    MetadataRef: meta,
+                    WasCompacted: meta?.wasCompacted,
+                    CanExpand: meta?.canExpand,
+                    IsExpired: meta?.isExpired,
+                };
+            }
+        }
         this._lastRecordedPromptStack = recorded;
-        if (previous && BaseAgent.isAppendOnlyExtension(previous, recorded)) {
+        if (isExtension) {
             return { conversationMessages: nonVolatile.slice(previous.length), conversationMessagesDelta: true };
         }
         return { conversationMessages: nonVolatile };
     }
 
-    /** True when `current` starts with every message of `previous`, by reference and unchanged. @private */
-    private static isAppendOnlyExtension(previous: RecordedPromptMessage[], current: RecordedPromptMessage[]): boolean {
+    /** True when `current` starts with every message of `previous`, by reference and unchanged in place. @private */
+    private static isAppendOnlyExtension(previous: RecordedPromptMessage[], current: ChatMessage[]): boolean {
         if (current.length < previous.length) {
             return false;
         }
-        return previous.every((p, i) => current[i].Message === p.Message && current[i].Serialized === p.Serialized);
+        for (let i = 0; i < previous.length; i++) {
+            const p = previous[i];
+            const c = current[i];
+            if (c !== p.Message || c.content !== p.ContentRef) {
+                return false;
+            }
+            const meta = (c as AgentChatMessage).metadata;
+            if (
+                meta !== p.MetadataRef ||
+                meta?.wasCompacted !== p.WasCompacted ||
+                meta?.canExpand !== p.CanExpand ||
+                meta?.isExpired !== p.IsExpired
+            ) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -13896,18 +14846,39 @@ The context is now within limits. Please retry your request with the recovered c
      */
     protected async finalizeStepEntity(stepEntity: MJAIAgentRunStepEntityExtended, success: boolean, errorMessage?: string, outputData?: any): Promise<void> {
         try {
+            // Preserve any OutputData properties already stamped on the step prior to finalize
+            // (e.g. guardrailExceeded written by checkExecutionGuardrails during processNextStep).
+            let effectiveOutputData = outputData;
+            const existingRawOutputData = stepEntity.OutputData;
+            if (existingRawOutputData && outputData && typeof outputData === 'object') {
+                try {
+                    const parsedExisting = JSON.parse(existingRawOutputData) as Record<string, unknown>;
+                    if (parsedExisting && typeof parsedExisting === 'object' && !Array.isArray(parsedExisting)) {
+                        effectiveOutputData = {
+                            ...parsedExisting,
+                            ...outputData
+                        };
+                    }
+                } catch {
+                    // Leave effectiveOutputData as-is if existing OutputData is not a JSON object
+                }
+            }
+
             // Capture the completion timestamp NOW so the duration is accurate regardless of when the
             // mutation is actually applied/persisted.
             const finalizeOpts = {
                 success,
                 errorMessage,
-                outputData: outputData ? CopyScalarsAndArrays(outputData, true) : undefined,
+                outputData: effectiveOutputData ? CopyScalarsAndArrays(effectiveOutputData, true) : undefined,
                 completedAt: new Date(),
                 // Capture any TargetLogID already stamped on the entity (e.g. a prompt-run / sub-agent-run id
                 // set before finalize) so the post-INSERT re-apply restores it too — otherwise the INSERT's
                 // reload could leave it null on a fast step.
                 targetLogID: stepEntity.TargetLogID ?? undefined
             };
+            const finalPayloadValidationResult = stepEntity.FinalPayloadValidationResult;
+            const finalPayloadValidationMessages = stepEntity.FinalPayloadValidationMessages;
+
             // Deduplicate PayloadAtEnd against the latest earlier finished, saved step when unchanged.
             if (stepEntity.PayloadAtEnd != null) {
                 const endSource = this.findPayloadAtEndSource(stepEntity.PayloadAtEnd, stepEntity);
@@ -13933,6 +14904,15 @@ The context is now within limits. Please retry your request with the recovered c
             // its reload) lands so the force-persisted UPDATE never writes stale pre-finalize values. The
             // agent flow never blocks on this UPDATE.
             this.queueStepSave(stepEntity, (s) => {
+                if (finalizeOpts.outputData === undefined && existingRawOutputData != null) {
+                    s.OutputData = existingRawOutputData;
+                }
+                if (finalPayloadValidationResult !== undefined) {
+                    s.FinalPayloadValidationResult = finalPayloadValidationResult;
+                }
+                if (finalPayloadValidationMessages !== undefined) {
+                    s.FinalPayloadValidationMessages = finalPayloadValidationMessages;
+                }
                 finalizeAgentRunStep(s, finalizeOpts);
                 s.PayloadAtEnd = payloadAtEnd;
                 s.PayloadAtEndSourceStepID = payloadAtEndSourceStepID;
@@ -14566,27 +15546,85 @@ The context is now within limits. Please retry your request with the recovered c
 
             const promptParams = await this.preparePromptParams(promptConfig, downstreamPayload, params);
             
-            // Pass cancellation token and streaming callbacks to prompt execution
+            // Pass cancellation token and streaming callbacks to prompt execution.
+            // Coalesce rapid token chunks within a ~35ms window while emitting the first chunk immediately
+            // and flushing synchronously on completion so downstream GraphQL/PubSub/WebSocket callbacks
+            // are not flooded on every single token.
             promptParams.cancellationToken = params.cancellationToken;
+            let pendingStreamingChunk: Parameters<NonNullable<typeof params.onStreaming>>[0] | null = null;
+            let streamingCoalesceTimer: ReturnType<typeof setTimeout> | null = null;
+            let lastStreamingEmitTime = 0;
+            const streamingCoalesceWindowMS = 35;
+
+            const flushPendingStreamingChunk = () => {
+                if (streamingCoalesceTimer !== null) {
+                    clearTimeout(streamingCoalesceTimer);
+                    streamingCoalesceTimer = null;
+                }
+                if (pendingStreamingChunk !== null && params.onStreaming) {
+                    const toEmit = pendingStreamingChunk;
+                    pendingStreamingChunk = null;
+                    lastStreamingEmitTime = Date.now();
+                    params.onStreaming(toEmit);
+                }
+            };
+
             promptParams.onStreaming = params.onStreaming ? (chunk) => {
-                // For streaming, we need to wrap it differently since chunk doesn't have metadata
-                // The server resolver should get the agent run from the closure
-                params.onStreaming!({
+                const enrichedChunk = {
                     ...chunk,
-                    stepType: 'prompt',
+                    stepType: 'prompt' as const,
                     stepEntityId: stepEntity.ID
-                });
+                };
+                if (chunk.isComplete) {
+                    if (pendingStreamingChunk !== null) {
+                        enrichedChunk.content = pendingStreamingChunk.content + enrichedChunk.content;
+                        pendingStreamingChunk = null;
+                    }
+                    if (streamingCoalesceTimer !== null) {
+                        clearTimeout(streamingCoalesceTimer);
+                        streamingCoalesceTimer = null;
+                    }
+                    lastStreamingEmitTime = Date.now();
+                    params.onStreaming!(enrichedChunk);
+                    return;
+                }
+                const now = Date.now();
+                if (lastStreamingEmitTime === 0 || (pendingStreamingChunk === null && now - lastStreamingEmitTime >= streamingCoalesceWindowMS)) {
+                    lastStreamingEmitTime = now;
+                    params.onStreaming!(enrichedChunk);
+                    return;
+                }
+                if (pendingStreamingChunk === null) {
+                    pendingStreamingChunk = { ...enrichedChunk };
+                } else {
+                    pendingStreamingChunk.content += enrichedChunk.content;
+                    if (enrichedChunk.modelName) {
+                        pendingStreamingChunk.modelName = enrichedChunk.modelName;
+                    }
+                }
+                if (streamingCoalesceTimer === null) {
+                    const delay = Math.max(1, streamingCoalesceWindowMS - (now - lastStreamingEmitTime));
+                    streamingCoalesceTimer = setTimeout(() => {
+                        streamingCoalesceTimer = null;
+                        flushPendingStreamingChunk();
+                    }, delay);
+                }
             } : undefined;
-            
+
             promptParams.onPromptRunCreated = async (promptRunId: string) => {
                 stepEntity.TargetLogID = promptRunId;
                 // Re-apply post-INSERT: onPromptRunCreated can fire before the step's INSERT lands, and the
                 // INSERT's reload would otherwise revert TargetLogID back to null.
                 this.queueStepSave(stepEntity, (s) => { s.TargetLogID = promptRunId; });
             };
-            
+
             // Execute the prompt
-            const promptResult = await this.executePrompt(promptParams);
+            let promptResult: Awaited<ReturnType<typeof this.executePrompt>>;
+            try {
+                promptResult = await this.executePrompt(promptParams);
+            } finally {
+                flushPendingStreamingChunk();
+            }
             this.recordPromptUsageInTreeBudget(promptResult.promptRun, promptResult, params);
 
             this.recordToolCallingInstrumentation(stepEntity, promptResult);
@@ -14611,6 +15649,7 @@ The context is now within limits. Please retry your request with the recovered c
             if (promptResult.modelSelectionInfo) {
                 this._lastModelSelectionInfo = promptResult.modelSelectionInfo;
             }
+            this.trackSentPrefix(params, promptResult);
 
             // Check for cancellation after prompt execution — before the failure check, because a prompt
             // the caller cancelled comes back failed, and that is not a prompt failure. The step does not
@@ -14618,7 +15657,8 @@ The context is now within limits. Please retry your request with the recovered c
             // cancellation check, before the next step, ends the run as Cancelled.
             if (params.cancellationToken?.aborted) {
                 if (stepEntity && payload) {
-                    stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(payload);
+                    stepEntity.PayloadAtEnd = (this.hasDefaultPayloadSerializers() ? this.resolveStepPayloadAtStart(stepEntity) : null)
+                        ?? this.serializePayloadAtEnd(payload);
                 }
 
                 await this.finalizeStepEntity(stepEntity, false, 'Cancelled during prompt execution');
@@ -14636,7 +15676,8 @@ The context is now within limits. Please retry your request with the recovered c
                 // CRITICAL FIX: Preserve payload before finalizing step
                 // This matches the success path behavior where PayloadAtEnd is set before finalizeStepEntity
                 if (stepEntity && payload) {
-                    stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(payload);
+                    stepEntity.PayloadAtEnd = (this.hasDefaultPayloadSerializers() ? this.resolveStepPayloadAtStart(stepEntity) : null)
+                        ?? this.serializePayloadAtEnd(payload);
                 }
 
                 await this.finalizeStepEntity(stepEntity, false, promptResult.errorMessage);
@@ -14688,7 +15729,7 @@ The context is now within limits. Please retry your request with the recovered c
             });
             
             // Determine next step using agent type, this doesn't validate, just gets the LLM response and then we can process payload changes
-            const initialNextStep = await this.determineNextStep<P>(params, config.agentType, promptResult, payload);
+            let initialNextStep = await this.determineNextStep<P>(params, config.agentType, promptResult, payload);
             
             // Apply payload changes if provided
             const isUnmodifiedInheritedPayload = payload === params.payload;
@@ -14744,6 +15785,20 @@ The context is now within limits. Please retry your request with the recovered c
                 // reverts or blocks a change; the agent reads the result on its next turn.
                 const payloadCheckParams = promptParams.data?.__agentTypePromptParams as Record<string, unknown> | undefined;
                 await this.checkPayloadChangesWhenOn(changeResult, initialNextStep, promptResult, payloadCheckParams, params);
+            }
+
+            // Run the agent's own tool calls (zero turn cost — processed inline), in order, after any
+            // same-turn payload_change_request. Their results answer the calls once the call turn is
+            // replayed in processNextStep.
+            this._pendingAgentToolResults = undefined;
+            const declined: NativeToolResult[] = (initialNextStep.declinedToolCalls ?? [])
+                .map((d) => ({ toolCallId: d.toolCallId, toolName: d.toolName, content: `Not executed. ${d.reason}`, isError: true }));
+            if (initialNextStep.agentToolCalls?.length || declined.length) {
+                const ran = await this.ExecuteAgentToolCallsAsSteps(initialNextStep.agentToolCalls ?? [], finalPayload, params);
+                finalPayload = ran.payload;
+                const results = [...ran.results, ...declined];
+                initialNextStep = this.declineTerminalAfterFailedWrite(initialNextStep, results);
+                this._pendingAgentToolResults = { results };
             }
 
             // Apply scratchpad changes if provided (zero turn cost — processed inline)
@@ -14863,9 +15918,15 @@ The context is now within limits. Please retry your request with the recovered c
                 })
             };
             
-            // Set PayloadAtEnd with the final payload after changes
+            // Set PayloadAtEnd with the final payload after changes (reusing serialized start when payload was not modified)
             if (stepEntity && finalPayload) {
-                stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(finalPayload);
+                const canReuseStartPayload =
+                    !initialNextStep.payloadChangeRequest &&
+                    updatedNextStep.newPayload === undefined &&
+                    finalPayload === payload &&
+                    this.hasDefaultPayloadSerializers();
+                stepEntity.PayloadAtEnd = (canReuseStartPayload ? this.resolveStepPayloadAtStart(stepEntity) : null)
+                    ?? this.serializePayloadAtEnd(finalPayload);
             }
             
             // Update the agent run's current payload
@@ -14924,7 +15985,9 @@ The context is now within limits. Please retry your request with the recovered c
                 ? JSON.parse(existingEnd)
                 : (previousDecision?.newPayload || params.payload);
 
-            stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(payload);
+            stepEntity.PayloadAtEnd = existingEnd
+                ?? (this.hasDefaultPayloadSerializers() ? this.resolveStepPayloadAtStart(stepEntity) : null)
+                ?? this.serializePayloadAtEnd(payload);
             stepEntity.PayloadAtEndSourceStepID = null;
 
             // we had an error, don't throw the exception as that will kill our overall execution/run
@@ -15305,8 +16368,17 @@ The context is now within limits. Please retry your request with the recovered c
                 stepEntity.TargetLogID = subAgentResult.agentRun.ID;
                 // Set the SubAgentRun property for hierarchical tracking (transient related object)
                 stepEntity.SubAgentRun = subAgentResult.agentRun;
-                stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(mergedPayload);
                 // saving happens later by calling finalizeStepEntity()
+            }
+
+            // Set PayloadAtEnd once with the merged payload (reusing serialized start when sub-agent failed or payload was not replaced)
+            if (stepEntity) {
+                const canReuseStartPayload =
+                    mergedPayload === previousDecision?.newPayload &&
+                    !currentStepPayloadChangeResult &&
+                    this.hasDefaultPayloadSerializers();
+                stepEntity.PayloadAtEnd = (canReuseStartPayload ? this.resolveStepPayloadAtStart(stepEntity) : null)
+                    ?? this.serializePayloadAtEnd(mergedPayload);
             }
             
             // Check for cancellation after sub-agent execution
@@ -15357,11 +16429,6 @@ The context is now within limits. Please retry your request with the recovered c
                     payloadChangeResult: currentStepPayloadChangeResult
                 })
             }; 
-
-            // Set PayloadAtEnd with the merged payload
-            if (stepEntity) {
-                stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(mergedPayload);
-            }
 
             // Finalize step entity
             await this.finalizeStepEntity(stepEntity, subAgentResult.success,
@@ -15439,7 +16506,7 @@ The context is now within limits. Please retry your request with the recovered c
 
             if (previousDecision?.nativeTurn?.sendResultsNatively && subAgentRequest.toolCallId) {
                 // the delegate_to_* call is answered as a tool result.
-                params.conversationMessages.push(BuildToolResultTurn([...this.payloadToolResult(previousDecision), {
+                this.PushToolResultTurn(params, BuildToolResultTurn([...this.payloadToolResult(previousDecision), {
                     toolCallId: subAgentRequest.toolCallId,
                     toolName: `${SUB_AGENT_TOOL_PREFIX}${SanitizeToolName(subAgentRequest.name)}`,
                     content: resultMessage,
@@ -16144,7 +17211,7 @@ The context is now within limits. Please retry your request with the recovered c
         const pairable = nativeResults ? allExecutions.filter((e) => !!e.request.toolCallId) : [];
         const unpairable = allExecutions.filter((e) => !pairable.includes(e));
         if (pairable.length > 0) {
-            params.conversationMessages.push(BuildToolResultTurn([
+            this.PushToolResultTurn(params, BuildToolResultTurn([
                 ...this.payloadToolResult(previousDecision),
                 ...pairable.map((e) => ({
                     toolCallId: e.request.toolCallId as string,
@@ -16464,7 +17531,7 @@ The context is now within limits. Please retry your request with the recovered c
 
             if (previousDecision.nativeTurn?.sendResultsNatively && subAgentRequest.toolCallId) {
                 // the delegate_to_* call is answered as a tool result (same as the child path).
-                params.conversationMessages.push(BuildToolResultTurn([...this.payloadToolResult(previousDecision), {
+                this.PushToolResultTurn(params, BuildToolResultTurn([...this.payloadToolResult(previousDecision), {
                     toolCallId: subAgentRequest.toolCallId,
                     toolName: `${SUB_AGENT_TOOL_PREFIX}${SanitizeToolName(subAgentRequest.name)}`,
                     content: relatedResultMessage,
@@ -16802,8 +17869,9 @@ The context is now within limits. Please retry your request with the recovered c
                 progressMessage = `Executing **${aa.name}** action`;
 
                 // Add parameters if they exist
-                if (aa.params && Object.keys(aa.params).length > 0) {
-                    const paramsList = Object.entries(aa.params)
+                const shownParams = this.shownActionParamEntries(params, aa);
+                if (shownParams.length > 0) {
+                    const paramsList = shownParams
                         .map(([key, value]) => {
                             const displayValue = this.formatParamValueForMessage(value);
                             return `• **${key}**: ${displayValue}`;
@@ -16818,8 +17886,9 @@ The context is now within limits. Please retry your request with the recovered c
                     let actionText = `${index + 1}. **${aa.name}**`;
 
                     // Add parameters if they exist
-                    if (aa.params && Object.keys(aa.params).length > 0) {
-                        const paramsList = Object.entries(aa.params)
+                    const shownParams = this.shownActionParamEntries(params, aa);
+                    if (shownParams.length > 0) {
+                        const paramsList = shownParams
                             .map(([key, value]) => {
                                 const displayValue = this.formatParamValueForMessage(value);
                                 return `   • **${key}**: ${displayValue}`;
@@ -16857,7 +17926,7 @@ The context is now within limits. Please retry your request with the recovered c
             // which (pre-guardrail) looped forever. Phrasing it in second person under the `user`
             // role keeps the memory while removing the false assistant-prose exemplar. The
             // human-facing narration is emitted separately via onProgress above.
-            const actionMessage = this.buildActionInvocationMessage(actions);
+            const actionMessage = this.buildActionInvocationMessage(actions, params);
 
             if (addConversationMessage) {
                 // Record as a `user`-role environment annotation (no metadata - permanent record).
@@ -16883,7 +17952,7 @@ The context is now within limits. Please retry your request with the recovered c
             // Fall back to database-configured actions if _effectiveActions is empty (shouldn't happen in normal flow)
             const effectiveActions = this._effectiveActions.length > 0
                 ? this._effectiveActions
-                : actionEngine.Actions.filter(a =>
+                : (actionEngine.Actions || []).filter(a =>
                     agentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID))
                   );
 
@@ -16911,17 +17980,26 @@ The context is now within limits. Please retry your request with the recovered c
             // Execute all actions in parallel
             let lastStep: MJAIAgentRunStepEntityExtended | undefined = undefined;
             const actionPromises = actions.map(async (aa) => {
-                // Find action entity from the effective actions (which includes runtime changes)
-                const actionEntity = effectiveActions.find(a => a.Name === aa.name);
+                // Find action entity from the effective actions (which includes runtime changes),
+                // or from actions referenced directly by this agent's Flow steps (AIAgentStep.ActionID)
+                let actionEntity = effectiveActions.find(a => a.Name === aa.name);
+                if (!actionEntity && Array.isArray(actionEngine?.Actions)) {
+                    const agentSteps = AIEngine.Instance.GetAgentSteps?.(params.agent.ID) || [];
+                    const stepActionIds = new UUIDSet(agentSteps.map(s => s.ActionID));
+                    actionEntity = actionEngine.Actions.find(
+                        a => a.Name === aa.name && stepActionIds.Has(a.ID)
+                    );
+                }
                 if (!actionEntity) {
                     throw new Error(`Action "${aa.name}" Not Found for Agent "${params.agent.Name}". Available actions: ${effectiveActions.map(a => a.Name).join(', ')}`);
                 }
 
-                // Prepare input data for the action step
-                const actionInputData = {
-                    actionName: aa.name,
-                    actionParams: aa.params
-                };
+                // Prepare input data for the action step. The names this run binds on the action are
+                // recorded with it, so a step audit tells a bound value from a chosen one on its own.
+                const boundNames = Object.keys(BindingsForAction(params.boundActionParams, actionEntity.ID) ?? {});
+                const actionInputData = boundNames.length > 0
+                    ? { actionName: aa.name, actionParams: aa.params, boundParams: boundNames }
+                    : { actionName: aa.name, actionParams: aa.params };
                 
                 const stepEntity = await this.createStepEntity({ stepType: 'Actions', stepName: `Execute Action: ${aa.name}`, contextUser: params.contextUser, targetId: actionEntity.ID, inputData: actionInputData, payloadAtStart: currentPayload, payloadAtEnd: currentPayload, parentId: parentStepId, skills: this.getSkillAttributionForAction(actionEntity.ID, params.agent) });
                 lastStep = stepEntity;
@@ -16934,7 +18012,7 @@ The context is now within limits. Please retry your request with the recovered c
                 let actionResult: ActionResult;
                 try {
                     // Execute the action
-                    actionResult = await this.ExecuteSingleAction(params, aa, actionEntity, params.contextUser, actionOptions);
+                    actionResult = await this.ExecuteSingleAction(params, aa, actionEntity, params.contextUser, { ...actionOptions, StepID: stepEntity.ID });
                     
                     // Update step entity with ActionExecutionLog ID if available
                     if (actionResult.LogEntry?.ID) {
@@ -16982,8 +18060,10 @@ The context is now within limits. Please retry your request with the recovered c
                 const actionResult = result.result;
                 const isActionSuccess = Boolean(result.success && (actionResult ? actionResult.Success : true));
 
-                // Filter to output params only
-                const outputParams = actionResult?.Params?.filter(p => p.Type === 'Both' || p.Type === 'Output') || [];
+                // Filter to output params only. A bound parameter (ExecuteAgentParams.boundActionParams) is
+                // left out as well: the model was not shown it on the way in, so it is not shown it on the way out.
+                const bindings = BindingsForAction(params.boundActionParams, result.actionEntity?.ID ?? '');
+                const outputParams = actionResult?.Params?.filter(p => (p.Type === 'Both' || p.Type === 'Output') && !IsBoundParamName(p.Name, bindings)) || [];
 
                 // Intercept large media content (images, audio, video) and replace with placeholders
                 // This prevents context overflow from base64 data (~700K tokens per 1024x1024 image)
@@ -17055,7 +18135,14 @@ The context is now within limits. Please retry your request with the recovered c
 
             if (addConversationMessage) {
                 // Add user message with results and optional metadata
-                this.appendActionResults(params, actionSummaries, resultsMessage, metadata, previousDecision); // results as a tool turn or the markdown user message
+                // Failure guidance, so the model does not repeatedly loop on broken tools. Not when the breaker
+                // is bypassed for this step: there is then no model in the loop to act on it (Flow, ForEach,
+                // While, pipeline), and the directive would only pollute the history.
+                const failureGuidance = failedActions.length > 0 && actionOptions?.skipCircuitBreaker !== true
+                    ? new Map(failedActions.map((f) => [f, this.formatActionFailureDirective(f)] as const))
+                    : undefined;
+                // results as a tool turn or the markdown user message; a natively answered failure carries its guidance
+                const answeredNatively = this.appendActionResults(params, actionSummaries, resultsMessage, metadata, previousDecision, failureGuidance);
 
                 // Surface explicit AI directives from action results as a separate instruction message.
                 // Actions that need the AI to follow specific instructions (not just acknowledge data)
@@ -17073,11 +18160,10 @@ The context is now within limits. Please retry your request with the recovered c
                     });
                 }
 
-                // Surface failure guidance for failed actions so the model does not repeatedly loop on broken
-                // tools. Not when the breaker is bypassed for this step: there is then no model in the loop to
-                // act on it (Flow, ForEach, While, pipeline), and the directive would only pollute the history.
-                if (failedActions.length > 0 && actionOptions?.skipCircuitBreaker !== true) {
-                    const failureText = failedActions.map(f => this.formatActionFailureDirective(f)).join('\n\n');
+                // Guidance for any failure not answered as a native tool result goes in a message of its own.
+                const unanswered = failureGuidance ? failedActions.filter((f) => !answeredNatively.has(f)) : [];
+                if (failureGuidance && unanswered.length > 0) {
+                    const failureText = unanswered.map((f) => failureGuidance.get(f)).join('\n\n');
 
                     params.conversationMessages.push({
                         role: 'user',
@@ -17896,7 +18982,7 @@ The context is now within limits. Please retry your request with the recovered c
         params: ExecuteAgentParams,
         invocation?: AgentSkillInvocation
     ): Promise<void> {
-        const stepEntity = await this.createStepEntity({
+        await this.createStepEntity({
             stepType: 'Skill',
             stepName: `Skill: ${skill.Name}`,
             targetId: skill.ID,
@@ -17904,17 +18990,19 @@ The context is now within limits. Please retry your request with the recovered c
             contextUser: params.contextUser,
             payloadAtStart: currentPayload,
             payloadAtEnd: currentPayload,
-            ...(invocation ? { skills: [invocation] } : {})
-        });
-
-        await this.finalizeStepEntity(stepEntity, true, undefined, {
-            skillId: skill.ID,
-            skillName: skill.Name,
-            ...(invocation ? {
-                activationType: invocation.ActivationType,
-                requestedBy: invocation.Provenance.RequestedBy,
-                ...(invocation.Reason ? { reason: invocation.Reason } : {})
-            } : {})
+            ...(invocation ? { skills: [invocation] } : {}),
+            completed: {
+                success: true,
+                outputData: {
+                    skillId: skill.ID,
+                    skillName: skill.Name,
+                    ...(invocation ? {
+                        activationType: invocation.ActivationType,
+                        requestedBy: invocation.Provenance.RequestedBy,
+                        ...(invocation.Reason ? { reason: invocation.Reason } : {})
+                    } : {})
+                }
+            }
         });
     }
 
@@ -17969,6 +19057,19 @@ The context is now within limits. Please retry your request with the recovered c
                 step: 'Failed',
                 terminate: true,
                 errorMessage: 'A Tasks step reached execution with no task graph attached.',
+                previousPayload: previousDecision.previousPayload,
+                newPayload: previousDecision.newPayload || previousDecision.previousPayload
+            };
+        }
+        // Fail closed under bound parameters (ExecuteAgentParams.boundActionParams): a graph's action nodes
+        // are dispatched by the task-graph runner with the inputs the model authored, outside
+        // ExecuteSingleAction, so nothing would hide or apply a binding. The response type already withholds
+        // `tasks` from a bound run; this is the gate for a model that emits one anyway.
+        if (this.hasBoundActionParams(params.boundActionParams)) {
+            return {
+                step: 'Failed',
+                terminate: true,
+                errorMessage: 'Task graphs are not available in a run with bound action parameters: a graph dispatches actions outside the binding gate.',
                 previousPayload: previousDecision.previousPayload,
                 newPayload: previousDecision.newPayload || previousDecision.previousPayload
             };
@@ -18082,17 +19183,20 @@ The context is now within limits. Please retry your request with the recovered c
         const graph = nextStep.taskGraph;
         if (!graph?.folded) return;
 
-        const stepEntity = await this.createStepEntity({
+        await this.createStepEntity({
             stepType: 'TaskGraph',
             stepName: `Task Graph (folded): ${graph.spec.workflowName}`,
             contextUser: params.contextUser,
-            inputData: { spec: graph.spec, folded: true, foldReason: graph.foldReason }
-        });
-        await this.finalizeStepEntity(stepEntity, true, undefined, {
-            spec: graph.spec,
-            folded: true,
-            foldReason: graph.foldReason,
-            submitted: false
+            inputData: { spec: graph.spec, folded: true, foldReason: graph.foldReason },
+            completed: {
+                success: true,
+                outputData: {
+                    spec: graph.spec,
+                    folded: true,
+                    foldReason: graph.foldReason,
+                    submitted: false
+                }
+            }
         });
     }
 
@@ -18106,9 +19210,12 @@ The context is now within limits. Please retry your request with the recovered c
             stepType: 'Plan',
             stepName: 'Plan Presented for Approval',
             contextUser: params.contextUser,
-            inputData: { plan: planText }
+            inputData: { plan: planText },
+            completed: {
+                success: true,
+                outputData: { plan: planText }
+            }
         });
-        await this.finalizeStepEntity(stepEntity, true, undefined, { plan: planText });
 
         const responseForm = this.buildPlanApprovalForm(planText);
         const planPresentation: BaseAgentNextStep = {
@@ -18192,10 +19299,15 @@ The context is now within limits. Please retry your request with the recovered c
         params: ExecuteAgentParams,
         previousDecision: BaseAgentNextStep
     ): Promise<BaseAgentNextStep> {
-        const stepEntity = await this.createStepEntity({ stepType: 'Chat', stepName: 'User Interaction', contextUser: params.contextUser });
-
-        // Chat steps are successful - they indicate a need for user interaction
-        await this.finalizeStepEntity(stepEntity, true);
+        // Chat steps are successful immediately — record in a single INSERT instead of INSERT + UPDATE
+        const stepEntity = await this.createStepEntity({
+            stepType: 'Chat',
+            stepName: 'User Interaction',
+            contextUser: params.contextUser,
+            completed: {
+                success: true
+            }
+        });
 
         // For root agents, create a persistent AIAgentRequest so the request is
         // tracked in the dashboard and can be responded to outside a conversation (none under an audience).
@@ -19474,7 +20586,8 @@ The context is now within limits. Please retry your request with the recovered c
             // Calculate total tokens even for failed runs
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
-            await this._agentRun.Save();
+            await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
         }
 
         return {
@@ -19525,7 +20638,7 @@ The context is now within limits. Please retry your request with the recovered c
             // Calculate total tokens even for cancelled runs
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
-            await this._agentRun.Save();
+            await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
             AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
         }
         
@@ -19691,7 +20804,8 @@ The context is now within limits. Please retry your request with the recovered c
             // Calculate total tokens from all prompts and sub-agents
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
-            const ok = await this._agentRun.Save();
+            const ok = await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
             if (!ok) {
                 LogError(`Failed to finalize agent run ${this._agentRun.ID}`);
             }
@@ -20001,8 +21115,9 @@ The context is now within limits. Please retry your request with the recovered c
                         reason: `Expired after ${turnsAlive} turns (limit: ${msg.metadata.expirationTurns})`
                     });
                 } else if (msg.metadata.expirationMode === 'Compact') {
-                    // Ensure we have compact config
-                    if (msg.metadata.compactMode) {
+                    // Compacted once is compacted: compacting again would summarize the summary, and
+                    // change the message again on every turn. Expansion clears the flag.
+                    if (msg.metadata.compactMode && !msg.metadata.wasCompacted) {
                         messagesToCompact.push({
                             index: i,
                             message: msg,
@@ -20026,9 +21141,10 @@ The context is now within limits. Please retry your request with the recovered c
         for (const item of messagesToCompact) {
             const originalContent = item.message.content;
             if (item.message.role === 'tool') {
-                // compact per block so the tool turn keeps answering its call.
-                const limit = item.metadata.compactLength || 500;
-                const compactedTurn = CompactToolResultContent(item.message, (t) => (t.length > limit ? `${t.slice(0, limit)}… [compacted from ${t.length} chars]` : t));
+                // Compact per block, in the action's own mode (first N chars or an AI summary), so
+                // the tool turn keeps answering its call.
+                const compactedTurn = await CompactToolResultContentAsync(item.message, (text) =>
+                    this.compactMessage({ ...item.message, content: text }, { ...item.metadata, originalLength: text.length }, params));
                 const saved = this.estimateTokens(originalContent) - this.estimateTokens(compactedTurn.content);
                 params.conversationMessages[item.index] = {
                     ...compactedTurn,
@@ -20437,12 +21553,16 @@ The context is now within limits. Please retry your request with the recovered c
 
                 for (let i = 1; i < compactEndIndex; i++) {
                     const msg = messages[i] as AgentChatMessage;
+                    const metaWithLegacyFlag = msg?.metadata as (AgentChatMessageMetadata & { isCompacted?: boolean }) | undefined;
                     if (
                         !msg ||
                         msg.role === 'system' ||
-                        msg.metadata?.wasCompacted === true ||
-                        msg.metadata?.isConversationSummary === true ||
-                        msg.metadata?.volatileState === true
+                        metaWithLegacyFlag?.wasCompacted === true ||
+                        metaWithLegacyFlag?.isCompacted === true ||
+                        metaWithLegacyFlag?.isConversationSummary === true ||
+                        metaWithLegacyFlag?.volatileState === true ||
+                        Boolean(msg.toolCalls?.length) ||
+                        !this.IsVolatileResultMessage(msg)
                     ) {
                         continue;
                     }
@@ -20645,22 +21765,32 @@ The context is now within limits. Please retry your request with the recovered c
         );
 
         step.NewRecord();
-        step.AgentRunID = this._agentRun.ID;
-        step.StepType = 'Compaction';
-        step.Status = 'Running';
-        step.InputData = JSON.stringify({
-            stepName: 'Message Compaction',
-            description: `Compacting message using AI Summary (${message.metadata?.messageType || 'unknown'} from turn ${message.metadata?.turnAdded || 0})`,
-            messageType: message.metadata?.messageType,
-            turnAdded: message.metadata?.turnAdded,
-            originalLength: message.metadata?.originalLength ||
-                (typeof message.content === 'string' ? message.content.length : JSON.stringify(message.content).length),
-            compactMode: 'AI Summary',
-            promptId: prompt.ID,
-            promptName: prompt.Name
+        const stepNumber = (this._agentRun.Steps?.length || 0) + 1;
+        initAgentRunStep(step, {
+            AgentRunID: this._agentRun.ID,
+            StepNumber: stepNumber,
+            StepType: 'Compaction',
+            StepName: this.fitStepName(step, this.formatHierarchicalMessage('Message Compaction')),
+            TargetID: prompt.ID,
+            InputData: JSON.stringify({
+                stepName: 'Message Compaction',
+                description: `Compacting message using AI Summary (${message.metadata?.messageType || 'unknown'} from turn ${message.metadata?.turnAdded || 0})`,
+                messageType: message.metadata?.messageType,
+                turnAdded: message.metadata?.turnAdded,
+                originalLength: message.metadata?.originalLength ||
+                    (typeof message.content === 'string' ? message.content.length : JSON.stringify(message.content).length),
+                compactMode: 'AI Summary',
+                promptId: prompt.ID,
+                promptName: prompt.Name
+            })
         });
 
-        await step.Save();
+        this._stepSaveQueue.Insert(step);
+        if (Array.isArray(this._agentRun.Steps)) {
+            this._agentRun.Steps.push(step);
+        }
+        this.ensureTreeBudget(this._executeParams ?? params).totalSteps += 1;
+
         return step;
     }
 
@@ -20677,12 +21807,15 @@ The context is now within limits. Please retry your request with the recovered c
         step: MJAIAgentRunStepEntityExtended,
         result: AIPromptRunResult<{ summary: string }>,
         message: AgentChatMessage,
-        params: ExecuteAgentParams
+        _params: ExecuteAgentParams
     ): Promise<void> {
-        step.Status = result.success ? 'Completed' : 'Failed';
+        if (result.promptRun?.ID) {
+            step.TargetLogID = result.promptRun.ID;
+            step.PromptRun = result.promptRun;
+        }
         const promptTokens = result.promptTokens || 0;
         const completionTokens = result.completionTokens || 0;
-        step.OutputData = JSON.stringify({
+        const outputData = {
             success: result.success,
             summaryLength: result.result?.summary?.length || 0,
             tokensSaved: message.metadata?.tokensSaved || 0,
@@ -20690,13 +21823,10 @@ The context is now within limits. Please retry your request with the recovered c
             completionTokens,
             totalTokens: promptTokens + completionTokens,
             cost: result.cost
-        });
+        };
+        const errorMessage = result.success ? undefined : (result.errorMessage || 'AI Summary compaction failed');
 
-        if (!result.success) {
-            step.ErrorMessage = result.errorMessage || 'AI Summary compaction failed';
-        }
-
-        await step.Save();
+        await this.finalizeStepEntity(step, result.success, errorMessage, outputData);
     }
 
     /**
@@ -20729,7 +21859,9 @@ The context is now within limits. Please retry your request with the recovered c
                 }
 
                 const truncated = originalContent.substring(0, length);
-                return `${truncated}...\n\n[Compacted: showing first ${length} of ${originalContent.length} characters. Agent can request expansion if needed.]`;
+                // A native-only agent has no message expansion, so its tool results do not offer it.
+                const expandable = !(message.role === 'tool' && this.GetNativeControlConfig(params).NativeOnly);
+                return `${truncated}...\n\n[Compacted: showing first ${length} of ${originalContent.length} characters.${expandable ? ' Agent can request expansion if needed.' : ''}]`;
             }
 
             case 'AI Summary': {
@@ -20771,9 +21903,13 @@ The context is now within limits. Please retry your request with the recovered c
                         AgentRun: this._agentRun,
                         ContextUser: params.contextUser,
                     }) ?? undefined;
+                    promptParams.onPromptRunCreated = async (promptRunId: string) => {
+                        step.TargetLogID = promptRunId;
+                        this.queueStepSave(step, (s) => { s.TargetLogID = promptRunId; });
+                    };
 
-                    const runner = new AIPromptRunner();
-                    const result = await runner.ExecutePrompt<{ summary: string }>(promptParams);
+                    const result = await this._promptRunner.ExecutePrompt<{ summary: string }>(promptParams);
+                    this.recordPromptUsageInTreeBudget(result.promptRun, result, params);
 
                     // Update step with result
                     await this.updateCompactionStep(step, result, message, params);

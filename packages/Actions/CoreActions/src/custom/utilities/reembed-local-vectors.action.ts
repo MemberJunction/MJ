@@ -134,11 +134,11 @@ export class ReembedLocalVectorsAction extends BaseAction {
         provider: IMetadataProvider | undefined
     ): Promise<EntityReport> {
         const run = await RecordSetProcessor.Instance.Process({
-            source: new KeysetSource(target.EntityName, filter),
-            processor: new FunctionRecordProcessor((record, ctx) => this.reembedRow(target, record, ctx.provider, ctx.contextUser, modelID, force)),
-            contextUser,
-            provider,
-            configuration: { Action: 'Re-embed Local Vectors', ModelID: modelID, Force: force },
+            Source: new KeysetSource(target.EntityName, filter),
+            Processor: new FunctionRecordProcessor((record, ctx) => this.reembedRow(target, record, ctx.Provider, ctx.ContextUser, modelID, force)),
+            ContextUser: contextUser,
+            Provider: provider,
+            Configuration: { Action: 'Re-embed Local Vectors', ModelID: modelID, Force: force },
         });
         return {
             EntityName: target.EntityName,

@@ -41,10 +41,10 @@ vi.mock('@memberjunction/record-set-processor', () => ({
     },
     RecordSetProcessor: {
         Instance: {
-            async Process(options: { processor: { fn: (record: { RecordID: string }, ctx: unknown) => Promise<{ Status: string }> }; provider: unknown }) {
+            async Process(options: { Processor: { fn: (record: { RecordID: string }, ctx: unknown) => Promise<{ Status: string }> }; Provider: unknown }) {
                 let success = 0;
                 for (const row of h.rows) {
-                    const result = await options.processor.fn({ RecordID: row.id }, { provider: options.provider, contextUser: { ID: 'user-1' } });
+                    const result = await options.Processor.fn({ RecordID: row.id }, { Provider: options.Provider, ContextUser: { ID: 'user-1' } });
                     if (result.Status === 'Succeeded') success++;
                 }
                 return { Status: 'Completed', Processed: h.rows.length, Success: success, Error: h.rows.length - success };

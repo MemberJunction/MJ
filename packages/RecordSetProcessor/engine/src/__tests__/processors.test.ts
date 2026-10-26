@@ -1,12 +1,16 @@
 /**
  * Unit tests for the Action/Agent record processors' pure mapping + extraction helpers (the
  * record -> work-input mapping and work-output -> result-payload extraction). The engine-invoking
- * ProcessRecord paths are covered by integration tests; here we verify the deterministic logic.
+ * ProcessRecord paths are covered by integration tests; here we verify the deterministic logic, plus
+ * ActionRecordProcessor's wait for the log row against a stubbed engine.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { BaseEntity, EntityFieldRules, EntityInfo, UserInfo, type EntityFieldRulesResult } from '@memberjunction/core';
+import { EntitiesOnlyProvider } from '@memberjunction/unit-testing';
 import { RecordRef } from '@memberjunction/record-set-processor-base';
-import { ActionRecordProcessor, AgentRecordProcessor, WriteBackProcessor } from '../index';
+import { ActionEngineServer } from '@memberjunction/actions';
+import { ActionRecordProcessor, AgentRecordProcessor, FieldRulesProcessor, WriteBackProcessor } from '../index';
 
 const record: RecordRef = { EntityID: 'ENT-1', RecordID: 'c1', Record: { ID: 'c1', Name: 'Ada', Tier: 3 } };
 
@@ -49,6 +53,44 @@ describe('ActionRecordProcessor', () => {
     });
 });
 
+describe('ActionRecordProcessor.ProcessRecord — waits for the log row (#6014)', () => {
+    const ctx = { ContextUser: {} as never, Provider: {} as never };
+    afterEach(() => vi.restoreAllMocks());
+
+    /** Stubs the engine singleton so ProcessRecord finds action A-1 and RunAction returns `result`. */
+    function stubEngine(result: Record<string, unknown>) {
+        const engine = ActionEngineServer.Instance;
+        vi.spyOn(engine, 'Config').mockResolvedValue(undefined);
+        vi.spyOn(engine, 'Actions', 'get').mockReturnValue([{ ID: 'A-1' }] as never);
+        vi.spyOn(engine, 'RunAction').mockResolvedValue(result as never);
+    }
+
+    it('does not resolve before LogEntryPersisted resolves', async () => {
+        let landLogRow!: () => void;
+        const LogEntryPersisted = new Promise<void>((r) => { landLogRow = r; });
+        stubEngine({ Success: true, Params: [], LogEntry: { ID: 'log-1' }, LogEntryPersisted });
+
+        let resolved = false;
+        const pending = new ActionRecordProcessor('A-1').ProcessRecord(record, ctx).then((r) => {
+            resolved = true;
+            return r;
+        });
+        await new Promise((r) => setTimeout(r, 10));
+        expect(resolved).toBe(false);
+
+        landLogRow();
+        const out = await pending;
+        expect(out).toMatchObject({ Status: 'Succeeded', ActionExecutionLogID: 'log-1' });
+    });
+
+    it('resolves normally when LogEntryPersisted is absent', async () => {
+        stubEngine({ Success: false, Message: 'nope', Params: [] });
+
+        const out = await new ActionRecordProcessor('A-1').ProcessRecord(record, ctx);
+        expect(out).toMatchObject({ Status: 'Failed', ErrorMessage: 'nope', ActionExecutionLogID: undefined });
+    });
+});
+
 describe('AgentRecordProcessor', () => {
     it('builds agent data from the input mapping', () => {
         const data = AgentRecordProcessor.buildData({ name: 'record.Name', tier: 'record.Tier' }, record);
@@ -62,7 +104,7 @@ describe('AgentRecordProcessor', () => {
 });
 
 describe('WriteBackProcessor — run-level Preflight forwarding', () => {
-    const ctx = { contextUser: {} as never, provider: {} as never };
+    const ctx = { ContextUser: {} as never, Provider: {} as never };
 
     it('forwards Preflight to the wrapped processor so its refusal reaches the engine', async () => {
         const inner = {
@@ -81,7 +123,7 @@ describe('WriteBackProcessor — run-level Preflight forwarding', () => {
 });
 
 describe('WriteBackProcessor.ProcessBatch — inner result shapes', () => {
-    const ctx = { contextUser: {} as never, provider: {} as never };
+    const ctx = { ContextUser: {} as never, Provider: {} as never };
     const recordsIn: RecordRef[] = [
         { EntityID: 'E', RecordID: 'a' },
         { EntityID: 'E', RecordID: 'b' },
@@ -110,5 +152,28 @@ describe('WriteBackProcessor.ProcessBatch — inner result shapes', () => {
         const out = await wrapped.ProcessBatch(recordsIn, ctx);
         expect(out.get('a')?.ErrorMessage).toBe('No result returned from batch processor');
         expect(out.get('b')?.ErrorMessage).toBe('only-b');
+    });
+});
+
+/** A Widgets record that loads any key (the processor only loads it before applying the rules). */
+class LoadedWidget extends BaseEntity {
+    public override async InnerLoad(): Promise<boolean> {
+        return true;
+    }
+}
+
+describe('FieldRulesProcessor on a dry run', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it('previews when the run is a dry run, whatever it was built with', async () => {
+        const preview: Pick<EntityFieldRulesResult, 'DryRun' | 'Changes' | 'AppliedFields' | 'Errors'> = { DryRun: true, Changes: [], AppliedFields: [], Errors: [] };
+        const apply = vi.spyOn(EntityFieldRules.prototype, 'ApplyToEntity').mockResolvedValue(preview as EntityFieldRulesResult);
+        const widgets = new EntityInfo({ ID: 'E', Name: 'Widgets', Fields: [{ Name: 'ID', IsPrimaryKey: true, TSType: 'string' }] });
+        const provider = new EntitiesOnlyProvider([widgets]);
+        vi.spyOn(provider, 'GetEntityObject').mockResolvedValue(new LoadedWidget(widgets));
+        const processor = new FieldRulesProcessor({ RuleSet: { Rules: [] } });
+        const result = await processor.ProcessRecord({ EntityID: 'E', RecordID: 'w1' }, { ContextUser: new UserInfo(), Provider: provider, DryRun: true });
+        expect(result.Status).toBe('Succeeded');
+        expect(apply.mock.calls[0][2]).toEqual({ DryRun: true });
     });
 });

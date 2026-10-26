@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { DatabaseProviderBase, SaveSQLResult, DeleteSQLResult } from '../generic/databaseProviderBase';
-import { CompositeKey, EntityInfo, RecordDependency, UserInfo, RunQueryResult, QueryExecutionSpec } from '../index';
+import { DatabaseProviderBase, SaveSQLResult, DeleteSQLResult, GetRecordDependenciesOptions } from '../generic/databaseProviderBase';
+import { CompositeKey, EntityInfo, RecordDependency, UserInfo, RunQueryResult, QueryExecutionSpec, Metadata } from '../index';
 
 /**
  * Covers the two polymorphic-link defects that live in the provider base rather than in a dialect:
@@ -15,18 +15,40 @@ import { CompositeKey, EntityInfo, RecordDependency, UserInfo, RunQueryResult, Q
 const RECORD_GUID = '38CB433E-F36B-1410-8DA0-00021F8B792E';
 const SURVIVOR_GUID = '99999999-AAAA-BBBB-CCCC-DDDDDDDDDDDD';
 
-function mockEntity(name: string, ...pkNames: string[]): EntityInfo {
+function mockEntity(
+    name: string,
+    pkNames: string[] = ['ID'],
+    fields: { Name: string; DisplayName?: string; DisplayNameOrName?: string }[] = [],
+    canRead?: boolean
+): EntityInfo {
     const keys = pkNames.map((Name) => ({ Name }));
-    return { Name: name, FirstPrimaryKey: keys[0], PrimaryKeys: keys, Fields: [] } as unknown as EntityInfo;
+    return {
+        Name: name,
+        FirstPrimaryKey: keys[0],
+        PrimaryKeys: keys,
+        Fields: fields,
+        ...(canRead !== undefined ? { CheckPermissions: () => canRead } : {}),
+    } as unknown as EntityInfo;
 }
 
 /** Minimal concrete provider: only what GetRecordDependencies touches is real. */
 class TestProvider extends DatabaseProviderBase {
     public softSQLCalls: string[] = [];
+    public lastSoftOptions?: GetRecordDependenciesOptions;
     public hardSQLCalls = 0;
+    public lastHardOptions?: GetRecordDependenciesOptions;
     public rowsToReturn: Record<string, unknown>[] = [];
     public entityDependencies: { EntityName: string; RelatedEntityName: string; FieldName: string }[] = [];
-    private _entities: EntityInfo[] = [mockEntity('Persons', 'ID'), mockEntity('Task Links', 'ID')];
+    public entities: EntityInfo[] = [
+        mockEntity('Persons', ['ID']),
+        mockEntity('Task Links', ['ID'], [
+            { Name: 'RecordID', DisplayName: 'Linked Record', DisplayNameOrName: 'Linked Record' },
+            { Name: 'PersonID', DisplayName: 'Assigned Person', DisplayNameOrName: 'Assigned Person' },
+        ]),
+        mockEntity('Tasks', ['ID'], [{ Name: 'PersonID', DisplayName: 'Owner', DisplayNameOrName: 'Owner' }]),
+        mockEntity('MJ: Record Changes', ['ID'], [{ Name: 'RecordID', DisplayName: 'Record ID', DisplayNameOrName: 'Record ID' }]),
+        mockEntity('MJ: Audit Logs', ['ID'], [{ Name: 'RecordID', DisplayName: 'Record ID', DisplayNameOrName: 'Record ID' }]),
+    ];
 
     protected get UUIDFunctionPattern(): RegExp { return /^$/; }
     protected get DBDefaultFunctionPattern(): RegExp { return /^$/; }
@@ -44,20 +66,30 @@ class TestProvider extends DatabaseProviderBase {
         throw new Error('Not supported.');
     }
 
-    public override get Entities(): EntityInfo[] { return this._entities; }
+    public override get Entities(): EntityInfo[] { return this.entities; }
     public override EntityByName(name: string): EntityInfo | undefined {
-        return this._entities.find((e) => e.Name === name);
+        return this.entities.find((e) => e.Name.toLowerCase() === name.toLowerCase());
     }
     public override async GetEntityDependencies(_entityName: string) {
         return this.entityDependencies as never;
     }
 
-    protected BuildHardLinkDependencySQL(): string {
+    protected BuildHardLinkDependencySQL(
+        _deps: unknown,
+        _key: CompositeKey,
+        options?: GetRecordDependenciesOptions
+    ): string {
         this.hardSQLCalls++;
+        this.lastHardOptions = options;
         return 'SELECT 1 AS hard';
     }
-    protected BuildSoftLinkDependencySQL(entityName: string, _key: CompositeKey): string {
+    protected BuildSoftLinkDependencySQL(
+        entityName: string,
+        _key: CompositeKey,
+        options?: GetRecordDependenciesOptions
+    ): string {
         this.softSQLCalls.push(entityName);
+        this.lastSoftOptions = options;
         return 'SELECT 1 AS soft';
     }
     async ExecuteSQL<T>(): Promise<Array<T>> {
@@ -181,5 +213,104 @@ describe('ResolveMergeLinkValue - merge writes the encoding the column holds', (
         const dep = { EntityName: 'Persons', RelatedEntityName: 'Tasks', FieldName: 'PersonID', PrimaryKey: CompositeKey.FromID(RECORD_GUID) } as RecordDependency;
 
         expect(provider.resolveMergeValue(dep, survivor)).toBe(SURVIVOR_GUID);
+    });
+});
+
+describe('GetRecordDependencies - GetRecordDependenciesOptions & FieldDisplayName', () => {
+    it('routes LinkType: "hard" to only BuildHardLinkDependencySQL', async () => {
+        const provider = new TestProvider();
+        provider.entityDependencies = [{ EntityName: 'Persons', RelatedEntityName: 'Tasks', FieldName: 'PersonID' }];
+        provider.rowsToReturn = [
+            { EntityName: 'Persons', RelatedEntityName: 'Tasks', PrimaryKeyValue: `ID|${RECORD_GUID}`, FieldName: 'PersonID', IsSoftLink: 0, EntityIDFieldName: null },
+        ];
+
+        const deps = await provider.GetRecordDependencies('Persons', CompositeKey.FromID(RECORD_GUID), { LinkType: 'hard' });
+
+        expect(provider.hardSQLCalls).toBe(1);
+        expect(provider.softSQLCalls).toEqual([]);
+        expect(deps).toHaveLength(1);
+        expect(deps[0].RelatedEntityName).toBe('Tasks');
+        expect(deps[0].FieldDisplayName).toBe('Owner');
+    });
+
+    it('routes LinkType: "soft" to only BuildSoftLinkDependencySQL', async () => {
+        const provider = new TestProvider();
+        provider.entityDependencies = [{ EntityName: 'Persons', RelatedEntityName: 'Tasks', FieldName: 'PersonID' }];
+        provider.rowsToReturn = [softLinkRow()];
+
+        const deps = await provider.GetRecordDependencies('Persons', CompositeKey.FromID(RECORD_GUID), { LinkType: 'soft' });
+
+        expect(provider.hardSQLCalls).toBe(0);
+        expect(provider.softSQLCalls).toEqual(['Persons']);
+        expect(deps).toHaveLength(1);
+        expect(deps[0].RelatedEntityName).toBe('Task Links');
+        expect(deps[0].FieldDisplayName).toBe('Linked Record');
+    });
+
+    it('excludes system audit/telemetry entities when IncludeSystemEntities is false', async () => {
+        const provider = new TestProvider();
+        provider.entityDependencies = [
+            { EntityName: 'Persons', RelatedEntityName: 'MJ: Record Changes', FieldName: 'RecordID' },
+            { EntityName: 'Persons', RelatedEntityName: 'Tasks', FieldName: 'PersonID' },
+        ];
+        provider.rowsToReturn = [
+            softLinkRow(),
+            { EntityName: 'Persons', RelatedEntityName: 'MJ: Record Changes', PrimaryKeyValue: `ID|${RECORD_GUID}`, FieldName: 'RecordID', IsSoftLink: 1, EntityIDFieldName: 'EntityID' },
+            { EntityName: 'Persons', RelatedEntityName: 'MJ: Audit Logs', PrimaryKeyValue: `ID|${RECORD_GUID}`, FieldName: 'RecordID', IsSoftLink: 1, EntityIDFieldName: 'EntityID' },
+        ];
+
+        const deps = await provider.GetRecordDependencies('Persons', CompositeKey.FromID(RECORD_GUID), { IncludeSystemEntities: false });
+
+        expect(deps.map(d => d.RelatedEntityName)).toEqual(['Task Links']);
+    });
+
+    it('restricts dependencies to EntityNames allow-list (case-insensitive)', async () => {
+        const provider = new TestProvider();
+        provider.entityDependencies = [
+            { EntityName: 'Persons', RelatedEntityName: 'Tasks', FieldName: 'PersonID' },
+        ];
+        provider.rowsToReturn = [
+            softLinkRow(),
+            { EntityName: 'Persons', RelatedEntityName: 'Tasks', PrimaryKeyValue: `ID|${RECORD_GUID}`, FieldName: 'PersonID', IsSoftLink: 0, EntityIDFieldName: null },
+        ];
+
+        const deps = await provider.GetRecordDependencies('Persons', CompositeKey.FromID(RECORD_GUID), { EntityNames: ['tasks'] });
+
+        expect(deps.map(d => d.RelatedEntityName)).toEqual(['Tasks']);
+    });
+
+    it('filters out entities the contextUser does not have Read permission on', async () => {
+        const provider = new TestProvider();
+        provider.entities.push(
+            mockEntity('Secret Notes', ['ID'], [{ Name: 'PersonID', DisplayName: 'Person' }], false)
+        );
+        provider.rowsToReturn = [
+            softLinkRow(),
+            { EntityName: 'Persons', RelatedEntityName: 'Secret Notes', PrimaryKeyValue: `ID|${RECORD_GUID}`, FieldName: 'PersonID', IsSoftLink: 0, EntityIDFieldName: null },
+        ];
+        const user = new UserInfo();
+        user.ID = 'u-1';
+
+        const deps = await provider.GetRecordDependencies('Persons', CompositeKey.FromID(RECORD_GUID), user, { LinkType: 'both' });
+
+        expect(deps.map(d => d.RelatedEntityName)).toEqual(['Task Links']);
+    });
+
+    it('forwards options through Metadata.GetRecordDependencies', async () => {
+        const provider = new TestProvider();
+        provider.rowsToReturn = [softLinkRow()];
+        const prevProvider = Metadata.Provider;
+        try {
+            Metadata.Provider = provider;
+            const md = new Metadata();
+            const deps = await md.GetRecordDependencies('Persons', CompositeKey.FromID(RECORD_GUID), {
+                LinkType: 'soft',
+                IncludeSystemEntities: false,
+            });
+            expect(provider.lastSoftOptions).toEqual({ LinkType: 'soft', IncludeSystemEntities: false });
+            expect(deps).toHaveLength(1);
+        } finally {
+            Metadata.Provider = prevProvider;
+        }
     });
 });

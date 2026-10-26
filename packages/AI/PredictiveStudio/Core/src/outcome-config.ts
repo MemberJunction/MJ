@@ -4,6 +4,7 @@
  * Declarative metadata contracts for model prediction outcomes, status bands,
  * labels, and badge color styling.
  */
+import { ProblemTypes } from './sidecar-contract';
 
 /** One threshold interval mapping a range of scores to a status label and styling. */
 export interface OutcomeBand {
@@ -201,16 +202,120 @@ export const DEFAULT_MONETARY_BANDS: OutcomeBand[] = [
   },
 ];
 
-/**
- * Resolves an effective OutcomeConfig from a model or pipeline, falling back to sensible
- * domain defaults when no explicit configuration is provided.
- */
-export function ResolveOutcomeConfig(modelLike?: {
+/** The model shape {@link ResolveOutcomeConfig} reads. */
+export interface OutcomeConfigSource {
   Lineage?: string | null;
   TargetVariable?: string | null;
   ProblemType?: string | null;
   outcomeConfig?: OutcomeConfig | null;
-}): OutcomeConfig {
+}
+
+/**
+ * Words in a target name that say the score measures something bad happening. `default` counts only as the name's last
+ * word or inflected (`LoanDefault`, `Defaulted`), because a leading "Default" is the adjective (`DefaultPlan`).
+ */
+const ADVERSE_TOKEN_PATTERNS: ReadonlyArray<RegExp> = [
+  /^churn(s|ed|ing|er)?$/,
+  /^laps(e|es|ed|ing)$/,
+  /^risk(s|y)?$/,
+  /^late(ness)?$/,
+  /^escalat/,
+  /^fraud(s|ulent)?$/,
+  /^default(s|ed|er)$/,
+  /^non$/,
+  /^not$/,
+];
+const RENEWAL_TOKEN_PATTERNS: ReadonlyArray<RegExp> = [/^renew/, /^retention$/];
+const MONETARY_TOKEN_PATTERNS: ReadonlyArray<RegExp> = [/^ltv$/, /^revenue/, /^spend/, /^gross$/, /^balance/, /^amount/];
+
+/** Lower-cased words of a column name, split on camelCase, acronyms, digits, `_`, `-` and spaces (`IsSLABreached` → is, sla, breached). */
+function targetTokens(name: string): string[] {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .split(/[^A-Za-z0-9]+/)
+    .filter((t) => t.length > 0)
+    .map((t) => t.toLowerCase());
+}
+
+function anyTokenMatches(tokens: ReadonlyArray<string>, patterns: ReadonlyArray<RegExp>): boolean {
+  return tokens.some((t) => patterns.some((p) => p.test(t)));
+}
+
+/** Whether a target name carries an adverse word; adverse words win over renewal words (`RenewalRisk`, `WillNotRenew`). */
+function isAdverseTarget(tokens: ReadonlyArray<string>): boolean {
+  return anyTokenMatches(tokens, ADVERSE_TOKEN_PATTERNS) || tokens[tokens.length - 1] === 'default';
+}
+
+// `Record<string, unknown>` is the boundary type the standards prescribe for untrusted JSON (narrowed by the caller).
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** The outcome config stored in a model's `Lineage` JSON (`outcomeConfig` or `OutcomeConfig`), or null. */
+function outcomeConfigFromLineage(lineage: string): OutcomeConfig | null {
+  // unknown: parsed JSON from the stored Lineage column; narrowed by isRecord below
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(lineage);
+  } catch (err) {
+    console.warn('ResolveOutcomeConfig: failed to parse Lineage JSON', err);
+    return null;
+  }
+  if (!isRecord(parsed)) return null;
+  const cfg = parsed.outcomeConfig ?? parsed.OutcomeConfig;
+  return isRecord(cfg) ? narrowOutcomeConfig(cfg) : null;
+}
+
+const BADGE_COLORS: ReadonlyArray<OutcomeBand['BadgeColor']> = ['green', 'amber', 'red', 'blue', 'gray'];
+
+function isBadgeColor(value: unknown): value is OutcomeBand['BadgeColor'] {
+  return typeof value === 'string' && (BADGE_COLORS as ReadonlyArray<string>).includes(value);
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+/** One stored band, or null when a required member is missing or the wrong type. */
+function narrowBand(raw: unknown): OutcomeBand | null {
+  if (!isRecord(raw)) return null;
+  const { Key, Label, Min, Max, BadgeColor } = raw;
+  if (typeof Key !== 'string' || typeof Label !== 'string' || typeof Min !== 'number' || typeof Max !== 'number' || !isBadgeColor(BadgeColor)) {
+    return null;
+  }
+  return { Key, Label, Min, Max, BadgeColor, Icon: optionalString(raw.Icon), Description: optionalString(raw.Description) };
+}
+
+/** A stored outcome config narrowed member by member; members of the wrong type are dropped (NormalizeOutcomeConfig defaults them). */
+function narrowOutcomeConfig(raw: Record<string, unknown>): OutcomeConfig {
+  const polarity = raw.Polarity === 'positive' || raw.Polarity === 'adverse' ? raw.Polarity : undefined;
+  const format = raw.Format === 'percentage' || raw.Format === 'currency' || raw.Format === 'number' ? raw.Format : undefined;
+  const bands = Array.isArray(raw.Bands) ? raw.Bands.map(narrowBand).filter((b): b is OutcomeBand => b !== null) : undefined;
+  const styles: Record<string, OutcomeStyle> = {};
+  if (isRecord(raw.OutcomeStyles)) {
+    for (const [name, style] of Object.entries(raw.OutcomeStyles)) {
+      if (isRecord(style) && isBadgeColor(style.BadgeColor)) {
+        styles[name] = { BadgeColor: style.BadgeColor, Icon: optionalString(style.Icon), DisplayLabel: optionalString(style.DisplayLabel) };
+      }
+    }
+  }
+  return {
+    ScoreLabel: optionalString(raw.ScoreLabel),
+    StatusLabel: optionalString(raw.StatusLabel),
+    Polarity: polarity,
+    Format: format,
+    Bands: bands,
+    OutcomeStyles: styles,
+  };
+}
+
+/**
+ * Resolves an effective OutcomeConfig from a model or pipeline, falling back to sensible
+ * domain defaults when no explicit configuration is provided. Inference from the target name matches whole words,
+ * checks adverse words before renewal words, and gives monetary bands only to regression models.
+ */
+export function ResolveOutcomeConfig(modelLike?: OutcomeConfigSource): OutcomeConfig {
   // 1. Direct explicit object passed in
   if (modelLike?.outcomeConfig && typeof modelLike.outcomeConfig === 'object') {
     return NormalizeOutcomeConfig(modelLike.outcomeConfig);
@@ -218,30 +323,15 @@ export function ResolveOutcomeConfig(modelLike?: {
 
   // 2. Parse from Lineage JSON if available
   if (modelLike?.Lineage && typeof modelLike.Lineage === 'string') {
-    try {
-      const parsed = JSON.parse(modelLike.Lineage) as Record<string, unknown>;
-      const cfg = (parsed.outcomeConfig ?? parsed.OutcomeConfig) as OutcomeConfig | undefined;
-      if (cfg && typeof cfg === 'object') {
-        return NormalizeOutcomeConfig(cfg);
-      }
-    } catch (err) {
-      console.warn('resolveOutcomeConfig: failed to parse Lineage JSON', err);
-    }
+    const cfg = outcomeConfigFromLineage(modelLike.Lineage);
+    if (cfg) return NormalizeOutcomeConfig(cfg);
   }
 
   // 3. Infer intelligent default based on target variable name and problem type
-  const target = (modelLike?.TargetVariable ?? '').toLowerCase();
-  const problemType = (modelLike?.ProblemType ?? '').toLowerCase();
+  const tokens = targetTokens(modelLike?.TargetVariable || '');
 
-  const isMonetary =
-    target.includes('ltv') ||
-    target.includes('revenue') ||
-    target.includes('spend') ||
-    target.includes('gross') ||
-    target.includes('balance') ||
-    target.includes('amount');
-
-  if (problemType === 'regression' || isMonetary) {
+  if (ProblemTypes.IsRegression(modelLike?.ProblemType)) {
+    const isMonetary = anyTokenMatches(tokens, MONETARY_TOKEN_PATTERNS);
     return {
       ScoreLabel: isMonetary ? 'Predicted Customer LTV' : 'Predicted Value',
       StatusLabel: isMonetary ? 'LTV Tier' : 'Value Tier',
@@ -252,12 +342,25 @@ export function ResolveOutcomeConfig(modelLike?: {
     };
   }
 
-  // Positive polarity: explicit renewal / retention models
-  const isRenewal =
-    target.includes('renew') ||
-    target.includes('retention');
+  // Adverse polarity first: churn, lapse, risk, late, escalation, fraud, default, or a negated outcome ("NonRenewal")
+  if (isAdverseTarget(tokens)) {
+    return {
+      ScoreLabel: 'Risk Score',
+      StatusLabel: 'Risk Level',
+      Polarity: 'adverse',
+      Format: 'percentage',
+      Bands: [...DEFAULT_ADVERSE_BANDS],
+      OutcomeStyles: {
+        Late: { BadgeColor: 'red', Icon: 'fa-circle-exclamation' },
+        OnTime: { BadgeColor: 'green', Icon: 'fa-check' },
+        Escalated: { BadgeColor: 'red', Icon: 'fa-triangle-exclamation' },
+        Normal: { BadgeColor: 'green', Icon: 'fa-check' },
+      },
+    };
+  }
 
-  if (isRenewal) {
+  // Positive polarity: renewal / retention models with no adverse word
+  if (anyTokenMatches(tokens, RENEWAL_TOKEN_PATTERNS)) {
     return {
       ScoreLabel: 'Renewal Probability',
       StatusLabel: 'Renewal Status',
@@ -274,32 +377,6 @@ export function ResolveOutcomeConfig(modelLike?: {
     };
   }
 
-  // Adverse polarity: explicit churn, lapse, risk, or default models
-  const isAdverse =
-    target.includes('churn') ||
-    target.includes('lapse') ||
-    target.includes('risk') ||
-    target.includes('late') ||
-    target.includes('escalat') ||
-    target.includes('fraud') ||
-    target.includes('default');
-
-  if (isAdverse) {
-    return {
-      ScoreLabel: 'Risk Score',
-      StatusLabel: 'Risk Level',
-      Polarity: 'adverse',
-      Format: 'percentage',
-      Bands: [...DEFAULT_ADVERSE_BANDS],
-      OutcomeStyles: {
-        Late: { BadgeColor: 'red', Icon: 'fa-circle-exclamation' },
-        OnTime: { BadgeColor: 'green', Icon: 'fa-check' },
-        Escalated: { BadgeColor: 'red', Icon: 'fa-triangle-exclamation' },
-        Normal: { BadgeColor: 'green', Icon: 'fa-check' },
-      },
-    };
-  }
-
   // Safe fallback: neutral config with no polarity claim and gray styling
   return {
     ScoreLabel: 'Prediction Score',
@@ -311,12 +388,7 @@ export function ResolveOutcomeConfig(modelLike?: {
 }
 
 /** @deprecated Use {@link ResolveOutcomeConfig}. */
-export function resolveOutcomeConfig(modelLike?: {
-  Lineage?: string | null;
-  TargetVariable?: string | null;
-  ProblemType?: string | null;
-  outcomeConfig?: OutcomeConfig | null;
-}): OutcomeConfig {
+export function resolveOutcomeConfig(modelLike?: OutcomeConfigSource): OutcomeConfig {
   return ResolveOutcomeConfig(modelLike);
 }
 
@@ -489,10 +561,10 @@ export function FormatPredictionScore(
     return '—';
   }
 
-  const pType = (problemType ?? '').toLowerCase();
+  const regression = ProblemTypes.IsRegression(problemType);
   const isCurrency =
     config?.Format === 'currency' ||
-    (pType === 'regression' &&
+    (regression &&
       (config?.ScoreLabel?.toLowerCase().includes('ltv') ||
         config?.ScoreLabel?.toLowerCase().includes('spend') ||
         config?.ScoreLabel?.toLowerCase().includes('revenue') ||
@@ -509,7 +581,7 @@ export function FormatPredictionScore(
 
   const isNumeric =
     config?.Format === 'number' ||
-    (pType === 'regression' && config?.Format !== 'percentage');
+    (regression && config?.Format !== 'percentage');
 
   if (isNumeric) {
     return score.toLocaleString('en-US', { maximumFractionDigits: 2 });
