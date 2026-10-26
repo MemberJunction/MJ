@@ -119,8 +119,8 @@ export interface ScheduleModelScoringOptions {
   timezone?: string;
   /** Server-side context user (required for data isolation + audit on the saved row). */
   contextUser?: UserInfo;
-  /** Metadata provider to create the entity object against (defaults to the global). */
-  provider?: IMetadataProvider;
+  /** The provider every read and the entity creation go through (no fallback to the global provider). */
+  provider: IMetadataProvider;
 }
 
 /**
@@ -190,7 +190,7 @@ export async function CreateScheduledModelScoring(
 ): Promise<ScheduledModelScoringResult> {
   validateOptions(opts);
 
-  const provider = opts.provider ?? Metadata.Provider;
+  const provider = opts.provider;
   const entityID = ResolveTargetEntityID(opts.targetEntityName, provider, HELPER_NAME);
   const cron = CadenceToCron(opts.cadence);
 

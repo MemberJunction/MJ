@@ -10,7 +10,6 @@
  */
 
 import {
-  Metadata,
   RunView,
   type BaseEntity,
   type UserInfo,
@@ -23,29 +22,24 @@ import { MLSidecarProvider } from '../sidecar-provider';
 import type { IEntityFactory, IRecordLoader, ISidecarTrainer } from './types';
 
 /**
- * `Metadata.GetEntityObject`-backed {@link IEntityFactory}. Optionally bound to a
- * specific provider for multi-provider correctness.
+ * Provider-bound {@link IEntityFactory}: every entity is created through the
+ * caller's provider, never the global `Metadata` default.
  */
 export class MetadataEntityFactory implements IEntityFactory {
   /**
-   * @param provider optional provider; when supplied it (and its `CurrentUser`)
-   *   is honored so multi-provider callers create entities on the RIGHT server.
-   *   When omitted the global default `Metadata` provider is used.
+   * @param provider the provider entities are created on (it and its `CurrentUser`
+   *   are honored so multi-provider callers create entities on the RIGHT server)
    */
-  constructor(private readonly provider?: IMetadataProvider) {}
+  constructor(private readonly provider: IMetadataProvider) {}
 
   /** @inheritdoc */
   public async getEntityObject<T extends BaseEntity>(entityName: string, contextUser?: UserInfo): Promise<T> {
-    if (this.provider) {
-      return this.provider.GetEntityObject<T>(entityName, contextUser ?? this.provider.CurrentUser);
-    }
-    const md = this.provider ?? new Metadata();
-    return md.GetEntityObject<T>(entityName, contextUser);
+    return this.provider.GetEntityObject<T>(entityName, contextUser || this.provider.CurrentUser);
   }
 }
 
 /**
- * `RunView`-backed {@link IRecordLoader}. Loads the pipeline as a full
+ * `RunView`-backed {@link IRecordLoader}; every read runs on the caller's provider. Loads the pipeline as a full
  * `entity_object` (it is read, not mutated) and computes the next version from a
  * narrow `simple` projection over `MJ: ML Models`.
  */
@@ -53,10 +47,10 @@ export class RunViewRecordLoader implements IRecordLoader {
   /** @inheritdoc */
   public async loadPipeline(
     pipelineId: string,
-    contextUser?: UserInfo,
-    provider?: IMetadataProvider,
+    contextUser: UserInfo,
+    provider: IMetadataProvider,
   ): Promise<MJMLTrainingPipelineEntity | null> {
-    const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+    const rv = RunView.FromMetadataProvider(provider);
     const result = await rv.RunView<MJMLTrainingPipelineEntity>(
       {
         EntityName: 'MJ: ML Training Pipelines',
@@ -75,10 +69,10 @@ export class RunViewRecordLoader implements IRecordLoader {
   /** @inheritdoc */
   public async nextModelVersion(
     pipelineId: string,
-    contextUser?: UserInfo,
-    provider?: IMetadataProvider,
+    contextUser: UserInfo,
+    provider: IMetadataProvider,
   ): Promise<number> {
-    const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+    const rv = RunView.FromMetadataProvider(provider);
     const result = await rv.RunView<{ Version: number }>(
       {
         EntityName: 'MJ: ML Models',
@@ -99,10 +93,10 @@ export class RunViewRecordLoader implements IRecordLoader {
   /** @inheritdoc */
   public async resolveAlgorithmDriverKey(
     algorithmId: string,
-    contextUser?: UserInfo,
-    provider?: IMetadataProvider,
+    contextUser: UserInfo,
+    provider: IMetadataProvider,
   ): Promise<string | null> {
-    const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+    const rv = RunView.FromMetadataProvider(provider);
     const result = await rv.RunView<{ DriverClass: string }>(
       {
         EntityName: 'MJ: ML Algorithms',

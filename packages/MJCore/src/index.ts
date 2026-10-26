@@ -32,6 +32,7 @@ export * from "./generic/recordChangeFieldSecurity";
 export * from "./generic/baseRemotableOperation";
 export * from "./generic/remoteOperationDispatch";
 export * from "./generic/entityInfo";
+export * from "./generic/alternateBaseViews";
 export * from "./generic/geoFields";
 export * from "./generic/extendedTypeValue";
 export * from "./generic/entityConfiguration";

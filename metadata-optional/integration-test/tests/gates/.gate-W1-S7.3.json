@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W1 -> S7.3",
+    "Description": "Gate G0.7 (owner PR 2, phase 0, dataset W1, criterion S7.3): ScoreRecordSet with write-back on a Draft and on an Archived W1-signal s42 model is refused with MODEL_NOT_SCORABLE and writes 0 rows, 2 of 2; with dryRun on a Validated model it writes 0 rows.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G0.7\",\"owner:PR2\",\"phase:0\",\"dataset:W1\",\"criterion:S7.3\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Draft and Archived models refused with MODEL_NOT_SCORABLE and 0 rows written (2 of 2); a dry run writes 0 rows."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w1-s7-3"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "98454AEB-8505-4D0D-8414-57D9FEDE0110"
+  }
+}

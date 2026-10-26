@@ -36,7 +36,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (458 classes)
+// @memberjunction/core-entities (459 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -256,6 +256,7 @@ import {
     MJEntityActionInvocationEntity,
     MJEntityActionInvocationTypeEntity,
     MJEntityActionParamEntity,
+    MJEntityAlternateBaseViewEntity,
     MJEntityCommunicationFieldEntity,
     MJEntityCommunicationMessageTypeEntity,
     MJEntityDocumentEntity,
@@ -966,6 +967,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJEntityActionInvocationEntity,
     MJEntityActionInvocationTypeEntity,
     MJEntityActionParamEntity,
+    MJEntityAlternateBaseViewEntity,
     MJEntityCommunicationFieldEntity,
     MJEntityCommunicationMessageTypeEntity,
     MJEntityDocumentEntity,
@@ -1134,11 +1136,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
     MJSearchScopeTestQueryEntity,
-    MJSignatureAccountEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSignatureAccountEntity,
     MJSignatureProviderEntity,
     MJSignatureRequestDocumentEntity,
     MJSignatureRequestEntity,
@@ -1338,11 +1340,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJRubricScaleLevelFormComponentExtended,
     MJRubricVersionFormComponentExtended,
     MJTemplateFormComponentExtended,
-    MJTestFormComponentExtended,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    MJTestFormComponentExtended,
     MJTestRubricFormComponentExtended,
     MJTestRunFeedbackFormComponentExtended,
     MJTestRunFormComponentExtended,
@@ -1388,7 +1390,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 631;
+export const CLASS_REGISTRATIONS_COUNT = 632;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

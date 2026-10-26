@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Model Development Agent - Main Prompt",
-      "Description": "System prompt for the Model Development Agent — the conversational Loop orchestrator that collaborates with a business user to build a strongly-typed ModelingPlanSpec, gates on approval, drives the deterministic experiment session, enforces the leakage warn/sign-off rule, and authors the ML Experiment Results artifact.",
+      "Description": "System prompt for the Model Development Agent — the conversational Loop orchestrator that collaborates with a business user to build a strongly-typed ModelingPlanSpec, gates on approval, hands the approved plan to the deterministic Pipeline Builder, enforces the leakage warn/sign-off rule, and authors the ML Experiment Results artifact.",
       "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
       "TemplateText": "@file:templates/model-development-agent/model-development-agent.template.md",
       "Status": "Active",
