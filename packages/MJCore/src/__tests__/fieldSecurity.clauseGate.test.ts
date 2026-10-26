@@ -167,8 +167,17 @@ function refusal(params: Partial<RunViewParams>, user: UserInfo = intern, platfo
 }
 
 /** A loaded saved view, as RunView receives it in `ViewEntity`. */
+/**
+ * A loaded saved view, shaped like a real `MJUserViewEntityExtended`: `WhereClause` and `EntityID`
+ * are columns read through `Get`, while `OrderByClause` is a computed property (built from the
+ * view's sort state) that `Get` knows nothing about.
+ */
 function savedView(values: Record<string, string>): BaseEntity {
-    return { Get: (name: string) => (name === 'EntityID' ? EMPLOYEES_ID : values[name] ?? null) } as unknown as BaseEntity;
+    const { OrderByClause, ...columns } = values;
+    return {
+        Get: (name: string) => (name === 'EntityID' ? EMPLOYEES_ID : columns[name] ?? null),
+        OrderByClause: OrderByClause ?? '',
+    } as unknown as BaseEntity;
 }
 
 describe('the gate reads SQL the way the database does', () => {

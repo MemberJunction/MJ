@@ -419,7 +419,8 @@ describe('Predicate validation (ExtraFilter / OrderBy)', () => {
 
     it("rejects a saved view's stored OrderByClause that sorts by column position", () => {
         const provider = setupProvider();
-        const view = { Get: (name: string) => (name === 'OrderByClause' ? '3 DESC' : null) };
+        // Like a real view: the sort is the computed OrderByClause property, not a column Get can read.
+        const view = { Get: (_name: string) => null, OrderByClause: '3 DESC' };
         expect(() => provider.assertPredicates(
             viewParams({ ViewEntity: view as unknown as RunViewParams['ViewEntity'] }),
             buildUser([INTERN_ROLE_ID])

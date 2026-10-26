@@ -243,7 +243,8 @@ describe('Field-Security Egress Compliance', () => {
             `  1. Route the values through ProjectEntityValuesForUser / ProjectEntityValueRowsForUser\n` +
             `     (@memberjunction/core) for the principal who receives them, then mark the line.\n` +
             `  2. If the object was built for that same principal (its width follows its user), or the path\n` +
-            `     is system-user-only, say so: \`// fls-guard: <reason>\` on the line or the line above.\n\n` +
+            `     is system-user-only, say so: \`// fls-guard: <reason>\` on a comment-only line in the\n` +
+            `     comment block directly above the flagged line. A marker trailing code does not count.\n\n` +
             `See guides/FIELD_LEVEL_SECURITY_GUIDE.md, "Building on field-level security".`
         );
     });

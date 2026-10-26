@@ -19,8 +19,8 @@ import {
     GuardedTransactionGroupRefusal,
     IsSystemUserID,
     PendingGuardedGroupWrite,
-    PendingGuardedGroupWriteFor,
-    RecordGuardedTransactionGroupWrite,
+    ReleaseGuardedTransactionGroupWrite,
+    ReserveGuardedTransactionGroupWrite,
     StoredRestrictingFieldIDsForRole,
     StoredRoleRemovalViolations,
 } from './systemUserGuardState';
@@ -217,23 +217,29 @@ export class MJUserRoleEntityServer extends MJUserRoleEntity {
         }
         // Guard B on the save path. Not only in Validate(): a ReplayOnly save skips Validate(), and
         // an Owner may replay — this check has no Owner exemption, so it must run either way.
-        const rejection = await this.systemUserSaveRejection();
-        if (rejection) {
-            return this.refuse(this.IsSaved ? 'update' : 'create', rejection);
+        let saved = false;
+        try {
+            const rejection = await this.systemUserSaveRejection();
+            if (rejection) {
+                return this.refuse(this.IsSaved ? 'update' : 'create', rejection);
+            }
+            saved = await super.Save(options);
+            return saved;
+        } finally {
+            this.settleGroupWrite(saved);
         }
-        const pending = this.takePendingGroupWrite();
-        const saved = await super.Save(options);
-        if (saved) {
-            RecordGuardedTransactionGroupWrite(pending);
-        }
-        return saved;
     }
 
-    /** The write guard B's group check passed, cleared so a later save cannot reuse it. */
-    private takePendingGroupWrite(): PendingGuardedGroupWrite | null {
+    /**
+     * Ends this write's hold on the group place guard B reserved: kept when the write enrolled,
+     * given back when it was refused, returned false or threw, so a retry is not counted twice.
+     */
+    private settleGroupWrite(enrolled: boolean): void {
         const pending = this.pendingGroupWrite;
         this.pendingGroupWrite = null;
-        return pending;
+        if (!enrolled) {
+            ReleaseGuardedTransactionGroupWrite(pending);
+        }
     }
 
     /**
@@ -376,28 +382,28 @@ export class MJUserRoleEntityServer extends MJUserRoleEntity {
 
         // Judged against the STORED pair: a delete removes the row by ID, whatever unsaved edits
         // this object carries.
-        const rejection = await this.systemUserDeleteRejection();
-        if (rejection) {
-            return this.refuse('delete', rejection);
+        let deleted = false;
+        try {
+            const rejection = await this.systemUserDeleteRejection();
+            if (rejection) {
+                return this.refuse('delete', rejection);
+            }
+            deleted = await super.Delete(options);
+            return deleted;
+        } finally {
+            this.settleGroupWrite(deleted);
         }
-
-        const pending = this.takePendingGroupWrite();
-        const deleted = await super.Delete(options);
-        if (deleted) {
-            RecordGuardedTransactionGroupWrite(pending);
-        }
-        return deleted;
     }
 
     /**
-     * Guard B's transaction-group rule for this write. When it passes, the write is held as pending
-     * and counted only once it enrols, so a write refused later, by any check, does not count.
+     * Guard B's transaction-group rule for this write. When it passes, the write's place in the
+     * group is reserved in the same step, so a second guarded write in flight at once sees it.
      */
     private groupRefusal(concernsSystemUser: boolean): string | null {
         this.pendingGroupWrite = null;
         const refusal = GuardedTransactionGroupRefusal(this.TransactionGroup, concernsSystemUser);
         if (!refusal) {
-            this.pendingGroupWrite = PendingGuardedGroupWriteFor(this.TransactionGroup, concernsSystemUser);
+            this.pendingGroupWrite = ReserveGuardedTransactionGroupWrite(this.TransactionGroup, concernsSystemUser);
         }
         return refusal;
     }

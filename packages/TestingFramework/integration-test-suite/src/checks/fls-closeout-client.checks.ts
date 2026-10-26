@@ -44,12 +44,12 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual, IntegrationCheckRegistry, LoadClientConfig, SkipCheck } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext, FlsClientFixture } from '@memberjunction/testing-integration';
 import {
-    SEEDED_FLS_ENTITY, SEED_FIXTURES_COMMAND, FLS_DENIER_ROLE, FLS_DENY_READ_FIELD, FLS_READER_DENIED_FIELD
+    SEEDED_FLS_ENTITY, FLS_DENIER_ROLE, FLS_DENY_READ_FIELD, FLS_READER_DENIED_FIELD
 } from '@memberjunction/testing-integration';
 import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJEmployeeEntity, MJEntityFieldPermissionEntity } from '@memberjunction/core-entities';
 import {
-    SetupFlsClientFixture, TeardownFlsClientFixture, ReplaceFieldRuleOverWire, WaitForWirePropagation,
+    SetupFlsClientFixture, TeardownFlsClientFixture, FlsClientFixtureSkipText, ReplaceFieldRuleOverWire, WaitForWirePropagation,
     FirstCompanyIdOverWire, MintFullAccessUserKey, DeleteMintedUserKeys
 } from './fls-client.checks';
 import type { FieldRuleAccess, MintedUserKeyIds } from './fls-client.checks';
@@ -163,7 +163,7 @@ function ready(ctx: IntegrationCheckContext, checkId: string): ReadyWire {
         Assert(false, `${checkId}: the wire fixture could not be provisioned: ${fx?.ProvisionError ?? state.ProvisionError}`);
     }
     if (!fx || !fx.Usable || !state.Markers) {
-        return skip(checkId, `${fx?.Reason ?? 'fixture not provisioned'}. Seed with \`${SEED_FIXTURES_COMMAND}\` and start MJAPI.`);
+        return skip(checkId, FlsClientFixtureSkipText(fx));
     }
     return { Fx: fx, Markers: state.Markers };
 }
@@ -236,19 +236,21 @@ function newEmployeeValues(companyID: string, label: string, extra: Record<strin
 
 // ─────────────────────────────────────────────────────────────────── REST
 
-/** The REST base URL: `MJAPI_REST_URL`, else the GraphQL endpoint's origin plus `MJAPI_BASE_PATH` and `/api/v1`. */
-function restBaseUrl(): string {
+/**
+ * The REST base URL: `MJAPI_REST_URL`, else the GraphQL endpoint's origin plus `/api/v1`. MJAPI
+ * mounts REST at that origin-absolute path even when its other routes sit under `MJAPI_BASE_PATH`,
+ * so the base path is deliberately not added.
+ */
+export function RestBaseUrl(): string {
     if (process.env.MJAPI_REST_URL) {
         return process.env.MJAPI_REST_URL.replace(/\/$/, '');
     }
-    const origin = new URL(LoadClientConfig().Url).origin;
-    const basePath = (process.env.MJAPI_BASE_PATH ?? '').replace(/\/$/, '');
-    return `${origin}${basePath}/api/v1`;
+    return `${new URL(LoadClientConfig().Url).origin}/api/v1`;
 }
 
 /** One REST call as the holder of `rawKey`; the body is parsed JSON when there is one. */
 async function rest(rawKey: string, method: 'GET' | 'POST' | 'PUT', path: string, body?: Record<string, unknown>): Promise<{ Status: number; Body: Record<string, unknown>; Headers: Headers }> {
-    const response = await fetch(`${state.RestBase ?? restBaseUrl()}${path}`, {
+    const response = await fetch(`${state.RestBase ?? RestBaseUrl()}${path}`, {
         method,
         headers: { 'Content-Type': 'application/json', 'x-api-key': rawKey },
         body: body ? JSON.stringify(body) : undefined,
@@ -294,11 +296,11 @@ async function probeRest(): Promise<void> {
             const probe = await rest(state.ReaderRawKey!, 'GET', '/users/current');
             const verdict = ClassifyRestProbe(probe.Status, probe.Headers);
             if (verdict === 'ready') {
-                state.RestBase = restBaseUrl();
+                state.RestBase = RestBaseUrl();
                 return;
             }
             if (verdict === 'not-enabled') {
-                state.RestSkipReason = `REST is not enabled on MJAPI (${restBaseUrl()} answered HTTP ${probe.Status}${probe.Status === 404 ? '' : ' from the GraphQL endpoint'}); set MJ_REST_API_ENABLED=true`;
+                state.RestSkipReason = `REST is not enabled on MJAPI (${RestBaseUrl()} answered HTTP ${probe.Status}${probe.Status === 404 ? '' : ' from the GraphQL endpoint'}); set MJ_REST_API_ENABLED=true`;
                 return;
             }
             last = `HTTP ${probe.Status}`;
@@ -306,7 +308,7 @@ async function probeRest(): Promise<void> {
             last = ErrorText(e);
         }
         if (Date.now() > deadline) {
-            state.RestSkipReason = `REST at ${restBaseUrl()} never accepted the minted key (${last})`;
+            state.RestSkipReason = `REST at ${RestBaseUrl()} never accepted the minted key (${last})`;
             return;
         }
         await sleep(REST_READY_POLL_MS);

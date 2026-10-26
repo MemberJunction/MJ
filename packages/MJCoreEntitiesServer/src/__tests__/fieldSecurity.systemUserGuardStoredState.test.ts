@@ -350,6 +350,72 @@ describe('transaction groups: two guarded writes that concern the system user ar
     });
 });
 
+describe('transaction groups: guarded writes saved in parallel', () => {
+    it('REGRESSION: refuses one of two parallel saves that assign R to the system user and add a Deny on R', async () => {
+        const group = {};
+        const assign = newAssignment('ur-r', SYSTEM_USER_ID, ROLE_R, group);
+        const deny = newRule('r-r', ROLE_R, DENY_READ, group);
+        const results = await Promise.all([assign.Save(), deny.Save()]);
+        expect([...results].sort()).toEqual([false, true]);
+        const refused = results[0] ? deny : assign;
+        expect(refusal(refused)).toContain('one at a time');
+    });
+
+    it('REGRESSION: refuses one of two parallel edits that turn both Allow rows on a field to No Access', async () => {
+        const group = {};
+        const first = storedRule('r-a', group);
+        const second = storedRule('r-b', group);
+        Object.assign(first, NEUTRAL);
+        Object.assign(second, NEUTRAL);
+        const results = await Promise.all([first.Save(), second.Save()]);
+        expect([...results].sort()).toEqual([false, true]);
+    });
+
+    it("REGRESSION: refuses one of two parallel removals of the system user's roles", async () => {
+        holdThirdNeutralRole();
+        const group = {};
+        const results = await Promise.all([storedAssignment('ur-a', group).Delete(), storedAssignment('ur-b', group).Delete()]);
+        expect([...results].sort()).toEqual([false, true]);
+    });
+
+    it('a guarded save that throws does not count against its retry in the same group', async () => {
+        const group = {};
+        const assign = newAssignment('ur-r', SYSTEM_USER_ID, ROLE_R, group);
+        const validate = vi.spyOn(assign, 'Validate').mockImplementationOnce(() => {
+            throw new Error('provider unavailable');
+        });
+        await expect(assign.Save()).rejects.toThrow('provider unavailable');
+        validate.mockRestore();
+
+        expect(await assign.Save()).toBe(true);
+    });
+
+    it('a guarded field-rule edit that throws does not count against its retry in the same group', async () => {
+        const group = {};
+        const edit = storedRule('r-a', group);
+        Object.assign(edit, NEUTRAL);
+        const validate = vi.spyOn(edit, 'Validate').mockImplementationOnce(() => {
+            throw new Error('provider unavailable');
+        });
+        await expect(edit.Save()).rejects.toThrow('provider unavailable');
+        validate.mockRestore();
+
+        expect(await edit.Save()).toBe(true);
+    });
+
+    it('a guarded delete that throws does not count against a later guarded write in the same group', async () => {
+        holdThirdNeutralRole();
+        const group = {};
+        const removal = storedAssignment('ur-a', group);
+        const base = Object.getPrototypeOf(MJUserRoleEntityServer.prototype) as { Delete(): Promise<boolean> };
+        const failingDelete = vi.spyOn(base, 'Delete').mockRejectedValueOnce(new Error('connection lost'));
+        await expect(removal.Delete()).rejects.toThrow('connection lost');
+        failingDelete.mockRestore();
+
+        expect(await newAssignment('ur-r2', SYSTEM_USER_ID, ROLE_R, group).Save()).toBe(true);
+    });
+});
+
 describe('the removal guard and the replay path', () => {
     it('REGRESSION: refuses removing the role that carries the only Allow while field security is switched off', async () => {
         setup({ enableFieldLevelSecurity: false });

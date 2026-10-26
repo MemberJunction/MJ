@@ -88,17 +88,25 @@ export class AIPromptExtension extends TemplateExtensionBase {
             callBack(new Error(AIPromptExtension.NoRenderUserMessage));
             return;
         }
-        const prompt = body();
-        const config = this.parseConfig(params);
-        // Nunjucks calls this synchronously and waits on the callback, so every path of the promise
-        // below must reach the callback: a rejection that skipped it would leave the render waiting forever.
-        this.runPrompt(prompt, config, contextUser).then(
-            (response) => callBack(null, response),
-            (e: unknown) => {
-                LogError(e);
-                callBack(e instanceof Error ? e : new Error(String(e)));
-            }
-        );
+        // Nunjucks calls this synchronously and waits on the callback, so every path below must reach the
+        // callback. Nunjucks renders the rest of the template inside `callBack(null, response)`, so an
+        // error there (a later `{{ undefinedFn() }}`) is caught by the `.catch` and fails the render too;
+        // a rejection that skipped the callback would leave the render waiting forever.
+        try {
+            const prompt = body();
+            const config = this.parseConfig(params);
+            this.runPrompt(prompt, config, contextUser)
+                .then((response) => callBack(null, response))
+                .catch((e: unknown) => AIPromptExtension.failRender(callBack, e));
+        } catch (e: unknown) {
+            AIPromptExtension.failRender(callBack, e);
+        }
+    }
+
+    /** Logs `e` and ends the render with it as the error. */
+    private static failRender(callBack: NunjucksCallback, e: unknown): void {
+        LogError(e);
+        callBack(e instanceof Error ? e : new Error(String(e)));
     }
 
     /** Why an `{% AIPrompt %}` tag fails in a render that has no user. */
@@ -116,7 +124,7 @@ export class AIPromptExtension extends TemplateExtensionBase {
             const value = params[key];
             const lowerKey = key.toLowerCase().replace(/\s+/g, '');
             if (lowerKey === 'aimodel') {
-                config.AIModel = value as string;
+                config.AIModel = AIPromptExtension.aiModelName(value);
             } else if (lowerKey === 'allowformatting') {
                 config.AllowFormatting = typeof value === 'string'
                     ? value.toLowerCase() === 'true' || value.toLowerCase() === 'yes'
@@ -124,6 +132,17 @@ export class AIPromptExtension extends TemplateExtensionBase {
             }
         }
         return config;
+    }
+
+    /** The tag's `AIModel` value as a model name; unset when it is null or undefined. Throws for any other non-string. */
+    private static aiModelName(value: unknown): string | undefined {
+        if (typeof value === 'string') {
+            return value;
+        }
+        if (value === undefined || value === null) {
+            return undefined;
+        }
+        throw new Error(`AIPrompt: the AIModel parameter must be a string naming a model, but it is a ${typeof value}.`);
     }
 
     /**

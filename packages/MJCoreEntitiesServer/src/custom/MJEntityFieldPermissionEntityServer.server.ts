@@ -29,8 +29,8 @@ import {
     GuardedTransactionGroupRefusal,
     LoadStoredSystemUser,
     PendingGuardedGroupWrite,
-    PendingGuardedGroupWriteFor,
-    RecordGuardedTransactionGroupWrite,
+    ReleaseGuardedTransactionGroupWrite,
+    ReserveGuardedTransactionGroupWrite,
     UserHoldsRole,
 } from './systemUserGuardState';
 
@@ -142,33 +142,39 @@ export class MJEntityFieldPermissionEntityServer extends MJEntityFieldPermission
      */
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
         this.normalizeAccessSpellings();
-        const rejection = await this.systemUserSaveRejection();
-        if (rejection) {
-            return this.refuse(rejection, 'save');
+        let saved = false;
+        try {
+            const rejection = await this.systemUserSaveRejection();
+            if (rejection) {
+                return this.refuse(rejection, 'save');
+            }
+            saved = await super.Save(options);
+            return saved;
+        } finally {
+            this.settleGroupWrite(saved);
         }
-        const pending = this.takePendingGroupWrite();
-        const saved = await super.Save(options);
-        if (saved) {
-            RecordGuardedTransactionGroupWrite(pending);
-        }
-        return saved;
-    }
-
-    /** The write the group check passed, cleared so a later save cannot reuse it. */
-    private takePendingGroupWrite(): PendingGuardedGroupWrite | null {
-        const pending = this.pendingGroupWrite;
-        this.pendingGroupWrite = null;
-        return pending;
     }
 
     /**
-     * The transaction-group rule for this write. When it passes, the write is held as pending and
-     * counted only once it enrols, so a write refused later, by any check, does not count.
+     * Ends this write's hold on its reserved group place: kept when the write enrolled, given back
+     * when it was refused, returned false or threw, so a retry is not counted as a second write.
+     */
+    private settleGroupWrite(enrolled: boolean): void {
+        const pending = this.pendingGroupWrite;
+        this.pendingGroupWrite = null;
+        if (!enrolled) {
+            ReleaseGuardedTransactionGroupWrite(pending);
+        }
+    }
+
+    /**
+     * The transaction-group rule for this write. When it passes, the write's place in the group is
+     * reserved in the same step, so a second guarded write in flight at once sees it.
      */
     private groupRefusal(concernsSystemUser: boolean): string | null {
         const refusal = GuardedTransactionGroupRefusal(this.TransactionGroup, concernsSystemUser);
         if (!refusal) {
-            this.pendingGroupWrite = PendingGuardedGroupWriteFor(this.TransactionGroup, concernsSystemUser);
+            this.pendingGroupWrite = ReserveGuardedTransactionGroupWrite(this.TransactionGroup, concernsSystemUser);
         }
         return refusal;
     }
@@ -222,16 +228,17 @@ export class MJEntityFieldPermissionEntityServer extends MJEntityFieldPermission
      * reconciler logs and skips such a refusal rather than aborting.
      */
     public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        const rejection = await this.systemUserDeleteRejection();
-        if (rejection) {
-            return this.refuse(rejection, 'delete');
+        let deleted = false;
+        try {
+            const rejection = await this.systemUserDeleteRejection();
+            if (rejection) {
+                return this.refuse(rejection, 'delete');
+            }
+            deleted = await super.Delete(options);
+            return deleted;
+        } finally {
+            this.settleGroupWrite(deleted);
         }
-        const pending = this.takePendingGroupWrite();
-        const deleted = await super.Delete(options);
-        if (deleted) {
-            RecordGuardedTransactionGroupWrite(pending);
-        }
-        return deleted;
     }
 
     /** The system-user checks for a delete, on the role set as stored in the database. */

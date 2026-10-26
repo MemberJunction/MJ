@@ -27,7 +27,10 @@ import { EntityFieldInfo, EntityInfo, FieldPermissionAccess } from './entityInfo
  * Primary keys, `__mj_` system columns and fields on the unrestrictable security/identity
  * entities are never restricted, matching runtime enforcement.
  *
- * Names are returned lowercased so callers match case-insensitively.
+ * Each restricted field is returned under both its `Name` and its `CodeName`, lowercased so
+ * callers match case-insensitively. Rows can be keyed either way: a view row carries the column's
+ * `Name`, while an explicit field list selects `[Name] AS [CodeName]` whenever the two differ (a
+ * name with a space or a symbol), so a set of names alone would let such a row's value through.
  */
 export function GetIndexRestrictedFieldNames(entity: EntityInfo | null | undefined): Set<string> {
     const restricted = new Set<string>();
@@ -38,7 +41,7 @@ export function GetIndexRestrictedFieldNames(entity: EntityInfo | null | undefin
         const readerRoleIds = getEntityReaderRoleIds(entity);
         for (const field of entity.Fields ?? []) {
             if (IsIndexRestrictedField(field, readerRoleIds)) {
-                restricted.add(field.Name.trim().toLowerCase());
+                addRestrictedField(restricted, field);
             }
         }
     }
@@ -60,9 +63,15 @@ function addFieldsRestrictedOnParent(entity: EntityInfo, restricted: Set<string>
     for (const field of entity.Fields ?? []) {
         const mirrored = parent.FieldByName(field.Name);
         if (mirrored && parentRestricted.has(mirrored.Name.trim().toLowerCase())) {
-            restricted.add(field.Name.trim().toLowerCase());
+            addRestrictedField(restricted, field);
         }
     }
+}
+
+/** Adds a field under both of the keys a row can carry it by: its `Name` and its `CodeName`. */
+function addRestrictedField(restricted: Set<string>, field: EntityFieldInfo): void {
+    restricted.add(field.Name.trim().toLowerCase());
+    restricted.add(field.CodeName.trim().toLowerCase());
 }
 
 /**

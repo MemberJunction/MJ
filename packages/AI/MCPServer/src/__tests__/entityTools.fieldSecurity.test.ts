@@ -87,7 +87,10 @@ function openTo(fieldId: string, roles: string[]): Record<string, string>[] {
     }));
 }
 
-/** `Employees`: `Salary` is HR-only; `Name` is open to both roles. */
+/**
+ * `Employees`: `Salary` is HR-only; `Name` is open to both roles; `Title` is open to HR, and
+ * interns may read and update it but not create it.
+ */
 function employeeEntity(): EntityInfo {
     const field = (id: string, seq: number, name: string, type: string, perms?: Record<string, string>[]) => ({
         ID: id, EntityID: ENTITY_ID, Sequence: seq, Name: name, Entity: 'Employees', Type: type,
@@ -101,6 +104,10 @@ function employeeEntity(): EntityInfo {
             { ...field('f-id', 1, 'ID', 'uniqueidentifier'), IsPrimaryKey: true, AllowsNull: false },
             field('f-name', 2, 'Name', 'nvarchar', openTo('f-name', [HR_ROLE_ID, INTERN_ROLE_ID])),
             field('f-salary', 3, 'Salary', 'money', openTo('f-salary', [HR_ROLE_ID])),
+            field('f-title', 4, 'Title', 'nvarchar', [
+                ...openTo('f-title', [HR_ROLE_ID]),
+                { ID: 'f-title-intern', EntityFieldID: 'f-title', RoleID: INTERN_ROLE_ID, ReadAccess: ALLOW, UpdateAccess: ALLOW, CreateAccess: FieldPermissionAccess.Deny },
+            ]),
         ],
     });
 }
@@ -184,6 +191,12 @@ describe('MCP entity tools: client input from a restricted caller', () => {
         expect(state.record!.SetMany).toHaveBeenCalledWith({ Name: 'x' }, true);
     });
 
+    it('a caller who is denied nothing is not refused an unknown key, which SetMany ignores, as REST does', async () => {
+        const out = JSON.parse(await run(AddEntityCreateTool, { Name: 'x', Bogus: 1 }, hr)) as ToolResponse;
+        expect(out.success).toBe(true);
+        expect(state.record!.SetMany).toHaveBeenCalledWith({ Name: 'x', Bogus: 1 }, true);
+    });
+
     it('a caller who is denied nothing may still send every field', async () => {
         const out = JSON.parse(await run(AddEntityCreateTool, { Name: 'x', Salary: 1 }, hr)) as ToolResponse;
         expect(out.success).toBe(true);
@@ -233,6 +246,12 @@ describe('MCP entity tools: restricted input sent through the MCP SDK', () => {
             expect(state.record!.SetMany).not.toHaveBeenCalled();
         });
     }
+
+    it('Create hands a field the caller may read but not create to the record, whose save leaves it out, as GraphQL and REST do', async () => {
+        const out = await callThroughSdk(AddEntityCreateTool, { Name: 'Ada', Title: 'Lead' }, intern);
+        expect(out.success).toBe(true);
+        expect(state.record!.SetMany).toHaveBeenCalledWith({ Name: 'Ada', Title: 'Lead' }, true);
+    });
 
     it('still applies permitted input sent through the SDK', async () => {
         const out = await callThroughSdk(AddEntityCreateTool, { Name: 'Ada' }, intern);

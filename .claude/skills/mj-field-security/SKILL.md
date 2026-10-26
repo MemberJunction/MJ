@@ -117,8 +117,9 @@ The `FieldSecurityEgressCompliance` scanner flags `.GetAll(`, `.GetDataObject(`,
 `.GetDataObjectJSON(`, `.To(`, `JSON.stringify(<entity or rows>)`, `.Fields.map(f => f.Value)` and
 view results written to an HTTP response, in MJServer (resolvers, REST, `generic`, agent sessions,
 realtime, services), the MCP and A2A servers, `AI/Agents`, and the Actions, Communication,
-Templates, SearchEngine and MessagingAdapters packages. For each flagged line, either project the value or mark the line (or the
-line above) with a short reason:
+Templates, SearchEngine and MessagingAdapters packages. For each flagged line, either project the
+value or explain why it is safe in a `// fls-guard: <short reason>` marker on a comment-only line
+in the comment block directly above the flagged line (a marker trailing code does not count):
 
 ```typescript
 // fls-guard: loaded as params.ContextUser; width follows its user

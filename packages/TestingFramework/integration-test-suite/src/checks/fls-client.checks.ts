@@ -31,7 +31,7 @@
 import { RunView, FieldSecurityDenialMessage, FieldSecurityWriteDenialMessage } from '@memberjunction/core';
 import type { IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual, GetGlobalObjectStore } from '@memberjunction/global';
-import { Assert, AssertEqual, IntegrationCheckRegistry, LoadClientConfig } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckRegistry, LoadClientConfig, SkipCheck } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext, FlsClientFixture } from '@memberjunction/testing-integration';
 import {
     SEEDED_FLS_ENTITY, SEED_FIXTURES_COMMAND,
@@ -56,16 +56,41 @@ const PROPAGATION_POLL_MS = 5_000;
 
 // ─────────────────────────────────────────────────────────────────── helpers
 
-function skipIfUnusable(fx: FlsClientFixture | undefined, checkId: string): fx is FlsClientFixture {
-    if (!fx || !fx.Usable) {
-        console.warn(
-            `  ⚠ ${checkId} SKIPPED — FLS client fixture not usable ` +
-            `(${fx?.ProvisionError ?? fx?.Reason ?? 'fixture not provisioned'}). ` +
-            `Seed with \`${SEED_FIXTURES_COMMAND}\` and start MJAPI.`
-        );
-        return false;
+/**
+ * Why the fixture refuses: the entity's field-security flag is on in freshly loaded metadata, so
+ * an administrator configured it and the bundle must not change it. Seeding does not help here.
+ */
+const CONFIGURED_ENTITY_REASON =
+    `'${SEEDED_FLS_ENTITY}' really has field-level security configured (the flag is on after a metadata refresh), ` +
+    'so the bundle refuses to change it. Turn the flag off on that entity to run these checks';
+
+/** The reason a check gives when it skips because the shared over-the-wire FLS fixture is unusable. */
+export function FlsClientFixtureSkipText(fx: FlsClientFixture | undefined): string {
+    const why = fx?.ProvisionError ?? fx?.Reason ?? 'fixture not provisioned';
+    if (fx?.Reason === CONFIGURED_ENTITY_REASON) {
+        return why;
     }
-    return true;
+    return `${why}. Seed with \`${SEED_FIXTURES_COMMAND}\` and start MJAPI.`;
+}
+
+/**
+ * Ends the running check as SKIPPED (never scored as a pass) when the fixture is not usable. A
+ * fixture whose seed was present but failed to provision fails the check instead.
+ */
+function requireUsable(fx: FlsClientFixture | undefined, checkId: string): FlsClientFixture {
+    if (fx?.ProvisionError) {
+        Assert(false, `${checkId}: the wire fixture could not be provisioned: ${fx.ProvisionError}`);
+    }
+    if (!fx || !fx.Usable) {
+        return skip(checkId, `FLS client fixture not usable (${FlsClientFixtureSkipText(fx)})`);
+    }
+    return fx;
+}
+
+/** Ends the running check as SKIPPED, logging why. */
+function skip(checkId: string, reason: string): never {
+    console.warn(`  ⚠ ${checkId} SKIPPED — ${reason}`);
+    return SkipCheck(`${checkId}: ${reason}`);
 }
 
 /** Resolve a seeded user's ID over the wire (system identity can read MJ: Users). */
@@ -410,13 +435,16 @@ export async function SetupFlsClientFixture(ctx: IntegrationCheckContext): Promi
     const fx: FlsClientFixture = { Usable: false, EntityName: SEEDED_FLS_ENTITY, CreatedKeyIds: [], CreatedScopeRuleIds: [], CreatedEmployeeIDs: [] };
     ctx.FlsClientFixture = fx;
 
+    // The client reloads metadata on a 15-45 s timer after a metadata write, so a flag an earlier
+    // bundle's teardown turned off can still read as on here. Reload before the guard reads it.
+    await ctx.Provider.Refresh();
     const entity = ctx.Provider.EntityByName(SEEDED_FLS_ENTITY);
     if (!entity) {
         fx.Reason = `'${SEEDED_FLS_ENTITY}' not in client metadata`;
         return;
     }
     if (entity.EnableFieldLevelSecurity) {
-        fx.Reason = `'${SEEDED_FLS_ENTITY}' already has field security enabled — refusing to mutate a configured entity`;
+        fx.Reason = CONFIGURED_ENTITY_REASON;
         return;
     }
     const readerId = await findUserId(ctx, SEEDED_FLS_READER_EMAIL);
@@ -543,6 +571,8 @@ export async function TeardownFlsClientFixture(ctx: IntegrationCheckContext): Pr
         if (entity && (await ent.Load(entity.ID))) {
             ent.EnableFieldLevelSecurity = false;
             await ent.Save();
+            // Reload now, so the next bundle's fixture guard does not read the flag as still on.
+            await ctx.Provider.Refresh();
         }
     } catch { /* best-effort */ }
     await DeleteMintedUserKeys(ctx, fx);
@@ -603,8 +633,7 @@ export async function FirstCompanyIdOverWire(ctx: IntegrationCheckContext, fx: F
  * wire). Provisioning already proved propagation (Setup polls); this pins the steady state.
  */
 export async function CheckFc1WireListStripsDeniedColumn(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsClientFixture, 'fls-enforcement-client.FC1')) return;
-    const fx = ctx.FlsClientFixture!;
+    const fx = requireUsable(ctx.FlsClientFixture, 'fls-enforcement-client.FC1');
     const rows = await ReadEmployeesOverWire(fx.ReaderProvider!);
     Assert(rows.length > 0, 'the wire fixture employee guarantees at least one row');
     for (const row of rows) {
@@ -625,8 +654,7 @@ export async function CheckFc1_WireListStripsDeniedColumn(ctx: IntegrationCheckC
  * entity LOAD over the wire arrives without the denied column's value.
  */
 export async function CheckFc2WireSingleRecordLoadStripped(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsClientFixture, 'fls-enforcement-client.FC2')) return;
-    const fx = ctx.FlsClientFixture!;
+    const fx = requireUsable(ctx.FlsClientFixture, 'fls-enforcement-client.FC2');
     const emp = await fx.ReaderProvider!.GetEntityObject<MJEmployeeEntity>(SEEDED_FLS_ENTITY);
     Assert(await emp.Load(fx.FixtureEmployeeID!), 'the restricted wire identity must be able to load the record');
     AssertEqual(emp.FirstName, 'WireFixture', 'allowed fields must arrive in the single-record payload');
@@ -650,8 +678,7 @@ export async function CheckFc2_WireSingleRecordLoadStripped(ctx: IntegrationChec
 
 /** FC3 — the unrestricted WIRE identity still receives the column, with its real value (3.2 over the wire). */
 export async function CheckFc3WireUnrestrictedUserUnaffected(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsClientFixture, 'fls-enforcement-client.FC3')) return;
-    const fx = ctx.FlsClientFixture!;
+    const fx = requireUsable(ctx.FlsClientFixture, 'fls-enforcement-client.FC3');
     const rows = await ReadEmployeesOverWire(fx.WriterProvider!);
     const fixtureRow = rows.find(r => UUIDsEqual(String(r.ID), fx.FixtureEmployeeID!));
     Assert(fixtureRow != null, 'fixture employee visible to the unrestricted wire identity');
@@ -667,8 +694,7 @@ export async function CheckFc3_WireUnrestrictedUserUnaffected(ctx: IntegrationCh
 
 /** FC4 — a caller-authored predicate on a denied field is rejected over the wire with the ambiguous message (3.4). */
 export async function CheckFc4WirePredicateRejected(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsClientFixture, 'fls-enforcement-client.FC4')) return;
-    const fx = ctx.FlsClientFixture!;
+    const fx = requireUsable(ctx.FlsClientFixture, 'fls-enforcement-client.FC4');
     let succeeded = false;
     let message = '';
     try {
@@ -706,11 +732,9 @@ export async function CheckFc4_WirePredicateRejected(ctx: IntegrationCheckContex
  * read-only identity is refused by the entity gate long before FLS is consulted.
  */
 export async function CheckFc5WireCreateSuppressesDeniedField(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsClientFixture, 'fls-enforcement-client.FC5')) return;
-    const fx = ctx.FlsClientFixture!;
+    const fx = requireUsable(ctx.FlsClientFixture, 'fls-enforcement-client.FC5');
     if (!fx.MultiProvider) {
-        console.warn('  ⚠ fls-enforcement-client.FC5 SKIPPED — multi-role wire identity not provisioned');
-        return;
+        return skip('fls-enforcement-client.FC5', 'multi-role wire identity not provisioned');
     }
 
     const emp = await fx.MultiProvider.GetEntityObject<MJEmployeeEntity>(SEEDED_FLS_ENTITY);
@@ -754,11 +778,9 @@ export async function CheckFc5_WireCreateSuppressesDeniedField(ctx: IntegrationC
  * the ambiguous wording here would pin the wrong contract.
  */
 export async function CheckFc6WireUpdateOfWriteDeniedFieldRejected(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsClientFixture, 'fls-enforcement-client.FC6')) return;
-    const fx = ctx.FlsClientFixture!;
+    const fx = requireUsable(ctx.FlsClientFixture, 'fls-enforcement-client.FC6');
     if (!fx.MultiProvider || !fx.FixtureEmployeeID) {
-        console.warn('  ⚠ fls-enforcement-client.FC6 SKIPPED — multi-role wire identity or fixture row not provisioned');
-        return;
+        return skip('fls-enforcement-client.FC6', 'multi-role wire identity or fixture row not provisioned');
     }
 
     const emp = await fx.MultiProvider.GetEntityObject<MJEmployeeEntity>(SEEDED_FLS_ENTITY);

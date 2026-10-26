@@ -15,7 +15,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { type EntityInfo, GetIndexRestrictedFieldNames, type IMetadataProvider, LogError, LogStatus, Metadata, RunQuery, RunView } from '@memberjunction/core';
+import { type EntityInfo, GetIndexRestrictedFieldNames, type IMetadataProvider, LogError, LogStatus, Metadata, OmitDeniedFieldKeys, RunQuery, RunView } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual, Canonicalize, ComputeContentHashAsync, EscapeSQLString, ResolveMappingRef, ResolveValueMapping, SafeJSONParse } from '@memberjunction/global';
 import { KnowledgeHubMetadataEngine, type MJFeatureValueCacheEntity, type MJFeaturePipelineTypeEntity, type MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -2054,8 +2054,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         const mappingToUse = this.inputMapping ?? this.spec?.Context?.InputMapping;
 
         if (!mappingToUse) {
-            const fieldsListed = (this.spec?.Context?.Fields?.length ?? 0) > 0;
-            promptData = { record: fieldsListed ? recordData : this.withoutIndexRestrictedFields(recordData, record, ctx) };
+            promptData = { record: this.contextFieldsListed ? recordData : this.withoutIndexRestrictedFields(recordData, record, ctx) };
         } else {
             const mapped = ResolveValueMapping(mappingToUse, { record: recordData });
             promptData = mapped && typeof mapped === 'object' ? (mapped as Record<string, unknown>) : { record: recordData };
@@ -2072,7 +2071,8 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
                     const parser = this.CreateContextDocumentParser(ctx.Provider);
                     const templateText = await parser.resolveDocumentTemplateText(doc, ctx.ContextUser);
                     if (templateText && templateText.trim().length > 0) {
-                        const rendered = await parser.Parse(templateText, record.EntityID, recordData, ctx.ContextUser);
+                        const documentRecord = this.contextDocumentRecord(recordData, record, ctx);
+                        const rendered = await parser.Parse(templateText, record.EntityID, documentRecord, ctx.ContextUser);
                         promptData.context = rendered;
                         promptData.RenderedContext = rendered;
                         promptData.document = rendered;
@@ -2154,6 +2154,26 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             return recordData;
         }
         return Object.fromEntries(Object.entries(recordData).filter(([key]) => !restricted.has(key.trim().toLowerCase())));
+    }
+
+    /** Whether the spec's `Context.Fields` names the record fields the prompt sees. */
+    private get contextFieldsListed(): boolean {
+        return (this.spec?.Context?.Fields?.length ?? 0) > 0;
+    }
+
+    /**
+     * The record values the `Context.EntityDocumentID` document renders from. The default mapping's
+     * rule applies ({@link withoutIndexRestrictedFields}, unless `Context.Fields` names the fields),
+     * and the fields the run user may not read are dropped as well, so the rendered context never
+     * holds a value the prompt's `record` leaves out.
+     */
+    private contextDocumentRecord(recordData: Record<string, unknown>, record: RecordRef, ctx: RecordProcessorContext): Record<string, unknown> {
+        const values = this.contextFieldsListed ? recordData : this.withoutIndexRestrictedFields(recordData, record, ctx);
+        const entity = this.recordEntityInfo(record, ctx);
+        if (!entity?.FieldLevelSecurityApplies || !ctx.ContextUser) {
+            return values;
+        }
+        return OmitDeniedFieldKeys(values, entity.GetDeniedReadFields(ctx.ContextUser));
     }
 
     /** The record's entity: from a loaded BaseEntity, else from the run's (or the global) metadata provider. */

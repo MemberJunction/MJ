@@ -60,5 +60,6 @@ checklist, and the `mj-field-security` skill walks through it with tests.
 response, in MJServer (resolvers, REST, `generic`, agent sessions, realtime, services), the MCP and
 A2A servers, `AI/Agents`, and the Actions, Communication, Templates, SearchEngine and
 MessagingAdapters packages.
-Project the value, or mark the line (or the line above) with `// fls-guard: <short reason>` saying
-why it is safe, for example `loaded as the caller; width follows its user`.
+Project the value, or put `// fls-guard: <short reason>` saying why it is safe, for example
+`loaded as the caller; width follows its user`, on a comment-only line in the comment block
+directly above the flagged line. A marker trailing code does not count.

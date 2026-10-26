@@ -8,6 +8,7 @@ import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testin
 import { FlsCloseoutChecks } from '../checks/fls-closeout.checks';
 import { FlsCloseoutPendingChecks } from '../checks/fls-closeout-pending.checks';
 import { FlsCloseoutClientChecks } from '../checks/fls-closeout-client.checks';
+import { FlsClientChecks } from '../checks/fls-client.checks';
 
 /** A context with no FLS fixture provisioned: what a run against an unseeded database sees. */
 const unseeded = {} as IntegrationCheckContext;
@@ -21,11 +22,12 @@ async function outcomeOf(check: NamedCheck): Promise<'passed' | 'skipped' | 'fai
     }
 }
 
-describe('FLS close-out bundles without their fixture', () => {
+describe('FLS bundles without their fixture', () => {
     const bundles: Array<[string, NamedCheck[]]> = [
         ['fls-closeout', FlsCloseoutChecks],
         ['fls-closeout-pending', FlsCloseoutPendingChecks],
         ['fls-closeout-client', FlsCloseoutClientChecks],
+        ['fls-enforcement-client', FlsClientChecks],
     ];
     for (const [name, checks] of bundles) {
         it(`${name}: every check reports SKIPPED, none passes`, async () => {

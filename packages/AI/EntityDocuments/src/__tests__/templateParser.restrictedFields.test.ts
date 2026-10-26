@@ -30,6 +30,7 @@ function reviewField(name: string, hrOnly: boolean): Record<string, unknown> {
   const roles = hrOnly ? [HR_ROLE] : [HR_ROLE, STAFF_ROLE];
   return {
     Name: name,
+    CodeName: name,
     IsUnrestrictableField: false,
     IsOnUnrestrictableEntity: false,
     FieldPermissions: roles.map((RoleID) => ({ RoleID, ReadAccess: 'Allow' })),
@@ -37,10 +38,10 @@ function reviewField(name: string, hrOnly: boolean): Record<string, unknown> {
 }
 
 /**
- * The related entity "Reviews": `ManagerNotes` is readable by HR only. `deniedForUser` is what the
- * render user is denied, standing in for `GetDeniedReadFields`.
+ * The related entity "Reviews": the `hrOnly` fields are readable by HR only. `deniedForUser` is what
+ * the render user is denied, standing in for `GetDeniedReadFields`.
  */
-function reviewsEntity(deniedForUser: string[]): Record<string, unknown> {
+function reviewsEntity(deniedForUser: string[], hrOnly: string[]): Record<string, unknown> {
   return {
     ID: CHILD_ENTITY_ID,
     Name: 'Reviews',
@@ -53,7 +54,7 @@ function reviewsEntity(deniedForUser: string[]): Record<string, unknown> {
       { RoleID: HR_ROLE, CanRead: true, IsDeny: false },
       { RoleID: STAFF_ROLE, CanRead: true, IsDeny: false },
     ],
-    Fields: [reviewField('ID', false), reviewField('EmployeeID', false), reviewField('Title', false), reviewField('ManagerNotes', true)],
+    Fields: ['ID', 'EmployeeID', 'Title', 'ManagerNotes'].map((name) => reviewField(name, hrOnly.includes(name))),
     GetDeniedReadFields: () => new Set(deniedForUser.map((n) => n.toLowerCase())),
   };
 }
@@ -61,6 +62,7 @@ function reviewsEntity(deniedForUser: string[]): Record<string, unknown> {
 class RestrictedRelationshipParser extends EntityDocumentTemplateParser {
   public RelatedRows: Array<Record<string, unknown>> = [];
   public DeniedForUser: string[] = [];
+  public HrOnlyFields: string[] = ['ManagerNotes'];
   public ChildDocumentText = '';
 
   protected override get ProviderToUse(): IMetadataProvider {
@@ -73,7 +75,7 @@ class RestrictedRelationshipParser extends EntityDocumentTemplateParser {
           PrimaryKeys: [{ Name: 'ID' }],
           RelatedEntities: [{ RelatedEntity: 'Reviews', RelatedEntityID: CHILD_ENTITY_ID, RelatedEntityJoinField: 'EmployeeID' }],
         },
-        reviewsEntity(self.DeniedForUser),
+        reviewsEntity(self.DeniedForUser, self.HrOnlyFields),
       ],
       GetEntityObject: async () => ({
         InnerLoad: async () => true,
@@ -126,6 +128,29 @@ describe('Relationship() keeps restricted related fields out of the document', (
     const rendered = await parser.Rel({ ID: 'hr-admin' } as UserInfo, 'Review Doc');
 
     expect(rendered).toContain('Review Q3 Notes  For emp-1');
+    expect(rendered).not.toContain('PIP-CONFIDENTIAL');
+  });
+
+  it('drops a field only the render user is denied, which every reader role may otherwise see', async () => {
+    const parser = new RestrictedRelationshipParser();
+    parser.RelatedRows = [{ ...REVIEW_ROW }];
+    parser.DeniedForUser = ['Title'];
+
+    const rendered = await parser.Rel({ ID: 'contractor' } as UserInfo, '');
+
+    expect(rendered).toContain('emp-1');
+    expect(rendered).not.toContain('Q3');
+  });
+
+  it('keeps the join field even when a reader role may not see it, since it holds the parent key', async () => {
+    const parser = new RestrictedRelationshipParser();
+    parser.RelatedRows = [{ ...REVIEW_ROW }];
+    parser.HrOnlyFields = ['ManagerNotes', 'EmployeeID'];
+    parser.ChildDocumentText = 'Review ${Title} For ${EmployeeID} Notes ${ManagerNotes}';
+
+    const rendered = await parser.Rel({ ID: 'hr-admin' } as UserInfo, 'Review Doc');
+
+    expect(rendered).toContain('Review Q3 For emp-1 Notes ');
     expect(rendered).not.toContain('PIP-CONFIDENTIAL');
   });
 
@@ -186,6 +211,29 @@ describe('EntityDocumentTemplateParserBase placeholder cache follows the record 
     expect(after).toBe('Name New');
   });
 
+  it("does not serve a child's parent value resolved from a wider parent record", async () => {
+    const parser = new FieldParser();
+    const user = { ID: 'user-a' } as UserInfo;
+    const template = 'Review ${Title} By ${__Parent.Salary}';
+
+    const wide = await parser.Parse(template, ENTITY_ID, { ID: 'r1', Title: 'Q3', __Parent: { ID: 'e1', Salary: 250000 } }, user);
+    const stripped = await parser.Parse(template, ENTITY_ID, { ID: 'r1', Title: 'Q3', __Parent: { ID: 'e1' } }, user);
+
+    expect(wide).toBe('Review Q3 By 250000');
+    expect(stripped).toBe('Review Q3 By ');
+  });
+
+  it('does not let a string value that spells out another field collide with a record holding that field', async () => {
+    const parser = new FieldParser();
+    const user = { ID: 'user-a' } as UserInfo;
+    const real = { ID: '1', A: 'x', B: 'SECRET' };
+    const crafted = { ID: '1', A: 'x,"B"=string:SECRET' };
+
+    expect(EntityDocumentTemplateParserBase.HashRecordValues(crafted)).not.toBe(EntityDocumentTemplateParserBase.HashRecordValues(real));
+    await parser.Parse('Value ${B}', ENTITY_ID, real, user);
+    expect(await parser.Parse('Value ${B}', ENTITY_ID, crafted, user)).toBe('Value ');
+  });
+
   it('still reuses a placeholder for the same user and the same record values', async () => {
     const parser = new FieldParser();
     const user = { ID: 'user-a' } as UserInfo;
@@ -194,6 +242,46 @@ describe('EntityDocumentTemplateParserBase placeholder cache follows the record 
     await parser.Parse('Name ${Name}', ENTITY_ID, { Name: 'Same', ID: '1' }, user);
 
     expect(parser.Evaluations).toBe(1);
+  });
+});
+
+/** Exposes the cache's protected read and write so the bound can be filled without rendering. */
+class CacheProbe extends EntityDocumentTemplateParserBase {
+  public static Put(key: string, value: string): void {
+    EntityDocumentTemplateParserBase.setCachedPlaceholder(key, value);
+  }
+  public static Take(key: string): string | undefined {
+    return EntityDocumentTemplateParserBase.getCachedPlaceholder(key);
+  }
+}
+
+describe('EntityDocumentTemplateParserBase placeholder cache is bounded', () => {
+  const max = EntityDocumentTemplateParserBase.MaxCachedPlaceholders;
+
+  beforeEach(() => {
+    EntityDocumentTemplateParserBase.ClearCache();
+  });
+
+  it('never holds more than the cap, however many record versions are parsed', async () => {
+    const parser = new FieldParser();
+    const user = { ID: 'user-a' } as UserInfo;
+    for (let version = 0; version <= max; version++) {
+      await parser.Parse('Name ${Name}', ENTITY_ID, { ID: '1', Name: `v${version}` }, user);
+    }
+
+    expect(EntityDocumentTemplateParserBase.CachedPlaceholderCount).toBe(max);
+  });
+
+  it('evicts the least recently used entry, keeping one that was read since it was added', () => {
+    CacheProbe.Put('first', '1');
+    CacheProbe.Put('second', '2');
+    CacheProbe.Take('first');
+    for (let i = 0; i < max - 1; i++) {
+      CacheProbe.Put(`filler-${i}`, 'f');
+    }
+
+    expect(CacheProbe.Take('first')).toBe('1');
+    expect(CacheProbe.Take('second')).toBeUndefined();
   });
 });
 

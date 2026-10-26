@@ -296,13 +296,13 @@ export async function CheckPq4RoleListGrantBypasses(ctx: IntegrationCheckContext
 
 /** The 'fls-closeout-pending' bundle (server transport; cache segmentation and saved-query field security). */
 export const FlsCloseoutPendingChecks: NamedCheck[] = [
-    { Id: `${BUNDLE}.PC1`, Name: 'PC1 (pending cache segmentation): a restricted user\'s cold miss does not narrow the result an unrestricted user then gets', Fn: CheckPc1RestrictedMissDoesNotNarrow },
-    { Id: `${BUNDLE}.PC2`, Name: 'PC2 (pending cache segmentation): a restricted user is never served an unrestricted user\'s slot — the read writes its own segment and carries no denied value', Fn: CheckPc2RestrictedNeverServedWide },
-    { Id: `${BUNDLE}.PC3`, Name: 'PC3 (pending cache segmentation): a search matching a row only through a denied column returns it to the unrestricted user and never to the restricted one', Fn: CheckPc3SearchRowSetIsolated },
-    { Id: `${BUNDLE}.PQ1`, Name: 'PQ1 (pending RunQuery FLS): a saved query selecting a denied column is refused for the restricted caller and runs for the unrestricted one', Fn: CheckPq1QuerySelectingDeniedRefused },
-    { Id: `${BUNDLE}.PQ2`, Name: 'PQ2 (pending RunQuery FLS): a saved query filtering on a denied column is refused for the restricted caller', Fn: CheckPq2QueryFilteringOnDeniedRefused },
-    { Id: `${BUNDLE}.PQ3`, Name: 'PQ3 (pending RunQuery FLS): a saved query reading whole rows (SELECT *) fails closed for the restricted caller', Fn: CheckPq3QueryWholeRowRefused },
-    { Id: `${BUNDLE}.PQ4`, Name: 'PQ4 (pending RunQuery FLS): a role-list grant that includes the restricted caller\'s role lets the query run (role-list grants bypass FLS by design)', Fn: CheckPq4RoleListGrantBypasses },
+    { Id: `${BUNDLE}.PC1`, Name: 'PC1 (cache segmentation): a restricted user\'s cold miss does not narrow the result an unrestricted user then gets', Fn: CheckPc1RestrictedMissDoesNotNarrow },
+    { Id: `${BUNDLE}.PC2`, Name: 'PC2 (cache segmentation): a restricted user is never served an unrestricted user\'s slot — the read writes its own segment and carries no denied value', Fn: CheckPc2RestrictedNeverServedWide },
+    { Id: `${BUNDLE}.PC3`, Name: 'PC3 (cache segmentation): a search matching a row only through a denied column returns it to the unrestricted user and never to the restricted one', Fn: CheckPc3SearchRowSetIsolated },
+    { Id: `${BUNDLE}.PQ1`, Name: 'PQ1 (RunQuery FLS): a saved query selecting a denied column is refused for the restricted caller and runs for the unrestricted one', Fn: CheckPq1QuerySelectingDeniedRefused },
+    { Id: `${BUNDLE}.PQ2`, Name: 'PQ2 (RunQuery FLS): a saved query filtering on a denied column is refused for the restricted caller', Fn: CheckPq2QueryFilteringOnDeniedRefused },
+    { Id: `${BUNDLE}.PQ3`, Name: 'PQ3 (RunQuery FLS): a saved query reading whole rows (SELECT *) fails closed for the restricted caller', Fn: CheckPq3QueryWholeRowRefused },
+    { Id: `${BUNDLE}.PQ4`, Name: 'PQ4 (RunQuery FLS): a role-list grant that includes the restricted caller\'s role lets the query run (role-list grants bypass FLS by design)', Fn: CheckPq4RoleListGrantBypasses },
 ];
 
 for (const check of FlsCloseoutPendingChecks) {

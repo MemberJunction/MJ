@@ -23,7 +23,9 @@ import { ActionParam } from "./ActionEngine-Base";
  *
  * Two kinds of value are projected:
  *
- * 1. **Entity objects** (`BaseEntity`, at any depth) become their field values
+ * 1. **Entity objects** (`BaseEntity`, at any depth up to
+ *    {@link ACTION_PARAM_PROJECTION_MAX_DEPTH}; one nested deeper is returned
+ *    untouched, like every deeper value) become their field values
  *    projected against their OWN entity for the given user, whatever user the
  *    object was loaded for — but only when the user may read that entity at all.
  *    An object of an entity the user cannot read is never turned into values;

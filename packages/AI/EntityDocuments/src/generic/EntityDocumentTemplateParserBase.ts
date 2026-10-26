@@ -8,8 +8,19 @@ import { TemplateEngineServer } from '@memberjunction/templates';
  * Use EntityDocumentTemplateParser or a subclass thereof.
  */
 export abstract class EntityDocumentTemplateParserBase {
+  /**
+   * The most resolved placeholders kept at once. Every record version adds entries (the key includes a
+   * hash of the record values), so the least recently used entry is evicted once the cache is full.
+   */
+  public static readonly MaxCachedPlaceholders = 10_000;
+
   public static ClearCache(): void {
-    EntityDocumentTemplateParserBase.__cache = {};
+    EntityDocumentTemplateParserBase.__cache.clear();
+  }
+
+  /** The number of resolved placeholders currently cached. */
+  public static get CachedPlaceholderCount(): number {
+    return EntityDocumentTemplateParserBase.__cache.size;
   }
 
   /**
@@ -40,9 +51,32 @@ export abstract class EntityDocumentTemplateParserBase {
     return createHash('sha256').update(stableSerialize(EntityRecord, new WeakSet<object>())).digest('hex');
   }
 
-  protected static __cache: Record<string, string> = {};
-  protected static get _cache(): Record<string, string> {
-    return EntityDocumentTemplateParserBase.__cache;
+  /** Resolved placeholders by cache key, in least-recently-used-first order. */
+  protected static __cache: Map<string, string> = new Map<string, string>();
+
+  /** Returns a cached placeholder value and marks it most recently used, or undefined on a miss. */
+  protected static getCachedPlaceholder(cacheKey: string): string | undefined {
+    const cache = EntityDocumentTemplateParserBase.__cache;
+    const value = cache.get(cacheKey);
+    if (value !== undefined) {
+      cache.delete(cacheKey);
+      cache.set(cacheKey, value);
+    }
+    return value;
+  }
+
+  /** Caches a placeholder value, evicting the least recently used entries beyond {@link MaxCachedPlaceholders}. */
+  protected static setCachedPlaceholder(cacheKey: string, value: string): void {
+    const cache = EntityDocumentTemplateParserBase.__cache;
+    cache.delete(cacheKey);
+    cache.set(cacheKey, value);
+    while (cache.size > EntityDocumentTemplateParserBase.MaxCachedPlaceholders) {
+      const oldest = cache.keys().next().value;
+      if (oldest === undefined) {
+        break;
+      }
+      cache.delete(oldest);
+    }
   }
 
   /** Optional provider override; falls back to Metadata.Provider when not set. */
@@ -113,19 +147,13 @@ export abstract class EntityDocumentTemplateParserBase {
         return { old: match[0], new: await this.evalSingleArgument(content, EntityID, EntityRecord, ContextUser) };
       }
 
-      if (!EntityDocumentTemplateParserBase._cache[cacheKey]) {
-        EntityDocumentTemplateParserBase._cache[cacheKey] = await this.evalSingleArgument(
-          content,
-          EntityID,
-          EntityRecord,
-          ContextUser
-        );
+      let resolved = EntityDocumentTemplateParserBase.getCachedPlaceholder(cacheKey);
+      if (resolved === undefined) {
+        resolved = await this.evalSingleArgument(content, EntityID, EntityRecord, ContextUser);
+        EntityDocumentTemplateParserBase.setCachedPlaceholder(cacheKey, resolved);
       }
 
-      return {
-        old: match[0],
-        new: EntityDocumentTemplateParserBase._cache[cacheKey],
-      };
+      return { old: match[0], new: resolved };
     });
 
     const resolvedReplacements = await Promise.all(replacements);
@@ -195,9 +223,13 @@ export abstract class EntityDocumentTemplateParserBase {
 
 /**
  * Serializes a value with object keys sorted, for {@link EntityDocumentTemplateParserBase.HashRecordValues}.
+ * Strings are JSON-quoted, so no string value can spell out the separators of another record shape.
  * A value already being serialized higher up (a cycle) is written as a marker instead of recursing.
  */
 function stableSerialize(value: unknown, seen: WeakSet<object>): string {
+  if (typeof value === 'string') {
+    return `string:${JSON.stringify(value)}`;
+  }
   if (value === null || typeof value !== 'object') {
     return typeof value === 'undefined' ? 'u' : `${typeof value}:${String(value)}`;
   }

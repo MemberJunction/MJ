@@ -2607,6 +2607,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 // normal SQL path that applies them runs below this early return — so fold them in
                 // here, else a UserView over an external entity silently returns unfiltered rows.
                 const externalParams = await this.mergeExternalViewParams(params, viewEntity, user);
+                this.assertExternalClausesRespectFieldSecurity(entityInfo, externalParams, user);
                 const externalRouter = this.resolveExternalReadRouterOrThrow(`Entity '${entityInfo.Name}'`);
                 const externalResult = await externalRouter.RunViewExternal<T>(entityInfo, externalParams, user, this);
                 // Apply the same row post-processing MJ-DB reads get (field decryption + datetime
@@ -2615,7 +2616,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     // Generic-erasure boundary: PostProcessRows operates on Record<string,unknown>[]
                     // but Results is typed T[]; the double-cast bridges that erasure (not a lazy `any`).
                     const rows = externalResult.Results as unknown as Record<string, unknown>[];
-                    externalResult.Results = (await this.PostProcessRows(rows, entityInfo, user)) as unknown as T[];
+                    const processed = (await this.PostProcessRows(rows, entityInfo, user)) as unknown as T[];
+                    externalResult.Results = this.projectExternalRowsForCaller(processed, entityInfo, externalParams, user);
                 }
                 return externalResult;
             }
@@ -4653,6 +4655,27 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * Field-level security on the clauses an external-data-source read hands its driver: the
+     * caller's own, merged with a saved view's stored ones. The same gates the SQL path applies to
+     * the clauses it runs; the external dispatch returns before that path, and the driver runs
+     * the clauses remotely, where nothing else checks them.
+     */
+    protected assertExternalClausesRespectFieldSecurity(entityInfo: EntityInfo, params: RunViewParams, user: UserInfo): void {
+        this.AssertClausesRespectFieldSecurityForEntity(entityInfo, [params.ExtraFilter, params.OverrideExcludeFilter], user);
+        this.AssertSortRespectsFieldSecurityForEntity(entityInfo, [params.OrderBy], user);
+    }
+
+    /**
+     * An external driver's rows without the columns `user` may not read. The driver returns the
+     * entity's columns at full width, and the result-path projection resolves the entity only from
+     * an `EntityName` or a loaded `ViewEntity`, so a request naming only a `ViewID` would keep
+     * them: the entity resolved here is named explicitly.
+     */
+    protected projectExternalRowsForCaller<T>(rows: T[], entityInfo: EntityInfo, params: RunViewParams, user: UserInfo): T[] {
+        return this.ApplyFieldSecurityProjection(rows, { ...params, EntityName: entityInfo.Name }, user);
+    }
+
+    /**
      * Folds a saved view's stored WhereClause and OrderByClause into the RunView params before
      * external dispatch. The external branch returns before the normal SQL path that applies
      * them, so without this a UserView over an external entity would silently return unfiltered,
@@ -4692,12 +4715,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
-     * Checks the server's LocalCacheManager for cached data matching the client's request.
-     * Returns the resolution if found ('current', 'stale' server-cached data to serve, or
-     * 'needs_verification' when the server slot's freshness window has elapsed),
-     * or null if the server cache doesn't have this data (or was evicted due to client monotonicity).
-     */
-    /**
      * True when a browser's cache status carries a field-security key (see
      * `ProviderBase.ComputeFieldSecurityCacheStatusKey`) other than the one this server computes
      * for `user` and `params`: the browser's slot was filled for a different set of columns, so
@@ -4711,6 +4728,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         return status.fieldSecurityKey !== this.ComputeFieldSecurityCacheStatusKey(params, user);
     }
 
+    /**
+     * Checks the server's LocalCacheManager for cached data matching the client's request.
+     * Returns the resolution if found ('current', 'stale' server-cached data to serve, or
+     * 'needs_verification' when the server slot's freshness window has elapsed),
+     * or null if the server cache doesn't have this data (or was evicted due to client monotonicity).
+     */
     private async resolveFromServerCache(
         item: RunViewWithCacheCheckParams,
         index: number,

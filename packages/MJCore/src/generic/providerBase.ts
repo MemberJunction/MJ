@@ -277,11 +277,6 @@ export function ProjectRowsToFields<T = Record<string, unknown>>(
 }
 
 /**
- * Base class for all metadata providers in MemberJunction.
- * Implements common functionality for metadata caching, refresh, and dataset management.
- * Subclasses must implement abstract methods for provider-specific operations.
- */
-/**
  * How the field-security row projection treats every row with one key shape: `Keys` is the shape
  * (the row's own keys, in order), and `Keep` the keys to copy, or null when the shape carries no
  * denied key and such a row is returned as is.
@@ -297,6 +292,18 @@ type RowProjectionPlans = {
     BySignature: Map<string, RowProjectionPlan>;
 };
 
+/**
+ * A loaded saved view as the field-security pre-gate reads its sort. `OrderByClause` is computed
+ * from the view's stored sort state rather than held in a column, so `Get('OrderByClause')`
+ * returns nothing for a real view: it has to be read as the property.
+ */
+type SavedViewSortSource = BaseEntity & { OrderByClause?: string | null };
+
+/**
+ * Base class for all metadata providers in MemberJunction.
+ * Implements common functionality for metadata caching, refresh, and dataset management.
+ * Subclasses must implement abstract methods for provider-specific operations.
+ */
 export abstract class ProviderBase implements IMetadataProvider, IRunViewProvider, IRunQueryProvider, IRemoteOperationProvider {
     /**
      * Whether this provider can execute a multi-record unit of work atomically, in-process.
@@ -3341,7 +3348,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (!entity) {
             return;
         }
-        const view = params.ViewEntity;
+        const view = params.ViewEntity as SavedViewSortSource | undefined;
         this.AssertClausesRespectFieldSecurityForEntity(entity, [
             params.ExtraFilter,
             params.OverrideExcludeFilter,
@@ -3350,7 +3357,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         ], contextUser);
         this.AssertSortRespectsFieldSecurityForEntity(entity, [
             params.OrderBy,
-            view ? view.Get('OrderByClause') : undefined,
+            view?.OrderByClause,
         ], contextUser);
     }
 

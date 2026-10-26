@@ -249,9 +249,11 @@ async function convertEntityObjectToJSON(record: BaseEntity, user: UserInfo, md:
 
 /**
  * The input schema of a Create or Update tool. It keeps keys it does not list rather than
- * stripping them, so a key naming a field the caller is denied (left out of that caller's schema)
- * or no field at all reaches {@link clientInputRefusal} and is refused, instead of being dropped
- * silently before the tool runs.
+ * stripping them, so every key reaches {@link clientInputRefusal} instead of being dropped
+ * silently before the tool runs. There, as at GraphQL and REST, a caller denied any field on the
+ * entity is refused a key naming a field they cannot read or no field at all. A key naming a
+ * field they may read but not write this way (left out of their schema) is not refused: on Update
+ * the save rejects it, and on Create the save leaves it out so the column takes its default.
  */
 function writeInputSchema(shape: Record<string, z.ZodTypeAny>): z.ZodObject<z.ZodRawShape> {
     return z.object(shape).passthrough();

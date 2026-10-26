@@ -1215,6 +1215,8 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         // is simply absent from it.
         this.removed = mode === 'request' ? await this.rehydrateRemovals(provider, data?.Removed ?? []) : [];
         this.loaded = true;
+        // The rehydrated children are this collection's own, never an engine's shared instances.
+        this.sharesEngineInstances = false;
     }
 
     /**

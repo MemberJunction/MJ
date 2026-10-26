@@ -119,7 +119,10 @@ target it leaves as well as the one it lands on. Taking a role off the system us
 entities with field security switched off too, so "disable, remove the role, re-enable" cannot
 strip a field. **A transaction group holding more than one guarded write that concerns the system
 user is refused**: the items of a group are checked before any of them is written, so no check
-could see the others' changes. Save such changes one at a time.
+could see the others' changes. Save such changes one at a time. That holds for guarded saves run in
+parallel too (a `Promise.all` in one group): a write takes its place in the group when its check
+passes, so every later one is refused, and it gives the place back when it is refused, its save
+returns false, or it throws, so a retry is not counted as a second write.
 
 > **Why the guard looks at the whole field, not the rule you are editing.** Whether a change
 > restricts someone is a property of the **aggregate across every role they hold**, never of one
@@ -306,7 +309,11 @@ under these conditions:
 - **The user is set before the object is filled, or the change narrows it.** Setting
   `ContextCurrentUser` on an object that already holds a record narrows it to the new user: values
   the new user may not read become `NotLoaded` on the object, its IS-A parent, its embedded
-  records and the children in its loaded related-record collections, which all get the same user. Nothing is widened — a field the old user could not read stays
+  records and the children in its loaded related-record collections, which all get the same user.
+  A read-only cache collection (`Source: 'cache'`, read-only by default) is deliberately left
+  alone: its children are the engine's own shared instances, so narrowing them would narrow them
+  for every reader. They keep the engine's width, like any engine-cached object (see Accepted
+  residuals). Nothing is widened — a field the old user could not read stays
   `NotLoaded` for a new user who could, because its value was never loaded. Set the user first
   wherever you can (pass it to `GetEntityObject`), so the record is loaded at the right width.
 - **The source is a plain row.** `LoadFromData`, `Hydrate` and the other entry points narrow the
@@ -338,14 +345,19 @@ What that means today:
   returned.
 - **Entity communications** (previews and sends) read recipients and related data as the
   sender (§3.7).
-- **A2A** runs entity work as the authenticated caller, and refuses to run when no user can be
-  resolved, instead of falling back to an arbitrary user. Tasks belong to their caller.
+- **A2A** runs entity work as the authenticated caller (each task's entity and agent handlers are
+  built for that user), and refuses to run when no user can be resolved, or when the caller's
+  cached user record is inactive, instead of falling back to an arbitrary user. Tasks belong to
+  their caller.
 - **Templates** render with the user of that render. Concurrent renders each see their own user.
   The contract is on the caller: **pass the user as `ContextUser`** on every render done on a
   user's behalf (a render nested inside another inherits the outer render's user). The engine never
   falls back to whichever caller first configured the process-wide engine. A render with no user
-  fails fast: an extension that needs a user, such as the AI prompt extension, rejects the render
-  with an error instead of running as someone else or hanging.
+  still runs, but an extension that needs a user (an `{% AIPrompt %}` tag) fails it with an error
+  instead of running as someone else or hanging. With a user, the tag also fails the render when
+  no model is found, the model call does not succeed, its `AIModel` parameter is set to something
+  other than a string, or
+  the template errors after the tag; it no longer writes "Error: …" into the output.
 - **Engines** (`BaseEngine`) load their shared caches as the system user (§3.4). Anything taken
   from an engine cache and handed to a person is projected first; on a server, an engine that
   loads an entity with field security logs a one-time reminder of this.
@@ -394,7 +406,10 @@ Predicates can leak values that never appear in a result: `Salary > 200000` retu
 it is true, and a sort on `Salary` ranks people by pay. So a predicate naming a denied field is
 **refused before it runs**, and the refusal is made in one place: the provider, after the view has
 been resolved, on the clauses as they will actually run. It applies to every caller (GraphQL, REST,
-agents, actions), not only to client requests.
+agents, actions), not only to client requests, and to entities on an external data source too: the
+clauses an external read hands its driver (the caller's merged with a saved view's) are gated the
+same way, and the driver's rows are projected for the caller, including on a `ViewID`-only
+RunView.
 
 - **It parses the SQL.** Identifiers are resolved from the dialect-aware SQL scanner's tokens,
   so a column name inside a string literal or a comment does not cause a false refusal, and
@@ -777,17 +792,28 @@ everyone. Field security handles that in two layers:
   projected after the fact, so this is the only way to keep a restricted value out of the vectors.
   The cost is accepted: semantic search does not match on restricted fields.
 
-  Two paths need more than the record's own fields:
+  A row can carry a field under its `Name` or its `CodeName` (an explicit field list selects
+  `[Name] AS [CodeName]` when the two differ, as for a name with a space), so
+  `GetIndexRestrictedFieldNames` returns each restricted field under both, and every consumer
+  above drops it either way.
+
+  Beyond the record's own fields, three things need care:
   - **Related rows** that an Entity Document template pulls in with `Relationship()` drop the same
     index-restricted fields of the related entity, plus any field the user of the render may not
-    read. The join field is kept, since its value is the parent record's own key. This covers
-    Entity Record Document text, autotagging content and the record-process inference context
-    built from the same document. (Vector sync renders through
+    read. The join field is kept, under its name and its code name, since its value is the parent
+    record's own key. This covers Entity Record Document text, autotagging content and the
+    record-process inference context built from the same document. (Vector sync renders through
     `EntityDocumentTemplateDataBuilder`, which applies the same rule to related rows.)
+  - **The record-process inference context document** (`Context.EntityDocumentID`) renders from
+    the record's values with its index-restricted fields removed (unless `Context.Fields` names the
+    fields, as for the prompt's `record`) and with the run user's denied fields removed, so the
+    rendered context never holds a value the prompt's `record` leaves out.
   - **The Entity Document placeholder cache** is keyed on the user and on a hash of the record
     values passed to the render, as well as the entity, record and placeholder. So a render whose
     values had restricted fields removed never gets back a value cached by an earlier, unstripped
-    render of the same record.
+    render of the same record. The hash JSON-quotes string values, so no value can spell out
+    another record's shape. Because every edit to a record changes its key, the cache is bounded:
+    it holds at most 10,000 placeholders and evicts the least recently used.
 - **At read time, results are projected per reader.** Search results (`RawMetadata`, snippets
   and titles) are projected for each reader, alongside the existing entity, row-level and origin
   checks. The external vector-fetch path requires entity read access and projects metadata, and
@@ -1008,6 +1034,12 @@ restriction should know them before relying on it.
   ([#5981](https://github.com/MemberJunction/MJ/issues/5981)). Avoid unique indexes and constraints
   that include a restricted column, or keep their messages away from restricted users.
 
+- **A read-only cache collection's children keep the engine's width.** A related-record
+  collection filled from an engine cache (`Source: 'cache'`, read-only) holds the engine's own
+  shared objects, so setting `ContextCurrentUser` on its owner does not narrow them (§2.3): doing so
+  would narrow them for every reader. Like any engine-cached object they hold every column, and no
+  transport serializes them to a client. Do not hand them to a restricted user without projecting.
+
 - **Related rows loaded with an entity are not narrowed.** `InnerLoad` with
   `EntityRelationshipsToLoad` reads related records without the user's field, row-level or entity
   checks and attaches them to the object unprojected
@@ -1039,7 +1071,8 @@ restriction should know them before relying on it.
   the entity's primary key and at least 80% of its keys are that entity's fields. These are not
   projected:
   - rows without their primary key, and rows enriched with many extra keys;
-  - rows nested more than 6 levels deep in a parameter value;
+  - entity objects and rows nested more than 6 levels deep in a parameter value
+    (`ACTION_PARAM_PROJECTION_MAX_DEPTH`), which are returned untouched;
   - objects with a `toJSON()` method, whose serialized form is whatever that method returns;
   - instances of classes other than `BaseEntity`. `RunAction` output drops them, but the action
     execution log serializes their own properties;
@@ -1140,3 +1173,10 @@ appears in what your feature produces:
   from `@memberjunction/testing-integration` when a fixture is not seeded or a transport is off; it
   throws, and the runners record the check as Skipped. Returning early scores the check as Passed
   and reports coverage the run did not have. Read the skip counts in the results.
+- **The over-the-wire bundles must run in CI.** IT92 and IT134 are the only checks that prove field
+  security through MJAPI's GraphQL and REST endpoints, so the integration job runs
+  `.github/scripts/check-fls-wire-bundles-ran.mjs` over the tier's log and fails when any of their
+  checks skipped or either bundle ran nothing. Their shared fixture reloads metadata before it
+  checks the entity's field-security flag and again after its teardown turns the flag off, so one
+  bundle's teardown is never read as a configured entity by the next. IT134's REST checks call the
+  origin-absolute `/api/v1`, where MJAPI mounts REST whatever `MJAPI_BASE_PATH` is.

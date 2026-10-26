@@ -14,6 +14,7 @@ import { AddEntityCreateTool, AddEntityUpdateTool } from '../tools/entityTools.j
 const HR_ROLE_ID = 'A0000000-0000-0000-0000-000000000001';
 const MANAGER_ROLE_ID = 'A0000000-0000-0000-0000-000000000002';
 const INTERN_ROLE_ID = 'A0000000-0000-0000-0000-000000000003';
+const AUDITOR_ROLE_ID = 'A0000000-0000-0000-0000-000000000004';
 const ENTITY_ID = 'B0000000-0000-0000-0000-000000000001';
 const { Allow, Deny } = FieldPermissionAccess;
 
@@ -27,7 +28,8 @@ const OPEN: Access = { read: Allow, update: Allow, create: Allow };
 
 /**
  * `Employees`: `Salary` is HR-only; `Title` is open to managers, and readable and creatable by
- * interns but not updatable; `Name` is open to every role.
+ * interns but not updatable; `Name` is open to every role. Auditors may use `Name` and `Salary`
+ * but not `Title`, so an auditor and a manager are each denied exactly one field, a different one.
  */
 function employeeEntity(): EntityInfo {
     const field = (id: string, seq: number, name: string, type: string, perms: Record<string, string>[] = []) => ({
@@ -40,8 +42,8 @@ function employeeEntity(): EntityInfo {
         EnableFieldLevelSecurity: true,
         Fields: [
             { ...field('f-id', 1, 'ID', 'uniqueidentifier'), IsPrimaryKey: true, AllowsNull: false },
-            field('f-name', 2, 'Name', 'nvarchar', [rule('f-name', HR_ROLE_ID, OPEN), rule('f-name', MANAGER_ROLE_ID, OPEN), rule('f-name', INTERN_ROLE_ID, OPEN)]),
-            field('f-salary', 3, 'Salary', 'money', [rule('f-salary', HR_ROLE_ID, OPEN)]),
+            field('f-name', 2, 'Name', 'nvarchar', [rule('f-name', HR_ROLE_ID, OPEN), rule('f-name', MANAGER_ROLE_ID, OPEN), rule('f-name', INTERN_ROLE_ID, OPEN), rule('f-name', AUDITOR_ROLE_ID, OPEN)]),
+            field('f-salary', 3, 'Salary', 'money', [rule('f-salary', HR_ROLE_ID, OPEN), rule('f-salary', AUDITOR_ROLE_ID, OPEN)]),
             field('f-title', 4, 'Title', 'nvarchar', [
                 rule('f-title', HR_ROLE_ID, OPEN),
                 rule('f-title', MANAGER_ROLE_ID, OPEN),
@@ -113,6 +115,16 @@ describe('MCP entity tool input schemas follow the session user', () => {
         // The manager is denied Salary only; the intern is denied Salary and Title.
         expect(schemaKeys(tool, manager)).toEqual(['ID', 'Name', 'Title']);
         expect(schemaKeys(tool, intern)).toEqual(['ID', 'Name']);
+        expect(schemaKeys(tool, manager)).toEqual(['ID', 'Name', 'Title']);
+    });
+
+    it('REGRESSION: keeps apart two users denied the same number of fields but different ones', () => {
+        const tool = captureTool(AddEntityUpdateTool, entity);
+        const manager = buildUser(MANAGER_ROLE_ID, 'manager');
+        const auditor = buildUser(AUDITOR_ROLE_ID, 'auditor');
+        // Each is denied exactly one field: the manager Salary, the auditor Title.
+        expect(schemaKeys(tool, manager)).toEqual(['ID', 'Name', 'Title']);
+        expect(schemaKeys(tool, auditor)).toEqual(['ID', 'Name', 'Salary']);
         expect(schemaKeys(tool, manager)).toEqual(['ID', 'Name', 'Title']);
     });
 });

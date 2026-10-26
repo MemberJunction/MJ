@@ -116,8 +116,8 @@ export class EntityDocumentTemplateParser extends EntityDocumentTemplateParserBa
    * - the fields some role that can read the related entity may not read, even when the render user
    *   can (the same rule vector sync applies to related rows).
    *
-   * The join field is kept against the second rule: its value is the parent record's own key. The rows
-   * are copied where a value is dropped and never modified.
+   * The join field (by name and by code name) is kept against the second rule: its value is the parent
+   * record's own key. The rows are copied where a value is dropped and never modified.
    */
   protected withoutRestrictedRelatedValues(
     relationship: EntityRelationshipInfo,
@@ -135,7 +135,12 @@ export class EntityDocumentTemplateParser extends EntityDocumentTemplateParserBa
   /** The lowercased names of the related entity's fields {@link withoutRestrictedRelatedValues} drops. */
   private relatedFieldsKeptOut(relatedEntity: EntityInfo, relationship: EntityRelationshipInfo, contextUser: UserInfo): Set<string> {
     const restricted = GetIndexRestrictedFieldNames(relatedEntity);
-    restricted.delete((relationship.RelatedEntityJoinField ?? '').trim().toLowerCase());
+    const joinFieldName = (relationship.RelatedEntityJoinField ?? '').trim().toLowerCase();
+    const joinField = relatedEntity.Fields?.find((f) => f.Name.trim().toLowerCase() === joinFieldName);
+    restricted.delete(joinFieldName);
+    if (joinField?.CodeName) {
+      restricted.delete(joinField.CodeName.trim().toLowerCase());
+    }
     if (relatedEntity.FieldLevelSecurityApplies) {
       for (const name of relatedEntity.GetDeniedReadFields(contextUser)) {
         restricted.add(name);

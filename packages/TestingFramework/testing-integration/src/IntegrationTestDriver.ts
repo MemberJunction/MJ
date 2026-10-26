@@ -297,8 +297,9 @@ export class IntegrationTestDriver extends BaseTestDriver {
             // would double-count the per-check skips.
             if (bundle.length > 0 && outcomes.length > 0 && outcomes.every(o => o.Skipped)) {
                 this.logToTestRun(context, 'warn',
-                    `${bundleType}: all ${outcomes.length} check(s) were gated out — nothing ran. ` +
-                    `Set RUN_MUTATION_TESTS=1 (or the live-model gate) to execute them. This bundle ` +
+                    `${bundleType}: all ${outcomes.length} check(s) were skipped — nothing ran. ` +
+                    `Each skip's reason is logged above: a gate (RUN_MUTATION_TESTS=1 or the live-model ` +
+                    `gate) or a fixture that could not be set up. This bundle ` +
                     `verified NOTHING on this run.`);
             }
         } catch (fxErr) {

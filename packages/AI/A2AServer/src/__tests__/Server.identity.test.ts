@@ -17,12 +17,13 @@ describe('A2A Server identity', () => {
         expect(source).not.toMatch(/Users\s*\[\s*0\s*\]/);
     });
 
-    it('runs a task as the caller resolved from the user cache', () => {
-        expect(source).toMatch(/const contextUser = ResolveTaskCaller\(\s*authenticatedUser\s*,\s*UserCache\.Instance\.Users\s*\)/);
+    it('builds the task handlers from the caller resolved from the user cache', () => {
+        // CreateTaskOperations is tested by execution in TaskOperations.test.ts.
+        expect(source).toMatch(/CreateTaskOperations\(\s*authenticatedUser\s*,\s*UserCache\.Instance\.Users\s*,\s*provider\s*\)/);
     });
 
-    it('hands the task caller to the entity operations', () => {
-        expect(source).toMatch(/new EntityOperations\(\s*provider\s*,\s*contextUser\s*\)/);
+    it('never builds an entity or agent handler itself, outside CreateTaskOperations', () => {
+        expect(source).not.toMatch(/new (EntityOperations|AgentOperations)\(/);
     });
 });
 

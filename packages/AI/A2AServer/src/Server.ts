@@ -7,14 +7,13 @@ import express, { Request, Response, NextFunction } from 'express';
 import sql from 'mssql';
 import { z } from "zod";
 import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInstanceName, dbTrustServerCertificate, a2aServerSettings } from './config.js';
-import { EntityOperations, OperationResult } from './EntityOperations.js';
-import { AgentOperations } from './AgentOperations.js';
+import type { OperationResult } from './EntityOperations.js';
 import { AIEngine } from "@memberjunction/aiengine";
 import { MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { ShutdownRegistry } from "@memberjunction/global";
 import { TaskStore, Task, TaskStatus, Message, Artifact, Part } from "./TaskStore.js";
 import { AgentCard, AgentCardAgentCapability, AgentCardEntityCapability, BuildAgentCard, ResolveAgentCardIdentity } from "./AgentCard.js";
-import { ResolveTaskCaller } from "./TaskCaller.js";
+import { CreateTaskOperations } from "./TaskOperations.js";
 
 // A2A Server Configuration
 const a2aServerPort = a2aServerSettings?.port || 3200;
@@ -705,15 +704,11 @@ async function processTask(task: Task, authenticatedUser?: UserInfo, authContext
             throw new Error("No user message found");
         }
 
-        // Work on behalf of the caller runs as the caller: never as a fallback user.
-        const contextUser = ResolveTaskCaller(authenticatedUser, UserCache.Instance.Users);
-
-        // Initialize operations handlers with the authenticated user and the request's
-        // metadata provider so every downstream entity operation routes through the right
-        // connection (see resolveProviderForRequest for the multi-tenant migration plan).
+        // Work on behalf of the caller runs as the caller: never as a fallback user. The handlers
+        // bind to the request's metadata provider so every downstream entity operation routes
+        // through the right connection (see resolveProviderForRequest for the multi-tenant plan).
         const provider = resolveProviderForRequest();
-        const entityOps = new EntityOperations(provider, contextUser);
-        const agentOps = new AgentOperations(contextUser, provider);
+        const { EntityOps: entityOps, AgentOps: agentOps } = CreateTaskOperations(authenticatedUser, UserCache.Instance.Users, provider);
 
         // Extract text content and parse operation
         const textParts = lastMessage.parts.filter(p => p.type === 'text');
