@@ -282,5 +282,257 @@
       "lastModified": "2026-03-12T21:57:26.514Z",
       "checksum": "96d41c1e1fce0261688e351922186e9408afe8988d26224ab811a5ca2ca4ce6a"
     }
+  },
+  {
+    "fields": {
+      "Name": "Bootstrap SQL Server Integration From Backup",
+      "Description": "Bootstraps a large SQL Server integration by restoring an Azure Blob backup (or local disk backup) into a temporary staging database, executing high-speed local ETL into target MemberJunction tables, seeding watermarks to BackupStartDate, and tearing down staging.",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
+      "DriverClass": "Bootstrap SQL Server Integration From Backup",
+      "Type": "Custom",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-database"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the Company Integration record defining credentials, schemas, and table mappings",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "2CCFEF16-6916-41DF-B68B-DB571903670E"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "BackupUrls",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Comma-separated or JSON array of Azure Blob URLs or local disk paths to the backup stripe files (.bak)",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "6E51E82E-2FE8-4662-B703-AF122680F214"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SasToken",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Shared Access Signature token for authenticating against the Azure Blob Storage container (not required for local disk)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B1692872-FC37-498B-BBEF-76393B09B6C5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StorageCredentialID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional SQL Server credential name to use for Azure RESTORE. If omitted, a temporary credential is created using SasToken",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "666CDE3C-12A0-435C-B841-568F3EBE21BC"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StagingDatabaseName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the temporary staging database to restore into. If omitted, defaults to MJ_Staging_<IntegrationName>_<Timestamp>",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "EA1262C5-43E6-4CB9-AB74-D609DFC92641"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DropStagingDbOnComplete",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "DefaultValue": "true",
+            "Description": "Whether to automatically drop the staging database upon successful ETL completion. Default is true",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3411C2C7-9841-4918-AE92-389CD695D4A1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "BatchSize",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "DefaultValue": "500000",
+            "Description": "Number of rows per batch for chunked ETL transfers. Default is 500,000",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "101C1D4C-C55F-4990-BED8-9F5D647AE26E"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityMapIDs",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional JSON array of specific Company Integration Entity Map IDs to bootstrap. If omitted, all active maps are processed",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E74E4391-E456-4EBF-A043-51548040281F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetDataFileDirectory",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Directory path on the SQL Server host where staging database .mdf/.ndf data files should be relocated",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "188A9C1A-1C72-4B29-9060-00F25EC1DAB6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetLogFileDirectory",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Directory path on the SQL Server host where staging database .ldf log files should be relocated",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1AB195EB-0BDB-4C12-ABF2-CD8D44609F19"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "BackupStartDate",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The exact UTC BackupStartDate extracted from the backup file header, used to seed sync watermarks",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "69617091-7E9A-4140-9ED4-5B2436431383"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalRowsInserted",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total count of records transferred from staging tables into target MemberJunction tables across all entity maps",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "377E3023-A993-4F1A-8F5B-8D2B476D23F5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DurationSeconds",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total execution duration in seconds covering restore, ETL, watermark seeding, and teardown",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5F0003A3-4AFF-4739-9452-DBE6319C10B4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StagingDatabaseDropped",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Boolean indicating whether the staging database was successfully dropped",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "FC7B7966-167F-4E1F-86E9-6316AA639545"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "Description": "Database successfully restored from backup, ETL completed into target tables, and watermarks seeded",
+            "IsSuccess": true
+          },
+          "primaryKey": {
+            "ID": "9A81434E-04DF-4DAF-86C2-01967FF4DCDE"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "Description": "Required parameters (CompanyIntegrationID or BackupUrls) were missing or invalid",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "8E5C5020-0533-4DDE-99F5-85A5DE8CFA26"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "BOOTSTRAP_FAILED",
+            "Description": "An error occurred during backup header inspection, database restore, schema verification, ETL data transfer, or watermark seeding",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "2D6C0C62-9DDC-478C-8F40-3575B9E83984"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "4EF0A049-1C4C-4FA7-B50E-D03FB3A511F7"
+    }
   }
 ]
