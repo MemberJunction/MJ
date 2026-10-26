@@ -172,16 +172,23 @@ describe('ReconcileFieldPermissions', () => {
         );
     });
 
-    it('throws with the underlying detail when a delete fails', async () => {
+    it('logs and SKIPS a refused delete, and still performs the inserts', async () => {
+        // The system-user guard legitimately refuses to delete a row holding that account's last
+        // Allow on a field, and reconciliation can ask for exactly that delete (a role's entity
+        // permission revoked while it carried the only Allow). Aborting there rolled back the
+        // inserts too, so a newly-permitted role got no rows, and every re-run failed the same way.
         const orphanRole = 'A0000000-0000-0000-0000-0000000000FF';
         const entity = buildEntity([
             { ID: 'orphan', EntityFieldID: SALARY_FIELD_ID, RoleID: orphanRole, ReadAccess: ALLOW },
         ]);
-        const { provider } = makeProvider({ deleteResult: false });
+        const { provider, order } = makeProvider({ deleteResult: false });
 
-        await expect(ReconcileFieldPermissions(entity, provider, USER)).rejects.toThrow(
-            /could not remove row 'orphan'.*mock failure detail/s
-        );
+        const result = await ReconcileFieldPermissions(entity, provider, USER);
+
+        expect(result).toEqual({ Inserted: 1, Deleted: 0 });
+        expect(order).toEqual(['load', 'delete', 'save']);
+        expect(logErrorSpy).toHaveBeenCalledTimes(1);
+        expect(logErrorSpy.mock.calls[0][0]).toMatch(/could not remove row 'orphan'.*mock failure detail/s);
     });
 
     it('does nothing without an entity or a provider', async () => {
