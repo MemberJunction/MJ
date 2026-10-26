@@ -41,6 +41,9 @@ vi.mock('@memberjunction/api-keys', async (importOriginal) => ({
 
 vi.mock('@memberjunction/ai-agents', () => ({
     AgentRunner: class {
+        async CreateAgentReplyDetail() {
+            return { ID: 'reply-1', __mj_CreatedAt: new Date() };
+        }
         RunAgentInConversation(...args: unknown[]) {
             return hoisted.runAgentInConversation(...args);
         }

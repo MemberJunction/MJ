@@ -28,7 +28,8 @@ export class MJFileFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIAgentSessions', sectionName: 'AI Agent Sessions', isExpanded: false },
             { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false },
             { sectionKey: 'mJMLModels', sectionName: 'ML Models', isExpanded: false },
-            { sectionKey: 'mJBrandKitAssets', sectionName: 'Brand Kit Assets', isExpanded: false }
+            { sectionKey: 'mJBrandKitAssets', sectionName: 'Brand Kit Assets', isExpanded: false },
+            { sectionKey: 'mJContentItems', sectionName: 'Content Items', isExpanded: false }
         ]);
     }
 }

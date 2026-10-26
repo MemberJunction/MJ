@@ -177,6 +177,7 @@ export async function SendToAudience(args: SendToAudienceParams): Promise<SendTo
     recipients,
     false,
     args.Credentials,
+    args.ContextUser,
   );
 
   return {

@@ -46,7 +46,7 @@ import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
 import { CreateRealtimeRecordingRouter, REALTIME_RECORDING_MOUNT_PATH } from './rest/RealtimeRecordingHandler.js';
 import { LoadOwnedRealtimeSession } from './realtimeSessions/ownedRealtimeSession.js';
-import { LoadSessionConversationExternalID } from './realtimeSessions/sessionAccess.js';
+import { LoadSessionConversationScope } from './realtimeSessions/sessionAccess.js';
 import { RecordingAssemblyScheduler } from './realtimeSessions/RecordingAssemblyScheduler.js';
 import {
   RealtimeSessionEventService,
@@ -77,7 +77,7 @@ import { RoomHandoffEngine } from '@memberjunction/livekit-room-server';
 // Type-only: the provider is built in ./sharedCache.ts. Still needed here because the handoff-offer
 // fan-out below stays in this file — see the note at its call site.
 import type { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
-import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
+import { IntegrationProgressEmitter, SweepInterruptedRuns } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
 import { ClientToolRequestManager, AgentRunWatchdog, SqlRealtimeRecordingLedger } from '@memberjunction/ai-agents';
@@ -496,6 +496,8 @@ const setupComplete$ = new ReplaySubject(1);
     // Every API pool carries the statement and idle-in-transaction timeouts from connection #1.
     const pgConnectionConfig = BuildPostgreSQLConnectionConfig(pgEndpoint, configInfo.databaseSettings, 'api');
     const pgPool = new pg.default.Pool(ToPGPoolConfig(pgConnectionConfig));
+    // An idle connection the server drops is emitted on the pool; without a listener Node exits.
+    pgPool.on('error', (err) => console.error('[PostgreSQL pool] Idle connection error (connection evicted):', err.message));
 
     // Verify connection
     const testClient = await pgPool.connect();
@@ -513,6 +515,7 @@ const setupComplete$ = new ReplaySubject(1);
         ...ToPGPoolConfig(BuildPostgreSQLConnectionConfig({ ...pgEndpoint, ...pgReadOnlyCredentials }, configInfo.databaseSettings, 'read-only')),
         types: MJPostgresTypes,
       });
+      readOnlyPgPool.on('error', (err) => console.error('[PostgreSQL read-only pool] Idle connection error (connection evicted):', err.message));
       const readOnlyTestClient = await readOnlyPgPool.connect();
       try {
         for (const warning of await DescribeReadOnlyLoginOverreach(readOnlyTestClient, mj_core_schema)) {
@@ -599,6 +602,7 @@ const setupComplete$ = new ReplaySubject(1);
           'codegen',
         );
         const codegenPgPool = new pg.default.Pool(ToPGPoolConfig(codegenPgConnectionConfig));
+        codegenPgPool.on('error', (err) => console.error('[PostgreSQL CodeGen pool] Idle connection error (connection evicted):', err.message));
         const codegenTestClient = await codegenPgPool.connect();
         await codegenTestClient.query('SELECT 1');
         codegenTestClient.release();
@@ -1058,7 +1062,8 @@ const setupComplete$ = new ReplaySubject(1);
           // fires for server-internal saves too (agents, actions, orchestrator), which are exactly
           // the ones no browser session asked for.
           recordData:
-            beEvent.type === 'save' && MayBroadcastRecordData(entityName)
+            beEvent.type === 'save' && MayBroadcastRecordData(entityName, beEvent.baseEntity.EntityInfo)
+              // fls-guard: MayBroadcastRecordData refuses FLS entities and Record Changes
               ? JSON.stringify(beEvent.baseEntity.GetAll())
               : undefined,
         });
@@ -1578,6 +1583,17 @@ const setupComplete$ = new ReplaySubject(1);
   if (!runBackgroundWorkers) {
     LogStatus(`[ServerRole] Running in '${serverRole}' mode — background worker services are disabled on this replica.`);
   }
+
+  // Close out run artifacts a dead process left open, BEFORE anything below can start a new run.
+  //
+  // A killed process (OOM killer, SIGKILL, host reboot) never writes its run's terminal result, so
+  // the run reads as in-flight forever: the wizard spins, the active-operations panel shows a step
+  // that will never advance, and no failure is reported anywhere. Sound only before the first new
+  // run: artifacts are process-local, so anything still in flight as THIS process starts belongs
+  // to a process that no longer exists. That is why it runs here, ahead of the scheduler, the
+  // integration sync worker (its Start() polls immediately), the HTTP listener (a request can
+  // start a discovery) and pending RSU work, and why it is awaited. It needs none of them.
+  await SweepInterruptedRuns(undefined, msg => console.warn(msg));
 
   // Initialize and start scheduled jobs service if enabled
   let scheduledJobsService: ScheduledJobsService | null = null;
@@ -2238,7 +2254,7 @@ function mountRealtimeRecordingRoutes(app: Application): boolean {
       return user ? { ContextUser: user, Provider: provider } : null;
     },
     LoadOwnedSession: LoadOwnedRealtimeSession,
-    LoadConversationExternalID: LoadSessionConversationExternalID,
+    LoadConversationScope: LoadSessionConversationScope,
     CreateLedger: (ledgerProvider, contextUser) => new SqlRealtimeRecordingLedger(ledgerProvider, contextUser),
     Scheduler: RecordingAssemblyScheduler.Instance,
     GraceMs: graceMs,

@@ -34,6 +34,7 @@ vi.mock('type-graphql', () => {
 const hoisted = vi.hoisted(() => ({
     runAgentInConversation: vi.fn(),
     followHandoffs: vi.fn(),
+    createAgentReplyDetail: vi.fn(),
     resolveWidgetGuestRunContext: vi.fn().mockResolvedValue(null),
     elevateUserPayload: vi.fn(),
 }));
@@ -48,6 +49,9 @@ vi.mock('@memberjunction/ai-agents', async (importOriginal) => {
             }
             FollowHandoffs(...args: unknown[]) {
                 return hoisted.followHandoffs(...args);
+            }
+            CreateAgentReplyDetail(...args: unknown[]) {
+                return hoisted.createAgentReplyDetail(...args);
             }
         },
         ArtifactToolManager: class {},
@@ -124,6 +128,11 @@ beforeEach(() => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     hoisted.runAgentInConversation.mockReset();
     hoisted.followHandoffs.mockReset();
+    hoisted.createAgentReplyDetail.mockReset().mockResolvedValue({
+        ID: 'detail-sage',
+        ConversationID: 'conv-1',
+        __mj_CreatedAt: new Date(),
+    });
     hoisted.resolveWidgetGuestRunContext.mockReset().mockResolvedValue(null);
     hoisted.elevateUserPayload.mockReset();
 });
@@ -390,13 +399,13 @@ describe('RunAIAgentResolver — FollowHandoffs & PubSub ordering', () => {
         expect(returnedPayload.handoff).toEqual(handoffPayload);
 
         expect(timeline).toEqual([
-            'pubsub:progress:run-sage',
+            'pubsub:progress:detail-sage',
             'target-row-created:detail-director',
-            'pubsub:partial_result:run-sage',
+            'pubsub:partial_result:detail-sage',
             'pubsub:complete:detail-sage',
-            'pubsub:progress:run-director',
-            'pubsub:streaming:run-director',
-            'pubsub:partial_result:run-director',
+            'pubsub:progress:detail-director',
+            'pubsub:streaming:detail-director',
+            'pubsub:partial_result:detail-director',
             'pubsub:complete:detail-director',
         ]);
 

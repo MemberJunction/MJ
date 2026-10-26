@@ -13,7 +13,7 @@
  * ML work type with no substrate change. But that call was never made at boot — so a Record Process
  * with `WorkType='ML Model'` fell through to "unknown work type". This {@link IStartupSink} makes the
  * call once during MJAPI bootstrap (mirroring `RemoteBrowserEngine`'s `@RegisterForStartup` pattern),
- * wiring the production {@link MLInferenceDeps} bundle ({@link buildProductionMLInferenceDeps}) the
+ * wiring the production {@link MLInferenceDeps} bundle ({@link BuildProductionMLInferenceDeps}) the
  * Score action / Remote Op also use — so a model is always scored the same way it was trained.
  *
  * Unlike `RemoteBrowserEngine`, this sink warms NO `BaseEngine` cache and touches NO database: the

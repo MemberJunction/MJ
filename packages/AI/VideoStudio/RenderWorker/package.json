@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/video-studio-render-worker",
-  "version": "6.2.0-edge.4",
+  "version": "6.2.0-edge.5",
   "description": "Isolated HyperFrames and headless Chromium render worker for MemberJunction Video Studio",
   "type": "module",
   "main": "dist/index.js",
@@ -30,7 +30,7 @@
     "@hyperframes/parsers": "0.8.134",
     "@hyperframes/producer": "0.8.134",
     "@hyperframes/studio-server": "0.8.134",
-    "@memberjunction/video-studio-core": "6.2.0-edge.4",
+    "@memberjunction/video-studio-core": "6.2.0-edge.5",
     "hyperframes": "0.8.134"
   },
   "devDependencies": {

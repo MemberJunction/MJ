@@ -11,10 +11,11 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-// @memberjunction/ai-realtime-client (8 classes)
+// @memberjunction/ai-realtime-client (9 classes)
 import {
     AssemblyAIRealtimeClient,
     ElevenLabsRealtimeClient,
+    ElevenRealtimeClient,
     GeminiEnterpriseRealtimeClient,
     GeminiRealtimeClient,
     HuggingFaceRealtimeClient,
@@ -35,7 +36,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (457 classes)
+// @memberjunction/core-entities (462 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -164,6 +165,8 @@ import {
     MJAuthorizationRoleEntity,
     MJBrandKitAssetEntity,
     MJBrandKitEntity,
+    MJCalendarEventLinkEntity,
+    MJCalendarSyncStateEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -179,6 +182,8 @@ import {
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
     MJCompanyIntegrationFieldMapEntity,
+    MJCompanyIntegrationObjectEntity,
+    MJCompanyIntegrationObjectFieldEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
@@ -253,6 +258,7 @@ import {
     MJEntityActionInvocationEntity,
     MJEntityActionInvocationTypeEntity,
     MJEntityActionParamEntity,
+    MJEntityAlternateBaseViewEntity,
     MJEntityCommunicationFieldEntity,
     MJEntityCommunicationMessageTypeEntity,
     MJEntityDocumentEntity,
@@ -561,10 +567,11 @@ import {
     XlsxArtifactViewerComponent,
 } from '@memberjunction/ng-artifacts';
 
-// @memberjunction/ng-auth-services (6 classes)
+// @memberjunction/ng-auth-services (7 classes)
 import {
     MJAuth0Provider,
     MJCognitoProvider,
+    MJLocalDevProvider,
     MJMSALProvider,
     MJMagicLinkProvider,
     MJOktaProvider,
@@ -593,8 +600,9 @@ import {
     RecordProcessRunnerUXComponent,
 } from '@memberjunction/ng-entity-action-ux';
 
-// @memberjunction/ng-entity-viewer (4 classes)
+// @memberjunction/ng-entity-viewer (5 classes)
 import {
+    CalendarViewType,
     CardsViewType,
     GridViewType,
     MapViewType,
@@ -606,10 +614,12 @@ import {
     ClusterViewType,
 } from '@memberjunction/ng-clustering';
 
-// @memberjunction/ng-dashboard-viewer (8 classes)
+// @memberjunction/ng-dashboard-viewer (10 classes)
 import {
     ArtifactConfigPanelComponent,
     ArtifactPartComponent,
+    ComponentConfigPanelComponent,
+    ComponentPartComponent,
     QueryConfigPanelComponent,
     QueryPartComponent,
     ViewConfigPanelComponent,
@@ -868,6 +878,7 @@ import {
 const CLASS_REGISTRATIONS_0: any[] = [
     AssemblyAIRealtimeClient,
     ElevenLabsRealtimeClient,
+    ElevenRealtimeClient,
     GeminiEnterpriseRealtimeClient,
     GeminiRealtimeClient,
     HuggingFaceRealtimeClient,
@@ -1005,6 +1016,8 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAuthorizationRoleEntity,
     MJBrandKitAssetEntity,
     MJBrandKitEntity,
+    MJCalendarEventLinkEntity,
+    MJCalendarSyncStateEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -1020,6 +1033,8 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
     MJCompanyIntegrationFieldMapEntity,
+    MJCompanyIntegrationObjectEntity,
+    MJCompanyIntegrationObjectFieldEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
@@ -1061,15 +1076,15 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJConversationSkillEntity,
     MJConversationWidgetInstanceEntity,
     MJCountryEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_1: any[] = [
     MJCredentialCategoryEntity,
     MJCredentialEntity,
     MJCredentialTypeEntity,
     MJDashboardCategoryEntity,
     MJDashboardCategoryLinkEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_1: any[] = [
     MJDashboardCategoryPermissionEntity,
     MJDashboardEntity,
     MJDashboardEntityExtended,
@@ -1098,6 +1113,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJEntityActionInvocationEntity,
     MJEntityActionInvocationTypeEntity,
     MJEntityActionParamEntity,
+    MJEntityAlternateBaseViewEntity,
     MJEntityCommunicationFieldEntity,
     MJEntityCommunicationMessageTypeEntity,
     MJEntityDocumentEntity,
@@ -1264,16 +1280,16 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSearchScopeExternalIndexEntity,
     MJSearchScopePermissionEntity,
     MJSearchScopeProviderEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJSearchScopeStorageAccountEntity,
     MJSearchScopeTestQueryEntity,
     MJSignatureAccountEntity,
     MJSignatureProviderEntity,
     MJSignatureRequestDocumentEntity,
     MJSignatureRequestEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJSignatureRequestLogEntity,
     MJSignatureRequestRecipientEntity,
     MJSkillEntity,
@@ -1382,6 +1398,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     XlsxArtifactViewerComponent,
     MJAuth0Provider,
     MJCognitoProvider,
+    MJLocalDevProvider,
     MJMSALProvider,
     MJMagicLinkProvider,
     MJOktaProvider,
@@ -1400,6 +1417,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     SkillCommandProvider,
     WhiteboardArtifactViewerComponent,
     RecordProcessRunnerUXComponent,
+    CalendarViewType,
     CardsViewType,
     GridViewType,
     MapViewType,
@@ -1407,6 +1425,8 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ClusterViewType,
     ArtifactConfigPanelComponent,
     ArtifactPartComponent,
+    ComponentConfigPanelComponent,
+    ComponentPartComponent,
     QueryConfigPanelComponent,
     QueryPartComponent,
     ViewConfigPanelComponent,
@@ -1464,6 +1484,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJRubricVersionFormComponentExtended,
     MJTemplateFormComponentExtended,
     MJTestFormComponentExtended,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     MJTestRubricFormComponentExtended,
     MJTestRunFeedbackFormComponentExtended,
     MJTestRunFormComponentExtended,
@@ -1474,10 +1498,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ProjectHierarchyPanel,
     QueryCategoryHierarchyPanel,
     RecordProcessCategoryHierarchyPanel,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     RecordProcessFormComponentExtended,
     RecordProcessFormPolicy,
     RubricAuthorPanel,
@@ -1642,7 +1662,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 750;
+export const CLASS_REGISTRATIONS_COUNT = 760;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

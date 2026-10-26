@@ -33,6 +33,9 @@ vi.mock('@memberjunction/ai-agents', () => ({
         RunAgentInConversation(...args: unknown[]) {
             return hoisted.runAgentInConversation(...args);
         }
+        CreateAgentReplyDetail() {
+            return Promise.resolve({ ID: 'reply-1', __mj_CreatedAt: new Date() }); // the server creates the reply row (A19)
+        }
     },
     ArtifactToolManager: class {},
     CanAgentOwnSubAgentConsults: vi.fn(() => false),
@@ -215,7 +218,7 @@ describe('RunAIAgentFromConversationDetail — continuing from a chainable prede
         );
     });
 
-    it('looks up the predecessor on the branch the reply row was created on', async () => {
+    it('looks up the predecessor on the branch the person\'s message was posted on', async () => {
         await runMutation(resolver, { branchId: 'B' });
         expect(seams.findChainablePredecessor).toHaveBeenCalledWith('conv-1', 'agent-1', 'B', expect.anything(), expect.anything());
         await runMutation(resolver, {});

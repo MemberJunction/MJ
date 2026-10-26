@@ -119,6 +119,7 @@ interface FakeDetail {
     HiddenToUser?: boolean;
     Message?: string;
     Error?: string | null;
+    MarkServerAuthoredReply: ReturnType<typeof vi.fn>;
     NewRecord: ReturnType<typeof vi.fn>;
     Save: ReturnType<typeof vi.fn>;
     Load: ReturnType<typeof vi.fn>;
@@ -143,6 +144,7 @@ function makeDetail(id: string, branchId: string | null, initialMessage = 'Sourc
         BranchID: branchId,
         Message: initialMessage,
         savedSnapshots: [],
+        MarkServerAuthoredReply: vi.fn(),
         NewRecord: vi.fn(),
         Save: vi.fn(async () => {
             detail.savedSnapshots.push({
@@ -263,6 +265,7 @@ describe('VS-SAGE-3: Server-side Handoff Execution', () => {
             const targetRow = makeDetail('detail-target', null, '');
             const provider = makeProvider([sourceRow, targetRow]);
             const runner = new AgentRunner(provider);
+            const createReplySpy = vi.spyOn(runner, 'CreateAgentReplyDetail');
 
             const handoffStep = makeHandoffStep({ targetAgentId: targetAgent.ID, brief: 'Build storyboard' });
             const preset = makePreset('preset-1', 'Fast', 'Fast Mode', 'ai-config-fast');
@@ -374,6 +377,16 @@ describe('VS-SAGE-3: Server-side Handoff Execution', () => {
                 Message: '⏳ Starting...',
                 Error: undefined,
             });
+            expect(createReplySpy).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    conversationId: CONV_ID,
+                    branchId: BRANCH_1,
+                    agentId: targetAgent.ID,
+                    parentId: 'detail-source',
+                    contextUser: USER,
+                })
+            );
+            expect(targetRow.MarkServerAuthoredReply).toHaveBeenCalled();
 
             const stepOutput = JSON.parse(handoffStep.OutputData!);
             expect(stepOutput).toMatchObject({
@@ -389,7 +402,7 @@ describe('VS-SAGE-3: Server-side Handoff Execution', () => {
             const [targetParams, targetOpts] = runInConvSpy.mock.calls[0];
             expect(targetOpts).toEqual({
                 conversationId: CONV_ID,
-                conversationDetailId: 'detail-target',
+                agentResponseDetail: targetRow,
                 createArtifacts: true,
             });
             expect(targetParams.agent).toBe(targetAgent);

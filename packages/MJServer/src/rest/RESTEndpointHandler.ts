@@ -2,7 +2,7 @@ import express from 'express';
 import {
     BaseEntity, CompositeKey, EntityDeleteOptions, EntityInfo,
     EntityPermissionType, EntitySaveOptions, LogError, Metadata,
-    RunView, RunViewParams, UserInfo
+    RunView, RunViewParams, StripServerOnlyRunViewParams, UserInfo
 } from '@memberjunction/core';
 import { EntityCRUDHandler } from './EntityCRUDHandler.js';
 import { ViewOperationsHandler } from './ViewOperationsHandler.js';
@@ -499,10 +499,11 @@ export class RESTEndpointHandler {
             
             const user = req['mjUser'];
             
-            // Create RunViewParams from the request body
+            // Create RunViewParams from the request body, without the fields only server code sets;
+            // the time zone comes from the x-mj-timezone header, as on the GraphQL path
             const params: RunViewParams = {
-                EntityName: entityName,
-                ...viewParams
+                ...StripServerOnlyRunViewParams({ ...viewParams, EntityName: entityName }),
+                TimeZone: req.userPayload?.TimeZone
             };
             
             const result = await ViewOperationsHandler.runView(params, user);
@@ -533,7 +534,9 @@ export class RESTEndpointHandler {
             
             // Filter out any views for entities that aren't allowed
             // using our enhanced entity filtering with wildcards and schema support
-            const filteredParams = params.filter(p => this.isEntityAllowed(p.EntityName));
+            const filteredParams = params
+                .filter(p => this.isEntityAllowed(p.EntityName))
+                .map(p => ({ ...StripServerOnlyRunViewParams(p), TimeZone: req.userPayload?.TimeZone }));
             
             // If all requested entities were filtered out, return an error
             if (filteredParams.length === 0 && params.length > 0) {

@@ -112,6 +112,7 @@ class MockConversationDetail {
     public UtteranceEndMs: number | null = null;
     public MediaType: string | null = null;
     public LatestResult = { CompleteMessage: '' };
+    public MarkServerAuthoredReply(): void { /* the server-authored marker; the gate is not under test here */ }
     public NewRecord(): void { this.ID = 'detail-1'; }
     public async Save(): Promise<boolean> { return true; }
     /** Same shared instance models "the existing row", so Load just confirms + keeps prior fields. */
@@ -157,6 +158,7 @@ class StoreBackedDetail {
     public LatestResult = { CompleteMessage: '' };
     private isNew = false;
     constructor(private store: MockDetailStore) {}
+    public MarkServerAuthoredReply(): void { /* the server-authored marker; the gate is not under test here */ }
     public NewRecord(): void { this.isNew = true; this.ID = ''; }
     public async Save(): Promise<boolean> {
         if (this.isNew && !this.ID) { this.ID = this.store.nextId(); this.isNew = false; }

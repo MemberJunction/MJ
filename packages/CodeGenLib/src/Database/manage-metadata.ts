@@ -3940,23 +3940,34 @@ export class ManageMetadataBase {
     * that mirror the parent entity's base table fields (excluding PKs, timestamps, and virtual fields).
     * Runs collision detection to prevent child table columns from shadowing parent fields.
     */
-   protected async manageParentEntityFields(pool: CodeGenConnection): Promise<{success: boolean, anyUpdates: boolean}> {
+   protected async manageParentEntityFields(pool: CodeGenConnection, excludeSchemas: string[] = []): Promise<{success: boolean, anyUpdates: boolean}> {
       let bSuccess = true;
-      let anyUpdates = false;
+      const updatedChildNames: string[] = [];
 
+      // `excludeSchemas` is the compiled scope: the authored exclude list plus every schema the
+      // includeSchemas allow-list left out (ApplyIncludeSchemaScope). Only children in scope are
+      // synced. Without this an Open App publisher run processed every IS-A child in the database
+      // and wrote INSERTs for sibling apps' children into its own migration capture (#4879).
       const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
-      const childEntities = md.Entities.filter(e => e.IsChildType);
+      const allChildEntities = md.Entities.filter(e => e.IsChildType);
+      const childEntities = allChildEntities.filter(e => !this.isSchemaExcluded(e.SchemaName, excludeSchemas));
+      const outOfScope = allChildEntities.length - childEntities.length;
 
       if (childEntities.length === 0) {
+         if (outOfScope > 0) {
+            logStatus(`   Skipping IS-A parent fields: all ${outOfScope} child entit${outOfScope === 1 ? 'y is' : 'ies are'} in excluded schemas`);
+         }
          return { success: true, anyUpdates: false };
       }
 
-      logStatus(`   Processing IS-A parent fields for ${childEntities.length} child entit${childEntities.length === 1 ? 'y' : 'ies'}...`);
+      logStatus(`   Processing IS-A parent fields for ${childEntities.length} child entit${childEntities.length === 1 ? 'y' : 'ies'}${outOfScope > 0 ? ` (${outOfScope} in excluded schemas skipped)` : ''}...`);
 
       for (const childEntity of childEntities) {
          try {
             const { success, updated } = await this.manageSingleEntityParentFields(pool, childEntity);
-            anyUpdates = anyUpdates || updated;
+            if (updated) {
+               updatedChildNames.push(childEntity.Name);
+            }
             if (!success) {
                logError(`   Error managing IS-A parent fields for ${childEntity.Name}`);
                bSuccess = false;
@@ -3967,7 +3978,29 @@ export class ManageMetadataBase {
          }
       }
 
-      return { success: bSuccess, anyUpdates };
+      // A child whose virtual EntityField set changed has a different TypeScript surface (entity
+      // subclass, zod schema, GraphQL types). The rows were written directly above, so nothing
+      // else marks the entity — and the file emit only rebuilds schemas holding a new or modified
+      // entity (fileEmit.dirtySchemaOnly). Mark it here or the run reports success and ships a
+      // class that lacks the field the metadata declares, until someone runs `--skipdb` (#5961).
+      if (updatedChildNames.length > 0) {
+         ManageMetadataBase.AddNewEntitiesToModifiedList(updatedChildNames);
+      }
+
+      return { success: bSuccess, anyUpdates: updatedChildNames.length > 0 };
+   }
+
+   /**
+    * True when `schemaName` is on the compiled exclude list. Schema names are compared
+    * case-insensitively: SQL Server resolves them that way, and PostgreSQL folds unquoted
+    * identifiers, so the list and the metadata can legitimately differ in case.
+    */
+   protected isSchemaExcluded(schemaName: string | null | undefined, excludeSchemas: readonly string[]): boolean {
+      if (!schemaName || excludeSchemas.length === 0) {
+         return false;
+      }
+      const target = schemaName.trim().toLowerCase();
+      return excludeSchemas.some(s => s.trim().toLowerCase() === target);
    }
 
    /**
@@ -4043,7 +4076,15 @@ export class ManageMetadataBase {
             // Apply-time Sequence (see applyTimeEntityFieldSequenceSQL); reordered by
             // updateExistingEntityFieldsFromSchema afterwards.
             const q = (n: string) => this.qi(n);
-            const sqlInsert = `INSERT INTO ${this.qs(MjCoreSchema(), 'EntityField')} (
+            // The INSERT is captured into the run's migration SQL and replayed on other hosts, so it
+            // carries the same existence guard as the schema-field inserts in createNewEntityFieldsFromSchema.
+            // Unguarded, a replay on a host where the field already exists (a second app captured on the
+            // same chain, or the owning app shipping the field itself) fails on
+            // UQ_EntityField_EntityID_Name and stops the install (#4879).
+            const conflictCheck = `SELECT 1 FROM ${this.qs(MjCoreSchema(), 'EntityField')} WHERE ${q('ID')} = '${newFieldID}' OR (${q('EntityID')} = '${childEntity.ID}' AND ${q('Name')} = '${parentField.Name}')`;
+            const guard = this.dbProvider.wrapInsertWithConflictGuard(conflictCheck);
+            const sqlInsert = `${guard.prefix}
+               INSERT INTO ${this.qs(MjCoreSchema(), 'EntityField')} (
                   ${q('ID')}, ${q('EntityID')}, ${q('Name')}, ${q('Type')}, ${q('AllowsNull')},
                   ${q('Length')}, ${q('Precision')}, ${q('Scale')},
                   ${q('Sequence')}, ${q('IsVirtual')}, ${q('AllowUpdateAPI')},
@@ -4054,7 +4095,8 @@ export class ManageMetadataBase {
                   '${parentField.Type}', ${this.boolLit(parentField.AllowsNull)},
                   ${parentField.Length}, ${parentField.Precision}, ${parentField.Scale},
                   ${this.applyTimeEntityFieldSequenceSQL(childEntity.ID)}, ${this.boolLit(true)}, ${this.boolLit(true)}, ${this.boolLit(false)}, ${this.boolLit(false)},
-                  ${this.utcNow()}, ${this.utcNow()})`;
+                  ${this.utcNow()}, ${this.utcNow()})
+               ${guard.suffix}`;
             await this.logSQLAndExecute(pool, sqlInsert,
                `Create IS-A parent field ${parentField.Name} on ${childEntity.Name}`);
             ManageMetadataBase.registerNewField(childEntity.ID, parentField.Name);
@@ -4776,7 +4818,7 @@ export class ManageMetadataBase {
       // IS-A parent field sync: create/update virtual EntityField records for parent chain fields
       // Must run AFTER metadata refresh so it sees current soft PK/FK flags
       const stepISAStartTime: Date = new Date();
-      const isaResult = await this.manageParentEntityFields(pool);
+      const isaResult = await this.manageParentEntityFields(pool, excludeSchemas);
       if (!isaResult.success) {
          logError('Error managing IS-A parent entity fields');
          bSuccess = false;
@@ -8922,7 +8964,35 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
     */
    protected isFieldEligibleForNameField(field: Record<string, unknown>): boolean {
       if (field.IsVirtual === true && !this.isInheritedISAField(field)) return false;
+      if (this.isForeignKeyOrPolymorphicRecordIDField(field)) return false;
       return this.isNameFieldTypeSafe(field);
+   }
+
+   /**
+    * Rejects foreign-key columns (`RelatedEntityID`) and polymorphic record-ID
+    * payload columns (`EntityIDFieldName` populated, or named `*RecordID` /
+    * `*RecordPrimaryKey` such as `RecordID`, `SourceRecordID`, `TargetRecordID`,
+    * `LinkedRecordID`, `SurvivingRecordID`) from being selected as `IsNameField`.
+    *
+    * Polymorphic `RecordID` columns use `nvarchar(450)` / `nvarchar(750)` so they
+    * can hold composite primary keys or non-UUID strings, which previously tricked
+    * Smart Field Identification into treating them as human-readable text names
+    * and displaying raw UUIDs in tab headers, breadcrumbs, and link cards.
+    */
+   protected isForeignKeyOrPolymorphicRecordIDField(field: Record<string, unknown>): boolean {
+      const relatedEntityId = field.RelatedEntityID as string | undefined | null;
+      if (relatedEntityId && String(relatedEntityId).trim().length > 0) {
+         return true;
+      }
+      const entityIdFieldName = field.EntityIDFieldName as string | undefined | null;
+      if (entityIdFieldName && String(entityIdFieldName).trim().length > 0) {
+         return true;
+      }
+      const name = ((field.Name as string | undefined) ?? '').trim();
+      if (/^(?:[A-Z][A-Za-z0-9]*?)?Record(?:ID|PrimaryKey)$/.test(name)) {
+         return true;
+      }
+      return false;
    }
 
    /**

@@ -16,12 +16,20 @@ import type { EntityActionUXContext, EntityActionUXResult } from '@memberjunctio
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { ExportColumnTypeForSQLType } from '../utils/export-column.util';
-import { LogError, LogStatus, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression, CoerceImageSrc, ParseCssHexColor, CompositeKey, IsDateOnlySQLType, FormatDateOnly, EntityFieldTSType } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { LogError, LogStatus, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression, CoerceImageSrc, ParseCssHexColor, CompositeKey, IsDateOnlySQLType, FormatDateOnly, EntityFieldTSType, BaseEntity, BaseEntityEvent } from '@memberjunction/core';
+import { UUIDsEqual, MJGlobal, MJEvent } from '@memberjunction/global';
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
 import { CommunicationEngineBase } from '@memberjunction/communication-types';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
-import { BuildPkString, CanonicalizeColumnFields, ComputeFieldsList } from '../utils/record.util';
+import {
+  BuildPkString,
+  CanonicalizeColumnFields,
+  ComputeFieldsList,
+  ResolvePolymorphicTargetEntity,
+  BuildPolymorphicCompositeKey,
+  PolymorphicCacheKey,
+  BatchResolvePolymorphicRecordNames
+} from '../utils/record.util';
 import { AggregateField } from '../utils/aggregate-field.util';
 import {
   MJUserViewEntityExtended,
@@ -216,6 +224,25 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   }
   get Params(): RunViewParams | null {
     return this._params;
+  }
+
+  private _alternateBaseView: string | null = null;
+  /**
+   * Optional semantic `Name` of a registered alternate base view on the entity (`MJ: Entity Alternate Base Views.Name`).
+   * Overrides `Params.AlternateBaseView` when set.
+   */
+  @Input()
+  set AlternateBaseView(value: string | null) {
+    const normalized = value?.trim() || null;
+    if (normalized !== this._alternateBaseView) {
+      this._alternateBaseView = normalized;
+      if (this._params) {
+        this.onParamsChanged();
+      }
+    }
+  }
+  get AlternateBaseView(): string | null {
+    return this._alternateBaseView;
   }
 
   private _allowLoad: boolean = true;
@@ -1929,6 +1956,19 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   // Export dialog state
   public ShowExportDialog: boolean = false;
 
+  /**
+   * Number of live record creations or deletions detected for the current entity
+   * since the last grid load. Displayed in a non-disruptive floating pill so
+   * the user can refresh on demand without losing scroll or sort state.
+   */
+  public LivePendingChangesCount: number = 0;
+
+  /**
+   * Concatenated PK string (`__pk`) of the most recently live-patched visible row.
+   */
+  public LastPatchedRowKey: string | null = null;
+  private _patchedRowClearTimer: ReturnType<typeof setTimeout> | null = null;
+
   /** @deprecated Use {@link ShowExportDialog}. */
   public get showExportDialog(): boolean {
     return this.ShowExportDialog;
@@ -1964,12 +2004,17 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     this.setupRefreshDebounce();
     this.setupStatePersistDebounce();
     this.setupUserDefaultsPersistDebounce();
+    this.subscribeToLiveEntityEvents();
     this.updateAgRowSelection();
   }
 
   ngOnDestroy(): void {
     // Flush any pending state persistence immediately before destroying
     this.EnsurePendingChangesSaved();
+    if (this._patchedRowClearTimer) {
+      clearTimeout(this._patchedRowClearTimer);
+      this._patchedRowClearTimer = null;
+    }
 
     this.destroy$.next();
     this.destroy$.complete();
@@ -2023,6 +2068,167 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     ).subscribe((state) => {
       this.persistUserDefaultGridState(state);
     });
+  }
+
+  /**
+   * Subscribes to `MJGlobal` `BaseEntity.BaseEventCode` (`save`, `delete`, `remote-invalidate`)
+   * events so visible rows in the grid are patched in-place on update without resetting scroll/sort,
+   * and new/deleted records surface a non-disruptive floating refresh pill.
+   */
+  private subscribeToLiveEntityEvents(): void {
+    MJGlobal.Instance.GetEventListener(false)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((event: MJEvent) => {
+        this.handleLiveEntityEvent(event);
+      });
+  }
+
+  private handleLiveEntityEvent(event: MJEvent): void {
+    if (!this._entityInfo || event.eventCode !== BaseEntity.BaseEventCode) {
+      return;
+    }
+    const baEvent = event.args as BaseEntityEvent | undefined;
+    if (!baEvent) {
+      return;
+    }
+
+    let entityName: string | undefined;
+    let candidateKey = '';
+    let action: 'save' | 'delete' = 'save';
+    let localRecordData: Record<string, unknown> | null = null;
+
+    if ((baEvent.type === 'save' || baEvent.type === 'delete') && baEvent.baseEntity) {
+      entityName = baEvent.baseEntity.EntityInfo?.Name;
+      action = baEvent.type;
+      if (entityName && entityName.trim().toLowerCase() === this._entityInfo.Name.trim().toLowerCase()) {
+        const rawData = baEvent.baseEntity.GetAll();
+        localRecordData = rawData;
+        candidateKey = BuildPkString(rawData, this._entityInfo);
+      }
+    } else if (baEvent.type === 'remote-invalidate' && baEvent.payload && typeof baEvent.payload === 'object') {
+      const payload = baEvent.payload as { entityName?: string; key?: string; action?: 'save' | 'delete' };
+      entityName = payload.entityName;
+      candidateKey = payload.key ?? '';
+      action = payload.action ?? 'save';
+    } else {
+      return;
+    }
+
+    if (!entityName || entityName.trim().toLowerCase() !== this._entityInfo.Name.trim().toLowerCase()) {
+      return;
+    }
+
+    const matchedKey = candidateKey ? this.findMatchingRowKey(candidateKey) : null;
+    if (action === 'save' && matchedKey !== null) {
+      if (localRecordData) {
+        this.patchRowInPlace(matchedKey, localRecordData);
+      } else {
+        void this.fetchAndPatchSingleRow(matchedKey);
+      }
+    } else {
+      // Record created (not currently in visible rows) or deleted: surface non-disruptive pill
+      this.LivePendingChangesCount++;
+      this.cdr.detectChanges();
+    }
+  }
+
+  private findMatchingRowKey(candidateKey: string): string | null {
+    if (this._rowDataMap.has(candidateKey)) {
+      return candidateKey;
+    }
+    const lower = candidateKey.toLowerCase();
+    for (const existingKey of this._rowDataMap.keys()) {
+      if (existingKey.toLowerCase() === lower) {
+        return existingKey;
+      }
+    }
+    return null;
+  }
+
+  private async fetchAndPatchSingleRow(matchedKey: string): Promise<void> {
+    if (!this._entityInfo) {
+      return;
+    }
+    try {
+      const ck = new CompositeKey();
+      ck.LoadFromConcatenatedString(matchedKey);
+      if (!ck.HasValue) {
+        return;
+      }
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const result = await rv.RunView<Record<string, unknown>>({
+        EntityName: this._entityInfo.Name,
+        ExtraFilter: ck.ToWhereClause(),
+        MaxRows: 1,
+        ResultType: 'simple',
+        Fields: ComputeFieldsList(this._entityInfo, this._gridState, this.hostColumnFieldNames()),
+      });
+      if (result.Success && result.Results.length > 0) {
+        this.patchRowInPlace(matchedKey, result.Results[0]);
+      }
+    } catch {
+      // Non-fatal: row remains at previous snapshot until next full refresh
+    }
+  }
+
+  private patchRowInPlace(matchedKey: string, updatedRecordData: Record<string, unknown>): void {
+    const existingRowData = this._rowDataMap.get(matchedKey);
+    if (!existingRowData || !this._entityInfo) {
+      return;
+    }
+
+    const mergedEntity: Record<string, unknown> = {
+      ...existingRowData.entity,
+      ...updatedRecordData,
+    };
+    existingRowData.entity = mergedEntity;
+
+    const agRow: Record<string, unknown> = {
+      __pk: matchedKey,
+    };
+    for (const field of this._entityInfo.Fields) {
+      agRow[field.Name] = mergedEntity[field.Name];
+    }
+
+    const rowIdx = this.RowData.findIndex((r) => r['__pk'] === matchedKey);
+    if (rowIdx >= 0) {
+      this.RowData[rowIdx] = agRow;
+    }
+
+    if (this.gridApi && !this.gridApi.isDestroyed()) {
+      this.gridApi.applyTransaction({ update: [agRow] });
+    }
+
+    void this.resolvePolymorphicNamesForCurrentRows([agRow]);
+
+    this.LastPatchedRowKey = matchedKey;
+    if (this._patchedRowClearTimer) {
+      clearTimeout(this._patchedRowClearTimer);
+    }
+    this._patchedRowClearTimer = setTimeout(() => {
+      this.LastPatchedRowKey = null;
+      this._patchedRowClearTimer = null;
+      this.cdr.detectChanges();
+    }, 2500);
+
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Triggered when the user clicks the floating live-updates pill to reload the grid.
+   */
+  public OnApplyLiveGridRefresh(): void {
+    this.LivePendingChangesCount = 0;
+    void this.Refresh();
+  }
+
+  /**
+   * Dismisses the floating live-updates pill without reloading the grid.
+   */
+  public OnDismissLiveGridPill(event: MouseEvent): void {
+    event.stopPropagation();
+    this.LivePendingChangesCount = 0;
+    this.cdr.detectChanges();
   }
 
   /**
@@ -2497,10 +2703,17 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         extraFilter = this._viewEntity.WhereClause;
       }
 
+      const alternateBaseView =
+        this._alternateBaseView ||
+        this._params?.AlternateBaseView ||
+        this._viewEntity?.AlternateBaseView ||
+        undefined;
+
       const result = await rv.RunView({
         EntityName: this._entityInfo.Name,
         MaxRows: 0, // Only get aggregates, no row data
         ExtraFilter: extraFilter,
+        AlternateBaseView: alternateBaseView,
         Aggregates: aggregateExpressions
       });
 
@@ -3317,6 +3530,34 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         return linkHtml;
       }
 
+      // Polymorphic FK rendering (driven by hard metadata link EntityField.EntityIDFieldName)
+      if (!customFormat && field?.EntityIDFieldName && params.data) {
+        const rawRecordId = String(params.value ?? '').trim();
+        if (rawRecordId) {
+          const targetEntity = ResolvePolymorphicTargetEntity(params.data, field, this.ProviderToUse);
+          if (targetEntity) {
+            const compositeKey = BuildPolymorphicCompositeKey(rawRecordId, targetEntity);
+            const resolvedName = compositeKey
+              ? this._polymorphicRecordNames.get(PolymorphicCacheKey(targetEntity.Name, compositeKey))
+              : undefined;
+            const labelToDisplay = resolvedName || rawRecordId;
+            const escapedLabel = HighlightUtil.escapeHtml(labelToDisplay);
+            const escapedFieldName = HighlightUtil.escapeHtml(field.Name);
+            const escapedRelatedEntityId = HighlightUtil.escapeHtml(targetEntity.ID);
+            const escapedRelatedEntityName = HighlightUtil.escapeHtml(targetEntity.Name);
+            const escapedRawRecordId = HighlightUtil.escapeHtml(rawRecordId);
+            const titleAttr = resolvedName
+              ? ` title="${HighlightUtil.escapeHtml(`${targetEntity.DisplayNameOrName}: ${resolvedName} (${rawRecordId})`)}"`
+              : '';
+            const dataAttrs = `data-related-entity-id="${escapedRelatedEntityId}" data-record-id="${escapedRawRecordId}" data-field-name="${escapedFieldName}" data-related-entity-name="${escapedRelatedEntityName}"${titleAttr}`;
+            const displayText = this._filterText
+              ? HighlightUtil.highlight(labelToDisplay, this._filterText, true)
+              : escapedLabel;
+            return `<a href="javascript:void(0)" class="cell-link cell-fk-link" ${dataAttrs}>${displayText}</a>`;
+          }
+        }
+      }
+
       let displayValue = '';
       let extraClass = '';
       let inlineStyle = '';
@@ -3776,6 +4017,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       const loadTimeMs = performance.now() - startTime;
 
       if (result.Success) {
+        this.LivePendingChangesCount = 0;
         this._allData = result.Results || [];
         this.totalRowCount = result.TotalRowCount || this._allData.length;
         this.processData();
@@ -3855,6 +4097,9 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     }
 
     const params: RunViewParams = { ...this._params };
+    if (this._alternateBaseView) {
+      params.AlternateBaseView = this._alternateBaseView;
+    }
 
     // Apply sort state (may be modified by user interactions)
     const orderBy = this.buildOrderByClause();
@@ -4040,7 +4285,31 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       return row;
     });
 
+    if (this._entityInfo && this.RowData.length > 0) {
+      void this.resolvePolymorphicNamesForCurrentRows(this.RowData);
+    }
+
     this.cdr.detectChanges();
+  }
+
+  /** Cache of resolved polymorphic target record display names (`entityName::compositeKey` -> name). */
+  private _polymorphicRecordNames = new Map<string, string>();
+
+  private async resolvePolymorphicNamesForCurrentRows(rows: readonly Record<string, unknown>[]): Promise<void> {
+    if (!this._entityInfo) return;
+    const sizeBefore = this._polymorphicRecordNames.size;
+    await BatchResolvePolymorphicRecordNames(
+      rows,
+      this._entityInfo,
+      this.ProviderToUse,
+      this._polymorphicRecordNames,
+    );
+    if (this._polymorphicRecordNames.size !== sizeBefore) {
+      if (this.gridApi && !this.gridApi.isDestroyed()) {
+        this.gridApi.refreshCells({ force: true });
+      }
+      this.cdr.detectChanges();
+    }
   }
 
   /**

@@ -2126,6 +2126,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             WorkflowName: parent.Name,
             ConversationDetailID: parent.ConversationDetailID ?? null,
             SubmittedByAgentRunID: meta.submittedByAgentRunID,
+            SubmittedByUserID: meta.submittedByUserID ?? null,
             ReinvokeDepth: meta.reinvokeDepth,
             Tasks: [...graph.entityById.values()].map((t) => ({
                 TaskID: t.ID,

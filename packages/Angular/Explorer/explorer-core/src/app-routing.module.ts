@@ -9,7 +9,7 @@ import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
 import { ClaimRedeemComponent } from './lib/identity-claims/claim-redeem.component';
 import { DATA_EXPLORER_DASHBOARDS_ROUTE } from './lib/guards/moved-nav-item-redirect';
 import { LogError, Metadata, StartupManager, IMetadataProvider, IsNewEntityRecordUrlId, NEW_RECORD_VALUES_QUERY_PARAM, CompositeKey } from '@memberjunction/core';
-import { SharedService, SYSTEM_APP_ID, RECORDS_RESOURCE_TYPE } from '@memberjunction/ng-shared';
+import { SharedService, SYSTEM_APP_ID, RECORDS_RESOURCE_TYPE, RecordTabQueryParams } from '@memberjunction/ng-shared';
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
 import { ApplicationManager, TabService } from '@memberjunction/ng-base-application';
 import { MJGlobal, MJEventType } from '@memberjunction/global';
@@ -325,6 +325,7 @@ export class ResourceResolver implements Resolve<void> {
               recordId: isNew ? '' : recordId,
               isNew: isNew || undefined,
               NewRecordValues: newRecordValues,
+              ...RecordTabQueryParams(route.queryParams),
               appName: appName,
               appId: app.ID
             },
@@ -340,7 +341,9 @@ export class ResourceResolver implements Resolve<void> {
             // Dynamic view: /app/:appName/view/dynamic/:entityName
             const entityName = decodeURIComponent(param2);
             const extraFilter = route.queryParams['ExtraFilter'] || route.queryParams['extraFilter'];
-            const filterSuffix = extraFilter ? ' (Filtered)' : '';
+            const rawAbv = route.queryParams['AlternateBaseView'] ?? route.queryParams['alternateBaseView'] ?? route.queryParams['abv'];
+            const alternateBaseView = typeof rawAbv === 'string' ? rawAbv : (Array.isArray(rawAbv) ? rawAbv[0] : undefined);
+            const filterSuffix = (extraFilter || alternateBaseView) ? ' (Filtered)' : '';
 
             this.tabService.OpenTab({
               ApplicationId: app.ID,
@@ -349,6 +352,7 @@ export class ResourceResolver implements Resolve<void> {
                 resourceType: 'MJ: User Views',
                 Entity: entityName,
                 ExtraFilter: extraFilter,
+                AlternateBaseView: alternateBaseView,
                 isDynamic: true,
                 recordId: 'dynamic',
                 appName: appName,
@@ -584,7 +588,8 @@ export class ResourceResolver implements Resolve<void> {
           Entity: entityName,
           recordId: isNew ? '' : recordId,
           isNew: isNew || undefined,
-          NewRecordValues: newRecordValues
+          NewRecordValues: newRecordValues,
+          ...RecordTabQueryParams(route.queryParams)
         },
         ResourceRecordId: isNew ? '' : recordId,
         IsPinned: false
@@ -615,8 +620,10 @@ export class ResourceResolver implements Resolve<void> {
       // /resource/view/dynamic/:entityName
       const entityName = decodeURIComponent(route.params['entityName']);
       const extraFilter = route.queryParams['ExtraFilter'] || route.queryParams['extraFilter'];
+      const rawAbv = route.queryParams['AlternateBaseView'] ?? route.queryParams['alternateBaseView'] ?? route.queryParams['abv'];
+      const alternateBaseView = typeof rawAbv === 'string' ? rawAbv : (Array.isArray(rawAbv) ? rawAbv[0] : undefined);
 
-      const filterSuffix = extraFilter ? ' (Filtered)' : '';
+      const filterSuffix = (extraFilter || alternateBaseView) ? ' (Filtered)' : '';
 
       // Queue tab request via TabService
       this.tabService.OpenTab({
@@ -626,6 +633,7 @@ export class ResourceResolver implements Resolve<void> {
           resourceType: 'MJ: User Views',
           Entity: entityName,
           ExtraFilter: extraFilter,
+          AlternateBaseView: alternateBaseView,
           isDynamic: true,
           recordId: 'dynamic'
         },

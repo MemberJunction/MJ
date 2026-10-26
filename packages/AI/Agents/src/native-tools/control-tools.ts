@@ -11,6 +11,10 @@
 import type { ChatTool } from '@memberjunction/ai';
 import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { SanitizeToolName, MAX_TOOL_DESCRIPTION_LENGTH, type ActionToolBinding, type ActionToolSet } from './action-tool-builder';
+import type { ParamValueSchema } from './action-param-schema';
+import { DEFAULT_NATIVE_CONTROL_CONFIG, type CompleteTaskPayloadForm, type NativeControlConfig } from './native-control-config';
+import { BuildAgentTool, type AgentToolDefinition } from './agent-tools';
+import { FRAMEWORK_TOOL_NAMES } from './framework-tools';
 
 export const PAYLOAD_CHANGE_TOOL = 'payload_change_request';
 export const ASK_USER_TOOL = 'ask_user';
@@ -27,7 +31,9 @@ export type NativeToolBinding =
     | { kind: 'subAgent'; toolName: string; agent: MJAIAgentEntityExtended; tool: ChatTool }
     | { kind: 'payloadChange'; toolName: string; tool: ChatTool }
     | { kind: 'askUser'; toolName: string; tool: ChatTool }
-    | { kind: 'complete'; toolName: string; tool: ChatTool };
+    | { kind: 'complete'; toolName: string; tool: ChatTool }
+    /** One of the agent's own tools (see `BaseAgent.GetAgentTools`). Dispatchable in every native mode, like an Action. */
+    | { kind: 'agentTool'; toolName: string; tool: ChatTool; definition: AgentToolDefinition };
 
 export interface NativeToolSet {
     tools: ChatTool[];
@@ -107,6 +113,44 @@ export function buildAskUserTool(): ChatTool {
     return BuildAskUserTool();
 }
 
+/** The four payload-change sections, as an object schema, for the object form of `complete_task`. */
+function payloadChangeObjectSchema(): ParamValueSchema {
+    const section = (what: string): ParamValueSchema => ({ type: 'object', description: what });
+    return {
+        type: 'object',
+        description: 'Optional. Final payload changes, applied before the task completes — same shape as payload_change_request.',
+        properties: {
+            newElements: section('Keys and values to ADD that are not in the payload yet.'),
+            updateElements: section('Existing keys to UPDATE — only the parts that change.'),
+            replaceElements: section('Existing objects to REPLACE entirely.'),
+            removeElements: section('Keys to REMOVE (value ignored).')
+        }
+    };
+}
+
+/** The `payloadChangeRequest` parameter of `complete_task`, in the declared form. */
+function completeTaskPayloadParameter(form: CompleteTaskPayloadForm): ParamValueSchema {
+    if (form === 'object') {
+        return payloadChangeObjectSchema();
+    }
+    // A JSON string, not an object: complete_task is the call the framework forces on the
+    // final turn, and a forced call is schema-constrained, so an object whose sections
+    // declare no properties can only decode as `{}`. The loop decodes the string.
+    return {
+        type: 'string',
+        description: 'Optional. Final payload changes as a JSON object string, applied before the task completes: '
+            + '{"newElements"?: {...}, "updateElements"?: {...}, "replaceElements"?: {...}, "removeElements"?: {...}} — same shape as payload_change_request.'
+    };
+}
+
+/** How {@link BuildCompleteTaskTool} declares the tool. */
+export interface CompleteTaskToolOptions {
+    /** Whether the tool carries a final payload change at all. Default true. */
+    IncludePayloadChange?: boolean;
+    /** The form of that parameter. Default `'string'`. */
+    PayloadForm?: CompleteTaskPayloadForm;
+}
+
 /**
  * `complete_task` — the terminal tool: apply the final payload write and finish, in ONE turn.
  *
@@ -117,29 +161,22 @@ export function buildAskUserTool(): ChatTool {
  * same reason (OpenAI Agents SDK `StopAtTools`, SWE-agent's `submit`). Plain text still ends the
  * turn, for agents whose answer is prose.
  */
-export function BuildCompleteTaskTool(): ChatTool {
+export function BuildCompleteTaskTool(options: CompleteTaskToolOptions = {}): ChatTool {
+    const includePayload = options.IncludePayloadChange !== false;
+    const properties: Record<string, ParamValueSchema> = {
+        message: { type: 'string', description: 'Your final answer or a brief summary of what you did.' },
+        ...(includePayload ? { payloadChangeRequest: completeTaskPayloadParameter(options.PayloadForm ?? 'string') } : {})
+    };
+    const writes = includePayload
+        ? 'put any final writes to the shared payload in payloadChangeRequest and your answer for the user or calling agent in message. The change is applied '
+        : 'put your answer for the user or calling agent in message. ';
     return {
         name: COMPLETE_TASK_TOOL,
         description: clip(
-            'Finish the task. Call this when your work is done and verified: put any final writes to the shared payload ' +
-            'in payloadChangeRequest and your answer for the user or calling agent in message. The change is applied ' +
+            `Finish the task. Call this when your work is done and verified: ${writes}` +
             'and the run ends — unless the result fails validation, in which case you receive the reason and continue. ' +
             'Must be the only call on its turn.', MAX_TOOL_DESCRIPTION_LENGTH),
-        inputSchema: {
-            type: 'object',
-            properties: {
-                message: { type: 'string', description: 'Your final answer or a brief summary of what you did.' },
-                // A JSON string, not an object: complete_task is the call the framework forces on the
-                // final turn, and a forced call is schema-constrained, so an object whose sections
-                // declare no properties can only decode as `{}`. The loop decodes the string.
-                payloadChangeRequest: {
-                    type: 'string',
-                    description: 'Optional. Final payload changes as a JSON object string, applied before the task completes: '
-                        + '{"newElements"?: {...}, "updateElements"?: {...}, "replaceElements"?: {...}, "removeElements"?: {...}} — same shape as payload_change_request.'
-                }
-            },
-            required: ['message']
-        }
+        inputSchema: { type: 'object', properties, required: ['message'] }
     };
 }
 
@@ -190,51 +227,109 @@ export function buildSubAgentTool(agent: MJAIAgentEntityExtended, options?: SubA
 }
 
 /**
- * Actions, then sub-agents, then the fixed control tools — one reverse map for all of them.
- * Collisions and reserved-name clashes are hard errors, exactly as Action/Action collisions are.
+ * The fixed control tools this agent declares, with their bindings — `payload_change_request`,
+ * `ask_user` and `complete_task`, each unless its configuration turns it off.
+ */
+export type SubAgentOptionsResolver = (agent: MJAIAgentEntityExtended) => SubAgentToolOptions | undefined;
+
+function buildControlBindings(control: NativeControlConfig): NativeToolBinding[] {
+    const bindings: NativeToolBinding[] = [];
+    if (control.PayloadChangeTool) {
+        const payload = BuildPayloadChangeTool();
+        bindings.push({ kind: 'payloadChange', toolName: payload.name, tool: payload });
+    }
+    if (control.AskUser) {
+        const ask = BuildAskUserTool();
+        bindings.push({ kind: 'askUser', toolName: ask.name, tool: ask });
+    }
+    if (control.Terminal === 'tool') {
+        const complete = BuildCompleteTaskTool({ IncludePayloadChange: control.PayloadChangeTool, PayloadForm: control.CompleteTaskPayload });
+        bindings.push({ kind: 'complete', toolName: complete.name, tool: complete });
+    }
+    return bindings;
+}
+
+/** How a binding is named in a collision error. */
+function describeBinding(binding: NativeToolBinding): string {
+    switch (binding.kind) {
+        case 'action': return `Action '${binding.action.Name}'`;
+        case 'subAgent': return `sub-agent '${binding.agent.Name}'`;
+        case 'agentTool': return `agent tool '${binding.toolName}'`;
+        default: return `'${binding.toolName}'`;
+    }
+}
+
+/** Adds one binding, rejecting a name another tool already declared. */
+function addBinding(set: NativeToolSet, binding: NativeToolBinding, isControl: boolean): void {
+    const existing = set.byToolName.get(binding.toolName);
+    if (existing) {
+        throw new Error(`Tool name collision: ${describeBinding(binding)} and ${describeBinding(existing)} both declare '${binding.toolName}'. Rename one.`);
+    }
+    set.byToolName.set(binding.toolName, binding);
+    set.tools.push(binding.tool);
+    if (isControl) {
+        set.controlToolNames.push(binding.toolName);
+    }
+}
+
+/**
+ * Actions, then sub-agents, then the agent's own tools, then the control tools its configuration
+ * declares — one reverse map for all of them. Collisions and reserved-name clashes are hard
+ * errors, exactly as Action/Action collisions are. A reserved name stays reserved when its tool is
+ * turned off, so changing an agent's configuration can never make an Action's name collide.
+ *
+ * Agent tools are not control tools: like Actions, they are kept for every native model, hybrid
+ * included, so they are not listed in `controlToolNames`. Framework tools (native-only mode) ARE
+ * control tools: a hybrid model keeps the envelope fields they replace, so the runner strips them.
  */
 export function BuildNativeToolSet(
     actionSet: ActionToolSet,
     subAgents: readonly MJAIAgentEntityExtended[],
-    subAgentOptions?: (agent: MJAIAgentEntityExtended) => SubAgentToolOptions | undefined
+    controlOrSubAgentOptions: NativeControlConfig | SubAgentOptionsResolver = DEFAULT_NATIVE_CONTROL_CONFIG,
+    agentTools: readonly AgentToolDefinition[] = [],
+    frameworkTools: readonly AgentToolDefinition[] = [],
+    subAgentOptions?: SubAgentOptionsResolver
 ): NativeToolSet {
-    const byToolName = new Map<string, NativeToolBinding>(actionSet.byToolName);
-    const tools: ChatTool[] = [...actionSet.tools];
-    const controlToolNames: string[] = [];
+    const control = typeof controlOrSubAgentOptions === 'function' ? DEFAULT_NATIVE_CONTROL_CONFIG : controlOrSubAgentOptions;
+    const resolveSubAgentOptions = typeof controlOrSubAgentOptions === 'function' ? controlOrSubAgentOptions : subAgentOptions;
     for (const reserved of NATIVE_CONTROL_TOOL_NAMES) {
         const clash = actionSet.byToolName.get(reserved);
         if (clash) {
             throw new Error(`Action '${clash.action.Name}' sanitizes to '${reserved}', which is a reserved control-tool name. Rename the Action.`);
         }
     }
-    for (const agent of subAgents) {
-        const tool = BuildSubAgentTool(agent, subAgentOptions?.(agent));
-        const existing = byToolName.get(tool.name);
-        if (existing) {
-            const other = existing.kind === 'action' ? `Action '${existing.action.Name}'`
-                : existing.kind === 'subAgent' ? `sub-agent '${existing.agent.Name}'` : `'${existing.toolName}'`;
-            throw new Error(`Tool name collision: sub-agent '${agent.Name}' and ${other} both declare '${tool.name}'. Rename one.`);
+    for (const framework of frameworkTools) {
+        const clash = actionSet.byToolName.get(framework.Name);
+        if (clash) {
+            throw new Error(`Action '${clash.action.Name}' sanitizes to '${framework.Name}', the native-only framework tool of that name. `
+                + 'Rename the Action, or turn NativeControl.NativeOnly off for this agent.');
         }
-        byToolName.set(tool.name, { kind: 'subAgent', toolName: tool.name, agent, tool });
-        tools.push(tool);
-        controlToolNames.push(tool.name);
     }
-    const payload = BuildPayloadChangeTool();
-    const ask = BuildAskUserTool();
-    const complete = BuildCompleteTaskTool();
-    byToolName.set(payload.name, { kind: 'payloadChange', toolName: payload.name, tool: payload });
-    byToolName.set(ask.name, { kind: 'askUser', toolName: ask.name, tool: ask });
-    byToolName.set(complete.name, { kind: 'complete', toolName: complete.name, tool: complete });
-    tools.push(payload, ask, complete);
-    controlToolNames.push(payload.name, ask.name, complete.name);
-    return { tools, byToolName, controlToolNames };
+    const set: NativeToolSet = { tools: [...actionSet.tools], byToolName: new Map<string, NativeToolBinding>(actionSet.byToolName), controlToolNames: [] };
+    for (const agent of subAgents) {
+        const tool = BuildSubAgentTool(agent, resolveSubAgentOptions?.(agent));
+        addBinding(set, { kind: 'subAgent', toolName: tool.name, agent, tool }, true);
+    }
+    const reserved = [...NATIVE_CONTROL_TOOL_NAMES, ...FRAMEWORK_TOOL_NAMES];
+    for (const definition of agentTools) {
+        const tool = BuildAgentTool(definition, reserved, SUB_AGENT_TOOL_PREFIX);
+        addBinding(set, { kind: 'agentTool', toolName: tool.name, tool, definition }, false);
+    }
+    for (const definition of frameworkTools) {
+        const tool: ChatTool = { name: definition.Name, description: definition.Description, inputSchema: definition.InputSchema };
+        addBinding(set, { kind: 'agentTool', toolName: tool.name, tool, definition }, true);
+    }
+    for (const binding of buildControlBindings(control)) {
+        addBinding(set, binding, true);
+    }
+    return set;
 }
 
 /** @deprecated Use {@link BuildNativeToolSet}. */
 export function buildNativeToolSet(
     actionSet: ActionToolSet,
     subAgents: readonly MJAIAgentEntityExtended[],
-    subAgentOptions?: (agent: MJAIAgentEntityExtended) => SubAgentToolOptions | undefined
+    subAgentOptions?: SubAgentOptionsResolver
 ): NativeToolSet {
     return BuildNativeToolSet(actionSet, subAgents, subAgentOptions);
 }

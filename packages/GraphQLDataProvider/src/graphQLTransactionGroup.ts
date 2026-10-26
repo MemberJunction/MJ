@@ -34,27 +34,52 @@ export class GraphQLTransactionGroup extends TransactionGroupBase {
      *   before calling `entity.SetMany(itemValues, true)`, so untouched fields remain intact.
      * - **Create / Delete / `ignoreDirtyState`**: Serializes the full loaded data object via
      *   `GetDataObjectJSON()`.
+     * - **Every operation**: leaves out the fields the current user may not read.
      */
     private async serializeTransactionItemEntity(pt: TransactionItem): Promise<string> {
         const entity = pt.BaseEntity;
         const ignoreDirty = Boolean((pt.ExtraData as { ignoreDirtyState?: boolean } | undefined)?.ignoreDirtyState);
-        if (pt.OperationType === 'Update' && !ignoreDirty && Array.isArray(entity.Fields)) {
-            const excludeFields = entity.Fields
-                .filter(f => !f.IsPrimaryKey && (f.ReadOnly || f.NotLoaded || !this.isFieldDirtyOnChain(entity, f)))
-                .map(f => f.Name);
-            if (excludeFields.length > 0) {
-                const params: DataObjectParams = {
-                    oldValues: false,
-                    omitNullValues: false,
-                    omitEmptyStrings: false,
-                    excludeFields,
-                    includeRelatedEntityData: false,
-                    relatedEntityList: []
-                };
-                return await entity.GetDataObjectJSON(params);
-            }
+        const dirtyFiltered = pt.OperationType === 'Update' && !ignoreDirty;
+        const denied = this.deniedReadFieldNames(entity);
+        if (denied.size === 0 && !dirtyFiltered) {
+            // Nothing to leave out: serialize without walking (and so building) the field objects.
+            return await entity.GetDataObjectJSON();
         }
-        return await entity.GetDataObjectJSON();
+        const fields = Array.isArray(entity.Fields) ? entity.Fields : [];
+        const excludeFields = fields
+            .filter(f => !f.IsPrimaryKey && (
+                denied.has(f.Name.trim().toLowerCase()) ||
+                (dirtyFiltered && (f.ReadOnly || f.NotLoaded || !this.isFieldDirtyOnChain(entity, f)))
+            ))
+            .map(f => f.Name);
+        if (excludeFields.length === 0) {
+            return await entity.GetDataObjectJSON();
+        }
+        const params: DataObjectParams = {
+            oldValues: false,
+            omitNullValues: false,
+            omitEmptyStrings: false,
+            excludeFields,
+            includeRelatedEntityData: false,
+            relatedEntityList: []
+        };
+        return await entity.GetDataObjectJSON(params);
+    }
+
+    /** The denied set for an entity without field security or a provider with no user. */
+    private static readonly noDeniedFields: ReadonlySet<string> = new Set<string>();
+
+    /**
+     * The fields the current user may not READ on `entity`'s entity, lowercased. A loaded record
+     * already omits them (they are not loaded), but a new record holds every field at its default,
+     * and the server refuses a restricted caller's payload that names a field it may not read.
+     */
+    private deniedReadFieldNames(entity: BaseEntity): ReadonlySet<string> {
+        const user = this._provider.CurrentUser;
+        if (!entity.EntityInfo?.FieldLevelSecurityApplies || !user) {
+            return GraphQLTransactionGroup.noDeniedFields;
+        }
+        return entity.EntityInfo.GetDeniedReadFields(user);
     }
 
     // new implementation

@@ -9,7 +9,7 @@
  */
 
 import type { WidgetMountOptions, WidgetSession } from './types.js';
-import { WidgetSessionClient } from './session/widget-session-client.js';
+import { WidgetSessionClient, WidgetSessionError } from './session/widget-session-client.js';
 import { ReadVisitorKey, WriteVisitorKey, ClearVisitorKey } from './session/visitor-key-cookie.js';
 import type { IWidgetTransport } from './transport/widget-transport.js';
 import type { IVoiceController } from './voice/voice-controller.js';
@@ -97,6 +97,29 @@ export async function BootstrapFromDocument(doc: Document = document): Promise<S
         title: mountEl.dataset.title,
         greeting: mountEl.dataset.greeting,
     });
+}
+
+/**
+ * What the embed bundle runs on load: {@link BootstrapFromDocument}, with any failure reported on the console
+ * instead of left as an unhandled rejection. The host page has nobody else to tell. Never rejects.
+ *
+ * The widget signs its session refreshes with a Web Crypto key, and browsers expose Web Crypto (`crypto.subtle`)
+ * only in a secure context (HTTPS, or localhost). On a plain-http page the widget cannot start, by design (there is
+ * no fallback without proof of possession), so that case gets a message the site owner can act on.
+ */
+export async function StartEmbeddedWidget(doc: Document = document): Promise<void> {
+    try {
+        await BootstrapFromDocument(doc);
+    } catch (error) {
+        if (typeof crypto === 'undefined' || !crypto.subtle) {
+            console.error(
+                '[mj-widget] The support widget needs a secure context (HTTPS, or localhost) for the Web Crypto API, which this page does not have, so it is not shown. Serve the page over HTTPS.',
+                error,
+            );
+            return;
+        }
+        console.error('[mj-widget] Could not start the support widget:', error);
+    }
 }
 
 /** @deprecated Use {@link BootstrapFromDocument}. */
@@ -198,17 +221,57 @@ function scheduleRefresh(
     scheduler(() => {
         void (async () => {
             try {
-                const refreshed = await client.Refresh(session.visitorKey);
+                const refreshed = await client.Refresh(session.token, session.visitorKey);
                 transport.UpdateToken(refreshed.token);
                 scheduleRefresh(client, transport, element, refreshed, scheduler);
-            } catch {
-                // A failed refresh leaves the current (soon-to-expire) token. Surface the
-                // connection-lost banner so the visitor can retry the refresh; on success
-                // the banner clears and the refresh timer re-arms (graceful degradation, W6).
-                element.ShowConnectionError('Connection to support was lost.', () =>
-                    scheduleRefresh(client, transport, element, session, scheduler),
-                );
+            } catch (error) {
+                if (error instanceof WidgetSessionError && error.IsRefused) {
+                    // The server will never renew this session (past the grace window, past its hard end,
+                    // or minted before key-bound refresh), so retrying it cannot work: start a new one.
+                    await restartSession(client, transport, element, session, scheduler);
+                    return;
+                }
+                showRefreshRetry(client, transport, element, session, scheduler);
             }
         })();
     }, delay);
+}
+
+/**
+ * Mints a new session after the server refused to renew `previous`, and moves the transport and element onto it.
+ * The visitor gets a new `mj_sid`, so the previous conversation is no longer readable and a new one starts; a
+ * widget that remembers returning visitors still chains it to the previous one through the visitor key.
+ */
+async function restartSession(
+    client: WidgetSessionClient,
+    transport: IWidgetTransport,
+    element: SupportWidgetElement,
+    previous: WidgetSession,
+    scheduler: (cb: () => void, delayMs: number) => void,
+): Promise<void> {
+    try {
+        const fresh = await client.Mint(previous.visitorKey);
+        await transport.Initialize(fresh);
+        element.SetSession(fresh);
+        element.ShowSystemMessage('Your previous chat ended. You can start a new one.');
+        scheduleRefresh(client, transport, element, fresh, scheduler);
+    } catch (error) {
+        console.error('[mj-widget] Could not start a new session after the previous one was refused:', error);
+        showRefreshRetry(client, transport, element, previous, scheduler);
+    }
+}
+
+/**
+ * A temporary failure leaves the current (soon-to-expire) token. Surface the connection-lost banner so the
+ * visitor can retry the refresh; on success the banner clears and the refresh timer re-arms (graceful
+ * degradation, W6). A refused retry goes on to start a new session.
+ */
+function showRefreshRetry(
+    client: WidgetSessionClient,
+    transport: IWidgetTransport,
+    element: SupportWidgetElement,
+    session: WidgetSession,
+    scheduler: (cb: () => void, delayMs: number) => void,
+): void {
+    element.ShowConnectionError('Connection to support was lost.', () => scheduleRefresh(client, transport, element, session, scheduler));
 }

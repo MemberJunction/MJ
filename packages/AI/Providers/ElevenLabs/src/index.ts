@@ -4,6 +4,9 @@ import { ElevenLabs, ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 
 // Realtime (Agents Platform) driver — BaseRealtimeModel implementation
 export * from './elevenLabsRealtime';
+// Eleven Realtime (OpenAI-Realtime-compatible speech-to-speech models) — BaseRealtimeModel implementation
+export * from './elevenRealtime';
+export * from './elevenLabsVoices';
 
 /**
  * ElevenLabs text-to-speech, with voice and pronunciation-dictionary listing. It does not implement

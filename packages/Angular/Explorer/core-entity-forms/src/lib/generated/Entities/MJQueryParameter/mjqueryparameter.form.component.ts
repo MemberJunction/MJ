@@ -17,6 +17,7 @@ export class MJQueryParameterFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'parameterCore', sectionName: 'Parameter Core', isExpanded: true },
             { sectionKey: 'parameterGuidanceValidation', sectionName: 'Parameter Guidance & Validation', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

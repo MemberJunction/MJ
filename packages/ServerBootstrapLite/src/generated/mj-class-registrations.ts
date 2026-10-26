@@ -65,12 +65,6 @@ import {
     CohereReranker,
 } from '@memberjunction/ai-cohere';
 
-// @memberjunction/ai-elevenlabs (2 classes)
-import {
-    ElevenLabsAudioGenerator,
-    ElevenLabsRealtime,
-} from '@memberjunction/ai-elevenlabs';
-
 // @memberjunction/ai-fireworks (1 classes)
 import {
     FireworksLLM,
@@ -137,6 +131,13 @@ import {
 import {
     DeepInfraLLM,
 } from '@memberjunction/ai-deepinfra';
+
+// @memberjunction/ai-elevenlabs (3 classes)
+import {
+    ElevenLabsAudioGenerator,
+    ElevenLabsRealtime,
+    ElevenRealtime,
+} from '@memberjunction/ai-elevenlabs';
 
 // @memberjunction/ai-inception (2 classes)
 import {
@@ -222,7 +223,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (457 classes)
+// @memberjunction/core-entities (462 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -351,6 +352,8 @@ import {
     MJAuthorizationRoleEntity,
     MJBrandKitAssetEntity,
     MJBrandKitEntity,
+    MJCalendarEventLinkEntity,
+    MJCalendarSyncStateEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -366,6 +369,8 @@ import {
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
     MJCompanyIntegrationFieldMapEntity,
+    MJCompanyIntegrationObjectEntity,
+    MJCompanyIntegrationObjectFieldEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
@@ -440,6 +445,7 @@ import {
     MJEntityActionInvocationEntity,
     MJEntityActionInvocationTypeEntity,
     MJEntityActionParamEntity,
+    MJEntityAlternateBaseViewEntity,
     MJEntityCommunicationFieldEntity,
     MJEntityCommunicationMessageTypeEntity,
     MJEntityDocumentEntity,
@@ -1153,7 +1159,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (64 classes)
+// @memberjunction/core-entities-server (67 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1181,8 +1187,11 @@ import {
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
+    MJConversationEntityServer,
+    MJDashboardEntityServer,
     MJDataContextItemEntityServer,
     MJDuplicateRunEntityServer,
+    MJEntityAlternateBaseViewEntityServer,
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
@@ -1477,8 +1486,6 @@ const CLASS_REGISTRATIONS_0: any[] = [
     CloudflareDecision,
     CohereEmbedding,
     CohereReranker,
-    ElevenLabsAudioGenerator,
-    ElevenLabsRealtime,
     FireworksLLM,
     GeminiEmbedding,
     GeminiImageGenerator,
@@ -1502,6 +1509,9 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OpenAILiveRealtime,
     OpenAIRealtime,
     DeepInfraLLM,
+    ElevenLabsAudioGenerator,
+    ElevenLabsRealtime,
+    ElevenRealtime,
     InceptionDecision,
     InceptionLLM,
     LlamaCppLLM,
@@ -1653,6 +1663,8 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAuthorizationRoleEntity,
     MJBrandKitAssetEntity,
     MJBrandKitEntity,
+    MJCalendarEventLinkEntity,
+    MJCalendarSyncStateEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -1660,18 +1672,20 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCollectionPermissionEntity,
     MJCollectionPermissionEntityExtended,
     MJCommunicationBaseMessageTypeEntity,
-    MJCommunicationLogEntity,
-    MJCommunicationProviderEntity,
-    MJCommunicationProviderMessageTypeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCommunicationLogEntity,
+    MJCommunicationProviderEntity,
+    MJCommunicationProviderMessageTypeEntity,
     MJCommunicationRunEntity,
     MJCompanyEntity,
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
     MJCompanyIntegrationFieldMapEntity,
+    MJCompanyIntegrationObjectEntity,
+    MJCompanyIntegrationObjectFieldEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
@@ -1746,6 +1760,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJEntityActionInvocationEntity,
     MJEntityActionInvocationTypeEntity,
     MJEntityActionParamEntity,
+    MJEntityAlternateBaseViewEntity,
     MJEntityCommunicationFieldEntity,
     MJEntityCommunicationMessageTypeEntity,
     MJEntityDocumentEntity,
@@ -1861,16 +1876,16 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQueryPermissionEntity,
     MJQuerySQLEntity,
     MJQueueEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJQueueTaskEntity,
     MJQueueTypeEntity,
     MJRSUPendingWorkEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJRecommendationRunEntity,
     MJRecordChangeEntity,
     MJRecordChangeReplayRunEntity,
@@ -2065,16 +2080,16 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetSingleSurveyMonkeyResponseAction,
     GetSingleTypeformResponseAction,
     GetSurveyMonkeyDetailsAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     GetSurveyMonkeyResponsesAction,
     GetSurveyMonkeyStatisticsAction,
     GetTypeformAction,
     GetTypeformFileContentAction,
     GetTypeformFormsAction,
     GetTypeformResponsesAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     GetTypeformStatisticsAction,
     UpdateJotFormAction,
     UpdateSurveyMonkeyAction,
@@ -2269,16 +2284,16 @@ const CLASS_REGISTRATIONS_3: any[] = [
     RecordProcessCancelRunServerOperation,
     RecordProcessGetRunStatusServerOperation,
     RecordProcessPauseRunServerOperation,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     RecordProcessResumeRunServerOperation,
     RecordProcessRunNowServerOperation,
     MLModelInferenceProcessor,
     MLModelScoreEnricher,
     PredictiveStudioControlExperimentSessionServerOperation,
     PredictiveStudioCreateScoringProcessServerOperation,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     PredictiveStudioModelDevAgent,
     PredictiveStudioPipelineBuilderAgent,
     PredictiveStudioPromoteModelAction,
@@ -2343,8 +2358,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
+    MJConversationEntityServer,
+    MJDashboardEntityServer,
     MJDataContextItemEntityServer,
     MJDuplicateRunEntityServer,
+    MJEntityAlternateBaseViewEntityServer,
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
@@ -2470,6 +2488,10 @@ const CLASS_REGISTRATIONS_4: any[] = [
     Get_AI_Model_Cost_Action,
     GoogleCustomSearchAction,
     GraphQLQueryAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     HTTPRequestAction,
     IPGeolocationAction,
     IntegrationActionExecutor,
@@ -2479,10 +2501,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ListObjectsAction,
     ListStorageAccountsAction,
     LoadAgentSpecAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     LoopAction,
     MCPToolAction,
     ManageMyCalendarEventAction,
@@ -2606,7 +2624,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1107;
+export const CLASS_REGISTRATIONS_COUNT = 1116;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
@@ -2620,7 +2638,6 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-cerebras',
     '@memberjunction/ai-cloudflare',
     '@memberjunction/ai-cohere',
-    '@memberjunction/ai-elevenlabs',
     '@memberjunction/ai-fireworks',
     '@memberjunction/ai-gemini',
     '@memberjunction/ai-groq',
@@ -2632,6 +2649,7 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-ollama',
     '@memberjunction/ai-openai',
     '@memberjunction/ai-deepinfra',
+    '@memberjunction/ai-elevenlabs',
     '@memberjunction/ai-inception',
     '@memberjunction/ai-llamacpp',
     '@memberjunction/ai-minimax',

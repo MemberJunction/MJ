@@ -21,6 +21,7 @@ export * from './lib/utils/decision-routing';
 // Fork rules: the delete guard and the open view (Main or one fork)
 export * from './lib/utils/conversation-branching';
 export * from './lib/utils/conversation-forks';
+export * from './lib/utils/agent-failure-display';
 
 // Services - State
 export * from './lib/services/data-cache.service';

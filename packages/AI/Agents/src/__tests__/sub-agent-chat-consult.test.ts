@@ -1227,7 +1227,7 @@ describe('VS-CON-2: Sub-Agent Consult flow in BaseAgent.Execute()', () => {
                 } as unknown as AIPromptRunResult['chatResult'];
                 RecordToolCallingDecision(chatResult, {
                     useNativeTools: true,
-                    mode: 'Native',
+                    mode: 'NativeImplicit',
                     controlFlow: 'implicit',
                     toolResults: true,
                 });

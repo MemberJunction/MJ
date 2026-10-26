@@ -22,10 +22,10 @@ import { BaseAgent } from '../base-agent';
 import { FlowAgentType, FlowExecutionState, type FlowAgentExecuteParams } from '../agent-types/flow-agent-type';
 import type { AgentPreExecutionRAGResult } from '../agent-pre-execution-rag';
 import {
+    AIPromptParams,
     TaskGraphSubmitter,
     TASK_GRAPH_SUBMITTER_KEY,
     type AgentSubAgentRequest,
-    type AIPromptParams,
     type AIPromptRunResult,
     type ExecuteAgentParams,
     type ExecuteAgentResult,
@@ -614,5 +614,63 @@ describe('Flow agent with multiple starting steps converging at a join', () => {
         // Sorted by step name ('Data Expert' before 'Requirements'), both starting steps run before 'Technical Product Manager'
         expect(agent.SubAgentCalls).toEqual(['Data Expert', 'Requirements Expert', 'Technical Product Manager']);
         expect(prompts.PromptIDs).toEqual([SUCCESS_PROMPT_ID]);
+    });
+});
+
+describe('FlowAgentType payload injection, output mapping, and prompt synthesis', () => {
+    const flowType = new FlowAgentType();
+
+    it('normalizes optional leading payload. prefix in ActionOutputMapping', () => {
+        const change = flowType.ProcessActionResult(
+            { Results: [{ Name: 'Acme' }], RowCount: 1 },
+            STEP_IDS.requirements,
+            JSON.stringify({ Results: 'payload.customerData', RowCount: 'rowCount' }),
+            {}
+        );
+
+        expect(change?.updateElements).toEqual({
+            customerData: [{ Name: 'Acme' }],
+            rowCount: 1,
+        });
+    });
+
+    it('injects payload and userMessage into prompt.data in InjectPayload', async () => {
+        const promptParams = new AIPromptParams();
+        promptParams.conversationMessages = [
+            { role: 'user', content: 'Analyze top accounts' },
+        ];
+        const state = new FlowExecutionState(FLOW_ID);
+        state.currentStepId = STEP_IDS.successFinal;
+
+        await flowType.InjectPayload({ customerData: [{ Name: 'Acme' }] }, state, promptParams, {
+            agentId: FLOW_ID,
+            agentRunId: 'run-1',
+        });
+
+        expect(promptParams.data?.payload).toEqual({ customerData: [{ Name: 'Acme' }] });
+        expect(promptParams.data?.userMessage).toBe('Analyze top accounts');
+    });
+
+    it('preserves plain-text/Markdown prompt output as the terminal Success message in DetermineNextStep', async () => {
+        const state = new FlowExecutionState(FLOW_ID);
+        state.executionMode = 'inRun';
+        state.currentStepId = STEP_IDS.successFinal;
+        const payload = { customerData: [{ Name: 'Acme' }] };
+
+        const next = await flowType.DetermineNextStep(
+            {
+                success: true,
+                status: 'Completed',
+                result: '# Executive Summary\n\nAcme is the top account.',
+                rawResult: '# Executive Summary\n\nAcme is the top account.',
+            } as unknown as AIPromptRunResult,
+            makeParams(),
+            payload,
+            state
+        );
+
+        expect(next.step).toBe('Success');
+        expect(next.message).toBe('# Executive Summary\n\nAcme is the top account.');
+        expect(next.newPayload).toEqual(payload);
     });
 });

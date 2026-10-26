@@ -40,6 +40,7 @@ import {
   EntityRecordNameResult,
   RecordDependency,
   EntityDependency,
+  GetRecordDependenciesOptions,
   LogStatus,
   LogStatusEx,
   CompositeKey,
@@ -954,9 +955,11 @@ export class SQLServerDataProvider
       return results;
     }
 
-    // Build array of SQL statements for batch execution
+    // Build array of SQL statements for batch execution (recording per-item resolution errors
+    // in `results` without aborting valid sibling items in the batch)
     const sqlStatements: string[] = [];
-    for (const { entityInfo, whereSQL, item } of items) {
+    const validItems: Array<{ index: number }> = [];
+    for (const { index, entityInfo, whereSQL, item } of items) {
       // The freshness probe MUST target the same physical view the read targets. For a
       // DataSource:'Materialized' read that's the materialized_vw<CodeName> wrapper (a full SELECT *
       // snapshot of the base view, so it carries __mj_UpdatedAt) — NOT the live base view. Probing the
@@ -966,8 +969,20 @@ export class SQLServerDataProvider
       // still supplies a materialized cacheStatus.) Use the status-gated resolveEffectiveBaseView (not the
       // unconditional GetEffectiveBaseView) so a Building/DriftHold/Disabled/never-minted snapshot probes the
       // LIVE base view — mirroring the read path — instead of a held or missing materialized_vw wrapper.
-      const effectiveView = await this.resolveEffectiveBaseView(entityInfo, item.params, contextUser);
-      sqlStatements.push(this.BuildCacheStatusSQL(entityInfo, effectiveView, whereSQL));
+      try {
+        const effectiveTarget = await this.resolveEffectiveBaseViewTarget(entityInfo, item.params, contextUser);
+        sqlStatements.push(this.BuildCacheStatusSQL(entityInfo, effectiveTarget.viewName, whereSQL, effectiveTarget.schemaName));
+        validItems.push({ index });
+      } catch (err) {
+        results.set(index, {
+          success: false,
+          errorMessage: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    if (sqlStatements.length === 0) {
+      return results;
     }
 
     try {
@@ -975,8 +990,8 @@ export class SQLServerDataProvider
       const resultSets = await this.ExecuteSQLBatch(sqlStatements, undefined, undefined, contextUser);
 
       // Process each result set and map to the corresponding item index
-      for (let i = 0; i < items.length; i++) {
-        const { index } = items[i];
+      for (let i = 0; i < validItems.length; i++) {
+        const { index } = validItems[i];
         const resultSet = resultSets[i];
 
         if (resultSet && resultSet.length > 0) {
@@ -1012,24 +1027,26 @@ export class SQLServerDataProvider
     whereSQL: string,
     orderBySQL: string,
     user: UserInfo,
+    schemaNameOverride?: string,
   ): Promise<{ executeViewSQL: string; runID: string }> {
     // entityInfo + effectiveBaseView are passed in (no reverse-lookup by base-view name) so the logged
-    // read honors DataSource:'Materialized' — effectiveBaseView is the materialized wrapper view then,
-    // and the entity's live base view otherwise.
+    // read honors DataSource:'Materialized' and AlternateBaseView — effectiveBaseView is the materialized
+    // or alternate view then, and the entity's live base view otherwise.
     //
     // UserViewRunDetail.RecordID is a single NVARCHAR(255) holding ONE bare key value per row, and the
     // read-back below is `<pk> IN (SELECT RecordID ...)` — a one-column predicate. A composite key has
     // no single column to log or match on, so refuse rather than record (and re-read) a truncated key.
     this.assertSingleColumnPrimaryKey(entityInfo, 'SaveViewResults (user view run logging)');
     const pkName = entityInfo.FirstPrimaryKey.Name; // first-pk-ok: guarded above — view-run RecordID holds one bare key value, PrimaryKeys.length === 1 enforced
+    const targetSchema = schemaNameOverride ?? entityInfo.SchemaName;
     const sSQL = `
             DECLARE @ViewIDList TABLE ( ID NVARCHAR(255) );
-            INSERT INTO @ViewIDList (ID) (SELECT ${pkName} FROM [${entityInfo.SchemaName}].${effectiveBaseView} WHERE (${whereSQL}))
+            INSERT INTO @ViewIDList (ID) (SELECT ${pkName} FROM [${targetSchema}].${effectiveBaseView} WHERE (${whereSQL}))
             EXEC [${this.MJCoreSchemaName}].spCreateUserViewRunWithDetail(${viewId},${user.Email}, @ViewIDLIst)
             `;
     const runIDResult = await this.ExecuteSQL(sSQL, undefined, undefined, user);
     const runID: string = runIDResult[0].UserViewRunID;
-    const sRetSQL: string = `SELECT * FROM [${entityInfo.SchemaName}].${effectiveBaseView} WHERE ${pkName} IN
+    const sRetSQL: string = `SELECT * FROM [${targetSchema}].${effectiveBaseView} WHERE ${pkName} IN
                                     (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE UserViewRunID=${runID})
                                  ${orderBySQL && orderBySQL.length > 0 ? ` ORDER BY ${orderBySQL}` : ''}`;
     return { executeViewSQL: sRetSQL, runID };
@@ -1053,7 +1070,12 @@ export class SQLServerDataProvider
    * @param entityName
    * @param compositeKey
    */
-  protected override BuildSoftLinkDependencySQL(entityName: string, compositeKey: CompositeKey): string {
+  protected override BuildSoftLinkDependencySQL(
+    entityName: string,
+    compositeKey: CompositeKey,
+    options?: GetRecordDependenciesOptions,
+    contextUser?: UserInfo,
+  ): string {
     // we need to go through ALL of the entities in the system and find all of the EntityFields that have a non-null EntityIDFieldName
     // for each of these, we generate a SQL Statement that will return the EntityName, RelatedEntityName, FieldName, and the primary key values of the related entity
     //
@@ -1064,12 +1086,19 @@ export class SQLServerDataProvider
     if (!targetEntity) {
       throw new Error(`Entity ${entityName} not found in metadata`);
     }
-    // The canonical stored encoding of the target record's key - `ID|<guid>` (see CompositeKey.ToRecordID).
-    // A RecordID column holds this, not the bare primary key value.
-    const targetRecordID = compositeKey.ToRecordID();
+    // Single-primary-key records referenced by polymorphic tables may store either the canonical
+    // `ID|<guid>` encoding (`CompositeKey.ToRecordID()`) OR the bare primary key value (`<guid>`).
+    const targetRecordID = this.escapeSQLLiteral(compositeKey.ToRecordID());
+    const bareValue =
+      compositeKey.KeyValuePairs.length === 1
+        ? this.escapeSQLLiteral(String(compositeKey.KeyValuePairs[0].Value ?? ''))
+        : '';
 
     let sSQL = '';
     this.Entities.forEach((entity) => {
+      if (!this.shouldIncludeDependencyEntity(entity, options, contextUser)) {
+        return;
+      }
       // we build a string that will concatenate all of the primary key values into a single string, this is because the primary key could be a composite key
       // we do this in SQL by combining the pirmary key name and value for each row using the default separator defined by the CompositeKey class
       // the output of this should be like the following 'Field1|Value1||Field2|Value2||Field3|Value3' where the || is the CompositeKey.DefaultFieldDelimiter and the | is the CompositeKey.DefaultValueDelimiter
@@ -1079,6 +1108,12 @@ export class SQLServerDataProvider
       entity.Fields.filter((f) => f.EntityIDFieldName && f.EntityIDFieldName.length > 0).forEach((f) => {
         // each field in f must be processed
         if (sSQL.length > 0) sSQL += ' UNION ALL ';
+
+        const sourceObject = this.resolveDependencySourceObject(entity, [f.Name, f.EntityIDFieldName]);
+        const recordIDPredicate =
+          bareValue && bareValue !== targetRecordID
+            ? `[${f.Name}] IN ('${targetRecordID}', '${bareValue}')`
+            : `[${f.Name}] = '${targetRecordID}'`;
 
         // there is a layer of indirection here because each ROW in each of the entity records for this entity/field combination could point to a DIFFERENT
         // entity. We find out which entity it is pointed to via the EntityIDFieldName in the field definition, so we have to filter the rows in the entity
@@ -1095,10 +1130,10 @@ export class SQLServerDataProvider
                             1 AS IsSoftLink,
                             '${f.EntityIDFieldName}' AS EntityIDFieldName
                         FROM
-                            [${entity.SchemaName}].[${entity.BaseView}]
+                            [${entity.SchemaName}].[${sourceObject}]
                         WHERE
                             [${f.EntityIDFieldName}] = '${targetEntity.ID}' AND
-                            [${f.Name}] = '${this.escapeSQLLiteral(targetRecordID)}'`;
+                            ${recordIDPredicate}`;
       });
     });
     return sSQL;
@@ -1113,13 +1148,26 @@ export class SQLServerDataProvider
     return value.replace(/'/g, "''");
   }
 
-  protected override BuildHardLinkDependencySQL(entityDependencies: EntityDependency[], compositeKey: CompositeKey): string {
+  protected override BuildHardLinkDependencySQL(
+    entityDependenciesOrName: EntityDependency[] | string,
+    compositeKey: CompositeKey,
+    options?: GetRecordDependenciesOptions,
+    contextUser?: UserInfo,
+  ): string {
+    const entityDependencies = this.resolveEntityDependencies(entityDependenciesOrName);
     let sSQL = '';
     for (const entityDependency of entityDependencies) {
       const entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.EntityName?.trim().toLowerCase());
-      const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
       const relatedEntityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.RelatedEntityName?.trim().toLowerCase());
-      const primaryKeySelectString = `CONCAT(${entityInfo.PrimaryKeys.map((pk) => `'${pk.Name}|', CAST([${pk.Name}] AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
+      if (!entityInfo || !relatedEntityInfo) continue;
+      if (!this.shouldIncludeDependencyEntity(relatedEntityInfo, options, contextUser)) continue;
+
+      const fkField = relatedEntityInfo.Fields.find((f) => f.Name.trim().toLowerCase() === entityDependency.FieldName?.trim().toLowerCase());
+      if (fkField?.EntityIDFieldName && fkField.EntityIDFieldName.trim().length > 0) continue;
+
+      const pksToProject = relatedEntityInfo.PrimaryKeys?.length ? relatedEntityInfo.PrimaryKeys : entityInfo.PrimaryKeys;
+      const primaryKeySelectString = `CONCAT(${pksToProject.map((pk) => `'${pk.Name}|', CAST([${pk.Name}] AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
+      const sourceObject = this.resolveDependencySourceObject(relatedEntityInfo, [entityDependency.FieldName]);
 
       if (sSQL.length > 0) sSQL += ' UNION ALL ';
       sSQL += `SELECT
@@ -1130,7 +1178,7 @@ export class SQLServerDataProvider
                         0 AS IsSoftLink,
                         NULL AS EntityIDFieldName
                     FROM
-                        [${relatedEntityInfo.SchemaName}].[${relatedEntityInfo.BaseView}]
+                        [${relatedEntityInfo.SchemaName}].[${sourceObject}]
                     WHERE
                         [${entityDependency.FieldName}] = ${this.GetRecordDependencyLinkSQL(entityDependency, entityInfo, relatedEntityInfo, compositeKey)}`;
     }
@@ -1143,7 +1191,8 @@ export class SQLServerDataProvider
       throw new Error(`Field ${dep.FieldName} not found in Entity ${relatedEntity.Name}`);
     }
 
-    if (f.RelatedEntityFieldName?.trim().toLowerCase() === 'id') {
+    const relFieldName = f.RelatedEntityFieldName?.trim().toLowerCase();
+    if (!relFieldName || relFieldName === 'id' || relFieldName === entity.FirstPrimaryKey?.Name?.trim().toLowerCase()) { // first-pk-ok: a foreign key targets a single column; default FK target is the first primary key
       // simple link to first primary key, most common scenario for linkages
       // Key values arrive from remote callers — render through the shared sanitizer.
       return SQLServerDataProvider.RenderKeyValueLiteral(CompositeKey.GetValueByIndex(0), entity.FirstPrimaryKey.NeedsQuotes, entity.FirstPrimaryKey.Name, entity.Name); // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
@@ -1200,20 +1249,23 @@ export class SQLServerDataProvider
    * @param bNewRecord - Whether this is a new record (create) or existing record (update)
    * @param spName - The stored procedure name to call
    * @param user - The user context for the operation
+   * @param transaction - The transaction the save will run in, when one is already open. A read
+   *   the save's Record Change snapshot needs runs in it, so it sees that transaction's earlier
+   *   writes and never waits on the locks they hold.
    * @returns The full SQL statement for the save operation
    *
    * @security This method handles field-level encryption transparently.
    *           Fields marked with Encrypt=true will have their values encrypted
    *           before being included in the SQL statement.
    */
-  public async GetSaveSQL(entity: BaseEntity, bNewRecord: boolean, _spName: string, user: UserInfo): Promise<string> {
+  public async GetSaveSQL(entity: BaseEntity, bNewRecord: boolean, _spName: string, user: UserInfo, transaction?: sql.Transaction): Promise<string> {
     // SQLServerTransactionGroup-batched saves regenerate per-item SQL when
     // transaction variables get rebound. `_spName` is preserved for back-compat
     // with that caller; the dialect-driven pipeline derives it from entity
     // metadata via `GetCreateUpdateSPName`. Outside a TransactionGroup,
     // `fullSQL` holds `@p$0` parameter placeholders, so return `literalSQL`
     // for standalone callers.
-    const result = await this.GenerateSaveSQL(entity, bNewRecord, user);
+    const result = await this.GenerateSaveSQLReadingOn(entity, bNewRecord, user, transaction);
     return result.literalSQL ?? result.fullSQL;
   }
 
@@ -2098,7 +2150,7 @@ export class SQLServerDataProvider
     let sSQL: string;
     if (entity.EntityInfo.TrackRecordChanges && !skipRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') {
       // don't track changes for the record changes entity
-      const oldData = entity.GetAll(true); // get all the OLD values
+      const oldData = this.RecordChangeDeleteSnapshot(entity, entity.GetAll(true)); // the OLD values, full width
       const sTableDeclare: string = entity.PrimaryKeys.map((pk) => {
         return `${pk.CodeName} ${pk.EntityFieldInfo.SQLFullType}`;
       }).join(', ');

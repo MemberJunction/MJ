@@ -22,7 +22,9 @@ export class MJCommunicationProviderFormComponent extends BaseFormComponent {
             { sectionKey: 'advancedCapabilities', sectionName: 'Advanced Capabilities', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJCommunicationLogs', sectionName: 'Communication Logs', isExpanded: false },
-            { sectionKey: 'mJCommunicationProviderMessageTypes', sectionName: 'Message Types', isExpanded: false }
+            { sectionKey: 'mJCommunicationProviderMessageTypes', sectionName: 'Message Types', isExpanded: false },
+            { sectionKey: 'mJCalendarSyncStates', sectionName: 'Calendar Sync States', isExpanded: false },
+            { sectionKey: 'mJCalendarEventLinks', sectionName: 'Calendar Event Links', isExpanded: false }
         ]);
     }
 }

@@ -8,6 +8,7 @@ export * from './AIPromptTimeoutError';
 // about the same decision before it decides whether to build tools at all, and because the mode
 // helpers are how a caller reads back which path a run took.
 export * from './nativeToolCallingGate';
+export * from './replayedReasoningPrefix';
 export * from './AIModelRunner';
 export * from './embedding/AIEmbeddingRunner';
 export * from './embedding/embedding-runner.types';

@@ -1,5 +1,239 @@
 # @memberjunction/server-bootstrap-lite
 
+## 6.2.0-edge.5
+
+### Minor Changes
+
+- b14c72f: Add the personal Chief of Staff (`Chief of Staff`) AI agent, per-user narrowed governance (`MJ: AI Agent User Policies` + `AgentUserPolicyEngine`), 3-Tier Wake Gate on `MJ: User Routines` (`RoutineType = 'AgentWake'`), user-scoped calendar/email/availability actions (`EnterpriseMailboxSecurityGate`), and Communication Dashboard enterprise governance cards.
+- 1cb1d52: Login Studio: design the Explorer sign-in page on the default theme.
+  - **Schema:** `MJ: Themes` gains `LoginScreen` (published) and `LoginScreenDraft`. `MJThemeEntityExtended`
+    refuses a design the login screen cannot draw safely (`StoredLoginDesignProblems` in
+    `@memberjunction/theme-engine`, the same contract the editor checks).
+  - **App:** Login Studio (`LoginStudioResource`) edits blocks, layout, background and colors, saves a draft
+    and publishes it.
+  - **Public route:** `GET /auth/login-screen` serves the default Active theme's published design, logos and
+    seeds, sanitized (`SanitizePublicLoginScreen`) on the server and again in the browser. Drafts are never
+    served to anonymous visitors; signed-in users who can read themes can read them.
+  - **Login screen:** `<mj-explorer-app>` draws a published design through `<mj-login-region>` and wears the
+    default theme's brand colors before sign-in. A host's `mjLoginSlot` templates still win;
+    `UsePublishedLoginScreen = false` keeps the screen as the host's own inputs and CSS draw it.
+
+- 230cdad: Add two decision models, each with a driver for its vendor's own API. Both are unmeasured in MJ, and their probabilities are not calibrated.
+  - **SubQ Snap** (new vendor Subquadratic, PowerRank 43): `SubQDecision` in `@memberjunction/ai-systemone` speaks SubQ's System One API (`subq-snap-preview`, public preview). A 402 is `NoCredit`, and a 403 or 422 a `ModelError`.
+  - **Mercury Decide** (Inception Labs, PowerRank 44): `InceptionDecision` in `@memberjunction/ai-inception` speaks Inception's System One API (`mercury-decide`). A 402 is `NoCredit` and a 422 a `ModelError`. Also served through OpenRouter (`OpenRouterDecision`).
+
+  Shared in `@memberjunction/ai`:
+  - `BaseHostedSystemOneDecision`, the base of the fixed-endpoint System One drivers: endpoint precedence (constructor, credential, default), the vendor's error message, and the missing-key check.
+  - `ReadSystemOneErrorMessage` (the vendor's message from an error body), `RedactSecret`, and the protected `GetHTTPErrorType` hook (a status's error type, attached as a failover-eligible classification).
+
+  Changes to existing drivers:
+  - `SystemOneDecision` and `PerplexityDecision` error messages also read SubQ-style `detail` objects, and an empty `detail` falls through to `error`.
+  - Every `BaseSystemOneDecision` driver redacts the API key (for `CloudflareDecision`, also its token alone) from HTTP error messages, before any truncation and again after the vendor message is decoded; a key under 8 characters is left as is.
+  - `PerplexityDecision` now extends `BaseHostedSystemOneDecision`, with no change in behaviour.
+
+  **Default Decision.** Its bindings are unchanged, but every active Decision model joins its power-matched fallbacks, ordered by PowerRank distance from its target (57). Mercury Decide and SubQ Snap are the last. A fallback is tried only when one of its rows has a credential: an OpenRouter key (as for Jev), a credential bound to the Inception Labs or Subquadratic vendor, or a default `API Key` credential is enough. To keep a model out, set its row's `Status` to `Inactive`.
+
+- ce758af: Feature Pipelines: keyed, versioned Feature Values and honest runs (migration `V202610201100__v6.2.x__Feature_Value_Key_And_Versions.sql`).
+  - Feature Values upsert on a key (record, feature, pipeline version, prompt version, primary model, parameters, input); a value a person entered (`Source='Human'`) is never overwritten unless the run sets `overwriteHumanValues`. Child write-back can `reconcile` rows on a key.
+  - `MJ: Feature Pipeline Versions` registers each pipeline pin; a gated pipeline runs only under a version whose golden-set result meets its threshold. The `Steward Feature Pipeline Version` Action (`StewardFeaturePipelineVersionAction`) and `Feature Pipeline Version Steward` Record Process (`WorkType='Action'`, scheduled via `RecordProcessScheduledJobDriver`) evaluate and backfill changed versions; golden sets carry a label-quality record, `Required` and `ExpectAbstain` cases.
+  - New `@memberjunction/feature-pipelines-engine` package houses server-side Feature Pipeline execution (`InferProcessor`, `BaseFeaturePipelineDriver`, `LLMFeaturePipelineDriver`, `DecisionFeaturePipelineDriver`, `FeaturePipelineEscalation`, `FeaturePipelineHumanValueGuard`, `FeaturePipelineErrors`), golden-set testing (`FeaturePipelineGoldenSetDriver`, `golden-set-scoring`, `golden-label-quality`), and version stewardship (`FeaturePipelineVersionSteward`, `StewardFeaturePipelineVersionAction`, `RegisterInferRecordProcessor`), keeping `@memberjunction/record-set-processor-base`, `@memberjunction/record-set-processor`, `@memberjunction/scheduling-engine`, and `@memberjunction/testing-engine` free of Feature Pipeline dependencies.
+  - Outputs are checked against `lookup` constraints (per item with `ItemRef`); an output below its `MinConfidence` is withheld (`OnLowConfidence: 'null'`); `Context.RecordAsUserMessage` sends the record as a JSON user turn.
+  - Dry runs write nothing, preview only what the real write would change, cap at 25 records and report `WouldRefuse`; a Feature Pipeline run with a failed record ends `Failed` with a `FeaturePipelineRunResult` summary; the breaker counts attempted records.
+  - An output may omit its write target (builder target mode `Feature value only (no write-back)`): the answer is stored in `MJ: Feature Values` only, typed by its constraint (`numeric`/`money`, `boolean`, `date`), and no entity field is written. The Bulk Operations dry-run dialog shows each as a `<Feature> (feature value)` row with the previous and proposed value, and loads only the non-skipped details so a large scope counts every changed record.
+  - A Feature Values panel on every record form shows the latest answer per pipeline and feature (Source, Confidence, version, Computed, Reasoning) and expands to its history; a latest answer that withheld its value reads "no value". `@memberjunction/ng-base-forms` re-resolves the form chrome when a panel mounts after first render, so a late panel gets its left-nav entry.
+  - The Version Steward beats on a timer while its backfill runs, defers a backfill while a run is Running, marks only a clean run as backfilled, and ignores a Running Process Run not checkpointed for 30 minutes. A Feature Value insert that loses the race on its key to an equal value is `Unchanged`.
+  - Bedrock sends a configured temperature of 0 as 0 (F-FP-13).
+  - `AIPromptParams.templateAutoescape` (set by the Feature Pipeline drivers) renders a prompt template without HTML escaping; a Feature Pipeline run reads its prompt's template from the database at run start, so a template edit takes effect on the next run.
+  - API moves & PascalCase standardization: `WriteBackResult`, `TagWriteBackPreview`, `FieldRulesResultPayload`, and `MetadataProviderCapabilities` live in `@memberjunction/record-set-processor-base`; `FeaturePipelineRunResults` lives in `@memberjunction/feature-pipelines`; `RunRecordProcessOptions`, `RecordProcessorContext`, `RecordSetProcessOptions`, `ProcessRunSummary`, and `WriteBackValuePreview` use `PascalCase` properties across `@memberjunction/record-set-processor-base` and `@memberjunction/record-set-processor`.
+
+### Patch Changes
+
+- 0cc6b08: Storage permissions: close the gaps a review found around `StorageAccessEvaluator`. The rules, in one place:
+  - **Account gate everywhere.** Every path that acts on a storage account for a user asks `StorageAccessEvaluator` first — the GraphQL storage routes, and now the File Storage core actions (Get Download URL, Get Object, Get File Content, Get Metadata, List Objects, Search Storage Files, Object/Directory Exists need `Read`; Get Upload URL, Copy, Move, Delete Object, Create/Delete Directory need `Write`), `List Storage Accounts` (lists only accounts the caller may read) and `BaseFileHandlerAction` (`Write` on the account a save lands in; reads go through the file-ID gate). These actions are reachable by any user through `RunAction` and by any agent. An unknown account name and a refused account return the same `ACCESS_DENIED` result. Zero permission rows on an account still means open (the current product rule, unchanged).
+  - **File-ID routes gate the account the row resolves to.** `FileStorageEngine.ResolveFileObject` (new) resolves an `MJ: Files` row's provider to its account, requires the caller's access on it, and applies the tracked-file rule to the row's object. `DownloadUrl`, `GetFileContents`, `CreateMediaAccessToken`, `DeleteFile` and the `UpdateFile` rename (`Write`), `ArtifactFileDownloadUrl`, the conversation-attachment blob store, the agent file handler and `ReadRealtimeRecordingFile` use it, so a row whose `ProviderKey`/`Name` aliases another row's object is refused.
+  - **Tracked-file rule.** An object backing an `MJ: Files` row may be read, signed, listed, returned by search, overwritten, moved, copied or deleted only when the caller can read that row (the minimum for a write; `CanWrite` is still required). Applied to the Get Object / Get File Content / Get Metadata / Get Download URL / Get Upload URL / Copy / Move / Delete Object actions, `CreatePreAuthDownloadUrl`/`CreatePreAuthUploadUrl`, `DeleteStorageObject`, `MoveStorageObject` and `CopyStorageObject` (source and destination), `CopyObjectBetweenAccounts` (both ends), `UploadFile` (before `PutObject`), and as a filter on `ListStorageObjects`, `SearchAcrossAccounts`, the List Objects / Search Storage Files actions and `SearchEngine`'s storage hits.
+  - **Key canonicalization.** Client and stored keys go through one canonicalizer, `FileStorageBase.NormalizeObjectKey` (default: trim, collapse repeated `/`, strip leading/trailing `/`; S3 overrides it to strip its key prefix the way it addresses keys), and are compared case-insensitively (`LOWER(...)` in SQL). Keys with a `.`/`..` segment, a backslash, a percent-encoded `/`, `\`, `.` or control character, or a raw control character are refused outright.
+  - **One object-key rule.** `StorageObjectKeyOf` (new) resolves an `MJ: Files` row to `ProviderKey`, or `Name` when `ProviderKey` is null or empty; the tracked-file lookup, `ResolveFileObject`, the file resolver and the conversation-attachment blob store all use it, so a row stored with an empty `ProviderKey` is checked under the same key it is served from.
+  - **Cache refresh on a miss runs as the system user.** `FileStorageEngine.RefreshAfterMiss` (new) reloads the account cache as the MJ system user; `ResolveFileObject`, `GetDriver`, `UploadFile`, the file resolver and the realtime recording store use it instead of a forced `Config` as the caller, which emptied the shared cache for everyone when the caller could not read `MJ: File Storage Accounts`. `GetFileContents` reads a row with no `ProviderKey` from its `Name`, as the other file routes do.
+  - **No truncation.** Every evaluator read sets `IgnoreMaxRows`, so the entity row cap can no longer drop an account's rows (which read as "zero rows → open") or a tracked file's row; lookups are batched.
+  - **Azure pre-authenticated URLs** are blob-scoped service SAS tokens (`r` to download, `cw` to upload) instead of account-wide SAS tokens; expiry is unchanged (10 minutes).
+  - **`MJ: Files` storage location is server-owned on existing rows.** `MJFileEntityServer` refuses a save that changes `ProviderID` or `ProviderKey` on an existing row (including `ReplayOnly`) unless trusted server code sets `AllowStorageLocationChange` (registered in both server-bootstrap class manifests). A new row may still carry a client-chosen `ProviderKey` (Explorer's direct-upload path registers its upload that way); the routes' gate above is what makes such a row harmless.
+  - **Search details.** `SearchAcrossAccounts` reports accounts in request order and withholds `totalMatches`/`nextPageToken` once hits are dropped; under an `Audience` storage hits are dropped (re-checked for the caller only; per-reader storage checks are a follow-up). `ListStorageObjects` reads the typed `Configuration` property.
+
+  Also fixed: the `List Storage Providers` action could never run. Its class was registered as `List Storage Accounts`, which no metadata row names; it is now registered under the shipped action's `DriverClass`, `List Storage Providers`.
+
+- e38710c: Regenerate the server class-registration manifests to include `MJDataContextItemEntityServer`, which #5266 added without regenerating them. Until this lands, `next`'s Build job fails "Committed class-registration manifests are STALE".
+- Updated dependencies [3b0e8db]
+- Updated dependencies [0d81c53]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [fd780a9]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [52b9fd5]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [d26183d]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [db50c6b]
+- Updated dependencies [afc1e0e]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [5465489]
+- Updated dependencies [a9344ad]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [1419678]
+- Updated dependencies [0ab85d7]
+- Updated dependencies [9d1eb6a]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [cd39c95]
+- Updated dependencies [55184f1]
+- Updated dependencies [e5675dc]
+- Updated dependencies [c6d1232]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [542795b]
+- Updated dependencies [db39145]
+- Updated dependencies [a0db1fb]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [fcc3f03]
+- Updated dependencies [230cdad]
+- Updated dependencies [7e72c86]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [a9614be]
+- Updated dependencies [cfb3aab]
+- Updated dependencies [fb7ac5d]
+- Updated dependencies [2a7a098]
+- Updated dependencies [8420f36]
+- Updated dependencies [72dd65c]
+- Updated dependencies [1d29837]
+- Updated dependencies [006a5e7]
+- Updated dependencies [ba61c0b]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [2ca8690]
+- Updated dependencies [74d44e1]
+- Updated dependencies [c7d1170]
+- Updated dependencies [79d4f27]
+- Updated dependencies [5f707d1]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [3cb20c0]
+- Updated dependencies [e1f2583]
+- Updated dependencies [8389c99]
+- Updated dependencies [03c085c]
+- Updated dependencies [dc38250]
+- Updated dependencies [04fec10]
+  - @memberjunction/generic-database-provider@6.2.0-edge.5
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/ai-agents@6.2.0-edge.5
+  - @memberjunction/ai-prompts@6.2.0-edge.5
+  - @memberjunction/ai-core-plus@6.2.0-edge.5
+  - @memberjunction/actions-base@6.2.0-edge.5
+  - @memberjunction/actions@6.2.0-edge.5
+  - @memberjunction/core-actions@6.2.0-edge.5
+  - @memberjunction/ai-engine-base@6.2.0-edge.5
+  - @memberjunction/task-graph@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/communication-types@6.2.0-edge.5
+  - @memberjunction/core-entities-server@6.2.0-edge.5
+  - @memberjunction/scheduling-engine@6.2.0-edge.5
+  - @memberjunction/ai-agent-harness@6.2.0-edge.5
+  - @memberjunction/record-set-processor@6.2.0-edge.5
+  - @memberjunction/storage@6.2.0-edge.5
+  - @memberjunction/search-engine@6.2.0-edge.5
+  - @memberjunction/ai-recommendations-rex@6.2.0-edge.5
+  - @memberjunction/content-autotagging@6.2.0-edge.5
+  - @memberjunction/ai-gemini@6.2.0-edge.5
+  - @memberjunction/ai-vertex@6.2.0-edge.5
+  - @memberjunction/ai-ollama@6.2.0-edge.5
+  - @memberjunction/ai-systemone@6.2.0-edge.5
+  - @memberjunction/ai-inception@6.2.0-edge.5
+  - @memberjunction/ai-cloudflare@6.2.0-edge.5
+  - @memberjunction/ai-reranker@6.2.0-edge.5
+  - @memberjunction/ai-anthropic@6.2.0-edge.5
+  - @memberjunction/ai-azure@6.2.0-edge.5
+  - @memberjunction/ai-bedrock@6.2.0-edge.5
+  - @memberjunction/ai-betty@6.2.0-edge.5
+  - @memberjunction/ai-betty-bot@6.2.0-edge.5
+  - @memberjunction/ai-blackforestlabs@6.2.0-edge.5
+  - @memberjunction/ai-cerebras@6.2.0-edge.5
+  - @memberjunction/ai-cohere@6.2.0-edge.5
+  - @memberjunction/ai-elevenlabs@6.2.0-edge.5
+  - @memberjunction/ai-fireworks@6.2.0-edge.5
+  - @memberjunction/ai-groq@6.2.0-edge.5
+  - @memberjunction/ai-heygen@6.2.0-edge.5
+  - @memberjunction/ai-lmstudio@6.2.0-edge.5
+  - @memberjunction/ai-local-embeddings@6.2.0-edge.5
+  - @memberjunction/ai-mistral@6.2.0-edge.5
+  - @memberjunction/ai-openai@6.2.0-edge.5
+  - @memberjunction/templates@6.2.0-edge.5
+  - @memberjunction/feature-pipelines@6.2.0-edge.5
+  - @memberjunction/feature-pipelines-engine@6.2.0-edge.5
+  - @memberjunction/predictive-studio@6.2.0-edge.5
+  - @memberjunction/record-cloning@6.2.0-edge.5
+  - @memberjunction/react-linter@6.2.0-edge.5
+  - @memberjunction/data-context-server@6.2.0-edge.5
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.5
+  - @memberjunction/ai-xai@6.2.0-edge.5
+  - @memberjunction/work-queue-engine@6.2.0-edge.5
+  - @memberjunction/ai-agent-manager@6.2.0-edge.5
+  - @memberjunction/ai-form-builder@6.2.0-edge.5
+  - @memberjunction/tag-engine-base@6.2.0-edge.5
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.5
+  - @memberjunction/actions-apollo@6.2.0-edge.5
+  - @memberjunction/actions-bizapps-accounting@6.2.0-edge.5
+  - @memberjunction/actions-bizapps-crm@6.2.0-edge.5
+  - @memberjunction/actions-bizapps-formbuilders@6.2.0-edge.5
+  - @memberjunction/actions-bizapps-lms@6.2.0-edge.5
+  - @memberjunction/actions-bizapps-social@6.2.0-edge.5
+  - @memberjunction/actions-peopledatalabs@6.2.0-edge.5
+  - @memberjunction/doc-utils@6.2.0-edge.5
+  - @memberjunction/encryption@6.2.0-edge.5
+  - @memberjunction/queue@6.2.0-edge.5
+  - @memberjunction/record-comparison@6.2.0-edge.5
+  - @memberjunction/rubrics@6.2.0-edge.5
+  - @memberjunction/scheduling-actions@6.2.0-edge.5
+  - @memberjunction/scheduling-engine-base@6.2.0-edge.5
+  - @memberjunction/testing-engine@6.2.0-edge.5
+  - @memberjunction/geo-core@6.2.0-edge.5
+  - @memberjunction/ai-assemblyai@6.2.0-edge.5
+  - @memberjunction/ai-deepinfra@6.2.0-edge.5
+  - @memberjunction/ai-inworld@6.2.0-edge.5
+  - @memberjunction/ai-llamacpp@6.2.0-edge.5
+  - @memberjunction/ai-minimax@6.2.0-edge.5
+  - @memberjunction/ai-openrouter@6.2.0-edge.5
+  - @memberjunction/ai-siliconflow@6.2.0-edge.5
+  - @memberjunction/ai-zhipu@6.2.0-edge.5
+  - @memberjunction/ai-vectors-pinecone@6.2.0-edge.5
+  - @memberjunction/ai-vectors-qdrant@6.2.0-edge.5
+  - @memberjunction/ai-vectors-sqlserver@6.2.0-edge.5
+  - @memberjunction/ai-vectors-pgvector@6.2.0-edge.5
+  - @memberjunction/rubrics-base@6.2.0-edge.5
+  - @memberjunction/work-queue-samples@6.2.0-edge.5
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.5
+
 ## 6.2.0-edge.4
 
 ### Minor Changes

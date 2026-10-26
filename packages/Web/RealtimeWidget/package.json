@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/realtime-widget",
   "type": "module",
-  "version": "6.2.0-edge.4",
+  "version": "6.2.0-edge.5",
   "description": "MemberJunction: Droppable, embeddable public customer-support widget (text + voice). A shadow-DOM web component that reuses ConversationsRuntime + the realtime client stack against MJAPI with a guest session JWT. No MJ login required.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,7 +9,7 @@
     "/dist"
   ],
   "scripts": {
-    "build": "tsc && tsc-alias -f",
+    "build": "tsc && tsc-alias -f && npm run bundle",
     "bundle": "esbuild dist/embed.js --bundle --splitting --format=esm --platform=browser --outdir=dist/embed --entry-names=mj-widget --chunk-names=chunks/[name]-[hash]",
     "bundle:min": "esbuild dist/embed.js --bundle --splitting --minify --format=esm --platform=browser --outdir=dist/embed-min --entry-names=mj-widget --chunk-names=chunks/[name]-[hash]",
     "test": "vitest run",
@@ -18,14 +18,14 @@
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/global": "6.2.0-edge.4",
-    "@memberjunction/core": "6.2.0-edge.4",
-    "@memberjunction/core-entities": "6.2.0-edge.4",
-    "@memberjunction/ai": "6.2.0-edge.4",
-    "@memberjunction/ai-core-plus": "6.2.0-edge.4",
-    "@memberjunction/ai-realtime-client": "6.2.0-edge.4",
-    "@memberjunction/conversations-runtime": "6.2.0-edge.4",
-    "@memberjunction/graphql-dataprovider": "6.2.0-edge.4"
+    "@memberjunction/global": "6.2.0-edge.5",
+    "@memberjunction/core": "6.2.0-edge.5",
+    "@memberjunction/core-entities": "6.2.0-edge.5",
+    "@memberjunction/ai": "6.2.0-edge.5",
+    "@memberjunction/ai-core-plus": "6.2.0-edge.5",
+    "@memberjunction/ai-realtime-client": "6.2.0-edge.5",
+    "@memberjunction/conversations-runtime": "6.2.0-edge.5",
+    "@memberjunction/graphql-dataprovider": "6.2.0-edge.5"
   },
   "devDependencies": {
     "@types/node": "24.10.11",
