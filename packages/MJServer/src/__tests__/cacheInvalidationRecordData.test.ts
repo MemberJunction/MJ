@@ -8,6 +8,8 @@ import {
   ReadIsRowFiltered,
   ShapeCacheInvalidationEvent,
 } from '../generic/CacheInvalidationResolver.js';
+import { EntityInfo } from '@memberjunction/core';
+import { EmployeeEntity } from './fieldSecurityFixtures.js';
 
 /**
  * The cache-invalidation subscription is delivered to every connected client with no per-user
@@ -59,6 +61,49 @@ describe('MayBroadcastRecordData', () => {
     ConfigureRecordDataBroadcast(['*']);
     expect(MayBroadcastRecordData('Users')).toBe(true);
     expect(MayBroadcastRecordData('Organization Person Roles')).toBe(true);
+  });
+});
+
+/**
+ * An entity under field-level security never broadcasts its row, whatever the allowlist says.
+ *
+ * The event reaches every signed-in session that may read the entity, with no per-user
+ * projection, so a row of an entity whose fields are restricted per role would hand every
+ * session the columns it may not read. The check is the IS-A-aware one: a child whose parent has
+ * field security carries the parent's restricted fields as its own.
+ */
+describe('MayBroadcastRecordData: entities under field-level security', () => {
+  afterEach(() => ConfigureRecordDataBroadcast([]));
+
+  it("REGRESSION: refuses an FLS entity even under an explicit '*'", () => {
+    ConfigureRecordDataBroadcast(['*']);
+    expect(MayBroadcastRecordData('Employees', EmployeeEntity(true))).toBe(false);
+  });
+
+  it('REGRESSION: refuses an FLS entity that is named in the allowlist', () => {
+    ConfigureRecordDataBroadcast(['Employees']);
+    expect(MayBroadcastRecordData('Employees', EmployeeEntity(true))).toBe(false);
+  });
+
+  it('still allows the same entity with field security off', () => {
+    ConfigureRecordDataBroadcast(['Employees']);
+    expect(MayBroadcastRecordData('Employees', EmployeeEntity(false))).toBe(true);
+  });
+
+  it("REGRESSION: refuses MJ: Record Changes under '*', with or without its metadata", () => {
+    // A Record Change row carries other entities' values in ChangesJSON / FullRecordJSON, and its
+    // own FieldLevelSecurityApplies is false; the per-row projection never runs on this push.
+    ConfigureRecordDataBroadcast(['*']);
+    const recordChanges = new EntityInfo({ ID: 'rc', Name: 'MJ: Record Changes', SchemaName: '__mj', BaseTable: 'RecordChange', BaseView: 'vwRecordChanges', Fields: [] });
+    expect(recordChanges.FieldLevelSecurityApplies).toBe(false);
+    expect(MayBroadcastRecordData('MJ: Record Changes', recordChanges)).toBe(false);
+    expect(MayBroadcastRecordData('MJ: Record Changes')).toBe(false);
+    expect(MayBroadcastRecordData(' mj: record changes ')).toBe(false);
+  });
+
+  it('REGRESSION: refuses MJ: Record Changes even when named in the allowlist', () => {
+    ConfigureRecordDataBroadcast(['MJ: Record Changes']);
+    expect(MayBroadcastRecordData('MJ: Record Changes')).toBe(false);
   });
 });
 
