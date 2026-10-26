@@ -137,6 +137,7 @@ async function getCohereClientCtor(): Promise<new (opts: { token: string }) => C
  */
 class CohereScopeAIReranker extends AIBaseReranker {
     private _clientPromise: Promise<CohereClientLike>;
+    public lastCallSucceeded = false;
 
     constructor(apiKey: string, modelName: string) {
         super(apiKey, modelName);
@@ -144,16 +145,26 @@ class CohereScopeAIReranker extends AIBaseReranker {
     }
 
     protected async doRerank(params: RerankParams): Promise<RerankResult[]> {
+        this.lastCallSucceeded = false;
         const client = await this._clientPromise;
         const responseResults = await this.executeSdkRerank(client, params);
+        const minThreshold = typeof params.options?.['minRelevanceThreshold'] === 'number' &&
+            Number.isFinite(params.options['minRelevanceThreshold'])
+            ? (params.options['minRelevanceThreshold'] as number)
+            : undefined;
+        const focusSnippet = params.options?.['focusSnippet'] !== false;
 
         const mapped: RerankResult[] = [];
         for (const r of responseResults) {
-            const item = this.mapSdkResult(r, mapped.length, params.documents);
+            if (minThreshold !== undefined && r.relevanceScore < minThreshold) {
+                continue;
+            }
+            const item = this.mapSdkResult(r, mapped.length, params.documents, focusSnippet);
             if (item) {
                 mapped.push(item);
             }
         }
+        this.lastCallSucceeded = true;
         return mapped;
     }
 
@@ -189,7 +200,8 @@ class CohereScopeAIReranker extends AIBaseReranker {
     private mapSdkResult(
         r: RawCohereRerankResultItem,
         rank: number,
-        documents: RerankDocument[]
+        documents: RerankDocument[],
+        focusSnippet: boolean
     ): RerankResult | null {
         const doc = documents[r.index];
         if (!doc) {
@@ -197,16 +209,15 @@ class CohereScopeAIReranker extends AIBaseReranker {
         }
         const rawSpans = r.relevant_spans ?? r.relevantSpans;
         if (Array.isArray(rawSpans) && rawSpans.length > 0) {
-            const spans: CohereSearchRelevantSpan[] = rawSpans.map(s => {
-                const safeStart = Math.max(0, Math.min(s.start, doc.text.length));
-                const safeEnd = Math.max(safeStart, Math.min(s.end, doc.text.length));
-                return {
-                    start: s.start,
-                    end: s.end,
-                    score: s.score,
-                    text: doc.text.slice(safeStart, safeEnd),
-                };
-            });
+            const spans = this.extractRelevantSpans(rawSpans, doc.text);
+            const original = doc.metadata?.['__mjSearchItem'] as SearchResultItem | undefined;
+            const enrichedItem = original
+                ? {
+                    ...original,
+                    Snippet: focusSnippet ? (this.buildFocusedSnippet(original, spans) || original.Snippet) : original.Snippet,
+                    RelevantSpans: spans,
+                }
+                : undefined;
             return {
                 id: doc.id,
                 relevanceScore: r.relevanceScore,
@@ -214,7 +225,7 @@ class CohereScopeAIReranker extends AIBaseReranker {
                     ...doc,
                     metadata: {
                         ...doc.metadata,
-                        __mjRelevantSpans: spans,
+                        ...(enrichedItem ? { __mjSearchItem: enrichedItem } : {}),
                     },
                 },
                 rank,
@@ -226,6 +237,34 @@ class CohereScopeAIReranker extends AIBaseReranker {
             document: doc,
             rank,
         };
+    }
+
+    private extractRelevantSpans(rawSpans: RawCohereSpan[], sourceText: string): CohereSearchRelevantSpan[] {
+        return rawSpans.map(s => {
+            const safeStart = Math.max(0, Math.min(s.start, sourceText.length));
+            const safeEnd = Math.max(safeStart, Math.min(s.end, sourceText.length));
+            return {
+                start: s.start,
+                end: s.end,
+                score: s.score,
+                text: sourceText.slice(safeStart, safeEnd),
+            };
+        });
+    }
+
+    private buildFocusedSnippet(original: SearchResultItem, spans: CohereSearchRelevantSpan[]): string {
+        const titlePrefix = original.Title ? `${original.Title}\n` : '';
+        return spans
+            .map(s => {
+                let text = s.text;
+                if (titlePrefix && s.start < titlePrefix.length) {
+                    const trimChars = Math.min(text.length, titlePrefix.length - Math.max(0, s.start));
+                    text = text.slice(trimChars);
+                }
+                return text.trim();
+            })
+            .filter(Boolean)
+            .join(' … ');
     }
 }
 
@@ -242,6 +281,8 @@ class CohereScopeAIReranker extends AIBaseReranker {
  */
 @RegisterClass(BaseReRanker, 'CohereReRanker')
 export class CohereReRanker extends BaseReRanker {
+    private currentAIReranker: CohereScopeAIReranker | null = null;
+
     public get DriverClass(): string {
         return 'CohereReRanker';
     }
@@ -274,20 +315,21 @@ export class CohereReRanker extends BaseReRanker {
         config: Record<string, unknown> | undefined,
         _contextUser: UserInfo,
     ): AIBaseReranker | null {
+        if (this.currentAIReranker) return this.currentAIReranker;
+
         const apiKey = GetAIAPIKey('CohereReranker') || GetAIAPIKey('CohereLLM');
         if (!apiKey) {
             LogError('CohereReRanker: no API key found for driver "CohereReranker" or "CohereLLM" — set AI_VENDOR_API_KEY__COHERERERANKER (or AI_VENDOR_API_KEY__COHERELLM) or register an AIAPIKeys subclass.');
             return null;
         }
         const modelName = (config?.['model'] as string | undefined) ?? 'rerank-v5.0-fast';
-        return new CohereScopeAIReranker(apiKey, modelName);
+        this.currentAIReranker = new CohereScopeAIReranker(apiKey, modelName);
+        return this.currentAIReranker;
     }
 
     /**
-     * Override `ReRank` to:
-     * 1. Record actual cost via the inherited `reportCost` helper after a successful Cohere call.
-     * 2. Apply Context Focus span extraction (`RelevantSpans`) onto `SearchResultItem` when returned.
-     * 3. Apply optional calibrated `minRelevanceThreshold` filtering when configured.
+     * Override `ReRank` to record actual cost via `reportCost` only after a successful
+     * Cohere call (matching `VoyageReRanker`'s `super.ReRank` pattern).
      */
     public override async ReRank(
         query: string,
@@ -297,93 +339,20 @@ export class CohereReRanker extends BaseReRanker {
         config?: Record<string, unknown>,
     ): Promise<SearchResultItem[]> {
         if (topN <= 0 || candidates.length === 0) return [];
-        const aiReranker = this.getAIReranker(config, contextUser);
-        if (!aiReranker) {
-            return candidates.slice(0, topN);
+        this.currentAIReranker = null;
+        const apiReranker = this.getAIReranker(config, contextUser) as CohereScopeAIReranker | null;
+        try {
+            if (!apiReranker) {
+                return candidates.slice(0, topN);
+            }
+            const result = await super.ReRank(query, candidates, topN, contextUser, config);
+            if (apiReranker.lastCallSucceeded) {
+                this.reportCost(this.EstimateCostCents(candidates.length));
+            }
+            return result;
+        } finally {
+            this.currentAIReranker = null;
         }
-
-        const documents = candidates.map(item => ({
-            id: item.ID,
-            text: this.buildRerankText(item),
-            metadata: { __mjSearchItem: item },
-            originalScore: item.Score,
-        }));
-
-        const response = await aiReranker.Rerank({
-            query,
-            documents,
-            topK: topN,
-            options: config,
-        });
-
-        if (!response.success) {
-            LogError(
-                `SearchEngine: AI reranker "${this.DriverClass}" failed (${response.durationMs}ms): ${
-                    response.errorMessage ?? 'unknown error'
-                }`
-            );
-            return candidates.slice(0, topN);
-        }
-
-        this.reportCost(this.EstimateCostCents(candidates.length));
-        return this.mapRerankResults(response.results, config);
-    }
-
-    private mapRerankResults(
-        results: RerankResult[],
-        config?: Record<string, unknown>
-    ): SearchResultItem[] {
-        const focusSnippet = config?.['focusSnippet'] !== false;
-        const minThreshold = typeof config?.['minRelevanceThreshold'] === 'number' && Number.isFinite(config['minRelevanceThreshold'])
-            ? (config['minRelevanceThreshold'] as number)
-            : undefined;
-
-        return results
-            .filter(r => minThreshold === undefined || r.relevanceScore >= minThreshold)
-            .map(r => {
-                const original = r.document.metadata?.['__mjSearchItem'] as SearchResultItem | undefined;
-                if (!original) {
-                    throw new Error(
-                        'CohereReRanker: rerank result missing original SearchResultItem in metadata.'
-                    );
-                }
-                const spans = r.document.metadata?.['__mjRelevantSpans'] as CohereSearchRelevantSpan[] | undefined;
-                if (spans && spans.length > 0) {
-                    const focusedText = this.buildFocusedSnippet(original, spans);
-                    return {
-                        ...original,
-                        Score: r.relevanceScore,
-                        ScoreBreakdown: { ...original.ScoreBreakdown, ReRank: r.relevanceScore },
-                        Snippet: focusSnippet && focusedText.length > 0 ? focusedText : original.Snippet,
-                        RelevantSpans: spans,
-                    };
-                }
-                return {
-                    ...original,
-                    Score: r.relevanceScore,
-                    ScoreBreakdown: { ...original.ScoreBreakdown, ReRank: r.relevanceScore },
-                };
-            });
-    }
-
-    /**
-     * Join extracted Context Focus spans into a focused snippet, stripping a leading
-     * `${Title}\n` prefix if a span starts inside the title line so `Snippet` does not
-     * repeat `Title`.
-     */
-    private buildFocusedSnippet(original: SearchResultItem, spans: CohereSearchRelevantSpan[]): string {
-        const titlePrefix = original.Title ? `${original.Title}\n` : '';
-        return spans
-            .map(s => {
-                let text = s.text;
-                if (titlePrefix && s.start < titlePrefix.length) {
-                    const trimChars = Math.min(text.length, titlePrefix.length - Math.max(0, s.start));
-                    text = text.slice(trimChars);
-                }
-                return text.trim();
-            })
-            .filter(Boolean)
-            .join(' … ');
     }
 }
 
