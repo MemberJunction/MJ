@@ -20,9 +20,21 @@ function render(html: string): void {
 
 function buildSession(): { session: CdpRemoteBrowserSession; adapter: FakePlaywrightBrowserAdapter } {
     const adapter = new FakePlaywrightBrowserAdapter();
+    // Playwright's locator, for plain CSS in the light DOM; a test maps any other selector itself.
+    adapter.FocusBySelector = (selector) => {
+        try {
+            return document.querySelector<HTMLElement>(selector);
+        } catch {
+            return null;
+        }
+    };
     const session = new CdpRemoteBrowserSession(adapter, 'ws://cdp.test/endpoint', {}, new FakeCdpSessionBackend(), 'FakeProvider');
     return { session, adapter };
 }
+
+/** The actions that typed or clicked, leaving out the empty Type that only focuses a typed action's target. */
+const typedOrClicked = (adapter: FakePlaywrightBrowserAdapter) =>
+    adapter.ExecutedActions.filter((a) => !(a.Type === 'Type' && a.Text === ''));
 
 const ORDER_FORM = `
   <form>
@@ -194,7 +206,7 @@ describe('Enter guard', () => {
         (document.getElementById('name') as HTMLInputElement).focus();
         expect((await session.ExecuteAction({ Kind: 'key', Key: 'Enter' })).Detail).toContain('Refusing to activate "Pay now"');
         expect((await session.ExecuteAction({ Kind: 'type', Text: 'Ada\n', Selector: '#name' })).Success).toBe(false);
-        expect(adapter.ExecutedActions).toEqual([]);
+        expect(typedOrClicked(adapter)).toEqual([]);
     });
 
     it('treats a newline key as Enter, and Space as activating the focused button', async () => {
@@ -214,6 +226,27 @@ describe('Enter guard', () => {
         // Spaces typed into a text field are just text, whatever selector names the field.
         (document.getElementById('name') as HTMLInputElement).focus();
         expect((await session.ExecuteAction({ Kind: 'type', Text: 'Ada Lovelace' })).Success).toBe(true);
+        expect((await session.ExecuteAction({ Kind: 'type', Text: 'Ada Lovelace', Selector: '#name >> nth=0' })).Success).toBe(true);
+    });
+
+    it('judges typed text by what the locator focuses, so a Playwright-only selector cannot reach a destructive button', async () => {
+        render(`<form><input id="name" aria-label="Name" data-visible><button id="lightpay" data-visible>Place your order</button></form><div id="host"></div>`);
+        const root = document.getElementById('host')!.attachShadow({ mode: 'open' });
+        root.innerHTML = '<form><button id="pay">Place your order</button></form>';
+        const lightpay = document.getElementById('lightpay');
+        // What Playwright's locator resolves each selector to (jsdom cannot parse them).
+        const locate: Record<string, HTMLElement | null> = {
+            '#pay >> nth=0': root.getElementById('pay'),
+            '#lightpay >> nth=0': lightpay,
+            'button:has-text("Place your order")': lightpay,
+            '#name >> nth=0': document.getElementById('name'),
+        };
+        adapter.FocusBySelector = (selector) => locate[selector] ?? null;
+        for (const selector of ['#pay >> nth=0', '#lightpay >> nth=0', 'button:has-text("Place your order")']) {
+            const result = await session.ExecuteAction({ Kind: 'type', Text: 'ok ', Selector: selector });
+            expect([selector, result.Detail]).toEqual([selector, expect.stringContaining('Refusing to activate "Place your order"')]);
+        }
+        expect(typedOrClicked(adapter)).toEqual([]);
         expect((await session.ExecuteAction({ Kind: 'type', Text: 'Ada Lovelace', Selector: '#name >> nth=0' })).Success).toBe(true);
     });
 
@@ -248,6 +281,7 @@ describe('guards reach into open shadow roots', () => {
     });
 
     it('a typed space aimed at it by selector', async () => {
+        adapter.FocusBySelector = () => root.getElementById('pay');
         refused((await session.ExecuteAction({ Kind: 'type', Text: ' ', Selector: '#pay' })).Detail);
     });
 

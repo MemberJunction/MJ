@@ -221,14 +221,17 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
     }
     // Enter and Space activate the focused control (Enter also submits a form through its default
     // button), so each is checked the way a click on what it activates is.
-    for (const key of this.activatingKeys(action)) {
-      const target = await ResolveKeyTarget(this.adapter, key, action.Kind === 'type' ? action.Selector : undefined);
-      // Spaces typed among other text only matter on a button (a text field never trips the check), so a
-      // Playwright-only selector naming the field to type into is not refused for them.
-      if (key === 'space' && action.Kind === 'type' && action.Text !== ' ' && target.InvalidSelector) {
-        continue;
+    const keys = this.activatingKeys(action);
+    if (keys.length > 0 && action.Kind === 'type' && action.Selector) {
+      // Focus the target through the same locator the typing uses (an empty Type only focuses), so the
+      // guard judges the element the keys reach, whatever selector syntax named it.
+      const focused = await this.adapter.ExecuteAction(MapRemoteBrowserAction({ Kind: 'type', Text: '', Selector: action.Selector }));
+      if (!focused.Success) {
+        return this.toActionResult(focused);
       }
-      const refusal = this.refusal(target);
+    }
+    for (const key of keys) {
+      const refusal = this.refusal(await ResolveKeyTarget(this.adapter, key));
       if (refusal) {
         return refusal;
       }

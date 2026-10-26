@@ -64,6 +64,11 @@ export class FakePlaywrightBrowserAdapter extends PlaywrightBrowserAdapter {
      * in-page script against. Under jsdom the script runs against the test's own document instead.
      */
     public EvaluateFallback: object | null = null;
+    /**
+     * What a Type action's selector resolves to, standing in for Playwright's locator (DOM tests): the
+     * fake focuses it, as the real adapter does before typing.
+     */
+    public FocusBySelector: ((selector: string) => { focus(): void } | null) | null = null;
     /** Captured `onFrame` callback from {@link StartScreencast}, so a test can drive frames. */
     public LastOnFrame: ((frame: ScreencastFrame) => void) | null = null;
     /** Count of {@link StartAudioCapture} calls. */
@@ -86,6 +91,9 @@ export class FakePlaywrightBrowserAdapter extends PlaywrightBrowserAdapter {
 
     public override async ExecuteAction(action: BrowserAction): Promise<ActionExecutionResult> {
         this.ExecutedActions.push(action);
+        if (action.Type === 'Type' && action.Selector) {
+            this.FocusBySelector?.(action.Selector)?.focus();
+        }
         if (this.ExecuteError) {
             throw this.ExecuteError;
         }

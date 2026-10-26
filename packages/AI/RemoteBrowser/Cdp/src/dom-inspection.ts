@@ -96,7 +96,7 @@ type InPageRequest =
   | { Op: 'inspect'; MaxTextChars: number }
   | { Op: 'fill'; Values: ReadonlyArray<RemoteBrowserFillFieldInput> }
   | { Op: 'resolveClick'; Query: ClickTargetQuery }
-  | { Op: 'resolveKey'; Key: ActivatingKey; Selector?: string };
+  | { Op: 'resolveKey'; Key: ActivatingKey };
 
 /** The result type of each in-page op. */
 interface InPageResults {
@@ -415,14 +415,9 @@ function inPageBrowserScript(req: InPageRequest): RawInspection | RawFillOutcome
   }
 
   if (req.Op === 'resolveKey') {
-    // Enter and Space activate the focused control (or the one a typed action focuses first); Enter
-    // in a field also submits its form through the form's default button.
-    let active: HTMLElement | null;
-    try {
-      active = req.Selector ? deepQueryAll(req.Selector)[0] ?? null : deepActive();
-    } catch {
-      return { Found: false, Label: req.Selector ?? '', Destructive: false, InvalidSelector: true };
-    }
+    // Enter and Space activate the focused control; Enter in a field also submits its form through the
+    // form's default button.
+    const active = deepActive();
     if (!active || active.tagName === 'TEXTAREA' || active.isContentEditable) {
       return { Found: false, Label: '', Destructive: false };
     }
@@ -555,9 +550,9 @@ export async function ResolveClickTarget(adapter: PlaywrightBrowserAdapter, quer
 }
 
 /**
- * Resolves what pressing `key` would activate: the focused control (or the one `selector` names, which
- * a typed action focuses first), or, for Enter in a field, its form's default button.
+ * Resolves what pressing `key` would activate: the focused control (followed into open shadow roots), or,
+ * for Enter in a field, its form's default button.
  */
-export async function ResolveKeyTarget(adapter: PlaywrightBrowserAdapter, key: ActivatingKey, selector?: string): Promise<ClickTarget> {
-  return runInPage(adapter, { Op: 'resolveKey', Key: key, Selector: selector });
+export async function ResolveKeyTarget(adapter: PlaywrightBrowserAdapter, key: ActivatingKey): Promise<ClickTarget> {
+  return runInPage(adapter, { Op: 'resolveKey', Key: key });
 }
