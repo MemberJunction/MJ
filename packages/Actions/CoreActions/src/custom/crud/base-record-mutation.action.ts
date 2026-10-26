@@ -1,6 +1,6 @@
 import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
-import { BaseEntity, EntityInfo, IMetadataProvider, Metadata, LogError, CompositeKey } from "@memberjunction/core";
+import { BaseEntity, EntityInfo, IMetadataProvider, Metadata, LogError, CompositeKey, UserInfo } from "@memberjunction/core";
 
 /**
  * Abstract base class for record mutation actions (Create, Update, Delete).
@@ -32,10 +32,10 @@ export abstract class BaseRecordMutationAction extends BaseAction {
     /**
      * Extract and validate the PrimaryKey parameter
      */
-    protected getPrimaryKeyParam(params: RunActionParams): { value?: Record<string, any>; error?: ActionResultSimple } {
+    protected getPrimaryKeyParam(params: RunActionParams): { value?: Record<string, unknown>; error?: ActionResultSimple } {
         const primaryKeyParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'primarykey');
         
-        if (!primaryKeyParam || !primaryKeyParam.Value) {
+        if (!primaryKeyParam || primaryKeyParam.Value === null || primaryKeyParam.Value === undefined) {
             return {
                 error: {
                     Success: false,
@@ -44,17 +44,42 @@ export abstract class BaseRecordMutationAction extends BaseAction {
                 }
             };
         }
+
+        let value = primaryKeyParam.Value;
+        if (typeof value === 'string') {
+            try {
+                value = JSON.parse(value);
+            } catch {
+                return {
+                    error: {
+                        Success: false,
+                        ResultCode: 'VALIDATION_ERROR',
+                        Message: 'PrimaryKey parameter is not valid JSON'
+                    }
+                };
+            }
+        }
+
+        if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+            return {
+                error: {
+                    Success: false,
+                    ResultCode: 'VALIDATION_ERROR',
+                    Message: 'PrimaryKey parameter must be an object'
+                }
+            };
+        }
         
-        return { value: primaryKeyParam.Value as Record<string, any> };
+        return { value: value as Record<string, unknown> };
     }
 
     /**
      * Extract and validate the Fields parameter
      */
-    protected getFieldsParam(params: RunActionParams): { value?: Record<string, any>; error?: ActionResultSimple } {
+    protected getFieldsParam(params: RunActionParams): { value?: Record<string, unknown>; error?: ActionResultSimple } {
         const fieldsParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'fields');
         
-        if (!fieldsParam || !fieldsParam.Value) {
+        if (!fieldsParam || fieldsParam.Value === null || fieldsParam.Value === undefined) {
             return {
                 error: {
                     Success: false,
@@ -63,16 +88,41 @@ export abstract class BaseRecordMutationAction extends BaseAction {
                 }
             };
         }
+
+        let value = fieldsParam.Value;
+        if (typeof value === 'string') {
+            try {
+                value = JSON.parse(value);
+            } catch {
+                return {
+                    error: {
+                        Success: false,
+                        ResultCode: 'VALIDATION_ERROR',
+                        Message: 'Fields parameter is not valid JSON'
+                    }
+                };
+            }
+        }
+
+        if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+            return {
+                error: {
+                    Success: false,
+                    ResultCode: 'VALIDATION_ERROR',
+                    Message: 'Fields parameter must be an object'
+                }
+            };
+        }
         
-        return { value: fieldsParam.Value as Record<string, any> };
+        return { value: value as Record<string, unknown> };
     }
 
     /**
      * Get entity metadata and create entity object
      */
-    protected async getEntityObject(entityName: string, contextUser: any, provider?: IMetadataProvider): Promise<{
+    protected async getEntityObject(entityName: string, contextUser: UserInfo | null | undefined, provider?: IMetadataProvider): Promise<{
         entity?: BaseEntity;
-        entityInfo?: any;
+        entityInfo?: EntityInfo;
         error?: ActionResultSimple
     }> {
         const md = provider ?? new Metadata();
@@ -107,12 +157,12 @@ export abstract class BaseRecordMutationAction extends BaseAction {
      */
     protected async loadRecord(
         entity: BaseEntity, 
-        entityInfo: any, 
-        primaryKey: Record<string, any>,
+        entityInfo: EntityInfo, 
+        primaryKey: Record<string, unknown>,
         entityName: string
     ): Promise<{ success: boolean; error?: ActionResultSimple }> {
         // Validate all primary key fields are provided
-        const keyData: Record<string, any> = {};
+        const keyData: Record<string, unknown> = {};
         for (const pk of entityInfo.PrimaryKeys) {
             if (!(pk.Name in primaryKey)) {
                 return {
@@ -195,7 +245,7 @@ export abstract class BaseRecordMutationAction extends BaseAction {
      */
     protected setFieldValues(
         entity: BaseEntity,
-        fields: Record<string, any>,
+        fields: Record<string, unknown>,
         entityName: string,
         entityInfo?: Pick<EntityInfo, 'Fields'>
     ): void {

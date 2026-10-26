@@ -8,7 +8,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { filter, takeUntil } from 'rxjs/operators';
-import { CompositeKey, EntityInfo, RunView, RunViewParams } from '@memberjunction/core';
+import { CompositeKey, EntityInfo, LogError, RunView, RunViewParams } from '@memberjunction/core';
 import {
     MJAIAgentRequestEntity,
     MJAIAgentUserPolicyEntity,
@@ -16,6 +16,8 @@ import {
     ResourceData,
 } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual, UUIDSet, MJGlobal } from '@memberjunction/global';
+import { ActionParam } from '@memberjunction/actions-base';
+import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { AgentRequestPanelResult } from '@memberjunction/ng-agent-requests';
@@ -765,6 +767,32 @@ export class ChiefOfStaffDashboardComponent
         }
     }
 
+    private _updateRecordActionId: string | null = null;
+    private async resolveUpdateRecordActionId(): Promise<string | null> {
+        if (this._updateRecordActionId) {
+            return this._updateRecordActionId;
+        }
+        try {
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+            const result = await rv.RunView<{ ID: string }>({
+                EntityName: 'MJ: Actions',
+                ExtraFilter: "Name = 'Update Record'",
+                Fields: ['ID'],
+                MaxRows: 1,
+                ResultType: 'simple',
+            });
+            if (result.Success && result.Results && result.Results.length > 0) {
+                this._updateRecordActionId = result.Results[0].ID;
+                return this._updateRecordActionId;
+            }
+            return null;
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            LogError(`ChiefOfStaffDashboard: failed to resolve 'Update Record' action: ${msg}`);
+            return null;
+        }
+    }
+
     public async SaveTaskEdits(): Promise<void> {
         if (!this.SelectedTask || this.IsSavingTask) return;
         this.IsSavingTask = true;
@@ -776,13 +804,10 @@ export class ChiefOfStaffDashboardComponent
             if (!key) {
                 return;
             }
-            const entity = await this.ProviderToUse.GetEntityObject(
-                BIZAPPS_TASKS_ENTITY_NAME,
-                this.ProviderToUse.CurrentUser,
-            );
-            const loaded = await entity.InnerLoad(key);
-            if (!loaded) {
-                throw new Error('Task record could not be loaded.');
+
+            const actionId = await this.resolveUpdateRecordActionId();
+            if (!actionId) {
+                throw new Error("Action 'Update Record' not found in metadata.");
             }
 
             const updates: Record<string, string | number | Date | null> = {
@@ -797,16 +822,27 @@ export class ChiefOfStaffDashboardComponent
                         : null,
             };
 
-            entity.SetMany(updates, true);
-            const saved = await entity.Save();
-            if (saved) {
+            const primaryKeyObj: Record<string, unknown> = {};
+            for (const kvp of key.KeyValuePairs) {
+                primaryKeyObj[kvp.FieldName] = kvp.Value;
+            }
+
+            const provider = this.ProviderToUse as GraphQLDataProvider;
+            const actionClient = new GraphQLActionClient(provider);
+            const params: ActionParam[] = [
+                { Name: 'EntityName', Value: BIZAPPS_TASKS_ENTITY_NAME, Type: 'Input' } as ActionParam,
+                { Name: 'PrimaryKey', Value: primaryKeyObj, Type: 'Input' } as ActionParam,
+                { Name: 'Fields', Value: updates, Type: 'Input' } as ActionParam,
+            ];
+
+            const result = await actionClient.RunAction(actionId, params);
+            if (result.Success) {
                 this.showBanner('success', `Task "${this.SelectedTask.Name}" updated successfully.`);
                 this.TaskDirty = false;
                 await this.LoadCockpitData();
                 this.SelectedTask = this.Tasks.find((t) => UUIDsEqual(t.ID, taskId)) ?? null;
             } else {
-                const errText =
-                    entity.LatestResult?.CompleteMessage ?? 'Failed to update task.';
+                const errText = result.Message || 'Failed to update task.';
                 this.showBanner('error', errText);
             }
         } catch (err) {

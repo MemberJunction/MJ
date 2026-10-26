@@ -113,6 +113,43 @@ describe('UpdateRecordAction', () => {
             expect(r.Message).toMatch(/Fields/);
         });
 
+        it('accepts PrimaryKey and Fields serialized as JSON strings', async () => {
+            const entity = new FakeEntity(['Name', 'Status'], { ID: 'w-1', Name: 'Old', Status: 'Draft' });
+            const provider = makeProvider({ entityInfo: makeEntityInfo(['Name', 'Status']), entity });
+            const params = makeParams(
+                [
+                    { Name: 'EntityName', Value: 'Widgets' },
+                    { Name: 'PrimaryKey', Value: JSON.stringify({ ID: 'w-1' }) },
+                    { Name: 'Fields', Value: JSON.stringify({ Status: 'Active' }) },
+                ],
+                provider
+            );
+
+            const r = await action.InternalRunAction(params);
+
+            expect(r.Success).toBe(true);
+            expect(r.ResultCode).toBe('SUCCESS');
+            expect(entity.values['Status']).toBe('Active');
+        });
+
+        it('fails with VALIDATION_ERROR when PrimaryKey is invalid JSON string', async () => {
+            const provider = makeProvider({ entityInfo: makeEntityInfo(['Name']), entity: new FakeEntity(['Name']) });
+            const params = makeParams(
+                [
+                    { Name: 'EntityName', Value: 'Widgets' },
+                    { Name: 'PrimaryKey', Value: '{invalid json' },
+                    { Name: 'Fields', Value: { Name: 'x' } },
+                ],
+                provider
+            );
+
+            const r = await action.InternalRunAction(params);
+
+            expect(r.Success).toBe(false);
+            expect(r.ResultCode).toBe('VALIDATION_ERROR');
+            expect(r.Message).toMatch(/PrimaryKey parameter is not valid JSON/);
+        });
+
         it('fails with VALIDATION_ERROR naming the missing primary key field', async () => {
             const entity = new FakeEntity(['Name']);
             const provider = makeProvider({ entityInfo: makeEntityInfo(['Name']), entity });

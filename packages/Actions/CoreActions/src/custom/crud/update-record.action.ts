@@ -77,7 +77,7 @@ export class UpdateRecordAction extends BaseRecordMutationAction {
             if (!loadResult.success) return loadResult.error!;
 
             // Track which fields are actually being changed
-            const updatedFields: Record<string, { oldValue: any, newValue: any }> = {};
+            const updatedFields: Record<string, { oldValue: unknown, newValue: unknown }> = {};
             let hasChanges = false;
 
             // Set each field value
