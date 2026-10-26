@@ -49,6 +49,7 @@ import type { MJEntityAIActionEntity } from '@memberjunction/core-entities';
 import { EntityActionDispatchGuard, EntityActionEngineServer } from '@memberjunction/actions';
 import { AIEngine } from '@memberjunction/aiengine';
 import { TransactionFrameTracker } from '../TransactionFrameTracker';
+import { SystemUserID } from '../systemUser';
 import type { ExecuteSQLBatchOptions } from '../GenericDatabaseProvider';
 import type { SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '../saveTypes.js';
 
@@ -1842,6 +1843,9 @@ describe('SqlLoggingSessionImpl', () => {
 
 describe('RenderedSQL in ExecuteQueryFromSpec', () => {
     let provider: TestGenericProvider;
+    // These tests cover rendering, over views that are not seeded entities, so they run as the
+    // system user; what a caller may read through this path is covered in adhocSQL.executedRender.test.ts.
+    const specRunner = { ...mockUser, ID: SystemUserID } as UserInfo;
 
     beforeEach(() => {
         provider = new TestGenericProvider();
@@ -1859,7 +1863,7 @@ describe('RenderedSQL in ExecuteQueryFromSpec', () => {
             SQL: 'SELECT ID FROM [dbo].[vwMembers]',
             MaxRows: 10,
         };
-        const result = await provider.ExecuteQueryFromSpec(spec, mockUser);
+        const result = await provider.ExecuteQueryFromSpec(spec, specRunner);
 
         expect(result.Success).toBe(true);
         expect(result.RenderedSQL).toBeDefined();
@@ -1876,7 +1880,7 @@ describe('RenderedSQL in ExecuteQueryFromSpec', () => {
             Parameters: { Status: 'Active' },
             MaxRows: 10,
         };
-        const result = await provider.ExecuteQueryFromSpec(spec, mockUser);
+        const result = await provider.ExecuteQueryFromSpec(spec, specRunner);
 
         expect(result.Success).toBe(true);
         expect(result.RenderedSQL).toBeDefined();
@@ -1899,7 +1903,7 @@ describe('RenderedSQL in ExecuteQueryFromSpec', () => {
             Parameters: { Status: 'Active' },
             MaxRows: 10,
         };
-        const result = await provider.ExecuteQueryFromSpec(spec, mockUser);
+        const result = await provider.ExecuteQueryFromSpec(spec, specRunner);
 
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toContain('ORDER BY');
@@ -1929,7 +1933,7 @@ ORDER BY Cnt DESC`,
             Parameters: { StartDate: '2024-01-01' },
             MaxRows: 10,
         };
-        const result = await provider.ExecuteQueryFromSpec(spec, mockUser);
+        const result = await provider.ExecuteQueryFromSpec(spec, specRunner);
 
         expect(result.Success).toBe(false);
         // RenderedSQL reveals the cap transformation that the error message alone cannot
@@ -1951,7 +1955,7 @@ ORDER BY Cnt DESC`,
             SQL: `SELECT * FROM {{query:"NonExistent/Query"}}`,
             MaxRows: 10,
         };
-        const result = await provider.ExecuteQueryFromSpec(spec, mockUser);
+        const result = await provider.ExecuteQueryFromSpec(spec, specRunner);
 
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toBeTruthy();

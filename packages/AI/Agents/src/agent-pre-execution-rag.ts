@@ -637,7 +637,7 @@ export class AgentPreExecutionRAG {
                 scopeDescription: scope.Description ?? ''
             };
 
-            const rendered = await TemplateEngineServer.Instance.RenderTemplate(tmpl.template, content, data);
+            const rendered = await TemplateEngineServer.Instance.RenderTemplate(tmpl.template, content, data, undefined, undefined, { ContextUser: params.contextUser });
             if (rendered?.Success && rendered.Output) {
                 return rendered.Output.trim();
             }

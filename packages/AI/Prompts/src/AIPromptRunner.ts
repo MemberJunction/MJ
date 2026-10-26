@@ -166,9 +166,11 @@ interface ResolvedScalarInferenceParams {
 }
 
 export class AIPromptRunner extends BaseModelRunner {
-  /** The render options a prompt asks for: a raw render when `templateAutoescape` is false, else the engine's default. */
-  public static RenderOptions(params: AIPromptParams): TemplateRenderOptions | undefined {
-    return params.templateAutoescape === false ? { autoescape: false } : undefined;
+  /** The render options a prompt asks for: the prompt caller as the render user, and a raw render when `templateAutoescape` is false. */
+  public static RenderOptions(params: AIPromptParams): TemplateRenderOptions {
+    return params.templateAutoescape === false
+      ? { autoescape: false, ContextUser: params.contextUser }
+      : { ContextUser: params.contextUser };
   }
 
   /**
