@@ -10,6 +10,7 @@
  */
 
 export * from './map-action';
+export * from './dom-inspection';
 export * from './cdp-session-backend';
 export * from './cdp-remote-browser-session';
 export * from './base-cdp-remote-browser-provider';

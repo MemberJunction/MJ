@@ -100,6 +100,16 @@
             <span class="artifact-badge">{{ artifactCountDisplay }}</span>
           </button>
         }
+        @if (conversation) {
+          <button mjButton variant="flat" size="sm"
+            class="remote-browser-toggle-btn"
+            [class.active]="ShowRemoteBrowserPanel"
+            (click)="ToggleRemoteBrowserPanel()"
+            [title]="ShowRemoteBrowserPanel ? 'Hide Browser' : 'Open Browser'">
+            <i class="fa-solid fa-globe"></i>
+            <span class="btn-label">Browser</span>
+          </button>
+        }
         @if (memberCount > 1) {
           <button class="chat-members" (click)="toggleMembersModal()" title="View members">
             <i class="fas fa-users"></i>
@@ -241,7 +251,7 @@
 
     <!-- Messages Pane -->
     <div class="chat-messages-pane"
-      [class.full-width]="!showArtifactPanel && !SelectedTaskGraphPanel"
+      [class.full-width]="!showArtifactPanel && !SelectedTaskGraphPanel && !ShowRemoteBrowserPanel"
       [class.hidden]="isArtifactPaneMaximized">
       @if (isLoadingConversation) {
         <!-- Loading State - checked FIRST to prevent empty state flash. The branch
@@ -485,7 +495,7 @@
                     [artifactsByDetailId]="inputRef.conversationId === conversationId ? artifactsByDetailId : emptyArtifactsMap"
                     [systemArtifactsByDetailId]="inputRef.conversationId === conversationId ? systemArtifactsByDetailId : emptyArtifactsMap"
                     [agentRunsByDetailId]="inputRef.conversationId === conversationId ? agentRunsByDetailId : emptyAgentRunsMap"
-                    [appContext]="appContext"
+                    [appContext]="EffectiveAppContext"
                     [applicationId]="applicationId"
                     [defaultAgentId]="defaultAgentId"
                     [conversationDefaultAgentId]="inputRef.conversationId === conversationId ? (conversation?.DefaultAgentID ?? null) : null"
@@ -633,6 +643,64 @@
             [ShowVariables]="true"
             [Height]="'100%'">
           </mj-task-graph-run-view>
+        </div>
+      </div>
+    }
+
+    <!-- Remote Browser Side Pane -->
+    @if (ShowRemoteBrowserPanel) {
+      @if (!isArtifactPaneMaximized) {
+        <div class="resize-handle" (mousedown)="onResizeStart($event)" (touchstart)="onResizeTouchStart($event)"></div>
+      }
+      <div class="chat-artifact-pane chat-task-graph-pane chat-remote-browser-pane"
+        [style.width.%]="artifactPaneWidth"
+        [class.maximized]="isArtifactPaneMaximized">
+        <div class="task-graph-pane-header">
+          <div class="task-graph-pane-title-group">
+            <span class="task-graph-pane-icon">
+              <i class="fa-solid fa-globe"></i>
+            </span>
+            <div class="task-graph-pane-titles">
+              <span class="task-graph-pane-title">Remote Browser</span>
+              <span class="task-graph-pane-subtitle">Shared live browser workspace</span>
+            </div>
+          </div>
+          <div class="task-graph-pane-actions">
+            <input
+              type="text"
+              class="remote-browser-url-input"
+              placeholder="Enter URL or domain…"
+              [(ngModel)]="RemoteBrowserUrlInput"
+              (keydown.enter)="$event.preventDefault(); NavigateRemoteBrowserFromInput()" />
+            <button
+              type="button"
+              class="task-graph-pane-save-btn"
+              [disabled]="IsRemoteBrowserNavigating || !RemoteBrowserUrlInput.trim()"
+              (click)="NavigateRemoteBrowserFromInput()"
+              title="Navigate to URL">
+              <i class="fa-solid" [class.fa-spinner]="IsRemoteBrowserNavigating" [class.fa-spin]="IsRemoteBrowserNavigating" [class.fa-arrow-right]="!IsRemoteBrowserNavigating"></i>
+              <span>Go</span>
+            </button>
+            <button
+              type="button"
+              class="task-graph-pane-btn"
+              (click)="toggleMaximizeArtifactPane()"
+              [title]="isArtifactPaneMaximized ? 'Restore panel size' : 'Maximize panel'">
+              <i class="fa-solid" [class.fa-compress]="isArtifactPaneMaximized" [class.fa-expand]="!isArtifactPaneMaximized"></i>
+            </button>
+            <button
+              type="button"
+              class="task-graph-pane-btn"
+              (click)="CloseRemoteBrowserPanel()"
+              title="Close Browser panel">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+        </div>
+        <div class="task-graph-pane-body">
+          <mj-realtime-remote-browser-surface
+            #conversationRemoteBrowserSurface>
+          </mj-realtime-remote-browser-surface>
         </div>
       </div>
     }

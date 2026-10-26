@@ -57,6 +57,22 @@ export class FakePlaywrightBrowserAdapter extends PlaywrightBrowserAdapter {
     public SelectionTextValue = 'SELECTED TEXT';
     /** When set, {@link GetSelectionText} rejects with this error. */
     public GetSelectionTextError: Error | null = null;
+    /** Text returned from {@link GetVisibleText}; defaults to `'Visible page text'`. */
+    public VisibleTextValue = 'Visible page text';
+    /** Title returned from {@link GetTitle}; defaults to `'Test Page'`. */
+    public TitleValue = 'Test Page';
+    /** Optional override for `InspectPageDom`. */
+    public InspectPageOverride?: (observationId: string) => Promise<import('@memberjunction/remote-browser-base').RemoteBrowserPageObservation>;
+    /** Optional override for `FillPageFields`. */
+    public FillFieldsOverride?: (
+        values: ReadonlyArray<import('@memberjunction/remote-browser-base').RemoteBrowserFillFieldInput>,
+        observationId: string,
+    ) => Promise<RemoteBrowserActionResult>;
+    /** Optional override for `ClickPageByRefOrText`. */
+    public ClickByRefOrTextOverride?: (
+        action: import('@memberjunction/remote-browser-base').RemoteBrowserClickAction,
+        observationId: string,
+    ) => Promise<RemoteBrowserActionResult>;
     /** Captured `onFrame` callback from {@link StartScreencast}, so a test can drive frames. */
     public LastOnFrame: ((frame: ScreencastFrame) => void) | null = null;
     /** Count of {@link StartAudioCapture} calls. */
@@ -92,6 +108,14 @@ export class FakePlaywrightBrowserAdapter extends PlaywrightBrowserAdapter {
 
     public override async CaptureScreenshot(): Promise<string> {
         return 'BASE64SCREENSHOT';
+    }
+
+    public override async GetVisibleText(): Promise<string> {
+        return this.VisibleTextValue;
+    }
+
+    public override async GetTitle(): Promise<string> {
+        return this.TitleValue;
     }
 
     public override async GetSelectionText(): Promise<string> {

@@ -353,3 +353,114 @@ describe('CdpRemoteBrowserSession — immediate frame on navigation (Bug 1)', ()
         expect(adapter.CaptureScreencastFrameCount).toBe(0);
     });
 });
+
+describe('CdpRemoteBrowserSession — structured DOM perception & form filling', () => {
+    it('Navigate normalizes bare domains to https:// before delegating to the adapter', async () => {
+        const { session, adapter } = buildSession({});
+        await session.Navigate('example.com');
+        expect(adapter.NavigatedUrls).toEqual(['https://example.com']);
+    });
+
+    it('ExecuteAction(inspect) returns a structured RemoteBrowserPageObservation with monotonic ObservationID', async () => {
+        const { session, adapter } = buildSession({});
+        adapter.CurrentUrlValue = 'https://httpbin.org/forms/post';
+        adapter.TitleValue = 'Order Form';
+        adapter.VisibleTextValue = 'Customer name: Telephone:';
+
+        const first = await session.ExecuteAction({ Kind: 'inspect' });
+        expect(first.Success).toBe(true);
+        expect(first.Observation).toEqual({
+            ObservationID: 'obs-1',
+            Url: 'https://httpbin.org/forms/post',
+            Title: 'Order Form',
+            Text: 'Customer name: Telephone:',
+            Fields: [],
+            Actions: [],
+            Links: [],
+        });
+
+        const second = await session.ExecuteAction({ Kind: 'inspect' });
+        expect(second.Observation?.ObservationID).toBe('obs-2');
+    });
+
+    it('ExecuteAction(getPageText) returns the visible page text on PageText and Detail', async () => {
+        const { session, adapter } = buildSession({});
+        adapter.VisibleTextValue = 'Welcome to MemberJunction';
+        const result = await session.ExecuteAction({ Kind: 'getPageText' });
+        expect(result.Success).toBe(true);
+        expect(result.PageText).toBe('Welcome to MemberJunction');
+        expect(result.Detail).toBe('Welcome to MemberJunction');
+    });
+
+    it('ExecuteAction(fill) populates fields via FillPageFields and pushes an immediate screencast frame', async () => {
+        const { session, adapter } = buildSession({});
+        adapter.FillFieldsOverride = async (values, observationId) => ({
+            Success: true,
+            CurrentUrl: 'https://httpbin.org/forms/post',
+            Detail: `Filled ${values.length} field(s).`,
+            Filled: values.map((v) => ({
+                Ref: v.Target,
+                Label: 'Customer name',
+                Value: String(v.Value),
+            })),
+            Observation: {
+                ObservationID: observationId,
+                Url: 'https://httpbin.org/forms/post',
+                Title: 'Order Form',
+                Text: 'Customer name',
+                Fields: [
+                    {
+                        Ref: 'field-1',
+                        Label: 'Customer name',
+                        Kind: 'text',
+                        Required: false,
+                        Writable: true,
+                        Value: 'Colin Brockman',
+                    },
+                ],
+                Actions: [],
+                Links: [],
+            },
+        });
+
+        const result = await session.ExecuteAction({
+            Kind: 'fill',
+            Values: [{ Target: 'field-1', Value: 'Colin Brockman' }],
+        });
+
+        expect(result.Success).toBe(true);
+        expect(result.Filled).toEqual([
+            { Ref: 'field-1', Label: 'Customer name', Value: 'Colin Brockman' },
+        ]);
+        expect(result.Observation?.ObservationID).toBe('obs-1');
+        expect(adapter.CaptureScreencastFrameCount).toBe(1);
+    });
+
+    it('ExecuteAction(click) with Ref or Text delegates to ClickPageByRefOrText and pushes a screencast frame', async () => {
+        const { session, adapter } = buildSession({});
+        adapter.ClickByRefOrTextOverride = async (action, observationId) => ({
+            Success: true,
+            CurrentUrl: 'https://example.org/iana',
+            Detail: `Clicked "${action.Text ?? action.Ref}".`,
+            Observation: {
+                ObservationID: observationId,
+                Url: 'https://example.org/iana',
+                Title: 'IANA',
+                Text: 'Example Domains',
+                Fields: [],
+                Actions: [],
+                Links: [],
+            },
+        });
+
+        const result = await session.ExecuteAction({
+            Kind: 'click',
+            Text: 'Learn more',
+        });
+
+        expect(result.Success).toBe(true);
+        expect(result.CurrentUrl).toBe('https://example.org/iana');
+        expect(result.Observation?.ObservationID).toBe('obs-1');
+        expect(adapter.CaptureScreencastFrameCount).toBe(1);
+    });
+});

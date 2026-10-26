@@ -1533,3 +1533,25 @@
   border-color: var(--mj-brand-primary);
   color: var(--mj-brand-primary);
 }
+.chat-actions-buttons > .remote-browser-toggle-btn.active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary);
+}
+.remote-browser-url-input {
+  width: 220px;
+  max-width: 38vw;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 6px;
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+  font-size: 12px;
+  font-family: var(--mj-font-mono, monospace);
+}
+.remote-browser-url-input:focus {
+  outline: none;
+  border-color: var(--mj-border-focus, var(--mj-brand-primary));
+}
+

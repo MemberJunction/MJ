@@ -29,6 +29,12 @@ import {
 } from '@memberjunction/remote-browser-base';
 import { ActionExecutionResult, PlaywrightBrowserAdapter, RunComputerUseParams, ScreencastFrame, ScreencastOptions } from '@memberjunction/computer-use';
 import { MapHumanInput, MapRemoteBrowserAction } from './map-action';
+import {
+  ClickPageByRefOrText,
+  FillPageFields,
+  InspectPageDom,
+  NormalizeNavigableUrl,
+} from './dom-inspection';
 import { ICdpAudioCaptureHandle, ICdpSessionBackend } from './cdp-session-backend';
 import { ComputerUseGoalEngineFactory, DefaultComputerUseGoalEngineFactory } from './computer-use-goal-engine';
 import { WrapAdapterWithContext } from './context-injection';
@@ -108,6 +114,9 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
   /** Epoch ms of the last frame emitted on the active stream (repaint OR forced). 0 when not streaming. */
   private lastFrameAt = 0;
 
+  /** Monotonic counter for structured page observations (`obs-1`, `obs-2`, ...). */
+  private observationSequence = 0;
+
   /**
    * The active backend audio-capture handle while an audio stream is running; `null` when not streaming
    * audio. Held so {@link StopAudioStream} and {@link Close} can tear the capture down.
@@ -159,9 +168,10 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
    * @inheritdoc
    */
   public async Navigate(url: string): Promise<RemoteBrowserActionResult> {
-    // The adapter's Navigate returns void and throws on failure, so we build the Base result here.
+    // Normalize bare domains (`example.com` -> `https://example.com`) before navigating.
+    const normalizedUrl = NormalizeNavigableUrl(url);
     try {
-      await this.adapter.Navigate(url);
+      await this.adapter.Navigate(normalizedUrl);
       // Force an immediate live-view frame: CDP only emits a screencast frame on a repaint, so the
       // first navigation can otherwise leave the user staring at a blank surface (best-effort).
       await this.pushImmediateFrame();
@@ -179,6 +189,74 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
    * @inheritdoc
    */
   public async ExecuteAction(action: RemoteBrowserAction): Promise<RemoteBrowserActionResult> {
+    if (action.Kind === 'inspect') {
+      try {
+        const observation = await InspectPageDom(this.adapter, this.nextObservationId());
+        return {
+          Success: true,
+          CurrentUrl: observation.Url || this.adapter.CurrentUrl,
+          Detail: `Inspected "${observation.Title || observation.Url}" (${observation.Fields.length} field(s), ${observation.Actions.length} action(s)).`,
+          Observation: observation,
+        };
+      } catch (err) {
+        return {
+          Success: false,
+          CurrentUrl: this.adapter.CurrentUrl,
+          Detail: this.errorDetail(err),
+        };
+      }
+    }
+
+    if (action.Kind === 'fill') {
+      try {
+        const fillResult = await FillPageFields(this.adapter, action.Values, this.nextObservationId());
+        if (fillResult.Success || (fillResult.Filled && fillResult.Filled.length > 0)) {
+          await this.pushImmediateFrame();
+        }
+        return fillResult;
+      } catch (err) {
+        return {
+          Success: false,
+          CurrentUrl: this.adapter.CurrentUrl,
+          Detail: this.errorDetail(err),
+        };
+      }
+    }
+
+    if (action.Kind === 'getPageText') {
+      try {
+        const text = await this.adapter.GetVisibleText();
+        return {
+          Success: true,
+          CurrentUrl: this.adapter.CurrentUrl,
+          Detail: text,
+          PageText: text,
+        };
+      } catch (err) {
+        return {
+          Success: false,
+          CurrentUrl: this.adapter.CurrentUrl,
+          Detail: this.errorDetail(err),
+        };
+      }
+    }
+
+    if (action.Kind === 'click' && !action.Selector && (action.Ref || action.Text)) {
+      try {
+        const clickResult = await ClickPageByRefOrText(this.adapter, action, this.nextObservationId());
+        if (clickResult.Success) {
+          await this.pushImmediateFrame();
+        }
+        return clickResult;
+      } catch (err) {
+        return {
+          Success: false,
+          CurrentUrl: this.adapter.CurrentUrl,
+          Detail: this.errorDetail(err),
+        };
+      }
+    }
+
     const result = await this.adapter.ExecuteAction(MapRemoteBrowserAction(action));
     // After a navigation-class action settles, force a fresh frame so the live view reflects the new
     // page immediately even if CDP hasn't fired a repaint frame yet (best-effort; the agent narrates
@@ -513,6 +591,14 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
     if (this.features[featureName] !== true) {
       throw new RemoteBrowserCapabilityNotSupportedError(String(featureName), this.providerName || 'CdpRemoteBrowserSession');
     }
+  }
+
+  /**
+   * Returns the next monotonic observation identifier (`obs-1`, `obs-2`, ...) for this session.
+   */
+  private nextObservationId(): string {
+    this.observationSequence += 1;
+    return `obs-${this.observationSequence}`;
   }
 
   /**

@@ -106,6 +106,8 @@ import { NormalizeUUID, UUIDsEqual, UUIDSet, IndexByUUID, IsValidUUID } from '@m
 // PR 2c — Widget extension surface
 import { ChatSlotDirective, type MJChatSlotName } from '../../directives/chat-slot.directive';
 import { ConversationCallStartOptions } from '../realtime/capture/realtime-capture-channel';
+import { ConversationRemoteBrowserController } from './conversation-remote-browser-controller';
+import { RemoteBrowserSurfaceComponent } from '../realtime/remote-browser/remote-browser-surface.component';
 import type {
   IMJChatAgentPresenceComponent,
   MJChatAgentPresenceState,
@@ -1900,6 +1902,31 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
   public ShowArtifactPanel: boolean = false;
   public SelectedTaskGraphPanel: { parentTaskId: string; workflowTitle: string } | null = null;
+  public ShowRemoteBrowserPanel: boolean = false;
+  public RemoteBrowserUrlInput: string = '';
+  public IsRemoteBrowserNavigating: boolean = false;
+
+  public readonly RemoteBrowserController = new ConversationRemoteBrowserController({
+    GetConversationId: () => this.ConversationId,
+    IsSurfaceOpen: () => this.ShowRemoteBrowserPanel,
+    OnAutoOpenSurface: () => this.OpenRemoteBrowserPanel(),
+    OnStateChange: () => {
+      if (this.RemoteBrowserController.CurrentUrl) {
+        this.RemoteBrowserUrlInput = this.RemoteBrowserController.CurrentUrl;
+      }
+      this.cdr.detectChanges();
+    },
+  });
+
+  @ViewChild('conversationRemoteBrowserSurface')
+  set ConversationRemoteBrowserSurface(surface: RemoteBrowserSurfaceComponent | undefined) {
+    if (surface) {
+      this.RemoteBrowserController.BindSurface(surface);
+      this.RemoteBrowserController.SetSurfaceVisible(true);
+    } else {
+      this.RemoteBrowserController.UnbindSurface();
+    }
+  }
 
   /** @deprecated Use {@link ShowArtifactPanel}. */
   public get showArtifactPanel(): boolean {
@@ -3104,6 +3131,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.artifactPermissionService.Provider = p;
     this.attachmentService.Provider = p;
     this.analyzeArtifactService.Provider = p;
+    this.RemoteBrowserController.InitializeClientWiring(
+      this.agentClientService,
+      p instanceof GraphQLDataProvider ? p : null,
+    );
 
     // Subscribe to actionable commands from UICommandHandlerService so we can
     // intercept and locally handle commands that depend on the conversation
@@ -3524,6 +3555,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     window.removeEventListener('mouseup', this.boundOnResizeEnd);
     window.removeEventListener('touchmove', this.boundOnResizeTouchMove);
     window.removeEventListener('touchend', this.boundOnResizeTouchEnd);
+
+    this.RemoteBrowserController?.Dispose();
   }
 
   private isActiveConversation(conversationId: string | null | undefined): boolean {
@@ -3544,6 +3577,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.clearTurnTracking();
     this.ShowArtifactPanel = false;
     this.SelectedTaskGraphPanel = null;
+    this.ShowRemoteBrowserPanel = false;
     this.SelectedArtifactId = null;
     this.SelectedVersionNumber = undefined;
     this.CanShareSelectedArtifact = false;
@@ -7263,6 +7297,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
 
     this.SelectedTaskGraphPanel = null;
+    this.ShowRemoteBrowserPanel = false;
     this.ShowArtifactPanel = true;
 
     // Load permissions for the selected artifact
@@ -7291,6 +7326,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
     this.ShowArtifactPanel = false;
+    this.ShowRemoteBrowserPanel = false;
     this.SelectedArtifactId = null;
     this.SelectedTaskGraphPanel = {
       parentTaskId: data.parentTaskId,
@@ -7305,6 +7341,77 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.SelectedTaskGraphPanel = null;
     this.resetArtifactPaneSizing();
     this.cdr.detectChanges();
+  }
+
+  public ToggleRemoteBrowserPanel(): void {
+    if (this.ShowRemoteBrowserPanel) {
+      this.CloseRemoteBrowserPanel();
+    } else {
+      this.OpenRemoteBrowserPanel();
+    }
+  }
+
+  public OpenRemoteBrowserPanel(): void {
+    if (this.ShowRemoteBrowserPanel) {
+      return;
+    }
+    this.ShowArtifactPanel = false;
+    this.SelectedTaskGraphPanel = null;
+    this.SelectedArtifactId = null;
+    this.ShowRemoteBrowserPanel = true;
+    this.cdr.detectChanges();
+  }
+
+  public CloseRemoteBrowserPanel(): void {
+    if (!this.ShowRemoteBrowserPanel) {
+      return;
+    }
+    this.ShowRemoteBrowserPanel = false;
+    this.resetArtifactPaneSizing();
+    this.cdr.detectChanges();
+  }
+
+  public async NavigateRemoteBrowserFromInput(): Promise<void> {
+    const rawUrl = this.RemoteBrowserUrlInput?.trim();
+    if (!rawUrl || this.IsRemoteBrowserNavigating) {
+      return;
+    }
+    this.IsRemoteBrowserNavigating = true;
+    this.cdr.detectChanges();
+    try {
+      await this.RemoteBrowserController.NavigateAndInspect(rawUrl);
+    } finally {
+      this.IsRemoteBrowserNavigating = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Returns `AppContext` enriched with the conversation's live Remote Browser state when the
+   * browser drawer is open or a browser page has been loaded in this conversation.
+   */
+  public get EffectiveAppContext(): Record<string, unknown> | null {
+    const hasBrowserState =
+      this.ShowRemoteBrowserPanel ||
+      Boolean(this.RemoteBrowserController.CurrentUrl) ||
+      Boolean(this.RemoteBrowserController.LastObservation);
+    if (!hasBrowserState) {
+      return this.AppContext;
+    }
+    const base = this.AppContext ?? {};
+    const existingAdditional =
+      base['AdditionalContext'] && typeof base['AdditionalContext'] === 'object' && !Array.isArray(base['AdditionalContext'])
+        ? (base['AdditionalContext'] as Record<string, unknown>)
+        : {};
+    const snapshot = this.RemoteBrowserController.GetAppContextSnapshot();
+    return {
+      ...base,
+      remoteBrowser: snapshot,
+      AdditionalContext: {
+        ...existingAdditional,
+        remoteBrowser: snapshot,
+      },
+    };
   }
 
   /**

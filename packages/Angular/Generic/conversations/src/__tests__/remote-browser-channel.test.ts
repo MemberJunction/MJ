@@ -16,6 +16,7 @@ import {
   MapToolToAction, REMOTE_BROWSER_TOOL_DEFINITIONS, REMOTE_BROWSER_TOOL_NAMES,
   REMOTE_BROWSER_TOOL_PREFIX, RemoteBrowserToolArgError
 } from '../lib/components/realtime/remote-browser/remote-browser-tools';
+import { ConversationRemoteBrowserController } from '../lib/components/conversation/conversation-remote-browser-controller';
 
 LoadRealtimeRemoteBrowserChannel();
 
@@ -1303,3 +1304,141 @@ describe('RemoteBrowserChannel — page changes the agent did not cause (#3496)'
     }
   });
 });
+
+describe('Remote Browser — inspect, fill, ref/text click + ConversationRemoteBrowserController', () => {
+  it('maps browser_Inspect to an inspect action', () => {
+    expect(MapToolToAction(REMOTE_BROWSER_TOOL_NAMES.Inspect, {})).toEqual({ Kind: 'inspect' });
+  });
+
+  it('maps browser_Fill with object map or array values and rejects empty values', () => {
+    expect(MapToolToAction(REMOTE_BROWSER_TOOL_NAMES.Fill, { values: { f1: 'Ada Lovelace', f2: true } }))
+      .toEqual({ Kind: 'fill', ValuesJson: JSON.stringify({ f1: 'Ada Lovelace', f2: true }) });
+    expect(() => MapToolToAction(REMOTE_BROWSER_TOOL_NAMES.Fill, { values: {} })).toThrow(RemoteBrowserToolArgError);
+    expect(() => MapToolToAction(REMOTE_BROWSER_TOOL_NAMES.Fill, {})).toThrow(RemoteBrowserToolArgError);
+  });
+
+  it('maps browser_Click by ref or text', () => {
+    expect(MapToolToAction(REMOTE_BROWSER_TOOL_NAMES.Click, { ref: 'a1' }))
+      .toEqual({ Kind: 'click', Selector: undefined, X: undefined, Y: undefined, Ref: 'a1' });
+    expect(MapToolToAction(REMOTE_BROWSER_TOOL_NAMES.Click, { text: 'Continue' }))
+      .toEqual({ Kind: 'click', Selector: undefined, X: undefined, Y: undefined, Text: 'Continue' });
+  });
+
+  it('executes browser_Inspect and browser_Fill through ConversationRemoteBrowserController and updates appContext snapshot', async () => {
+    let autoOpened = false;
+    let stateChanges = 0;
+    const calls: ServerCall[] = [];
+    const controller = new ConversationRemoteBrowserController({
+      GetConversationId: () => 'conv-42',
+      IsSurfaceOpen: () => autoOpened,
+      OnAutoOpenSurface: () => {
+        autoOpened = true;
+      },
+      OnStateChange: () => {
+        stateChanges++;
+      },
+      ExecuteServerAction: async <T>(query: string, variables: Record<string, JSONValue>): Promise<T | null> => {
+        calls.push({ Query: query, Variables: variables });
+        if (variables['kind'] === 'inspect') {
+          return {
+            ExecuteRemoteBrowserAction: {
+              Success: true,
+              CurrentUrl: 'https://example.com/form',
+              Detail: 'Inspected Form Page (2 fields, 1 action).',
+              ObservationJson: JSON.stringify({
+                Url: 'https://example.com/form',
+                Title: 'Form Page',
+                Fields: [{ Ref: 'f1', Label: 'Full Name' }],
+              }),
+              FilledJson: null,
+            },
+          } as unknown as T;
+        }
+        return {
+          ExecuteRemoteBrowserAction: {
+            Success: true,
+            CurrentUrl: 'https://example.com/form',
+            Detail: 'Filled 1 field; 1 verified.',
+            ObservationJson: null,
+            FilledJson: JSON.stringify([
+              { Target: 'f1', Label: 'Full Name', Status: 'filled', Verified: true, ActualValue: 'Ada Lovelace' },
+            ]),
+          },
+        } as unknown as T;
+      },
+    });
+
+    const inspectRes = await controller.ExecuteBrowserTool(REMOTE_BROWSER_TOOL_NAMES.Inspect, {});
+    expect(inspectRes.Success).toBe(true);
+    expect(autoOpened).toBe(true);
+    expect(controller.CurrentUrl).toBe('https://example.com/form');
+    expect(controller.LastObservation).toMatchObject({ Title: 'Form Page' });
+
+    const fillRes = await controller.ExecuteBrowserTool(REMOTE_BROWSER_TOOL_NAMES.Fill, {
+      values: { f1: 'Ada Lovelace' },
+    });
+    expect(fillRes.Success).toBe(true);
+    expect(controller.LastFilled).toMatchObject([
+      { Target: 'f1', Label: 'Full Name', Status: 'filled', Verified: true },
+    ]);
+    expect(calls[1].Variables).toMatchObject({
+      agentSessionID: 'conv-42',
+      kind: 'fill',
+      valuesJson: JSON.stringify({ f1: 'Ada Lovelace' }),
+    });
+    expect(stateChanges).toBeGreaterThanOrEqual(2);
+
+    const snapshot = controller.GetAppContextSnapshot();
+    expect(snapshot).toMatchObject({
+      open: true,
+      conversationId: 'conv-42',
+      currentUrl: 'https://example.com/form',
+      lastDetail: 'Filled 1 field; 1 verified.',
+    });
+
+    controller.Dispose();
+  });
+
+  it('allows overlapping ConversationRemoteBrowserController tool registrations and filters push updates by active conversationId', () => {
+    const first = new ConversationRemoteBrowserController({
+      GetConversationId: () => 'conv-1',
+      IsSurfaceOpen: () => true,
+      OnAutoOpenSurface: () => undefined,
+    });
+    const second = new ConversationRemoteBrowserController({
+      GetConversationId: () => 'conv-2',
+      IsSurfaceOpen: () => true,
+      OnAutoOpenSurface: () => undefined,
+    });
+
+    // Invoke private registerBrowserTools on both controllers to simulate two mounted chat areas
+    expect(() => {
+      (first as unknown as { registerBrowserTools(): void }).registerBrowserTools();
+      (second as unknown as { registerBrowserTools(): void }).registerBrowserTools();
+    }).not.toThrow();
+
+    // Unrelated conversation ID is ignored
+    second.handlePushMessage(JSON.stringify({
+      resolver: 'RemoteBrowserActionResolver',
+      type: 'RemoteBrowserScreencastFrame',
+      agentSessionID: 'conv-1',
+      currentUrl: 'https://wrong.example.com',
+      dataBase64: 'frame-wrong',
+    }));
+    expect(second.CurrentUrl).toBeNull();
+
+    // Matching conversation ID updates currentUrl
+    second.handlePushMessage(JSON.stringify({
+      resolver: 'RemoteBrowserActionResolver',
+      type: 'RemoteBrowserScreencastFrame',
+      agentSessionID: 'conv-2',
+      currentUrl: 'https://right.example.com',
+      dataBase64: 'frame-right',
+    }));
+    expect(second.CurrentUrl).toBe('https://right.example.com');
+
+    first.Dispose();
+    second.Dispose();
+  });
+});
+

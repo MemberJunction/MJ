@@ -34,23 +34,16 @@ import {
     WaitAction,
 } from '@memberjunction/computer-use';
 
+import { NormalizeNavigableUrl } from './dom-inspection';
+
 /**
  * Maps a single Base {@link RemoteBrowserAction} to the computer-use {@link BrowserAction} the adapter
  * executes. Exhaustive over `action.Kind`; lossless — every Base field that the enriched computer-use
  * action can carry (selector, coordinates, deltas, text, key, wait) is propagated.
  *
- * Field-level mapping notes:
- * - `click` → {@link ClickAction}: propagates `Selector` (preferred when present) AND `X`/`Y` so the
- *   adapter can use robust DOM targeting or fall back to a coordinate click — exactly the dual mode the
- *   enriched `ClickAction` supports.
- * - `type` → {@link TypeAction}: carries `Text` and the optional focus `Selector`.
- * - `key` → {@link KeypressAction}: carries the key/combination string.
- * - `scroll` → {@link ScrollAction}: carries `Selector` (scroll-into-view) AND `DeltaX`/`DeltaY`
- *   (delta scroll); the adapter prefers the selector when set.
- * - `navigate` → {@link NavigateAction}: carries the URL.
- * - `back`/`forward` → {@link GoBackAction}/{@link GoForwardAction}.
- * - `wait` → {@link WaitAction}: carries the optional `Selector` (wait-for-element) AND maps `Ms` →
- *   `DurationMs` (fixed sleep); the adapter prefers the selector when set.
+ * Note: Higher-level composite actions (`inspect`, `fill`, `getPageText`, and ref/text `click`) are
+ * intercepted directly by {@link import('./cdp-remote-browser-session').CdpRemoteBrowserSession.ExecuteAction}
+ * before reaching the low-level adapter; their fallback branches here keep the switch exhaustive.
  *
  * @param action The Base action to translate; narrow on `action.Kind`.
  * @returns The equivalent computer-use {@link BrowserAction}.
@@ -59,7 +52,7 @@ export function MapRemoteBrowserAction(action: RemoteBrowserAction): BrowserActi
     switch (action.Kind) {
         case 'navigate': {
             const mapped = new NavigateAction();
-            mapped.Url = action.Url;
+            mapped.Url = NormalizeNavigableUrl(action.Url);
             return mapped;
         }
         case 'click': {
@@ -70,6 +63,8 @@ export function MapRemoteBrowserAction(action: RemoteBrowserAction): BrowserActi
             mapped.Y = action.Y ?? 0;
             if (action.Selector !== undefined) {
                 mapped.Selector = action.Selector;
+            } else if (action.Ref !== undefined) {
+                mapped.Selector = `[data-mj-browser-ref="${action.Ref}"]`;
             }
             return mapped;
         }
@@ -109,6 +104,24 @@ export function MapRemoteBrowserAction(action: RemoteBrowserAction): BrowserActi
             if (action.Selector !== undefined) {
                 mapped.Selector = action.Selector;
             }
+            return mapped;
+        }
+        case 'inspect':
+        case 'getPageText': {
+            const mapped = new WaitAction();
+            mapped.DurationMs = 0;
+            return mapped;
+        }
+        case 'fill': {
+            const first = action.Values[0];
+            if (first) {
+                const mapped = new TypeAction();
+                mapped.Text = String(first.Value);
+                mapped.Selector = `[data-mj-browser-ref="${first.Target}"]`;
+                return mapped;
+            }
+            const mapped = new WaitAction();
+            mapped.DurationMs = 0;
             return mapped;
         }
         default:

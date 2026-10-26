@@ -446,6 +446,12 @@ export class ConversationAgentService {
         }
       }
 
+      const clientTools = ConversationsRuntime.Instance.Tools.GetAllTools().map(t => ({
+        Name: t.Name,
+        Description: t.Description,
+        InputSchema: t.ParameterSchema,
+      }));
+
       const agentParams: RunAgentFromConversationDetailParams = {
         ConversationDetailId: conversationDetailId,
         AgentId: agent.ID,
@@ -455,6 +461,7 @@ export class ConversationAgentService {
           latestMessageId: message.ID,
           invocationReason: reasoning,
           ...(appContext ? { appContext } : {}),
+          ...(clientTools.length > 0 ? { clientTools } : {}),
         },
         ...(payload ? { Payload: payload } : {}),
         ...(aiConfigurationId ? { ConfigurationId: aiConfigurationId } : {}),

@@ -20,7 +20,7 @@ import { Resolver, Mutation, Query, Arg, Ctx, Float, Int, ObjectType, Field, Pub
 import { AppContext, UserPayload } from '../types.js';
 import { UserInfo, IMetadataProvider, LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { MJAIAgentSessionEntity, MJAIAgentEntity } from '@memberjunction/core-entities';
+import { MJAIAgentSessionEntity, MJAIAgentEntity, MJConversationEntity } from '@memberjunction/core-entities';
 import { NormalizeInstanceKey, RemoteBrowserEngine } from '@memberjunction/remote-browser-server';
 import { BeginBrowserGoalStep, FinalizeBrowserGoalStep, ExtractCoAgentRunID } from '../agentSessions/remoteBrowserGoalEngine.js';
 import { RemoteBrowserGoalRegistry } from '../agentSessions/remoteBrowserGoalRegistry.js';
@@ -29,6 +29,7 @@ import { randomUUID } from 'node:crypto';
 import {
   RemoteBrowserAction,
   RemoteBrowserAudioChunk,
+  RemoteBrowserFillFieldInput,
   RemoteBrowserHumanInput,
   RemoteBrowserModifierKey,
   RemoteBrowserCapabilityNotSupportedError,
@@ -42,6 +43,8 @@ import { AIPromptParams } from '@memberjunction/ai-core-plus';
 
 /** Entity name — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
+/** Entity name for turn-based text conversations that scope a live Remote Browser session. */
+const CONVERSATION_ENTITY = 'MJ: Conversations';
 /** Entity name for the agent whose `TypeConfiguration` carries the remote-browser provider preference. */
 const AGENT_ENTITY = 'MJ: AI Agents';
 /**
@@ -65,7 +68,7 @@ interface RemoteBrowserTypeConfiguration {
 
 /**
  * Result of {@link RemoteBrowserActionResolver.ExecuteRemoteBrowserAction} — the outcome of one browser
- * action plus the resulting URL the client narrates / displays.
+ * action plus the resulting URL and optional structured DOM observation / filled-field list.
  */
 @ObjectType()
 export class RemoteBrowserActionResult {
@@ -80,6 +83,14 @@ export class RemoteBrowserActionResult {
   /** Human-readable detail — an error message on failure, a note on success. Null when none. */
   @Field(() => String, { nullable: true })
   Detail?: string;
+
+  /** Optional JSON-serialized {@link import('@memberjunction/remote-browser-base').RemoteBrowserPageObservation} returned by `inspect`, `fill`, or `click`. */
+  @Field(() => String, { nullable: true })
+  ObservationJson?: string;
+
+  /** Optional JSON-serialized `RemoteBrowserFilledFieldResult[]` returned by `fill`. */
+  @Field(() => String, { nullable: true })
+  FilledJson?: string;
 }
 
 /**
@@ -324,11 +335,13 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     @Arg('deltaY', () => Float, { nullable: true }) deltaY?: number,
     @Arg('ms', () => Float, { nullable: true }) ms?: number,
     @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
+    @Arg('ref', () => String, { nullable: true }) ref?: string,
+    @Arg('valuesJson', () => String, { nullable: true }) valuesJson?: string,
   ): Promise<RemoteBrowserActionResult> {
     const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
     const session = await this.loadOwnedSession(agentSessionID, contextUser, provider);
 
-    const action = this.buildAction({ kind, url, selector, x, y, text, key, deltaX, deltaY, ms });
+    const action = this.buildAction({ kind, url, selector, ref, x, y, text, key, deltaX, deltaY, ms, valuesJson });
     if (!action) {
       return { Success: false, Detail: `Unknown or incomplete remote-browser action '${kind}'.` };
     }
@@ -337,7 +350,13 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     try {
       const liveSession = await RemoteBrowserEngine.Instance.StartSessionForAgentSession(agentSessionID, contextUser, providerName, instanceKey);
       const result = await liveSession.ExecuteAction(action);
-      return { Success: result.Success, CurrentUrl: result.CurrentUrl, Detail: result.Detail };
+      return {
+        Success: result.Success,
+        CurrentUrl: result.CurrentUrl,
+        Detail: result.Detail,
+        ...(result.Observation ? { ObservationJson: JSON.stringify(result.Observation) } : {}),
+        ...(result.Filled ? { FilledJson: JSON.stringify(result.Filled) } : {}),
+      };
     } catch (err) {
       // A dead handle is not a failure to report, it is a mapping to delete (#3598) — and this is the
       // path where that fault is actually FELT: the poll below only freezes a pane, while here the
@@ -362,6 +381,8 @@ export class RemoteBrowserActionResolver extends ResolverBase {
             Detail: retried.Success
               ? retried.Detail
               : `The browser had closed and was replaced (it is now on a blank page). ${retried.Detail ?? ''}`.trim(),
+            ...(retried.Observation ? { ObservationJson: JSON.stringify(retried.Observation) } : {}),
+            ...(retried.Filled ? { FilledJson: JSON.stringify(retried.Filled) } : {}),
           };
         } catch (retryError) {
           const retryMessage = retryError instanceof Error ? retryError.message : String(retryError);
@@ -1077,21 +1098,44 @@ export class RemoteBrowserActionResolver extends ResolverBase {
   }
 
   /**
-   * Loads the agent session and enforces inbound ownership: the session's `UserID` must equal the
-   * caller's. Throws when the session is missing or owned by another user.
+   * Loads the owning scope (`MJ: AI Agent Sessions` for realtime sessions, or `MJ: Conversations` for
+   * turn-based text conversations) and enforces inbound ownership: the record's `UserID` must equal the
+   * caller's. Throws when the record is missing or owned by another user.
    *
-   * @param agentSessionID The `AIAgentSession` id.
-   * @returns The loaded, owned session entity.
+   * @param agentSessionID The `AIAgentSession` id or `Conversation` id.
+   * @returns The loaded, owned session entity (or a synthetic conversation-scoped session descriptor).
    */
   protected async loadOwnedSession(agentSessionID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<MJAIAgentSessionEntity> {
     const session = await provider.GetEntityObject<MJAIAgentSessionEntity>(SESSION_ENTITY, contextUser);
-    if (!(await session.Load(agentSessionID))) {
-      throw new Error(`Remote-browser session ${agentSessionID} not found.`);
+    if (await session.Load(agentSessionID)) {
+      if (!UUIDsEqual(session.UserID, contextUser.ID)) {
+        throw new Error(`Not authorized: remote-browser session ${agentSessionID} is not owned by you.`);
+      }
+      return session;
     }
-    if (!UUIDsEqual(session.UserID, contextUser.ID)) {
-      throw new Error(`Not authorized: remote-browser session ${agentSessionID} is not owned by you.`);
+
+    // Fallback: turn-based text chat scopes its live browser to an owned `MJ: Conversations` record.
+    try {
+      const conversation = await provider.GetEntityObject<MJConversationEntity>(CONVERSATION_ENTITY, contextUser);
+      if (conversation && (await conversation.Load(agentSessionID))) {
+        if (!UUIDsEqual(conversation.UserID, contextUser.ID)) {
+          throw new Error(`Not authorized: remote-browser session ${agentSessionID} is not owned by you.`);
+        }
+        return {
+          ID: conversation.ID,
+          UserID: conversation.UserID,
+          AgentID: '',
+          Config_: null,
+        } as unknown as MJAIAgentSessionEntity;
+      }
+    } catch (convErr) {
+      if (convErr instanceof Error && convErr.message.startsWith('Not authorized:')) {
+        throw convErr;
+      }
+      // Entity lookup unsupported or failed in stubbed provider — fall through to not-found below.
     }
-    return session;
+
+    throw new Error(`Remote-browser session ${agentSessionID} not found.`);
   }
 
   /**
@@ -1104,6 +1148,9 @@ export class RemoteBrowserActionResolver extends ResolverBase {
    * @returns The configured backend name, or `undefined` to let the engine auto-select.
    */
   protected async resolveProviderName(session: MJAIAgentSessionEntity, contextUser: UserInfo, provider: IMetadataProvider): Promise<string | undefined> {
+    if (!session.AgentID) {
+      return undefined;
+    }
     // The session's agent IS the co-agent (the realtime voice agent), and the interactive channels
     // (Remote Browser, Whiteboard) are the CO-AGENT's abilities — so the remoteBrowser backend config
     // lives on the co-agent's TypeConfiguration, not on the target agent it voices.
@@ -1154,6 +1201,7 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     kind: string;
     url?: string;
     selector?: string;
+    ref?: string;
     x?: number;
     y?: number;
     text?: string;
@@ -1161,13 +1209,21 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     deltaX?: number;
     deltaY?: number;
     ms?: number;
+    valuesJson?: string;
   }): RemoteBrowserAction | null {
     switch (input.kind) {
       case 'navigate':
         return input.url ? { Kind: 'navigate', Url: input.url } : null;
       case 'click':
-        if (input.selector || (typeof input.x === 'number' && typeof input.y === 'number')) {
-          return { Kind: 'click', Selector: input.selector, X: input.x, Y: input.y };
+        if (input.selector || input.ref || input.text || (typeof input.x === 'number' && typeof input.y === 'number')) {
+          return {
+            Kind: 'click',
+            Selector: input.selector,
+            Ref: input.ref,
+            Text: input.text,
+            X: input.x,
+            Y: input.y,
+          };
         }
         return null;
       case 'type':
@@ -1188,8 +1244,62 @@ export class RemoteBrowserActionResolver extends ResolverBase {
           return { Kind: 'wait', Ms: input.ms, Selector: input.selector };
         }
         return null;
+      case 'inspect':
+        return { Kind: 'inspect' };
+      case 'getPageText':
+        return { Kind: 'getPageText' };
+      case 'fill': {
+        const values = this.parseFillValues(input.valuesJson);
+        return values.length > 0 ? { Kind: 'fill', Values: values } : null;
+      }
       default:
         return null;
+    }
+  }
+
+  /**
+   * Parses the `valuesJson` payload for a `fill` action. Accepts either a JSON array of
+   * `{ Target/target/ref/field, Value/value }` objects or a JSON object map `{ "field-1": "value" }`.
+   */
+  private parseFillValues(valuesJson?: string): RemoteBrowserFillFieldInput[] {
+    if (!valuesJson || valuesJson.trim().length === 0) {
+      return [];
+    }
+    try {
+      const parsed: unknown = JSON.parse(valuesJson);
+      if (Array.isArray(parsed)) {
+        const result: RemoteBrowserFillFieldInput[] = [];
+        for (const entry of parsed) {
+          if (!entry || typeof entry !== 'object') {
+            continue;
+          }
+          const rec = entry as Record<string, unknown>;
+          const targetRaw = rec.Target ?? rec.target ?? rec.ref ?? rec.Ref ?? rec.field ?? rec.name ?? rec.label;
+          const valueRaw = rec.Value ?? rec.value;
+          if (typeof targetRaw === 'string' && targetRaw.trim().length > 0 && valueRaw !== undefined && valueRaw !== null) {
+            result.push({
+              Target: targetRaw.trim(),
+              Value: typeof valueRaw === 'boolean' ? valueRaw : String(valueRaw),
+            });
+          }
+        }
+        return result;
+      }
+      if (parsed && typeof parsed === 'object') {
+        const result: RemoteBrowserFillFieldInput[] = [];
+        for (const [key, val] of Object.entries(parsed as Record<string, unknown>)) {
+          if (key.trim().length > 0 && val !== undefined && val !== null) {
+            result.push({
+              Target: key.trim(),
+              Value: typeof val === 'boolean' ? val : String(val),
+            });
+          }
+        }
+        return result;
+      }
+      return [];
+    } catch {
+      return [];
     }
   }
 

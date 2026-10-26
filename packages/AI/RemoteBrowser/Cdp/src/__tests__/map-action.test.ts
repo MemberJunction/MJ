@@ -107,6 +107,24 @@ describe('mapRemoteBrowserAction', () => {
         expect(wait.Selector).toBeUndefined();
     });
 
+    it('normalizes bare domains in navigate → https:// URL', () => {
+        const result = MapRemoteBrowserAction({ Kind: 'navigate', Url: 'httpbin.org/forms/post' });
+        expect(result).toBeInstanceOf(NavigateAction);
+        expect((result as NavigateAction).Url).toBe('https://httpbin.org/forms/post');
+    });
+
+    it('normalizes localhost in navigate → http:// URL', () => {
+        const result = MapRemoteBrowserAction({ Kind: 'navigate', Url: 'localhost:4200/app' });
+        expect(result).toBeInstanceOf(NavigateAction);
+        expect((result as NavigateAction).Url).toBe('http://localhost:4200/app');
+    });
+
+    it('maps click with Ref → ClickAction carrying [data-mj-browser-ref="..."] selector', () => {
+        const result = MapRemoteBrowserAction({ Kind: 'click', Ref: 'action-1' });
+        expect(result).toBeInstanceOf(ClickAction);
+        expect((result as ClickAction).Selector).toBe('[data-mj-browser-ref="action-1"]');
+    });
+
     it('covers every RemoteBrowserAction.Kind (no kind silently unmapped)', () => {
         const samples: RemoteBrowserAction[] = [
             { Kind: 'navigate', Url: 'https://a.test/' },
@@ -117,6 +135,9 @@ describe('mapRemoteBrowserAction', () => {
             { Kind: 'back' },
             { Kind: 'forward' },
             { Kind: 'wait', Ms: 1 },
+            { Kind: 'inspect' },
+            { Kind: 'fill', Values: [{ Target: 'field-1', Value: 'Alice' }] },
+            { Kind: 'getPageText' },
         ];
         for (const action of samples) {
             expect(MapRemoteBrowserAction(action)).toBeDefined();
