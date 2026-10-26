@@ -90,7 +90,7 @@ function bootCoreRoutes(): { app: Application; paths: string[] } {
 }
 
 async function statusOf(app: Application, path: string): Promise<number> {
-    const server = app.listen(0);
+    const server = app.listen(0, '127.0.0.1');
     try {
         await new Promise<void>((resolve) => server.once('listening', () => resolve()));
         const { port } = server.address() as AddressInfo;
