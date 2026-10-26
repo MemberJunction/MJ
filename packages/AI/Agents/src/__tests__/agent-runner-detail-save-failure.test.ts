@@ -217,5 +217,24 @@ describe('AgentRunner.RunAgentInConversation — refused conversation-detail sav
             // The swallowed-for-now step failure is logged with what failed, not dropped.
             expect(loggedErrors.some((line) => line.includes('artifact link failed'))).toBe(true);
         });
+
+        it('links nothing to a caller-supplied detail it could not write, and keeps only the media audit rows', async () => {
+            // WHY: a caller-supplied detail ID (legacy RunAIAgent(conversationDetailId=...)) was not created for this run,
+            // and the gate refused writing the reply into it. Linking artifacts to that row would still write into a
+            // conversation the gate kept this run out of, as the run user (the system user for a widget guest). The
+            // media bytes are recorded on the run itself (AIAgentRunMedia), so those are still kept.
+            const runner = new AgentRunner(makeProvider([makeDetail('caller-detail', [false])]));
+            stubSuccessfulRunWithOutputs(runner);
+            const steps = spyPostRunSteps(runner);
+
+            await expect(
+                runner.RunAgentInConversation(makeParams(), { conversationId: 'conv-1', conversationDetailId: 'caller-detail' }),
+            ).rejects.toThrow(`The agent's reply could not be saved: ${REFUSAL}`);
+
+            expect(steps.saveMedia).toHaveBeenCalledTimes(1);
+            expect(steps.processArtifacts).not.toHaveBeenCalled();
+            expect(steps.processFileArtifacts).not.toHaveBeenCalled();
+            expect(steps.createMediaArtifacts).not.toHaveBeenCalled();
+        });
     });
 });

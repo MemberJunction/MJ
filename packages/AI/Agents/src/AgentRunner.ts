@@ -804,7 +804,7 @@ export class AgentRunner {
             // before we return, so the resolver's 'complete' event still guarantees the client sees
             // every write.
             //
-            // A failed reply save (step 5) does NOT skip steps 6-7. AgentRunner is the only writer of
+            // A failed reply save (step 5) into the reply row created for this run does NOT skip steps 6-7. AgentRunner is the only writer of
             // AIAgentRunMedia and nothing retries, so skipping them would leave the run Completed with no
             // artifact linked and its media bytes lost. Instead the step-5 error is held, steps 6, 6b and 7
             // each run (one's rejection must not skip the next, and ProcessAgentArtifacts can reject outside
@@ -824,9 +824,20 @@ export class AgentRunner {
                         LogError(`${stepName} failed for agent run ${agentResult.agentRun?.ID} (reply detail ${agentResponseDetailId}) after its reply could not be saved: ${stepMessage}`, undefined, stepError);
                     }
                 };
-                await runDespiteFailedReply('Step 6 (payload artifacts)', processArtifacts);
-                await runDespiteFailedReply('Step 6b (file artifacts)', processFileArtifacts);
-                await runDespiteFailedReply('Step 7 (media)', saveMedia);
+                if (options.conversationDetailId && !options.agentResponseDetail) {
+                    // A caller-supplied row (not created for this run) that the gate refused: link nothing to it, since
+                    // that would write into a conversation the gate kept this run out of, as the run user. The media
+                    // bytes belong to the run (AIAgentRunMedia), so only those are kept.
+                    await runDespiteFailedReply('Step 7 (media audit)', async () => {
+                        if (agentResult.mediaOutputs?.length) {
+                            await this.SaveAgentRunMedia(agentResult.agentRun.ID, agentResult.mediaOutputs, contextUser, md);
+                        }
+                    });
+                } else {
+                    await runDespiteFailedReply('Step 6 (payload artifacts)', processArtifacts);
+                    await runDespiteFailedReply('Step 6b (file artifacts)', processFileArtifacts);
+                    await runDespiteFailedReply('Step 7 (media)', saveMedia);
+                }
                 throw replySaveError;
             }
             const payloadArtifact = await processArtifacts();
