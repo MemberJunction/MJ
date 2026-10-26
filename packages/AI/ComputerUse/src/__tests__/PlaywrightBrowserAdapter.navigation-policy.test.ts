@@ -9,13 +9,27 @@ import { BrowserConfig, NavigateAction } from '../types/browser.js';
 
 type RouteHandler = (route: { request: () => { url: () => string }; abort: (code: string) => Promise<void>; continue: () => Promise<void> }) => Promise<void>;
 
-let page: { goto: ReturnType<typeof vi.fn>; route: ReturnType<typeof vi.fn>; url: () => string; close: () => Promise<void>; setDefaultNavigationTimeout: () => void; setDefaultTimeout: () => void };
+type FrameListener = (frame: { url: () => string }) => void;
+const mainFrame = { url: () => currentUrl };
+let currentUrl = 'about:blank';
+/** Where a goto to each URL lands, standing in for a server's redirect. */
+let redirects: Record<string, string> = {};
+let page: {
+    goto: ReturnType<typeof vi.fn>; route: ReturnType<typeof vi.fn>; on: ReturnType<typeof vi.fn>; mainFrame: () => typeof mainFrame;
+    url: () => string; close: () => Promise<void>; setDefaultNavigationTimeout: () => void; setDefaultTimeout: () => void;
+};
 
 beforeEach(() => {
+    currentUrl = 'about:blank';
+    redirects = {};
     page = {
-        goto: vi.fn().mockResolvedValue(undefined),
+        goto: vi.fn(async (url: string) => {
+            currentUrl = redirects[url] ?? url;
+        }),
         route: vi.fn().mockResolvedValue(undefined),
-        url: () => 'about:blank',
+        on: vi.fn(),
+        mainFrame: () => mainFrame,
+        url: () => currentUrl,
         close: async () => undefined,
         setDefaultNavigationTimeout: () => undefined,
         setDefaultTimeout: () => undefined,
@@ -31,12 +45,15 @@ async function launched(): Promise<PlaywrightBrowserAdapter> {
 }
 
 describe('NavigationGuard.IsPrivateNetworkHost', () => {
-    it('flags this machine and private networks, not public hosts', () => {
-        for (const host of ['localhost', 'api.localhost', 'intranet', '127.0.0.1', '10.1.2.3', '172.20.0.1', '192.168.1.1', '169.254.169.254', '100.64.0.1', '0.0.0.0', '[::1]', 'fd00::1', 'fe80::1']) {
-            expect(NavigationGuard.IsPrivateNetworkHost(host)).toBe(true);
+    it('flags this machine and private networks, trailing dot or not, and IPv6 literals by their prefix', () => {
+        for (const host of ['localhost', 'localhost.', 'api.localhost', 'intranet', '127.0.0.1', '127.0.0.1.', '10.1.2.3', '172.20.0.1', '192.168.1.1', '169.254.169.254', '100.64.0.1', '0.0.0.0', '[::1]', '[fd00::1]', '[fc00::1]', '[fe80::1]', '[::ffff:7f00:1]']) {
+            expect([host, NavigationGuard.IsPrivateNetworkHost(host)]).toEqual([host, true]);
         }
-        for (const host of ['example.com', '8.8.8.8', '172.32.0.1', '[2606:4700::1]']) {
-            expect(NavigationGuard.IsPrivateNetworkHost(host)).toBe(false);
+    });
+
+    it('lets public names through, including ones that merely start like an IPv6 prefix', () => {
+        for (const host of ['example.com', 'fda.gov', 'fdic.gov', 'fcc.gov', 'fe80.example.com', '8.8.8.8', '172.32.0.1', '[2606:4700::1]']) {
+            expect([host, NavigationGuard.IsPrivateNetworkHost(host)]).toEqual([host, false]);
         }
     });
 });
@@ -77,5 +94,22 @@ describe('PlaywrightBrowserAdapter.RestrictNavigation', () => {
         };
         expect(await request('http://10.0.0.5/admin')).toBe('aborted');
         expect(await request('https://example.com/a.js')).toBe('continued');
+    });
+
+    it('refuses a navigation a redirect lands on a private host, and sends the page back to about:blank', async () => {
+        const adapter = await launched();
+        await adapter.RestrictNavigation([]);
+        redirects['https://short.example/x'] = 'http://169.254.169.254/latest/meta-data';
+        await expect(adapter.Navigate('https://short.example/x')).rejects.toThrow('redirected to 169.254.169.254');
+        expect(page.url()).toBe('about:blank');
+    });
+
+    it('sends the page back when a main-frame navigation it did not start (a followed link) lands on a private host', async () => {
+        const adapter = await launched();
+        await adapter.RestrictNavigation([]);
+        const onNavigated = page.on.mock.calls.find((c) => c[0] === 'framenavigated')![1] as FrameListener;
+        currentUrl = 'http://localhost:4000/graphql';
+        onNavigated(mainFrame);
+        expect(page.goto).toHaveBeenLastCalledWith('about:blank');
     });
 });

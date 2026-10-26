@@ -261,6 +261,8 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
     private domainHeaders: Map<string, Record<string, string>> = new Map();
     /** Where navigation may go once {@link RestrictNavigation} is called; `null` = unrestricted. */
     private navigationPolicy: { AllowedPrivateHosts: string[] | null } | null = null;
+    /** Whether the private-network route and landing check are installed. */
+    private privateNetworkGuardActive = false;
     /** Whether the route interceptor has been set up */
     private routeInterceptorActive: boolean = false;
 
@@ -417,22 +419,51 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
         this.requirePage();
         this.assertNavigable(url);
         await this.page!.goto(url, { waitUntil: 'load' });
+        await this.refuseBlockedLanding();
     }
 
     /**
      * Restricts where this browser may go, for a browser an agent drives (a test harness leaves it
      * unrestricted). Navigation then opens only http(s) pages and `about:blank`. With
-     * `allowedPrivateHosts`, no request the page makes (navigation, redirect, followed link or
-     * subresource) may reach a loopback, link-local or private-network host unless it is listed, as
-     * `host` or `host:port`. Can be called again to replace the list.
+     * `allowedPrivateHosts`, a request to a loopback, link-local or private-network host (listed ones,
+     * as `host` or `host:port`, excepted) is aborted, and a main-frame navigation that lands on one (a
+     * redirect) is sent back to `about:blank`. Can be called again to replace the list.
+     *
+     * ponytail: best effort, by hostname (see {@link NavigationGuard.IsPrivateNetworkHost}). Names that
+     * resolve to private addresses, WebSockets and service-worker fetches get through; real isolation
+     * is network egress rules on the machine the browser runs on.
      */
     public async RestrictNavigation(allowedPrivateHosts: string[] | null): Promise<void> {
-        this.navigationPolicy = { AllowedPrivateHosts: allowedPrivateHosts?.map((h) => h.trim().toLowerCase()) ?? null };
-        if (allowedPrivateHosts && !this.routeInterceptorActive) {
-            this.requirePage();
+        this.navigationPolicy = { AllowedPrivateHosts: allowedPrivateHosts?.map((h) => h.trim().toLowerCase().replace(/\.$/, '')) ?? null };
+        if (!allowedPrivateHosts || this.privateNetworkGuardActive) {
+            return;
+        }
+        this.requirePage();
+        this.privateNetworkGuardActive = true;
+        if (!this.routeInterceptorActive) {
             await this.setupRouteInterceptor();
             this.routeInterceptorActive = true;
         }
+        // The route sees a request's first URL only; a redirect's landing shows up here.
+        const page = this.page!;
+        page.on('framenavigated', (frame) => {
+            if (frame === page.mainFrame() && this.isBlockedLanding(frame.url())) {
+                void page.goto('about:blank').catch(() => undefined);
+            }
+        });
+    }
+
+    /** Sends the page back to `about:blank` and refuses when a redirect landed it on a blocked host. */
+    private async refuseBlockedLanding(): Promise<void> {
+        const landed = this.page!.url();
+        if (this.isBlockedLanding(landed)) {
+            await this.page!.goto('about:blank');
+            throw new Error(`Navigation refused: it was redirected to ${new URL(landed).host}, which is on a private network.`);
+        }
+    }
+
+    private isBlockedLanding(url: string): boolean {
+        return /^https?:/i.test(url) && this.isBlockedPrivateHost(new URL(url));
     }
 
     /** Throws when the navigation policy refuses `url`. */
@@ -457,7 +488,11 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
     /** Whether the policy's private-network rule blocks this http(s) URL. */
     private isBlockedPrivateHost(url: URL): boolean {
         const allowed = this.navigationPolicy?.AllowedPrivateHosts;
-        return !!allowed && NavigationGuard.IsPrivateNetworkHost(url.hostname) && !allowed.includes(url.host.toLowerCase()) && !allowed.includes(url.hostname.toLowerCase());
+        if (!allowed || !NavigationGuard.IsPrivateNetworkHost(url.hostname)) {
+            return false;
+        }
+        const hostname = url.hostname.toLowerCase().replace(/\.$/, '');
+        return !allowed.includes(hostname) && !allowed.includes(url.port ? `${hostname}:${url.port}` : hostname);
     }
 
     // ─── Screenshot ────────────────────────────────────────
@@ -895,6 +930,7 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
             case 'Navigate':
                 this.assertNavigable(action.Url);
                 await page.goto(action.Url, { waitUntil: 'load' });
+                await this.refuseBlockedLanding();
                 break;
 
             case 'GoBack':
