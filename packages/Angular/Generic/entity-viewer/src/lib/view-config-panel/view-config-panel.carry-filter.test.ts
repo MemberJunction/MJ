@@ -555,4 +555,103 @@ describe('ViewConfigPanelComponent — carrying a staged filter back from the na
     expect(panel.IsBaseViewDropdownOpen).toBe(false);
     expect(panel.AlternateBaseView).toBe('Active');
   });
+
+  it('clears ViewEntity and emits SwitchToDefaultLayout when switching from New Saved View to Personal Default Layout (#6037)', () => {
+    const panel = makePanel();
+    const existingView = {
+      ID: 'view-existing-x',
+      Name: 'Active Enterprise Accounts',
+      Description: 'Filtered enterprise view',
+      IsShared: true,
+      IsDefault: false,
+      UserCanEdit: true,
+      UserCanDelete: true,
+      SmartFilterEnabled: true,
+      SmartFilterPrompt: 'Enterprise accounts',
+      FilterState: JSON.stringify(traditionalFilter),
+      Columns: [{ Name: 'AccountName', hidden: false, orderIndex: 0 }],
+      ViewSortInfo: [],
+    } as unknown as MJUserViewEntityExtended;
+
+    panel.ViewEntity = existingView;
+    panel.DefaultSaveAsNew = true;
+    panel.PendingNewViewFilterState = traditionalFilter;
+    open(panel);
+
+    expect(panel.IsSaveAsNewFlow).toBe(true);
+    expect(panel.IsCreatingNamedView).toBe(true);
+
+    // Customize sort in the open panel before switching to Personal Default Layout
+    panel.AddSortLevel();
+    expect(panel.SortItems).toHaveLength(1);
+
+    let switchEmitted = 0;
+    panel.SwitchToDefaultLayout.subscribe(() => {
+      switchEmitted++;
+      // Simulate host (ViewWorkspaceComponent) reacting to SwitchToDefaultLayout
+      panel.ViewEntity = null;
+      panel.DefaultSaveAsNew = false;
+      panel.ngOnChanges({
+        ViewEntity: new SimpleChange(existingView, null, false),
+        DefaultSaveAsNew: new SimpleChange(true, false, false),
+      });
+    });
+
+    // RequestSwitchToDefaultLayoutMode prompts for confirmation because a filter is active
+    panel.RequestSwitchToDefaultLayoutMode();
+    expect(panel.ShowDefaultLayoutSwitchConfirm).toBe(true);
+    panel.OnDefaultLayoutSwitchConfirmed();
+
+    expect(switchEmitted).toBe(1);
+    expect(panel.ViewEntity).toBeNull();
+    expect(panel.IsSaveAsNewFlow).toBe(false);
+    expect(panel.IsCreatingNewView).toBe(false);
+    expect(panel.IsCreatingNamedView).toBe(false);
+    expect(panel.ViewName).toBe('');
+    expect(panel.SmartFilterPrompt).toBe('');
+    expect(panel.GetFilterCount()).toBe(0);
+    // In-progress sort customization is preserved across the host input update
+    expect(panel.SortItems).toHaveLength(1);
+
+    const defaultsSaved: ViewSaveEvent[] = [];
+    const viewSaved: ViewSaveEvent[] = [];
+    panel.SaveDefaults.subscribe(e => defaultsSaved.push(e));
+    panel.Save.subscribe(e => viewSaved.push(e));
+
+    panel.OnSaveDefaults();
+    expect(defaultsSaved).toHaveLength(1);
+    expect(viewSaved).toHaveLength(0);
+    expect(existingView.Name).toBe('Active Enterprise Accounts');
+    expect(existingView.SmartFilterPrompt).toBe('Enterprise accounts');
+  });
+
+  it('prevents non-Owner users from enabling or editing Custom SQL WHERE clauses (#6037)', () => {
+    const panel = makePanel();
+    panel.Provider = {
+      CurrentUser: { ID: 'user-regular', Type: 'User' },
+    } as unknown as IMetadataProvider;
+    open(panel);
+
+    expect(panel.CanEdit).toBe(true);
+    expect(panel.CanEditCustomSql).toBe(false);
+
+    panel.ToggleAdvancedMode();
+    panel.SetFilterMode('sql');
+    panel.OnToggleCustomWhereOverride(true);
+    expect(panel.CustomWhereClause).toBe(false);
+
+    panel.OnCustomSqlWhereChange("[Status] = 'Active'");
+    expect(panel.WhereClause).toBe('');
+
+    // Owner-type user can enable and edit Custom SQL WHERE clauses
+    panel.Provider = {
+      CurrentUser: { ID: 'user-owner', Type: 'Owner' },
+    } as unknown as IMetadataProvider;
+    expect(panel.CanEditCustomSql).toBe(true);
+
+    panel.OnToggleCustomWhereOverride(true);
+    expect(panel.CustomWhereClause).toBe(true);
+    panel.OnCustomSqlWhereChange("[Status] = 'Active'");
+    expect(panel.WhereClause).toBe("[Status] = 'Active'");
+  });
 });

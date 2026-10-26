@@ -242,6 +242,14 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    */
   @Output() Duplicate = new EventEmitter<void>();
 
+  /**
+   * Emitted when the user switches from "Save as New Named View" to "Personal Default Layout"
+   * while a saved ViewEntity was bound, so the host can deselect the saved view (#6037).
+   */
+  @Output() SwitchToDefaultLayout = new EventEmitter<void>();
+
+  private _suppressNextInputReinit: boolean = false;
+
   // Form state
   public ViewName: string = '';
   public ViewDescription: string = '';
@@ -457,6 +465,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   ngOnChanges(changes: SimpleChanges): void {
     // Reset to first tab and clear search when panel opens
     if (changes['IsOpen'] && this.IsOpen) {
+      this._suppressNextInputReinit = false;
       // Unified View Studio: open on Filters & Source when creating a new view, otherwise Columns
       this.ActiveTab = this.DefaultSaveAsNew ? 'filters' : 'columns';
       this.ColumnSearchText = '';
@@ -485,7 +494,12 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       changes['PendingNewViewAlternateBaseView'] ||
       (changes['CurrentGridState'] && !this.IsOpen)
     ) {
-      this.initializeFromEntity();
+      if (this._suppressNextInputReinit && this.IsOpen && !changes['Entity']) {
+        this._suppressNextInputReinit = false;
+      } else {
+        this._suppressNextInputReinit = false;
+        this.initializeFromEntity();
+      }
     }
 
     // BUG-003: Reset local saving guard when isSaving transitions from true to false
@@ -510,7 +524,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    */
   private deniedReadFields(): Set<string> {
     const user = this.ProviderToUse?.CurrentUser;
-    if (!this.Entity || !user) {
+    if (!this.Entity || !user || typeof this.Entity.GetDeniedReadFields !== 'function') {
       return new Set<string>();
     }
     return this.Entity.GetDeniedReadFields(user);
@@ -695,7 +709,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       }
     }
 
-    const declared = this.ViewEntity?.PropertiesObject;
+    const declared = !this.IsSaveAsNewFlow ? this.ViewEntity?.PropertiesObject : null;
     this.Properties = declared ? ToPlainJSON(declared) : [];
 
     // Auto-enable Advanced Mode if this view uses any advanced features
@@ -1097,6 +1111,23 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   /**
+   * Check if the current user can create or modify a custom SQL WHERE clause on this view.
+   * Server-side validation (`MJUserViewEntityServer.validateCustomWhereClauseAuthorization`)
+   * restricts `CustomWhereClause` to Owner-type administrators because raw SQL bypasses
+   * client-clause screening (#6037).
+   */
+  get CanEditCustomSql(): boolean {
+    if (!this.CanEdit) {
+      return false;
+    }
+    const userType = this.ProviderToUse?.CurrentUser?.Type?.trim();
+    if (!userType) {
+      return true;
+    }
+    return userType.toLowerCase() === 'owner';
+  }
+
+  /**
    * Check if the current user can delete the view
    */
   get CanDelete(): boolean {
@@ -1179,19 +1210,35 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
 
   /**
    * Switch from "Save as New Named View" back to "Personal Default Layout" mode.
-   * Clears any filter or alternate base view that forced named-view promotion.
+   * Clears any filter, alternate base view, or bound ViewEntity so saving writes
+   * the user's default layout rather than overwriting a previously selected view (#6037).
    */
   SwitchToDefaultLayoutMode(): void {
+    const hadViewEntity = !!this.ViewEntity;
     this.ShowDefaultLayoutSwitchConfirm = false;
+    if (hadViewEntity) {
+      this._suppressNextInputReinit = true;
+    }
+    this.ViewEntity = null;
     this.IsCreatingNewView = false;
     this.IsSaveAsNewFlow = false;
+    this.ViewName = '';
+    this.ViewDescription = '';
+    this.ShowDescriptionEditor = false;
+    this.IsShared = false;
+    this.IsDefault = false;
     this.SmartFilterPrompt = '';
+    this.SmartFilterExplanation = '';
     this.FilterState = CreateEmptyFilter();
     this.AlternateBaseView = null;
     this.CustomWhereClause = false;
     this.WhereClause = '';
     this.FilterMode = 'smart';
     this.SmartFilterEnabled = true;
+    this.Properties = [];
+    if (hadViewEntity) {
+      this.SwitchToDefaultLayout.emit();
+    }
     this.cdr.detectChanges();
   }
 
@@ -2681,7 +2728,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    * Handle toggling the one-way Custom SQL WHERE Override checkbox
    */
   OnToggleCustomWhereOverride(enabled: boolean): void {
-    if (!this.CanEdit) return;
+    if (!this.CanEditCustomSql) return;
     // Capture generated SQL from the currently active filter mode BEFORE clearing SmartFilterEnabled
     const generated = enabled && !this.WhereClause.trim() ? this.GeneratedSqlWhereClause : '';
     this.CustomWhereClause = enabled;
@@ -2702,7 +2749,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    * Handle changes emitted from <mj-code-editor> when CustomWhereClause is enabled
    */
   OnCustomSqlWhereChange(value: string): void {
-    if (!this.CustomWhereClause || !this.CanEdit) return;
+    if (!this.CustomWhereClause || !this.CanEditCustomSql) return;
     this.WhereClause = value;
     if (!this.ViewEntity && value.trim() && !this.ViewName.trim()) {
       this.ViewName = this.BuildSuggestedViewName();
