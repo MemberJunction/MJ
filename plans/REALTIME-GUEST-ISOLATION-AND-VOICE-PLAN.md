@@ -59,7 +59,9 @@
 
 - [x] `cd packages/MJServer && npx vitest run src/__tests__/WidgetSessionService.test.ts` → 45 passed.
 
-### Task 3: LiveKit room rule refuses anonymous callers (MJ#6044)
+### Task 3: LiveKit room rule decides anonymous callers by scope (MJ#6044)
+
+> **Superseded in one respect (PR gauntlet, 2026-10-26):** the fail-closed decision below locked an anonymous magic-link invitee out of its OWN agent room in Explorer's LiveKit room, so the premise "no client sends an anonymous visitor through this rule" was false. Rule 2 now admits an anonymous caller only when it owns one of the room's agent sessions by scope: `RoomAuthorizationService.SetAnonymousSessionOwnerCheck`, registered by MJServer with `AuthorizeAnonymousRoomSessions` (`LoadSessionForAccess` + `AuthorizeSessionAccess`). Nothing moved into `@memberjunction/core`. The refusal text is now "Anonymous visitors may join only the agent session rooms they started."
 
 **Decision:** Fail closed in rule 2 of `RoomAuthorizationService.AuthorizeRoomAccess` for `user.IsMagicLinkAnonymous`, before the `UserID` match. No client path sends an anonymous visitor through this rule today (`MintLiveKitClientToken` is called by Explorer's agent picker and the LiveKit room component only), so the issue's "A is still let in" is deliberately not met; the scope-based alternative needs `ResolveSessionScopeIdentity` moved into `@memberjunction/core` and is logged below.
 
@@ -155,7 +157,7 @@
 ## Logged, not fixed
 
 - MJ#5516: closed 2026-10-26 as not planned; design in the closing comment.
-- LiveKit scope-based room rule for anonymous owners (move `ResolveSessionScopeIdentity` + `AuthorizeSessionAccess` into `@memberjunction/core`) — only if a host ever sends anonymous visitors through `MintLiveKitClientToken`.
+- ~~LiveKit scope-based room rule for anonymous owners~~ — done in the gauntlet round (Task 3 note), without moving anything into `@memberjunction/core`.
 - `AIAgentSessionBridge` lookup uses `Status = 'Active'`, which the check constraint does not allow (Task 3 note).
 - ElevenLabs drift PATCH on every first ensure per process (MJ#4803's open question).
 - `gemini-enterprise-client-contract.test.ts` close-message race (Task 10).
