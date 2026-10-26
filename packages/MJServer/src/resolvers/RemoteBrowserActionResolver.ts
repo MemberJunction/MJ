@@ -1225,6 +1225,8 @@ export class RemoteBrowserActionResolver extends ResolverBase {
   ): Promise<IRemoteBrowserSession> {
     if (scope.IsConversation) {
       const settings = this.ConversationBrowserSettings();
+      // ponytail: an action that joins a launch a concurrent End then tears down keeps this slot until the
+      // reaper frees it (idleMinutes); release it on that teardown if users hit maxPerUser this way.
       ConversationBrowsers.Claim(agentSessionID, contextUser.ID, settings.maxPerUser, settings.idleMinutes);
       // Set once, before the browser launches; the engine re-applies it to any replacement.
       if (!RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID, instanceKey)) {
