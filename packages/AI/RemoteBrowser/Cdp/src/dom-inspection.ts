@@ -329,7 +329,7 @@ function inPageInspectDom(): RawDomInspectionPayload {
     }
     const text = cleanText(a.innerText || a.textContent || a.getAttribute('aria-label'));
     const href = a.href;
-    if (!text || !href || href.startsWith('javascript:') || seenHrefs.has(href)) {
+    if (!text || !href || !/^https?:/i.test(href) || seenHrefs.has(href)) {
       continue;
     }
     seenHrefs.add(href);

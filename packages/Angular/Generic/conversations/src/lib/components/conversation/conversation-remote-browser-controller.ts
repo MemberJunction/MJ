@@ -272,7 +272,7 @@ export class ConversationRemoteBrowserController {
       if (!rawStatus) {
         return;
       }
-      this.handlePushMessage(rawStatus);
+      this.HandlePushMessage(rawStatus);
     });
   }
 
@@ -280,7 +280,7 @@ export class ConversationRemoteBrowserController {
    * Routes a raw `PushStatusUpdates` JSON string for `RemoteBrowserScreencastFrame` or
    * `RemoteBrowserAudioChunk` when its `agentSessionID` matches the active conversation ID.
    */
-  public handlePushMessage(rawMessage: string): void {
+  public HandlePushMessage(rawMessage: string): void {
     const activeConversationId = this.options.GetConversationId();
     if (!activeConversationId) {
       return;

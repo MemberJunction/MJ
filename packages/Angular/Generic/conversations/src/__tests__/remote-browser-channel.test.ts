@@ -1418,7 +1418,7 @@ describe('Remote Browser — inspect, fill, ref/text click + ConversationRemoteB
     }).not.toThrow();
 
     // Unrelated conversation ID is ignored
-    second.handlePushMessage(JSON.stringify({
+    second.HandlePushMessage(JSON.stringify({
       resolver: 'RemoteBrowserActionResolver',
       type: 'RemoteBrowserScreencastFrame',
       agentSessionID: 'conv-1',
@@ -1428,7 +1428,7 @@ describe('Remote Browser — inspect, fill, ref/text click + ConversationRemoteB
     expect(second.CurrentUrl).toBeNull();
 
     // Matching conversation ID updates currentUrl
-    second.handlePushMessage(JSON.stringify({
+    second.HandlePushMessage(JSON.stringify({
       resolver: 'RemoteBrowserActionResolver',
       type: 'RemoteBrowserScreencastFrame',
       agentSessionID: 'conv-2',
