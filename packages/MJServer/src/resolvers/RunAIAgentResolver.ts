@@ -330,6 +330,8 @@ export class RunAIAgentResolver extends ResolverBase {
         // run is not marked Failed — the early-failure case we most want to
         // persist, but we have no run object yet.
         const agentRunRef = runRef ?? { current: null as MJAIAgentRunEntityExtended | null };
+        // The publisher owns every status message, including the failure completion the catch below sends.
+        const statusPublisher = new AgentRunStatusPublisher(pubSub, userPayload, sessionId, conversationDetailId);
 
         try {
             LogStatus(`=== RUNNING AI AGENT FOR ID: ${agentId} ===`);
@@ -363,9 +365,8 @@ export class RunAIAgentResolver extends ResolverBase {
 
             console.log(`🚀 Starting agent execution with sessionId: ${sessionId}`);
 
-            // The publisher owns every status message. The resolver still copies the run into
-            // agentRunRef, including noise steps, for the fire-and-forget liveness pulse.
-            const statusPublisher = new AgentRunStatusPublisher(pubSub, userPayload, sessionId, conversationDetailId);
+            // The resolver still copies the run into agentRunRef, including noise steps, for the
+            // fire-and-forget liveness pulse.
             const publishProgress = statusPublisher.OnProgress;
 
             // Execute the agent in conversation context - handles conversation, artifacts, etc.
@@ -491,11 +492,18 @@ export class RunAIAgentResolver extends ResolverBase {
         } catch (error) {
             const executionTime = Date.now() - startTime;
             LogError(`AI Agent run failed:`, undefined, error);
-            const errorMessage = (error as Error).message || 'Unknown error occurred';
+            // Never dereference a non-Error throw: this catch must not itself throw, since executeAIAgent resolves on
+            // every failure (executeAgentInBackground relies on it).
+            const errorMessage = (error instanceof Error && error.message) || 'Unknown error occurred';
 
             // Fire-and-forget clients otherwise leave the run Running and the
             // conversation detail In-Progress (Explorer red-pill timer).
             await this.persistInFlightAgentFailure(p, userPayload, agentRunRef.current, conversationDetailId, errorMessage, replyDetail);
+            // A fire-and-forget client has only this message to learn the run ended: without it, it waits out its
+            // idle timeout and then reconciles the run as a success. Published after the rows are closed, so a
+            // client that reloads the reply on this message reads the error. PublishFinal is the try's last step
+            // that can throw, so a run gets one completion or the other, never both.
+            statusPublisher.PublishFailure(conversationDetailId, errorMessage);
 
             const errorResult = {
                 success: false,
@@ -1440,9 +1448,8 @@ export class RunAIAgentResolver extends ResolverBase {
 
     /**
      * Execute agent in background (fire-and-forget).
-     * Handles errors by publishing error completion events via PubSub,
-     * so the client receives them via WebSocket even though the HTTP response
-     * has already been sent.
+     * The client learns the outcome only from the run's completion status message (executeAIAgent publishes it,
+     * failure included), since the HTTP response has already been sent. A liveness pulse runs until the run ends.
      */
     private executeAgentInBackground(
         p: DatabaseProviderBase,
@@ -1490,7 +1497,8 @@ export class RunAIAgentResolver extends ResolverBase {
                 : undefined,
         });
 
-        // Execute in background - errors are handled within, not propagated
+        // executeAIAgent resolves on every failure and publishes the run's completion itself (PublishFinal, or
+        // PublishFailure from its catch), so nothing here publishes one.
         this.executeAIAgent(
             p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
             data, payload, undefined, lastRunId, autoPopulateLastRunPayload,
@@ -1498,14 +1506,9 @@ export class RunAIAgentResolver extends ResolverBase {
             sourceArtifactId, sourceArtifactVersionId, conversationId, runRef, planMode, requestedSkillIDs, taskGraphDebug,
             conversationHistoryFrom, trustReservedRunData, conversationBranchId, replyDetail
         ).catch((error: unknown) => {
-            // Background execution failed unexpectedly (executeAIAgent has its own try-catch,
-            // so this would only fire for truly unexpected errors).
-            const errorMessage = (error instanceof Error) ? error.message : 'Unknown background execution error';
-            LogError(`🔥 Fire-and-forget background execution failed: ${errorMessage}`, undefined, error);
-
-            // Publish error completion event so the client knows the agent failed.
-            // The publisher is created inside executeAIAgent, which rejected before returning one.
-            new AgentRunStatusPublisher(pubSub, userPayload, sessionId, conversationDetailId).PublishFailure(conversationDetailId, errorMessage);
+            // Only a broken executeAIAgent contract lands here. Logged rather than left as an unhandled rejection;
+            // no completion is published, because executeAIAgent may already have sent one.
+            LogError(`🔥 Fire-and-forget run of agent ${agentId} for session ${sessionId} rejected, which executeAIAgent never should`, undefined, error);
         }).finally(() => pulse.Stop());
     }
 

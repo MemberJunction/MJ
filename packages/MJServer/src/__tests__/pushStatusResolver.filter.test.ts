@@ -90,3 +90,30 @@ describe('statusUpdatesFilter — anonymous visitors share one user id (#4931)',
         expect(StatusUpdatesFilter({ payload: event(), args: { sessionId: 'same-session' }, context: connection({ ID: ANON, IsMagicLinkAnonymous: true }) })).toBe(false);
     });
 });
+
+describe('statusUpdatesFilter — an anonymous owner key matches exactly', () => {
+    // The scope part is a signed, case-significant identity (an mj_sid or a resource scope), so the anonymous key is
+    // compared exactly. A UUID comparison (case- and whitespace-insensitive) would let a visitor whose scope differs
+    // only in case or padding receive another visitor's run events.
+    const ANON = 'AAAAAAAA-0000-4000-8000-0000000000A0';
+    const visitor = (sid: string) => ({ ID: ANON, IsMagicLinkAnonymous: true, AnonymousVisitorID: sid, MagicLinkScope: { ResourceID: sid } });
+    const connection = (user: object): StatusUpdatesFilterContext => ({ userPayload: { sessionId: 's', email: 'anonymous@magic-link.local', userRecord: user } as UserPayload });
+    const eventOwnedBy = (sid: string): PushStatusNotificationPayload => ({
+        sessionId: 's',
+        ownerUserId: `${ANON.toLowerCase()}|${sid}`,
+        message: 'complete',
+    });
+
+    it('delivers to the visitor whose scope is identical', () => {
+        expect(StatusUpdatesFilter({ payload: eventOwnedBy('sid-a'), args: { sessionId: 's' }, context: connection(visitor('sid-a')) })).toBe(true);
+    });
+
+    it('does not deliver when the scopes differ only by case', () => {
+        expect(StatusUpdatesFilter({ payload: eventOwnedBy('SID-A'), args: { sessionId: 's' }, context: connection(visitor('sid-a')) })).toBe(false);
+    });
+
+    it('does not deliver when the scopes differ only by surrounding whitespace', () => {
+        expect(StatusUpdatesFilter({ payload: eventOwnedBy('sid-a '), args: { sessionId: 's' }, context: connection(visitor('sid-a')) })).toBe(false);
+        expect(StatusUpdatesFilter({ payload: eventOwnedBy('sid-a'), args: { sessionId: 's' }, context: connection(visitor(' sid-a')) })).toBe(false);
+    });
+});

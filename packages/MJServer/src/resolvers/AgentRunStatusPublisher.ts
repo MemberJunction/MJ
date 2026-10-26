@@ -149,8 +149,9 @@ export class AgentRunStatusPublisher {
     }
 
     /**
-     * Completion for a failure that has no run. The fire-and-forget path uses this when
-     * `executeAIAgent` rejects. A host uses it the same way: when the turn throws
+     * Completion for a failure that has no run result. `executeAIAgent` sends it when the run
+     * throws (the agent could not start, the run failed, or its reply could not be saved), so a
+     * fire-and-forget client learns the reason. A host uses it the same way: when the turn throws
      * instead of returning a result, call `PublishFailure` with the reply row's id
      * and the error. That completion is what tells the chat the reply finished.
      */

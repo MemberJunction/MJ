@@ -234,19 +234,6 @@ export interface StatusUpdatesFilterContext {
 }
 
 /**
- * Filter predicate for the `statusUpdates` subscription. Exported so it can be unit-tested in
- * isolation (it is the security-critical gate). A push reaches a subscriber only when BOTH hold:
- *   1. the push's `sessionId` matches the subscriber's requested `sessionId` (tab routing), AND
- *   2. the push's `ownerUserId` matches the subscriber CONNECTION's authenticated identity
- *      (`context.userPayload.userRecord.ID`, established once at WS connect).
- *
- * Condition (2) is the fix for the session-hijack class (B49): `sessionId` is a client-chosen
- * correlation value, so a subscriber who lifts another user's `sessionId` would previously receive
- * their pushes. Binding delivery to the connection's server-authenticated identity means knowing a
- * `sessionId` is no longer sufficient. Fails CLOSED — a missing owner or connection identity never
- * matches.
- */
-/**
  * The owner key of a status update for `user`: its user ID, or, for an anonymous visitor, its user ID plus its scope
  * identity (`ResolveSessionScopeIdentity`). Every anonymous visitor shares one Anonymous user and the session id is
  * chosen by the client (`x-session-id`), so the user ID alone would let one visitor receive another's run events.
@@ -273,6 +260,21 @@ export function StatusUpdateOwnerID(userPayload: UserPayload | undefined): strin
   return StatusUpdateOwnerKey(userPayload?.ElevatedFrom ?? userPayload?.userRecord);
 }
 
+/**
+ * Filter predicate for the `statusUpdates` subscription. Exported so it can be unit-tested in
+ * isolation (it is the security-critical gate). A push reaches a subscriber only when BOTH hold:
+ *   1. the push's `sessionId` matches the subscriber's requested `sessionId` (tab routing), or is `'*'`, AND
+ *   2. the push's `ownerUserId` matches the owner key ({@link StatusUpdateOwnerKey}) of the subscriber
+ *      CONNECTION's authenticated identity (`context.userPayload.userRecord`, established once at WS
+ *      connect): the user ID for a named user, compared as a UUID; for an anonymous visitor, the user ID
+ *      plus its scope identity, compared exactly because the scope part is case-significant.
+ *
+ * Condition (2) is the fix for the session-hijack class (B49): `sessionId` is a client-chosen
+ * correlation value, so a subscriber who lifts another user's `sessionId` would previously receive
+ * their pushes. Binding delivery to the connection's server-authenticated identity means knowing a
+ * `sessionId` is no longer sufficient; the scope part does the same between anonymous visitors, who all
+ * share one Anonymous user. Fails CLOSED — a missing owner or connection key never matches.
+ */
 export function StatusUpdatesFilter(data: {
   payload: PushStatusNotificationPayload;
   args: PushStatusNotificationArgs;

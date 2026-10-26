@@ -116,6 +116,20 @@ describe('AgentRunner.RunAgentInConversation — ConversationWriter', () => {
         expect(requests.filter((r) => r.entity === 'MJ: Conversation Details')).toHaveLength(2);
     });
 
+    it('creates the conversation owned by the conversation writer, not the elevated run user', async () => {
+        // WHY: only the conversation's owner (or a grantee) may write its messages. A conversation owned by the system
+        // user would lock the guest out of the reply row the run writes as the guest.
+        const { provider, requests, rows } = recordingProvider();
+        const runner = new AgentRunner(provider);
+        stubRun(runner);
+
+        await runner.RunAgentInConversation(PARAMS, { userMessage: 'hi', conversationName: 'Widget chat', ConversationWriter: GUEST });
+
+        const conversationIndex = requests.findIndex((r) => r.entity === 'MJ: Conversations');
+        expect(conversationIndex).toBeGreaterThanOrEqual(0);
+        expect(rows[conversationIndex].UserID).toBe(GUEST.ID);
+    });
+
     it('defaults to the run user when no writer is named (every other caller is unchanged)', async () => {
         const { provider, requests } = recordingProvider();
         const runner = new AgentRunner(provider);

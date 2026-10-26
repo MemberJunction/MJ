@@ -12,7 +12,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import type { ExecuteAgentParams, ExecuteAgentResult } from '@memberjunction/ai-core-plus';
+import type { ExecuteAgentParams, ExecuteAgentResult, MediaOutput } from '@memberjunction/ai-core-plus';
 
 const loggedErrors: string[] = [];
 
@@ -158,5 +158,64 @@ describe('AgentRunner.RunAgentInConversation — refused conversation-detail sav
         const finalLine = loggedErrors.find((line) => line.includes('final status'));
         expect(finalLine).toBeDefined();
         expect(finalLine).toContain(REFUSAL);
+    });
+
+    describe('a refused final-status save still keeps the run\'s artifacts and media', () => {
+        // WHY: step 5 (the reply save) runs before steps 6, 6b and 7. AgentRunner is the only writer of
+        // AIAgentRunMedia and nothing retries, so if a refused reply save skipped those steps the run's
+        // artifacts would be unlinked and its media bytes lost for good. The run must still fail with the
+        // reply-save reason, after the later steps ran.
+        const MEDIA: MediaOutput = { modality: 'Image', mimeType: 'image/png', data: 'bm90LWluLXRoZS1wYXlsb2Fk' };
+
+        function stubSuccessfulRunWithOutputs(runner: AgentRunner): void {
+            vi.spyOn(runner as unknown as RunAgentStub, 'RunAgent').mockResolvedValue({
+                success: true,
+                payload: { report: 'done' },
+                fileOutputs: [{ fileName: 'report.pdf' }],
+                mediaOutputs: [MEDIA],
+                agentRun: { ID: 'run-1', Status: 'Completed', FinalStep: 'Success' },
+            } as unknown as ExecuteAgentResult);
+        }
+
+        function spyPostRunSteps(runner: AgentRunner) {
+            return {
+                processArtifacts: vi.spyOn(runner, 'ProcessAgentArtifacts').mockResolvedValue(undefined),
+                processFileArtifacts: vi.spyOn(runner, 'ProcessFileArtifacts').mockResolvedValue([]),
+                saveMedia: vi.spyOn(runner, 'SaveAgentRunMedia').mockResolvedValue(['media-1']),
+                createMediaArtifacts: vi.spyOn(runner, 'CreateMediaArtifacts').mockResolvedValue(undefined),
+            };
+        }
+
+        it('runs every artifact and media step, then rejects with the reply-save reason', async () => {
+            const runner = new AgentRunner(makeProvider([makeDetail('user-detail', [true]), makeDetail('agent-detail', [true, false])]));
+            stubSuccessfulRunWithOutputs(runner);
+            const steps = spyPostRunSteps(runner);
+
+            await expect(
+                runner.RunAgentInConversation(makeParams(), { conversationId: 'conv-1', userMessage: 'hi' }),
+            ).rejects.toThrow(`The agent's reply could not be saved: ${REFUSAL}`);
+
+            expect(steps.processArtifacts).toHaveBeenCalledTimes(1);
+            expect(steps.processFileArtifacts).toHaveBeenCalledTimes(1);
+            expect(steps.saveMedia).toHaveBeenCalledTimes(1);
+            expect(steps.createMediaArtifacts).toHaveBeenCalledTimes(1);
+        });
+
+        it('still saves the media when the payload artifact step also rejects, and the thrown error stays the reply-save one', async () => {
+            const runner = new AgentRunner(makeProvider([makeDetail('user-detail', [true]), makeDetail('agent-detail', [true, false])]));
+            stubSuccessfulRunWithOutputs(runner);
+            const steps = spyPostRunSteps(runner);
+            steps.processArtifacts.mockRejectedValue(new Error('artifact link failed'));
+
+            await expect(
+                runner.RunAgentInConversation(makeParams(), { conversationId: 'conv-1', userMessage: 'hi' }),
+            ).rejects.toThrow(`The agent's reply could not be saved: ${REFUSAL}`);
+
+            expect(steps.processFileArtifacts).toHaveBeenCalledTimes(1);
+            expect(steps.saveMedia).toHaveBeenCalledTimes(1);
+            expect(steps.createMediaArtifacts).toHaveBeenCalledTimes(1);
+            // The swallowed-for-now step failure is logged with what failed, not dropped.
+            expect(loggedErrors.some((line) => line.includes('artifact link failed'))).toBe(true);
+        });
     });
 });

@@ -1644,11 +1644,12 @@ export class ResolverBase {
 
   /**
    * Publishes a push-status update to the client on {@link PUSH_STATUS_UPDATES_TOPIC}, stamping the
-   * authenticated owner's user ID from `userPayload` so the subscription filter can bind delivery
-   * to identity (see B49 / `statusUpdatesFilter`). The ergonomic wrapper every resolver should use
-   * instead of calling `pubSub.publish` on the topic directly — it makes omitting identity
-   * impossible. Non-resolver publishers (services, the liveness heartbeat) call the shared
-   * `publishStatusUpdate()` function directly with an explicit `ownerUserId`.
+   * owner key of `userPayload` (`StatusUpdateOwnerID`: the request's user, or the widget guest an
+   * elevated payload stands in for) so the subscription filter can bind delivery to identity (see B49 /
+   * `StatusUpdatesFilter`). The ergonomic wrapper every resolver should use instead of calling
+   * `pubSub.publish` on the topic directly — it makes omitting identity impossible. Non-resolver
+   * publishers (services, the liveness heartbeat) call the shared `PublishStatusUpdate()` function
+   * directly with an explicit `ownerUserId`.
    */
   protected PublishStatusUpdate(pubSub: PubSubEngine, sessionId: string, message: string | undefined, userPayload: UserPayload): void {
     PublishStatusUpdate(pubSub, {

@@ -396,8 +396,12 @@ export class AgentRunner {
                 conversationId = options.conversationId || agentResponseDetail.ConversationID;
                 userMessageDetailId = agentResponseDetail.ParentID || agentResponseDetailId;
             } else if (options.conversationDetailId) {
-                // A caller-supplied detail ID. It was not created for this run, so it is not marked as server-authored:
-                // the conversation detail gate decides whether the run may write a reply into it.
+                // A caller-supplied detail ID (the legacy RunAIAgent(conversationDetailId=...) shape). The row was not
+                // created for this run, so it is loaded unmarked (no MarkServerAuthoredReply), and the conversation
+                // detail gate's reply rule refuses the final save (step 5 changes Message and Status) for every user,
+                // the system user included. So a caller-supplied detail ID cannot receive the final reply: the run
+                // fails at step 5. Only the server-created reply path (options.agentResponseDetail, or the branch
+                // below that creates the reply via CreateAgentReplyDetail) completes.
                 agentResponseDetailId = options.conversationDetailId;
 
                 // LATENCY OPTIMIZATION (Opt #2): When conversationId is pre-resolved by the caller
@@ -799,7 +803,32 @@ export class AgentRunner {
             // no report." Sequential execution removes the interleave; all writes still complete
             // before we return, so the resolver's 'complete' event still guarantees the client sees
             // every write.
-            await updateDetail();
+            //
+            // A failed reply save (step 5) does NOT skip steps 6-7. AgentRunner is the only writer of
+            // AIAgentRunMedia and nothing retries, so skipping them would leave the run Completed with no
+            // artifact linked and its media bytes lost. Instead the step-5 error is held, steps 6, 6b and 7
+            // each run (one's rejection must not skip the next, and ProcessAgentArtifacts can reject outside
+            // its own try/catch), and the step-5 error is thrown last, so the run still fails with its reason.
+            let replySaveError: Error | undefined;
+            try {
+                await updateDetail();
+            } catch (error) {
+                replySaveError = error instanceof Error ? error : new Error(String(error));
+            }
+            if (replySaveError) {
+                const runDespiteFailedReply = async (stepName: string, step: () => Promise<unknown>): Promise<void> => {
+                    try {
+                        await step();
+                    } catch (stepError) {
+                        const stepMessage = stepError instanceof Error ? stepError.message : String(stepError);
+                        LogError(`${stepName} failed for agent run ${agentResult.agentRun?.ID} (reply detail ${agentResponseDetailId}) after its reply could not be saved: ${stepMessage}`, undefined, stepError);
+                    }
+                };
+                await runDespiteFailedReply('Step 6 (payload artifacts)', processArtifacts);
+                await runDespiteFailedReply('Step 6b (file artifacts)', processFileArtifacts);
+                await runDespiteFailedReply('Step 7 (media)', saveMedia);
+                throw replySaveError;
+            }
             const payloadArtifact = await processArtifacts();
             const fileArtifacts = await processFileArtifacts();
             await saveMedia();
