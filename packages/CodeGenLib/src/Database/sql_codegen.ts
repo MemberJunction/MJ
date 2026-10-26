@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import path from 'path';
 
 import { SQLUtilityBase } from './sql';
+import type { SQLPassFailure } from './sqlPassFailures';
 import { CodeGenDatabaseProvider, BaseViewGenerationContext, CascadeDeleteContext, CodeGenConnection, PhasedExecutionResult, OrderAlternateBaseViewsTopologically } from './codeGenDatabaseProvider';
 
 import { AutoIndexForeignKeys, AutoIndexSoftPrimaryKeys, configInfo, CustomSqlScripts, dbDatabase, mjCoreSchema, MAX_INDEX_NAME_LENGTH } from '../Config/config';
@@ -297,12 +298,30 @@ export class SQLCodeGenBase {
      */
     protected layeredEntitiesWithLoggedInnerView: Set<string> = new Set();
 
+    /**
+     * Every failure recorded by the current {@link ManageSQLScriptsAndExecution} pass, each tied to
+     * its entity where it has one. The CRUD self-heal in `runCodeGen` reads this to clear the
+     * SQL-pass failure only when it repaired every entry.
+     */
+    protected sqlPassFailures: SQLPassFailure[] = [];
+
+    /** The failures recorded by the last {@link ManageSQLScriptsAndExecution} pass. */
+    public get SQLPassFailures(): ReadonlyArray<SQLPassFailure> {
+        return this.sqlPassFailures;
+    }
+
+    /** Records a failure of a step that has no single entity, such as a custom SQL script. */
+    protected RecordSQLPassStepFailure(step: string, message: string): void {
+        this.sqlPassFailures.push({ Step: step, EntityName: null, Message: message });
+    }
+
     public async ManageSQLScriptsAndExecution(pool: CodeGenConnection, entities: EntityInfo[], directory: string, currentUser: UserInfo): Promise<boolean> {
         try {
             this.existingRoutines = null;
             this.existingRoutineDefinitions = null;
             this.driftedRoutines = new Set();
             this.layeredEntitiesWithLoggedInnerView = new Set();
+            this.sqlPassFailures = [];
             // Build list of entities qualified for forced regeneration if entityWhereClause is provided
             if (configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.entityWhereClause) {
                 this.filterEntitiesQualifiedForRegeneration = true; // Enable filtering
@@ -339,6 +358,7 @@ export class SQLCodeGenBase {
             const beforeScriptsSucceeded = await this.RunCustomSQLScripts(pool, 'before-sql');
             if (!beforeScriptsSucceeded) {
                 FailSpinner('Failed to run custom SQL scripts');
+                this.RecordSQLPassStepFailure('before-sql scripts', 'One or more before-sql scripts failed');
             }
             else {
                 SucceedSpinner(`Custom SQL scripts completed (${(new Date().getTime() - startTime.getTime())/1000}s)`);
@@ -539,6 +559,7 @@ export class SQLCodeGenBase {
             let overallSuccess = entityGenSuccess && beforeScriptsSucceeded;
             if (!executionSuccess) {
                 FailSpinner('Failed to execute entity SQL files');
+                this.RecordSQLPassStepFailure('Executing entity SQL files', 'One or more entity SQL files had failed batches');
                 TempBatchFile.cleanup(); // Cleanup on error
                 overallSuccess = false;
                 // Continue to manage entity fields metadata even after SQL execution failure.
@@ -561,6 +582,7 @@ export class SQLCodeGenBase {
             StartSpinner('Refreshing custom base views...');
             if (! await this.RefreshCustomBaseViewsLive(pool, includedEntities)) {
                 FailSpinner('Failed to refresh one or more custom base views');
+                this.RecordSQLPassStepFailure('Refreshing custom base views', 'One or more custom base views failed to refresh');
                 overallSuccess = false;
             }
             else {
@@ -602,6 +624,7 @@ export class SQLCodeGenBase {
             StartSpinner('Managing entity fields metadata...');
             if (! await manageMD.manageEntityFields(pool, configInfo.excludeSchemas, true, true, currentUser, false, false, pass2EntityFilter)) {
                 FailSpinner('Failed to manage entity fields');
+                this.RecordSQLPassStepFailure('Managing entity fields', 'Entity field sync after SQL generation failed');
                 overallSuccess = false;
             }
             else {
@@ -668,6 +691,7 @@ export class SQLCodeGenBase {
             const step4StartTime: Date = new Date();
             if (! await this.ApplyPermissions(pool, directory, includedEntities)) {
                 FailSpinner('Failed to apply permissions');
+                this.RecordSQLPassStepFailure('Applying permissions', 'One or more permissions files failed');
                 overallSuccess = false;
             }
             else {
@@ -684,6 +708,7 @@ export class SQLCodeGenBase {
             const step5StartTime: Date = new Date();
             if (! await this.RunCustomSQLScripts(pool, 'after-sql')) {
                 FailSpinner('Failed to run post-generation SQL scripts');
+                this.RecordSQLPassStepFailure('after-sql scripts', 'One or more after-sql scripts failed');
                 overallSuccess = false;
             }
             else {
@@ -698,10 +723,16 @@ export class SQLCodeGenBase {
             const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
             await md.Refresh();
 
+            // A failure that set overallSuccess without recording itself still needs an entry, or
+            // the self-heal would find nothing left unrepaired and clear the pass's failure.
+            if (!overallSuccess && this.sqlPassFailures.length === 0) {
+                this.RecordSQLPassStepFailure('SQL pass', 'SQL generation/execution reported a failure');
+            }
             return overallSuccess;
         }
         catch (err) {
             logError(err as string);
+            this.RecordSQLPassStepFailure('SQL pass', `SQL generation/execution threw: ${err instanceof Error ? err.message : String(err)}`);
             // Clean up temp batch files on error
             TempBatchFile.cleanup();
             return false;
@@ -1016,12 +1047,16 @@ export class SQLCodeGenBase {
                     .map(e => `  - ${e.SchemaName}.${e.Name}`)
                     .join('\n');
                 logError(`SQL generation/execution failed for ${failedEntities.length} of ${totalEntities} entity(ies):\n${list}`);
+                for (const e of failedEntities) {
+                    this.sqlPassFailures.push({ Step: phaseLabel, EntityName: e.Name, Message: `SQL generation/execution failed for ${e.SchemaName}.${e.Name}` });
+                }
             }
 
             return {Success: failedEntities.length === 0, Files: files};
         }
         catch (err) {
             logError(err as string);
+            this.RecordSQLPassStepFailure('Generating entity SQL', `Entity SQL generation threw: ${err instanceof Error ? err.message : String(err)}`);
             return {Success: false, Files: files};
         }
     }
