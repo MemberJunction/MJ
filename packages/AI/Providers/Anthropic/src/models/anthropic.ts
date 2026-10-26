@@ -797,11 +797,13 @@ export class AnthropicLLM extends BaseLLM {
                 messages: this.formatMessagesWithCaching(messagesForApi, params.enableCaching ?? true, thinking.thinking !== undefined)
             };
 
+            // Add temperature only where Anthropic accepts it. Temperature is incompatible with thinking on every
+            // model, and adaptive-thinking models (Claude 4.6+, Claude 5) reject a non-default value "regardless of
+            // whether thinking is used" — including requests that carry no `thinking` block at all. 1 is the default.
             // Docs: https://platform.claude.com/docs/en/build-with-claude/thinking#limits-and-feature-compatibility ("Sampling parameters")
-            // Add temperature if specified. Note that Anthropic requires temperature to be 1 or omitted
-            // whenever extended thinking or adaptive thinking is enabled.
             if (params.temperature != null) {
-                if (!thinking.thinking) {
+                const samplingRestricted = thinking.thinking !== undefined || UsesAdaptiveThinking(params.model);
+                if (!samplingRestricted) {
                     createParams.temperature = params.temperature;
                 } else if (params.temperature === 1) {
                     createParams.temperature = 1;
@@ -1105,11 +1107,14 @@ export class AnthropicLLM extends BaseLLM {
         );
         if (streamingThinking.thinking) {
             createParams.thinking = streamingThinking.thinking;
-            // Anthropic requires temperature to be 1 or omitted whenever thinking is enabled or in adaptive mode
-            // Docs: https://platform.claude.com/docs/en/build-with-claude/thinking#limits-and-feature-compatibility ("Sampling parameters")
-            if (createParams.temperature !== undefined && createParams.temperature !== 1) {
-                delete createParams.temperature;
-            }
+        }
+        // Temperature is incompatible with thinking on every model, and adaptive-thinking models (Claude 4.6+,
+        // Claude 5) reject a non-default value "regardless of whether thinking is used" — including requests that
+        // carry no `thinking` block at all. 1 is the default and stays.
+        // Docs: https://platform.claude.com/docs/en/build-with-claude/thinking#limits-and-feature-compatibility ("Sampling parameters")
+        const samplingRestricted = streamingThinking.thinking !== undefined || UsesAdaptiveThinking(params.model);
+        if (samplingRestricted && createParams.temperature !== undefined && createParams.temperature !== 1) {
+            delete createParams.temperature;
         }
         if (streamingThinking.output_config) {
             createParams.output_config = streamingThinking.output_config;

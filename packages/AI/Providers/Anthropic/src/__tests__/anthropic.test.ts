@@ -772,6 +772,72 @@ describe('AnthropicLLM', () => {
         });
     });
 
+    describe('temperature (Anthropic sampling-parameter rules)', () => {
+        // Docs: https://platform.claude.com/docs/en/build-with-claude/thinking#limits-and-feature-compatibility ("Sampling parameters")
+        const okStream = (): void => {
+            const finalMessage = vi.fn().mockResolvedValue({
+                content: [{ type: 'text', text: 'response' }],
+                usage: { input_tokens: 10, output_tokens: 5 },
+                stop_reason: 'end_turn'
+            });
+            mockStream.mockReturnValue({ on: vi.fn().mockReturnValue({ finalMessage }) });
+        };
+        const userMessages = [{ role: ChatMessageRole.user, content: 'Hello' }];
+
+        it('drops a non-default temperature on an adaptive-thinking model even when no thinking block is sent (non-streaming)', async () => {
+            okStream();
+            // No effortLevel → BuildAnthropicThinking returns {} → no `thinking` in the request. The API still
+            // rejects non-default temperature on Claude 4.7+/5 "regardless of whether thinking is used".
+            await (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion']({
+                messages: userMessages,
+                model: 'claude-sonnet-5',
+                temperature: 0.3,
+                enableCaching: false
+            });
+            const callArgs = mockStream.mock.calls[0][0];
+            expect(callArgs.thinking).toBeUndefined();
+            expect(callArgs.temperature).toBeUndefined();
+        });
+
+        it('drops a non-default temperature on an adaptive-thinking model even when no thinking block is sent (streaming)', async () => {
+            mockCreate.mockResolvedValue({});
+            await (instance as ReturnType<typeof Object.create>)['createStreamingRequest']({
+                messages: userMessages,
+                model: 'claude-opus-4-7',
+                temperature: 0.3,
+                enableCaching: false
+            });
+            const callArgs = mockCreate.mock.calls[0][0];
+            expect(callArgs.thinking).toBeUndefined();
+            expect(callArgs.temperature).toBeUndefined();
+        });
+
+        it('keeps a non-default temperature on a pre-4.6 model when thinking is off', async () => {
+            okStream();
+            await (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion']({
+                messages: userMessages,
+                model: 'claude-sonnet-4-5',
+                temperature: 0.3,
+                enableCaching: false
+            });
+            expect(mockStream.mock.calls[0][0].temperature).toBe(0.3);
+        });
+
+        it('keeps temperature 1 (the default) when thinking is on', async () => {
+            okStream();
+            await (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion']({
+                messages: userMessages,
+                model: 'claude-sonnet-5',
+                effortLevel: 'medium',
+                temperature: 1,
+                enableCaching: false
+            });
+            const callArgs = mockStream.mock.calls[0][0];
+            expect(callArgs.thinking).toBeDefined();
+            expect(callArgs.temperature).toBe(1);
+        });
+    });
+
     describe('cancellationToken', () => {
         const baseParams = {
             messages: [{ role: ChatMessageRole.user, content: 'Hello' }],
@@ -1173,9 +1239,9 @@ describe('AnthropicLLM — native tool calling', () => {
             expect(sent.temperature).toBeUndefined();
         });
 
-        it('preserves temperature when thinking is off', async () => {
+        it('preserves temperature when thinking is off on a pre-4.6 model (adaptive-thinking models reject it regardless; see the temperature suite)', async () => {
             okStream();
-            await (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion']({ ...base, model: 'claude-sonnet-5', temperature: 0.7 });
+            await (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion']({ ...base, model: 'claude-sonnet-4-5', temperature: 0.7 });
 
             const sent = mockStream.mock.calls[0][0];
             expect(sent.thinking).toBeUndefined();
