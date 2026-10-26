@@ -1,13 +1,22 @@
 import { EncodeFloat32ToPcm16Base64 } from './pcmUtils';
 
 /**
- * Handle returned by {@link createPcmMicCapture}: the only operation a driver needs is
- * teardown. Production wraps an `AudioContext` + `AudioWorkletNode` pipeline; tests return a
- * no-op fake.
+ * Handle returned by {@link CreatePcmMicCapture}: a driver rebinds it when the microphone's track
+ * changes and stops it on teardown. Production wraps an `AudioContext` + `AudioWorkletNode`
+ * pipeline; tests return a fake.
  */
 export interface IPcmMicCapture {
     /** Stops capture and releases the audio context / worklet resources. */
     Stop(): void;
+    /**
+     * Captures from the stream's current audio track from now on, keeping the same context and
+     * worklet, so the chunks keep flowing to the same callback. A source node reads the track it was
+     * created with, so a stream whose track was replaced (a device switch) needs this. Does nothing
+     * after {@link Stop}.
+     *
+     * @throws When the stream has no audio track; capture stays on the previous one.
+     */
+    Rebind(micStream: MediaStream): void;
 }
 
 /** Registration name for the inline mic-capture worklet processor. */
@@ -64,7 +73,7 @@ export async function CreatePcmMicCapture(
 ): Promise<IPcmMicCapture> {
     const context = new AudioContext({ sampleRate });
     await loadCaptureWorklet(context);
-    const source = context.createMediaStreamSource(micStream);
+    let source = context.createMediaStreamSource(micStream);
     const worklet = new AudioWorkletNode(context, CAPTURE_WORKLET_NAME);
     worklet.port.onmessage = (event: MessageEvent<Float32Array>) => {
         onPcmChunk(EncodeFloat32ToPcm16Base64(event.data));
@@ -73,8 +82,22 @@ export async function CreatePcmMicCapture(
     const muteTail = context.createGain();
     muteTail.gain.value = 0;
     worklet.connect(muteTail).connect(context.destination);
+    let stopped = false;
     return {
+        Rebind: (next: MediaStream) => {
+            if (stopped) {
+                return;
+            }
+            if (next.getAudioTracks().length === 0) {
+                throw new Error('The microphone stream has no audio track.');
+            }
+            const replacement = context.createMediaStreamSource(next);
+            source.disconnect();
+            source = replacement;
+            source.connect(worklet);
+        },
         Stop: () => {
+            stopped = true;
             worklet.port.onmessage = null;
             source.disconnect();
             worklet.disconnect();

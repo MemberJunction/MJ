@@ -1,5 +1,251 @@
 # @memberjunction/search-engine
 
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- 0cc6b08: Storage permissions: close the gaps a review found around `StorageAccessEvaluator`. The rules, in one place:
+  - **Account gate everywhere.** Every path that acts on a storage account for a user asks `StorageAccessEvaluator` first — the GraphQL storage routes, and now the File Storage core actions (Get Download URL, Get Object, Get File Content, Get Metadata, List Objects, Search Storage Files, Object/Directory Exists need `Read`; Get Upload URL, Copy, Move, Delete Object, Create/Delete Directory need `Write`), `List Storage Accounts` (lists only accounts the caller may read) and `BaseFileHandlerAction` (`Write` on the account a save lands in; reads go through the file-ID gate). These actions are reachable by any user through `RunAction` and by any agent. An unknown account name and a refused account return the same `ACCESS_DENIED` result. Zero permission rows on an account still means open (the current product rule, unchanged).
+  - **File-ID routes gate the account the row resolves to.** `FileStorageEngine.ResolveFileObject` (new) resolves an `MJ: Files` row's provider to its account, requires the caller's access on it, and applies the tracked-file rule to the row's object. `DownloadUrl`, `GetFileContents`, `CreateMediaAccessToken`, `DeleteFile` and the `UpdateFile` rename (`Write`), `ArtifactFileDownloadUrl`, the conversation-attachment blob store, the agent file handler and `ReadRealtimeRecordingFile` use it, so a row whose `ProviderKey`/`Name` aliases another row's object is refused.
+  - **Tracked-file rule.** An object backing an `MJ: Files` row may be read, signed, listed, returned by search, overwritten, moved, copied or deleted only when the caller can read that row (the minimum for a write; `CanWrite` is still required). Applied to the Get Object / Get File Content / Get Metadata / Get Download URL / Get Upload URL / Copy / Move / Delete Object actions, `CreatePreAuthDownloadUrl`/`CreatePreAuthUploadUrl`, `DeleteStorageObject`, `MoveStorageObject` and `CopyStorageObject` (source and destination), `CopyObjectBetweenAccounts` (both ends), `UploadFile` (before `PutObject`), and as a filter on `ListStorageObjects`, `SearchAcrossAccounts`, the List Objects / Search Storage Files actions and `SearchEngine`'s storage hits.
+  - **Key canonicalization.** Client and stored keys go through one canonicalizer, `FileStorageBase.NormalizeObjectKey` (default: trim, collapse repeated `/`, strip leading/trailing `/`; S3 overrides it to strip its key prefix the way it addresses keys), and are compared case-insensitively (`LOWER(...)` in SQL). Keys with a `.`/`..` segment, a backslash, a percent-encoded `/`, `\`, `.` or control character, or a raw control character are refused outright.
+  - **One object-key rule.** `StorageObjectKeyOf` (new) resolves an `MJ: Files` row to `ProviderKey`, or `Name` when `ProviderKey` is null or empty; the tracked-file lookup, `ResolveFileObject`, the file resolver and the conversation-attachment blob store all use it, so a row stored with an empty `ProviderKey` is checked under the same key it is served from.
+  - **Cache refresh on a miss runs as the system user.** `FileStorageEngine.RefreshAfterMiss` (new) reloads the account cache as the MJ system user; `ResolveFileObject`, `GetDriver`, `UploadFile`, the file resolver and the realtime recording store use it instead of a forced `Config` as the caller, which emptied the shared cache for everyone when the caller could not read `MJ: File Storage Accounts`. `GetFileContents` reads a row with no `ProviderKey` from its `Name`, as the other file routes do.
+  - **No truncation.** Every evaluator read sets `IgnoreMaxRows`, so the entity row cap can no longer drop an account's rows (which read as "zero rows → open") or a tracked file's row; lookups are batched.
+  - **Azure pre-authenticated URLs** are blob-scoped service SAS tokens (`r` to download, `cw` to upload) instead of account-wide SAS tokens; expiry is unchanged (10 minutes).
+  - **`MJ: Files` storage location is server-owned on existing rows.** `MJFileEntityServer` refuses a save that changes `ProviderID` or `ProviderKey` on an existing row (including `ReplayOnly`) unless trusted server code sets `AllowStorageLocationChange` (registered in both server-bootstrap class manifests). A new row may still carry a client-chosen `ProviderKey` (Explorer's direct-upload path registers its upload that way); the routes' gate above is what makes such a row harmless.
+  - **Search details.** `SearchAcrossAccounts` reports accounts in request order and withholds `totalMatches`/`nextPageToken` once hits are dropped; under an `Audience` storage hits are dropped (re-checked for the caller only; per-reader storage checks are a follow-up). `ListStorageObjects` reads the typed `Configuration` property.
+
+  Also fixed: the `List Storage Providers` action could never run. Its class was registered as `List Storage Accounts`, which no metadata row names; it is now registered under the shipped action's `DriverClass`, `List Storage Providers`.
+
+- 0cc6b08: Pre-execution RAG now applies the same scope-permission gate as the Scoped Search action and the GraphQL resolver. Before searching one of an agent's assigned scopes it resolves the effective `SearchScopePermission` for the acting user, with the agent as principal and the run's tenant, and requires a level above `Read`. Requested and persisted conversation skills are already active when pre-execution RAG runs, so the run's skills are passed in as well: when exactly one skill is active it is a second principal, as in the action, so its `SearchScopeAccess` can refuse a scope (`SkillNone`, `SkillAssignedNotListed`) and it is stamped as `AISkillID` on the search and on any `Forbidden` row; when several are active, none is passed. A sub-agent receives the root run's active skills, as it does for the action, so a sub-agent that cannot activate the root's lone active skill has its pre-execution scopes refused (`PrincipalNotActivatable`). Previously every assigned scope was searched for every user before the first tool call — the one scoped search path that never consulted scope permissions.
+
+  A refused scope is skipped (the others still run) and written as one `Forbidden` row in `MJ: Search Execution Logs`, its reason truncated to the column's 500 characters; the console line is verbose-only. A resolver failure skips that scope with a logged error and writes no `Forbidden` row, as the action and the GraphQL resolvers do. A turn with no query text (an empty or multimodal last message on a scope without a query template) skips the scope before the gate, so it neither resolves a permission nor logs a `Forbidden` row with an empty query.
+
+  **Behaviour change for existing configurations.** An agent whose `SearchScopeAccess` is `None` (the column default) no longer gets pre-execution retrieval, and an `Assigned` agent's scopes now need a `MJ: Search Scope Permissions` grant at `Search` or `Manage` for the acting user or one of their roles (or the agent set to `All`), exactly as the Scoped Search action already required. Deployments that attached pre-execution scopes without setting the agent's access or granting the scope will see retrieval stop, with a `Forbidden` row per scope explaining why.
+
+  **Known resolver behaviour, inherited.** For an agent set to `All`, a user or role grant at `Read` on a scope is found before the agent's `All` fallback, so the resolver returns `Read` and the scope is refused: adding a `Read` grant removes pre-execution retrieval of that scope for the users it covers. The Scoped Search action and the GraphQL resolvers behave the same way.
+
+  The agent form and the Knowledge Hub scope-permission grid now say that `Assigned` needs a Search grant for the user or one of their roles, and that pre-execution scopes are searched only for users who may search them. The integration fixture `IT: Integration Test Scope` gains `Search` grants for the `UI`, `Developer` and `Integration` roles, so the scope is searchable by any `UI`-role user wherever the integration fixture is pushed. A new deterministic integration test, `IT117 - Agent Pre-Execution RAG Permission Gate`, runs pre-execution RAG directly (no model) for a permitted run and a refused one.
+
+- 0cc6b08: `SearchParams.Audience` lets a caller name the other people who will see a search's results. When set, the engine runs its permission safety net (entity read, row filters, ownership) once for the caller and once per reader, concurrently, and keeps only the results every reader may read, so a shared conversation's results are the intersection of what its participants may see. The audience is part of the result-cache key, so a search the caller ran alone is never served to a room, nor the reverse. Nothing changes for callers that pass no audience.
+
+  Every reader must be a hydrated `UserInfo` with a non-empty `ID` and a `UserRoles` array. A malformed audience (`Readers` not an array, a `null` reader, a reader with no `ID` or no `UserRoles` array) fails the search with a "SearchEngine: invalid Audience" error instead of being skipped. `UserRoles: []` is legitimate and reads nothing.
+
+  Limits, matching the `SearchParams.Audience` docs and the Search Scopes guide:
+  - `storage-file` results are refused under an audience (their permissions are evaluated for the caller only).
+  - `streamSearch` `provider` events carry `results: []` under an audience (progress only); results reach the room through `fused`/`final`.
+  - Scope entitlement (`SearchScopePermission`), `ServerDerived` dimensions, scope `ExtraFilter`/`MetadataFilter` templates and vector push-down are evaluated for the caller only: hosts must check each reader's scope permission themselves.
+  - `SourceCounts` are counted before the permission and audience passes, so they reveal the caller's unfiltered reach.
+  - The result cache keys on reader IDs, so within its 30 s TTL a differently hydrated reader with the same `ID` gets the cached verdict.
+
+- 0cc6b08: Search review fixes for bounded scopes and provider trust. Each changes behaviour.
+
+  **A content item promoted to its origin record is held to that record's lane bound.** A `MJ: Content Items` hit derived from an entity record is promoted to that record. Promotion used to run once, after cross-scope fusion, after every lane `ExtraFilter` check. So a vector hit on a content item could become a row of a bounded entity (for example `Contacts` bounded by `OrganizationID`) from outside the bound. For a scoped search, promotion now runs per scope, between two lane checks: the content-item hit is checked against a Content Items lane, then the promoted hit against the origin entity's lane. A promoted hit is never exempt, whichever provider found it. Unscoped and global searches still promote after fusion, and nothing is promoted twice.
+
+  **A promoted hit is verified, not trusted.** It keeps its `ProviderId` for attribution. The new `SearchResultItem.PromotedFromContentItemID` marks it, and the permission pass then verifies the origin row with `PK IN (...)`. A stale document can name an origin record that no longer exists; that hit is now dropped.
+
+  **A provider declares the lane kinds it reads.** New `BaseSearchProvider.ConsumesLaneKinds` (`'ExternalIndex'`, `'Entity'`, `'StorageAccount'`). Every shipped provider sets it. The default is `['ExternalIndex']`, because a third-party provider serves an index of its own `IndexType`. **A custom provider that reads entity or storage lanes must override it, or a scoped search will not call it.** A non-global scope now calls only the listed providers that are configured, available, and have an active lane of a kind they read. A provider whose lane kinds are all empty in a scope is not called, so an older provider that tests `ExternalIndexes?.length` cannot fall back to its default index. `ExplainScope` and the logged scope decision apply the same rule. A `Semantic` (vector) provider row over entity lanes only, as the guide's example used to show, is now reported `Reachable: false` with a diagnostic; before, the dry run said reachable and the search returned nothing. A provider row naming no configured or available provider is reported the same way.
+
+  **`ExplainScope` no longer calls a scope reachable when a lane is broken.** A real search refuses on the first unusable lane. The dry run used to mark that lane `Skipped` and still report the scope reachable through its other lanes. A non-global scope with any skipped lane is now `Reachable: false`, with the diagnostic "a real search would be refused".
+
+  **The lane `ExtraFilter` exemption is a provider capability.** New `BaseSearchProvider.AppliesLaneExtraFilter`, set only by `EntitySearchProvider`, replaces the `instanceof EntitySearchProvider` check. It and `ResultsAreRowsOfLabelledEntity` are both read from the provider the engine stamped on the result. A subclass inherits both and must override them if it changes `Search`.
+
+  **Smaller fixes.**
+  - The `path` escaper refuses a value that is `..` or `.`, judged after control characters are stripped. A value that only contains `..`, such as `Acme..Inc`, is kept. `/` and `\` are refused as before.
+  - An unresolvable scope's explanation reports `Entitlement.Source: 'ScopeUnresolvable'` (new `EntitlementSource` type) instead of `'NoGrant'`. `SummarizeExplanation` says the scope was refused, not "legacy scope" or "NONE CONFIGURED".
+  - A refused search's `MJ: Search Execution Logs` row names the first unresolved scope that has a row, or no scope. Before, it could name a valid scope that was searched beside a missing one.
+  - `ScopeConstraints` documents the `[]` versus `undefined` contract on each lane field.
+
+- 0cc6b08: Search results derived from another MJ record are now kept only when the user may read that record. After a content item or chunk passes the entity-level ownership and row-filter check, `SearchEngine` follows it to its `MJ: Entity Record Documents` row (through the root item for a split child, always read via the base `MJ: Content Items`) and verifies the origin record under the origin entity's own permissions and row filters. Content with no Entity Record Document, and every non-content entity, is unaffected in outcome. The gate is the protected `VerifyOriginRecords` hook, so a host can extend it to other derived-content families; it fails closed, scoped to the rows that depended on a failed hop.
+
+  **New requirement for who may see content hits.** The walk runs as the user, so anyone who should see chunk hits now needs read on `MJ: Content Items` (not only on the chunks), and anyone who should see hits derived from a record needs read on `MJ: Entity Record Documents`. Without those, chunk hits are dropped (all of them, for the item hop) or the document-bearing ones are (for the document hop). Field-level security that denies one of the link columns counts as a failed hop, so it drops those rows too rather than passing them as "no origin". Deployments whose users read chunks under a filter that never reached items should add the item grant.
+
+  **Cost.** The hops are sequential `PK IN (...)` reads: a chunk group does up to four (chunks, items, root items, documents) plus one view per origin entity, issued together in one `RunViews` batch; an item group up to three plus that batch; crawled chunk content two. Origin-gate removals are logged separately (`origin-record gate removed N result(s)`), so the residual-filter count still means "push-down is incomplete".
+
+  **Behaviour change for every entity: prefixed record ids are now read, not dropped.** The late permission check parses each result's `RecordID` as a key segment, so a result whose `RecordID` is a prefixed `PK|value` segment (what `CompositeKey.ToRecordID()` writes) is checked against its value and kept when readable. Before, `ID IN ('ID|value')` could never match and such results were dropped as unauthorized; this fixes that over-strict dropping. A composite-key segment that names a field which is not a primary key of the entity is dropped, and never reaches the SQL.
+
+- 0cc6b08: A search scope can now declare its own permission over-fetch multiplier in `ScopeConfig.permissionOverfetchFactor` (the guide already listed the key; nothing read it). The engine resolves the factor as the caller's `SearchParams.PermissionOverfetchFactor`, else the largest factor across the resolved scopes (a scope that declares none counts as the engine default, so one scope's low factor never lowers a neighbour's), else the engine default (2), and holds it to 1–20 whatever the source. The factor is resolved after the result-cache lookup, and `streamSearch`'s per-provider partial events are capped to the caller's `MaxResults`, so a larger factor cannot multiply what a stream client is shown before the permission pass. A scope whose lanes are trimmed heavily by late permission checks can ask providers for more candidates without every caller having to know to pass the parameter. Also fixed: a non-finite caller value or engine default (`NaN`, `Infinity`) used to flow through `??` into the provider `topK`; it is now treated as absent. Scopes that declare nothing behave as before, and so do callers passing a value within 1–20; a caller value above 20 is now clamped to 20, and a numeric string is now ignored rather than coerced (no caller in the repository passes one).
+- 0cc6b08: Three search trust fixes. Each changes behaviour.
+
+  **External-index hits are always verified against the entity they name.** The permission pass used to skip its ownership check for any result labelled `SourceType: 'entity'` or `'fulltext'` when no row filter applied. Every shipped external-index provider (Azure AI Search, Typesense, Elasticsearch, OpenSearch) labels its hits `'fulltext'`, with the index name as `EntityName` and the document's own id as `RecordID`. So a document in an index named after an entity the user can read was admitted as that entity's row without being checked. A third-party provider could also label its hits `'entity'`. Trust now follows the provider the engine stamped on the result (`ProviderId`), never the label. The new `BaseSearchProvider.ResultsAreRowsOfLabelledEntity` flag (default `false`) is set only by `EntitySearchProvider` and `FullTextSearchProvider`, which read the entity through `RunView`. Every other result is verified, including one with no `ProviderId` and one whose `ProviderId` names no configured provider. Fusion and dedup keep each result's `ProviderId` paired with its own `EntityName`, `RecordID` and `SourceType`, so a merge never upgrades an external hit to trusted. A merge can still lend a result another item's scores: dedup merges items sharing `EntityName` + `RecordID`, but per-scope RRF merges `ScoreBreakdown` across items that share only a `RecordID`, of any entity. A `MJ: Content Items` hit promoted to its origin record is always verified: its provider never read that row. Cost: one `PK IN (...)` read per labelled entity for each search that returns external-index hits. Hits whose document id is not the MJ primary key of the labelled entity are dropped. The entity and full-text lanes cost nothing extra.
+
+  **Naming a scope that cannot be resolved no longer widens the search to a global one.** An inactive, expired or missing scope in `SearchParams.ScopeIDs` used to be skipped. A search whose scopes were all skipped then ran with no scope at all. The GraphQL paths let a caller with a grant on a dead scope do this, because the scope permission check does not look at scope status. Now, if any named scope cannot be resolved, the search is refused: `Success: false`, an error naming the scope, a `LogError`, a `Failure` row in `MJ: Search Execution Logs`, and no provider runs. One dead scope among several also refuses the search, because dropping it silently would change what the caller asked for. The check runs before the result cache. `ExplainScope` agrees with the search. It now reports an inactive or expired scope as unreachable, by name; before, it explained one as searchable. When one requested scope cannot be resolved, it reports every scope in that dry run as unreachable, with the reason.
+
+  **Streamed `provider` events carry counts only.** `streamSearch` used to put each provider's hits on its `provider` event, before the permission pass. That included rows the caller's row filters would drop, unverified external-index hits, and content whose origin record the caller may not read. `SearchKnowledgeStreamResolver` published those hits to the client. A `provider` event now carries `providerName`, `durationMs` and a new `resultCount` (the provider's hit count, capped at `MaxResults`). `results` is always `[]` and is deprecated. Results arrive only in `fused` and `final`. The GraphQL `SearchStreamNotification` gains `ResultCount` and always sends `Results: []` on a provider event, whatever the engine hands it. `GraphQLSearchClient.StreamSearch` requests `ResultCount` (new exported type `SearchStreamClientEvent`). `SearchService.StreamSearch` forwards it. The search overlay, the search results page and the scope form preview now show each provider's count from it, and render rows from `final` only. Pre-execution RAG's streaming trace and the Scoped Search action's `ProgressEvents` report `resultCount`. Like `SourceCounts`, `resultCount` is counted before the permission and audience passes, so don't show it to a room. This replaces the audience-only withholding of partials. Because a newer client requests `ResultCount`, its stream subscription fails against an older server. The reverse also shows: an older client counts each provider's `Results`, which a newer server always sends empty, so its per-provider chips show 0 until the client is upgraded. Search results themselves are unaffected.
+
+  New deterministic integration bundle `IT118 - Search Provider Trust and Unresolvable Scopes` (`search-provider-trust`, SPT1–SPT2).
+
+- 0cc6b08: A `required` scope dimension that resolves to nothing — an expansion query with no rows, an empty caller set, a blank string, `null` — now refuses the search with a `ScopeDimensionError`, the same way a narrowing that meets to nothing already did. Previously only an _unresolved_ (`undefined`) required dimension was refused, so an empty bound passed through to the lane templates; under the `{% if x | length %}` idiom an empty set removes the clause, and a template without an `{% else %}` then ran unbounded. Dimensions explicitly declared `inheritanceMode: 'cascading'` (where empty is meaningful; their template must carry an `{% else %}<column> IS NULL` branch, as the guide now says) and dimensions that are not `required` are unaffected. The message says whether the caller sent an empty value, the declared `defaultValue` is empty, or nothing is reachable for the user, so an agent that sent an empty argument is told to fix its call rather than that the user has no access. Behaviour change to note: a user whose bound is legitimately empty now gets a refused search (an error result) rather than an empty success — or a widened one, where the template dropped the clause — and in a multi-scope search that refusal fails the whole call, as every `ScopeDimensionError` already does.
+- 0cc6b08: A scoped search is now bounded by its scope's rows. An empty configuration means "nothing", never "everything". These are behaviour changes.
+
+  **A non-global scope runs only its enabled provider rows.** A scope with no enabled `MJ: Search Scope Providers` row used to run every provider, so disabling a scope's last provider row widened it to all of them. It now runs no provider and returns nothing. Its scope decision (`SearchExecutionLog.ScopeDecisionJSON`) is `Reachable: false` with a diagnostic, and `ExplainScope` reports the same. **Scopes that relied on "no provider rows means all providers" now return nothing until rows are added.** A non-global scope with no lanes at all also reaches nothing now (`Reachable: false`, `Unbounded: false`). `Unbounded` is now true only for a global scope with no lanes. Global scopes, and searches with no scope, are unchanged.
+
+  **An empty lane list means no results from that provider.** For a non-global scope, `ScopeConstraints.Entities`, `ExternalIndexes` and `StorageAccounts` are now `[]` rather than `undefined` when the scope has no rows of that kind. A provider reads `[]` as "nothing for me" and returns without querying. `undefined` still means unscoped. The changes by provider:
+  - The entity, full-text and tag providers search nothing without entity lanes. They used to search every searchable entity.
+  - The vector provider searches nothing without `Vector` index rows. It used to search every index, unfiltered.
+  - Elasticsearch, OpenSearch, Typesense and Azure AI Search query nothing without rows of their own `IndexType`. They used to fall back to the configured default index with no scope filter, and now use it only for unscoped searches.
+  - The storage provider searches nothing without storage lanes. It used to search every account.
+  - `BaseSearchProvider.ScopedExternalIndexRows()` gives custom providers the same rule.
+
+  **A lane `ExtraFilter` now applies to every provider's hits for that entity.** Before, only the entity provider applied it. Full-text, tag, vector and 3rd-party hits for the entity are now kept only when the record satisfies the same rendered filter. The engine checks this as the user, with one `PK IN (...) AND (<ExtraFilter>)` RunView per filtered entity per scope, and drops those hits if the check fails. Hits from a provider declaring the new `BaseSearchProvider.AppliesLaneExtraFilter` (only `EntitySearchProvider`) are exempt because that provider already applied the filter. The engine identifies the provider by the `ProviderId` it stamps on each result, not by the declared `SourceType`. **Scopes that configured only an entity lane now return less from other providers.** For a scoped search, `SearchResult.SourceCounts` and the log row's `ProvidersJSON` are counted after this step, while a streamed `provider` event's `resultCount` is counted before it, so the two can differ.
+
+  **A storage lane's `FolderPath` now restricts, and refuses rather than widens.** The search is refused with an error, and `ExplainScope` marks the lane `Skipped` and the scope unreachable, when the FolderPath:
+  - renders empty (before, the whole account was searched);
+  - renders an empty segment, e.g. `clients/{{ context.X }}` with X absent renders `clients/`, every client's folder;
+  - contains a `..` segment.
+
+  The `path` escaper (`EscapePathSegment`) now refuses a value that is `..` or `.`, or contains `/` or `\`. It used to strip `..` and separators, so `..` became nothing and `../other` became `other`. A value that only contains `..`, such as `Acme..Inc`, is an ordinary segment and is kept. The renderer throws only when such a value is actually interpolated into the path. **FolderPath templates that render empty now fail loudly instead of widening.**
+
+  **Restoring the old breadth (optional data step).** A non-global scope that should keep its old reach needs the rows added explicitly: one enabled `MJ: Search Scope Providers` row per provider it should run, and the external-index and storage lanes those providers should search. No migration is needed.
+
+- 0cc6b08: Storage search permissions are now evaluated per search instead of from a startup snapshot. `StorageSearchProvider` no longer loads every `MJ: File Storage Account Permissions` row once under whichever user configured the engine first (a failed load used to open every account to every user until restart); it asks `StorageAccessEvaluator` for the searching user on every search, and reads the searchable accounts from `FileStorageEngine`'s live cache. `SearchEngine`'s late permission filter no longer passes `storage-file` results through: a storage hit is kept only when its engine-stamped `ProviderId` belongs to a `StorageSearchProvider` and its account is readable by the user now, so a `storage-file`-typed hit from any other provider is dropped, as is one that cannot be attributed or evaluated.
+- Updated dependencies [0d81c53]
+- Updated dependencies [39b35f1]
+- Updated dependencies [3080e83]
+- Updated dependencies [52b9fd5]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [db39145]
+- Updated dependencies [b14c72f]
+- Updated dependencies [5e4205c]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [81aea34]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [5465489]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [0c634ba]
+- Updated dependencies [223669e]
+- Updated dependencies [cd39c95]
+- Updated dependencies [2274f42]
+- Updated dependencies [5fed75a]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [230cdad]
+- Updated dependencies [7e72c86]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ce758af]
+- Updated dependencies [8420f36]
+- Updated dependencies [72dd65c]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [5f707d1]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [03c085c]
+- Updated dependencies [dc38250]
+  - @memberjunction/core-entities@6.2.0-edge.5
+  - @memberjunction/ai-prompts@6.2.0-edge.5
+  - @memberjunction/ai@6.2.0-edge.5
+  - @memberjunction/aiengine@6.2.0-edge.5
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/storage@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+  - @memberjunction/ai-vectordb@6.2.0-edge.5
+  - @memberjunction/tag-engine-base@6.2.0-edge.5
+
+## 6.2.0-edge.4
+
+### Minor Changes
+
+- f2f6f4b: Search now ranks multi-source results by Reciprocal Rank Fusion end to end, and applies `MinScore` before fusion.
+  - **Order:** `SearchFusion.Deduplicate` used to raise each fused score to the max raw `ScoreBreakdown` value and re-sort, which threw away the RRF order (and a reranker's). An exact keyword match, such as a person's full name, ranked below every semantic near-miss. The RRF order is now kept.
+  - **`Score`:** the RRF score divided by its maximum (Σ weights of the lanes that returned results / (k + 1), k = 60), in [0, 1]. 1.0 means every such lane ranked it first. It is rank-based, not a confidence. Each provider's raw score stays in `ScoreBreakdown`.
+  - **One ranked list per embedding model:** the vector provider used to glue each embedding model's results together unsorted, and RRF now relies on lane order. Each model's results are sorted by its own scores and tagged with a `FusionLane`, and fusion ranks each lane as its own RRF list. Models are merged by rank, never by comparing cosine values on different scales.
+  - **Identity:** fusion keys results by `EntityName` + `RecordID` (integer IDs no longer merge across entities) and counts a record once per lane, so `Score` stays within [0, 1].
+  - **`MinScore`:** a floor on the semantic (vector) lane's own similarity, applied before fusion and to streamed per-provider results. Keyword, full-text, tag and storage hits have no numeric floor, and the fused `Score` is no longer compared to `MinScore`.
+  - **Colocated vector stores (pgvector):** the semantic lane asks for a vector-only search, so the store returns a true similarity (as SQL Server's colocated search already does) instead of its own vector+keyword RRF value. MJ's keyword and full-text lanes do the text matching, so text matches are no longer counted twice, and the semantic floor works on PostgreSQL.
+  - **Explorer:** the search page's relevance slider and the search-bar dropdown's relevance filter now judge semantic similarity only (`PassesSemanticFloor`). Filtering on the fused score hid most results when three or more lanes returned hits.
+  - **Descriptions:** the `MinScore` parameter of the Search and Scoped Search actions, the `Search.DefaultMinScore` setting, the RAG guide and the agent `filterByScore` tool now describe the new meaning. These are metadata changes, so the changeset is `minor`.
+
+### Patch Changes
+
+- a7fd6e9: Follow-ups from the #4993 review: tests for the semantic floor on the scoped search path (the agent-facing path), a pinned contract for partly tagged `FusionLane` lists, and comments explaining why the server-side `ApplySemanticFloor` may fall back to the raw `Score` while the client-side `PassesSemanticFloor` must not. No behavior change.
+- Updated dependencies [a709bb6]
+- Updated dependencies [d17de94]
+- Updated dependencies [7ada797]
+- Updated dependencies [432cb73]
+- Updated dependencies [293c316]
+- Updated dependencies [155aa45]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [1da00cb]
+- Updated dependencies [92ecdf9]
+- Updated dependencies [b699a37]
+- Updated dependencies [a4b23b7]
+- Updated dependencies [49f26d9]
+- Updated dependencies [961d529]
+- Updated dependencies [10c2311]
+- Updated dependencies [7384dd6]
+- Updated dependencies [88e6902]
+- Updated dependencies [bb3028a]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [0a7c255]
+- Updated dependencies [64b6fa5]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [af6f892]
+- Updated dependencies [432fe69]
+- Updated dependencies [4889fb2]
+- Updated dependencies [b2441c3]
+- Updated dependencies [69e19c5]
+- Updated dependencies [7316ac3]
+- Updated dependencies [8ef5e86]
+- Updated dependencies [596855c]
+- Updated dependencies [fdf6669]
+- Updated dependencies [4c682c1]
+- Updated dependencies [f325baa]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [b09fe34]
+- Updated dependencies [6d5c6ad]
+- Updated dependencies [8bac4d6]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [5a3de97]
+- Updated dependencies [0d0ba18]
+- Updated dependencies [b6fcb30]
+- Updated dependencies [f73e192]
+- Updated dependencies [8704df6]
+- Updated dependencies [5345e3d]
+- Updated dependencies [1ea4085]
+- Updated dependencies [22c9074]
+- Updated dependencies [aee2d53]
+- Updated dependencies [5dc3752]
+- Updated dependencies [6c8798b]
+- Updated dependencies [25f7b82]
+- Updated dependencies [35ed7b5]
+- Updated dependencies [d853bf8]
+- Updated dependencies [e293b68]
+- Updated dependencies [afe9eb4]
+- Updated dependencies [90829e3]
+- Updated dependencies [57096ab]
+- Updated dependencies [aac148b]
+- Updated dependencies [d2cb42e]
+- Updated dependencies [cbddadb]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [57fea6a]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [6b487b8]
+  - @memberjunction/core-entities@6.2.0-edge.4
+  - @memberjunction/aiengine@6.2.0-edge.4
+  - @memberjunction/ai@6.2.0-edge.4
+  - @memberjunction/storage@6.2.0-edge.4
+  - @memberjunction/core@6.2.0-edge.4
+  - @memberjunction/ai-prompts@6.2.0-edge.4
+  - @memberjunction/global@6.2.0-edge.4
+  - @memberjunction/tag-engine-base@6.2.0-edge.4
+  - @memberjunction/ai-vectordb@6.2.0-edge.4
+
 ## 6.2.0-edge.3
 
 ### Patch Changes

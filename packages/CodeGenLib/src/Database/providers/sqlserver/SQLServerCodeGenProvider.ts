@@ -7,9 +7,10 @@ import {
     FullTextSearchResult,
     MaterializedColumnSpec,
     DataSourceResult,
+    ExcludedBaseViewFieldNames,
 } from '../../codeGenDatabaseProvider';
 import { SQLServerDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
-import { ordinalCompare, RegisterClass } from '@memberjunction/global';
+import { EscapeSQLString, ordinalCompare, RegisterClass } from '@memberjunction/global';
 import { SortBySequenceAndCreatedAt } from '../../../Misc/util';
 import { configInfo, dbDatabase, MjCoreSchema } from '../../../Config/config';
 import { MSSQLConnection, GetSqlConfig } from '../../../Config/db-connection';
@@ -123,6 +124,13 @@ export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
         const whereClause = entity.DeleteType === 'Soft'
             ? `WHERE\n    ${alias}.[${EntityInfo.DeletedAtFieldName}] IS NULL\n`
             : '';
+        // `alias.*` unless this entity has a configured base-view column exclusion, in which case the
+        // base-table columns are enumerated instead. See baseTableSelectList / ExcludedBaseViewFieldNames.
+        const baseTableSelect = this.baseTableSelectList(
+            entity,
+            alias,
+            ExcludedBaseViewFieldNames(entity.Name, configInfo?.baseViewExcludedFields ?? [])
+        );
 
         return `
 ------------------------------------------------------------
@@ -138,7 +146,7 @@ GO
 CREATE VIEW [${entity.SchemaName}].[${viewName}]
 AS
 SELECT
-    ${alias}.*${context.parentFieldsSelect}${context.relatedFieldsSelect.length > 0 ? ',' : ''}${context.relatedFieldsSelect}${context.rootFieldsSelect}
+    ${baseTableSelect}${context.parentFieldsSelect}${context.relatedFieldsSelect.length > 0 ? ',' : ''}${context.relatedFieldsSelect}${context.rootFieldsSelect}
 FROM
     [${entity.SchemaName}].[${entity.BaseTable}] AS ${alias}${context.parentJoins ? '\n' + context.parentJoins : ''}${context.relatedFieldsJoins ? '\n' + context.relatedFieldsJoins : ''}${context.rootJoins}
 ${whereClause}GO`;
@@ -256,7 +264,7 @@ ${this.trimStatementTerminator(selectSQL)}`;
             additionalFieldList = callerSuppliedKeys.map(k => `[${k.Name}]`).join(',\n                ');
             additionalValueList = callerSuppliedKeys.map(k => `@${k.CodeName}`).join(',\n                ');
             const callerSuppliedKeyPredicates = callerSuppliedKeys.map(k => ` AND [${k.Name}] = @${k.CodeName}`).join('');
-            selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${identityKey.Name}] = SCOPE_IDENTITY()${callerSuppliedKeyPredicates}`;
+            selectInsertedRecord = this.buildCRUDReturnSelect(entity, `[${identityKey.Name}] = SCOPE_IDENTITY()${callerSuppliedKeyPredicates}`);
         } else if (firstKey.Type.toLowerCase().trim() === 'uniqueidentifier' && entity.PrimaryKeys.length === 1) {
             const hasDefaultValue = firstKey.DefaultValue && firstKey.DefaultValue.trim().length > 0;
 
@@ -302,7 +310,7 @@ ${this.trimStatementTerminator(selectSQL)}`;
                 additionalFieldList = '';
                 additionalValueList = '';
                 outputCode = '';
-                selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${firstKey.Name}] = (SELECT [${firstKey.Name}] FROM @InsertedRow)`;
+                selectInsertedRecord = this.buildCRUDReturnSelect(entity, `[${firstKey.Name}] = (SELECT [${firstKey.Name}] FROM @InsertedRow)`);
             } else {
                 // UUID without DB default: generate via ISNULL(@PK, NEWID()).
                 // PK is added via additionalFieldList; no leading comma — the
@@ -311,7 +319,7 @@ ${this.trimStatementTerminator(selectSQL)}`;
                 additionalFieldList = '[' + firstKey.Name + ']';
                 additionalValueList = '@ActualID';
                 outputCode = '';
-                selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${firstKey.Name}] = @ActualID`;
+                selectInsertedRecord = this.buildCRUDReturnSelect(entity, `[${firstKey.Name}] = @ActualID`);
             }
         } else {
             // Composite PKs or single non-UUID PKs (e.g. string `Code` keys): the caller MUST
@@ -329,13 +337,8 @@ ${this.trimStatementTerminator(selectSQL)}`;
             }
             additionalFieldList = pkColumns.join(',\n                ');
             additionalValueList = pkValues.join(',\n                ');
-            selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE `;
-            let isFirst = true;
-            for (const k of entity.PrimaryKeys) {
-                if (!isFirst) selectInsertedRecord += ' AND ';
-                selectInsertedRecord += `[${k.Name}] = @${k.CodeName}`;
-                isFirst = false;
-            }
+            const pkWhereClause = entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ');
+            selectInsertedRecord = this.buildCRUDReturnSelect(entity, pkWhereClause);
         }
 
         // Build the INSERT column and value lists. For the non-hasDefaultValue branches,
@@ -396,11 +399,31 @@ GO${permissions}
     }
 
     /**
+     * Builds the post-insert / post-update `SELECT` statement returned by a CRUD stored procedure.
+     *
+     * - When `entity.SaveReturnMode` is `'full'` (default), queries `SELECT *` (or `SELECT TOP 0 *`)
+     *   from `[schema].[BaseView]` so calculated and joined columns are returned.
+     * - When `entity.SaveReturnMode` is `'datestamps_only'`, queries only the primary key column(s)
+     *   plus `__mj_CreatedAt` and `__mj_UpdatedAt` (via {@link EntityInfo.DatestampReturnFields})
+     *   directly from `[schema].[BaseTable]`, avoiding the post-write `BaseView` joins and large
+     *   payload columns while still returning DB-generated key and timestamp values.
+     */
+    protected buildCRUDReturnSelect(entity: EntityInfo, whereClause: string, topZero: boolean = false): string {
+        const topPrefix = topZero ? 'TOP 0 ' : '';
+        if (entity.SaveReturnMode === 'datestamps_only') {
+            const cols = entity.DatestampReturnFields.map(f => `[${f.Name}]`).join(', ');
+            return `SELECT ${topPrefix}${cols} FROM [${entity.SchemaName}].[${entity.BaseTable}] WHERE ${whereClause}`;
+        }
+        return `SELECT ${topPrefix}* FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE ${whereClause}`;
+    }
+
+    /**
      * Generates the `spUpdate` stored procedure for a SQL Server entity. Performs a standard
      * `UPDATE ... SET ... WHERE PK = @PK` and uses `@@ROWCOUNT` to detect whether the row
      * was found: if no rows were updated (e.g., stale PK or concurrent delete), returns an
      * empty result set with the base view's column structure (`SELECT TOP 0 ... WHERE 1=0`);
-     * otherwise returns the updated record from the base view. Also generates the
+     * otherwise returns the updated record from the base view (or PK + datestamp columns from
+     * the base table when `entity.SaveReturnMode === 'datestamps_only'`). Also generates the
      * `__mj_UpdatedAt` timestamp trigger if the entity has that column.
      */
     generateCRUDUpdate(entity: EntityInfo): string {
@@ -410,13 +433,18 @@ GO${permissions}
         const hasUpdatedAtField = entity.Fields.find(f => f.Name.toLowerCase().trim() === EntityInfo.UpdatedAtFieldName.trim().toLowerCase()) !== undefined;
         const updatedAtTrigger = hasUpdatedAtField ? this.generateTimestampTrigger(entity) : '';
         const updateFields = this.generateUpdateFieldString(entity.Fields);
-        const selectUpdatedRecord = `SELECT
+        const pkWhereClause = entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ');
+        const isDatestampsOnly = entity.SaveReturnMode === 'datestamps_only';
+        const selectUpdatedRecord = isDatestampsOnly
+            ? this.buildCRUDReturnSelect(entity, pkWhereClause)
+            : `SELECT
                                         *
                                     FROM
                                         [${entity.SchemaName}].[${entity.BaseView}]
                                     WHERE
-                                        ${entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ')}
+                                        ${pkWhereClause}
                                     `;
+        const selectEmptyRecord = this.buildCRUDReturnSelect(entity, '1=0', true);
 
         // PK-only entities (e.g. junction tables with only PK + __mj timestamp columns)
         // have no updatable fields. Generate a no-op SP that just returns the existing row
@@ -429,12 +457,12 @@ GO${permissions}
     SET
         ${updateFields}
     WHERE
-        ${entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ')}
+        ${pkWhereClause}
 
     -- Check if the update was successful
     IF @@ROWCOUNT = 0
         -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
-        SELECT TOP 0 * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE 1=0
+        ${selectEmptyRecord}
     ELSE
         -- Return the updated record so the caller can see the updated values and any calculated fields
         ${selectUpdatedRecord}`
@@ -633,6 +661,15 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] (${col
     // ─── FULL-TEXT SEARCH ────────────────────────────────────────────────
 
     /**
+     * True: the `CREATE FULLTEXT INDEX … KEY INDEX <name>` below names the table's unique
+     * primary-key index, so CodeGen must resolve that name before the DDL can be composed.
+     * See {@link CodeGenDatabaseProvider.FullTextIndexNeedsPrimaryKeyIndexName}.
+     */
+    override get FullTextIndexNeedsPrimaryKeyIndexName(): boolean {
+        return true;
+    }
+
+    /**
      * Generates SQL Server full-text search infrastructure for an entity, conditionally
      * producing up to three components based on entity metadata flags:
      *
@@ -645,6 +682,25 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] (${col
      *
      * @returns The generated SQL and the resolved function name for permission grants.
      */
+    /**
+     * SQL Server charges full-text search through the fulltext population service rather than a
+     * trigger: `CREATE FULLTEXT INDEX` puts the table under continuous change tracking, so every
+     * INSERT/UPDATE/DELETE that touches an indexed column queues crawl work, and the index itself
+     * occupies catalog storage. The generated script also DROPs and RECREATEs the index, which means
+     * a full re-crawl of the table each time this entity's SQL is applied.
+     */
+    FullTextSearchCostDisclosure(entity: EntityInfo, searchFields: EntityFieldInfo[]): string | null {
+        if (!entity.FullTextIndexGenerated) {
+            return null;
+        }
+        const fields = searchFields.map((f: EntityFieldInfo) => f.Name).join(', ');
+        return `Full-text search on ${entity.SchemaName}.${entity.BaseTable} adds a PERMANENT cost: the `
+            + `fulltext index over (${fields}) puts the table under change tracking, so every write to an `
+            + `indexed column queues population work, and this script DROPs and RECREATEs the index — a full `
+            + `re-crawl of the table on every apply. Clearing the entity's full-text flags later does not drop `
+            + `the index or the catalog.`;
+    }
+
     generateFullTextSearch(entity: EntityInfo, searchFields: EntityFieldInfo[], primaryKeyIndexName: string): FullTextSearchResult {
         let sql = '';
         const catalogName = entity.FullTextCatalog && entity.FullTextCatalog.length > 0
@@ -1117,7 +1173,11 @@ GO
      *  - **Unrestrictable targets** (PKs, `__mj_` columns, the security/identity entities) are
      *    filtered defensively even though save-time guards should make such rows impossible.
      */
-    private generateFieldSecurityDenies(entity: EntityInfo): string {
+    private generateFieldSecurityDenies(
+        entity: EntityInfo,
+        targetSchemaName: string = entity.SchemaName,
+        targetViewName: string = entity.BaseView,
+    ): string {
         const context = this._fieldSecurityRunContext;
         if (!context) return '';
         if (!entity.EnableFieldLevelSecurity) return ''; // rules retained but inactive — mirror nothing
@@ -1147,27 +1207,58 @@ GO
         }
         let sOutput = '';
         for (const [sqlName, columns] of [...deniedColumnsByRole.entries()].sort(([a], [b]) => ordinalCompare(a, b))) {
-            sOutput += `\nDENY SELECT (${columns.map(c => `[${c}]`).join(', ')}) ON [${entity.SchemaName}].[${entity.BaseView}] TO [${sqlName}]`;
+            sOutput += `\nDENY SELECT (${columns.map(c => `[${c}]`).join(', ')}) ON [${targetSchemaName}].[${targetViewName}] TO [${sqlName}]`;
         }
         return sOutput;
     }
 
     /** @inheritdoc */
-    generateViewPermissions(entity: EntityInfo): string {
+    override GenerateViewPermissionsForTarget(
+        entity: EntityInfo,
+        targetSchemaName: string,
+        targetViewName: string,
+    ): string {
         let sOutput = '';
         for (const ep of entity.Permissions) {
             if (ep.RoleSQLName && ep.RoleSQLName.length > 0) {
-                sOutput += (sOutput === '' ? `GRANT SELECT ON [${entity.SchemaName}].[${entity.BaseView}] TO ` : ', ') + `[${ep.RoleSQLName}]`;
+                sOutput += (sOutput === '' ? `GRANT SELECT ON [${targetSchemaName}].[${targetViewName}] TO ` : ', ') + `[${ep.RoleSQLName}]`;
             } else {
                 this.logAppTierOnlyRoleSkip(ep.Role);
             }
         }
         // Order matters: wipe (REVOKE within the managed scope) → assert grants → assert
         // field-security DENYs. The whole body executes every run via applyPermissions.
-        const revokes = this.generateManagedPermissionRevokes(entity.SchemaName, entity.BaseView);
+        const revokes = this.generateManagedPermissionRevokes(targetSchemaName, targetViewName);
         const grants = (sOutput === '' ? '' : '\n') + sOutput;
-        const denies = this.generateFieldSecurityDenies(entity);
+        const denies = this.generateFieldSecurityDenies(entity, targetSchemaName, targetViewName);
         return revokes + grants + denies;
+    }
+
+    /** @inheritdoc */
+    override GenerateDisabledViewRevokePermissionsForTarget(
+        entity: EntityInfo,
+        targetSchemaName: string,
+        targetViewName: string,
+    ): string {
+        const revokes = this.generateManagedPermissionRevokes(targetSchemaName, targetViewName);
+        if (revokes.trim().length > 0) {
+            return revokes;
+        }
+        const roles: string[] = [];
+        for (const ep of entity.Permissions) {
+            if (ep.RoleSQLName && ep.RoleSQLName.length > 0 && !roles.includes(ep.RoleSQLName)) {
+                roles.push(ep.RoleSQLName);
+            }
+        }
+        if (roles.length === 0) {
+            return '';
+        }
+        return `\nREVOKE SELECT ON [${targetSchemaName}].[${targetViewName}] FROM ${roles.map((r) => `[${r}]`).join(', ')}`;
+    }
+
+    /** @inheritdoc */
+    generateViewPermissions(entity: EntityInfo): string {
+        return this.GenerateViewPermissionsForTarget(entity, entity.SchemaName, entity.BaseView);
     }
 
     /**
@@ -1597,6 +1688,26 @@ WHERE s.name IN (${inList})`;
     }
 
     /** @inheritdoc */
+    public override GetUniqueIndexMembershipSQL(schema: string, tableName: string, columnName: string): string | null {
+        return `SELECT ic.is_included_column AS IsIncludedColumn,
+                (SELECT COUNT(*)
+                   FROM sys.index_columns k
+                  WHERE k.object_id = i.object_id
+                    AND k.index_id = i.index_id
+                    AND k.is_included_column = 0) AS KeyColumnCount
+            FROM sys.indexes i
+            INNER JOIN sys.tables t ON t.object_id = i.object_id
+            INNER JOIN sys.schemas s ON s.schema_id = t.schema_id
+            INNER JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+            INNER JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+            WHERE i.is_unique = 1
+              AND i.is_primary_key = 0
+              AND s.name = '${EscapeSQLString(schema)}'
+              AND t.name = '${EscapeSQLString(tableName)}'
+              AND c.name = '${EscapeSQLString(columnName)}'`;
+    }
+
+    /** @inheritdoc */
     getForeignKeyIndexExistsSQL(schema: string, tableName: string, indexName: string): string {
         return `SELECT 1
     FROM sys.indexes
@@ -1775,6 +1886,19 @@ ORDER BY
     /** @inheritdoc */
     generateViewRefreshSQL(schema: string, viewName: string): string {
         return `EXEC sp_refreshview '${schema}.${viewName}';`;
+    }
+
+    /** @inheritdoc */
+    override getViewDependenciesSQL(schema: string, viewName: string): string {
+        const escapedSchema = EscapeSQLString(schema);
+        const escapedView = EscapeSQLString(viewName);
+        return `SELECT
+    COALESCE(OBJECT_SCHEMA_NAME(d.referenced_id), d.referenced_schema_name, '${escapedSchema}') AS ReferencedSchema,
+    COALESCE(OBJECT_NAME(d.referenced_id), d.referenced_entity_name) AS ReferencedObject,
+    COALESCE(o.type_desc, 'UNKNOWN') AS ReferencedType
+FROM sys.sql_expression_dependencies d
+LEFT JOIN sys.objects o ON o.object_id = d.referenced_id
+WHERE d.referencing_id = OBJECT_ID('[${escapedSchema}].[${escapedView}]')`;
     }
 
     /** @inheritdoc */

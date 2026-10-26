@@ -246,7 +246,7 @@ vi.mock('../engines/artifacts', () => ({
 // ---------------------------------------------------------------------------
 // Import the module under test AFTER mocks
 // ---------------------------------------------------------------------------
-import { ConversationEngine, BuildProjectVisibilityFilter, ExplainProjectDeleteFailure } from '../engines/conversations';
+import { ConversationEngine, ConversationWindowFields, BuildProjectVisibilityFilter, ExplainProjectDeleteFailure, ShouldReplaceDetailAgentRun } from '../engines/conversations';
 import { ResourcePermissionEngine } from '../custom/ResourcePermissions/ResourcePermissionEngine';
 import { UserInfo } from '@memberjunction/core';
 
@@ -1115,6 +1115,54 @@ describe('ConversationEngine', () => {
             const result = engine.GetAgentRunForDetail('no-conv', 'no-detail');
             expect(result).toBeUndefined();
         });
+
+        it('should honor ShouldReplaceDetailAgentRun and not overwrite a root primary run with a continuation or sub-agent run', async () => {
+            enqueueDetailsResults([
+                createMockDetail({ ID: 'd1', ConversationID: 'conv-1' }),
+            ]);
+            await engine.LoadConversationDetails('conv-1', contextUser);
+
+            const primaryRun = createMockAgentRun({
+                ID: 'run-primary',
+                ConversationDetailID: 'd1',
+                ParentRunID: null,
+                ContinuationDepth: 0,
+            });
+            const continuationRun = createMockAgentRun({
+                ID: 'run-continuation',
+                ConversationDetailID: 'd1',
+                ParentRunID: null,
+                ContinuationDepth: 1,
+            });
+            const subAgentRun = createMockAgentRun({
+                ID: 'run-child',
+                ConversationDetailID: 'd1',
+                ParentRunID: 'run-primary',
+                ContinuationDepth: 0,
+            });
+
+            engine.SetAgentRunForDetail('conv-1', 'd1', primaryRun as never);
+            expect((engine.GetAgentRunForDetail('conv-1', 'd1') as unknown as Record<string, unknown>)['ID']).toBe('run-primary');
+
+            // Continuation synthesis run must not replace the root primary orchestrating run
+            engine.SetAgentRunForDetail('conv-1', 'd1', continuationRun as never);
+            expect((engine.GetAgentRunForDetail('conv-1', 'd1') as unknown as Record<string, unknown>)['ID']).toBe('run-primary');
+
+            // Child sub-agent run must not replace the root primary orchestrating run
+            engine.SetAgentRunForDetail('conv-1', 'd1', subAgentRun as never);
+            expect((engine.GetAgentRunForDetail('conv-1', 'd1') as unknown as Record<string, unknown>)['ID']).toBe('run-primary');
+
+            // Same primary run ID (in-place update) IS allowed to replace
+            const updatedPrimaryRun = createMockAgentRun({
+                ID: 'run-primary',
+                ConversationDetailID: 'd1',
+                ParentRunID: null,
+                ContinuationDepth: 0,
+                Status: 'Completed',
+            });
+            engine.SetAgentRunForDetail('conv-1', 'd1', updatedPrimaryRun as never);
+            expect((engine.GetAgentRunForDetail('conv-1', 'd1') as unknown as Record<string, unknown>)['Status']).toBe('Completed');
+        });
     });
 
     // ========================================================================
@@ -1807,6 +1855,16 @@ describe('ConversationEngine', () => {
             expect(window.map(m => m.content)).toEqual(['m1', 'm2']);
         });
 
+        it('leaves out a replaced answer (ReplacedAt set), whatever its type', () => {
+            const window = ConversationEngine.AssembleContextWindow([
+                row(1, 'User', 'm1'),
+                { ...row(2, 'AI', 'old answer'), ReplacedAt: '2026-10-07T10:00:00.000Z' },
+                { ...row(3, 'AI', 'other old answer'), ReplacedAt: new Date('2026-10-07T10:00:00.000Z') },
+                { ...row(4, 'AI', 'new answer'), ReplacedAt: null },
+            ]);
+            expect(window.map(m => m.content)).toEqual(['m1', 'new answer']);
+        });
+
         describe('history floor (historyFrom)', () => {
             const floor = new Date('2026-09-01T12:00:00.000Z');
             const dated = (sequence: number, createdAt: Date | string | null, summary?: string) => ({
@@ -1856,23 +1914,69 @@ describe('ConversationEngine', () => {
         });
     });
 
+    describe('LiveRowsFilter and IsReplacedRow', () => {
+        it('appends the replaced-row clause and leaves the trunk predicate as it is', () => {
+            expect(ConversationEngine.LiveRowsFilter(`[ConversationID]='c' AND [BranchID] IS NULL`))
+                .toBe(`[ConversationID]='c' AND [BranchID] IS NULL AND [ReplacedAt] IS NULL`);
+        });
+
+        it('says a row is replaced only when ReplacedAt is set', () => {
+            expect(ConversationEngine.IsReplacedRow({ ReplacedAt: new Date() })).toBe(true);
+            expect(ConversationEngine.IsReplacedRow({ ReplacedAt: '2026-10-07T10:00:00.000Z' })).toBe(true);
+            expect(ConversationEngine.IsReplacedRow({ ReplacedAt: null })).toBe(false);
+            expect(ConversationEngine.IsReplacedRow({})).toBe(false);
+        });
+
+        it('lists ReplacedAt among the window fields', () => {
+            expect(ConversationWindowFields).toContain('ReplacedAt');
+        });
+    });
+
     describe('LoadWindowRowsFresh', () => {
-        it('loads the whole conversation, with the window fields including __mj_CreatedAt', async () => {
+        it('loads the whole trunk, with the window fields including __mj_CreatedAt', async () => {
             await ConversationEngine.LoadWindowRowsFresh('conv-1', contextUser);
             expect(runViewParamsLog).toHaveLength(1);
-            expect(runViewParamsLog[0].ExtraFilter).toBe(`ConversationID='conv-1'`);
+            expect(runViewParamsLog[0].ExtraFilter).toBe(`[ConversationID]='conv-1' AND [BranchID] IS NULL AND [ReplacedAt] IS NULL`);
             expect(runViewParamsLog[0].Fields).toContain('__mj_CreatedAt');
         });
 
         it('applies a history floor in the query, so earlier rows never leave the database', async () => {
             const floor = new Date('2026-09-01T12:00:00.000Z');
             await ConversationEngine.LoadWindowRowsFresh('conv-1', contextUser, undefined, floor);
-            expect(runViewParamsLog[0].ExtraFilter).toBe(`ConversationID='conv-1' AND __mj_CreatedAt >= '2026-09-01T12:00:00.000Z'`);
+            expect(runViewParamsLog[0].ExtraFilter).toBe(`[ConversationID]='conv-1' AND [BranchID] IS NULL AND __mj_CreatedAt >= '2026-09-01T12:00:00.000Z' AND [ReplacedAt] IS NULL`);
         });
 
         it('fails before querying when the floor is an invalid date', async () => {
             await expect(ConversationEngine.LoadWindowRowsFresh('conv-1', contextUser, undefined, new Date('nope'))).rejects.toThrow(RangeError);
             expect(runViewParamsLog).toHaveLength(0);
+        });
+
+        it('loads the branch rows first, then the rows on the branch path', async () => {
+            runViewResultQueue.push({ Success: true, Results: [
+                { ID: 'B', ConversationID: 'conv-1', ParentBranchID: null, ForkFromSequence: 2, Name: null },
+            ] });
+            runViewResultQueue.push({ Success: true, Results: [] });
+            await ConversationEngine.LoadWindowRowsFresh('conv-1', contextUser, undefined, undefined, 'B');
+            expect(runViewParamsLog[0].EntityName).toBe('MJ: Conversation Branches');
+            expect(runViewParamsLog[0].ExtraFilter).toBe(`ConversationID='conv-1'`);
+            expect(runViewParamsLog[1].ExtraFilter).toBe(`[ConversationID]='conv-1' AND ([BranchID]='B' OR ([BranchID] IS NULL AND [Sequence] <= 2)) AND [ReplacedAt] IS NULL`);
+        });
+
+        it('does not query branches for the trunk', async () => {
+            await ConversationEngine.LoadWindowRowsFresh('conv-1', contextUser, undefined, undefined, null);
+            expect(runViewParamsLog).toHaveLength(1);
+        });
+    });
+
+    describe('BranchPathFilterFresh', () => {
+        it('returns the trunk predicate without a query', async () => {
+            const filter = await ConversationEngine.BranchPathFilterFresh('conv-1', null, contextUser);
+            expect(filter).toBe(`[ConversationID]='conv-1' AND [BranchID] IS NULL`);
+            expect(runViewParamsLog).toHaveLength(0);
+        });
+        it('throws when the branch load fails', async () => {
+            runViewResultQueue.push({ Success: false, Results: [], ErrorMessage: 'boom' });
+            await expect(ConversationEngine.BranchPathFilterFresh('conv-1', 'B', contextUser)).rejects.toThrow(/boom/);
         });
     });
 
@@ -2321,7 +2425,7 @@ describe('ConversationEngine', () => {
 
             const fetch = runViewParamsLog[0];
             expect(fetch.EntityName).toBe('MJ: Conversation Details');
-            expect(fetch.ExtraFilter).toBe(`ConversationID='conv-1'`);
+            expect(fetch.ExtraFilter).toBe(`[ConversationID]='conv-1' AND [BranchID] IS NULL AND [ReplacedAt] IS NULL`);
             expect(fetch.OrderBy).toBe('Sequence DESC');
             expect(fetch.AfterKey).toBeUndefined();
         });
@@ -2605,6 +2709,70 @@ describe('ConversationEngine', () => {
             expect(result.Failed).toBe(false);
             errorSpy.mockRestore();
         });
+
+        it('filters every window query to the branch path', async () => {
+            runViewResultQueue.push({ Success: true, Results: [
+                { ID: 'B', ConversationID: 'conv-1', ParentBranchID: null, ForkFromSequence: 2, Name: null },
+            ] });
+            await engine.LoadDetailWindow({ ConversationID: 'conv-1', BranchID: 'B', PageSize: 5 }, contextUser);
+            const expected = `[ConversationID]='conv-1' AND ([BranchID]='B' OR ([BranchID] IS NULL AND [Sequence] <= 2))`;
+            const detailQueries = runViewParamsLog.filter(p => p.EntityName === 'MJ: Conversation Details');
+            expect(detailQueries.length).toBeGreaterThan(0);
+            for (const q of detailQueries) {
+                expect(String(q.ExtraFilter)).toContain(expected);
+            }
+        });
+
+        it('filters the session expansion and the older-rows probe to the branch path', async () => {
+            runViewResultQueue.push({ Success: true, Results: [
+                { ID: 'B', ConversationID: 'conv-1', ParentBranchID: null, ForkFromSequence: 2, Name: null },
+            ] });
+            // The oldest row is session-stamped, so the page read, the expansion and the probe all run.
+            runViewResultQueue.push({
+                Success: true,
+                Results: [...createWindowRows([5, 4]), ...createWindowRows([3], { AgentSessionID: 'sess-a' })],
+            });
+            runViewResultQueue.push({ Success: true, Results: createWindowRows([2], { AgentSessionID: 'sess-a' }) });
+            runViewResultQueue.push({ Success: true, Results: [] }); // probe
+
+            await engine.LoadDetailWindow({ ConversationID: 'conv-1', BranchID: 'B', PageSize: 5 }, contextUser);
+
+            const expected = `[ConversationID]='conv-1' AND ([BranchID]='B' OR ([BranchID] IS NULL AND [Sequence] <= 2))`;
+            const detailQueries = runViewParamsLog.filter(p => p.EntityName === 'MJ: Conversation Details');
+            // Page (PageSize x 3), session expansion, then the one-row probe.
+            expect(detailQueries.map(q => q.MaxRows)).toEqual([15, 200, 1]);
+            for (const q of detailQueries) {
+                expect(String(q.ExtraFilter)).toContain(expected);
+                expect(String(q.ExtraFilter)).toContain('[ReplacedAt] IS NULL');
+            }
+        });
+
+        it('returns a Failed window, with no detail query, when the branch read fails', async () => {
+            const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            runViewResultQueue.push({ Success: false, Results: [], ErrorMessage: 'boom' });
+
+            const result = await engine.LoadDetailWindow({ ConversationID: 'conv-1', BranchID: 'B' }, contextUser);
+
+            expect(result.Failed).toBe(true);
+            expect(result.Details).toEqual([]);
+            expect(runViewParamsLog[0].EntityName).toBe('MJ: Conversation Branches');
+            expect(runViewParamsLog.filter(p => p.EntityName === 'MJ: Conversation Details')).toHaveLength(0);
+            expect(errorSpy).toHaveBeenCalled();
+            errorSpy.mockRestore();
+        });
+
+        it('returns a Failed window, never the trunk, when the branch is not found', async () => {
+            const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            runViewResultQueue.push({ Success: true, Results: [] });
+
+            const result = await engine.LoadDetailWindow({ ConversationID: 'conv-1', BranchID: 'B' }, contextUser);
+
+            expect(result.Failed).toBe(true);
+            expect(result.Details).toEqual([]);
+            expect(runViewParamsLog.filter(p => p.EntityName === 'MJ: Conversation Details')).toHaveLength(0);
+            expect(errorSpy).toHaveBeenCalled();
+            errorSpy.mockRestore();
+        });
     });
 
     // ======================================================================
@@ -2672,4 +2840,76 @@ describe('ConversationEngine', () => {
             expect(input.map((c) => c.ID)).toEqual(['old', 'new']);
         });
     });
+
+    describe('SaveConversation optimistic emission (NG0100 prevention)', () => {
+        it('emits Conversations$ synchronously when mutating the cached entity before Save() resolves', async () => {
+            let resolveSave!: (ok: boolean) => void;
+            const conv = createMockConversation({ ID: 'c1', Name: 'New Conversation' });
+            (conv as Record<string, unknown>)['Save'] = vi.fn().mockImplementation(
+                () => new Promise<boolean>((resolve) => { resolveSave = resolve; }),
+            );
+            runViewResultQueue.push({ Success: true, Results: [conv] });
+            await engine.LoadConversations('env-1', contextUser);
+
+            const namesSeenOnEmit: string[] = [];
+            const sub = engine.Conversations$.subscribe((list) => {
+                if (list[0]) namesSeenOnEmit.push(list[0].Name ?? '');
+            });
+            namesSeenOnEmit.length = 0; // ignore BehaviorSubject initial replay
+
+            const savePromise = engine.SaveConversation('c1', { Name: 'Renamed Title' }, contextUser);
+            // Synchronously (before await savePromise resolves), Conversations$ must have emitted the new Name
+            expect(namesSeenOnEmit).toEqual(['Renamed Title']);
+
+            resolveSave(true);
+            await savePromise;
+            sub.unsubscribe();
+        });
+    });
+
+    describe('ShouldReplaceDetailAgentRun (primary orchestrating run vs continuation synthesis run)', () => {
+        const primaryRun = {
+            ID: '05FCC2C8-6D72-416D-A774-0C7F15F4CA6E',
+            ParentRunID: null,
+            ContinuationDepth: 0,
+            __mj_CreatedAt: '2026-10-19T14:00:00.000Z',
+        };
+        const continuationRun = {
+            ID: '858AB1A5-20AD-425A-896E-58D34494FCF3',
+            ParentRunID: null,
+            ContinuationDepth: 1,
+            __mj_CreatedAt: '2026-10-19T14:06:00.000Z',
+        };
+        const childSubAgentRun = {
+            ID: '11111111-2222-3333-4444-555555555555',
+            ParentRunID: '05FCC2C8-6D72-416D-A774-0C7F15F4CA6E',
+            ContinuationDepth: 0,
+            __mj_CreatedAt: '2026-10-19T14:03:00.000Z',
+        };
+
+        it('keeps the primary orchestrating run (ContinuationDepth=0) over a newer post-workflow continuation synthesis run (ContinuationDepth=1)', () => {
+            expect(ShouldReplaceDetailAgentRun(primaryRun, continuationRun)).toBe(false);
+        });
+
+        it('replaces a continuation synthesis run (ContinuationDepth=1) when the primary orchestrating run (ContinuationDepth=0) is evaluated', () => {
+            expect(ShouldReplaceDetailAgentRun(continuationRun, primaryRun)).toBe(true);
+        });
+
+        it('keeps a root run (ParentRunID=null) over a child sub-agent run (ParentRunID!=null)', () => {
+            expect(ShouldReplaceDetailAgentRun(continuationRun, childSubAgentRun)).toBe(false);
+            expect(ShouldReplaceDetailAgentRun(childSubAgentRun, continuationRun)).toBe(true);
+        });
+
+        it('prefers the newer root primary run when a user retries a message (both ContinuationDepth=0)', () => {
+            const retriedPrimaryRun = {
+                ID: '99999999-8888-7777-6666-555555555555',
+                ParentRunID: null,
+                ContinuationDepth: 0,
+                __mj_CreatedAt: '2026-10-19T14:10:00.000Z',
+            };
+            expect(ShouldReplaceDetailAgentRun(primaryRun, retriedPrimaryRun)).toBe(true);
+            expect(ShouldReplaceDetailAgentRun(retriedPrimaryRun, primaryRun)).toBe(false);
+        });
+    });
 });
+

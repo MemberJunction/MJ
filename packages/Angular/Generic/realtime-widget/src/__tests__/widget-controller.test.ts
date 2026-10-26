@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { WidgetKeyError } from '../lib/auth/widget-key-client';
 import { START_DROPPED_MESSAGE, CONNECTION_LOST_MESSAGE, DescribeStartError } from '../lib/session/widget-controller';
+import { REALTIME_CALL_TIME_LIMIT_END } from '@memberjunction/realtime-runtime';
 import {
   FakeGuestSessions,
   SESSION_ID,
@@ -161,6 +162,14 @@ describe('WidgetController', () => {
       expect(h.controller.Phase).toBe('error');
       expect(h.controller.ErrorMessage).toBe(CONNECTION_LOST_MESSAGE);
       expect(h.events.find((e) => e.name === 'mj-error')?.detail).toMatchObject({ code: 'connection-lost' });
+    });
+
+    it('says the call reached its time limit, with its own code, rather than that the connection dropped', async () => {
+      const h = await liveCall();
+      WidgetFakeClient.Instance!.ReachTimeLimit();
+      expect(h.controller.Phase).toBe('error');
+      expect(h.controller.ErrorMessage).toBe(REALTIME_CALL_TIME_LIMIT_END.Message);
+      expect(h.events.find((e) => e.name === 'mj-error')?.detail).toMatchObject({ code: 'time-limit' });
     });
 
     it('can start again after ending, ignoring the previous session\'s replayed final state', async () => {
@@ -347,13 +356,16 @@ describe('WidgetController', () => {
       }
     });
 
-    it('gives the provider a renewer that asks the server\'s refresh path and holds the new token', async () => {
+    it('gives the provider a renewer that asks the server\'s refresh path with the current token and holds the new token', async () => {
       const h = buildHarness(base);
+      const initial = guestSession({ token: makeJwt(9_999_999_998), expiresAtMs: Date.now() + 3_600_000 });
+      h.guest.Next = initial;
       await h.controller.Start();
       const renewed = guestSession({ token: makeJwt(9_999_999_999), expiresAtMs: Date.now() + 7_200_000 });
       h.guest.Next = renewed;
       expect(await h.authProvider.Refreshers[0]()).toBe(renewed.token);
       expect(h.guest.Refreshes).toBe(1);
+      expect(h.guest.RefreshTokens).toEqual([initial.token]);
     });
   });
 

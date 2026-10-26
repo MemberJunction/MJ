@@ -128,6 +128,14 @@ describe('RoomCallSessionStarter.Start', () => {
         expect(s.hostCalls[1]).toMatchObject({ JoinMethod: 'OnDemand' });
     });
 
+    it("tells the coordinator the call's channel, so a SIP phone call asks for no avatar and a web visitor's room can", async () => {
+        const s = setup();
+        await s.starter.Start(s.args());
+        await s.starter.Start(s.args({ RoomName: 'call-out', Direction: 'Outbound' }));
+        await s.starter.Start(s.args({ RoomName: 'web-1', Channel: 'web', RemoteNumber: undefined }));
+        expect(s.hostCalls.map((h) => h.Channel)).toEqual(['phone', 'phone', 'web']);
+    });
+
     it('frames the call for the model and offers the handoff tools the server can act on', async () => {
         const s = setup();
         await s.starter.Start(s.args());
@@ -286,6 +294,14 @@ describe('RoomCallSessionStarter.StartRoomAgent (an agent taking over, or the fi
         expect(s.hostCalls[1].HostFraming).toContain('taking this conversation over from Sage');
         expect(s.hostCalls[1].HostFraming).toContain('Needs legal help with a contract');
         expect(s.startParams[1]).toMatchObject({ AgentName: 'Rex', TargetAgentID: 'rex-id' });
+    });
+
+    it("starts an agent taking over a phone call as a phone call too (no avatar), and one in a web room as web", async () => {
+        const s = setup();
+        await s.starter.Start(s.args({ Lease: null }));
+        await s.starter.StartRoomAgent(request({ Provider: s.db.provider }));
+        await s.starter.StartRoomAgent(request({ RoomName: 'meet-room', Brief: undefined, Provider: s.db.provider }));
+        expect(s.hostCalls.map((h) => h.Channel)).toEqual(['phone', 'phone', 'web']);
     });
 
     it('takes its own capacity slot for a phone call and gives it back when it ends', async () => {

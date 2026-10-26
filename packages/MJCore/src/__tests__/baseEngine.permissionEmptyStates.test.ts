@@ -102,6 +102,28 @@ describe('BaseEngine loaded-empty permission states', () => {
             expect(vi.getTimerCount()).toBe(0);
         });
 
+        it('skips all configs cleanly without permission-constraining when an entity schema is not installed in metadata', () => {
+            const providerWithMissingSchema = {
+                CurrentUser: USER,
+                Entities: [{ Name: 'Alpha' }],
+                EntityByName: vi.fn((name: string) =>
+                    name === 'Alpha'
+                        ? { GetUserPermisions: () => ({ CanRead: true }) }
+                        : undefined
+                ),
+            } as unknown as IMetadataProvider;
+            engine.Prepare(providerWithMissingSchema, [ALPHA, BETA]);
+
+            expect(engine.SkipAllForTest([ALPHA, BETA])).toEqual([]);
+            expect(engine.IsPermissionConstrained).toBe(false);
+            expect(engine._alpha).toEqual([]);
+            expect(engine._beta).toEqual([]);
+            expect(engine.EntryFor('_alpha')).toMatchObject({ loadedSuccessfully: true });
+            expect(engine.EntryFor('_alpha')?.permissionDenied).toBeUndefined();
+            expect(engine.Read('_alpha')).toEqual([]);
+            expect(engine.Read('_beta')).toEqual([]);
+        });
+
     });
 
     describe('HandleSingleViewResult on a failed load', () => {

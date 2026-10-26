@@ -96,6 +96,7 @@ class FakePorts implements VerificationPorts {
             AgentSessionID: SESSION_ID,
             OwnerUserID: OWNER,
             ConversationExternalID: null,
+            ConversationReadable: false,
             Status: 'Active',
             ConfigRaw: JSON.stringify({ targetAgentID: 'target-1' }),
             StartedAtMs: T0,
@@ -219,17 +220,34 @@ describe('RealtimeSessionVerificationWorkflow', () => {
         it('refuses another anonymous guest sharing the Anonymous user (scope mismatch) and a scope-less anonymous caller', async () => {
             ports.AddSession({ ConversationExternalID: 'scope-A' });
             expect(
-                await workflow.RequestVerification(REQUEST, principal({ IsMagicLinkAnonymous: true, MagicLinkScope: { ResourceID: 'scope-B' } })),
+                await workflow.RequestVerification(
+                    REQUEST,
+                    principal({ IsMagicLinkAnonymous: true, AnonymousVisitorID: 'scope-B', MagicLinkScope: { ResourceID: 'scope-B' } }),
+                ),
             ).toMatchObject({ ErrorCode: 'session_not_found' });
             expect(await workflow.RequestVerification(REQUEST, principal({ IsMagicLinkAnonymous: true }))).toMatchObject({ ErrorCode: 'session_not_found' });
             expect(
-                await workflow.RequestVerification(REQUEST, principal({ IsMagicLinkAnonymous: true, MagicLinkScope: { ResourceID: 'scope-A' } })),
+                await workflow.RequestVerification(
+                    REQUEST,
+                    principal({ IsMagicLinkAnonymous: true, AnonymousVisitorID: 'scope-A', MagicLinkScope: { ResourceID: 'scope-A' } }),
+                ),
             ).toMatchObject({ Success: true });
         });
 
         it('refuses a closed session', async () => {
             ports.AddSession({ Status: 'Closed' });
             expect(await workflow.RequestVerification(REQUEST, principal())).toMatchObject({ ErrorCode: 'session_closed' });
+        });
+
+        it("lets a named owner holding a link scope use an unstamped conversation only when it can read that conversation", async () => {
+            // A conversation started outside any link carries no ExternalID. The owner's own row-level security
+            // decides: readable is allowed, unreadable is refused like a missing session.
+            const linkHolder = principal({ MagicLinkScope: { ResourceID: 'invite-scope-1' } });
+            ports.AddSession({ ConversationExternalID: null, ConversationReadable: false });
+            expect(await workflow.RequestVerification(REQUEST, linkHolder)).toMatchObject({ ErrorCode: 'session_not_found' });
+
+            ports.AddSession({ ConversationExternalID: null, ConversationReadable: true });
+            expect(await workflow.RequestVerification(REQUEST, linkHolder)).toMatchObject({ Success: true });
         });
 
         it('treats an already-verified session as success without sending anything', async () => {
@@ -362,7 +380,7 @@ describe('RealtimeSessionVerificationWorkflow', () => {
 
         it('routes the event with the session scope so an anonymous guest\'s event reaches only that guest', async () => {
             ports.AddSession({ ConversationExternalID: 'scope-A' });
-            const guest = principal({ IsMagicLinkAnonymous: true, MagicLinkScope: { ResourceID: 'scope-A' } });
+            const guest = principal({ IsMagicLinkAnonymous: true, AnonymousVisitorID: 'scope-A', MagicLinkScope: { ResourceID: 'scope-A' } });
             await workflow.RequestVerification(REQUEST, guest);
             await workflow.SubmitCode({ AgentSessionID: SESSION_ID, Code: secretsFrom(ports).code }, guest);
             expect(ports.Published[0].routing.ScopeKey).toBe('scope-A');
@@ -445,7 +463,10 @@ describe('RealtimeSessionVerificationWorkflow', () => {
             expect(await workflow.SubmitCode({ AgentSessionID: SESSION_ID, Code: code }, principal({ ID: STRANGER }))).toMatchObject({ ErrorCode: 'session_not_found' });
             ports.AddSession({ ConversationExternalID: 'scope-A', ConfigRaw: ports.Sessions.get(SESSION_ID.toLowerCase())?.ConfigRaw ?? null });
             expect(
-                await workflow.SubmitCode({ AgentSessionID: SESSION_ID, Code: code }, principal({ IsMagicLinkAnonymous: true, MagicLinkScope: { ResourceID: 'scope-B' } })),
+                await workflow.SubmitCode(
+                    { AgentSessionID: SESSION_ID, Code: code },
+                    principal({ IsMagicLinkAnonymous: true, AnonymousVisitorID: 'scope-B', MagicLinkScope: { ResourceID: 'scope-B' } }),
+                ),
             ).toMatchObject({ ErrorCode: 'session_not_found' });
             expect(ports.Published).toHaveLength(0);
         });

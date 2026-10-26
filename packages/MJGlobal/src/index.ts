@@ -13,13 +13,16 @@ export * from './util/PatternUtils';
 export * from './util/ResourcePatternUtils';
 export * from './util/UUIDUtils';
 export * from './util/UUIDCollections';
+export * from './util/UserScopedCacheKey';
 export * from './util/CronUtils';
 export * from './util/SerializationUtils';
 export * from './util/BinaryEncoding';
+export * from './util/ProofOfPossession';
 export * from './ValidationTypes'
 export * from './JSONValidator'
 export * from './SafeExpressionEvaluator'
 export * from './fieldRules'
+export * from './SQLScreeningScanner'
 export * from './SQLExpressionValidator'
 export * from './warningManager'
 export * from './EncryptionUtils'

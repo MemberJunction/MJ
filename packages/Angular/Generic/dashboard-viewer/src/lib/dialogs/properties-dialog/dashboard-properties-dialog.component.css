@@ -1,0 +1,18 @@
+.dpd { display: flex; flex-direction: column; gap: var(--mj-space-4); }
+.dpd section { display: flex; flex-direction: column; gap: var(--mj-space-2); align-items: flex-start; }
+.dpd__label { font-size: var(--mj-text-xs); font-weight: var(--mj-font-semibold); color: var(--mj-text-secondary); }
+.dpd__hint { margin: 0; font-size: 12px; color: var(--mj-text-muted); }
+.dpd__empty { margin: 0; font-size: 13px; color: var(--mj-text-muted); }
+.dpd__card {
+  display: flex; flex-direction: column; gap: var(--mj-space-2); align-self: stretch;
+  padding: 10px 12px; border: 1px solid var(--mj-border-subtle); border-radius: var(--mj-radius-md);
+}
+.dpd__row { display: flex; gap: var(--mj-space-2); align-items: flex-end; }
+.dpd__field { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.dpd__field--narrow { flex: 0 0 120px; }
+.dpd__field label, .dpd__field-label { font-size: 12px; color: var(--mj-text-secondary); }
+.dpd__check { display: flex; align-items: center; gap: var(--mj-space-2); font-size: 13px; }
+.dpd__wire { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; align-self: stretch; }
+.dpd__wire select { flex: 1 1 120px; min-width: 110px; }
+.dpd__arrow { color: var(--mj-text-muted); }
+.dpd__problems { margin: 0; padding-left: 18px; font-size: 13px; color: var(--mj-status-error-text); }

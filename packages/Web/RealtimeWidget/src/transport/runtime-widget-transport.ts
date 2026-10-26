@@ -15,6 +15,7 @@
  */
 
 import { RunView, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { ConversationEngine } from '@memberjunction/core-entities';
 import type { MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { setupGraphQLClient, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
@@ -64,18 +65,11 @@ export class RuntimeWidgetTransport implements IWidgetTransport {
             if (!userDetail) {
                 return { reply: '', success: false, error: 'Could not record your message.' };
             }
-            // The agent writes its reply INTO a pre-created response detail whose id is passed as
-            // `conversationDetailId` (the AgentRunner contract — see AgentRunner.ts: `options.conversationDetailId`
-            // IS the agent response detail). Create it as Role='AI' so the reply is an agent turn, not a
-            // second user turn; `message`/`latestMessageId` stays the user's triggering message.
-            const agentDetail = await this.createAgentResponseDetail();
-            if (!agentDetail) {
-                return { reply: '', success: false, error: 'Could not start the agent response.' };
-            }
+            // The server creates the agent's reply row for the visitor's message (only the server writes agent
+            // replies) and runs the agent into it; the reply is read back below.
             const result = await ConversationsRuntime.Instance.AgentRunner.processMessage({
                 conversationId: this.conversationId,
                 message: userDetail,
-                conversationDetailId: agentDetail.ID,
                 applicationId: this.session.applicationId,
                 // D5: ALWAYS pin the support agent — never the unfiltered fallback.
                 explicitAgentId: this.session.pinnedAgentId,
@@ -179,37 +173,20 @@ export class RuntimeWidgetTransport implements IWidgetTransport {
         return detail;
     }
 
-    /**
-     * Creates the agent's response detail placeholder (Role='AI', In-Progress) the agent run writes
-     * into. Mirrors how the chat UI / AgentRunner pre-create the response row; its id is passed as
-     * `conversationDetailId` so the reply lands as an agent turn the widget can read back.
-     */
-    private async createAgentResponseDetail(): Promise<MJConversationDetailEntity | null> {
-        const md = this.requireProvider();
-        const detail = await md.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAILS_ENTITY, this.contextUser ?? undefined);
-        detail.NewRecord();
-        detail.ConversationID = this.conversationId!;
-        detail.Role = 'AI';
-        detail.Message = '⏳ Starting…';
-        detail.Status = 'In-Progress';
-        if (this.session?.pinnedAgentId) {
-            detail.AgentID = this.session.pinnedAgentId;
-        }
-        const saved = await detail.Save();
-        if (!saved) {
-            return null;
-        }
-        return detail;
-    }
-
-    /** Reads the newest AI Conversation Detail for the conversation (the agent's reply). */
+    /** Reads the newest AI Conversation Detail in Main (the agent's reply). */
     private async readLatestAgentReply(): Promise<string> {
+        const conversationId = this.conversationId;
+        if (!conversationId || !this.contextUser) {
+            return '';
+        }
+        // The widget's conversations have no forks.
+        const scope = ConversationEngine.TrunkScope(conversationId);
         const rv = new RunView();
         const result = await rv.RunView<MJConversationDetailEntity>(
             {
                 EntityName: CONVERSATION_DETAILS_ENTITY,
-                ExtraFilter: `ConversationID='${this.conversationId}' AND Role='AI'`,
-                OrderBy: '__mj_CreatedAt DESC',
+                ExtraFilter: `${ConversationEngine.ScopeFilter(scope)} AND [Role]='AI'`,
+                OrderBy: 'Sequence DESC',
                 MaxRows: 1,
                 ResultType: 'entity_object',
             },

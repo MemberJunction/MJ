@@ -28,12 +28,16 @@ vi.mock('type-graphql', () => {
 
 const hoisted = vi.hoisted(() => ({
     runAgentInConversation: vi.fn(),
+    reply: { ID: 'reply-1', ConversationID: 'conv-1', __mj_CreatedAt: new Date('2026-10-12T10:00:00.000Z') },
 }));
 
 vi.mock('@memberjunction/ai-agents', () => ({
     AgentRunner: class {
         RunAgentInConversation(...args: unknown[]) {
             return hoisted.runAgentInConversation(...args);
+        }
+        async CreateAgentReplyDetail() {
+            return hoisted.reply;
         }
     },
     ArtifactToolManager: class {},
@@ -94,7 +98,7 @@ async function runMutation(
     options: { agentHistoryFrom?: string; fireAndForget?: boolean }
 ) {
     return resolver.RunAIAgentFromConversationDetail(
-        'detail-1', 'agent-1', makeContext(), 'session-1', pubSub,
+        'user-msg-1', 'agent-1', makeContext(), 'session-1', pubSub,
         undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
         undefined, undefined, options.fireAndForget, undefined, undefined,
         options.agentHistoryFrom
@@ -108,6 +112,8 @@ afterEach(() => {
 describe('RunAIAgentFromConversationDetail — agentHistoryFrom', () => {
     let resolver: RunAIAgentResolver;
     let seams: ResolverSeams;
+    /** The floor's position in executeAIAgent / executeAgentInBackground: fourth from last, before TrustReservedRunData, the branch, and the reply detail. */
+    const FLOOR_ARG = -4;
 
     beforeEach(() => {
         ({ resolver, seams } = makeResolver());
@@ -122,9 +128,9 @@ describe('RunAIAgentFromConversationDetail — agentHistoryFrom', () => {
         expect(result.success).toBe(true);
         const loaderArgs = seams.loadConversationHistoryWithAttachments.mock.calls[0];
         expect(loaderArgs[0]).toBe('conv-1');
-        expect(loaderArgs[4]).toEqual(['detail-1']);
+        expect(loaderArgs[4]).toBeUndefined(); // the reply row is created after the history loads, so nothing to exclude
         expect((loaderArgs[5] as Date).toISOString()).toBe(FLOOR_ISO);
-        const runFloor = seams.executeAIAgent.mock.calls[0].at(-1) as Date;
+        const runFloor = seams.executeAIAgent.mock.calls[0].at(FLOOR_ARG) as Date;
         expect(runFloor.toISOString()).toBe(FLOOR_ISO);
     });
 
@@ -133,7 +139,7 @@ describe('RunAIAgentFromConversationDetail — agentHistoryFrom', () => {
 
         expect(result.success).toBe(true);
         expect(seams.executeAIAgent).not.toHaveBeenCalled();
-        const runFloor = seams.executeAgentInBackground.mock.calls[0].at(-1) as Date;
+        const runFloor = seams.executeAgentInBackground.mock.calls[0].at(FLOOR_ARG) as Date;
         expect(runFloor.toISOString()).toBe(FLOOR_ISO);
     });
 
@@ -141,7 +147,7 @@ describe('RunAIAgentFromConversationDetail — agentHistoryFrom', () => {
         await runMutation(resolver, {});
 
         expect(seams.loadConversationHistoryWithAttachments.mock.calls[0][5]).toBeUndefined();
-        expect(seams.executeAIAgent.mock.calls[0].at(-1)).toBeUndefined();
+        expect(seams.executeAIAgent.mock.calls[0].at(FLOOR_ARG)).toBeUndefined();
     });
 
     it('fails the request on an unreadable floor, before loading or running anything', async () => {
@@ -178,7 +184,7 @@ describe('loadConversationHistoryWithAttachments — history floor', () => {
         }).loadConversationHistoryWithAttachments.bind(resolver);
         await load('conv-1', USER, 20, provider, ['detail-1'], floor);
 
-        expect(loadRows).toHaveBeenCalledWith('conv-1', USER, provider, floor);
+        expect(loadRows).toHaveBeenCalledWith('conv-1', USER, provider, floor, undefined);
         expect(assemble.mock.calls[0][1]).toEqual({ maxTailMessages: 20, excludeDetailIds: ['detail-1'], historyFrom: floor });
     });
 });
@@ -288,10 +294,13 @@ describe('executeAIAgent — status publishing', () => {
         expect(completion.success).toBe(true);
     });
 
-    it('publishes a failure completion when a fire-and-forget run rejects', async () => {
+    it('logs a fire-and-forget run that rejects, and publishes no second completion', async () => {
+        // executeAIAgent resolves on every failure and publishes the failure completion itself
+        // (RunAIAgentResolver.fireAndForgetCompletion.test.ts). A rejection breaks that contract; the background
+        // runner only logs it, with the agent and session, instead of leaving an unhandled rejection.
         const { resolver, seams } = makeResolver();
         seams.executeAIAgent = vi.fn().mockRejectedValue(new Error('background blew up'));
-        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         vi.spyOn(console, 'log').mockImplementation(() => undefined);
         const publish = vi.fn().mockResolvedValue(undefined);
         const localPubSub = { publish } as unknown as PubSubEngine;
@@ -304,28 +313,11 @@ describe('executeAIAgent — status publishing', () => {
             {}, {}, 'agent-1', userPayload, '[]', 'session-1', localPubSub,
             undefined, undefined, undefined, undefined, undefined, 'detail-1',
         );
-        await vi.waitFor(() => expect(publish).toHaveBeenCalled());
+        await vi.waitFor(() =>
+            expect(errors.mock.calls.some((call) => String(call[0]).includes('agent-1') && String(call[0]).includes('session-1'))).toBe(true),
+        );
 
-        const sent = envelopes(publish);
-        expect(sent).toHaveLength(1);
-        expect(sent[0].type).toBe('StreamingContent');
-        expect(sent[0].resolver).toBe('RunAIAgentResolver');
-        const completion = sent[0].data as {
-            type: string;
-            agentRunId: string;
-            conversationDetailId: string;
-            success: boolean;
-            errorMessage: string;
-            result: string;
-        };
-        expect(completion).toMatchObject({
-            type: 'complete',
-            agentRunId: 'unknown',
-            conversationDetailId: 'detail-1',
-            success: false,
-            errorMessage: 'background blew up',
-            result: JSON.stringify({ success: false, errorMessage: 'background blew up' }),
-        });
+        expect(publish).not.toHaveBeenCalled();
     });
 
     it('saves a Running run reported by progress as Failed when the agent throws', async () => {

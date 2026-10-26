@@ -16,6 +16,7 @@ import { BehaviorSubject, Observable, Subject, Subscription } from 'rxjs';
 import type { JSONObject } from '@memberjunction/ai';
 import { IsIdentityVerifiedEventPayload, type RealtimeChannelDescriptor } from '@memberjunction/ai-core-plus';
 import {
+  DescribeCallEnd,
   type BaseRealtimeChannelClient,
   type RealtimeConnectionState,
   type RealtimeContextActionResult,
@@ -44,7 +45,7 @@ export type WidgetChannelClass = new () => BaseRealtimeChannelClient;
 /** The slice of the guest-session client the controller uses (the real one is `WidgetKeyClient`). */
 export interface WidgetGuestSessionSource {
   Mint(): Promise<WidgetGuestSession>;
-  Refresh(): Promise<WidgetGuestSession>;
+  Refresh(currentToken: string): Promise<WidgetGuestSession>;
 }
 
 export interface WidgetControllerDeps {
@@ -473,9 +474,9 @@ export class WidgetController {
     return { agentId: guest.pinnedAgentId, applicationId: guest.applicationId, deadline, guestChannels: guest.enabledChannels };
   }
 
-  private async mintGuest(source: WidgetGuestSessionSource, op: 'Mint' | 'Refresh'): Promise<WidgetGuestSession> {
+  private async mintGuest(source: WidgetGuestSessionSource, op: 'Mint' | 'Refresh', currentToken?: string): Promise<WidgetGuestSession> {
     try {
-      return await source[op]();
+      return op === 'Refresh' ? await source.Refresh(currentToken ?? '') : await source.Mint();
     } catch (error) {
       if (error instanceof WidgetKeyError) {
         throw new LaunchFailure(error.message, 'auth-failed');
@@ -486,10 +487,10 @@ export class WidgetController {
 
   /** The provider's way to renew a guest token: ask the server's refresh path and hand back the new one. */
   private async renewGuestToken(): Promise<string> {
-    if (this.guestSource === null) {
+    if (this.guestSource === null || this.guest === null) {
       throw new Error(SESSION_EXPIRED_MESSAGE);
     }
-    const next = await this.mintGuest(this.guestSource, 'Refresh');
+    const next = await this.mintGuest(this.guestSource, 'Refresh', this.guest.token);
     this.guest = next;
     return next.token;
   }
@@ -736,13 +737,20 @@ export class WidgetController {
         this.sawLive = true;
         this.setPhase('live');
         break;
-      case 'error':
+      case 'error': {
+        // A live call that reached its time limit says so, with its own code, rather than that the connection dropped.
+        const ended = this.sawLive ? DescribeCallEnd(this.deps.runtime.LastSessionError) : null;
+        if (ended) {
+          this.fail('time-limit', ended.Message);
+          break;
+        }
         // The runtime swallows a launcher throw into this state, so a custom launcher is named here.
         this.fail(
           this.sawLive ? 'connection-lost' : this.config.launcher ? 'launcher-failed' : 'start-failed',
           this.sawLive ? CONNECTION_LOST_MESSAGE : DescribeStartError(this.deps.runtime.LastStartError)
         );
         break;
+      }
       case 'closed':
         if (this.sawLive) {
           this.setPhase('ended');

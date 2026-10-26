@@ -49,8 +49,12 @@ name: Integration Tier
 # with the unused browser/Computer-Use regression wiring — this repo does not run that stack in CI.
 
 on:
+  # Line branches run this gate too (process doc 5.2 rule 4): lts/* is what a publish
+  # ships from and what customers pin to, so a break discovered after merge is worse
+  # here than on next. The trigger lives on next so every candidate cut inherits it;
+  # lts/5 got it from a line-only commit (6937c7c050) and lts/6.1 was cut without it.
   pull_request:
-    branches: [next]
+    branches: [next, 'lts/**']
     paths:
       - 'pnpm-lock.yaml'
       - 'packages/**'
@@ -72,7 +76,7 @@ on:
   # heuristic; migrations + runtime @RegisterClass wiring can couple files no filter foresees)
   # can never merge silently and red the next PR (R3, mirrors test.yml).
   push:
-    branches: [next]
+    branches: [next, 'lts/**']
   workflow_dispatch:
     inputs:
       run_live_model:
@@ -312,6 +316,8 @@ jobs:
           # checks read them as "never ran" (expected 4, got 0). Immediately-eligible root tasks
           # lose this race most often, which is why it presented as an intermittent failure.
           MJ_DISABLE_TASK_GRAPH_DISPATCHER: '1'
+          # REST is off by default; the REST members (IT134 CW7/CW8) skip without it.
+          MJ_REST_API_ENABLED: 'true'
         run: |
           (cd packages/MJAPI && node dist/index.js > /tmp/mjapi.log 2>&1 &)
           echo "Waiting for MJAPI /healthcheck..."
@@ -347,6 +353,14 @@ jobs:
         run: |
           set -o pipefail
           pnpm run test:integration 2>&1 | tee /tmp/integration.log
+
+      # IT92 and IT134 are the only checks that prove field-level security through MJAPI's
+      # GraphQL and REST endpoints. The suite counts a skipped check as a skip, not a failure, so a
+      # fixture that refused to run (seed missing, REST off, the field-security flag read as on)
+      # would leave every one of them unrun while the gate stays green. Same reasoning as the RLS
+      # fixture check above: fail loudly when any of their checks skipped or none ran.
+      - name: Verify the over-the-wire FLS bundles ran (IT92, IT134)
+        run: node .github/scripts/check-fls-wire-bundles-ran.mjs /tmp/integration.log
 
       # Surface the suite's own pass/fail/skip accounting in the job summary so a run
       # where coverage silently shrank (skips) is one click away from being noticed.

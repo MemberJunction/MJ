@@ -2,10 +2,12 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
+  EventEmitter,
   Input,
   OnChanges,
   OnDestroy,
   OnInit,
+  Output,
   SimpleChanges,
   inject,
 } from '@angular/core';
@@ -20,8 +22,8 @@ import {
 } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CompositeKey, LogError, RunView, EntityRecordNameInput, EntityRecordNameResult } from '@memberjunction/core';
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
-import { MJProcessRunDetailEntity, MJMLModelEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { MJMLModelEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { AgGridModule } from 'ag-grid-angular';
 import {
   AllCommunityModule,
@@ -40,16 +42,13 @@ import {
 } from 'ag-grid-community';
 
 import {
-  ParseAtRiskRows,
-  ResolveRenewalPolarity,
-  type RenewalPolarityResult,
+  AtRiskRules,
+  ProblemTypes,
+  type AtRiskRow,
   type RowDriver,
-} from '../at-risk.view-models';
-import {
   type OutcomeConfig,
-  type OutcomeBand,
   resolveOutcomeConfig,
-  resolveScoreBand,
+  ResolveScoreBand,
   resolveOutcomeStyle,
   formatPredictionScore,
 } from '@memberjunction/predictive-studio-core';
@@ -57,7 +56,8 @@ import {
   PredictiveStudioScoreHistoryService,
   type ModelScoreHistoryPoint,
 } from '../predictive-studio-score-history.service';
-import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
+import { PredictiveStudioEngine, type PSRunDetailRow } from '../engine/predictive-studio.engine';
+import { PSRowDriversComponent } from './ps-row-drivers.component';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -119,6 +119,22 @@ interface TrendlinePlotPoint {
   color: string;
 }
 
+/** The tier a row is shown in: its key (filter and count), status label, badge colour and icon. */
+interface RowTier {
+  Key: string;
+  Label: string;
+  BadgeColor: string;
+  Icon?: string;
+}
+
+/** {@link PSPredictionsGridComponent.RowsLoaded}'s payload: the parsed at-risk rows of the run the grid shows. */
+export interface PredictionGridRowsLoadedEvent {
+  /** The run's at-risk rows, highest risk first, exactly as the grid parsed them. */
+  Rows: AtRiskRow[];
+  /** True when the run has more predictions than {@link PredictiveStudioEngine.MaxRunDetailRows}; `Rows` holds the first ones. */
+  Capped: boolean;
+}
+
 /**
  * **PSPredictionsGridComponent** — Unified enterprise grid and analytics component for
  * model predictions. Shared between:
@@ -145,6 +161,7 @@ interface TrendlinePlotPoint {
     MJViewToggleComponent,
     MjSlidePanelComponent,
     AgGridModule,
+    PSRowDriversComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -184,14 +201,30 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     return this.ReadOnly;
   }
 
+  /**
+   * Emitted after the grid parses a run, with the run's at-risk rows. A host that needs the rows (counts, export, a list)
+   * takes them from here rather than reading the run a second time. Also emitted, empty, when the model has no run.
+   */
+  @Output() RowsLoaded = new EventEmitter<PredictionGridRowsLoadedEvent>();
+  /** Emitted with the error message when the run's predictions fail to load. */
+  @Output() RowsLoadFailed = new EventEmitter<string>();
+
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly navigationService = inject(NavigationService);
   private readonly scoreHistoryService = inject(PredictiveStudioScoreHistoryService);
 
   public readonly Math = Math;
 
+  /** The run-detail cap, formatted for the footer notice. */
+  public readonly MaxRunDetailRowsLabel = PredictiveStudioEngine.MaxRunDetailRowsLabel;
+
+  /** The tier of a regression row whose value falls in none of the outcome bands. */
+  private static readonly unbandedTier: RowTier = { Key: 'unbanded', Label: 'No band', BadgeColor: 'gray' };
+
   public isLoading = false;
   public loadError: string | null = null;
+  /** True when the run has more predictions than {@link PredictiveStudioEngine.MaxRunDetailRows}; only the first are shown. */
+  public DetailRowsCapped = false;
 
   public AllRows: PredictionGridRow[] = [];
 
@@ -463,6 +496,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     this.DefaultColDef = value;
   }
 
+  /** True when the model's score is the probability of the good outcome, so risk is `1 - score` (e.g. a renewal model). */
   public IsRenewalModel = false;
 
   /** @deprecated Use {@link IsRenewalModel}. */
@@ -484,12 +518,12 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     this.SelectedDecileIndex = value;
   }
 
+  /**
+   * True for a regression model. Risk bands are classification rules, so a regression model's tiers, row band, status and
+   * badge come from its outcome bands on the raw value, and the risk column is hidden.
+   */
   public get IsRegression(): boolean {
-    return (
-      (this.ProblemType ?? '').toLowerCase() === 'regression' ||
-      this.OutcomeConfig?.Format === 'currency' ||
-      this.OutcomeConfig?.Format === 'number'
-    );
+    return ProblemTypes.IsRegression(this.ProblemType);
   }
 
   /** @deprecated Use {@link IsRegression}. */
@@ -566,20 +600,30 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
         },
       },
       {
-        field: 'riskPct',
+        field: 'status',
         headerName: statusLabel,
         width: 155,
+        // The tier order: by risk for classification (the tiers are risk bands), by value for regression.
+        comparator: (_a: string, _b: string, nodeA, nodeB): number =>
+          this.IsRegression
+            ? (nodeA.data?.score ?? 0) - (nodeB.data?.score ?? 0)
+            : (nodeA.data?.riskPct ?? 0) - (nodeB.data?.riskPct ?? 0),
         cellRenderer: (params: ICellRendererParams<PredictionGridRow>): string => {
           if (!params.data) return '';
           const badgeColor = params.data.badgeColor || 'gray';
           const icon = params.data.icon ? `<i class="fa-solid ${this.escapeHtml(params.data.icon)}"></i> ` : '';
           const label = this.escapeHtml(params.data.status || params.data.band);
-          if (this.IsRegression) {
-            return `<span class="ps-badge ${badgeColor}" title="${scoreLabel}: ${this.escapeHtml(params.data.scoreFormatted)}">${icon}${label}</span>`;
-          }
-          const pct = Math.round(params.data.score * 100);
-          return `<span class="ps-badge ${badgeColor}" title="${pct}% ${scoreLabel}">${icon}${label} (${pct}%)</span>`;
+          return `<span class="ps-badge ${badgeColor}" title="${this.escapeHtml(scoreLabel)}: ${this.escapeHtml(params.data.scoreFormatted)}">${icon}${label}</span>`;
         },
+      },
+      {
+        field: 'riskPct',
+        headerName: 'Risk',
+        width: 95,
+        // Risk is a classification measure (1 - score for a good-outcome model); a regression value has none.
+        hide: this.IsRegression,
+        cellRenderer: (params: ICellRendererParams<PredictionGridRow>): string =>
+          params.data ? `<span class="ps-mono" data-testid="ps-risk-cell">${params.data.riskPct}%</span>` : '',
       },
       {
         field: 'class',
@@ -605,11 +649,13 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
             return '<span class="ps-muted">—</span>';
           }
           const chips = params.data.drivers.slice(0, 2).map((d) => {
-            const cls = d.up ? 'up' : 'down';
-            const icon = d.up ? 'fa-arrow-up' : 'fa-arrow-down';
-            const label = this.escapeHtml(d.label);
-            return `<span class="ps-why-chip ${cls}" title="${label}"><i class="fa-solid ${icon}"></i> ${label}</span>`;
-          }).join('');
+            const cls = d.Up ? 'up' : 'down';
+            const icon = d.Up ? 'fa-arrow-up' : 'fa-arrow-down';
+            const label = this.escapeHtml(d.Label);
+            // The arrow is the direction of RISK, not of the score column, so the tooltip says so.
+            const title = `${label}: ${d.Up ? 'raises' : 'lowers'} risk`;
+            return `<span class="ps-why-chip ${cls}" title="${title}"><i class="fa-solid ${icon}"></i> ${label}</span>`;
+          }).join(' ');
           return `<div class="pg-drivers-cell">${chips}</div>`;
         },
       },
@@ -694,153 +740,135 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   }
 
   private async loadPredictions(): Promise<void> {
+    this.resetRunState();
     if (!this.modelId && !this.RunId) {
-      this.AllRows = [];
       this.applyFilter();
       return;
     }
 
     this.isLoading = true;
-    this.loadError = null;
     this.cdr.markForCheck();
 
     try {
       const provider = this.ProviderToUse;
       const user = provider.CurrentUser ?? undefined;
-
-      // 1. Resolve effective run ID and model entity
-      let effectiveRunId = this.RunId;
-      let model: MJMLModelEntity | null = null;
-
-      if (this.modelId) {
-        const modelsRes = await RunView.FromMetadataProvider(provider).RunView<MJMLModelEntity>(
-          {
-            EntityName: 'MJ: ML Models',
-            ExtraFilter: `ID = '${this.modelId.replace(/'/g, "''")}'`,
-            MaxRows: 1,
-            ResultType: 'entity_object',
-          },
-          user,
-        );
-        model = modelsRes.Success && modelsRes.Results ? modelsRes.Results[0] : null;
-      }
-
-      if (!effectiveRunId && this.modelId) {
-        // Query latest process run for this model using engine
-        try {
-          const engine = PredictiveStudioEngine.Instance;
-          const runs = await engine.LoadRecentRunsForModel(this.modelId, provider, user, { maxRows: 1 });
-          if (runs && runs.length > 0) {
-            effectiveRunId = runs[0].ID;
-          }
-        } catch {
-          // Fallback if engine is not yet primed
-        }
-      }
-
+      const model = await this.loadModel();
+      const effectiveRunId = this.RunId ?? (await this.resolveLatestRunId());
       if (!effectiveRunId) {
-        this.AllRows = [];
         this.applyFilter();
-        this.isLoading = false;
-        this.cdr.markForCheck();
+        this.RowsLoaded.emit({ Rows: [], Capped: false });
         return;
       }
 
-      // 2. Resolve target entity
       await this.resolveTargetEntity(model);
 
-      // 3. Load full process run details (removing 50/200 cap)
-      const detailsRes = await RunView.FromMetadataProvider(provider).RunView<MJProcessRunDetailEntity>(
-        {
-          EntityName: 'MJ: Process Run Details',
-          ExtraFilter: `ProcessRunID = '${effectiveRunId.replace(/'/g, "''")}'`,
-          OrderBy: '__mj_CreatedAt ASC',
-          MaxRows: 10000,
-          ResultType: 'entity_object',
-        },
-        user,
+      // The run's process run details by keyset paging, read-only and only the columns the grid uses; throws on failure.
+      const read = await PredictiveStudioEngine.Instance.LoadRunDetails(effectiveRunId, provider, user);
+      this.applyModelOptions(model);
+      const parsedAtRisk = AtRiskRules.ParseAtRiskRows(
+        read.Rows.map((d) => ({ RecordID: d.RecordID, ResultPayload: d.ResultPayload })),
+        { InvertedRisk: this.IsRenewalModel },
       );
-
-      if (!detailsRes.Success || !detailsRes.Results) {
-        this.AllRows = [];
-        this.applyFilter();
-        this.isLoading = false;
-        this.cdr.markForCheck();
-        return;
-      }
-
-      // 4. Resolve OutcomeConfig and determine polarity
-      if (model?.ProblemType) {
-        this.ProblemType = model.ProblemType.toLowerCase();
-      }
-      this.OutcomeConfig = resolveOutcomeConfig(model ?? undefined);
-      this.IsRenewalModel = this.OutcomeConfig.Polarity === 'positive' && !this.IsRegression;
-      this.SetupColumnDefs();
-
-      const polarity = ResolveRenewalPolarity(
-        detailsRes.Results.map((d) => d.ResultPayload),
-        model?.TargetVariable,
-      );
-
-      // When the model outputs P(Renewed) (scoreIsLapseRisk = false), adverse risk is inverted (1 - score).
-      // When the model outputs P(Lapse) (scoreIsLapseRisk = true), adverse risk is ALREADY score (invertedRisk = false).
-      const shouldInvertRisk = polarity.IsRenewalModel ? !polarity.ScoreIsLapseRisk : false;
-
-      const parsedAtRisk = ParseAtRiskRows(
-        detailsRes.Results.map((d) => ({ recordId: d.RecordID, ResultPayload: d.ResultPayload })),
-        { InvertedRisk: shouldInvertRisk, OutcomeConfig: this.OutcomeConfig },
-      );
-
-      // Map details into indexed lookup for scoredAt timestamp
-      const detailByRecord = new Map<string, MJProcessRunDetailEntity>();
-      for (const d of detailsRes.Results) {
+      const detailByRecord = new Map<string, PSRunDetailRow>();
+      for (const d of read.Rows) {
         detailByRecord.set(NormalizeUUID(d.RecordID), d);
       }
-
-      this.AllRows = parsedAtRisk.map((r) => {
-        const detail = detailByRecord.get(NormalizeUUID(r.recordId));
-        const dt = detail?.CompletedAt ?? detail?.__mj_CreatedAt ?? null;
-        // For renewal models, the primary displayed score is Renewal Probability (0–1).
-        // If the raw score was lapse risk, renewal probability is 1 - r.score.
-        // Otherwise, raw score is already renewal probability.
-        const displayScore = polarity.IsRenewalModel
-          ? (polarity.ScoreIsLapseRisk ? Math.max(0, Math.min(1, 1 - r.score)) : r.score)
-          : r.score;
-
-        const resolved = this.OutcomeConfig
-          ? resolveScoreBand(displayScore, this.OutcomeConfig)
-          : null;
-
-        const formatted = formatPredictionScore(displayScore, this.OutcomeConfig, this.ProblemType);
-
-        return {
-          recordId: r.recordId,
-          recordName: r.label ?? r.recordId,
-          score: displayScore,
-          scoreFormatted: formatted,
-          riskPct: r.riskPct,
-          band: resolved?.Key ?? r.band,
-          badgeColor: resolved?.BadgeColor ?? r.badgeColor,
-          icon: resolved?.Icon ?? r.icon,
-          class: r.class,
-          drivers: r.drivers ?? [],
-          status: resolved?.Label ?? r.status ?? detail?.Status ?? 'Succeeded',
-          scoredAtDate: dt instanceof Date ? dt : dt ? new Date(dt) : null,
-        };
-      });
+      this.AllRows = parsedAtRisk.map((r) => this.toGridRow(r, detailByRecord.get(NormalizeUUID(r.RecordID))));
+      this.DetailRowsCapped = read.Capped;
 
       this.computeVisibleBands();
       this.applyFilter();
+      this.RowsLoaded.emit({ Rows: parsedAtRisk, Capped: read.Capped });
 
-      // 5. Schedule lazy lookup of record names for visible rows
+      // Lazy lookup of record names for visible rows
       this.ScheduleVisibleRowsLookup(0);
     } catch (err) {
       this.loadError = err instanceof Error ? err.message : String(err);
       LogError(`PSPredictionsGridComponent.loadPredictions: ${this.loadError}`);
+      this.RowsLoadFailed.emit(this.loadError);
     } finally {
       this.isLoading = false;
       this.cdr.markForCheck();
     }
+  }
+
+  /** Clears everything derived from the previous run, so a model or run switch never shows the old run's rows or notices. */
+  private resetRunState(): void {
+    this.AllRows = [];
+    this.FilteredRows = [];
+    this.VisibleBands = [];
+    this.DetailRowsCapped = false;
+    this.loadError = null;
+    this.SelectedTier = 'all';
+    this.SelectedDecileIndex = null;
+  }
+
+  /** The grid's model, or null when no model id is bound. */
+  private async loadModel(): Promise<MJMLModelEntity | null> {
+    if (!this.modelId) return null;
+    const provider = this.ProviderToUse;
+    const modelsRes = await RunView.FromMetadataProvider(provider).RunView<MJMLModelEntity>(
+      {
+        EntityName: 'MJ: ML Models',
+        ExtraFilter: `ID = '${EscapeSQLString(this.modelId)}'`,
+        MaxRows: 1,
+        ResultType: 'entity_object',
+      },
+      provider.CurrentUser ?? undefined,
+    );
+    return modelsRes.Success && modelsRes.Results ? modelsRes.Results[0] ?? null : null;
+  }
+
+  /** The model's latest run when no run id is bound, or null when it has none. */
+  private async resolveLatestRunId(): Promise<string | null> {
+    if (!this.modelId) return null;
+    const provider = this.ProviderToUse;
+    const runs = await PredictiveStudioEngine.Instance.LoadRecentRunsForModel(this.modelId, provider, provider.CurrentUser ?? undefined, { maxRows: 1 });
+    return runs[0]?.ID ?? null;
+  }
+
+  /** The model's problem type, outcome config and polarity: one rule (`BuildAtRiskOptions`), shared with the resource and the gate probe. */
+  private applyModelOptions(model: MJMLModelEntity | null): void {
+    if (model?.ProblemType) {
+      this.ProblemType = model.ProblemType.toLowerCase();
+    }
+    const atRiskOptions = AtRiskRules.BuildAtRiskOptions(model ?? undefined);
+    this.OutcomeConfig = atRiskOptions.OutcomeConfig;
+    // A positive-polarity score is P(good outcome): risk is 1 - score, while the displayed score stays the model's own.
+    this.IsRenewalModel = atRiskOptions.InvertedRisk === true;
+    this.SetupColumnDefs();
+  }
+
+  /** One displayed row: the model's own score, its risk, and its tier (risk band, or outcome band for regression). */
+  private toGridRow(r: AtRiskRow, detail: PSRunDetailRow | undefined): PredictionGridRow {
+    const dt = detail?.CompletedAt ?? detail?.__mj_CreatedAt ?? null;
+    const tier = this.tierFor(r);
+    return {
+      recordId: r.RecordID,
+      recordName: r.Label || r.RecordID,
+      score: r.Score,
+      scoreFormatted: formatPredictionScore(r.Score, this.OutcomeConfig, this.ProblemType),
+      riskPct: r.RiskPct,
+      band: tier.Key,
+      badgeColor: tier.BadgeColor,
+      icon: tier.Icon,
+      class: r.Class,
+      drivers: r.Drivers || [],
+      status: tier.Label,
+      scoredAtDate: dt instanceof Date ? dt : dt ? new Date(dt) : null,
+    };
+  }
+
+  /**
+   * A row's tier. Classification: the risk band Core put on the row, so "High" is the riskiest records whatever the
+   * polarity. Regression: the outcome band of the raw value (risk bands do not apply to a value such as an LTV).
+   */
+  private tierFor(r: AtRiskRow): RowTier {
+    if (!this.IsRegression) {
+      return { Key: r.Band, Label: r.Status, BadgeColor: r.BadgeColor, Icon: r.Icon };
+    }
+    const band = ResolveScoreBand(r.Score, this.OutcomeConfig);
+    return band ? { Key: band.Key, Label: band.Label, BadgeColor: band.BadgeColor, Icon: band.Icon } : PSPredictionsGridComponent.unbandedTier;
   }
 
   private async resolveTargetEntity(model: MJMLModelEntity | null): Promise<void> {
@@ -858,7 +886,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       const pRes = await RunView.FromMetadataProvider(provider).RunView<Record<string, unknown>>(
         {
           EntityName: 'MJ: ML Training Pipelines',
-          ExtraFilter: `ID = '${model.PipelineID.replace(/'/g, "''")}'`,
+          ExtraFilter: `ID = '${EscapeSQLString(model.PipelineID)}'`,
           MaxRows: 1,
           ResultType: 'simple',
           Fields: ['TargetEntityID'],
@@ -1158,48 +1186,44 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     return this.GetBadgeColorVar(color);
   }
 
+  /**
+   * The tier chips and KPI cards, each with its tier's average model score. Classification: one per risk band (the
+   * at-risk list's tiers). Regression: one per configured outcome band, plus any tier a row landed in outside them.
+   */
   private computeVisibleBands(): void {
-    const total = this.AllRows.length;
-    const bands = this.OutcomeConfig.Bands ?? [];
-    this.VisibleBands = bands.map((b) => {
-      const matching = this.AllRows.filter((r) => r.band === b.Key);
-      const count = matching.length;
-      const pct = total > 0 ? Math.round((count / total) * 100) : 0;
-      const rawAvg = count > 0 ? matching.reduce((sum, r) => sum + r.score, 0) / count : 0;
-      const avgScore = Math.round(rawAvg * 100);
-      const avgScoreFormatted = formatPredictionScore(rawAvg, this.OutcomeConfig, this.ProblemType);
-      return {
-        key: b.Key,
-        label: b.Label,
-        count,
-        pct,
-        avgScore,
-        avgScoreFormatted,
-        badgeColor: b.BadgeColor,
-        icon: b.Icon,
-        description: b.Description,
-      };
-    });
+    const tiers: RowTier[] = this.IsRegression ? this.regressionTiers() : AtRiskRules.RiskBands.map((b) => ({ Key: b.Key, Label: b.Label, BadgeColor: b.BadgeColor, Icon: b.Icon }));
+    this.VisibleBands = tiers.map((t) => this.summarizeTier(t));
+  }
 
-    const knownKeys = new Set(bands.map((b) => b.Key));
-    const extraKeys = new Set(this.AllRows.map((r) => r.band).filter((k) => !knownKeys.has(k)));
-    for (const k of extraKeys) {
-      const matching = this.AllRows.filter((r) => r.band === k);
-      const count = matching.length;
-      const pct = total > 0 ? Math.round((count / total) * 100) : 0;
-      const rawAvg = count > 0 ? matching.reduce((sum, r) => sum + r.score, 0) / count : 0;
-      const avgScore = Math.round(rawAvg * 100);
-      const avgScoreFormatted = formatPredictionScore(rawAvg, this.OutcomeConfig, this.ProblemType);
-      this.VisibleBands.push({
-        key: k,
-        label: k.charAt(0).toUpperCase() + k.slice(1),
-        count,
-        pct,
-        avgScore,
-        avgScoreFormatted,
-        badgeColor: 'gray',
-      });
+  /** The configured outcome bands, then each other tier the rows carry (e.g. values outside every band), in row order. */
+  private regressionTiers(): RowTier[] {
+    const tiers: RowTier[] = (this.OutcomeConfig.Bands ?? []).map((b) => ({ Key: b.Key, Label: b.Label, BadgeColor: b.BadgeColor, Icon: b.Icon }));
+    const known = new Set(tiers.map((t) => t.Key));
+    for (const r of this.AllRows) {
+      if (!known.has(r.band)) {
+        known.add(r.band);
+        tiers.push({ Key: r.band, Label: r.status, BadgeColor: r.badgeColor || 'gray', Icon: r.icon });
+      }
     }
+    return tiers;
+  }
+
+  /** A tier's chip / KPI card: its row count, share and average model score. */
+  private summarizeTier(t: RowTier): VisibleBandSummary {
+    const total = this.AllRows.length;
+    const matching = this.AllRows.filter((r) => r.band === t.Key);
+    const count = matching.length;
+    const rawAvg = count > 0 ? matching.reduce((sum, r) => sum + r.score, 0) / count : 0;
+    return {
+      key: t.Key,
+      label: t.Label,
+      count,
+      pct: total > 0 ? Math.round((count / total) * 100) : 0,
+      avgScore: Math.round(rawAvg * 100),
+      avgScoreFormatted: formatPredictionScore(rawAvg, this.OutcomeConfig, this.ProblemType),
+      badgeColor: t.BadgeColor,
+      icon: t.Icon,
+    };
   }
 
   public OnViewToggle(key: string): void {
@@ -1255,6 +1279,12 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     return this.ClearDecileFilter();
   }
 
+  /** The selected tier's label for the footer ("High risk", or an outcome band's label), empty when all tiers show. */
+  public get SelectedTierLabel(): string {
+    if (this.SelectedTier === 'all') return '';
+    return this.VisibleBands.find((b) => b.key === this.SelectedTier)?.label ?? this.SelectedTier;
+  }
+
   public get SelectedDecileLabel(): string {
     if (this.SelectedDecileIndex === null) return '';
     return `${this.SelectedDecileIndex * 10}%–${(this.SelectedDecileIndex + 1) * 10}%`;
@@ -1284,7 +1314,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
         r.recordName.toLowerCase().includes(q) ||
         r.recordId.toLowerCase().includes(q) ||
         (r.class && r.class.toLowerCase().includes(q)) ||
-        r.drivers.some((d) => d.label.toLowerCase().includes(q)),
+        r.drivers.some((d) => d.Label.toLowerCase().includes(q)),
       );
     }
 
@@ -1419,7 +1449,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       const recRes = await RunView.FromMetadataProvider(provider).RunView<Record<string, unknown>>(
         {
           EntityName: entity.Name,
-          ExtraFilter: `${entity.FirstPrimaryKey.Name} = '${recordId.replace(/'/g, "''")}'`, // first-pk-ok: Single-key entity lookup by recordId
+          ExtraFilter: `${entity.FirstPrimaryKey.Name} = '${EscapeSQLString(recordId)}'`, // first-pk-ok: Single-key entity lookup by recordId
           MaxRows: 1,
           ResultType: 'simple',
           Fields: [matchedField],
@@ -1468,6 +1498,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
         modelId: this.modelId,
         OutcomeConfig: this.OutcomeConfig,
         ProblemType: this.ProblemType,
+        InvertedRisk: this.IsRenewalModel,
       });
     } finally {
       this.HistoryLoading = false;
@@ -1651,7 +1682,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       const height = count === 0 ? 0 : Math.round(14 + Math.pow(count / maxCount, 0.45) * 116);
 
       const centerScore = (binMin + binMax) / 2;
-      const band = resolveScoreBand(centerScore, this.OutcomeConfig);
+      const band = ResolveScoreBand(centerScore, this.OutcomeConfig);
       const color = band ? this.GetBadgeColorVar(band.BadgeColor) : 'var(--mj-brand-primary)';
 
       let label: string;
@@ -1756,7 +1787,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
         ? Math.max(0, Math.min(1, (pt.score - minScore) / range))
         : Math.max(0, Math.min(1, pt.score));
       const y = Math.round(yBottom - clampedScore * ySpan);
-      const band = resolveScoreBand(pt.score, this.OutcomeConfig);
+      const band = ResolveScoreBand(pt.score, this.OutcomeConfig);
       const color = band ? this.GetBadgeColorVar(band.BadgeColor) : 'var(--mj-brand-primary)';
       return {
         runId: pt.runId,
@@ -1804,11 +1835,12 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
 
     const scoreHeader = this.OutcomeConfig.ScoreLabel || 'Prediction Score';
     const statusHeader = this.OutcomeConfig.StatusLabel || 'Risk Level';
-    const headers = ['Record ID', 'Record Name', scoreHeader, statusHeader, 'Predicted Class', 'Top Drivers', 'Scored At'];
-    const lines = [headers.join(',')];
+    const headers = ['Record ID', 'Record Name', scoreHeader, statusHeader, 'Predicted Class', 'Top Drivers (+ raises risk, − lowers risk)', 'Scored At'];
+    // Quoted: the drivers header carries a comma.
+    const lines = [headers.map((h) => `"${h.replace(/"/g, '""')}"`).join(',')];
 
     for (const r of this.FilteredRows) {
-      const driversStr = r.drivers.map((d) => `${d.up ? '+' : '-'}${d.label}`).join('; ');
+      const driversStr = r.drivers.map((d) => `${d.Up ? '+' : '−'}${d.Label}`).join('; ');
       const statusStr = `${r.status || r.band} (${r.scoreFormatted})`;
       const rowData = [
         `"${r.recordId.replace(/"/g, '""')}"`,

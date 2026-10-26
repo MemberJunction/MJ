@@ -65,6 +65,7 @@ export class GetRecordsAction extends BaseAction {
 
             const filter = this.getStringParam(params, "Filter");
             const orderBy = this.getStringParam(params, "OrderBy");
+            const alternateBaseView = this.getStringParam(params, "AlternateBaseView");
             const maxRows = this.getNumericParam(params, "MaxRows", 100);
             const includeCount = this.getBooleanParam(params, "IncludeCount", true);
 
@@ -84,7 +85,7 @@ export class GetRecordsAction extends BaseAction {
             // filter was dropped and EVERY caller asking for a filtered set quietly received the
             // whole entity instead — capped only by MaxRows. The field is `ExtraFilter`, and the
             // type now says so.
-            const rv = new RunView();
+            const rv = params.Provider ? RunView.FromMetadataProvider(params.Provider) : new RunView();
             const runViewParams: RunViewParams = {
                 EntityName: entityName,
                 MaxRows: maxRows,
@@ -99,6 +100,11 @@ export class GetRecordsAction extends BaseAction {
             // Add ordering if provided
             if (orderBy) {
                 runViewParams.OrderBy = orderBy;
+            }
+
+            // Add alternate base view if provided
+            if (alternateBaseView) {
+                runViewParams.AlternateBaseView = alternateBaseView;
             }
 
             const result = await rv.RunView(runViewParams, params.ContextUser);
@@ -155,7 +161,14 @@ export class GetRecordsAction extends BaseAction {
                         Name: 'OrderBy',
                         Type: 'Output',
                         Value: orderBy
-                    }
+                    },
+                    ...(alternateBaseView
+                        ? [{
+                            Name: 'AlternateBaseView',
+                            Type: 'Output' as const,
+                            Value: alternateBaseView
+                        }]
+                        : [])
                 ]
             };
 
@@ -193,6 +206,11 @@ export class GetRecordsAction extends BaseAction {
             },
             {
                 Name: 'IncludeCount',
+                Type: 'Input',
+                Value: null
+            },
+            {
+                Name: 'AlternateBaseView',
                 Type: 'Input',
                 Value: null
             }

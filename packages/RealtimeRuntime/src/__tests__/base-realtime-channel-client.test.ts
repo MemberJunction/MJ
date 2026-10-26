@@ -55,6 +55,8 @@ describe('legacy channels (v1 members only)', () => {
         expect(bare.ToolNamePrefix).toBe('');
         expect(bare.GetToolDefinitions()).toEqual([]);
         expect(bare.InstanceId).toBe('1');
+        // A surface is shared on its own only when its channel opts in.
+        expect(bare.SurfaceShareable).toBe(false);
     });
 
     it('a channel that implements neither ApplyVerb nor ApplyAgentTool fails loudly instead of recursing', async () => {

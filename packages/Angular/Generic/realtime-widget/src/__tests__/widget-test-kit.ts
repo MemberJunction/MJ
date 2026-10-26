@@ -38,6 +38,11 @@ export class WidgetFakeClient extends BaseRealtimeClient {
   public Drop(): void {
     this.emitStateChange('error');
   }
+  /** Ends the call the way MJAPI's relay does at the session's time limit. */
+  public ReachTimeLimit(): void {
+    this.emitError({ Message: 'Gemini Live session reached its time limit (4000)', Code: 'time-limit', Fatal: true });
+    this.emitStateChange('error');
+  }
   public SendText(): void {}
   public CancelActiveResponse(): void {}
   public SendContextNote(text: string): void {
@@ -179,6 +184,7 @@ export function guestSession(overrides: Partial<WidgetGuestSession> = {}): Widge
 export class FakeGuestSessions implements WidgetGuestSessionSource {
   public Mints = 0;
   public Refreshes = 0;
+  public RefreshTokens: string[] = [];
   public Next: WidgetGuestSession | Error = guestSession();
   public async Mint(): Promise<WidgetGuestSession> {
     this.Mints++;
@@ -187,8 +193,9 @@ export class FakeGuestSessions implements WidgetGuestSessionSource {
     }
     return this.Next;
   }
-  public async Refresh(): Promise<WidgetGuestSession> {
+  public async Refresh(currentToken: string): Promise<WidgetGuestSession> {
     this.Refreshes++;
+    this.RefreshTokens.push(currentToken);
     if (this.Next instanceof Error) {
       throw this.Next;
     }

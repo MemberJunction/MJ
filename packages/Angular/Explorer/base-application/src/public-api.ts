@@ -9,6 +9,7 @@
 export * from './lib/base-application';
 export * from './lib/application-manager';
 export * from './lib/workspace-state-manager';
+export * from './lib/workspace-journal';
 export * from './lib/golden-layout-manager';
 export * from './lib/layout-transforms';
 export * from './lib/tab.service';

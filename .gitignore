@@ -77,6 +77,10 @@ Thumbs.db
 
 # Large media files
 *.mp4
+# ...except the two small generated stand-in avatars the fragmented MP4 reader tests read (made by the script beside them)
+!packages/AI/Core/src/__tests__/fixtures/avatar-standin-*.mp4
+# ...and the meeting bot's small generated lip-sync fixture (made by the script beside it)
+!packages/AI/RealtimeBridge/Providers/LiveKitNative/src/__tests__/fixtures/avatar-sync-flash-beep.mp4
 *.tiff
 *.avi
 *.flv
@@ -211,6 +215,9 @@ packages/DBAutoDoc/autocare-config.json
 # Local test/credential directories
 amith-sf/
 benchmark-*/
+!packages/TestingFramework/integration-test-suite/benchmark-logs/
+!packages/TestingFramework/integration-test-suite/benchmark-logs/**
+packages/TestingFramework/integration-test-suite/benchmark-logs/benchmark-*
 Demos/sample-skip-code-fix-prompt.json
 
 # Per-run artifacts from /audit-memory-leaks
@@ -265,3 +272,4 @@ dist-stricttmpl/
 # Local one-off verification scripts (e.g. scratch-4946-e2e.mjs). They read a local .env and
 # hard-coded test data, so they never belong in the repo.
 scratch-*.mjs
+gen-lang-client-0516550786-6a039e3b0346.json

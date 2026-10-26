@@ -89,6 +89,20 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "AlternateBaseView",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional logical Name of a registered Alternate Base View on the entity (e.g. 'Active', 'DueNow'). When provided, sample rows and TotalRowCount are read from that alternate view rather than the entity's BaseView.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "487C4AD1-8790-4A42-938D-E88D4886A011"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "SchemaName",
             "Type": "Output",
             "ValueType": "Scalar",
@@ -138,6 +152,20 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:25.895Z",
             "checksum": "1e302eb85930bb74835724b86516c3fa03c848b88e805d6c1cf2179abb3c581f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AlternateBaseViews",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": true,
+            "Description": "Array of active Alternate Base Views registered on the entity, each exposing Name, DisplayName, ViewName, SchemaName, Description, ParentID, CachePolicy, and Status.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B82D9C41-19A3-41D7-8D42-502B6C9C0E12"
           }
         },
         {

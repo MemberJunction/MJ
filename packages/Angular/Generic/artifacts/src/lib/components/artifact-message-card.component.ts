@@ -41,25 +41,24 @@ import { IArtifactPreviewComponent } from '../interfaces/artifact-viewer-plugin.
                 {{ artifact.Type }}
               </span>
               <span class="artifact-version">v{{ currentVersion.VersionNumber || 1 }}</span>
-              <span class="open-icon"><i class="fa-solid fa-arrow-up-right-from-square"></i></span>
             </div>
           </div>
         } @else {
-          <div class="artifact-info-bar" (click)="openFullView()">
+          <div class="artifact-info-bar" (click)="openFullView()" [title]="displayDescription ? (displayName + ' — ' + displayDescription) : displayName">
             <div class="artifact-icon">
               <i class="fa-solid" [ngClass]="getArtifactIcon()"></i>
             </div>
             <div class="artifact-info">
               <span class="artifact-name">{{ displayName }}</span>
+              @if (displayDescription && displayDescription !== displayName) {
+                <span class="artifact-description">{{ displayDescription }}</span>
+              }
               <div class="artifact-meta">
                 <span class="artifact-type-badge" [style.background]="getTypeBadgeColor()">
                   {{ artifact.Type }}
                 </span>
                 <span class="artifact-version">v{{ currentVersion?.VersionNumber || 1 }}</span>
               </div>
-            </div>
-            <div class="open-icon">
-              <i class="fa-solid fa-arrow-up-right-from-square"></i>
             </div>
           </div>
         }
@@ -163,6 +162,15 @@ import { IArtifactPreviewComponent } from '../interfaces/artifact-viewer-plugin.
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+
+    .artifact-description {
+      font-size: 12px;
+      color: var(--mj-text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.35;
     }
 
     .artifact-meta {
@@ -516,9 +524,9 @@ export class ArtifactMessageCardComponent extends BaseAngularComponent implement
 
     const type = this._artifact.Type?.toLowerCase() || '';
 
-    if (type.includes('code')) return '#8B5CF6'; // Purple
-    if (type.includes('report')) return '#3B82F6'; // Blue
-    if (type.includes('dashboard')) return '#10B981'; // Green
+    if (type.includes('code') || type === 'json') return '#8B5CF6'; // Purple
+    if (type.includes('report') || type.includes('research')) return '#3B82F6'; // Blue
+    if (type.includes('dashboard') || type.includes('data')) return '#10B981'; // Green
     if (type.includes('document')) return '#F59E0B'; // Orange
 
     return '#6B7280'; // Gray

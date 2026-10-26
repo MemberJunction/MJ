@@ -93,7 +93,11 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/global')>();
     return {
         ...actual,
-        MJGlobal: { Instance: { ClassFactory: mockClassFactory } }
+        // The real MJGlobal behind a mocked ClassFactory: constructing a real BaseEntity (the
+        // field-security tests below) reads the global object store.
+        MJGlobal: {
+            Instance: Object.create(actual.MJGlobal.Instance, { ClassFactory: { value: mockClassFactory } })
+        }
     };
 });
 
@@ -129,6 +133,8 @@ import { ActionEngineServer } from '../generic/ActionEngine';
 import { BaseAction } from '../generic/BaseAction';
 import type { ActionParam, RunActionParams } from '@memberjunction/actions-base';
 import type { MJActionParamEntity, MJEntityActionParamEntity } from '@memberjunction/core-entities';
+import type { UserInfo } from '@memberjunction/core';
+import { BuildUser, EmployeeEntityInfo, FullEmployeeRow, HR_ROLE_ID, INTERN_ROLE_ID, LoadEmployeeFor, SALARY } from './fieldSecurityFixture';
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -142,7 +148,7 @@ const PARAM_DEF_ID = 'PA710000-0000-0000-0000-000000000006';
 interface EngineInternals {
     ActionParams: MJActionParamEntity[];
     ActionResultCodes: unknown[];
-    _logQueue: { Insert: (e: unknown) => void; Update: (e: unknown, mutate: () => void) => void };
+    _logQueue: { Insert: (e: unknown) => void; Update: (e: unknown, mutate: () => void) => void; Settled: (e: unknown) => Promise<void> };
 }
 
 /**
@@ -160,7 +166,9 @@ function engine(paramDefinitions: MJActionParamEntity[] = []): ActionEngineServe
     const inserted: unknown[] = [];
     internals._logQueue = {
         Insert: (row: unknown) => { inserted.push(row); },
-        Update: (_row: unknown, mutate: () => void) => { mutate(); }
+        Update: (_row: unknown, mutate: () => void) => { mutate(); },
+        // Writes apply synchronously above, so every row has already "landed".
+        Settled: () => Promise.resolve()
     };
     (e as unknown as { _inserted: unknown[] })._inserted = inserted;
     return e;
@@ -421,5 +429,106 @@ describe('LoggingMode', () => {
         );
 
         expect(logRows).toHaveLength(0);
+    });
+
+    it('skips param redaction and JSON serialization inside SnapshotInputParams when SkipActionLog is true or LoggingMode is None (MJ-AI-13)', async () => {
+        const e = engine();
+        const paramDefsSpy = vi.spyOn(
+            e as unknown as { ParamDefinitionsFor: (p: RunActionParams) => MJActionParamEntity[] },
+            'ParamDefinitionsFor'
+        );
+
+        await e.RunAction(
+            runParams({
+                Params: [{ Name: 'Large', Value: { big: 'payload' }, Type: 'Input' }] as ActionParam[],
+                SkipActionLog: true
+            } as Partial<RunActionParams>)
+        );
+        await e.RunAction(
+            runParams({
+                Params: [{ Name: 'Large', Value: { big: 'payload' }, Type: 'Input' }] as ActionParam[],
+                Provenance: { LoggingMode: 'None' }
+            } as Partial<RunActionParams>)
+        );
+
+        expect(paramDefsSpy).not.toHaveBeenCalled();
+    });
+
+    it('instantiates BaseAction only once per RunAction even when Audience is evaluated (MJ-AI-14)', async () => {
+        class AudienceSupportingAction extends OutputWritingAction {
+            public override get SupportsAudience(): boolean {
+                return true;
+            }
+        }
+        mockClassFactory.CreateInstance.mockImplementation(() => new AudienceSupportingAction());
+        const e = engine();
+        const result = await e.RunAction(
+            runParams({
+                Audience: { Readers: [{ ID: 'reader-2' }] } as RunActionParams['Audience']
+            })
+        );
+
+        expect(result.Success).toBe(true);
+        expect(mockClassFactory.CreateInstance).toHaveBeenCalledTimes(1);
+    });
+});
+
+// ── Field security on the persisted parameters ──────────────────────────────────────────────────
+
+describe('ActionExecutionLog parameters are projected for the user the action ran for', () => {
+    const employees = EmployeeEntityInfo();
+
+    /** A request provider: the entity list the projection reads, and the log row factory. */
+    const provider = { Entities: [employees], EntityByID: () => undefined, GetEntityObject: vi.fn(async () => newLogRow()) };
+
+    /** An action that returns an engine-cached (system-loaded) employee and a plain full-width row. */
+    class SystemRowAction extends BaseAction {
+        protected async InternalRunAction(params: RunActionParams): Promise<{ Success: boolean; ResultCode: string; Message: string }> {
+            params.Params.push({ Name: 'Employee', Value: await LoadEmployeeFor(employees, null), Type: 'Output' } as ActionParam);
+            params.Params.push({ Name: 'Rows', Value: [FullEmployeeRow()], Type: 'Output' } as ActionParam);
+            return { Success: true, ResultCode: 'SUCCESS', Message: 'ok' };
+        }
+    }
+
+    async function loggedResultParams(contextUser: UserInfo, inputs: ActionParam[] = []): Promise<ActionParam[]> {
+        mockClassFactory.CreateInstance.mockImplementation(() => new SystemRowAction());
+        await engine().RunAction(runParams({ ContextUser: contextUser, Params: inputs, Provider: provider } as Partial<RunActionParams>));
+        return JSON.parse(logRows[0].ResultParams) as ActionParam[];
+    }
+
+    it('REGRESSION: ResultParams never carries a field the context user is denied', async () => {
+        const logged = await loggedResultParams(BuildUser([INTERN_ROLE_ID], 'intern-log'));
+
+        expect(JSON.stringify(logged)).not.toContain(String(SALARY));
+        expect(logged.find(p => p.Name === 'Employee')?.Value).toEqual({ ID: FullEmployeeRow().ID, Name: 'Ada', Notes: 'n' });
+        expect(logged.find(p => p.Name === 'Rows')?.Value).toEqual([{ ID: FullEmployeeRow().ID, Name: 'Ada', Notes: 'n' }]);
+    });
+
+    it('REGRESSION: Params (the as-called inputs) is projected the same way', async () => {
+        await loggedResultParams(BuildUser([INTERN_ROLE_ID], 'intern-log'), [{ Name: 'Seed', Value: FullEmployeeRow(), Type: 'Input' }] as ActionParam[]);
+        expect(logRows[0].Params).not.toContain(String(SALARY));
+    });
+
+    it('REGRESSION: an entity object of an entity the context user cannot read is logged as null', async () => {
+        const unreadable = EmployeeEntityInfo();
+        unreadable.Permissions.splice(0, unreadable.Permissions.length, ...unreadable.Permissions.filter(p => p.RoleID !== INTERN_ROLE_ID));
+        class UnreadableRowAction extends BaseAction {
+            protected async InternalRunAction(params: RunActionParams): Promise<{ Success: boolean; ResultCode: string; Message: string }> {
+                params.Params.push({ Name: 'Employee', Value: await LoadEmployeeFor(unreadable, null), Type: 'Output' } as ActionParam);
+                return { Success: true, ResultCode: 'SUCCESS', Message: 'ok' };
+            }
+        }
+        mockClassFactory.CreateInstance.mockImplementation(() => new UnreadableRowAction());
+        const unreadableProvider = { ...provider, Entities: [unreadable] };
+        await engine().RunAction(runParams({ ContextUser: BuildUser([INTERN_ROLE_ID], 'intern-log'), Provider: unreadableProvider } as Partial<RunActionParams>));
+
+        expect(logRows[0].ResultParams).not.toContain('Ada');
+        expect((JSON.parse(logRows[0].ResultParams) as ActionParam[])[0].Value).toBeNull();
+    });
+
+    it('keeps the field for a context user allowed to read it', async () => {
+        const logged = await loggedResultParams(BuildUser([HR_ROLE_ID], 'hr-log'));
+        expect(logged.find(p => p.Name === 'Employee')?.Value).toMatchObject({ Salary: SALARY });
+        expect(logged.find(p => p.Name === 'Rows')?.Value).toEqual([FullEmployeeRow()]);
     });
 });

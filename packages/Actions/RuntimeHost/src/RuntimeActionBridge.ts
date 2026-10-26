@@ -485,6 +485,7 @@ async function handleEntityLoad(
                 `Could not load ${args.entityName} record with ID ${args.id}.`
         };
     }
+    // fls-guard: built for ctx.contextUser; width follows its user
     return { Success: true, Record: entity.GetAll(), ErrorMessage: null };
 }
 
@@ -508,12 +509,14 @@ async function handleEntityCreate(
     if (!saved) {
         return {
             Success: false,
+            // fls-guard: built for ctx.contextUser; width follows its user, after Save too
             Record: entity.GetAll(),
             ErrorMessage:
                 entity.LatestResult?.CompleteMessage ??
                 `Failed to create ${args.entityName} record.`
         };
     }
+    // fls-guard: built for ctx.contextUser; width follows its user, after Save too
     return { Success: true, Record: entity.GetAll(), ErrorMessage: null };
 }
 
@@ -546,12 +549,14 @@ async function handleEntityUpdate(
     if (!saved) {
         return {
             Success: false,
+            // fls-guard: built for ctx.contextUser; width follows its user, after Save too
             Record: entity.GetAll(),
             ErrorMessage:
                 entity.LatestResult?.CompleteMessage ??
                 `Failed to update ${args.entityName} record ${args.id}.`
         };
     }
+    // fls-guard: built for ctx.contextUser; width follows its user, after Save too
     return { Success: true, Record: entity.GetAll(), ErrorMessage: null };
 }
 
@@ -627,12 +632,14 @@ async function handleEntitySave(
     if (!saved) {
         return {
             Success: false,
+            // fls-guard: built for ctx.contextUser; width follows its user, after Save too
             Record: entity.GetAll(),
             ErrorMessage:
                 entity.LatestResult?.CompleteMessage ??
                 `Failed to save ${args.entityName} record.`
         };
     }
+    // fls-guard: built for ctx.contextUser; width follows its user, after Save too
     return { Success: true, Record: entity.GetAll(), ErrorMessage: null };
 }
 
@@ -735,7 +742,11 @@ async function handleInvokeAction(
         Filters: [],
         Params: runParams,
         AbortSignal: ctx.abortSignal,
-        SkipActionLog: false
+        SkipActionLog: false,
+        // The calling run's bounds: a nested Scoped Search searches the run's tenant, and an audience reaches the
+        // nested action (which the engine refuses unless the action supports it) instead of being dropped.
+        RunScope: ctx.runScope,
+        Audience: ctx.audience
     });
 
     const outputParams: Record<string, unknown> = {};
@@ -849,12 +860,23 @@ async function handleAgentRun(
         return { role, content: m.content };
     });
 
+    // A run under an audience is bounded by its readers; this bridge cannot hand that on, so it refuses rather than
+    // start an agent with the caller's full reach. (The engine refuses Runtime actions under an audience today.)
+    if (ctx.audience !== undefined) {
+        throw new Error(`Agent '${allowedRef.name}' cannot be run from this action: the calling run is bounded by an audience.`);
+    }
+
     const runner = new AgentRunner();
     const result = await runner.RunAgent({
         agent,
         contextUser: ctx.contextUser,
         conversationMessages,
+        // Sandboxed code writes `Data`, so the run is never trusted with reserved scope keys there; the calling run's
+        // scope goes on as first-class fields instead, so the nested agent searches the same tenant.
         data: args.Data,
+        PrimaryScopeEntityName: ctx.runScope?.PrimaryScopeEntityName ?? undefined,
+        PrimaryScopeRecordID: ctx.runScope?.PrimaryScopeRecordID ?? undefined,
+        SecondaryScopes: ctx.runScope?.SecondaryScopes ?? undefined,
         maxExecutionTimeMs: args.MaxExecutionTimeMs,
         cancellationToken: ctx.abortSignal
     });
