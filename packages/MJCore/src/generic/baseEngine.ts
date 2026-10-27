@@ -952,8 +952,18 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         try {
             if (!this._eventListener) {
                 this._eventListener = MJGlobal.Instance.GetEventListener(false)
-                this._eventListener.subscribe(async (event) => {
-                    await this.HandleIndividualEvent(event);
+                this._eventListener.subscribe((event) => {
+                    if (event?.event === MJEventType.ComponentEvent && event.eventCode === BaseEntity.BaseEventCode) {
+                        const baseEntityEvent = event.args as BaseEntityEvent | undefined;
+                        if (
+                            baseEntityEvent?.type === 'load_started' ||
+                            baseEntityEvent?.type === 'load_complete' ||
+                            baseEntityEvent?.type === 'new_record'
+                        ) {
+                            return;
+                        }
+                    }
+                    void this.HandleIndividualEvent(event);
                 });
             }
         }
@@ -976,6 +986,13 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         if (event.event === MJEventType.ComponentEvent && event.eventCode === BaseEntity.BaseEventCode) {
             // we have an entity event
             const baseEntityEvent: BaseEntityEvent = event.args;
+            if (
+                baseEntityEvent?.type === 'load_started' ||
+                baseEntityEvent?.type === 'load_complete' ||
+                baseEntityEvent?.type === 'new_record'
+            ) {
+                return true;
+            }
             return await this.HandleIndividualBaseEntityEvent(baseEntityEvent);
         }
     }

@@ -65,6 +65,81 @@ export class UserCache extends BaseSingleton<UserCache> {
      * `.find()`. Callers already treat a missing system user as `undefined`.
      */
     private _users: UserInfo[] = [];
+    private _indexedUsersRef: UserInfo[] | null = null;
+    private _indexedUsersLen: number = -1;
+    private _indexedFirstUser: UserInfo | undefined = undefined;
+    private _indexedLastUser: UserInfo | undefined = undefined;
+    private readonly _userByIdMap = new Map<string, UserInfo>();
+    private readonly _userByEmailMap = new Map<string, UserInfo>();
+    private readonly _userByNameLowerMap = new Map<string, UserInfo>();
+    private readonly _userByNameExactMap = new Map<string, UserInfo>();
+    private _systemUser: UserInfo | undefined = undefined;
+
+    private rebuildIndexes(): void {
+      const users = this._users;
+      this._userByIdMap.clear();
+      this._userByEmailMap.clear();
+      this._userByNameLowerMap.clear();
+      this._userByNameExactMap.clear();
+      this._systemUser = undefined;
+
+      if (!Array.isArray(users)) {
+        this._indexedUsersRef = null;
+        this._indexedUsersLen = -1;
+        this._indexedFirstUser = undefined;
+        this._indexedLastUser = undefined;
+        return;
+      }
+
+      const sysIdLower = SystemUserID.toLowerCase();
+      const len = users.length;
+      for (let i = 0; i < len; i++) {
+        const u = users[i];
+        if (!u) continue;
+        if (u.ID) {
+          const idKey = u.ID.trim().toLowerCase();
+          if (!this._userByIdMap.has(idKey)) {
+            this._userByIdMap.set(idKey, u);
+          }
+          if (this._systemUser === undefined && u.ID.toLowerCase() === sysIdLower) {
+            this._systemUser = u;
+          }
+        }
+        if (u.Email) {
+          const emailKey = u.Email.trim().toLowerCase();
+          if (emailKey && !this._userByEmailMap.has(emailKey)) {
+            this._userByEmailMap.set(emailKey, u);
+          }
+        }
+        if (u.Name) {
+          const nameTrimmed = u.Name.trim();
+          if (!this._userByNameExactMap.has(nameTrimmed)) {
+            this._userByNameExactMap.set(nameTrimmed, u);
+          }
+          const nameLower = nameTrimmed.toLowerCase();
+          if (!this._userByNameLowerMap.has(nameLower)) {
+            this._userByNameLowerMap.set(nameLower, u);
+          }
+        }
+      }
+      this._indexedUsersRef = users;
+      this._indexedUsersLen = len;
+      this._indexedFirstUser = len > 0 ? users[0] : undefined;
+      this._indexedLastUser = len > 0 ? users[len - 1] : undefined;
+    }
+
+    private ensureIndexes(): void {
+      const users = this._users;
+      const len = Array.isArray(users) ? users.length : -1;
+      if (
+        this._indexedUsersRef !== users ||
+        this._indexedUsersLen !== len ||
+        this._indexedFirstUser !== (len > 0 ? users[0] : undefined) ||
+        this._indexedLastUser !== (len > 0 ? users[len - 1] : undefined)
+      ) {
+        this.rebuildIndexes();
+      }
+    }
 
     /** The provider the last {@link Refresh} read through; every self-refresh reuses it. */
     private _provider: DatabaseProviderBase | null = null;
@@ -152,7 +227,8 @@ export class UserCache extends BaseSingleton<UserCache> {
      * explicit assertion where the old one silently inferred the same lie.
      */
     public GetSystemUser(): UserInfo {
-      return this.Users.find((u) => u.ID.toLowerCase() === UserCache.Instance.SYSTEM_USER_ID.toLowerCase()) as UserInfo;
+      this.ensureIndexes();
+      return this._systemUser as UserInfo;
     }
 
     /**
@@ -174,6 +250,7 @@ export class UserCache extends BaseSingleton<UserCache> {
         const users = await this.LoadUsers(provider);
         if (users) {
           this._users = users;
+          this.rebuildIndexes();
           this._recentMisses.clear();
           this._lastStamp = await this.readDatabaseStamp(provider);
 
@@ -208,6 +285,7 @@ export class UserCache extends BaseSingleton<UserCache> {
      */
     public SetUsers(users: UserInfo[]): void {
       this._users = users;
+      this.rebuildIndexes();
       this._recentMisses.clear();
     }
 
@@ -297,11 +375,12 @@ export class UserCache extends BaseSingleton<UserCache> {
      * @returns
      */
     public UserByName(name: string, caseSensitive: boolean = false): UserInfo | undefined {
-      return UserCache.Users.find(u => {
-        const comparisonItem = u.Name.trim();
-        const item = name.trim();
-        return caseSensitive ? comparisonItem === item : comparisonItem.toLowerCase() === item.toLowerCase();
-      });
+      const instance = UserCache.Instance;
+      instance.ensureIndexes();
+      const item = name.trim();
+      return caseSensitive
+        ? instance._userByNameExactMap.get(item)
+        : instance._userByNameLowerMap.get(item.toLowerCase());
     }
 
     // ────────────────────────────────────────────────────────────────────────────────────────────
@@ -348,6 +427,7 @@ export class UserCache extends BaseSingleton<UserCache> {
         } else {
           this._users.push(user);
         }
+        this.rebuildIndexes();
         LogStatusEx({ message: `UserCache: loaded user ${user.ID} on demand — it was created after this process last refreshed`, verboseOnly: true });
         return user;
       } catch (e) {
@@ -380,11 +460,12 @@ export class UserCache extends BaseSingleton<UserCache> {
 
     /** The cached answer for {@link FindUser}'s criteria, without touching the database. */
     private findCached(criteria: { ID?: string; Email?: string }): UserInfo | undefined {
+      this.ensureIndexes();
       if (criteria.ID) {
-        return this._users.find(u => UUIDsEqual(u.ID, criteria.ID as string));
+        return this._userByIdMap.get(criteria.ID.trim().toLowerCase());
       }
       const email = criteria.Email?.trim().toLowerCase();
-      return email ? this._users.find(u => u.Email?.trim().toLowerCase() === email) : undefined;
+      return email ? this._userByEmailMap.get(email) : undefined;
     }
 
     private missKey(criteria: { ID?: string; Email?: string }): string | null {
@@ -554,6 +635,7 @@ export class UserCache extends BaseSingleton<UserCache> {
           const users = await this.LoadUsers(provider);
           if (users) {
             this._users = users;
+            this.rebuildIndexes();
             this._recentMisses.clear();
             this._lastStamp = await this.readDatabaseStamp(provider);
           }
