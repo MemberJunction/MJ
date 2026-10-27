@@ -129,6 +129,9 @@ function makeQueryInfo(overrides: Partial<{
         QueryPermissions: queryPermissions,
     };
 
+    // The run-time checks on the rendered SQL are covered with real queries in queryRun.fieldSecurity.test.ts.
+    q.UserCanRunRenderedSQL = vi.fn().mockReturnValue({ canRun: true, deniedEntities: [] });
+
     // UserCanRun mirrors the real implementation logic
     q.UserCanRun = vi.fn().mockImplementation((user: UserInfo) => {
         const hasRunPerms = (q.UserHasRunPermissions as ReturnType<typeof vi.fn>)(user);
