@@ -30,9 +30,11 @@ import {
     type AgentToolResult,
 } from '../shared/agent-tool-validation';
 
-export const CHIEF_OF_STAFF_AGENT_ID = 'C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E00';
-export const AGENT_REQUEST_TYPE_APPROVAL_ID = '015B94A7-8817-4FF2-98FB-7F0513F4591F';
-export const AGENT_REQUEST_TYPE_INFORMATION_ID = '895A5582-02A0-458D-86E0-BA394A35F5A6';
+/**
+ * The cockpit serves one agent, identified by its metadata name. The id is resolved at runtime
+ * through `AIEngineBase.GetAgentByName`, never hardcoded.
+ */
+export const CHIEF_OF_STAFF_AGENT_NAME = 'Chief of Staff';
 
 export type ChiefOfStaffTab = 'overview' | 'priorities' | 'approvals-wakes' | 'governance';
 export const VALID_CHIEF_OF_STAFF_TABS: readonly ChiefOfStaffTab[] = [
@@ -187,11 +189,9 @@ export function IsApprovalRequest(req: {
     RequestType?: MJAIAgentRequestEntity['RequestType'] | undefined;
     RequestTypeID?: MJAIAgentRequestEntity['RequestTypeID'] | undefined;
 }): boolean {
+    // The RequestType virtual field carries the type name; classify on it alone.
     const typeName = req.RequestType?.trim().toLowerCase() ?? '';
-    if (typeName === 'information' || UUIDsEqual(req.RequestTypeID, AGENT_REQUEST_TYPE_INFORMATION_ID)) {
-        return false;
-    }
-    return true;
+    return typeName !== 'information';
 }
 
 export function ParseOptionalDate(val: Date | string | null | undefined): Date | null {
@@ -265,12 +265,13 @@ export interface CockpitScopeFilters {
     Requests: string;
 }
 
-export function BuildCockpitScopeFilters(currentUserId: string): CockpitScopeFilters {
+export function BuildCockpitScopeFilters(currentUserId: string, chiefOfStaffAgentId: string): CockpitScopeFilters {
     const user = EscapeSQLString(currentUserId);
+    const agent = EscapeSQLString(chiefOfStaffAgentId);
     return {
-        Policy: `AgentID = '${CHIEF_OF_STAFF_AGENT_ID}' AND UserID = '${user}'`,
-        Routines: `UserID = '${user}' AND (RoutineType = 'AgentWake' OR TargetID = '${CHIEF_OF_STAFF_AGENT_ID}')`,
-        Requests: `AgentID = '${CHIEF_OF_STAFF_AGENT_ID}' AND RequestForUserID = '${user}' AND (RequestType IS NULL OR RequestType <> 'Information')`,
+        Policy: `AgentID = '${agent}' AND UserID = '${user}'`,
+        Routines: `UserID = '${user}' AND (RoutineType = 'AgentWake' OR TargetID = '${agent}')`,
+        Requests: `AgentID = '${agent}' AND RequestForUserID = '${user}' AND (RequestType IS NULL OR RequestType <> 'Information')`,
     };
 }
 

@@ -22,13 +22,14 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { AgentRequestPanelResult } from '@memberjunction/ng-agent-requests';
 import { TabConfig } from '@memberjunction/ng-ui-components';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
     BizAppsTaskRecordLike,
     BuildTaskRecordKey,
     BuildChiefOfStaffAgentContext,
     BuildCockpitScopeFilters,
     CalculateChiefOfStaffMetrics,
-    CHIEF_OF_STAFF_AGENT_ID,
+    CHIEF_OF_STAFF_AGENT_NAME,
     GetTaskPriorityClass,
     ChiefOfStaffMetrics,
     ChiefOfStaffTab,
@@ -385,8 +386,15 @@ export class ChiefOfStaffDashboardComponent
                 return;
             }
 
+            const chiefOfStaffAgentId = await this.resolveChiefOfStaffAgentId();
+            if (!chiefOfStaffAgentId) {
+                this.showBanner('error', `The "${CHIEF_OF_STAFF_AGENT_NAME}" agent is not installed in this environment.`);
+                return;
+            }
+            this.chiefOfStaffAgentId = chiefOfStaffAgentId;
+
             const bizAppsTasksEntity = this.bizAppsTasksEntityInfo;
-            const scope = BuildCockpitScopeFilters(currentUserId);
+            const scope = BuildCockpitScopeFilters(currentUserId, chiefOfStaffAgentId);
 
             const viewParams: RunViewParams[] = [
                 {
@@ -618,6 +626,20 @@ export class ChiefOfStaffDashboardComponent
     public get SelectedTaskIsObjective(): boolean {
         if (!this.SelectedTask) return false;
         return !this.SelectedTask.ParentID;
+    }
+
+    /** Resolved once per load from the agent's metadata name; null until LoadCockpitData has run. */
+    private chiefOfStaffAgentId: string | null = null;
+
+    /**
+     * Looks the Chief of Staff agent up by name through the AI engine's cached agents, so the
+     * cockpit carries no hardcoded agent id and follows whichever provider it is embedded under.
+     */
+    private async resolveChiefOfStaffAgentId(): Promise<string | null> {
+        const engine = <AIEngineBase>AIEngineBase.GetProviderInstance(this.ProviderToUse, AIEngineBase);
+        await engine.EnsureLoaded(this.ProviderToUse.CurrentUser, this.ProviderToUse);
+        const agent = engine.GetAgentByName(CHIEF_OF_STAFF_AGENT_NAME);
+        return agent?.ID ?? null;
     }
 
     private get bizAppsTasksEntityInfo(): EntityInfo | undefined {
@@ -1092,7 +1114,10 @@ export class ChiefOfStaffDashboardComponent
                     this.ProviderToUse.CurrentUser,
                 );
                 entity.NewRecord();
-                entity.AgentID = CHIEF_OF_STAFF_AGENT_ID;
+                if (!this.chiefOfStaffAgentId) {
+                    throw new Error(`The "${CHIEF_OF_STAFF_AGENT_NAME}" agent id has not been resolved; reload the cockpit.`);
+                }
+                entity.AgentID = this.chiefOfStaffAgentId;
                 const currentUserId = this.ProviderToUse.CurrentUser?.ID;
                 if (currentUserId) {
                     entity.UserID = currentUserId;

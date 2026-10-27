@@ -1,9 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { EntityInfo } from '@memberjunction/core';
 import {
-    AGENT_REQUEST_TYPE_APPROVAL_ID,
-    AGENT_REQUEST_TYPE_INFORMATION_ID,
-    CHIEF_OF_STAFF_AGENT_ID,
+    CHIEF_OF_STAFF_AGENT_NAME,
     BizAppsTaskRecordLike,
     BuildChiefOfStaffAgentContext,
     BuildTaskRecordKey,
@@ -154,7 +152,7 @@ describe('CalculateChiefOfStaffMetrics', () => {
                 RequestedAt: '2026-10-24T12:00:00.000Z',
                 ExpiresAt: null,
                 RequestType: 'Approval',
-                RequestTypeID: AGENT_REQUEST_TYPE_APPROVAL_ID,
+                RequestTypeID: '44444444-0000-0000-0000-000000000001',
             },
             {
                 ID: '33333333-0000-0000-0000-000000000002',
@@ -164,12 +162,15 @@ describe('CalculateChiefOfStaffMetrics', () => {
                 RequestedAt: '2026-10-24T12:05:00.000Z',
                 ExpiresAt: null,
                 RequestType: 'Information',
-                RequestTypeID: AGENT_REQUEST_TYPE_INFORMATION_ID,
+                RequestTypeID: '44444444-0000-0000-0000-000000000002',
             },
         ];
 
         expect(IsApprovalRequest(requests[0])).toBe(true);
         expect(IsApprovalRequest(requests[1])).toBe(false);
+        // Classification is by the RequestType name only; no request-type id is hardcoded in the cockpit.
+        expect(IsApprovalRequest({ RequestType: 'information', RequestTypeID: null })).toBe(false);
+        expect(IsApprovalRequest({ RequestType: null, RequestTypeID: '44444444-0000-0000-0000-000000000002' })).toBe(true);
 
         const metrics = CalculateChiefOfStaffMetrics([], [], requests);
         expect(metrics.PendingApprovalCount).toBe(1);
@@ -443,27 +444,37 @@ describe('ResolvePersonTaskScope', () => {
 
 describe('BuildCockpitScopeFilters', () => {
     const USER = 'UUUUUUUU-0000-0000-0000-000000000001';
+    const AGENT = 'C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E00';
 
     it('scopes policy, routines, and requests to the current user and the Chief of Staff agent', () => {
-        const f = BuildCockpitScopeFilters(USER);
-        expect(f.Policy).toBe(`AgentID = '${CHIEF_OF_STAFF_AGENT_ID}' AND UserID = '${USER}'`);
+        const f = BuildCockpitScopeFilters(USER, AGENT);
+        expect(f.Policy).toBe(`AgentID = '${AGENT}' AND UserID = '${USER}'`);
         expect(f.Routines).toBe(
-            `UserID = '${USER}' AND (RoutineType = 'AgentWake' OR TargetID = '${CHIEF_OF_STAFF_AGENT_ID}')`,
+            `UserID = '${USER}' AND (RoutineType = 'AgentWake' OR TargetID = '${AGENT}')`,
         );
         expect(f.Requests).toBe(
-            `AgentID = '${CHIEF_OF_STAFF_AGENT_ID}' AND RequestForUserID = '${USER}' AND (RequestType IS NULL OR RequestType <> 'Information')`,
+            `AgentID = '${AGENT}' AND RequestForUserID = '${USER}' AND (RequestType IS NULL OR RequestType <> 'Information')`,
         );
     });
 
     it('never produces a clause that is not bound to the user', () => {
-        const f = BuildCockpitScopeFilters(USER);
+        const f = BuildCockpitScopeFilters(USER, AGENT);
         for (const clause of [f.Policy, f.Routines, f.Requests]) {
             expect(clause).toContain(USER);
         }
     });
 
     it('escapes the user id', () => {
-        expect(BuildCockpitScopeFilters("a'b").Policy).toContain("UserID = 'a''b'");
+        expect(BuildCockpitScopeFilters("a'b", AGENT).Policy).toContain("UserID = 'a''b'");
+    });
+    it('escapes the agent id like any other bound value', () => {
+        expect(BuildCockpitScopeFilters(USER, "x'y").Policy).toContain("AgentID = 'x''y'");
+    });
+});
+
+describe('CHIEF_OF_STAFF_AGENT_NAME', () => {
+    it('is the metadata name the cockpit resolves to an agent id at runtime', () => {
+        expect(CHIEF_OF_STAFF_AGENT_NAME).toBe('Chief of Staff');
     });
 });
 
