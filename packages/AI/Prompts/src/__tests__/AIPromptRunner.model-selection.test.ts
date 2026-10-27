@@ -133,7 +133,7 @@ import { ParallelExecutionCoordinator } from '../ParallelExecutionCoordinator';
 import { MJGlobal } from '@memberjunction/global';
 import {
   buildRealisticCatalog, DEFAULT_CONFIGURED_DRIVERS, MODEL, VENDOR, CONFIG, MODEL_TYPE,
-  makePromptModel, type AICatalog,
+  makePromptModel, makeModel, makeModelVendor, type AICatalog,
 } from './__fixtures__/ai-metadata.fixtures';
 
 // ---------------------------------------------------------------------------
@@ -311,14 +311,40 @@ describe('selectModel — Specific strategy + AIPromptModel', () => {
     expect(r.vendorDriverClass).toBe('BedrockLLM');
   });
 
-  it('Default strategy: an AIPromptModel VendorID orders vendors within its model, never above a higher-Priority model', async () => {
-    catalog.promptModels.push(
-      makePromptModel({ PromptID: 'prompt-1', ModelID: MODEL.GPT5, Priority: 50 }),
-      makePromptModel({ PromptID: 'prompt-1', ModelID: MODEL.Gemini3Flash, VendorID: VENDOR.Google, Priority: 10 }),
-    );
+  it('Default strategy: a row naming a vendor gives its effort and configuration to that vendor only', async () => {
+    catalog.promptModels.push({
+      ...makePromptModel({ PromptID: 'prompt-1', ModelID: MODEL.ClaudeOpus45, VendorID: VENDOR.Anthropic, Priority: 10 }),
+      EffortLevel: 25,
+      PromptConfigurationObject: { temperature: 0.1 },
+    } as never);
+    loadCatalog(catalog);
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default' }), { vendorId: VENDOR.Anthropic });
+    const opus = (r.allCandidates as Array<{ model: { ID: string }; driverClass: string; isPreferredVendor: boolean; effortLevel?: number; promptModelConfiguration?: unknown }>)
+      .filter(c => c.model.ID === MODEL.ClaudeOpus45);
+    const preferred = opus.find(c => c.isPreferredVendor);
+    expect(preferred?.driverClass).toBe('AnthropicLLM');
+    expect(preferred?.effortLevel).toBe(25);
+    expect(preferred?.promptModelConfiguration).toEqual({ temperature: 0.1 });
+    const bedrock = opus.find(c => c.driverClass === 'BedrockLLM');
+    expect(bedrock?.effortLevel).toBeUndefined();
+    expect(bedrock?.promptModelConfiguration).toBeUndefined();
+  });
+
+  it('Default strategy: a row naming no vendor gives its effort and configuration to a vendorless model\'s own driver', async () => {
+    const solo = makeModel({ ID: 'AA000000-0000-0000-0000-0000000000B1', Name: 'Solo', DriverClass: 'OpenAILLM', PowerRank: 99 });
+    catalog.models.push(solo);
+    catalog.promptModels.push({
+      ...makePromptModel({ PromptID: 'prompt-1', ModelID: solo.ID, Priority: 10 }),
+      EffortLevel: 40,
+      PromptConfigurationObject: { temperature: 0.2 },
+    } as never);
     loadCatalog(catalog);
     const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default' }));
-    expect(r.model?.ID).toBe(MODEL.GPT5);
+    expect(r.model?.ID).toBe(solo.ID);
+    const own = (r.allCandidates as Array<{ model: { ID: string }; effortLevel?: number; promptModelConfiguration?: unknown }>)
+      .find(c => c.model.ID === solo.ID);
+    expect(own?.effortLevel).toBe(40);
+    expect(own?.promptModelConfiguration).toEqual({ temperature: 0.2 });
   });
 
   it('orders multiple prompt models by Priority (higher first)', async () => {
@@ -346,6 +372,76 @@ describe('selectModel — Specific strategy + AIPromptModel', () => {
     const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Specific', RequireSpecificModels: false }));
     expect(r.model).not.toBeNull();
     expect(r.vendorDriverClass).toBe('AnthropicLLM'); // fell back to a credentialed Anthropic model
+  });
+});
+
+// A prompt-model row names a vendor for its model. It must pick which of that model's vendors serves
+// the prompt, never which model runs. The shape is the shipped Database Research prompt: aggregator
+// vendors on top (OpenRouter 50, Fireworks 150), direct vendors at 0-2, rows Gemini/Google 15,
+// Gemini/Vertex 14, GPT-OSS/Cerebras 10. Without aggregator keys `next` runs Gemini via Google.
+describe('selectModel — Default strategy: a prompt-model row picks the vendor, never the model', () => {
+  const V = { OpenRouter: 'AA000000-0000-0000-0000-0000000000F1', Fireworks: 'AA000000-0000-0000-0000-0000000000F2' };
+  const M = { Gemini: 'AA000000-0000-0000-0000-0000000000A1', GptOss: 'AA000000-0000-0000-0000-0000000000A2' };
+  const DIRECT = ['GeminiLLM', 'VertexLLM', 'CerebrasLLM', 'GroqLLM'];
+
+  function loadDatabaseResearch(configuredDrivers: string[]): void {
+    catalog.vendors.push({ ID: V.OpenRouter, Name: 'OpenRouter' }, { ID: V.Fireworks, Name: 'Fireworks.ai' });
+    const mv = (ModelID: string, VendorID: string, Vendor: string, DriverClass: string, Priority: number) =>
+      makeModelVendor({ ModelID, VendorID, Vendor, DriverClass, Priority });
+    const gemini = makeModel({ ID: M.Gemini, Name: 'Gemini 3.8 Flash', PowerRank: 26, ModelVendors: [
+      mv(M.Gemini, V.OpenRouter, 'OpenRouter', 'OpenRouterLLM', 50),
+      mv(M.Gemini, VENDOR.Google, 'Google', 'GeminiLLM', 1),
+      mv(M.Gemini, VENDOR.VertexAI, 'Vertex AI', 'VertexLLM', 0),
+    ] });
+    const oss = makeModel({ ID: M.GptOss, Name: 'GPT-OSS-120B', PowerRank: 14, ModelVendors: [
+      mv(M.GptOss, V.Fireworks, 'Fireworks.ai', 'FireworksLLM', 150),
+      mv(M.GptOss, VENDOR.Cerebras, 'Cerebras', 'CerebrasLLM', 2),
+      mv(M.GptOss, VENDOR.Groq, 'Groq', 'GroqLLM', 1),
+    ] });
+    catalog.models.push(gemini, oss);
+    catalog.modelVendors.push(...gemini.ModelVendors, ...oss.ModelVendors);
+    catalog.promptModels.push(
+      makePromptModel({ PromptID: 'prompt-1', ModelID: M.Gemini, VendorID: VENDOR.Google, Priority: 15 }),
+      makePromptModel({ PromptID: 'prompt-1', ModelID: M.Gemini, VendorID: VENDOR.VertexAI, Priority: 14 }),
+      makePromptModel({ PromptID: 'prompt-1', ModelID: M.GptOss, VendorID: VENDOR.Cerebras, Priority: 10 }),
+    );
+    loadCatalog(catalog, configuredDrivers);
+  }
+
+  it('with no aggregator key, runs the model next runs (Gemini via Google), not GPT-OSS via Cerebras', async () => {
+    loadDatabaseResearch(DIRECT);
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default' }));
+    expect(r.model?.ID).toBe(M.Gemini);
+    expect(r.vendorDriverClass).toBe('GeminiLLM');
+  });
+
+  it('with the top vendor credentialed, the row vendor still serves the model next chose', async () => {
+    loadDatabaseResearch([...DIRECT, 'OpenRouterLLM']); // next: Gemini via OpenRouter (5200)
+    const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default' }));
+    expect(r.model?.ID).toBe(M.Gemini);
+    expect(r.vendorDriverClass).toBe('GeminiLLM');
+  });
+
+  it('failover keeps next\'s model order, and each model starts on its row vendor', async () => {
+    loadDatabaseResearch([...DIRECT, 'OpenRouterLLM']);
+    const prompt = makePrompt({ SelectionStrategy: 'Default', FailoverStrategy: 'NextBestModel', FailoverMaxAttempts: 20 });
+    const selection = await selectModel(runner, prompt);
+    const calls: Array<{ model: string; driver: string }> = [];
+    vi.spyOn(runner as unknown as { executeModel: (...a: unknown[]) => Promise<unknown> }, 'executeModel')
+      .mockImplementation(async (...args: unknown[]) => {
+        calls.push({ model: (args[0] as { ID: string }).ID, driver: args[8] as string });
+        throw new Error('connect ECONNREFUSED 10.0.0.5:443');
+      });
+    const first = selection.allCandidates![0] as unknown as { model: unknown; vendorId: string; driverClass: string; apiName: string };
+    await (runner as unknown as { executeModelWithFailover: (...a: unknown[]) => Promise<unknown> }).executeModelWithFailover(
+      first.model, 'rendered prompt', prompt, { verbose: false }, first.vendorId,
+      undefined, 'system', undefined, selection.allCandidates, undefined,
+      first.driverClass, first.apiName, false, undefined,
+    );
+    const ours = calls.filter(c => c.model === M.Gemini || c.model === M.GptOss);
+    expect(ours[0]).toEqual({ model: M.Gemini, driver: 'GeminiLLM' });
+    expect([...new Set(ours.map(c => c.model))]).toEqual([M.Gemini, M.GptOss]);
+    expect(ours.find(c => c.model === M.GptOss)?.driver).toBe('CerebrasLLM');
   });
 });
 

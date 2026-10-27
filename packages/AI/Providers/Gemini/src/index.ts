@@ -614,7 +614,8 @@ export class GeminiLLM extends BaseLLM {
     private static readonly _warnedThinking = new Set<string>();
 
     private thinkingReplacementKey(modelName: string, config: ThinkingConfig): string {
-        return `${this.constructor.name}|${modelName}|${JSON.stringify(config)}`;
+        // Sorted keys, so the same setting with its keys in another order hits the same memo.
+        return `${this.constructor.name}|${modelName}|${JSON.stringify(config, Object.keys(config).sort())}`;
     }
 
     /**
@@ -629,7 +630,8 @@ export class GeminiLLM extends BaseLLM {
         if (resolution.Ignored) {
             this.warnThinkingOnce(`${modelName}:${resolution.Ignored}`, `Gemini: ${resolution.Ignored}; sending no thinking setting, so the model thinks at its default.`);
         }
-        const wanted = resolution.Config ?? (requestConfig.thinkingConfig as ThinkingConfig | undefined);
+        const supplied = requestConfig.thinkingConfig as ThinkingConfig | undefined;
+        const wanted = resolution.Config ?? supplied;
         if (!wanted) {
             return;
         }
@@ -637,9 +639,11 @@ export class GeminiLLM extends BaseLLM {
         const config = GeminiLLM._thinkingReplacements.has(key) ? GeminiLLM._thinkingReplacements.get(key) : wanted;
         if (config) {
             requestConfig.thinkingConfig = config;
-        } else {
+        } else if (!supplied || wanted === supplied) {
             delete requestConfig.thinkingConfig;
         }
+        // Otherwise the effort's own setting was rejected with nothing to fall back to, and the caller's
+        // `thinkingConfig` stays, as it would have with no effort level.
     }
 
     /**

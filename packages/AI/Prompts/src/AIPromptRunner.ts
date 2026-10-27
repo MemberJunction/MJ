@@ -1653,6 +1653,16 @@ export class AIPromptRunner extends BaseModelRunner {
     // can set `AIPromptParams.forceFullModelEvaluation = true` to probe every candidate.
     const forceFullEval = params?.forceFullModelEvaluation === true;
     let selected: typeof consideredModels[number] | undefined;
+    // Credentials via hierarchical resolution, cached by driver:model:vendor.
+    const probeCredentials = (candidate: ModelVendorCandidate): boolean => {
+      const cacheKey = `${candidate.driverClass}:${candidate.model.ID}:${candidate.vendorId || 'default'}`;
+      let hasCredentials = credentialCache.get(cacheKey);
+      if (hasCredentials === undefined) {
+        hasCredentials = this.HasCredentialsAvailable(candidate.driverClass, promptId, candidate.model.ID, candidate.vendorId, params);
+        credentialCache.set(cacheKey, hasCredentials);
+      }
+      return hasCredentials;
+    };
 
     for (const candidate of candidates) {
       const vendorEntity = candidate.vendorId
@@ -1672,24 +1682,7 @@ export class AIPromptRunner extends BaseModelRunner {
         continue;
       }
 
-      // Build cache key including model and vendor for proper credential resolution
-      const cacheKey = `${candidate.driverClass}:${candidate.model.ID}:${candidate.vendorId || 'default'}`;
-
-      // Check cache first
-      let hasCredentials: boolean;
-      if (credentialCache.has(cacheKey)) {
-        hasCredentials = credentialCache.get(cacheKey)!;
-      } else {
-        // Check for credentials using hierarchical resolution
-        hasCredentials = this.HasCredentialsAvailable(
-          candidate.driverClass,
-          promptId,
-          candidate.model.ID,
-          candidate.vendorId,
-          params
-        );
-        credentialCache.set(cacheKey, hasCredentials);
-      }
+      const hasCredentials = probeCredentials(candidate);
 
       // Track this model as considered with availability status
       const considered = {
@@ -1708,10 +1701,20 @@ export class AIPromptRunner extends BaseModelRunner {
       }
     }
 
-    const selectedCandidate = selected ? candidates.find(c =>
+    let selectedCandidate = selected ? candidates.find(c =>
       UUIDsEqual(c.model.ID, selected!.model.ID) &&
       UUIDsEqual(c.vendorId, selected!.vendor?.ID)
-    ) : null;
+    ) ?? null : null;
+
+    // Same rule as ExecuteWithFailover: the model is decided, and its prompt-model row's vendor serves it
+    // when that vendor has credentials.
+    if (selectedCandidate) {
+      const rowVendorIndex = this.PromptModelVendorIndex(candidates, candidates.indexOf(selectedCandidate), probeCredentials);
+      if (rowVendorIndex >= 0) {
+        selectedCandidate = candidates[rowVendorIndex];
+        consideredModels[rowVendorIndex] = { ...consideredModels[rowVendorIndex], available: true, unavailableReason: undefined };
+      }
+    }
 
     if (selectedCandidate) {
       const validCount = consideredModels.filter(m => m.available).length;

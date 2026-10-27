@@ -234,6 +234,13 @@ export class AIDecisionRunner extends BaseModelRunner {
         selected = candidate;
       }
     }
+    if (selected) {
+      // The model is decided; its prompt-model row's vendor serves it when that vendor has credentials.
+      const rowVendorIndex = this.PromptModelVendorIndex(candidates, candidates.indexOf(selected), c => credentialAvailability.get(this.candidateKey(c)) === true);
+      if (rowVendorIndex >= 0) {
+        selected = candidates[rowVendorIndex];
+      }
+    }
     this.warnSkippedCandidates(candidates, selected, credentialAvailability);
     if (!selected) {
       const summary = candidates

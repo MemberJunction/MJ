@@ -147,6 +147,9 @@ export class AgentRunner {
      */
     private static readonly ARTIFACT_NAME_MAX_LENGTH = 255;
 
+    /** How long the end of a run waits for the generated conversation name before keeping the initial one. */
+    private static readonly NAMING_WAIT_MS = 5000;
+
     private readonly _provider: IMetadataProvider;
 
     constructor(provider?: IMetadataProvider) {
@@ -652,6 +655,9 @@ export class AgentRunner {
                     // then for any other save still in flight on this entity
                     await progressSaves;
                     await agentResponseDetail.EnsureSaveComplete();
+                    // No reload first: nothing in-tree writes this row mid-run except Message/Status, which
+                    // this save sets anyway. A writer of another column between the last progress save and
+                    // this one would be overwritten, since Save sends every loaded column.
 
                     LogStatus('Updating agent response detail with final result');
 
@@ -882,10 +888,23 @@ export class AgentRunner {
         md: IMetadataProvider,
         credentials: Pick<ExecuteAgentParams, 'configurationId' | 'apiKeys' | 'CredentialScope'>
     ): () => Promise<void> {
+        const initialName = conversation.Name;
         const naming = this.generateConversationName(userMessage, contextUser, md, credentials);
         return async () => {
-            const nameResult = await naming;
+            // Bounded: a run that failed or was cancelled early must not wait out the whole naming call.
+            let timer: ReturnType<typeof setTimeout> | undefined;
+            const gaveUp = new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), AgentRunner.NAMING_WAIT_MS); });
+            const nameResult = await Promise.race([naming, gaveUp]).finally(() => clearTimeout(timer));
             if (!nameResult?.name) {
+                return;
+            }
+            // Re-read first: Save writes every column, so a stale instance would undo a rename or an
+            // archive made during the run. A name someone already changed is kept.
+            if (!(await conversation.Load(conversation.ID))) {
+                LogError(`Failed to reload conversation ${conversation.ID} before saving its generated name`);
+                return;
+            }
+            if (conversation.Name !== initialName) {
                 return;
             }
             conversation.Name = nameResult.name;

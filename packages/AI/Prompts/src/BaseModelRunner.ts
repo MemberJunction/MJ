@@ -93,6 +93,11 @@ export interface ModelVendorCandidate {
    */
   promptModelConfiguration?: AIPromptConfiguration | null;
   isPreferredVendor: boolean;
+  /**
+   * True when this candidate's vendor is the one its `AIPromptModel` row names. Selection runs it in
+   * place of the first credentialed candidate of the same model; see `PromptModelVendorIndex`.
+   */
+  isPromptModelVendor?: boolean;
   priority: number; // Higher is better
   source: 'explicit' | 'prompt-model' | 'model-type' | 'power-rank' | 'power-match-fallback';
 }
@@ -1409,9 +1414,12 @@ export abstract class BaseModelRunner {
 
   /**
    * Helper: Create candidates for a model with AIModelVendor priorities (legacy behavior).
-   * `preferredVendorId` is the caller's runtime vendor override and is boosted above every other
-   * candidate. A prompt-model row's own `VendorID` only leads this model's vendors: it takes the
-   * model's top vendor priority and goes first, so it never lifts the model above another one.
+   * `preferredVendorId` is the caller's runtime vendor override and is boosted above its own model's
+   * other vendors. A prompt-model row's `VendorID` changes no priority: that vendor's candidate is
+   * flagged `isPromptModelVendor`, and selection runs it in place of the first credentialed candidate
+   * of its model (see {@link PromptModelVendorIndex}), so the row picks the vendor but never which
+   * model runs. The row's effort level and configuration go only to the candidates the row
+   * describes: its own vendor, or every vendor of the model when it names none.
    */
   private createCandidatesForModel(
     model: MJAIModelEntityExtended,
@@ -1421,17 +1429,22 @@ export abstract class BaseModelRunner {
     promptModel?: MJAIPromptModelEntity
   ): ModelVendorCandidate[] {
     const modelCandidates: ModelVendorCandidate[] = [];
-    const effortLevel = promptModel?.EffortLevel ?? undefined;
-    const promptModelConfiguration = promptModel?.PromptConfigurationObject;
+    const rowFields = (vendorId?: string) => {
+      const isRowVendor = !!promptModel?.VendorID && UUIDsEqual(vendorId, promptModel.VendorID);
+      const applies = !!promptModel && (!promptModel.VendorID || isRowVendor);
+      return {
+        effortLevel: applies ? promptModel?.EffortLevel ?? undefined : undefined,
+        promptModelConfiguration: applies ? promptModel?.PromptConfigurationObject : undefined,
+        isPromptModelVendor: isRowVendor
+      };
+    };
 
     // Get all vendors for this model - filter for inference providers only.
     // Uses the model's precomputed ModelVendors (grouped at engine load) rather than scanning
-    // the global ModelVendors array. The prompt-model row's vendor goes first, then by priority.
-    const isRowVendor = (vendorId: string) => UUIDsEqual(vendorId, promptModel?.VendorID);
+    // the global ModelVendors array.
     const modelVendors = model.ModelVendors
       .filter(mv => mv.Status === 'Active' && this.IsInferenceProvider(mv))
-      .sort((a, b) => Number(isRowVendor(b.VendorID)) - Number(isRowVendor(a.VendorID)) || b.Priority - a.Priority);
-    const topVendorPriority = Math.max(0, ...modelVendors.map(mv => mv.Priority || 0));
+      .sort((a, b) => b.Priority - a.Priority);
 
     // First, add preferred vendor if it exists
     if (preferredVendorId) {
@@ -1443,12 +1456,11 @@ export abstract class BaseModelRunner {
           vendorName: preferredVendor.Vendor,
           driverClass: preferredVendor.DriverClass || model.DriverClass,
           apiName: preferredVendor.APIName || model.APIName,
-          effortLevel,
           supportsEffortLevel: preferredVendor.SupportsEffortLevel ?? model.SupportsEffortLevel ?? false,
           isPreferredVendor: true,
           priority: basePriority + 1000, // Boost priority for preferred vendor
           source,
-          promptModelConfiguration
+          ...rowFields(preferredVendor.VendorID)
         });
       }
     }
@@ -1462,12 +1474,11 @@ export abstract class BaseModelRunner {
           vendorName: vendor.Vendor,
           driverClass: vendor.DriverClass || model.DriverClass,
           apiName: vendor.APIName || model.APIName,
-          effortLevel,
           supportsEffortLevel: vendor.SupportsEffortLevel ?? model.SupportsEffortLevel ?? false,
           isPreferredVendor: false,
-          priority: basePriority + (isRowVendor(vendor.VendorID) ? topVendorPriority : (vendor.Priority || 0)),
+          priority: basePriority + (vendor.Priority || 0),
           source,
-          promptModelConfiguration
+          ...rowFields(vendor.VendorID)
         });
       }
     }
@@ -1478,12 +1489,11 @@ export abstract class BaseModelRunner {
         model,
         driverClass: model.DriverClass,
         apiName: model.APIName,
-        effortLevel,
         supportsEffortLevel: model.SupportsEffortLevel ?? false,
         isPreferredVendor: false,
         priority: basePriority,
         source,
-        promptModelConfiguration
+        ...rowFields(undefined)
       });
     }
 
@@ -1493,6 +1503,33 @@ export abstract class BaseModelRunner {
     }
 
     return modelCandidates;
+  }
+
+  /**
+   * Where a candidate list runs the prompt-model row's vendor in place of `candidates[index]`.
+   *
+   * Call it when `candidates[index]` is the first credentialed candidate a walk reaches. If that
+   * candidate is neither the caller's runtime override nor a row vendor, and a later candidate of the
+   * same model is its prompt-model row's vendor with credentials, returns that candidate's index;
+   * otherwise -1. The caller moves it into `index`. So the ranked order still decides which model
+   * runs, credentials included, and the row only decides which of that model's vendors serves it.
+   */
+  protected PromptModelVendorIndex(
+    candidates: ModelVendorCandidate[],
+    index: number,
+    hasCredentials: (candidate: ModelVendorCandidate) => boolean
+  ): number {
+    const current = candidates[index];
+    if (!current || current.isPreferredVendor || current.isPromptModelVendor) {
+      return -1;
+    }
+    for (let j = index + 1; j < candidates.length; j++) {
+      const candidate = candidates[j];
+      if (candidate.isPromptModelVendor && UUIDsEqual(candidate.model.ID, current.model.ID) && hasCredentials(candidate)) {
+        return j;
+      }
+    }
+    return -1;
   }
 
   /**
@@ -1844,6 +1881,16 @@ export abstract class BaseModelRunner {
       // highest-priority-with-credentials rule).
       if (!candidateHasCredentials(candidate)) {
         skippedForCredentials++;
+        continue;
+      }
+
+      // The model is decided; its prompt-model row's vendor serves it when that vendor has credentials.
+      // Move it into this slot (on a copy) and re-run the index, so the displaced candidate follows it.
+      const rowVendorIndex = this.PromptModelVendorIndex(allCandidates, i, candidateHasCredentials);
+      if (rowVendorIndex > i) {
+        allCandidates = [...allCandidates];
+        allCandidates.splice(i, 0, ...allCandidates.splice(rowVendorIndex, 1));
+        i--;
         continue;
       }
 
