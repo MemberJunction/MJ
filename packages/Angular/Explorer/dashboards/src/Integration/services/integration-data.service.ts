@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Metadata, RunView, IRunViewProvider, IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import type { ActionParam } from '@memberjunction/actions-base';
 import { DateCellDayKey } from '../../shared/date-cell';
 import {
   MJCompanyIntegrationEntityMapEntity,
@@ -211,6 +212,33 @@ export interface WatermarkRow {
   WatermarkValue: string | null;
   Direction: 'Pull' | 'Push';
   EntityMap: string;
+}
+
+/** Backup header inspection result from 'Inspect SQL Server Backup' action */
+export interface InspectBackupResult {
+  Success: boolean;
+  Message: string;
+  DatabaseName?: string;
+  BackupStartDateUTC?: string;
+  SizeFormatted?: string;
+  SizeBytes?: number;
+  Stripes?: number;
+}
+
+/** Azure blob metadata item returned when browsing backup blobs */
+export interface AzureBlobItem {
+  Name: string;
+  SizeBytes: number;
+  SizeFormatted: string;
+  LastModified?: Date;
+  IsBak: boolean;
+}
+
+/** List of backup blobs returned from 'List Azure Backup Blobs' action */
+export interface ListAzureBackupBlobsResult {
+  Success: boolean;
+  Message: string;
+  Blobs: AzureBlobItem[];
 }
 
 /** Shared icon resolution map for integration names to Font Awesome icon classes */
@@ -879,6 +907,7 @@ export class IntegrationDataService {
       StorageCredentialID?: string;
       StagingDatabaseName?: string;
       DropStagingDbOnComplete?: boolean;
+      TruncateTargetBeforeLoad?: boolean;
       BatchSize?: number;
     }
   ): Promise<{
@@ -901,42 +930,218 @@ export class IntegrationDataService {
 
     const provider = this.Provider as unknown as GraphQLDataProvider;
     const actionClient = new GraphQLActionClient(provider);
-    const params = [
-      { Name: 'CompanyIntegrationID', Value: companyIntegrationID, Type: 'Input' as const },
-      { Name: 'BackupUrls', Value: options.BackupUrls, Type: 'Input' as const },
+    const params: ActionParam[] = [
+      { Name: 'CompanyIntegrationID', Value: companyIntegrationID, Type: 'Input' },
+      { Name: 'BackupUrls', Value: options.BackupUrls, Type: 'Input' },
     ];
     if (options.SasToken) {
-      params.push({ Name: 'SasToken', Value: options.SasToken, Type: 'Input' as const });
+      params.push({ Name: 'SasToken', Value: options.SasToken, Type: 'Input' });
     }
     if (options.StorageCredentialID) {
-      params.push({ Name: 'StorageCredentialID', Value: options.StorageCredentialID, Type: 'Input' as const });
+      params.push({ Name: 'StorageCredentialID', Value: options.StorageCredentialID, Type: 'Input' });
     }
     if (options.StagingDatabaseName) {
-      params.push({ Name: 'StagingDatabaseName', Value: options.StagingDatabaseName, Type: 'Input' as const });
+      params.push({ Name: 'StagingDatabaseName', Value: options.StagingDatabaseName, Type: 'Input' });
     }
     if (options.DropStagingDbOnComplete !== undefined) {
-      params.push({ Name: 'DropStagingDbOnComplete', Value: options.DropStagingDbOnComplete ? 'true' : 'false', Type: 'Input' as const });
+      params.push({ Name: 'DropStagingDbOnComplete', Value: options.DropStagingDbOnComplete ? 'true' : 'false', Type: 'Input' });
+    }
+    if (options.TruncateTargetBeforeLoad !== undefined) {
+      params.push({ Name: 'TruncateTargetBeforeLoad', Value: options.TruncateTargetBeforeLoad ? 'true' : 'false', Type: 'Input' });
     }
     if (options.BatchSize) {
-      params.push({ Name: 'BatchSize', Value: String(options.BatchSize), Type: 'Input' as const });
+      params.push({ Name: 'BatchSize', Value: String(options.BatchSize), Type: 'Input' });
     }
 
     const result = await actionClient.RunAction(actionID, params);
 
-    const getParamVal = (name: string): string | undefined => {
-      const p = result.Params?.find((item: { Name: string }) => item.Name.toLowerCase() === name.toLowerCase());
+    const getOutputParamVal = (name: string): string | undefined => {
+      if (Array.isArray(result.Result)) {
+        const p = result.Result.find((item: { Name?: string }) => item?.Name?.toLowerCase() === name.toLowerCase());
+        if (p && 'Value' in p && p.Value != null) return String(p.Value);
+      } else if (result.Result && typeof result.Result === 'object') {
+        const resObj = result.Result as unknown as Record<string, unknown>;
+        const key = Object.keys(resObj).find(k => k.toLowerCase() === name.toLowerCase());
+        if (key && resObj[key] != null) {
+          return String(resObj[key]);
+        }
+      }
+      const p = result.Params?.find((item: { Name: string }) => item.Name?.toLowerCase() === name.toLowerCase());
       return p?.Value != null ? String(p.Value) : undefined;
     };
+
+    const totalRows = getOutputParamVal('TotalRowsInserted') ?? getOutputParamVal('TotalRowsTransferred');
 
     return {
       Success: result.Success,
       Message: result.Message ?? '',
-      BackupStartDate: getParamVal('BackupStartDate'),
-      StagingDatabaseName: getParamVal('StagingDatabaseName') ?? options.StagingDatabaseName,
-      TablesProcessed: getParamVal('TablesProcessed') ? Number(getParamVal('TablesProcessed')) : undefined,
-      TotalRowsTransferred: getParamVal('TotalRowsTransferred') ? Number(getParamVal('TotalRowsTransferred')) : undefined,
-      DurationSeconds: getParamVal('DurationSeconds') ? Number(getParamVal('DurationSeconds')) : undefined,
-      StagingDatabaseDropped: getParamVal('StagingDatabaseDropped') === '1' || getParamVal('StagingDatabaseDropped') === 'true',
+      BackupStartDate: getOutputParamVal('BackupStartDate'),
+      StagingDatabaseName: getOutputParamVal('StagingDatabaseName') ?? options.StagingDatabaseName,
+      TablesProcessed: getOutputParamVal('TablesProcessed') ? Number(getOutputParamVal('TablesProcessed')) : undefined,
+      TotalRowsTransferred: totalRows ? Number(totalRows) : undefined,
+      DurationSeconds: getOutputParamVal('DurationSeconds') ? Number(getOutputParamVal('DurationSeconds')) : undefined,
+      StagingDatabaseDropped: getOutputParamVal('StagingDatabaseDropped') === '1' || getOutputParamVal('StagingDatabaseDropped') === 'true',
+    };
+  }
+
+  /**
+   * Inspects SQL Server backup headers (via 'Inspect SQL Server Backup' server action)
+   * to verify backup availability, database name, temporal start timestamp, and stripe count.
+   */
+  async InspectSQLServerBackup(
+    companyIntegrationID: string,
+    options: {
+      BackupUrls: string;
+      SasToken?: string;
+      StorageCredentialID?: string;
+    }
+  ): Promise<InspectBackupResult> {
+    const actionID = await this.lookupActionID('Inspect SQL Server Backup');
+    if (!actionID) {
+      return {
+        Success: false,
+        Message: 'Action "Inspect SQL Server Backup" not found. Ensure the action is registered.'
+      };
+    }
+
+    const provider = this.Provider as unknown as GraphQLDataProvider;
+    const actionClient = new GraphQLActionClient(provider);
+    const params: ActionParam[] = [
+      { Name: 'CompanyIntegrationID', Value: companyIntegrationID, Type: 'Input' },
+      { Name: 'BackupUrls', Value: options.BackupUrls, Type: 'Input' },
+    ];
+    if (options.SasToken) {
+      params.push({ Name: 'SasToken', Value: options.SasToken, Type: 'Input' });
+    }
+    if (options.StorageCredentialID) {
+      params.push({ Name: 'StorageCredentialID', Value: options.StorageCredentialID, Type: 'Input' });
+    }
+
+    const result = await actionClient.RunAction(actionID, params);
+
+    const getOutputParamVal = (name: string): string | undefined => {
+      if (Array.isArray(result.Result)) {
+        const p = result.Result.find((item: { Name?: string }) => item?.Name?.toLowerCase() === name.toLowerCase());
+        if (p && 'Value' in p && p.Value != null) return String(p.Value);
+      } else if (result.Result && typeof result.Result === 'object') {
+        const resObj = result.Result as unknown as Record<string, unknown>;
+        const key = Object.keys(resObj).find(k => k.toLowerCase() === name.toLowerCase());
+        if (key && resObj[key] != null) {
+          return String(resObj[key]);
+        }
+      }
+      const p = result.Params?.find((item: { Name: string }) => item.Name?.toLowerCase() === name.toLowerCase());
+      return p?.Value != null ? String(p.Value) : undefined;
+    };
+
+    const sizeBytes = getOutputParamVal('SizeBytes') ?? getOutputParamVal('BackupSizeBytes');
+    const stripes = getOutputParamVal('Stripes') ?? getOutputParamVal('StripeCount');
+
+    return {
+      Success: result.Success,
+      Message: result.Message ?? '',
+      DatabaseName: getOutputParamVal('DatabaseName'),
+      BackupStartDateUTC: getOutputParamVal('BackupStartDateUTC') ?? getOutputParamVal('BackupStartDate'),
+      SizeFormatted: getOutputParamVal('SizeFormatted'),
+      SizeBytes: sizeBytes ? Number(sizeBytes) : undefined,
+      Stripes: stripes ? Number(stripes) : undefined,
+    };
+  }
+
+  /**
+   * Lists backup blobs from an Azure Blob container via server action 'List Azure Backup Blobs',
+   * avoiding browser CORS restrictions and SAS token exposure.
+   */
+  async ListAzureBackupBlobs(
+    companyIntegrationID: string,
+    options: {
+      ContainerUrl: string;
+      SasToken?: string;
+      StorageCredentialID?: string;
+      Prefix?: string;
+    }
+  ): Promise<ListAzureBackupBlobsResult> {
+    const actionID = await this.lookupActionID('List Azure Backup Blobs');
+    if (!actionID) {
+      return {
+        Success: false,
+        Message: 'Action "List Azure Backup Blobs" not found. Ensure the action is registered.',
+        Blobs: []
+      };
+    }
+
+    const provider = this.Provider as unknown as GraphQLDataProvider;
+    const actionClient = new GraphQLActionClient(provider);
+    const params: ActionParam[] = [
+      { Name: 'CompanyIntegrationID', Value: companyIntegrationID, Type: 'Input' },
+      { Name: 'ContainerUrl', Value: options.ContainerUrl, Type: 'Input' },
+    ];
+    if (options.SasToken) {
+      params.push({ Name: 'SasToken', Value: options.SasToken, Type: 'Input' });
+    }
+    if (options.StorageCredentialID) {
+      params.push({ Name: 'StorageCredentialID', Value: options.StorageCredentialID, Type: 'Input' });
+    }
+    if (options.Prefix) {
+      params.push({ Name: 'Prefix', Value: options.Prefix, Type: 'Input' });
+    }
+
+    const result = await actionClient.RunAction(actionID, params);
+
+    let rawBlobs: unknown[] = [];
+    if (Array.isArray(result.Result)) {
+      const blobsParam = result.Result.find((item: { Name?: string }) => item?.Name?.toLowerCase() === 'blobs');
+      if (blobsParam && typeof (blobsParam as { Value: unknown }).Value === 'string') {
+        try {
+          rawBlobs = JSON.parse((blobsParam as { Value: string }).Value);
+        } catch {
+          rawBlobs = [];
+        }
+      } else if (blobsParam && Array.isArray((blobsParam as { Value: unknown }).Value)) {
+        rawBlobs = (blobsParam as { Value: unknown[] }).Value;
+      } else if (result.Result.length > 0 && 'Name' in result.Result[0] && !('Type' in result.Result[0])) {
+        rawBlobs = result.Result;
+      }
+    } else if (result.Result && typeof result.Result === 'object') {
+      const resObj = result.Result as unknown as Record<string, unknown>;
+      if (Array.isArray(resObj['Blobs'])) {
+        rawBlobs = resObj['Blobs'] as unknown[];
+      } else if (typeof resObj['Blobs'] === 'string') {
+        try {
+          rawBlobs = JSON.parse(resObj['Blobs']);
+        } catch {
+          rawBlobs = [];
+        }
+      }
+    }
+
+    const formatBytes = (bytes: number): string => {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    };
+
+    const blobs: AzureBlobItem[] = rawBlobs.map((b: unknown) => {
+      const item = b as Record<string, unknown>;
+      const name = String(item['Name'] ?? item['name'] ?? '');
+      const sizeBytes = Number(item['SizeBytes'] ?? item['sizeBytes'] ?? item['ContentLength'] ?? 0);
+      const sizeFormatted = String(item['SizeFormatted'] ?? item['sizeFormatted'] ?? formatBytes(sizeBytes));
+      const lastModifiedRaw = item['LastModified'] ?? item['lastModified'];
+      return {
+        Name: name,
+        SizeBytes: sizeBytes,
+        SizeFormatted: sizeFormatted,
+        LastModified: lastModifiedRaw ? new Date(String(lastModifiedRaw)) : undefined,
+        IsBak: name.toLowerCase().endsWith('.bak')
+      };
+    });
+
+    return {
+      Success: result.Success,
+      Message: result.Message ?? '',
+      Blobs: blobs
     };
   }
 

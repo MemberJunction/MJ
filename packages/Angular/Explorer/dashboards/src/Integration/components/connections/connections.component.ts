@@ -637,11 +637,39 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
 
   IsSqlServerIntegration(summary: IntegrationSummary | null | undefined): boolean {
     if (!summary) return false;
-    const intName = summary.Integration?.Integration?.toLowerCase() ?? '';
-    const srcType = summary.SourceType?.Name?.toLowerCase() ?? '';
-    const name = summary.Integration?.Name?.toLowerCase() ?? '';
-    const driver = summary.Integration?.DriverClassName?.toLowerCase() ?? '';
-    return intName.includes('sql') || srcType.includes('sql') || name.includes('sql') || driver.includes('sql');
+    const srcType = summary.SourceType?.Name?.trim() ?? '';
+    const driver = summary.Integration?.DriverClassName?.trim() ?? '';
+    const intName = summary.Integration?.Integration?.trim() ?? '';
+    const name = summary.Integration?.Name?.trim() ?? '';
+
+    // Direct exact matches for known SQL Server source types and drivers
+    const sqlServerNames = [
+      'microsoft sql server',
+      'sql server',
+      'sql server (external)',
+      'microsoft fabric sql endpoint (external)',
+      'mssql',
+      'sqlserver'
+    ];
+
+    if (sqlServerNames.includes(srcType.toLowerCase())) return true;
+    if (sqlServerNames.includes(intName.toLowerCase())) return true;
+    if (driver.toLowerCase() === 'sqlserverexternaldriver' || driver.toLowerCase() === 'sqlserverdriver') return true;
+
+    // Reject non-SQL Server relational databases explicitly (PostgreSQL, MySQL, MariaDB, SQLite, Snowflake)
+    const combined = `${srcType} ${intName} ${name} ${driver}`.toLowerCase();
+    if (
+      combined.includes('postgres') ||
+      combined.includes('pgsql') ||
+      combined.includes('mysql') ||
+      combined.includes('mariadb') ||
+      combined.includes('sqlite') ||
+      combined.includes('snowflake')
+    ) {
+      return false;
+    }
+
+    return combined.includes('sql server') || combined.includes('mssql') || combined.includes('sqlserver');
   }
 
   OpenBootstrapWizard(integration: MJCompanyIntegrationEntity, event?: MouseEvent): void {
