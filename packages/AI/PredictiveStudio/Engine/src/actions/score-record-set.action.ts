@@ -19,14 +19,16 @@
 
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { RegisterClass } from '@memberjunction/global';
-import { LogError, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { LogError, Metadata, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
 
 import { BasePredictiveStudioAction, type JsonObject } from './base-predictive-studio.action';
-import { ProductionScoreRecordSetRunner } from './score-record-set.runner';
+import { BuildScoreRecordSetRunner } from '../operations/delegation';
+import { PredictiveStudioRefusals } from '../operations/refusals';
 
 /** The driver-class key this action registers under (matches the metadata row). */
-export const SCORE_RECORD_SET_DRIVER_CLASS = 'PredictiveStudioScoreRecordSetAction';
+export { SCORE_RECORD_SET_DRIVER_CLASS } from './driver-classes';
+import { SCORE_RECORD_SET_DRIVER_CLASS } from './driver-classes';
 
 /**
  * The scope of records to score. Mirrors the Record Set Processing scope shapes
@@ -68,7 +70,8 @@ export interface ScoreRecordSetRequest {
    */
   dryRun?: boolean;
   contextUser?: UserInfo;
-  provider?: IMetadataProvider;
+  /** The provider every scope read and write-back goes through (required: no fallback to the global provider). */
+  provider: IMetadataProvider;
 }
 
 /** A single ephemeral prediction surfaced when write-back is NOT requested. */
@@ -144,19 +147,22 @@ export class PredictiveStudioScoreRecordSetAction extends BasePredictiveStudioAc
 
       const writeBack = this.parseWriteBack(params);
 
+      const provider = params.Provider || Metadata.Provider; // global-provider-ok: RunActionParams.Provider is optional; ActionEngine contract falls back to the global provider (ActionEngine-Base.ts:413-419)
       const runner = this.createRunner();
       const result = await runner.run({
         modelId,
         scope,
         writeBack,
         contextUser: params.ContextUser,
-        provider: params.Provider,
+        provider,
       });
 
       return this.mapResult(params, result);
     } catch (e) {
       LogError(e);
-      return this.fail('SCORING_FAILED', `Scoring failed: ${e instanceof Error ? e.message : String(e)}`);
+      const error = e instanceof Error ? e : new Error(String(e));
+      // A refusal keeps its typed code (the same one the operation returns), so agents never parse the message.
+      return this.fail(PredictiveStudioRefusals.CodeOf(error) || 'SCORING_FAILED', `Scoring failed: ${error.message}`);
     }
   }
 
@@ -216,8 +222,12 @@ export class PredictiveStudioScoreRecordSetAction extends BasePredictiveStudioAc
 
   // ----- injectable runner seam (overridden in tests) ------------------------
 
-  /** Construct the production scoring runner. Overridable so tests inject a mock. */
+  /**
+   * Construct the production scoring runner — the same one the Score Record Set
+   * operation uses, wired with the production model loader, sidecar and artifact
+   * loader. Overridable so tests inject a mock.
+   */
   protected createRunner(): IScoreRecordSetRunner {
-    return new ProductionScoreRecordSetRunner();
+    return BuildScoreRecordSetRunner();
   }
 }

@@ -1,7 +1,8 @@
 import { Arg, Ctx, Field, InputType, Int, ObjectType, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { ResolverBase, type RunViewResultWithResolvedView } from './ResolverBase.js';
-import { LogError, LogStatus, EntityInfo, FieldSecurityError, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams, AggregateResult, CompositeKey } from '@memberjunction/core';
+import { LogError, LogStatus, EntityInfo, FieldSecurityError, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams, AggregateResult, CompositeKey, ViewPropertyValues } from '@memberjunction/core';
+import { GraphQLJSONObject } from 'graphql-type-json';
 
 import { ReplaceByteArraysWithBase64, UUIDsEqual } from '@memberjunction/global';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
@@ -207,6 +208,20 @@ export class RunViewByIDInput {
       'Optional, when true the binary fields of the entity (varbinary / bytea columns) are returned, as base64 strings. They are omitted by default because they are usually large and lists rarely read them. A binary field named explicitly in Fields is always returned.',
   })
   IncludeBinaryFields?: boolean;
+
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'Optional registered Alternate Base View logical Name (from EntityAlternateBaseView.Name) for this entity. When set, overrides both a saved UserView DisplayState.alternateBaseView pin and the entity default BaseView. Pass an empty string ("") to force the entity default BaseView over a saved UserView pin.',
+  })
+  AlternateBaseView?: string;
+
+  @Field(() => GraphQLJSONObject, {
+    nullable: true,
+    description:
+      "Optional values for the view's declared properties, keyed by property name ({ \"Chapter\": \"<id>\" }). A list is accepted only for a property whose operator is IN; null means no value. A name the view does not declare, a value of the wrong type, a value for a property that only the server may set, or a required property left without a value refuses the run with an error naming the property.",
+  })
+  Properties?: ViewPropertyValues;
 }
 
 @InputType()
@@ -335,6 +350,20 @@ export class RunViewByNameInput {
       'Optional, when true the binary fields of the entity (varbinary / bytea columns) are returned, as base64 strings. They are omitted by default because they are usually large and lists rarely read them. A binary field named explicitly in Fields is always returned.',
   })
   IncludeBinaryFields?: boolean;
+
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'Optional registered Alternate Base View logical Name (from EntityAlternateBaseView.Name) for this entity. When set, overrides both a saved UserView DisplayState.alternateBaseView pin and the entity default BaseView. Pass an empty string ("") to force the entity default BaseView over a saved UserView pin.',
+  })
+  AlternateBaseView?: string;
+
+  @Field(() => GraphQLJSONObject, {
+    nullable: true,
+    description:
+      "Optional values for the view's declared properties, keyed by property name ({ \"Chapter\": \"<id>\" }). A list is accepted only for a property whose operator is IN; null means no value. A name the view does not declare, a value of the wrong type, a value for a property that only the server may set, or a required property left without a value refuses the run with an error naming the property.",
+  })
+  Properties?: ViewPropertyValues;
 }
 
 @InputType()
@@ -449,6 +478,13 @@ export class RunDynamicViewInput {
       'Optional, when true the binary fields of the entity (varbinary / bytea columns) are returned, as base64 strings. They are omitted by default because they are usually large and lists rarely read them. A binary field named explicitly in Fields is always returned.',
   })
   IncludeBinaryFields?: boolean;
+
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'Optional registered Alternate Base View logical Name (from EntityAlternateBaseView.Name) for this entity. When set, routes the dynamic view read through the named alternate base view instead of the entity default BaseView.',
+  })
+  AlternateBaseView?: string;
 }
 
 @InputType()
@@ -592,6 +628,20 @@ export class RunViewGenericInput {
       'Optional, when true the binary fields of the entity (varbinary / bytea columns) are returned, as base64 strings. They are omitted by default because they are usually large and lists rarely read them. A binary field named explicitly in Fields is always returned.',
   })
   IncludeBinaryFields?: boolean;
+
+  @Field(() => String, {
+    nullable: true,
+    description:
+      'Optional registered Alternate Base View logical Name (from EntityAlternateBaseView.Name) for this entity. When set, overrides both a saved UserView DisplayState.alternateBaseView pin and the entity default BaseView. Pass an empty string ("") to force the entity default BaseView over a saved UserView pin.',
+  })
+  AlternateBaseView?: string;
+
+  @Field(() => GraphQLJSONObject, {
+    nullable: true,
+    description:
+      "Optional values for the view's declared properties, keyed by property name ({ \"Chapter\": \"<id>\" }). A list is accepted only for a property whose operator is IN; null means no value. A name the view does not declare, a value of the wrong type, a value for a property that only the server may set, or a required property left without a value refuses the run with an error naming the property.",
+  })
+  Properties?: ViewPropertyValues;
 }
 
 //****************************************************************************
@@ -605,6 +655,12 @@ export class RunViewCacheStatusInput {
 
   @Field(() => Int, { description: 'The number of rows in cached results' })
   rowCount: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
+
+  @Field(() => String, {
+    nullable: true,
+    description: "A hash of the client's field-security key for this view ('' when the user is denied nothing). When it differs from the server's for the same user, the server answers stale with fresh rows. Omitted by older clients.",
+  })
+  fieldSecurityKey?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name, matching its siblings
 }
 
 @InputType()
@@ -818,6 +874,7 @@ export class RunViewResolver extends ResolverBase {
         TotalRowCount: rawData?.TotalRowCount,
         ExecutionTime: rawData?.ExecutionTime,
         Success: rawData?.Success,
+        ErrorMessage: rawData?.ErrorMessage,
         AggregateResults: this.processAggregateResults(rawData?.AggregateResults),
         AggregateExecutionTime: rawData?.AggregateExecutionTime,
       };
@@ -868,6 +925,7 @@ export class RunViewResolver extends ResolverBase {
         TotalRowCount: rawData?.TotalRowCount,
         ExecutionTime: rawData?.ExecutionTime,
         Success: rawData?.Success,
+        ErrorMessage: rawData?.ErrorMessage,
         AggregateResults: this.processAggregateResults(rawData?.AggregateResults),
         AggregateExecutionTime: rawData?.AggregateExecutionTime,
       };
@@ -1268,6 +1326,7 @@ export class RunViewResolver extends ResolverBase {
           // DataSource must be forwarded on this transport too (same as the InternalRunView/RunViews maps):
           // otherwise a CacheLocal batch's DataSource:'Materialized' request silently reads the live view.
           DataSource: item.params.DataSource,
+          AlternateBaseView: item.params.AlternateBaseView,
           IncludeBinaryFields: item.params.IncludeBinaryFields,
           // BypassCache likewise — the input type (RunDynamicViewInput) has always declared it, and its
           // own description promises "the pre-check cache lookup is skipped". Dropping it here left the
@@ -1276,10 +1335,12 @@ export class RunViewResolver extends ResolverBase {
           AfterKey: item.params.AfterKey
             ? CompositeKey.FromKeyValuePairs(item.params.AfterKey.KeyValuePairs)
             : undefined,
+          TimeZone: userPayload?.TimeZone,
         },
         cacheStatus: item.cacheStatus ? {
           maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
           rowCount: item.cacheStatus.rowCount,
+          fieldSecurityKey: item.cacheStatus.fieldSecurityKey ?? undefined,
         } : undefined,
       }));
 

@@ -687,6 +687,7 @@ export class RunAdhocQueryAction extends BaseAction {
                     lines.push('```');
                 } else {
                     lines.push('```json');
+                    // fls-guard: query rows; the SQL is refused before it runs if it reads a field the caller is denied
                     lines.push(JSON.stringify(results, null, 2));
                     lines.push('```');
                 }

@@ -524,6 +524,38 @@
     flex-shrink: 0;
 }
 
+.mj-links-card-row {
+    display: flex;
+    align-items: stretch;
+    gap: 6px;
+}
+
+.mj-links-card__unlink-btn {
+    flex-shrink: 0;
+    width: 34px;
+    border-radius: 8px;
+    border: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.mj-links-card__unlink-btn:hover:not(:disabled) {
+    color: var(--mj-status-error);
+    border-color: color-mix(in srgb, var(--mj-status-error) 45%, var(--mj-border-default));
+    background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
+}
+
+.mj-links-card__unlink-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
 /* Empty & Loading States */
 .mj-links-state {
     display: flex;

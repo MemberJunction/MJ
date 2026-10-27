@@ -1,0 +1,168 @@
+[
+  {
+    "_comments": [
+      "Out-of-the-box Alternate Base View on MJ: Users: Active users (IsActive = 1)."
+    ],
+    "fields": {
+      "Name": "MJ: Users"
+    },
+    "relatedEntities": {
+      "MJ: Entity Alternate Base Views": [
+        {
+          "fields": {
+            "EntityID": "@parent:ID",
+            "Name": "Active",
+            "DisplayName": "Active Users",
+            "Description": "Users with IsActive = 1. Excludes deactivated user accounts from pickers, assignments, notifications, and active user queries.",
+            "ViewName": "vwUsersActive",
+            "CachePolicy": "Default",
+            "Status": "Active",
+            "Sequence": 1
+          },
+          "primaryKey": {
+            "ID": "8D1544F7-988A-4450-9A26-40513B71F329"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Users"
+    }
+  },
+  {
+    "_comments": [
+      "Out-of-the-box Alternate Base View on MJ: AI Agents: Active, non-restricted agents (Status = 'Active' AND IsRestricted = 0)."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agents"
+    },
+    "relatedEntities": {
+      "MJ: Entity Alternate Base Views": [
+        {
+          "fields": {
+            "EntityID": "@parent:ID",
+            "Name": "Active",
+            "DisplayName": "Active Agents",
+            "Description": "AI Agents with Status = 'Active' and IsRestricted = 0. Ready for interactive selection, orchestration, and sub-agent delegation.",
+            "ViewName": "vwAIAgentsActive",
+            "CachePolicy": "Default",
+            "Status": "Active",
+            "Sequence": 1
+          },
+          "primaryKey": {
+            "ID": "0029EF87-519E-471E-963D-C9221BE31FDA"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agents"
+    }
+  },
+  {
+    "_comments": [
+      "Out-of-the-box Alternate Base View on MJ: AI Prompts: Active prompts (Status = 'Active')."
+    ],
+    "fields": {
+      "Name": "MJ: AI Prompts"
+    },
+    "relatedEntities": {
+      "MJ: Entity Alternate Base Views": [
+        {
+          "fields": {
+            "EntityID": "@parent:ID",
+            "Name": "Active",
+            "DisplayName": "Active Prompts",
+            "Description": "AI Prompts with Status = 'Active', excluding Disabled, Pending, and Inactive prompts.",
+            "ViewName": "vwAIPromptsActive",
+            "CachePolicy": "Default",
+            "Status": "Active",
+            "Sequence": 1
+          },
+          "primaryKey": {
+            "ID": "C2EBE4C3-75B0-4BB7-A9AE-FEBC561E7B41"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Prompts"
+    }
+  },
+  {
+    "_comments": [
+      "Out-of-the-box Alternate Base View on MJ: Actions: Active actions (Status = 'Active')."
+    ],
+    "fields": {
+      "Name": "MJ: Actions"
+    },
+    "relatedEntities": {
+      "MJ: Entity Alternate Base Views": [
+        {
+          "fields": {
+            "EntityID": "@parent:ID",
+            "Name": "Active",
+            "DisplayName": "Active Actions",
+            "Description": "Actions with Status = 'Active', excluding Disabled and Pending actions from workflow, agent, and action catalogs.",
+            "ViewName": "vwActionsActive",
+            "CachePolicy": "Default",
+            "Status": "Active",
+            "Sequence": 1
+          },
+          "primaryKey": {
+            "ID": "457ECF5B-44E3-46ED-8ABF-7E9C0BCEF7BD"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Actions"
+    }
+  },
+  {
+    "_comments": [
+      "Out-of-the-box Alternate Base Views on MJ: Scheduled Jobs: Active jobs (Status = 'Active') and DueNow jobs (derived from Active, NextRunAt <= GETUTCDATE(), CachePolicy = 'Bypass')."
+    ],
+    "fields": {
+      "Name": "MJ: Scheduled Jobs"
+    },
+    "relatedEntities": {
+      "MJ: Entity Alternate Base Views": [
+        {
+          "fields": {
+            "EntityID": "@parent:ID",
+            "Name": "Active",
+            "DisplayName": "Active Scheduled Jobs",
+            "Description": "Scheduled Jobs with Status = 'Active', excluding Paused, Disabled, Pending, and Expired jobs.",
+            "ViewName": "vwScheduledJobsActive",
+            "CachePolicy": "Default",
+            "Status": "Active",
+            "Sequence": 1
+          },
+          "primaryKey": {
+            "ID": "1EB795DE-1AAF-40F5-8697-8FFF866B5724"
+          }
+        },
+        {
+          "fields": {
+            "EntityID": "@parent:ID",
+            "ParentID": "1EB795DE-1AAF-40F5-8697-8FFF866B5724",
+            "Name": "DueNow",
+            "DisplayName": "Scheduled Jobs Due Now",
+            "Description": "Active Scheduled Jobs whose NextRunAt timestamp is non-null and due at or before the current UTC clock (NextRunAt <= GETUTCDATE()). Derived from the Active alternate base view with CachePolicy = 'Bypass'.",
+            "ViewName": "vwScheduledJobsDueNow",
+            "CachePolicy": "Bypass",
+            "Status": "Active",
+            "Sequence": 2
+          },
+          "primaryKey": {
+            "ID": "4E2B0421-FFF4-43FC-B967-7C381C9BFB80"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Scheduled Jobs"
+    }
+  }
+]

@@ -57,6 +57,12 @@ export interface NavigationOptions {
    * resource hands to the form host. Omit to leave the tab's mode unchanged.
    */
   formMode?: 'standard';
+
+  /**
+   * Optional semantic name (`EntityAlternateBaseView.Name`) of an alternate base view
+   * to use when opening a dynamic view via `OpenDynamicView`.
+   */
+  alternateBaseView?: string;
 }
 
 /**

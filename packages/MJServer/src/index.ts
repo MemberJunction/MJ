@@ -46,7 +46,7 @@ import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
 import { CreateRealtimeRecordingRouter, REALTIME_RECORDING_MOUNT_PATH } from './rest/RealtimeRecordingHandler.js';
 import { LoadOwnedRealtimeSession } from './realtimeSessions/ownedRealtimeSession.js';
-import { LoadSessionConversationExternalID } from './realtimeSessions/sessionAccess.js';
+import { AuthorizeAnonymousRoomSessions, LoadSessionConversationScope } from './realtimeSessions/sessionAccess.js';
 import { RecordingAssemblyScheduler } from './realtimeSessions/RecordingAssemblyScheduler.js';
 import {
   RealtimeSessionEventService,
@@ -73,11 +73,11 @@ import {
   SetHandoffOfferPublishHook,
   ParseReplicatedHandoffOfferUpdate,
 } from './resolvers/HumanHandoffResolver.js';
-import { RoomHandoffEngine } from '@memberjunction/livekit-room-server';
+import { RoomAuthorizationService, RoomHandoffEngine } from '@memberjunction/livekit-room-server';
 // Type-only: the provider is built in ./sharedCache.ts. Still needed here because the handoff-offer
 // fan-out below stays in this file — see the note at its call site.
 import type { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
-import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
+import { IntegrationProgressEmitter, SweepInterruptedRuns } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
 import { ClientToolRequestManager, AgentRunWatchdog, SqlRealtimeRecordingLedger } from '@memberjunction/ai-agents';
@@ -437,6 +437,9 @@ export const Serve = async (resolverPaths: Array<string>, app: Application = Cre
   SetHostInstancePort(graphqlPort);
   // The realtime bridge engine stamps its bridge rows with the same identity and reconciles orphans by it (#5310).
   BindBridgeEngineHostInstance();
+  // An anonymous visitor may join only the LiveKit agent-session room it owns by scope; the room gate cannot import
+  // this package's session-access decision, so it is handed in here, before any resolver runs (MJ#6044).
+  RoomAuthorizationService.Instance.SetAnonymousSessionOwnerCheck(AuthorizeAnonymousRoomSessions);
   // Level-gated startup logger. Resolves verbosity from telemetry.level (single
   // operator knob). At `standard` (default), per-phase timings are collapsed into
   // the one-line summary; at `verbose`+ each phase prints inline as before.
@@ -1062,7 +1065,8 @@ const setupComplete$ = new ReplaySubject(1);
           // fires for server-internal saves too (agents, actions, orchestrator), which are exactly
           // the ones no browser session asked for.
           recordData:
-            beEvent.type === 'save' && MayBroadcastRecordData(entityName)
+            beEvent.type === 'save' && MayBroadcastRecordData(entityName, beEvent.baseEntity.EntityInfo)
+              // fls-guard: MayBroadcastRecordData refuses FLS entities and Record Changes
               ? JSON.stringify(beEvent.baseEntity.GetAll())
               : undefined,
         });
@@ -1582,6 +1586,17 @@ const setupComplete$ = new ReplaySubject(1);
   if (!runBackgroundWorkers) {
     LogStatus(`[ServerRole] Running in '${serverRole}' mode — background worker services are disabled on this replica.`);
   }
+
+  // Close out run artifacts a dead process left open, BEFORE anything below can start a new run.
+  //
+  // A killed process (OOM killer, SIGKILL, host reboot) never writes its run's terminal result, so
+  // the run reads as in-flight forever: the wizard spins, the active-operations panel shows a step
+  // that will never advance, and no failure is reported anywhere. Sound only before the first new
+  // run: artifacts are process-local, so anything still in flight as THIS process starts belongs
+  // to a process that no longer exists. That is why it runs here, ahead of the scheduler, the
+  // integration sync worker (its Start() polls immediately), the HTTP listener (a request can
+  // start a discovery) and pending RSU work, and why it is awaited. It needs none of them.
+  await SweepInterruptedRuns(undefined, msg => console.warn(msg));
 
   // Initialize and start scheduled jobs service if enabled
   let scheduledJobsService: ScheduledJobsService | null = null;
@@ -2242,7 +2257,7 @@ function mountRealtimeRecordingRoutes(app: Application): boolean {
       return user ? { ContextUser: user, Provider: provider } : null;
     },
     LoadOwnedSession: LoadOwnedRealtimeSession,
-    LoadConversationExternalID: LoadSessionConversationExternalID,
+    LoadConversationScope: LoadSessionConversationScope,
     CreateLedger: (ledgerProvider, contextUser) => new SqlRealtimeRecordingLedger(ledgerProvider, contextUser),
     Scheduler: RecordingAssemblyScheduler.Instance,
     GraceMs: graceMs,

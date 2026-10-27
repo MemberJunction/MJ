@@ -34,6 +34,7 @@ export class FileCategoryResolver extends FileCategoryResolverBase {
     fileCategoryEntity.CheckPermissions(EntityPermissionType.Delete, true);
 
     await fileCategoryEntity.Load(ID);
+    // fls-guard: loaded as the caller; width follows its user
     const returnValue = fileCategoryEntity.GetAll();
 
     // Any files using the deleted category fall back to its parent
