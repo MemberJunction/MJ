@@ -267,7 +267,7 @@ describe('UpdateRecordAction', () => {
     describe('unknown-field handling', () => {
         // A misspelled field used to be skipped (LogError only) while the rest of the update went through as
         // SUCCESS, and a payload of nothing but typos came back as a NO_CHANGES success.
-        it('refuses an unknown field with UNKNOWN_ENTITY_FIELDS and writes nothing, even alongside a known one', async () => {
+        it('refuses an unknown field with VALIDATION_ERROR and writes nothing, even alongside a known one', async () => {
             const entity = new FakeEntity(['Status'], { ID: '1', Status: 'Draft' });
             const provider = makeProvider({ entityInfo: makeEntityInfo(['Status']), entity });
             const params = makeParams(
@@ -282,7 +282,7 @@ describe('UpdateRecordAction', () => {
             const r = await action.InternalRunAction(params);
 
             expect(r.Success).toBe(false);
-            expect(r.ResultCode).toBe('UNKNOWN_ENTITY_FIELDS');
+            expect(r.ResultCode).toBe('VALIDATION_ERROR');
             expect(r.Message).toContain("'Stauts'");
             expect(r.Message).toContain('Status');
             expect(entity.values.Status).toBe('Draft');
@@ -305,7 +305,7 @@ describe('UpdateRecordAction', () => {
             const r = await action.InternalRunAction(params);
 
             expect(r.Success).toBe(false);
-            expect(r.ResultCode).toBe('UNKNOWN_ENTITY_FIELDS');
+            expect(r.ResultCode).toBe('VALIDATION_ERROR');
             expect(r.Message).toContain("'Stauts', 'Nmae'");
             expect(entity.saveCallCount).toBe(0);
         });

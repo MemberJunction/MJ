@@ -952,6 +952,40 @@ describe('BaseAgent — Fix 2A: Action Failure Handling & Circuit Breaker', () =
             expect(contents.some(c => c.includes('POLICY_APPROVAL_REQUIRED —'))).toBe(true);
         });
 
+        it('a policy refusal repeated with the same arguments still gets the policy directive, not REPEATED_IDENTICAL_CALL', async () => {
+            harness.runAction = () => {
+                harness.runActionCallCount++;
+                const ar = new ActionResult();
+                ar.Success = false;
+                ar.Message = 'Quiet hours: the policy defers this action until 08:00.';
+                ar.Params = [];
+                ar.ResultCode = 'POLICY_DEFERRED_OUTSIDE_TIME_WINDOW';
+                return ar;
+            };
+
+            // The same refused call twice, then the model gives up.
+            const { agent } = makeAgent([
+                () => llmEnvelope(actionsEnvelope()),
+                () => llmEnvelope(actionsEnvelope()),
+                () => llmEnvelope(successEnvelope()),
+            ]);
+
+            const params = makeParams();
+            const result = await agent.Execute(params);
+            expect(result.success).toBe(true);
+            expect(harness.runActionCallCount).toBe(2);
+
+            const guidance = params.conversationMessages
+                .map(m => typeof m.content === 'string' ? m.content : '')
+                .filter(c => c.includes('Action Execution Failure Guidance'));
+            expect(guidance).toHaveLength(2);
+            expect(guidance[0]).toContain('[CRITICAL/POLICY_DEFERRED]');
+            // The second identical call would otherwise trip the identical-arguments rule and be told to
+            // "adjust your parameters" — the one thing a deferred call must not do.
+            expect(guidance[1]).toContain('[CRITICAL/POLICY_DEFERRED]');
+            expect(guidance.some(g => g.includes('[CRITICAL/REPEATED_IDENTICAL_CALL]'))).toBe(false);
+        });
+
         it('once the budget is spent the directive says ATTEMPTS_EXHAUSTED, never REPEATED_IDENTICAL_CALL', async () => {
             harness.runAction = () => {
                 harness.runActionCallCount++;

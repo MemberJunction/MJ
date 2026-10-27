@@ -101,12 +101,18 @@ export class FakeEntity {
 export interface FakeEntityInfo {
     PrimaryKeys: Array<{ Name: string }>;
     Fields: Array<{ Name: string }>;
+    /** EntityInfo's case-insensitive, trimmed field lookup, which the mutation actions resolve names through. */
+    FieldByName(name: string): { Name: string } | undefined;
 }
 
-export const makeEntityInfo = (fieldNames: string[], pkNames: string[] = ['ID']): FakeEntityInfo => ({
-    PrimaryKeys: pkNames.map((Name) => ({ Name })),
-    Fields: fieldNames.map((Name) => ({ Name })),
-});
+export const makeEntityInfo = (fieldNames: string[], pkNames: string[] = ['ID']): FakeEntityInfo => {
+    const fields = fieldNames.map((Name) => ({ Name }));
+    return {
+        PrimaryKeys: pkNames.map((Name) => ({ Name })),
+        Fields: fields,
+        FieldByName: (name: string) => fields.find((f) => f.Name.trim().toLowerCase() === name.trim().toLowerCase()),
+    };
+};
 
 export interface FakeProviderOpts {
     entityInfo?: FakeEntityInfo;

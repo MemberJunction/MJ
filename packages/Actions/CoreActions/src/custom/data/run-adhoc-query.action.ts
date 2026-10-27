@@ -88,7 +88,10 @@ export class RunAdhocQueryAction extends BaseAction {
             const maxRows = this.positiveOrDefault(this.getNumericParam(params, "maxrows", 1000), 1000);
             const requestedTimeout = this.getNumericParam(params, "timeout", 0);
             const timeout = authorizer.ClampTimeoutSeconds(requestedTimeout > 0 ? requestedTimeout : undefined);
-            const dataFormat = this.getStringParam(params, "dataformat") || this.getStringParam(params, "outputformat") || 'csv';
+            // A rendered copy of the rows is produced only when the caller asked for one. With no format the
+            // rows go out once, in `Results`; a default rendering alongside it put every result set into an
+            // agent's context twice.
+            const dataFormat = this.getStringParam(params, "dataformat") || this.getStringParam(params, "outputformat");
             const analysisRequest = this.getStringParam(params, "analysisrequest");
             const returnType = this.getStringParam(params, "returntype") ||
                 (analysisRequest ? 'data and analysis' : 'data only');
@@ -692,9 +695,6 @@ export class RunAdhocQueryAction extends BaseAction {
         if (returnType === 'data only' || returnType === 'data and analysis') {
             lines.push(this.describeDataLocation(results.length, formattedData !== undefined));
         }
-
-        lines.push(`\n---`);
-        lines.push(`\n**The full result set is available in the Results output parameter for further processing.**`);
 
         return lines.join('\n');
     }

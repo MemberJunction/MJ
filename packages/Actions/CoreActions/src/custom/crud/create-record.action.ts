@@ -45,7 +45,7 @@ export class CreateRecordAction extends BaseRecordMutationAction {
      * 
      * @returns ActionResultSimple with:
      *   - Success: true if record was created successfully
-     *   - ResultCode: SUCCESS, FAILED, ENTITY_NOT_FOUND, UNKNOWN_ENTITY_FIELDS, VALIDATION_ERROR, PERMISSION_DENIED
+     *   - ResultCode: SUCCESS, FAILED, ENTITY_NOT_FOUND, VALIDATION_ERROR (including unknown field names), PERMISSION_DENIED
      *   - Message: Details about the operation
      *   - Params: Output parameter 'PrimaryKey' contains an object with the primary key field(s) and value(s)
      */
@@ -75,7 +75,7 @@ export class CreateRecordAction extends BaseRecordMutationAction {
             entity!.NewRecord();
 
             // Set field values using base class method
-            this.setFieldValues(entity!, resolved, entityName);
+            this.setFieldValues(entity!, resolved);
 
             // Save the record
             const saveResult = await entity!.Save();

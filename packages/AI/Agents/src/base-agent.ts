@@ -1248,20 +1248,20 @@ export class BaseAgent {
         if (this._fatalActionFailures.has(summary.actionName)) {
             return 'fatal';
         }
-        // A policy refusal still counts in the history: the budget and identical-arguments rules above
-        // stay as backstops, but until one fires the guidance names the refusal, not the parameters.
-        const plain: ActionFailureClass = POLICY_REFUSAL_RESULT_CODES.has(summary.resultCode) ? 'policy' : 'warning';
         const record = this._actionFailureHistory.get(summary.actionName);
-        if (!record) {
-            return plain;
-        }
-        if (record.totalConsecutiveFailures >= ACTION_FAILURE_BUDGET) {
+        if (record && record.totalConsecutiveFailures >= ACTION_FAILURE_BUDGET) {
             return 'attempts-exhausted';
         }
-        if (record.identicalFailures >= IDENTICAL_FAILURE_THRESHOLD) {
+        // A policy refusal still counts in the history, so the budget above stays as the backstop; but it
+        // outranks the identical-arguments rule, whose guidance ("adjust your parameters") is exactly what
+        // a refused call must not be told. Approval and a time window do not come from different arguments.
+        if (POLICY_REFUSAL_RESULT_CODES.has(summary.resultCode)) {
+            return 'policy';
+        }
+        if (record && record.identicalFailures >= IDENTICAL_FAILURE_THRESHOLD) {
             return 'identical-arguments';
         }
-        return plain;
+        return 'warning';
     }
 
     /**

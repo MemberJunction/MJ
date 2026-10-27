@@ -240,7 +240,23 @@ describe('Run Ad-hoc Query: output parameters and markdown truncation', () => {
             { ColumnName: 'Month', DataType: 'string', IsNullable: false },
             { ColumnName: 'Total', DataType: 'number', IsNullable: false },
         ]);
-        expect(typeof formattedParam?.Value).toBe('string');
+        // No format was asked for, so the rows travel once: no rendered copy alongside Results.
+        expect(formattedParam).toBeUndefined();
+        expect(result.Message).not.toContain('FormattedResults');
+    });
+
+    it('renders FormattedResults only when a format is asked for', async () => {
+        const params: Param[] = [
+            { Name: 'Query', Type: 'Input', Value: SQL },
+            { Name: 'DataFormat', Type: 'Input', Value: 'csv' },
+        ];
+        const action = new RunAdhocQueryAction() as unknown as Runnable;
+
+        await action.InternalRunAction({ ContextUser: USER, Params: params });
+
+        const formatted = params.find(p => p.Name === 'FormattedResults')?.Value as string;
+        expect(formatted).toContain('Month');
+        expect(formatted).toContain('Jan');
     });
 
     it('keeps the rows out of Message: they travel once, in the Results (and FormattedResults) output parameters', async () => {

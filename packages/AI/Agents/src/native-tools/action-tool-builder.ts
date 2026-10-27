@@ -192,7 +192,9 @@ function composeDescription(
  */
 function describeTool(action: MJActionEntityExtended, params: readonly MJActionParamEntity[]): string {
     const outputs = params.filter((p) => p.Type === 'Output' || p.Type === 'Both');
-    // Harness stand-ins may build an Action literal without the related-record collection.
+    // Harness stand-ins may build an Action literal without the related-record collection. The collection
+    // itself is declared `OrderBy: 'ResultCode ASC'`, and the prose catalog lists the codes in that same
+    // order, so they are left as they come: the two descriptions have to agree.
     const codes = action.ResultCodes?.Items ?? [];
 
     for (const detail of DESCRIPTION_DETAIL_LEVELS) {
@@ -229,9 +231,10 @@ export function BuildToolFromAction(action: MJActionEntityExtended, params: read
     const properties: Record<string, ParamValueSchema> = {};
     const required: string[] = [];
 
-    // Declared in name order, so the schema is byte-identical on every request that declares the same
-    // tool. The engine hands the params over in load order, which is not stable across processes, and a
-    // tool declaration that differs only in property order still misses the provider's prompt cache.
+    // Declared in ordinal name order, so the schema is byte-identical wherever it is built. The `Params`
+    // collection already loads `OrderBy: 'Name ASC'`, but that is the database's collation order, which
+    // differs between servers; a tool declaration that differs only in property order still misses the
+    // provider's prompt cache.
     const declared = params
         .filter((param) => param.Type === 'Input' || param.Type === 'Both')
         .sort((a, b) => CompareToolNames(a.Name, b.Name));

@@ -162,13 +162,13 @@ export abstract class BaseRecordMutationAction extends BaseAction {
      * be dropped on the floor, and the caller told the write succeeded with that value silently missing.
      */
     protected ResolveFieldNames(entityInfo: EntityInfo, fields: Record<string, unknown>): { resolved: Record<string, unknown>; unknown: string[] } {
-        const canonicalByLowerName = new Map<string, string>(entityInfo.Fields.map((f) => [f.Name.toLowerCase(), f.Name]));
         const resolved: Record<string, unknown> = {};
         const unknown: string[] = [];
         for (const [name, value] of Object.entries(fields)) {
-            const canonical = canonicalByLowerName.get(name.trim().toLowerCase());
-            if (canonical) {
-                resolved[canonical] = value;
+            // The metadata's own case-insensitive, trimmed lookup.
+            const field = entityInfo.FieldByName(name);
+            if (field) {
+                resolved[field.Name] = value;
             } else {
                 unknown.push(name);
             }
@@ -179,27 +179,28 @@ export abstract class BaseRecordMutationAction extends BaseAction {
     /**
      * The failure for a Fields object that names fields the entity does not have, listing the ones a caller
      * can write (the metadata's read-only fields — keys, computed and system columns — are left out).
+     * `VALIDATION_ERROR` is the code both actions declare for bad input, and the one the sibling
+     * `Write Entity Fields` action returns for the same mistake.
      */
     protected UnknownFieldsResult(entityName: string, entityInfo: EntityInfo, unknown: string[]): ActionResultSimple {
         const known = entityInfo.Fields.filter((f) => !f.ReadOnly).map((f) => f.Name);
         return {
             Success: false,
-            ResultCode: 'UNKNOWN_ENTITY_FIELDS',
+            ResultCode: 'VALIDATION_ERROR',
             Message: `Entity '${entityName}' has no field named ${unknown.map((name) => `'${name}'`).join(', ')}; nothing was changed. ` +
                 `Its fields are: ${known.join(', ')}.`
         };
     }
 
     /**
-     * Set field values on an entity
+     * Sets already-resolved field values on an entity. `BaseEntity.Set` finds the field by its metadata name,
+     * so no property check is needed — the earlier `in entity` test asked whether a JavaScript property of
+     * that name existed on the object, which is false for an entity with no generated subclass or whose
+     * generated property is spelled differently from the column, and the value was then dropped.
      */
-    protected setFieldValues(entity: BaseEntity, fields: Record<string, any>, entityName: string): void {
+    protected setFieldValues(entity: BaseEntity, fields: Record<string, unknown>): void {
         for (const [fieldName, fieldValue] of Object.entries(fields)) {
-            if (fieldName in entity) {
-                entity.Set(fieldName, fieldValue);
-            } else {
-                LogError(`Field '${fieldName}' does not exist on entity '${entityName}'`);
-            }
+            entity.Set(fieldName, fieldValue);
         }
     }
 

@@ -216,7 +216,7 @@ describe('CreateRecordAction', () => {
     describe('unknown-field handling', () => {
         // A misspelled field used to be dropped (LogError only) while the record still saved as SUCCESS —
         // the agent was told the write worked with that value silently missing.
-        it('refuses an unknown field with UNKNOWN_ENTITY_FIELDS before creating anything, naming the entity\'s fields', async () => {
+        it('refuses an unknown field with VALIDATION_ERROR before creating anything, naming the entity\'s fields', async () => {
             const entity = new FakeEntity(['Name', 'Status'], { ID: 'new-7' });
             const provider = makeProvider({ entityInfo: makeEntityInfo(['Name', 'Status']), entity });
             const params = makeParams(
@@ -230,7 +230,7 @@ describe('CreateRecordAction', () => {
             const r = await action.InternalRunAction(params);
 
             expect(r.Success).toBe(false);
-            expect(r.ResultCode).toBe('UNKNOWN_ENTITY_FIELDS');
+            expect(r.ResultCode).toBe('VALIDATION_ERROR');
             expect(r.Message).toContain("'Naem'");
             expect(r.Message).toContain('Name, Status');
             expect(entity.newRecordCalled).toBe(false);
