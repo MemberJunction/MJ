@@ -18,8 +18,9 @@
  * Record creation: when the entity lists `__mj_CreatedAt`, a record created after a row's decision day did not exist
  * then, so its `immutable-field` value reads as missing (version `created-after-decision`), never the stored value.
  * Without the column the rule cannot be applied and the value is read; such entities (those mapped from external
- * schemas) rely on the unit's premise that its rows exist on their decision dates. The key join reads the unit row
- * itself, whose existence on its decision date is that same premise, so the creation rule does not apply to it.
+ * schemas) rely on the unit's premise that its rows exist on their decision dates. The same rule applies to the key
+ * a unit row joins through: a unit row created after its decision day resolves its join key as null, so every value
+ * read through that key is missing (version `created-after-decision`).
  *
  * System timestamp columns: `__mj_CreatedAt` and `__mj_UpdatedAt` are requested only when the entity's metadata lists
  * them. Without `__mj_CreatedAt`, an immutable field's provenance carries the record key only (version
@@ -28,6 +29,9 @@
  *
  * Categorical columns: when a column has more distinct levels than its encoding's `cardinalityCap`, the least frequent
  * levels beyond the cap (by count, ties by value) fold into one `__other` level, recorded on the column's provenance.
+ * The kept levels are a fitted encoding step, like the sidecar's one-hot vocabulary: training returns them
+ * (`CategoryLevels` on the result) and scoring passes them back (`CategoryLevels` on the input), so a value is folded
+ * the same way in both contexts; a value not among the kept levels becomes `__other` and nothing is recounted.
  * One-hot is the only categorical method the sidecar fits; any other method fails loudly.
  */
 import { createHash } from 'node:crypto';
@@ -69,6 +73,13 @@ export interface AsOfAssemblyInput {
   readonly Metadata: IAssemblyMetadata;
   readonly AssembledAt: Date;
   readonly ExplicitOps?: readonly PreprocessingOp[];
+  /**
+   * The kept levels of each categorical column, by column name, as training produced them (the result's
+   * `CategoryLevels`). Scoring must pass training's levels so a value folds into `__other` exactly as it did in
+   * training; a column listed here is folded to these levels without recounting. Absent (training), the levels are
+   * computed from the assembled rows.
+   */
+  readonly CategoryLevels?: ReadonlyMap<string, readonly string[]>;
 }
 
 export type AsOfAssemblyResult =
@@ -81,6 +92,8 @@ export type AsOfAssemblyResult =
       readonly Coverage: readonly ChangeHistoryCoverage[];
       readonly Preprocessing: readonly PreprocessingOp[];
       readonly ColumnProvenance: readonly ColumnProvenance[];
+      /** The kept levels of every categorical column, by column name: persist them with the model and pass them back at scoring. */
+      readonly CategoryLevels: ReadonlyMap<string, readonly string[]>;
     }
   | { readonly Status: 'refused'; readonly Refusal: AssemblyRefusal };
 
@@ -92,6 +105,8 @@ interface Uncovered { readonly Uncovered: true; readonly Entity: string; readonl
 type FeatureReader = (row: AssemblyRowRef) => RawValue | Uncovered;
 interface ColumnReader { readonly Spec: FeatureColumnSpec; readonly Read: FeatureReader }
 type KeyOf = (row: AssemblyRowRef) => string | null;
+/** How rows resolve a join key, and which rows' keys are unknown because the unit row was created after its decision day. */
+interface JoinKeys { readonly KeyOf: KeyOf; readonly CreatedAfter: (row: AssemblyRowRef) => boolean }
 type FieldSource = Extract<FeatureColumnSpec['source'], { kind: 'immutable-field' | 'record-changes' }>;
 type FeatureValueSource = Extract<FeatureColumnSpec['source'], { kind: 'feature-value' }>;
 type SeriesSource = Extract<FeatureColumnSpec['source'], { kind: 'series' }>;
@@ -161,7 +176,7 @@ export class AsOfFeatureAssembler {
     if (input.Unit.history.onUncoveredRow === 'refuse' && first) {
       throw new AssemblyRefused({ kind: 'decision-date-before-change-history', entity: first.Entity, field: first.Field, historyStart: first.HistoryStart, rowsAffected: first.Rows });
     }
-    const folded = AsOfFeatureAssembler.foldCategoricals(columns, input.Features, assembled.Rows);
+    const folded = AsOfFeatureAssembler.foldCategoricals(columns, input.Features, assembled.Rows, input.CategoryLevels);
     return {
       Status: 'assembled',
       Columns: columns,
@@ -171,41 +186,53 @@ export class AsOfFeatureAssembler {
       Coverage: [...coverage.values()],
       Preprocessing: AsOfFeatureAssembler.BuildPreprocessingOps(columns, input.Features, input.ExplicitOps || []),
       ColumnProvenance: readers.map((r) => AsOfFeatureAssembler.columnProvenance(r.Spec, input, coverage, folded.Folds.get(r.Spec.name))),
+      CategoryLevels: folded.Levels,
     };
   }
 
   private static columnProvenance(spec: FeatureColumnSpec, input: AsOfAssemblyInput, coverage: CoverageByEntity, fold: CategoryFold | undefined): ColumnProvenance {
     const base: ColumnProvenance = { column: spec.name, source: spec.source.kind, sourceRef: AsOfFeatureAssembler.describeSource(spec), sourceVersion: AsOfFeatureAssembler.columnVersion(spec, input, coverage) };
-    return fold ? { ...base, categoryFold: fold } : base;
+    return fold && fold.folded.length > 0 ? { ...base, categoryFold: fold } : base;
   }
 
   /**
-   * Caps every categorical column's levels: when a column has more distinct non-missing levels than its cap, the levels
-   * beyond the cap (ordered by count descending, then value ascending, so the fold is deterministic) become `__other`.
+   * Caps every categorical column's levels. With training's kept levels for a column (`given`), every other value becomes
+   * `__other`. Otherwise, when a column has more distinct non-missing levels than its cap, the levels beyond the cap
+   * (count descending, then value ascending, so the fold is deterministic) become `__other`. Returns the kept levels of
+   * every categorical column and the fold of each column that folded anything.
    */
-  private static foldCategoricals(columns: readonly AssembledColumn[], features: readonly FeatureColumnSpec[], rows: readonly AssembledRow[]): { readonly Rows: AssembledRow[]; readonly Folds: Map<string, CategoryFold> } {
+  private static foldCategoricals(
+    columns: readonly AssembledColumn[], features: readonly FeatureColumnSpec[], rows: readonly AssembledRow[], given: ReadonlyMap<string, readonly string[]> | undefined,
+  ): { readonly Rows: AssembledRow[]; readonly Folds: Map<string, CategoryFold>; readonly Levels: Map<string, readonly string[]> } {
     const byFeature = new Map(features.map((f) => [f.name, f]));
     const folds = new Map<string, CategoryFold>();
-    const replace = new Map<number, ReadonlySet<string>>();
+    const levels = new Map<string, readonly string[]>();
+    const kept = new Map<number, ReadonlySet<string>>();
     columns.forEach((c, i) => {
       const encoding = byFeature.get(c.FeatureName)?.encoding;
       if (c.Encoding !== 'categorical' || !encoding || encoding.kind !== 'categorical') return;
-      const fold = AsOfFeatureAssembler.levelFold(rows.map((r) => r.Values[i]), encoding.cardinalityCap);
-      if (fold === null) return;
+      const fold = AsOfFeatureAssembler.levelFold(rows.map((r) => r.Values[i]), encoding.cardinalityCap, given?.get(c.Name));
+      levels.set(c.Name, fold.kept);
       folds.set(c.Name, fold);
-      replace.set(i, new Set(fold.folded));
+      if (fold.folded.length > 0) kept.set(i, new Set(fold.kept));
     });
-    if (replace.size === 0) return { Rows: [...rows], Folds: folds };
-    const foldedRows = rows.map((r) => ({ ...r, Values: r.Values.map((v, i) => (typeof v === 'string' && replace.get(i)?.has(v) ? OTHER_CATEGORY_LEVEL : v)) }));
-    return { Rows: foldedRows, Folds: folds };
+    if (kept.size === 0) return { Rows: [...rows], Folds: folds, Levels: levels };
+    const foldedRows = rows.map((r) => ({ ...r, Values: r.Values.map((v, i) => (typeof v === 'string' && kept.has(i) && !kept.get(i).has(v) ? OTHER_CATEGORY_LEVEL : v)) }));
+    return { Rows: foldedRows, Folds: folds, Levels: levels };
   }
 
-  /** The kept and folded levels of one column's values, or null when its distinct levels are within the cap. */
-  private static levelFold(values: readonly MatrixCell[], cap: number): CategoryFold | null {
+  /**
+   * The kept and folded levels of one column's values. With `trained` levels the kept levels are exactly those and the
+   * folded ones are the other values seen; without, the most frequent `cap` levels are kept.
+   */
+  private static levelFold(values: readonly MatrixCell[], cap: number, trained: readonly string[] | undefined): CategoryFold {
     const counts = new Map<string, number>();
     for (const v of values) if (typeof v === 'string') counts.set(v, (counts.get(v) || 0) + 1);
-    if (counts.size <= cap) return null;
     const ordered = [...counts.entries()].sort((a, b) => b[1] - a[1] || OrdinalCompare(a[0], b[0])).map(([level]) => level);
+    if (trained) {
+      const keep = new Set(trained);
+      return { kept: [...trained], folded: ordered.filter((level) => !keep.has(level)) };
+    }
     return { kept: ordered.slice(0, cap), folded: ordered.slice(cap) };
   }
 
@@ -342,12 +369,13 @@ export class AsOfFeatureAssembler {
   private async fieldReader(spec: FeatureColumnSpec, source: FieldSource, input: AsOfAssemblyInput, coverage: CoverageByEntity): Promise<FeatureReader> {
     const entity = source.entity === input.RowEntity.Name ? input.RowEntity : input.Metadata.Entity(source.entity);
     if (!entity) throw new AssemblyRefused({ kind: 'unresolved-column', entity: source.entity, field: source.field });
-    const keyOf = await this.keyResolver(source.keyField, input, (row) => row.RowId);
-    if (source.kind === 'immutable-field') return this.currentValueReader(spec, source, entity, keyOf, input);
+    const join = await this.keyResolver(source.keyField, input, (row) => row.RowId);
+    const keyOf = join.KeyOf;
+    if (source.kind === 'immutable-field') return AsOfFeatureAssembler.missingWhenCreatedAfter(spec, join, await this.currentValueReader(spec, source, entity, keyOf, input), input);
     const keys = input.Rows.map((r) => keyOf(r)).filter((k): k is string => k !== null);
     const history = await input.History.Load(entity, keys, [source.field], input.Unit.history, input.AssembledAt);
     if (!coverage.has(entity.Name)) coverage.set(entity.Name, history.Coverage);
-    return this.replayReader(spec, source, entity, keyOf, history);
+    return AsOfFeatureAssembler.missingWhenCreatedAfter(spec, join, this.replayReader(spec, source, entity, keyOf, history), input);
   }
 
   /** The value Record Changes say the field held as of the decision day; a row it cannot replay is uncovered. */
@@ -411,9 +439,9 @@ export class AsOfFeatureAssembler {
   private async aggregateReader(spec: FeatureColumnSpec, source: WindowedAggregateSource, input: AsOfAssemblyInput): Promise<FeatureReader> {
     const index = await this.childIndex(source, input);
     // The contract: a null owner key field means the row's entity key.
-    const keyOf = await this.keyResolver(source.ownerKeyField, input, (row) => row.EntityKey);
-    return (row) => {
-      const owner = keyOf(row);
+    const join = await this.keyResolver(source.ownerKeyField, input, (row) => row.EntityKey);
+    return AsOfFeatureAssembler.missingWhenCreatedAfter(spec, join, (row) => {
+      const owner = join.KeyOf(row);
       // A row with no owner key has no child rows; '' would read the bucket of child rows that have no owner.
       if (owner === null) {
         return { Value: null, Provenance: { column: spec.name, source: 'windowed-aggregate', sourceRef: 'none', sourceVersion: AsOfFeatureAssembler.contributorsVersion([]), computedAt: input.AssembledAt.toISOString() } };
@@ -427,7 +455,7 @@ export class AsOfFeatureAssembler {
           sourceVersion: AsOfFeatureAssembler.contributorsVersion(agg.Contributors), computedAt: input.AssembledAt.toISOString(),
         },
       };
-    };
+    }, input);
   }
 
   /** A declared lag or rolling window of the unit's own series. */
@@ -518,15 +546,32 @@ export class AsOfFeatureAssembler {
    * How a row finds the record a source reads: through a key field on the row entity, or (no key field) `fallback` —
    * the row's own id for a field, the row's entity key for an aggregate owner.
    */
-  private async keyResolver(keyField: string | null, input: AsOfAssemblyInput, fallback: KeyOf): Promise<KeyOf> {
-    if (keyField === null) return fallback;
+  private async keyResolver(keyField: string | null, input: AsOfAssemblyInput, fallback: KeyOf): Promise<JoinKeys> {
+    if (keyField === null) return { KeyOf: fallback, CreatedAfter: () => false };
     await this.assertStableCurrentValue(input.RowEntity, keyField, input.Rows.map((r) => ({ Row: r, Key: r.RowId })), input);
-    const rowsById = await KeyedReader.ReadByKeys(input.DataAccess, input.RowEntity.Name, input.RowEntity.PrimaryKey, input.Rows.map((r) => r.RowId), [keyField]);
+    const hasCreatedAt = AsOfFeatureAssembler.hasField(input.RowEntity, '__mj_CreatedAt');
+    const rowsById = await KeyedReader.ReadByKeys(input.DataAccess, input.RowEntity.Name, input.RowEntity.PrimaryKey, input.Rows.map((r) => r.RowId), hasCreatedAt ? [keyField, '__mj_CreatedAt'] : [keyField]);
     if (rowsById.Status === 'refused') throw new AssemblyRefused(rowsById.Refusal);
-    return (row) => {
-      const v = rowsById.Rows.get(row.RowId.toLowerCase())?.[keyField];
-      return v === null || v === undefined ? null : String(v);
+    const createdAfter = (row: AssemblyRowRef): boolean => {
+      if (!hasCreatedAt) return false;
+      const created = AsOfFeatureAssembler.instantOf(rowsById.Rows.get(row.RowId.toLowerCase())?.__mj_CreatedAt);
+      return created !== null && created.getTime() >= AsOfFeatureAssembler.asOfInstant(row.DecisionDate).getTime();
     };
+    return {
+      CreatedAfter: createdAfter,
+      KeyOf: (row) => {
+        if (createdAfter(row)) return null;
+        const v = rowsById.Rows.get(row.RowId.toLowerCase())?.[keyField];
+        return v === null || v === undefined ? null : String(v);
+      },
+    };
+  }
+
+  /** A reader whose rows created after their decision day (so their join key is unknown) read as missing. */
+  private static missingWhenCreatedAfter(spec: FeatureColumnSpec, join: JoinKeys, read: FeatureReader, input: AsOfAssemblyInput): FeatureReader {
+    return (row) => (join.CreatedAfter(row)
+      ? { Value: null, Provenance: { column: spec.name, source: spec.source.kind, sourceRef: 'none', sourceVersion: 'created-after-decision', computedAt: input.AssembledAt.toISOString() } }
+      : read(row));
   }
 
   private async childIndex(source: WindowedAggregateSource, input: AsOfAssemblyInput): Promise<ChildRowIndex> {

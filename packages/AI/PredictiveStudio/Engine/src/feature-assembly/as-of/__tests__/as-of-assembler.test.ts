@@ -76,6 +76,8 @@ interface Fixture {
   readonly Changes?: Record<string, RecordChangeRow[]>;
   readonly Unit?: PredictionUnitSpec;
   readonly SeriesHistory?: SeriesHistory;
+  readonly RowEntity?: AssemblyEntityInfo;
+  readonly CategoryLevels?: ReadonlyMap<string, readonly string[]>;
 }
 
 const input = (features: FeatureColumnSpec[], f: Fixture = {}): AsOfAssemblyInput => {
@@ -83,7 +85,7 @@ const input = (features: FeatureColumnSpec[], f: Fixture = {}): AsOfAssemblyInpu
   return {
     Context: 'train',
     Unit: f.Unit || unit,
-    RowEntity: entities.Years,
+    RowEntity: f.RowEntity || entities.Years,
     Rows: f.Rows || rows,
     Features: features,
     SeriesHistory: f.SeriesHistory || null,
@@ -92,6 +94,7 @@ const input = (features: FeatureColumnSpec[], f: Fixture = {}): AsOfAssemblyInpu
     History: historyOver(data, f.Changes || changes),
     Metadata: metadata,
     AssembledAt: new Date('2026-10-12T00:00:00Z'),
+    ...(f.CategoryLevels ? { CategoryLevels: f.CategoryLevels } : {}),
   };
 };
 
@@ -247,6 +250,32 @@ describe('AsOfFeatureAssembler current-value reads', () => {
     if (out.Status !== 'assembled') return;
     expect(out.Rows.map((r) => r.Values[0])).toEqual(['EU', 'R7', 'EU', '__other']);
     expect(out.ColumnProvenance[0].categoryFold).toEqual({ kept: ['EU', 'R7'], folded: ['US'] });
+    expect(out.CategoryLevels.get('Region')).toEqual(['EU', 'R7']);
+  });
+  it('folds with the levels training kept when they are given, without recounting', async () => {
+    const regions = ['EU', 'R7', 'EU', 'US'];
+    const data: Record<string, SourceRow[]> = { ...tables, Years: regions.map((Region, i) => ({ ID: `y${i + 1}`, PersonID: 'P1', Region })) };
+    const fourRows: AssemblyRowRef[] = regions.map((_, i) => ({ RowId: `y${i + 1}`, EntityKey: `y${i + 1}`, DecisionDate: new Date('2023-12-01T00:00:00Z'), Period: null }));
+    const trained = new Map<string, readonly string[]>([['Region', ['R7', 'US']]]);
+    const out = await new AsOfFeatureAssembler().Assemble(input([categorical('Region', 'Years', null, 2)], { Tables: data, Rows: fourRows, CategoryLevels: trained }));
+    expect(out.Status).toBe('assembled');
+    if (out.Status !== 'assembled') return;
+    expect(out.Rows.map((r) => r.Values[0])).toEqual(['__other', 'R7', '__other', 'US']);
+    expect(out.CategoryLevels.get('Region')).toEqual(['R7', 'US']);
+    expect(out.ColumnProvenance[0].categoryFold).toEqual({ kept: ['R7', 'US'], folded: ['EU'] });
+  });
+  it('resolves the join key of a unit row created after its decision day as missing', async () => {
+    const years: AssemblyEntityInfo = { ...entities.Years, Fields: [...entities.Years.Fields, field('__mj_CreatedAt', 'Date')] };
+    const data: Record<string, SourceRow[]> = {
+      ...tables,
+      Years: [{ ...tables.Years[0], __mj_CreatedAt: new Date('2022-01-01T00:00:00Z') }, { ...tables.Years[1], __mj_CreatedAt: new Date('2024-02-01T00:00:00Z') }],
+    };
+    const features: FeatureColumnSpec[] = [{ name: 'Status', source: { kind: 'record-changes', entity: 'People', field: 'Status', keyField: 'PersonID' }, encoding: { kind: 'categorical', cardinalityCap: 50, method: 'onehot' }, missing: { impute: 'mode', indicator: true, constant: null } }];
+    const out = await new AsOfFeatureAssembler().Assemble(input(features, { Tables: data, RowEntity: years }));
+    expect(out.Status).toBe('assembled');
+    if (out.Status !== 'assembled') return;
+    expect(out.Rows.map((r) => r.Values[0])).toEqual(['Active', null]);
+    expect(out.Rows[1].Provenance[0]).toMatchObject({ source: 'record-changes', sourceRef: 'none', sourceVersion: 'created-after-decision' });
   });
   it('fails on a categorical method the assembly cannot emit, naming it', async () => {
     const hashed: FeatureColumnSpec = { ...categorical('Region', 'Years'), encoding: { kind: 'categorical', cardinalityCap: 50, method: 'hashed' } };
