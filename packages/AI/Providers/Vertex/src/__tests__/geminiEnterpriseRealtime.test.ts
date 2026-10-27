@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { GoogleAuth, JWT, type GoogleAuthOptions } from 'google-auth-library';
@@ -378,6 +378,28 @@ describe('GeminiEnterpriseRealtime', () => {
             expect(getHeadersSpy).toHaveBeenCalledTimes(3);
             expect(getHeadersSpy.mock.instances[0]).toBe(getHeadersSpy.mock.instances[1]);
             expect(getHeadersSpy.mock.instances[2]).not.toBe(getHeadersSpy.mock.instances[0]);
+        });
+
+        it('gives a session the key file as it is now, not the key a cached GoogleAuth read from that path earlier', async () => {
+            const getHeadersSpy = vi
+                .spyOn(GoogleAuth.prototype, 'getRequestHeaders')
+                .mockResolvedValue(new Headers({ Authorization: `Bearer ${ACCESS_TOKEN}` }));
+            const rotatedEmail = 'rotated-sa@stand-in-project.iam.gserviceaccount.com';
+            const original = readFileSync(keyFilePath, 'utf8');
+            try {
+                const before = openFresh(await new GeminiEnterpriseRealtime(environmentKey).CreateClientSession(makeParams()));
+                await before.Policy.UpstreamHeaders();
+
+                // The operator rotates the key: same path, new service account.
+                writeFileSync(keyFilePath, JSON.stringify({ type: 'service_account', project_id: PROJECT, private_key: STAND_IN_KEY, client_email: rotatedEmail }));
+                const after = openFresh(await new GeminiEnterpriseRealtime(environmentKey).CreateClientSession(makeParams()));
+                await after.Policy.UpstreamHeaders();
+
+                const client = await (getHeadersSpy.mock.instances[1] as GoogleAuth).getClient();
+                expect((client as JWT).email).toBe(rotatedEmail);
+            } finally {
+                writeFileSync(keyFilePath, original);
+            }
         });
     });
 

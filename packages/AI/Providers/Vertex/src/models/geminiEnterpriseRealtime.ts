@@ -111,7 +111,7 @@ export interface GeminiEnterpriseLiveClient {
 
 /**
  * Process-wide bounded cache of `VertexGoogleAuth` instances keyed by a SHA-256 hash of the credential source
- * and payload. Because `RealtimeClientSessionService` instantiates a fresh `GeminiEnterpriseRealtime` per session
+ * and payload — inline service-account keys only, whose JSON is the key material. Because `RealtimeClientSessionService` instantiates a fresh `GeminiEnterpriseRealtime` per session
  * via `ClassFactory.CreateInstance`, caching inside `CreateGoogleAuth` preserves `google-auth-library`'s ~55-minute
  * OAuth access-token cache across concurrent sessions while letting subclasses that override `CreateGoogleAuth`
  * naturally supply their own auth client.
@@ -183,7 +183,7 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
         this.credentials = read.Credentials;
         this.credentialsProblem = read.Problem;
         this.keySource = VertexKeySourceOf(DRIVER_CLASS, credentialsJson);
-        this.credentialHash = read.Credentials
+        this.credentialHash = GeminiEnterpriseRealtime.holdsKeyMaterial(read.Credentials)
             ? createHash('sha256').update(`${this.keySource}|${credentialsJson}`).digest('hex')
             : null;
     }
@@ -266,8 +266,9 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
 
     /**
      * Creation seam for the `GoogleAuth` that mints this driver's tokens (tests return a fake).
-     * Shares the underlying `GoogleAuth` across driver instances with identical credentials (keyed by SHA-256 hash)
-     * so `google-auth-library`'s OAuth token cache survives across sessions.
+     * Shares the underlying `GoogleAuth` across driver instances with an identical inline service-account key (keyed by
+     * SHA-256 hash) so `google-auth-library`'s OAuth token cache survives across sessions. A key-file or ADC key gets a
+     * fresh one each time (see {@link holdsKeyMaterial}).
      *
      * @param options The credentials' `google-auth-library` options, with the `cloud-platform` scope.
      */
@@ -374,6 +375,15 @@ export class GeminiEnterpriseRealtime extends GeminiRealtime {
             const problem = error instanceof VertexCredentialsError ? CREDENTIALS_PROBLEMS[error.Problem] : 'is not a JSON object';
             return { Credentials: null, Problem: problem };
         }
+    }
+
+    /**
+     * Whether the key JSON itself holds the key material (an inline service account), so a hash of the JSON identifies
+     * the credential. A key-file path or Application Default Credentials point at material that can change behind the
+     * same JSON — a rotated key file keeps its path — so their `GoogleAuth` must not be shared across sessions.
+     */
+    private static holdsKeyMaterial(credentials: VertexAICredentials | null): boolean {
+        return !!credentials && !credentials.keyFilePath && credentials.type === 'service_account' && !!credentials.private_key;
     }
 
     /**
