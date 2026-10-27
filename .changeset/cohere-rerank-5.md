@@ -5,4 +5,8 @@
 "@memberjunction/ng-core-entity-forms": patch
 ---
 
-Add Cohere Rerank 5 (`rerank-v5.0-pro` and `rerank-v5.0-fast`) model metadata, `Default Rerank` prompt bindings, and Context Focus (`relevant_spans` via `/v2/rerank`) support across `@memberjunction/ai-cohere` and `@memberjunction/search-engine`. Fix `CohereReranker` to pass raw queries without instruction wrapping (required by Rerank 5's calibrated cross-encoder) and remove debug console logging. Update Sage and Chief of Staff agent memory `RerankerConfiguration` to use `rerank-v5.0-fast` with calibrated relevance threshold (`0.1`).
+Add Cohere Rerank 5 (`rerank-v5.0-pro`, `rerank-v5.0-fast`) and its Context Focus spans.
+
+- `@memberjunction/ai-cohere`: `CohereReranker` always calls Cohere's `/v2/rerank`, sends the query as written for every Cohere model (the instruction wrapper is gone; Rerank 5 does not take relevance instructions), and defaults to `rerank-v5.0-fast`. The `RelevantSpans` option (`true` or `{ Threshold, MaxSpans }`) asks for Context Focus spans, returned on `document.metadata.RelevantSpans` as `CohereRelevantSpan[]` with text sliced by Unicode code points, as Cohere counts offsets.
+- `@memberjunction/search-engine`: `CohereReRanker` uses that `CohereReranker` through the ClassFactory instead of its own Cohere client, and no longer declares `cohere-ai`. It defaults to `rerank-v5.0-fast`; scope config `relevantSpans` sets `SearchResultItem.RelevantSpans` and, unless `focusSnippet` is false, narrows `Snippet` to the spans. `minRelevanceThreshold` drops weak results but never empties the list.
+- Metadata: Rerank 5 models, with `Default Rerank` preferring `rerank-v5.0-fast`, so callers that don't pin a model, and search scopes with no `model`, switch to it. Sage and Chief of Staff memory reranking moves to `rerank-v5.0-fast` with `minRelevanceThreshold` 0.02.

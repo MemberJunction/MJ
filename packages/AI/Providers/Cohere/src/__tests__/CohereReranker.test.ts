@@ -3,13 +3,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 /* ------------------------------------------------------------------ */
 /*  Hoisted mocks                                                     */
 /* ------------------------------------------------------------------ */
-const mockRerank = vi.hoisted(() => vi.fn());
 const mockV2Rerank = vi.hoisted(() => vi.fn());
 
 vi.mock('cohere-ai', () => {
   return {
     CohereClient: class MockCohereClient {
-      rerank = mockRerank;
       v2 = {
         rerank: mockV2Rerank,
       };
@@ -39,7 +37,18 @@ vi.mock('@memberjunction/ai', () => {
   };
 });
 
-import { CohereReranker, CreateCohereReranker, NormalizeCohereRelevantSpans } from '../models/CohereReranker';
+import { CohereReranker, CreateCohereReranker } from '../models/CohereReranker';
+
+type SpanResult = Array<{
+  id: string;
+  rank: number;
+  relevanceScore: number;
+  document: { metadata?: { noteId?: string; RelevantSpans?: Array<{ Start: number; End: number; Score: number; Text: string }> } };
+}>;
+
+function doRerank(reranker: CohereReranker, params: Record<string, unknown>): Promise<unknown> {
+  return (reranker as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)['doRerank'].call(reranker, params);
+}
 
 /* ------------------------------------------------------------------ */
 /*  Tests                                                              */
@@ -54,236 +63,140 @@ describe('CohereReranker', () => {
 
   /* ---- Constructor ---- */
   describe('constructor', () => {
-    it('should create an instance with default model name', () => {
+    it('defaults to rerank-v5.0-fast', () => {
       expect(reranker).toBeInstanceOf(CohereReranker);
-      expect((reranker as unknown as Record<string, unknown>)['_modelName']).toBe('rerank-v3.5');
+      expect((reranker as unknown as Record<string, unknown>)['_modelName']).toBe('rerank-v5.0-fast');
     });
 
-    it('should accept a custom model name including rerank-v5.0-pro and rerank-v5.0-fast', () => {
+    it('should accept a custom model name', () => {
       const pro = new CohereReranker('key', 'rerank-v5.0-pro');
-      const fast = new CohereReranker('key', 'rerank-v5.0-fast');
       expect((pro as unknown as Record<string, unknown>)['_modelName']).toBe('rerank-v5.0-pro');
-      expect((fast as unknown as Record<string, unknown>)['_modelName']).toBe('rerank-v5.0-fast');
-    });
-
-    it('should create a CohereClient with the provided API key', () => {
-      expect((reranker as unknown as Record<string, unknown>)['_client']).toBeDefined();
     });
   });
 
   /* ---- doRerank ---- */
   describe('doRerank', () => {
-    it('should call Cohere rerank API and map results', async () => {
-      mockRerank.mockResolvedValueOnce({
+    it('should call Cohere /v2/rerank and map results', async () => {
+      mockV2Rerank.mockResolvedValueOnce({
         results: [
           { index: 1, relevanceScore: 0.95 },
           { index: 0, relevanceScore: 0.72 },
         ],
       });
 
-      const params = {
+      const results = await doRerank(reranker, {
         query: 'What is the capital of France?',
         documents: [
           { id: 'doc1', text: 'Paris is in France.' },
           { id: 'doc2', text: 'London is in England.' },
         ],
         topK: 2,
-      };
-
-      const fn = (reranker as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)['doRerank']
-        .bind(reranker);
-      const results = await fn(params) as Array<Record<string, unknown>>;
+      }) as SpanResult;
 
       expect(results).toHaveLength(2);
       expect(results[0].id).toBe('doc2');
       expect(results[0].relevanceScore).toBe(0.95);
       expect(results[0].rank).toBe(0);
       expect(results[1].id).toBe('doc1');
-      expect(results[1].relevanceScore).toBe(0.72);
       expect(results[1].rank).toBe(1);
     });
 
-    it('should pass raw query and correct parameters to Cohere API without instruction wrapping', async () => {
-      mockRerank.mockResolvedValueOnce({ results: [] });
+    it('sends the raw query, the documents and topN, and passes the cancellation token as abortSignal', async () => {
+      mockV2Rerank.mockResolvedValueOnce({ results: [] });
+      const token = new AbortController().signal;
 
-      const params = {
+      await doRerank(reranker, {
         query: 'test query',
-        documents: [{ id: 'd1', text: 'some text' }],
-        topK: 5,
-      };
+        documents: [{ id: 'd1', text: 'some text' }, { id: 'd2', text: 'more' }],
+        CancellationToken: token,
+      });
 
-      const fn = (reranker as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)['doRerank']
-        .bind(reranker);
-      await fn(params);
-
-      expect(mockRerank).toHaveBeenCalledWith(
-        expect.objectContaining({
-          model: 'rerank-v3.5',
-          query: 'test query',
-          documents: ['some text'],
-          topN: 5,
-          returnDocuments: false,
-        }),
-        { abortSignal: undefined },
-      );
-    });
-
-    it('should use document count as topN when topK is not provided', async () => {
-      mockRerank.mockResolvedValueOnce({ results: [] });
-
-      const params = {
-        query: 'query',
-        documents: [
-          { id: 'd1', text: 'text 1' },
-          { id: 'd2', text: 'text 2' },
-          { id: 'd3', text: 'text 3' },
-        ],
-      };
-
-      const fn = (reranker as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)['doRerank']
-        .bind(reranker);
-      await fn(params);
-
-      expect(mockRerank).toHaveBeenCalledWith(
-        expect.objectContaining({ topN: 3 }),
-        { abortSignal: undefined },
+      expect(mockV2Rerank).toHaveBeenCalledWith(
+        { model: 'rerank-v5.0-fast', query: 'test query', documents: ['some text', 'more'], topN: 2 },
+        { abortSignal: token },
       );
     });
 
     it('should preserve document metadata in results', async () => {
-      mockRerank.mockResolvedValueOnce({
-        results: [{ index: 0, relevanceScore: 0.88 }],
-      });
-
+      mockV2Rerank.mockResolvedValueOnce({ results: [{ index: 0, relevanceScore: 0.88 }] });
       const originalDoc = { id: 'doc-with-meta', text: 'sample text', metadata: { source: 'test' } };
-      const params = {
-        query: 'query',
-        documents: [originalDoc],
-        topK: 1,
-      };
 
-      const fn = (reranker as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)['doRerank']
-        .bind(reranker);
-      const results = await fn(params) as Array<Record<string, unknown>>;
+      const results = await doRerank(reranker, { query: 'query', documents: [originalDoc], topK: 1 }) as SpanResult;
 
       expect(results[0].document).toBe(originalDoc);
     });
 
-    it('should invoke v2.rerank and extract relevantSpans when Context Focus is enabled', async () => {
-      const v5Pro = new CohereReranker('test-cohere-key', 'rerank-v5.0-pro');
+    it('requests Context Focus and attaches RelevantSpans to the document metadata', async () => {
       const docText = 'Intro section. The Python virtual environment uses poetry2nix. Footer section.';
       const start = docText.indexOf('The Python');
       const end = docText.indexOf(' Footer');
-
       mockV2Rerank.mockResolvedValueOnce({
-        results: [
-          {
-            index: 0,
-            relevanceScore: 0.62,
-            relevant_spans: [{ start, end, score: 0.78 }],
-          },
-        ],
+        results: [{ index: 0, relevanceScore: 0.62, relevant_spans: [{ start, end, score: 0.78 }] }],
       });
 
-      const originalDoc = { id: 'note-1', text: docText, metadata: { noteId: 'note-1' } };
-      const fn = (v5Pro as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)['doRerank']
-        .bind(v5Pro);
-      const results = await fn({
+      const results = await doRerank(new CohereReranker('k', 'rerank-v5.0-pro'), {
         query: 'How is Python configured?',
-        documents: [originalDoc],
+        documents: [{ id: 'note-1', text: docText, metadata: { noteId: 'note-1' } }],
         topK: 1,
-        options: {
-          relevantSpans: { mode: 'enabled', threshold: 0.1, maxSpans: 3 },
-        },
-      }) as Array<{
-        id: string;
-        relevanceScore: number;
-        document: { metadata?: { noteId?: string; relevantSpans?: Array<{ start: number; end: number; score: number; text: string }> } };
-      }>;
+        options: { RelevantSpans: { Threshold: 0.1, MaxSpans: 3 } },
+      }) as SpanResult;
 
-      expect(mockV2Rerank).toHaveBeenCalledWith(
-        {
-          model: 'rerank-v5.0-pro',
-          query: 'How is Python configured?',
-          documents: [docText],
-          topN: 1,
-          relevant_spans: { mode: 'enabled', threshold: 0.1, max_spans: 3 },
-        },
-        { abortSignal: undefined },
-      );
-      expect(mockRerank).not.toHaveBeenCalled();
+      expect(mockV2Rerank.mock.calls[0][0]).toEqual({
+        model: 'rerank-v5.0-pro',
+        query: 'How is Python configured?',
+        documents: [docText],
+        topN: 1,
+        relevant_spans: { mode: 'enabled', threshold: 0.1, max_spans: 3 },
+      });
       expect(results[0].document.metadata?.noteId).toBe('note-1');
-      expect(results[0].document.metadata?.relevantSpans).toEqual([
-        {
-          start,
-          end,
-          score: 0.78,
-          text: 'The Python virtual environment uses poetry2nix.',
-        },
+      expect(results[0].document.metadata?.RelevantSpans).toEqual([
+        { Start: start, End: end, Score: 0.78, Text: 'The Python virtual environment uses poetry2nix.' },
       ]);
     });
 
-    it('should safely ignore out-of-bounds result indices and clamp span offsets', async () => {
-      const v5Fast = new CohereReranker('test-cohere-key', 'rerank-v5.0-fast');
+    it('slices span text by Unicode code points, as Cohere counts offsets', async () => {
+      // '𝑥' is one code point but two UTF-16 units; a UTF-16 slice would shift the span by one.
+      const docText = '𝑥 = 2. The answer is four.';
+      mockV2Rerank.mockResolvedValueOnce({
+        results: [{ index: 0, relevanceScore: 0.5, relevant_spans: [{ start: 7, end: 17, score: 0.9 }] }],
+      });
+
+      const results = await doRerank(reranker, {
+        query: 'q',
+        documents: [{ id: 'd', text: docText }],
+        options: { RelevantSpans: true },
+      }) as SpanResult;
+
+      expect(mockV2Rerank.mock.calls[0][0].relevant_spans).toEqual({ mode: 'enabled' });
+      expect(results[0].document.metadata?.RelevantSpans?.[0].Text).toBe('The answer');
+    });
+
+    it('ignores out-of-range result indices and clamps span offsets', async () => {
       mockV2Rerank.mockResolvedValueOnce({
         results: [
           { index: 99, relevanceScore: 0.99 },
-          {
-            index: 0,
-            relevanceScore: 0.55,
-            relevant_spans: [{ start: -5, end: 500, score: 0.6 }],
-          },
+          { index: 0, relevanceScore: 0.55, relevant_spans: [{ start: -5, end: 500, score: 0.6 }] },
         ],
       });
 
-      const originalDoc = { id: 'doc-1', text: 'Short text.' };
-      const fn = (v5Fast as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)['doRerank']
-        .bind(v5Fast);
-      const results = await fn({
+      const results = await doRerank(reranker, {
         query: 'q',
-        documents: [originalDoc],
-        options: { contextFocus: true },
-      }) as Array<{
-        id: string;
-        rank: number;
-        document: { metadata?: { relevantSpans?: Array<{ text: string }> } };
-      }>;
+        documents: [{ id: 'doc-1', text: 'Short text.' }],
+        options: { RelevantSpans: true },
+      }) as SpanResult;
 
       expect(results).toHaveLength(1);
       expect(results[0].id).toBe('doc-1');
       expect(results[0].rank).toBe(0);
-      expect(results[0].document.metadata?.relevantSpans?.[0].text).toBe('Short text.');
+      expect(results[0].document.metadata?.RelevantSpans?.[0].Text).toBe('Short text.');
     });
   });
 
-  /* ---- NormalizeCohereRelevantSpans ---- */
-  describe('NormalizeCohereRelevantSpans', () => {
-    it('normalizes boolean and object options and ignores non-finite or non-positive values', () => {
-      expect(NormalizeCohereRelevantSpans(undefined)).toBeUndefined();
-      expect(NormalizeCohereRelevantSpans({ contextFocus: false })).toBeUndefined();
-      expect(NormalizeCohereRelevantSpans({ contextFocus: true })).toEqual({ mode: 'enabled' });
-      expect(
-        NormalizeCohereRelevantSpans({
-          relevantSpans: { mode: 'enabled', threshold: 0.15, maxSpans: 2 },
-        })
-      ).toEqual({ mode: 'enabled', threshold: 0.15, max_spans: 2 });
-      expect(
-        NormalizeCohereRelevantSpans({
-          relevantSpans: { mode: 'enabled', threshold: Number.NaN, maxSpans: -1 },
-        })
-      ).toEqual({ mode: 'enabled' });
-    });
-  });
-
-  /* ---- createCohereReranker factory ---- */
-  describe('createCohereReranker', () => {
-    it('should create a CohereReranker instance', () => {
-      const instance = CreateCohereReranker('key123');
-      expect(instance).toBeInstanceOf(CohereReranker);
-    });
-
-    it('should pass model name to constructor', () => {
+  /* ---- CreateCohereReranker factory ---- */
+  describe('CreateCohereReranker', () => {
+    it('should create a CohereReranker with the given model', () => {
       const instance = CreateCohereReranker('key123', 'custom-model');
+      expect(instance).toBeInstanceOf(CohereReranker);
       expect((instance as unknown as Record<string, unknown>)['_modelName']).toBe('custom-model');
     });
   });

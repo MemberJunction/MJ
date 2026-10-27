@@ -15066,10 +15066,6 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
-    optionalDependencies:
-      cohere-ai:
-        specifier: ^7.20.0
-        version: 7.20.0
 
   packages/ServerBootstrap:
     dependencies:

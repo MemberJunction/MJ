@@ -1,12 +1,12 @@
 /**
- * Tests for CohereReRanker (P2D.2). Mocks the optional `cohere-ai` SDK so the
- * test runs without network access or an API key.
+ * Tests for CohereReRanker (P2D.2). The Cohere call is the AI layer's `CohereReranker`, resolved through
+ * the ClassFactory; these tests hand back a fake one, so they cover only what scope search adds on top:
+ * config mapping, the threshold, Context Focus snippets, cost reporting and the fallbacks.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockRerank, mockV2Rerank, mockGetAIAPIKey } = vi.hoisted(() => ({
-    mockRerank: vi.fn(),
-    mockV2Rerank: vi.fn(),
+const { mockCohereRerank, mockGetAIAPIKey } = vi.hoisted(() => ({
+    mockCohereRerank: vi.fn(),
     mockGetAIAPIKey: vi.fn(),
 }));
 
@@ -26,21 +26,23 @@ vi.mock('@memberjunction/ai', async () => {
     };
 });
 
-vi.mock('cohere-ai', () => {
-    return {
-        CohereClient: class {
-            constructor(_opts: { token: string }) { /* token captured implicitly */ }
-            rerank = mockRerank;
-            v2 = {
-                rerank: mockV2Rerank,
-            };
-        },
-    };
-});
-
+import { MJGlobal } from '@memberjunction/global';
+import { BaseReranker, type RerankParams, type RerankResponse, type RerankResult } from '@memberjunction/ai';
 import { CohereReRanker } from '../rerankers/CohereReRanker';
 import type { SearchResultItem } from '../generic/search.types';
 import type { UserInfo } from '@memberjunction/core';
+
+type Span = { Start: number; End: number; Score: number; Text: string };
+
+/** Stands in for the AI layer's CohereReranker; its Rerank answers from `mockCohereRerank`. */
+class FakeCohereReranker extends BaseReranker {
+    public override Rerank(params: RerankParams): Promise<RerankResponse> {
+        return mockCohereRerank(params);
+    }
+    protected async doRerank(): Promise<RerankResult[]> {
+        return [];
+    }
+}
 
 function makeItem(id: string, title: string, score: number): SearchResultItem {
     return {
@@ -58,12 +60,39 @@ function makeItem(id: string, title: string, score: number): SearchResultItem {
     };
 }
 
+/** Make the fake CohereReranker answer with these results, as the AI layer shapes them. */
+function respond(results: Array<{ index: number; relevanceScore: number; spans?: Span[] }>): void {
+    mockCohereRerank.mockImplementation(async (params: RerankParams) => ({
+        success: true,
+        durationMs: 1,
+        results: results.map((r, rank) => {
+            const doc = params.documents[r.index];
+            return {
+                id: doc.id,
+                relevanceScore: r.relevanceScore,
+                rank,
+                document: r.spans ? { ...doc, metadata: { ...doc.metadata, RelevantSpans: r.spans } } : doc,
+            };
+        }),
+    }));
+}
+
+function sentParams(): RerankParams {
+    return mockCohereRerank.mock.calls[0][0] as RerankParams;
+}
+
 describe('CohereReRanker', () => {
     const fakeUser = { ID: 'u1' } as unknown as UserInfo;
+    let tryCreate: ReturnType<typeof vi.spyOn>;
 
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.restoreAllMocks();
         mockGetAIAPIKey.mockReturnValue('fake-cohere-key');
+        tryCreate = vi.spyOn(MJGlobal.Instance.ClassFactory, 'TryCreateInstance').mockReturnValue({
+            Resolved: true,
+            Instance: new FakeCohereReranker('fake-cohere-key', 'rerank-v5.0-fast'),
+        });
     });
 
     describe('contract surface (P2D.1 inheritance)', () => {
@@ -75,294 +104,180 @@ describe('CohereReRanker', () => {
         });
 
         it('caps GetMaxResultCount at 1000 (Cohere v3 limit)', () => {
-            const rr = new CohereReRanker();
-            expect(rr.GetMaxResultCount()).toBe(1000);
+            expect(new CohereReRanker().GetMaxResultCount()).toBe(1000);
         });
 
         it('estimates cost as 0.2¢ per "search" (each search reranks up to 100 docs)', () => {
             const rr = new CohereReRanker();
-            // Empty input still rounds up to one search
             expect(rr.EstimateCostCents(0)).toBeCloseTo(0.2);
-            expect(rr.EstimateCostCents(1)).toBeCloseTo(0.2);
             expect(rr.EstimateCostCents(100)).toBeCloseTo(0.2);
             expect(rr.EstimateCostCents(101)).toBeCloseTo(0.4);
             expect(rr.EstimateCostCents(250)).toBeCloseTo(0.6);
         });
     });
 
-    describe('ReRank against a mocked Cohere SDK', () => {
+    describe('ReRank', () => {
         it('reorders candidates by Cohere relevance score and rewrites Score / ScoreBreakdown.ReRank', async () => {
-            const a = makeItem('a', 'low-relevance', 0.4);
-            const b = makeItem('b', 'high-relevance', 0.5);
+            respond([{ index: 1, relevanceScore: 0.95 }, { index: 0, relevanceScore: 0.30 }]);
+            const result = await new CohereReRanker().ReRank('q', [makeItem('a', 'low', 0.4), makeItem('b', 'high', 0.5)], 5, fakeUser);
 
-            // Cohere returns the higher-relevance one first regardless of input order
-            mockRerank.mockResolvedValue({
-                results: [
-                    { index: 1, relevanceScore: 0.95 }, // b
-                    { index: 0, relevanceScore: 0.30 }, // a
-                ],
-            });
-
-            const rr = new CohereReRanker();
-            const result = await rr.ReRank('what is the best?', [a, b], 5, fakeUser);
-
-            expect(result).toHaveLength(2);
-            expect(result[0].RecordID).toBe('b');
+            expect(result.map(r => r.RecordID)).toEqual(['b', 'a']);
             expect(result[0].Score).toBeCloseTo(0.95);
             expect(result[0].ScoreBreakdown.ReRank).toBeCloseTo(0.95);
-            expect(result[1].RecordID).toBe('a');
-            expect(result[1].Score).toBeCloseTo(0.30);
         });
 
-        it('passes the RAW query through and defaults to rerank-v5.0-fast', async () => {
-            mockRerank.mockResolvedValue({ results: [{ index: 0, relevanceScore: 0.9 }] });
-            const rr = new CohereReRanker();
-            await rr.ReRank('plain user query', [makeItem('a', 't', 0.5)], 5, fakeUser);
-            expect(mockRerank).toHaveBeenCalledTimes(1);
-            const args = mockRerank.mock.calls[0][0] as { query: string; model: string };
-            expect(args.query).toBe('plain user query');
-            expect(args.model).toBe('rerank-v5.0-fast');
-            expect(args.query).not.toMatch(/memory notes/i);
+        it('resolves the AI layer CohereReranker with the key, defaults to rerank-v5.0-fast, and passes the raw query', async () => {
+            respond([{ index: 0, relevanceScore: 0.9 }]);
+            await new CohereReRanker().ReRank('plain user query', [makeItem('a', 't', 0.5)], 5, fakeUser);
+
+            expect(tryCreate).toHaveBeenCalledWith(expect.anything(), 'CohereReranker', 'fake-cohere-key', 'rerank-v5.0-fast');
+            expect(sentParams().query).toBe('plain user query');
+            expect(sentParams().options).toEqual({ RelevantSpans: undefined });
+        });
+
+        it('respects a custom model name from config', async () => {
+            respond([{ index: 0, relevanceScore: 0.9 }]);
+            await new CohereReRanker().ReRank('q', [makeItem('a', 't', 0.5)], 5, fakeUser, { model: 'rerank-v5.0-pro' });
+            expect(tryCreate).toHaveBeenCalledWith(expect.anything(), 'CohereReranker', 'fake-cohere-key', 'rerank-v5.0-pro');
         });
 
         it('reports actual cost to CostReporter after a successful call', async () => {
-            mockRerank.mockResolvedValue({ results: [{ index: 0, relevanceScore: 0.9 }] });
+            respond([{ index: 0, relevanceScore: 0.9 }]);
             const rr = new CohereReRanker();
             const charges: number[] = [];
             rr.CostReporter = (c) => charges.push(c);
 
             await rr.ReRank('q', [makeItem('a', 't', 0.5), makeItem('b', 't', 0.4)], 5, fakeUser);
-
-            expect(charges).toHaveLength(1);
-            expect(charges[0]).toBeCloseTo(0.2); // 2 docs → 1 search → 0.2¢
+            expect(charges).toEqual([expect.closeTo(0.2)]);
         });
 
-        it('does NOT charge cost when no API key is available (super.ReRank slices unchanged)', async () => {
+        it('does NOT call or charge when no API key is available (top-N slice)', async () => {
             mockGetAIAPIKey.mockReturnValue('');
             const rr = new CohereReRanker();
             const charges: number[] = [];
             rr.CostReporter = (c) => charges.push(c);
 
-            const items = [makeItem('a', 't', 0.5), makeItem('b', 't', 0.4)];
-            const result = await rr.ReRank('q', items, 5, fakeUser);
-
-            expect(mockRerank).not.toHaveBeenCalled();
+            const result = await rr.ReRank('q', [makeItem('a', 't', 0.5), makeItem('b', 't', 0.4)], 5, fakeUser);
+            expect(mockCohereRerank).not.toHaveBeenCalled();
             expect(charges).toHaveLength(0);
-            // Falls through to a top-N slice — input order preserved
+            expect(result.map(r => r.RecordID)).toEqual(['a', 'b']);
+        });
+
+        it('falls back to a top-N slice when the AI layer CohereReranker is not registered', async () => {
+            // Unregistered, the ClassFactory hands back a hollow base-class instance with Resolved: false.
+            tryCreate.mockReturnValue({ Resolved: false, Instance: new FakeCohereReranker('k', 'm'), Reason: 'no registration' });
+            const result = await new CohereReRanker().ReRank('q', [makeItem('a', 't', 0.5), makeItem('b', 't', 0.4)], 5, fakeUser);
+            expect(mockCohereRerank).not.toHaveBeenCalled();
             expect(result.map(r => r.RecordID)).toEqual(['a', 'b']);
         });
 
         it('falls back to GetAIAPIKey("CohereLLM") when "CohereReranker" has no key', async () => {
-            mockGetAIAPIKey.mockImplementation((driver: unknown) =>
-                driver === 'CohereLLM' ? 'legacy-cohere-key' : ''
-            );
-            mockRerank.mockResolvedValue({ results: [{ index: 0, relevanceScore: 0.85 }] });
-            const rr = new CohereReRanker();
-            const result = await rr.ReRank('q', [makeItem('a', 't', 0.5)], 5, fakeUser);
-            expect(result).toHaveLength(1);
+            mockGetAIAPIKey.mockImplementation((driver: unknown) => (driver === 'CohereLLM' ? 'legacy-cohere-key' : ''));
+            respond([{ index: 0, relevanceScore: 0.85 }]);
+            const result = await new CohereReRanker().ReRank('q', [makeItem('a', 't', 0.5)], 5, fakeUser);
             expect(result[0].Score).toBeCloseTo(0.85);
-            expect(mockGetAIAPIKey).toHaveBeenCalledWith('CohereReranker');
-            expect(mockGetAIAPIKey).toHaveBeenCalledWith('CohereLLM');
+            expect(tryCreate).toHaveBeenCalledWith(expect.anything(), 'CohereReranker', 'legacy-cohere-key', 'rerank-v5.0-fast');
         });
 
         it('returns empty without calling Cohere when topN <= 0', async () => {
-            const rr = new CohereReRanker();
-            const result = await rr.ReRank('q', [makeItem('a', 't', 0.5)], 0, fakeUser);
+            const result = await new CohereReRanker().ReRank('q', [makeItem('a', 't', 0.5)], 0, fakeUser);
             expect(result).toEqual([]);
-            expect(mockRerank).not.toHaveBeenCalled();
+            expect(mockCohereRerank).not.toHaveBeenCalled();
         });
 
-        it('respects a custom model name from config', async () => {
-            mockRerank.mockResolvedValue({ results: [{ index: 0, relevanceScore: 0.9 }] });
-            const rr = new CohereReRanker();
-            await rr.ReRank('q', [makeItem('a', 't', 0.5)], 5, fakeUser, { model: 'rerank-v5.0-pro' });
-            const args = mockRerank.mock.calls[0][0] as { model: string };
-            expect(args.model).toBe('rerank-v5.0-pro');
-        });
-
-        it('supports Rerank 5 Context Focus (relevant_spans) via v2.rerank and narrows Snippet', async () => {
+        it('maps scope relevantSpans onto the Context Focus option and narrows Snippet to the spans', async () => {
             const item = makeItem('a', 'Enterprise Renewal Policy', 0.5);
             item.Snippet = 'Intro paragraph. Customers renewing 3-year contracts receive a 12% discount. Closing notes.';
             const fullText = `${item.Title}\n${item.Snippet}`;
-            const start = fullText.indexOf('Customers renewing');
-            const end = fullText.indexOf(' Closing notes.');
+            const span: Span = {
+                Start: fullText.indexOf('Customers'),
+                End: fullText.indexOf(' Closing'),
+                Score: 0.81,
+                Text: 'Customers renewing 3-year contracts receive a 12% discount.',
+            };
+            respond([{ index: 0, relevanceScore: 0.74, spans: [span] }]);
 
-            mockV2Rerank.mockResolvedValue({
-                results: [
-                    {
-                        index: 0,
-                        relevanceScore: 0.74,
-                        relevant_spans: [{ start, end, score: 0.81 }],
-                    },
-                ],
+            const result = await new CohereReRanker().ReRank('3-year renewal discount', [item], 5, fakeUser, {
+                relevantSpans: { threshold: 0.1, maxSpans: 2 },
             });
 
-            const rr = new CohereReRanker();
-            const result = await rr.ReRank('3-year renewal discount', [item], 5, fakeUser, {
-                model: 'rerank-v5.0-pro',
-                contextFocus: { mode: 'enabled', threshold: 0.1, max_spans: 2 },
-            });
-
-            expect(mockV2Rerank).toHaveBeenCalledTimes(1);
-            expect(mockV2Rerank.mock.calls[0][0]).toEqual({
-                model: 'rerank-v5.0-pro',
-                query: '3-year renewal discount',
-                documents: [fullText],
-                topN: 5,
-                relevant_spans: { mode: 'enabled', threshold: 0.1, max_spans: 2 },
-            });
-            expect(result).toHaveLength(1);
-            expect(result[0].Snippet).toBe('Customers renewing 3-year contracts receive a 12% discount.');
-            expect(result[0].RelevantSpans).toEqual([
-                {
-                    start,
-                    end,
-                    score: 0.81,
-                    text: 'Customers renewing 3-year contracts receive a 12% discount.',
-                },
-            ]);
+            expect(sentParams().documents[0].text).toBe(fullText);
+            expect(sentParams().options).toEqual({ RelevantSpans: { Threshold: 0.1, MaxSpans: 2 } });
+            expect(result[0].Snippet).toBe(span.Text);
+            expect(result[0].RelevantSpans).toEqual([span]);
         });
 
-        it('strips leading Title prefix when a Context Focus span overlaps the title line', async () => {
-            const item = makeItem('a', 'Enterprise Renewal Policy', 0.5);
-            item.Snippet = 'Customers renewing 3-year contracts receive a 12% discount.';
-            const fullText = `${item.Title}\n${item.Snippet}`;
+        it('trims the title line off a span by code points, so a non-ASCII title does not shift the snippet', async () => {
+            // '𝑥' is one code point but two UTF-16 units: trimming by .length would eat one character too many.
+            const item = makeItem('a', 'Solve 𝑥', 0.5);
+            item.Snippet = 'The answer is four.';
+            const fullText = Array.from(`${item.Title}\n${item.Snippet}`);
+            respond([{ index: 0, relevanceScore: 0.7, spans: [{ Start: 0, End: fullText.length, Score: 0.8, Text: fullText.join('') }] }]);
 
-            mockV2Rerank.mockResolvedValue({
-                results: [
-                    {
-                        index: 0,
-                        relevanceScore: 0.74,
-                        relevant_spans: [{ start: 0, end: fullText.length, score: 0.81 }],
-                    },
-                ],
-            });
+            const result = await new CohereReRanker().ReRank('q', [item], 5, fakeUser, { relevantSpans: true });
+            expect(sentParams().options).toEqual({ RelevantSpans: true });
+            expect(result[0].Snippet).toBe('The answer is four.');
+        });
 
-            const rr = new CohereReRanker();
-            const result = await rr.ReRank('3-year renewal discount', [item], 5, fakeUser, {
-                model: 'rerank-v5.0-pro',
-                contextFocus: true,
-            });
+        it('keeps the original Snippet when focusSnippet is false, but still attaches RelevantSpans', async () => {
+            const item = makeItem('a', 'T', 0.5);
+            const span: Span = { Start: 2, End: 9, Score: 0.8, Text: 'snippet' };
+            respond([{ index: 0, relevanceScore: 0.7, spans: [span] }]);
 
-            expect(result).toHaveLength(1);
-            expect(result[0].Snippet).toBe('Customers renewing 3-year contracts receive a 12% discount.');
+            const result = await new CohereReRanker().ReRank('q', [item], 5, fakeUser, { relevantSpans: true, focusSnippet: false });
+            expect(result[0].Snippet).toBe('snippet-a');
+            expect(result[0].RelevantSpans).toEqual([span]);
         });
 
         it('filters weak results when minRelevanceThreshold is configured', async () => {
-            const a = makeItem('a', 'strong match', 0.5);
-            const b = makeItem('b', 'weak match', 0.5);
-            mockRerank.mockResolvedValue({
-                results: [
-                    { index: 0, relevanceScore: 0.65 },
-                    { index: 1, relevanceScore: 0.008 },
-                ],
+            respond([{ index: 0, relevanceScore: 0.65 }, { index: 1, relevanceScore: 0.008 }]);
+            const result = await new CohereReRanker().ReRank('q', [makeItem('a', 's', 0.5), makeItem('b', 'w', 0.5)], 5, fakeUser, {
+                minRelevanceThreshold: 0.05,
             });
-            const rr = new CohereReRanker();
-            const result = await rr.ReRank('query', [a, b], 5, fakeUser, { minRelevanceThreshold: 0.05 });
-            expect(result).toHaveLength(1);
-            expect(result[0].RecordID).toBe('a');
+            expect(result.map(r => r.RecordID)).toEqual(['a']);
+        });
+
+        it('never empties the list: when no result reaches minRelevanceThreshold, all are kept', async () => {
+            respond([{ index: 1, relevanceScore: 0.01 }, { index: 0, relevanceScore: 0.004 }]);
+            const result = await new CohereReRanker().ReRank('q', [makeItem('a', 's', 0.5), makeItem('b', 'w', 0.5)], 5, fakeUser, {
+                minRelevanceThreshold: 0.05,
+            });
+            expect(result.map(r => r.RecordID)).toEqual(['b', 'a']);
         });
     });
 
     /**
-     * Tier-1 release-readiness: graceful degradation when the Cohere SDK
-     * fails mid-call. Real production failure modes:
-     *   - Cohere returns 500 (server overload)
-     *   - Request times out / network error
-     *   - SDK returns a malformed payload
-     *   - SDK returns fewer results than the input set
-     *
-     * Expected behavior in all cases: the engine's overall search still
-     * succeeds; the rerank step degrades to the unsorted top-N slice
-     * (handled by the base class). The exception/malformed shape must
-     * not propagate up to the caller.
+     * Graceful degradation: whatever the Cohere call does, the search still succeeds and the rerank step
+     * degrades to the unsorted top-N slice (handled by the base class), without billing a failed call.
      */
-    describe('graceful degradation when SDK fails mid-call', () => {
-        it('falls back to top-N slice and does NOT charge CostReporter when SDK rejects with an Error', async () => {
-            // Simulates Cohere returning 500 / network failure
-            mockRerank.mockRejectedValue(new Error('Cohere API: 503 Service Unavailable'));
+    describe('graceful degradation when the Cohere call fails', () => {
+        it('falls back to the top-N slice and does NOT charge when the AI reranker reports failure', async () => {
+            mockCohereRerank.mockResolvedValue({ success: false, errorMessage: 'Cohere API: 503 Service Unavailable', results: [], durationMs: 3 });
             const rr = new CohereReRanker();
             const charges: number[] = [];
             rr.CostReporter = (c) => charges.push(c);
-            const items = [
-                makeItem('a', 'first', 0.9),
-                makeItem('b', 'second', 0.7),
-                makeItem('c', 'third', 0.5),
-            ];
 
-            const result = await rr.ReRank('q', items, 5, fakeUser);
-
-            // Underlying ai-layer wrapper catches the throw and returns
-            // success=false; BaseReRanker falls back to candidates.slice(0, topN)
-            // without billing CostReporter for a failed call.
-            expect(result).toHaveLength(3);
-            expect(result.map(r => r.RecordID)).toEqual(['a', 'b', 'c']);
+            const result = await rr.ReRank('q', [makeItem('a', 'first', 0.9), makeItem('b', 'second', 0.7)], 5, fakeUser);
+            expect(result.map(r => r.RecordID)).toEqual(['a', 'b']);
             expect(charges).toHaveLength(0);
         });
 
-        it('does not propagate the SDK exception to the caller', async () => {
-            mockRerank.mockRejectedValue(new Error('boom'));
-            const rr = new CohereReRanker();
-            const items = [makeItem('a', 't', 0.5)];
-
-            // Must resolve, not reject — the engine swallows reranker failures.
-            await expect(rr.ReRank('q', items, 5, fakeUser)).resolves.toBeDefined();
+        it('does not propagate an exception from the AI reranker to the caller', async () => {
+            mockCohereRerank.mockRejectedValue(new Error('boom'));
+            const result = await new CohereReRanker().ReRank('q', [makeItem('a', 't', 0.5), makeItem('b', 't', 0.4)], 5, fakeUser);
+            expect(result.map(r => r.RecordID)).toEqual(['a', 'b']);
         });
 
-        it('falls back to top-N slice when SDK times out (simulated as a hung promise resolved with timeout error)', async () => {
-            mockRerank.mockRejectedValue(new Error('Request timed out after 30000ms'));
-            const rr = new CohereReRanker();
-            const items = [makeItem('a', 't', 0.6), makeItem('b', 't', 0.5)];
-
-            const result = await rr.ReRank('q', items, 5, fakeUser);
-            expect(result).toHaveLength(2);
-        });
-
-        it('falls back to top-N slice when SDK returns a payload without a `results` array', async () => {
-            // Underlying ai-layer wrapper should treat this as a malformed
-            // response and surface success=false. Worst case: it crashes
-            // trying to read .results — either way our test here proves
-            // the failure mode doesn't reach the caller as an exception.
-            mockRerank.mockResolvedValue({ /* no results field */ } as unknown as { results: Array<{ index: number; relevanceScore: number }> });
-            const rr = new CohereReRanker();
-            const items = [makeItem('a', 't', 0.5), makeItem('b', 't', 0.4)];
-
-            const result = await rr.ReRank('q', items, 5, fakeUser);
-            // Whether the wrapper falls back or returns an empty list, the
-            // engine must still get a usable response without throwing.
-            expect(Array.isArray(result)).toBe(true);
-        });
-
-        it('handles SDK returning fewer results than the input set without crashing', async () => {
-            // Cohere is contractually allowed to return fewer results than
-            // requested if some documents fail tokenization / are deemed
-            // irrelevant. The fromRerankResult mapper must handle the
-            // truncated response without index-out-of-bounds errors.
-            mockRerank.mockResolvedValue({
-                results: [{ index: 0, relevanceScore: 0.95 }],
-            });
-            const rr = new CohereReRanker();
-            const items = [
-                makeItem('a', 'first', 0.5),
-                makeItem('b', 'second', 0.5),
-                makeItem('c', 'third', 0.5),
-            ];
-
-            const result = await rr.ReRank('q', items, 5, fakeUser);
-            // We sent 3 items, Cohere returned 1 — the result reflects only
-            // the reranked subset. (No defensive padding — if Cohere
-            // dropped items, they're considered low-relevance.)
-            expect(result.length).toBe(1);
-            expect(result[0].RecordID).toBe('a');
+        it('handles Cohere returning fewer results than the input set', async () => {
+            respond([{ index: 0, relevanceScore: 0.95 }]);
+            const result = await new CohereReRanker().ReRank('q', [makeItem('a', '1', 0.5), makeItem('b', '2', 0.5), makeItem('c', '3', 0.5)], 5, fakeUser);
+            expect(result.map(r => r.RecordID)).toEqual(['a']);
             expect(result[0].Score).toBeCloseTo(0.95);
         });
 
-        it('handles SDK returning an empty results array', async () => {
-            mockRerank.mockResolvedValue({ results: [] });
-            const rr = new CohereReRanker();
-            const items = [makeItem('a', 't', 0.5)];
-
-            const result = await rr.ReRank('q', items, 5, fakeUser);
+        it('handles Cohere returning no results', async () => {
+            respond([]);
+            const result = await new CohereReRanker().ReRank('q', [makeItem('a', 't', 0.5)], 5, fakeUser);
             expect(result).toEqual([]);
         });
     });

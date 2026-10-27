@@ -40,16 +40,7 @@
  * ```
  */
 
-export {
-    CohereReranker,
-    CreateCohereReranker,
-    createCohereReranker,
-    NormalizeCohereRelevantSpans,
-} from './models/CohereReranker';
-export type {
-    CohereRelevantSpan,
-    CohereRelevantSpansConfig,
-    CohereRerankOptions,
-} from './models/CohereReranker';
+export { CohereReranker, CreateCohereReranker, createCohereReranker } from './models/CohereReranker';
+export type { CohereRelevantSpan, CohereRelevantSpansOptions, CohereRerankOptions } from './models/CohereReranker';
 
 export { CohereEmbedding } from './models/CohereEmbedding';

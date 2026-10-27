@@ -541,14 +541,14 @@ export interface SearchResultItem {
     /** Raw vector metadata as JSON string (contains all entity fields stored in vector DB) */
     RawMetadata?: string;
     /**
-     * Optional passage-level spans extracted by a re-ranker that supports Context Focus
-     * (e.g., Cohere Rerank 5 `relevant_spans`).
+     * Passage-level spans from a re-ranker that supports Context Focus (Cohere Rerank 5):
+     * `[Start, End)` in Unicode code points of the text the re-ranker scored, with the span's text.
      */
     RelevantSpans?: Array<{
-        start: number;
-        end: number;
-        score: number;
-        text: string;
+        Start: number;
+        End: number;
+        Score: number;
+        Text: string;
     }>;
     /** Discriminator for UI rendering: entity-record, storage-file, or content-item */
     ResultType: SearchResultType;
