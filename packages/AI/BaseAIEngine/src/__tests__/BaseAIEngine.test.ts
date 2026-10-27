@@ -44,6 +44,11 @@ vi.mock('@memberjunction/core', () => {
             this._contextUser = contextUser;
             this._loaded = true;
         }
+        async EnsureLoaded(contextUser?: unknown) {
+            if (this._loaded) return;
+            this._contextUser = contextUser;
+            this._loaded = true;
+        }
         static _instance: unknown = undefined;
         static getInstance<U>(): U {
             if (!this._instance) {
@@ -307,6 +312,26 @@ describe('AIEngineBase', () => {
             set('_agentRequestTypes', [{ ID: 'rt1', Name: 'Approval' }]);
             expect(AIEngineBase.Instance.GetAgentRequestTypeByName('Escalation')).toBeUndefined();
             expect(AIEngineBase.Instance.GetAgentRequestTypeByName('')).toBeUndefined();
+        });
+    });
+
+    // -----------------------------------------------
+    // ResolveAgentRequestTypeID
+    // -----------------------------------------------
+    describe('ResolveAgentRequestTypeID', () => {
+        it('should ensure the engine is loaded, then return the matching ID', async () => {
+            const ctx = { ID: 'u1' };
+            set('_agentRequestTypes', [{ ID: 'rt1', Name: 'Approval' }, { ID: 'rt2', Name: 'Information' }]);
+            const ensure = vi.spyOn(AIEngineBase.Instance, 'EnsureLoaded');
+            expect(await AIEngineBase.Instance.ResolveAgentRequestTypeID(' approval ', ctx as never)).toBe('rt1');
+            expect(ensure).toHaveBeenCalledWith(ctx, undefined);
+            expect(AIEngineBase.Instance.ContextUser).toBe(ctx);
+        });
+
+        it('should return null when no request type has that name', async () => {
+            set('_agentRequestTypes', [{ ID: 'rt1', Name: 'Approval' }]);
+            expect(await AIEngineBase.Instance.ResolveAgentRequestTypeID('Escalation')).toBeNull();
+            expect(await AIEngineBase.Instance.ResolveAgentRequestTypeID('')).toBeNull();
         });
     });
 
