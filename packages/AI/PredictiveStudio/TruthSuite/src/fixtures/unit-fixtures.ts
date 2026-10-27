@@ -7,7 +7,7 @@
 import { RunView } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
 import type { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
-import { DOMINANCE_THRESHOLD_DEFAULT, PredictionUnit, type LeakageGuard, type PredictionUnitSpec, type TaskType } from '@memberjunction/predictive-studio-core';
+import { PredictionUnit, type LeakageGuard, type PredictionUnitSpec, type TaskType } from '@memberjunction/predictive-studio-core';
 import { RunViewPredictionUnitStore, PredictionUnitVersioning, MetadataEntityFactory, ProviderAssemblyMetadata, type IEntityFactory, type PredictionUnitDraft } from '@memberjunction/predictive-studio';
 import type { ScenarioID, TruthHarness } from '../harness/types';
 import { DatasetSeeds } from '../data/seeds';
@@ -93,13 +93,7 @@ export class UnitFixtures {
     return r.Results[0].ID;
   }
 
-  /** The pipeline's LeakageGuard JSON: an explicit guard as given, else the deny list at the default dominance threshold; null for neither. */
-  private static leakageGuardJson(denyFields: readonly string[] | undefined, guard: LeakageGuard | undefined): string | null {
-    if (guard) return JSON.stringify(guard);
-    return denyFields ? JSON.stringify({ DenyFields: denyFields, SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT }) : null;
-  }
-
-  private static async provision(h: TruthHarness, draft: PredictionUnitDraft, features: readonly string[], algorithm: string, denyFields?: readonly string[], guard?: LeakageGuard): Promise<ProvisionedUnitPipeline> {
+  private static async provision(h: TruthHarness, draft: PredictionUnitDraft, features: readonly string[], algorithm: string, guard?: LeakageGuard): Promise<ProvisionedUnitPipeline> {
     const factory = UnitFixtures.EntityFactory(h);
     const unitRow = await PredictionUnitVersioning.CreatePredictionUnitV1(draft, { kind: 'human', userId: h.User.ID }, factory, h.User);
     h.Created.RecordPredictionUnit(unitRow.ID);
@@ -110,8 +104,7 @@ export class UnitFixtures {
     pipeline.AlgorithmID = await UnitFixtures.algorithmId(h, algorithm);
     pipeline.FeatureSteps = JSON.stringify({ Steps: [{ Id: 'select', Kind: 'select', Columns: features }] });
     pipeline.ValidationStrategy = JSON.stringify({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.2 });
-    const guardJson = UnitFixtures.leakageGuardJson(denyFields, guard);
-    if (guardJson !== null) pipeline.LeakageGuard = guardJson;
+    if (guard) pipeline.LeakageGuard = JSON.stringify(guard);
     RunViewPredictionUnitStore.ApplyUnitToPipeline(pipeline, unitRow.ID, parsed.Value, new ProviderAssemblyMetadata(h.Provider));
     if (!(await pipeline.Save())) throw new Error(`Saving pipeline failed: ${pipeline.LatestResult?.CompleteMessage}`);
     h.Created.RecordPipeline(pipeline.ID);
@@ -122,12 +115,9 @@ export class UnitFixtures {
     return UnitFixtures.provision(h, UnitFixtures.C1RenewalUnitDraft(h), ['PeriodIndex'], 'Logistic Regression');
   }
 
-  /**
-   * `denyFields` are saved in the pipeline's LeakageGuard as `h.CreatePipeline` saves a spec's DenyFields;
-   * `leakageGuard`, when given, is saved as the whole guard instead.
-   */
-  public static ProvisionWorldRenewalPipeline(h: TruthHarness, world: string, o: { readonly features: readonly string[]; readonly oneClassVariant?: boolean; readonly algorithm?: string; readonly denyFields?: readonly string[]; readonly leakageGuard?: LeakageGuard }): Promise<ProvisionedUnitPipeline> {
-    return UnitFixtures.provision(h, UnitFixtures.WorldRenewalUnitDraft(h, world, o.oneClassVariant === true), o.features, o.algorithm || 'Logistic Regression', o.denyFields, o.leakageGuard);
+  /** `leakageGuard`, when given, is saved as the pipeline's whole LeakageGuard (deny list and dominance threshold). */
+  public static ProvisionWorldRenewalPipeline(h: TruthHarness, world: string, o: { readonly features: readonly string[]; readonly oneClassVariant?: boolean; readonly algorithm?: string; readonly leakageGuard?: LeakageGuard }): Promise<ProvisionedUnitPipeline> {
+    return UnitFixtures.provision(h, UnitFixtures.WorldRenewalUnitDraft(h, world, o.oneClassVariant === true), o.features, o.algorithm || 'Logistic Regression', o.leakageGuard);
   }
 
   public static ProvisionScenarioPipeline(h: TruthHarness, scenario: string, task: TaskType): Promise<ProvisionedUnitPipeline> {

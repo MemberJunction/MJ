@@ -104,8 +104,15 @@ export class PredictionUnitGates {
     h.Created.RecordPredictionUnit(v2.ID);
     unitRow.LabelWindowDays = 365;
     const inPlaceRefused = !(await unitRow.Save());
-    const passed = v2.Version === 2 && v2.LabelVersion === 2 && UUIDsEqual(v2.LineageRootID, unitRow.ID) && UUIDsEqual(modelUnitId, unitRow.ID) && modelUnitVersion === 1 && inPlaceRefused;
-    return { Passed: passed, Measured: { v2Version: v2.Version, v2LabelVersion: v2.LabelVersion, modelUnitVersion: modelUnitVersion === null ? -1 : modelUnitVersion, inPlaceRefused }, Detail: 'model still references version 1' };
+    const v2SameLineage = UUIDsEqual(v2.LineageRootID, unitRow.ID);
+    const modelReferencesV1Unit = UUIDsEqual(modelUnitId, unitRow.ID);
+    const measuredUnitVersion = modelUnitVersion === null ? -1 : modelUnitVersion;
+    const passed = v2.Version === 2 && v2.LabelVersion === 2 && v2SameLineage && modelReferencesV1Unit && modelUnitVersion === 1 && inPlaceRefused;
+    return {
+      Passed: passed,
+      Measured: { v2Version: v2.Version, v2LabelVersion: v2.LabelVersion, v2SameLineage, modelReferencesV1Unit, modelUnitVersion: measuredUnitVersion, inPlaceRefused },
+      Detail: `label edit created version ${v2.Version} (LabelVersion ${v2.LabelVersion}${v2SameLineage ? ', same lineage' : ', different lineage'}); model references unit version ${measuredUnitVersion}${modelReferencesV1Unit ? ' of the edited unit' : ' of another unit'}; in-place edit ${inPlaceRefused ? 'refused' : 'saved'}`,
+    };
   }
 
   /** G1.7 W1 → S1.4 */
@@ -130,6 +137,6 @@ export class PredictionUnitGates {
     await h.Train(asCount.Pipeline);
     const run2: MJMLTrainingRunEntity = await UnitFixtures.LatestRun(h, asCount.Pipeline.ID);
     const refusedContinuous = r1.Ok && r1.Value.status === 'refused' && r1.Value.refusal.reason.kind === 'task-type-mismatch';
-    return { Passed: refusedContinuous && run2.Status === 'Completed', Measured: { refusedContinuous, countRunStatus: run2.Status }, Detail: 'continuous refused, count accepted' };
+    return { Passed: refusedContinuous && run2.Status === 'Completed', Measured: { refusedContinuous, countRunStatus: run2.Status }, Detail: `declared continuous: ${refusedContinuous ? 'refused (task-type-mismatch)' : 'not refused'}; declared count: run ${run2.Status}` };
   }
 }
