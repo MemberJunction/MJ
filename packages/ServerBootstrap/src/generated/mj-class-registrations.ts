@@ -1065,8 +1065,11 @@ import {
     HereGeocodingProvider,
 } from '@memberjunction/geo-core';
 
-// @memberjunction/integration-actions (1 classes)
+// @memberjunction/integration-actions (4 classes)
 import {
+    BootstrapSQLServerIntegrationFromBackupAction,
+    InspectSQLServerBackupAction,
+    ListAzureBackupBlobsAction,
     RunSyncAction,
 } from '@memberjunction/integration-actions';
 
@@ -2495,6 +2498,9 @@ const CLASS_REGISTRATIONS_3: any[] = [
     GeocodioGeocodingProvider,
     GoogleGeocodingProvider,
     HereGeocodingProvider,
+    BootstrapSQLServerIntegrationFromBackupAction,
+    InspectSQLServerBackupAction,
+    ListAzureBackupBlobsAction,
     RunSyncAction,
     AIActionQueue,
     EntityAIActionQueue,
