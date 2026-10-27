@@ -24,7 +24,7 @@ import { MagicLinkKeyManager } from '../auth/magicLink/MagicLinkKeys.js';
 import { GenerateSessionId } from '../auth/magicLink/magicLinkCore.js';
 import { MagicLinkService } from '../auth/magicLink/MagicLinkService.js';
 import { configInfo, type WidgetConfig } from '../config.js';
-import { BuildWidgetGuestClaims, EvaluateWidgetMint, ParseEnabledChannels, type WidgetMintErrorCode } from './widgetCore.js';
+import { BuildWidgetGuestClaims, EvaluateWidgetMint, IsIsolatedGuestRole, ParseEnabledChannels, type GuestRolePolicy, type WidgetMintErrorCode } from './widgetCore.js';
 import { VerifyHostAssertion, type HostAssertedIdentity } from './host-identity.js';
 import { WriteReturningVisitorRecap } from '../agentSessions/ReturningVisitorRecap.js';
 import { ResolveIdentityByEmail, MergeVisitorIdentity, ForgetVisitor, type ResolvedVisitorIdentity } from './visitorIdentity.js';
@@ -262,6 +262,8 @@ export class WidgetSessionService {
   constructor(
     private readonly publicUrl: string,
     private readonly config: WidgetConfig,
+    /** Which roles a widget may hand to an anonymous guest; by default only the scope-isolated `Widget Guest`. */
+    private readonly guestRolePolicy: GuestRolePolicy = { GrantableRoleNames: [] },
   ) {}
 
   /**
@@ -289,11 +291,11 @@ export class WidgetSessionService {
         return this.audited({ success: false, errorCode: eligibility.errorCode, error: 'Widget mint rejected.' }, input, widget);
       }
 
-      const guestRoleName = this.resolveGuestRoleName(widget.GuestRoleID);
-      if (!guestRoleName) {
-        LogError(`[Widget] Guest role ${widget.GuestRoleID} for widget ${widget.ID} not found in metadata.`);
-        return this.audited({ success: false, errorCode: 'server_error', error: 'Guest role not resolvable.' }, input, widget);
+      const guestRole = this.resolveIsolatedGuestRole(widget);
+      if (guestRole.ok === false) {
+        return this.audited(guestRole.refusal, input, widget);
       }
+      const guestRoleName = guestRole.name;
 
       // D1 host-identity strategy: a HostIdentity widget MUST present a valid host assertion.
       let hostIdentity: HostAssertedIdentity | undefined;
@@ -368,11 +370,11 @@ export class WidgetSessionService {
         return this.audited({ success: false, errorCode: eligibility.errorCode, error: 'Widget mint rejected.' }, input, widget);
       }
 
-      const guestRoleName = this.resolveGuestRoleName(widget.GuestRoleID);
-      if (!guestRoleName) {
-        LogError(`[Widget] Guest role ${widget.GuestRoleID} for widget ${widget.ID} not found in metadata.`);
-        return this.audited({ success: false, errorCode: 'server_error', error: 'Guest role not resolvable.' }, input, widget);
+      const guestRole = this.resolveIsolatedGuestRole(widget);
+      if (guestRole.ok === false) {
+        return this.audited(guestRole.refusal, input, widget);
       }
+      const guestRoleName = guestRole.name;
 
       let hostIdentity: HostAssertedIdentity | undefined;
       if (widget.AuthStrategy === 'HostIdentity') {
@@ -899,6 +901,30 @@ export class WidgetSessionService {
     const md = Metadata.Provider; // global-provider-ok: pre-auth server-side mint under the single default provider
     const role = md?.Roles.find((r) => UUIDsEqual(r.ID, guestRoleId));
     return role?.Name ?? null;
+  }
+
+  /**
+   * The ONE decision, for mint and refresh alike, of which role a guest token carries: the widget's `GuestRoleID`
+   * must resolve, and it must be a role the deployment may hand to an anonymous visitor
+   * ({@link IsIsolatedGuestRole}). Both refusals are the admin's to fix, so both are logged with the widget id;
+   * the visitor gets a uniform rejection.
+   */
+  private resolveIsolatedGuestRole(
+    widget: MJConversationWidgetInstanceEntity,
+  ): { ok: true; name: string } | { ok: false; refusal: MintGuestSessionResult } {
+    const name = this.resolveGuestRoleName(widget.GuestRoleID);
+    if (!name) {
+      LogError(`[Widget] Guest role ${widget.GuestRoleID} for widget ${widget.ID} not found in metadata.`);
+      return { ok: false, refusal: { success: false, errorCode: 'server_error', error: 'Guest role not resolvable.' } };
+    }
+    if (!IsIsolatedGuestRole(name, this.guestRolePolicy)) {
+      LogError(
+        `[Widget] Widget ${widget.ID} grants guest role '${name}', whose row filters do not isolate anonymous visitors ` +
+          `from each other. Use the Widget Guest role, or list '${name}' in magicLink.grantableRoleNames to allow it (MJ#6043).`,
+      );
+      return { ok: false, refusal: { success: false, errorCode: 'guest_role_not_isolated', error: 'Widget mint rejected.' } };
+    }
+    return { ok: true, name };
   }
 
   /** Resolves the server-side context user used to READ widget config (not the guest principal). */

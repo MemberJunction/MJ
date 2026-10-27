@@ -1105,6 +1105,7 @@ Skips unchanged files and records using stored checksums, significantly speeding
 - State is stored in `~/.mj/sync-state/` (machine-local, not committed to version control)
 - Combine freely with other flags: `mj sync push --dir ./metadata --incremental --verbose`
 - `--incremental` compares file content only. After you set a variable that `?optional` left out, push once without `--incremental`.
+- A file's checksum includes the content of the `@file:` targets it references. Checksums stored by an earlier version do not, so the first `--incremental` push after upgrading treats every file as changed and processes the whole tree once.
 
 ### Incremental Pull (`--incremental`)
 
@@ -1348,6 +1349,8 @@ SQL logging captures all database operations during push commands for creating m
 | `enabled` | boolean | false | Enable SQL logging during push operations |
 | `outputDirectory` | string | "./sql_logging" | Directory for SQL log files |
 | `formatAsMigration` | boolean | false | Format as Flyway migration files |
+| `schemaPlaceholders` | `{ schema, placeholder }[]` | undefined | With `formatAsMigration`, the schema names to rewrite and the Flyway placeholder for each, e.g. an Open App's schema to `${flyway:defaultSchema}` and `__mj` to `${mjSchema}`. Falls back to `SQLOutput.schemaPlaceholders` in `mj.config.cjs`; without either, `__mj` becomes `${flyway:defaultSchema}`. A schema name followed by `.` is rewritten wherever it appears, string data included |
+| `escapeFlywaySyntax` | boolean | false | Escape `${...}` in captured string data so Flyway does not read it as a placeholder. Always on with `formatAsMigration` |
 | `filterPatterns` | string[] | undefined | Patterns to filter SQL statements |
 | `filterType` | "exclude" or "include" | "exclude" | How to apply filter patterns |
 
