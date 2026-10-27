@@ -20,7 +20,8 @@
     "@memberjunction/core-entities": "6.2.0-edge.5",
     "@memberjunction/credentials": "6.2.0-edge.5",
     "@memberjunction/global": "6.2.0-edge.5",
-    "@memberjunction/integration-engine": "6.2.0-edge.5"
+    "@memberjunction/integration-engine": "6.2.0-edge.5",
+    "@memberjunction/schema-engine": "6.2.0-edge.5"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

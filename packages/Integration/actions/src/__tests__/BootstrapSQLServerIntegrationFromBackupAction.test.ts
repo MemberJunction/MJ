@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, type UserInfo } from '@memberjunction/core';
 import { RunActionParams, ActionParam } from '@memberjunction/actions-base';
 import {
     BootstrapSQLServerIntegrationFromBackupAction,
-    ISqlExecutor,
     SqlBackupFileListEntry,
     SqlColumnInfo
 } from '../BootstrapSQLServerIntegrationFromBackupAction.js';
@@ -16,6 +15,7 @@ let mockCredentialConfigFn: ReturnType<typeof vi.fn>;
 let mockGetCredentialByIdFn: ReturnType<typeof vi.fn>;
 let mockGetCredentialFn: ReturnType<typeof vi.fn>;
 let mockEntityByIDFn: ReturnType<typeof vi.fn>;
+let mockInvalidateEntityCachesFn: ReturnType<typeof vi.fn>;
 
 vi.mock('@memberjunction/integration-engine', () => {
     return {
@@ -47,12 +47,19 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
         LogError: vi.fn(),
         LogStatus: vi.fn(),
         RunView: class {
+            public static FromMetadataProvider() {
+                return new this();
+            }
             public RunView(...args: unknown[]) {
                 return mockRunViewFn(...args);
             }
         },
+        LocalCacheManager: {
+            Instance: {
+                InvalidateEntityCaches: (...args: unknown[]) => mockInvalidateEntityCachesFn(...args),
+            },
+        },
         Metadata: class {
-            public static Provider = {};
             public EntityByID(...args: unknown[]) {
                 return mockEntityByIDFn(...args);
             }
@@ -83,10 +90,13 @@ function makeParams(inputs: Record<string, string | number | boolean>): RunActio
 interface MockSqlOptions {
     totalRows?: number;
     failOnInsert?: boolean;
+    targetHasRows?: boolean;
+    pkType?: string;
+    compositePk?: boolean;
 }
 
 function createMockSqlExecutor(options: MockSqlOptions = {}): {
-    executor: ISqlExecutor;
+    executor: DatabaseProviderBase;
     executedSql: string[];
     mockExecuteSql: ReturnType<typeof vi.fn>;
 } {
@@ -98,6 +108,10 @@ function createMockSqlExecutor(options: MockSqlOptions = {}): {
             return Promise.reject(new Error('Target table disk full error'));
         }
 
+        if (sql.includes('SELECT TOP 1 1 AS HasRows')) {
+            return Promise.resolve(options.targetHasRows ? [{ HasRows: 1 }] : []);
+        }
+
         if (sql.includes('RESTORE HEADERONLY')) {
             return Promise.resolve([{
                 BackupStartDate: new Date('2026-10-26T01:00:00.000Z'),
@@ -106,13 +120,14 @@ function createMockSqlExecutor(options: MockSqlOptions = {}): {
                 FirstLSN: '100000000001',
                 LastLSN: '100000000050',
                 CheckpointLSN: '100000000020',
+                BackupSize: 104857600,
             }]);
         }
 
         if (sql.includes('RESTORE FILELISTONLY')) {
             const files: SqlBackupFileListEntry[] = [
-                { LogicalName: 'AdventureWorks_Data', PhysicalName: 'D:\\Data\\AW.mdf', Type: 'D' },
-                { LogicalName: 'AdventureWorks_Log', PhysicalName: 'L:\\Log\\AW.ldf', Type: 'L' },
+                { LogicalName: 'AdventureWorks_Data', PhysicalName: 'D:\\Data\\AW.mdf', Type: 'D', SizeBytes: 83886080 },
+                { LogicalName: 'AdventureWorks_Log', PhysicalName: 'L:\\Log\\AW.ldf', Type: 'L', SizeBytes: 20971520 },
             ];
             return Promise.resolve(files);
         }
@@ -125,19 +140,26 @@ function createMockSqlExecutor(options: MockSqlOptions = {}): {
         }
 
         if (sql.includes('INFORMATION_SCHEMA.COLUMNS')) {
+            const pkDataType = options.pkType ?? 'int';
             const columns: SqlColumnInfo[] = [
-                { COLUMN_NAME: 'CustomerID', DATA_TYPE: 'int', IS_NULLABLE: 'NO' },
+                { COLUMN_NAME: 'CustomerID', DATA_TYPE: pkDataType, IS_NULLABLE: 'NO' },
                 { COLUMN_NAME: 'CustomerName', DATA_TYPE: 'nvarchar', IS_NULLABLE: 'YES' },
                 { COLUMN_NAME: 'EmailAddress', DATA_TYPE: 'nvarchar', IS_NULLABLE: 'YES' },
                 { COLUMN_NAME: 'ID', DATA_TYPE: 'uniqueidentifier', IS_NULLABLE: 'NO' },
-                { COLUMN_NAME: 'SourceRecordID', DATA_TYPE: 'nvarchar', IS_NULLABLE: 'NO' },
-                { COLUMN_NAME: 'SourceObject', DATA_TYPE: 'nvarchar', IS_NULLABLE: 'NO' },
-                { COLUMN_NAME: 'SyncedAt', DATA_TYPE: 'datetimeoffset', IS_NULLABLE: 'NO' },
+                { COLUMN_NAME: '__mj_integration_SyncStatus', DATA_TYPE: 'nvarchar', IS_NULLABLE: 'NO' },
+                { COLUMN_NAME: '__mj_integration_LastSyncedAt', DATA_TYPE: 'datetimeoffset', IS_NULLABLE: 'YES' },
+                { COLUMN_NAME: '__mj_integration_LastSeenModifiedValue', DATA_TYPE: 'nvarchar', IS_NULLABLE: 'YES' },
             ];
+            if (options.compositePk) {
+                columns.push({ COLUMN_NAME: 'TenantID', DATA_TYPE: 'int', IS_NULLABLE: 'NO' });
+            }
             return Promise.resolve(columns);
         }
 
         if (sql.includes('INFORMATION_SCHEMA.TABLE_CONSTRAINTS')) {
+            if (options.compositePk) {
+                return Promise.resolve([{ COLUMN_NAME: 'CustomerID' }, { COLUMN_NAME: 'TenantID' }]);
+            }
             return Promise.resolve([{ COLUMN_NAME: 'CustomerID' }]);
         }
 
@@ -148,9 +170,9 @@ function createMockSqlExecutor(options: MockSqlOptions = {}): {
         return Promise.resolve([]);
     });
 
-    const executor: ISqlExecutor = {
-        ExecuteSQL: mockExecuteSql,
-    };
+    const executor = Object.create(DatabaseProviderBase.prototype) as DatabaseProviderBase;
+    executor.ExecuteSQL = mockExecuteSql;
+    executor.EntityByID = (id: string) => mockEntityByIDFn(id);
 
     return { executor, executedSql, mockExecuteSql };
 }
@@ -164,12 +186,13 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
     beforeEach(() => {
         action = new BootstrapSQLServerIntegrationFromBackupAction();
         mockSql = createMockSqlExecutor();
-        action.CustomSqlExecutor = mockSql.executor;
+        action.CustomDatabaseProvider = mockSql.executor;
 
         mockWatermarkUpdateFn = vi.fn().mockResolvedValue(undefined);
         mockCredentialConfigFn = vi.fn().mockResolvedValue(undefined);
         mockGetCredentialByIdFn = vi.fn();
         mockGetCredentialFn = vi.fn();
+        mockInvalidateEntityCachesFn = vi.fn().mockResolvedValue(undefined);
 
         mockRunViewFn = vi.fn().mockResolvedValue({
             Success: true,
@@ -182,6 +205,7 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
                     SyncEnabled: true,
                     SyncDirection: 'Pull',
                     Priority: 1,
+                    Configuration: JSON.stringify({ IncrementalWatermarkField: 'ModifiedAt' }),
                 },
             ],
         });
@@ -193,6 +217,9 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
                     Name: 'Customer',
                     SchemaName: 'raw_erp',
                     BaseTable: 'Customer',
+                    AllowDirectSQLInsert: true,
+                    FirstPrimaryKey: { Name: 'ID' },
+                    PrimaryKeys: [{ Name: 'ID' }],
                 };
             }
             return undefined;
@@ -229,7 +256,7 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
             expect(result.ResultCode).toBe('INVALID_PARAMETER');
         });
 
-        it('returns BOOTSTRAP_FAILED when neither SasToken nor StorageCredentialID is provided', async () => {
+        it('returns BOOTSTRAP_FAILED when neither SasToken nor StorageCredentialID is provided for blob URL', async () => {
             const params = makeParams({
                 CompanyIntegrationID: 'ci-001',
                 BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
@@ -302,48 +329,38 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
         });
     });
 
-    describe('Staging Restore & Header Extraction', () => {
-        it('executes RESTORE HEADERONLY and extracts BackupStartDate correctly', async () => {
+    describe('Multi-Stripe Inspection (Msg 3132 Prevention)', () => {
+        it('passes ALL stripes in RESTORE HEADERONLY and RESTORE FILELISTONLY', async () => {
+            const stripes = [
+                'https://storage.blob.core.windows.net/backups/stripe1.bak',
+                'https://storage.blob.core.windows.net/backups/stripe2.bak',
+                'https://storage.blob.core.windows.net/backups/stripe3.bak',
+            ];
             const params = makeParams({
                 CompanyIntegrationID: 'ci-001',
-                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                BackupUrls: stripes.join(', '),
                 SasToken: 'token123',
             });
 
             const result = await action['InternalRunAction'](params);
-
             expect(result.Success).toBe(true);
+
             const headerSql = mockSql.executedSql.find(s => s.includes('RESTORE HEADERONLY'));
             expect(headerSql).toBeDefined();
+            expect(headerSql).toContain("URL = N'https://storage.blob.core.windows.net/backups/stripe1.bak'");
+            expect(headerSql).toContain("URL = N'https://storage.blob.core.windows.net/backups/stripe2.bak'");
+            expect(headerSql).toContain("URL = N'https://storage.blob.core.windows.net/backups/stripe3.bak'");
 
-            const backupStartDateParam = result.Params?.find(p => p.Name === 'BackupStartDate');
-            expect(backupStartDateParam?.Value).toBe('2026-10-26T01:00:00.000Z');
-        });
-
-        it('constructs RESTORE DATABASE statement with correct MOVE clauses and multiple striped URLs', async () => {
-            const params = makeParams({
-                CompanyIntegrationID: 'ci-001',
-                BackupUrls: 'https://storage.blob.core.windows.net/backups/stripe1.bak, https://storage.blob.core.windows.net/backups/stripe2.bak',
-                SasToken: 'token123',
-                StagingDatabaseName: 'MJ_Staging_TestDB',
-            });
-
-            const result = await action['InternalRunAction'](params);
-
-            expect(result.Success).toBe(true);
-            const restoreSql = mockSql.executedSql.find(s => s.includes('RESTORE DATABASE [MJ_Staging_TestDB]'));
-            expect(restoreSql).toBeDefined();
-            expect(restoreSql).toContain("URL = N'https://storage.blob.core.windows.net/backups/stripe1.bak'");
-            expect(restoreSql).toContain("URL = N'https://storage.blob.core.windows.net/backups/stripe2.bak'");
-            expect(restoreSql).toContain("MOVE N'AdventureWorks_Data' TO N'F:\\SQLData\\MJ_Staging_TestDB_data.mdf'");
-            expect(restoreSql).toContain("MOVE N'AdventureWorks_Log' TO N'L:\\SQLLog\\MJ_Staging_TestDB_log.ldf'");
-            expect(restoreSql).toContain('REPLACE');
-            expect(restoreSql).toContain('RECOVERY');
+            const fileListSql = mockSql.executedSql.find(s => s.includes('RESTORE FILELISTONLY'));
+            expect(fileListSql).toBeDefined();
+            expect(fileListSql).toContain("URL = N'https://storage.blob.core.windows.net/backups/stripe1.bak'");
+            expect(fileListSql).toContain("URL = N'https://storage.blob.core.windows.net/backups/stripe2.bak'");
+            expect(fileListSql).toContain("URL = N'https://storage.blob.core.windows.net/backups/stripe3.bak'");
         });
     });
 
-    describe('Fast Local In-Engine ETL with TABLOCK', () => {
-        it('generates and executes minimally-logged INSERT INTO Target WITH (TABLOCK) statement', async () => {
+    describe('Fast Local In-Engine ETL with NEWID() and TABLOCK', () => {
+        it('uses NEWID() (never NEWSEQUENTIALID()) in SELECT and generates Record Maps insert', async () => {
             const params = makeParams({
                 CompanyIntegrationID: 'ci-001',
                 BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
@@ -354,19 +371,38 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
             const result = await action['InternalRunAction'](params);
 
             expect(result.Success).toBe(true);
+
+            // Assert transaction commands were executed
+            expect(mockSql.executedSql.some(s => s.includes('BEGIN TRANSACTION'))).toBe(true);
+            expect(mockSql.executedSql.some(s => s.includes('COMMIT TRANSACTION'))).toBe(true);
+
+            // Assert ETL insert SQL
             const etlSql = mockSql.executedSql.find(s => s.includes('INSERT INTO [raw_erp].[Customer] WITH (TABLOCK)'));
             expect(etlSql).toBeDefined();
-            expect(etlSql).toContain('NEWSEQUENTIALID()');
-            expect(etlSql).toContain("ISNULL(CAST(s.[CustomerID] AS NVARCHAR(450)), N'')");
-            expect(etlSql).toContain("N'Customer'");
-            expect(etlSql).toContain('@RestoreTimestamp');
+            expect(etlSql).toContain('NEWID()');
+            expect(etlSql).not.toContain('NEWSEQUENTIALID()');
+            expect(etlSql).not.toContain('[SourceRecordID]');
+            expect(etlSql).not.toContain('[SourceObject]');
+            expect(etlSql).not.toContain('[SyncedAt]');
+            expect(etlSql).toContain('[__mj_integration_SyncStatus]');
+            expect(etlSql).toContain('[__mj_integration_LastSyncedAt]');
             expect(etlSql).toContain('[raw_erp].[Customer]');
             expect(etlSql).toContain('[MJ_Staging_TestDB].[sales].[Customer] s WITH (NOLOCK)');
+
+            // Assert Record Maps insert
+            const recordMapsSql = mockSql.executedSql.find(s => s.includes('INSERT INTO __mj.[Company Integration Record Maps]'));
+            expect(recordMapsSql).toBeDefined();
+            expect(recordMapsSql).toContain("'ci-001'");
+            expect(recordMapsSql).toContain("'entity-cust-001'");
+            expect(recordMapsSql).toContain('CAST(t.[ID] AS NVARCHAR(750))');
+
+            // Assert RunView cache was invalidated for target entity
+            expect(mockInvalidateEntityCachesFn).toHaveBeenCalledWith('Customer');
         });
 
-        it('executes chunked ETL when totalRows exceeds BatchSize and numeric PK exists', async () => {
-            mockSql = createMockSqlExecutor({ totalRows: 1200000 });
-            action.CustomSqlExecutor = mockSql.executor;
+        it('executes chunked ETL when totalRows exceeds BatchSize and PK is integer', async () => {
+            mockSql = createMockSqlExecutor({ totalRows: 1200000, pkType: 'bigint' });
+            action.CustomDatabaseProvider = mockSql.executor;
 
             const params = makeParams({
                 CompanyIntegrationID: 'ci-001',
@@ -382,6 +418,118 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
             expect(chunkedSql).toBeDefined();
             expect(chunkedSql).toContain('@ChunkSize BIGINT = 500000');
             expect(chunkedSql).toContain('s.[CustomerID] >= @CurrentID AND s.[CustomerID] < @CurrentID + @ChunkSize');
+            expect(chunkedSql).toContain('NEWID()');
+            expect(chunkedSql).not.toContain('NEWSEQUENTIALID()');
+        });
+
+        it('falls back to single set-based INSERT when PK is non-integer (e.g. uniqueidentifier) even if totalRows > BatchSize', async () => {
+            mockSql = createMockSqlExecutor({ totalRows: 1200000, pkType: 'uniqueidentifier' });
+            action.CustomDatabaseProvider = mockSql.executor;
+
+            const params = makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                SasToken: 'token123',
+                BatchSize: 500000,
+            });
+
+            const result = await action['InternalRunAction'](params);
+
+            expect(result.Success).toBe(true);
+            const chunkedSql = mockSql.executedSql.find(s => s.includes('WHILE @CurrentID <= @MaxID'));
+            expect(chunkedSql).toBeUndefined(); // Must NOT chunk on UUID PK
+
+            const singleSql = mockSql.executedSql.find(s => s.includes('INSERT INTO [raw_erp].[Customer] WITH (TABLOCK)'));
+            expect(singleSql).toBeDefined();
+        });
+
+        it('falls back to single set-based INSERT when composite PK exists', async () => {
+            mockSql = createMockSqlExecutor({ totalRows: 1200000, pkType: 'int', compositePk: true });
+            action.CustomDatabaseProvider = mockSql.executor;
+
+            const params = makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                SasToken: 'token123',
+                BatchSize: 500000,
+            });
+
+            const result = await action['InternalRunAction'](params);
+
+            expect(result.Success).toBe(true);
+            const chunkedSql = mockSql.executedSql.find(s => s.includes('WHILE @CurrentID <= @MaxID'));
+            expect(chunkedSql).toBeUndefined(); // Must NOT chunk on composite PK
+        });
+    });
+
+    describe('Re-run Safety & TruncateTargetBeforeLoad', () => {
+        it('fails with informative error when target table has rows and TruncateTargetBeforeLoad is false', async () => {
+            mockSql = createMockSqlExecutor({ targetHasRows: true });
+            action.CustomDatabaseProvider = mockSql.executor;
+
+            const params = makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                SasToken: 'token123',
+                TruncateTargetBeforeLoad: false,
+            });
+
+            const result = await action['InternalRunAction'](params);
+
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('BOOTSTRAP_FAILED');
+            expect(result.Message).toContain("Target table '[raw_erp].[Customer]' already contains data and 'TruncateTargetBeforeLoad' is false");
+        });
+
+        it('truncates target table and clears record maps when TruncateTargetBeforeLoad is true and target has rows', async () => {
+            mockSql = createMockSqlExecutor({ targetHasRows: true });
+            action.CustomDatabaseProvider = mockSql.executor;
+
+            const params = makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                SasToken: 'token123',
+                TruncateTargetBeforeLoad: true,
+            });
+
+            const result = await action['InternalRunAction'](params);
+
+            expect(result.Success).toBe(true);
+            const truncateSql = mockSql.executedSql.find(s => s.includes('TRUNCATE TABLE [raw_erp].[Customer]'));
+            expect(truncateSql).toBeDefined();
+
+            const clearMapsSql = mockSql.executedSql.find(s => s.includes('DELETE FROM __mj.[Company Integration Record Maps]'));
+            expect(clearMapsSql).toBeDefined();
+        });
+    });
+
+    describe('Data Access Rule (AllowDirectSQLInsert)', () => {
+        it('fails with clear error if target entity has AllowDirectSQLInsert = false', async () => {
+            mockEntityByIDFn = vi.fn().mockImplementation((id: string) => {
+                if (id === 'entity-cust-001') {
+                    return {
+                        ID: 'entity-cust-001',
+                        Name: 'Customer',
+                        SchemaName: 'raw_erp',
+                        BaseTable: 'Customer',
+                        AllowDirectSQLInsert: false, // Disallowed!
+                        FirstPrimaryKey: { Name: 'ID' },
+                    };
+                }
+                return undefined;
+            });
+
+            const params = makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                SasToken: 'token123',
+            });
+
+            const result = await action['InternalRunAction'](params);
+
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('BOOTSTRAP_FAILED');
+            expect(result.Message).toContain('AllowDirectSQLInsert enabled');
         });
     });
 
@@ -449,26 +597,26 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
     });
 
     describe('Local Disk File Support', () => {
-        it('correctly identifies URLs vs local disk paths via isUrl', () => {
-            expect(action.isUrl('https://account.blob.core.windows.net/container/backup.bak')).toBe(true);
-            expect(action.isUrl('http://storage.local/container/backup.bak')).toBe(true);
-            expect(action.isUrl('C:\\backups\\AdventureWorks.bak')).toBe(false);
-            expect(action.isUrl('/var/opt/mssql/backup/AdventureWorks.bak')).toBe(false);
-            expect(action.isUrl('D:/sql_backups/stripe1.bak')).toBe(false);
+        it('correctly identifies URLs vs local disk paths via IsUrl', () => {
+            expect(action.IsUrl('https://account.blob.core.windows.net/container/backup.bak')).toBe(true);
+            expect(action.IsUrl('http://storage.local/container/backup.bak')).toBe(true);
+            expect(action.IsUrl('C:\\backups\\AdventureWorks.bak')).toBe(false);
+            expect(action.IsUrl('/var/opt/mssql/backup/AdventureWorks.bak')).toBe(false);
+            expect(action.IsUrl('D:/sql_backups/stripe1.bak')).toBe(false);
         });
 
         it('executes RESTORE HEADERONLY and FILELISTONLY using FROM DISK for local files', async () => {
-            const header = await action['readBackupHeader'](mockSql.executor, '/var/opt/mssql/backup/mydb.bak', makeUser());
+            const header = await action.readBackupHeader(mockSql.executor, '/var/opt/mssql/backup/mydb.bak', makeUser());
             expect(header.DatabaseName).toBe('AdventureWorks_Prod');
 
             const headerSql = mockSql.executedSql.find(s => s.includes('RESTORE HEADERONLY'));
-            expect(headerSql).toBe("RESTORE HEADERONLY FROM DISK = N'/var/opt/mssql/backup/mydb.bak';");
+            expect(headerSql).toContain("FROM\n    DISK = N'/var/opt/mssql/backup/mydb.bak';");
 
-            const fileList = await action['readBackupFileList'](mockSql.executor, '/var/opt/mssql/backup/mydb.bak', makeUser());
+            const fileList = await action.readBackupFileList(mockSql.executor, '/var/opt/mssql/backup/mydb.bak', makeUser());
             expect(fileList).toHaveLength(2);
 
             const fileListSql = mockSql.executedSql.find(s => s.includes('RESTORE FILELISTONLY'));
-            expect(fileListSql).toBe("RESTORE FILELISTONLY FROM DISK = N'/var/opt/mssql/backup/mydb.bak';");
+            expect(fileListSql).toContain("FROM\n    DISK = N'/var/opt/mssql/backup/mydb.bak';");
         });
 
         it('formats multi-stripe local restores using DISK clause', async () => {
@@ -488,8 +636,8 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
         });
 
         it('formats mixed stripe restores correctly', async () => {
-            await action['executeDatabaseRestore']
-                (mockSql.executor,
+            await action['executeDatabaseRestore'](
+                mockSql.executor,
                 'StagingDb',
                 ['https://blob.core.windows.net/b/part1.bak', 'C:\\backups\\part2.bak'],
                 ["MOVE N'Data' TO N'C:\\data\\StagingDb.mdf'"],
@@ -538,7 +686,7 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
     describe('Error Handling and Rollback Cleanup', () => {
         it('attempts to clean up staging database when an error occurs during ETL', async () => {
             mockSql = createMockSqlExecutor({ failOnInsert: true });
-            action.CustomSqlExecutor = mockSql.executor;
+            action.CustomDatabaseProvider = mockSql.executor;
 
             const params = makeParams({
                 CompanyIntegrationID: 'ci-001',

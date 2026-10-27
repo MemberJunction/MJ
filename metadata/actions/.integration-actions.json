@@ -332,7 +332,8 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "Description": "Shared Access Signature token for authenticating against the Azure Blob Storage container (not required for local disk)",
-            "IsRequired": false
+            "IsRequired": false,
+            "LogValue": false
           },
           "primaryKey": {
             "ID": "B1692872-FC37-498B-BBEF-76393B09B6C5"
@@ -441,6 +442,21 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "TruncateTargetBeforeLoad",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Set to 'true' to truncate target tables before loading, allowing safe re-runs. If false and target table contains rows, the map load fails.",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "68BA61D5-FDE1-4C55-B1EA-128C0710C297"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "BackupStartDate",
             "Type": "Output",
             "ValueType": "Scalar",
@@ -533,6 +549,334 @@
     },
     "primaryKey": {
       "ID": "4EF0A049-1C4C-4FA7-B50E-D03FB3A511F7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "List Azure Backup Blobs",
+      "Description": "Queries an Azure Blob Storage container via the Azure REST API to discover available backup (.bak) files for bootstrap integration.",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
+      "DriverClass": "List Azure Backup Blobs",
+      "Type": "Custom",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-cloud-arrow-down"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ContainerUrl",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Azure Blob Storage container URL (e.g. https://storage.blob.core.windows.net/backups)",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "A03AE162-A550-4D20-BD1C-F809FB56E815"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SasToken",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Shared Access Signature token for Azure Blob container authentication",
+            "IsRequired": false,
+            "LogValue": false
+          },
+          "primaryKey": {
+            "ID": "10F7B0BA-EBC6-45E4-811C-21FD66C9C894"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CredentialID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "MJ: Credentials record ID storing the SAS token",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "883192ED-38AA-41A8-BE08-D35318F0471E"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Prefix",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional blob name prefix filter (e.g. 'AdventureWorks_')",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "256B5EEA-F2F9-403F-9DB7-8169F1565EDF"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Blobs",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "JSON-serialized array of { Name, Url, SizeBytes, LastModified }",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0939AB4C-A179-4431-94E2-68A1AD129FD0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "BlobCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of blobs matching query",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F26ABB1D-43A3-4DBB-9222-039F96458B64"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "Description": "Successfully retrieved blob list from Azure container",
+            "IsSuccess": true
+          },
+          "primaryKey": {
+            "ID": "95D86ED4-4B6F-4058-B522-41137F825930"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "Description": "Required parameter ContainerUrl was not provided",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "E06FC1BD-43A6-4297-BCB0-A7FBE9019B1A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_PARAMETER",
+            "Description": "ContainerUrl is not a valid HTTP/HTTPS URL",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "382D64C9-01B9-4402-AF15-32575DD83B7F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "LIST_BLOBS_FAILED",
+            "Description": "Failed to list blobs from Azure Storage container due to authentication, network, or REST API error",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "BF049A36-35F0-427B-A7A1-8E5D7CE0AC69"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "3ED29A15-FE6F-46EE-8215-4258815A7E99"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Inspect SQL Server Backup",
+      "Description": "Inspects multi-stripe SQL Server backup files (.bak) from Azure Blob Storage or local disk by executing RESTORE HEADERONLY and RESTORE FILELISTONLY.",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
+      "DriverClass": "Inspect SQL Server Backup",
+      "Type": "Custom",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-file-magnifying-glass"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the Company Integration being inspected",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "93619581-FF51-494E-AD5F-DDE65EC3B792"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "BackupUrls",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Single backup URL/path or comma-separated list of URLs/paths for multi-stripe backup sets",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "7ACE87EB-E9C3-4E25-B94F-E022AA07817B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SasToken",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Shared Access Signature token for Azure Blob container access",
+            "IsRequired": false,
+            "LogValue": false
+          },
+          "primaryKey": {
+            "ID": "543DAC28-045D-4001-B5C3-DF40E456953B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CredentialID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "MJ: Credentials record ID storing the SAS token",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "EA41A3A2-F8CA-41CD-A3D5-213FAA16D6A2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "BackupStartDate",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Point-in-time timestamp (ISO UTC) when the backup began",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D4BC61B4-41F1-4D9F-8EB8-905173D87BCE"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DatabaseName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Original database name recorded in the backup header",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E5AB0CC2-4FE8-4F3F-9907-C4AB6357AC36"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "BackupSizeBytes",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total backup size in bytes",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "89CC9C5A-3C45-45CC-9B30-C3221409B7BD"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Files",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "JSON-serialized array of logical and physical file records { LogicalName, PhysicalName, Type, SizeBytes }",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7B5D185A-5E6A-454B-BDFA-F72D003E463F"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "Description": "Successfully inspected backup header and file list",
+            "IsSuccess": true
+          },
+          "primaryKey": {
+            "ID": "0436732C-EF56-487F-9AC3-A4CEEA1F8233"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "Description": "Required parameter CompanyIntegrationID or BackupUrls was not provided",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "5E40C03A-3A2B-4E9E-B5D9-C5E4B0E63819"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_PARAMETER",
+            "Description": "BackupUrls parameter contains no valid URLs or file paths",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "AFDA42B4-B046-43AC-94A0-4950CC7A6F09"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INSPECTION_FAILED",
+            "Description": "Failed to inspect backup files via RESTORE HEADERONLY / FILELISTONLY",
+            "IsSuccess": false
+          },
+          "primaryKey": {
+            "ID": "8145028A-8251-4C58-875F-BAAED55EFB2B"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F8148275-DCE4-4035-9EDE-096E6EDEA08F"
     }
   }
 ]

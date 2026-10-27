@@ -1,8 +1,9 @@
 import { RegisterClass } from '@memberjunction/global';
 import { LogError } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
-import { ActionResultSimple, RunActionParams, ActionParam } from '@memberjunction/actions-base';
+import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { IntegrationEngine, SyncResult, SyncTriggerType, IntegrationSyncOptions } from '@memberjunction/integration-engine';
+import { BaseIntegrationAction } from './BaseIntegrationAction.js';
 
 /**
  * MJ Action that triggers a sync for a CompanyIntegration.
@@ -23,7 +24,7 @@ import { IntegrationEngine, SyncResult, SyncTriggerType, IntegrationSyncOptions 
  *   - ErrorSummary: JSON string of error details (first 10 errors)
  */
 @RegisterClass(BaseAction, 'Run Integration Sync')
-export class RunSyncAction extends BaseAction {
+export class RunSyncAction extends BaseIntegrationAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
@@ -118,21 +119,5 @@ export class RunSyncAction extends BaseAction {
                 JSON.stringify(result.Errors.slice(0, 10))
             );
         }
-    }
-
-    private getStringParam(params: RunActionParams, name: string): string | undefined {
-        const nameLower = name.toLowerCase();
-        const param = params.Params?.find(p => p.Name.trim().toLowerCase() === nameLower);
-        if (!param || param.Value == null) return undefined;
-        const value = String(param.Value).trim();
-        return value.length > 0 ? value : undefined;
-    }
-
-    private addOutputParam(params: RunActionParams, name: string, value: number | string): void {
-        const outputParam = new ActionParam();
-        outputParam.Name = name;
-        outputParam.Type = 'Output';
-        outputParam.Value = value;
-        params.Params.push(outputParam);
     }
 }
