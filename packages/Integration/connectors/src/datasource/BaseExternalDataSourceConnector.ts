@@ -76,6 +76,24 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
         return true;
     }
 
+    /**
+     * Name of a stable, monotonic ordering key (PK) usable for keyset/seek resume.
+     * 
+     * ARCHITECTURAL NOTE (IntegrationEngine.ts:2711):
+     * The IntegrationEngine treats 'StableOrderingKey' and 'Timestamp Watermark' as mutually exclusive:
+     * declaring a StableOrderingKey forces `initialWatermark = null` in the engine, which drops the
+     * timestamp watermark and turns incremental syncs into repeated full scans.
+     * 
+     * Therefore:
+     * - For objects that HAVE a watermark column (incremental delta ingestion), this MUST return `null`.
+     *   Compound keyset seeking is handled internally by FetchChanges within the run.
+     * - For objects that have NO watermark column (pure full-table scans), this returns the single-column
+     *   primary key when available, allowing the engine's checkpoint-resume to persist the cursor.
+     */
+    public override StableOrderingKey(_objectName: string): string | null {
+        return null;
+    }
+
     // ─── The bridge: CompanyIntegration → shared EDS data-source row ──────────────
 
     /**
@@ -196,7 +214,7 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
     // ─── Incremental delta ingestion (generic across all EDS drivers) ─────────────
 
     public async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
-        const { dataSource, driver } = await this.Resolve(ctx.CompanyIntegration, ctx.ContextUser);
+        const { dataSource, dataSourceType, driver } = await this.Resolve(ctx.CompanyIntegration, ctx.ContextUser);
         const meta = await this.ResolveObjectMeta(ctx);
 
         // Order by watermark then PK (ascending) so the last row carries the max watermark and paging is
@@ -213,7 +231,7 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
         if (canUseKeyset && ctx.AfterKeyValue) {
             const parsed = this.ParseKeysetMarker(ctx.AfterKeyValue, meta.PrimaryKeyFields, meta.WatermarkField);
             if (parsed) {
-                keysetFilter = this.BuildKeysetFilter(parsed, meta.PrimaryKeyFields, meta.WatermarkField);
+                keysetFilter = this.BuildKeysetFilter(parsed, meta.PrimaryKeyFields, meta.WatermarkField, dataSourceType?.FilterDialect);
                 if (keysetFilter) {
                     useKeyset = true;
                 }
@@ -285,12 +303,17 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
         }
 
         // Include watermark field value if present on row to support (Watermark, PK) compound seeks
-        if (watermarkField && row[watermarkField] !== undefined) {
+        if (watermarkField && row[watermarkField] !== undefined && row[watermarkField] !== null) {
             const rawWatermark = row[watermarkField];
-            const watermarkVal = rawWatermark instanceof Date
-                ? rawWatermark.toISOString()
-                : (typeof rawWatermark === 'string' ? rawWatermark : String(rawWatermark));
+            const watermarkVal = typeof rawWatermark === 'string'
+                ? rawWatermark
+                : (rawWatermark instanceof Date ? rawWatermark.toISOString() : String(rawWatermark));
             return JSON.stringify({ w: watermarkVal, k: keys });
+        }
+
+        // If watermark on row is null or undefined, emit { k: keys } (NO w property)
+        if (watermarkField && (row[watermarkField] === undefined || row[watermarkField] === null)) {
+            return JSON.stringify({ k: keys });
         }
 
         // Pure primary key keyset
@@ -353,6 +376,18 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
         return undefined;
     }
 
+    private quoteIdentifier(name: string, dialect?: string): string {
+        const d = (dialect ?? '').toLowerCase();
+        if (d === 'sqlserver') {
+            return `[${name}]`;
+        }
+        if (d === 'mysql' || d === 'databricks') {
+            return `\`${name}\``;
+        }
+        // PostgreSQL, Snowflake, Oracle, ANSI default:
+        return `"${name}"`;
+    }
+
     /**
      * Generates a SQL-compatible keyset seek filter expression based on the parsed marker,
      * primary keys, and optional watermark field.
@@ -360,7 +395,8 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
     public BuildKeysetFilter(
         markerData: { Watermark?: string; Keys: Record<string, unknown> },
         primaryKeyFields: string[],
-        watermarkField?: string
+        watermarkField?: string,
+        dialect?: string
     ): string | undefined {
         if (!markerData || primaryKeyFields.length === 0) {
             return undefined;
@@ -371,7 +407,7 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
             if (typeof val === 'boolean') return val ? '1' : '0';
             if (val === null || val === undefined) return "''";
             const s = String(val);
-            if (/^-?\d+$/.test(s)) return s;
+            // NOTE: Never unquote strings matching /^\d+$/! Varchar keys must stay quoted.
             return `'${s.replace(/'/g, "''")}'`;
         };
 
@@ -380,7 +416,7 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
             if (primaryKeyFields.length === 1) {
                 const pk = primaryKeyFields[0];
                 const val = keys[pk];
-                return val !== undefined ? `[${pk}] > ${formatLiteral(val)}` : undefined;
+                return val !== undefined ? `${this.quoteIdentifier(pk, dialect)} > ${formatLiteral(val)}` : undefined;
             }
 
             const clauses: string[] = [];
@@ -388,10 +424,10 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
                 const andParts: string[] = [];
                 for (let j = 0; j < i; j++) {
                     const prevKey = primaryKeyFields[j];
-                    andParts.push(`[${prevKey}] = ${formatLiteral(keys[prevKey])}`);
+                    andParts.push(`${this.quoteIdentifier(prevKey, dialect)} = ${formatLiteral(keys[prevKey])}`);
                 }
                 const currKey = primaryKeyFields[i];
-                andParts.push(`[${currKey}] > ${formatLiteral(keys[currKey])}`);
+                andParts.push(`${this.quoteIdentifier(currKey, dialect)} > ${formatLiteral(keys[currKey])}`);
                 clauses.push(`(${andParts.join(' AND ')})`);
             }
             return clauses.length > 0 ? `(${clauses.join(' OR ')})` : undefined;
@@ -403,10 +439,11 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
         }
 
         // If watermark is also part of the seek (Watermark, PK):
-        if (watermarkField && markerData.Watermark) {
+        if (watermarkField && markerData.Watermark != null && String(markerData.Watermark).trim().length > 0 && markerData.Watermark !== 'null') {
+            const qWatermark = this.quoteIdentifier(watermarkField, dialect);
             const wmLiteral = formatLiteral(markerData.Watermark);
             // (Watermark > LastWatermark) OR (Watermark = LastWatermark AND PK > LastPK)
-            return `([${watermarkField}] > ${wmLiteral}) OR ([${watermarkField}] = ${wmLiteral} AND ${pkCondition})`;
+            return `(${qWatermark} > ${wmLiteral}) OR (${qWatermark} = ${wmLiteral} AND ${pkCondition})`;
         }
 
         return pkCondition;

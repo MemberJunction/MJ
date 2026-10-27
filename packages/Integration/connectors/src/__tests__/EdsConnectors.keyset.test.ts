@@ -159,6 +159,32 @@ describe('BaseExternalDataSourceConnector — Keyset Marker Extraction & Parsing
             expect(connector.ExtractKeysetMarker({}, [])).toBeUndefined();
             expect(connector.ExtractKeysetMarker({ id: 1 }, [])).toBeUndefined();
         });
+
+        it('preserves full-precision timestamp string in marker', () => {
+            const row = { id: 101, modified_at: '2026-10-26T01:00:00.123456Z' };
+            const marker = connector.ExtractKeysetMarker(row, ['id'], 'modified_at');
+            expect(marker).toBeDefined();
+
+            const parsed = JSON.parse(marker!);
+            expect(parsed.w).toBe('2026-10-26T01:00:00.123456Z');
+            expect(parsed.k).toEqual({ id: 101 });
+        });
+
+        it('omits w property when watermark on row is null or undefined', () => {
+            const rowNull = { id: 101, modified_at: null };
+            const markerNull = connector.ExtractKeysetMarker(rowNull, ['id'], 'modified_at');
+            expect(markerNull).toBe(JSON.stringify({ k: { id: 101 } }));
+            const parsedNull = JSON.parse(markerNull!);
+            expect(parsedNull.w).toBeUndefined();
+            expect(parsedNull.k).toEqual({ id: 101 });
+
+            const rowUndef = { id: 102 };
+            const markerUndef = connector.ExtractKeysetMarker(rowUndef, ['id'], 'modified_at');
+            expect(markerUndef).toBe(JSON.stringify({ k: { id: 102 } }));
+            const parsedUndef = JSON.parse(markerUndef!);
+            expect(parsedUndef.w).toBeUndefined();
+            expect(parsedUndef.k).toEqual({ id: 102 });
+        });
     });
 
     describe('ParseKeysetMarker', () => {
@@ -191,30 +217,100 @@ describe('BaseExternalDataSourceConnector — Keyset Marker Extraction & Parsing
 
     describe('BuildKeysetFilter', () => {
         it('builds single column numeric seek filter', () => {
-            const filter = connector.BuildKeysetFilter({ Keys: { id: 101 } }, ['id']);
+            const filter = connector.BuildKeysetFilter({ Keys: { id: 101 } }, ['id'], undefined, 'sqlserver');
             expect(filter).toBe('[id] > 101');
         });
 
         it('builds single column string seek filter with SQL escaping', () => {
-            const filter = connector.BuildKeysetFilter({ Keys: { code: "O'Reilly" } }, ['code']);
+            const filter = connector.BuildKeysetFilter({ Keys: { code: "O'Reilly" } }, ['code'], undefined, 'sqlserver');
             expect(filter).toBe("[code] > 'O''Reilly'");
         });
 
         it('builds composite PK seek filter: (k1 > v1) OR (k1 = v1 AND k2 > v2)', () => {
             const filter = connector.BuildKeysetFilter(
                 { Keys: { tenant_id: 'T1', id: 100 } },
-                ['tenant_id', 'id']
+                ['tenant_id', 'id'],
+                undefined,
+                'sqlserver'
             );
             expect(filter).toBe("(([tenant_id] > 'T1') OR ([tenant_id] = 'T1' AND [id] > 100))");
         });
 
-        it('builds compound (Watermark, PK) seek filter', () => {
+        it('builds compound (Watermark, PK) seek filter for SQL Server', () => {
             const filter = connector.BuildKeysetFilter(
                 { Watermark: '2026-10-26T01:00:00.000Z', Keys: { id: 100 } },
                 ['id'],
-                'modified_at'
+                'modified_at',
+                'sqlserver'
             );
             expect(filter).toBe("([modified_at] > '2026-10-26T01:00:00.000Z') OR ([modified_at] = '2026-10-26T01:00:00.000Z' AND [id] > 100)");
+        });
+
+        it('builds compound seek filter for Postgres / ANSI dialect', () => {
+            const filter = connector.BuildKeysetFilter(
+                { Watermark: '2026-10-26T01:00:00.000Z', Keys: { id: 100 } },
+                ['id'],
+                'modified_at',
+                'postgres'
+            );
+            expect(filter).toBe('("modified_at" > \'2026-10-26T01:00:00.000Z\') OR ("modified_at" = \'2026-10-26T01:00:00.000Z\' AND "id" > 100)');
+        });
+
+        it('builds compound seek filter for MySQL / Databricks dialect', () => {
+            const filter = connector.BuildKeysetFilter(
+                { Watermark: '2026-10-26T01:00:00.000Z', Keys: { id: 100 } },
+                ['id'],
+                'modified_at',
+                'mysql'
+            );
+            expect(filter).toBe("(`modified_at` > '2026-10-26T01:00:00.000Z') OR (`modified_at` = '2026-10-26T01:00:00.000Z' AND `id` > 100)");
+        });
+
+        it('quotes numeric-looking varchar PK strings instead of stripping quotes', () => {
+            const filter = connector.BuildKeysetFilter(
+                { Keys: { code: '00123' } },
+                ['code'],
+                undefined,
+                'sqlserver'
+            );
+            expect(filter).toBe("[code] > '00123'");
+        });
+
+        it('generates seek solely on PK condition when watermark is absent, empty, or null', () => {
+            const filterAbsent = connector.BuildKeysetFilter(
+                { Keys: { id: 101 } },
+                ['id'],
+                'modified_at',
+                'sqlserver'
+            );
+            expect(filterAbsent).toBe('[id] > 101');
+            expect(filterAbsent).not.toContain('null');
+            expect(filterAbsent).not.toContain('modified_at');
+
+            const filterNull = connector.BuildKeysetFilter(
+                { Watermark: undefined, Keys: { id: 101 } },
+                ['id'],
+                'modified_at',
+                'sqlserver'
+            );
+            expect(filterNull).toBe('[id] > 101');
+            expect(filterNull).not.toContain('null');
+
+            const filterEmpty = connector.BuildKeysetFilter(
+                { Watermark: '', Keys: { id: 101 } },
+                ['id'],
+                'modified_at',
+                'sqlserver'
+            );
+            expect(filterEmpty).toBe('[id] > 101');
+            expect(filterEmpty).not.toContain('null');
+        });
+    });
+
+    describe('StableOrderingKey', () => {
+        it('returns null for objects with or without watermarks to preserve timestamp ingestion', () => {
+            expect(connector.StableOrderingKey('orders')).toBeNull();
+            expect(connector.StableOrderingKey('customers')).toBeNull();
         });
     });
 });
@@ -298,8 +394,23 @@ describe('BaseExternalDataSourceConnector — FetchChanges with Keyset Seek Pagi
 
         // Offset bypassed
         expect(driver.LastView?.offset).toBe(0);
-        expect(driver.LastView?.filter).toBe('[id] > 25');
+        expect(driver.LastView?.filter).toBe("[id] > '25'");
         expect(result.NextOffset).toBeUndefined();
+    });
+
+    it('pure PK keyset seek with numeric JSON marker produces unquoted numeric filter', async () => {
+        const driver = new MockSeekDriver();
+        const connector = new TestSeekConnector(resolvedFor(driver), {
+            PrimaryKeyFields: ['id'],
+        });
+
+        await connector.FetchChanges(makeFetchContext({
+            BatchSize: 2,
+            AfterKeyValue: JSON.stringify({ k: { id: 25 } }),
+        }));
+
+        expect(driver.LastView?.offset).toBe(0);
+        expect(driver.LastView?.filter).toBe('[id] > 25');
     });
 
     it('composite PK keyset seek applies composite condition and offset=0', async () => {
