@@ -400,7 +400,7 @@ export class AIRerankerRunner extends BaseModelRunner {
         const startTime = new Date();
         const bound = this.createExecutionBound(request.Prompt, request.PromptParams, request.PromptParams.cancellationToken);
         try {
-            const response = await this.RaceWithinBound(driver.Rerank(this.driverParams(request.Params, bound)), bound, request.Prompt);
+            const response = await this.RaceWithinBound(driver.Rerank(this.driverParams(request.Params, bound, candidate)), bound, request.Prompt);
             if (!response.success) {
                 return this.failedResponseAttempt(response, candidate, bound);
             }
@@ -418,14 +418,19 @@ export class AIRerankerRunner extends BaseModelRunner {
         }
     }
 
-    /** The driver's own params: the rerank fields, and the bound's signal as its cancellation token. */
-    private driverParams(params: AIRerankParams, bound: ExecutionBound): RerankParams {
+    /**
+     * The driver's own params: the rerank fields, the bound's signal as its cancellation token, and the
+     * candidate's model-vendor `MaxInputTokens` as the per-document token limit.
+     */
+    private driverParams(params: AIRerankParams, bound: ExecutionBound, candidate: ModelVendorCandidate): RerankParams {
+        const modelVendor = candidate.model.ModelVendors?.find(mv => UUIDsEqual(mv.VendorID, candidate.vendorId));
         return {
             query: params.query,
             documents: params.documents,
             topK: params.topK,
             options: params.options,
             CancellationToken: bound.Signal,
+            MaxTokensPerDocument: modelVendor?.MaxInputTokens ?? undefined,
         };
     }
 

@@ -91,6 +91,9 @@ export class CohereReranker extends BaseReranker {
             query: params.query,
             documents: params.documents.map(d => d.text),
             topN: params.topK || params.documents.length,
+            // Cohere truncates each document to this many tokens, 4096 when unset. Spread, not assigned:
+            // the SDK serializes an undefined typed field as null.
+            ...(params.MaxTokensPerDocument ? { maxTokensPerDoc: params.MaxTokensPerDocument } : {}),
             // Not in the SDK's request type yet; its serializer passes the key through unchanged.
             ...(relevantSpans ? { relevant_spans: relevantSpans } : {}),
         };
@@ -118,13 +121,18 @@ export class CohereReranker extends BaseReranker {
 function toWireRelevantSpans(
     option: CohereRerankOptions['RelevantSpans']
 ): { mode: 'enabled'; threshold?: number; max_spans?: number } | undefined {
-    if (!option) {
-        return undefined;
-    }
     if (option === true) {
         return { mode: 'enabled' };
     }
-    return { mode: 'enabled', threshold: option.Threshold, max_spans: option.MaxSpans };
+    if (!option || typeof option !== 'object') {
+        return undefined;
+    }
+    const { Threshold, MaxSpans } = option;
+    return {
+        mode: 'enabled',
+        threshold: Number.isFinite(Threshold) ? Math.min(1, Math.max(0, Threshold as number)) : undefined,
+        max_spans: Number.isInteger(MaxSpans) && (MaxSpans as number) > 0 ? MaxSpans : undefined,
+    };
 }
 
 /** Attach each span's text. Cohere's offsets count Unicode code points, not UTF-16 units. */

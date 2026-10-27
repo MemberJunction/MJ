@@ -219,6 +219,32 @@ describe('CohereReRanker', () => {
             expect(result[0].Snippet).toBe('The answer is four.');
         });
 
+        it('joins several spans in document order, whatever order Cohere returns them in', async () => {
+            const item = makeItem('a', 'T', 0.5);
+            item.Snippet = 'First fact. Filler. Second fact.';
+            const text = `${item.Title}\n${item.Snippet}`;
+            const at = (s: string): Span => ({ Start: text.indexOf(s), End: text.indexOf(s) + s.length, Score: 0.5, Text: s });
+            respond([{ index: 0, relevanceScore: 0.7, spans: [at('Second fact.'), at('First fact.')] }]);
+
+            const result = await new CohereReRanker().ReRank('q', [item], 5, fakeUser, { relevantSpans: true });
+            expect(result[0].Snippet).toBe('First fact. … Second fact.');
+        });
+
+        it('finds the snippet in the text actually sent, so a subclass that changes buildRerankText still trims right', async () => {
+            class TaggedCohereReRanker extends CohereReRanker {
+                protected override buildRerankText(item: SearchResultItem): string {
+                    return `[tags: a, b]\n${item.Title}\n${item.Snippet}`;
+                }
+            }
+            const item = makeItem('a', 'Title', 0.5);
+            item.Snippet = 'Only this part.';
+            const text = `[tags: a, b]\n${item.Title}\n${item.Snippet}`;
+            respond([{ index: 0, relevanceScore: 0.7, spans: [{ Start: 0, End: text.length, Score: 0.8, Text: text }] }]);
+
+            const result = await new TaggedCohereReRanker().ReRank('q', [item], 5, fakeUser, { relevantSpans: true });
+            expect(result[0].Snippet).toBe('Only this part.');
+        });
+
         it('keeps the original Snippet when focusSnippet is false, but still attaches RelevantSpans', async () => {
             const item = makeItem('a', 'T', 0.5);
             const span: Span = { Start: 2, End: 9, Score: 0.8, Text: 'snippet' };

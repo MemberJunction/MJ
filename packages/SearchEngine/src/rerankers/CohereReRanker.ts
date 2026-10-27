@@ -7,8 +7,9 @@
  * Context Focus snippets on the result items, and per-search cost reporting.
  *
  * **Cost model.** Cohere bills per "search," where one search reranks up to 100
- * documents. Above 100 docs, larger requests count as multiple searches.
- * Pricing as of 2026-04: $2.00 per 1k searches → 0.2¢ / search.
+ * documents. Above 100 docs, larger requests count as multiple searches. The estimate
+ * uses 0.2¢ per search ($2.00 per 1k, Cohere's rerank-v3.5 price as of 2026-04) for every
+ * model; it is not adjusted per model.
  *
  * **API key resolution.** Checks `GetAIAPIKey('CohereReranker')` first (matching
  * `metadata/ai-models/.cohere-reranker-models.json` → `AI_VENDOR_API_KEY__COHERERERANKER`)
@@ -84,19 +85,25 @@ function withRelevantSpans(result: RerankResult, focusSnippet: boolean): RerankR
     const item: SearchResultItem = {
         ...original,
         RelevantSpans: spans,
-        Snippet: (focusSnippet && focusedSnippet(original, spans)) || original.Snippet,
+        Snippet: (focusSnippet && focusedSnippet(result.document.text, original.Snippet, spans)) || original.Snippet,
     };
     return { ...result, document: { ...result.document, metadata: { ...result.document.metadata, __mjSearchItem: item } } };
 }
 
 /**
- * The spans' text with the title line trimmed off. The rerank text is `${Title}\n${Snippet}` and
- * span offsets count Unicode code points.
+ * The spans' text from the snippet onward, in document order. Spans index the text that was sent for
+ * reranking (`buildRerankText`, overridable) in Unicode code points, so the snippet's position is found
+ * in that text rather than assumed. '' when the snippet isn't in it, which keeps the original snippet.
  */
-function focusedSnippet(item: SearchResultItem, spans: RelevantSpans): string {
-    const titleLength = item.Title ? Array.from(`${item.Title}\n`).length : 0;
-    return spans
-        .map(s => Array.from(s.Text).slice(Math.max(0, titleLength - s.Start)).join('').trim())
+function focusedSnippet(rerankText: string, snippet: string | undefined, spans: RelevantSpans): string {
+    const at = snippet ? rerankText.indexOf(snippet) : -1;
+    if (at < 0) {
+        return '';
+    }
+    const snippetStart = Array.from(rerankText.slice(0, at)).length;
+    return [...spans]
+        .sort((a, b) => a.Start - b.Start)
+        .map(s => Array.from(s.Text).slice(Math.max(0, snippetStart - s.Start)).join('').trim())
         .filter(Boolean)
         .join(' … ');
 }
@@ -137,8 +144,7 @@ export class CohereReRanker extends BaseReRanker {
 
     /**
      * Cohere bills per "search". 1 search reranks up to 100 documents; above 100,
-     * count as `ceil(N/100)` searches. As of 2026-04, $2.00 per 1k searches = 0.2¢
-     * per search. Override via `config.cents_per_search` if Cohere's pricing changes.
+     * count as `ceil(N/100)` searches, each estimated at 0.2¢ (see the file header).
      */
     public override EstimateCostCents(resultCount: number): number {
         const searches = Math.max(1, Math.ceil(resultCount / 100));
