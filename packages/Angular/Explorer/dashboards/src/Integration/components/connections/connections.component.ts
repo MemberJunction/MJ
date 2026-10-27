@@ -635,41 +635,13 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   // Bootstrap Wizard
   // ---------------------------------------------------------------------------
 
+  /**
+   * A connection can be bootstrapped from a SQL Server backup when the external data source it reads
+   * speaks T-SQL (SQL Server or a Fabric SQL endpoint). The dialect comes from the data source type the
+   * connection is linked to — the same signal the sync engine uses — never from a name.
+   */
   IsSqlServerIntegration(summary: IntegrationSummary | null | undefined): boolean {
-    if (!summary) return false;
-    const srcType = summary.SourceType?.Name?.trim() ?? '';
-    const driver = summary.Integration?.DriverClassName?.trim() ?? '';
-    const intName = summary.Integration?.Integration?.trim() ?? '';
-    const name = summary.Integration?.Name?.trim() ?? '';
-
-    // Direct exact matches for known SQL Server source types and drivers
-    const sqlServerNames = [
-      'microsoft sql server',
-      'sql server',
-      'sql server (external)',
-      'microsoft fabric sql endpoint (external)',
-      'mssql',
-      'sqlserver'
-    ];
-
-    if (sqlServerNames.includes(srcType.toLowerCase())) return true;
-    if (sqlServerNames.includes(intName.toLowerCase())) return true;
-    if (driver.toLowerCase() === 'sqlserverexternaldriver' || driver.toLowerCase() === 'sqlserverdriver') return true;
-
-    // Reject non-SQL Server relational databases explicitly (PostgreSQL, MySQL, MariaDB, SQLite, Snowflake)
-    const combined = `${srcType} ${intName} ${name} ${driver}`.toLowerCase();
-    if (
-      combined.includes('postgres') ||
-      combined.includes('pgsql') ||
-      combined.includes('mysql') ||
-      combined.includes('mariadb') ||
-      combined.includes('sqlite') ||
-      combined.includes('snowflake')
-    ) {
-      return false;
-    }
-
-    return combined.includes('sql server') || combined.includes('mssql') || combined.includes('sqlserver');
+    return summary?.DataSourceDialect === 'tsql';
   }
 
   OpenBootstrapWizard(integration: MJCompanyIntegrationEntity, event?: MouseEvent): void {

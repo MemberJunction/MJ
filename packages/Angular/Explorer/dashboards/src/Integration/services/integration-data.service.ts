@@ -1,9 +1,10 @@
 import { Injectable } from '@angular/core';
 import { Metadata, RunView, IRunViewProvider, IMetadataProvider } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDMap, UUIDsEqual } from '@memberjunction/global';
 import type { ActionParam, ActionResult } from '@memberjunction/actions-base';
+import type { MJExternalDataSourceTypeEntity } from '@memberjunction/core-entities';
 import { DateCellDayKey } from '../../shared/date-cell';
-import { FormatBytes } from './backup-source.helpers';
+import { FormatBytes, ReadExternalDataSourceID } from './backup-source.helpers';
 import {
   MJCompanyIntegrationEntityMapEntity,
   MJCompanyIntegrationFieldMapEntity,
@@ -149,6 +150,12 @@ export interface IntegrationDefinitionRow {
 export interface IntegrationSummary {
   Integration: MJCompanyIntegrationEntity;
   SourceType: MJIntegrationSourceTypeEntity | null;
+  /**
+   * The query dialect of the external data source this connection reads (its `MJ: External Data Source
+   * Types.FilterDialect`), resolved through `Configuration.externalDataSourceID`; null for a connection
+   * that is not backed by an external data source. `tsql` identifies a SQL Server (or Fabric SQL) source.
+   */
+  DataSourceDialect: MJExternalDataSourceTypeEntity['FilterDialect'] | null;
   /** Icon from the Integration entity — FA class, URL, or base64 */
   Icon: string | null;
   LatestRun: IntegrationRunRow | null;
@@ -309,8 +316,9 @@ export class IntegrationDataService {
     const engine = IntegrationEngineBase.Instance;
     const rv = this.createRunView(provider);
 
-    // Engine provides cached metadata; only runs are dynamic and need a RunView call
-    const [, runsResult] = await Promise.all([
+    // Engine provides cached metadata; runs are dynamic, and the external-data-source link (which
+    // decides the source dialect) is not cached by the integration engine, so both are read here.
+    const [, runsResult, dialectByDataSourceID] = await Promise.all([
       engine.Config(false),
       rv.RunView<IntegrationRunRow>({
         EntityName: 'MJ: Company Integration Runs',
@@ -319,7 +327,8 @@ export class IntegrationDataService {
         Fields: ['ID', 'CompanyIntegrationID', 'StartedAt', 'EndedAt', 'TotalRecords',
                  'Status', 'ErrorLog', 'Integration', 'Company', 'RunByUser'],
         ResultType: 'simple'
-      })
+      }),
+      this.loadDataSourceDialects(rv)
     ]);
 
     const integrations = engine.CompanyIntegrations;
@@ -327,7 +336,31 @@ export class IntegrationDataService {
     const sourceTypes = engine.SourceTypes;
 
     const integrationDefs = engine.Integrations;
-    return integrations.map(integration => this.buildSummary(integration, runs, sourceTypes, integrationDefs));
+    return integrations.map(integration => this.buildSummary(integration, runs, sourceTypes, integrationDefs, dialectByDataSourceID));
+  }
+
+  /** `MJ: External Data Sources` ID → its type's `FilterDialect`, read in one batched round trip. */
+  private async loadDataSourceDialects(rv: RunView): Promise<UUIDMap<MJExternalDataSourceTypeEntity['FilterDialect']>> {
+    type DataSourceLinkRow = { ID: string; TypeID?: string | null; FilterDialect?: MJExternalDataSourceTypeEntity['FilterDialect'] | null };
+    const [sourcesResult, typesResult] = await rv.RunViews<DataSourceLinkRow>([
+      { EntityName: 'MJ: External Data Sources', Fields: ['ID', 'TypeID'], ResultType: 'simple' },
+      { EntityName: 'MJ: External Data Source Types', Fields: ['ID', 'FilterDialect'], ResultType: 'simple' },
+    ]);
+
+    const dialectByTypeID = new UUIDMap<MJExternalDataSourceTypeEntity['FilterDialect']>();
+    for (const type of typesResult?.Results ?? []) {
+      if (type.FilterDialect) {
+        dialectByTypeID.Set(type.ID, type.FilterDialect);
+      }
+    }
+    const dialectByDataSourceID = new UUIDMap<MJExternalDataSourceTypeEntity['FilterDialect']>();
+    for (const source of sourcesResult?.Results ?? []) {
+      const dialect = source.TypeID ? dialectByTypeID.Get(source.TypeID) : undefined;
+      if (dialect) {
+        dialectByDataSourceID.Set(source.ID, dialect);
+      }
+    }
+    return dialectByDataSourceID;
   }
 
   async LoadEntityMaps(companyIntegrationID: string, _provider?: IRunViewProvider | null): Promise<MJCompanyIntegrationEntityMapEntity[]> {
@@ -1255,8 +1288,11 @@ export class IntegrationDataService {
     integration: MJCompanyIntegrationEntity,
     allRuns: IntegrationRunRow[],
     sourceTypes: MJIntegrationSourceTypeEntity[],
-    integrationDefs: MJIntegrationEntity[]
+    integrationDefs: MJIntegrationEntity[],
+    dialectByDataSourceID: UUIDMap<MJExternalDataSourceTypeEntity['FilterDialect']>
   ): IntegrationSummary {
+    const dataSourceID = ReadExternalDataSourceID(integration.Configuration);
+    const dataSourceDialect = dataSourceID ? dialectByDataSourceID.Get(dataSourceID) ?? null : null;
     const integrationRuns = allRuns.filter(r => UUIDsEqual(r.CompanyIntegrationID, integration.ID));
     const latestRun = integrationRuns.length > 0 ? integrationRuns[0] : null;
     const recentRuns = integrationRuns.slice(0, 5);
@@ -1273,6 +1309,7 @@ export class IntegrationDataService {
     return {
       Integration: integration,
       SourceType: sourceType,
+      DataSourceDialect: dataSourceDialect,
       Icon: icon,
       LatestRun: latestRun,
       RecentRuns: recentRuns,

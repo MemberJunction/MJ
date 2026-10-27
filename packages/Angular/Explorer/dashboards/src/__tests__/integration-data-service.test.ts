@@ -18,6 +18,7 @@ function createSummary(overrides: Partial<IntegrationSummary> = {}): Integration
       Integration: 'Test', DriverClassName: null
     } as unknown as MJCompanyIntegrationEntity,
     SourceType: null,
+    DataSourceDialect: null,
     LatestRun: null,
     RecentRuns: [],
     StatusColor: 'gray',

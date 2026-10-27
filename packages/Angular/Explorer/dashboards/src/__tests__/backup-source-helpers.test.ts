@@ -5,9 +5,26 @@ import {
   DeriveContainerUrl,
   FirstBackupUrl,
   FormatBytes,
+  ReadExternalDataSourceID,
 } from '../Integration/services/backup-source.helpers';
 
 describe('backup-source helpers', () => {
+  describe('ReadExternalDataSourceID', () => {
+    it('reads the externalDataSourceID key from the configuration JSON', () => {
+      expect(ReadExternalDataSourceID('{"externalDataSourceID":" DS-1 "}')).toBe('DS-1');
+      expect(ReadExternalDataSourceID('{"externalDataSourceID":"ds-1","other":1}')).toBe('ds-1');
+    });
+
+    it('returns undefined for missing, blank, non-JSON or key-less configuration', () => {
+      expect(ReadExternalDataSourceID(null)).toBeUndefined();
+      expect(ReadExternalDataSourceID('')).toBeUndefined();
+      expect(ReadExternalDataSourceID('not json')).toBeUndefined();
+      expect(ReadExternalDataSourceID('{"schedule":"daily"}')).toBeUndefined();
+      expect(ReadExternalDataSourceID('{"externalDataSourceID":""}')).toBeUndefined();
+      expect(ReadExternalDataSourceID('[1,2]')).toBeUndefined();
+    });
+  });
+
   describe('AppendDirectoryPreset', () => {
     it('starts an entry ending in the directory separator for the user to complete', () => {
       expect(AppendDirectoryPreset('', '/var/opt/mssql/backup')).toBe('/var/opt/mssql/backup/');

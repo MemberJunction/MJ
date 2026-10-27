@@ -13,12 +13,12 @@ import {
 } from '@memberjunction/core-entities';
 
 describe('Bootstrap Wizard Review Fixes', () => {
-  describe('Task 7: Exact SQL Server Source Type Matching in ConnectionsComponent', () => {
+  describe('SQL Server detection in ConnectionsComponent is driven by the data source dialect, not names', () => {
     const comp = Object.create(ConnectionsComponent.prototype) as ConnectionsComponent;
 
     function makeSummary(opts: {
+      dialect?: IntegrationSummary['DataSourceDialect'];
       sourceTypeName?: string;
-      driverClassName?: string;
       integrationName?: string;
     }): IntegrationSummary {
       return {
@@ -26,11 +26,12 @@ describe('Bootstrap Wizard Review Fixes', () => {
           ID: 'ci-1',
           Name: opts.integrationName ?? 'Test Integration',
           Integration: opts.integrationName ?? 'Test Integration',
-          DriverClassName: opts.driverClassName ?? null,
+          DriverClassName: null,
         } as unknown as MJCompanyIntegrationEntity,
         SourceType: opts.sourceTypeName
           ? ({ ID: 'st-1', Name: opts.sourceTypeName } as unknown as MJIntegrationSourceTypeEntity)
           : null,
+        DataSourceDialect: opts.dialect ?? null,
         LatestRun: null,
         RecentRuns: [],
         StatusColor: 'gray',
@@ -42,39 +43,21 @@ describe('Bootstrap Wizard Review Fixes', () => {
       };
     }
 
-    it('returns true for Microsoft SQL Server source type', () => {
-      const summary = makeSummary({ sourceTypeName: 'Microsoft SQL Server' });
-      expect(comp.IsSqlServerIntegration(summary)).toBe(true);
+    it('returns true for a T-SQL data source whatever the connection is called', () => {
+      expect(comp.IsSqlServerIntegration(makeSummary({ dialect: 'tsql', integrationName: 'Warehouse Sync' }))).toBe(true);
+      expect(comp.IsSqlServerIntegration(makeSummary({ dialect: 'tsql', sourceTypeName: 'Relational Database' }))).toBe(true);
     });
 
-    it('returns true for SQL Server (External)', () => {
-      const summary = makeSummary({ sourceTypeName: 'SQL Server (External)' });
-      expect(comp.IsSqlServerIntegration(summary)).toBe(true);
+    it('returns false for every other dialect even when the name mentions SQL Server', () => {
+      expect(comp.IsSqlServerIntegration(makeSummary({ dialect: 'pgsql', integrationName: 'SQL Server to Postgres' }))).toBe(false);
+      expect(comp.IsSqlServerIntegration(makeSummary({ dialect: 'mysql', sourceTypeName: 'MySQL (External)' }))).toBe(false);
+      expect(comp.IsSqlServerIntegration(makeSummary({ dialect: 'ansi', integrationName: 'Snowflake' }))).toBe(false);
+      expect(comp.IsSqlServerIntegration(makeSummary({ dialect: 'mongo-ast' }))).toBe(false);
     });
 
-    it('returns true for SQLServerExternalDriver driver class', () => {
-      const summary = makeSummary({ driverClassName: 'SQLServerExternalDriver' });
-      expect(comp.IsSqlServerIntegration(summary)).toBe(true);
-    });
-
-    it('returns true for MSSQL in integration name', () => {
-      const summary = makeSummary({ integrationName: 'MSSQL Production Database' });
-      expect(comp.IsSqlServerIntegration(summary)).toBe(true);
-    });
-
-    it('returns false for PostgreSQL (External) even though it contains "SQL"', () => {
-      const summary = makeSummary({ sourceTypeName: 'PostgreSQL (External)' });
-      expect(comp.IsSqlServerIntegration(summary)).toBe(false);
-    });
-
-    it('returns false for MySQL (External) even though it contains "SQL"', () => {
-      const summary = makeSummary({ sourceTypeName: 'MySQL (External)' });
-      expect(comp.IsSqlServerIntegration(summary)).toBe(false);
-    });
-
-    it('returns false for Snowflake (External)', () => {
-      const summary = makeSummary({ sourceTypeName: 'Snowflake (External)' });
-      expect(comp.IsSqlServerIntegration(summary)).toBe(false);
+    it('returns false for a connection with no external data source, whatever its name', () => {
+      expect(comp.IsSqlServerIntegration(makeSummary({ integrationName: 'Microsoft SQL Server' }))).toBe(false);
+      expect(comp.IsSqlServerIntegration(makeSummary({ sourceTypeName: 'SQL Server (External)' }))).toBe(false);
     });
 
     it('returns false for null or undefined summary', () => {

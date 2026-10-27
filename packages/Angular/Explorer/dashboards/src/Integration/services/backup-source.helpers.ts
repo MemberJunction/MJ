@@ -41,6 +41,27 @@ export function FirstBackupUrl(backupUrls: string): string {
 }
 
 /**
+ * The `MJ: External Data Sources` ID an external-data-source connection names in its
+ * `CompanyIntegration.Configuration` JSON (`externalDataSourceID`), or undefined when the
+ * configuration is absent, not JSON, or names none.
+ */
+export function ReadExternalDataSourceID(configuration: string | null | undefined): string | undefined {
+  if (!configuration) {
+    return undefined;
+  }
+  try {
+    const parsed: unknown = JSON.parse(configuration);
+    if (!parsed || typeof parsed !== 'object') {
+      return undefined;
+    }
+    const id = (parsed as Record<string, unknown>)['externalDataSourceID'];
+    return typeof id === 'string' && id.trim().length > 0 ? id.trim() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * The `BackupUrls` value after choosing a directory preset. A preset is a directory on the SQL Server
  * host, not a backup file, so it is never added as an entry of its own: it starts a new entry ending in
  * the directory's own separator for the user to complete with a file name. With nothing entered yet the
