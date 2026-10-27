@@ -587,6 +587,13 @@ const configInfoSchema = z.object({
    * Leave off for Open Apps.
    */
   allowCrossSchemaCascadeDeletes: z.boolean().default(false),
+  /**
+   * After the entity-field sync, CodeGen looks for One To Many EntityRelationship rows whose join
+   * field no longer backs them (dropped or renamed FK column, or an FK now pointing at another
+   * entity), among in-scope entities and rows with AutoUpdateFromSchema set. Default false: each
+   * stale row is logged as a warning and kept. True: the stale rows are deleted (#2071).
+   */
+  cleanupStaleRelationships: z.boolean().default(false),
   excludeTables: excludeTableEntrySchema.array().default([
     { schema: '%', table: 'sys%' },
     { schema: '%', table: 'flyway_schema_history' }

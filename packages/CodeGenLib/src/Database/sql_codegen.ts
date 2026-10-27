@@ -48,6 +48,98 @@ export function entitiesNotInExcludedSchemas<T extends { SchemaName: string }>(
     return EntitiesNotInExcludedSchemas(entities, excludeSchemas);
 }
 
+/** One parent column an IS-A child's base view selects from a parent's base table. */
+export interface InheritedParentColumn {
+    /** The join alias of the parent's base table in the child's view (`__mj_isa_p1` is the direct parent). */
+    Alias: string;
+    /** The parent entity whose base table holds the column. */
+    Parent: EntityInfo;
+    /** The parent's field. */
+    Field: EntityFieldInfo;
+}
+
+/**
+ * The parent columns an IS-A child's generated base view selects, in parent-chain order and each
+ * parent's field order. The child's view joins each parent's BASE TABLE, so a column qualifies only
+ * if it is physically on that table:
+ * - primary keys are shared with the child and `__mj_` columns are the child's own;
+ * - a view-only virtual field (`IsVirtual` and not `IsComputed`) is not on the table and is skipped;
+ * - a computed column (`IsVirtual` and `IsComputed`, e.g. a persisted `DisplayName`) IS on the
+ *   table and is selected (#5899), unless an ancestor further up the chain also has a field of that
+ *   name: then the row on this parent is an inherited mirror and the ancestor's join supplies it.
+ * A name is selected once even if two parents carry it.
+ */
+export function InheritedParentColumns(entity: Pick<EntityInfo, 'IsChildType' | 'ParentChain'>): InheritedParentColumn[] {
+    if (!entity.IsChildType) return [];
+    const chain = entity.ParentChain;
+    const columns: InheritedParentColumn[] = [];
+    const seen = new Set<string>();
+    for (let i = 0; i < chain.length; i++) {
+        const parent = chain[i];
+        const ancestorFieldNames = new Set(
+            chain.slice(i + 1).flatMap(a => a.Fields.map(f => f.Name.toLowerCase()))
+        );
+        for (const field of parent.Fields) {
+            if (field.IsPrimaryKey || field.Name.startsWith('__mj_')) continue;
+            if (field.IsVirtual && (!field.IsComputed || ancestorFieldNames.has(field.Name.toLowerCase()))) continue;
+            const key = field.Name.toLowerCase();
+            if (seen.has(key)) continue;
+            seen.add(key);
+            columns.push({ Alias: `__mj_isa_p${i + 1}`, Parent: parent, Field: field });
+        }
+    }
+    return columns;
+}
+
+/** An IS-A child outside this run's scope whose live view lacks columns its in-scope parent now has. */
+export interface OutOfScopeISAChildDrift {
+    ChildName: string;
+    ChildSchema: string;
+    ViewName: string;
+    MissingColumns: string[];
+}
+
+/**
+ * Compares out-of-scope IS-A children's live view columns against the parent columns their view
+ * would select ({@link InheritedParentColumns}). Only children with at least one in-scope parent are
+ * considered: a parent app's run adds the column but cannot regenerate a sibling app's view (#4821).
+ * `liveColumns` maps `schema.view` (lower case) to the view's column names; a view absent from the
+ * map does not exist or was not read, and is skipped rather than reported as missing every column.
+ */
+export function FindOutOfScopeISAChildDrift(
+    entities: EntityInfo[],
+    excludeSchemas: string[],
+    liveColumns: Map<string, Set<string>>,
+): OutOfScopeISAChildDrift[] {
+    const excluded = new Set(excludeSchemas.map(s => s.toLowerCase()));
+    const drift: OutOfScopeISAChildDrift[] = [];
+    for (const child of OutOfScopeISAChildrenWithInScopeParent(entities, excludeSchemas)) {
+        const viewName = child.GeneratedViewName;
+        const live = liveColumns.get(`${child.SchemaName}.${viewName}`.toLowerCase());
+        if (!live) continue;
+        const missing = InheritedParentColumns(child)
+            .filter(c => !excluded.has(c.Parent.SchemaName.toLowerCase()))
+            .map(c => c.Field.Name)
+            .filter(name => !live.has(name.toLowerCase()));
+        if (missing.length > 0) {
+            drift.push({ ChildName: child.Name, ChildSchema: child.SchemaName, ViewName: viewName, MissingColumns: missing });
+        }
+    }
+    return drift;
+}
+
+/** IS-A children in an excluded schema with at least one parent in this run's scope. */
+export function OutOfScopeISAChildrenWithInScopeParent(entities: EntityInfo[], excludeSchemas: string[]): EntityInfo[] {
+    const excluded = new Set(excludeSchemas.map(s => s.toLowerCase()));
+    return entities.filter(e =>
+        e.IsChildType &&
+        !e.VirtualEntity &&
+        !e.ExternalDataSourceID &&
+        excluded.has(e.SchemaName.toLowerCase()) &&
+        e.ParentChain.some(p => !excluded.has(p.SchemaName.toLowerCase()))
+    );
+}
+
 export interface AlternateBaseViewDependencyEntry {
     ReferencedSchema: string;
     ReferencedObject: string;
@@ -297,12 +389,19 @@ export class SQLCodeGenBase {
      */
     protected layeredEntitiesWithLoggedInnerView: Set<string> = new Set();
 
+    /**
+     * Names of LAYERED entities whose outer-view refresh was written right after their inner view
+     * ({@link logLayeredOuterViewRefresh}). STEP 2(f) does not log their refresh a second time.
+     */
+    protected layeredEntitiesWithInlineRefresh: Set<string> = new Set();
+
     public async ManageSQLScriptsAndExecution(pool: CodeGenConnection, entities: EntityInfo[], directory: string, currentUser: UserInfo): Promise<boolean> {
         try {
             this.existingRoutines = null;
             this.existingRoutineDefinitions = null;
             this.driftedRoutines = new Set();
             this.layeredEntitiesWithLoggedInnerView = new Set();
+            this.layeredEntitiesWithInlineRefresh = new Set();
             // Build list of entities qualified for forced regeneration if entityWhereClause is provided
             if (configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.entityWhereClause) {
                 this.filterEntitiesQualifiedForRegeneration = true; // Enable filtering
@@ -363,9 +462,11 @@ export class SQLCodeGenBase {
             await this.markEntitiesForCascadeDeleteRegeneration(pool, includedEntities);
             SucceedSpinner('Cascade delete dependency analysis completed');
 
-            // STEP 2(a) - clean out all *.generated.sql and *.permissions.generated.sql files from the directory
+            // STEP 2(a) - clean out all *.generated.sql and *.permissions.generated.sql files from the directory.
+            // Only in-scope schemas' directories (#3384): STEP 2(b) rewrites those, and an out-of-scope
+            // schema's files are another run's to regenerate, so deleting them would leave them missing.
             StartSpinner('Cleaning generated files...');
-            this.DeleteGeneratedEntityFiles(directory, baselineEntities);
+            this.DeleteGeneratedEntityFiles(directory, includedEntities);
             SucceedSpinner('Cleaned generated files');
 
             // STEP 2(a.5) - field-level security / permission-reconciliation run context.
@@ -558,6 +659,9 @@ export class SQLCodeGenBase {
             // outer view made it delete the rows for columns added this run (#4336). The same refresh
             // is written to the migration log here, ahead of any field-sync SQL, so a replay of the
             // migration runs in the same order. STEP 4.5 still emits its refresh as a safety net.
+            // A layered entity whose inner view was logged already had its refresh executed in the
+            // STEP 2(e) batch, between the inner view and its CRUD routines (#4927); this pass
+            // re-runs it live and does not log it a second time.
             StartSpinner('Refreshing custom base views...');
             if (! await this.RefreshCustomBaseViewsLive(pool, includedEntities)) {
                 FailSpinner('Failed to refresh one or more custom base views');
@@ -608,6 +712,12 @@ export class SQLCodeGenBase {
                 SucceedSpinner('Entity fields metadata updated');
             }
             // no logStatus/timer for this because manageEntityFields() has its own internal logging for this including the total, so it is redundant to log it here
+
+            // STEP 3.1 - stale One To Many relationships (#2071). Runs after Pass 2's unscoped field prune,
+            // so the fields of dropped FK columns are gone. Report-only unless cleanupStaleRelationships is set.
+            if (!await this.CleanupStaleRelationships(pool, manageMD)) {
+                overallSuccess = false;
+            }
 
             // STEP 3.5 - Late-phase view regeneration
             // Some late-phase changes (e.g., SupportsGeoCoding toggled during advanced generation)
@@ -697,6 +807,9 @@ export class SQLCodeGenBase {
             // now - we need to tell our metadata object to refresh itself
             const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
             await md.Refresh();
+
+            // Advisory only: an out-of-scope IS-A child's view is another app's to regenerate.
+            await this.WarnOnOutOfScopeISAChildDrift(pool, md.Entities, configInfo.excludeSchemas ?? []);
 
             return overallSuccess;
         }
@@ -1041,6 +1154,27 @@ export class SQLCodeGenBase {
         willRegenerate?: Set<string>
     }): Promise<{Success: boolean, Files: string[]}> {
       return this.GenerateAndExecuteEntitySQLToSeparateFiles(options);
+    }
+
+    /**
+     * Finds stale One To Many EntityRelationship rows among in-scope entities and, when the
+     * `cleanupStaleRelationships` config option is set, deletes them; otherwise each one is logged as a
+     * warning (#2071). Refreshes the global metadata only when rows were deleted, so the late-phase
+     * regeneration that follows sees the current relationships.
+     * @returns false when the cleanup failed
+     */
+    protected async CleanupStaleRelationships(pool: CodeGenConnection, manageMD: ManageMetadataBase): Promise<boolean> {
+        const dryRun = configInfo.cleanupStaleRelationships !== true;
+        if (!await manageMD.CleanupStaleEntityRelationships(pool, configInfo.excludeSchemas ?? [], { DryRun: dryRun })) {
+            logError('Failed to check for stale entity relationships');
+            return false;
+        }
+        if (manageMD.StaleRelationshipsRemoved > 0) {
+            logStatus(`   Removed ${manageMD.StaleRelationshipsRemoved} stale entity relationship(s); refreshing metadata`);
+            const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
+            await md.Refresh();
+        }
+        return true;
     }
 
     public DeleteGeneratedEntityFiles(directory: string, entities: EntityInfo[]) {
@@ -1565,7 +1699,8 @@ export class SQLCodeGenBase {
             }
         }
 
-        const toLog = targets.filter(e => this.shouldLogCustomBaseViewRefresh(e));
+        // A layered entity whose refresh already follows its inner view in the log is not logged again.
+        const toLog = targets.filter(e => this.shouldLogCustomBaseViewRefresh(e) && !this.layeredEntitiesWithInlineRefresh.has(e.Name));
         if (toLog.length > 0) {
             await SQLLogging.AppendToSQLLogFile(
                 this.buildCustomBaseViewRefreshSQL(toLog),
@@ -1597,6 +1732,33 @@ export class SQLCodeGenBase {
                 configInfo.includeSchemas,
             )
         );
+    }
+
+    /**
+     * Writes the layered entity's view refresh ({@link buildCustomBaseViewRefreshSQL}: inner view,
+     * then the guarded outer view, its rebind and alternate views) into the migration log AND the
+     * temp batch STEP 2(e) executes, right after the inner view and before the entity's CRUD routines
+     * (#4927). The application-owned outer view selects `g.*`, and SQL Server freezes that column list
+     * when the view is created; when the inner view's columns change, the routines that read the
+     * outer view fail to compile until it is refreshed. STEP 2(f) refreshes the outer view too, but
+     * only after the batch has run, which is too late for the routines in it.
+     *
+     * Called only when the inner view was logged, whether or not the entity is on the new/modified
+     * lists. No-op on platforms that rebind views themselves (PostgreSQL's phased executor).
+     */
+    protected logLayeredOuterViewRefresh(entity: EntityInfo): void {
+        if (!this._dbProvider.NeedsViewRefresh || !entity.HasLayeredBaseView || !entity.BaseView ||
+            entity.VirtualEntity || entity.ExternalDataSourceID) {
+            return;
+        }
+        const refreshSQL = this.buildCustomBaseViewRefreshSQL([entity]);
+        if (refreshSQL.trim().length === 0) {
+            return;
+        }
+        // Closed with its own batch separator: the migration log appends units without one, and the
+        // unit that follows may start with a statement that must open its batch.
+        this.logSQLForNewOrModifiedEntity(entity, `${refreshSQL}\n${this._dbProvider.BatchSeparator}`, `Refresh layered base view for ${entity.Name} after its inner view changed`, true, true);
+        this.layeredEntitiesWithInlineRefresh.add(entity.Name);
     }
 
     /** True when this run's migration log must carry the entity's custom base view refresh. */
@@ -1783,6 +1945,7 @@ export class SQLCodeGenBase {
                     const viewLogged = this.logSQLForNewOrModifiedEntity(options.entity, s, `Base View SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
                     if (viewLogged && options.entity.HasLayeredBaseView) {
                         this.layeredEntitiesWithLoggedInnerView.add(options.entity.Name);
+                        this.logLayeredOuterViewRefresh(options.entity);
                     }
                     files.push(filePath);
                 }
@@ -2548,29 +2711,15 @@ export class SQLCodeGenBase {
     /**
      * Generates SELECT field expressions for IS-A parent entity columns.
      * Walks the ParentID chain upward, joining to each parent's base table, and includes
-     * non-PK, non-timestamp, non-virtual fields from each parent table.
+     * the columns physically on each parent table ({@link InheritedParentColumns}).
      * Returns a string starting with ',\n' if there are parent fields, or '' if none.
      */
     protected generateParentEntityFieldSelects(entity: EntityInfo): string {
-        if (!entity.IsChildType) return '';
-
-        const parentChain = entity.ParentChain;
-        if (parentChain.length === 0) return '';
-
-        const fieldExpressions: string[] = [];
-
-        for (let i = 0; i < parentChain.length; i++) {
-            const parent = parentChain[i];
-            const alias = `__mj_isa_p${i + 1}`;
-
-            for (const field of parent.Fields) {
-                // Skip PKs (shared with child), timestamps, and virtual fields (view-computed)
-                if (field.IsPrimaryKey || field.Name.startsWith('__mj_') || field.IsVirtual) continue;
-
-                fieldExpressions.push(`    ${alias}.${this._dbProvider.Dialect.QuoteIdentifier(field.Name)}`);
-            }
-        }
-
+        // Which parent columns qualify (PKs, __mj_ and view-only virtual fields are skipped;
+        // computed columns are kept): see InheritedParentColumns.
+        const fieldExpressions = InheritedParentColumns(entity).map(c =>
+            `    ${c.Alias}.${this._dbProvider.Dialect.QuoteIdentifier(c.Field.Name)}`
+        );
         if (fieldExpressions.length === 0) return '';
         return ',\n' + fieldExpressions.join(',\n');
     }
@@ -2815,6 +2964,50 @@ export class SQLCodeGenBase {
             }
         }
         return sOutput;
+    }
+
+    /**
+     * Warns about IS-A children outside this run's scope whose live view lacks a column their
+     * in-scope parent's table now has (#4821). This run cannot regenerate those views: the child
+     * belongs to another app, which must run CodeGen or ship a migration. Until it does, the child's
+     * metadata (synced by that app's run) and its view disagree, and its saves fail.
+     * Never fails the run; a failed catalog read is logged and ignored.
+     */
+    public async WarnOnOutOfScopeISAChildDrift(pool: CodeGenConnection, entities: EntityInfo[], excludeSchemas: string[]): Promise<OutOfScopeISAChildDrift[]> {
+        const children = OutOfScopeISAChildrenWithInScopeParent(entities, excludeSchemas);
+        if (children.length === 0) {
+            return [];
+        }
+        try {
+            const esc = (s: string) => s.replace(/'/g, "''");
+            const predicates = children.map(c =>
+                `(TABLE_SCHEMA = '${esc(c.SchemaName)}' AND TABLE_NAME = '${esc(c.GeneratedViewName)}')`
+            );
+            const sql = `SELECT TABLE_SCHEMA AS "TableSchema", TABLE_NAME AS "TableName", COLUMN_NAME AS "ColumnName"
+                         FROM INFORMATION_SCHEMA.COLUMNS
+                         WHERE ${predicates.join(' OR ')}`;
+            const result = await pool.query(sql);
+            const live = new Map<string, Set<string>>();
+            for (const row of result.recordset as Array<{ TableSchema: string; TableName: string; ColumnName: string }>) {
+                const key = `${row.TableSchema}.${row.TableName}`.toLowerCase();
+                const cols = live.get(key) ?? new Set<string>();
+                cols.add(row.ColumnName.toLowerCase());
+                live.set(key, cols);
+            }
+            const drift = FindOutOfScopeISAChildDrift(entities, excludeSchemas, live);
+            for (const d of drift) {
+                LogWarning(
+                    `IS-A child '${d.ChildName}' is outside this run's scope, and its view ${d.ChildSchema}.${d.ViewName} ` +
+                    `lacks column(s) its parent now has: ${d.MissingColumns.join(', ')}. ` +
+                    `Run CodeGen for schema '${d.ChildSchema}', or ship a migration there that regenerates the view; ` +
+                    `once the child's EntityField rows list the column, saves fail until the view has it.`
+                );
+            }
+            return drift;
+        } catch (e) {
+            LogIf(configInfo.verboseOutput, `Could not check out-of-scope IS-A child views: ${e instanceof Error ? e.message : String(e)}`);
+            return [];
+        }
     }
 
     protected async validateAlternateBaseViewsForEntities(
