@@ -266,18 +266,16 @@ async function handleTerminal(deps: RealtimeRecordingRouterDeps, req: Request, r
  */
 async function loadAuthorizedSession(deps: RealtimeRecordingRouterDeps, sessionID: string, caller: RealtimeRecordingCaller): Promise<MJAIAgentSessionEntity> {
     const session = await deps.LoadOwnedSession(sessionID, caller.ContextUser, caller.Provider);
-    if (deps.LoadOwnedSession !== LoadOwnedRealtimeSession) {
-        const conversation = ResolveSessionScopeIdentity(caller.ContextUser)
-            ? await deps.LoadConversationScope(session, caller.ContextUser, caller.Provider)
-            : { ExternalID: null, Readable: false };
-        const decision = AuthorizeSessionAccess(
-            { SessionUserID: session.UserID, ConversationExternalID: conversation.ExternalID, ConversationReadable: conversation.Readable },
-            caller.ContextUser,
-        );
-        if (decision.Allowed === false) {
-            LogError(`RealtimeRecordingHandler: refused user ${caller.ContextUser.ID} on session ${sessionID}: ${decision.Reason}`);
-            throw new RecordingRequestError(403, 'Not authorized for this realtime session');
-        }
+    const conversation = ResolveSessionScopeIdentity(caller.ContextUser)
+        ? await deps.LoadConversationScope(session, caller.ContextUser, caller.Provider)
+        : { ExternalID: null, Readable: false };
+    const decision = AuthorizeSessionAccess(
+        { SessionUserID: session.UserID, ConversationExternalID: conversation.ExternalID, ConversationReadable: conversation.Readable },
+        caller.ContextUser,
+    );
+    if (decision.Allowed === false) {
+        LogError(`RealtimeRecordingHandler: refused user ${caller.ContextUser.ID} on session ${sessionID}: ${decision.Reason}`);
+        throw new RecordingRequestError(403, 'Not authorized for this realtime session');
     }
     return session;
 }

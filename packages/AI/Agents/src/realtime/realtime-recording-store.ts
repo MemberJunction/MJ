@@ -281,8 +281,6 @@ export async function writeRecordingPeaksSidecar(
  *
  * @returns The number of shards deleted.
  */
-const SEGMENT_DELETE_CONCURRENCY = 16;
-
 export async function DeleteRealtimeRecordingSegments(sessionID: string, storageAccountID: string, contextUser: UserInfo): Promise<number> {
     try {
         const driver = await FileStorageEngine.Instance.GetDriver(storageAccountID, contextUser);
@@ -290,21 +288,11 @@ export async function DeleteRealtimeRecordingSegments(sessionID: string, storage
         // List the folder's CONTENTS: without the trailing slash, delimiter-based drivers (S3, GCS)
         // return the folder itself as a common prefix and no objects, so no shard was ever deleted.
         const listed = await driver.ListObjects(`${folder}/`);
-        const pathsToDelete: string[] = [];
+        let deleted = 0;
         for (const obj of listed.objects ?? []) {
             const base = (obj.name.split('/').pop() ?? obj.name);
-            if (base.startsWith('seg-')) {
-                pathsToDelete.push(`${folder}/${base}`);
-            }
-        }
-        let deleted = 0;
-        for (let i = 0; i < pathsToDelete.length; i += SEGMENT_DELETE_CONCURRENCY) {
-            const batch = pathsToDelete.slice(i, i + SEGMENT_DELETE_CONCURRENCY);
-            const results = await Promise.all(batch.map((path) => driver.DeleteObject(path)));
-            for (const ok of results) {
-                if (ok) {
-                    deleted++;
-                }
+            if (base.startsWith('seg-') && await driver.DeleteObject(`${folder}/${base}`)) {
+                deleted++;
             }
         }
         return deleted;
@@ -835,13 +823,9 @@ async function finishRecovery(
 async function deleteListedShards(storageAccountID: string, contextUser: UserInfo, shards: ListedShard[]): Promise<string[]> {
     const driver = await FileStorageEngine.Instance.GetDriver(storageAccountID, contextUser);
     const notDeleted: string[] = [];
-    for (let i = 0; i < shards.length; i += SEGMENT_DELETE_CONCURRENCY) {
-        const batch = shards.slice(i, i + SEGMENT_DELETE_CONCURRENCY);
-        const results = await Promise.all(batch.map((shard) => driver.DeleteObject(shard.Path)));
-        for (let j = 0; j < batch.length; j++) {
-            if (!results[j]) {
-                notDeleted.push(batch[j].Path);
-            }
+    for (const shard of shards) {
+        if (!await driver.DeleteObject(shard.Path)) {
+            notDeleted.push(shard.Path);
         }
     }
     return notDeleted;

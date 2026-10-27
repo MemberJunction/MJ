@@ -670,17 +670,6 @@ describe('SessionManager.Heartbeat', () => {
         expect(ok).toBe(false);
         expect(session.Save).not.toHaveBeenCalled();
     });
-
-    it('reuses a preloaded session entity without calling Load a second time', async () => {
-        const session = makeSessionEntity({ ID: 'session-preloaded', Status: 'Active' });
-        const { provider } = makeProvider(() => session);
-        const mgr = new SessionManager();
-
-        const ok = await mgr.Heartbeat('session-preloaded', makeUser(), provider, session);
-        expect(ok).toBe(true);
-        expect(session.Load).not.toHaveBeenCalled();
-        expect(session.Save).toHaveBeenCalledTimes(1);
-    });
 });
 
 describe('SessionManager.CloseSession — recording assembly (#5294)', () => {

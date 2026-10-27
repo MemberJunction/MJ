@@ -126,12 +126,9 @@ export function ListChangedPaths(delta: StateDelta, maxDepth: number = 2): strin
  * @param channelKey The channel's key.
  * @param instanceId The instance's id.
  * @param event The event name (`state_changed`, `opened`, `completed`, …).
- * @param payload The JSON payload, or an already-serialized JSON string (omit for an event with none).
+ * @param payload The JSON payload (omit for an event with none).
  */
-export function FormatChannelNote(channelKey: string, instanceId: string, event: string, payload?: JSONObject | string): string {
+export function FormatChannelNote(channelKey: string, instanceId: string, event: string, payload?: JSONObject): string {
     const head = `[channel:${channelKey}#${instanceId}] ${event}`;
-    if (payload === undefined) {
-        return head;
-    }
-    return `${head} ${typeof payload === 'string' ? payload : JSON.stringify(payload)}`;
+    return payload === undefined ? head : `${head} ${JSON.stringify(payload)}`;
 }
