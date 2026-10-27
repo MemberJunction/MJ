@@ -634,6 +634,7 @@ export class PushService {
           filterPatterns: this.syncConfig?.sqlLogging?.filterPatterns,
           filterType: this.syncConfig?.sqlLogging?.filterType,
           verboseOutput: this.syncConfig?.sqlLogging?.verboseOutput || false,
+          variableBatchThreshold: this.syncConfig?.sqlLogging?.variableBatchThreshold ?? 200,
         });
         
         if (options.verbose) {

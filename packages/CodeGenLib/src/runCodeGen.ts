@@ -52,6 +52,14 @@ type DataSourceResult = ProviderDataSourceResult;
 /**
  * Main orchestrator class for the MemberJunction code generation process.
  */
+/**
+ * Counts validators by identity (`entityName|functionName`, entity compared case-insensitively),
+ * so a validator regenerated or loaded twice is reported once.
+ */
+export function CountDistinctValidators(validators: ReadonlyArray<{ entityName: string; functionName: string }>): number {
+  return new Set(validators.map((v) => `${v.entityName.toLowerCase()}|${v.functionName}`)).size;
+}
+
 export class RunCodeGenBase {
   /**
    * BEFORE/AFTER external command failures captured during a pipeline run, so the
@@ -525,7 +533,7 @@ export class RunCodeGenBase {
         // generation emits each entity as though it had no `Validate()` override, silently deleting
         // whatever was committed. Both times that regression shipped, the log said exactly this
         // line and nothing else. A number here makes the next one visible in CI output.
-        const loadedValidators = ManageMetadataBase.generatedValidators.length;
+        const loadedValidators = CountDistinctValidators(ManageMetadataBase.generatedValidators);
         SucceedSpinner(`AI Generated Code loaded from Metadata (${loadedValidators} validator${loadedValidators === 1 ? '' : 's'})`);
       }
 

@@ -1346,10 +1346,11 @@ SQL logging captures all database operations during push commands for creating m
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `enabled` | boolean | false | Enable SQL logging during push operations |
-| `outputDirectory` | string | "./sql_logging" | Directory for SQL log files |
+| `outputDirectory` | string | "./sql-log-push" | Directory for SQL log files, relative to the sync root |
 | `formatAsMigration` | boolean | false | Format as Flyway migration files |
 | `filterPatterns` | string[] | undefined | Patterns to filter SQL statements |
 | `filterType` | "exclude" or "include" | "exclude" | How to apply filter patterns |
+| `variableBatchThreshold` | number | 200 | Number of `DECLARE @...` variables to accumulate before emitting a batch separator (avoids SQL Server's 10,000-variable batch limit). `0` emits a separator per statement |
 
 **Filter Pattern Types:**
 - **Regex patterns**: Start with `/` and optionally end with flags (e.g., `/spCreate.*Run/i`)
