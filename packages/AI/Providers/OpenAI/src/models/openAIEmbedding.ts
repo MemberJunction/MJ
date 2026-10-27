@@ -1,6 +1,33 @@
-import { EmbedTextParams, EmbedTextsParams, EmbedTextResult, EmbedTextsResult, BaseEmbeddings, ModelUsage, ErrorAnalyzer } from "@memberjunction/ai";
+import { EmbedTextParams, EmbedTextsParams, EmbedTextResult, EmbedTextsResult, BaseEmbeddings, EmbeddingModelInfo, ModelUsage, ErrorAnalyzer } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 import { OpenAI } from "openai";
+
+/**
+ * OpenAI's embedding models, as {@link OpenAIEmbedding.GetEmbeddingModels} lists them. OpenAI's API
+ * reference on `dimensions`: "Only supported in `text-embedding-3` and later models."
+ */
+const OPENAI_EMBEDDING_MODELS: readonly EmbeddingModelInfo[] = [
+    {
+        Model: 'text-embedding-3-large',
+        Description: "Most capable embedding model for both english and non-english tasks",
+        OutputDimension: 3072,
+        AcceptsDimensions: true,
+    },
+    {
+        Model: 'text-embedding-3-small',
+        Description: "Increased performance over 2nd generation ada embedding model",
+        OutputDimension: 1536,
+        AcceptsDimensions: true,
+    },
+    {
+        Model: 'text-embedding-ada-002',
+        Description: "Most capable 2nd generation embedding model, replacing 16 first generation models",
+        OutputDimension: 1536,
+        AcceptsDimensions: false,
+    },
+];
+
+const DEFAULT_MODEL = 'text-embedding-3-small';
 
 @RegisterClass(BaseEmbeddings, 'OpenAIEmbedding')
 export class OpenAIEmbedding extends BaseEmbeddings {
@@ -26,11 +53,16 @@ export class OpenAIEmbedding extends BaseEmbeddings {
         return true;
     }
 
+    protected override get EmbeddingModels(): readonly EmbeddingModelInfo[] {
+        return OPENAI_EMBEDDING_MODELS;
+    }
+
     public async EmbedText(params: EmbedTextParams): Promise<EmbedTextResult> {
+        const model = params.model || DEFAULT_MODEL;
         let body: OpenAI.Embeddings.EmbeddingCreateParams = {
             input: params.text,
-            model: params.model || "text-embedding-3-small",
-            ...(params.dimensions ? { dimensions: params.dimensions } : {}),
+            model,
+            ...this.DimensionsParam(model, params.dimensions),
         }
 
         try{
@@ -53,7 +85,7 @@ export class OpenAIEmbedding extends BaseEmbeddings {
             // Return error result
             return {
                 object: "object",
-                model: params.model || "text-embedding-3-small",
+                model,
                 ModelUsage: new ModelUsage(0, 0),
                 vector: []
             };
@@ -61,10 +93,11 @@ export class OpenAIEmbedding extends BaseEmbeddings {
     }
 
     protected override async embedBatch(params: EmbedTextsParams): Promise<EmbedTextsResult> {
+        const model = params.model || DEFAULT_MODEL;
         let body: OpenAI.Embeddings.EmbeddingCreateParams = {
             input: params.texts,
-            model: params.model || "text-embedding-3-small",
-            ...(params.dimensions ? { dimensions: params.dimensions } : {}),
+            model,
+            ...this.DimensionsParam(model, params.dimensions),
         }
 
         try{
@@ -87,7 +120,7 @@ export class OpenAIEmbedding extends BaseEmbeddings {
             // Return error result
             return {
                 object: "list",
-                model: params.model || "text-embedding-3-small",
+                model,
                 ModelUsage: new ModelUsage(0, 0),
                 vectors: []
             };
@@ -95,23 +128,7 @@ export class OpenAIEmbedding extends BaseEmbeddings {
     }
 
     //openAI doesnt have an endpoint we can call
-    public async GetEmbeddingModels(): Promise<any> {
-        return [
-            {
-                Model: 'text-embedding-3-large',
-                Description: "Most capable embedding model for both english and non-english tasks",
-                OutputDimension: 3072,
-            },
-            {
-                Model: 'text-embedding-3-small',
-                Description: "Increased performance over 2nd generation ada embedding model",
-                OutputDimension: 1536,
-            },
-            {
-                Model: 'text-embedding-ada-002',
-                Description: "Most capable 2nd generation embedding model, replacing 16 first generation models",
-                OutputDimension: 1536,
-            }
-        ]
+    public async GetEmbeddingModels(): Promise<EmbeddingModelInfo[]> {
+        return OPENAI_EMBEDDING_MODELS.map((m) => ({ ...m }));
     }
 }

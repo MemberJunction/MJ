@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { BaseEmbeddings, Embeddings } from '../generic/baseEmbeddings';
+import { BaseEmbeddings, EmbeddingDimensionsError, EmbeddingModelInfo, Embeddings } from '../generic/baseEmbeddings';
+import { ErrorAnalyzer } from '../generic/errorAnalyzer';
 import { EmbedTextParams, EmbedTextResult, EmbedTextsParams, EmbedTextsResult } from '../generic/embed.types';
 import { ModelUsage } from '../generic/baseModel';
 import { AIErrorInfo } from '../generic/errorTypes';
@@ -386,6 +387,114 @@ describe('BaseEmbeddings.EmbedTexts dispatch on SupportsBatchEmbeddings', () => 
         }
         const e = new CollapsingBatch('k');
         await expect(e.EmbedTexts({ texts: ['a', 'b', 'c'], model: 'm' })).rejects.toThrow(/1:1 match|misaligned/i);
+    });
+});
+
+/** A driver with a model table, exposing the shared `dimensions` rule. */
+class TableEmbeddings extends TestEmbeddings {
+    protected override get EmbeddingModels(): readonly EmbeddingModelInfo[] {
+        return [
+            { Model: 'fixed', Description: 'one width, rejects dimensions', OutputDimension: 1536, AcceptsDimensions: false },
+            { Model: 'ranged', Description: 'any width up to 3072', OutputDimension: 3072, AcceptsDimensions: true },
+            { Model: 'listed', Description: 'three widths', OutputDimension: 1024, AcceptsDimensions: true, SupportedDimensions: [256, 512, 1024] },
+        ];
+    }
+
+    public Dimensions(model: string, dimensions?: number): { dimensions?: number } {
+        return this.DimensionsParam(model, dimensions);
+    }
+}
+
+describe('BaseEmbeddings.DimensionsParam', () => {
+    const e = new TableEmbeddings('k');
+
+    it('sends nothing when no width is requested', () => {
+        expect(e.Dimensions('ranged')).toEqual({});
+        expect(e.Dimensions('fixed', 0)).toEqual({});
+    });
+
+    it('omits dimensions for a model that rejects it when the width is its own', () => {
+        expect(e.Dimensions('fixed', 1536)).toEqual({});
+    });
+
+    it('sends a width the model can produce', () => {
+        expect(e.Dimensions('ranged', 512)).toEqual({ dimensions: 512 });
+        expect(e.Dimensions('ranged', 3072)).toEqual({ dimensions: 3072 });
+        expect(e.Dimensions('listed', 256)).toEqual({ dimensions: 256 });
+    });
+
+    it('refuses a width the model cannot produce, with a non-retriable classification', () => {
+        expect(() => e.Dimensions('fixed', 512)).toThrow(EmbeddingDimensionsError);
+        expect(() => e.Dimensions('fixed', 512)).toThrow("Embedding model 'fixed' can't produce 512-dimension vectors; it supports only 1536.");
+        expect(() => e.Dimensions('ranged', 4096)).toThrow('it supports 1 to 3072');
+        expect(() => e.Dimensions('ranged', -1)).toThrow('it supports 1 to 3072');
+        expect(() => e.Dimensions('listed', 768)).toThrow('it supports 256, 512, 1024');
+    });
+
+    it('passes the width through for a model not in the table, and for a driver with no table', () => {
+        expect(e.Dimensions('unknown', 4096)).toEqual({ dimensions: 4096 });
+        expect(new (class extends TestEmbeddings {
+            public Dimensions(model: string, dimensions?: number): { dimensions?: number } { return this.DimensionsParam(model, dimensions); }
+        })('k').Dimensions('fixed', 512)).toEqual({ dimensions: 512 });
+    });
+
+    it('carries a classification ErrorAnalyzer keeps: no retry, no failover', () => {
+        let thrown: unknown;
+        try {
+            e.Dimensions('fixed', 512);
+        } catch (error) {
+            thrown = error;
+        }
+        expect(ErrorAnalyzer.AnalyzeError(thrown)).toMatchObject({ errorType: 'InvalidRequest', severity: 'Fatal', canFailover: false });
+    });
+});
+
+/**
+ * A refusal is a configuration error, so the per-text path must not treat it as a transient
+ * failure. Retrying it sleeps through the backoff to reach the same answer, and degrading it to an
+ * empty result is what the refusal exists to replace: the runner reads an empty result as
+ * "No vectors returned", classifies it Retriable and fails over to another vendor, which fails the
+ * same way. Both layers arrived with embedding cancellation; the refusal arrived with #5234.
+ */
+describe('BaseEmbeddings.EmbedTexts and a refused width on the per-text path', () => {
+    /** Per-text driver (no native batch) whose EmbedText refuses a width its model can't produce. */
+    class RefusingEmbeddings extends BaseEmbeddings {
+        public attempts = 0;
+        protected override get EmbeddingModels(): readonly EmbeddingModelInfo[] {
+            return [{ Model: 'fixed', Description: 'one width, rejects dimensions', OutputDimension: 1536, AcceptsDimensions: false }];
+        }
+        public async EmbedText(params: EmbedTextParams): Promise<EmbedTextResult> {
+            this.attempts++;
+            this.DimensionsParam(params.model ?? '', params.dimensions);
+            return { object: 'object', model: 'fixed', ModelUsage: new ModelUsage(1, 0), vector: [0.1] };
+        }
+        public async GetEmbeddingModels(): Promise<string[]> {
+            return ['fixed'];
+        }
+    }
+
+    it('throws the refusal instead of degrading to an empty result, and does not retry it', async () => {
+        const e = new RefusingEmbeddings('k');
+
+        await expect(e.EmbedTexts({ texts: ['a'], model: 'fixed', dimensions: 512 })).rejects.toThrow(EmbeddingDimensionsError);
+        expect(e.attempts).toBe(1); // one attempt; 3 would mean the refusal was retried through the backoff
+    });
+
+    it('still degrades an ordinary per-text failure, which retry and the error contract own', async () => {
+        class FailingEmbeddings extends RefusingEmbeddings {
+            public override async EmbedText(_params: EmbedTextParams): Promise<EmbedTextResult> {
+                this.attempts++;
+                throw new Error('503 upstream unavailable');
+            }
+            protected override get embedRetryBaseDelayMs(): number {
+                return 0; // no real sleeping in a unit test
+            }
+        }
+        const e = new FailingEmbeddings('k');
+
+        const r = await e.EmbedTexts({ texts: ['a'], model: 'fixed', dimensions: 1536 });
+        expect(r.vectors).toEqual([]);
+        expect(e.attempts).toBe(3); // the initial attempt plus maxEmbedTextsRetries
     });
 });
 

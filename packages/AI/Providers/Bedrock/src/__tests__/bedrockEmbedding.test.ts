@@ -52,6 +52,69 @@ describe('BedrockEmbedding.EmbedTexts (Bedrock keeps its own EmbedTexts — unmo
     });
 });
 
+/**
+ * The `dimensions` parameter (#5234). Titan Embed Text V1 has one width, 1536, and rejects
+ * `dimensions`; V2 accepts 256, 512 or 1024. The Cohere branch never sends it.
+ */
+describe('BedrockEmbedding and the dimensions parameter', () => {
+    /** The request body of the nth InvokeModel call. */
+    const sentBody = (n = 0): Record<string, unknown> => JSON.parse(mockSend.mock.calls[n][0].input.body);
+
+    beforeEach(() => {
+        mockSend.mockReset();
+        mockSend.mockResolvedValue({ body: encode({ embedding: [0.1, 0.2], inputTextTokenCount: 1 }) });
+    });
+
+    it('omits dimensions for Titan V1 when asked for its own width', async () => {
+        const e = new BedrockEmbedding('id:secret');
+        await e.EmbedText({ text: 'a', model: 'amazon.titan-embed-text-v1', dimensions: 1536 });
+        await e.EmbedTexts({ texts: ['b'], model: 'amazon.titan-embed-text-v1', dimensions: 1536 });
+
+        expect(sentBody(0)).toEqual({ inputText: 'a' });
+        expect(sentBody(1)).toEqual({ inputText: 'b' });
+    });
+
+    it('applies Titan V1\'s width when no model is named', async () => {
+        await new BedrockEmbedding('id:secret').EmbedText({ text: 'a', model: '', dimensions: 1536 });
+
+        expect(sentBody()).toEqual({ inputText: 'a' });
+    });
+
+    it('refuses a width Titan V1 cannot produce before calling the API', async () => {
+        const e = new BedrockEmbedding('id:secret');
+
+        await expect(e.EmbedText({ text: 'a', model: 'amazon.titan-embed-text-v1', dimensions: 1024 })).rejects.toThrow(/supports only 1536/);
+        await expect(e.EmbedTexts({ texts: ['a', 'b'], model: 'amazon.titan-embed-text-v1', dimensions: 1024 })).rejects.toThrow(/supports only 1536/);
+        expect(mockSend).not.toHaveBeenCalled();
+    });
+
+    it('sends a Titan V2 width it supports, and refuses one it does not', async () => {
+        const e = new BedrockEmbedding('id:secret');
+        await e.EmbedText({ text: 'a', model: 'amazon.titan-embed-text-v2:0', dimensions: 512 });
+
+        expect(sentBody()).toEqual({ inputText: 'a', dimensions: 512 });
+        await expect(e.EmbedTexts({ texts: ['a'], model: 'amazon.titan-embed-text-v2:0', dimensions: 1536 })).rejects.toThrow(/supports 256, 512, 1024/);
+        expect(mockSend).toHaveBeenCalledTimes(1);
+    });
+
+    it('carries a Titan V2 width through EmbedTexts to every per-text call', async () => {
+        // EmbedTexts is the path AIEmbeddingRunner uses, and Titan has no batch endpoint, so the width
+        // has to survive the hand-off to each EmbedText. Asserted per text: dropping `dimensions` from
+        // that inner call would otherwise hand a 512-wide index 1024-wide vectors with nothing failing.
+        await new BedrockEmbedding('id:secret').EmbedTexts({ texts: ['a', 'b'], model: 'amazon.titan-embed-text-v2:0', dimensions: 512 });
+
+        expect(sentBody(0)).toEqual({ inputText: 'a', dimensions: 512 });
+        expect(sentBody(1)).toEqual({ inputText: 'b', dimensions: 512 });
+    });
+
+    it('does not send dimensions on the Cohere path', async () => {
+        mockSend.mockResolvedValue({ body: encode({ embeddings: [[1, 0]], tokens: 1 }) });
+        await new BedrockEmbedding('id:secret').EmbedTexts({ texts: ['a'], model: 'cohere.embed-english-v3', dimensions: 1536 });
+
+        expect(sentBody()).not.toHaveProperty('dimensions');
+    });
+});
+
 /** Builds the error `fetch` and the SDKs reject an aborted request with. */
 function abortError(): Error {
     const error = new Error('This operation was aborted');

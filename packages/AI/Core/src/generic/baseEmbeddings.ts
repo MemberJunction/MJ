@@ -3,6 +3,41 @@ import { BaseModel, ModelUsage } from './baseModel';
 import { AbortableDelay, CreateCancellationError, IsRequestAborted, ThrowIfAborted } from './cancellation';
 import { ChatMessageContent, ChatMessageContentBlock } from './chat.types';
 import { EmbedContentParams, EmbedContentResult, EmbedTextParams, EmbedTextResult, EmbedTextsParams, EmbedTextsResult } from './embed.types';
+import { AIErrorInfo } from './errorTypes';
+
+/** An embedding model's output widths, as a driver's {@link BaseEmbeddings.EmbeddingModels} table lists it. */
+export interface EmbeddingModelInfo {
+    Model: string;
+    Description: string;
+    /** The width of the vectors the model produces when no `dimensions` is requested. */
+    OutputDimension: number;
+    /**
+     * Whether the model accepts a `dimensions` request parameter. A model that doesn't (OpenAI's
+     * text-embedding-ada-002, Bedrock's Titan Embed Text V1) has one width and rejects the parameter,
+     * even when the requested width is its own.
+     */
+    AcceptsDimensions: boolean;
+    /**
+     * The widths a model that accepts `dimensions` can produce. Omitted, it can produce any width from
+     * 1 to {@link OutputDimension} (OpenAI's text-embedding-3 models).
+     */
+    SupportedDimensions?: readonly number[];
+}
+
+/**
+ * Thrown before any API call when a driver's model table says the model can't produce the requested
+ * width. The request would fail (or return vectors of the wrong width) on every vendor of that model,
+ * so the error carries a non-retriable classification that {@link ErrorAnalyzer} passes through.
+ */
+export class EmbeddingDimensionsError extends Error {
+    public readonly errorInfo: AIErrorInfo;
+
+    constructor(model: string, requested: number, supported: string) {
+        super(`Embedding model '${model}' can't produce ${requested}-dimension vectors; it supports ${supported}.`);
+        this.name = 'EmbeddingDimensionsError';
+        this.errorInfo = { errorType: 'InvalidRequest', severity: 'Fatal', canFailover: false, error: this };
+    }
+}
 
 /**
  * Base class for all embedding model implementations
@@ -108,6 +143,52 @@ export abstract class BaseEmbeddings extends BaseModel {
     public abstract GetEmbeddingModels(): Promise<any>;
 
     /**
+     * The driver's known embedding models and their widths. Empty by default: a driver with no table
+     * forwards `dimensions` as it is given. Used by {@link DimensionsParam}.
+     */
+    protected get EmbeddingModels(): readonly EmbeddingModelInfo[] {
+        return [];
+    }
+
+    /**
+     * The `dimensions` request parameter for a call to `model`, or none.
+     *
+     * Callers pass the vector index's `Dimensions` on every call, and MJ stamps one on every index it
+     * creates, so a model with a single width is asked for it too. For a model in
+     * {@link EmbeddingModels}:
+     * - a model that rejects the parameter is sent nothing when the requested width is its own,
+     *   which is what it produces anyway;
+     * - a width the model can't produce throws {@link EmbeddingDimensionsError} before any (paid)
+     *   API call. Call this outside the driver's try/catch so the error isn't degraded to an empty
+     *   result.
+     *
+     * A model not in the table gets the width as requested.
+     */
+    protected DimensionsParam(model: string, dimensions?: number): { dimensions?: number } {
+        if (!dimensions) {
+            return {};
+        }
+        const info = this.EmbeddingModels.find((m) => m.Model === model);
+        if (!info) {
+            return { dimensions };
+        }
+        if (!info.AcceptsDimensions) {
+            if (dimensions !== info.OutputDimension) {
+                throw new EmbeddingDimensionsError(model, dimensions, `only ${info.OutputDimension}`);
+            }
+            return {};
+        }
+        if (info.SupportedDimensions) {
+            if (!info.SupportedDimensions.includes(dimensions)) {
+                throw new EmbeddingDimensionsError(model, dimensions, info.SupportedDimensions.join(', '));
+            }
+        } else if (dimensions < 1 || dimensions > info.OutputDimension) {
+            throw new EmbeddingDimensionsError(model, dimensions, `1 to ${info.OutputDimension}`);
+        }
+        return { dimensions };
+    }
+
+    /**
      * Whether this provider's embedding model has a NATIVE batch endpoint that returns one vector
      * per input in a single request. Defaults to `false`. Providers that pass an array of texts
      * straight to their API (e.g. OpenAI, Azure, Cohere, Mistral) override this to return `true`
@@ -206,8 +287,10 @@ export abstract class BaseEmbeddings extends BaseModel {
      * ERROR CONTRACT (deliberate — change here if a different policy is wanted): mirrors the
      * per-provider Gemini fix. On any other per-text failure that survives retry (EmbedText throws OR
      * yields an empty vector) we return an EMPTY result rather than throwing, so batch pipelines that
-     * don't wrap EmbedTexts (e.g. EntityVectorSyncer) degrade gracefully instead of aborting. An aborted
-     * request (cancelled or timed out) is the exception: it is rethrown (see {@link EmbedTexts}). To
+     * don't wrap EmbedTexts (e.g. EntityVectorSyncer) degrade gracefully instead of aborting. Two
+     * failures are the exception and are rethrown: an aborted request (cancelled or timed out, see
+     * {@link EmbedTexts}), and an {@link EmbeddingDimensionsError}, which is a configuration error no
+     * retry or failover can resolve (see {@link DimensionsParam}). To
      * make it fully fail-loud instead, replace the two `emptyEmbedTextsResult(...)` returns below with
      * `throw`.
      */
@@ -230,6 +313,12 @@ export abstract class BaseEmbeddings extends BaseModel {
         } catch (error) {
             // A cancellation is the caller's decision, not a failed text: it is thrown, not degraded.
             this.ThrowIfRequestAborted(error, signal);
+            // A refused width is the other exception: degrading it to an empty result is exactly what
+            // the refusal replaces, since the runner reads that as a retriable "No vectors returned"
+            // and fails over to a vendor that refuses it the same way.
+            if (error instanceof EmbeddingDimensionsError) {
+                throw error;
+            }
             // Graceful degrade (see error contract above) — but never silently: log why it failed.
             console.error(`${this.constructor.name}.EmbedTexts: per-text embedding failed:`, error);
             return this.emptyEmbedTextsResult(params.model);
@@ -315,7 +404,9 @@ export abstract class BaseEmbeddings extends BaseModel {
                 return result; // success, or the final empty result after exhausting retries
             } catch (error) {
                 lastError = error;
-                if (n >= this.maxEmbedTextsRetries || IsRequestAborted(error, signal)) {
+                // A refused width is a configuration error: every attempt reaches the same answer,
+                // so retrying it only sleeps through the backoff first.
+                if (n >= this.maxEmbedTextsRetries || IsRequestAborted(error, signal) || error instanceof EmbeddingDimensionsError) {
                     throw error; // out of retries — let the caller's catch degrade the batch
                 }
             }
