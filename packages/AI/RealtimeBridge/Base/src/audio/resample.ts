@@ -87,6 +87,8 @@ function assertPositiveRate(rate: number, label: string): void {
     }
 }
 
+const IS_LITTLE_ENDIAN = new Uint8Array(new Uint16Array([0x0102]).buffer)[0] === 0x02;
+
 /**
  * `ArrayBuffer` wrapper of {@link resamplePcm16}: little-endian PCM16 in → little-endian PCM16 out,
  * matching the {@link ITelephonyCallSdk} frame type. Convenient when the native SDK already holds the
@@ -98,8 +100,14 @@ function assertPositiveRate(rate: number, label: string): void {
  * @returns An `ArrayBuffer` of little-endian PCM16 at `toRate`.
  */
 export function ResamplePcm16Buffer(pcm: ArrayBuffer, fromRate: number, toRate: number): ArrayBuffer {
-    const view = new DataView(pcm);
     const count = Math.floor(pcm.byteLength / 2);
+    if (IS_LITTLE_ENDIAN) {
+        const input = new Int16Array(pcm, 0, count);
+        const resampled = ResamplePcm16(input, fromRate, toRate);
+        return resampled.buffer as ArrayBuffer;
+    }
+
+    const view = new DataView(pcm);
     const input = new Int16Array(count);
     for (let i = 0; i < count; i++) {
         input[i] = view.getInt16(i * 2, true);

@@ -274,6 +274,9 @@ export function SniffFmp4Piece(bytes: ArrayBuffer | ArrayBufferView): Fmp4PieceK
     return type === 'moof' || type === 'styp' ? 'fragment' : null;
 }
 
+const fmp4InitByBuffer = new WeakMap<ArrayBuffer, Fmp4Init | null>();
+const fmp4FragmentByBuffer = new WeakMap<ArrayBuffer, { init: Fmp4Init | null; fragment: Fmp4Fragment | null }>();
+
 /**
  * Reads the tracks an init segment declares. `null` when the piece holds no `moov` box, when a box's size runs past
  * what holds it, or when a track lacks the `tkhd` or `hdlr` box that identifies it. A track whose sample entry this
@@ -283,10 +286,16 @@ export function SniffFmp4Piece(bytes: ArrayBuffer | ArrayBufferView): Fmp4PieceK
  * @param bytes The init segment (`ftyp` + `moov`), as an `ArrayBuffer` or a view of one.
  */
 export function ReadFmp4Init(bytes: ArrayBuffer | ArrayBufferView): Fmp4Init | null {
+    if (bytes instanceof ArrayBuffer && fmp4InitByBuffer.has(bytes)) {
+        return fmp4InitByBuffer.get(bytes) ?? null;
+    }
     const view = viewOf(bytes);
     const moov = readBoxes(view, 0, view.byteLength)?.find((box) => box.Type === 'moov');
     const moovBoxes = moov ? childBoxes(view, moov) : null;
     if (!moovBoxes) {
+        if (bytes instanceof ArrayBuffer) {
+            fmp4InitByBuffer.set(bytes, null);
+        }
         return null;
     }
     const defaults = readTrexDefaults(view, moovBoxes.find((box) => box.Type === 'mvex'));
@@ -294,11 +303,18 @@ export function ReadFmp4Init(bytes: ArrayBuffer | ArrayBufferView): Fmp4Init | n
     for (const trak of moovBoxes.filter((box) => box.Type === 'trak')) {
         const track = readTrack(view, trak, defaults);
         if (!track) {
+            if (bytes instanceof ArrayBuffer) {
+                fmp4InitByBuffer.set(bytes, null);
+            }
             return null;
         }
         tracks.push(track);
     }
-    return { Tracks: tracks };
+    const result: Fmp4Init = { Tracks: tracks };
+    if (bytes instanceof ArrayBuffer) {
+        fmp4InitByBuffer.set(bytes, result);
+    }
+    return result;
 }
 
 /**
@@ -340,20 +356,36 @@ export function Fmp4AudioSeconds(bytes: ArrayBuffer | ArrayBufferView, init: Fmp
  * @param init The stream's init segment, read: its `trex` defaults apply to the samples.
  */
 export function ReadFmp4Fragment(bytes: ArrayBuffer | ArrayBufferView, init: Fmp4Init | null): Fmp4Fragment | null {
+    if (bytes instanceof ArrayBuffer) {
+        const cached = fmp4FragmentByBuffer.get(bytes);
+        if (cached && cached.init === init) {
+            return cached.fragment;
+        }
+    }
     const view = viewOf(bytes);
     const moofs = readBoxes(view, 0, view.byteLength)?.filter((box) => box.Type === 'moof');
     if (!moofs || moofs.length === 0) {
+        if (bytes instanceof ArrayBuffer) {
+            fmp4FragmentByBuffer.set(bytes, { init, fragment: null });
+        }
         return null;
     }
     const samples: Fmp4Sample[] = [];
     for (const moof of moofs) {
         const read = readMovieFragment(view, moof, init);
         if (!read) {
+            if (bytes instanceof ArrayBuffer) {
+                fmp4FragmentByBuffer.set(bytes, { init, fragment: null });
+            }
             return null;
         }
         samples.push(...read);
     }
-    return { Samples: samples };
+    const result: Fmp4Fragment = { Samples: samples };
+    if (bytes instanceof ArrayBuffer) {
+        fmp4FragmentByBuffer.set(bytes, { init, fragment: result });
+    }
+    return result;
 }
 
 /**

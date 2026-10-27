@@ -150,7 +150,8 @@ export class ChannelPerceptionCoalescer {
 
     /** Sends `full` unless it is too large, in which case the compact fallback goes instead. */
     private deliver(full: JSONObject, compact: () => JSONObject): void {
-        const body = JSON.stringify(full).length <= this.options.MaxNoteChars ? full : compact();
+        const fullJson = JSON.stringify(full);
+        const body = fullJson.length <= this.options.MaxNoteChars ? fullJson : compact();
         this.host.SendNote(FormatChannelNote(this.host.ChannelKey, this.host.InstanceId, 'state_changed', body));
     }
 }

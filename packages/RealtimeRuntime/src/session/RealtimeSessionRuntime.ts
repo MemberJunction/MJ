@@ -5132,17 +5132,23 @@ export class RealtimeSessionRuntime {
    * delegation path is untouched.
    */
   private onDelegationStatusMessage(raw: string): void {
-    const frame = this.parseScreencastFrame(raw);
+    let parsed: Partial<RemoteBrowserScreencastPayload & RemoteBrowserAudioChunkPayload & RealtimeDelegationProgressPayload>;
+    try {
+      parsed = JSON.parse(raw) as Partial<RemoteBrowserScreencastPayload & RemoteBrowserAudioChunkPayload & RealtimeDelegationProgressPayload>;
+    } catch {
+      return;
+    }
+    const frame = this.parseScreencastFrame(parsed);
     if (frame) {
       this.routeScreencastFrame(frame);
       return;
     }
-    const audio = this.parseAudioChunk(raw);
+    const audio = this.parseAudioChunk(parsed);
     if (audio) {
       this.routeAudioChunk(audio);
       return;
     }
-    const progress = this.parseProgress(raw);
+    const progress = this.parseProgress(parsed);
     if (progress) {
       this.dispatchProgress(progress);
     }
@@ -5153,12 +5159,16 @@ export class RealtimeSessionRuntime {
    * active session — otherwise `null` (ignored, so delegation progress falls through). Matched by
    * `resolver` + `type`, then scoped to THIS session by `agentSessionID`.
    */
-  private parseScreencastFrame(raw: string): RemoteBrowserScreencastPayload | null {
+  private parseScreencastFrame(rawOrParsed: string | Partial<RemoteBrowserScreencastPayload>): RemoteBrowserScreencastPayload | null {
     let payload: { resolver?: string } & Partial<RemoteBrowserScreencastPayload>;
-    try {
-      payload = JSON.parse(raw);
-    } catch {
-      return null;
+    if (typeof rawOrParsed === 'string') {
+      try {
+        payload = JSON.parse(rawOrParsed);
+      } catch {
+        return null;
+      }
+    } else {
+      payload = rawOrParsed;
     }
     const matches =
       payload?.resolver === 'RemoteBrowserActionResolver' &&
@@ -5196,12 +5206,16 @@ export class RealtimeSessionRuntime {
    * session — otherwise `null` (ignored). Matched by `resolver` + `type`, then scoped to THIS session by
    * `agentSessionID`.
    */
-  private parseAudioChunk(raw: string): RemoteBrowserAudioChunkPayload | null {
+  private parseAudioChunk(rawOrParsed: string | Partial<RemoteBrowserAudioChunkPayload>): RemoteBrowserAudioChunkPayload | null {
     let payload: { resolver?: string } & Partial<RemoteBrowserAudioChunkPayload>;
-    try {
-      payload = JSON.parse(raw);
-    } catch {
-      return null;
+    if (typeof rawOrParsed === 'string') {
+      try {
+        payload = JSON.parse(rawOrParsed);
+      } catch {
+        return null;
+      }
+    } else {
+      payload = rawOrParsed;
     }
     const matches =
       payload?.resolver === 'RemoteBrowserActionResolver' &&
@@ -5242,12 +5256,16 @@ export class RealtimeSessionRuntime {
    * Parses a push-status message and returns it only when it's a delegation
    * progress event for the active voice session — otherwise `null` (ignored).
    */
-  private parseProgress(raw: string): RealtimeDelegationProgress | null {
+  private parseProgress(rawOrParsed: string | Partial<RealtimeDelegationProgressPayload>): RealtimeDelegationProgress | null {
     let payload: RealtimeDelegationProgressPayload;
-    try {
-      payload = JSON.parse(raw) as RealtimeDelegationProgressPayload;
-    } catch {
-      return null; // non-JSON or unrelated frame
+    if (typeof rawOrParsed === 'string') {
+      try {
+        payload = JSON.parse(rawOrParsed) as RealtimeDelegationProgressPayload;
+      } catch {
+        return null; // non-JSON or unrelated frame
+      }
+    } else {
+      payload = rawOrParsed as RealtimeDelegationProgressPayload;
     }
     const matches =
       payload?.resolver === 'RealtimeClientSessionResolver' &&

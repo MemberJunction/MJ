@@ -76,9 +76,6 @@ function wireNames(...camelNames: string[]): ReadonlyMap<string, string> {
     return names;
 }
 
-/** An object that may have no fields at all (an activity marker). */
-const NO_FIELDS: ReadonlyMap<string, string> = new Map();
-
 const MESSAGE_TYPES = wireNames('realtimeInput', 'clientContent', 'toolResponse');
 const REALTIME_INPUT_FIELDS = wireNames('audio', 'video', 'text', 'activityStart', 'activityEnd', 'audioStreamEnd');
 const BLOB_FIELDS = wireNames('data', 'mimeType');
@@ -177,11 +174,17 @@ export class GeminiLiveRelayPolicy implements IRealtimeRelayPolicy {
         if (!message) {
             return { Drop: 'invalid' };
         }
-        const keys = Object.keys(message);
-        if (keys.length !== 1) {
-            return { Drop: keys.length === 0 ? 'empty' : 'multi-key' };
+        let onlyKey: string | undefined;
+        for (const key in message) {
+            if (onlyKey !== undefined) {
+                return { Drop: 'multi-key' };
+            }
+            onlyKey = key;
         }
-        const problem = checkClientMessage(keys[0], message[keys[0]]);
+        if (onlyKey === undefined) {
+            return { Drop: 'empty' };
+        }
+        const problem = checkClientMessage(onlyKey, message[onlyKey]);
         return problem ? { Drop: problem } : { Forward: JSON.stringify(message) };
     }
 
@@ -298,6 +301,25 @@ function prefixed(type: string, problem: string | null): string | null {
 
 /** Realtime input: audio and video blobs of the allowed types, text, the two activity markers, and `audioStreamEnd`. */
 function checkRealtimeInput(body: JSONValue): string | null {
+    if (!isJsonObject(body)) {
+        return 'invalid';
+    }
+    let firstKey: string | undefined;
+    let hasMultipleKeys = false;
+    for (const key in body) {
+        if (firstKey !== undefined) {
+            hasMultipleKeys = true;
+            break;
+        }
+        firstKey = key;
+    }
+    if (!hasMultipleKeys) {
+        if (firstKey === undefined) {
+            return null;
+        }
+        const name = REALTIME_INPUT_FIELDS.get(firstKey);
+        return name === undefined ? 'unknown' : checkRealtimeField(name, body[firstKey]);
+    }
     const fields = readFields(body, REALTIME_INPUT_FIELDS);
     if (typeof fields === 'string') {
         return fields;
@@ -332,21 +354,47 @@ function checkRealtimeField(name: string, value: JSONValue): string | null {
 
 /** An activity marker: an empty object (the SDK's `ActivityStart` and `ActivityEnd` have no fields). */
 function checkMarker(value: JSONValue): string | null {
-    const fields = readFields(value, NO_FIELDS);
-    return typeof fields === 'string' ? fields : null;
+    if (!isJsonObject(value)) {
+        return 'invalid';
+    }
+    for (const _ in value) {
+        return 'unknown';
+    }
+    return null;
 }
 
 /** Inline media: base64 `data` and a `mimeType` from `types`. */
 function checkBlob(value: JSONValue, types: ReadonlySet<string>): string | null {
-    const fields = readFields(value, BLOB_FIELDS);
-    if (typeof fields === 'string') {
-        return fields;
+    if (!isJsonObject(value)) {
+        return 'invalid';
     }
-    const mimeType = fields.get('mimeType');
+    let hasMimeType = false;
+    let mimeType: JSONValue | undefined;
+    let hasData = false;
+    let data: JSONValue | undefined;
+    for (const key in value) {
+        const name = BLOB_FIELDS.get(key);
+        if (name === undefined) {
+            return 'unknown';
+        }
+        if (name === 'mimeType') {
+            if (hasMimeType) {
+                return 'duplicate';
+            }
+            hasMimeType = true;
+            mimeType = value[key];
+        } else {
+            if (hasData) {
+                return 'duplicate';
+            }
+            hasData = true;
+            data = value[key];
+        }
+    }
     if (typeof mimeType !== 'string' || !types.has(mimeType)) {
         return 'media-type';
     }
-    return typeof fields.get('data') === 'string' ? null : 'invalid';
+    return typeof data === 'string' ? null : 'invalid';
 }
 
 /** Client content: `user` turns only (or none, for the `turnComplete` commit), and a boolean `turnComplete`. */

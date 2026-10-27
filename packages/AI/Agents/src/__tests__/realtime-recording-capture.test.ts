@@ -359,5 +359,35 @@ describe('RealtimeRecordingController', () => {
             c.AppendOutbound(pcm16(...block));
             expect(c.GetPeaks()).toHaveLength(600);
         });
+
+        it('caches the mixed timeline across EncodeWav() and GetPeaks() and invalidates on new frames or Reset()', () => {
+            const c = new RealtimeRecordingController({ Now: clock.Now, OutputSampleRate: 24000, InputSampleRate: 16000 });
+            clock.Value = 0;
+            c.Start();
+            c.AppendOutbound(pcm16(1000, -1000, 2000, -2000));
+            c.AppendInbound(pcm16(500, -500));
+
+            const wav = c.EncodeWav();
+            expect(wav).not.toBeNull();
+            const cachedAfterWav = Reflect.get(c, 'cachedMixedTimeline');
+            expect(cachedAfterWav).toBeDefined();
+            expect(cachedAfterWav).not.toBeNull();
+
+            const peaks = c.GetPeaks(2);
+            expect(peaks.length).toBe(2);
+            expect(Reflect.get(c, 'cachedMixedTimeline')).toBe(cachedAfterWav);
+
+            // Appending a new frame invalidates the cache
+            clock.Value = 10;
+            c.AppendOutbound(pcm16(3000));
+            expect(Reflect.get(c, 'cachedMixedTimeline')).toBeNull();
+
+            c.EncodeWav();
+            expect(Reflect.get(c, 'cachedMixedTimeline')).not.toBeNull();
+
+            // Reset invalidates the cache
+            c.Reset();
+            expect(Reflect.get(c, 'cachedMixedTimeline')).toBeNull();
+        });
     });
 });

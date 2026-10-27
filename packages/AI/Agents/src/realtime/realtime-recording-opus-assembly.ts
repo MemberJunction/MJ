@@ -467,8 +467,13 @@ class LibopusPacketDecoder implements IOpusPacketDecoder {
     public Decode(packet: Uint8Array): Int16Array {
         // The binding returns a view of a buffer it reuses on the next call, so copy the samples out now.
         const bytes = this.decoder.decode(packet);
+        const sampleCount = bytes.byteLength / BYTES_PER_SAMPLE;
+        const samples = new Int16Array(sampleCount);
+        if (endianness() === 'LE' && bytes.byteOffset % BYTES_PER_SAMPLE === 0) {
+            samples.set(new Int16Array(bytes.buffer, bytes.byteOffset, sampleCount));
+            return samples;
+        }
         const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-        const samples = new Int16Array(bytes.byteLength / BYTES_PER_SAMPLE);
         for (let i = 0; i < samples.length; i++) {
             samples[i] = view.getInt16(i * BYTES_PER_SAMPLE, true);
         }
