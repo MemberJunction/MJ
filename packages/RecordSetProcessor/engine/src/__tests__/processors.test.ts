@@ -2,7 +2,7 @@
  * Unit tests for the Action/Agent record processors' pure mapping + extraction helpers (the
  * record -> work-input mapping and work-output -> result-payload extraction). The engine-invoking
  * ProcessRecord paths are covered by integration tests; here we verify the deterministic logic, plus
- * ActionRecordProcessor's wait for the log row against a stubbed engine.
+ * how ActionRecordProcessor hands the log-row promise to the tracker, against a stubbed engine.
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
@@ -54,7 +54,7 @@ describe('ActionRecordProcessor', () => {
     });
 });
 
-describe('ActionRecordProcessor.ProcessRecord — waits for the log row (#6014)', () => {
+describe('ActionRecordProcessor.ProcessRecord — hands the log-row wait to the tracker (#6014, #6045)', () => {
     const ctx = { ContextUser: {} as never, Provider: {} as never };
     afterEach(() => vi.restoreAllMocks());
 
@@ -66,22 +66,13 @@ describe('ActionRecordProcessor.ProcessRecord — waits for the log row (#6014)'
         vi.spyOn(engine, 'RunAction').mockResolvedValue(result as never);
     }
 
-    it('does not resolve before LogEntryPersisted resolves', async () => {
-        let landLogRow!: () => void;
-        const LogEntryPersisted = new Promise<void>((r) => { landLogRow = r; });
+    it('resolves while LogEntryPersisted is still pending, and hands it to the tracker as ActionExecutionLogPersisted', async () => {
+        const LogEntryPersisted = new Promise<void>(() => { /* the log row never lands in this test */ });
         stubEngine({ Success: true, Params: [], LogEntry: { ID: 'log-1' }, LogEntryPersisted });
 
-        let resolved = false;
-        const pending = new ActionRecordProcessor('A-1').ProcessRecord(record, ctx).then((r) => {
-            resolved = true;
-            return r;
-        });
-        await new Promise((r) => setTimeout(r, 10));
-        expect(resolved).toBe(false);
-
-        landLogRow();
-        const out = await pending;
+        const out = await new ActionRecordProcessor('A-1').ProcessRecord(record, ctx);
         expect(out).toMatchObject({ Status: 'Succeeded', ActionExecutionLogID: 'log-1' });
+        expect(out.ActionExecutionLogPersisted).toBe(LogEntryPersisted);
     });
 
     it('resolves normally when LogEntryPersisted is absent', async () => {
@@ -89,6 +80,7 @@ describe('ActionRecordProcessor.ProcessRecord — waits for the log row (#6014)'
 
         const out = await new ActionRecordProcessor('A-1').ProcessRecord(record, ctx);
         expect(out).toMatchObject({ Status: 'Failed', ErrorMessage: 'nope', ActionExecutionLogID: undefined });
+        expect(out.ActionExecutionLogPersisted).toBeUndefined();
     });
 });
 
