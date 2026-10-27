@@ -97,22 +97,32 @@ export class FakeEntity {
     }
 }
 
-/** Minimal EntityInfo shape the CRUD actions consume. */
-export interface FakeEntityInfo {
-    PrimaryKeys: Array<{ Name: string }>;
-    Fields: Array<{ Name: string }>;
-    /** EntityInfo's case-insensitive, trimmed field lookup, which the mutation actions resolve names through. */
-    FieldByName(name: string): { Name: string } | undefined;
+/** Minimal EntityFieldInfo shape: the flags the CRUD actions read when deciding whether a field is writable. */
+export interface FakeEntityField {
+    Name: string;
+    ReadOnly?: boolean;
+    IsVirtual?: boolean;
+    IsPrimaryKey?: boolean;
 }
 
-export const makeEntityInfo = (fieldNames: string[], pkNames: string[] = ['ID']): FakeEntityInfo => {
-    const fields = fieldNames.map((Name) => ({ Name }));
-    return {
-        PrimaryKeys: pkNames.map((Name) => ({ Name })),
-        Fields: fields,
-        FieldByName: (name: string) => fields.find((f) => f.Name.trim().toLowerCase() === name.trim().toLowerCase()),
-    };
-};
+/** Minimal EntityInfo shape the CRUD actions consume. */
+export interface FakeEntityInfo {
+    Name: string;
+    PrimaryKeys: Array<{ Name: string }>;
+    FirstPrimaryKey: { Name: string };
+    Fields: FakeEntityField[];
+}
+
+export const makeEntityInfo = (
+    fields: Array<string | FakeEntityField>,
+    pkNames: string[] = ['ID'],
+    entityName: string = 'Widgets'
+): FakeEntityInfo => ({
+    Name: entityName,
+    PrimaryKeys: pkNames.map((Name) => ({ Name })),
+    FirstPrimaryKey: { Name: pkNames[0] },
+    Fields: fields.map((f) => (typeof f === 'string' ? { Name: f } : f)),
+});
 
 export interface FakeProviderOpts {
     entityInfo?: FakeEntityInfo;

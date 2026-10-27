@@ -150,7 +150,7 @@ const DEFAULT_PROJECT_ICONS = [
               <p class="visibility-hint" id="projectVisibilityHint">
                 {{ FormData.isPersonal
                     ? 'Only you can see this folder.'
-                    : 'Everyone can see this folder and its name. They will not see the conversations you keep in it.' }}
+                    : "Everyone can see this folder and its name. They will not see the conversations you keep in it. Once shared, a folder can't be made private again." }}
               </p>
             </fieldset>
           }
@@ -699,7 +699,7 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
       // It resolves to the folder's CURRENT state, so it is a no-op in every other case.
       const isPersonal = this.VisibilityIsLocked ? false : this.FormData.isPersonal;
 
-            const project = this.Project || await md.GetEntityObject<MJProjectEntity>('MJ: Projects', this.CurrentUser);
+      const project = this.Project || await md.GetEntityObject<MJProjectEntity>('MJ: Projects', this.CurrentUser);
 
       project.Name = this.FormData.name.trim();
       project.Description = this.FormData.description.trim() || null;

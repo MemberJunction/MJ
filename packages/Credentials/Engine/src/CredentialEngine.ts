@@ -23,13 +23,16 @@ import {
     ResolvedCredential,
     StoreCredentialOptions,
     CredentialValidationResult,
-    CredentialAccessDetails
+    CredentialAccessDetails,
+    UserDelegatedOAuthCredentialValues,
+    StoreUserDelegatedCredentialOptions
 } from "./types";
 import {
     CredentialExpirationConfig,
     CredentialExpirationEvaluation,
     CredentialExpiredError,
     CredentialNotFoundError,
+    CredentialOwnerMismatchError,
     DEFAULT_EXPIRATION_CONFIG,
     EvaluateExpiration
 } from "./expiration";
@@ -72,6 +75,9 @@ const CREDENTIAL_ACCESS_AUDIT_LOG_TYPE_ID = '9375C9F9-1A58-44D6-9B09-8C6AF071438
  * openai.setApiKey(cred.values.apiKey);
  * ```
  */
+/** Name prefix that marks a per-user delegated OAuth (3LO) credential. */
+const USER_DELEGATED_CREDENTIAL_PREFIX = 'UserOAuth3LO:';
+
 export class CredentialEngine extends BaseEngine<CredentialEngine> {
     // Cached entity data
     private _credentials: MJCredentialEntity[] = [];
@@ -170,8 +176,14 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     /**
      * Returns all active credentials loaded from the database.
      */
+    /**
+     * Shared (application-level) credentials. Per-user delegated OAuth credentials
+     * (`UserOAuth3LO:*`) are excluded: their decrypted `Values` belong to one user and are
+     * reachable only through {@link GetUserDelegatedCredential} or
+     * {@link GetCredential} with that user as `contextUser`, both of which enforce ownership.
+     */
     public get Credentials(): MJCredentialEntity[] {
-        return this._credentials;
+        return this._credentials.filter(c => !this.isUserDelegatedCredential(c));
     }
 
     /**
@@ -267,6 +279,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         if (!credType) return undefined;
 
         return this._credentials.find(c =>
+            !this.isUserDelegatedCredential(c) &&
             UUIDsEqual(c.CredentialTypeID, credType.ID) && c.IsDefault && c.IsActive &&
             this.GetExpirationStatus(c).usable
         );
@@ -286,7 +299,8 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
      * if you need to know whether the result is still usable.
      */
     public GetCredentialById(credentialId: string): MJCredentialEntity | undefined {
-        return this._credentials.find(c => UUIDsEqual(c.ID, credentialId));
+        const cred = this.findCredentialById(credentialId);
+        return cred && !this.isUserDelegatedCredential(cred) ? cred : undefined;
     }
 
     /** @deprecated Use {@link GetCredentialById}. */
@@ -305,6 +319,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         if (!credType) return undefined;
 
         return this._credentials.find(c =>
+            !this.isUserDelegatedCredential(c) &&
             UUIDsEqual(c.CredentialTypeID, credType.ID) &&
             c.Name.trim().toLowerCase() === credentialName.trim().toLowerCase() &&
             c.IsActive &&
@@ -384,7 +399,19 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
                     this.warnIfExpiringOrExpired(credential, expiration);
 
                     // Values field is already decrypted by BaseEntity via field-level encryption
-                    values = this.parseCredentialValues(credential.Values) as T;
+                    const parsedValues = this.parseCredentialValues(credential.Values);
+                    // Enforce strict OwnerUserID isolation for user-delegated (3LO) credentials
+                    if (parsedValues.ownerUserId) {
+                        const requestingUserId = options.contextUser?.ID ?? null;
+                        if (!requestingUserId || !UUIDsEqual(parsedValues.ownerUserId, requestingUserId)) {
+                            throw new CredentialOwnerMismatchError(
+                                credential.Name,
+                                parsedValues.ownerUserId,
+                                requestingUserId
+                            );
+                        }
+                    }
+                    values = parsedValues as T;
                     source = 'database';
                 } else {
                     throw new CredentialNotFoundError(credentialName);
@@ -677,6 +704,211 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     }
 
     // ====================================
+    // Per-User Delegated OAuth (3LO) Isolation
+    // ====================================
+
+    /**
+     * Builds the canonical, isolated credential name for a user-delegated OAuth 2.0 (`3LO`) token.
+     */
+    public BuildUserDelegatedCredentialName(providerName: string, ownerUserId: string): string {
+        return `${USER_DELEGATED_CREDENTIAL_PREFIX}${providerName.trim()}:${ownerUserId.trim().toLowerCase()}`;
+    }
+
+    /**
+     * Stores or rotates a per-user delegated OAuth 2.0 (`3LO`) credential with strict `ownerUserId`
+     * isolation bound inside the encrypted `Values` payload.
+     */
+    public async StoreUserDelegatedCredential(
+        options: StoreUserDelegatedCredentialOptions,
+        contextUser: UserInfo
+    ): Promise<MJCredentialEntity> {
+        this.TryThrowIfNotLoaded();
+
+        if (!contextUser?.ID || !UUIDsEqual(options.ownerUserId, contextUser.ID)) {
+            throw new CredentialOwnerMismatchError(
+                this.BuildUserDelegatedCredentialName(options.providerName, options.ownerUserId),
+                options.ownerUserId,
+                contextUser?.ID ?? null
+            );
+        }
+
+        const credentialName = this.BuildUserDelegatedCredentialName(options.providerName, options.ownerUserId);
+        const payload = this.buildUserDelegatedPayload(options);
+
+        // One chain per credential name covers the create path too: two first-time stores for the
+        // same (provider, user) would otherwise both miss the cache and insert duplicate rows.
+        return this.enqueueCredentialWrite(credentialName, async () => {
+            const existing = this.findCredentialByExactName(credentialName);
+            if (existing) {
+                this.assertDelegatedOwner(existing, credentialName, contextUser);
+                return this.updateUserDelegatedCredential(existing, payload, options, contextUser);
+            }
+            return this.createUserDelegatedCredential(credentialName, payload, options, contextUser);
+        });
+    }
+
+    private buildUserDelegatedPayload(options: StoreUserDelegatedCredentialOptions): UserDelegatedOAuthCredentialValues {
+        return {
+            ownerUserId: options.ownerUserId,
+            principalEmail: options.principalEmail.trim().toLowerCase(),
+            providerName: options.providerName.trim(),
+            accessToken: options.accessToken,
+            refreshToken: options.refreshToken ?? '',
+            tokenType: options.tokenType ?? 'Bearer',
+            scope: options.scope ?? '',
+            tenantId: options.tenantId ?? '',
+            issuedAt: new Date().toISOString(),
+        };
+    }
+
+    /**
+     * The stored `ownerUserId` must match the caller before a delegated row is mutated. The name is
+     * keyed by owner, so a mismatch means the row was edited out of band; refuse rather than overwrite.
+     */
+    private assertDelegatedOwner(existing: MJCredentialEntity, credentialName: string, contextUser: UserInfo): void {
+        const parsed = this.parseCredentialValues(existing.Values);
+        if (parsed.ownerUserId && !UUIDsEqual(parsed.ownerUserId, contextUser.ID)) {
+            throw new CredentialOwnerMismatchError(credentialName, parsed.ownerUserId, contextUser.ID);
+        }
+    }
+
+    private async updateUserDelegatedCredential(
+        existing: MJCredentialEntity,
+        payload: UserDelegatedOAuthCredentialValues,
+        options: StoreUserDelegatedCredentialOptions,
+        contextUser: UserInfo
+    ): Promise<MJCredentialEntity> {
+        const md = this.ProviderToUse;
+        const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
+        const loaded = await credEntity.Load(existing.ID);
+        if (!loaded) {
+            throw new Error(`Credential not found: ${existing.ID}`);
+        }
+        credEntity.Values = JSON.stringify(payload);
+        credEntity.IsActive = true;
+        credEntity.ExpiresAt = options.expiresAt ?? null;
+        const saved = await credEntity.Save();
+        if (!saved) {
+            throw new Error('Failed to update user-delegated credential');
+        }
+        await this.logAccess(credEntity, contextUser, {
+            operation: 'Update',
+            subsystem: 'UserDelegatedOAuth3LO',
+            success: true,
+        });
+        await this.RefreshItem('_credentials');
+        return this.findCredentialById(existing.ID) ?? credEntity;
+    }
+
+    private async createUserDelegatedCredential(
+        credentialName: string,
+        payload: UserDelegatedOAuthCredentialValues,
+        options: StoreUserDelegatedCredentialOptions,
+        contextUser: UserInfo
+    ): Promise<MJCredentialEntity> {
+        const requestedTypeName = options.credentialTypeName ?? 'OAuth2 Client Credentials';
+        const fallbackType = this.GetCredentialTypeByName(requestedTypeName) ?? this._credentialTypes[0];
+        if (!fallbackType) {
+            throw new Error(`No credential type available to store user-delegated credential for ${options.providerName}`);
+        }
+        const md = this.ProviderToUse;
+        const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
+        credEntity.NewRecord();
+        credEntity.CredentialTypeID = fallbackType.ID;
+        credEntity.Name = credentialName;
+        credEntity.Description = `Per-user 3LO OAuth credential for ${options.principalEmail} on ${options.providerName}`;
+        credEntity.Values = JSON.stringify(payload);
+        credEntity.IsDefault = false;
+        credEntity.IsActive = true;
+        credEntity.CategoryID = options.categoryId ?? null;
+        credEntity.ExpiresAt = options.expiresAt ?? null;
+        const saved = await credEntity.Save();
+        if (!saved) {
+            throw new Error('Failed to save user-delegated credential');
+        }
+        await this.logAccess(credEntity, contextUser, {
+            operation: 'Create',
+            subsystem: 'UserDelegatedOAuth3LO',
+            success: true,
+        });
+        await this.RefreshItem('_credentials');
+        return credEntity;
+    }
+
+    /**
+     * Resolves a user-delegated OAuth 2.0 (`3LO`) credential for `contextUser`, enforcing that
+     * `ownerUserId` in the encrypted payload matches `contextUser.ID`.
+     */
+    public async GetUserDelegatedCredential(
+        providerName: string,
+        contextUser: UserInfo
+    ): Promise<ResolvedCredential<UserDelegatedOAuthCredentialValues> | null> {
+        this.TryThrowIfNotLoaded();
+        if (!contextUser?.ID) {
+            return null;
+        }
+        const credentialName = this.BuildUserDelegatedCredentialName(providerName, contextUser.ID);
+        const match = this._credentials.find(
+            (c) => c.Name.trim().toLowerCase() === credentialName.toLowerCase() && c.IsActive
+        );
+        if (!match) {
+            return null;
+        }
+        return this.GetCredential<UserDelegatedOAuthCredentialValues>(credentialName, {
+            credentialId: match.ID,
+            contextUser,
+            subsystem: 'UserDelegatedOAuth3LO',
+        });
+    }
+
+    /**
+     * Deactivates and clears the encrypted token values for a user's delegated OAuth (`3LO`) credential.
+     */
+    public async RevokeUserDelegatedCredential(
+        providerName: string,
+        contextUser: UserInfo
+    ): Promise<boolean> {
+        this.TryThrowIfNotLoaded();
+        if (!contextUser?.ID) {
+            return false;
+        }
+        const credentialName = this.BuildUserDelegatedCredentialName(providerName, contextUser.ID);
+        const match = this._credentials.find(
+            (c) => c.Name.trim().toLowerCase() === credentialName.toLowerCase() && c.IsActive
+        );
+        if (!match) {
+            return false;
+        }
+
+        // Verify ownership before revoking
+        const parsed = this.parseCredentialValues(match.Values);
+        if (parsed.ownerUserId && !UUIDsEqual(parsed.ownerUserId, contextUser.ID)) {
+            throw new CredentialOwnerMismatchError(credentialName, parsed.ownerUserId, contextUser.ID);
+        }
+
+        // Same chain key as StoreUserDelegatedCredential so a store and a revoke for one user never interleave.
+        await this.enqueueCredentialWrite(credentialName, async () => {
+            const md = this.ProviderToUse;
+            const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
+            const loaded = await credEntity.Load(match.ID);
+            if (!loaded) return;
+            credEntity.IsActive = false;
+            credEntity.Values = JSON.stringify({
+                ownerUserId: contextUser.ID,
+                revokedAt: new Date().toISOString(),
+            });
+            await credEntity.Save();
+            await this.logAccess(credEntity, contextUser, {
+                operation: 'Delete',
+                subsystem: 'UserDelegatedOAuth3LO',
+                success: true,
+            });
+            await this.RefreshItem('_credentials');
+        });
+        return true;
+    }
+
+    // ====================================
     // Private Helper Methods
     // ====================================
 
@@ -700,7 +932,9 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     ): MJCredentialEntity | null {
         // Try by ID first
         if (options.credentialId) {
-            return this.GetCredentialById(options.credentialId) || null;
+            // Internal finder: delegated credentials are resolvable here because GetCredential
+            // enforces ownerUserId against options.contextUser before releasing the values.
+            return this.findCredentialById(options.credentialId) || null;
         }
 
         // Try by name (using the main credentialName param or the override)
@@ -716,6 +950,24 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
 
         // No match found
         return null;
+    }
+
+    /**
+     * True for per-user delegated OAuth (3LO) credentials, whose name is built by
+     * {@link BuildUserDelegatedCredentialName}.
+     */
+    private isUserDelegatedCredential(credential: MJCredentialEntity): boolean {
+        return credential.Name.trim().toLowerCase().startsWith(USER_DELEGATED_CREDENTIAL_PREFIX.toLowerCase());
+    }
+
+    /** Cache lookup by id with no ownership filtering; callers must enforce ownership themselves. */
+    private findCredentialById(credentialId: string): MJCredentialEntity | undefined {
+        return this._credentials.find(c => UUIDsEqual(c.ID, credentialId));
+    }
+
+    private findCredentialByExactName(credentialName: string): MJCredentialEntity | undefined {
+        const target = credentialName.trim().toLowerCase();
+        return this._credentials.find(c => c.Name.trim().toLowerCase() === target);
     }
 
     /**
@@ -891,10 +1143,10 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
      * The returned promise settles with the operation's own outcome; a rejected
      * operation does not break the chain for subsequent writers.
      */
-    private enqueueCredentialWrite(credentialId: string, operation: () => Promise<void>): Promise<void> {
-        const key = credentialId.trim().toLowerCase();
+    private enqueueCredentialWrite<T = void>(credentialKey: string, operation: () => Promise<T>): Promise<T> {
+        const key = credentialKey.trim().toLowerCase();
         const prev = this._credentialWriteChains.get(key) ?? Promise.resolve();
-        const next = prev.then(operation, operation);
+        const next: Promise<T> = prev.then(operation, operation);
         // The chain link swallows the rejection (it surfaces to this call's
         // caller via `next`) so an un-awaited chain never emits an unhandled
         // rejection, and cleans the map up once it drains.

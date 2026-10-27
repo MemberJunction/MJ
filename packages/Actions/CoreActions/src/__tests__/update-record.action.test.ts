@@ -113,6 +113,25 @@ describe('UpdateRecordAction', () => {
             expect(r.Message).toMatch(/Fields/);
         });
 
+        it('accepts PrimaryKey and Fields serialized as JSON strings', async () => {
+            const entity = new FakeEntity(['Name', 'Status'], { ID: 'w-1', Name: 'Old', Status: 'Draft' });
+            const provider = makeProvider({ entityInfo: makeEntityInfo(['Name', 'Status']), entity });
+            const params = makeParams(
+                [
+                    { Name: 'EntityName', Value: 'Widgets' },
+                    { Name: 'PrimaryKey', Value: JSON.stringify({ ID: 'w-1' }) },
+                    { Name: 'Fields', Value: JSON.stringify({ Status: 'Active' }) },
+                ],
+                provider
+            );
+
+            const r = await action.InternalRunAction(params);
+
+            expect(r.Success).toBe(true);
+            expect(r.ResultCode).toBe('SUCCESS');
+            expect(entity.values['Status']).toBe('Active');
+        });
+
         it('fails with VALIDATION_ERROR naming the missing primary key field', async () => {
             const entity = new FakeEntity(['Name']);
             const provider = makeProvider({ entityInfo: makeEntityInfo(['Name']), entity });
@@ -265,11 +284,9 @@ describe('UpdateRecordAction', () => {
     });
 
     describe('unknown-field handling', () => {
-        // A misspelled field used to be skipped (LogError only) while the rest of the update went through as
-        // SUCCESS, and a payload of nothing but typos came back as a NO_CHANGES success.
-        it('refuses an unknown field with VALIDATION_ERROR and writes nothing, even alongside a known one', async () => {
-            const entity = new FakeEntity(['Status'], { ID: '1', Status: 'Draft' });
-            const provider = makeProvider({ entityInfo: makeEntityInfo(['Status']), entity });
+        it('fails with INVALID_FIELD_NAMES listing the unknown fields and the valid updatable ones, without mutating or saving', async () => {
+            const entity = new FakeEntity(['Status', 'Name'], { ID: '1', Status: 'Draft', Name: 'n' });
+            const provider = makeProvider({ entityInfo: makeEntityInfo(['Status', 'Name']), entity });
             const params = makeParams(
                 [
                     { Name: 'EntityName', Value: 'Widgets' },
@@ -282,35 +299,14 @@ describe('UpdateRecordAction', () => {
             const r = await action.InternalRunAction(params);
 
             expect(r.Success).toBe(false);
-            expect(r.ResultCode).toBe('VALIDATION_ERROR');
-            expect(r.Message).toContain("'Stauts'");
-            expect(r.Message).toContain('Status');
+            expect(r.ResultCode).toBe('INVALID_FIELD_NAMES');
+            expect(r.Message).toMatch(/Stauts/);
+            expect(r.Message).toMatch(/Status, Name/);
             expect(entity.values.Status).toBe('Draft');
             expect(entity.saveCallCount).toBe(0);
-            expect(findOutput(params.Params, 'UpdatedFields')).toBeUndefined();
         });
 
-        it('names every unknown field when the whole payload is unknown, instead of a NO_CHANGES success', async () => {
-            const entity = new FakeEntity(['Status'], { ID: '1', Status: 'Draft' });
-            const provider = makeProvider({ entityInfo: makeEntityInfo(['Status']), entity });
-            const params = makeParams(
-                [
-                    { Name: 'EntityName', Value: 'Widgets' },
-                    { Name: 'PrimaryKey', Value: { ID: '1' } },
-                    { Name: 'Fields', Value: { Stauts: 'typo', Nmae: 'typo2' } },
-                ],
-                provider
-            );
-
-            const r = await action.InternalRunAction(params);
-
-            expect(r.Success).toBe(false);
-            expect(r.ResultCode).toBe('VALIDATION_ERROR');
-            expect(r.Message).toContain("'Stauts', 'Nmae'");
-            expect(entity.saveCallCount).toBe(0);
-        });
-
-        it('accepts a field name in the wrong case and updates it under the entity\'s own spelling', async () => {
+        it('resolves field names case-insensitively against entity metadata', async () => {
             const entity = new FakeEntity(['Status'], { ID: '1', Status: 'Draft' });
             const provider = makeProvider({ entityInfo: makeEntityInfo(['Status']), entity });
             const params = makeParams(
@@ -327,7 +323,32 @@ describe('UpdateRecordAction', () => {
             expect(r.Success).toBe(true);
             expect(r.ResultCode).toBe('SUCCESS');
             expect(entity.values.Status).toBe('Active');
-            expect(findOutput(params.Params, 'UpdatedFields')?.Value).toEqual({ Status: { oldValue: 'Draft', newValue: 'Active' } });
+            const updatedOut = findOutput(params.Params, 'UpdatedFields');
+            expect(updatedOut?.Value).toEqual({ Status: { oldValue: 'Draft', newValue: 'Active' } });
+        });
+
+        it('leaves read-only, virtual and primary-key fields out of the valid-field list', async () => {
+            const entity = new FakeEntity(['Status'], { ID: '1', Status: 'Draft' });
+            const entityInfo = makeEntityInfo([
+                { Name: 'ID', IsPrimaryKey: true },
+                { Name: 'Status' },
+                { Name: '__mj_UpdatedAt', ReadOnly: true },
+                { Name: 'Owner', IsVirtual: true },
+            ]);
+            const provider = makeProvider({ entityInfo, entity });
+            const params = makeParams(
+                [
+                    { Name: 'EntityName', Value: 'Widgets' },
+                    { Name: 'PrimaryKey', Value: { ID: '1' } },
+                    { Name: 'Fields', Value: { Nope: 1 } },
+                ],
+                provider
+            );
+
+            const r = await action.InternalRunAction(params);
+
+            expect(r.ResultCode).toBe('INVALID_FIELD_NAMES');
+            expect(r.Message).toMatch(/Valid updatable fields: Status$/);
         });
     });
 

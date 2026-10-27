@@ -41,13 +41,14 @@ export class UpdateRecordAction extends BaseRecordMutationAction {
      * 
      * @param params - The action parameters containing:
      *   - EntityName (required): The name of the entity to update
-     *   - PrimaryKey (required): Object containing primary key field(s) and value(s)
-     *   - Fields (required): Object containing field names and values to update
+     *   - PrimaryKey (required): Object keyed by primary key column(s), the CompositeKey `{ KeyValuePairs }` shape,
+     *                 a JSON string of either, or (single-column keys only) the bare key value
+     *   - Fields (required): Object (or JSON string) containing field names and values to update
      * 
      * @returns ActionResultSimple with:
      *   - Success: true if record was updated successfully
-     *   - ResultCode: SUCCESS, FAILED, ENTITY_NOT_FOUND, RECORD_NOT_FOUND, VALIDATION_ERROR (including unknown field names),
-     *                 PERMISSION_DENIED, NO_CHANGES, CONCURRENT_UPDATE
+     *   - ResultCode: SUCCESS, FAILED, ENTITY_NOT_FOUND, RECORD_NOT_FOUND, VALIDATION_ERROR, 
+     *                 INVALID_FIELD_NAMES, PERMISSION_DENIED, NO_CHANGES, CONCURRENT_UPDATE
      *   - Message: Details about the operation
      *   - Params: Output parameter 'UpdatedFields' contains the fields that were actually changed
      */
@@ -58,41 +59,38 @@ export class UpdateRecordAction extends BaseRecordMutationAction {
             if (entityNameResult.error) return entityNameResult.error;
             const entityName = entityNameResult.value!;
 
-            const primaryKeyResult = this.getPrimaryKeyParam(params);
-            if (primaryKeyResult.error) return primaryKeyResult.error;
-            const primaryKey = primaryKeyResult.value!;
-
             const fieldsResult = this.getFieldsParam(params);
             if (fieldsResult.error) return fieldsResult.error;
             const fields = fieldsResult.value!;
 
-            // Get entity object and metadata
+            // Get entity object and metadata (needed to interpret the PrimaryKey shape and validate field names)
             const entityResult = await this.getEntityObject(entityName, params.ContextUser, params.Provider);
             if (entityResult.error) return entityResult.error;
             const { entity, entityInfo } = entityResult;
 
-            // A field the entity does not have is refused before anything is read or written, not skipped: a
-            // skipped typo used to come back as SUCCESS (or NO_CHANGES) with that value never saved. This
-            // needs only metadata, so it runs ahead of the record load and costs no database round trip.
-            const { resolved, unknown } = this.ResolveFieldNames(entityInfo!, fields);
-            if (unknown.length > 0) {
-                return this.UnknownFieldsResult(entityName, entityInfo!, unknown);
-            }
+            const primaryKeyResult = this.getPrimaryKeyParam(params, entityInfo!);
+            if (primaryKeyResult.error) return primaryKeyResult.error;
+            const primaryKey = primaryKeyResult.value!;
+
+            // Fail fast on a misspelled field before touching the database
+            const fieldNamesError = this.validateFieldNames(entity!, entityInfo!, fields);
+            if (fieldNamesError) return fieldNamesError;
 
             // Load the existing record
             const loadResult = await this.loadRecord(entity!, entityInfo!, primaryKey, entityName);
             if (!loadResult.success) return loadResult.error!;
 
             // Track which fields are actually being changed
-            const updatedFields: Record<string, { oldValue: any, newValue: any }> = {};
+            const updatedFields: Record<string, { oldValue: unknown, newValue: unknown }> = {};
             let hasChanges = false;
 
-            // Set each field value
-            for (const [fieldName, fieldValue] of Object.entries(resolved)) {
-                const currentValue = entity!.Get(fieldName);
+            // Set each field value (every name resolved above, so resolution cannot miss here)
+            for (const [fieldName, fieldValue] of Object.entries(fields)) {
+                const resolvedName = this.resolveEntityFieldName(entity!, fieldName, entityInfo) ?? fieldName;
+                const currentValue = entity!.Get(resolvedName);
                 if (currentValue !== fieldValue) {
-                    entity!.Set(fieldName, fieldValue);
-                    updatedFields[fieldName] = {
+                    entity!.Set(resolvedName, fieldValue);
+                    updatedFields[resolvedName] = {
                         oldValue: currentValue,
                         newValue: fieldValue
                     };

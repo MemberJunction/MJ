@@ -211,14 +211,49 @@ describe('CreateRecordAction', () => {
             const pkOut = findOutput(params.Params, 'PrimaryKey');
             expect(pkOut?.Value).toEqual({ UserID: 'u-9', RoleID: 'r-4' });
         });
+
+        it('populates fields via EntityInfo.Fields when entity is a generic BaseEntity without prototype getters (e.g. OpenApp entities like MJ_BizApps_Tasks: Tasks)', async () => {
+            // Simulate a generic BaseEntity instance where fields exist in EntityInfo.Fields
+            // rather than as Object.defineProperty getters on the entity prototype (`'Name' in entity === false`).
+            const entity = new FakeEntity([], { ID: 'bizapp-task-1' });
+            const provider = makeProvider({
+                entityInfo: makeEntityInfo(['Name', 'TypeID', 'IsPriority', 'HealthStatus', 'CheckInCadence']),
+                entity,
+            });
+            const params = makeParams(
+                [
+                    { Name: 'EntityName', Value: 'MJ_BizApps_Tasks: Tasks' },
+                    {
+                        Name: 'Fields',
+                        Value: {
+                            Name: 'Launch Revised Platform — Q4 (12 Weeks)',
+                            TypeID: '11111111-2222-3333-4444-555555555555',
+                            IsPriority: true,
+                            HealthStatus: 'OnTrack',
+                            CheckInCadence: 'Weekly',
+                        },
+                    },
+                ],
+                provider
+            );
+
+            const r = await action.InternalRunAction(params);
+
+            expect(r.Success).toBe(true);
+            expect(r.ResultCode).toBe('SUCCESS');
+            expect(entity.values.Name).toBe('Launch Revised Platform — Q4 (12 Weeks)');
+            expect(entity.values.TypeID).toBe('11111111-2222-3333-4444-555555555555');
+            expect(entity.values.IsPriority).toBe(true);
+            expect(entity.values.HealthStatus).toBe('OnTrack');
+            expect(entity.values.CheckInCadence).toBe('Weekly');
+            expect(logErrorSpy).not.toHaveBeenCalled();
+        });
     });
 
     describe('unknown-field handling', () => {
-        // A misspelled field used to be dropped (LogError only) while the record still saved as SUCCESS —
-        // the agent was told the write worked with that value silently missing.
-        it('refuses an unknown field with VALIDATION_ERROR before creating anything, naming the entity\'s fields', async () => {
-            const entity = new FakeEntity(['Name', 'Status'], { ID: 'new-7' });
-            const provider = makeProvider({ entityInfo: makeEntityInfo(['Name', 'Status']), entity });
+        it('fails with INVALID_FIELD_NAMES before saving when a field name is unknown', async () => {
+            const entity = new FakeEntity(['Name'], { ID: 'new-7' });
+            const provider = makeProvider({ entityInfo: makeEntityInfo(['Name']), entity });
             const params = makeParams(
                 [
                     { Name: 'EntityName', Value: 'Widgets' },
@@ -230,21 +265,20 @@ describe('CreateRecordAction', () => {
             const r = await action.InternalRunAction(params);
 
             expect(r.Success).toBe(false);
-            expect(r.ResultCode).toBe('VALIDATION_ERROR');
-            expect(r.Message).toContain("'Naem'");
-            expect(r.Message).toContain('Name, Status');
-            expect(entity.newRecordCalled).toBe(false);
+            expect(r.ResultCode).toBe('INVALID_FIELD_NAMES');
+            expect(r.Message).toMatch(/Naem/);
+            expect(r.Message).toMatch(/Valid updatable fields: Name/);
             expect(entity.saveCallCount).toBe(0);
             expect(entity.values.Name).toBeUndefined();
         });
 
-        it('accepts a field name in the wrong case and writes it under the entity\'s own spelling', async () => {
-            const entity = new FakeEntity(['Name'], { ID: 'new-8' });
+        it('sets fields resolved case-insensitively against entity metadata', async () => {
+            const entity = new FakeEntity(['Name'], { ID: 'new-7' });
             const provider = makeProvider({ entityInfo: makeEntityInfo(['Name']), entity });
             const params = makeParams(
                 [
                     { Name: 'EntityName', Value: 'Widgets' },
-                    { Name: 'Fields', Value: { name: 'lower-cased key' } },
+                    { Name: 'Fields', Value: { name: 'ok' } },
                 ],
                 provider
             );
@@ -252,9 +286,8 @@ describe('CreateRecordAction', () => {
             const r = await action.InternalRunAction(params);
 
             expect(r.Success).toBe(true);
+            expect(entity.values.Name).toBe('ok');
             expect(entity.saveCallCount).toBe(1);
-            expect(entity.values.Name).toBe('lower-cased key');
-            expect(entity.values.name).toBeUndefined();
         });
     });
 

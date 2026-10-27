@@ -495,7 +495,7 @@ export class ExecBlockRule implements IConversionRule {
 
     // Match: EXEC [schema].[proc] paramList
     const m = normalized.match(
-      /^EXEC\s+(\[?\w+\]?\s*\.\s*\[?\w+\]?)\s+([\s\S]*)$/i
+      /^EXEC\s+((?:\[\w+\]|"\w+"|\w+)\s*\.\s*\[?\w+\]?)\s+([\s\S]*)$/i
     );
     if (!m) return null;
 
@@ -511,12 +511,28 @@ export class ExecBlockRule implements IConversionRule {
     return { procRef, params };
   }
 
-  /** Convert [schema].[name] to schema."name" */
+  /**
+   * Convert [schema].[name] to schema."name". A schema written in double quotes keeps them,
+   * because PostgreSQL treats a quoted identifier as case-sensitive and an unquoted one as
+   * lower-case; dropping the quotes would silently change which schema is meant.
+   */
   private convertProcRef(ref: string): string {
-    // [schema].[name]
-    const m = ref.match(/\[?(\w+)\]?\s*\.\s*\[?(\w+)\]?/);
+    const m = ref.match(/(?:\[(\w+)\]|"(\w+)"|(\w+))\s*\.\s*\[?(\w+)\]?/);
     if (!m) return ref;
-    return `${m[1]}."${m[2]}"`;
+    const schema = m[2] !== undefined ? `"${m[2]}"` : (m[1] ?? m[3]);
+    return `${schema}."${m[4]}"`;
+  }
+
+  /**
+   * The text to place inside `n.nspname = '...'` for a schema reference as it will appear in
+   * the emitted SQL. PostgreSQL folds an unquoted schema to lower case, so the catalogue holds
+   * `__mj_bizappssales` for `__mj_BizAppsSales."spX"`; a quoted schema is stored exactly as
+   * written and must not be lower-cased.
+   */
+  private schemaCatalogueName(schemaRef: string): string {
+    const quoted = schemaRef.match(/^"(.*)"$/);
+    const name = quoted ? quoted[1].replace(/""/g, '"') : schemaRef.toLowerCase();
+    return name.replace(/'/g, "''");
   }
 
   /** Parse @Param = @Var, @Param2 = @Var2 parameter list */
@@ -806,9 +822,9 @@ export class ExecBlockRule implements IConversionRule {
       // branch is ever planned: PL/pgSQL plans a statement on first execution, not when the
       // DO block is compiled, so the untaken branch's call need not resolve.
       const procName = exec.procRef.replace(/^.*\./, '').replace(/"/g, '');
-      const schemaRef = exec.procRef.includes('.')
-        ? exec.procRef.replace(/\.[^.]*$/, '').replace(/"/g, '')
-        : context.Schema;
+      const schemaRef = this.schemaCatalogueName(
+        exec.procRef.includes('.') ? exec.procRef.replace(/\.[^.]*$/, '') : context.Schema,
+      );
       out.push(`${indent}IF EXISTS (`);
       out.push(`${indent}  SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace`);
       out.push(`${indent}   WHERE n.nspname = '${schemaRef}' AND p.proname = '${procName}'`);
