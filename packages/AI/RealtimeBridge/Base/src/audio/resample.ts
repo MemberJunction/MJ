@@ -19,6 +19,8 @@
  * @see {@link muLawToPcm16} — the companion G.711 codec.
  */
 
+import { IS_LITTLE_ENDIAN } from '@memberjunction/global';
+
 /**
  * Resamples a block of linear PCM16 samples from `fromRate` to `toRate` using linear interpolation.
  *
@@ -86,8 +88,6 @@ function assertPositiveRate(rate: number, label: string): void {
         throw new Error(`resamplePcm16: ${label} must be a positive finite number, got ${rate}`);
     }
 }
-
-const IS_LITTLE_ENDIAN = new Uint8Array(new Uint16Array([0x0102]).buffer)[0] === 0x02;
 
 /**
  * `ArrayBuffer` wrapper of {@link resamplePcm16}: little-endian PCM16 in → little-endian PCM16 out,

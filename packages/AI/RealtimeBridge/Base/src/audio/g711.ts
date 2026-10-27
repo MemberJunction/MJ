@@ -16,6 +16,8 @@
  * @see {@link ITelephonyCallSdk} — `sendAudioFrame(pcm: ArrayBuffer)` / `onAudioFrame` speak PCM16.
  */
 
+import { IS_LITTLE_ENDIAN } from '@memberjunction/global';
+
 /** The μ-law bias added before encoding (G.711: `0x84` = 132), removed on decode. */
 const MU_LAW_BIAS = 0x84;
 
@@ -98,9 +100,6 @@ const MU_LAW_DECODE_TABLE: Int16Array = (() => {
     }
     return table;
 })();
-
-/** Whether the host CPU uses little-endian byte order (true on x86_64 and ARM64). */
-const IS_LITTLE_ENDIAN = new Uint8Array(new Uint16Array([0x0102]).buffer)[0] === 0x02;
 
 /**
  * Decodes a buffer of G.711 μ-law bytes to linear PCM16 samples.

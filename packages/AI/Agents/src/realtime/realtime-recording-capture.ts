@@ -9,6 +9,8 @@
  * @module @memberjunction/ai-agents/realtime/realtime-recording-capture
  */
 
+import { IS_LITTLE_ENDIAN } from '@memberjunction/global';
+
 /** Media kind tag stored on a realtime recording session. */
 export type RealtimeRecordingMedia = 'Audio' | 'AudioVideo';
 
@@ -43,8 +45,6 @@ const PCM16_MAX = 32767;
 const WAV_HEADER_BYTES = 44;
 /** Default waveform resolution (bucket count) produced by {@link RealtimeRecordingController.GetPeaks}. */
 const DEFAULT_PEAK_BUCKETS = 600;
-/** Whether the host CPU uses little-endian byte order (true on x86_64 and ARM64). */
-const IS_LITTLE_ENDIAN = new Uint8Array(new Uint16Array([0x0102]).buffer)[0] === 0x02;
 
 /**
  * Accumulates realtime PCM audio frames from both the model (outbound) and the

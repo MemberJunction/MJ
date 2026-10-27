@@ -20,14 +20,13 @@
  * @module @memberjunction/ai-bridge-base
  */
 
+import { IS_LITTLE_ENDIAN } from '@memberjunction/global';
+
 /** Low-pass cutoff as a fraction of the TARGET rate: 0.425 × 8000 Hz = 3400 Hz, the telephony band edge. */
 export const CUTOFF_FRACTION_OF_TARGET_RATE = 0.425;
 
 /** Odd FIR length for the anti-alias filter. Long enough to be ~50 dB down past the target Nyquist at 24 kHz. */
 const FILTER_TAPS = 65;
-
-/** Whether the host CPU uses little-endian byte order (true on x86_64 and ARM64). */
-const IS_LITTLE_ENDIAN = new Uint8Array(new Uint16Array([0x0102]).buffer)[0] === 0x02;
 
 /** Builds a unity-DC-gain Hamming-windowed sinc low-pass of {@link FILTER_TAPS} taps. */
 function BuildLowPassTaps(cutoffHz: number, sampleRate: number): Float64Array {
