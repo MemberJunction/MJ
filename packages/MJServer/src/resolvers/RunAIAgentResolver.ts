@@ -15,6 +15,7 @@ import { StatusUpdateOwnerID } from '../generic/PushStatusResolver.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
 import { ResolveWidgetGuestRunContext, ElevateUserPayload } from '../realtimeWidget/widgetGuestElevation.js';
+import { AuthorizeConversationTurn } from '../realtimeSessions/sessionAccess.js';
 import { IsTrustedAgentRunCaller } from './agent-run-data-guard.js';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { GetAttachmentService } from '@memberjunction/aiengine';
@@ -1188,8 +1189,9 @@ export class RunAIAgentResolver extends ResolverBase {
         // AUTHORITATIVELY from the widget instance (never the client-supplied arg) — so a guest needs
         // no grants to WRITE the AI run entities and cannot run an arbitrary agent under elevation.
         // Conversation OWNERSHIP is still enforced under the guest principal below: the guest loads its
-        // own ConversationDetail through the Widget Guest RLS filters, so a detail id from another
-        // session resolves to "not found" before any elevated work happens. The reply row is written
+        // own ConversationDetail through its role's RLS filters, and startConversationTurn then checks
+        // the conversation's scope stamp against the visitor (MJ#6032), so a detail id from another
+        // visitor's session is refused before any elevated work happens. The reply row is written
         // as the guest too, never as the elevated principal, which owns no guest's conversation.
         const widgetElevation = await ResolveWidgetGuestRunContext(userPayload, p);
         const effectiveAgentId = widgetElevation ? widgetElevation.PinnedAgentId : agentId;
@@ -1322,7 +1324,8 @@ export class RunAIAgentResolver extends ResolverBase {
 
     /**
      * Everything a conversation turn needs before its agent runs: the user's message (read as the caller, so a
-     * message they can't see is "not found"), the conversation history, the optional announcement line, and the reply
+     * message they can't see is "not found", and for an anonymous visitor also checked against the conversation's
+     * scope stamp), the conversation history, the optional announcement line, and the reply
      * row, created last so the history never holds the empty reply. Every row is written as `user`, the person asking,
      * and marked as server-authored by {@link AgentRunner.CreateAgentReplyDetail}.
      */
@@ -1335,6 +1338,15 @@ export class RunAIAgentResolver extends ResolverBase {
         // branch, which are threaded through the call chain rather than reloaded downstream.
         const placement = await this.loadPlacementOf(p, user, request.UserMessageId);
         const conversationId = placement.ConversationId;
+        // Loading the message as the caller is the whole ownership check for a named user. It is not for an
+        // anonymous visitor: every visitor is the one shared Anonymous user, so under a guest role whose row
+        // filters key on UserID another visitor's message loads fine (MJ#6032). The conversation's scope stamp
+        // decides instead, exactly as it does for the realtime gates — and before any row is written.
+        const access = await AuthorizeConversationTurn(conversationId, user, p);
+        if (!access.Allowed) {
+            LogError(`RunAIAgentFromConversationDetail: anonymous visitor ${user.AnonymousVisitorID ?? '(no visitor id)'} refused a turn in conversation ${conversationId} (${access.Reason})`);
+            throw new Error('Not authorized: you do not own this conversation');
+        }
         const branchId = request.ReplyBranchId
             ? await this.validateReplyBranch(p, user, conversationId, placement, request.ReplyBranchId)
             : placement.BranchId;

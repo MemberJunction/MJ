@@ -21,7 +21,8 @@ vi.mock('@elevenlabs/elevenlabs-js', () => {
   };
 });
 
-vi.mock('@memberjunction/global', () => ({
+vi.mock('@memberjunction/global', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@memberjunction/global')>()),
   RegisterClass: () => (_target: unknown) => {},
 }));
 
