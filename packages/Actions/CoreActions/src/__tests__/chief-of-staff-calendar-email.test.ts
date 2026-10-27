@@ -44,16 +44,7 @@ vi.mock('@memberjunction/aiengine', () => ({
                     Name: 'Chief of Staff',
                 },
             ],
-        },
-    },
-}));
-
-vi.mock('@memberjunction/ai-engine-base', () => ({
-    AIEngineBase: {
-        Instance: {
-            EnsureLoaded: vi.fn().mockResolvedValue(undefined),
-            GetAgentRequestTypeByName: (name: string) =>
-                name === 'Approval' ? { ID: 'approval-type-id', Name: 'Approval' } : undefined,
+            ResolveAgentRequestTypeID: async (name: string) => (name === 'Approval' ? 'approval-type-id' : null),
         },
     },
 }));

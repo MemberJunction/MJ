@@ -5,7 +5,6 @@ import { LogError, Metadata } from '@memberjunction/core';
 import { MJAIAgentRequestEntity } from '@memberjunction/core-entities';
 import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
-import { APPROVAL_REQUEST_TYPE_NAME, ResolveAgentRequestTypeId } from './agent-request-type-resolver';
 
 
 /**
@@ -142,12 +141,12 @@ export class SendInterAgentRequestAction extends BaseAction {
                 ...(dueByISO ? { dueByISO } : {}),
             };
 
-            const approvalTypeId = await ResolveAgentRequestTypeId(APPROVAL_REQUEST_TYPE_NAME, contextUser);
+            const approvalTypeId = await AIEngine.Instance.ResolveAgentRequestTypeID('Approval', contextUser);
             if (!approvalTypeId) {
                 return {
                     Success: false,
                     ResultCode: 'REQUEST_TYPE_NOT_FOUND',
-                    Message: `Agent request type "${APPROVAL_REQUEST_TYPE_NAME}" is not in metadata; cannot create the coordination request.`,
+                    Message: 'Agent request type "Approval" is not in metadata; cannot create the coordination request.',
                     Params: params.Params,
                 };
             }

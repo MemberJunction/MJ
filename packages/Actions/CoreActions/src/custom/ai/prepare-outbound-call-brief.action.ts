@@ -5,7 +5,6 @@ import { LogError, Metadata } from '@memberjunction/core';
 import { MJAIAgentRequestEntity } from '@memberjunction/core-entities';
 import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
-import { APPROVAL_REQUEST_TYPE_NAME, ResolveAgentRequestTypeId } from './agent-request-type-resolver';
 
 /**
  * Locked outbound telephony brief enforced before any Chief of Staff voice session or outbound call.
@@ -141,12 +140,12 @@ export class PrepareOutboundCallBriefAction extends BaseAction {
             this.setOutputParam(params, 'DisclosureStatement', mandatoryUpfrontDisclosure);
 
             if (needsApproval) {
-                const approvalTypeId = await ResolveAgentRequestTypeId(APPROVAL_REQUEST_TYPE_NAME, contextUser);
+                const approvalTypeId = await AIEngine.Instance.ResolveAgentRequestTypeID('Approval', contextUser);
                 if (!approvalTypeId) {
                     return {
                         Success: false,
                         ResultCode: 'REQUEST_TYPE_NOT_FOUND',
-                        Message: `Agent request type "${APPROVAL_REQUEST_TYPE_NAME}" is not in metadata; the call brief was prepared but cannot be queued for approval.`,
+                        Message: 'Agent request type "Approval" is not in metadata; the call brief was prepared but cannot be queued for approval.',
                         Params: params.Params,
                     };
                 }

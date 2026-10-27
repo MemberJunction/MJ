@@ -54,6 +54,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => ({
     },
 }));
 
+const resolveRequestTypeMock = vi.fn(async (name: string) => (name === 'Approval' ? 'approval-type-id' : null));
 vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: {
         Instance: {
@@ -62,18 +63,7 @@ vi.mock('@memberjunction/aiengine', () => ({
                 return agentsList;
             },
             CanUserRunAgent: (...args: unknown[]) => canUserRunAgentMock(...args),
-        },
-    },
-}));
-
-const requestTypeByNameMock = vi.fn((name: string) =>
-    name === 'Approval' ? { ID: 'approval-type-id', Name: 'Approval' } : undefined
-);
-vi.mock('@memberjunction/ai-engine-base', () => ({
-    AIEngineBase: {
-        Instance: {
-            EnsureLoaded: vi.fn().mockResolvedValue(undefined),
-            GetAgentRequestTypeByName: (name: string) => requestTypeByNameMock(name),
+            ResolveAgentRequestTypeID: (name: string, user: unknown) => resolveRequestTypeMock(name, user),
         },
     },
 }));
@@ -380,7 +370,7 @@ describe('Chief of Staff Actions Suite', () => {
             expect(requestStub.RequestForUserID).toBe('user-target');
             // The Approval request type is resolved by name through the AI engine cache, never hardcoded.
             expect(requestStub.RequestTypeID).toBe('approval-type-id');
-            expect(requestTypeByNameMock).toHaveBeenCalledWith('Approval');
+            expect(resolveRequestTypeMock).toHaveBeenCalledWith('Approval', params.ContextUser);
             expect(params.Params.find((p: ActionParam) => p.Name === 'DeliveryMode')?.Value).toBe('InterAgent');
             expect(params.Params.find((p: ActionParam) => p.Name === 'AgentRequestID')?.Value).toBe('req-555');
         });
@@ -389,7 +379,7 @@ describe('Chief of Staff Actions Suite', () => {
             getPolicyMock
                 .mockResolvedValueOnce({ Status: 'Active', AllowInterAgentCoordination: true, CoordinationMode: 'Coordinator' })
                 .mockResolvedValueOnce({ Status: 'Active', AllowInterAgentCoordination: true, CoordinationMode: 'Coordinator' });
-            requestTypeByNameMock.mockReturnValueOnce(undefined);
+            resolveRequestTypeMock.mockResolvedValueOnce(null);
             const save = vi.fn().mockResolvedValue(true);
             getEntityObjectMock.mockResolvedValue({ ID: 'req-556', Save: save });
 

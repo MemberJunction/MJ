@@ -10,7 +10,6 @@ import {
 } from '@memberjunction/core-entities';
 import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
-import { APPROVAL_REQUEST_TYPE_NAME, ResolveAgentRequestTypeId } from './agent-request-type-resolver';
 import { CommunicationEngine } from '@memberjunction/communication-engine';
 import {
     BaseCommunicationProvider,
@@ -369,9 +368,9 @@ export abstract class BaseUserScopedCommunicationAction extends BaseAction {
         provider?: IMetadataProvider
     ): Promise<string | null> {
         try {
-            const approvalTypeId = await ResolveAgentRequestTypeId(APPROVAL_REQUEST_TYPE_NAME, contextUser);
+            const approvalTypeId = await AIEngine.Instance.ResolveAgentRequestTypeID('Approval', contextUser);
             if (!approvalTypeId) {
-                LogError(`Agent request type "${APPROVAL_REQUEST_TYPE_NAME}" is not in metadata; cannot create an approval request.`);
+                LogError('Agent request type "Approval" is not in metadata; cannot create an approval request.');
                 return null;
             }
             const md = provider ?? new Metadata();
