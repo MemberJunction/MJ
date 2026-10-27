@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs-extra';
 import os from 'os';
 import path from 'path';
-import type { BaseEntity, UserInfo } from '@memberjunction/core';
+import type { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import type { SqlLoggingOptions, SqlLoggingSession } from '@memberjunction/generic-database-provider';
 import type { SyncConfig } from '../config';
@@ -126,7 +126,48 @@ describe('push SQL log redaction', () => {
     expect(fakeProvider.CreateSqlLogger).toHaveBeenCalled();
     expect(capturedOptions?.statementTypes).toBe('mutations');
     expect(service['envSqlLog']).not.toBeNull();
-    expect(capturedOptions?.TransformStatement).toBe(service['envSqlLog']?.Redactor.Transform);
+    expect(service['lookupSqlLog']).not.toBeNull();
+    expect(capturedOptions?.TransformStatement).toBeTypeOf('function');
+  });
+
+  it('runs the env redactor and then the lookup rewriter on one statement', () => {
+    const entity = fakeEntity({ ID: 'w-0001', Token: SECRET, OwnerID: ID_VALUE }, false, {});
+    service['registerEnvSqlFields'](entity, new Map([['Token', new Set(['MJ_SQL_TOKEN'])]]), true);
+    vi.spyOn(syncEngine, 'GetEntityInfo').mockReturnValue({
+      Name: 'MJ: Users',
+      SchemaName: 'dbo',
+      BaseTable: 'User',
+      PrimaryKeys: [{ Name: 'ID' }],
+      FirstPrimaryKey: { Name: 'ID' },
+      ParentEntityFieldNames: new Set<string>(),
+      Fields: [{ Name: 'Email', Type: 'nvarchar', NeedsQuotes: true, IsVirtual: false }],
+    } as unknown as EntityInfo);
+    const owner = { Expression: '@lookup:MJ: Users.Email=a@example.com', EntityName: 'MJ: Users', Criteria: [{ FieldName: 'Email', Value: 'a@example.com' }], EnvSourced: false };
+    service['lookupSqlLog']?.Rewriter.RegisterEntityLookups(entity, new Map([['OwnerID', owner]]));
+
+    const sql = transform([tokenLine('6679d1fd77d5'), `SET @OwnerID_6679d1fd77d5 = '${ID_VALUE}'`].join('\n'));
+
+    expect(sql).toBe([TOKEN_COMMENT, "SET @OwnerID_6679d1fd77d5 = (SELECT [ID] FROM [dbo].[User] WHERE [Email] = N'a@example.com')"].join('\n'));
+  });
+
+  it('passes no schema rules when none are configured, and the sync config rules with the Flyway escape when they are', async () => {
+    expect(capturedOptions?.escapeFlywaySyntax).toBe(capturedOptions?.schemaPlaceholders !== undefined);
+
+    const rules = [{ schema: '__mj_App', placeholder: '${flyway:defaultSchema}' }, { schema: '__mj', placeholder: '${mjSchema}' }];
+    const config = { version: '1.0', sqlLogging: { enabled: true, outputDirectory: './sql', schemaPlaceholders: rules } } as SyncConfig;
+    service['syncConfig'] = config;
+    await service['startSqlLogging'](new SQLLogger(config), {}, dir, {});
+
+    expect(capturedOptions?.schemaPlaceholders).toEqual(rules);
+    expect(capturedOptions?.escapeFlywaySyntax).toBe(true);
+  });
+
+  it('drops the lookup rewriter and its own lookup-create hook when the log closes', () => {
+    expect(syncEngine.BeforeLookupCreateSaveSource).not.toBeNull();
+    service['closeEnvSqlRedactor']();
+
+    expect(service['lookupSqlLog']).toBeNull();
+    expect(syncEngine.BeforeLookupCreateSaveSource).toBeNull();
   });
 
   it('registers a field of an IS-A parent table under the parent level and its hash', () => {

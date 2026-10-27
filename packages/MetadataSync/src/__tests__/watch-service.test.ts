@@ -599,6 +599,44 @@ describe('WatchService — save path', () => {
     expect(warnings.filter((w) => w.includes('was not found'))).toEqual([]);
   });
 
+  it('writes a lookup-sourced field into the SQL log as a subquery, and closes the rewriter when it stops', async () => {
+    const result = await service.Watch({}, callbacks());
+    expect(syncEngine.BeforeLookupCreateSaveSource).toBeTypeOf('function');
+    vi.spyOn(syncEngine, 'ResolveLookup').mockResolvedValue('w-1');
+    vi.spyOn(syncEngine, 'GetEntityInfo').mockReturnValue({
+      Name: 'MJ: Widgets',
+      SchemaName: '__mj',
+      BaseTable: 'Widget',
+      PrimaryKeys: [{ Name: 'ID' }],
+      FirstPrimaryKey: { Name: 'ID' },
+      ParentEntityFieldNames: new Set<string>(),
+      Fields: [{ Name: 'Name', Type: 'nvarchar', NeedsQuotes: true, IsVirtual: false }],
+    } as unknown as EntityInfo);
+    const existing = new WatchEntity().Load({ ID: 'w-1', Name: 'Old' });
+    vi.spyOn(syncEngine, 'loadEntity').mockResolvedValue(existing as unknown as BaseEntity);
+
+    await sync({ primaryKey: { ID: 'w-1' }, fields: { Code: '@lookup:MJ: Widgets.Name=Old' } });
+
+    const hash = GenericDatabaseProvider.SaveCallVariableHash('__mj', 'Widget', ['w-1']);
+    expect(sqlLog.options?.TransformStatement?.(`SET @Code_${hash} = 'w-1'`)).toBe(
+      `SET @Code_${hash} = (SELECT [ID] FROM [__mj].[Widget] WHERE [Name] = N'Old')`
+    );
+    await result.stop();
+    expect(service['lookupSqlLog']).toBeNull();
+    expect(syncEngine.BeforeLookupCreateSaveSource).toBeNull();
+  });
+
+  it('passes the .mj-sync.json schema placeholder rules, with the Flyway escape, to the watch log', async () => {
+    const rules = [{ schema: '__mj', placeholder: '${mjSchema}' }];
+    await fs.writeJson(path.join(root, '.mj-sync.json'), { version: '1.0.0', sqlLogging: { enabled: true, schemaPlaceholders: rules } });
+
+    const result = await service.Watch({}, callbacks());
+
+    expect(sqlLog.options?.schemaPlaceholders).toEqual(rules);
+    expect(sqlLog.options?.escapeFlywaySyntax).toBe(true);
+    await result.stop();
+  });
+
   it('closes the SQL log and the lookup-create hook when the start fails', async () => {
     const failingCallbacks = {
       onLog: (m: string) => {

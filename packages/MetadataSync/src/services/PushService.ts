@@ -2,7 +2,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import fastGlob from 'fast-glob';
 import chalk from 'chalk';
-import { BaseEntity, Metadata, UserInfo, EntitySaveOptions, IsVerboseLoggingEnabled, DatabaseProviderBase, IEntityDataProvider, IMetadataProvider, RelatedRecordLoadMode, RelatedRecordRemovalMode } from '@memberjunction/core';
+import { BaseEntity, Metadata, UserInfo, EntitySaveOptions, IsVerboseLoggingEnabled, DatabaseProviderBase, IEntityDataProvider, IMetadataProvider, IRunViewProvider, RelatedRecordLoadMode, RelatedRecordRemovalMode } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { IsStringSQLType } from '@memberjunction/sql-dialect';
 import { SyncEngine, RecordData, DeferrableLookupError, SyncResolutionCollector, BatchContext } from '../lib/sync-engine';
@@ -35,6 +35,9 @@ import { EnvVariableNotSetError, OptionalEnvMissingError, OptionalEnvSkipMessage
 import { RecordStartLine } from '../lib/json-record-lines';
 import { EnvDisplayMask, EnvSourceLabel, ENV_HIDDEN_VALUE, MaskedError } from '../lib/env-display';
 import { EnvSqlLog, AddSkippedOptionalEnvField } from '../lib/env-sql-redactor';
+import { ComposeStatementTransforms, LookupSqlLog } from '../lib/lookup-sql';
+import { ResolveSchemaPlaceholders } from '../lib/schema-placeholders';
+import { DatabaseNaturalKeyReader, NaturalKeyConflictMessage, NaturalKeyPreflight, UniqueKeyColumns } from '../lib/natural-key-preflight';
 import { CreatedRecordKeyFields, IsKeyReference, KeyFieldValue } from '../lib/created-record-key';
 import { EntityFieldName, RecordFieldNames } from '../lib/entity-field-names';
 import { METADATA_KEYWORDS } from '../constants/metadata-keywords';
@@ -283,6 +286,10 @@ export class PushService {
   private sqlLogFilePath: string | undefined;
   /** The open SQL log's redactor and lookup-create hook; null when no log is open. */
   private envSqlLog: EnvSqlLog | null = null;
+  /** The open SQL log's `@lookup` → subquery rewriter and lookup-create hook; null when no log is open. */
+  private lookupSqlLog: LookupSqlLog | null = null;
+  /** Unique keys of each entity's table read for the create pre-flight (#4400), by entity name. */
+  private uniqueKeyCache = new Map<string, Promise<UniqueKeyColumns[]>>();
   /** Composition child fields waiting for their owner's save, by the owner record's resolution collector. */
   private pendingEnvSqlChildFields = new WeakMap<SyncResolutionCollector, PendingEnvSqlChildField[]>();
   /** Non-atomic mode: creates and updates that were committed outside the push transaction. */
@@ -623,9 +630,15 @@ export class PushService {
         // Create the SQL logging session
         this.sqlLogFilePath = filepath;
         this.envSqlLog = new EnvSqlLog(this.syncEngine);
+        this.lookupSqlLog = new LookupSqlLog(this.syncEngine);
+        const schemaPlaceholders = ResolveSchemaPlaceholders(this.syncConfig, configManager.GetMJConfig());
         sqlLoggingSession = await provider.CreateSqlLogger(filepath, {
-          TransformStatement: this.envSqlLog.Redactor.Transform,
+          // Env values are left out first, then lookup IDs become subqueries; the logger's schema
+          // placeholder rewrite runs after both, so the subqueries' schema names become placeholders.
+          TransformStatement: ComposeStatementTransforms(this.envSqlLog.Redactor.Transform, this.lookupSqlLog.Rewriter.Transform),
           formatAsMigration: this.syncConfig?.sqlLogging?.formatAsMigration || false,
+          schemaPlaceholders,
+          escapeFlywaySyntax: schemaPlaceholders !== undefined,
           description: 'MetadataSync push operation',
           statementTypes: "mutations",
           prettyPrint: true,
@@ -715,6 +728,8 @@ export class PushService {
   private closeEnvSqlRedactor(): void {
     this.envSqlLog?.Close();
     this.envSqlLog = null;
+    this.lookupSqlLog?.Close();
+    this.lookupSqlLog = null;
   }
 
   /**
@@ -1146,13 +1161,14 @@ export class PushService {
         const unprocessedRecords = Array.isArray(rawFileData) ? rawFileData : [rawFileData];
         const isArray = Array.isArray(rawFileData);
 
-        // Compute checksum on the RESOLVED content (after @include preprocessing)
-        // so that changes to included files are properly detected.
+        // Compute checksum on the RESOLVED content (after @include preprocessing), with the content
+        // of each @file: target folded in, so a change to an included or referenced file is
+        // detected (#4190). @file: paths resolve against the entity folder, as push resolves them.
         let cachedChecksum: string | undefined;
 
         if (options.incremental && this.stateManager && syncRootDir) {
           const relativePath = path.relative(syncRootDir, filePath);
-          cachedChecksum = this.syncEngine.calculateChecksum(fileData);
+          cachedChecksum = await this.syncEngine.CalculateChecksumWithFileContent(fileData, entityDir);
           if (!this.stateManager.hasFileChanged(relativePath, cachedChecksum)) {
             const recordCount = Array.isArray(rawFileData) ? rawFileData.length : 1;
             if (options.verbose) {
@@ -1267,7 +1283,7 @@ export class PushService {
         // Uses resolved content (after @include) so included-file changes are tracked.
         if (this.stateManager && syncRootDir) {
           const relativePath = path.relative(syncRootDir, filePath);
-          const checksum = cachedChecksum ?? this.syncEngine.calculateChecksum(fileData);
+          const checksum = cachedChecksum ?? (await this.syncEngine.CalculateChecksumWithFileContent(fileData, entityDir));
           this.pendingChecksums.set(relativePath, checksum);
         }
       } catch (fileError) {
@@ -1575,7 +1591,7 @@ export class PushService {
     // Check if record exists
     // Process primaryKey values through processFieldValue to resolve @lookup, @parent, etc.
     // Create a resolution collector to track @lookup and @parent resolutions
-    const resolutionCollector: SyncResolutionCollector = { notes: [], fieldPrefix: 'primaryKey', EnvFields: new Map() };
+    const resolutionCollector: SyncResolutionCollector = { notes: [], fieldPrefix: 'primaryKey', EnvFields: new Map(), LookupSources: new Map() };
     // Reads the same EnvFields map, so fields recorded later are masked too
     const envMask = new EnvDisplayMask(resolutionCollector.EnvFields);
 
@@ -1919,6 +1935,12 @@ export class PushService {
       };
     }
 
+    // A literal key that missed can still collide on a unique key with a row this database made
+    // under another ID: report that row instead of a constraint violation (#4400).
+    if (isNew && resolvedPrimaryKey && Object.keys(resolvedPrimaryKey).length > 0) {
+      await this.checkNaturalKey(entity, resolvedPrimaryKey, envMask, recordProvider);
+    }
+
     // A dry run stops here, after the same change detection a real push uses, so an
     // in-sync record reports unchanged above rather than "would update" (#4529).
     if (options.dryRun) {
@@ -1950,6 +1972,8 @@ export class PushService {
     
     this.registerEnvSqlFields(entity, resolutionCollector.EnvFields, isNew || alwaysPush);
     this.registerPendingEnvSqlChildFields(resolutionCollector);
+    // Key and foreign-key values from @lookup are logged as subqueries on the natural key (#5626)
+    this.lookupSqlLog?.Rewriter.RegisterEntityLookups(entity, resolutionCollector.LookupSources);
 
     // Save the record with detailed error logging
     const keyBeforeSave = new Map(entity.PrimaryKeys.map((pk) => [pk.Name, entity.Get(pk.Name)]));
@@ -2365,7 +2389,9 @@ export class PushService {
     const keyCollector: SyncResolutionCollector = { notes: [], fieldPrefix: 'primaryKey', EnvFields: new Map() };
     const resolvedKey = await this.resolveEnvKeyValues(record.primaryKey, entityDir, keyCollector);
     const keyMask = new EnvDisplayMask(keyCollector.EnvFields);
-    const existingEntity = await this.syncEngine.loadEntity(entityName, resolvedKey);
+    // Read through the push transaction's provider, not the preload cache: a row an earlier delete's
+    // cascade removed in this push is still in the cache until commit (#4935).
+    const existingEntity = await this.syncEngine.LoadEntityFromDatabase(entityName, resolvedKey, this.transactionProvider());
 
     // Check if the deletion has already been processed
     if (record.deleteRecord?.deletedAt) {
@@ -2386,22 +2412,7 @@ export class PushService {
     }
     
     if (!existingEntity) {
-      const pkDisplay = Object.entries(record.primaryKey)
-        .map(([key, value]) => `${key}=${this.fileKeyText(value)}`)
-        .join(', ');
-      
-      const warning = `Record not found for deletion: ${entityName} with primaryKey {${pkDisplay}}`;
-      this.warnings.push(warning);
-      callbacks?.onWarn?.(warning);
-      
-      // Mark as deleted anyway since it doesn't exist
-      if (!record.deleteRecord) {
-        record.deleteRecord = { delete: true };
-      }
-      record.deleteRecord.deletedAt = undefined; // Indicate it was not found
-      record.deleteRecord.notFound = true;
-      
-      return { status: 'skipped', isDuplicate: false };
+      return this.skipMissingDelete(flattenedRecord, 'Record not found for deletion', callbacks);
     }
     
     // Key values and free error text can hold a value of any variable push resolved
@@ -2458,6 +2469,10 @@ export class PushService {
       const deleteResult = await existingEntity.Delete();
       
       if (!deleteResult) {
+        // A row already gone (removed by an earlier delete's cascade) is the intended end state
+        if (!(await this.rowStillExists(entityName, resolvedKey))) {
+          return this.skipMissingDelete(flattenedRecord, 'Record was already gone when it was deleted (an earlier delete in this push may have cascaded to it)', callbacks);
+        }
         // Check the LatestResult for error details
         const errorMessage = errorTextMask.MaskText(existingEntity.LatestResult?.CompleteMessage || 'Unknown error');
         const errorDetails = errorTextMask.MaskText(existingEntity.LatestResult?.Errors?.map(err => 
@@ -2506,6 +2521,9 @@ export class PushService {
       return { status: 'deleted', isDuplicate: false };
       
     } catch (deleteError: any) {
+      if (!(await this.rowStillExists(entityName, resolvedKey))) {
+        return this.skipMissingDelete(flattenedRecord, 'Record was already gone when it was deleted (an earlier delete in this push may have cascaded to it)', callbacks);
+      }
       console.error(`\n❌ DELETE EXCEPTION for ${entityName}`);
       console.error(`   Primary Key: {${primaryKeyDisplay.join(', ')}}`);
       console.error(`   Error: ${errorTextMask.MaskText(String(deleteError.message || deleteError))}`);
@@ -2522,6 +2540,75 @@ export class PushService {
     }
   }
   
+  /**
+   * A delete whose row is not in the database: a warning, the record marked not found, and a skip.
+   * The database is already in the state the delete asks for.
+   */
+  private skipMissingDelete(
+    flattenedRecord: FlattenedRecord,
+    reason: string,
+    callbacks?: PushCallbacks
+  ): { status: 'skipped'; isDuplicate: boolean } {
+    const { record, entityName } = flattenedRecord;
+    const pkDisplay = Object.entries(record.primaryKey ?? {})
+      .map(([key, value]) => `${key}=${this.fileKeyText(value)}`)
+      .join(', ');
+    const warning = `${reason}: ${entityName} with primaryKey {${pkDisplay}}`;
+    this.warnings.push(warning);
+    callbacks?.onWarn?.(warning);
+
+    // Mark as deleted anyway since it doesn't exist
+    if (!record.deleteRecord) {
+      record.deleteRecord = { delete: true };
+    }
+    record.deleteRecord.deletedAt = undefined; // Indicate it was not found
+    record.deleteRecord.notFound = true;
+    return { status: 'skipped', isDuplicate: false };
+  }
+
+  /**
+   * True when the row is still in the database, read through the push transaction. A failed read
+   * counts as present, so the original delete error is reported.
+   */
+  private async rowStillExists(entityName: string, primaryKey: Record<string, unknown>): Promise<boolean> {
+    try {
+      return (await this.syncEngine.LoadEntityFromDatabase(entityName, primaryKey, this.transactionProvider())) !== null;
+    } catch {
+      return true;
+    }
+  }
+
+  /**
+   * Throws when creating `entity` with the key the record declares would collide on a unique key
+   * with an existing row, naming that row's key. See natural-key-preflight.ts.
+   */
+  private async checkNaturalKey(
+    entity: BaseEntity,
+    resolvedPrimaryKey: Record<string, unknown>,
+    envMask: EnvDisplayMask,
+    recordProvider?: IMetadataProvider
+  ): Promise<void> {
+    const host = this.hostProvider();
+    if (typeof host?.ExecuteSQL !== 'function') {
+      return; // no SQL provider, so no catalog to read unique keys from
+    }
+    // Rows are found on the record's provider, so the lookup sees what its transaction wrote
+    const runViewProvider = (recordProvider ?? this.transactionProvider()) as unknown as IRunViewProvider;
+    const reader = new DatabaseNaturalKeyReader(host, this.contextUser, runViewProvider, this.uniqueKeyCache);
+    const conflict = await new NaturalKeyPreflight(reader).Check(entity);
+    if (conflict) {
+      const recordKey = Object.entries(resolvedPrimaryKey)
+        .map(([field, value]) => `${field}=${envMask.NewValue(field, String(value))}`)
+        .join(', ');
+      throw new Error(NaturalKeyConflictMessage(entity.EntityInfo.Name, recordKey, conflict));
+    }
+  }
+
+  /** The provider that owns the push transaction, as the metadata provider a read joins it through. */
+  private transactionProvider(): IMetadataProvider {
+    return this.hostProvider() as unknown as IMetadataProvider;
+  }
+
   /**
    * Prompt user for confirmation before proceeding with push operation
    * This happens after deletion audit but before any database operations
@@ -3257,6 +3344,9 @@ export class PushService {
   /** Adds the names-only SQL log warnings of this run. */
   private addEnvSqlWarnings(sqlLogPath: string, callbacks?: PushCallbacks): void {
     for (const warning of this.envSqlLog?.Redactor.Warnings(sqlLogPath) ?? []) {
+      this.addWarning(warning, callbacks);
+    }
+    for (const warning of this.lookupSqlLog?.Rewriter.Warnings() ?? []) {
       this.addWarning(warning, callbacks);
     }
   }

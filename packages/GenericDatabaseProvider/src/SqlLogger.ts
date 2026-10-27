@@ -13,7 +13,7 @@ import * as path from 'path';
 import { format as formatSql } from 'sql-formatter';
 import { ensureRegExps } from '@memberjunction/global';
 import { SQLDialect, SQLServerDialect } from '@memberjunction/sql-dialect';
-import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
+import { SqlLoggingOptions, SqlLoggingSession, SqlSchemaPlaceholder } from './types.js';
 
 /** Line written in place of a statement whose `TransformStatement` threw. */
 export const TRANSFORM_FAILED_LINE = '-- Statement not logged: TransformStatement failed';
@@ -27,6 +27,12 @@ interface StatementParts {
   simpleSQLFallback?: string;
   description?: string;
   paramComment?: string;
+}
+
+/** Compiled `schemaPlaceholders` rules: one regex over every schema and a schema -> placeholder map. */
+interface SchemaPlaceholderMatcher {
+  regex: RegExp;
+  placeholderBySchema: Map<string, string>;
 }
 
 /**
@@ -48,6 +54,8 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
   private _disposed: boolean = false;
   private _compiledPatterns: RegExp[] | undefined;
   private _dialect: SQLDialect;
+  /** Compiled `schemaPlaceholders`; null when the session has no usable rules. */
+  private _schemaPlaceholderMatcher: SchemaPlaceholderMatcher | null;
 
   /**
    * @param dialect - The SQL dialect to use for platform-specific SQL emission
@@ -66,6 +74,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     if (options.filterPatterns && options.filterPatterns.length > 0) {
       this._compiledPatterns = ensureRegExps(options.filterPatterns);
     }
+    this._schemaPlaceholderMatcher = SqlLoggingSessionImpl._compileSchemaPlaceholders(options.schemaPlaceholders);
   }
 
   /**
@@ -201,28 +210,16 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
       }
     }
 
-    // Replace schema names with Flyway placeholders if migration format
-    if (this.options.formatAsMigration) {
-      // Step 1: Escape ${...} patterns within SQL string literals to prevent Flyway from treating them as placeholders
+    // Escape ${...} inside string literals so Flyway does not read captured data as a placeholder.
+    // Runs after TransformStatement, so SQL a transform adds is escaped too.
+    if (this.options.formatAsMigration || this.options.escapeFlywaySyntax) {
       processedQuery = this._escapeFlywaySyntaxInStrings(processedQuery);
+    }
 
-      // Step 2: Replace schema names with Flyway placeholders
-      const schemaName = this.options.defaultSchemaName;
-      if (schemaName && schemaName.length > 0) {
-        // Create a regex that matches the schema name with optional brackets.
-        // Capture groups preserve whether the original used brackets or not,
-        // so bare `schema.` stays bare and `[schema].` keeps brackets.
-        const schemaRegex = new RegExp(`(\\[?)${schemaName}(\\]?)\\.`, 'g');
-        processedQuery = processedQuery.replace(schemaRegex, (_match, openBracket: string, closeBracket: string) => {
-          return `${openBracket}\${flyway:defaultSchema}${closeBracket}.`;
-        });
-      }
-      else {
-        // no default schema name provided
-        if (verbose) {
-          console.warn(`Session ${this.id}: No default schema name provided for Flyway migration format, using [\${flyway:defaultSchema}] placeholder`);
-        }
-      }
+    // Replace schema names with Flyway placeholders if migration format. Runs after
+    // TransformStatement, so a transform emits real schema names and they are rewritten here.
+    if (this.options.formatAsMigration) {
+      processedQuery = this._applySchemaPlaceholders(processedQuery, verbose);
     }
 
     // Apply pretty printing if enabled
@@ -562,6 +559,72 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
       names.push(match[1].toLowerCase());
     }
     return names;
+  }
+
+  /**
+   * Rewrites schema names to Flyway placeholders. Uses `schemaPlaceholders` when the session has
+   * any usable rules; otherwise keeps the single-schema `defaultSchemaName` ->
+   * `${flyway:defaultSchema}` rewrite exactly as it was.
+   */
+  private _applySchemaPlaceholders(sql: string, verbose: boolean): string {
+    const matcher = this._schemaPlaceholderMatcher;
+    if (matcher) {
+      matcher.regex.lastIndex = 0;
+      // The brackets are captured so `schema.` stays bare and `[schema].` keeps its brackets.
+      return sql.replace(matcher.regex, (_match, openBracket: string, schema: string, closeBracket: string) => {
+        return `${openBracket}${matcher.placeholderBySchema.get(schema)}${closeBracket}.`;
+      });
+    }
+
+    const schemaName = this.options.defaultSchemaName;
+    if (schemaName && schemaName.length > 0) {
+      // Create a regex that matches the schema name with optional brackets.
+      // Capture groups preserve whether the original used brackets or not,
+      // so bare `schema.` stays bare and `[schema].` keeps brackets.
+      const schemaRegex = new RegExp(`(\\[?)${schemaName}(\\]?)\\.`, 'g');
+      return sql.replace(schemaRegex, (_match, openBracket: string, closeBracket: string) => {
+        return `${openBracket}\${flyway:defaultSchema}${closeBracket}.`;
+      });
+    }
+
+    if (verbose) {
+      console.warn(`Session ${this.id}: No default schema name provided for Flyway migration format, using [\${flyway:defaultSchema}] placeholder`);
+    }
+    return sql;
+  }
+
+  /**
+   * Compiles `schemaPlaceholders` into one regex, alternation ordered longest schema first. A
+   * single pass means a short rule (`__mj`) never matches the prefix of a longer schema
+   * (`__mj_BizAppsAccounting`) whatever the declared order, and an emitted placeholder is never
+   * matched again. A match needs a following `.` (after an optional `]`) and no preceding word
+   * character, so a bare schema name in text data is left alone. Returns null when no rule has
+   * both a schema and a placeholder.
+   */
+  private static _compileSchemaPlaceholders(rules: SqlSchemaPlaceholder[] | undefined): SchemaPlaceholderMatcher | null {
+    const placeholderBySchema = new Map<string, string>();
+    for (const rule of rules ?? []) {
+      // The first rule for a schema wins.
+      if (rule?.schema && rule.placeholder && !placeholderBySchema.has(rule.schema)) {
+        placeholderBySchema.set(rule.schema, rule.placeholder);
+      }
+    }
+    if (placeholderBySchema.size === 0) {
+      return null;
+    }
+    const alternation = [...placeholderBySchema.keys()]
+      .sort((a, b) => b.length - a.length)
+      .map((schema) => SqlLoggingSessionImpl._escapeRegex(schema))
+      .join('|');
+    return {
+      regex: new RegExp(`(?<![\\w$@#])(\\[?)(${alternation})(\\]?)\\.`, 'g'),
+      placeholderBySchema,
+    };
+  }
+
+  /** Escapes regex metacharacters so a schema name matches literally. */
+  private static _escapeRegex(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   /**
