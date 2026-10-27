@@ -29,7 +29,7 @@
  */
 
 // The session runtime itself — the orchestration a host subclasses or composes.
-export { RealtimeSessionRuntime } from './session/RealtimeSessionRuntime';
+export { RealtimeSessionRuntime, RealtimeSessionAlreadyActiveError, type SessionEndReason, type ClientCloseReason } from './session/RealtimeSessionRuntime';
 
 // Session-facing types a host or UI binds to.
 export {

@@ -821,6 +821,7 @@ export class HarnessAgentBase extends BaseAgent {
                     { ...(promptParams.data ?? {}), ...(promptParams.templateData ?? {}) },
                     true,
                     true,
+                    { ContextUser: promptParams.contextUser },
                 );
                 if (rendered.Success && rendered.Output?.trim()) {
                     return rendered.Output;

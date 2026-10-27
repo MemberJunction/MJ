@@ -2,7 +2,7 @@
  * Unit tests for the Action/Agent record processors' pure mapping + extraction helpers (the
  * record -> work-input mapping and work-output -> result-payload extraction). The engine-invoking
  * ProcessRecord paths are covered by integration tests; here we verify the deterministic logic, plus
- * ActionRecordProcessor's wait for the log row against a stubbed engine.
+ * how ActionRecordProcessor hands the log-row promise to the tracker, against a stubbed engine.
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
@@ -11,6 +11,7 @@ import { EntitiesOnlyProvider } from '@memberjunction/unit-testing';
 import { RecordRef } from '@memberjunction/record-set-processor-base';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionRecordProcessor, AgentRecordProcessor, FieldRulesProcessor, WriteBackProcessor } from '../index';
+import { TemplateEngineServer } from '@memberjunction/templates';
 
 const record: RecordRef = { EntityID: 'ENT-1', RecordID: 'c1', Record: { ID: 'c1', Name: 'Ada', Tier: 3 } };
 
@@ -53,7 +54,7 @@ describe('ActionRecordProcessor', () => {
     });
 });
 
-describe('ActionRecordProcessor.ProcessRecord — waits for the log row (#6014)', () => {
+describe('ActionRecordProcessor.ProcessRecord — hands the log-row wait to the tracker (#6014, #6045)', () => {
     const ctx = { ContextUser: {} as never, Provider: {} as never };
     afterEach(() => vi.restoreAllMocks());
 
@@ -65,22 +66,13 @@ describe('ActionRecordProcessor.ProcessRecord — waits for the log row (#6014)'
         vi.spyOn(engine, 'RunAction').mockResolvedValue(result as never);
     }
 
-    it('does not resolve before LogEntryPersisted resolves', async () => {
-        let landLogRow!: () => void;
-        const LogEntryPersisted = new Promise<void>((r) => { landLogRow = r; });
+    it('resolves while LogEntryPersisted is still pending, and hands it to the tracker as ActionExecutionLogPersisted', async () => {
+        const LogEntryPersisted = new Promise<void>(() => { /* the log row never lands in this test */ });
         stubEngine({ Success: true, Params: [], LogEntry: { ID: 'log-1' }, LogEntryPersisted });
 
-        let resolved = false;
-        const pending = new ActionRecordProcessor('A-1').ProcessRecord(record, ctx).then((r) => {
-            resolved = true;
-            return r;
-        });
-        await new Promise((r) => setTimeout(r, 10));
-        expect(resolved).toBe(false);
-
-        landLogRow();
-        const out = await pending;
+        const out = await new ActionRecordProcessor('A-1').ProcessRecord(record, ctx);
         expect(out).toMatchObject({ Status: 'Succeeded', ActionExecutionLogID: 'log-1' });
+        expect(out.ActionExecutionLogPersisted).toBe(LogEntryPersisted);
     });
 
     it('resolves normally when LogEntryPersisted is absent', async () => {
@@ -88,6 +80,7 @@ describe('ActionRecordProcessor.ProcessRecord — waits for the log row (#6014)'
 
         const out = await new ActionRecordProcessor('A-1').ProcessRecord(record, ctx);
         expect(out).toMatchObject({ Status: 'Failed', ErrorMessage: 'nope', ActionExecutionLogID: undefined });
+        expect(out.ActionExecutionLogPersisted).toBeUndefined();
     });
 });
 
@@ -175,5 +168,31 @@ describe('FieldRulesProcessor on a dry run', () => {
         const result = await processor.ProcessRecord({ EntityID: 'E', RecordID: 'w1' }, { ContextUser: new UserInfo(), Provider: provider, DryRun: true });
         expect(result.Status).toBe('Succeeded');
         expect(apply.mock.calls[0][2]).toEqual({ DryRun: true });
+    });
+});
+
+describe('FieldRulesProcessor entity-document source', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    /** Exposes the protected resolver an `entityDocument` rule source calls. */
+    class ResolverProbe extends FieldRulesProcessor {
+        public Resolver(context: Parameters<FieldRulesProcessor['ProcessRecord']>[1]) {
+            return (this as unknown as { buildEntityDocumentResolver(c: typeof context): (a: { EntityDocumentID: string; Record: Record<string, unknown> }) => Promise<string> })
+                .buildEntityDocumentResolver(context);
+        }
+    }
+
+    it('renders the document as the run user, never as whoever configured the shared template engine', async () => {
+        const engine = TemplateEngineServer.Instance;
+        vi.spyOn(engine, 'Config').mockResolvedValue(undefined);
+        const render = vi.spyOn(engine, 'RenderTemplateSimple').mockResolvedValue({ Success: true, Output: 'doc', Message: undefined });
+        const user = new UserInfo();
+        const provider = new EntitiesOnlyProvider([]);
+        vi.spyOn(provider, 'GetEntityObject').mockResolvedValue({ Load: async () => true, TemplateText: 'Name {{ Name }}' } as never);
+
+        const text = await new ResolverProbe({ RuleSet: { Rules: [] } }).Resolver({ ContextUser: user, Provider: provider })({ EntityDocumentID: 'doc-1', Record: { Name: 'Ada' } });
+
+        expect(text).toBe('doc');
+        expect(render.mock.calls[0][2]).toEqual({ autoescape: false, ContextUser: user });
     });
 });

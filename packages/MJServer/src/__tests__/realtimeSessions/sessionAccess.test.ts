@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { AuthorizeSessionAccess, LoadSessionForAccess } from '../../realtimeSessions/sessionAccess.js';
+import { AuthorizeSessionAccess, AuthorizeConversationTurn, AuthorizeAnonymousRoomSessions, LoadSessionForAccess, LoadConversationScope } from '../../realtimeSessions/sessionAccess.js';
 
 const OWNER = 'AAAAAAAA-0000-4000-8000-000000000001';
 const OTHER = 'AAAAAAAA-0000-4000-8000-000000000002';
@@ -189,3 +189,80 @@ describe('LoadSessionForAccess', () => {
         expect(loaded?.ConversationReadable).toBe(true);
     });
 });
+
+describe('LoadConversationScope (a conversation addressed directly, e.g. by a text agent turn)', () => {
+    it('reports the owner and scope id of a readable conversation', async () => {
+        const scope = await LoadConversationScope(CONVERSATION_ID, USER, fakeProvider({ conversation: { UserID: OWNER, ExternalID: 'scope-1' } }));
+        expect(scope).toEqual({ UserID: OWNER, ExternalID: 'scope-1', Readable: true });
+    });
+
+    it('reports an unreadable conversation (missing, refused by RLS, or a failed read) without an owner', async () => {
+        expect(await LoadConversationScope(CONVERSATION_ID, USER, fakeProvider({ conversation: null }))).toEqual({ UserID: null, ExternalID: null, Readable: false });
+        expect(await LoadConversationScope(CONVERSATION_ID, USER, fakeProvider({ conversation: {}, conversationThrows: true }))).toEqual({ UserID: null, ExternalID: null, Readable: false });
+    });
+
+    it('reports a null scope id for a readable conversation with no stamp', async () => {
+        const scope = await LoadConversationScope(CONVERSATION_ID, USER, fakeProvider({ conversation: { UserID: OWNER, ExternalID: null } }));
+        expect(scope).toEqual({ UserID: OWNER, ExternalID: null, Readable: true });
+    });
+
+    it('does not touch the database for an empty id', async () => {
+        const provider = fakeProvider({});
+        expect(await LoadConversationScope('', USER, provider)).toEqual({ UserID: null, ExternalID: null, Readable: false });
+        expect(provider.GetEntityObject).not.toHaveBeenCalled();
+    });
+});
+
+describe('AuthorizeConversationTurn (a text agent turn addressed by a message in the conversation, MJ#6032)', () => {
+    const ANON = 'AAAAAAAA-0000-4000-8000-00000000A0A0';
+    const visitor = (sid: string) => ({ ID: ANON, IsMagicLinkAnonymous: true, AnonymousVisitorID: sid, MagicLinkScope: { ResourceID: sid } }) as unknown as UserInfo;
+
+    it('allows a named principal without reading the conversation (its permissions already decided the turn)', async () => {
+        const provider = fakeProvider({});
+        expect(await AuthorizeConversationTurn(CONVERSATION_ID, { ID: OWNER } as UserInfo, provider)).toEqual({ Allowed: true });
+        expect(provider.GetEntityObject).not.toHaveBeenCalled();
+    });
+
+    it('allows the anonymous visitor whose scope id the conversation carries', async () => {
+        const provider = fakeProvider({ conversation: { UserID: ANON, ExternalID: 'sid-1' } });
+        expect(await AuthorizeConversationTurn(CONVERSATION_ID, visitor('sid-1'), provider)).toEqual({ Allowed: true });
+    });
+
+    it('refuses a second anonymous visitor — same shared user, different scope id (the UI-guest-role leak)', async () => {
+        const provider = fakeProvider({ conversation: { UserID: ANON, ExternalID: 'sid-1' } });
+        expect(await AuthorizeConversationTurn(CONVERSATION_ID, visitor('sid-2'), provider)).toEqual({ Allowed: false, Reason: 'scope_mismatch' });
+    });
+
+    it('refuses an anonymous visitor when the conversation cannot be read or carries no scope id', async () => {
+        expect(await AuthorizeConversationTurn(CONVERSATION_ID, visitor('sid-1'), fakeProvider({ conversation: null }))).toEqual({ Allowed: false, Reason: 'not_owner' });
+        expect(await AuthorizeConversationTurn(CONVERSATION_ID, visitor('sid-1'), fakeProvider({ conversation: { UserID: ANON, ExternalID: null } }))).toEqual({ Allowed: false, Reason: 'scope_mismatch' });
+    });
+});
+
+describe('AuthorizeAnonymousRoomSessions (who of the anonymous visitors owns a LiveKit room\'s agent session, MJ#6044)', () => {
+    const ANON = 'AAAAAAAA-0000-4000-8000-00000000A0A0';
+    const visitor = (sid: string) => ({ ID: ANON, IsMagicLinkAnonymous: true, AnonymousVisitorID: sid, MagicLinkScope: { ResourceID: sid } }) as unknown as UserInfo;
+    const roomSession = { ID: SESSION_ID, UserID: ANON, ConversationID: CONVERSATION_ID };
+
+    it("admits the visitor whose scope id the session's conversation carries", async () => {
+        const provider = fakeProvider({ session: roomSession, conversation: { UserID: ANON, ExternalID: 'sid-1' } });
+        expect(await AuthorizeAnonymousRoomSessions([SESSION_ID], visitor('sid-1'), provider)).toBe(true);
+    });
+
+    it('refuses another visitor — same shared user, different scope id', async () => {
+        const provider = fakeProvider({ session: roomSession, conversation: { UserID: ANON, ExternalID: 'sid-1' } });
+        expect(await AuthorizeAnonymousRoomSessions([SESSION_ID], visitor('sid-2'), provider)).toBe(false);
+    });
+
+    it('refuses when the session cannot be read as the caller', async () => {
+        expect(await AuthorizeAnonymousRoomSessions([SESSION_ID], visitor('sid-1'), fakeProvider({ session: null }))).toBe(false);
+    });
+
+    it('refuses without reading anything when there is no session or no provider', async () => {
+        const provider = fakeProvider({});
+        expect(await AuthorizeAnonymousRoomSessions([], visitor('sid-1'), provider)).toBe(false);
+        expect(await AuthorizeAnonymousRoomSessions([SESSION_ID], visitor('sid-1'), undefined)).toBe(false);
+        expect(provider.GetEntityObject).not.toHaveBeenCalled();
+    });
+});
+
