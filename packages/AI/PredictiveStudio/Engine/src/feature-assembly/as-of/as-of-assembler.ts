@@ -11,7 +11,8 @@
  *
  * Current values: a value read from the stored row (an `immutable-field` source, the key field a row joins through, or
  * the fields a windowed aggregate reads from its child rows) is used only when it is the value the row held on every
- * decision day. A field the metadata declares not updatable is read; an updatable field is read only when the entity
+ * decision day. A field the metadata declares not updatable is read (on a tracked entity its history is read too, only
+ * to learn when the record was created); an updatable field is read only when the entity
  * tracks Record Changes, its history covers the decision day (else `decision-date-before-change-history`, naming where
  * the history starts) and none of them updated it afterwards (else `select-changes-after-decision-date`); an updatable
  * field of an untracked entity refuses `decision-date-before-change-history`, since its past value cannot be known.
@@ -23,19 +24,24 @@
  * excludes makes every unit row uncovered.
  *
  * Coverage: every Record Changes history the assembly reads (replayed fields and the stable-value rule) is reported in
- * the result's `Coverage`, one entry per entity and field; two reads of one field merge (no history start wins, else
- * the later start; the continuity counts add).
+ * the result's `Coverage`, one entry per entity and field. A history is loaded once per assembly for one entity, field
+ * list and key set, however many features read it; two loads of one field (other keys, another join, a child entity)
+ * merge: no history start wins, else the later start, and the continuity counts add.
  *
  * Record creation: a record created after a row's decision day did not exist then, so its value reads as missing
- * (version `created-after-decision`), never the stored value and never as uncovered. Creation is known from the
- * record's own Create row in Record Changes, or from `__mj_CreatedAt` when the entity lists it; a history that starts
- * with a Snapshot says nothing about creation. The same rule applies to the key a unit row joins through: a unit row
- * created after its decision day resolves its join key as null, so every value read through that key is missing.
+ * (version `created-after-decision`), never the stored value and never as uncovered. When creation is known: on an
+ * entity that tracks Record Changes, from the record's own Create row (a history that starts with a Snapshot says
+ * nothing about creation, and the column below is consulted instead); on any entity that lists `__mj_CreatedAt`, from
+ * that column; when neither tells, the unit's premise that its records exist on their decision days applies. The rule
+ * is consulted on every current read: fields declared not updatable and the key a unit row joins through included. A
+ * unit row created after its decision day resolves its join key as null, so every value read through that key is
+ * missing. A child row created after an owner row's decision day (late-entered) is dropped from that owner's window
+ * before its aggregate is computed; the number of drops is recorded in the column's version (`late-entered-dropped`).
  *
  * System timestamp columns: `__mj_CreatedAt` and `__mj_UpdatedAt` are requested only when the entity's metadata lists
- * them. Without `__mj_CreatedAt`, an immutable field's provenance carries the record key only (version
- * `immutable-after-create`, computed at the assembly time); without `__mj_UpdatedAt`, a windowed aggregate's version
- * hashes the IDs of the child rows it read.
+ * them. An immutable field's provenance carries the record's creation instant when it is known (version
+ * `created:<instant>`), else the record key only (version `immutable-after-create`, computed at the assembly time);
+ * without `__mj_UpdatedAt`, a windowed aggregate's version hashes the IDs of the child rows it read.
  *
  * Categorical columns: when a column has more distinct levels than its encoding's `cardinalityCap`, the least frequent
  * levels beyond the cap (by count, ties by value) fold into one `__other` level, recorded on the column's provenance.
@@ -132,11 +138,16 @@ interface AssembledRows { readonly Rows: AssembledRow[]; readonly Excluded: Set<
 interface StableRead { readonly Key: string; readonly Rows: readonly AssemblyRowRef[] }
 /** The rule's verdict on a stored record; `changed` and `uncovered` refuse the assembly and are never returned. */
 type StableOutcome = 'stable' | 'created-after' | 'changed' | 'uncovered' | 'excluded';
-/** The verdicts of a stable-value check, aligned with its reads, and where the history it read starts. */
-interface StableValues { readonly Outcomes: readonly StableOutcome[]; readonly HistoryStart: string | null }
+/** The verdicts of a stable-value check, aligned with its reads, the history it read (null when none was) and where it starts. */
+interface StableValues { readonly Outcomes: readonly StableOutcome[]; readonly History: EntityHistory | null; readonly HistoryStart: string | null }
 type CategoryFold = NonNullable<ColumnProvenance['categoryFold']>;
 /** Coverage per entity and field (`entity|field`): one entry for every history the assembly read. */
 type CoverageByField = Map<string, ChangeHistoryCoverage>;
+/**
+ * The state of one assembly: the coverage read so far, the histories loaded (one per entity, field list and key set)
+ * and, per windowed-aggregate column, the late-entered child rows dropped from owner windows.
+ */
+interface AssemblyState { readonly Coverage: CoverageByField; readonly Histories: Map<string, EntityHistory>; readonly LateEntered: Map<string, number> }
 
 /** The level the least frequent categories beyond a column's cardinality cap fold into. */
 export const OTHER_CATEGORY_LEVEL = '__other';
@@ -187,8 +198,8 @@ export class AsOfFeatureAssembler {
   }
 
   private async assemble(input: AsOfAssemblyInput): Promise<AsOfAssemblyResult> {
-    const coverage: CoverageByField = new Map();
-    const readers = await this.buildReaders(input, coverage);
+    const state: AssemblyState = { Coverage: new Map(), Histories: new Map(), LateEntered: new Map() };
+    const readers = await this.buildReaders(input, state);
     const columns = readers.flatMap((r) => this.columnsFor(r.Spec));
     const assembled = this.assembleRows(input, readers);
     const first = assembled.Uncovered[0];
@@ -202,15 +213,15 @@ export class AsOfFeatureAssembler {
       Rows: folded.Rows,
       ExcludedRowIds: assembled.Excluded,
       UncoveredRowsExcluded: assembled.Uncovered.map((u) => ({ entity: u.Entity, field: u.Field, rows: u.Rows })),
-      Coverage: [...coverage.values()],
+      Coverage: [...state.Coverage.values()],
       Preprocessing: AsOfFeatureAssembler.BuildPreprocessingOps(columns, input.Features, input.ExplicitOps || []),
-      ColumnProvenance: readers.map((r) => AsOfFeatureAssembler.columnProvenance(r.Spec, input, coverage, folded.Folds.get(r.Spec.name))),
+      ColumnProvenance: readers.map((r) => AsOfFeatureAssembler.columnProvenance(r.Spec, input, state, folded.Folds.get(r.Spec.name))),
       CategoryLevels: folded.Levels,
     };
   }
 
-  private static columnProvenance(spec: FeatureColumnSpec, input: AsOfAssemblyInput, coverage: CoverageByField, fold: CategoryFold | undefined): ColumnProvenance {
-    const base: ColumnProvenance = { column: spec.name, source: spec.source.kind, sourceRef: AsOfFeatureAssembler.describeSource(spec), sourceVersion: AsOfFeatureAssembler.columnVersion(spec, input, coverage) };
+  private static columnProvenance(spec: FeatureColumnSpec, input: AsOfAssemblyInput, state: AssemblyState, fold: CategoryFold | undefined): ColumnProvenance {
+    const base: ColumnProvenance = { column: spec.name, source: spec.source.kind, sourceRef: AsOfFeatureAssembler.describeSource(spec), sourceVersion: AsOfFeatureAssembler.columnVersion(spec, input, state) };
     return fold && fold.folded.length > 0 ? { ...base, categoryFold: fold } : base;
   }
 
@@ -268,12 +279,12 @@ export class AsOfFeatureAssembler {
   }
 
   /** One dated reader per non-identifier column; record-changes readers append their coverage. */
-  private async buildReaders(input: AsOfAssemblyInput, coverage: CoverageByField): Promise<ColumnReader[]> {
+  private async buildReaders(input: AsOfAssemblyInput, state: AssemblyState): Promise<ColumnReader[]> {
     const readers: ColumnReader[] = [];
     for (const spec of input.Features) {
       if (spec.encoding.kind === 'identifier') continue;
       AsOfFeatureAssembler.assertEncodable(spec);
-      readers.push({ Spec: spec, Read: await this.readerFor(spec, input, coverage) });
+      readers.push({ Spec: spec, Read: await this.readerFor(spec, input, state) });
     }
     return readers;
   }
@@ -382,12 +393,12 @@ export class AsOfFeatureAssembler {
     });
   }
 
-  private async readerFor(spec: FeatureColumnSpec, input: AsOfAssemblyInput, coverage: CoverageByField): Promise<FeatureReader> {
+  private async readerFor(spec: FeatureColumnSpec, input: AsOfAssemblyInput, state: AssemblyState): Promise<FeatureReader> {
     const source = spec.source;
     switch (source.kind) {
       case 'immutable-field':
-      case 'record-changes': return this.fieldReader(spec, source, input, coverage);
-      case 'windowed-aggregate': return this.aggregateReader(spec, source, input, coverage);
+      case 'record-changes': return this.fieldReader(spec, source, input, state);
+      case 'windowed-aggregate': return this.aggregateReader(spec, source, input, state);
       case 'series': return this.seriesReader(spec, source, input);
       case 'feature-value': return this.featureValueReader(spec, source, input);
     }
@@ -397,22 +408,37 @@ export class AsOfFeatureAssembler {
    * A field read as of the decision day: replayed from Record Changes (updatable fields), or read from the stored row
    * when the stable-value rule says the stored value is the value on every decision day.
    */
-  private async fieldReader(spec: FeatureColumnSpec, source: FieldSource, input: AsOfAssemblyInput, coverage: CoverageByField): Promise<FeatureReader> {
+  private async fieldReader(spec: FeatureColumnSpec, source: FieldSource, input: AsOfAssemblyInput, state: AssemblyState): Promise<FeatureReader> {
     const entity = source.entity === input.RowEntity.Name ? input.RowEntity : input.Metadata.Entity(source.entity);
     if (!entity) throw new AssemblyRefused({ kind: 'unresolved-column', entity: source.entity, field: source.field });
-    const join = await this.keyResolver(source.keyField, input, (row) => row.RowId, coverage);
+    const join = await this.keyResolver(source.keyField, input, (row) => row.RowId, state);
     const keyOf = join.KeyOf;
-    if (source.kind === 'immutable-field') return AsOfFeatureAssembler.throughJoin(spec, join, await this.currentValueReader(spec, source, entity, keyOf, input, coverage), input);
-    const keys = AsOfFeatureAssembler.uniqueKeys(input.Rows.map((r) => keyOf(r)).filter((k): k is string => k !== null));
-    const history = await input.History.Load(entity, keys, [source.field], input.Unit.history, input.AssembledAt);
-    AsOfFeatureAssembler.recordCoverage(coverage, entity, source.field, history);
+    if (source.kind === 'immutable-field') return AsOfFeatureAssembler.throughJoin(spec, join, await this.currentValueReader(spec, source, entity, keyOf, input, state), input);
+    const keys = input.Rows.map((r) => keyOf(r)).filter((k): k is string => k !== null);
+    const history = await AsOfFeatureAssembler.loadHistory(entity, keys, [source.field], input, state);
     return AsOfFeatureAssembler.throughJoin(spec, join, this.replayReader(spec, source, entity, keyOf, history, input), input);
   }
 
   /**
-   * Records the history read for one entity and field. A second read of the same field (through another join, or as a
-   * child entity's field) merges into the first: no history start wins over any start, else the later start, and the
-   * continuity counts add.
+   * The entity's history for `keys` and `fields`, loaded once per assembly for one entity, field list and key set (keys
+   * case-folded and deduplicated), so every feature that reads the same records shares one load, and that load's
+   * coverage is recorded once.
+   */
+  private static async loadHistory(entity: AssemblyEntityInfo, keys: readonly string[], fields: readonly string[], input: AsOfAssemblyInput, state: AssemblyState): Promise<EntityHistory> {
+    const unique = AsOfFeatureAssembler.uniqueKeys(keys);
+    const cacheKey = JSON.stringify([entity.Name, [...fields].sort(OrdinalCompare), unique.map((k) => k.toLowerCase()).sort(OrdinalCompare)]);
+    const cached = state.Histories.get(cacheKey);
+    if (cached) return cached;
+    const history = await input.History.Load(entity, unique, fields, input.Unit.history, input.AssembledAt);
+    state.Histories.set(cacheKey, history);
+    for (const field of fields) AsOfFeatureAssembler.recordCoverage(state.Coverage, entity, field, history);
+    return history;
+  }
+
+  /**
+   * Records one history load for one entity and field. A second load of the same field (another key set, through
+   * another join or as a child entity's field) merges into the first: no history start wins over any start, else the
+   * later start, and the continuity counts add.
    */
   private static recordCoverage(coverage: CoverageByField, entity: AssemblyEntityInfo, field: string, history: EntityHistory): void {
     const k = `${entity.Name}|${field}`;
@@ -453,31 +479,30 @@ export class AsOfFeatureAssembler {
   }
 
   /**
-   * The stored value of a field the stable-value rule admits. A record created after a row's decision day (its Create
-   * row, or `__mj_CreatedAt` when the entity lists it) reads as missing, never as its stored value; a record the rule
-   * excludes makes its row uncovered.
+   * The stored value of a field the stable-value rule admits. A record created after a row's decision day (by the one
+   * creation rule, `creationInstant`) reads as missing, never as its stored value; a record the rule excludes makes its
+   * row uncovered. The provenance carries the creation instant when it is known.
    */
-  private async currentValueReader(spec: FeatureColumnSpec, source: FieldSource, entity: AssemblyEntityInfo, keyOf: KeyOf, input: AsOfAssemblyInput, coverage: CoverageByField): Promise<FeatureReader> {
+  private async currentValueReader(spec: FeatureColumnSpec, source: FieldSource, entity: AssemblyEntityInfo, keyOf: KeyOf, input: AsOfAssemblyInput, state: AssemblyState): Promise<FeatureReader> {
     const reads = AsOfFeatureAssembler.rowReads(input.Rows, keyOf);
     const hasCreatedAt = AsOfFeatureAssembler.hasField(entity, '__mj_CreatedAt');
     // Read first: a key with no record is a short read, whatever the history of the records that exist.
     const current = await KeyedReader.ReadByKeys(input.DataAccess, entity.Name, entity.PrimaryKey, reads.map((r) => r.Key), hasCreatedAt ? [source.field, '__mj_CreatedAt'] : [source.field]);
     if (current.Status === 'refused') throw new AssemblyRefused(current.Refusal);
-    const stable = await this.assertStableCurrentValue(entity, source.field, reads, input, coverage);
+    const stable = await this.assertStableCurrentValue(entity, source.field, reads, input, state);
     const outcomes = AsOfFeatureAssembler.outcomesByRow(reads, stable);
     return (row) => {
       const key = keyOf(row);
-      const outcome = outcomes.get(row.RowId);
-      if (outcome === 'excluded') return { Uncovered: true, Entity: entity.Name, Field: source.field, HistoryStart: stable.HistoryStart };
+      if (outcomes.get(row.RowId) === 'excluded') return { Uncovered: true, Entity: entity.Name, Field: source.field, HistoryStart: stable.HistoryStart };
       const rec = key === null ? undefined : current.Rows.get(key.toLowerCase());
-      const created = hasCreatedAt && rec ? AsOfFeatureAssembler.instantOf(rec.__mj_CreatedAt) : null;
-      const createdAfter = outcome === 'created-after' || (created !== null && created.getTime() >= AsOfFeatureAssembler.asOfInstant(row.DecisionDate).getTime());
-      const version = createdAfter ? 'created-after-decision' : !hasCreatedAt ? 'immutable-after-create' : `created:${AsOfFeatureAssembler.isoOf(rec?.__mj_CreatedAt)}`;
+      const created = key === null ? null : AsOfFeatureAssembler.creationInstant(stable.History, key, hasCreatedAt ? rec?.__mj_CreatedAt : null);
+      const createdAfter = !AsOfFeatureAssembler.existedBefore(created, AsOfFeatureAssembler.asOfInstant(row.DecisionDate));
+      const version = createdAfter ? 'created-after-decision' : created !== null ? `created:${created.toISOString()}` : 'immutable-after-create';
       return {
         Value: rec && !createdAfter ? rec[source.field] : null,
         Provenance: {
           column: spec.name, source: 'immutable-field', sourceRef: AsOfFeatureAssembler.fieldRef(entity, key, source.field), sourceVersion: version,
-          computedAt: hasCreatedAt ? AsOfFeatureAssembler.isoOf(rec?.__mj_CreatedAt) : input.AssembledAt.toISOString(),
+          computedAt: created !== null ? created.toISOString() : input.AssembledAt.toISOString(),
         },
       };
     };
@@ -494,24 +519,29 @@ export class AsOfFeatureAssembler {
    * instant refuses `select-changes-after-decision-date`; a history that starts after it with a Snapshot, or no history,
    * refuses `decision-date-before-change-history`; both count the distinct unit rows whose own decision instant is
    * affected. An updatable field of an untracked entity cannot be known on a past day and refuses for every unit row.
+   * On a tracked entity the history is read for every field, a field declared not updatable included: its stored value
+   * is the value since creation, so only the creation instant is consulted for it.
    */
-  private async assertStableCurrentValue(entity: AssemblyEntityInfo, field: string, reads: readonly StableRead[], input: AsOfAssemblyInput, coverage: CoverageByField): Promise<StableValues> {
+  private async assertStableCurrentValue(entity: AssemblyEntityInfo, field: string, reads: readonly StableRead[], input: AsOfAssemblyInput, state: AssemblyState): Promise<StableValues> {
     const info = entity.Fields.find((f) => f.Name === field);
     if (!info) throw new AssemblyRefused({ kind: 'unresolved-column', entity: entity.Name, field });
-    if (info.AllowUpdateAPI === false || reads.length === 0) return { Outcomes: reads.map(() => 'stable'), HistoryStart: null };
+    const unread: StableValues = { Outcomes: reads.map(() => 'stable'), History: null, HistoryStart: null };
+    if (reads.length === 0) return unread;
     if (!entity.TrackRecordChanges) {
+      if (info.AllowUpdateAPI === false) return unread;
       throw new AssemblyRefused({ kind: 'decision-date-before-change-history', entity: entity.Name, field, historyStart: null, rowsAffected: AsOfFeatureAssembler.distinctRows(reads) });
     }
-    const history = await input.History.Load(entity, AsOfFeatureAssembler.uniqueKeys(reads.map((r) => r.Key)), [field], input.Unit.history, input.AssembledAt);
-    AsOfFeatureAssembler.recordCoverage(coverage, entity, field, history);
-    const judge = (key: string, at: Date): StableOutcome => AsOfFeatureAssembler.judgeStoredValue(history, key, field, at);
+    const history = await AsOfFeatureAssembler.loadHistory(entity, reads.map((r) => r.Key), [field], input, state);
+    const judge = (key: string, at: Date): StableOutcome => (info.AllowUpdateAPI === false
+      ? (AsOfFeatureAssembler.createdAfter(history, key, at) ? 'created-after' : 'stable')
+      : AsOfFeatureAssembler.judgeStoredValue(history, key, field, at));
     const instants = AsOfFeatureAssembler.instantsOf(reads);
     const outcomes = reads.map((r) => AsOfFeatureAssembler.outcomeOf(r, instants.get(r.Rows), judge));
     const changed = AsOfFeatureAssembler.affectedRows(reads, outcomes, 'changed', judge);
     if (changed > 0) throw new AssemblyRefused({ kind: 'select-changes-after-decision-date', entity: entity.Name, field, changesAfter: changed });
     const uncovered = AsOfFeatureAssembler.affectedRows(reads, outcomes, 'uncovered', judge);
     if (uncovered > 0) throw new AssemblyRefused({ kind: 'decision-date-before-change-history', entity: entity.Name, field, historyStart: history.Coverage.historyStart, rowsAffected: uncovered });
-    return { Outcomes: outcomes, HistoryStart: history.Coverage.historyStart };
+    return { Outcomes: outcomes, History: history, HistoryStart: history.Coverage.historyStart };
   }
 
   /** The rule's verdict on one stored record at one instant (the order of the checks is the order of the doc above). */
@@ -525,8 +555,23 @@ export class AsOfFeatureAssembler {
 
   /** Whether the record's own Create row is dated at or after `at`: it did not exist on the decision day `at` closes. */
   private static createdAfter(history: EntityHistory, key: string, at: Date): boolean {
-    const created = history.CreatedAt(key);
-    return created !== null && created.getTime() >= at.getTime();
+    return !AsOfFeatureAssembler.existedBefore(AsOfFeatureAssembler.creationInstant(history, key, null), at);
+  }
+
+  /**
+   * The one rule for when a record came into existence: its own Create row when the entity tracks Record Changes and
+   * its history starts with one; else `__mj_CreatedAt` when the entity lists the column (`stored` is its value for the
+   * record); else null, and the unit's premise that its records exist on their decision days applies.
+   */
+  private static creationInstant(history: EntityHistory | null, key: string, stored: CellValue): Date | null {
+    const fromHistory = history === null ? null : history.CreatedAt(key);
+    // `||`: a Date is never falsy, so only an unknown Create row falls through to the column.
+    return fromHistory || AsOfFeatureAssembler.instantOf(stored);
+  }
+
+  /** Whether a record with creation instant `created` (null = unknown, the premise applies) existed before `at`. */
+  private static existedBefore(created: Date | null, at: Date): boolean {
+    return created === null || created.getTime() < at.getTime();
   }
 
   /** A read's verdict: at the earliest of its instants at which the record existed, or `created-after` when it never did. */
@@ -595,14 +640,18 @@ export class AsOfFeatureAssembler {
 
   /**
    * A windowed aggregate over the owner's child rows; its version hashes the contributing rows (and their update times).
-   * Every child row read passes the stable-value rule before any value is used.
+   * Every child row read passes the stable-value rule before any value is used, and a child row that did not exist on
+   * the owner row's decision day (late-entered) is dropped from that owner's window; the drops are recorded per column.
    */
-  private async aggregateReader(spec: FeatureColumnSpec, source: WindowedAggregateSource, input: AsOfAssemblyInput, coverage: CoverageByField): Promise<FeatureReader> {
-    const { Child: child, Index: index, Keys: keys } = await this.childIndex(source, input);
+  private async aggregateReader(spec: FeatureColumnSpec, source: WindowedAggregateSource, input: AsOfAssemblyInput, state: AssemblyState): Promise<FeatureReader> {
+    const { Child: child, Index: index, Keys: keys, CreatedAt: createdAt } = await this.childIndex(source, input);
     // The contract: a null owner key field means the row's entity key.
-    const join = await this.keyResolver(source.ownerKeyField, input, (row) => row.EntityKey, coverage);
-    const excluded = await this.assertStableChildRows(child, source, keys, input, coverage);
+    const join = await this.keyResolver(source.ownerKeyField, input, (row) => row.EntityKey, state);
+    const excluded = await this.assertStableChildRows(child, source, keys, input, state);
+    const history = child.TrackRecordChanges && keys.length > 0 ? await AsOfFeatureAssembler.loadHistory(child, keys, [source.foreignKey], input, state) : null;
+    const existedAt = (c: ChildRow, at: Date): boolean => AsOfFeatureAssembler.existedBefore(AsOfFeatureAssembler.creationInstant(history, c.Id, createdAt.get(c.Id.toLowerCase())), at);
     const values = new Map<AssemblyRowRef, RawValue>();
+    let dropped = 0;
     for (const row of input.Rows) {
       if (join.CreatedAfter(row) || join.UncoveredFor(row) !== null) continue;
       const owner = join.KeyOf(row);
@@ -610,9 +659,11 @@ export class AsOfFeatureAssembler {
         values.set(row, AsOfFeatureAssembler.aggregateValue(spec, source, null, row, [], null, input));
         continue;
       }
-      const agg = WindowedAggregates.ComputeWindowedAggregate(index, owner, row.DecisionDate, source);
+      const agg = AsOfFeatureAssembler.aggregateOfPresentRows(index, owner, row, source, existedAt);
+      dropped += agg.Dropped;
       values.set(row, AsOfFeatureAssembler.aggregateValue(spec, source, owner, row, agg.Contributors, agg.Value, input));
     }
+    state.LateEntered.set(spec.name, dropped);
     return AsOfFeatureAssembler.throughJoin(spec, join, (row) => {
       if (excluded) return excluded;
       const v = values.get(row);
@@ -622,19 +673,38 @@ export class AsOfFeatureAssembler {
   }
 
   /**
+   * One owner's aggregate as of its decision day over the child rows that existed then: the rows the full window would
+   * have read but that were entered after the decision day are dropped and counted, and the aggregate is recomputed
+   * over the owner's remaining rows.
+   */
+  private static aggregateOfPresentRows(
+    index: ChildRowIndex, owner: string, row: AssemblyRowRef, source: WindowedAggregateSource, existedAt: (c: ChildRow, at: Date) => boolean,
+  ): { readonly Value: number | null; readonly Contributors: readonly ChildRow[]; readonly Dropped: number } {
+    const full = WindowedAggregates.ComputeWindowedAggregate(index, owner, row.DecisionDate, source);
+    const asOf = AsOfFeatureAssembler.asOfInstant(row.DecisionDate);
+    const late = full.Contributors.filter((c) => !existedAt(c, asOf)).length;
+    if (late === 0) return { ...full, Dropped: 0 };
+    const present = (index.get(owner.toLowerCase()) || []).filter((c) => existedAt(c, asOf));
+    const recomputed = WindowedAggregates.ComputeWindowedAggregate(new Map([[owner.toLowerCase(), present]]), owner, row.DecisionDate, source);
+    return { ...recomputed, Dropped: late };
+  }
+
+  /**
    * Every child row the index was built from passes the stable-value rule for the fields that decide what an aggregate
    * reads, judged for the whole batch (each read stands for every unit row): a child row re-owned or re-dated after a
-   * decision day can move between owners, so none is exempt for contributing to no row. A child row the rule excludes
-   * makes every unit row uncovered for that field, since its owner on a past day cannot be trusted; the first such
-   * field's marker is returned, else null.
+   * decision day can move between owners, so none is exempt for contributing to no row. Every field is judged, so a
+   * later field's refusal is never hidden by an earlier field's exclusion. A child row the rule excludes makes every
+   * unit row uncovered for that field, since its owner on a past day cannot be trusted; the first such field's marker
+   * is returned, else null.
    */
-  private async assertStableChildRows(child: AssemblyEntityInfo, source: WindowedAggregateSource, keys: readonly string[], input: AsOfAssemblyInput, coverage: CoverageByField): Promise<Uncovered | null> {
+  private async assertStableChildRows(child: AssemblyEntityInfo, source: WindowedAggregateSource, keys: readonly string[], input: AsOfAssemblyInput, state: AssemblyState): Promise<Uncovered | null> {
     const reads: StableRead[] = keys.map((k) => ({ Key: k, Rows: input.Rows }));
+    let excluded: Uncovered | null = null;
     for (const field of AsOfFeatureAssembler.childStableFields(source)) {
-      const stable = await this.assertStableCurrentValue(child, field, reads, input, coverage);
-      if (stable.Outcomes.includes('excluded')) return { Uncovered: true, Entity: child.Name, Field: field, HistoryStart: stable.HistoryStart };
+      const stable = await this.assertStableCurrentValue(child, field, reads, input, state);
+      if (excluded === null && stable.Outcomes.includes('excluded')) excluded = { Uncovered: true, Entity: child.Name, Field: field, HistoryStart: stable.HistoryStart };
     }
-    return null;
+    return excluded;
   }
 
   /** One aggregate value; a row with no owner key has no child rows ('' would read the bucket of ownerless child rows). */
@@ -739,19 +809,17 @@ export class AsOfFeatureAssembler {
    * How a row finds the record a source reads: through a key field on the row entity, or (no key field) `fallback` —
    * the row's own id for a field, the row's entity key for an aggregate owner.
    */
-  private async keyResolver(keyField: string | null, input: AsOfAssemblyInput, fallback: KeyOf, coverage: CoverageByField): Promise<JoinKeys> {
+  private async keyResolver(keyField: string | null, input: AsOfAssemblyInput, fallback: KeyOf, state: AssemblyState): Promise<JoinKeys> {
     if (keyField === null) return { KeyOf: fallback, CreatedAfter: () => false, UncoveredFor: () => null };
     const reads = AsOfFeatureAssembler.rowReads(input.Rows, (row) => row.RowId);
-    const stable = await this.assertStableCurrentValue(input.RowEntity, keyField, reads, input, coverage);
+    const stable = await this.assertStableCurrentValue(input.RowEntity, keyField, reads, input, state);
     const outcomes = AsOfFeatureAssembler.outcomesByRow(reads, stable);
     const hasCreatedAt = AsOfFeatureAssembler.hasField(input.RowEntity, '__mj_CreatedAt');
     const rowsById = await KeyedReader.ReadByKeys(input.DataAccess, input.RowEntity.Name, input.RowEntity.PrimaryKey, reads.map((r) => r.Key), hasCreatedAt ? [keyField, '__mj_CreatedAt'] : [keyField]);
     if (rowsById.Status === 'refused') throw new AssemblyRefused(rowsById.Refusal);
     const createdAfter = (row: AssemblyRowRef): boolean => {
-      if (outcomes.get(row.RowId) === 'created-after') return true;
-      if (!hasCreatedAt) return false;
-      const created = AsOfFeatureAssembler.instantOf(rowsById.Rows.get(row.RowId.toLowerCase())?.__mj_CreatedAt);
-      return created !== null && created.getTime() >= AsOfFeatureAssembler.asOfInstant(row.DecisionDate).getTime();
+      const created = AsOfFeatureAssembler.creationInstant(stable.History, row.RowId, hasCreatedAt ? rowsById.Rows.get(row.RowId.toLowerCase())?.__mj_CreatedAt : null);
+      return !AsOfFeatureAssembler.existedBefore(created, AsOfFeatureAssembler.asOfInstant(row.DecisionDate));
     };
     const uncoveredFor = (row: AssemblyRowRef): Uncovered | null =>
       (outcomes.get(row.RowId) === 'excluded' ? { Uncovered: true, Entity: input.RowEntity.Name, Field: keyField, HistoryStart: stable.HistoryStart } : null);
@@ -780,17 +848,27 @@ export class AsOfFeatureAssembler {
     return { Value: null, Provenance: { column: spec.name, source: spec.source.kind, sourceRef, sourceVersion, computedAt: input.AssembledAt.toISOString() } };
   }
 
-  /** The child entity, its indexed rows, and the keys of every row read (the index skips undated and filtered-out rows). */
-  private async childIndex(source: WindowedAggregateSource, input: AsOfAssemblyInput): Promise<{ readonly Child: AssemblyEntityInfo; readonly Index: ChildRowIndex; readonly Keys: readonly string[] }> {
+  /**
+   * The child entity, its indexed rows, the keys of every row read (the index skips undated and filtered-out rows) and,
+   * when the entity lists `__mj_CreatedAt`, each row's value of it by lower-cased key.
+   */
+  private async childIndex(source: WindowedAggregateSource, input: AsOfAssemblyInput): Promise<{ readonly Child: AssemblyEntityInfo; readonly Index: ChildRowIndex; readonly Keys: readonly string[]; readonly CreatedAt: ReadonlyMap<string, CellValue> }> {
     const child = input.Metadata.Entity(source.childEntity);
     if (!child) throw new AssemblyRefused({ kind: 'unresolved-column', entity: source.childEntity, field: '*' });
+    const hasCreatedAt = AsOfFeatureAssembler.hasField(child, '__mj_CreatedAt');
     const fields = [
       child.PrimaryKey, source.foreignKey, source.dateField, source.endDateField, source.voidedAtField, source.valueField, ...source.filter.map((f) => f.field),
-      AsOfFeatureAssembler.hasField(child, '__mj_UpdatedAt') ? '__mj_UpdatedAt' : null,
+      AsOfFeatureAssembler.hasField(child, '__mj_UpdatedAt') ? '__mj_UpdatedAt' : null, hasCreatedAt ? '__mj_CreatedAt' : null,
     ].filter((f): f is string => !!f);
     const read = await CompleteReader.ReadCompletely(input.DataAccess, { EntityName: child.Name, KeyField: child.PrimaryKey, Fields: [...new Set(fields)] }, input.Read);
     if (read.Status === 'refused') throw new AssemblyRefused(read.Refusal);
-    return { Child: child, Index: WindowedAggregates.BuildChildRowIndex(read.Rows, source, child.PrimaryKey), Keys: read.Rows.map((r) => String(r[child.PrimaryKey])) };
+    const keyOf = (r: SourceRow): string => String(r[child.PrimaryKey]);
+    return {
+      Child: child,
+      Index: WindowedAggregates.BuildChildRowIndex(read.Rows, source, child.PrimaryKey),
+      Keys: read.Rows.map(keyOf),
+      CreatedAt: new Map(hasCreatedAt ? read.Rows.map((r) => [keyOf(r).toLowerCase(), r.__mj_CreatedAt] as const) : []),
+    };
   }
 
   /** The sha-256 of the contributing rows: `ID:updatedAt` per row, or the ID alone when the row has no update time. */
@@ -800,12 +878,12 @@ export class AsOfFeatureAssembler {
   }
 
   /** The per-column version summary stored on the snapshot (per-value versions are in the provenance file). */
-  private static columnVersion(spec: FeatureColumnSpec, input: AsOfAssemblyInput, coverage: CoverageByField): string {
+  private static columnVersion(spec: FeatureColumnSpec, input: AsOfAssemblyInput, state: AssemblyState): string {
     const s = spec.source;
     switch (s.kind) {
-      case 'record-changes': return `history-start:${coverage.get(`${s.entity}|${s.field}`)?.historyStart || 'none'}`;
+      case 'record-changes': return `history-start:${state.Coverage.get(`${s.entity}|${s.field}`)?.historyStart || 'none'}`;
       case 'immutable-field': return 'immutable-after-create';
-      case 'windowed-aggregate': return `window:${s.windowDays === null ? 'all' : s.windowDays};aggregate:${s.aggregate}`;
+      case 'windowed-aggregate': return `window:${s.windowDays === null ? 'all' : s.windowDays};aggregate:${s.aggregate};late-entered-dropped:${state.LateEntered.get(spec.name) || 0}`;
       case 'series': return `labelVersion:${input.Unit.label.labelVersion}`;
       case 'feature-value': return s.pin ? AsOfFeatureAssembler.pinVersion(s.pin) : 'unpinned';
     }
