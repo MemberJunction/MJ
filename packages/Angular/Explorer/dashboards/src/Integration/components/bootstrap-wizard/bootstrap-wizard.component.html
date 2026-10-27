@@ -14,7 +14,7 @@
             </p>
           </div>
         </div>
-        <button class="modal-close-btn" (click)="Close()" [disabled]="IsExecuting">
+        <button class="modal-close-btn" (click)="Close()" [disabled]="IsExecuting" aria-label="Close dialog">
           <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
@@ -134,9 +134,15 @@
                       <option [value]="cred.ID">{{ cred.Name }}</option>
                     }
                   </select>
-                  <span class="form-hint">
-                    Resolved via MemberJunction CredentialEngine.
-                  </span>
+                  @if (CredentialsError) {
+                    <span class="form-hint error-hint">
+                      <i class="fa-solid fa-triangle-exclamation"></i> {{ CredentialsError }}
+                    </span>
+                  } @else {
+                    <span class="form-hint">
+                      Resolved via MemberJunction CredentialEngine.
+                    </span>
+                  }
                 }
               </div>
 
@@ -148,7 +154,9 @@
                   </div>
                   <button
                     type="button"
-                    class="btn btn-secondary btn-sm"
+                    mjButton
+                    variant="secondary"
+                    size="sm"
                     [disabled]="IsBrowsingAzure"
                     (click)="BrowseAzureBlobs()"
                   >
@@ -209,6 +217,9 @@
                         <span class="file-size-badge">{{ blob.SizeFormatted }}</span>
                         <button
                           type="button"
+                          mjButton
+                          variant="flat"
+                          size="sm"
                           class="btn-select-only"
                           title="Select only this file"
                           (click)="$event.stopPropagation(); SelectSingleAzureBlob(blob.Name)"
@@ -237,84 +248,70 @@
 
             <!-- ================= LOCAL DISK FILE SECTION ================= -->
             @if (SourceType === 'local') {
-              <!-- Interactive Local File Browser -->
+              <!-- Local Backup Verification Card -->
               <div class="browser-card">
                 <div class="browser-header">
                   <div class="browser-title">
-                    <i class="fa-solid fa-folder-tree"></i> Local Directory & File Browser
+                    <i class="fa-solid fa-hard-drive"></i> Backup Verification
                   </div>
-                  <span class="badge-hint">SQL Server Host Filesystem</span>
-                </div>
-
-                <div class="browser-inputs">
-                  <label class="form-label-inline">Host Directory:</label>
-                  <input
-                    type="text"
-                    class="form-control"
-                    [(ngModel)]="LocalServerDirectory"
-                    (change)="refreshLocalFiles()"
-                    placeholder="/var/opt/mssql/backup"
-                  />
+                  <button
+                    type="button"
+                    mjButton
+                    variant="secondary"
+                    size="sm"
+                    [disabled]="IsVerifyingBackup || !BackupUrls.trim()"
+                    (click)="VerifyLocalBackup()"
+                  >
+                    @if (IsVerifyingBackup) {
+                      <i class="fa-solid fa-spinner fa-spin"></i> Verifying...
+                    } @else {
+                      <i class="fa-solid fa-circle-check"></i> Verify Backup
+                    }
+                  </button>
                 </div>
 
                 <div class="preset-chips">
                   <span class="preset-label">Quick Paths:</span>
-                  @for (preset of DirectoryPresets; track preset.path) {
+                  @for (preset of DirectoryPresets; track preset.Path) {
                     <button
                       type="button"
                       class="preset-chip"
-                      [class.active]="LocalServerDirectory === preset.path"
-                      (click)="SetLocalDirectory(preset.path)"
+                      (click)="ApplyDirectoryPreset(preset.Path)"
                     >
-                      {{ preset.label }}
+                      {{ preset.Label }}
                     </button>
                   }
                 </div>
 
-                <div class="browser-add-file-row">
-                  <input
-                    type="text"
-                    class="form-control"
-                    placeholder="Enter backup filename (e.g. MyDatabase.bak)"
-                    [(ngModel)]="CustomFileNameInput"
-                    (keyup.enter)="AddCustomLocalFile()"
-                  />
-                  <button
-                    type="button"
-                    class="btn btn-secondary btn-sm"
-                    [disabled]="!CustomFileNameInput.trim()"
-                    (click)="AddCustomLocalFile()"
-                  >
-                    <i class="fa-solid fa-plus"></i> Add File
-                  </button>
-                </div>
+                @if (VerifyBackupError) {
+                  <div class="browser-error-banner">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span>{{ VerifyBackupError }}</span>
+                  </div>
+                }
 
-                <div class="browser-items-list">
-                  @for (file of LocalBakFiles; track file.Name) {
-                    <div
-                      class="browser-item-row"
-                      [class.selected]="SelectedLocalFiles.has(file.Name)"
-                      (click)="ToggleLocalFile(file.Name)"
-                    >
-                      <input
-                        type="checkbox"
-                        [checked]="SelectedLocalFiles.has(file.Name)"
-                        (click)="$event.stopPropagation(); ToggleLocalFile(file.Name)"
-                      />
-                      <i class="fa-solid fa-hard-drive file-icon"></i>
-                      <span class="file-name" [title]="file.FullPath">{{ file.Name }}</span>
-                      <span class="file-size-badge">{{ file.SizeFormatted }}</span>
-                      <button
-                        type="button"
-                        class="btn-select-only"
-                        title="Select only this file"
-                        (click)="$event.stopPropagation(); SelectSingleLocalFile(file.Name)"
-                      >
-                        Select
-                      </button>
+                @if (VerifiedBackupHeader) {
+                  <div class="header-metadata-card">
+                    <div class="metadata-grid">
+                      <div class="metadata-item">
+                        <span class="meta-label">Database Name</span>
+                        <span class="meta-value"><strong>{{ VerifiedBackupHeader.DatabaseName }}</strong></span>
+                      </div>
+                      <div class="metadata-item">
+                        <span class="meta-label">Backup Start Date (UTC)</span>
+                        <span class="meta-value">{{ VerifiedBackupHeader.BackupStartDateUTC }}</span>
+                      </div>
+                      <div class="metadata-item">
+                        <span class="meta-label">Backup Size</span>
+                        <span class="meta-value">{{ VerifiedBackupHeader.SizeFormatted || (VerifiedBackupHeader.SizeBytes ? FormatBytes(VerifiedBackupHeader.SizeBytes) : '—') }}</span>
+                      </div>
+                      <div class="metadata-item">
+                        <span class="meta-label">Stripes</span>
+                        <span class="meta-value">{{ VerifiedBackupHeader.Stripes ?? 1 }} file(s)</span>
+                      </div>
                     </div>
-                  }
-                </div>
+                  </div>
+                }
               </div>
 
               <div class="form-section">
@@ -324,9 +321,10 @@
                   rows="3"
                   placeholder="/var/opt/mssql/backup/AdventureWorks2022.bak, /var/opt/mssql/backup/AdventureWorks2022_stripe2.bak"
                   [(ngModel)]="BackupUrls"
+                  (ngModelChange)="OnBackupPathChanged()"
                 ></textarea>
                 <span class="form-hint">
-                  Selected local files appear here. You can also directly type or paste local paths accessible by SQL Server (e.g., C:\... or /var/...).
+                  Enter the absolute file path on the SQL Server host. For striped backups, separate paths with commas. Click "Verify Backup" to inspect headers.
                 </span>
               </div>
             }
@@ -344,6 +342,7 @@
               </div>
             </div>
 
+            <!-- Options: Drop Staging DB -->
             <div class="form-section toggle-box">
               <label class="checkbox-container">
                 <input type="checkbox" [(ngModel)]="DropStagingDbOnComplete" />
@@ -351,6 +350,20 @@
                   <strong>Automatically drop staging database upon completion</strong>
                   <p class="checkbox-desc">
                     Reclaims 2–3 TB of disk space immediately after row counts are verified. Recommended.
+                  </p>
+                </span>
+              </label>
+            </div>
+
+            <!-- Options: Truncate Target Before Load -->
+            <div class="form-section toggle-box warning-toggle-box">
+              <label class="checkbox-container">
+                <input type="checkbox" [(ngModel)]="TruncateTargetBeforeLoad" />
+                <span class="checkbox-label">
+                  <strong>Truncate target tables before loading data</strong>
+                  <p class="checkbox-desc warning-desc">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    Caution: Permanently removes all existing data in target MemberJunction tables for mapped entities before loading. Use only for clean initial loads.
                   </p>
                 </span>
               </label>
@@ -510,32 +523,32 @@
       <!-- Modal Footer -->
       <div class="modal-footer">
         @if (CurrentStep === 1) {
-          <button class="btn btn-secondary" (click)="Close()">Cancel</button>
-          <button class="btn btn-primary" [disabled]="!IsStep1Valid" (click)="GoToStep(2)">
+          <button mjButton variant="secondary" (click)="Close()">Cancel</button>
+          <button mjButton variant="primary" [disabled]="!IsStep1Valid" (click)="GoToStep(2)">
             Next: Preview & Inspect <i class="fa-solid fa-arrow-right"></i>
           </button>
         }
 
         @if (CurrentStep === 2) {
-          <button class="btn btn-secondary" (click)="GoToStep(1)">
+          <button mjButton variant="secondary" (click)="GoToStep(1)">
             <i class="fa-solid fa-arrow-left"></i> Back
           </button>
-          <button class="btn btn-primary btn-launch" [disabled]="EntityMaps.length === 0" (click)="StartBootstrap()">
+          <button mjButton variant="primary" [disabled]="EntityMaps.length === 0" (click)="StartBootstrap()">
             <i class="fa-solid fa-rocket"></i> Launch Bootstrap
           </button>
         }
 
         @if (CurrentStep === 3) {
           @if (ExecutionError) {
-            <button class="btn btn-secondary" (click)="GoToStep(1)">Back to Config</button>
-            <button class="btn btn-danger" (click)="Close()">Close</button>
+            <button mjButton variant="secondary" (click)="GoToStep(1)">Back to Config</button>
+            <button mjButton variant="danger" (click)="Close()">Close</button>
           } @else {
             <span class="footer-busy-note"><i class="fa-solid fa-spinner fa-spin"></i> Processing... Please do not close this window.</span>
           }
         }
 
         @if (CurrentStep === 4) {
-          <button class="btn btn-success" (click)="Finish()">
+          <button mjButton variant="primary" (click)="Finish()">
             <i class="fa-solid fa-check"></i> Done
           </button>
         }
