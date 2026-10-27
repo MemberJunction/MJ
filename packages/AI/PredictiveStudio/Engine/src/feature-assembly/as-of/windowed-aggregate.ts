@@ -4,7 +4,8 @@
  * Summaries of a dated child table as of a decision date: rows dated in (d − windowDays, d] (or on/before d when no
  * window), minus rows voided on or before d, then count | sum | mean | distinct | days-since, or active-at
  * (dateField <= d and (endDateField null or >= d)). Generalises the executor's two hard-coded aggregates. sum and
- * mean skip a missing value (null, undefined or blank) and refuse a present value that is not a number.
+ * mean skip a missing value (null, undefined or blank) and refuse a present value that is not a number (a date, a
+ * boolean or text).
  */
 import { OrdinalCompare } from '@memberjunction/global';
 import type { WindowedAggregateSource } from '@memberjunction/predictive-studio-core';
@@ -53,9 +54,15 @@ export class WindowedAggregates {
     return out;
   }
 
-  /** The aggregate for one owner as of `decision`, with the child rows that contributed to it. */
+  /**
+   * The aggregate for one owner as of `decision`, read as its UTC day so a time of day never shifts the window.
+   * `Contributors` are the child rows the aggregate read (the window, or the rows active on the day; the latest row for
+   * days-since), including rows whose value a sum or mean skipped as missing.
+   */
   public static ComputeWindowedAggregate(index: ChildRowIndex, ownerKey: string, decision: Date, spec: WindowedAggregateSource): { readonly Value: number | null; readonly Contributors: readonly ChildRow[] } {
-    const d = decision.getTime();
+    const decisionDay = UtcDay.ToUtcDay(decision);
+    if (decisionDay === null) throw new Error(`Windowed aggregate ${spec.childEntity}: the decision date is not a valid date`);
+    const d = decisionDay.getTime();
     const all = index.get(ownerKey.toLowerCase()) || [];
     const live = all.filter((c) => c.VoidedDay === null || c.VoidedDay.getTime() > d);
     if (spec.aggregate === 'active-at') {
@@ -81,14 +88,15 @@ export class WindowedAggregates {
 
   /**
    * The numbers a sum or mean reads: a missing value (null, undefined or a blank string) is skipped so it neither adds
-   * nor counts in a mean's denominator; a present value that is not a number refuses, so it is never silently dropped.
+   * nor counts in a mean's denominator. A number is a finite number or a non-blank string that parses to one; any
+   * other present value (a date, a boolean, text) refuses, so it is never silently dropped or read as epoch ms / 1 / 0.
    */
   private static numericValues(rows: readonly ChildRow[], spec: WindowedAggregateSource): number[] {
     const out: number[] = [];
     for (const c of rows) {
       const v = c.Value;
       if (v === null || v === undefined || (typeof v === 'string' && v.trim() === '')) continue;
-      const n = Number(v);
+      const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : Number.NaN;
       if (!Number.isFinite(n)) {
         throw new AssemblyRefused({ kind: 'non-numeric-in-numeric-column', column: `${spec.childEntity}.${spec.valueField}`, sampleValue: String(v) });
       }

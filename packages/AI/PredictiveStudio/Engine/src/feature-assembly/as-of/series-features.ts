@@ -19,7 +19,11 @@ export type SeriesHistory = { readonly Spec: TemporalSpec; readonly ByEntity: Re
 
 /** Series lags and rolling windows (static members on one owner class). */
 export class SeriesFeatures {
-  /** Calendar index of a period start (months since 1970 for monthly, days for daily, …). */
+  /**
+   * Calendar index of a period start, monotonic in time so consecutive periods differ by one: days since the epoch for
+   * daily, year * 12 + month for monthly, the year for yearly. Weekly buckets count whole weeks from the epoch (a
+   * Thursday), so they rely on every point being a period start on one consistent weekday.
+   */
   public static PeriodIndex(period: Date, unit: TemporalSpec['period']): number {
     switch (unit) {
       case 'day': return Math.floor(period.getTime() / MS_PER_DAY);
@@ -45,6 +49,8 @@ export class SeriesFeatures {
   public static ComputeSeriesFeature(
     history: SeriesHistory, entityKey: string, period: Date, spec: TemporalSpec, feature: SeriesFeatureRef,
   ): { readonly Value: number | null; readonly SourceRowIds: readonly string[] } {
+    const declared = feature.kind === 'lag' ? spec.lags.length : spec.rollingWindows.length;
+    if (!Number.isInteger(feature.index) || feature.index < 0 || feature.index >= declared) throw SeriesFeatures.indexError(feature, declared);
     const series = history.ByEntity.get(entityKey.toLowerCase());
     const t = SeriesFeatures.PeriodIndex(period, spec.period);
     if (!series) return { Value: null, SourceRowIds: [] };
@@ -64,5 +70,10 @@ export class SeriesFeatures {
       : w.aggregate === 'sum' ? values.reduce((s, v) => s + v, 0)
       : w.aggregate === 'min' ? Math.min(...values) : Math.max(...values);
     return { Value: value, SourceRowIds: pts.map((p) => p.RowId) };
+  }
+
+  /** Feature resolution refuses an out-of-range index; this guards the computation against a caller that skipped it. */
+  private static indexError(feature: SeriesFeatureRef, declared: number): Error {
+    return new Error(`Series ${feature.kind} feature index ${feature.index} is outside the Temporal Spec, which declares ${declared}`);
   }
 }

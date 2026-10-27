@@ -17,4 +17,8 @@ describe('ComputeSeriesFeature', () => {
   it('returns null when the lag reaches before the first period', () => {
     expect(SeriesFeatures.ComputeSeriesFeature(history, 'series', new Date(Date.UTC(2005, 5, 1)), spec, { kind: 'lag', index: 1 }).Value).toBeNull();
   });
+  it('throws when a feature index is past the Temporal Spec', () => {
+    expect(() => SeriesFeatures.ComputeSeriesFeature(history, 'series', new Date(Date.UTC(2006, 5, 1)), spec, { kind: 'lag', index: 2 })).toThrow(/lag.*index 2/);
+    expect(() => SeriesFeatures.ComputeSeriesFeature(history, 'series', new Date(Date.UTC(2006, 5, 1)), spec, { kind: 'rolling', index: 1 })).toThrow(/rolling.*index 1/);
+  });
 });
