@@ -11,6 +11,12 @@ export type RowCapForm = 'top' | 'limit-offset' | 'offset-fetch';
 export type CorrelatedJoinForm = 'apply' | 'lateral' | 'both' | 'none';
 
 /**
+ * A select-list alias form besides `expr [AS] alias`: `'equals'` (`alias = expr`, SQL Server) or
+ * `'string'` (`expr 'alias'`, a string literal used as the alias).
+ */
+export type ColumnAliasForm = 'equals' | 'string';
+
+/**
  * Facts about a dialect's statement grammar that code rewriting or screening SQL needs.
  */
 export interface DialectGrammar {
@@ -55,4 +61,11 @@ export interface DialectGrammar {
     readonly SelectListPagingOrderBy: string | null;
     /** Whether skipping rows for a page requires an ORDER BY. */
     readonly PagingRequiresOrderBy: boolean;
+    /** Select-list alias forms the dialect accepts besides `expr [AS] alias`; none when absent. */
+    readonly ExtraColumnAliasForms?: readonly ColumnAliasForm[];
+    /**
+     * Whether a FROM source's name used as a value stands for the whole row, as in PostgreSQL's
+     * `SELECT t FROM t` and `row_to_json(t)`. False when absent.
+     */
+    readonly SourceNameIsRowValue?: boolean;
 }

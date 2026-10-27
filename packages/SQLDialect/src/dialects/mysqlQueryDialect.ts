@@ -1,6 +1,6 @@
 import type { DialectKey } from '../facets/dialectKey.js';
 import type { DialectLexicalRules, ParameterPlaceholderForm } from '../facets/dialectLexicalRules.js';
-import type { DialectGrammar, RowCapForm } from '../facets/dialectGrammar.js';
+import type { ColumnAliasForm, DialectGrammar, RowCapForm } from '../facets/dialectGrammar.js';
 import type { DateAddUnit, DialectWriter, LimitClauseResult } from '../facets/dialectWriter.js';
 import { ANSI_GRAMMAR, ANSI_LEXICAL, ANSI_WRITE_STATEMENT_KEYWORDS, AnsiQueryDialect, AnsiWriter } from './ansi.js';
 
@@ -63,6 +63,7 @@ export const MYSQL_GRAMMAR: DialectGrammar = Object.freeze({
     CallerSQLForbiddenFunctions: Object.freeze(['load_file', 'sleep', 'benchmark', 'get_lock', 'release_lock', 'release_all_locks']),
     // ORDER BY a column position is deprecated in MySQL; ORDER BY NULL is accepted and imposes no order.
     DefaultPagingOrderBy: 'NULL',
+    ExtraColumnAliasForms: Object.freeze<ColumnAliasForm[]>(['string']),
 });
 
 /** Writes MySQL: backtick identifiers, backslash-safe string literals, `LIMIT`, `CONCAT()`. */

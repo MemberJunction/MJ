@@ -23,7 +23,7 @@ export type {
     ParameterPlaceholderForm,
     IdentifierCaseFolding,
 } from './facets/dialectLexicalRules.js';
-export type { DialectGrammar, RowCapForm, CorrelatedJoinForm } from './facets/dialectGrammar.js';
+export type { DialectGrammar, RowCapForm, CorrelatedJoinForm, ColumnAliasForm } from './facets/dialectGrammar.js';
 export type { DialectTypes } from './facets/dialectTypes.js';
 export type { DialectBinding } from './facets/dialectBinding.js';
 export { QueryDialect } from './queryDialect.js';

@@ -142,3 +142,88 @@ export type {
     CompositionTargetParameter,
     CompositionResolver,
 } from './template/validationTypes.js';
+
+// ─── SqlDocument: the tolerant structural parser, scope, analyses and edits ───
+export { SqlDocument } from './sql/sqlDocument.js';
+export { SqlDocumentDiagnosticCodes } from './sql/sqlDiagnosticCodes.js';
+export type { SqlDocumentDiagnosticCode } from './sql/sqlDiagnosticCodes.js';
+export { SqlExpression } from './sql/sqlExpression.js';
+export type { IdentifierPath, FunctionCall, StarReference } from './sql/sqlExpression.js';
+export { SqlScope, NameKey } from './sql/sqlScope.js';
+export type {
+    ColumnClause,
+    ScopeSource,
+    ScopeSourceKind,
+    QueryScope,
+    ExpressionContext,
+    QualifierBinding,
+} from './sql/sqlScope.js';
+export { SqlNodeChildren, WalkSqlNodes, LeftmostSelect, IsQueryExpression } from './sql/sqlWalker.js';
+export type {
+    SqlNode,
+    UnknownNode,
+    IdentifierNode,
+    ObjectName,
+    SqlStatementKind,
+    StatementNode,
+    QueryNode,
+    WithClause,
+    CTEDeclaration,
+    QueryTailClauses,
+    QueryExpression,
+    SelectCore,
+    SetOperator,
+    SetOperationNode,
+    ParenthesizedQuery,
+    ValuesQuery,
+    DistinctClause,
+    TopClause,
+    SelectItem,
+    IntoClause,
+    FromClause,
+    FromSource,
+    SourceAlias,
+    TableSource,
+    DerivedSource,
+    FunctionSource,
+    ValuesSource,
+    JoinKind,
+    JoinSource,
+    ApplySource,
+    PivotSource,
+    ParenthesizedSource,
+    ConditionClause,
+    GroupByClause,
+    WindowClause,
+    WindowDefinition,
+    OrderByClause,
+    OrderByItem,
+    LimitClause,
+    OffsetClause,
+    FetchClause,
+    ForClauseForm,
+    ForClause,
+    OptionClause,
+} from './sql/sqlNodes.js';
+export type {
+    TableReference,
+    CTEInfo,
+    OutputItem,
+    OutputItems,
+    TopLevelOrderBy,
+    RowCap,
+    ReadOnlyCheck,
+    ColumnBinding,
+    ColumnReference,
+    WholeRowKind,
+    WholeRowConstruct,
+    DuplicateOutputName,
+    DuplicateOutputNameOptions,
+} from './sql/analyses/analysisTypes.js';
+export { EditSet, EditConflictError, SpanMap } from './edit/editSet.js';
+export type { EditTarget, TextEdit, TextEditKind, AppliedEdits, OffsetBias } from './edit/editSet.js';
+export type { SqlTransformResult, TransformDialect } from './edit/transformSupport.js';
+export { StripOrderBy, ReplaceSelectList, AppendTail, SetRowCap } from './edit/clauseTransforms.js';
+export type { AppendTailOptions } from './edit/clauseTransforms.js';
+export { HoistCTEs, RenameCTE, WrapAsDerivedTable, OutputOrderBy } from './edit/cteTransforms.js';
+export type { HoistedCTE, HoistedCTEs, WrapOptions } from './edit/cteTransforms.js';

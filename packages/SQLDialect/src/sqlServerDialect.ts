@@ -2,7 +2,7 @@ import { SQLDialect, DatabasePlatform } from './sqlDialect.js';
 import { ANSI_GRAMMAR, ANSI_LEXICAL, ANSI_WRITE_STATEMENT_KEYWORDS, AnsiWriter } from './dialects/ansi.js';
 import { SQLServerSchemaDDL } from './dialects/sqlServerSchemaDDL.js';
 import type { DialectLexicalRules, ParameterPlaceholderForm } from './facets/dialectLexicalRules.js';
-import type { DialectGrammar, RowCapForm } from './facets/dialectGrammar.js';
+import type { ColumnAliasForm, DialectGrammar, RowCapForm } from './facets/dialectGrammar.js';
 import type { DialectWriter, LimitClauseResult } from './facets/dialectWriter.js';
 import type { DialectTypes } from './facets/dialectTypes.js';
 import type { DialectBinding } from './facets/dialectBinding.js';
@@ -61,6 +61,7 @@ export const SQL_SERVER_GRAMMAR: DialectGrammar = Object.freeze({
     DefaultPagingOrderBy: '(SELECT NULL)',
     SelectListPagingOrderBy: '1',
     PagingRequiresOrderBy: true,
+    ExtraColumnAliasForms: Object.freeze<ColumnAliasForm[]>(['equals', 'string']),
 });
 
 /**

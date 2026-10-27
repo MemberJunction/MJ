@@ -60,6 +60,7 @@ export const POSTGRESQL_GRAMMAR: DialectGrammar = Object.freeze({
         'COPY', 'DO', 'VACUUM', 'REINDEX', 'CLUSTER', 'REFRESH', 'LOCK', 'COMMENT', 'IMPORT', 'SECURITY',
     ]),
     CallerSQLForbiddenFunctions: POSTGRESQL_CALLER_SQL_FORBIDDEN_FUNCTIONS,
+    SourceNameIsRowValue: true,
 });
 
 /**
