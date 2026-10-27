@@ -14,6 +14,7 @@ import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { MJQueryEntityExtended, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryDependencyEntity, QueryEngine } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { CompositionTokenClickEvent } from '@memberjunction/ng-code-editor';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 
@@ -64,7 +65,7 @@ export interface OpenQueryRecordEvent {
         ])
     ]
 })
-export class QueryInfoPanelComponent implements OnInit, OnDestroy {
+export class QueryInfoPanelComponent extends BaseAngularComponent implements OnInit, OnDestroy {
     // ========================================
     // Inputs
     // ========================================
@@ -93,6 +94,7 @@ export class QueryInfoPanelComponent implements OnInit, OnDestroy {
     private widthPersistSubject = new Subject<number>();
 
     constructor(private cdr: ChangeDetectorRef) {
+        super();
         // Debounce width persistence
         this.widthPersistSubject.pipe(
             debounceTime(500),
@@ -140,9 +142,17 @@ export class QueryInfoPanelComponent implements OnInit, OnDestroy {
         this.CompositionTokenClick.emit(event);
     }
 
+    /**
+     * The QueryEngine for this panel's provider: the global instance without a Provider input, as
+     * before; otherwise the engine for that provider's connection, which the viewer has loaded.
+     */
+    private get queryEngine(): QueryEngine {
+        return this.Provider ? QueryEngine.GetProviderInstance<QueryEngine>(this.Provider, QueryEngine) as QueryEngine : QueryEngine.Instance;
+    }
+
     public OnDependentQueryClick(dep: MJQueryDependencyEntity): void {
         // Navigate to the dependent (referencing) query
-        const depQuery = QueryEngine.Instance.Queries.find(q => UUIDsEqual(q.ID, dep.QueryID));
+        const depQuery = this.queryEngine.Queries.find(q => UUIDsEqual(q.ID, dep.QueryID));
         const categoryPath = depQuery?.CategoryPath || '';
         const fullPath = categoryPath ? `${categoryPath}/${dep.Query}` : dep.Query;
         this.CompositionTokenClick.emit({

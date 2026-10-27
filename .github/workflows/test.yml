@@ -133,6 +133,9 @@ jobs:
             # Same again for the EntityField Sequence gate: its vitest suite lives in __tests__, but an
             # edit to the gate script alone must run it too.
             .github/scripts/check-migration-entityfield-sequence.mjs
+            # Same again for the exact-pins guard: it runs in ci-exact-pins.yml, not here, but its
+            # vitest suite lives in __tests__ — so an edit to the guard script alone must run it too.
+            .github/scripts/check-exact-pins.mjs
             # The browser-manifest server-leakage gate runs in this workflow (see that step).
             # The two guarded manifests are listed too: a PR that edits ONLY a generated manifest
             # is exactly the shape that can introduce a leak, and neither path is under packages/**
@@ -334,7 +337,7 @@ jobs:
       # (that is the other half of this fix), so pointing at it here would match nothing. And
       # `--passWithNoTests=false` overrides the shared default, so if these paths are ever renamed
       # this step fails loudly instead of quietly passing with zero tests and disabling the gate.
-      - name: Repo-wide compliance scans (UUID + multi-provider)
+      - name: Repo-wide compliance scans (UUID + multi-provider + field-security egress)
         if: ${{ !cancelled() }}
         run: >-
           pnpm --filter @memberjunction/global exec vitest run
@@ -342,6 +345,7 @@ jobs:
           --passWithNoTests=false
           src/__tests__/UUIDCompliance.test.ts
           src/__tests__/MultiProviderCompliance.test.ts
+          src/__tests__/FieldSecurityEgressCompliance.test.ts
 
       - name: Generic DOM coverage ratchet
         if: ${{ !cancelled() }}
@@ -400,6 +404,26 @@ jobs:
         # defers the leak hunt to the next push.
         if: ${{ !cancelled() }}
         run: node .github/scripts/check-browser-manifest-leakage.mjs
+
+      # Entity class-registration manifest completeness gate (#6027). A `@RegisterClass(BaseEntity, …)`
+      # subclass missing from the committed manifests compiles, tests green and merges — then the app
+      # instantiates the BASE class, so whatever the subclass overrode never runs.
+      #
+      # The freshness gate below cannot catch it on a PR: it regenerates the manifests and diffs them,
+      # which needs a fully built tree, so it is gated on the full-suite path and every filtered PR run
+      # skips it. That is how `next` stayed red on this for most of 2026-10-22 (#5973 and #4412, fixed
+      # by #6009), and how #5997 and #6022 reached review with a class in no manifest. This gate is
+      # static — committed source against committed manifests, no build and no dist — so it belongs
+      # with the other pure-file guards and runs on every PR.
+      #
+      # Scoped to `BaseEntity` deliberately: measured on `next`, that rule flags 0 of 535 registrations,
+      # where looser rules flag 87 and 607. The script header carries the numbers; re-measure before
+      # widening it.
+      - name: Entity manifest registration gate
+        # `!cancelled()` for the same reason as its neighbours: a step's default `if: success()` would
+        # skip it whenever an earlier guard failed.
+        if: ${{ !cancelled() }}
+        run: pnpm run check:manifest-registrations
 
       # Python dialect tests against the COMMITTED sqlglot pin (issue #3252 review): the
       # sqlglot-ts vitest suite auto-skips when Python/sqlglot is absent, so CI never

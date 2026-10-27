@@ -115,6 +115,9 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
       *                      Provider-specific credential object (e.g., SendGridCredentials).
       *                      If not provided, uses environment variables.
       *                      Set `credentials.disableEnvironmentFallback = true` to require explicit credentials.
+      * @param contextUser - Optional user the messages are processed as (template rendering and its
+      *                      extensions). Defaults to this engine's context user; pass it whenever the send
+      *                      is on behalf of a specific user, since the engine is shared across requests.
       */
      public async SendMessages(
         providerName: string,
@@ -122,7 +125,8 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
         message: Message,
         recipients: MessageRecipient[],
         previewOnly: boolean = false,
-        credentials?: ProviderCredentialsBase
+        credentials?: ProviderCredentialsBase,
+        contextUser?: UserInfo
      ): Promise<MessageResult[]> {
         const run = await this.base.StartRun();
         if (!run)
@@ -133,7 +137,7 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
             const messageCopy = new Message(message);
             messageCopy.To = r.To;
             messageCopy.ContextData = r.ContextData;
-            const result = await this.SendSingleMessage(providerName, providerMessageTypeName, messageCopy, run, previewOnly, credentials);
+            const result = await this.SendSingleMessage(providerName, providerMessageTypeName, messageCopy, run, previewOnly, credentials, contextUser);
             results.push(result);
         }
 
@@ -159,6 +163,7 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
       *                      Provider-specific credential object (e.g., SendGridCredentials).
       *                      If not provided, uses environment variables.
       *                      Set `credentials.disableEnvironmentFallback = true` to require explicit credentials.
+      * @param contextUser - Optional user the message is processed as. Defaults to this engine's context user.
       */
      public async SendSingleMessage(
         providerName: string,
@@ -166,7 +171,8 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
         message: Message,
         run?: MJCommunicationRunEntity,
         previewOnly?: boolean,
-        credentials?: ProviderCredentialsBase
+        credentials?: ProviderCredentialsBase,
+        contextUser?: UserInfo
      ): Promise<MessageResult> {
         if (!this.Loaded){
             throw new Error(`Metadata not loaded. Call Config() before accessing metadata.`);
@@ -194,7 +200,7 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
 
         // now, process the message
         const processedMessage = new ProcessedMessageServer(message);
-        const processResult = await processedMessage.Process(false, this.ContextUser);
+        const processResult = await processedMessage.Process(false, contextUser ?? this.ContextUser);
         if (processResult.Success) {
             if (previewOnly) {
                 return { Success: true, Error: '', Message: processedMessage };

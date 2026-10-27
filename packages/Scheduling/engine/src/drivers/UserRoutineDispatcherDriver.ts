@@ -972,7 +972,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
                 resultSummary: run.ResultSummary ?? '',
                 status: run.Status,
             };
-            const rendered = await TemplateEngineServer.Instance.RenderTemplate(template, content, data, true);
+            const rendered = await TemplateEngineServer.Instance.RenderTemplate(template, content, data, true, undefined, { ContextUser: contextUser });
             if (rendered.Success && rendered.Output) {
                 return rendered.Output;
             }

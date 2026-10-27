@@ -135,6 +135,10 @@ class FakeLedger implements IRealtimeRecordingLedger {
         throw new Error('not used by the routes');
     }
 
+    public async StampFile(): Promise<{ RecordingStatus: string | null }> {
+        throw new Error('not used by the routes');
+    }
+
     public async LoadShards(sessionID: string): Promise<LedgerShard[]> {
         return [...this.shardsOf(sessionID).values()].sort((a, b) => a.Index - b.Index)
             .map(s => ({ Index: s.Index, StartSample: s.StartSample, SampleCount: s.SampleCount, Data: s.Data }));
@@ -198,6 +202,7 @@ function callerLedger(inner: FakeLedger): IRealtimeRecordingLedger {
         ClaimAssembly: id => inner.ClaimAssembly(id),
         FinishAssembly: input => inner.FinishAssembly(input),
         StampAssemblyGaps: () => inner.StampAssemblyGaps(),
+        StampFile: () => inner.StampFile(),
         LoadShards: refuse,
         LoadShardMetadata: refuse,
         CountShardsBelow: refuse,
@@ -221,7 +226,7 @@ describe('realtime recording REST routes', () => {
         const app = express();
         app.use(REALTIME_RECORDING_MOUNT_PATH, CreateRealtimeRecordingRouter(deps));
         server = await new Promise<Server>(resolve => {
-            const s = app.listen(0, () => resolve(s));
+            const s = app.listen(0, '127.0.0.1', () => resolve(s));
         });
         baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}${REALTIME_RECORDING_MOUNT_PATH}`;
     }
@@ -264,11 +269,15 @@ describe('realtime recording REST routes', () => {
                 const user = {
                     ID: id,
                     IsMagicLinkAnonymous: req.header('x-test-anonymous') === 'true',
+                    AnonymousVisitorID: scope ?? undefined,
                     MagicLinkScope: scope ? { ResourceID: scope } : undefined,
                 };
                 return id ? { ContextUser: user as unknown as UserInfo, Provider: {} as unknown as DatabaseProviderBase } : null;
             },
-            LoadConversationExternalID: async session => ledger.Sessions.get(session.ID)?.ConversationExternalID ?? null,
+            LoadConversationScope: async session => {
+                const row = ledger.Sessions.get(session.ID);
+                return { ExternalID: row?.ConversationExternalID ?? null, Readable: row?.ConversationExternalID !== undefined };
+            },
             LoadOwnedSession: async (agentSessionId, contextUser) => {
                 const row = ledger.Sessions.get(agentSessionId);
                 if (!row) {
@@ -389,6 +398,14 @@ describe('realtime recording REST routes', () => {
                 const headers = { 'x-test-anonymous': 'true', 'x-test-scope': SCOPE };
                 expect((await post(`/${SESSION}/shard/0`, shardBytes(0), OWNER_ID, headers)).status).toBe(200);
                 expect((await post(`/${SESSION}/end?lastShardIndex=0&capturedSamples=${SHARD_SAMPLES}`, null, OWNER_ID, headers)).status).toBe(200);
+            });
+
+            it('accepts a named owner holding a resource-scoped link on its own unstamped conversation, and refuses another stamp (#4931)', async () => {
+                const headers = { 'x-test-scope': 'res-1' };
+                addSession(SESSION, { ConversationExternalID: null });
+                expect((await post(`/${SESSION}/shard/0`, shardBytes(0), OWNER_ID, headers)).status).toBe(200);
+                addSession(SESSION, { ConversationExternalID: 'res-2' });
+                expect((await post(`/${SESSION}/shard/1`, shardBytes(1), OWNER_ID, headers)).status).toBe(403);
             });
 
             it('leaves a named owner (no scope, not anonymous) unaffected', async () => {

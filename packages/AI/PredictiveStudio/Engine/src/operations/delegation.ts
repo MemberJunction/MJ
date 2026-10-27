@@ -3,10 +3,10 @@
  *
  * Shared **engine-delegation helpers** for the Predictive Studio Remote Operations.
  *
- * The six Manual-mode Remote Operations and the four Predictive Studio Actions are
+ * The seven Manual-mode Remote Operations and the five Predictive Studio Actions are
  * two thin invocation surfaces over the SAME engine service classes
- * (`TrainingEngine`, `ProductionScoreRecordSetRunner`, `ExperimentOrchestrator` via
- * `buildProductionExperimentDeps`, `ProductionModelPromotionGate`). Per CLAUDE.md
+ * (`TrainingEngine`, `ProductionScoreRecordSetRunner`, `ProductionModelPromotionGate`; experiment
+ * sessions are switched off and refuse with `ExperimentSessionsUnavailableError`). Per CLAUDE.md
  * "push improvements to the generic level" and DRY, the production wiring each path
  * needs lives here exactly ONCE, so the Remote Ops and Actions share one delegation
  * path rather than duplicating the deps/seam construction.
@@ -27,7 +27,7 @@ import type { TrainModelInput, TrainModelResult, TrainingDeps } from '../trainin
 
 import { ExperimentOrchestrator } from '../experiment/experiment-orchestrator';
 import type { ExperimentRunOptions, ExperimentSessionResult } from '../experiment/types';
-import { BuildProductionExperimentDeps } from '../actions/run-experiment.deps';
+import { ExperimentSessionsUnavailableError } from '../actions/run-experiment.deps';
 
 import { ProductionScoreRecordSetRunner } from '../actions/score-record-set.runner';
 import { RunViewMLModelLoader, MJSidecarPredictor } from '../scoring/seams';
@@ -57,7 +57,7 @@ import type {
  * Build the {@link TrainingEngine}'s production dependency bundle from a per-call
  * `provider` + `user`. Resolves the active File Storage Provider once and chooses
  * the artifact-store family accordingly (MJ-Files when a provider is active, local
- * disk when none is — see {@link resolveActiveFileStorageProviderId}). Async so the
+ * disk when none is — see {@link ResolveActiveFileStorageProviderId}). Async so the
  * provider lookup is part of the wiring; the scoring side keys off the SAME
  * decision (the composite loader routes by whether the artifact exists on local
  * disk) so a model never gets trained to one family and scored from another.
@@ -133,7 +133,7 @@ export function wasTrainingLeakageFlagged(result: TrainModelResult): boolean {
  * {@link RunViewMLModelLoader} (loads the `MJ: ML Models` row), the
  * {@link MJSidecarPredictor} (runs `/predict` against the Python sidecar) and the
  * {@link LocalArtifactLoader} (reads the model bytes back by their `MJ: Files` row id,
- * the read-side inverse of `MJFilesArtifactStore`). Shared by {@link buildScoreRecordSetRunner}
+ * the read-side inverse of `MJFilesArtifactStore`). Shared by {@link BuildScoreRecordSetRunner}
  * (the Score action / Remote Op path) AND the startup work-type registration so a model
  * trained one way is always scored the same way — one source of truth (CLAUDE.md DRY).
  *
@@ -151,7 +151,7 @@ export function buildProductionMLInferenceDeps(): MLInferenceDeps {
 
 /**
  * Build the production scoring runner wired with the production {@link MLInferenceDeps}
- * (see {@link buildProductionMLInferenceDeps}). No provider lookup is needed at score
+ * (see {@link BuildProductionMLInferenceDeps}). No provider lookup is needed at score
  * time — the File id IS the artifact key.
  */
 export function BuildScoreRecordSetRunner(): ProductionScoreRecordSetRunner {
@@ -170,7 +170,7 @@ export function buildScoreRecordSetRunner(): ProductionScoreRecordSetRunner {
  * read back by its `MJ: Files` row id. The `runner` is injectable for tests.
  *
  * @param request the model id + resolved scope + write-back directive + user/provider
- * @param runner optional runner override (defaults to {@link buildScoreRecordSetRunner})
+ * @param runner optional runner override (defaults to {@link BuildScoreRecordSetRunner})
  */
 export function ScoreRecordSetViaRunner(
   request: ScoreRecordSetRequest,
@@ -190,25 +190,24 @@ export function scoreRecordSetViaRunner(
 // ----- Experiment -------------------------------------------------------------
 
 /**
- * Start (run) an experiment session, delegating to
- * {@link ExperimentOrchestrator.runSession} with the SAME production deps the
- * Run-Experiment action builds ({@link buildProductionExperimentDeps}). The
- * `orchestrator` is injectable for tests.
+ * Start (run) an experiment session. Always refuses with {@link ExperimentSessionsUnavailableError}
+ * (no production pipeline resolver exists), before any Experiment, Session or Iteration row is
+ * created. The signature is kept for the published callers.
  *
- * @param plan the approved modeling plan to execute
- * @param options run tunables (experiment id to attach to, budget override, session name)
- * @param provider the owning provider
- * @param user the acting user
- * @param orchestrator optional orchestrator override (defaults to {@link ExperimentOrchestrator})
+ * @param _plan the approved modeling plan to execute
+ * @param _options run tunables (experiment id to attach to, budget override, session name)
+ * @param _provider the owning provider
+ * @param _user the acting user
+ * @param _orchestrator optional orchestrator override
  */
 export async function RunExperimentSessionViaOrchestrator(
-  plan: ModelingPlanSpec,
-  options: ExperimentRunOptions,
-  provider: IMetadataProvider,
-  user: UserInfo,
-  orchestrator: ExperimentOrchestrator = new ExperimentOrchestrator(),
+  _plan: ModelingPlanSpec,
+  _options: ExperimentRunOptions,
+  _provider: IMetadataProvider,
+  _user: UserInfo,
+  _orchestrator?: ExperimentOrchestrator,
 ): Promise<ExperimentSessionResult> {
-  return orchestrator.runSession(plan, await BuildProductionExperimentDeps(user, provider), options);
+  throw new ExperimentSessionsUnavailableError();
 }
 
 /** @deprecated Use {@link RunExperimentSessionViaOrchestrator}. */

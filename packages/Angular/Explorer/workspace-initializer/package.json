@@ -8,7 +8,7 @@
     "/dist"
   ],
   "scripts": {
-    "test": "echo \"No tests configured yet\"",
+    "test": "vitest run",
     "build": "ngc"
   },
   "keywords": [
@@ -21,7 +21,8 @@
   "license": "BUSL-1.1",
   "devDependencies": {
     "@angular/compiler": "21.2.22",
-    "@angular/compiler-cli": "21.2.22"
+    "@angular/compiler-cli": "21.2.22",
+    "vitest": "^4.0.18"
   },
   "peerDependencies": {
     "@angular/common": "^21.2.22",
