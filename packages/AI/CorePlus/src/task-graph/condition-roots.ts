@@ -61,11 +61,47 @@ const LANGUAGE_NAMES: ReadonlySet<string> = new Set([
  * this stays silent rather than guessing, which keeps the check sound in the direction that matters
  * — it may miss a typo, it will never invent one.
  */
+function stripStringLiterals(expression: string): string {
+    let out = '';
+    let i = 0;
+    while (i < expression.length) {
+        const ch = expression[i];
+        if (ch === "'" || ch === '"') {
+            const quote = ch;
+            let j = i + 1;
+            let closed = false;
+            while (j < expression.length) {
+                const c = expression[j];
+                if (c === '\\') {
+                    j += 2;
+                    continue;
+                }
+                if (c === quote) {
+                    closed = true;
+                    j++;
+                    break;
+                }
+                j++;
+            }
+            if (closed) {
+                out += "''";
+                i = j;
+                continue;
+            }
+            out += expression.slice(i);
+            break;
+        }
+        out += ch;
+        i++;
+    }
+    return out;
+}
+
 export function UnknownConditionRoots(expression: string): string[] {
     if (!expression || expression.includes('=>')) return [];
 
     // Strings first: `payload.status === 'approved'` must not report `approved` as a root.
-    const code = expression.replace(/'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"/g, "''");
+    const code = stripStringLiterals(expression);
 
     const unknown = new Set<string>();
     // Lookbehind excludes both property access (`.includes`) and identifier tails, including the

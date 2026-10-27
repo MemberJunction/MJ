@@ -419,6 +419,8 @@ export interface UserRoutinesFixture {
     RoutineSunset?: MJUserRoutineEntity;
     RoutineSeed?: MJUserRoutineEntity;
     FirstRunId?: string | null;
+    /** The "User Routine Dispatcher" job lock the bundle holds, so no server sweep runs its routines meanwhile. */
+    DispatcherLock?: { JobID: string; Token: string } | null;
 }
 
 /**

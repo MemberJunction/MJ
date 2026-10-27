@@ -193,9 +193,14 @@ export abstract class BaseFileHandlerAction extends BaseAction {
             await this.assertCanWrite(storageAccountId, params.ContextUser);
 
             const buffer = Buffer.isBuffer(content) ? content : Buffer.from(content);
-            const pathPrefix = storagePath
-                ? storagePath.replace(/\/+$/, '')
-                : undefined;
+            let pathPrefix: string | undefined;
+            if (storagePath !== undefined) {
+                let end = storagePath.length;
+                while (end > 0 && storagePath.charCodeAt(end - 1) === 47) {
+                    end--;
+                }
+                pathPrefix = storagePath.slice(0, end);
+            }
 
             const result = await FileStorageEngine.Instance.UploadFile({
                 content: buffer,

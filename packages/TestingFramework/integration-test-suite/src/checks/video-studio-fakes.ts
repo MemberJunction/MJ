@@ -1,5 +1,5 @@
 /**
- * Shared deterministic fakes for Video Studio integration tests (IT136, IT151):
+ * Shared deterministic fakes for Video Studio integration tests (IT155, IT151):
  * - `UseFakeRenderDriver(options?)` — swaps `FakeRenderDriver` into `VideoRenderEngine.Instance.UseDriver`
  *   and restores the previous driver on teardown.
  * - `RegisterFakeVideoGenerator(script?)` — registers `ScriptedITVideoGenerator` over `BaseVideoGenerator`
@@ -88,7 +88,7 @@ export function UseFakeRenderDriver(options?: FakeRenderDriverOptions): FakeRend
     };
 }
 
-// ─── 2. Fake Video Generator (shared with IT136) ─────────────────────────────────────────────────
+// ─── 2. Fake Video Generator (shared with IT155) ─────────────────────────────────────────────────
 
 export interface ScriptedVideoOutcome {
     JobID: string;

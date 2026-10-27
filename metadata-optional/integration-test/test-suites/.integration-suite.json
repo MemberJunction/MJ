@@ -1467,7 +1467,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT135 - Video Data Snapshot",
+            "TestID": "@lookup:MJ: Tests.Name=IT154 - Video Data Snapshot",
             "Sequence": 49,
             "Status": "Active"
           },
@@ -1478,7 +1478,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT136 - Video Generation Cost",
+            "TestID": "@lookup:MJ: Tests.Name=IT155 - Video Generation Cost",
             "Sequence": 49,
             "Status": "Active"
           },

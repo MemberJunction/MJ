@@ -1,5 +1,5 @@
 /**
- * video-generation-cost.checks.ts — the 'video-generation-cost' bundle (VGC1–VGC2, IT136):
+ * video-generation-cost.checks.ts — the 'video-generation-cost' bundle (VGC1–VGC2, IT155):
  * proves `AIVideoRunner.RunGenerateVideo` end-to-end against live metadata (`Default Generative Video`
  * prompt + `FLUX 3 Video` `Per Second` cost row from VS-GEN-4) using an in-file scripted
  * `BaseVideoGenerator` registered over the bound vendor's `DriverClass`.
@@ -104,7 +104,7 @@ export const VideoGenerationCostChecks: NamedCheck[] = [
             );
             Assert(
                 Boolean(costRow),
-                `No active 'Seconds' cost row found for model ${f.ModelID} / vendor ${f.VendorID} — push VS-GEN-4 metadata before running IT136`,
+                `No active 'Seconds' cost row found for model ${f.ModelID} / vendor ${f.VendorID} — push VS-GEN-4 metadata before running IT155`,
             );
             const calculator = AIEngineBase.Instance.GetPriceCalculator(costRow!);
             Assert(
@@ -125,7 +125,7 @@ export const VideoGenerationCostChecks: NamedCheck[] = [
             const runner = new AIVideoRunner();
             runner.Provider = ctx.Provider;
             const result = await runner.RunGenerateVideo({
-                Prompt: 'IT136 VGC1 server-calculated Per Second cost check',
+                Prompt: 'IT155 VGC1 server-calculated Per Second cost check',
                 Mode: 'TextToVideo',
                 DurationSeconds: CLIP_DURATION_SECONDS,
                 AspectRatio: '16:9',
@@ -176,7 +176,7 @@ export const VideoGenerationCostChecks: NamedCheck[] = [
             const runner = new AIVideoRunner();
             runner.Provider = ctx.Provider;
             const result = await runner.RunGenerateVideo({
-                Prompt: 'IT136 VGC2 driver-reported cost preservation check',
+                Prompt: 'IT155 VGC2 driver-reported cost preservation check',
                 Mode: 'TextToVideo',
                 DurationSeconds: CLIP_DURATION_SECONDS,
                 AspectRatio: '16:9',

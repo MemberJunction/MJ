@@ -93,7 +93,17 @@ function buildRelationshipLines(tables: TableDefinition[]): string[] {
  */
 function toMermaidType(col: ColumnDefinition): string {
     if (col.RawSqlType) {
-        return col.RawSqlType.replace(/\s*\(.*\)/, '').toUpperCase();
+        const raw = col.RawSqlType;
+        const openIdx = raw.indexOf('(');
+        const closeIdx = raw.lastIndexOf(')');
+        if (openIdx !== -1 && closeIdx > openIdx) {
+            let prefixEnd = openIdx;
+            while (prefixEnd > 0 && /\s/.test(raw[prefixEnd - 1])) {
+                prefixEnd--;
+            }
+            return (raw.slice(0, prefixEnd) + raw.slice(closeIdx + 1)).toUpperCase();
+        }
+        return raw.toUpperCase();
     }
 
     const typeMap: Record<string, string> = {

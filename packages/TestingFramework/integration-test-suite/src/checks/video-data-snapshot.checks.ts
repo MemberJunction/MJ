@@ -1,5 +1,5 @@
 /**
- * video-data-snapshot.checks.ts — the 'video-data-snapshot' bundle (VDS1–VDS3, IT135), VS-DAT-1.
+ * video-data-snapshot.checks.ts — the 'video-data-snapshot' bundle (VDS1–VDS3, IT154), VS-DAT-1.
  *
  * Deterministic, server-transport integration checks for `CaptureDataSnapshot` and
  * `LoadDataSnapshotValues` against the live Row-Level Security and entity-permission layer:

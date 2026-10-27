@@ -12,7 +12,7 @@ Ground truth for every claim below is the check source under `packages/TestingFr
 | `scope-enforcement` | `src/checks/scope-enforcement.checks.ts` | 5 (SE1–SE5) | IT36 | server | deterministic (self-cleaning writes) |
 | `subscription-isolation` | `src/checks/subscription-isolation.checks.ts` | 2 (SI1–SI2) | IT37 | client (GraphQL, needs MJAPI) | deterministic |
 | `api-keys` | `src/checks/api-keys.checks.ts` | 3 (AK1–AK3) | IT13 | server | deterministic (self-cleaning writes) |
-| `video-data-snapshot` | `src/checks/video-data-snapshot.checks.ts` | 3 (VDS1–VDS3) | IT135 | server (in-process SQL provider) | deterministic (self-cleaning writes) |
+| `video-data-snapshot` | `src/checks/video-data-snapshot.checks.ts` | 3 (VDS1–VDS3) | IT154 | server (in-process SQL provider) | deterministic (self-cleaning writes) |
 
 ---
 
