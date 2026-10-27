@@ -1,6 +1,5 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
-import { LogError } from "@memberjunction/core";
 import { BaseRecordMutationAction } from "./base-record-mutation.action";
 import { BaseAction } from '@memberjunction/actions';
 
@@ -42,13 +41,14 @@ export class UpdateRecordAction extends BaseRecordMutationAction {
      * 
      * @param params - The action parameters containing:
      *   - EntityName (required): The name of the entity to update
-     *   - PrimaryKey (required): Object containing primary key field(s) and value(s)
-     *   - Fields (required): Object containing field names and values to update
+     *   - PrimaryKey (required): Object keyed by primary key column(s), the CompositeKey `{ KeyValuePairs }` shape,
+     *                 a JSON string of either, or (single-column keys only) the bare key value
+     *   - Fields (required): Object (or JSON string) containing field names and values to update
      * 
      * @returns ActionResultSimple with:
      *   - Success: true if record was updated successfully
      *   - ResultCode: SUCCESS, FAILED, ENTITY_NOT_FOUND, RECORD_NOT_FOUND, VALIDATION_ERROR, 
-     *                 PERMISSION_DENIED, NO_CHANGES, CONCURRENT_UPDATE
+     *                 INVALID_FIELD_NAMES, PERMISSION_DENIED, NO_CHANGES, CONCURRENT_UPDATE
      *   - Message: Details about the operation
      *   - Params: Output parameter 'UpdatedFields' contains the fields that were actually changed
      */
@@ -59,18 +59,22 @@ export class UpdateRecordAction extends BaseRecordMutationAction {
             if (entityNameResult.error) return entityNameResult.error;
             const entityName = entityNameResult.value!;
 
-            const primaryKeyResult = this.getPrimaryKeyParam(params);
-            if (primaryKeyResult.error) return primaryKeyResult.error;
-            const primaryKey = primaryKeyResult.value!;
-
             const fieldsResult = this.getFieldsParam(params);
             if (fieldsResult.error) return fieldsResult.error;
             const fields = fieldsResult.value!;
 
-            // Get entity object and metadata
+            // Get entity object and metadata (needed to interpret the PrimaryKey shape and validate field names)
             const entityResult = await this.getEntityObject(entityName, params.ContextUser, params.Provider);
             if (entityResult.error) return entityResult.error;
             const { entity, entityInfo } = entityResult;
+
+            const primaryKeyResult = this.getPrimaryKeyParam(params, entityInfo!);
+            if (primaryKeyResult.error) return primaryKeyResult.error;
+            const primaryKey = primaryKeyResult.value!;
+
+            // Fail fast on a misspelled field before touching the database
+            const fieldNamesError = this.validateFieldNames(entity!, entityInfo!, fields);
+            if (fieldNamesError) return fieldNamesError;
 
             // Load the existing record
             const loadResult = await this.loadRecord(entity!, entityInfo!, primaryKey, entityName);
@@ -80,21 +84,17 @@ export class UpdateRecordAction extends BaseRecordMutationAction {
             const updatedFields: Record<string, { oldValue: unknown, newValue: unknown }> = {};
             let hasChanges = false;
 
-            // Set each field value
+            // Set each field value (every name resolved above, so resolution cannot miss here)
             for (const [fieldName, fieldValue] of Object.entries(fields)) {
-                const resolvedName = this.resolveEntityFieldName(entity!, fieldName, entityInfo);
-                if (resolvedName) {
-                    const currentValue = entity!.Get(resolvedName);
-                    if (currentValue !== fieldValue) {
-                        entity!.Set(resolvedName, fieldValue);
-                        updatedFields[resolvedName] = {
-                            oldValue: currentValue,
-                            newValue: fieldValue
-                        };
-                        hasChanges = true;
-                    }
-                } else {
-                    LogError(`Field '${fieldName}' does not exist on entity '${entityName}'`);
+                const resolvedName = this.resolveEntityFieldName(entity!, fieldName, entityInfo) ?? fieldName;
+                const currentValue = entity!.Get(resolvedName);
+                if (currentValue !== fieldValue) {
+                    entity!.Set(resolvedName, fieldValue);
+                    updatedFields[resolvedName] = {
+                        oldValue: currentValue,
+                        newValue: fieldValue
+                    };
+                    hasChanges = true;
                 }
             }
 

@@ -110,3 +110,28 @@ describe('AgentSessionResolver anonymous visitor ownership', () => {
         );
     });
 });
+
+describe('CloseAgentSession close reason (MJ#6013)', () => {
+    beforeEach(() => closeSessionMock.mockClear());
+
+    it('passes a client-reportable reason through, so a start that failed is recorded as an Error', async () => {
+        const resolver = new AgentSessionResolver();
+        const provider = makeProvider(true, 'visitor-1');
+        await expect(resolver.CloseAgentSession(SESSION, makeCtx(guest('visitor-1'), provider), 'Error')).resolves.toBe(true);
+        expect(closeSessionMock).toHaveBeenCalledWith(SESSION, expect.anything(), provider, 'Error');
+    });
+
+    it('defaults to Explicit when the client sends no reason (older clients)', async () => {
+        const resolver = new AgentSessionResolver();
+        const provider = makeProvider(true, 'visitor-1');
+        await expect(resolver.CloseAgentSession(SESSION, makeCtx(guest('visitor-1'), provider))).resolves.toBe(true);
+        expect(closeSessionMock).toHaveBeenCalledWith(SESSION, expect.anything(), provider, 'Explicit');
+    });
+
+    it('refuses a reason only the server may stamp', async () => {
+        const resolver = new AgentSessionResolver();
+        const provider = makeProvider(true, 'visitor-1');
+        await expect(resolver.CloseAgentSession(SESSION, makeCtx(guest('visitor-1'), provider), 'Janitor')).rejects.toThrow(/close reason/i);
+        expect(closeSessionMock).not.toHaveBeenCalled();
+    });
+});

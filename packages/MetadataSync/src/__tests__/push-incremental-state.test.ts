@@ -74,9 +74,11 @@ vi.mock('../lib/entity-subclass-guard', () => ({ DescribeMissingEntitySubclass: 
 
 import { PushService } from '../services/PushService';
 import { SyncStateManager } from '../lib/sync-state-manager';
+import { SyncEngine as RealSyncEngine } from '../lib/sync-engine';
+import { RecordDependencyAnalyzer } from '../lib/record-dependency-analyzer';
 
-function makeSyncEngine(): SyncEngine {
-  const stub = { setMetadataEngine: () => undefined, getProvider: () => host, calculateChecksum: () => 'C1' };
+function makeSyncEngine(checksum: (data: unknown, entityDir: string) => Promise<string> = async () => 'C1'): SyncEngine {
+  const stub = { setMetadataEngine: () => undefined, getProvider: () => host, CalculateChecksumWithFileContent: checksum };
   return stub as unknown as SyncEngine;
 }
 
@@ -137,5 +139,32 @@ describe('incremental push with --dir pointing at an entity folder', () => {
     await service.Push({ dir: root, incremental: true }, {});
 
     expect(stateOf(state).fileChecksums).toEqual({ [path.join('a', 'x.json')]: 'C1' });
+  });
+
+  it('stores a file checksum that covers the content of its @file: targets (#4190)', async () => {
+    const records = [{ fields: { Name: 'Q', SQL: '@file:SQL/q.sql' }, primaryKey: { ID: 'q-1' } }];
+    await fs.writeJson(path.join(root, 'a', 'x.json'), records);
+    await fs.ensureDir(path.join(root, 'a', 'SQL'));
+    await fs.writeFile(path.join(root, 'a', 'SQL', 'q.sql'), 'SELECT 1');
+    const real = new RealSyncEngine({} as UserInfo);
+    const checksum = vi.fn((data: unknown, entityDir: string) => real.CalculateChecksumWithFileContent(data, entityDir));
+    const pushWith = async (): Promise<string> => {
+      const service = new PushService(makeSyncEngine(checksum), {} as UserInfo, state);
+      vi.spyOn(RecordDependencyAnalyzer.prototype, 'analyzeFileRecords').mockResolvedValue({
+        sortedRecords: [],
+        circularDependencies: [],
+        dependencyGraph: new Map(),
+        dependencyLevels: [],
+      });
+      await service.Push({ dir: path.join(root, 'a'), incremental: true }, {});
+      return stateOf(state).fileChecksums[path.join('a', 'x.json')];
+    };
+
+    const before = await pushWith();
+    expect(checksum).toHaveBeenCalledWith(records, path.join(root, 'a'));
+    await fs.writeFile(path.join(root, 'a', 'SQL', 'q.sql'), 'SELECT 2');
+    const after = await pushWith();
+
+    expect(after).not.toBe(before);
   });
 });
