@@ -49,6 +49,12 @@ export interface IRecordHistoryReader {
 /** The description every history snapshot row carries, so an operator can tell them from ordinary changes. */
 const SNAPSHOT_DESCRIPTION = 'History snapshot for Predictive Studio as-of coverage';
 
+/**
+ * Snapshot saves in flight at once. Bounded because an entity loaded before tracking can have thousands of uncovered
+ * records, and starting every save together would exhaust the provider's connection pool.
+ */
+const SNAPSHOT_SAVE_BATCH = 50;
+
 /** Replay of `MJ: Record Changes` rows, and the snapshots that start a record's history. Static members on one owner. */
 export class RecordHistory {
   /**
@@ -60,7 +66,10 @@ export class RecordHistory {
     return (pair ? String(pair.Value) : recordId).toLowerCase();
   }
 
-  /** Pure: index the change rows, run the continuity check against the current values, and expose replay. */
+  /**
+   * Pure: index the change rows, run the continuity check against the current values, and expose replay.
+   * `current` is keyed by the lower-cased record key, as `KeyedReader.ReadByKeys` produces it.
+   */
   public static BuildEntityHistory(
     entityName: string,
     changes: readonly RecordChangeRow[],
@@ -103,8 +112,12 @@ export class RecordHistory {
     const pkName = entity.FirstPrimaryKey.Name; // first-pk-ok: a composite key is rejected above
     const uncovered = records.filter((r) => !covered.has(String(r[pkName]).toLowerCase()));
     const now = new Date();
-    const outcomes = await Promise.all(uncovered.map((r) => RecordHistory.saveSnapshot(provider, entity, r, now, user)));
-    const failures = outcomes.filter((o): o is string => o !== null);
+    const failures: string[] = [];
+    for (let i = 0; i < uncovered.length; i += SNAPSHOT_SAVE_BATCH) {
+      const batch = uncovered.slice(i, i + SNAPSHOT_SAVE_BATCH);
+      const outcomes = await Promise.all(batch.map((r) => RecordHistory.saveSnapshot(provider, entity, pkName, r, now, user)));
+      failures.push(...outcomes.filter((o): o is string => o !== null));
+    }
     if (failures.length > 0) {
       throw new Error(`Writing history snapshots for ${entityName}: ${failures.length} of ${uncovered.length} failed: ${failures.join('; ')}`);
     }
@@ -136,8 +149,22 @@ export class RecordHistory {
     return r.Results;
   }
 
-  /** Saves one Snapshot row for `record`; null on success, else the failure naming the record. */
-  private static async saveSnapshot(provider: IMetadataProvider, entity: EntityInfo, record: SourceRow, now: Date, user: UserInfo): Promise<string | null> {
+  /**
+   * Saves one Snapshot row for `record`; null on success, else the failure naming the record. Never throws, so one
+   * record that cannot be snapshotted (a key holding the RecordID delimiter, a failed entity-object load) still lands in
+   * the caller's aggregate error instead of hiding every other failure.
+   */
+  private static async saveSnapshot(provider: IMetadataProvider, entity: EntityInfo, pkName: string, record: SourceRow, now: Date, user: UserInfo): Promise<string | null> {
+    const label = `${pkName} ${String(record[pkName])}`;
+    try {
+      return await RecordHistory.trySaveSnapshot(provider, entity, record, now, user, label);
+    } catch (e) {
+      return `${label}: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  }
+
+  /** The save itself; returns null on success, else the failure with the save's complete message. */
+  private static async trySaveSnapshot(provider: IMetadataProvider, entity: EntityInfo, record: SourceRow, now: Date, user: UserInfo, label: string): Promise<string | null> {
     const change = await provider.GetEntityObject<MJRecordChangeEntity>('MJ: Record Changes', user);
     const recordId = CompositeKey.FromEntityRecord(entity, record).ToRecordID();
     change.EntityID = entity.ID;
@@ -151,7 +178,7 @@ export class RecordHistory {
     change.ChangesDescription = SNAPSHOT_DESCRIPTION;
     change.FullRecordJSON = JSON.stringify(record);
     if (await change.Save()) return null;
-    return `${recordId}: ${change.LatestResult?.CompleteMessage || 'unknown error'}`;
+    return `${label}: ${change.LatestResult?.CompleteMessage || 'unknown error'}`;
   }
 
   /** Change rows per record key, in ChangedAt order (ties by ID, ordinal). */

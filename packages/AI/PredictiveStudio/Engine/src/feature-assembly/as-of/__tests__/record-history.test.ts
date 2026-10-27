@@ -45,6 +45,8 @@ class SnapshotProviderDouble {
   public readonly Reads: RunViewParams[] = [];
   private readonly people = { ID: 'E-P', Name: 'People', PrimaryKeys: [{ Name: 'ID' }], FirstPrimaryKey: { Name: 'ID' }, Fields: [{ Name: 'ID' }, { Name: 'Status' }] };
 
+  constructor(private readonly records: ReadonlyArray<{ ID: string; Status: string }> = [{ ID: 'P1', Status: 'Active' }, { ID: 'P2', Status: 'Lapsed' }, { ID: 'P3', Status: 'Active' }]) {}
+
   public EntityByName(name: string): EntityInfo | null {
     return name === 'People' ? (this.people as unknown as EntityInfo) : null;
   }
@@ -53,7 +55,7 @@ class SnapshotProviderDouble {
     this.Reads.push(params);
     const rows = params.EntityName === 'MJ: Record Changes'
       ? [{ RecordID: 'ID|P1' }]
-      : [{ ID: 'P1', Status: 'Active' }, { ID: 'P2', Status: 'Lapsed' }, { ID: 'P3', Status: 'Active' }];
+      : this.records;
     return { Success: true, Results: rows as unknown as T[], TotalRowCount: rows.length, RowCount: rows.length, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
   }
 
@@ -76,5 +78,13 @@ describe('WriteHistorySnapshots', () => {
     expect(provider.Saved[0]).toMatchObject({ EntityID: 'E-P', UserID: 'U-1', Type: 'Snapshot', Source: 'Internal', Status: 'Complete', ChangesJSON: '{}', ChangesDescription: 'History snapshot for Predictive Studio as-of coverage' });
     expect(JSON.parse(provider.Saved.find((s) => s.RecordID === 'ID|P2').FullRecordJSON)).toEqual({ ID: 'P2', Status: 'Lapsed' });
     expect(provider.Reads.every((r) => r.ResultType === 'simple' && Array.isArray(r.Fields) && r.IgnoreMaxRows === true)).toBe(true);
+  });
+
+  it('lists a record whose snapshot cannot be built in the one error and still saves the others', async () => {
+    const provider = new SnapshotProviderDouble([{ ID: 'P2', Status: 'Lapsed' }, { ID: 'P|4', Status: 'Active' }, { ID: 'P3', Status: 'Active' }]);
+    const user = { ID: 'U-1', Email: 'snapshots@example.com' } as UserInfo;
+
+    await expect(RecordHistory.WriteHistorySnapshots('People', provider as unknown as IMetadataProvider, user)).rejects.toThrow(/1 of 3 failed: ID P\|4: /);
+    expect(provider.Saved.map((s) => s.RecordID).sort()).toEqual(['ID|P2', 'ID|P3']);
   });
 });
