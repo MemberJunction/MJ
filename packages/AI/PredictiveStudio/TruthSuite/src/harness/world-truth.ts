@@ -22,7 +22,16 @@ export class HarnessWorldTruth {
     };
     const [id, cycle, trueP, censored] = [col('MembershipYearID'), col('Cycle'), col('TrueP'), col('Censored')];
     const out = new Map<string, WorldTruthRow>();
-    for (const r of rows) out.set(r[id].toLowerCase(), { Cycle: Number(r[cycle]), TrueP: Number(r[trueP]), Censored: r[censored] === '1' });
+    rows.forEach((r, i) => {
+      // A short row or a non-numeric cell would otherwise become undefined or NaN and skew every mean a gate takes.
+      const where = `${dataset.Dir}/truth.csv data row ${i + 1}`;
+      if (r.length !== header.length) throw new Error(`${where} has ${r.length} cells; the header has ${header.length}`);
+      const cycleValue = Number(r[cycle]);
+      const truePValue = Number(r[trueP]);
+      if (r[cycle] === '' || !Number.isInteger(cycleValue)) throw new Error(`${where}: Cycle "${r[cycle]}" is not an integer`);
+      if (r[trueP] === '' || !Number.isFinite(truePValue)) throw new Error(`${where}: TrueP "${r[trueP]}" is not a number`);
+      out.set(r[id].toLowerCase(), { Cycle: cycleValue, TrueP: truePValue, Censored: r[censored] === '1' });
+    });
     return out;
   }
 }

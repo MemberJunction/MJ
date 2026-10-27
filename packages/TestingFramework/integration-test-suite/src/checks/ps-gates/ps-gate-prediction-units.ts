@@ -27,6 +27,7 @@ export class PredictionUnitGates {
   /** The trained model's most important feature and its share of total importance (what the promotion leakage check reads). */
   private static async dominantFeature(h: TruthHarness, modelId: string): Promise<{ readonly Feature: string; readonly Share: number }> {
     const r = await RunView.FromMetadataProvider(h.Provider).RunView<Pick<MJMLModelEntity, 'FeatureImportance'>>({ EntityName: 'MJ: ML Models', ExtraFilter: `ID='${EscapeSQLString(modelId)}'`, Fields: ['FeatureImportance'], ResultType: 'simple' }, h.User);
+    if (!r.Success) throw new Error(`Reading the feature importance of model ${modelId} failed: ${r.ErrorMessage || 'unknown error'}`);
     const parsed = JsonParse.ParseJsonText(r.Results[0]?.FeatureImportance || '{}', 'FeatureImportance');
     const importance: FeatureImportance = {};
     if (parsed.Ok && JsonParse.IsJsonObject(parsed.Value)) {
@@ -95,6 +96,7 @@ export class PredictionUnitGates {
     const run = await UnitFixtures.LatestRun(h, pipeline.ID);
     const rv = RunView.FromMetadataProvider(h.Provider);
     const models = await rv.RunView<Pick<MJMLModelEntity, 'Lineage'>>({ EntityName: 'MJ: ML Models', ExtraFilter: `ID='${EscapeSQLString(run.ResultingModelID)}'`, Fields: ['Lineage'], ResultType: 'simple' }, h.User);
+    if (!models.Success) throw new Error(`Reading the lineage of model ${run.ResultingModelID} failed: ${models.ErrorMessage || 'unknown error'}`);
     // Typed read of the two lineage keys (no cast of JSON.parse's result).
     const lineageJson = JsonParse.ParseJsonText(models.Results[0]?.Lineage || '{}', 'Lineage');
     const lineage = lineageJson.Ok && JsonParse.IsJsonObject(lineageJson.Value) ? lineageJson.Value : {};

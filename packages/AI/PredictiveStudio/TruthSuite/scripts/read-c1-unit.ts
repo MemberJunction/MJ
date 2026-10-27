@@ -58,10 +58,15 @@ async function main(): Promise<void> {
   console.log(JSON.stringify(out.Counts));
 }
 
-main().then(
-  () => process.exit(0),
-  (error: unknown) => {
-    console.error(error instanceof Error ? error.message : String(error));
+/** Runs `main` and exits 0, or prints the error with its stack and exits 1. */
+async function run(): Promise<void> {
+  try {
+    await main();
+    process.exit(0);
+  } catch (error: unknown) {
+    console.error(error instanceof Error ? (error.stack ?? error.message) : String(error));
     process.exit(1);
-  },
-);
+  }
+}
+
+void run();

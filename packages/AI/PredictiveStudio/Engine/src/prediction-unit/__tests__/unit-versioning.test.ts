@@ -25,4 +25,9 @@ describe('BuildNextVersionColumns', () => {
     const next = PredictionUnitVersioning.BuildNextVersionColumns({ lineageRootId: 'V1', latestVersion: 3, previousLabelVersion: 2, previous: draft }, { Name: 'Renewal v4' }, { kind: 'human', userId: 'U' });
     expect([next.Version, next.LabelVersion]).toEqual([4, 2]);
   });
+  it('keeps LabelVersion when the outcome rule is restated with its keys in another order', () => {
+    const restated = { offset: 1, periodIndexField: 'PeriodIndex', kind: 'next-period' } as const;
+    const next = PredictionUnitVersioning.BuildNextVersionColumns({ lineageRootId: 'V1', latestVersion: 1, previousLabelVersion: 1, previous: draft }, { LabelRule: restated }, { kind: 'human', userId: 'U' });
+    expect([next.Version, next.LabelVersion]).toEqual([2, 1]);
+  });
 });

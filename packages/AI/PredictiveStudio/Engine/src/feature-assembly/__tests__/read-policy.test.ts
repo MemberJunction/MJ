@@ -45,4 +45,9 @@ describe('ReadCompletely', () => {
     const keyless: SourceRow[] = [...rows.slice(0, 999), { V: -1 }];   // sorts last ("undefined" > "id-…")
     await expect(CompleteReader.ReadCompletely(new FakeCountingDataAccess(keyless), { EntityName: 'E', KeyField: 'ID' }, { mode: 'paged', pageSize: 1000 })).rejects.toThrow();
   });
+  it('refuses a paged read whose page size is below one', async () => {
+    const da = new FakeCountingDataAccess(rows);
+    await expect(CompleteReader.ReadCompletely(da, { EntityName: 'E', KeyField: 'ID' }, { mode: 'paged', pageSize: 0 })).rejects.toThrow(/pageSize of at least 1, got 0/);
+    expect(da.Reads).toHaveLength(0);
+  });
 });

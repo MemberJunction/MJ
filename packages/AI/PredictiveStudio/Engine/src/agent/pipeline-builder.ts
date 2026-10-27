@@ -279,11 +279,6 @@ export class PredictiveStudioPipelineBuilder {
     }
   }
 
-  /** @deprecated Use {@link Build}. */
-  public async build(input: BuildPredictionInput): Promise<BuildPredictionResult> {
-    return this.Build(input);
-  }
-
   /** Create + save the `MJ: ML Training Pipelines` row from the resolved config. */
   private async createPipeline(config: PipelineConfig, provider: IMetadataProvider, user: UserInfo): Promise<MJMLTrainingPipelineEntity> {
     // Validate the whole plan against real metadata BEFORE creating any rows or training — so an invalid
@@ -520,10 +515,5 @@ export function ResolveEntity(nameOrView: string, provider: IMetadataProvider): 
     if (strippedPrefix === trimmed || normalize(strippedPrefix) === normalizedTarget) return e;
   }
   return undefined;
-}
-
-/** @deprecated Use {@link ResolveEntity}. */
-export function resolveEntity(nameOrView: string, provider: IMetadataProvider): EntityInfo | undefined {
-  return ResolveEntity(nameOrView, provider);
 }
 

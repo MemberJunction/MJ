@@ -7,7 +7,8 @@
  * must be consecutive).
  *
  *   tsx scripts/probe-unit-immutability.ts                  create the probe unit and attempt the edit
- *   tsx scripts/probe-unit-immutability.ts --label-version  the LabelVersion and consecutive-version checks
+ *   tsx scripts/probe-unit-immutability.ts --label-version  the LabelVersion and consecutive-version checks, then delete
+ *                                                          its rows (also when a step throws)
  *   tsx scripts/probe-unit-immutability.ts --cleanup        delete every probe unit row through the entity
  *
  * Needs MJAPI running and MJ_API_KEY, GRAPHQL_PORT in the environment (the repo env file).
@@ -143,14 +144,25 @@ async function cleanup(provider: GraphQLDataProvider): Promise<void> {
 async function main(): Promise<void> {
   const provider = await connect();
   if (process.argv.includes('--cleanup')) await cleanup(provider);
-  else if (process.argv.includes('--label-version')) await probeLabelVersion(provider);
+  else if (process.argv.includes('--label-version')) {
+    try {
+      await probeLabelVersion(provider);
+    } finally {
+      await cleanup(provider);
+    }
+  }
   else await probeEdit(provider);
 }
 
-main().then(
-  () => process.exit(0),
-  (error: unknown) => {
-    console.error(error instanceof Error ? error.message : String(error));
+/** Runs `main` and exits 0, or prints the error with its stack and exits 1. */
+async function run(): Promise<void> {
+  try {
+    await main();
+    process.exit(0);
+  } catch (error: unknown) {
+    console.error(error instanceof Error ? (error.stack ?? error.message) : String(error));
     process.exit(1);
-  },
-);
+  }
+}
+
+void run();

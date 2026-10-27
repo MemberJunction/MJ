@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { appendFile, cp, mkdtemp } from 'node:fs/promises';
+import { appendFile, cp, mkdtemp, rm } from 'node:fs/promises';
 import { C1CorpusFixture, C1_CORPUS_DIR } from '../fixtures/c1-corpus-loader';
 
 describe('C1 corpus fixture', () => {
@@ -10,9 +10,13 @@ describe('C1 corpus fixture', () => {
   });
   it('names a file whose bytes no longer match SHA256SUMS (the guard LoadC1Corpus relies on)', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'c1-corpus-'));
-    await cp(C1_CORPUS_DIR, dir, { recursive: true });
-    await appendFile(join(dir, 'people.csv'), 'X');
-    expect(await C1CorpusFixture.VerifyC1CorpusChecksums(dir)).toEqual(['people.csv']);
+    try {
+      await cp(C1_CORPUS_DIR, dir, { recursive: true });
+      await appendFile(join(dir, 'people.csv'), 'X');
+      expect(await C1CorpusFixture.VerifyC1CorpusChecksums(dir)).toEqual(['people.csv']);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
   it('holds every final-valid person-period of the pinned MoreCheese corpus: 4,873 resolved + 1,756 censored + 44 label-known = 6,673', async () => {
     const periods = await C1CorpusFixture.ReadC1CorpusCsv(join(C1_CORPUS_DIR, 'dues_periods.csv'));

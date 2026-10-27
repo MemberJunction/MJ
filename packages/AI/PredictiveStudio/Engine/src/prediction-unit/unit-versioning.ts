@@ -8,7 +8,7 @@
 import { randomUUID } from 'node:crypto';
 import type { UserInfo } from '@memberjunction/core';
 import type { MJPredictionUnitEntity } from '@memberjunction/core-entities';
-import { PredictionUnit, type Actor, type CensoringRule, type ChangeHistoryPolicy, type DecisionSpec, type IncumbentHeuristic, type LabelRule, type TaskType, type TemporalSpec, type UnitRows } from '@memberjunction/predictive-studio-core';
+import { PredictionUnit, type Actor, type CensoringRule, type ChangeHistoryPolicy, type DecisionSpec, type IncumbentHeuristic, type LabelRule, type PredictionUnitSpec, type TaskType, type TemporalSpec, type UnitRows } from '@memberjunction/predictive-studio-core';
 import type { IEntityFactory } from '../training/types';
 
 /** The authored content of a unit version: everything but its identity, version numbers and author. */
@@ -55,9 +55,26 @@ export interface UnitVersionColumns {
  * functions).
  */
 export class PredictionUnitVersioning {
-  /** The outcome definition (rule, window, gap, task) — the same fields `PredictionUnit.LabelDefinitionChanged` compares. */
-  private static labelKey(d: PredictionUnitDraft): string {
-    return JSON.stringify([d.LabelRule, d.LabelWindowDays, d.LabelGapDays, d.TaskType]);
+  /**
+   * Whether the outcome definition (rule, window, gap, task) changed, decided the way the server decides it: both drafts
+   * are parsed as stored rows and compared with `PredictionUnit.LabelDefinitionChanged`, so key order or members the
+   * parser drops never make a meaning-identical edit look like a change.
+   */
+  private static labelDefinitionChanged(previous: PredictionUnitDraft, next: PredictionUnitDraft, lineageRootId: string, actor: Actor): boolean {
+    return PredictionUnit.LabelDefinitionChanged(
+      PredictionUnitVersioning.parseDraft(previous, lineageRootId, actor),
+      PredictionUnitVersioning.parseDraft(next, lineageRootId, actor),
+    );
+  }
+
+  /** A draft read back through the row parser; the identity columns are fixed because the comparison never reads them. */
+  private static parseDraft(d: PredictionUnitDraft, lineageRootId: string, actor: Actor): PredictionUnitSpec {
+    const parsed = PredictionUnit.ParsePredictionUnitRow({
+      ID: lineageRootId, LineageRootID: lineageRootId, Version: 1, LabelVersion: 1, AuthoredBy: JSON.stringify(actor),
+      ...PredictionUnitVersioning.columnsOf(d),
+    });
+    if (parsed.Ok === false) throw new Error(`Prediction Unit "${d.Name}" does not parse: ${parsed.Errors.join('; ')}`);
+    return parsed.Value;
   }
 
   private static columnsOf(d: PredictionUnitDraft): Omit<UnitVersionColumns, 'ID' | 'LineageRootID' | 'Version' | 'LabelVersion' | 'AuthoredBy'> {
@@ -70,7 +87,7 @@ export class PredictionUnitVersioning {
     };
   }
 
-  /** Pure: the columns of the next version. */
+  /** Pure: the columns of the next version. Throws when the previous or the changed draft does not parse. */
   public static BuildNextVersionColumns(
     lineage: { readonly lineageRootId: string; readonly latestVersion: number; readonly previousLabelVersion: number; readonly previous: PredictionUnitDraft },
     changes: Partial<PredictionUnitDraft>,
@@ -81,7 +98,7 @@ export class PredictionUnitVersioning {
       ID: null,
       LineageRootID: lineage.lineageRootId,
       Version: lineage.latestVersion + 1,
-      LabelVersion: lineage.previousLabelVersion + (PredictionUnitVersioning.labelKey(next) === PredictionUnitVersioning.labelKey(lineage.previous) ? 0 : 1),
+      LabelVersion: lineage.previousLabelVersion + (PredictionUnitVersioning.labelDefinitionChanged(lineage.previous, next, lineage.lineageRootId, actor) ? 1 : 0),
       AuthoredBy: JSON.stringify(actor),
       ...PredictionUnitVersioning.columnsOf(next),
     };
@@ -121,7 +138,7 @@ export class PredictionUnitVersioning {
     return PredictionUnitVersioning.saveOrThrow(entity, `Prediction Unit "${draft.Name}" v1`);
   }
 
-  /** Read a saved version back into a draft (the inverse of `columnsOf`), through the same parser that validated it. */
+  /** Read a saved version back into a draft in canonical form (the parser's output), through the same parser that validated it. */
   public static DraftFromUnitRow(row: MJPredictionUnitEntity): PredictionUnitDraft {
     const parsed = PredictionUnit.ParsePredictionUnitRow(row);
     if (parsed.Ok === false) throw new Error(`Prediction Unit ${row.ID} does not parse: ${parsed.Errors.join('; ')}`);

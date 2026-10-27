@@ -1,4 +1,4 @@
-import { BaseEntity, RunView, ValidationErrorInfo, ValidationErrorType, type EntitySaveOptions, type IEntityDataProvider, type IMetadataProvider, type ValidationResult } from '@memberjunction/core';
+import { BaseEntity, LogStatus, RunView, ValidationErrorInfo, ValidationErrorType, type EntitySaveOptions, type IEntityDataProvider, type IMetadataProvider, type ValidationResult } from '@memberjunction/core';
 import { EscapeSQLString, RegisterClass } from '@memberjunction/global';
 import { MJPredictionUnitEntity } from '@memberjunction/core-entities';
 import { PredictionUnit, type PredictionUnitSpec } from '@memberjunction/predictive-studio-core';
@@ -88,7 +88,10 @@ export class MJPredictionUnitEntityServer extends MJPredictionUnitEntity {
     const result = await super.ValidateAsync();
     if (!result.Success || this.IsSaved) return result;
     const provider = this.ProviderToUse;
-    if (!VersionedRowGuard.IsMetadataProvider(provider)) return result;
+    if (!VersionedRowGuard.IsMetadataProvider(provider)) {
+      LogStatus(`MJPredictionUnitEntityServer: the provider is not a metadata provider, so the reference and LabelVersion checks were skipped for "${this.Name}" v${this.Version}`);
+      return result;
+    }
     const parsed = PredictionUnit.ParsePredictionUnitRow(this);
     if (parsed.Ok === false) {
       this.fail(result, 'UnitRows', `Prediction Unit does not parse: ${parsed.Errors.join('; ')}`);

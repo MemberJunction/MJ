@@ -2,13 +2,13 @@
  * @module training-run-results
  *
  * What a unit-based training run stores in `MJ: ML Training Runs.ValidationResults` (schema `ps-run-results/v2`).
- * The `completed` variant carries the unit resolution, the trainer result and request, the holdout carve and the gate
- * record (the gate decision lives here).
+ * The `refused` variant carries the refusal (its stage and reason); the `completed` variant carries the unit resolution
+ * counts and the trainer's metrics and row counts (`legacy`).
  */
 import { z } from 'zod';
 import type { AssemblyRefusal } from './assembly-contract';
 import type { UnitRefusal } from './prediction-unit';
-import { TASK_KINDS, type TaskKind } from './task-type';
+import { TASK_KINDS } from './task-type';
 import { JsonParse, type ParseResult } from './json-value';
 
 export const TRAINING_RUN_RESULTS_SCHEMA = 'ps-run-results/v2';
@@ -48,8 +48,8 @@ export type TrainingRunResults =
 // The stored envelope is parsed with zod, never `JSON.parse(...) as T`: the column is text any writer
 // (a migration, a hand edit, an older build) can change, so every member is checked before the type is trusted.
 // Each schema is annotated with the TypeScript type it parses, so `tsc` refuses a schema whose output does not fit it.
-// Every later task that adds an envelope member, a refusal stage or a refusal kind extends these schemas in the same
-// task and adds a case to `training-run-results.test.ts` (the union cannot make `tsc` notice a missing variant).
+// A new envelope member, refusal stage or refusal kind needs its schema here and a case in
+// `training-run-results.test.ts`: the union cannot make `tsc` notice a missing variant.
 const pipelineRefusalSchema: z.ZodType<PipelineRefusal> = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('unit-required'), pipelineId: z.string(), why: z.string() }),
   z.object({ kind: z.literal('protocol-required'), pipelineId: z.string() }),
@@ -58,7 +58,7 @@ const pipelineRefusalSchema: z.ZodType<PipelineRefusal> = z.discriminatedUnion('
 ]);
 const unitRefusalSchema: z.ZodType<UnitRefusal> = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('single-valued-target'), value: z.string(), rows: z.number() }),
-  z.object({ kind: z.literal('task-type-mismatch'), declared: z.enum(TASK_KINDS as [TaskKind, ...TaskKind[]]), observed: z.string() }),
+  z.object({ kind: z.literal('task-type-mismatch'), declared: z.enum(TASK_KINDS), observed: z.string() }),
   z.object({ kind: z.literal('unresolved-reference'), entity: z.string(), field: z.string().nullable() }),
   z.object({ kind: z.literal('lag-inside-horizon'), lag: z.number(), horizonPeriods: z.number() }),
   z.object({ kind: z.literal('rolling-window-inside-horizon'), endLag: z.number(), horizonPeriods: z.number() }),

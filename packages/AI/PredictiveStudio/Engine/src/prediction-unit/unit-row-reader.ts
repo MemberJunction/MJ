@@ -102,6 +102,14 @@ export class PredictionUnitRowReader {
     return value === null || value === undefined || value === '';
   }
 
+  /** A summed child-event value: an empty cell adds 0; a value that is not a number fails instead of making the label NaN. */
+  private static requireEventValue(value: CellValue, what: string): number {
+    if (PredictionUnitRowReader.isEmptyCell(value)) return 0;
+    const n = Number(value);
+    if (!Number.isFinite(n)) throw new Error(`PredictionUnitRowReader: ${what} is not a number`);
+    return n;
+  }
+
   /**
    * A row's period index as an integer. `Number()` coerces an absent index (null, '') to 0, which would label the row
    * against the entity's first period, so an absent or non-integer index fails loudly instead.
@@ -280,7 +288,10 @@ export class PredictionUnitRowReader {
       if (d === null) continue;
       const k = PredictionUnitRowReader.keyOf(r[rule.foreignKey]);
       const list = events.get(k) || [];
-      list.push({ Day: d, Value: rule.valueField ? Number(r[rule.valueField] || 0) : 1 });
+      const value = rule.valueField
+        ? PredictionUnitRowReader.requireEventValue(r[rule.valueField], `${child.Name}.${rule.valueField} of ${PredictionUnitRowReader.keyOf(r[child.PrimaryKey])}`)
+        : 1;
+      list.push({ Day: d, Value: value });
       events.set(k, list);
     }
     return (row, entityKey, _decision, windowStart, windowEnd) => {

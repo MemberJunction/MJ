@@ -36,7 +36,7 @@ describe('PredictiveStudioPipelineBuilder warnings and error handling', () => {
       ProposedBudget: {},
     };
 
-    const res = await builder.build({
+    const res = await builder.Build({
       spec,
       provider: mockProvider,
       user: dummyUser,
@@ -79,7 +79,7 @@ describe('PredictiveStudioPipelineBuilder warnings and error handling', () => {
       ProposedBudget: {},
     };
 
-    const res = await builder.build({
+    const res = await builder.Build({
       spec,
       provider: mockProvider,
       user: dummyUser,

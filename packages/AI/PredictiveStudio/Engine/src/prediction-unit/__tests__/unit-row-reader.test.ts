@@ -106,4 +106,24 @@ describe('PredictionUnitRowReader', () => {
       tables.Periods.pop();
     }
   });
+  it('fails on a summed child-event value that is not a number instead of labelling NaN', async () => {
+    tables.Grain = [{ ID: 'g1', D: '2020-01-01' }];
+    tables.Gifts = [{ ID: 'e1', OwnerID: 'g1', At: '2020-01-05', Amount: '12' }, { ID: 'e2', OwnerID: 'g1', At: '2020-01-06', Amount: 'abc' }];
+    entities.Grain = { ID: 'E-G', Name: 'Grain', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [field('ID'), field('D', 'Date')] };
+    entities.Gifts = { ID: 'E-GF', Name: 'Gifts', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [field('ID'), field('OwnerID'), field('At', 'Date'), field('Amount', 'number')] };
+    try {
+      const sumUnit: PredictionUnitSpec = {
+        ...unit,
+        rows: { kind: 'grain', grainEntity: 'Grain', decisionDate: { kind: 'column', column: 'D' }, filter: [] },
+        label: { ...unit.label, rule: { kind: 'child-event', childEntity: 'Gifts', foreignKey: 'OwnerID', dateField: 'At', aggregate: 'sum', valueField: 'Amount', ownerKeyField: null, filter: [] }, windowDays: 30, outcome: { kind: 'continuous' } },
+        censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: '2026-01-01' } },
+      };
+      await expect(new PredictionUnitRowReader().Read(sumUnit, { DataAccess: new TableDataAccess(), Metadata: metadata, Read: { mode: 'complete' }, Now: new Date() })).rejects.toThrow(/Gifts\.Amount of e2 is not a number/);
+    } finally {
+      delete tables.Grain;
+      delete tables.Gifts;
+      delete entities.Grain;
+      delete entities.Gifts;
+    }
+  });
 });

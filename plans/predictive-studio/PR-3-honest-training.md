@@ -3855,7 +3855,7 @@ and `SHA256SUMS`, `TruthSuite/migrations/V202610201300__pstruth_c1_corpus.sql`, 
 `TruthSuite/metadata/entities/.pstruth-c1-entities.json` · Modify `TruthSuite/python/requirements.txt` (Step 0)
 (`TruthSuite` = `packages/AI/PredictiveStudio/TruthSuite`).
 
-- [ ] Step 0: The parquet reader in the TruthSuite venv. Step 3's builder reads `person_years.parquet` with
+- [x] Step 0: The parquet reader in the TruthSuite venv. Step 3's builder reads `person_years.parquet` with
   `pandas.read_parquet`, which needs `pyarrow`; neither venv has it on `next` (§8.3 A-PR2-VENV), and M2 runs before
   M5, so this task pins it. Append to `TruthSuite/python/requirements.txt`, after `pandas-stubs==2.2.2.240807`:
 
@@ -3866,7 +3866,7 @@ pyarrow==25.0.1  # pandas.read_parquet for the MoreCheese person-years table
   Then `cd $MJ/packages/AI/PredictiveStudio/TruthSuite && pnpm run setup:python` → exit 0;
   `.venv/bin/python -c "import pyarrow; print(pyarrow.__version__)"` → `25.0.1`; `pnpm run test:python` → `7 passed`
   (PR 2's judge tests, unchanged: 4 functions, one parametrized over 4 lineages) and the mypy run exit 0. M5.2 keeps this pin and adds `statsmodels`.
-- [ ] Step 1: Write the failing test `TruthSuite/src/__tests__/c1-corpus.test.ts` (pure; reads the committed CSVs):
+- [x] Step 1: Write the failing test `TruthSuite/src/__tests__/c1-corpus.test.ts` (pure; reads the committed CSVs):
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -3900,9 +3900,9 @@ describe('C1 corpus fixture', () => {
 });
 ```
 
-- [ ] Step 2: `cd packages/AI/PredictiveStudio/TruthSuite && pnpm test -- c1-corpus` → fails: unresolved import
+- [x] Step 2: `cd packages/AI/PredictiveStudio/TruthSuite && pnpm test -- c1-corpus` → fails: unresolved import
   `../fixtures/c1-corpus-loader`.
-- [ ] Step 3: Implement the builder `TruthSuite/python/fixtures/build_c1_corpus.py` (same reading rules as
+- [x] Step 3: Implement the builder `TruthSuite/python/fixtures/build_c1_corpus.py` (same reading rules as
   `ps-review/probes/reference/build_person_years.py` `load_dues`, so the 6,673 periods are the reference's):
 
 ```python
@@ -4276,12 +4276,12 @@ export class ImmutableFieldDeclarations {
 ```
 
   Scenario tables (`Scn_*`) get the same treatment for every column except `ID` in M2.7 (`ScenarioFieldsImmutable`).
-- [ ] Step 4: `pnpm test -- c1-corpus` → `4 passed`. Provision and load:
+- [x] Step 4: `pnpm test -- c1-corpus` → `4 passed`. Provision and load:
   `pnpm --filter @memberjunction/predictive-studio-truth-suite run truth:provision` (applies the new test-schema
   migration and the scoped CodeGen, and pushes the C1 entities' opt-in — it prints `direct SQL sanctioned on <n>`), then a 20-line script `TruthSuite/scripts/load-c1-corpus.ts` that opens the pool
   from the env file, calls `C1CorpusFixture.LoadC1Corpus`, then `ImmutableFieldDeclarations.Apply` through the GraphQL client, and
   prints the counts. Restart MJAPI.
-- [ ] Step 5: Runtime verification:
+- [x] Step 5: Runtime verification:
   ```bash
   sqlcmd … -Q "SET NOCOUNT ON; SELECT (SELECT COUNT(*) FROM pstruth.C1DuesPeriod), (SELECT COUNT(DISTINCT PersonID) FROM pstruth.C1DuesPeriod), (SELECT CONVERT(char(10),MAX(OrderDate),23) FROM pstruth.C1OrderHeader); SELECT e.Name, COUNT(*) FROM __mj.EntityField f JOIN __mj.Entity e ON e.ID=f.EntityID WHERE e.SchemaName='pstruth' AND e.BaseTable LIKE 'C1%' AND f.AllowUpdateAPI=0 GROUP BY e.Name ORDER BY e.Name;"
   ```
@@ -4298,7 +4298,7 @@ export class ImmutableFieldDeclarations {
 **Interfaces:** Produces `ICountingDataAccess`, `CountRowsResult`, `CompleteReader.ReadCompletely`, `IAssemblyMetadata`,
 `ProviderAssemblyMetadata`, `TrainingRunResults`, `TrainingRefusal`, `UnitResolutionCounts`.
 
-- [ ] Step 1: Failing test `Engine/src/feature-assembly/__tests__/read-policy.test.ts`:
+- [x] Step 1: Failing test `Engine/src/feature-assembly/__tests__/read-policy.test.ts`:
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -4350,8 +4350,8 @@ describe('ReadCompletely', () => {
 });
 ```
 
-- [ ] Step 2: `cd packages/AI/PredictiveStudio/Engine && pnpm test -- read-policy` → fails: unresolved `../read-policy`.
-- [ ] Step 3: Implement. In `data-access.ts` widen `SourceRow` to the values RunView really returns and add the
+- [x] Step 2: `cd packages/AI/PredictiveStudio/Engine && pnpm test -- read-policy` → fails: unresolved `../read-policy`.
+- [x] Step 3: Implement. In `data-access.ts` widen `SourceRow` to the values RunView really returns and add the
   counting interface; `RunViewDataAccess` implements it:
 
 ```ts
@@ -4668,7 +4668,7 @@ describe('TrainingRunResultsParser', () => {
 });
 ```
 
-- [ ] Step 4: `pnpm test -- read-policy` → `3 passed`; Core `pnpm test -- training-run-results` → `3 passed`; Core and
+- [x] Step 4: `pnpm test -- read-policy` → `3 passed`; Core `pnpm test -- training-run-results` → `3 passed`; Core and
   Engine `pnpm run build` → exit 0; Engine `pnpm test` → all passed (the six existing `IFeatureDataAccess` fakes are
   untouched: they do not implement the new interface). Mutation check (recorded with the M2 table): replace
   `trainingRunResultsSchema.safeParse(json.Value)` by an unchecked cast of `json.Value` → `refuses an envelope whose
@@ -4683,7 +4683,7 @@ describe('TrainingRunResultsParser', () => {
 **Interfaces:** Consumes `CompleteReader.ReadCompletely`, `IAssemblyMetadata`, `PredictionUnitSpec`. Produces
 `PredictionUnitRowReader`, `UnitRow`, `UnitRowReadResult`, `UnitReadDeps`, `PredictionUnitRowReader.CanonicalLabel`, `PredictionUnitRowReader.MatchesRowFilters`.
 
-- [ ] Step 1: Failing test `unit-row-reader.test.ts` — a miniature of C1 that exercises every rule the gates rely on
+- [x] Step 1: Failing test `unit-row-reader.test.ts` — a miniature of C1 that exercises every rule the gates rely on
   (censoring before label-known, the 400-day window, label-known exclusion, the corpus-end cutoff over another entity):
 
 ```ts
@@ -4784,8 +4784,8 @@ describe('PredictionUnitRowReader', () => {
 
   (Row order is decision date then row id: a1 2022-01-10, b1 2022-03-01, c2 2022-06-01, a2 2023-01-10, b2 2023-04-06.
   c2's own next period is absent → 0; a2 likewise; b2 likewise. c1 is label-known; d1 is censored.)
-- [ ] Step 2: `pnpm test -- unit-row-reader` → fails: unresolved `../unit-row-reader`.
-- [ ] Step 3: Implement `Engine/src/prediction-unit/utc-day.ts`:
+- [x] Step 2: `pnpm test -- unit-row-reader` → fails: unresolved `../unit-row-reader`.
+- [x] Step 3: Implement `Engine/src/prediction-unit/utc-day.ts`:
 
 ```ts
 /** Day arithmetic in UTC: every decision date, window end and cutoff is a UTC midnight. */
@@ -5102,8 +5102,8 @@ export class PredictionUnitRowReader {
   `missing-decision-date` refusal above); it exists so no assertion is needed. `requireKey` throws on a row whose
   primary or foreign key is empty instead of keying it as the string "undefined" (coding standards §2, the
   `String(undefined)` bug class).
-- [ ] Step 4: `pnpm test -- unit-row-reader` → `4 passed`; `pnpm run build` → exit 0.
-- [ ] Step 5: Runtime verification against the loaded C1 corpus (a 30-line script `TruthSuite/scripts/read-c1-unit.ts`
+- [x] Step 4: `pnpm test -- unit-row-reader` → `4 passed`; `pnpm run build` → exit 0.
+- [x] Step 5: Runtime verification against the loaded C1 corpus (a 30-line script `TruthSuite/scripts/read-c1-unit.ts`
   that builds the C1 unit spec inline — using the `C1RenewalUnitDraft` shape M2.7 Step 3 extracts into `UnitFixtures` — reads it in-process through
   `RunViewDataAccess` + `ProviderAssemblyMetadata` over the GraphQL provider, and prints `Counts`). Expected:
   `rowsRead 6673, censoredRowsExcluded 1756, labelKnownRowsExcluded 44, emptyLabelRowsExcluded 0, duplicateRowsRemoved 0, resolvedRows 4873, dataCutoff 2026-07-30`.
@@ -5114,7 +5114,7 @@ export class PredictionUnitRowReader {
 
 **Files:** Create `Engine/src/prediction-unit/target-validation.ts`, `…/__tests__/target-validation.test.ts`
 
-- [ ] Step 1: Failing test:
+- [x] Step 1: Failing test:
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -5149,8 +5149,8 @@ describe('ValidateUnitTargets', () => {
 });
 ```
 
-- [ ] Step 2: `pnpm test -- target-validation` → fails: unresolved import.
-- [ ] Step 3: Implement:
+- [x] Step 2: `pnpm test -- target-validation` → fails: unresolved import.
+- [x] Step 3: Implement:
 
 ```ts
 /**
@@ -5221,7 +5221,7 @@ export class UnitTargetValidator {
 }
 ```
 
-- [ ] Step 4: `pnpm test -- target-validation` → `5 passed`.
+- [x] Step 4: `pnpm test -- target-validation` → `5 passed`.
 
 #### Task M2.5: Unit store, versioning and the unit's `ValidateAsync`
 
@@ -5233,7 +5233,7 @@ export class UnitTargetValidator {
 `RunViewPredictionUnitStore.ApplyUnitToPipeline`, `PredictionUnitDraft`, `PredictionUnitVersioning.CreatePredictionUnitV1`, `PredictionUnitVersioning.CreateNextPredictionUnitVersion`,
 `MJPredictionUnitEntityServer.ExpectedLabelVersion` (MJCoreEntitiesServer, pure).
 
-- [ ] Step 1: Failing tests. In `unit-versioning.test.ts`:
+- [x] Step 1: Failing tests. In `unit-versioning.test.ts`:
 
 ```ts
 import { describe, it, expect } from 'vitest';
@@ -5278,8 +5278,8 @@ describe('ExpectedLabelVersion', () => {
 });
 ```
 
-- [ ] Step 2: both test files fail on the missing exports.
-- [ ] Step 3: Implement `unit-versioning.ts`:
+- [x] Step 2: both test files fail on the missing exports.
+- [x] Step 3: Implement `unit-versioning.ts`:
 
 ```ts
 /**
@@ -5496,9 +5496,9 @@ export class RunViewPredictionUnitStore implements IPredictionUnitStore {
   (message: `LabelVersion must be <n>: the outcome definition <changed|did not change> from version <v-1>`). Use
   `VersionedRowGuard.IsMetadataProvider` (M1.4) for the provider. Read the previous version with `ResultType: 'simple'` (nothing is mutated) and `EscapeSQLString` on the
   lineage root in the filter; split the override into a private method per check (references, label version).
-- [ ] Step 4: Engine `pnpm test -- unit-versioning` → `2 passed`; MJCoreEntitiesServer `pnpm test` → all passed
+- [x] Step 4: Engine `pnpm test -- unit-versioning` → `2 passed`; MJCoreEntitiesServer `pnpm test` → all passed
   (+1 file block); both builds exit 0; rebuild ServerBootstrap (manifest unchanged: same classes).
-- [ ] Step 5: Runtime (after M2.6, in M2.7's gate G1.6): covered by the gate. Here: restart MJAPI and save a v2 whose
+- [x] Step 5: Runtime (after M2.6, in M2.7's gate G1.6): covered by the gate. Here: restart MJAPI and save a v2 whose
   `LabelVersion` is wrong through `probe-unit-immutability.ts` (extend it) → `Save()` false with the LabelVersion
   message; correct it → true.
 
@@ -5512,7 +5512,7 @@ export class RunViewPredictionUnitStore implements IPredictionUnitStore {
 `TrainingDeps` gains optional `predictionUnits?: IPredictionUnitStore`, `assemblyMetadata?: IAssemblyMetadata`,
 `dataAccess?: ICountingDataAccess`, `now?: () => Date` (production defaults built from `provider`/`contextUser`).
 
-- [ ] Step 1: Failing tests appended to `training-engine.test.ts` (reusing its fakes; add a `FakePredictionUnit`
+- [x] Step 1: Failing tests appended to `training-engine.test.ts` (reusing its fakes; add a `FakePredictionUnit`
   with the unit columns and a `FakeCountingDataAccess` over the W5-like table below):
 
 ```ts
@@ -5573,8 +5573,8 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
   `assemblyMetadata` describing `Years` (fields `ID`, `PersonID`, `StartDate` Date, `EventsAttended` number, `Renewed`
   boolean); a counting data access over `years`; the existing capturing sidecar fake (add `CallCount`,
   `LastHoldout`); and a `runs` array the entity factory pushes every `FakeMLRun` into.
-- [ ] Step 2: `pnpm test -- training-engine` → the four new tests fail (`trainModel` ignores `PredictionUnitID`).
-- [ ] Step 3: Implement. `Engine/src/training/training-refusal.ts`:
+- [x] Step 2: `pnpm test -- training-engine` → the four new tests fail (`trainModel` ignores `PredictionUnitID`).
+- [x] Step 3: Implement. `Engine/src/training/training-refusal.ts`:
 
 ```ts
 /** A training run refused before (or instead of) fitting; the run row records `refusal` and the operation surfaces the sentence. */
@@ -5728,8 +5728,8 @@ export class TrainingRefusedError extends Error {
   In `delegation.ts`, `TrainingDelegation.TrainModelViaEngine` passes `predictionUnits`, `assemblyMetadata` and `dataAccess` built from
   the provider and user it already has (production wiring), and maps `TrainingRefusedError` to the operation's error
   message unchanged (the operation rethrows; the remote-operation framework returns the message).
-- [ ] Step 4: `pnpm test` (Engine) → all passed incl. the 4 new; `pnpm run build` → exit 0.
-- [ ] Step 5: Runtime verification is the gate run in M2.7.
+- [x] Step 4: `pnpm test` (Engine) → all passed incl. the 4 new; `pnpm run build` → exit 0.
+- [x] Step 5: Runtime verification is the gate run in M2.7.
 
 #### Task M2.7: Unit fixtures, the harness's truth reader and the six Phase-1 gates
 
@@ -5761,7 +5761,7 @@ and `TruthHarness` with `EnsureLoaded`, `Train`, `Promote`, `Score`, `Provider`,
 | G1.7 | `W1 -> S1.4` | `ps-gate-w1-s1-4` | `PredictionUnitGates.MeasureW1OneClassRefused` |
 | G1.8 | `R3 -> S1.4` | `ps-gate-r3-s1-4` | `PredictionUnitGates.MeasureR3CountTaskType` |
 
-- [ ] Step 1: Write the six check files and the measurements first (they fail to build: the fixtures and the harness
+- [x] Step 1: Write the six check files and the measurements first (they fail to build: the fixtures and the harness
   member do not exist). Each check file is the §6 preamble's harness form; the first, in full,
   `IT/src/checks/ps-gate-c1-s1-1.checks.ts`:
 
@@ -5912,10 +5912,10 @@ export class PredictionUnitGates {
 
 ```
 
-- [ ] Step 2: `cd packages/TestingFramework/integration-test-suite && pnpm run build` → fails: `UnitFixtures`,
+- [x] Step 2: `cd packages/TestingFramework/integration-test-suite && pnpm run build` → fails: `UnitFixtures`,
   `C1CorpusFixture` and `C1_CORPUS_DIR` are not exported by `@memberjunction/predictive-studio-truth-suite`, and
   `Property 'ReadWorldTruth' does not exist on type 'TruthHarness'`.
-- [ ] Step 3: Implement the harness member and the fixtures.
+- [x] Step 3: Implement the harness member and the fixtures.
 
   `TruthSuite/src/harness/world-truth.ts` (§5.4 `HarnessWorldTruth`; M4.6 adds `provenance.ts` and `sidecar.ts` beside it):
 
@@ -6113,7 +6113,7 @@ export class UnitFixtures {
   (`metadata/ml-algorithms/.ml-algorithms.json`, verified at `ac24ffeb8a`). `MetadataEntityFactory` and
   `IEntityFactory` are exported by `@memberjunction/predictive-studio` (`Engine/src/training/seams.ts`, `types.ts`,
   re-exported through `training/index.ts`), a dependency PR 2's TruthSuite `package.json` already declares.
-- [ ] Step 4: **Gate rows and check files** (§6 preamble, Gate flip 1–2; names from §4.1). Each row is written
+- [x] Step 4: **Gate rows and check files** (§6 preamble, Gate flip 1–2; names from §4.1). Each row is written
   `Status: "Active"`, `Description` = "Gate G<id> (phase <p>, dataset <dataset>, criterion <criterion>):
   <§4.1 threshold verbatim>. It fails when <§4.1 mutation check>.", `ExpectedOutcomes.summary` = the one-line threshold
   below; each check file holds the one `NamedCheck` the table names:
@@ -6127,32 +6127,32 @@ export class UnitFixtures {
   | G1.7 | `.gate-W1-S1.4.json` | `ps-gate-w1-s1-4.checks.ts` · `PsGateW1S14Checks` | `'G1.7 W1 → S1.4: the one-class target is refused before training, 1 of 1'` | `PsGate.Assert(await PredictionUnitGates.MeasureW1OneClassRefused(h))` |
   | G1.8 | `.gate-R3-S1.4.json` | `ps-gate-r3-s1-4.checks.ts` · `PsGateR3S14Checks` | `'G1.8 R3 → S1.4: a Poisson count declared continuous is refused; declared count it trains'` | `PsGate.Assert(await PredictionUnitGates.MeasureR3CountTaskType(h))` |
 
-- [ ] Step 5: **Barrel** — append to `integration-test-suite/src/index.ts`, in this order:
+- [x] Step 5: **Barrel** — append to `integration-test-suite/src/index.ts`, in this order:
   `export * from './checks/ps-gate-c1-s1-1.checks';`
   `export * from './checks/ps-gate-c1-s2-2.checks';`
   `export * from './checks/ps-gate-w5-s2-2.checks';`
   `export * from './checks/ps-gate-c1-s2-3.checks';`
   `export * from './checks/ps-gate-w1-s1-4.checks';`
   `export * from './checks/ps-gate-r3-s1-4.checks';`
-- [ ] Step 6: **Pins** (`src/__tests__/check-registry.test.ts`): add `'ps-gate-c1-s1-1': 1`, `'ps-gate-c1-s2-2': 1`, `'ps-gate-w5-s2-2': 1`, `'ps-gate-c1-s2-3': 1`, `'ps-gate-w1-s1-4': 1`, `'ps-gate-r3-s1-4': 1` to
+- [x] Step 6: **Pins** (`src/__tests__/check-registry.test.ts`): add `'ps-gate-c1-s1-1': 1`, `'ps-gate-c1-s2-2': 1`, `'ps-gate-w5-s2-2': 1`, `'ps-gate-c1-s2-3': 1`, `'ps-gate-w1-s1-4': 1`, `'ps-gate-r3-s1-4': 1` to
   `EXPECTED_BUNDLE_COUNTS`; the bundle total `toHaveLength(154)` → `toHaveLength(160)` (+ any bundle `next` added); add
   `'ps-gate-c1-s1-1.G1.1'`, `'ps-gate-c1-s2-2.G1.2'`, `'ps-gate-w5-s2-2.G1.3'`, `'ps-gate-c1-s2-3.G1.6'`, `'ps-gate-w1-s1-4.G1.7'`, `'ps-gate-r3-s1-4.G1.8'` to the gated-skip snapshot's `RequiresMutation` list.
-- [ ] Step 7: **Suite entries** (§6 preamble, Gate flip 5; each `MJ: Test Suite Tests` element `Status: "Active"`, `uuidgen` key):
+- [x] Step 7: **Suite entries** (§6 preamble, Gate flip 5; each `MJ: Test Suite Tests` element `Status: "Active"`, `uuidgen` key):
   **Create** `metadata-optional/integration-test/test-suites/.ps-gates-prediction-units-suite.json` (suite `Predictive Studio Gates — Prediction Units`, `Status: "Active"`, `Description` "The twelve Prediction Unit, as-of assembly and snapshot gates (G1.1–G1.12). Needs MJAPI and the truth sidecar running and `pnpm run truth:provision` done. Run with: MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite \"Predictive Studio Gates — Prediction Units\"", `uuidgen` key) holding `C1 -> S1.1` (`Sequence` 1), `C1 -> S2.2` (`Sequence` 2), `W5 -> S2.2` (`Sequence` 3), `C1 -> S2.3` (`Sequence` 4), `W1 -> S1.4` (`Sequence` 5), `R3 -> S1.4` (`Sequence` 6).
-- [ ] Step 8: **Runtime check** (§6 preamble, Gate flip 6):
+- [x] Step 8: **Runtime check** (§6 preamble, Gate flip 6):
   `cd packages/TestingFramework/integration-test-suite && pnpm run build && pnpm test` → 0 failed (pins and parity);
   `pnpm mj sync push --dir=metadata-optional/integration-test --ci` → exit 0; restart MJAPI; then, one gate at a time,
   `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test run "<name>"` → pass for `C1 -> S1.1`, `C1 -> S2.2`, `W5 -> S2.2`, `C1 -> S2.3`, `W1 -> S1.4`, `R3 -> S1.4`.
   `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Prediction Units"` → 6 of 6 passed.
   The PR 3 row count (§6 preamble) → `6`.
   Measured values to see and record in §11: `G1.1 matched=4873 extra=0`, `G1.2 censoredRowsExcluded=1756 resolvedRows=4873`, `G1.3 censoredRowsExcluded=2147 censoredInMatrix=0` with |meanPrediction − meanTrue| ≤ 0.05 (record both means), `G1.6 v2Version=2 v2LabelVersion=2 modelUnitVersion=1 inPlaceRefused=true`, `G1.7 refusal=single-valued-target modelCreated=false`, `G1.8 refusedContinuous=true countRunStatus=Completed`.
-- [ ] Step 9: **Mutation check G1.1:** `PredictionUnitRowReader.Read` ignores the unit's row `filter` (extra keys > 0) → `C1 -> S1.1` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G1.1:** <pasted assertion>`; undo; re-run → pass).
-- [ ] Step 10: **Mutation check G1.2:** `PredictionUnitRowReader.Read` skips the `exclude-unresolved` censoring step (stored excluded count 0, not 1,756) → `C1 -> S2.2` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G1.2:** <pasted assertion>`; undo; re-run → pass).
-- [ ] Step 11: **Mutation check G1.3:** `PredictionUnitRowReader.Read` skips the censoring step (censored rows in training > 0) → `W5 -> S2.2` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G1.3:** <pasted assertion>`; undo; re-run → pass).
-- [ ] Step 12: **Mutation check G1.6:** `PredictionUnit.LabelDefinitionChanged` returns false (the label edit creates no version 2) → `C1 -> S2.3` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G1.6:** <pasted assertion>`; undo; re-run → pass).
-- [ ] Step 13: **Mutation check G1.7:** `UnitTargetValidator.ValidateUnitTargets` drops the one-class check (training starts) → `W1 -> S1.4` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G1.7:** <pasted assertion>`; undo; re-run → pass).
-- [ ] Step 14: **Mutation check G1.8:** `UnitTargetValidator.ValidateUnitTargets` drops the count-declared-continuous rule (D3-12) (the Poisson target is accepted as continuous) → `R3 -> S1.4` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G1.8:** <pasted assertion>`; undo; re-run → pass).
-- [ ] Step 15: Runtime DB checks (after Step 8's runs):
+- [x] Step 9: **Mutation check G1.1:** `PredictionUnitRowReader.Read` ignores the unit's row `filter` (extra keys > 0) → `C1 -> S1.1` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G1.1:** <pasted assertion>`; undo; re-run → pass).
+- [x] Step 10: **Mutation check G1.2:** `PredictionUnitRowReader.Read` skips the `exclude-unresolved` censoring step (stored excluded count 0, not 1,756) → `C1 -> S2.2` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G1.2:** <pasted assertion>`; undo; re-run → pass).
+- [x] Step 11: **Mutation check G1.3:** `PredictionUnitRowReader.Read` skips the censoring step (censored rows in training > 0) → `W5 -> S2.2` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G1.3:** <pasted assertion>`; undo; re-run → pass).
+- [x] Step 12: **Mutation check G1.6:** `PredictionUnit.LabelDefinitionChanged` returns false (the label edit creates no version 2) → `C1 -> S2.3` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G1.6:** <pasted assertion>`; undo; re-run → pass).
+- [x] Step 13: **Mutation check G1.7:** `UnitTargetValidator.ValidateUnitTargets` drops the one-class check (training starts) → `W1 -> S1.4` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G1.7:** <pasted assertion>`; undo; re-run → pass).
+- [x] Step 14: **Mutation check G1.8:** `UnitTargetValidator.ValidateUnitTargets` drops the count-declared-continuous rule (D3-12) (the Poisson target is accepted as continuous) → `R3 -> S1.4` fails (run once; record the failing `PsGate.Assert` text in §11 as `**Mutation output G1.8:** <pasted assertion>`; undo; re-run → pass).
+- [x] Step 15: Runtime DB checks (after Step 8's runs):
   ```bash
   sqlcmd … -Q "SET NOCOUNT ON; SELECT TOP 6 p.Name, r.Status, JSON_VALUE(r.ValidationResults,'$.status') AS s, JSON_VALUE(r.ValidationResults,'$.unitResolution.censoredRowsExcluded') AS censored, JSON_VALUE(r.ValidationResults,'$.refusal.reason.kind') AS refusal FROM __mj.MLTrainingRun r JOIN __mj.MLTrainingPipeline p ON p.ID=r.PipelineID WHERE p.PredictionUnitID IS NOT NULL ORDER BY r.__mj_CreatedAt DESC; SELECT LineageRootID, Version, LabelVersion, LabelWindowDays FROM __mj.PredictionUnit WHERE Name LIKE N'C1 renewal%' ORDER BY Version;"
   ```
@@ -30658,6 +30658,12 @@ corrected, B-REGISTRY-TEST).
   or allowlist path added; alias deletion in touched files was already D-053.
 - **D3-77** · A version-1 Prediction Unit or Evaluation Protocol row adopts its own ID as its lineage root on create, server-side (`MJPredictionUnitEntityServer.Save` / `MJEvaluationProtocolEntityServer.Save`, `VersionedRowGuard.AdoptOwnLineageRoot`): over GraphQL the client provider never sends a primary key on a create (`GraphQLDataProvider.Save` sends it only for a saved row or an IS-A promotion), so a client cannot pre-choose the ID; the server mints it and the override sets `LineageRootID = ID` before validation. In-process writers that set an explicit ID (M2's `CreatePredictionUnitV1`) keep it. The Core parse rule and the DB CHECK are unchanged. Reason: M1.4 Step 5's expected output requires a v1 created over the wire to save; the fix stays inside allowlisted files. *Scope note for the owner:* the general fix — the client provider sending an explicitly set primary key on create — is a foundational-package change (D-062 (4)) and is not made here. *Rejected:* making `ID` writable through the API by metadata (`IsPrimaryKey` alone makes it read-only client-side); restricting v1 creation to in-process writers.
 - **D3-78** · The keep-list's Feature Pipelines suite is recorded as environment-blocked at every milestone: it needs a bizapps-common install, host CodeGen and an `mj.config.cjs` edit (guides/INTEGRATION_TESTING_QUICKSTART.md), which neither PR 2's nor PR 3's private database has (both hold only `__mj`, `__mj_UDT`, `pstruth`); §4.3's "5 of 5" line came from the guide, not from PR 2's environment. PR 3's feature-pipeline changes are covered by the feature-pipelines unit suites, IT124/IT126 in the deterministic tier and the M3 gates. The owner may order the install before M12; until then every §11 entry records the suite as blocked with this reason.
+- **D3-79** · `packages/AI/PredictiveStudio/Core/tsconfig.json` gains `"strictNullChecks": true` (M2.2 fix round). zod's `z.object` output marks every member optional unless `strictNullChecks` is on (its `undefined extends T[k]` test), so the seven `z.ZodType<T>` annotations in `training-run-results.ts` — the plan's guard that a schema fits the type it parses — cannot compile without it; Core compiles under it with 0 errors. Every later Core task compiles under `strictNullChecks`. Engine stays non-strict (8 errors under the flag). *Rejected:* dropping the annotations and asserting `parsed.data as TrainingRunResults` (tsc would no longer prove schema/type agreement).
+- **D3-80** · The unit training path refuses a pipeline whose `AsOfStrategy` is anything but `none` with `TrainingRefusedError({ stage: 'pipeline', reason: { kind: 'input-not-accepted', input: 'asOf', why: 'decision dates come from the Prediction Unit' } })` (M2.6 fix round). The unit path assembles with `asOf: { Mode: 'none' }`; keeping the pipeline's strategy in the resolved pipeline would record it in the lineage and the scorer would apply it (a train/serve mismatch), and dropping it silently hides the setting. M3.6's "ignores AsOfStrategy" text yields to this refusal until the as-of assembler takes over the decision dates. *Rejected:* ignoring the setting; recording `none` while the pipeline says otherwise.
+- **D3-81** · The W5 gate fixture (G1.3, `MeasureW5Censoring`) mirrors PR 2's own world pipelines (`W_WORLD_FEATURES`, `W_WORLD_DENY_FIELDS`) and sets an explicit pipeline leakage guard (the product's `LeakageGuard` shape) with `SingleFeatureDominanceThreshold` 0.75: AutoRenew carries about 0.737 of W5's importance because it is a planted true driver of the world generator, not leakage, and the default 0.6 kept the model Draft so the dry run never scored. The gate records `dominantFeature`/`dominantShare` in `Measured`, and the W5 row's Description states the threshold and why. M2.7's original W5 feature trio (`EventsAttended`, `AutoRenew`, `IncomeK`) is replaced. *Rejected:* dropping AutoRenew from W5's features (the gate would no longer train on the world's real driver); a promotion sign-off through a new harness member.
+- **D3-82** · The `TrainingDelegation` owner class is M3's (plan §5.1 row for `delegation.ts`); M2.6 kept the shipped free functions (`TrainModelViaEngine`, `BuildTrainingDeps`) and added the unit-path wiring there. Under D-053, M2.3 deleted the `isModelingPlanApproved` alias in Engine `index.ts` and M2.6 the eight lowercase delegation aliases, moving `agent/pipeline-builder.ts` and the three `rigs/ps-inproc-{operate-flow,scheduled-scoring,scored-query}.ts` to the PascalCase exports; the M2 close deleted the two aliases left in `agent/pipeline-builder.ts` (`build`, `resolveEntity`) and the four in `agent/pipeline-builder-agent.ts` (its `.build` caller changed), moving `rigs/ps-inproc-agent-builder.ts` and the Engine tests.
+- **D3-83** · `PredictionUnitRowReader` fails loudly instead of coercing (M2.3 fix round): a period row whose `PeriodIndex` is empty or not an integer throws when it is labelled (it was indexed as period 0), and an empty declared group-key value throws like a missing foreign key (it merged rows under `''`). The M2 close adds the same rule for a summed child-event value that is not a number (the label was `NaN`). These extend the plan's key rule (fail instead of the `String(undefined)` coercion) to every value the reader keys or sums on.
+- **D3-84** · The truth suite's immutability declarations without a `W<n>_`/`C1`/`Scn_` prefix (`MembershipYear`, `Person`) apply by suffix to every registered `W<n>_<BaseTable>` table: `ImmutableFieldDeclarations.Apply` compares `BaseTable` exactly today, so those two declarations match no table and the W-world fields stay updatable (G1.4's W4 as-of gate would treat every field as replayable). The fix lands in M3.6 (Files += `TruthSuite/src/fixtures/immutable-fields.ts`), whose runtime step reruns `scripts/load-c1-corpus.ts`, restarts MJAPI and re-runs G1.3 and G1.8. *Rejected:* listing every `W1_`…`W9_` table by name (drifts when a world is added).
 
 ### 9.2 Risks
 
@@ -30908,6 +30914,69 @@ Product-direction questions keep a working automated default; the others are dec
 - **State left behind:** none (servers and sidecar stopped, `lsof -i :4031` empty; the integration-suite benchmark-log rewrites restored from HEAD; database holds no probe data).
 - **Next step (exact):** M2 start: `git fetch origin && git merge origin/next`, then Task M2.1 Step 0 (the parquet reader / `pyarrow==25.0.1` pin) in the TruthSuite venv.
 - **Gotchas / decisions:** (a) the migration carries two generated sections: CodeGen's second pass adds the virtual `TrainingSnapshot` name field on ML Training Runs once the Training Snapshot entity exists; any later DDL change regenerates both. (b) CodeGen writes its capture under `migrations/v5/` by default. (c) `mj migrate` reports "2 applied" because the repeatable `R__RefreshMetadata` reruns. (d) `check:guards` needs the four manifests regenerated (root build / ServerBootstrap builds) before it passes; M1.4 also regenerated ServerBootstrapLite (`pnpm run mj:manifest:server-bootstrap-lite`). (e) Core's and MJCoreEntitiesServer's tsconfigs are not `strict`, so `if (!r.Ok)` does not narrow a `ParseResult`: use `r.Ok === false` / `=== true`. (f) IT29 CG5 is a known `next` failure kept as the baseline. (g) The Feature Pipelines suite is environment-blocked (D3-78). (h) D3-77: a version-1 unit or protocol adopts its own ID as lineage root on create, server-side; scope note for the owner: the general fix (the client provider sending an explicitly set primary key on create) is a foundational-package change (D-062 (4)) and is not made. (i) The keep-list suites need `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1`, otherwise every Containment check is skipped. (j) §2.3's clean-build block now pushes `metadata-optional/integration-test` (the baseline run found it unpushed).
+
+### 2026-10-27 16:45 EDT — Claude Fable 5.1 (controller) + Sonnet/Opus subagents; close by Claude Opus 5.5 — M2
+
+- **Branch / HEAD:** `ps/pr-3-honest-training` @ the checkpoint commit that follows `993ec4975a` (pushed: yes, after step 7).
+- **Database / ports:** `MJ_PS_PR3_claude` (state: clean of truth-suite fixtures — `SELECT COUNT(*) FROM __mj.PredictionUnit` → 0, `PSTruth:` pipelines → 0; the C1 corpus is loaded in `pstruth.C1*` and `PS Truth: C1Certification` is back to `AllowDirectSQLInsert = 1`, `AllowDirectSQLDelete = 1`, 0 pstruth entities without the opt-in), MJAPI :4031 (PID 23905, started with `PREDICTIVE_STUDIO_SIDECAR_URL=http://127.0.0.1:57089`), truth sidecar http://127.0.0.1:57089 (Python PID 17758).
+- **Done this session:** M2 start merge `933d97c5a0` (origin/next); M2.1 `d2dea75920` (C1 corpus fixture, loader, immutable-field declarations); M2.2 `0a8bf1b58b` + fix round `a07947ac15` (complete reads, assembly metadata, run-results contract; Core `strictNullChecks`, D3-79); M2.3 `6b53e8ed28` + fix round `b1f70af165` (unit row reader; period-index and group-key coercion refused, D3-83); M2.4 `73cc69ab0d` (target validation); M2.5 `35575c9cab` (unit store, versioning, the unit's `ValidateAsync`); M2.6 `fe02db7b59` + fix round `d8047a2726` (training engine unit path; as-of refused on the unit path, D3-80; refusal save guarded); M2.7 `6e4d82d99e` + fix round `993ec4975a` (unit fixtures, `ReadWorldTruth`, six Phase-1 gates flipped `Active`; W5 leakage guard, D3-81; gate rows and details state what was measured); this close commit (standards self-audit fixes, three new unit tests and one new test file, plan ticks, D3-79…D3-84, this entry).
+- **Tests (after the self-audit):**
+  - `cd packages/AI/PredictiveStudio/Core && pnpm test` → 165 passed / 0 failed / 0 skipped (12 files; 162 at M1 + 3 run-results; the plan's "new: Core 0" counts M2's Core tests in M2.2, see the M2.2 report).
+  - `cd packages/AI/PredictiveStudio/Engine && pnpm test` → 505 passed / 0 failed / 0 skipped (52 files; 480 at M1 + 22 from M2.2–M2.6 = 502 at `993ec4975a`; +3 from this close: the paged-read page-size refusal, the summed child-event value that is not a number, the key-order restatement that keeps LabelVersion).
+  - `cd packages/MJCoreEntitiesServer && pnpm test` → 1038 passed / 0 failed / 0 skipped (71 files; 1034 at M1 + 3 from the `origin/next` merge `933d97c5a0` + 1 `ExpectedLabelVersion`).
+  - `cd packages/AI/PredictiveStudio/TruthSuite && pnpm test` → 62 passed / 0 failed / 0 skipped (14 files; 58 + 1 cleanup test = 59 at `993ec4975a`; +3 in the new `harness/__tests__/world-truth.test.ts`).
+  - `pnpm run build` at the root → exit 0 (310 tasks successful). `npm run check:standards` → exit 0 (no errors; 13293 warnings, unchanged). `npm run check:guards` → exit 0. `npm run check:codegen-tail` → OK (433 entities, 762 migrations).
+  - Sidecar `pnpm run test:python -- -p no:cacheprovider` → 127 passed / 0 failed / 0 skipped (the M1 count; no Python change in M2).
+  - `cd packages/TestingFramework/integration-test-suite && pnpm test` → 774 passed / 0 failed / 0 skipped (49 files; the bundle total `toHaveLength` value is 160, six `ps-gate-*` pins). PR 3 gate-row count (`Tags LIKE '%owner:PR3%'`, Active) → 6.
+  - `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Prediction Units"` → Completed (6/6 passed), run after the self-audit builds and an MJAPI restart.
+  - Keep-list (run with `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1`): Containment → 10 passed / 0 failed / 0 skipped (of 10). Feature Pipelines → ENVIRONMENT-BLOCKED (D3-78): 0 of 5, each "needs bizapps-common installed" / "the job-title pipeline is installed (bizapps-common)"; the database still holds only `__mj`, `__mj_UDT`, `pstruth`. Deterministic → 115 passed / 1 failed / 1 skipped (of 117); equal to the M1 baseline; failed: IT29 - Cache Gauntlet (`cache-gauntlet.CG5`, the known `next` failure); skipped: IT52 (RUN_SEARCH_TESTS not set). No new failure. That count is from a run with MJAPI started with `MJ_DISABLE_TASK_GRAPH_DISPATCHER=1`: the first run, with the normally started MJAPI, gave 114/2/1 — IT74 - Task Graph Execution failed `task-graph-execution.TX7` ("1 task(s) reached a terminal status without this bundle's stub ever running them: R One (Complete). Another dispatcher on this database executed them … IT74 requires exclusive use of the database"); two IT74-only re-runs against that MJAPI failed different checks (TX14; TX2 and TX16), two IT74-only runs with the dispatcher disabled passed (Score 1), and the full re-run gave 115/1/1. Root cause: MJAPI's task-graph dispatcher races IT74's own dispatcher on the shared database (the check names it); no PR 3 file touches task graphs. MJAPI was then restarted normally.
+  - Builder counts (M2.1): `dues_periods=6673 people=2015 orders=15420 nondues_lines=8724 event_attendances=11213 course_completions=2768 certifications=123 committee_memberships=287 keys=4873`. Reader (M2.3 Step 5, over GraphQL): `rowsRead 6673, censoredRowsExcluded 1756, labelKnownRowsExcluded 44, emptyLabelRowsExcluded 0, duplicateRowsRemoved 0, resolvedRows 4873, dataCutoff 2026-07-30`.
+  - Milestone-exit gate: see the commit body (the gate ran after this entry was written).
+- **Gate measurements (`Measured`, the suite run at this close; identical to M2.7's):**
+  - G1.1 `C1 -> S1.1`: `{"matched":4873,"expected":4873,"extra":0}`
+  - G1.2 `C1 -> S2.2`: `{"censoredRowsExcluded":1756,"resolvedRows":4873}`
+  - G1.3 `W5 -> S2.2`: `{"censoredRowsExcluded":2147,"censoredInMatrix":0,"meanPrediction":0.8286224671135163,"meanTrue":0.7999999998689591,"dominantFeature":"AutoRenew","dominantShare":0.7370200987568735}`
+  - G1.6 `C1 -> S2.3`: `{"v2Version":2,"v2LabelVersion":2,"v2SameLineage":true,"modelReferencesV1Unit":true,"modelUnitVersion":1,"inPlaceRefused":true}`
+  - G1.7 `W1 -> S1.4`: `{"refusal":"single-valued-target","modelCreated":false}` (Detail: `Refused (single-valued-target): the outcome is "1" for all 13488 resolved rows; a model needs at least two outcomes.`)
+  - G1.8 `R3 -> S1.4`: `{"refusedContinuous":true,"countRunStatus":"Completed"}`
+- **Gate mutation checks (M2.7 Steps 9–14, each run once against MJAPI, reverted, rebuilt, re-run green):**
+  - **Mutation output G1.1:** `4873 of 4873 matched, 41 extra` — Measured `{"matched":4873,"expected":4873,"extra":41}`. Substitute mutation (the brief's "ignores the row filter" cannot fail: the C1 unit has `filter: []`): the next-period labeler's label-known return removed. 41 and not 44: 3 of the 44 label-known rows have a next period on the same day, so they collapse into their sibling's (entity, day, period) dedupe key (reviewer's read-only query).
+  - **Mutation output G1.2:** `stored excluded count 0` — Measured `{"censoredRowsExcluded":0,"resolvedRows":6595}`; 6595 = 4873 + 1756 − 34 (78 rows are label-known before censoring, 44 after).
+  - **Mutation output G1.3:** `newest cycle mean prediction 0.3895 vs true 0.8000` — Measured `{"censoredRowsExcluded":0,"censoredInMatrix":0,"meanPrediction":0.38953661035073844,"meanTrue":0.7999999998689591,"dominantFeature":"AutoRenew","dominantShare":0.4340992743851519}`.
+  - **Mutation output G1.6:** `Saving Prediction Unit "C1 renewal (person x dues period)" v2 failed: LabelVersion must be 1: the outcome definition did not change from version 1` (M2.7, thrown: the engine then compared raw draft JSON while the server used `LabelDefinitionChanged`). Re-run at this close after the self-audit made `PredictionUnitVersioning.BuildNextVersionColumns` compare parsed specs with `LabelDefinitionChanged` (Core rebuilt, MJAPI restarted): `label edit created version 2 (LabelVersion 1, same lineage); model references unit version 1 of the edited unit; in-place edit refused` — Measured `{"v2Version":2,"v2LabelVersion":1,"v2SameLineage":true,"modelReferencesV1Unit":true,"modelUnitVersion":1,"inPlaceRefused":true}`; reverted, Core rebuilt, MJAPI restarted, suite 6 of 6.
+  - **Mutation output G1.7:** `Sidecar request failed with status 400: {"detail":"This solver needs samples of at least 2 classes in the data, but the data contains only one class: 0"}` — Measured `{"refusal":"none","modelCreated":false}` (training started).
+  - **Mutation output G1.8:** `continuous refused, count accepted` — Measured `{"refusedContinuous":false,"countRunStatus":"Completed"}` (the Detail text was static at that run; fix round `993ec4975a` builds it from the measurement).
+- **Mutation checks (M2 table; guard → mutation → failing test; each reverted by a targeted edit and re-run green):**
+  1. `C1CorpusFixture.VerifyC1CorpusChecksums` → returns `[]` → `C1 corpus fixture › names a file whose bytes no longer match SHA256SUMS (the guard LoadC1Corpus relies on)` (1 failed | 3 passed).
+  2. `C1CorpusFixture.RequireDirectSQLOptIn` (LIVE) → `PS Truth: C1Certification.AllowDirectSQLInsert` set to 0 through its `MJ: Entities` record (`Save()` → true; sqlcmd shows 0); `tsx scripts/load-c1-corpus.ts` → exit 1, `Error: direct SQL is not sanctioned on pstruth.C1Certification: run truth:provision (it pushes TruthSuite/metadata)`; with the guard returning early → exit 0 and the full load (`{"C1Person":2015,…,"C1Certification":123,"C1CommitteeMembership":287}`); guard restored, the record saved back to 1 (sqlcmd: `AllowDirectSQLInsert 1, AllowDirectSQLDelete 1`, 0 pstruth entities lacking either flag), loader re-run → exit 0, same counts.
+  3. `TrainingRunResultsParser.ParseTrainingRunResults` → `safeParse` replaced by passing `json.Value` through → `TrainingRunResultsParser › refuses an envelope whose members have the wrong shape, naming the path` (1 failed | 2 passed).
+  4. `CompleteReader.ReadCompletely` count comparison → accepts any row count → `ReadCompletely › refuses a truncated read naming the entity and both counts`.
+  5. `CompleteReader.readPaged` key-presence throw deleted → `ReadCompletely › fails instead of paging on the string "undefined" when a page ends with a key-less row`.
+  6. `PredictionUnitRowReader.resolveRows` censoring `windowEnd > cutoff` → `false` → `PredictionUnitRowReader › yields resolved person-periods with their labels and counts every exclusion` (the censored row d1 joins the resolved rows: 6 rows, not 5; the counts assertion follows it).
+  7. `nextPeriodLabeler` label-known branch dropped → same test (the label-known row is kept with a label).
+  8. `CanonicalLabel` returns `t` for `''` → `› excludes an empty-string label as unlabelled instead of keeping it as a class`.
+  9. `requireKey` → `return String(value)` → `› fails on a period row with no foreign key instead of keying it as "undefined"`.
+  10. `UnitTargetValidator.validateClasses`: (a) `levels.size < 2` → `< 1` → `ValidateUnitTargets › refuses a one-class binary target before training`; (b) unknown-label refusal disabled → `› refuses a binary label outside the declared class order`.
+  11. `validateNumeric`: (a) count signature refusal disabled → `› refuses a Poisson count declared continuous and accepts it declared count`; (b) the count negatives refusal disabled and (c) the non-negative negatives refusal disabled (each alone) → `› refuses negative values for a count and for a non-negative task`.
+  12. `PredictionUnitVersioning.BuildNextVersionColumns` label bump always `+ 0` → `BuildNextVersionColumns › bumps Version and LabelVersion when the outcome window changes`.
+  13. `MJPredictionUnitEntityServer.ExpectedLabelVersion` returns `previous` → `ExpectedLabelVersion › is the previous LabelVersion, plus one when the outcome definition changed`.
+  14. `TrainingEngine.trainUnitPipeline`: (a) `maxRows` throw disabled → `TrainingEngine — Prediction Unit pipelines › refuses maxRows for a unit pipeline (a capped read is not a complete read)`; (b) `labelEventDates` throw disabled → `› refuses labelEventDates for a unit pipeline (decision dates come from the unit)`.
+  15. `UnitTargetValidator.ValidateUnitTargets` moved after `sidecar.train` → `› refuses a one-class target before calling the sidecar and records the refusal on the run` (`AssertionError: expected 1 to be +0`: `CallCount` 0 → 1).
+  Result: 15 of 15 rows (21 runs) turn a named test red; no row needed a new test. `git diff --stat` on Core, Engine, MJCoreEntitiesServer and TruthSuite afterwards shows only the self-audit edits.
+- **Standards self-audit (`git diff origin/next...HEAD` for M2's files against dev-best-practices.md and constraints §2; findings fixed first, packages rebuilt and re-tested green):**
+  - M2.1: `scripts/provision.mjs` comment and error now name both entity files; `c1-corpus.test.ts` removes its `mkdtemp` copy in `finally`; `scripts/load-c1-corpus.ts` prints the stack.
+  - M2.2: `training-run-results.ts` module doc describes only the members the envelope holds, and the process comment is restated as the rule (new member → schema + test case); `assembly-metadata.ts` `TSType` is `EntityFieldTSType`; `TASK_KINDS` is `as const satisfies readonly TaskKind[]` and `z.enum(TASK_KINDS)` needs no assertion; `CompleteReader` refuses a paged read whose `pageSize` is not a whole number ≥ 1 (new test).
+  - M2.3 deferred minors: a summed child-event value that is not a number now throws naming entity, field and row (the label was `NaN`; new test, red without the guard). Not changed: next-period on a `grain` unit still answers `unresolved-reference` on the period-index field — every `UnitRefusal` kind's rendered text (`… is not registered`, `task-type-mismatch`, …) would misstate the problem, the union is fixed, and `ParsePredictionUnitRow` already refuses that unit (M1 mutation row 4), so the branch is unreachable for a parsed spec.
+  - M2.5: `BuildNextVersionColumns` decides the LabelVersion bump with `PredictionUnit.LabelDefinitionChanged` over both drafts parsed by `ParsePredictionUnitRow`, as the server does (new test: a rule restated with its keys in another order keeps LabelVersion; red on the raw-JSON compare); `MJPredictionUnitEntityServer.ValidateAsync` and `MJMLTrainingPipelineEntityServer.checkUnitAndProtocol` log (`LogStatus`) when the provider is not a metadata provider; `probe-unit-immutability.ts --label-version` deletes its rows in `finally`; `DraftFromUnitRow` JSDoc says "canonical form".
+  - M2.7 remaining minors: `HarnessWorldTruth.ReadWorldTruth` refuses a row whose width differs from the header and a non-integer `Cycle` / non-numeric `TrueP` (new `world-truth.test.ts`, 3 tests); `UnitFixtures.LoadUnitSpec` and the gate's `dominantFeature` and G1.6 lineage reads surface the RunView `ErrorMessage`.
+  - M1 carry-over: `guides/PREDICTIVE_STUDIO_GUIDE.md` names `ModelingPlanToPipelineConfig`, not the deleted lowercase alias.
+  - Found by this audit: (a) D-053 — `agent/pipeline-builder.ts` (touched by M2.6) still carried two `@deprecated` aliases (`build`, `resolveEntity`): deleted, callers moved (`agent/pipeline-builder-agent.ts`, `rigs/ps-inproc-agent-builder.ts` — compiled clean with a temporary tsconfig — and two Engine tests); touching `pipeline-builder-agent.ts` brought its four aliases (`summarizeBuildResult`, `buildOutcomeMessage`, `parseFeatureImportance`, `generateMarkdownReport`) under D-053 too: deleted (no caller outside their own test titles, renamed). (b) `.then()` in `load-c1-corpus.ts`, `read-c1-unit.ts`, `probe-unit-immutability.ts` → `async run()` with `try/catch`. (c) A test's `as SourceBinding[]` → `satisfies`.
+  - Scans of M2's added lines: no `any`, no `.Get(`/`.Set(`, no dynamic `import(`, no `PrimaryKeys[0]`; no plan vocabulary in product files (the only hits are the six gate ids pinned in `check-registry.test.ts`, the registered check ids); `as` casts left: the test fake's `as unknown as MJPredictionUnitEntity` (M2.6 review minor, deferred). `@deprecated` over the product files PR 3 touched: 1 — the plan-mandated `ProblemType` tag in `sidecar-contract.ts`.
+  - Not changed (owner's whole-branch note): `Core/src/modeling-plan-schema.ts:73` `as unknown as ModelingPlanSpec` and its two `@deprecated` aliases — the first task that touches the file.
+- **Runtime verification:** M2.1 provision + load (`direct SQL sanctioned on 47`; per-entity `AllowUpdateAPI = 0` counts 4,7,6,6,3,3,4,4 including the PK); M2.3 reader over GraphQL (counts above); M2.5 probe (`LabelVersion must be 2…`, `versions must be consecutive…`, cleanup → 0 rows); M2.7 suite and six gate mutations; this close: the live `RequireDirectSQLOptIn` row, the G1.6 mutation re-run, the suite 6 of 6, `SELECT COUNT(*) FROM __mj.PredictionUnit` → 0 and `PSTruth:` pipelines → 0 after the runs.
+- **State left behind:** MJAPI running on :4031 (PID 23905, env `.env.MJ_PS_PR3_claude` + `PREDICTIVE_STUDIO_SIDECAR_URL`), truth sidecar http://127.0.0.1:57089 (Python PID 17758); the database holds the C1 corpus and no Prediction Unit or `PSTruth:` rows; the integration-suite benchmark-log rewrites restored from HEAD; untracked owner files only.
+- **Next step (exact):** M3 start: `git fetch origin && git merge origin/next` (then the §6 preamble's milestone-start steps), then Task M3.1 Step 1 (feature-step extensions and feature resolution).
+- **Gotchas / decisions:** (a) §9.1 D3-79…D3-84. (b) M2.1 Step 5's per-entity `AllowUpdateAPI = 0` counts include the primary key CodeGen marks read-only: 4, 7, 6, 6, 3, 3, 4, 4 (declared 3, 6, 5, 5, 2, 2, 3, 3 with `IsPrimaryKey = 0`). (c) M2.2 Step 4's read-policy test count is 4. (d) The C1 bulk loader takes each column's nullability from `BulkLoader.ReadTableColumns` (SQL Server's bcp rejects a nullable declaration on a NOT NULL column). (e) G1.1's mutation is a substitute (label-known exclusion skipped → 41 extra keys; the brief's filter mutation cannot fail with `filter: []`). (f) The G1.6 mutation now fails on the assertion (LabelVersion 1) since engine and server share `LabelDefinitionChanged`; at M2.7 it threw ("LabelVersion must be 1…"). (g) M2.7 Step 15's rows are deleted by the bundle teardown (units and `PSTruth:` pipelines); the `Measured` objects are the database evidence. (h) MJAPI must be started with `PREDICTIVE_STUDIO_SIDECAR_URL` for any training run. (i) In Engine, `pnpm test -- <pattern>` runs the whole suite; use `pnpm exec vitest run <file>`. (j) `check:guards` rejects `PrimaryKeys[0]` (use `FirstPrimaryKey` with `// first-pk-ok:`). (k) Entity names are `PS Truth: C1Person`, `PS Truth: C1DuesPeriod`, … (not `C1 People`). (l) The integration-suite vitest rewrites `benchmark-logs/*`; restore from HEAD before committing. (m) Run the Deterministic keep-list tier against an MJAPI started with `MJ_DISABLE_TASK_GRAPH_DISPATCHER=1` (IT74 races a running dispatcher on the same database), then restart MJAPI normally. (n) Owner flags (not acted on): the general client-provider PK-on-create fix (D-062, from M1); a bizapps-common install before M12 (D3-78, Feature Pipelines blocked); `rigs/ps-inproc-{operate-flow,scheduled-scoring,scored-query}.ts` carry 7 type errors identical on `next` and are compiled by no build or test (D-062); Engine's full run prints about 25 stderr lines from failure-path tests on `next` (D-062).
 
 ## 12. Refresh log (append-only)
 

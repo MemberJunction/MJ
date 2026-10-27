@@ -134,8 +134,10 @@ export class UnitFixtures {
   /** A saved unit version, parsed. */
   public static async LoadUnitSpec(h: TruthHarness, unitId: string): Promise<PredictionUnitSpec> {
     const r = await RunView.FromMetadataProvider(h.Provider).RunView<MJPredictionUnitEntity>({ EntityName: 'MJ: Prediction Units', ExtraFilter: `ID='${EscapeSQLString(unitId)}'`, ResultType: 'simple' }, h.User);
-    const parsed = r.Results[0] ? PredictionUnit.ParsePredictionUnitRow(r.Results[0]) : null;
-    if (!parsed || !parsed.Ok) throw new Error(`Prediction Unit ${unitId} missing or invalid`);
+    if (!r.Success) throw new Error(`Reading Prediction Unit ${unitId} failed: ${r.ErrorMessage || 'unknown error'}`);
+    if (!r.Results[0]) throw new Error(`Prediction Unit ${unitId} was not found`);
+    const parsed = PredictionUnit.ParsePredictionUnitRow(r.Results[0]);
+    if (parsed.Ok === false) throw new Error(`Prediction Unit ${unitId} does not parse: ${parsed.Errors.join('; ')}`);
     return parsed.Value;
   }
 }

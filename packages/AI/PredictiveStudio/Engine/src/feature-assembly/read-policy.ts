@@ -53,6 +53,10 @@ export class CompleteReader {
   }
 
   private static async readPaged(dataAccess: ICountingDataAccess, params: CompleteReadParams, pageSize: number): Promise<SourceRow[]> {
+    // A page size below one would never fill a page (or would read without a cap), so paging could not end correctly.
+    if (!Number.isInteger(pageSize) || pageSize < 1) {
+      throw new Error(`Reading ${params.EntityName}: the paged read policy needs a whole-number pageSize of at least 1, got ${pageSize}`);
+    }
     const out: SourceRow[] = [];
     let last: string | null = null;
     for (;;) {

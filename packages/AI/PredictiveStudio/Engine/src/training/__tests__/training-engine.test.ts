@@ -656,7 +656,7 @@ function unitHarness(rows: SourceRow[], unitColumns: PredictionUnitColumns): {
   const pipeline = new FakeMLPipeline();
   pipeline.PredictionUnitID = 'U-1';
   pipeline.TargetEntity = 'Years';
-  pipeline.SourceBindings = JSON.stringify([{ Kind: 'Entity', Ref: 'Years' }] as SourceBinding[]);
+  pipeline.SourceBindings = JSON.stringify([{ Kind: 'Entity', Ref: 'Years' }] satisfies SourceBinding[]);
   pipeline.FeatureSteps = JSON.stringify({ Steps: [{ Id: 's1', Kind: 'select', Columns: ['EventsAttended'] }] } satisfies FeatureStepGraph);
   const { deps, factory, sidecar } = buildDeps({ pipeline });
   deps.predictionUnits = new FakePredictionUnitStore(unitColumns);

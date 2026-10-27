@@ -36,7 +36,7 @@ const held: BuildPredictionResult = {
 };
 const failed: BuildPredictionResult = { success: false, published: false, leakageFlagged: false, heldReason: null, errorMessage: 'Algorithm not found' };
 
-describe('summarizeBuildResult', () => {
+describe('SummarizeBuildResult', () => {
   it('projects a published result', () => {
     expect(SummarizeBuildResult(published)).toMatchObject({ success: true, pipelineId: 'p1', modelId: 'm1', trustGrade: 'Good', published: true, heldReason: null, errorMessage: null });
   });
@@ -51,7 +51,7 @@ describe('summarizeBuildResult', () => {
   });
 });
 
-describe('buildOutcomeMessage', () => {
+describe('BuildOutcomeMessage', () => {
   it('describes published / held / failed in plain language', () => {
     expect(BuildOutcomeMessage(SummarizeBuildResult(published))).toMatch(/built and published/i);
     expect(BuildOutcomeMessage(SummarizeBuildResult(held))).toMatch(/holding it back/i);
@@ -115,7 +115,7 @@ describe('buildOutcomeMessage', () => {
   });
 });
 
-describe('parseFeatureImportance', () => {
+describe('ParseFeatureImportance', () => {
   it('parses JSON string object of key/value weights', async () => {
     const { ParseFeatureImportance } = await import('../pipeline-builder-agent');
     const res = ParseFeatureImportance('{"DuesAmount": 0.45, "TenureMonths": 0.28}');
@@ -167,7 +167,7 @@ describe('GenerateMarkdownReport', () => {
   });
 });
 
-describe('resolveEntity', () => {
+describe('ResolveEntity', () => {
   it('resolves entity by name, baseView, baseTable, schema prefix, and stripped prefix', async () => {
     const { ResolveEntity } = await import('../pipeline-builder');
     const fakeEntity = {

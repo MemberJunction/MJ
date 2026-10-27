@@ -1,4 +1,4 @@
-import { BaseEntity, EntityInfo, IEntityDataProvider, IMetadataProvider, RunView, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, IEntityDataProvider, IMetadataProvider, LogStatus, RunView, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import type { MJEvaluationProtocolEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
@@ -223,7 +223,10 @@ export class MJMLTrainingPipelineEntityServer extends MJMLTrainingPipelineEntity
         const unitID = this.PredictionUnitID;
         if (!unitID) return;
         const provider = this.ProviderToUse;
-        if (!VersionedRowGuard.IsMetadataProvider(provider)) return;
+        if (!VersionedRowGuard.IsMetadataProvider(provider)) {
+            LogStatus(`MJMLTrainingPipelineEntityServer: the provider is not a metadata provider, so the Prediction Unit and Evaluation Protocol checks were skipped for pipeline "${this.Name}"`);
+            return;
+        }
         const { unitRow, protocol } = await this.loadUnitAndProtocol(provider, unitID, this.EvaluationProtocolID);
         if (!unitRow) {
             this.fail(result, 'PredictionUnitID', `Prediction Unit ${unitID} was not found`);

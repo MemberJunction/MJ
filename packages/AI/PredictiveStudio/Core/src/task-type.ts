@@ -23,7 +23,7 @@ export type TaskType =
 
 export type TaskKind = TaskType['kind'];
 
-export const TASK_KINDS: readonly TaskKind[] = ['binary', 'multiclass', 'continuous', 'count', 'non-negative', 'forecast'];
+export const TASK_KINDS = ['binary', 'multiclass', 'continuous', 'count', 'non-negative', 'forecast'] as const satisfies readonly TaskKind[];
 
 export interface ScoreSemanticsResult {
   readonly ScoreRefersTo: string | null;

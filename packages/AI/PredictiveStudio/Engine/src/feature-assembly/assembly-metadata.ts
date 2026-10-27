@@ -4,12 +4,12 @@
  * The narrow view of entity metadata the unit reader and the as-of assembly need, so both are testable with plain
  * objects. `ProviderAssemblyMetadata` adapts the provider's `EntityInfo`.
  */
-import type { IMetadataProvider } from '@memberjunction/core';
+import type { EntityFieldTSType, IMetadataProvider } from '@memberjunction/core';
 
 export interface AssemblyFieldInfo {
   readonly Name: string;
   readonly SqlType: string;
-  readonly TSType: 'string' | 'number' | 'Date' | 'boolean';
+  readonly TSType: EntityFieldTSType;
   /** `false` = declared immutable after creation (`MJ: Entity Fields.AllowUpdateAPI`). */
   readonly AllowUpdateAPI: boolean;
   readonly IsPrimaryKey: boolean;
