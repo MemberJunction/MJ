@@ -939,35 +939,18 @@ describe('RealtimeClientSessionService — prompt-run write serialization (no cl
         expect(store.TokensUsed).toBe(75);
     });
 
-    it('calls assembleMemoryContext and loadAppAgentSettings at most once per PrepareRealtimeSessionParams', async () => {
+    it('calls assembleMemoryContext once per PrepareRealtimeSessionParams and puts it in the system prompt', async () => {
         class CountingPrepService extends TestableService {
             public MemoryCalls = 0;
-            public AppSettingsCalls = 0;
             protected override async assembleMemoryContext(): Promise<string> {
                 this.MemoryCalls++;
                 return 'MEMORY_BLOCK';
             }
-            protected override async loadAppAgentSettings(): Promise<null> {
-                this.AppSettingsCalls++;
-                return null;
-            }
-            protected override async resolveAppRealtimeOverrides(
-                applicationId: string | undefined,
-                user: UserInfo,
-                prov: IMetadataProvider,
-            ): Promise<string | null> {
-                return super.resolveAppRealtimeOverrides(applicationId, user, prov);
-            }
         }
         const svc = new CountingPrepService();
-        const prep = await svc.PrepareRealtimeSessionParams(
-            makePrepInput({ ApplicationID: 'app-1' }),
-            contextUser,
-            provider,
-        );
+        const prep = await svc.PrepareRealtimeSessionParams(makePrepInput(), contextUser, provider);
         expect(prep.Success).toBe(true);
         expect(svc.MemoryCalls).toBe(1);
-        expect(svc.AppSettingsCalls).toBe(1);
         expect(prep.SessionParams?.InitialContext).toBe('MEMORY_BLOCK');
         expect(prep.SessionParams?.SystemPrompt).toContain('MEMORY_BLOCK');
     });

@@ -30,7 +30,6 @@
  * @author MemberJunction.com
  */
 
-import { AsyncLocalStorage } from 'async_hooks';
 import { UserInfo, IMetadataProvider, LogError, LogStatus, RunView, DatabaseProviderBase } from '@memberjunction/core';
 import { MJAIAgentRunStepEntity, MJArtifactEntity, MJApplicationEntity, MJConversationEntity, MJActionParamEntity } from '@memberjunction/core-entities';
 import { MJGlobal, MJLruCache, UUIDsEqual, EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
@@ -923,28 +922,6 @@ export class RealtimeClientSessionService {
     });
 
     /**
-     * Per-`PrepareRealtimeSessionParams` memo of `loadAppAgentSettings` results so `resolveAppRealtimeOverrides`
-     * and `resolveSessionClientToolTiers` share a single lookup per prepare call without threading a closure
-     * through protected method signatures.
-     */
-    private readonly appSettingsMemo = new AsyncLocalStorage<Map<string, Promise<IAgentSettings | null>>>();
-
-    private getAppAgentSettings(applicationId: string | undefined, contextUser: UserInfo): Promise<IAgentSettings | null> {
-        const store = this.appSettingsMemo.getStore();
-        if (!store) {
-            return this.loadAppAgentSettings(applicationId, contextUser);
-        }
-        const key = `${applicationId?.trim() ?? ''}|${contextUser?.ID ?? ''}`;
-        const existing = store.get(key);
-        if (existing) {
-            return existing;
-        }
-        const loading = this.loadAppAgentSettings(applicationId, contextUser);
-        store.set(key, loading);
-        return loading;
-    }
-
-    /**
      * Serializes `task` against all other writes to the same `AIPromptRun` (see {@link promptRunWriteChains}).
      * Tasks run in call order; a failing task never breaks the chain for the next one. Returns the task's result.
      */
@@ -1326,67 +1303,65 @@ export class RealtimeClientSessionService {
         contextUser: UserInfo,
         provider: IMetadataProvider
     ): Promise<RealtimeSessionParamsPrep> {
-        return this.appSettingsMemo.run(new Map(), async () => {
-            await this.configureEngine(contextUser, provider);
+        await this.configureEngine(contextUser, provider);
 
-            const coAgent = this.resolveCoAgent(input);
-            if (!coAgent) {
-                return { Success: false, ErrorMessage: 'The Realtime Co-Agent could not be resolved from the supplied id or entity.' };
+        const coAgent = this.resolveCoAgent(input);
+        if (!coAgent) {
+            return { Success: false, ErrorMessage: 'The Realtime Co-Agent could not be resolved from the supplied id or entity.' };
+        }
+
+        // Effective config via the surface-agnostic cascade: type DefaultConfiguration < co-agent
+        // TypeConfiguration < TARGET agent TypeConfiguration < APP (Application.AgentSettings.Realtime) <
+        // runtime overrides (authorization-gated upstream). This is the identical precedence on every host.
+        const targetAgent = this.resolveTargetAgent(input.TargetAgentID);
+        const appSettingsJson = await this.resolveAppRealtimeOverrides(input.ApplicationID, contextUser, provider);
+        const effectiveConfig = this.resolveEffectiveConfig(coAgent, input.ConfigOverridesJson, targetAgent, appSettingsJson);
+        this.logDeprecatedVideoKeys(effectiveConfig, coAgent, targetAgent);
+
+        const outcome = await this.resolveModelForSession(input, coAgent, effectiveConfig);
+        if (!outcome.Resolution) {
+            return { Success: false, ErrorMessage: outcome.ErrorMessage ?? this.noModelMessage() };
+        }
+        const resolution = outcome.Resolution;
+
+        let hostTools = input.HostTools;
+        if (input.ResolveHostTools) {
+            const dynamicHostTools = input.ResolveHostTools({
+                ModelID: resolution.ModelID,
+                ModelVendorID: resolution.ModelVendorID,
+                DriverClass: resolution.DriverClass,
+            });
+            if (dynamicHostTools !== undefined) {
+                hostTools = dynamicHostTools;
             }
+        }
 
-            // Effective config via the surface-agnostic cascade: type DefaultConfiguration < co-agent
-            // TypeConfiguration < TARGET agent TypeConfiguration < APP (Application.AgentSettings.Realtime) <
-            // runtime overrides (authorization-gated upstream). This is the identical precedence on every host.
-            const targetAgent = this.resolveTargetAgent(input.TargetAgentID);
-            const appSettingsJson = await this.resolveAppRealtimeOverrides(input.ApplicationID, contextUser, provider);
-            const effectiveConfig = this.resolveEffectiveConfig(coAgent, input.ConfigOverridesJson, targetAgent, appSettingsJson);
-            this.logDeprecatedVideoKeys(effectiveConfig, coAgent, targetAgent);
+        const effectiveInput = hostTools !== input.HostTools ? { ...input, HostTools: hostTools } : input;
+        // One answer for the whole session: it lowers channel exposure here and keeps the driver from
+        // turning on provider features that store session data (Gemini session resumption).
+        const zeroDataRetention = this.modelHasZeroDataRetention(resolution.ModelID, resolution.ModelVendorID);
+        // Channel scoping + client-tool tiers: narrows the declared tools to the scope's decision and
+        // folds the app tier into the capability manifest the prompt renders. The scoped input is what
+        // the prompt/tool builders see, so a vetoed channel is absent from the framing as well as the tools.
+        const scoped = await this.scopeSessionInput(effectiveInput, effectiveConfig, contextUser, provider, zeroDataRetention);
+        // A session nobody would see an avatar in (a phone call, an app without agent video) asks the driver for none
+        // and keeps the persona's voice.
+        const avatar = WithoutUnseenAvatar(
+            this.ResolveSessionAvatar(scoped.Input, coAgent, effectiveConfig, resolution.ModelID, resolution.ModelVendorID),
+            scoped.Input,
+        );
+        const sessionParams: RealtimeSessionParams = {
+            ...(await this.buildSessionParams(
+                scoped.Input, coAgent, resolution.APIName, contextUser, provider, effectiveConfig, resolution.DriverClass,
+                resolution.ModelID, resolution.ModelVendorID, avatar,
+            )),
+            ZeroDataRetention: zeroDataRetention,
+        };
 
-            const outcome = await this.resolveModelForSession(input, coAgent, effectiveConfig);
-            if (!outcome.Resolution) {
-                return { Success: false, ErrorMessage: outcome.ErrorMessage ?? this.noModelMessage() };
-            }
-            const resolution = outcome.Resolution;
-
-            let hostTools = input.HostTools;
-            if (input.ResolveHostTools) {
-                const dynamicHostTools = input.ResolveHostTools({
-                    ModelID: resolution.ModelID,
-                    ModelVendorID: resolution.ModelVendorID,
-                    DriverClass: resolution.DriverClass,
-                });
-                if (dynamicHostTools !== undefined) {
-                    hostTools = dynamicHostTools;
-                }
-            }
-
-            const effectiveInput = hostTools !== input.HostTools ? { ...input, HostTools: hostTools } : input;
-            // One answer for the whole session: it lowers channel exposure here and keeps the driver from
-            // turning on provider features that store session data (Gemini session resumption).
-            const zeroDataRetention = this.modelHasZeroDataRetention(resolution.ModelID, resolution.ModelVendorID);
-            // Channel scoping + client-tool tiers: narrows the declared tools to the scope's decision and
-            // folds the app tier into the capability manifest the prompt renders. The scoped input is what
-            // the prompt/tool builders see, so a vetoed channel is absent from the framing as well as the tools.
-            const scoped = await this.scopeSessionInput(effectiveInput, effectiveConfig, contextUser, provider, zeroDataRetention);
-            // A session nobody would see an avatar in (a phone call, an app without agent video) asks the driver for none
-            // and keeps the persona's voice.
-            const avatar = WithoutUnseenAvatar(
-                this.ResolveSessionAvatar(scoped.Input, coAgent, effectiveConfig, resolution.ModelID, resolution.ModelVendorID),
-                scoped.Input,
-            );
-            const sessionParams: RealtimeSessionParams = {
-                ...(await this.buildSessionParams(
-                    scoped.Input, coAgent, resolution.APIName, contextUser, provider, effectiveConfig, resolution.DriverClass,
-                    resolution.ModelID, resolution.ModelVendorID, avatar,
-                )),
-                ZeroDataRetention: zeroDataRetention,
-            };
-
-            return {
-                Success: true, CoAgent: coAgent, Resolution: resolution, EffectiveConfig: effectiveConfig, SessionParams: sessionParams,
-                ClientPolicy: scoped.ClientPolicy, AvatarResolution: avatar,
-            };
-        });
+        return {
+            Success: true, CoAgent: coAgent, Resolution: resolution, EffectiveConfig: effectiveConfig, SessionParams: sessionParams,
+            ClientPolicy: scoped.ClientPolicy, AvatarResolution: avatar,
+        };
     }
 
     /**
@@ -1504,7 +1479,7 @@ export class RealtimeClientSessionService {
     ): Promise<RealtimeSessionClientTools> {
         const tiers: RealtimeSessionClientTools = {};
         try {
-            const settings = await this.getAppAgentSettings(applicationId, contextUser);
+            const settings = await this.loadAppAgentSettings(applicationId, contextUser);
             const definitions = AIEngine.Instance.ClientToolDefinitions ?? [];
             const app = ResolveAppClientToolMetadata(settings?.ClientTools, definitions, ref =>
                 LogStatus(`RealtimeClientSessionService: the app's client tool '${ref.Name ?? ref.ClientToolDefinitionID}' matches no tool definition — skipping it.`));
@@ -1593,7 +1568,7 @@ export class RealtimeClientSessionService {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         provider: IMetadataProvider
     ): Promise<string | null> {
-        const settings = await this.getAppAgentSettings(applicationId, contextUser);
+        const settings = await this.loadAppAgentSettings(applicationId, contextUser);
         if (!settings) {
             return null;
         }
