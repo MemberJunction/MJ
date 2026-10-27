@@ -243,9 +243,9 @@ When `videoStudio.render.driver` is `'LocalWorker'` (the default for dev and sin
    pnpm --filter @memberjunction/video-studio-render-worker run browser:install
    ```
    Alternatively, set `CHROME_PATH` (or `PUPPETEER_EXECUTABLE_PATH` / `HYPERFRAMES_BROWSER_PATH`) to an existing Chromium or Chrome executable. If either `ffmpeg` or Chromium is missing, `LocalWorkerRenderDriver.Health()` returns immediately with `Healthy: false` and the specific remediation command on the Studio Setup Health card.
-3. **Standalone `@memberjunction/video-studio-render-worker` package boundary:** Per Plan §7.1–§7.2, `@hyperframes/*` is isolated exclusively inside `@memberjunction/video-studio-render-worker` (`packages/AI/VideoStudio/RenderWorker`) and is not a runtime `dependency` of `@memberjunction/video-studio`.
-   - **Monorepo checkouts:** `LocalWorkerRenderDriver` resolves `packages/AI/VideoStudio/RenderWorker/dist/main.js` (or `node_modules/@memberjunction/video-studio-render-worker/dist/main.js`) automatically.
-   - **npm-installed / standalone MJAPI hosts:** Install `@memberjunction/video-studio-render-worker` alongside `@memberjunction/video-studio` (`npm install @memberjunction/video-studio-render-worker` or set `videoStudio.render.local.workerEntry` in `mj.config.cjs`), or configure `videoStudio.render.driver = 'Docker'` / `'Remote'` (`packages/AI/VideoStudio/RenderWorker/Dockerfile` bundles the worker, `ffmpeg`, and Chromium in a single self-contained image).
+3. **Standalone `@memberjunction/video-studio-render-worker` package boundary (`optionalDependencies`):** Per Plan §7.1–§7.2, `@hyperframes/*` is isolated exclusively inside `@memberjunction/video-studio-render-worker` (`packages/AI/VideoStudio/RenderWorker`) and is declared in `optionalDependencies` of `@memberjunction/video-studio`.
+   - **Monorepo checkouts and default `npm install`:** `npm install @memberjunction/video-studio` installs `@memberjunction/video-studio-render-worker` automatically by default so `LocalWorkerRenderDriver` resolves `node_modules/@memberjunction/video-studio-render-worker/dist/main.js` (or `packages/AI/VideoStudio/RenderWorker/dist/main.js`) out of the box.
+   - **Container builds using `Docker` or `Remote`:** Pass `--omit=optional` during `npm install` to skip pulling `@memberjunction/video-studio-render-worker` and `@hyperframes/*` into the MJAPI image (`packages/AI/VideoStudio/RenderWorker/Dockerfile` bundles the worker, `ffmpeg`, and Chromium in a dedicated render-worker image).
 
 ### `DockerRenderDriver` execution and the three host rules
 

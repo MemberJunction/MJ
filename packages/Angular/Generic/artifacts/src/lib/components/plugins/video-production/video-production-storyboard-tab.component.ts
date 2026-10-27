@@ -298,11 +298,15 @@ export class VideoProductionStoryboardTabComponent extends BaseAngularComponent 
       const format = fmt as VideoFormat;
       if (Array.isArray(rawValue)) {
         for (const fileId of rawValue) {
-          if (typeof fileId === 'string' && fileId.length > 0) {
+          if (typeof fileId === 'string' && fileId.trim().length > 0 && !fileId.trim().startsWith('inline:')) {
             items.push({ Format: format, FileID: fileId, Url: null, Failed: false });
           }
         }
-      } else if (typeof rawValue === 'string' && (rawValue as string).length > 0) {
+      } else if (
+        typeof rawValue === 'string' &&
+        (rawValue as string).trim().length > 0 &&
+        !(rawValue as string).trim().startsWith('inline:')
+      ) {
         items.push({ Format: format, FileID: rawValue as string, Url: null, Failed: false });
       }
     }

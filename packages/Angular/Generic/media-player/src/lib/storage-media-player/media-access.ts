@@ -13,6 +13,9 @@ export function MintMediaAccessUrl(
   provider: IMetadataProvider,
   fileId: string,
 ): Promise<CreateMediaAccessTokenResult | null> {
+  if (!fileId || fileId.trim().startsWith('inline:')) {
+    return Promise.resolve(null);
+  }
   try {
     const gqlProvider = provider as unknown as GraphQLDataProvider;
     const storageClient = new GraphQLFileStorageClient(gqlProvider);

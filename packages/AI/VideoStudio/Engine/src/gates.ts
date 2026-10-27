@@ -1004,10 +1004,9 @@ export function ReadApprovalDecision(text: string | null | undefined): 'Approve'
     }
 
     // Also support literal @form:{...} syntax if passed directly
-    const firstLiteralForm = findLiteralFormBlocks(text)[0];
-    if (firstLiteralForm) {
+    for (const literalForm of findLiteralFormBlocks(text)) {
         try {
-            const parsed = JSON.parse(firstLiteralForm.jsonBody) as {
+            const parsed = JSON.parse(literalForm.jsonBody) as {
                 decision?: unknown;
                 fields?: Array<{ name?: string; value?: unknown }>;
             };
@@ -1027,7 +1026,7 @@ export function ReadApprovalDecision(text: string | null | undefined): 'Approve'
                 }
             }
         } catch {
-            // Fall through to free-text parsing
+            // Fall through to next literal form or free-text parsing
         }
     }
 
@@ -1062,6 +1061,43 @@ function toAsciiLowerCase(text: string): string {
     return text.replace(/[A-Z]/g, (c) => c.toLowerCase());
 }
 
+function findMatchingCloseBrace(
+    text: string,
+    lower: string,
+    openBraceIdx: number,
+): { closeIdx: number; nextSearchFrom: number } {
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let i = openBraceIdx; i < text.length; i++) {
+        const ch = text[i]!;
+        if (inString) {
+            if (escaped) {
+                escaped = false;
+            } else if (ch === '\\') {
+                escaped = true;
+            } else if (ch === '"') {
+                inString = false;
+            }
+            continue;
+        }
+        if (i > openBraceIdx && ch === '@' && lower.startsWith('@form:', i)) {
+            return { closeIdx: -1, nextSearchFrom: i };
+        }
+        if (ch === '"') {
+            inString = true;
+        } else if (ch === '{') {
+            depth++;
+        } else if (ch === '}') {
+            depth--;
+            if (depth === 0) {
+                return { closeIdx: i, nextSearchFrom: i + 1 };
+            }
+        }
+    }
+    return { closeIdx: -1, nextSearchFrom: text.length };
+}
+
 function findLiteralFormBlocks(text: string): Array<{ start: number; end: number; jsonBody: string }> {
     const blocks: Array<{ start: number; end: number; jsonBody: string }> = [];
     const lower = toAsciiLowerCase(text);
@@ -1079,16 +1115,17 @@ function findLiteralFormBlocks(text: string): Array<{ start: number; end: number
             searchFrom = braceStart;
             continue;
         }
-        const closeIdx = text.indexOf('}', braceStart + 1);
+        const { closeIdx, nextSearchFrom } = findMatchingCloseBrace(text, lower, braceStart);
         if (closeIdx === -1) {
-            break;
+            searchFrom = nextSearchFrom;
+            continue;
         }
         blocks.push({
             start: idx,
             end: closeIdx + 1,
             jsonBody: text.slice(braceStart, closeIdx + 1),
         });
-        searchFrom = closeIdx + 1;
+        searchFrom = nextSearchFrom;
     }
     return blocks;
 }

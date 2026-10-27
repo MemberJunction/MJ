@@ -283,8 +283,11 @@ test.describe('Video Studio — Studio & Copilot Iterate (VS-UX-2)', () => {
     });
 
     // Send a follow-up ("make the intro faster") and see version 2 appear in the viewer
-    const chatInput = dockedChatArea.locator('textarea, input[type="text"]').first();
+    const chatInput = dockedChatArea
+      .locator('mj-mention-editor [contenteditable="true"], .mention-editor, [contenteditable="true"], textarea, input[type="text"]')
+      .first();
     await expect(chatInput).toBeVisible({ timeout: 30_000 });
+    await chatInput.click();
     await chatInput.fill('make the intro faster');
     await chatInput.press('Enter');
     await expect(detailPane).toContainText(/v2|version 2/i, { timeout: 60_000 });

@@ -53,7 +53,7 @@ import {
     ResolveVideoStudioSettings,
     type VideoStudioSettings,
 } from '../settings.js';
-import { StoreFile } from '../storage.js';
+import { INLINE_EPHEMERAL_FILE_PREFIX, StoreFile } from '../storage.js';
 import { ValidateVideoGenerationSpecAsync } from '../validate-spec-async.js';
 
 /**
@@ -86,6 +86,23 @@ const STAGE_PROGRESS_PERCENTAGE: Readonly<Record<string, number>> = {
     'Video Studio - Motion Engineer': 75,
     'Video Studio - Render': 90,
     'Video Studio - Critic': 95,
+};
+
+const STAGE_UPSTREAM_SECTION_PATHS: Readonly<Record<string, readonly string[]>> = {
+    'Video Studio - Director': [
+        'Film',
+        'Archetype',
+        'Assets.Required',
+        'Assets.NeverInvent',
+        'Assets.Generate',
+        'DataBindings',
+    ],
+    'Video Studio - Art Director': ['Style', 'Assets.Generate'],
+    'Video Studio - Storyboard': ['Beats', 'StateList', 'Audio'],
+    'Video Studio - Pre-Production': ['DataSnapshot', 'Audio', 'Beats', 'Assets'],
+    'Video Studio - Motion Engineer': ['Output.Source'],
+    'Video Studio - Render': ['Output', 'Review.Gates'],
+    'Video Studio - Critic': ['Review.Rounds', 'Review.Scores'],
 };
 
 function isValidInteractionMode(value: unknown): value is VideoInteractionMode {
@@ -249,15 +266,21 @@ export class VideoStudioAgent extends BaseAgent {
         };
 
         const outcome = await super.executeAgentInternal(nextParams, config);
+        const isTerminalExit =
+            outcome.finalStep?.step === 'Success' || outcome.finalStep?.step === 'Failed';
         if (outcome.finalStep?.newPayload && typeof outcome.finalStep.newPayload === 'object') {
-            this.restoreInlineVideoBase64(
-                outcome.finalStep.newPayload as unknown as Partial<VideoGenerationSpec>,
-            );
+            const finalSpec = outcome.finalStep.newPayload as unknown as Partial<VideoGenerationSpec>;
+            this.restoreInlineVideoBase64(finalSpec);
+            if (isTerminalExit) {
+                this.clearEphemeralOutputFileIds(finalSpec);
+            }
         }
         if (this.AgentRun?.FinalPayloadObject && typeof this.AgentRun.FinalPayloadObject === 'object') {
-            this.restoreInlineVideoBase64(
-                this.AgentRun.FinalPayloadObject as Partial<VideoGenerationSpec>,
-            );
+            const finalObj = this.AgentRun.FinalPayloadObject as Partial<VideoGenerationSpec>;
+            this.restoreInlineVideoBase64(finalObj);
+            if (isTerminalExit) {
+                this.clearEphemeralOutputFileIds(finalObj);
+            }
         }
         return outcome;
     }
@@ -279,11 +302,13 @@ export class VideoStudioAgent extends BaseAgent {
             if (canonicalStage) {
                 const candidatePayload = (result.newPayload ?? params.payload ?? {}) as Partial<VideoGenerationSpec>;
                 const stageSucceeded = result.step !== 'Failed';
+                const subAgentPayload = this._lastSubAgentPayload;
+                this._lastSubAgentPayload = undefined;
                 // INTERIM: PayloadManager drops keys that contain a dot (plan-notes 37)
                 if (
                     stageSucceeded &&
                     canonicalStage === 'Video Studio - Motion Engineer' &&
-                    this._lastSubAgentPayload?.Output?.Source
+                    subAgentPayload?.Output?.Source
                 ) {
                     candidatePayload.Output = {
                         Videos: candidatePayload.Output?.Videos ?? {},
@@ -296,27 +321,27 @@ export class VideoStudioAgent extends BaseAgent {
                             RenderedAt: '',
                         },
                         ...(candidatePayload.Output ?? {}),
-                        Source: structuredClone(this._lastSubAgentPayload.Output.Source),
+                        Source: structuredClone(subAgentPayload.Output.Source),
                     };
                 } else if (
                     stageSucceeded &&
                     canonicalStage === 'Video Studio - Render' &&
-                    this._lastSubAgentPayload?.Output
+                    subAgentPayload?.Output
                 ) {
                     candidatePayload.Output = {
                         ...(candidatePayload.Output ?? {}),
-                        ...structuredClone(this._lastSubAgentPayload.Output),
+                        ...structuredClone(subAgentPayload.Output),
                         ...(candidatePayload.Output?.Source
                             ? { Source: candidatePayload.Output.Source }
                             : {}),
                     };
                 }
-                this._lastSubAgentPayload = undefined;
                 const updatedPayload = this.ApplyStageResult(
                     params,
                     canonicalStage,
                     candidatePayload,
                     stageSucceeded,
+                    subAgentPayload,
                 );
                 if (this.AgentRun) {
                     this.AgentRun.FinalPayloadObject = updatedPayload;
@@ -341,6 +366,7 @@ export class VideoStudioAgent extends BaseAgent {
         stageName: string,
         payload: Partial<VideoGenerationSpec>,
         stageSucceeded: boolean = true,
+        subAgentPayload?: Partial<VideoGenerationSpec>,
     ): Partial<VideoGenerationSpec> {
         const canonicalStage = resolveCanonicalStage(stageName) ?? stageName.trim();
         const cloned = structuredClone(payload ?? {});
@@ -348,7 +374,7 @@ export class VideoStudioAgent extends BaseAgent {
         // INTERIM: JSONValidator.CleanValidationSyntax strips ':' from keys (plan-notes 38)
         RestoreStrippedFormatKeys(cloned);
         // INTERIM: PayloadManager.MergeUpstreamPayload drops empty arrays (plan-notes 39)
-        this.restoreDroppedEmptyArrays(cloned);
+        this.restoreDroppedEmptyArrays(cloned, subAgentPayload ?? this._lastSubAgentPayload, canonicalStage);
 
         this.syncArchetypeId(cloned);
         this.syncDeliverableFormats(cloned);
@@ -716,6 +742,7 @@ export class VideoStudioAgent extends BaseAgent {
         if (terminalFailure) {
             spec.Status = DeriveStatus(spec, gates);
             this.restoreInlineVideoBase64(spec);
+            this.clearEphemeralOutputFileIds(spec);
             return {
                 ...baseResult,
                 step: 'Failed',
@@ -783,6 +810,7 @@ export class VideoStudioAgent extends BaseAgent {
         spec.Status = 'Delivered';
         this.restoreInlineVideoBase64(spec);
         spec.Review.HumanReviewNotes = ComposeHumanReviewNotes(spec);
+        this.clearEphemeralOutputFileIds(spec);
         const provenance = BuildGenerationProvenanceSummary(spec);
         if (spec.Output) {
             if (provenance !== undefined) {
@@ -862,6 +890,41 @@ export class VideoStudioAgent extends BaseAgent {
                 if (raw) {
                     video.InlineBase64 = raw;
                 }
+            }
+        }
+    }
+
+    private clearEphemeralOutputFileIds(spec: Partial<VideoGenerationSpec>): void {
+        const output = spec.Output;
+        if (!output || typeof output !== 'object') {
+            return;
+        }
+        if (
+            typeof output.PosterFileID === 'string' &&
+            output.PosterFileID.trim().startsWith(INLINE_EPHEMERAL_FILE_PREFIX)
+        ) {
+            delete output.PosterFileID;
+        }
+        if (output.ContactSheetFileIDs && typeof output.ContactSheetFileIDs === 'object') {
+            const sheetMap = output.ContactSheetFileIDs as Partial<Record<VideoFormat, string[]>>;
+            for (const [fmt, ids] of Object.entries(sheetMap)) {
+                if (!Array.isArray(ids)) {
+                    continue;
+                }
+                const persistedIds = ids.filter(
+                    (id) =>
+                        typeof id === 'string' &&
+                        id.trim().length > 0 &&
+                        !id.trim().startsWith(INLINE_EPHEMERAL_FILE_PREFIX),
+                );
+                if (persistedIds.length > 0) {
+                    sheetMap[fmt as VideoFormat] = persistedIds;
+                } else {
+                    delete sheetMap[fmt as VideoFormat];
+                }
+            }
+            if (Object.keys(sheetMap).length === 0) {
+                delete output.ContactSheetFileIDs;
             }
         }
     }
@@ -1317,14 +1380,36 @@ export class VideoStudioAgent extends BaseAgent {
     }
 
     // INTERIM: PayloadManager.MergeUpstreamPayload drops empty arrays (plan-notes 39)
-    private restoreDroppedEmptyArrays(spec: Partial<VideoGenerationSpec>): void {
+    private restoreDroppedEmptyArrays(
+        spec: Partial<VideoGenerationSpec>,
+        subAgentPayload?: Partial<VideoGenerationSpec>,
+        canonicalStage?: string,
+    ): void {
+        if (subAgentPayload && typeof subAgentPayload === 'object') {
+            RestoreStrippedFormatKeys(subAgentPayload);
+            const allowedSections = canonicalStage
+                ? STAGE_UPSTREAM_SECTION_PATHS[canonicalStage]
+                : undefined;
+            if (allowedSections) {
+                for (const sectionPath of allowedSections) {
+                    this.syncExplicitEmptyArraysAtPath(
+                        spec as Record<string, unknown>,
+                        subAgentPayload as Record<string, unknown>,
+                        sectionPath,
+                    );
+                }
+            } else {
+                this.syncNestedEmptyArrays(spec, subAgentPayload);
+            }
+        }
+
         if (spec.Film && typeof spec.Film === 'object') {
             if (!Array.isArray(spec.Film.Formats)) {
                 spec.Film.Formats = [];
             }
-            if (!Array.isArray(spec.DataBindings)) {
-                spec.DataBindings = [];
-            }
+        }
+        if (!Array.isArray(spec.DataBindings)) {
+            spec.DataBindings = [];
         }
 
         if (spec.Assets && typeof spec.Assets === 'object') {
@@ -1456,6 +1541,115 @@ export class VideoStudioAgent extends BaseAgent {
                 !Array.isArray(spec.Output.GenerationProvenance.Assets)
             ) {
                 spec.Output.GenerationProvenance.Assets = [];
+            }
+        }
+    }
+
+    private hasEmptyArrayDescendant(val: unknown): boolean {
+        if (Array.isArray(val)) {
+            return val.length === 0 || val.some((item) => this.hasEmptyArrayDescendant(item));
+        }
+        if (val && typeof val === 'object') {
+            return Object.values(val as Record<string, unknown>).some((v) =>
+                this.hasEmptyArrayDescendant(v),
+            );
+        }
+        return false;
+    }
+
+    private syncExplicitEmptyArraysAtPath(
+        targetRoot: Record<string, unknown>,
+        sourceRoot: Record<string, unknown>,
+        sectionPath: string,
+    ): void {
+        const segments = sectionPath.split('.');
+        let tgtParent: Record<string, unknown> | undefined = targetRoot;
+        let srcParent: Record<string, unknown> | undefined = sourceRoot;
+        for (let i = 0; i < segments.length - 1; i++) {
+            const seg = segments[i]!;
+            const nextSrc = srcParent?.[seg];
+            if (!nextSrc || typeof nextSrc !== 'object' || Array.isArray(nextSrc)) {
+                return;
+            }
+            let nextTgt = tgtParent?.[seg];
+            if ((!nextTgt || typeof nextTgt !== 'object' || Array.isArray(nextTgt)) && tgtParent) {
+                if (!this.hasEmptyArrayDescendant(nextSrc)) {
+                    return;
+                }
+                nextTgt = {};
+                tgtParent[seg] = nextTgt;
+            }
+            if (!nextTgt || typeof nextTgt !== 'object' || Array.isArray(nextTgt)) {
+                return;
+            }
+            srcParent = nextSrc as Record<string, unknown>;
+            tgtParent = nextTgt as Record<string, unknown>;
+        }
+        const leafKey = segments[segments.length - 1]!;
+        if (!srcParent || !tgtParent || !Object.prototype.hasOwnProperty.call(srcParent, leafKey)) {
+            return;
+        }
+        const srcVal = srcParent[leafKey];
+        if (Array.isArray(srcVal) && srcVal.length === 0) {
+            tgtParent[leafKey] = [];
+            return;
+        }
+        let tgtVal = tgtParent[leafKey];
+        if (
+            srcVal &&
+            typeof srcVal === 'object' &&
+            !Array.isArray(srcVal) &&
+            (!tgtVal || typeof tgtVal !== 'object' || Array.isArray(tgtVal)) &&
+            this.hasEmptyArrayDescendant(srcVal)
+        ) {
+            tgtVal = {};
+            tgtParent[leafKey] = tgtVal;
+        }
+        if (srcVal && typeof srcVal === 'object' && tgtVal && typeof tgtVal === 'object') {
+            this.syncNestedEmptyArrays(tgtVal, srcVal);
+        }
+    }
+
+    private syncNestedEmptyArrays(target: unknown, source: unknown): void {
+        if (!target || typeof target !== 'object' || !source || typeof source !== 'object') {
+            return;
+        }
+        if (Array.isArray(source) && Array.isArray(target)) {
+            const len = Math.min(source.length, target.length);
+            for (let i = 0; i < len; i++) {
+                const srcItem = source[i];
+                const tgtItem = target[i];
+                if (Array.isArray(srcItem) && srcItem.length === 0) {
+                    target[i] = [];
+                } else if (
+                    srcItem &&
+                    typeof srcItem === 'object' &&
+                    tgtItem &&
+                    typeof tgtItem === 'object'
+                ) {
+                    this.syncNestedEmptyArrays(tgtItem, srcItem);
+                }
+            }
+            return;
+        }
+        if (!Array.isArray(source) && !Array.isArray(target)) {
+            const tgtObj = target as Record<string, unknown>;
+            const srcObj = source as Record<string, unknown>;
+            for (const [key, srcVal] of Object.entries(srcObj)) {
+                if (Array.isArray(srcVal) && srcVal.length === 0) {
+                    tgtObj[key] = [];
+                } else if (srcVal && typeof srcVal === 'object') {
+                    if (
+                        !Array.isArray(srcVal) &&
+                        (!tgtObj[key] || typeof tgtObj[key] !== 'object' || Array.isArray(tgtObj[key])) &&
+                        this.hasEmptyArrayDescendant(srcVal)
+                    ) {
+                        tgtObj[key] = {};
+                    }
+                    if (tgtObj[key] && typeof tgtObj[key] === 'object') {
+                        this.syncNestedEmptyArrays(tgtObj[key], srcVal);
+                    }
+                }
             }
         }
     }

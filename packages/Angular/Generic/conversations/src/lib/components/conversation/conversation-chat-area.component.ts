@@ -1078,7 +1078,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   public get ModePickerTargetAgentId(): string | null {
-    return this.Conversation?.DefaultAgentID
+    return this.CurrentOwnerAgent?.ID
+        ?? this.Conversation?.DefaultAgentID
         ?? this.DefaultAgentId
         ?? this.conversationManagerAgent?.ID
         ?? null;
@@ -5961,7 +5962,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       }
       const owner = this.CurrentOwnerAgent;
       if (owner && !owner.IsConversationManager) {
-        return `Ask ${owner.Name} for changes, like "make the opening faster"`;
+        if (owner.Name.trim().toLowerCase() === 'video studio') {
+          return `Ask ${owner.Name} for changes, like "make the opening faster"`;
+        }
+        return `Ask ${owner.Name} for changes or a follow-up...`;
       }
     }
     return MAIN_COMPOSER_PLACEHOLDER;

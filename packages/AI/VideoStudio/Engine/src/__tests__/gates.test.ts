@@ -726,6 +726,21 @@ describe('VideoStudio gates', () => {
             expect(ReadApprovalDecision('Reject İstanbul cut\n@form:{"decision":"approve"}')).toBe('Approve');
             expect(ReadApprovalDecision('approve\n@form:\u00A0{"decision":"reject"}')).toBe('Reject');
             expect(ReadApprovalDecision('reject\n@form:\u3000{"decision":"approve"}')).toBe('Approve');
+            expect(
+                ReadApprovalDecision(
+                    'Reject cut\n@form:{"decision":"approve","meta":{"nested":{"note":"contains } inside string"}}}',
+                ),
+            ).toBe('Approve');
+            expect(
+                ReadApprovalDecision(
+                    '@form:{"meta":{"nested":true}}\nApprove cut after nested form block',
+                ),
+            ).toBe('Approve');
+            expect(
+                ReadApprovalDecision(
+                    'Reject cut\n@form:{{unclosed}\n@form:{"decision":"approve","meta":{"nested":true}}',
+                ),
+            ).toBe('Approve');
         });
     });
 });

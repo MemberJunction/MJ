@@ -766,7 +766,9 @@ export class VideoStudioProductionsResourceComponent
           ? (statusAttr as VideoProductionStatus)
           : 'Unknown';
       const archetype = this.cleanAttributeValue(attrMap.get('archetype')) || '';
-      const posterFileId = this.cleanAttributeValue(attrMap.get('posterFileID'));
+      const rawPosterFileId = this.cleanAttributeValue(attrMap.get('posterFileID'));
+      const posterFileId =
+        rawPosterFileId && !rawPosterFileId.startsWith('inline:') ? rawPosterFileId : null;
       const brandKitId = this.cleanAttributeValue(attrMap.get('brandKitID'));
       const companyId = this.cleanAttributeValue(attrMap.get('companyID'));
       const durationRaw = this.cleanAttributeValue(attrMap.get('durationSeconds'));
@@ -867,14 +869,16 @@ export class VideoStudioProductionsResourceComponent
     }
 
     const client = new GraphQLFileStorageClient(this.ProviderToUse);
-    const itemsWithPosters = items.filter((item) => Boolean(item.PosterFileID));
+    const itemsWithPosters = items.filter(
+      (item) => Boolean(item.PosterFileID && !item.PosterFileID.startsWith('inline:')),
+    );
     if (itemsWithPosters.length === 0) {
       return;
     }
 
     await Promise.all(
       itemsWithPosters.map(async (item) => {
-        if (!item.PosterFileID) {
+        if (!item.PosterFileID || item.PosterFileID.startsWith('inline:')) {
           return;
         }
         try {

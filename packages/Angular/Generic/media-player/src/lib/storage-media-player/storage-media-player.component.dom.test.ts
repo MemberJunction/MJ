@@ -220,6 +220,30 @@ describe('MJStorageMediaPlayerComponent — streaming-URL resolution', () => {
     );
     expect(posterMintCount).toBe(3);
   });
+
+  it('skips CreateMediaAccessToken GraphQL calls when given an ephemeral inline:<uuid> file ID', async () => {
+    const provider = stubProvider({
+      'FILE-V1': { Success: true, Url: 'http://localhost:4000/media/FILE-V1?token=v1', MimeType: 'video/mp4' },
+    });
+    const fixture = renderComponentFixture(MJStorageMediaPlayerComponent, {
+      inputs: {
+        Provider: provider,
+        FileID: 'FILE-V1',
+        PosterFileID: 'inline:11111111-1111-4111-8111-111111111111',
+      },
+    });
+    await flush();
+
+    const tracks = fixture.componentInstance.ResolvedTracks;
+    expect(tracks).toHaveLength(1);
+    expect(tracks[0].PosterUrl).toBeUndefined();
+
+    const executeGql = (provider as unknown as { ExecuteGQL: ReturnType<typeof vi.fn> }).ExecuteGQL;
+    expect(executeGql).toHaveBeenCalledTimes(1);
+    expect(executeGql.mock.calls.map((c: unknown[]) => (c[1] as { fileId: string }).fileId)).toEqual([
+      'FILE-V1',
+    ]);
+  });
 });
 
 

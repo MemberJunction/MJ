@@ -1114,5 +1114,102 @@ describe('VideoStudioCriticAgent', () => {
             } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>),
         ).rejects.toThrow(/has no matching scale/);
     });
+
+    it('never auto-closes a Round 1 Open defect when Round 2 re-reports it alongside > MAX_DEFECTS_PER_FORMAT defects, and prioritizes carried-over defects within the same severity tier', async () => {
+        const spec = CreateDeliveredSpecFixture();
+        spec.Deliverables.Formats = ['16:9'];
+        spec.Review.Rounds = [
+            {
+                Round: 1,
+                Timestamp: '2026-10-17T00:01:00.000Z',
+                ContactSheetFileIDs: { '16:9': ['12121212-3434-4565-8787-989898989898'] },
+                Defects: [
+                    {
+                        Key: 'r1-16:9-1',
+                        Format: '16:9',
+                        Timestamp: 1.5,
+                        Beat: 'beat-1',
+                        Criterion: 'text-legibility',
+                        Severity: 'Major',
+                        Evidence: 'Headline overlaps logo in beat-1.',
+                        Fix: 'Increase top margin on headline.',
+                        Status: 'Open',
+                    },
+                ],
+                Summary: 'Round 1 found 1 defect.',
+            },
+        ];
+
+        const agent = new TestableCriticAgent();
+        agent.EnqueuePromptOutcome({
+            success: true,
+            result: {
+                Summary: 'Round 2 found 5 defects including the carried-over beat-1 defect.',
+                Defects: [
+                    {
+                        Timestamp: 4.0,
+                        Beat: 'beat-2',
+                        Criterion: 'text-legibility',
+                        Severity: 'Major',
+                        Evidence: 'New defect 1 on beat-2.',
+                        Fix: 'Fix beat-2.',
+                    },
+                    {
+                        Timestamp: 6.0,
+                        Beat: 'beat-3',
+                        Criterion: 'text-legibility',
+                        Severity: 'Major',
+                        Evidence: 'New defect 2 on beat-3.',
+                        Fix: 'Fix beat-3.',
+                    },
+                    {
+                        Timestamp: 8.0,
+                        Beat: 'beat-4',
+                        Criterion: 'text-legibility',
+                        Severity: 'Major',
+                        Evidence: 'New defect 3 on beat-4.',
+                        Fix: 'Fix beat-4.',
+                    },
+                    {
+                        Timestamp: 10.0,
+                        Beat: 'beat-5',
+                        Criterion: 'text-legibility',
+                        Severity: 'Major',
+                        Evidence: 'New defect 4 on beat-5.',
+                        Fix: 'Fix beat-5.',
+                    },
+                    {
+                        // Re-reported at index 4 (5th item), after 4 new Major defects!
+                        Timestamp: 1.5,
+                        Beat: 'beat-1',
+                        Criterion: 'Text Legibility',
+                        Severity: 'Major',
+                        Evidence: 'Headline still overlaps logo in beat-1.',
+                        Fix: 'Increase top margin on headline.',
+                    },
+                ],
+                Scores: {
+                    Criteria: [
+                        { Criterion: 'text-legibility', Level: 'Partial' },
+                        { Criterion: 'generated-assets-are-honest-and-disclosed', Level: 'Meets' },
+                    ],
+                },
+            },
+        });
+
+        const outcome = await agent.RunForTest({
+            agent: { ID: 'critic-id', ParentID: 'root-id' },
+            payload: spec,
+        } as unknown as ExecuteAgentParams<Partial<VideoGenerationSpec>>);
+
+        const rounds = outcome.finalStep.newPayload?.Review?.Rounds ?? [];
+        expect(rounds).toHaveLength(2);
+        // Round 1's defect was re-reported by the Critic, so it must stay 'Open' (never falsely marked 'Fixed')
+        expect(rounds[0].Defects[0].Status).toBe('Open');
+        // And within the Major tier, the carried-over defect is prioritized into the capped 3-defect list for Round 2
+        expect(rounds[1].Defects).toHaveLength(3);
+        expect(rounds[1].Defects[0].Beat).toBe('beat-1');
+        expect(rounds[1].Defects[0].Criterion).toBe('text-legibility');
+    });
 });
 

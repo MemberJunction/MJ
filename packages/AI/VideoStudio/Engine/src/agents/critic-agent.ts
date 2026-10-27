@@ -150,6 +150,7 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
         const leafNodes = rubricVersion.nodes.filter((n) => n.nodeType === 'Criterion');
         const roundContactSheets: Partial<Record<VideoFormat, string[]>> = {};
         const roundDefects: VideoDefect[] = [];
+        const allReportedDefects: VideoDefect[] = [];
         const formatSummaries: string[] = [];
         const formatScores: Array<NonNullable<CriticPromptOutput['Scores']>> = [];
 
@@ -215,14 +216,19 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
                 );
             }
 
-            const formatDefects = this.normalizeFormatDefects(
+            const earlierOpenDefects = existingRounds.flatMap((r) =>
+                (r.Defects ?? []).filter((d): d is VideoDefect => Boolean(d && d.Status === 'Open')),
+            );
+            const { cappedDefects, allNormalizedDefects } = this.normalizeFormatDefects(
                 outcome.Result.Defects ?? [],
                 roundNumber,
                 format,
                 approvedAssetKeys,
                 leafNodes,
+                earlierOpenDefects,
             );
-            roundDefects.push(...formatDefects);
+            roundDefects.push(...cappedDefects);
+            allReportedDefects.push(...allNormalizedDefects);
 
             const summaryText = (outcome.Result.Summary ?? '').trim();
             if (summaryText.length > 0) {
@@ -245,13 +251,13 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
             Summary: formatSummaries.join(' ') || `Round ${roundNumber} completed.`,
         };
 
-        // 5. Update defect history on earlier rounds
+        // 5. Update defect history on earlier rounds against all reported defects (before per-format cap)
         for (const earlierRound of existingRounds) {
             for (const earlierDefect of earlierRound.Defects ?? []) {
                 if (earlierDefect.Status !== 'Open') {
                     continue;
                 }
-                const stillReported = roundDefects.some((current) =>
+                const stillReported = allReportedDefects.some((current) =>
                     this.isSameDefect(earlierDefect, current),
                 );
                 if (!stillReported) {
@@ -340,54 +346,69 @@ export class VideoStudioCriticAgent extends VideoStudioAgentBase {
         format: VideoFormat,
         approvedAssetKeys: Set<string>,
         leafNodes: readonly RubricNodeSnapshot[],
-    ): VideoDefect[] {
+        earlierOpenDefects: readonly VideoDefect[] = [],
+    ): { cappedDefects: VideoDefect[]; allNormalizedDefects: VideoDefect[] } {
         if (!Array.isArray(rawDefects) || rawDefects.length === 0) {
-            return [];
+            return { cappedDefects: [], allNormalizedDefects: [] };
         }
 
-        // Stable sort by severity: Blocker, Major, Minor (preserving model order within a severity)
         const indexed = rawDefects
             .filter((d) => Boolean(d))
-            .map((defect, index) => ({ defect, index }));
+            .map((defect, index) => {
+                const rawCriterion =
+                    typeof defect.Criterion === 'string' ? defect.Criterion.trim() : '';
+                const normalizedCriterion = rawCriterion
+                    ? (this.findCriterionNode(leafNodes, rawCriterion)?.key ?? rawCriterion)
+                    : '';
+                const normalized: VideoDefect = {
+                    Key: '',
+                    Format: format,
+                    Timestamp: typeof defect.Timestamp === 'number' ? defect.Timestamp : 0,
+                    Beat: typeof defect.Beat === 'string' && defect.Beat.trim() ? defect.Beat.trim() : 'unknown',
+                    ...(normalizedCriterion ? { Criterion: normalizedCriterion } : {}),
+                    Severity: this.normalizeSeverity(defect.Severity),
+                    Evidence: typeof defect.Evidence === 'string' ? defect.Evidence : '',
+                    Fix: typeof defect.Fix === 'string' ? defect.Fix : '',
+                    Status: 'Open',
+                };
 
+                if (
+                    typeof defect.AssetKey === 'string' &&
+                    defect.AssetKey.trim().length > 0 &&
+                    approvedAssetKeys.has(defect.AssetKey.trim())
+                ) {
+                    normalized.AssetKey = defect.AssetKey.trim();
+                }
+
+                const carriedOver = earlierOpenDefects.some((earlier) =>
+                    this.isSameDefect(earlier, normalized),
+                );
+                return { normalized, index, carriedOver };
+            });
+
+        // Stable sort by severity (Blocker, Major, Minor), prioritizing carried-over open defects
+        // within the same severity tier before new defects.
         indexed.sort((a, b) => {
-            const sevA = SEVERITY_ORDER[this.normalizeSeverity(a.defect.Severity)];
-            const sevB = SEVERITY_ORDER[this.normalizeSeverity(b.defect.Severity)];
+            const sevA = SEVERITY_ORDER[a.normalized.Severity];
+            const sevB = SEVERITY_ORDER[b.normalized.Severity];
             if (sevA !== sevB) {
                 return sevA - sevB;
+            }
+            if (a.carriedOver !== b.carriedOver) {
+                return a.carriedOver ? -1 : 1;
             }
             return a.index - b.index;
         });
 
-        const topDefects = indexed.slice(0, MAX_DEFECTS_PER_FORMAT);
-        return topDefects.map(({ defect }, idx) => {
-            const rawCriterion =
-                typeof defect.Criterion === 'string' ? defect.Criterion.trim() : '';
-            const normalizedCriterion = rawCriterion
-                ? (this.findCriterionNode(leafNodes, rawCriterion)?.key ?? rawCriterion)
-                : '';
-            const normalized: VideoDefect = {
-                Key: `r${roundNumber}-${format}-${idx + 1}`,
-                Format: format,
-                Timestamp: typeof defect.Timestamp === 'number' ? defect.Timestamp : 0,
-                Beat: typeof defect.Beat === 'string' && defect.Beat.trim() ? defect.Beat.trim() : 'unknown',
-                ...(normalizedCriterion ? { Criterion: normalizedCriterion } : {}),
-                Severity: this.normalizeSeverity(defect.Severity),
-                Evidence: typeof defect.Evidence === 'string' ? defect.Evidence : '',
-                Fix: typeof defect.Fix === 'string' ? defect.Fix : '',
-                Status: 'Open',
-            };
+        const allNormalizedDefects = indexed.map(({ normalized }, idx) => ({
+            ...normalized,
+            Key: `r${roundNumber}-${format}-${idx + 1}`,
+        }));
 
-            if (
-                typeof defect.AssetKey === 'string' &&
-                defect.AssetKey.trim().length > 0 &&
-                approvedAssetKeys.has(defect.AssetKey.trim())
-            ) {
-                normalized.AssetKey = defect.AssetKey.trim();
-            }
-
-            return normalized;
-        });
+        return {
+            cappedDefects: allNormalizedDefects.slice(0, MAX_DEFECTS_PER_FORMAT),
+            allNormalizedDefects,
+        };
     }
 
     private normalizeSeverity(severity: unknown): DefectSeverity {

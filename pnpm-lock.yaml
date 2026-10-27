@@ -3639,9 +3639,6 @@ importers:
         specifier: 9.0.0
         version: 9.0.0(typescript@5.9.3)
     devDependencies:
-      '@memberjunction/video-studio-render-worker':
-        specifier: 6.2.0-edge.5
-        version: link:../RenderWorker
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
@@ -3654,6 +3651,10 @@ importers:
       vitest:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+    optionalDependencies:
+      '@memberjunction/video-studio-render-worker':
+        specifier: 6.2.0-edge.5
+        version: link:../RenderWorker
 
   packages/AI/VideoStudio/RenderWorker:
     dependencies:

@@ -649,8 +649,68 @@ describe('VideoStudioAgent conversation attachment intake (VS-AGT-6)', () => {
         expect(deliveredStep.newPayload?.Output?.Videos?.['9:16']?.InlineBase64).toBe(
             rawMp4Base649x16,
         );
+        // Ephemeral inline:<uuid> IDs are stripped on terminal exit so saved artifacts never trigger
+        // failing CreateMediaAccessToken GraphQL calls
+        expect(deliveredStep.newPayload?.Output?.PosterFileID).toBeUndefined();
+        expect(deliveredStep.newPayload?.Output?.ContactSheetFileIDs).toBeUndefined();
         expect(deliveredStep.newPayload?.Review?.HumanReviewNotes).toContain(
             'Stored inline in the database, not in file storage',
         );
+    });
+
+    it('clears stale nested arrays (Beats[i].AssetRefs = [], DataRefs = [], OnScreenText = []) when subAgentPayload explicitly sets [] and initializes DataBindings even when Film is absent', async () => {
+        const { CreateDeliveredSpecFixture } = await import('./fixtures/delivered-spec.fixture.js');
+        const harness = createHarness(['Video Studio']);
+
+        const mergedByPayloadManager = CreateDeliveredSpecFixture();
+        mergedByPayloadManager.Status = 'Storyboarded';
+        // Simulate PayloadManager.mergeUpstreamPayload retaining stale array entries when Storyboard
+        // returned AssetRefs: [], DataRefs: [], OnScreenText: []
+        mergedByPayloadManager.Beats[0].AssetRefs = ['stale-asset-key'];
+        mergedByPayloadManager.Beats[0].DataRefs = ['stale-data-key'];
+        mergedByPayloadManager.Beats[0].OnScreenText = ['Stale headline'];
+
+        const subAgentPayload = CreateDeliveredSpecFixture();
+        subAgentPayload.Status = 'Storyboarded';
+        subAgentPayload.Beats[0].AssetRefs = [];
+        subAgentPayload.Beats[0].DataRefs = [];
+        subAgentPayload.Beats[0].OnScreenText = [];
+
+        const driver = harness.agent as unknown as {
+            ApplyStageResult: (
+                params: ExecuteAgentParams,
+                stageName: string,
+                payload: Partial<VideoGenerationSpec>,
+                stageSucceeded?: boolean,
+                subAgentPayload?: Partial<VideoGenerationSpec>,
+            ) => Partial<VideoGenerationSpec>;
+        };
+
+        const params: ExecuteAgentParams = {
+            agent: harness.agentEntity,
+            contextUser: harness.contextUser,
+            conversationMessages: [],
+        };
+
+        const afterStoryboard = driver.ApplyStageResult(
+            params,
+            'Video Studio - Storyboard',
+            mergedByPayloadManager,
+            true,
+            subAgentPayload,
+        );
+
+        expect(afterStoryboard.Beats?.[0]?.AssetRefs).toEqual([]);
+        expect(afterStoryboard.Beats?.[0]?.DataRefs).toEqual([]);
+        expect(afterStoryboard.Beats?.[0]?.OnScreenText).toEqual([]);
+
+        // Also verify DataBindings is initialized to [] when Film is absent
+        const withoutFilm = driver.ApplyStageResult(
+            params,
+            'Video Studio - Director',
+            {} as Partial<VideoGenerationSpec>,
+            false,
+        );
+        expect(withoutFilm.DataBindings).toEqual([]);
     });
 });
