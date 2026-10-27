@@ -10,6 +10,7 @@ import {
 } from '@memberjunction/core-entities';
 import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
+import { APPROVAL_REQUEST_TYPE_NAME, ResolveAgentRequestTypeId } from './agent-request-type-resolver';
 import { CommunicationEngine } from '@memberjunction/communication-engine';
 import {
     BaseCommunicationProvider,
@@ -22,7 +23,6 @@ import {
     UpdateCalendarEventParams,
 } from '@memberjunction/communication-types';
 
-const APPROVAL_REQUEST_TYPE_ID = '015B94A7-8817-4FF2-98FB-7F0513F4591F';
 
 /**
  * Result of evaluating whether the enterprise communication provider is permitted
@@ -369,13 +369,18 @@ export abstract class BaseUserScopedCommunicationAction extends BaseAction {
         provider?: IMetadataProvider
     ): Promise<string | null> {
         try {
+            const approvalTypeId = await ResolveAgentRequestTypeId(APPROVAL_REQUEST_TYPE_NAME, contextUser);
+            if (!approvalTypeId) {
+                LogError(`Agent request type "${APPROVAL_REQUEST_TYPE_NAME}" is not in metadata; cannot create an approval request.`);
+                return null;
+            }
             const md = provider ?? new Metadata();
             const req = await md.GetEntityObject<MJAIAgentRequestEntity>('MJ: AI Agent Requests', contextUser);
             req.RequestForUserID = contextUser.ID;
             if (agentId) {
                 req.AgentID = agentId;
             }
-            req.RequestTypeID = APPROVAL_REQUEST_TYPE_ID;
+            req.RequestTypeID = approvalTypeId;
             req.RequestedAt = new Date();
             req.Status = 'Requested';
             req.Priority = 50;

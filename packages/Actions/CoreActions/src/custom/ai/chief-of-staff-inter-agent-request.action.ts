@@ -5,8 +5,8 @@ import { LogError, Metadata } from '@memberjunction/core';
 import { MJAIAgentRequestEntity } from '@memberjunction/core-entities';
 import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
+import { APPROVAL_REQUEST_TYPE_NAME, ResolveAgentRequestTypeId } from './agent-request-type-resolver';
 
-const APPROVAL_REQUEST_TYPE_ID = '015B94A7-8817-4FF2-98FB-7F0513F4591F';
 
 /**
  * Structured payload stored inside `MJAIAgentRequestEntity.Comments` (and reflected in `Request`)
@@ -142,13 +142,23 @@ export class ChiefOfStaffInterAgentRequestAction extends BaseAction {
                 ...(dueByISO ? { dueByISO } : {}),
             };
 
+            const approvalTypeId = await ResolveAgentRequestTypeId(APPROVAL_REQUEST_TYPE_NAME, contextUser);
+            if (!approvalTypeId) {
+                return {
+                    Success: false,
+                    ResultCode: 'REQUEST_TYPE_NOT_FOUND',
+                    Message: `Agent request type "${APPROVAL_REQUEST_TYPE_NAME}" is not in metadata; cannot create the coordination request.`,
+                    Params: params.Params,
+                };
+            }
+
             const md = params.Provider ?? new Metadata();
             const requestEntity = await md.GetEntityObject<MJAIAgentRequestEntity>(
                 'MJ: AI Agent Requests',
                 contextUser
             );
             requestEntity.AgentID = agent.ID;
-            requestEntity.RequestTypeID = APPROVAL_REQUEST_TYPE_ID;
+            requestEntity.RequestTypeID = approvalTypeId;
             requestEntity.RequestedAt = new Date();
             requestEntity.RequestForUserID = targetUserId;
             requestEntity.Status = 'Requested';

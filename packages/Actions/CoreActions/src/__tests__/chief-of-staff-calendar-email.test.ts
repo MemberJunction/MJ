@@ -48,6 +48,16 @@ vi.mock('@memberjunction/aiengine', () => ({
     },
 }));
 
+vi.mock('@memberjunction/ai-engine-base', () => ({
+    AIEngineBase: {
+        Instance: {
+            EnsureLoaded: vi.fn().mockResolvedValue(undefined),
+            GetAgentRequestTypeByName: (name: string) =>
+                name === 'Approval' ? { ID: 'approval-type-id', Name: 'Approval' } : undefined,
+        },
+    },
+}));
+
 vi.mock('@memberjunction/communication-engine', () => ({
     CommunicationEngine: {
         Instance: {
@@ -122,15 +132,25 @@ function buildPolicy(
 describe('Chief of Staff User-Scoped Calendar, Email, and External Scheduling Actions', () => {
     const originalFetch = globalThis.fetch;
 
+    const savedApprovalRequests: Array<{ ID: string; RequestTypeID: string | null }> = [];
+
     beforeEach(() => {
         vi.clearAllMocks();
         AgentUserPolicyEngine.Instance.ClearCache();
         mockProvidersList.length = 0;
         mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
-        mockGetEntityObjectFn.mockImplementation(async () => ({
-            ID: 'approval-req-123',
-            Save: vi.fn().mockResolvedValue(true),
-        }));
+        savedApprovalRequests.length = 0;
+        mockGetEntityObjectFn.mockImplementation(async () => {
+            const stub = {
+                ID: 'approval-req-123',
+                RequestTypeID: null as string | null,
+                Save: vi.fn(async () => {
+                    savedApprovalRequests.push(stub);
+                    return true;
+                }),
+            };
+            return stub;
+        });
     });
 
     afterEach(() => {
@@ -496,6 +516,8 @@ describe('Chief of Staff User-Scoped Calendar, Email, and External Scheduling Ac
             );
             const approvalId = params.Params.find((p) => p.Name === 'ApprovalRequestID')?.Value;
             expect(approvalId).toBe('approval-req-123');
+            // The Approval request type comes from the AI engine cache by name, never a hardcoded id.
+            expect(savedApprovalRequests[0]?.RequestTypeID).toBe('approval-type-id');
         });
 
         it('executes live CreateCalendarEvent when CalendarChannelMode is Autonomous', async () => {

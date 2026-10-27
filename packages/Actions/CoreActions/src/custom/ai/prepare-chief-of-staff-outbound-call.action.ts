@@ -5,6 +5,7 @@ import { LogError, Metadata } from '@memberjunction/core';
 import { MJAIAgentRequestEntity } from '@memberjunction/core-entities';
 import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
+import { APPROVAL_REQUEST_TYPE_NAME, ResolveAgentRequestTypeId } from './agent-request-type-resolver';
 
 /**
  * Locked outbound telephony brief enforced before any Chief of Staff voice session or outbound call.
@@ -27,7 +28,6 @@ export interface ChiefOfStaffOutboundCallBrief {
     maxDurationSeconds: number;
 }
 
-const APPROVAL_REQUEST_TYPE_ID = '015B94A7-8817-4FF2-98FB-7F0513F4591F';
 
 const CORE_CALL_PROHIBITIONS: ReadonlyArray<string> = [
     'Always state upfront that you are an AI assistant calling on the user\'s behalf.',
@@ -141,13 +141,22 @@ export class PrepareChiefOfStaffOutboundCallAction extends BaseAction {
             this.setOutputParam(params, 'DisclosureStatement', mandatoryUpfrontDisclosure);
 
             if (needsApproval) {
+                const approvalTypeId = await ResolveAgentRequestTypeId(APPROVAL_REQUEST_TYPE_NAME, contextUser);
+                if (!approvalTypeId) {
+                    return {
+                        Success: false,
+                        ResultCode: 'REQUEST_TYPE_NOT_FOUND',
+                        Message: `Agent request type "${APPROVAL_REQUEST_TYPE_NAME}" is not in metadata; the call brief was prepared but cannot be queued for approval.`,
+                        Params: params.Params,
+                    };
+                }
                 const md = params.Provider ?? new Metadata();
                 const approvalReq = await md.GetEntityObject<MJAIAgentRequestEntity>(
                     'MJ: AI Agent Requests',
                     contextUser
                 );
                 approvalReq.AgentID = agent.ID;
-                approvalReq.RequestTypeID = APPROVAL_REQUEST_TYPE_ID;
+                approvalReq.RequestTypeID = approvalTypeId;
                 approvalReq.RequestedAt = new Date();
                 approvalReq.RequestForUserID = contextUser.ID;
                 approvalReq.Status = 'Requested';

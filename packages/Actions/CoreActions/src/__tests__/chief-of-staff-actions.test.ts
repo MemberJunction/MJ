@@ -66,6 +66,18 @@ vi.mock('@memberjunction/aiengine', () => ({
     },
 }));
 
+const requestTypeByNameMock = vi.fn((name: string) =>
+    name === 'Approval' ? { ID: 'approval-type-id', Name: 'Approval' } : undefined
+);
+vi.mock('@memberjunction/ai-engine-base', () => ({
+    AIEngineBase: {
+        Instance: {
+            EnsureLoaded: vi.fn().mockResolvedValue(undefined),
+            GetAgentRequestTypeByName: (name: string) => requestTypeByNameMock(name),
+        },
+    },
+}));
+
 vi.mock('@memberjunction/ai-core-plus', () => ({
     AgentUserPolicyEngine: {
         Instance: {
@@ -339,6 +351,7 @@ describe('Chief of Staff Actions Suite', () => {
             const requestStub = {
                 ID: 'req-555',
                 AgentID: '',
+                RequestTypeID: null as string | null,
                 RequestedAt: null as Date | null,
                 RequestForUserID: null as string | null,
                 Status: 'Requested' as MJAIAgentRequestEntity['Status'],
@@ -365,8 +378,36 @@ describe('Chief of Staff Actions Suite', () => {
             const res = await invokeAction(new ChiefOfStaffInterAgentRequestAction(), params);
             expect(res.Success).toBe(true);
             expect(requestStub.RequestForUserID).toBe('user-target');
+            // The Approval request type is resolved by name through the AI engine cache, never hardcoded.
+            expect(requestStub.RequestTypeID).toBe('approval-type-id');
+            expect(requestTypeByNameMock).toHaveBeenCalledWith('Approval');
             expect(params.Params.find((p: ActionParam) => p.Name === 'DeliveryMode')?.Value).toBe('InterAgentCoS');
             expect(params.Params.find((p: ActionParam) => p.Name === 'AgentRequestID')?.Value).toBe('req-555');
+        });
+
+        it('fails with REQUEST_TYPE_NOT_FOUND instead of saving when the Approval request type is not in metadata', async () => {
+            getPolicyMock
+                .mockResolvedValueOnce({ Status: 'Active', AllowInterAgentCoordination: true, CoordinationMode: 'Coordinator' })
+                .mockResolvedValueOnce({ Status: 'Active', AllowInterAgentCoordination: true, CoordinationMode: 'Coordinator' });
+            requestTypeByNameMock.mockReturnValueOnce(undefined);
+            const save = vi.fn().mockResolvedValue(true);
+            getEntityObjectMock.mockResolvedValue({ ID: 'req-556', Save: save });
+
+            const params: RunActionParams = {
+                Action: {} as RunActionParams['Action'],
+                ContextUser: makeUser('user-sender', 'Alice Executive'),
+                Filters: [],
+                Params: [
+                    { Name: 'TargetUserID', Type: 'Input', Value: 'user-target' },
+                    { Name: 'Subject', Type: 'Input', Value: 'Q4 OKR Check-in' },
+                    { Name: 'Message', Type: 'Input', Value: 'Please share current metric for KR-2.' },
+                ],
+            };
+
+            const res = await invokeAction(new ChiefOfStaffInterAgentRequestAction(), params);
+            expect(res.Success).toBe(false);
+            expect(res.ResultCode).toBe('REQUEST_TYPE_NOT_FOUND');
+            expect(save).not.toHaveBeenCalled();
         });
     });
 
@@ -403,6 +444,7 @@ describe('Chief of Staff Actions Suite', () => {
             const reqStub = {
                 ID: 'call-req-1',
                 AgentID: '',
+                RequestTypeID: null as string | null,
                 RequestedAt: null as Date | null,
                 RequestForUserID: null as string | null,
                 Status: 'Requested' as MJAIAgentRequestEntity['Status'],
@@ -436,6 +478,7 @@ describe('Chief of Staff Actions Suite', () => {
             );
             expect(params.Params.find((p: ActionParam) => p.Name === 'Status')?.Value).toBe('PENDING_APPROVAL');
             expect(params.Params.find((p: ActionParam) => p.Name === 'AgentRequestID')?.Value).toBe('call-req-1');
+            expect(reqStub.RequestTypeID).toBe('approval-type-id');
         });
     });
 });
