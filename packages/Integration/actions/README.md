@@ -53,7 +53,7 @@ Performs a high-speed initial bootstrap of external SQL Server tables into Membe
 | `BackupUrls` | Input | string | Yes | Single Azure Blob URL / disk path or comma-separated list of URLs/paths for striped backups |
 | `SasToken` | Input | string | No | Shared Access Signature token for Azure Blob container access (redacted from logs) |
 | `StorageCredentialID` | Input | string | No | MJ Credentials record ID storing the SAS token |
-| `StagingDatabaseName` | Input | string | No | Temporary staging database name (default: auto-generated) |
+| `StagingDatabaseName` | Both | string | No | Temporary staging database name (default: auto-generated); returned with the name actually used |
 | `DropStagingDbOnComplete`| Input | string | No | `'true'` or `'false'` (default: `'true'`) to drop staging DB on completion |
 | `TruncateTargetBeforeLoad`| Input | string | No | `'true'` or `'false'` (default: `'false'`) to truncate target tables before load for safe re-runs |
 | `BatchSize` | Input | number | No | Chunk batch size for large table transfers (default: 500,000; 0 for unchunked) |
@@ -62,7 +62,6 @@ Performs a high-speed initial bootstrap of external SQL Server tables into Membe
 | `EntityMapIDs` | Input | string | No | Comma-separated list of specific EntityMapIDs to restrict bootstrap |
 | `ProgressRunID` | Input | string | No | Integration progress run to report stages to. Set by the `IntegrationStartBootstrap` GraphQL mutation, which launches this action detached and returns the run ID; clients tail the run with `IntegrationTailRunEvents` instead of awaiting the action |
 | `BackupStartDate` | Output | string | — | Point-in-time timestamp (ISO UTC) when backup began (seeds watermarks) |
-| `StagingDatabaseName` | Output | string | — | Staging database name created |
 | `TablesProcessed` | Output | number | — | Count of entity tables transferred |
 | `TotalRowsTransferred` | Output | number | — | Total record count inserted into target tables |
 | `DurationSeconds` | Output | number | — | Total runtime in seconds |

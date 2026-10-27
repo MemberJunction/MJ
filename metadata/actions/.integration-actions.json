@@ -357,10 +357,10 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "StagingDatabaseName",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Name of the temporary staging database to restore into. If omitted, defaults to MJ_Staging_<IntegrationName>_<Timestamp>",
+            "Description": "Name of the temporary staging database to restore into. If omitted, defaults to MJ_Staging_<IntegrationName>_<Timestamp>. Returned as an output with the name actually used (the database is retained when DropStagingDbOnComplete is false)",
             "IsRequired": false
           },
           "primaryKey": {
@@ -494,20 +494,6 @@
           },
           "primaryKey": {
             "ID": "6888EF76-2BA3-4550-9641-1064E0044F53"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "StagingDatabaseName",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Name of the staging database the backup was restored into (retained when DropStagingDbOnComplete is false)",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "5022E81D-D280-4FCF-9A02-E0B40CCC67BD"
           }
         },
         {

@@ -131,7 +131,10 @@ export type {
     ApplyAllEntityMapCreated,
     ApplyAllResult,
     SourceObjectListItem,
-    SourceObjectSelectionInput
+    SourceObjectSelectionInput,
+    IntegrationBootstrapStartInput,
+    IntegrationRunSummary,
+    IntegrationRunEvent
 } from './graphQLIntegrationClient';
 export { GraphQLConversationClient } from './graphQLConversationClient';
 export type { ConversationRunEvent, ConversationTailResult } from './graphQLConversationClient';

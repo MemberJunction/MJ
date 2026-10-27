@@ -445,6 +445,24 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
             expect(mockSql.executedSql.some(s => s.includes('DROP DATABASE'))).toBe(false);
         });
 
+        it('returns the staging database name on the caller-supplied param as Both, never as a duplicate', async () => {
+            const params = makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                SasToken: 'token123',
+                StagingDatabaseName: 'MJ_Staging_TestDB',
+            });
+
+            const result = await action['InternalRunAction'](params);
+
+            expect(result.Success).toBe(true);
+            const staging = result.Params?.filter(p => p.Name === 'StagingDatabaseName') ?? [];
+            expect(staging).toHaveLength(1);
+            expect(staging[0].Type).toBe('Both');
+            expect(staging[0].Value).toBe('MJ_Staging_TestDB');
+            expect(result.Params?.filter(p => p.Name === 'TotalRowsTransferred')).toHaveLength(1);
+        });
+
         it('restores without REPLACE once the name is known to be free', async () => {
             const params = makeParams({
                 CompanyIntegrationID: 'ci-001',

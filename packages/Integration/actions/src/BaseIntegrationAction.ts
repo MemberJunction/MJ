@@ -342,7 +342,19 @@ END`;
         return list.length > 0 ? list : undefined;
     }
 
+    /**
+     * Records an output value. A parameter the caller already supplied under the same name (one the
+     * action declares as `Both`, such as a staging database name the action may have generated) is
+     * updated in place rather than duplicated: an action's parameter names are unique.
+     */
     protected addOutputParam(params: RunActionParams, name: string, value: number | string | boolean): void {
+        const nameLower = name.trim().toLowerCase();
+        const existing = params.Params.find(p => p.Name.trim().toLowerCase() === nameLower);
+        if (existing) {
+            existing.Type = 'Both';
+            existing.Value = value;
+            return;
+        }
         const outputParam = new ActionParam();
         outputParam.Name = name;
         outputParam.Type = 'Output';
