@@ -221,21 +221,17 @@ export class AIImageGenerationRunner extends BaseModelRunner {
     }
   }
 
-  /** Selects the first candidate with credentials, or returns an error listing every candidate. */
+  /** Selects the candidate to run (see SelectCandidate), or returns an error listing every candidate. */
   private selectCandidate(
     prompt: MJAIPromptEntityExtended,
     candidates: ModelVendorCandidate[],
     promptParams: AIPromptParams
   ): ImageSelection | string {
-    const credentialAvailability = new Map<string, boolean>();
-    let selected: ModelVendorCandidate | undefined;
-    for (const candidate of candidates) {
-      const available = this.HasCredentialsAvailable(candidate.driverClass, prompt.ID, candidate.model.ID, candidate.vendorId, promptParams);
-      credentialAvailability.set(this.candidateKey(candidate), available);
-      if (available && !selected) {
-        selected = candidate;
-      }
-    }
+    const { Candidate: selected, CredentialAvailability: credentialAvailability } = this.SelectCandidate(
+      candidates,
+      c => this.HasCredentialsAvailable(c.driverClass, prompt.ID, c.model.ID, c.vendorId, promptParams),
+      true
+    );
     if (!selected) {
       const summary = candidates
         .map(c => `[Model: ${c.model.Name}, Vendor: ${c.vendorName ?? 'default'}, Driver: ${c.driverClass}]`)
@@ -511,10 +507,6 @@ export class AIImageGenerationRunner extends BaseModelRunner {
     };
   }
 
-  /** The key format BaseModelRunner's failover credential cache uses. */
-  private candidateKey(candidate: ModelVendorCandidate): string {
-    return `${candidate.driverClass}:${candidate.model.ID}:${candidate.vendorId || 'default'}`;
-  }
 
   /** Records which candidate was chosen and why, for the run row. */
   private buildSelectionInfo(
@@ -530,7 +522,7 @@ export class AIImageGenerationRunner extends BaseModelRunner {
     info.SelectionReason = 'First candidate with available credentials';
     info.FallbackUsed = false;
     info.ModelsConsidered = candidates.map(c => {
-      const available = selection.CredentialAvailability.get(this.candidateKey(c)) ?? false;
+      const available = selection.CredentialAvailability.get(this.CandidateKey(c)) ?? false;
       return {
         model: c.model,
         vendor: c.vendorId ? AIEngine.Instance.VendorsByID.get(NormalizeUUID(c.vendorId)) : undefined,

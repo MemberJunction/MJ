@@ -413,16 +413,18 @@ describe('selectModel — Default strategy: a prompt-model row picks the vendor,
     const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default' }));
     expect(r.model?.ID).toBe(M.Gemini);
     expect(r.vendorDriverClass).toBe('GeminiLLM');
+    expect(r.selectionInfo?.fallbackUsed).toBe(true); // the top candidate (Fireworks) had no key
   });
 
   it('with the top vendor credentialed, the row vendor still serves the model next chose', async () => {
-    loadDatabaseResearch([...DIRECT, 'OpenRouterLLM']); // next: Gemini via OpenRouter (5200)
+    loadDatabaseResearch([...DIRECT, 'OpenRouterLLM', 'FireworksLLM']); // next: GPT-OSS via Fireworks (5250)
     const r = await selectModel(runner, makePrompt({ SelectionStrategy: 'Default' }));
-    expect(r.model?.ID).toBe(M.Gemini);
-    expect(r.vendorDriverClass).toBe('GeminiLLM');
+    expect(r.model?.ID).toBe(M.GptOss);
+    expect(r.vendorDriverClass).toBe('CerebrasLLM');
+    expect(r.selectionInfo?.fallbackUsed).toBe(false); // the row vendor serving next's pick is not a fallback
   });
 
-  it('failover keeps next\'s model order, and each model starts on its row vendor', async () => {
+  it('failover starts each model on its row vendor and reaches the models in next\'s order of first appearance', async () => {
     loadDatabaseResearch([...DIRECT, 'OpenRouterLLM']);
     const prompt = makePrompt({ SelectionStrategy: 'Default', FailoverStrategy: 'NextBestModel', FailoverMaxAttempts: 20 });
     const selection = await selectModel(runner, prompt);
@@ -442,6 +444,35 @@ describe('selectModel — Default strategy: a prompt-model row picks the vendor,
     expect(ours[0]).toEqual({ model: M.Gemini, driver: 'GeminiLLM' });
     expect([...new Set(ours.map(c => c.model))]).toEqual([M.Gemini, M.GptOss]);
     expect(ours.find(c => c.model === M.GptOss)?.driver).toBe('CerebrasLLM');
+  });
+});
+
+// The one rule every runner selects by (BaseModelRunner.SelectCandidate): the first credentialed
+// candidate decides the model, and that model's own row vendor serves it when it has a key.
+describe('SelectCandidate — the row vendor serves the model the ranking picked, never another model', () => {
+  type Fake = { model: { ID: string }; vendorId: string; driverClass: string; isPreferredVendor: boolean; isPromptModelVendor: boolean; priority: number; source: string };
+  const c = (model: string, driver: string, opts: { row?: boolean; preferred?: boolean } = {}): Fake => ({
+    model: { ID: model }, vendorId: `v-${driver}`, driverClass: driver,
+    isPreferredVendor: !!opts.preferred, isPromptModelVendor: !!opts.row, priority: 0, source: 'prompt-model',
+  });
+  const pick = (candidates: Fake[], keyed: string[]): string | undefined =>
+    (runner as unknown as { SelectCandidate(c: Fake[], has: (x: Fake) => boolean): { Candidate: Fake | null } })
+      .SelectCandidate(candidates, x => keyed.includes(x.driverClass)).Candidate?.driverClass;
+
+  it('swaps to the same model\'s row vendor, past another model\'s row vendor ranked in between', () => {
+    expect(pick([c('A', 'A-top'), c('B', 'B-row', { row: true }), c('A', 'A-row', { row: true })], ['A-top', 'B-row', 'A-row'])).toBe('A-row');
+  });
+
+  it('never moves to another model: with the top keyless, the next model keeps its own vendor', () => {
+    expect(pick([c('A', 'A-top'), c('B', 'B-1'), c('A', 'A-row', { row: true })], ['B-1', 'A-row'])).toBe('B-1');
+  });
+
+  it('keeps the first credentialed candidate when its row vendor has no key', () => {
+    expect(pick([c('A', 'A-top'), c('A', 'A-row', { row: true })], ['A-top'])).toBe('A-top');
+  });
+
+  it('never swaps away from a runtime vendor override', () => {
+    expect(pick([c('A', 'A-pref', { preferred: true }), c('A', 'A-row', { row: true })], ['A-pref', 'A-row'])).toBe('A-pref');
   });
 });
 

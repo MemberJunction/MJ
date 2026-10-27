@@ -1532,6 +1532,44 @@ export abstract class BaseModelRunner {
     return -1;
   }
 
+  /** The key credential probes are cached under: driver, model and vendor. */
+  protected CandidateKey(candidate: ModelVendorCandidate): string {
+    return `${candidate.driverClass}:${candidate.model.ID}:${candidate.vendorId || 'default'}`;
+  }
+
+  /**
+   * Picks the candidate a run uses: the first with credentials, or that model's prompt-model-row vendor
+   * when it has credentials too (see {@link PromptModelVendorIndex}). Every runner selects here, so the
+   * vendor is the same whether or not failover runs. Probing stops at the pick unless `probeAll` asks
+   * for every candidate (a selection report). Returns the probes made, keyed by {@link CandidateKey},
+   * for failover to reuse.
+   */
+  protected SelectCandidate(
+    candidates: ModelVendorCandidate[],
+    hasCredentials: (candidate: ModelVendorCandidate) => boolean,
+    probeAll = false
+  ): { Candidate: ModelVendorCandidate | null; CredentialAvailability: Map<string, boolean> } {
+    const availability = new Map<string, boolean>();
+    const probe = (candidate: ModelVendorCandidate): boolean => {
+      const key = this.CandidateKey(candidate);
+      let available = availability.get(key);
+      if (available === undefined) {
+        available = hasCredentials(candidate);
+        availability.set(key, available);
+      }
+      return available;
+    };
+    const first = candidates.findIndex(probe);
+    const rowVendor = first < 0 ? -1 : this.PromptModelVendorIndex(candidates, first, probe);
+    if (probeAll) {
+      candidates.forEach(probe);
+    }
+    return {
+      Candidate: first < 0 ? null : candidates[rowVendor >= 0 ? rowVendor : first],
+      CredentialAvailability: availability
+    };
+  }
+
   /**
    * Awaits all in-flight `MJAIPromptRunEntityExtended` INSERT and UPDATE operations queued on this
    * runner's internal {@link BaseEntitySaveQueue} (`_promptRunQueue`) and clears the in-flight parent
@@ -1828,7 +1866,7 @@ export abstract class BaseModelRunner {
       ? new Map<string, boolean>(credentialAvailability)
       : new Map<string, boolean>();
     const candidateHasCredentials = (c: ModelVendorCandidate): boolean => {
-      const key = `${c.driverClass}:${c.model.ID}:${c.vendorId || 'default'}`;
+      const key = this.CandidateKey(c);
       let has = failoverCredentialCache.get(key);
       if (has === undefined) {
         has = this.HasCredentialsAvailable(c.driverClass, prompt.ID, c.model.ID, c.vendorId, params);

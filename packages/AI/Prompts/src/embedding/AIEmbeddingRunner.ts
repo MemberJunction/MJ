@@ -329,28 +329,11 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     candidates: ModelVendorCandidate[],
     promptParams: AIPromptParams
   ): EmbeddingSelection | string {
-    const credentialAvailability = new Map<string, boolean>();
-    let selected: ModelVendorCandidate | undefined;
-    for (const candidate of candidates) {
-      const available = this.HasCredentialsAvailable(
-        candidate.driverClass,
-        prompt.ID,
-        candidate.model.ID,
-        candidate.vendorId,
-        promptParams
-      );
-      credentialAvailability.set(this.candidateKey(candidate), available);
-      if (available && !selected) {
-        selected = candidate;
-      }
-    }
-    if (selected) {
-      // The model is decided; its prompt-model row's vendor serves it when that vendor has credentials.
-      const rowVendorIndex = this.PromptModelVendorIndex(candidates, candidates.indexOf(selected), c => credentialAvailability.get(this.candidateKey(c)) === true);
-      if (rowVendorIndex >= 0) {
-        selected = candidates[rowVendorIndex];
-      }
-    }
+    const { Candidate: selected, CredentialAvailability: credentialAvailability } = this.SelectCandidate(
+      candidates,
+      c => this.HasCredentialsAvailable(c.driverClass, prompt.ID, c.model.ID, c.vendorId, promptParams),
+      true
+    );
     if (!selected) {
       const summary = candidates
         .map(c => `[Model: ${c.model.Name}, Vendor: ${c.vendorName ?? 'default'}, Driver: ${c.driverClass}]`)
@@ -404,9 +387,6 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     return driver && driver.constructor !== BaseEmbeddings ? driver : null;
   }
 
-  private candidateKey(candidate: ModelVendorCandidate): string {
-    return `${candidate.driverClass}:${candidate.model.ID}:${candidate.vendorId || 'default'}`;
-  }
 
   private buildSelectionInfo(
     prompt: MJAIPromptEntityExtended,
@@ -423,7 +403,7 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     info.SelectionReason = 'First candidate with available credentials';
     info.FallbackUsed = false;
     info.ModelsConsidered = candidates.map(c => {
-      const available = selection.CredentialAvailability.get(this.candidateKey(c)) ?? false;
+      const available = selection.CredentialAvailability.get(this.CandidateKey(c)) ?? false;
       return {
         model: c.model,
         vendor: c.vendorId ? AIEngine.Instance.VendorsByID.get(NormalizeUUID(c.vendorId)) : undefined,

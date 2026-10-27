@@ -243,6 +243,20 @@ describe('AgentRunner.RunAgentInConversation — a progress save still committin
         expect(archivedStatusAtSave.at(-1)).toBe('Smart Title/Archived');
     });
 
+    it('a reload that throws while saving the name does not replace a successful run\'s result', async () => {
+        const convEntity = makeRacyDetail('conv-new');
+        const savedNames = recordSavedNames(convEntity);
+        convEntity.Load = async () => { throw new Error('connection reset'); };
+        const runner = new AgentRunner(makeProvider([convEntity, makeRacyDetail('user-detail'), makeRacyDetail('agent-detail')]));
+        vi.spyOn(runner as unknown as RunAgentStub, 'generateConversationName').mockResolvedValue({ name: 'Smart Title', description: '' });
+        vi.spyOn(runner as unknown as RunAgentStub, 'RunAgent').mockResolvedValue(reply);
+
+        const result = await runInConversation(runner, {});
+
+        expect(result.agentResult).toBe(reply);
+        expect(savedNames).toEqual(['Chat with Betty']);
+    });
+
     it('saves the generated name after the run\'s own writes', async () => {
         const events: string[] = [];
         const convEntity = makeRacyDetail('conv-new');

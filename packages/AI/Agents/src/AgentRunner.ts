@@ -899,8 +899,9 @@ export class AgentRunner {
                 return;
             }
             // Re-read first: Save writes every column, so a stale instance would undo a rename or an
-            // archive made during the run. A name someone already changed is kept.
-            if (!(await conversation.Load(conversation.ID))) {
+            // archive made during the run. A name someone already changed is kept. This runs in the run's
+            // finally, so a reload that throws must not replace the run's result.
+            if (!(await conversation.Load(conversation.ID).catch(() => false))) {
                 LogError(`Failed to reload conversation ${conversation.ID} before saving its generated name`);
                 return;
             }
