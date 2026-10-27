@@ -387,7 +387,6 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     return driver && driver.constructor !== BaseEmbeddings ? driver : null;
   }
 
-
   private buildSelectionInfo(
     prompt: MJAIPromptEntityExtended,
     candidates: ModelVendorCandidate[],

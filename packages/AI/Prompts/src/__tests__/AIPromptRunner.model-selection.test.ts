@@ -280,7 +280,7 @@ describe('selectModel — Specific strategy + AIPromptModel', () => {
   it('Default strategy preserves AIPromptModel VendorID preference, EffortLevel, and PromptConfigurationObject', async () => {
     // ClaudeOpus45 is offered by Anthropic (Priority 1) and Bedrock (Priority 5).
     // When AIPromptModel specifies VendorID=Anthropic under SelectionStrategy='Default',
-    // Anthropic must receive the preferred-vendor priority boost and carry EffortLevel + PromptConfigurationObject.
+    // Anthropic is selected by substitution for its model (no priority boost) and carries EffortLevel + PromptConfigurationObject.
     const promptConfig = { temperature: 0.1 };
     catalog.promptModels.push({
       ...makePromptModel({ PromptID: 'prompt-1', ModelID: MODEL.ClaudeOpus45, VendorID: VENDOR.Anthropic, Priority: 10 }),

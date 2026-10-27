@@ -656,9 +656,9 @@ export class AgentRunner {
                     // then for any other save still in flight on this entity
                     await progressSaves;
                     await agentResponseDetail.EnsureSaveComplete();
-                    // No reload first: nothing in-tree writes this row mid-run except Message/Status, which
-                    // this save sets anyway. A writer of another column between the last progress save and
-                    // this one would be overwritten, since Save sends every loaded column.
+                    // No reload first, for latency. Save sends every loaded column, so a pin (SavePinState) or
+                    // rating written to this row between the last progress save and this one is overwritten.
+                    // The progress saves already have that window; the reload only rescued a late pin.
 
                     LogStatus('Updating agent response detail with final result');
 

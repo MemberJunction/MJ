@@ -220,6 +220,23 @@ describe('AgentRunner.RunAgentInConversation — a progress save still committin
         expect(savedNames).toEqual(['Chat with Betty']);
     });
 
+    it('returns the run result when naming never finishes, after the naming cap', async () => {
+        const cap = Reflect.get(AgentRunner, 'NAMING_WAIT_MS');
+        Reflect.set(AgentRunner, 'NAMING_WAIT_MS', 20);
+        try {
+            const convEntity = makeRacyDetail('conv-new');
+            const savedNames = recordSavedNames(convEntity);
+            const runner = new AgentRunner(makeProvider([convEntity, makeRacyDetail('user-detail'), makeRacyDetail('agent-detail')]));
+            vi.spyOn(runner as unknown as RunAgentStub, 'generateConversationName').mockReturnValue(new Promise<null>(() => undefined));
+            vi.spyOn(runner as unknown as RunAgentStub, 'RunAgent').mockResolvedValue(reply);
+
+            await expect(runInConversation(runner, {})).resolves.toBeDefined();
+            expect(savedNames).toEqual(['Chat with Betty']);
+        } finally {
+            Reflect.set(AgentRunner, 'NAMING_WAIT_MS', cap);
+        }
+    }, 2000);
+
     it('keeps a rename made during the run, and an archive made during the run', async () => {
         const renamed = makeRacyDetail('conv-new');
         const renamedSaves = recordSavedNames(renamed);

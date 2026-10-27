@@ -507,7 +507,6 @@ export class AIImageGenerationRunner extends BaseModelRunner {
     };
   }
 
-
   /** Records which candidate was chosen and why, for the run row. */
   private buildSelectionInfo(
     prompt: MJAIPromptEntityExtended,

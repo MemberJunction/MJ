@@ -1543,6 +1543,11 @@ export abstract class BaseModelRunner {
    * vendor is the same whether or not failover runs. Probing stops at the pick unless `probeAll` asks
    * for every candidate (a selection report). Returns the probes made, keyed by {@link CandidateKey},
    * for failover to reuse.
+   *
+   * Failover walks the same rule, so a model with two prompt-model rows naming two vendors has two
+   * row-vendor candidates and the whole call budget can land on that one model: better for a vendor
+   * outage, worse for a model-level failure (retired APIName, refusal, bad ModelConfiguration). Calls
+   * that span several driver classes also skip the last-resort cross-provider attempt.
    */
   protected SelectCandidate(
     candidates: ModelVendorCandidate[],

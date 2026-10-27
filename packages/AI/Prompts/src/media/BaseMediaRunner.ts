@@ -520,7 +520,6 @@ export abstract class BaseMediaRunner<
     };
   }
 
-
   /** Records which candidate was chosen and why, for the run row. */
   private buildSelectionInfo(plan: MediaRunPlan): AIModelSelectionInfo {
     const info = new AIModelSelectionInfo();
