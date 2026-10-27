@@ -2,3 +2,4 @@
 -r ../../Sidecar/src/python/requirements.txt
 mypy==1.17.1
 pandas-stubs==2.2.2.240807
+pyarrow==25.0.1  # pandas.read_parquet for the MoreCheese person-years table
