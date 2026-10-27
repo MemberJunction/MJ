@@ -251,21 +251,19 @@ Each write is audit-logged under the `UserDelegatedOAuth3LO` subsystem (`Create`
 `Update` or `Delete`), and `GetUserDelegatedCredential` goes through
 `GetCredential`, so reads inherit expiry enforcement and `Decrypt` audit entries.
 
-### Which paths enforce ownership (known gap)
+### Which paths can reach a delegated credential
 
-| Method | Owner check |
+| Method | Behavior |
 |---|---|
-| `GetUserDelegatedCredential()` | Yes (via `GetCredential`) |
-| `GetCredential(name, { contextUser })` | Yes -- any credential whose values carry `ownerUserId` throws `CredentialOwnerMismatchError` for another user |
-| `StoreUserDelegatedCredential()` / `RevokeUserDelegatedCredential()` | Yes |
-| `GetCredentialById()`, `GetCredentialByName()`, `GetDefaultCredentialForType()`, the `Credentials` getter | **No** -- they return the cached `MJCredentialEntity`, whose decrypted `Values` is readable |
+| `GetUserDelegatedCredential()` | Resolves the caller's own row; owner check via `GetCredential` |
+| `GetCredential(name, { contextUser })` | Any credential whose values carry `ownerUserId` throws `CredentialOwnerMismatchError` for another user |
+| `StoreUserDelegatedCredential()` / `RevokeUserDelegatedCredential()` | Owner check on the caller **and** on the stored `ownerUserId` of an existing row before it is mutated; the whole find-then-upsert is serialized per credential name, so concurrent first-time stores produce one row |
+| `GetCredentialById()`, `GetCredentialByName()`, `GetDefaultCredentialForType()`, the `Credentials` getter | **Never return a delegated row.** Rows whose name starts with `UserOAuth3LO:` are filtered out, so shared app-level lookups cannot hand out another user's decrypted token |
 
 The rule for callers is therefore: **always resolve a delegated credential through
 `GetUserDelegatedCredential` or `GetCredential(name, { contextUser })`.** The
-other read paths exist for administration and rotation tooling and do not yet
-enforce the binding; closing that gap is planned follow-up work. Until then,
-code that enumerates `Credentials` should treat any row whose name starts with
-`UserOAuth3LO:` as opaque.
+shared accessors are for application and provider credentials only; a delegated
+credential looked up through them is simply not found.
 
 ## Pre-defined Credential Types
 
