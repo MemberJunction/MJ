@@ -20,7 +20,7 @@ import {
   AzureBlobItem,
   ListAzureBackupBlobsResult
 } from '../../services/integration-data.service';
-import { BuildBackupUrlList, DeriveContainerUrl, FirstBackupUrl, FormatBytes } from '../../services/backup-source.helpers';
+import { AppendDirectoryPreset, BuildBackupUrlList, DeriveContainerUrl, FirstBackupUrl, FormatBytes } from '../../services/backup-source.helpers';
 
 export interface BootstrapResultSummary {
   Success: boolean;
@@ -259,11 +259,7 @@ export class BootstrapWizardComponent extends BaseAngularComponent implements On
   }
 
   public ApplyDirectoryPreset(path: string): void {
-    if (!this.BackupUrls.trim()) {
-      this.BackupUrls = path;
-    } else {
-      this.BackupUrls = `${this.BackupUrls.trim().replace(/[\\/]+$/, '')}, ${path}`;
-    }
+    this.BackupUrls = AppendDirectoryPreset(this.BackupUrls, path);
     this.RefreshLocalFiles();
     this.cdr.detectChanges();
   }

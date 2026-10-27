@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  AppendDirectoryPreset,
   BuildBackupUrlList,
   DeriveContainerUrl,
   FirstBackupUrl,
@@ -7,6 +8,19 @@ import {
 } from '../Integration/services/backup-source.helpers';
 
 describe('backup-source helpers', () => {
+  describe('AppendDirectoryPreset', () => {
+    it('starts an entry ending in the directory separator for the user to complete', () => {
+      expect(AppendDirectoryPreset('', '/var/opt/mssql/backup')).toBe('/var/opt/mssql/backup/');
+      expect(AppendDirectoryPreset('   ', 'C:\\SQLBackups')).toBe('C:\\SQLBackups\\');
+      expect(AppendDirectoryPreset('', 'C:\\Program Files\\Microsoft SQL Server\\MSSQL\\Backup\\')).toBe('C:\\Program Files\\Microsoft SQL Server\\MSSQL\\Backup\\');
+    });
+
+    it('appends a new entry after existing paths instead of replacing them', () => {
+      expect(AppendDirectoryPreset('/backups/db_1.bak', '/backups')).toBe('/backups/db_1.bak, /backups/');
+      expect(AppendDirectoryPreset('/backups/db_1.bak, ', '/var/opt/mssql/backup')).toBe('/backups/db_1.bak, /var/opt/mssql/backup/');
+    });
+  });
+
   describe('FormatBytes', () => {
     it('formats whole units without trailing zeros and fractions to two decimals', () => {
       expect(FormatBytes(0)).toBe('0 B');

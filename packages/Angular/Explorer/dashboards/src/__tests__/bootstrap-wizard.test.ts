@@ -136,10 +136,14 @@ describe('Bootstrap Wizard Review Fixes', () => {
       expect(wizard.VerifyBackupError).toBeNull();
     });
 
-    it('ApplyDirectoryPreset appends path and refreshes state', () => {
+    it('ApplyDirectoryPreset starts a path entry for the user to complete, never a bare directory entry', () => {
       const wizard = createWizard();
       wizard.ApplyDirectoryPreset('/var/opt/mssql/backup');
-      expect(wizard.BackupUrls).toBe('/var/opt/mssql/backup');
+      expect(wizard.BackupUrls).toBe('/var/opt/mssql/backup/');
+
+      wizard.BackupUrls = '/var/opt/mssql/backup/db_1.bak';
+      wizard.ApplyDirectoryPreset('C:\\SQLBackups');
+      expect(wizard.BackupUrls).toBe('/var/opt/mssql/backup/db_1.bak, C:\\SQLBackups\\');
     });
 
     it('validates Step 1 correctly for local vs azure sources', () => {

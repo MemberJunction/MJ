@@ -41,6 +41,19 @@ export function FirstBackupUrl(backupUrls: string): string {
 }
 
 /**
+ * The `BackupUrls` value after choosing a directory preset. A preset is a directory on the SQL Server
+ * host, not a backup file, so it is never added as an entry of its own: it starts a new entry ending in
+ * the directory's own separator for the user to complete with a file name. With nothing entered yet the
+ * value becomes that directory; otherwise the directory is appended as a further comma-separated entry.
+ */
+export function AppendDirectoryPreset(currentBackupUrls: string, directory: string): string {
+  const separator = /^[A-Za-z]:|\\/.test(directory) ? '\\' : '/';
+  const entry = `${directory.replace(/[\\/]+$/, '')}${separator}`;
+  const current = currentBackupUrls.trim().replace(/,\s*$/, '');
+  return current ? `${current}, ${entry}` : entry;
+}
+
+/**
  * The comma-separated `BackupUrls` value for a set of blob names selected inside a container.
  * A blob name is appended to the container URL (trailing slashes removed); without a container the
  * names are passed through as given.
