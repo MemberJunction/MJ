@@ -1,7 +1,7 @@
-import { BaseEntity, ValidationErrorInfo, ValidationErrorType, type EntitySaveOptions, type IEntityDataProvider, type IMetadataProvider, type ValidationResult } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { BaseEntity, RunView, ValidationErrorInfo, ValidationErrorType, type EntitySaveOptions, type IEntityDataProvider, type IMetadataProvider, type ValidationResult } from '@memberjunction/core';
+import { EscapeSQLString, RegisterClass } from '@memberjunction/global';
 import { MJPredictionUnitEntity } from '@memberjunction/core-entities';
-import { PredictionUnit } from '@memberjunction/predictive-studio-core';
+import { PredictionUnit, type PredictionUnitSpec } from '@memberjunction/predictive-studio-core';
 
 /**
  * The immutable-version guard shared by the unit, protocol and snapshot subclasses: one implementation of
@@ -49,7 +49,9 @@ export class VersionedRowGuard {
 }
 
 /**
- * `MJ: Prediction Units`: a version row is written once and never updated, and must parse.
+ * `MJ: Prediction Units`: a version row is written once and never updated, and must parse. On insert, every entity
+ * and field the unit names must exist, versions of a lineage must be consecutive, and LabelVersion must move exactly
+ * when the outcome definition changed from the previous version.
  */
 @RegisterClass(BaseEntity, 'MJ: Prediction Units')
 export class MJPredictionUnitEntityServer extends MJPredictionUnitEntity {
@@ -57,6 +59,11 @@ export class MJPredictionUnitEntityServer extends MJPredictionUnitEntity {
   public static GetPredictionUnitRowProblems(row: MJPredictionUnitEntity): readonly string[] {
     const parsed = PredictionUnit.ParsePredictionUnitRow(row);
     return parsed.Ok === true ? [] : parsed.Errors;
+  }
+
+  /** The LabelVersion a new version must carry: the previous one, plus one when the outcome definition changed. Pure. */
+  public static ExpectedLabelVersion(previous: number, changed: boolean): number {
+    return changed ? previous + 1 : previous;
   }
 
   /** A version-1 row is its own lineage root; the server assigns it on create. */
@@ -67,5 +74,82 @@ export class MJPredictionUnitEntityServer extends MJPredictionUnitEntity {
 
   public override Validate(): ValidationResult {
     return VersionedRowGuard.AddProblems(this, super.Validate(), 'Version', 'UnitRows', () => MJPredictionUnitEntityServer.GetPredictionUnitRowProblems(this));
+  }
+
+  public override get DefaultSkipAsyncValidation(): boolean {
+    return false;
+  }
+
+  /**
+   * The checks that need metadata or other rows, on insert only (a saved version is never updated, so there is
+   * nothing to re-check on an update; the synchronous guard refuses it).
+   */
+  public override async ValidateAsync(): Promise<ValidationResult> {
+    const result = await super.ValidateAsync();
+    if (!result.Success || this.IsSaved) return result;
+    const provider = this.ProviderToUse;
+    if (!VersionedRowGuard.IsMetadataProvider(provider)) return result;
+    const parsed = PredictionUnit.ParsePredictionUnitRow(this);
+    if (parsed.Ok === false) {
+      this.fail(result, 'UnitRows', `Prediction Unit does not parse: ${parsed.Errors.join('; ')}`);
+      return result;
+    }
+    this.checkReferencedFields(result, provider, parsed.Value);
+    if (this.Version > 1) await this.checkLabelVersion(result, provider, parsed.Value);
+    return result;
+  }
+
+  /** Every entity the unit names must be registered, and every field it names must exist on that entity. */
+  private checkReferencedFields(result: ValidationResult, provider: IMetadataProvider, spec: PredictionUnitSpec): void {
+    for (const ref of PredictionUnit.UnitReferencedFields(spec)) {
+      const entity = provider.EntityByName(ref.entity);
+      const resolved = !!entity && (ref.field === null || !!entity.FieldByName(ref.field));
+      if (!resolved) this.fail(result, 'UnitRows', `unresolved-reference: ${ref.field === null ? ref.entity : `${ref.entity}.${ref.field}`}`);
+    }
+  }
+
+  /**
+   * Version `n` follows version `n - 1` of the same lineage, and its LabelVersion is the previous one plus one exactly
+   * when the outcome definition (rule, window, gap, task) changed.
+   */
+  private async checkLabelVersion(result: ValidationResult, provider: IMetadataProvider, spec: PredictionUnitSpec): Promise<void> {
+    const previousVersion = this.Version - 1;
+    const read = await this.loadVersion(provider, previousVersion);
+    if (read.Error !== null) {
+      this.fail(result, 'Version', `Reading version ${previousVersion} of lineage ${this.LineageRootID} failed: ${read.Error}`);
+      return;
+    }
+    const previous = read.Row;
+    if (!previous) {
+      this.fail(result, 'Version', `versions must be consecutive: version ${previousVersion} of lineage ${this.LineageRootID} does not exist`);
+      return;
+    }
+    const previousSpec = PredictionUnit.ParsePredictionUnitRow(previous);
+    if (previousSpec.Ok === false) {
+      this.fail(result, 'Version', `Prediction Unit version ${previousVersion} (${previous.ID}) does not parse: ${previousSpec.Errors.join('; ')}`);
+      return;
+    }
+    const changed = PredictionUnit.LabelDefinitionChanged(previousSpec.Value, spec);
+    const expected = MJPredictionUnitEntityServer.ExpectedLabelVersion(previous.LabelVersion, changed);
+    if (this.LabelVersion !== expected) {
+      this.fail(result, 'LabelVersion', `LabelVersion must be ${expected}: the outcome definition ${changed ? 'changed' : 'did not change'} from version ${previousVersion}`);
+    }
+  }
+
+  /**
+   * One version of this row's lineage as a plain row (nothing is mutated): the row or null when it is absent, and the
+   * read error when the read itself failed (so a failed read is never reported as a missing version).
+   */
+  private async loadVersion(provider: IMetadataProvider, version: number): Promise<{ Row: MJPredictionUnitEntity | null; Error: string | null }> {
+    const r = await RunView.FromMetadataProvider(provider).RunView<MJPredictionUnitEntity>(
+      { EntityName: 'MJ: Prediction Units', ExtraFilter: `LineageRootID='${EscapeSQLString(this.LineageRootID)}' AND Version=${version}`, ResultType: 'simple' },
+      this.ContextCurrentUser,
+    );
+    return r.Success ? { Row: r.Results[0] || null, Error: null } : { Row: null, Error: r.ErrorMessage || 'unknown error' };
+  }
+
+  private fail(result: ValidationResult, field: string, message: string): void {
+    result.Success = false;
+    result.Errors.push(new ValidationErrorInfo(field, message, null, ValidationErrorType.Failure));
   }
 }

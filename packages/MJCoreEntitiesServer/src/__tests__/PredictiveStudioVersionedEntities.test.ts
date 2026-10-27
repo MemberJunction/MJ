@@ -91,3 +91,10 @@ describe.each([
     expect(saved.LineageRootID).toBe('ROOT');
   });
 });
+
+describe('ExpectedLabelVersion', () => {
+  it('is the previous LabelVersion, plus one when the outcome definition changed', () => {
+    expect(MJPredictionUnitEntityServer.ExpectedLabelVersion(3, false)).toBe(3);
+    expect(MJPredictionUnitEntityServer.ExpectedLabelVersion(3, true)).toBe(4);
+  });
+});
