@@ -851,7 +851,19 @@ jobs:
           # must stay well under the 16 GB runner's limit — uncapped it OOM'd with exit 137 on
           # PR #3231, twice. Sharding reduces but does not remove the risk: the planner spreads
           # the heavy DOM packages across shards, yet a shard can still draw several.
-          npx turbo run test --concurrency=4 "${FILTER_ARGS[@]}"
+          # Tee into a log so the digest step below can read the vitest counters on failure.
+          # The job's shell already runs with `-o pipefail`, so teeing does not mask the exit code.
+          npx turbo run test --concurrency=4 "${FILTER_ARGS[@]}" 2>&1 | tee /tmp/shard-test.log
+
+      # A red shard hands you a job log tens of thousands of lines long in which the decisive
+      # lines are not the ones you would grep for: a worker that loses its IPC heartbeat exits 1
+      # with ZERO failing tests, and `✕`/`FAIL `/`N failed` all return nothing for that shape.
+      # This prints each package's counters and names the timeouts, so "infra, re-run it" and
+      # "the diff broke something" are distinguishable at a glance. Never gates — `|| true`
+      # keeps a digest bug from changing the job's outcome.
+      - name: Summarize test failures
+        if: failure()
+        run: node .github/scripts/summarize-test-failures.mjs /tmp/shard-test.log >> "$GITHUB_STEP_SUMMARY" || true
 
       # A skipped suite and a passing suite look identical in the summary, which is how the
       # Redis-gated files stayed dormant for a whole release. The step above now runs them for
