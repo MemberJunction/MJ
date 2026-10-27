@@ -2560,13 +2560,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     EvaluateRecordAgainstRubricAction,
     GetRubricAction,
     GetRubricConsensusAction,
-    GetRubricSubjectAction,
-    HumanRubricEvaluator,
-    LLMRubricEvaluator,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    GetRubricSubjectAction,
+    HumanRubricEvaluator,
+    LLMRubricEvaluator,
     SubmitHumanRubricAction,
     AzureAISearchProvider,
     BGEReRanker,
@@ -2764,13 +2764,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJUserRoutineRecipientEntityServer,
     MJUserViewEntityServer,
     MJVectorIndexEntityServer,
-    EntityDataGridRelatedEntityGenerator,
-    JoinGridRelatedEntityGenerator,
-    PostgreSQLCodeGenProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    EntityDataGridRelatedEntityGenerator,
+    JoinGridRelatedEntityGenerator,
+    PostgreSQLCodeGenProvider,
     SQLServerCodeGenProvider,
     TimelineRelatedEntityGenerator,
     CreateScheduledJobAction,
@@ -2968,13 +2968,13 @@ const CLASS_REGISTRATIONS_5: any[] = [
     MJWorkQueueSubscriptionEntityServer,
     MJWorkQueueTopicEntityServer,
     MJWorkQueueTransportEntityServer,
-    WorkQueueDiscardDeliveryServerOperation,
-    WorkQueueGetBacklogServerOperation,
-    WorkQueueGetSubscriptionStatsServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    WorkQueueDiscardDeliveryServerOperation,
+    WorkQueueGetBacklogServerOperation,
+    WorkQueueGetSubscriptionStatsServerOperation,
     WorkQueueListDeadLettersServerOperation,
     WorkQueueListPartitionsServerOperation,
     WorkQueueReplayDeadLetterServerOperation,
@@ -3005,7 +3005,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1213;
+export const CLASS_REGISTRATIONS_COUNT = 1216;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
