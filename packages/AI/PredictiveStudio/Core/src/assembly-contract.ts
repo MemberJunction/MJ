@@ -91,6 +91,8 @@ export interface ColumnProvenance {
   readonly source: DatedSource['kind'];  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   readonly sourceRef: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   readonly sourceVersion: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /** A categorical column whose distinct levels exceeded its cap: the levels kept and those folded into `__other`. */
+  readonly categoryFold?: { readonly kept: readonly string[]; readonly folded: readonly string[] };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
 }
 
 export interface ValueProvenance {

@@ -4,7 +4,8 @@
  * `ExtraFilter` is evaluated, not ignored, so a test sees the rows the database would return. It understands clauses
  * joined by ` AND `, each one of: `[Field] IS NOT NULL`, `[Field] = <number>`, `[Field] = '<text>'` and
  * `[Field] IN ('a','b',…)` (text compared case-insensitively, as SQL Server's default collation does). Any other
- * clause throws, so a filter the fake cannot evaluate fails the test loudly instead of returning every row.
+ * clause throws, so a filter the fake cannot evaluate fails the test loudly instead of returning every row. `Fields`,
+ * when given, projects each row to those columns, as the database does, so a read that forgets a column sees it absent.
  */
 import { OrdinalCompare } from '@memberjunction/global';
 import type { CountRowsResult, FetchRowsParams, FetchRowsResult, ICountingDataAccess, SourceRow } from '../../feature-assembly/data-access';
@@ -21,7 +22,8 @@ export class TableDataAccess implements ICountingDataAccess {
       const field = /\[(\w+)\]/.exec(p.OrderBy)?.[1] || '';
       rows.sort((x, y) => OrdinalCompare(String(y[field]), String(x[field])));   // ordinal, like the database
     }
-    return { Success: true, Rows: rows.slice(0, p.MaxRows ?? rows.length), TotalRowCount: rows.length };
+    const page = rows.slice(0, p.MaxRows ?? rows.length);
+    return { Success: true, Rows: p.Fields ? page.map((r) => TableDataAccess.project(r, p.Fields)) : page, TotalRowCount: rows.length };
   }
 
   public async fetchEmbedding(): Promise<number[] | null> {
@@ -35,6 +37,12 @@ export class TableDataAccess implements ICountingDataAccess {
   private matching(entityName: string, filter: string | undefined): SourceRow[] {
     const predicates = filter ? filter.split(' AND ').map((clause) => TableDataAccess.parseClause(clause.trim())) : [];
     return (this.tables[entityName] || []).filter((row) => predicates.every((p) => p(row)));
+  }
+
+  private static project(row: SourceRow, fields: readonly string[]): SourceRow {
+    const out: SourceRow = {};
+    for (const f of fields) if (f in row) out[f] = row[f];
+    return out;
   }
 
   private static parseClause(clause: string): RowPredicate {

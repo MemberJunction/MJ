@@ -41,6 +41,10 @@ const entities: Record<string, AssemblyEntityInfo> = {
   Years: { ID: 'E-Y', Name: 'Years', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [field('ID'), field('PersonID'), field('EventsAttended', 'number'), field('Region'), field('PersonStatusNow')] },
   People: { ID: 'E-PE', Name: 'People', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [field('ID'), field('Status')] },
   Events: { ID: 'E-EV', Name: 'Events', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [field('ID'), field('PersonID'), field('EventDate', 'Date')] },
+  // Untracked, with an updatable field: its value on a past day cannot be known.
+  Accounts: { ID: 'E-AC', Name: 'Accounts', PrimaryKey: 'ID', TrackRecordChanges: false, Fields: [field('ID'), field('Tier')] },
+  // A field declared not updatable, on an entity that carries its creation time.
+  Badges: { ID: 'E-BA', Name: 'Badges', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [field('ID'), { ...field('Level'), AllowUpdateAPI: false }, field('__mj_CreatedAt', 'Date')] },
 };
 const metadata: IAssemblyMetadata = { Entity: (n) => entities[n] || null };
 
@@ -187,6 +191,79 @@ describe('AsOfFeatureAssembler', () => {
     const sha = (text: string): string => createHash('sha256').update(text).digest('hex');
     expect(out.Rows[1].Provenance[0]).toMatchObject({ source: 'windowed-aggregate', sourceRef: 'Events?PersonID=p1&as-of=2023-12-01&aggregate=count', sourceVersion: sha('e1\ne2') });
     expect(out.Rows[1].Provenance[1]).toMatchObject({ source: 'series', sourceRef: 'Years/label/y1', sourceVersion: 'labelVersion:1' });
+  });
+});
+
+describe('AsOfFeatureAssembler current-value reads', () => {
+  const categorical = (name: string, entity: string, keyField: string | null = null, cardinalityCap = 50): FeatureColumnSpec =>
+    ({ name, source: { kind: 'immutable-field', entity, field: name, keyField }, encoding: { kind: 'categorical', cardinalityCap, method: 'onehot' }, missing: { impute: 'mode', indicator: true, constant: null } });
+
+  it('refuses a current read of an updatable field on an entity that does not track changes', async () => {
+    const data: Record<string, SourceRow[]> = { ...tables, Accounts: [{ ID: 'y1', Tier: 'A' }, { ID: 'y2', Tier: 'B' }] };
+    expect(await new AsOfFeatureAssembler().Assemble(input([categorical('Tier', 'Accounts')], { Tables: data }))).toEqual({ Status: 'refused', Refusal: { kind: 'decision-date-before-change-history', entity: 'Accounts', field: 'Tier', historyStart: null, rowsAffected: 2 } });
+  });
+  it('reads a record created after the decision day as missing, never its stored value', async () => {
+    const data: Record<string, SourceRow[]> = {
+      ...tables,
+      Badges: [{ ID: 'y1', Level: 'Gold', __mj_CreatedAt: new Date('2022-06-01T00:00:00Z') }, { ID: 'y2', Level: 'Silver', __mj_CreatedAt: new Date('2024-01-01T00:00:00Z') }],
+    };
+    const out = await new AsOfFeatureAssembler().Assemble(input([categorical('Level', 'Badges')], { Tables: data }));
+    expect(out.Status).toBe('assembled');
+    if (out.Status !== 'assembled') return;
+    expect(out.Rows.map((r) => r.Values[0])).toEqual(['Gold', null]);
+    expect(out.Rows[0].Provenance[0]).toMatchObject({ sourceRef: 'Badges/y1/Level', sourceVersion: 'created:2022-06-01T00:00:00.000Z' });
+    expect(out.Rows[1].Provenance[0]).toMatchObject({ sourceRef: 'Badges/y2/Level', sourceVersion: 'created-after-decision' });
+  });
+  it('refuses a join through a key field that changed after a decision day', async () => {
+    const yearChanges: Record<string, RecordChangeRow[]> = {
+      ...changes,
+      Years: [
+        rc('yc-create', 'y1', 'Create', '2022-01-01T00:00:00Z', { ID: 'y1', PersonID: 'P0' }),
+        rc('yc-update', 'y1', 'Update', '2023-01-01T00:00:00Z', { ID: 'y1', PersonID: 'P1' }, ['PersonID']),
+      ],
+    };
+    const features: FeatureColumnSpec[] = [{ name: 'Status', source: { kind: 'record-changes', entity: 'People', field: 'Status', keyField: 'PersonID' }, encoding: { kind: 'categorical', cardinalityCap: 50, method: 'onehot' }, missing: { impute: 'mode', indicator: true, constant: null } }];
+    expect(await new AsOfFeatureAssembler().Assemble(input(features, { Changes: yearChanges }))).toEqual({ Status: 'refused', Refusal: { kind: 'select-changes-after-decision-date', entity: 'Years', field: 'PersonID', changesAfter: 1 } });
+  });
+  it('reads a windowed aggregate of a row with no owner key as missing, not the orphan rows', async () => {
+    const data: Record<string, SourceRow[]> = {
+      ...tables,
+      Years: [tables.Years[0], { ...tables.Years[1], PersonID: null }],
+      Events: [...tables.Events, { ID: 'e-orphan', PersonID: null, EventDate: '2020-01-01' }],
+    };
+    const features: FeatureColumnSpec[] = [{ name: 'EventsToDate', source: { kind: 'windowed-aggregate', childEntity: 'Events', foreignKey: 'PersonID', ownerKeyField: 'PersonID', dateField: 'EventDate', endDateField: null, voidedAtField: null, aggregate: 'count', valueField: null, windowDays: null, filter: [] }, encoding: { kind: 'numeric', nonNumericValue: 'fail' }, missing: { impute: 'median', indicator: true, constant: null } }];
+    const out = await new AsOfFeatureAssembler().Assemble(input(features, { Tables: data }));
+    expect(out.Status).toBe('assembled');
+    if (out.Status !== 'assembled') return;
+    expect(out.Rows.map((r) => r.Values[0])).toEqual([1, null]);
+    expect(out.Rows[1].Provenance[0]).toMatchObject({ source: 'windowed-aggregate', sourceRef: 'none' });
+  });
+  it('folds the least frequent levels beyond the cardinality cap into __other and records the fold', async () => {
+    const regions = ['EU', 'R7', 'EU', 'US'];
+    const data: Record<string, SourceRow[]> = { ...tables, Years: regions.map((Region, i) => ({ ID: `y${i + 1}`, PersonID: 'P1', Region })) };
+    const fourRows: AssemblyRowRef[] = regions.map((_, i) => ({ RowId: `y${i + 1}`, EntityKey: `y${i + 1}`, DecisionDate: new Date('2023-12-01T00:00:00Z'), Period: null }));
+    const out = await new AsOfFeatureAssembler().Assemble(input([categorical('Region', 'Years', null, 2)], { Tables: data, Rows: fourRows }));
+    expect(out.Status).toBe('assembled');
+    if (out.Status !== 'assembled') return;
+    expect(out.Rows.map((r) => r.Values[0])).toEqual(['EU', 'R7', 'EU', '__other']);
+    expect(out.ColumnProvenance[0].categoryFold).toEqual({ kept: ['EU', 'R7'], folded: ['US'] });
+  });
+  it('fails on a categorical method the assembly cannot emit, naming it', async () => {
+    const hashed: FeatureColumnSpec = { ...categorical('Region', 'Years'), encoding: { kind: 'categorical', cardinalityCap: 50, method: 'hashed' } };
+    await expect(new AsOfFeatureAssembler().Assemble(input([hashed]))).rejects.toThrow(/hashed/);
+  });
+  it('refuses a pin that names neither a pipeline version nor a prompt version', async () => {
+    const features: FeatureColumnSpec[] = [{ name: 'Engagement', source: { kind: 'feature-value', featureName: 'Engagement', pin: { featurePipelineRecordProcessId: 'RP-1', pipelineVersion: null, promptVersionHash: null, aiModelId: null, parametersHash: null } }, encoding: { kind: 'numeric', nonNumericValue: 'fail' }, missing: { impute: 'median', indicator: true, constant: null } }];
+    expect(await new AsOfFeatureAssembler().Assemble(input(features))).toEqual({ Status: 'refused', Refusal: { kind: 'unpinned-feature-version', featureName: 'Engagement' } });
+  });
+  it('counts every uncovered field of an excluded row and reports one coverage entry per entity', async () => {
+    const replayed = (name: string): FeatureColumnSpec => ({ name, source: { kind: 'record-changes', entity: 'Years', field: name, keyField: null }, encoding: { kind: 'categorical', cardinalityCap: 50, method: 'onehot' }, missing: { impute: 'mode', indicator: true, constant: null } });
+    const out = await new AsOfFeatureAssembler().Assemble(input([replayed('PersonStatusNow'), replayed('Region')], { Unit: { ...unit, history: { onUncoveredRow: 'exclude-and-count', externalSourceRows: 'ineligible' } } }));
+    expect(out.Status).toBe('assembled');
+    if (out.Status !== 'assembled') return;
+    expect([...out.ExcludedRowIds]).toEqual(['y1', 'y2']);
+    expect(out.UncoveredRowsExcluded).toEqual([{ entity: 'Years', field: 'PersonStatusNow', rows: 2 }, { entity: 'Years', field: 'Region', rows: 2 }]);
+    expect(out.Coverage.map((c) => c.entity)).toEqual(['Years']);
   });
 });
 
