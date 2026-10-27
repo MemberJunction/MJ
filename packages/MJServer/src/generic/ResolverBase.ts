@@ -1698,25 +1698,16 @@ export class ResolverBase {
     if (!this.eventSubscriptions.has(uniqueKey)) {
       // listen for events from the entityObject in case it is a long running task and we can push messages back to the client via pubSub
       LogDebug(`ResolverBase.ListenForEntityMessages: About to call MJGlobal.Instance.GetEventListener() to get the event listener subscription for ${uniqueKey}`);
-      const theSub = MJGlobal.Instance.GetEventListener(false).subscribe((event: MJEvent) => {
-        if (!event) {
-          return;
-        }
-        const baseEntity = <BaseEntity>event.args?.baseEntity;
+      const theSub = MJGlobal.Instance.GetEventListener(false).subscribe(async (event: MJEvent) => {
+        if (event) {
+          const baseEntity = <BaseEntity>event.args?.baseEntity;
 
-        // Only process events for the entity type this subscription was created for
-        // This prevents duplicate CloudEvents when multiple entity types have active subscriptions
-        if (baseEntity?.EntityInfo?.Name !== uniqueKey) {
-          return;
-        }
-        if (
-          event.args instanceof BaseEntityEvent &&
-          (event.args.type === 'load_started' || event.args.type === 'load_complete' || event.args.type === 'new_record')
-        ) {
-          return;
-        }
+          // Only process events for the entity type this subscription was created for
+          // This prevents duplicate CloudEvents when multiple entity types have active subscriptions
+          if (baseEntity?.EntityInfo?.Name !== uniqueKey) {
+            return;
+          }
 
-        void (async () => {
           const baseEntityValues = baseEntity ? this.EntityEventPayload(baseEntity, event.args instanceof BaseEntityEvent ? event.args.ChangedFieldNames : undefined) : null;
           const eventToLog = { entityName: entityObject.EntityInfo.Name, baseEntity: baseEntityValues, event: event.event, eventCode: event.eventCode };
           LogDebug(`ResolverBase.ListenForEntityMessages: Received Event from within MJGlobal.Instance.GetEventListener() callback. Will call EmitCloudEvent() next\nEvent data:\n${JSON.stringify(eventToLog)}`);
@@ -1728,7 +1719,7 @@ export class ResolverBase {
             LogDebug('ResolverBase.ListenForEntityMessages: About to publish PUSH_STATUS_UPDATES_TOPIC');
             this.PublishStatusUpdate(pubSub, userPayload.sessionId, this.EntityStatusMessage(event.args), userPayload);
           }
-        })();
+        }
       });
       this.eventSubscriptions.set(uniqueKey, theSub);
     }
