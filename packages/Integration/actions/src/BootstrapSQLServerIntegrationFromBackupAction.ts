@@ -1,5 +1,5 @@
 import { RegisterClass, EscapeSQLString } from '@memberjunction/global';
-import { LogError, LogStatus, RunView, DatabaseProviderBase, LocalCacheManager, type UserInfo } from '@memberjunction/core';
+import { LogError, LogStatus, RunView, DatabaseProviderBase, LocalCacheManager, type EntityInfo, type UserInfo } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { WatermarkService } from '@memberjunction/integration-engine';
@@ -8,7 +8,8 @@ import { ValidateIdentifier } from '@memberjunction/schema-engine';
 import {
     BaseIntegrationAction,
     SqlBackupFileListEntry,
-    SqlBackupHeaderInfo
+    SqlBackupHeaderInfo,
+    type LongRunningSqlRunner
 } from './BaseIntegrationAction.js';
 
 // Re-export shared types for backward compatibility
@@ -30,6 +31,38 @@ export interface TableEtlResult {
     SourceTable: string;
     TargetTable: string;
     RowsTransferred: number;
+}
+
+/** One target column of the load and the T-SQL expression (over the staging alias `s`) that fills it. */
+interface ColumnMapping {
+    Target: string;
+    Expr: string;
+}
+
+/** Where record maps are written, resolved from metadata so the core schema and base table are never hardcoded. */
+interface RecordMapTarget {
+    /** Fully quoted `[schema].[table]` of the `MJ: Company Integration Record Maps` base table. */
+    Table: string;
+    AllowDirectSQLDelete: boolean;
+}
+
+/** Everything the per-table load batch needs; built once per entity map. */
+interface TableLoadBatchSpec {
+    StagingDbName: string;
+    SourceSchema: string;
+    SourceTable: string;
+    TargetSchema: string;
+    TargetTable: string;
+    TargetPkCol: string;
+    Mappings: ColumnMapping[];
+    ExternalIdExpr: string;
+    RestoreTimestampIso: string;
+    ChunkPkCol?: string;
+    BatchSize: number;
+    TruncateTarget: boolean;
+    RecordMaps: RecordMapTarget;
+    CompanyIntegrationID: string;
+    EntityID: string;
 }
 
 /**
@@ -56,6 +89,11 @@ export interface TableEtlResult {
  *   - TotalRowsTransferred: Total record count inserted into target tables
  *   - DurationSeconds: Total runtime in seconds
  *   - StagingDatabaseDropped: 1 if staging database was dropped, 0 if retained
+ *
+ * The restore and the per-table loads run for hours on a multi-terabyte backup, so they execute on a
+ * dedicated connection with no request timeout (see {@link BaseIntegrationAction.createLongRunningRunner})
+ * rather than on the API's shared pool. Each table load is one T-SQL batch that opens, commits or rolls
+ * back its own transaction, so the statements are guaranteed to share a connection.
  */
 @RegisterClass(BaseAction, 'Bootstrap SQL Server Integration From Backup')
 export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrationAction {
@@ -66,6 +104,7 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
         let stagingDbName = '';
         let containerUrl = '';
         let sqlExecutor: DatabaseProviderBase | undefined;
+        let runner: LongRunningSqlRunner | undefined;
 
         try {
             // 1. Parameter Validation
@@ -110,6 +149,7 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
 
             // 2. Resolve SQL Execution Provider (MultiProvider compliant)
             sqlExecutor = this.getDatabaseProvider(params);
+            const recordMaps = this.resolveRecordMapTarget(sqlExecutor);
 
             // 3. Resolve Azure Storage SAS Token & Credential if URL sources are used
             const hasUrl = backupUrls.some(u => this.IsUrl(u));
@@ -131,10 +171,13 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
             const fileList = await this.inspectBackupFileList(sqlExecutor, backupUrls, params.ContextUser);
             const moveClauses = await this.buildMoveClauses(sqlExecutor, stagingDbName, fileList, params);
 
-            // 5. Direct Restore Database from Backup File(s) or Blob Storage URL(s)
+            // 5. Restore into a staging database that must not already exist: a restore WITH REPLACE over
+            //    a user-typed name could otherwise overwrite a live database.
+            await this.assertStagingDatabaseAbsent(sqlExecutor, stagingDbName, params.ContextUser);
+            runner = await this.createLongRunningRunner(sqlExecutor, params.ContextUser);
             LogStatus(`[BootstrapSQLServer] Restoring staging database [${stagingDbName}] from ${backupUrls.length} backup source(s)...`);
-            await this.executeDatabaseRestore(sqlExecutor, stagingDbName, backupUrls, moveClauses, params.ContextUser);
             stagingDbCreated = true;
+            await this.executeDatabaseRestore(runner, stagingDbName, backupUrls, moveClauses);
 
             // 6. Load Active Entity Maps for Company Integration
             const entityMaps = await this.loadEntityMaps(sqlExecutor, companyIntegrationID, entityMapIDs, params.ContextUser);
@@ -153,15 +196,16 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
                     continue;
                 }
 
-                // Check AllowDirectSQLInsert on target entity before direct DML (Task 7)
+                // Direct DML against an entity's base table is sanctioned only by the entity's own opt-in.
                 if (!entityInfo.AllowDirectSQLInsert) {
                     throw new Error(`Target entity '${entityInfo.Name}' does not have AllowDirectSQLInsert enabled. Direct SQL ETL is prohibited.`);
                 }
 
-                const targetPkCol = entityInfo.FirstPrimaryKey?.Name ?? 'ID';
+                const targetPkCol = this.resolveTargetPrimaryKey(entityInfo);
 
                 const result = await this.executeTableEtl(
                     sqlExecutor,
+                    runner,
                     companyIntegrationID,
                     map,
                     stagingDbName,
@@ -172,6 +216,7 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
                     batchSize,
                     headerInfo.BackupStartDate,
                     truncateTargetBeforeLoad,
+                    recordMaps,
                     params.ContextUser
                 );
 
@@ -243,29 +288,59 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
                 Message: message,
                 Params: params.Params,
             };
+        } finally {
+            if (runner) {
+                await runner.Dispose();
+            }
         }
     }
 
     /**
-     * Backward-compatible helper method to inspect backup header.
+     * The target entity's single primary-key column. The load writes one generated key per row and the
+     * record-map seed stores one key value per row, so a composite-key target cannot be bootstrapped here.
      */
-    public async readBackupHeader(
-        executor: DatabaseProviderBase,
-        backupUrl: string,
-        contextUser?: UserInfo
-    ): Promise<SqlBackupHeaderInfo> {
-        return this.inspectBackupHeader(executor, [backupUrl], contextUser);
+    protected resolveTargetPrimaryKey(entityInfo: EntityInfo): string {
+        if (entityInfo.PrimaryKeys.length !== 1) {
+            throw new Error(`Target entity '${entityInfo.Name}' has a composite primary key (${entityInfo.PrimaryKeys.map(pk => pk.Name).join(', ')}); bootstrap requires a single-column key.`);
+        }
+        return entityInfo.FirstPrimaryKey.Name; // first-pk-ok: single-column key enforced on the line above
     }
 
     /**
-     * Backward-compatible helper method to inspect backup file list.
+     * Resolves where record maps are seeded from the `MJ: Company Integration Record Maps` entity so the
+     * core schema name and base table come from metadata, and checks the entity sanctions direct SQL.
      */
-    public async readBackupFileList(
+    protected resolveRecordMapTarget(provider: DatabaseProviderBase): RecordMapTarget {
+        const entity = provider.EntityByName('MJ: Company Integration Record Maps');
+        if (!entity) {
+            throw new Error("Entity 'MJ: Company Integration Record Maps' was not found in metadata.");
+        }
+        if (!entity.AllowDirectSQLInsert) {
+            throw new Error(`Entity '${entity.Name}' does not have AllowDirectSQLInsert enabled. Direct SQL record-map seeding is prohibited.`);
+        }
+        ValidateIdentifier(entity.SchemaName, 'schema');
+        ValidateIdentifier(entity.BaseTable, 'table');
+        return {
+            Table: `[${entity.SchemaName}].[${entity.BaseTable}]`,
+            AllowDirectSQLDelete: entity.AllowDirectSQLDelete,
+        };
+    }
+
+    /**
+     * Refuses to restore over a database that already exists. `RESTORE ... WITH REPLACE` would silently
+     * overwrite it, and a staging name is user-supplied.
+     */
+    protected async assertStagingDatabaseAbsent(
         executor: DatabaseProviderBase,
-        backupUrl: string,
+        stagingDbName: string,
         contextUser?: UserInfo
-    ): Promise<SqlBackupFileListEntry[]> {
-        return this.inspectBackupFileList(executor, [backupUrl], contextUser);
+    ): Promise<void> {
+        ValidateIdentifier(stagingDbName, 'database');
+        const sql = `SELECT DB_ID(N'${EscapeSQLString(stagingDbName)}') AS DatabaseId;`;
+        const rows = await executor.ExecuteSQL<{ DatabaseId: number | null }>(sql, undefined, { description: 'Check staging database is absent' }, contextUser);
+        if (rows && rows.length > 0 && rows[0].DatabaseId != null) {
+            throw new Error(`Database [${stagingDbName}] already exists on this instance. Choose an unused staging database name; the bootstrap never overwrites an existing database.`);
+        }
     }
 
     /**
@@ -319,16 +394,16 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
     ): Promise<{ DataPath: string; LogPath: string }> {
         try {
             const sql = `
-SELECT 
+SELECT
     COALESCE(
         CAST(SERVERPROPERTY('InstanceDefaultDataPath') AS NVARCHAR(512)),
-        (SELECT SUBSTRING(physical_name, 1, LEN(physical_name) - CHARINDEX('\\', REVERSE(physical_name))) 
+        (SELECT SUBSTRING(physical_name, 1, LEN(physical_name) - CHARINDEX('\\', REVERSE(physical_name)))
          FROM sys.master_files WHERE database_id = 1 AND file_id = 1),
         'C:\\Program Files\\Microsoft SQL Server\\MSSQL\\DATA'
     ) AS DataPath,
     COALESCE(
         CAST(SERVERPROPERTY('InstanceDefaultLogPath') AS NVARCHAR(512)),
-        (SELECT SUBSTRING(physical_name, 1, LEN(physical_name) - CHARINDEX('\\', REVERSE(physical_name))) 
+        (SELECT SUBSTRING(physical_name, 1, LEN(physical_name) - CHARINDEX('\\', REVERSE(physical_name)))
          FROM sys.master_files WHERE database_id = 1 AND file_id = 2),
         'C:\\Program Files\\Microsoft SQL Server\\MSSQL\\DATA'
     ) AS LogPath;`;
@@ -356,13 +431,14 @@ SELECT
 
     /**
      * Executes the RESTORE DATABASE command formatting each stripe as URL = N'...' or DISK = N'...'.
+     * Runs on the long-running connection: a multi-terabyte restore takes hours. Never `WITH REPLACE`;
+     * {@link assertStagingDatabaseAbsent} has already established the name is free.
      */
     protected async executeDatabaseRestore(
-        executor: DatabaseProviderBase,
+        runner: LongRunningSqlRunner,
         stagingDbName: string,
         backupUrls: string[],
-        moveClauses: string[],
-        contextUser?: UserInfo
+        moveClauses: string[]
     ): Promise<void> {
         ValidateIdentifier(stagingDbName, 'database');
         const fromSources = this.buildFromSourcesClause(backupUrls);
@@ -370,15 +446,14 @@ SELECT
 
         const sql = `
 RESTORE DATABASE [${stagingDbName}]
-FROM 
+FROM
     ${fromSources}
-WITH 
+WITH
     ${moves},
-    REPLACE,
     RECOVERY,
     STATS = 10;`;
 
-        await executor.ExecuteSQL(sql, undefined, { isMutation: true, description: `RESTORE DATABASE [${stagingDbName}]` }, contextUser);
+        await runner.ExecuteSQL(sql, `RESTORE DATABASE [${stagingDbName}]`);
     }
 
     /**
@@ -447,49 +522,6 @@ END`;
     }
 
     /**
-     * Truncates target table or falls back to DELETE if table has foreign key references.
-     */
-    protected async truncateOrDeleteTargetTable(
-        executor: DatabaseProviderBase,
-        targetSchema: string,
-        targetTable: string,
-        contextUser?: UserInfo
-    ): Promise<void> {
-        ValidateIdentifier(targetSchema, 'schema');
-        ValidateIdentifier(targetTable, 'table');
-        try {
-            await executor.ExecuteSQL(
-                `TRUNCATE TABLE [${targetSchema}].[${targetTable}];`,
-                undefined,
-                { isMutation: true, description: `TRUNCATE TABLE [${targetSchema}].[${targetTable}]` },
-                contextUser
-            );
-        } catch {
-            await executor.ExecuteSQL(
-                `DELETE FROM [${targetSchema}].[${targetTable}];`,
-                undefined,
-                { isMutation: true, description: `DELETE FROM [${targetSchema}].[${targetTable}]` },
-                contextUser
-            );
-        }
-    }
-
-    /**
-     * Clears existing record map rows for a specific CompanyIntegrationID and EntityID.
-     */
-    protected async clearRecordMapsForEntity(
-        executor: DatabaseProviderBase,
-        companyIntegrationID: string,
-        entityID: string,
-        contextUser?: UserInfo
-    ): Promise<void> {
-        const cleanCI = EscapeSQLString(companyIntegrationID);
-        const cleanEntity = EscapeSQLString(entityID);
-        const sql = `DELETE FROM __mj.[Company Integration Record Maps] WHERE CompanyIntegrationID = '${cleanCI}' AND EntityID = '${cleanEntity}';`;
-        await executor.ExecuteSQL(sql, undefined, { isMutation: true, description: 'Clear Record Maps for Entity' }, contextUser);
-    }
-
-    /**
      * Resolves the watermark column for an entity map if configured.
      */
     protected resolveWatermarkColumn(
@@ -511,10 +543,13 @@ END`;
     }
 
     /**
-     * Executes the local set-based minimally-logged ETL for a single entity table wrapped in its own transaction.
+     * Loads one entity map's staging table into its target table and seeds the record maps that let the
+     * engine match later deltas to the bootstrapped rows. Metadata lookups run on the provider; the load
+     * itself is a single T-SQL batch on the long-running connection (see {@link buildTableLoadBatch}).
      */
     protected async executeTableEtl(
         executor: DatabaseProviderBase,
+        runner: LongRunningSqlRunner,
         companyIntegrationID: string,
         entityMap: MJCompanyIntegrationEntityMapEntity,
         stagingDbName: string,
@@ -525,6 +560,7 @@ END`;
         batchSize: number,
         restoreTimestamp: Date,
         truncateTargetBeforeLoad: boolean,
+        recordMaps: RecordMapTarget,
         contextUser?: UserInfo
     ): Promise<TableEtlResult> {
         const { schema: sourceSchema, table: sourceTable } = this.parseObjectIdentifier(externalObjectName);
@@ -535,13 +571,11 @@ END`;
         ValidateIdentifier(targetTable, 'table');
         ValidateIdentifier(targetPkCol, 'column');
 
-        // Query source column list
         const sourceColumns = await this.queryTableColumns(executor, stagingDbName, sourceSchema, sourceTable, contextUser);
         if (sourceColumns.length === 0) {
             throw new Error(`Source table '[${stagingDbName}].[${sourceSchema}].[${sourceTable}]' does not exist or has no columns.`);
         }
 
-        // Query target column list
         const targetColumns = await this.queryTableColumns(executor, undefined, targetSchema, targetTable, contextUser);
         if (targetColumns.length === 0) {
             throw new Error(`Target table '[${targetSchema}].[${targetTable}]' does not exist in target database.`);
@@ -550,192 +584,211 @@ END`;
         const sourceColSet = new Set(sourceColumns.map(c => c.COLUMN_NAME.toLowerCase()));
         const targetColMap = new Map(targetColumns.map(c => [c.COLUMN_NAME.toLowerCase(), c.COLUMN_NAME]));
 
-        // Determine source primary key column(s)
         const pkColumns = await this.queryPrimaryKeyColumns(executor, stagingDbName, sourceSchema, sourceTable, contextUser);
         pkColumns.forEach(c => ValidateIdentifier(c, 'column'));
 
-        const pkExpression = pkColumns.length > 0
-            ? pkColumns.map(c => `ISNULL(CAST(s.[${c}] AS NVARCHAR(450)), N'')`).join(" + ':' + ")
-            : (sourceColSet.has('id') ? `CAST(s.[id] AS NVARCHAR(450))` : `CAST(NEWID() AS NVARCHAR(450))`);
-
-        // Check re-run safety & target rows
         const hasRows = await this.targetTableHasRows(executor, targetSchema, targetTable, contextUser);
         if (hasRows && !truncateTargetBeforeLoad) {
             throw new Error(`Target table '[${targetSchema}].[${targetTable}]' already contains data and 'TruncateTargetBeforeLoad' is false. Set TruncateTargetBeforeLoad to 'true' to allow replacing existing data, or clear target table before running.`);
         }
+        const truncateTarget = truncateTargetBeforeLoad && hasRows;
+        if (truncateTarget && !recordMaps.AllowDirectSQLDelete) {
+            throw new Error("Entity 'MJ: Company Integration Record Maps' does not have AllowDirectSQLDelete enabled, so existing record maps cannot be cleared for a re-run.");
+        }
 
-        // Resolve optional watermark column
         const watermarkSourceCol = this.resolveWatermarkColumn(entityMap, sourceColSet);
-
-        // Build column projections
-        const insertCols: string[] = [];
-        const selectCols: string[] = [];
-
-        // Target primary key - use NEWID() (Task 3: NEWSEQUENTIALID rejected in SELECT)
-        if (targetColMap.has(targetPkCol.toLowerCase())) {
-            insertCols.push(`[${targetColMap.get(targetPkCol.toLowerCase())}]`);
-            selectCols.push(`NEWID()`);
-        }
-
-        // Standard integration columns (Task 11: Remove SourceRecordID, SourceObject, SyncedAt)
-        if (targetColMap.has('__mj_integration_syncstatus')) {
-            insertCols.push(`[${targetColMap.get('__mj_integration_syncstatus')}]`);
-            selectCols.push(`N'Active'`);
-        }
-        if (targetColMap.has('__mj_integration_lastsyncedat')) {
-            insertCols.push(`[${targetColMap.get('__mj_integration_lastsyncedat')}]`);
-            selectCols.push(`@RestoreTimestamp`);
-        }
-        if (targetColMap.has('__mj_integration_lastseenmodifiedvalue') && watermarkSourceCol) {
-            insertCols.push(`[${targetColMap.get('__mj_integration_lastseenmodifiedvalue')}]`);
-            selectCols.push(`CAST(s.[${watermarkSourceCol}] AS NVARCHAR(255))`);
-        }
-
-        // Standard domain columns (intersection of source and target)
-        for (const sCol of sourceColumns) {
-            const sNameLower = sCol.COLUMN_NAME.toLowerCase();
-            // Skip target PK and synthetic integration columns
-            if (
-                sNameLower === targetPkCol.toLowerCase() ||
-                sNameLower === 'sourcerecordid' ||
-                sNameLower === 'sourceobject' ||
-                sNameLower === 'syncedat' ||
-                sNameLower === '__mj_integration_syncstatus' ||
-                sNameLower === '__mj_integration_lastsyncedat' ||
-                sNameLower === '__mj_integration_lastseenmodifiedvalue'
-            ) {
-                continue;
-            }
-            if (targetColMap.has(sNameLower)) {
-                const targetExactName = targetColMap.get(sNameLower)!;
-                ValidateIdentifier(targetExactName, 'column');
-                ValidateIdentifier(sCol.COLUMN_NAME, 'column');
-                insertCols.push(`[${targetExactName}]`);
-                selectCols.push(`s.[${sCol.COLUMN_NAME}]`);
-            }
-        }
-
-        // Query source row count
+        const mappings = this.buildColumnMappings(sourceColumns, targetColMap, targetPkCol, watermarkSourceCol);
         const totalRows = await this.queryTableRowCount(executor, stagingDbName, sourceSchema, sourceTable, contextUser);
-        const isoTimestamp = restoreTimestamp.toISOString();
+        const chunkPkCol = this.resolveChunkColumn(pkColumns, sourceColumns, totalRows, batchSize);
 
-        // Determine if chunking is eligible (Task 5: Gate chunked transfer on single-column integer PK)
-        let isIntegerPk = false;
-        if (pkColumns.length === 1) {
-            const pkColInfo = sourceColumns.find(c => c.COLUMN_NAME.toLowerCase() === pkColumns[0].toLowerCase());
-            if (pkColInfo) {
-                const dt = pkColInfo.DATA_TYPE.toLowerCase();
-                isIntegerPk = ['tinyint', 'smallint', 'int', 'bigint'].includes(dt);
-            }
-        }
-        const useChunked = batchSize > 0 && totalRows > batchSize && pkColumns.length === 1 && isIntegerPk;
+        const batchSql = this.buildTableLoadBatch({
+            StagingDbName: stagingDbName,
+            SourceSchema: sourceSchema,
+            SourceTable: sourceTable,
+            TargetSchema: targetSchema,
+            TargetTable: targetTable,
+            TargetPkCol: targetPkCol,
+            Mappings: mappings,
+            ExternalIdExpr: this.buildExternalIdExpression(pkColumns, sourceColSet),
+            RestoreTimestampIso: restoreTimestamp.toISOString(),
+            ChunkPkCol: chunkPkCol,
+            BatchSize: batchSize,
+            TruncateTarget: truncateTarget,
+            RecordMaps: recordMaps,
+            CompanyIntegrationID: companyIntegrationID,
+            EntityID: entityMap.EntityID,
+        });
 
-        // Build join predicate for SEED RECORD MAPS (Task 11)
-        const joinPredicates = pkColumns.length > 0
-            ? pkColumns.map(col => {
-                const targetCol = targetColMap.get(col.toLowerCase()) ?? col;
-                return `t.[${targetCol}] = s.[${col}]`;
-            }).join(' AND ')
-            : `t.[${targetPkCol}] = s.[id]`;
-
-        const cleanCI = EscapeSQLString(companyIntegrationID);
-        const cleanEntityID = EscapeSQLString(entityMap.EntityID);
-
-        const recordMapsInsertSql = `
-INSERT INTO __mj.[Company Integration Record Maps]
-(
-    [ID],
-    [CompanyIntegrationID],
-    [EntityID],
-    [ExternalSystemRecordID],
-    [EntityRecordID],
-    [__mj_CreatedAt],
-    [__mj_UpdatedAt]
-)
-SELECT 
-    NEWID(),
-    '${cleanCI}',
-    '${cleanEntityID}',
-    (${pkExpression}),
-    CAST(t.[${targetPkCol}] AS NVARCHAR(750)),
-    GETUTCDATE(),
-    GETUTCDATE()
-FROM [${targetSchema}].[${targetTable}] t WITH (NOLOCK)
-INNER JOIN [${stagingDbName}].[${sourceSchema}].[${sourceTable}] s WITH (NOLOCK)
-    ON ${joinPredicates};`;
-
-        // Wrap each entity map load in its own transaction (Task 6)
-        await executor.ExecuteSQL('BEGIN TRANSACTION;', undefined, { isMutation: true, description: `BEGIN TRANSACTION ${sourceTable}` }, contextUser);
-
-        try {
-            if (truncateTargetBeforeLoad && hasRows) {
-                await this.truncateOrDeleteTargetTable(executor, targetSchema, targetTable, contextUser);
-                await this.clearRecordMapsForEntity(executor, companyIntegrationID, entityMap.EntityID, contextUser);
-            }
-
-            if (!useChunked) {
-                // Single set-based insert
-                const sql = `
-DECLARE @RestoreTimestamp DATETIMEOFFSET = '${EscapeSQLString(isoTimestamp)}';
-INSERT INTO [${targetSchema}].[${targetTable}] WITH (TABLOCK)
-(
-    ${insertCols.join(',\n    ')}
-)
-SELECT 
-    ${selectCols.join(',\n    ')}
-FROM [${stagingDbName}].[${sourceSchema}].[${sourceTable}] s WITH (NOLOCK);`;
-
-                await executor.ExecuteSQL(sql, undefined, { isMutation: true, description: `ETL Transfer ${sourceTable} -> ${targetTable}` }, contextUser);
-            } else {
-                // Chunked batched insert using primary key range
-                const pkCol = pkColumns[0];
-                const sql = `
-DECLARE @RestoreTimestamp DATETIMEOFFSET = '${EscapeSQLString(isoTimestamp)}';
-DECLARE @MinID BIGINT = (SELECT ISNULL(MIN([${pkCol}]), 0) FROM [${stagingDbName}].[${sourceSchema}].[${sourceTable}]);
-DECLARE @MaxID BIGINT = (SELECT ISNULL(MAX([${pkCol}]), 0) FROM [${stagingDbName}].[${sourceSchema}].[${sourceTable}]);
-DECLARE @CurrentID BIGINT = @MinID;
-DECLARE @ChunkSize BIGINT = ${batchSize};
-
-WHILE @CurrentID <= @MaxID
-BEGIN
-    INSERT INTO [${targetSchema}].[${targetTable}] WITH (TABLOCK)
-    (
-        ${insertCols.join(',\n        ')}
-    )
-    SELECT 
-        ${selectCols.join(',\n        ')}
-    FROM [${stagingDbName}].[${sourceSchema}].[${sourceTable}] s WITH (NOLOCK)
-    WHERE s.[${pkCol}] >= @CurrentID AND s.[${pkCol}] < @CurrentID + @ChunkSize;
-
-    SET @CurrentID = @CurrentID + @ChunkSize;
-END`;
-
-                await executor.ExecuteSQL(sql, undefined, { isMutation: true, description: `Chunked ETL Transfer ${sourceTable} -> ${targetTable}` }, contextUser);
-            }
-
-            // Seed record maps in the same transaction (Task 11)
-            await executor.ExecuteSQL(recordMapsInsertSql, undefined, { isMutation: true, description: `Seed Record Maps ${sourceTable} -> ${targetTable}` }, contextUser);
-
-            await executor.ExecuteSQL('COMMIT TRANSACTION;', undefined, { isMutation: true, description: `COMMIT TRANSACTION ${sourceTable}` }, contextUser);
-
-        } catch (txErr) {
-            try {
-                await executor.ExecuteSQL('IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;', undefined, { isMutation: true, description: `ROLLBACK TRANSACTION ${sourceTable}` }, contextUser);
-            } catch (rbErr) {
-                LogError(`[BootstrapSQLServer] Rollback failed for ${sourceTable}: ${rbErr}`);
-            }
-            throw txErr;
-        }
-
-        // Verify target row count
-        const targetCount = await this.queryTableRowCount(executor, undefined, targetSchema, targetTable, contextUser);
-        LogStatus(`[BootstrapSQLServer] Transferred ${sourceTable} -> ${targetTable}: ${targetCount.toLocaleString()} rows.`);
+        const rows = await runner.ExecuteSQL<{ RowsInserted: number | string }>(batchSql, `ETL Transfer ${sourceTable} -> ${targetTable}`);
+        const rowsInserted = rows && rows.length > 0 ? Number(rows[0].RowsInserted) : 0;
+        LogStatus(`[BootstrapSQLServer] Transferred ${sourceTable} -> ${targetTable}: ${rowsInserted.toLocaleString()} rows.`);
 
         return {
             SourceTable: `[${sourceSchema}].[${sourceTable}]`,
             TargetTable: `[${targetSchema}].[${targetTable}]`,
-            RowsTransferred: targetCount,
+            RowsTransferred: rowsInserted,
         };
+    }
+
+    /**
+     * The columns the load writes: a generated target key, the engine's integration bookkeeping columns,
+     * and every domain column present on both sides. Source columns that collide with the target key or the
+     * bookkeeping columns are skipped — the key is generated and the bookkeeping is set here.
+     */
+    protected buildColumnMappings(
+        sourceColumns: SqlColumnInfo[],
+        targetColMap: Map<string, string>,
+        targetPkCol: string,
+        watermarkSourceCol: string | undefined
+    ): ColumnMapping[] {
+        const mappings: ColumnMapping[] = [];
+        const targetPkLower = targetPkCol.toLowerCase();
+
+        // Target primary key: NEWID() — NEWSEQUENTIALID() is only valid in a DEFAULT constraint (Msg 302).
+        if (targetColMap.has(targetPkLower)) {
+            mappings.push({ Target: targetColMap.get(targetPkLower)!, Expr: 'NEWID()' });
+        }
+        if (targetColMap.has('__mj_integration_syncstatus')) {
+            mappings.push({ Target: targetColMap.get('__mj_integration_syncstatus')!, Expr: `N'Active'` });
+        }
+        if (targetColMap.has('__mj_integration_lastsyncedat')) {
+            mappings.push({ Target: targetColMap.get('__mj_integration_lastsyncedat')!, Expr: '@RestoreTimestamp' });
+        }
+        if (targetColMap.has('__mj_integration_lastseenmodifiedvalue') && watermarkSourceCol) {
+            mappings.push({ Target: targetColMap.get('__mj_integration_lastseenmodifiedvalue')!, Expr: `CAST(s.[${watermarkSourceCol}] AS NVARCHAR(255))` });
+        }
+
+        const reserved = new Set([targetPkLower, 'sourcerecordid', 'sourceobject', 'syncedat',
+            '__mj_integration_syncstatus', '__mj_integration_lastsyncedat', '__mj_integration_lastseenmodifiedvalue']);
+        for (const sCol of sourceColumns) {
+            const sNameLower = sCol.COLUMN_NAME.toLowerCase();
+            if (reserved.has(sNameLower) || !targetColMap.has(sNameLower)) {
+                continue;
+            }
+            const targetExactName = targetColMap.get(sNameLower)!;
+            ValidateIdentifier(targetExactName, 'column');
+            ValidateIdentifier(sCol.COLUMN_NAME, 'column');
+            mappings.push({ Target: targetExactName, Expr: `s.[${sCol.COLUMN_NAME}]` });
+        }
+        return mappings;
+    }
+
+    /**
+     * The external record identity the engine will match deltas against: the source primary key, with the
+     * parts of a composite key joined by `|` exactly as the external-data-source connector's `BuildRecord`
+     * joins them. Falls back to a column named `id`, then to a random key for a key-less source.
+     */
+    protected buildExternalIdExpression(pkColumns: string[], sourceColSet: Set<string>): string {
+        if (pkColumns.length > 0) {
+            return pkColumns.map(c => `ISNULL(CAST(s.[${c}] AS NVARCHAR(450)), N'')`).join(" + N'|' + ");
+        }
+        return sourceColSet.has('id') ? `CAST(s.[id] AS NVARCHAR(450))` : `CAST(NEWID() AS NVARCHAR(450))`;
+    }
+
+    /** The key column to chunk a large load by, or undefined: only a single-column integer key qualifies. */
+    protected resolveChunkColumn(pkColumns: string[], sourceColumns: SqlColumnInfo[], totalRows: number, batchSize: number): string | undefined {
+        if (batchSize <= 0 || totalRows <= batchSize || pkColumns.length !== 1) {
+            return undefined;
+        }
+        const pkColInfo = sourceColumns.find(c => c.COLUMN_NAME.toLowerCase() === pkColumns[0].toLowerCase());
+        const isIntegerPk = pkColInfo ? ['tinyint', 'smallint', 'int', 'bigint'].includes(pkColInfo.DATA_TYPE.toLowerCase()) : false;
+        return isIntegerPk ? pkColumns[0] : undefined;
+    }
+
+    /**
+     * One T-SQL batch that loads a table and seeds its record maps atomically. Every statement runs on the
+     * batch's connection, so `BEGIN TRANSACTION` / `COMMIT` are guaranteed to wrap the work (separate
+     * `ExecuteSQL` calls each take whatever pooled connection is free). The MERGE's `OUTPUT ... INTO`
+     * captures the generated target key next to the external key of the same source row, which is the
+     * only way to build the record map: an `INSERT ... SELECT` cannot output source columns.
+     */
+    protected buildTableLoadBatch(spec: TableLoadBatchSpec): string {
+        const stagingSource = `[${spec.StagingDbName}].[${spec.SourceSchema}].[${spec.SourceTable}]`;
+        const load = spec.ChunkPkCol
+            ? this.buildChunkedLoad(spec, stagingSource)
+            : this.buildMergeStatement(spec, stagingSource, undefined);
+        const preLoad = spec.TruncateTarget ? this.buildTruncateStatements(spec) : '';
+        const cleanCI = EscapeSQLString(spec.CompanyIntegrationID);
+        const cleanEntityID = EscapeSQLString(spec.EntityID);
+
+        return `
+SET XACT_ABORT ON;
+SET NOCOUNT ON;
+DECLARE @RestoreTimestamp DATETIMEOFFSET = '${EscapeSQLString(spec.RestoreTimestampIso)}';
+CREATE TABLE #MJRecordMap ([EntityRecordID] NVARCHAR(750) NOT NULL, [ExternalSystemRecordID] NVARCHAR(750) NOT NULL);
+BEGIN TRY
+    BEGIN TRANSACTION;
+${preLoad}${load}
+    INSERT INTO ${spec.RecordMaps.Table}
+    (
+        [ID],
+        [CompanyIntegrationID],
+        [EntityID],
+        [ExternalSystemRecordID],
+        [EntityRecordID],
+        [__mj_CreatedAt],
+        [__mj_UpdatedAt]
+    )
+    SELECT NEWID(), '${cleanCI}', '${cleanEntityID}', m.[ExternalSystemRecordID], m.[EntityRecordID], GETUTCDATE(), GETUTCDATE()
+    FROM #MJRecordMap m;
+    COMMIT TRANSACTION;
+END TRY
+BEGIN CATCH
+    IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+    THROW;
+END CATCH;
+SELECT COUNT_BIG(*) AS RowsInserted FROM #MJRecordMap;
+DROP TABLE #MJRecordMap;`;
+    }
+
+    /** Clear the target table (DELETE when a foreign key blocks TRUNCATE) and its record maps for a re-run. */
+    private buildTruncateStatements(spec: TableLoadBatchSpec): string {
+        const target = `[${spec.TargetSchema}].[${spec.TargetTable}]`;
+        const cleanCI = EscapeSQLString(spec.CompanyIntegrationID);
+        const cleanEntityID = EscapeSQLString(spec.EntityID);
+        return `    BEGIN TRY
+        TRUNCATE TABLE ${target};
+    END TRY
+    BEGIN CATCH
+        DELETE FROM ${target};
+    END CATCH;
+    DELETE FROM ${spec.RecordMaps.Table} WHERE CompanyIntegrationID = '${cleanCI}' AND EntityID = '${cleanEntityID}';
+`;
+    }
+
+    /** The MERGE that inserts every staged row (optionally a key range) and records (target key, external key) pairs. */
+    private buildMergeStatement(spec: TableLoadBatchSpec, stagingSource: string, whereClause: string | undefined): string {
+        const projection = [`${spec.ExternalIdExpr} AS [__MJExternalID]`, ...spec.Mappings.map(m => `${m.Expr} AS [${m.Target}]`)].join(',\n            ');
+        const insertCols = spec.Mappings.map(m => `[${m.Target}]`).join(', ');
+        const insertVals = spec.Mappings.map(m => `src.[${m.Target}]`).join(', ');
+        return `    MERGE INTO [${spec.TargetSchema}].[${spec.TargetTable}] WITH (TABLOCK) AS t
+    USING (
+        SELECT
+            ${projection}
+        FROM ${stagingSource} s WITH (NOLOCK)${whereClause ? `\n        WHERE ${whereClause}` : ''}
+    ) AS src
+    ON 1 = 0
+    WHEN NOT MATCHED THEN
+        INSERT (${insertCols})
+        VALUES (${insertVals})
+    OUTPUT CAST(inserted.[${spec.TargetPkCol}] AS NVARCHAR(750)), src.[__MJExternalID]
+    INTO #MJRecordMap ([EntityRecordID], [ExternalSystemRecordID]);
+`;
+    }
+
+    /** The chunked form of the load: the MERGE repeated over integer key ranges of `BatchSize`. */
+    private buildChunkedLoad(spec: TableLoadBatchSpec, stagingSource: string): string {
+        const pkCol = spec.ChunkPkCol!;
+        const merge = this.buildMergeStatement(spec, stagingSource, `s.[${pkCol}] >= @CurrentID AND s.[${pkCol}] < @CurrentID + @ChunkSize`);
+        return `    DECLARE @MinID BIGINT = (SELECT ISNULL(MIN([${pkCol}]), 0) FROM ${stagingSource});
+    DECLARE @MaxID BIGINT = (SELECT ISNULL(MAX([${pkCol}]), 0) FROM ${stagingSource});
+    DECLARE @CurrentID BIGINT = @MinID;
+    DECLARE @ChunkSize BIGINT = ${Math.floor(spec.BatchSize)};
+    WHILE @CurrentID <= @MaxID
+    BEGIN
+${merge}        SET @CurrentID = @CurrentID + @ChunkSize;
+    END
+`;
     }
 
     /**
@@ -786,8 +839,8 @@ ORDER BY ORDINAL_POSITION;`;
 SELECT col.COLUMN_NAME
 FROM ${dbPrefix}INFORMATION_SCHEMA.TABLE_CONSTRAINTS pk
 INNER JOIN ${dbPrefix}INFORMATION_SCHEMA.KEY_COLUMN_USAGE col
-    ON pk.TABLE_NAME = col.TABLE_NAME 
-    AND pk.TABLE_SCHEMA = col.TABLE_SCHEMA 
+    ON pk.TABLE_NAME = col.TABLE_NAME
+    AND pk.TABLE_SCHEMA = col.TABLE_SCHEMA
     AND pk.CONSTRAINT_NAME = col.CONSTRAINT_NAME
 WHERE pk.CONSTRAINT_TYPE = 'PRIMARY KEY'
     AND pk.TABLE_SCHEMA = N'${EscapeSQLString(schema)}'
@@ -823,8 +876,8 @@ SELECT ISNULL(SUM(p.rows), 0) AS TotalRows
 FROM ${dbPrefix}sys.partitions p
 INNER JOIN ${dbPrefix}sys.tables t ON p.object_id = t.object_id
 INNER JOIN ${dbPrefix}sys.schemas s ON t.schema_id = s.schema_id
-WHERE s.name = N'${EscapeSQLString(schema)}' 
-    AND t.name = N'${EscapeSQLString(table)}' 
+WHERE s.name = N'${EscapeSQLString(schema)}'
+    AND t.name = N'${EscapeSQLString(table)}'
     AND p.index_id IN (0, 1);`;
 
         const rows = await executor.ExecuteSQL<{ TotalRows: number }>(

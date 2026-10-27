@@ -15,6 +15,7 @@ let mockCredentialConfigFn: ReturnType<typeof vi.fn>;
 let mockGetCredentialByIdFn: ReturnType<typeof vi.fn>;
 let mockGetCredentialFn: ReturnType<typeof vi.fn>;
 let mockEntityByIDFn: ReturnType<typeof vi.fn>;
+let mockEntityByNameFn: ReturnType<typeof vi.fn>;
 let mockInvalidateEntityCachesFn: ReturnType<typeof vi.fn>;
 
 vi.mock('@memberjunction/integration-engine', () => {
@@ -93,6 +94,7 @@ interface MockSqlOptions {
     targetHasRows?: boolean;
     pkType?: string;
     compositePk?: boolean;
+    stagingDbExists?: boolean;
 }
 
 function createMockSqlExecutor(options: MockSqlOptions = {}): {
@@ -110,6 +112,14 @@ function createMockSqlExecutor(options: MockSqlOptions = {}): {
 
         if (sql.includes('SELECT TOP 1 1 AS HasRows')) {
             return Promise.resolve(options.targetHasRows ? [{ HasRows: 1 }] : []);
+        }
+
+        if (sql.includes('AS DatabaseId')) {
+            return Promise.resolve([{ DatabaseId: options.stagingDbExists ? 7 : null }]);
+        }
+
+        if (sql.includes('COUNT_BIG(*) AS RowsInserted')) {
+            return Promise.resolve([{ RowsInserted: options.totalRows ?? 1500 }]);
         }
 
         if (sql.includes('RESTORE HEADERONLY')) {
@@ -173,6 +183,7 @@ function createMockSqlExecutor(options: MockSqlOptions = {}): {
     const executor = Object.create(DatabaseProviderBase.prototype) as DatabaseProviderBase;
     executor.ExecuteSQL = mockExecuteSql;
     executor.EntityByID = (id: string) => mockEntityByIDFn(id);
+    executor.EntityByName = (name: string) => mockEntityByNameFn(name);
 
     return { executor, executedSql, mockExecuteSql };
 }
@@ -220,6 +231,20 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
                     AllowDirectSQLInsert: true,
                     FirstPrimaryKey: { Name: 'ID' },
                     PrimaryKeys: [{ Name: 'ID' }],
+                };
+            }
+            return undefined;
+        });
+
+        mockEntityByNameFn = vi.fn().mockImplementation((name: string) => {
+            if (name === 'MJ: Company Integration Record Maps') {
+                return {
+                    ID: 'entity-record-maps',
+                    Name: 'MJ: Company Integration Record Maps',
+                    SchemaName: '__mj',
+                    BaseTable: 'CompanyIntegrationRecordMap',
+                    AllowDirectSQLInsert: true,
+                    AllowDirectSQLDelete: true,
                 };
             }
             return undefined;
@@ -359,8 +384,28 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
         });
     });
 
-    describe('Fast Local In-Engine ETL with NEWID() and TABLOCK', () => {
-        it('uses NEWID() (never NEWSEQUENTIALID()) in SELECT and generates Record Maps insert', async () => {
+    describe('Staging database safety', () => {
+        it('refuses to restore over an existing database and never uses WITH REPLACE', async () => {
+            mockSql = createMockSqlExecutor({ stagingDbExists: true });
+            action.CustomDatabaseProvider = mockSql.executor;
+
+            const params = makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                SasToken: 'token123',
+                StagingDatabaseName: 'MJ_Prod',
+            });
+
+            const result = await action['InternalRunAction'](params);
+
+            expect(result.Success).toBe(false);
+            expect(result.Message).toContain('Database [MJ_Prod] already exists');
+            expect(mockSql.executedSql.some(s => s.includes('RESTORE DATABASE'))).toBe(false);
+            // The failure happened before any restore, so nothing is dropped.
+            expect(mockSql.executedSql.some(s => s.includes('DROP DATABASE'))).toBe(false);
+        });
+
+        it('restores without REPLACE once the name is known to be free', async () => {
             const params = makeParams({
                 CompanyIntegrationID: 'ci-001',
                 BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
@@ -371,33 +416,116 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
             const result = await action['InternalRunAction'](params);
 
             expect(result.Success).toBe(true);
+            const restoreSql = mockSql.executedSql.find(s => s.includes('RESTORE DATABASE [MJ_Staging_TestDB]'));
+            expect(restoreSql).toBeDefined();
+            expect(restoreSql).not.toContain('REPLACE');
+        });
+    });
 
-            // Assert transaction commands were executed
-            expect(mockSql.executedSql.some(s => s.includes('BEGIN TRANSACTION'))).toBe(true);
-            expect(mockSql.executedSql.some(s => s.includes('COMMIT TRANSACTION'))).toBe(true);
+    describe('Fast Local In-Engine ETL (one atomic batch per table)', () => {
+        const findLoadBatch = () => mockSql.executedSql.find(s => s.includes('MERGE INTO [raw_erp].[Customer] WITH (TABLOCK)'));
 
-            // Assert ETL insert SQL
-            const etlSql = mockSql.executedSql.find(s => s.includes('INSERT INTO [raw_erp].[Customer] WITH (TABLOCK)'));
-            expect(etlSql).toBeDefined();
-            expect(etlSql).toContain('NEWID()');
-            expect(etlSql).not.toContain('NEWSEQUENTIALID()');
-            expect(etlSql).not.toContain('[SourceRecordID]');
-            expect(etlSql).not.toContain('[SourceObject]');
-            expect(etlSql).not.toContain('[SyncedAt]');
-            expect(etlSql).toContain('[__mj_integration_SyncStatus]');
-            expect(etlSql).toContain('[__mj_integration_LastSyncedAt]');
-            expect(etlSql).toContain('[raw_erp].[Customer]');
-            expect(etlSql).toContain('[MJ_Staging_TestDB].[sales].[Customer] s WITH (NOLOCK)');
+        it('loads via MERGE ... OUTPUT inside a single BEGIN/COMMIT batch and seeds record maps from the captured keys', async () => {
+            const params = makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                SasToken: 'token123',
+                StagingDatabaseName: 'MJ_Staging_TestDB',
+            });
 
-            // Assert Record Maps insert
-            const recordMapsSql = mockSql.executedSql.find(s => s.includes('INSERT INTO __mj.[Company Integration Record Maps]'));
-            expect(recordMapsSql).toBeDefined();
-            expect(recordMapsSql).toContain("'ci-001'");
-            expect(recordMapsSql).toContain("'entity-cust-001'");
-            expect(recordMapsSql).toContain('CAST(t.[ID] AS NVARCHAR(750))');
+            const result = await action['InternalRunAction'](params);
 
-            // Assert RunView cache was invalidated for target entity
+            expect(result.Success).toBe(true);
+            const batch = findLoadBatch();
+            expect(batch).toBeDefined();
+
+            // Transaction control lives INSIDE the batch, so every statement shares one connection.
+            expect(batch).toContain('BEGIN TRANSACTION;');
+            expect(batch).toContain('COMMIT TRANSACTION;');
+            expect(batch).toContain('IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;');
+            expect(mockSql.executedSql.filter(s => s.trim() === 'BEGIN TRANSACTION;')).toHaveLength(0);
+
+            // Generated target key + integration bookkeeping, never the invented columns.
+            expect(batch).toContain('NEWID() AS [ID]');
+            expect(batch).not.toContain('NEWSEQUENTIALID()');
+            expect(batch).not.toContain('[SourceRecordID]');
+            expect(batch).not.toContain('[SourceObject]');
+            expect(batch).not.toContain('[SyncedAt]');
+            expect(batch).toContain("N'Active' AS [__mj_integration_SyncStatus]");
+            expect(batch).toContain('@RestoreTimestamp AS [__mj_integration_LastSyncedAt]');
+            expect(batch).toContain('[MJ_Staging_TestDB].[sales].[Customer] s WITH (NOLOCK)');
+
+            // The record map pairs the generated key with the source key of the same row via OUTPUT.
+            expect(batch).toContain('ISNULL(CAST(s.[CustomerID] AS NVARCHAR(450)), N\'\') AS [__MJExternalID]');
+            expect(batch).toContain('OUTPUT CAST(inserted.[ID] AS NVARCHAR(750)), src.[__MJExternalID]');
+            expect(batch).toContain('INSERT INTO [__mj].[CompanyIntegrationRecordMap]');
+            expect(batch).not.toContain('[Company Integration Record Maps]');
+            expect(batch).toContain("'ci-001'");
+            expect(batch).toContain("'entity-cust-001'");
+            expect(batch).toContain('SELECT COUNT_BIG(*) AS RowsInserted FROM #MJRecordMap');
+
+            expect(result.Message).toContain('1,500 rows');
             expect(mockInvalidateEntityCachesFn).toHaveBeenCalledWith('Customer');
+        });
+
+        it('joins composite source keys with | exactly as the connector builds external IDs', async () => {
+            mockSql = createMockSqlExecutor({ compositePk: true });
+            action.CustomDatabaseProvider = mockSql.executor;
+
+            const params = makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                SasToken: 'token123',
+            });
+
+            const result = await action['InternalRunAction'](params);
+
+            expect(result.Success).toBe(true);
+            expect(findLoadBatch()).toContain("ISNULL(CAST(s.[CustomerID] AS NVARCHAR(450)), N'') + N'|' + ISNULL(CAST(s.[TenantID] AS NVARCHAR(450)), N'') AS [__MJExternalID]");
+        });
+
+        it('fails clearly when the target entity has a composite primary key', async () => {
+            mockEntityByIDFn = vi.fn().mockReturnValue({
+                ID: 'entity-cust-001',
+                Name: 'Customer',
+                SchemaName: 'raw_erp',
+                BaseTable: 'Customer',
+                AllowDirectSQLInsert: true,
+                FirstPrimaryKey: { Name: 'TenantID' },
+                PrimaryKeys: [{ Name: 'TenantID' }, { Name: 'CustomerID' }],
+            });
+
+            const params = makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                SasToken: 'token123',
+            });
+
+            const result = await action['InternalRunAction'](params);
+
+            expect(result.Success).toBe(false);
+            expect(result.Message).toContain('composite primary key');
+        });
+
+        it('fails clearly when record maps do not sanction direct SQL insert', async () => {
+            mockEntityByNameFn = vi.fn().mockReturnValue({
+                Name: 'MJ: Company Integration Record Maps',
+                SchemaName: '__mj',
+                BaseTable: 'CompanyIntegrationRecordMap',
+                AllowDirectSQLInsert: false,
+                AllowDirectSQLDelete: false,
+            });
+
+            const params = makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                SasToken: 'token123',
+            });
+
+            const result = await action['InternalRunAction'](params);
+
+            expect(result.Success).toBe(false);
+            expect(result.Message).toContain("'MJ: Company Integration Record Maps' does not have AllowDirectSQLInsert enabled");
         });
 
         it('executes chunked ETL when totalRows exceeds BatchSize and PK is integer', async () => {
@@ -417,7 +545,8 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
             const chunkedSql = mockSql.executedSql.find(s => s.includes('WHILE @CurrentID <= @MaxID'));
             expect(chunkedSql).toBeDefined();
             expect(chunkedSql).toContain('@ChunkSize BIGINT = 500000');
-            expect(chunkedSql).toContain('s.[CustomerID] >= @CurrentID AND s.[CustomerID] < @CurrentID + @ChunkSize');
+            expect(chunkedSql).toContain('WHERE s.[CustomerID] >= @CurrentID AND s.[CustomerID] < @CurrentID + @ChunkSize');
+            expect(chunkedSql).toContain('MERGE INTO [raw_erp].[Customer] WITH (TABLOCK)');
             expect(chunkedSql).toContain('NEWID()');
             expect(chunkedSql).not.toContain('NEWSEQUENTIALID()');
         });
@@ -439,7 +568,7 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
             const chunkedSql = mockSql.executedSql.find(s => s.includes('WHILE @CurrentID <= @MaxID'));
             expect(chunkedSql).toBeUndefined(); // Must NOT chunk on UUID PK
 
-            const singleSql = mockSql.executedSql.find(s => s.includes('INSERT INTO [raw_erp].[Customer] WITH (TABLOCK)'));
+            const singleSql = mockSql.executedSql.find(s => s.includes('MERGE INTO [raw_erp].[Customer] WITH (TABLOCK)'));
             expect(singleSql).toBeDefined();
         });
 
@@ -495,11 +624,36 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
             const result = await action['InternalRunAction'](params);
 
             expect(result.Success).toBe(true);
-            const truncateSql = mockSql.executedSql.find(s => s.includes('TRUNCATE TABLE [raw_erp].[Customer]'));
-            expect(truncateSql).toBeDefined();
+            const batch = mockSql.executedSql.find(s => s.includes('TRUNCATE TABLE [raw_erp].[Customer]'));
+            expect(batch).toBeDefined();
+            // Truncate, record-map clear and the load are one transaction in one batch.
+            expect(batch).toContain("DELETE FROM [__mj].[CompanyIntegrationRecordMap] WHERE CompanyIntegrationID = 'ci-001' AND EntityID = 'entity-cust-001'");
+            expect(batch).toContain('MERGE INTO [raw_erp].[Customer]');
+            expect(batch?.indexOf('BEGIN TRANSACTION;')).toBeLessThan(batch!.indexOf('TRUNCATE TABLE'));
+        });
 
-            const clearMapsSql = mockSql.executedSql.find(s => s.includes('DELETE FROM __mj.[Company Integration Record Maps]'));
-            expect(clearMapsSql).toBeDefined();
+        it('refuses a re-run that must clear record maps when the entity does not sanction direct SQL delete', async () => {
+            mockSql = createMockSqlExecutor({ targetHasRows: true });
+            action.CustomDatabaseProvider = mockSql.executor;
+            mockEntityByNameFn = vi.fn().mockReturnValue({
+                Name: 'MJ: Company Integration Record Maps',
+                SchemaName: '__mj',
+                BaseTable: 'CompanyIntegrationRecordMap',
+                AllowDirectSQLInsert: true,
+                AllowDirectSQLDelete: false,
+            });
+
+            const params = makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                SasToken: 'token123',
+                TruncateTargetBeforeLoad: true,
+            });
+
+            const result = await action['InternalRunAction'](params);
+
+            expect(result.Success).toBe(false);
+            expect(result.Message).toContain('AllowDirectSQLDelete');
         });
     });
 
@@ -606,13 +760,13 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
         });
 
         it('executes RESTORE HEADERONLY and FILELISTONLY using FROM DISK for local files', async () => {
-            const header = await action.readBackupHeader(mockSql.executor, '/var/opt/mssql/backup/mydb.bak', makeUser());
+            const header = await action['inspectBackupHeader'](mockSql.executor, ['/var/opt/mssql/backup/mydb.bak'], makeUser());
             expect(header.DatabaseName).toBe('AdventureWorks_Prod');
 
             const headerSql = mockSql.executedSql.find(s => s.includes('RESTORE HEADERONLY'));
             expect(headerSql).toContain("FROM\n    DISK = N'/var/opt/mssql/backup/mydb.bak';");
 
-            const fileList = await action.readBackupFileList(mockSql.executor, '/var/opt/mssql/backup/mydb.bak', makeUser());
+            const fileList = await action['inspectBackupFileList'](mockSql.executor, ['/var/opt/mssql/backup/mydb.bak'], makeUser());
             expect(fileList).toHaveLength(2);
 
             const fileListSql = mockSql.executedSql.find(s => s.includes('RESTORE FILELISTONLY'));
@@ -620,12 +774,12 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
         });
 
         it('formats multi-stripe local restores using DISK clause', async () => {
+            const runner = await action['createLongRunningRunner'](mockSql.executor, makeUser());
             await action['executeDatabaseRestore'](
-                mockSql.executor,
+                runner,
                 'StagingDb',
                 ['C:\\backups\\part1.bak', 'C:\\backups\\part2.bak'],
-                ["MOVE N'Data' TO N'C:\\data\\StagingDb.mdf'"],
-                makeUser()
+                ["MOVE N'Data' TO N'C:\\data\\StagingDb.mdf'"]
             );
 
             const restoreSql = mockSql.executedSql.find(s => s.includes('RESTORE DATABASE [StagingDb]'));
@@ -636,12 +790,12 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
         });
 
         it('formats mixed stripe restores correctly', async () => {
+            const runner = await action['createLongRunningRunner'](mockSql.executor, makeUser());
             await action['executeDatabaseRestore'](
-                mockSql.executor,
+                runner,
                 'StagingDb',
                 ['https://blob.core.windows.net/b/part1.bak', 'C:\\backups\\part2.bak'],
-                ["MOVE N'Data' TO N'C:\\data\\StagingDb.mdf'"],
-                makeUser()
+                ["MOVE N'Data' TO N'C:\\data\\StagingDb.mdf'"]
             );
 
             const restoreSql = mockSql.executedSql.find(s => s.includes('RESTORE DATABASE [StagingDb]'));

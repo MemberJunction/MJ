@@ -1,0 +1,21 @@
+[
+  {
+    "_comments": [
+      "Record maps are seeded set-based by the SQL Server backup bootstrap action (one row per bootstrapped",
+      "record, millions at a time) and cleared the same way on a re-run, so direct SQL insert and delete are",
+      "sanctioned. Setting them requires change tracking and the trusted server cache to be off (a database",
+      "CHECK enforces it) and a hard delete type for the delete flag."
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Company Integration Record Maps"
+    },
+    "fields": {
+      "Name": "MJ: Company Integration Record Maps",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "DeleteType": "Hard",
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLDelete": true
+    }
+  }
+]

@@ -172,6 +172,22 @@ describe('PostgresExternalDataSourceDriver — SQL building', () => {
     });
   });
 
+  // PostgreSQL sorts NULL last in an ascending ORDER BY, so a keyset seek must still reach the NULL run.
+  describe('seekAfter (NULLS LAST dialect)', () => {
+    it('quotes identifiers with double quotes', () => {
+      expect(d.sel('"s"."t"', { objectName: 't', seekAfter: { Keys: [{ Field: 'id', Value: 101 }] } }))
+        .toBe('SELECT * FROM "s"."t" WHERE "id" > 101');
+    });
+    it('exact watermark + key keeps the trailing NULL run reachable', () => {
+      expect(d.sel('"s"."t"', { objectName: 't', seekAfter: { Watermark: { Field: 'modified_at', Value: '2026-10-26T01:00:00.000Z' }, Keys: [{ Field: 'id', Value: 100 }] } }))
+        .toBe('SELECT * FROM "s"."t" WHERE "modified_at" > \'2026-10-26T01:00:00.000Z\' OR ("modified_at" = \'2026-10-26T01:00:00.000Z\' AND "id" > 100) OR "modified_at" IS NULL');
+    });
+    it('NULL watermark → only the rest of the NULL run remains', () => {
+      expect(d.sel('"s"."t"', { objectName: 't', seekAfter: { Watermark: { Field: 'modified_at', Value: null }, Keys: [{ Field: 'id', Value: 5 }] } }))
+        .toBe('SELECT * FROM "s"."t" WHERE "modified_at" IS NULL AND "id" > 5');
+    });
+  });
+
   describe('mapObjectType', () => {
     it('maps VIEW -> view and everything else -> table', () => {
       expect(d.mapType('VIEW')).toBe('view');

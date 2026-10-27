@@ -1,10 +1,20 @@
 ---
 "@memberjunction/integration-actions": minor
 "@memberjunction/integration-connectors": minor
-"@memberjunction/ng-explorer-dashboards": minor
+"@memberjunction/ng-dashboards": minor
+"@memberjunction/external-data-sources": minor
+"@memberjunction/external-data-source-mongodb": minor
+"@memberjunction/external-data-source-oracle": minor
+"@memberjunction/external-data-source-postgres": minor
+"@memberjunction/external-data-source-snowflake": minor
 ---
 
 Add SQL Server backup bootstrap integration actions, Azure blob inspection, and Explorer integration dashboard bootstrap wizard.
+
+### `@memberjunction/external-data-sources` and the EDS drivers
+- `ExternalViewParams.seekAfter`: a structured keyset resume point (watermark, keys, and the consumed range of a millisecond-truncated temporal watermark) that each driver renders in its own dialect — identifier quoting, literal formatting, and where the dialect sorts NULL watermarks (PostgreSQL, Oracle and Snowflake sort them last; the rest first). MongoDB renders it as a filter document. Callers never hand-write dialect SQL for a seek.
+- Keyset walks in `@memberjunction/integration-connectors` use it instead of a raw `filter`, and trim each page to a watermark boundary so the resume is exact for sub-millisecond timestamps.
+- `MJ: Company Integration Record Maps` now sanctions direct SQL insert and delete (metadata), which the bootstrap action's set-based record-map seed requires.
 
 ### `@memberjunction/integration-actions`
 - **`Bootstrap SQL Server Integration From Backup`**:

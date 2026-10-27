@@ -506,6 +506,11 @@ export class SnowflakeExternalDataSourceDriver extends BaseSqlExternalDataSource
     return `"${name.replace(/"/g, '""')}"`;
   }
 
+  /** Snowflake sorts NULL last in an ascending ORDER BY, so a keyset seek reaches the NULL run at the end. */
+  protected override nullsSortFirst(): boolean {
+    return false;
+  }
+
   /**
    * Snowflake native queries are screened with the ANSI/PostgreSQL grammar, which can't parse
    * Snowflake's `?` positional bind placeholders — neutralize them for STRUCTURE analysis only (the

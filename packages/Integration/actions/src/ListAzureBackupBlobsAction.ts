@@ -26,7 +26,7 @@ function decodeXml(str: string): string {
 /**
  * Parses the Azure Blob Storage List Blobs XML response into AzureBlobItem[].
  */
-export function parseAzureListBlobsXml(xml: string, containerUrl: string): { blobs: AzureBlobItem[]; nextMarker?: string } {
+export function ParseAzureListBlobsXml(xml: string, containerUrl: string): { blobs: AzureBlobItem[]; nextMarker?: string } {
     const blobs: AzureBlobItem[] = [];
     const cleanBaseUrl = containerUrl.replace(/\/+$/, '');
 
@@ -157,7 +157,7 @@ export class ListAzureBackupBlobsAction extends BaseIntegrationAction {
                 }
 
                 const responseXml = await response.text();
-                const parseResult = parseAzureListBlobsXml(responseXml, cleanContainerUrl);
+                const parseResult = ParseAzureListBlobsXml(responseXml, cleanContainerUrl);
                 allBlobs.push(...parseResult.blobs);
                 currentMarker = parseResult.nextMarker;
 

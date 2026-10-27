@@ -424,6 +424,11 @@ export class OracleExternalDataSourceDriver extends BaseSqlExternalDataSourceDri
     return `"${name.replace(/"/g, '""')}"`;
   }
 
+  /** Oracle sorts NULL last in an ascending ORDER BY, so a keyset seek reaches the NULL run at the end. */
+  protected override nullsSortFirst(): boolean {
+    return false;
+  }
+
   /**
    * Oracle's default NLS date format rejects an ISO-8601 timestamp literal (the `T`/`Z` form → ORA-01843),
    * so an incremental watermark like `2026-03-01T00:00:00.000Z` is wrapped in `TO_TIMESTAMP` with a matching

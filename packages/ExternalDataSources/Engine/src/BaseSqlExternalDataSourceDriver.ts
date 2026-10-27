@@ -1,7 +1,7 @@
 import { ExternalObjectType, ExternalSchemaRelationship, EntityInfo } from "@memberjunction/core";
 import { MJExternalDataSourceEntity } from "@memberjunction/core-entities";
 import { BaseExternalDataSourceDriver } from "./BaseExternalDataSourceDriver";
-import { ExternalFkRow, ExternalViewParams, ExternalQueryParameter } from "./types";
+import { ExternalFkRow, ExternalViewParams, ExternalQueryParameter, ExternalSeekAfter } from "./types";
 import { AssertReadOnlyNativeQuery, AssertReadOnlyClause, type SqlDialectKey } from "./sqlReadOnlyScreen";
 
 /**
@@ -133,21 +133,126 @@ export abstract class BaseSqlExternalDataSourceDriver<TConnection = unknown> ext
   }
 
   /**
+   * Whether this dialect sorts NULL before non-NULL values in an ascending ORDER BY. SQL Server, MySQL
+   * and Databricks (Spark) do; PostgreSQL, Oracle and Snowflake sort NULL last and override this. It
+   * decides on which side of the NULL run a keyset seek resumes — see {@link buildSeekPredicate}.
+   */
+  protected nullsSortFirst(): boolean {
+    return true;
+  }
+
+  /** Format a seek key value as a dialect literal: a number verbatim, anything else single-quoted. */
+  protected formatSeekKeyLiteral(value: string | number): string {
+    return typeof value === 'number' ? String(value) : this.quoteLiteral(value);
+  }
+
+  /**
+   * Render "primary key strictly after these values" for the ordered key list: `k1 > v1` for a single
+   * key, `(k1 > v1) OR (k1 = v1 AND k2 > v2) ...` for a composite one. Undefined when there are no keys.
+   */
+  protected buildKeysAfterPredicate(keys: ExternalSeekAfter['Keys']): string | undefined {
+    if (keys.length === 0) {
+      return undefined;
+    }
+    if (keys.length === 1) {
+      return `${this.quoteIdent(keys[0].Field)} > ${this.formatSeekKeyLiteral(keys[0].Value)}`;
+    }
+    const alternatives = keys.map((key, i) => {
+      const equalPrefix = keys.slice(0, i).map((k) => `${this.quoteIdent(k.Field)} = ${this.formatSeekKeyLiteral(k.Value)}`);
+      const after = `${this.quoteIdent(key.Field)} > ${this.formatSeekKeyLiteral(key.Value)}`;
+      return `(${[...equalPrefix, after].join(' AND ')})`;
+    });
+    return `(${alternatives.join(' OR ')})`;
+  }
+
+  /**
+   * Render the structured {@link ExternalViewParams.seekAfter} resume point into a dialect WHERE fragment
+   * using THIS driver's identifier quoting, literal formatting and NULL ordering, so a keyset caller never
+   * hand-writes dialect SQL. Returns undefined when no seek was supplied; throws on a seek that cannot
+   * resume (no keys and no consumed range), since silently ignoring it would restart the walk from the top.
+   */
+  protected buildSeekPredicate(params: ExternalViewParams): string | undefined {
+    const seek = params.seekAfter;
+    if (!seek) {
+      return undefined;
+    }
+    const keysAfter = this.buildKeysAfterPredicate(seek.Keys);
+    if (!seek.Watermark) {
+      if (!keysAfter) {
+        throw new Error('seekAfter requires at least one key when no watermark is supplied.');
+      }
+      return keysAfter;
+    }
+    const field = this.quoteIdent(seek.Watermark.Field);
+    const nullRun = this.buildSeekNullRunPredicate(field, seek.Watermark.Value, keysAfter);
+    if (nullRun !== undefined) {
+      return nullRun;
+    }
+    const value = seek.Watermark.Value as string;
+    const afterWatermark = seek.Watermark.ExclusiveUpper
+      ? this.buildSeekTruncatedRangePredicate(field, value, seek.Watermark.ExclusiveUpper, keysAfter)
+      : this.buildSeekExactWatermarkPredicate(field, value, keysAfter);
+    // A NULL watermark sorts after every value on a NULLS-LAST dialect, so the NULL run is still ahead.
+    return this.nullsSortFirst() ? afterWatermark : `${afterWatermark} OR ${field} IS NULL`;
+  }
+
+  /** The seek when the last consumed row's watermark was NULL, i.e. the walk is inside the NULL run. */
+  private buildSeekNullRunPredicate(field: string, value: string | null, keysAfter: string | undefined): string | undefined {
+    if (value !== null) {
+      return undefined;
+    }
+    if (!keysAfter) {
+      throw new Error('seekAfter with a NULL watermark requires at least one key.');
+    }
+    // NULLS FIRST: finish the NULL run by key, then every non-NULL row. NULLS LAST: the NULL run is the
+    // tail of the ordering, so only the rest of it remains.
+    return this.nullsSortFirst()
+      ? `(${field} IS NULL AND ${keysAfter}) OR ${field} IS NOT NULL`
+      : `${field} IS NULL AND ${keysAfter}`;
+  }
+
+  /** The seek for an exactly-known watermark: later watermarks, or the same watermark with a later key. */
+  private buildSeekExactWatermarkPredicate(field: string, value: string, keysAfter: string | undefined): string {
+    const literal = this.formatIncrementalLiteral(value);
+    return keysAfter ? `${field} > ${literal} OR (${field} = ${literal} AND ${keysAfter})` : `${field} > ${literal}`;
+  }
+
+  /** The seek for a truncated temporal watermark whose consumed rows lie in `[lower, upper)`. */
+  private buildSeekTruncatedRangePredicate(field: string, lower: string, upper: string, keysAfter: string | undefined): string {
+    const upperLiteral = this.formatIncrementalLiteral(upper);
+    if (!keysAfter) {
+      return `${field} >= ${upperLiteral}`;
+    }
+    const lowerLiteral = this.formatIncrementalLiteral(lower);
+    return `${field} >= ${upperLiteral} OR (${field} >= ${lowerLiteral} AND ${field} < ${upperLiteral} AND ${keysAfter})`;
+  }
+
+  /**
    * The effective WHERE body: the caller's screened {@link ExternalViewParams.filter} combined (ANDed)
-   * with the driver-rendered incremental predicate. Either, both, or neither may be present. The
-   * caller's filter is screened by {@link buildSelectSql}; the incremental predicate is driver-built
-   * from a quoted identifier + escaped literal, so it needs no screening.
+   * with the driver-rendered incremental predicate and the driver-rendered keyset seek. Any subset may
+   * be present. The caller's filter is screened by {@link buildSelectSql}; the incremental and seek
+   * predicates are driver-built from quoted identifiers + escaped literals, so they need no screening.
    */
   protected effectiveWhere(params: ExternalViewParams): string | undefined {
     const incremental = this.buildIncrementalPredicate(params);
+    const seek = this.buildSeekPredicate(params);
     // Normalize a blank filter to undefined FIRST: `''`/whitespace is falsy but NOT nullish, so a naive
     // `params.filter ?? incremental` would return `''` and silently DROP the incremental bound (and emit
     // an empty `WHERE`). Treat a blank filter as "no filter".
     const filter = params.filter && params.filter.trim().length > 0 ? params.filter : undefined;
-    if (filter && incremental) {
-      return `(${filter}) AND ${incremental}`;
+    const clauses: string[] = [];
+    if (filter) clauses.push(filter);
+    if (incremental) clauses.push(incremental);
+    if (seek) clauses.push(seek);
+    if (clauses.length === 0) {
+      return undefined;
     }
-    return filter ?? incremental;
+    if (clauses.length === 1) {
+      return clauses[0];
+    }
+    // The filter and the seek are OR-capable fragments and get parenthesized; the incremental bound is a
+    // single comparison and stays bare (the historical shape callers and tests rely on).
+    return clauses.map((c) => (c === incremental ? c : `(${c})`)).join(' AND ');
   }
 
   /**

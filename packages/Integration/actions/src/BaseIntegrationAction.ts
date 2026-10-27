@@ -1,8 +1,25 @@
 import { BaseAction } from '@memberjunction/actions';
 import { RunActionParams, ActionParam } from '@memberjunction/actions-base';
-import { DatabaseProviderBase, LogError, type UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, type UserInfo } from '@memberjunction/core';
 import { CredentialEngine } from '@memberjunction/credentials';
 import { EscapeSQLString } from '@memberjunction/global';
+import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
+import sql from 'mssql';
+
+/**
+ * Runs statements that may take hours (a multi-terabyte RESTORE, a set-based load of a staged table)
+ * on a connection whose request timeout is disabled, then releases that connection. The API's shared
+ * pool keeps its usual request timeout, which a long statement would exceed and be cancelled by.
+ */
+export interface LongRunningSqlRunner {
+    ExecuteSQL<T = Record<string, unknown>>(query: string, description: string): Promise<T[]>;
+    Dispose(): Promise<void>;
+}
+
+/** The runtime shape of an mssql pool that its type definitions leave out: the config it was built from. */
+interface ConnectionPoolWithConfig extends sql.ConnectionPool {
+    config?: sql.config;
+}
 
 /**
  * Header information returned by SQL Server's RESTORE HEADERONLY statement.
@@ -56,6 +73,43 @@ export abstract class BaseIntegrationAction extends BaseAction {
         }
 
         throw new Error("A database provider extending DatabaseProviderBase is required to execute this action.");
+    }
+
+    /**
+     * A runner for statements that may take hours. On a SQL Server provider this opens one dedicated
+     * connection from the same server settings with `requestTimeout: 0` (no limit), since the shared pool's
+     * request timeout cannot be lengthened per statement. Any other provider (a test double, another
+     * platform) runs the statements through its own `ExecuteSQL`.
+     */
+    protected async createLongRunningRunner(executor: DatabaseProviderBase, contextUser?: UserInfo): Promise<LongRunningSqlRunner> {
+        if (executor instanceof SQLServerDataProvider) {
+            const sharedPool = executor.ConfigData.ConnectionPool as ConnectionPoolWithConfig;
+            if (!sharedPool.config) {
+                throw new Error('The SQL Server connection pool exposes no configuration to derive a long-running connection from.');
+            }
+            const pool = new sql.ConnectionPool({
+                ...sharedPool.config,
+                requestTimeout: 0,
+                pool: { ...(sharedPool.config.pool ?? {}), min: 0, max: 1 },
+            });
+            await pool.connect();
+            return {
+                ExecuteSQL: async <T>(query: string): Promise<T[]> => {
+                    const rows: T[] = await SQLServerDataProvider.ExecuteSQLWithPool(pool, query, undefined, contextUser);
+                    return rows;
+                },
+                Dispose: async () => {
+                    await pool.close();
+                },
+            };
+        }
+        return {
+            ExecuteSQL: async <T>(query: string, description: string): Promise<T[]> => {
+                const rows: T[] | undefined = await executor.ExecuteSQL<T>(query, undefined, { isMutation: true, description }, contextUser);
+                return rows ?? [];
+            },
+            Dispose: async () => undefined,
+        };
     }
 
     /**

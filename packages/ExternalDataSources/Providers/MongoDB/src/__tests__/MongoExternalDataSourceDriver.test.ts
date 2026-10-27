@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { MJExternalDataSourceEntity } from '@memberjunction/core-entities';
 import type { EntityInfo } from '@memberjunction/core';
+import type { ExternalSeekAfter } from '@memberjunction/external-data-sources';
 import { MongoExternalDataSourceDriver } from '../MongoExternalDataSourceDriver';
 
 // Unit-test the pure read-only pipeline guard — no database connection required.
@@ -8,6 +9,9 @@ import { MongoExternalDataSourceDriver } from '../MongoExternalDataSourceDriver'
 class TestableMongoDriver extends MongoExternalDataSourceDriver {
   public assertReadOnly(pipeline: unknown[]) {
     return this.assertReadOnlyPipeline(pipeline);
+  }
+  public seek(seek: ExternalSeekAfter) {
+    return this.buildSeekFilter(seek);
   }
 }
 
@@ -86,5 +90,45 @@ describe('MongoExternalDataSourceDriver — object-name resolution', () => {
   });
   it('falls back to BaseTable then Name when ExternalObjectName is unset', () => {
     expect(d.ResolveObjectName(entity({ BaseTable: 'events', SchemaName: 'dbo' }))).toBe('events');
+  });
+});
+
+describe('MongoExternalDataSourceDriver — seekAfter (structured keyset resume → Mongo filter)', () => {
+  const d = new TestableMongoDriver();
+
+  it('single key → { k: { $gt: v } }', () => {
+    expect(d.seek({ Keys: [{ Field: 'seq', Value: 101 }] })).toEqual({ seq: { $gt: 101 } });
+  });
+  it('composite key → $or of prefix-equal AND component-after', () => {
+    expect(d.seek({ Keys: [{ Field: 'tenant', Value: 'T1' }, { Field: 'seq', Value: 50 }] })).toEqual({
+      $or: [{ $and: [{ tenant: { $gt: 'T1' } }] }, { $and: [{ tenant: 'T1' }, { seq: { $gt: 50 } }] }],
+    });
+  });
+  it('coerces a hex string _id key to an ObjectId so the seek matches BSON ids', () => {
+    const filter = d.seek({ Keys: [{ Field: '_id', Value: '507f1f77bcf86cd799439011' }] }) as { _id: { $gt: { toHexString(): string } } };
+    expect(filter._id.$gt.toHexString()).toBe('507f1f77bcf86cd799439011');
+  });
+  it('exact watermark + key → later watermark, or same watermark with a later key (ISO → Date)', () => {
+    const w = new Date('2026-10-26T01:00:00.000Z');
+    expect(d.seek({ Watermark: { Field: 'updatedAt', Value: '2026-10-26T01:00:00.000Z' }, Keys: [{ Field: 'seq', Value: 9 }] })).toEqual({
+      $or: [{ updatedAt: { $gt: w } }, { $and: [{ updatedAt: w }, { seq: { $gt: 9 } }] }],
+    });
+  });
+  it('truncated range → >= upper, or inside the range with a later key; no keys → >= upper', () => {
+    const lower = new Date('2026-10-26T01:00:00.123Z');
+    const upper = new Date('2026-10-26T01:00:00.124Z');
+    const wm = { Field: 'updatedAt', Value: '2026-10-26T01:00:00.123Z', ExclusiveUpper: '2026-10-26T01:00:00.124Z' };
+    expect(d.seek({ Watermark: wm, Keys: [{ Field: 'seq', Value: 9 }] })).toEqual({
+      $or: [{ updatedAt: { $gte: upper } }, { $and: [{ updatedAt: { $gte: lower, $lt: upper } }, { seq: { $gt: 9 } }] }],
+    });
+    expect(d.seek({ Watermark: wm, Keys: [] })).toEqual({ updatedAt: { $gte: upper } });
+  });
+  it('NULL watermark (BSON sorts null first) → finish the null run by key, then every non-null doc', () => {
+    expect(d.seek({ Watermark: { Field: 'updatedAt', Value: null }, Keys: [{ Field: 'seq', Value: 9 }] })).toEqual({
+      $or: [{ $and: [{ updatedAt: null }, { seq: { $gt: 9 } }] }, { updatedAt: { $ne: null } }],
+    });
+  });
+  it('refuses a seek that cannot resume', () => {
+    expect(() => d.seek({ Keys: [] })).toThrow(/at least one key/);
   });
 });

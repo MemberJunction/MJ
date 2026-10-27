@@ -3,7 +3,7 @@ import type { UserInfo } from '@memberjunction/core';
 import { RunActionParams, ActionParam } from '@memberjunction/actions-base';
 import {
     ListAzureBackupBlobsAction,
-    parseAzureListBlobsXml
+    ParseAzureListBlobsXml
 } from '../ListAzureBackupBlobsAction.js';
 
 let mockCredentialConfigFn: ReturnType<typeof vi.fn>;
@@ -109,10 +109,10 @@ describe('ListAzureBackupBlobsAction', () => {
         mockGetCredentialFn = vi.fn();
     });
 
-    describe('XML Parsing (parseAzureListBlobsXml)', () => {
+    describe('XML Parsing (ParseAzureListBlobsXml)', () => {
         it('parses Azure List Blobs XML into structured blob array', () => {
             const containerUrl = 'https://myaccount.blob.core.windows.net/sql-backups';
-            const { blobs, nextMarker } = parseAzureListBlobsXml(SAMPLE_AZURE_XML, containerUrl);
+            const { blobs, nextMarker } = ParseAzureListBlobsXml(SAMPLE_AZURE_XML, containerUrl);
 
             expect(blobs).toHaveLength(2);
             expect(blobs[0]).toEqual({
@@ -127,7 +127,7 @@ describe('ListAzureBackupBlobsAction', () => {
 
         it('extracts NextMarker when pagination is present', () => {
             const containerUrl = 'https://myaccount.blob.core.windows.net/sql-backups';
-            const { blobs, nextMarker } = parseAzureListBlobsXml(SAMPLE_PAGINATED_XML_PAGE1, containerUrl);
+            const { blobs, nextMarker } = ParseAzureListBlobsXml(SAMPLE_PAGINATED_XML_PAGE1, containerUrl);
 
             expect(blobs).toHaveLength(1);
             expect(nextMarker).toBe('page2-token');
