@@ -88,7 +88,7 @@ describe('ResolveFeatureColumns — deny lists and windowed aggregates', () => {
     expect(r.Status).toBe('resolved');
     if (r.Status !== 'resolved') return;
     expect(r.Columns.map((c) => c.name)).toEqual(['Region']);
-    expect(r.ExplicitOps).toEqual([{ op: 'standardize', cols: [] }]);
+    expect(r.ExplicitOps).toEqual([]);
   });
   it('maps a windowed aggregate onto a numeric column spec', () => {
     const r = FeatureResolver.ResolveFeatureColumns({ Steps: [spend] }, unitSpec, years, md, { denyFields: [], denySources: [] });

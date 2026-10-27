@@ -105,10 +105,12 @@ export class FeatureResolver {
         this.columns[index] = { ...this.columns[index], missing: { impute: step.Strategy, indicator: true, constant: step.FillValue ?? null } };
         return;
       }
-      case 'standardize':
-        for (const col of step.Columns) if (!this.isDenied(col)) this.requireColumn(col);
-        this.ops.push({ op: 'standardize', cols: step.Columns.filter((col) => !this.isDenied(col)) });
+      case 'standardize': {
+        const cols = step.Columns.filter((col) => !this.isDenied(col));
+        for (const col of cols) this.requireColumn(col);
+        if (cols.length > 0) this.ops.push({ op: 'standardize', cols });
         return;
+      }
       case 'onehot':
         if (this.isDenied(step.Column)) return;
         this.requireColumn(step.Column);
