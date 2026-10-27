@@ -46,6 +46,8 @@ export type DatedSource =
 
 export interface ChangeHistoryCoverage {
   readonly entity: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
+  /** The field the coverage was computed for; the assembly reports one entry per entity and field it read history for. */
+  readonly field?: string;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   readonly historyStart: string | null;  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   readonly continuity: { readonly checkedAt: string; readonly recordsReplayed: number; readonly recordsMismatched: number };  // case-violation-ok-legacy-back-compat: contracts.ts wire name
   readonly externalSourceRows: 'as-of-detection-time' | 'ineligible';  // case-violation-ok-legacy-back-compat: contracts.ts wire name

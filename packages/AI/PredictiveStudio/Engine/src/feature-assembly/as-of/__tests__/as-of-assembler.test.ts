@@ -37,10 +37,16 @@ const changes: Record<string, RecordChangeRow[]> = {
 };
 
 const field = (Name: string, TSType: AssemblyFieldInfo['TSType'] = 'string'): AssemblyFieldInfo => ({ Name, SqlType: 'nvarchar', TSType, AllowUpdateAPI: true, IsPrimaryKey: Name === 'ID', RelatedEntity: null, IsVirtual: false });
+const fixed = (Name: string, TSType: AssemblyFieldInfo['TSType'] = 'string'): AssemblyFieldInfo => ({ ...field(Name, TSType), AllowUpdateAPI: false });
+/** `Years` with one field redeclared updatable, for the tests of the stable-value rule on a tracked entity. */
+const yearsWithUpdatable = (name: string): AssemblyEntityInfo => ({ ...entities.Years, Fields: entities.Years.Fields.map((f) => (f.Name === name ? { ...f, AllowUpdateAPI: true } : f)) });
 const entities: Record<string, AssemblyEntityInfo> = {
-  Years: { ID: 'E-Y', Name: 'Years', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [field('ID'), field('PersonID'), field('EventsAttended', 'number'), field('Region'), field('PersonStatusNow')] },
+  // Years has no change history; its key and attribute fields are declared not updatable, so their stored values stand.
+  Years: { ID: 'E-Y', Name: 'Years', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [field('ID'), fixed('PersonID'), fixed('EventsAttended', 'number'), fixed('Region'), field('PersonStatusNow')] },
   People: { ID: 'E-PE', Name: 'People', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [field('ID'), field('Status')] },
-  Events: { ID: 'E-EV', Name: 'Events', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [field('ID'), field('PersonID'), field('EventDate', 'Date')] },
+  Events: { ID: 'E-EV', Name: 'Events', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [field('ID'), fixed('PersonID'), fixed('EventDate', 'Date')] },
+  // A tracked child whose amount can be edited.
+  Donations: { ID: 'E-DO', Name: 'Donations', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [field('ID'), fixed('PersonID'), fixed('GivenOn', 'Date'), field('Amount', 'number')] },
   // Untracked, with an updatable field: its value on a past day cannot be known.
   Accounts: { ID: 'E-AC', Name: 'Accounts', PrimaryKey: 'ID', TrackRecordChanges: false, Fields: [field('ID'), field('Tier')] },
   // A field declared not updatable, on an entity that carries its creation time.
@@ -157,10 +163,11 @@ describe('AsOfFeatureAssembler', () => {
       Years: [
         rc('yc-create', 'y1', 'Create', '2022-01-01T00:00:00Z', { ID: 'y1', EventsAttended: 2 }),
         rc('yc-update', 'y1', 'Update', '2023-01-01T00:00:00Z', { ID: 'y1', EventsAttended: 3 }, ['EventsAttended']),
+        rc('yc-create-2', 'y2', 'Create', '2022-01-01T00:00:00Z', { ID: 'y2', EventsAttended: 1 }),
       ],
     };
     const features: FeatureColumnSpec[] = [{ name: 'EventsAttended', source: { kind: 'immutable-field', entity: 'Years', field: 'EventsAttended', keyField: null }, encoding: { kind: 'numeric', nonNumericValue: 'fail' }, missing: { impute: 'median', indicator: true, constant: null } }];
-    expect(await new AsOfFeatureAssembler().Assemble(input(features, { Changes: yearChanges }))).toEqual({ Status: 'refused', Refusal: { kind: 'select-changes-after-decision-date', entity: 'Years', field: 'EventsAttended', changesAfter: 1 } });
+    expect(await new AsOfFeatureAssembler().Assemble(input(features, { Changes: yearChanges, RowEntity: yearsWithUpdatable('EventsAttended') }))).toEqual({ Status: 'refused', Refusal: { kind: 'select-changes-after-decision-date', entity: 'Years', field: 'EventsAttended', changesAfter: 1 } });
   });
   it('refuses a Feature Value source with no version pin', async () => {
     const features: FeatureColumnSpec[] = [{ name: 'Engagement', source: { kind: 'feature-value', featureName: 'Engagement', pin: null }, encoding: { kind: 'numeric', nonNumericValue: 'fail' }, missing: { impute: 'median', indicator: true, constant: null } }];
@@ -223,10 +230,11 @@ describe('AsOfFeatureAssembler current-value reads', () => {
       Years: [
         rc('yc-create', 'y1', 'Create', '2022-01-01T00:00:00Z', { ID: 'y1', PersonID: 'P0' }),
         rc('yc-update', 'y1', 'Update', '2023-01-01T00:00:00Z', { ID: 'y1', PersonID: 'P1' }, ['PersonID']),
+        rc('yc-create-2', 'y2', 'Create', '2022-01-01T00:00:00Z', { ID: 'y2', PersonID: 'P1' }),
       ],
     };
     const features: FeatureColumnSpec[] = [{ name: 'Status', source: { kind: 'record-changes', entity: 'People', field: 'Status', keyField: 'PersonID' }, encoding: { kind: 'categorical', cardinalityCap: 50, method: 'onehot' }, missing: { impute: 'mode', indicator: true, constant: null } }];
-    expect(await new AsOfFeatureAssembler().Assemble(input(features, { Changes: yearChanges }))).toEqual({ Status: 'refused', Refusal: { kind: 'select-changes-after-decision-date', entity: 'Years', field: 'PersonID', changesAfter: 1 } });
+    expect(await new AsOfFeatureAssembler().Assemble(input(features, { Changes: yearChanges, RowEntity: yearsWithUpdatable('PersonID') }))).toEqual({ Status: 'refused', Refusal: { kind: 'select-changes-after-decision-date', entity: 'Years', field: 'PersonID', changesAfter: 1 } });
   });
   it('reads a windowed aggregate of a row with no owner key as missing, not the orphan rows', async () => {
     const data: Record<string, SourceRow[]> = {
@@ -285,14 +293,67 @@ describe('AsOfFeatureAssembler current-value reads', () => {
     const features: FeatureColumnSpec[] = [{ name: 'Engagement', source: { kind: 'feature-value', featureName: 'Engagement', pin: { featurePipelineRecordProcessId: 'RP-1', pipelineVersion: null, promptVersionHash: null, aiModelId: null, parametersHash: null } }, encoding: { kind: 'numeric', nonNumericValue: 'fail' }, missing: { impute: 'median', indicator: true, constant: null } }];
     expect(await new AsOfFeatureAssembler().Assemble(input(features))).toEqual({ Status: 'refused', Refusal: { kind: 'unpinned-feature-version', featureName: 'Engagement' } });
   });
-  it('counts every uncovered field of an excluded row and reports one coverage entry per entity', async () => {
+  it('counts every uncovered field of an excluded row and reports coverage per entity and field', async () => {
     const replayed = (name: string): FeatureColumnSpec => ({ name, source: { kind: 'record-changes', entity: 'Years', field: name, keyField: null }, encoding: { kind: 'categorical', cardinalityCap: 50, method: 'onehot' }, missing: { impute: 'mode', indicator: true, constant: null } });
     const out = await new AsOfFeatureAssembler().Assemble(input([replayed('PersonStatusNow'), replayed('Region')], { Unit: { ...unit, history: { onUncoveredRow: 'exclude-and-count', externalSourceRows: 'ineligible' } } }));
     expect(out.Status).toBe('assembled');
     if (out.Status !== 'assembled') return;
     expect([...out.ExcludedRowIds]).toEqual(['y1', 'y2']);
     expect(out.UncoveredRowsExcluded).toEqual([{ entity: 'Years', field: 'PersonStatusNow', rows: 2 }, { entity: 'Years', field: 'Region', rows: 2 }]);
-    expect(out.Coverage.map((c) => c.entity)).toEqual(['Years']);
+    expect(out.Coverage.map((c) => [c.entity, c.field])).toEqual([['Years', 'PersonStatusNow'], ['Years', 'Region']]);
+  });
+});
+
+describe('AsOfFeatureAssembler stable values, scoring levels and pins', () => {
+  const statusOf = (kind: 'immutable-field' | 'record-changes'): FeatureColumnSpec =>
+    ({ name: 'Status', source: { kind, entity: 'People', field: 'Status', keyField: 'PersonID' }, encoding: { kind: 'categorical', cardinalityCap: 50, method: 'onehot' }, missing: { impute: 'mode', indicator: true, constant: null } });
+  const region: FeatureColumnSpec = { name: 'Region', source: { kind: 'immutable-field', entity: 'Years', field: 'Region', keyField: null }, encoding: { kind: 'categorical', cardinalityCap: 50, method: 'onehot' }, missing: { impute: 'mode', indicator: true, constant: null } };
+  const engagement = (pipelineVersion: number): FeatureColumnSpec =>
+    ({ name: 'Engagement', source: { kind: 'feature-value', featureName: 'Engagement', pin: { featurePipelineRecordProcessId: 'RP-1', pipelineVersion, promptVersionHash: null, aiModelId: null, parametersHash: null } }, encoding: { kind: 'numeric', nonNumericValue: 'fail' }, missing: { impute: 'median', indicator: true, constant: null } });
+
+  it('refuses a current read of a tracked field whose history starts after the decision day', async () => {
+    const late: Record<string, RecordChangeRow[]> = { People: [rc('rc-snapshot', 'P1', 'Snapshot', '2026-10-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' })] };
+    expect(await new AsOfFeatureAssembler().Assemble(input([statusOf('immutable-field')], { Changes: late }))).toEqual({ Status: 'refused', Refusal: { kind: 'decision-date-before-change-history', entity: 'People', field: 'Status', historyStart: '2026-10-01T00:00:00.000Z', rowsAffected: 2 } });
+  });
+  it('refuses a child row whose aggregated value was edited after the owner row\'s decision day', async () => {
+    const data: Record<string, SourceRow[]> = { ...tables, Donations: [{ ID: 'd1', PersonID: 'P1', GivenOn: '2022-06-01', Amount: 20 }] };
+    const edits: Record<string, RecordChangeRow[]> = {
+      ...changes,
+      Donations: [
+        rc('dc-create', 'd1', 'Create', '2022-06-01T00:00:00Z', { ID: 'd1', Amount: 10 }),
+        rc('dc-update', 'd1', 'Update', '2023-01-01T00:00:00Z', { ID: 'd1', Amount: 20 }, ['Amount']),
+      ],
+    };
+    const features: FeatureColumnSpec[] = [{ name: 'GivenToDate', source: { kind: 'windowed-aggregate', childEntity: 'Donations', foreignKey: 'PersonID', ownerKeyField: 'PersonID', dateField: 'GivenOn', endDateField: null, voidedAtField: null, aggregate: 'sum', valueField: 'Amount', windowDays: null, filter: [] }, encoding: { kind: 'numeric', nonNumericValue: 'fail' }, missing: { impute: 'median', indicator: true, constant: null } }];
+    expect(await new AsOfFeatureAssembler().Assemble(input(features, { Tables: data, Changes: edits }))).toEqual({ Status: 'refused', Refusal: { kind: 'select-changes-after-decision-date', entity: 'Donations', field: 'Amount', changesAfter: 1 } });
+  });
+  it('reads a replayed field through a null join key as missing, not as an uncovered row', async () => {
+    const data: Record<string, SourceRow[]> = { ...tables, Years: [tables.Years[0], { ...tables.Years[1], PersonID: null }] };
+    const out = await new AsOfFeatureAssembler().Assemble(input([statusOf('record-changes')], { Tables: data }));
+    expect(out.Status).toBe('assembled');
+    if (out.Status !== 'assembled') return;
+    expect(out.Rows.map((r) => r.Values[0])).toEqual(['Active', null]);
+    expect(out.Rows[1].Provenance[0]).toMatchObject({ source: 'record-changes', sourceRef: 'none' });
+  });
+  it('fails a scoring assembly whose categorical column has no levels from training, naming it', async () => {
+    await expect(new AsOfFeatureAssembler().Assemble({ ...input([region]), Context: 'score' })).rejects.toThrow(/Region/);
+  });
+  it('fails on a stored categorical value equal to the fold level, naming the column', async () => {
+    const data: Record<string, SourceRow[]> = { ...tables, Years: [tables.Years[0], { ...tables.Years[1], Region: '__other' }] };
+    await expect(new AsOfFeatureAssembler().Assemble(input([region], { Tables: data }))).rejects.toThrow(/Region.*__other|__other.*Region/);
+  });
+  it('honours pipeline version 0 in the read and the version string', async () => {
+    const fv = (ID: string, PipelineVersion: number, ValueNumeric: number): SourceRow => ({
+      ID, EntityID: 'E-Y', FeatureName: 'Engagement', RecordProcessID: 'RP-1', RecordID: 'ID|y1', EffectiveAsOf: new Date('2022-01-01T00:00:00Z'), ComputedAt: new Date('2022-01-02T00:00:00Z'),
+      PipelineVersion, PromptVersionHash: null, AIModelID: null, ParametersHash: null, ValueNumeric, ValueText: null, ValueBoolean: null, ValueDate: null,
+    });
+    const data: Record<string, SourceRow[]> = { ...tables, 'MJ: Feature Values': [fv('fv-v0', 0, 5), fv('fv-v2', 2, 9)] };
+    const out = await new AsOfFeatureAssembler().Assemble(input([engagement(0)], { Tables: data, Rows: [rows[0]] }));
+    expect(out.Status === 'assembled' && out.Rows[0].Values).toEqual([5]);
+    expect(out.Status === 'assembled' && out.Rows[0].Provenance[0]).toMatchObject({ sourceRef: 'MJ: Feature Values/fv-v0', sourceVersion: 'RP-1@0' });
+  });
+  it('refuses a pin with a fractional pipeline version', async () => {
+    expect(await new AsOfFeatureAssembler().Assemble(input([engagement(1.5)]))).toEqual({ Status: 'refused', Refusal: { kind: 'unpinned-feature-version', featureName: 'Engagement' } });
   });
 });
 
