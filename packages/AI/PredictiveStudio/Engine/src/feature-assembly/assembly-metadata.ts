@@ -39,7 +39,7 @@ export class ProviderAssemblyMetadata implements IAssemblyMetadata {
     return {
       ID: e.ID,
       Name: e.Name,
-      PrimaryKey: e.PrimaryKeys[0].Name,
+      PrimaryKey: e.FirstPrimaryKey.Name, // first-pk-ok: entities with a composite key return null above (PS units need one key)
       TrackRecordChanges: e.TrackRecordChanges === true,
       Fields: e.Fields.map((f) => ({
         Name: f.Name,

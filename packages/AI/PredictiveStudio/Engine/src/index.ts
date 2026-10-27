@@ -19,6 +19,10 @@ import type { ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 // FeatureAssembly executor + as-of / leakage-guard correctness primitives (§5/§6).
 export * from './feature-assembly';
 
+// Prediction Unit rows — PredictionUnitRowReader: one row per grain record (or grain record x period) with its
+// decision date, outcome window and label; censored, label-known and empty-label rows are excluded and counted.
+export * from './prediction-unit';
+
 // Feature Pipeline discovery + monitoring — FeaturePipelineEngine (BaseEngine cache
 // over the categorized MJ: Record Processes rows) + its projection types (§5.4 / SP6).
 export * from './feature-pipelines';
@@ -92,9 +96,4 @@ export const PredictiveStudioEngineVersion = '5.43.0';
  */
 export function IsModelingPlanApproved(plan: ModelingPlanSpec): boolean {
   return plan.Approved === true;
-}
-
-/** @deprecated Use {@link IsModelingPlanApproved}. */
-export function isModelingPlanApproved(plan: ModelingPlanSpec): boolean {
-  return IsModelingPlanApproved(plan);
 }
