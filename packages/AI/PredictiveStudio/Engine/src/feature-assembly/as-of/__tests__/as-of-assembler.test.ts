@@ -49,6 +49,8 @@ const entities: Record<string, AssemblyEntityInfo> = {
   Donations: { ID: 'E-DO', Name: 'Donations', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [field('ID'), fixed('PersonID'), fixed('GivenOn', 'Date'), field('Amount', 'number')] },
   // Untracked, with an updatable field: its value on a past day cannot be known.
   Accounts: { ID: 'E-AC', Name: 'Accounts', PrimaryKey: 'ID', TrackRecordChanges: false, Fields: [field('ID'), field('Tier')] },
+  // An untracked child whose amount can be edited: its value on a past day cannot be known.
+  Pledges: { ID: 'E-PL', Name: 'Pledges', PrimaryKey: 'ID', TrackRecordChanges: false, Fields: [field('ID'), fixed('PersonID'), fixed('PledgedOn', 'Date'), field('Amount', 'number')] },
   // A field declared not updatable, on an entity that carries its creation time.
   Badges: { ID: 'E-BA', Name: 'Badges', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [field('ID'), { ...field('Level'), AllowUpdateAPI: false }, field('__mj_CreatedAt', 'Date')] },
 };
@@ -354,6 +356,95 @@ describe('AsOfFeatureAssembler stable values, scoring levels and pins', () => {
   });
   it('refuses a pin with a fractional pipeline version', async () => {
     expect(await new AsOfFeatureAssembler().Assemble(input([engagement(1.5)]))).toEqual({ Status: 'refused', Refusal: { kind: 'unpinned-feature-version', featureName: 'Engagement' } });
+  });
+});
+
+describe('AsOfFeatureAssembler record creation, uncovered reasons, counts and coverage', () => {
+  const excludeAndCount: PredictionUnitSpec = { ...unit, history: { onUncoveredRow: 'exclude-and-count', externalSourceRows: 'ineligible' } };
+  const statusOf = (kind: 'immutable-field' | 'record-changes', keyField: string | null = 'PersonID'): FeatureColumnSpec =>
+    ({ name: 'Status', source: { kind, entity: 'People', field: 'Status', keyField }, encoding: { kind: 'categorical', cardinalityCap: 50, method: 'onehot' }, missing: { impute: 'mode', indicator: true, constant: null } });
+  const givenToDate = (childEntity: string, dateField: string): FeatureColumnSpec =>
+    ({ name: 'GivenToDate', source: { kind: 'windowed-aggregate', childEntity, foreignKey: 'PersonID', ownerKeyField: 'PersonID', dateField, endDateField: null, voidedAtField: null, aggregate: 'sum', valueField: 'Amount', windowDays: null, filter: [] }, encoding: { kind: 'numeric', nonNumericValue: 'fail' }, missing: { impute: 'median', indicator: true, constant: null } });
+
+  it('resolves the join key of a unit row whose Create row is dated after its decision day as missing, not as uncovered', async () => {
+    const yearChanges: Record<string, RecordChangeRow[]> = {
+      ...changes,
+      Years: [
+        rc('yc-create', 'y1', 'Create', '2022-01-01T00:00:00Z', { ID: 'y1', PersonID: 'P1' }),
+        rc('yc-create-2', 'y2', 'Create', '2024-02-01T00:00:00Z', { ID: 'y2', PersonID: 'P1' }),
+      ],
+    };
+    const out = await new AsOfFeatureAssembler().Assemble(input([statusOf('record-changes')], { Changes: yearChanges, RowEntity: yearsWithUpdatable('PersonID') }));
+    expect(out.Status).toBe('assembled');
+    if (out.Status !== 'assembled') return;
+    expect(out.Rows.map((r) => r.Values[0])).toEqual(['Active', null]);
+    expect(out.Rows[1].Provenance[0]).toMatchObject({ source: 'record-changes', sourceRef: 'none', sourceVersion: 'created-after-decision' });
+    expect(out.ExcludedRowIds.size).toBe(0);
+  });
+  it('reads a record whose Create row is dated after the decision day as missing, for a current read and a replay', async () => {
+    const late: Record<string, RecordChangeRow[]> = { People: [rc('rc-late-create', 'P1', 'Create', '2023-06-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' })] };
+    for (const kind of ['immutable-field', 'record-changes'] as const) {
+      const out = await new AsOfFeatureAssembler().Assemble(input([statusOf(kind)], { Changes: late }));
+      expect(out.Status).toBe('assembled');
+      if (out.Status !== 'assembled') return;
+      expect(out.Rows.map((r) => r.Values[0])).toEqual([null, 'Lapsed']);
+      expect(out.Rows[0].Provenance[0]).toMatchObject({ source: kind, sourceVersion: 'created-after-decision' });
+      expect(out.Rows[1].Provenance[0]).toMatchObject({ source: kind, sourceRef: 'People/p1/Status' });
+    }
+  });
+  it('excludes and counts a current read whose history does not match the stored value, instead of refusing it', async () => {
+    const mismatched: Record<string, RecordChangeRow[]> = { People: [rc('rc-create', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Active' })] };
+    const out = await new AsOfFeatureAssembler().Assemble(input([statusOf('immutable-field')], { Changes: mismatched, Unit: excludeAndCount }));
+    expect(out.Status).toBe('assembled');
+    if (out.Status !== 'assembled') return;
+    expect([...out.ExcludedRowIds]).toEqual(['y1', 'y2']);
+    expect(out.UncoveredRowsExcluded).toEqual([{ entity: 'People', field: 'Status', rows: 2 }]);
+    expect(out.Coverage.map((c) => [c.entity, c.field, c.continuity.recordsMismatched])).toEqual([['People', 'Status', 1]]);
+  });
+  it('counts the unit rows a field changed after, not the changes', async () => {
+    const twice: Record<string, RecordChangeRow[]> = {
+      People: [
+        rc('rc-create', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Active' }),
+        rc('rc-update-1', 'P1', 'Update', '2023-01-01T00:00:00Z', { ID: 'P1', Status: 'Dormant' }, ['Status']),
+        rc('rc-update-2', 'P1', 'Update', '2023-06-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }, ['Status']),
+      ],
+    };
+    expect(await new AsOfFeatureAssembler().Assemble(input([statusOf('immutable-field')], { Changes: twice }))).toEqual({ Status: 'refused', Refusal: { kind: 'select-changes-after-decision-date', entity: 'People', field: 'Status', changesAfter: 1 } });
+  });
+  it('refuses a tracked child row whose history starts after the earliest decision day, even when it contributes to no earlier row', async () => {
+    const data: Record<string, SourceRow[]> = { ...tables, Donations: [{ ID: 'd1', PersonID: 'P1', GivenOn: '2023-03-01', Amount: 20 }] };
+    const late: Record<string, RecordChangeRow[]> = { ...changes, Donations: [rc('dc-snapshot', 'd1', 'Snapshot', '2023-06-01T00:00:00Z', { ID: 'd1', Amount: 20 })] };
+    expect(await new AsOfFeatureAssembler().Assemble(input([givenToDate('Donations', 'GivenOn')], { Tables: data, Changes: late }))).toEqual({ Status: 'refused', Refusal: { kind: 'decision-date-before-change-history', entity: 'Donations', field: 'Amount', historyStart: '2023-06-01T00:00:00.000Z', rowsAffected: 1 } });
+  });
+  it('refuses an updatable field of an untracked child entity even when no child row contributes', async () => {
+    const data: Record<string, SourceRow[]> = { ...tables, Pledges: [{ ID: 'pl1', PersonID: 'P9', PledgedOn: '2022-06-01', Amount: 5 }] };
+    expect(await new AsOfFeatureAssembler().Assemble(input([givenToDate('Pledges', 'PledgedOn')], { Tables: data }))).toEqual({ Status: 'refused', Refusal: { kind: 'decision-date-before-change-history', entity: 'Pledges', field: 'Amount', historyStart: null, rowsAffected: 2 } });
+  });
+
+  describe('coverage of one entity and field read through two joins', () => {
+    const years: AssemblyEntityInfo = { ...entities.Years, Fields: [...entities.Years.Fields, fixed('SponsorID')] };
+    const sponsored: Record<string, SourceRow[]> = {
+      ...tables,
+      Years: [{ ...tables.Years[0], SponsorID: 'P1' }, { ...tables.Years[1], SponsorID: 'P2' }],
+      People: [...tables.People, { ID: 'P2', Status: 'Lapsed' }],
+    };
+    const through = (keyField: string): FeatureColumnSpec => ({ ...statusOf('record-changes', keyField), name: `StatusVia${keyField}` });
+
+    it('merges to the later history start and adds the replayed counts', async () => {
+      const withP2: Record<string, RecordChangeRow[]> = { People: [...changes.People, rc('rc-create-p2', 'P2', 'Create', '2023-06-01T00:00:00Z', { ID: 'P2', Status: 'Lapsed' })] };
+      const out = await new AsOfFeatureAssembler().Assemble(input([through('PersonID'), through('SponsorID')], { Tables: sponsored, Changes: withP2, RowEntity: years }));
+      expect(out.Status).toBe('assembled');
+      if (out.Status !== 'assembled') return;
+      expect(out.Rows.map((r) => r.Values)).toEqual([['Active', 'Active'], ['Lapsed', 'Lapsed']]);
+      expect(out.Coverage).toEqual([expect.objectContaining({ entity: 'People', field: 'Status', historyStart: '2023-06-01T00:00:00.000Z', continuity: expect.objectContaining({ recordsReplayed: 3, recordsMismatched: 0 }) })]);
+    });
+    it('merges to no history start when any join reads a record without one', async () => {
+      const out = await new AsOfFeatureAssembler().Assemble(input([through('PersonID'), through('SponsorID')], { Tables: sponsored, RowEntity: years, Unit: excludeAndCount }));
+      expect(out.Status).toBe('assembled');
+      if (out.Status !== 'assembled') return;
+      expect([...out.ExcludedRowIds]).toEqual(['y2']);
+      expect(out.Coverage).toEqual([expect.objectContaining({ entity: 'People', field: 'Status', historyStart: null, continuity: expect.objectContaining({ recordsReplayed: 2 }) })]);
+    });
   });
 });
 

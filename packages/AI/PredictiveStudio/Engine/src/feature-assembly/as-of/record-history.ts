@@ -40,6 +40,11 @@ export interface EntityHistory {
   ValueAt(recordKey: string, field: string, before: Date): HistoryValue;
   /** Update rows that changed `field` at or after `after`. */
   UpdatesAfter(recordKey: string, field: string, after: Date): number;
+  /**
+   * When the record's history starts with its own Create row, the instant of that row: the record did not exist before
+   * it. Null when the history starts with a Snapshot (the record is older than its history) or there is no history.
+   */
+  CreatedAt(recordKey: string): Date | null;
 }
 
 export interface IRecordHistoryReader {
@@ -80,6 +85,7 @@ export class RecordHistory {
   ): EntityHistory {
     const byKey = RecordHistory.indexByKey(changes);
     const start = RecordHistory.historyStarts(byKey);
+    const created = RecordHistory.creationInstants(byKey);
     const continuity = RecordHistory.checkContinuity(byKey, start, current, fields);
     const allCovered = [...current.keys()].every((k) => start.has(k));
     const historyStart = allCovered && start.size > 0 ? new Date(Math.max(...[...start.values()].map((d) => d.getTime()))).toISOString() : null;
@@ -94,6 +100,7 @@ export class RecordHistory {
       ValueAt: (recordKey, field, before) => RecordHistory.valueAt(byKey, start, continuity.Mismatched, policy, recordKey, field, before),
       UpdatesAfter: (recordKey, field, after) =>
         (byKey.get(recordKey.toLowerCase()) || []).filter((c) => c.Type === 'Update' && c.ChangedAt.getTime() >= after.getTime() && RecordHistory.changedFields(c.ChangesJSON).has(field)).length,
+      CreatedAt: (recordKey) => created.get(recordKey.toLowerCase()) || null,
     };
   }
 
@@ -201,6 +208,16 @@ export class RecordHistory {
       if (first) start.set(k, first.ChangedAt);
     }
     return start;
+  }
+
+  /** The Create instant of every record whose history starts with its own Create row (not a Snapshot). */
+  private static creationInstants(byKey: ReadonlyMap<string, readonly RecordChangeRow[]>): Map<string, Date> {
+    const created = new Map<string, Date>();
+    for (const [k, list] of byKey) {
+      const first = list.find((c) => c.Type === 'Create' || c.Type === 'Snapshot');
+      if (first && first.Type === 'Create') created.set(k, first.ChangedAt);
+    }
+    return created;
   }
 
   /** Replays every covered record to now and compares it with the stored value; a mismatch marks that record-field. */

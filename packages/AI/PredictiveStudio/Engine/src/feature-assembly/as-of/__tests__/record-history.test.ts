@@ -34,6 +34,12 @@ describe('BuildEntityHistory', () => {
     expect(h.UpdatesAfter('P1', 'Status', new Date('2022-01-01T00:00:00Z'))).toBe(1);
     expect(h.UpdatesAfter('P1', 'Status', new Date('2024-01-01T00:00:00Z'))).toBe(0);
   });
+  it('tells the instant a record was created only from its own Create row, never from a snapshot or no history', () => {
+    expect(h.CreatedAt('P1')).toEqual(new Date('2021-01-01T00:00:00Z'));
+    expect(h.CreatedAt('p1')).toEqual(new Date('2021-01-01T00:00:00Z'));
+    expect(h.CreatedAt('P2')).toBeNull();
+    expect(h.CreatedAt('P3')).toBeNull();
+  });
 });
 
 /** The fields of a saved Record Change the snapshot writer sets. */
