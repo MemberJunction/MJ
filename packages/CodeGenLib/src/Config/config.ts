@@ -281,10 +281,10 @@ const advancedGenerationSchema = z.object({
       enabled: false,
     },
     {
-      name: 'FormLayout',
+      name: 'FormLayoutGeneration',
       description:
         'Use AI to generate better layouts for forms. This includes using AI to determine the way to layout fields on each entity form. The field will still be laid out in the order they are defined in the entity, but the AI will determine the best way to layout the fields on the form. Since generated forms are regenerated every time you run this tool, it will be done every time you run the tool, including for existing entities and fields.',
-      enabled: false,
+      enabled: true,
     },
     {
       name: 'FormTabs',
@@ -300,6 +300,9 @@ const advancedGenerationSchema = z.object({
     },
   ]),
 });
+
+/** The advanced-generation config schema, exported so its defaults can be checked against `DEFAULT_CODEGEN_CONFIG`. */
+export const AdvancedGenerationSchema = advancedGenerationSchema;
 
 export type IntegrityCheckConfig = z.infer<typeof IntegrityCheckConfigSchema>;
 
