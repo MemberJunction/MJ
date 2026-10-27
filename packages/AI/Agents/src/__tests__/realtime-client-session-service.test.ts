@@ -954,6 +954,37 @@ describe('RealtimeClientSessionService — prompt-run write serialization (no cl
         expect(prep.SessionParams?.InitialContext).toBe('MEMORY_BLOCK');
         expect(prep.SessionParams?.SystemPrompt).toContain('MEMORY_BLOCK');
     });
+
+    it('keeps an override written against the original signature working (bizapps-caliber appends a persona this way)', async () => {
+        // The shape of bizapps-caliber's CaliberPersonaClientSessionService override: the original five
+        // parameters, forwarded to super. A protected seam is published API, so this must keep compiling and
+        // receive the caller and provider under their own names.
+        const received: Array<{ ContextUser: unknown; Provider: unknown; EffectiveConfig: unknown }> = [];
+        class OriginalSignatureOverride extends TestableService {
+            protected override async assembleMemoryContext(): Promise<string> {
+                return 'MEMORY_BLOCK';
+            }
+            protected override async buildCompanionSystemPrompt(
+                input: PrepareClientSessionInput,
+                coAgent: MJAIAgentEntityExtended,
+                user: UserInfo,
+                prov: IMetadataProvider,
+                effectiveConfig?: RealtimeCoAgentConfig,
+            ): Promise<string> {
+                received.push({ ContextUser: user, Provider: prov, EffectiveConfig: effectiveConfig });
+                const base = await super.buildCompanionSystemPrompt(input, coAgent, user, prov, effectiveConfig);
+                return `${base}\n\nPERSONA_BLOCK`;
+            }
+        }
+        const prep = await new OriginalSignatureOverride().PrepareRealtimeSessionParams(makePrepInput(), contextUser, provider);
+        expect(prep.Success).toBe(true);
+        expect(received).toHaveLength(1);
+        expect(received[0].ContextUser).toBe(contextUser);
+        expect(received[0].Provider).toBe(provider);
+        expect(typeof received[0].EffectiveConfig).toBe('object');
+        expect(prep.SessionParams?.SystemPrompt).toContain('MEMORY_BLOCK');
+        expect(prep.SessionParams?.SystemPrompt).toContain('PERSONA_BLOCK');
+    });
 });
 
 describe('RealtimeClientSessionService.FinalizeCoAgentRun', () => {

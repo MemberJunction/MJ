@@ -2847,7 +2847,7 @@ export class RealtimeClientSessionService {
         const directTools = this.projectDirectActions(input, effectiveConfig, driverClass);
         const hasDirectTools = directTools.length > 0 || (input.ExtraTools != null && input.ExtraTools.length > 0);
         const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser, provider);
-        const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, effectiveConfig, hasDirectTools, memoryContext);
+        const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, contextUser, provider, effectiveConfig, hasDirectTools, memoryContext);
         const combinedExtra = directTools.length > 0
             ? [...(input.ExtraTools ?? []), ...directTools]
             : input.ExtraTools;
@@ -3002,7 +3002,7 @@ export class RealtimeClientSessionService {
     /**
      * Assembles the companion system prompt: the framing ("you are the voice for the target"), the
      * co-agent's own system prompt text, the TARGET agent's identity/capabilities (Name +
-     * Description), the conversation history, and the pre-assembled memory/context.
+     * Description), the conversation history, and the same memory/context a loop agent assembles.
      *
      * When the effective configuration carries a voice persona (`realtime.voice.default`), a
      * short "Voice & manner" section (tone / speaking style) is appended after the co-agent's
@@ -3010,17 +3010,23 @@ export class RealtimeClientSessionService {
      *
      * @param input The prepare-session input.
      * @param coAgent The resolved co-agent.
+     * @param contextUser The calling user.
+     * @param provider The request-scoped metadata provider.
      * @param effectiveConfig The resolved effective configuration (voice persona source).
      * @param hasDirectTools Whether direct action/channel tools are projected onto the session.
-     * @param memoryContext The pre-assembled memory/context block from {@link assembleMemoryContext}.
+     * @param memoryContext The memory/context block when the caller already assembled it (as
+     *   {@link buildSessionParams} does); omitted, it is assembled here. Last and optional so overrides
+     *   written against the earlier signature (bizapps-caliber's persona seam) keep working.
      * @returns The concatenated system prompt (never empty — the framing is always present).
      */
     protected async buildCompanionSystemPrompt(
         input: PrepareClientSessionInput,
         coAgent: MJAIAgentEntityExtended,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
         effectiveConfig?: RealtimeCoAgentConfig,
         hasDirectTools = false,
-        memoryContext = ''
+        memoryContext?: string
     ): Promise<string> {
         const target = this.resolveTargetAgent(input.TargetAgentID);
         const targetName = target?.Name ?? 'the configured target agent';
@@ -3040,8 +3046,9 @@ export class RealtimeClientSessionService {
         const appContextSection = this.buildAppContextSection(input.AppContext);
         const priorTranscript = this.formatPriorTranscript(input.PriorTranscript);
         const history = this.formatConversationHistory(input.ConversationMessages);
+        const memory = memoryContext ?? await this.assembleMemoryContext(input, coAgent, contextUser, provider);
 
-        return [framing, meetingFraming, hostFraming, coAgentPrompt, voiceManner, targetIdentity, appContextSection, priorTranscript, history, memoryContext]
+        return [framing, meetingFraming, hostFraming, coAgentPrompt, voiceManner, targetIdentity, appContextSection, priorTranscript, history, memory]
             .filter(part => part && part.trim().length > 0)
             .join('\n\n');
     }
