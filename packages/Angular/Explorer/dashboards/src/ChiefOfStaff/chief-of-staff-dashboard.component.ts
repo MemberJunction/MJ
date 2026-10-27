@@ -24,6 +24,7 @@ import { AgentRequestPanelResult } from '@memberjunction/ng-agent-requests';
 import { TabConfig } from '@memberjunction/ng-ui-components';
 import {
     BizAppsTaskRecordLike,
+    BuildTaskRecordKey,
     BuildChiefOfStaffAgentContext,
     BuildCockpitScopeFilters,
     CalculateChiefOfStaffMetrics,
@@ -628,13 +629,23 @@ export class ChiefOfStaffDashboardComponent
      * derived from its metadata rather than assuming a column named `ID`. Returns null (and
      * surfaces an error banner) when the entity is not installed in this environment.
      */
-    private taskRecordKey(taskId: string): CompositeKey | null {
+    private taskRecordKey(task: BizAppsTaskRecordLike): CompositeKey | null {
+        const entityInfo = this.requireTasksEntityInfo();
+        return entityInfo ? BuildTaskRecordKey(entityInfo, task) : null;
+    }
+
+    /** For a task id that is not in the loaded list: the bare value maps onto the entity's first key column. */
+    private taskRecordKeyFromId(taskId: string): CompositeKey | null {
+        const entityInfo = this.requireTasksEntityInfo();
+        return entityInfo ? CompositeKey.FromURLSegment(entityInfo, taskId) : null;
+    }
+
+    private requireTasksEntityInfo(): EntityInfo | undefined {
         const entityInfo = this.bizAppsTasksEntityInfo;
         if (!entityInfo) {
             this.showBanner('error', 'The BizApps Tasks entity is not available in this environment.');
-            return null;
         }
-        return CompositeKey.FromURLSegment(entityInfo, taskId);
+        return entityInfo;
     }
 
     public get SelectedTaskSubtasks(): BizAppsTaskRecordLike[] {
@@ -666,7 +677,7 @@ export class ChiefOfStaffDashboardComponent
             this.ShowTaskDrawer = true;
             this.cdr.markForCheck();
         } else {
-            const key = this.taskRecordKey(taskId);
+            const key = this.taskRecordKeyFromId(taskId);
             if (key) {
                 this.navigationService.OpenEntityRecord(BIZAPPS_TASKS_ENTITY_NAME, key);
             }
@@ -682,7 +693,7 @@ export class ChiefOfStaffDashboardComponent
 
     public OpenFullTaskForm(): void {
         if (!this.SelectedTask) return;
-        const key = this.taskRecordKey(this.SelectedTask.ID);
+        const key = this.taskRecordKey(this.SelectedTask);
         if (key) {
             this.navigationService.OpenEntityRecord(BIZAPPS_TASKS_ENTITY_NAME, key);
         }
@@ -781,7 +792,7 @@ export class ChiefOfStaffDashboardComponent
 
         try {
             const taskId = this.SelectedTask.ID;
-            const key = this.taskRecordKey(taskId);
+            const key = this.taskRecordKey(this.SelectedTask);
             if (!key) {
                 return;
             }

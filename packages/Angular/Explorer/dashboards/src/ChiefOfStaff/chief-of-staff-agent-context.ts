@@ -20,7 +20,7 @@ import type {
     MJUserRoutineEntity,
     MJAIAgentRequestEntity,
 } from '@memberjunction/core-entities';
-import type { RunViewParams } from '@memberjunction/core';
+import { CompositeKey, type EntityInfo, type RunViewParams } from '@memberjunction/core';
 import { EscapeSQLString, GroupByUUID, UUIDsEqual } from '@memberjunction/global';
 import {
     AGENT_CONTEXT_NAME_LIST_CAP,
@@ -203,6 +203,15 @@ export function ParseOptionalDate(val: Date | string | null | undefined): Date |
     }
     const parsed = new Date(val);
     return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/**
+ * Builds the primary key of a BizApps task from the entity's own primary key column(s) and the
+ * in-memory row. Tasks is an OpenApp entity, so neither the column name nor the column count is
+ * assumed; the same key feeds `OpenEntityRecord` and the `PrimaryKey` parameter of `Update Record`.
+ */
+export function BuildTaskRecordKey(entityInfo: EntityInfo, task: BizAppsTaskRecordLike): CompositeKey {
+    return CompositeKey.FromEntityRecord(entityInfo, { ...task });
 }
 
 export function IsTaskPriorityObjective(task: BizAppsTaskRecordLike): boolean {

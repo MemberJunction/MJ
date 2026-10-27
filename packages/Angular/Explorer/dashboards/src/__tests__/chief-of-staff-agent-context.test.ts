@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest';
+import type { EntityInfo } from '@memberjunction/core';
 import {
     AGENT_REQUEST_TYPE_APPROVAL_ID,
     AGENT_REQUEST_TYPE_INFORMATION_ID,
     CHIEF_OF_STAFF_AGENT_ID,
     BizAppsTaskRecordLike,
     BuildChiefOfStaffAgentContext,
+    BuildTaskRecordKey,
     BuildCockpitScopeFilters,
     BuildPersonScopedTaskFilter,
     CalculateChiefOfStaffMetrics,
@@ -462,5 +464,49 @@ describe('BuildCockpitScopeFilters', () => {
 
     it('escapes the user id', () => {
         expect(BuildCockpitScopeFilters("a'b").Policy).toContain("UserID = 'a''b'");
+    });
+});
+
+describe('BuildTaskRecordKey', () => {
+    const baseTask = {
+        ID: 'task-1',
+        ParentID: null,
+        Name: 'Q4 plan',
+        Description: null,
+        Status: 'Open',
+        Priority: null,
+        IsPriority: null,
+        HealthStatus: null,
+        ConfidenceScore: null,
+        PercentComplete: null,
+        CheckInCadence: null,
+        PlanningPeriod: null,
+        BaselineValue: null,
+        TargetValue: null,
+        CurrentValue: null,
+        UnitOfMeasure: null,
+        MetricDirection: null,
+        DueAt: null,
+        LastCheckInAt: null,
+        NextCheckInDueAt: null,
+    } satisfies BizAppsTaskRecordLike;
+
+    it('builds the key from the entity metadata rather than assuming a column named ID', () => {
+        const entityInfo = { PrimaryKeys: [{ Name: 'TaskKey' }] } as unknown as EntityInfo;
+        const task = { ...baseTask, TaskKey: 'tk-99' } as BizAppsTaskRecordLike;
+
+        const key = BuildTaskRecordKey(entityInfo, task);
+
+        expect(key.KeyValuePairs).toEqual([{ FieldName: 'TaskKey', Value: 'tk-99' }]);
+    });
+
+    it('carries every column of a composite key', () => {
+        const entityInfo = { PrimaryKeys: [{ Name: 'TenantID' }, { Name: 'ID' }] } as unknown as EntityInfo;
+        const task = { ...baseTask, TenantID: 'tenant-a' } as BizAppsTaskRecordLike;
+
+        const key = BuildTaskRecordKey(entityInfo, task);
+
+        expect(key.KeyValuePairs.map((kv) => kv.FieldName)).toEqual(['TenantID', 'ID']);
+        expect(key.KeyValuePairs.map((kv) => kv.Value)).toEqual(['tenant-a', 'task-1']);
     });
 });
