@@ -1694,9 +1694,12 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * Use instead of `PromptModels.filter(pm => UUIDsEqual(pm.PromptID, id))` in hot paths.
      */
     public get PromptModelsByPromptID(): Map<string, MJAIPromptModelEntity[]> {
+        // Through the getter, not `_promptModels`: a user who cannot read prompt models must get the same
+        // PermissionConstrainedError, not an empty index that reads as "this prompt has no model bindings".
+        const promptModels = this.PromptModels;
         if (!this._promptModelsByPromptID) {
             const map = new Map<string, MJAIPromptModelEntity[]>();
-            for (const pm of this._promptModels) {
+            for (const pm of promptModels) {
                 const key = NormalizeUUID(pm.PromptID);
                 const list = map.get(key);
                 if (list) {
