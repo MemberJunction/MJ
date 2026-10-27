@@ -5,10 +5,65 @@ import {
   DeriveContainerUrl,
   FirstBackupUrl,
   FormatBytes,
+  ProgressLinesFromEvents,
   ReadExternalDataSourceID,
+  SummarizeBootstrapRun,
 } from '../Integration/services/backup-source.helpers';
 
 describe('backup-source helpers', () => {
+  describe('ProgressLinesFromEvents', () => {
+    it('keeps run and stage events with their stage and message, and drops heartbeats', () => {
+      const lines = ProgressLinesFromEvents([
+        { Seq: 1, Ts: 't1', EventType: 'run.start', Message: 'SQL Server backup bootstrap started' },
+        { Seq: 2, Ts: 't2', EventType: 'stage.start', Stage: 'Restore', Message: 'Restoring into [MJ_Staging]' },
+        { Seq: 3, Ts: 't3', EventType: 'heartbeat', Stage: 'Restore', Message: '40%' },
+        { Seq: 4, Ts: 't4', EventType: 'stage.error', Stage: 'Load Customer', Message: 'disk full' },
+        { Seq: 5, Ts: 't5', EventType: 'warning', Level: 'warn', Stage: 'Load Orders', Message: 'slow' },
+      ]);
+      expect(lines).toEqual([
+        { Seq: 1, Ts: 't1', Stage: 'Run', Message: 'SQL Server backup bootstrap started', Level: 'info' },
+        { Seq: 2, Ts: 't2', Stage: 'Restore', Message: 'Restoring into [MJ_Staging]', Level: 'info' },
+        { Seq: 4, Ts: 't4', Stage: 'Load Customer', Message: 'disk full', Level: 'error' },
+        { Seq: 5, Ts: 't5', Stage: 'Load Orders', Message: 'slow', Level: 'warn' },
+      ]);
+    });
+  });
+
+  describe('SummarizeBootstrapRun', () => {
+    const run = { RunID: 'bootstrap-1', IsInFlight: false, Success: true, ExitReason: 'completed', LatestMessage: 'done', DurationMs: 7200000 };
+
+    it('reads the outputs from the terminal Summary stage event of a completed run', () => {
+      const summary = SummarizeBootstrapRun(run, [
+        { Seq: 1, Ts: 't', EventType: 'stage.complete', Stage: 'Load Customer', DataJSON: '{"ignored":true}' },
+        { Seq: 2, Ts: 't', EventType: 'stage.complete', Stage: 'Summary', Message: 'Successfully bootstrapped 2 table(s)', DataJSON: JSON.stringify({ BackupStartDate: '2026-10-26T01:00:00.000Z', StagingDatabaseName: 'MJ_Staging', TablesProcessed: 2, TotalRowsTransferred: 1500, DurationSeconds: 7201, StagingDatabaseDropped: 1 }) },
+        { Seq: 3, Ts: 't', EventType: 'run.complete', Message: 'done' },
+      ]);
+      expect(summary).toEqual({
+        Success: true,
+        Message: 'Successfully bootstrapped 2 table(s)',
+        RunID: 'bootstrap-1',
+        BackupStartDate: '2026-10-26T01:00:00.000Z',
+        StagingDatabaseName: 'MJ_Staging',
+        TablesProcessed: 2,
+        TotalRowsTransferred: 1500,
+        DurationSeconds: 7201,
+        StagingDatabaseDropped: true,
+      });
+    });
+
+    it('falls back to the run duration when no Summary event was recorded', () => {
+      expect(SummarizeBootstrapRun(run, []).DurationSeconds).toBe(7200);
+    });
+
+    it('reports a failed run with its last error', () => {
+      const failed = { ...run, Success: false, ExitReason: 'failed', LatestMessage: 'Bootstrap failed' };
+      const summary = SummarizeBootstrapRun(failed, [], ['[Restore] Cannot open backup device']);
+      expect(summary.Success).toBe(false);
+      expect(summary.Message).toBe('[Restore] Cannot open backup device');
+      expect(summary.RunID).toBe('bootstrap-1');
+    });
+  });
+
   describe('ReadExternalDataSourceID', () => {
     it('reads the externalDataSourceID key from the configuration JSON', () => {
       expect(ReadExternalDataSourceID('{"externalDataSourceID":" DS-1 "}')).toBe('DS-1');

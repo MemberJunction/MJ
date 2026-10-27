@@ -475,6 +475,52 @@
   gap: 4px;
 }
 
+.progress-log {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface);
+  font-size: 0.78rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.progress-log-line {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  color: var(--mj-text-secondary);
+}
+
+.progress-log-line.is-warn {
+  color: var(--mj-status-warning);
+}
+
+.progress-log-line.is-error {
+  color: var(--mj-status-error);
+}
+
+.progress-log-stage {
+  flex: 0 0 auto;
+  min-width: 96px;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.progress-log-line.is-error .progress-log-stage {
+  color: var(--mj-status-error);
+}
+
+.progress-log-message {
+  flex: 1 1 auto;
+  word-break: break-word;
+}
+
 .error-box {
   background: var(--mj-status-error-bg);
   border: 1px solid var(--mj-status-error-border);

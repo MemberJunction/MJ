@@ -6,12 +6,70 @@ import { WatermarkService } from '@memberjunction/integration-engine';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import { MJCompanyIntegrationEntityMapEntity } from '@memberjunction/core-entities';
 import { ValidateIdentifier } from '@memberjunction/schema-engine';
+import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import {
     BaseIntegrationAction,
     SqlBackupFileListEntry,
     SqlBackupHeaderInfo,
     type LongRunningSqlRunner
 } from './BaseIntegrationAction.js';
+
+/**
+ * Reports the bootstrap's stages onto an integration run's progress artifact stream when the caller
+ * launched it detached (the `ProgressRunID` input), and is a no-op otherwise. The stream is what a
+ * client tails for hours while the restore and the loads run; the terminal `Summary` stage carries
+ * the action's outputs so the client can read the outcome without the action result.
+ */
+export class BootstrapProgress {
+    private readonly emitter?: IntegrationProgressEmitter;
+    private currentStage = 'Prepare';
+
+    constructor(runID: string | undefined, companyIntegrationID: string) {
+        if (!runID) {
+            return;
+        }
+        this.emitter = new IntegrationProgressEmitter({
+            runID,
+            runKind: 'Other',
+            companyIntegrationID,
+            triggerType: 'Manual',
+            startedAt: new Date().toISOString(),
+            context: { kind: 'SQLServerBackupBootstrap' },
+        });
+        this.emitter.RunStart('SQL Server backup bootstrap started');
+    }
+
+    public StageStart(stage: string, message: string): void {
+        this.currentStage = stage;
+        this.emitter?.StageStart(stage, message);
+    }
+
+    public StageComplete(stage: string, rowsProcessed?: number): void {
+        this.emitter?.StageComplete(stage, rowsProcessed === undefined ? undefined : { processed: rowsProcessed, succeeded: rowsProcessed });
+    }
+
+    public Heartbeat(message: string): void {
+        this.emitter?.Heartbeat(this.currentStage, message);
+    }
+
+    /** Terminate as success; the outputs ride on a final `Summary` stage event for the client. */
+    public async Complete(message: string, outputs: Record<string, string | number | boolean>): Promise<void> {
+        if (!this.emitter) {
+            return;
+        }
+        this.emitter.Emit('stage.complete', { stage: 'Summary', message, data: outputs });
+        await this.emitter.Complete(message);
+    }
+
+    /** Terminate as failure, attributing it to the stage that was running. */
+    public async Fail(message: string): Promise<void> {
+        if (!this.emitter) {
+            return;
+        }
+        this.emitter.StageError(this.currentStage, message, { code: 'bootstrap-failed' });
+        await this.emitter.Fail(message, 'bootstrap-failed');
+    }
+}
 
 // Re-export shared types for backward compatibility
 export type { SqlBackupHeaderInfo, SqlBackupFileListEntry } from './BaseIntegrationAction.js';
@@ -82,6 +140,8 @@ interface TableLoadBatchSpec {
  *   - TargetDataFileDirectory (optional): Custom file path for staging database .mdf file
  *   - TargetLogFileDirectory (optional): Custom file path for staging database .ldf file
  *   - EntityMapIDs (optional): Comma-separated list of specific EntityMapIDs to restrict the bootstrap
+ *   - ProgressRunID (optional): The integration progress run to report stages to, when launched detached
+ *     by the `IntegrationStartBootstrap` mutation; the client tails that run instead of awaiting the action
  *
  * Parameters (Output):
  *   - BackupStartDate: Point-in-time timestamp (ISO UTC) when the backup began (used as the watermark)
@@ -106,37 +166,24 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
         let containerUrl = '';
         let sqlExecutor: DatabaseProviderBase | undefined;
         let runner: LongRunningSqlRunner | undefined;
+        // Opened before any validation so a detached caller sees even a parameter failure on its run.
+        const progress = new BootstrapProgress(this.getStringParam(params, 'ProgressRunID'), this.getStringParam(params, 'CompanyIntegrationID') ?? '');
 
         try {
             // 1. Parameter Validation
             const companyIntegrationID = this.getStringParam(params, 'CompanyIntegrationID');
             if (!companyIntegrationID) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_PARAMETER',
-                    Message: "Parameter 'CompanyIntegrationID' is required.",
-                    Params: params.Params,
-                };
+                return await this.rejectInput(params, progress, 'MISSING_PARAMETER', "Parameter 'CompanyIntegrationID' is required.");
             }
 
             const backupUrlsRaw = this.getStringParam(params, 'BackupUrls');
             if (!backupUrlsRaw) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_PARAMETER',
-                    Message: "Parameter 'BackupUrls' is required.",
-                    Params: params.Params,
-                };
+                return await this.rejectInput(params, progress, 'MISSING_PARAMETER', "Parameter 'BackupUrls' is required.");
             }
 
             const backupUrls = backupUrlsRaw.split(',').map(u => u.trim()).filter(u => u.length > 0);
             if (backupUrls.length === 0) {
-                return {
-                    Success: false,
-                    ResultCode: 'INVALID_PARAMETER',
-                    Message: "Parameter 'BackupUrls' must contain at least one valid URL or file path.",
-                    Params: params.Params,
-                };
+                return await this.rejectInput(params, progress, 'INVALID_PARAMETER', "Parameter 'BackupUrls' must contain at least one valid URL or file path.");
             }
 
             stagingDbName = this.getStringParam(params, 'StagingDatabaseName') ??
@@ -155,6 +202,7 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
             // 3. Resolve Azure Storage SAS Token & Credential if URL sources are used
             const hasUrl = backupUrls.some(u => this.IsUrl(u));
             if (hasUrl) {
+                progress.StageStart('Credential', 'Resolving the storage token and registering the SQL Server credential');
                 const sasToken = await this.resolveSasToken(params);
                 const firstUrl = backupUrls.find(u => this.IsUrl(u))!;
                 containerUrl = this.extractContainerUrl(firstUrl);
@@ -162,23 +210,28 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
                 // Create SQL Server Storage Credential
                 LogStatus(`[BootstrapSQLServer] Ensuring credential for storage container '${containerUrl}'...`);
                 await this.ensureStorageCredential(sqlExecutor, containerUrl, sasToken, params.ContextUser);
+                progress.StageComplete('Credential');
             }
 
             // 4. Inspect Backup Header & Filelist across ALL stripes (Msg 3132 prevention)
+            progress.StageStart('Inspect', `Reading the backup header and file list across ${backupUrls.length} stripe(s)`);
             LogStatus(`[BootstrapSQLServer] Reading backup header from ${backupUrls.length} stripe(s)...`);
             const headerInfo = await this.inspectBackupHeader(sqlExecutor, backupUrls, params.ContextUser);
             LogStatus(`[BootstrapSQLServer] Backup Header: SourceDB='${headerInfo.DatabaseName}', BackupStartDate=${headerInfo.BackupStartDate.toISOString()}`);
 
             const fileList = await this.inspectBackupFileList(sqlExecutor, backupUrls, params.ContextUser);
             const moveClauses = await this.buildMoveClauses(sqlExecutor, stagingDbName, fileList, params);
+            progress.StageComplete('Inspect');
 
             // 5. Restore into a staging database that must not already exist: a restore WITH REPLACE over
             //    a user-typed name could otherwise overwrite a live database.
+            progress.StageStart('Restore', `Restoring '${headerInfo.DatabaseName}' (backup of ${headerInfo.BackupStartDate.toISOString()}) into staging database [${stagingDbName}]`);
             await this.assertStagingDatabaseAbsent(sqlExecutor, stagingDbName, params.ContextUser);
             runner = await this.createLongRunningRunner(sqlExecutor, params.ContextUser);
             LogStatus(`[BootstrapSQLServer] Restoring staging database [${stagingDbName}] from ${backupUrls.length} backup source(s)...`);
             stagingDbCreated = true;
             await this.executeDatabaseRestore(runner, stagingDbName, backupUrls, moveClauses);
+            progress.StageComplete('Restore');
 
             // 6. Load Active Entity Maps for Company Integration
             const entityMaps = await this.loadEntityMaps(sqlExecutor, companyIntegrationID, entityMapIDs, params.ContextUser);
@@ -205,6 +258,8 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
 
                 const targetPkCol = this.resolveTargetPrimaryKey(entityInfo);
 
+                const loadStage = `Load ${entityInfo.Name}`;
+                progress.StageStart(loadStage, `Loading ${map.ExternalObjectName} into ${entityInfo.SchemaName}.${entityInfo.BaseTable}`);
                 const result = await this.executeTableEtl(
                     sqlExecutor,
                     runner,
@@ -228,12 +283,14 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
                 totalRowsInserted += result.RowsTransferred;
                 tableResults.push(result);
                 loadedMaps.push(map);
+                progress.StageComplete(loadStage, result.RowsTransferred);
             }
 
             // 8. Seed Watermark via WatermarkService (Zero-Gap Invariant). Only a map whose table was
             //    actually loaded is seeded: seeding a skipped map would make its next incremental sync
             //    start after the backup date and lose every pre-backup row for good.
             LogStatus(`[BootstrapSQLServer] Seeding sync watermarks with BackupStartDate: ${headerInfo.BackupStartDate.toISOString()}...`);
+            progress.StageStart('Watermarks', `Seeding ${loadedMaps.length} sync watermark(s) to ${headerInfo.BackupStartDate.toISOString()}`);
             const watermarkService = new WatermarkService();
             for (const map of loadedMaps) {
                 await watermarkService.Update(
@@ -243,9 +300,11 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
                     'Pull'
                 );
             }
+            progress.StageComplete('Watermarks');
 
             // 9. Post-Restore Cleanup
             if (dropStagingOnComplete) {
+                progress.StageStart('Cleanup', `Dropping staging database [${stagingDbName}] and the storage credential`);
                 LogStatus(`[BootstrapSQLServer] Cleaning up staging database [${stagingDbName}]...`);
                 await this.dropStagingDatabase(sqlExecutor, stagingDbName, params.ContextUser);
                 stagingDbCreated = false;
@@ -254,26 +313,35 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
                     LogStatus(`[BootstrapSQLServer] Cleaning up storage credential '${containerUrl}'...`);
                     await this.dropStorageCredential(sqlExecutor, containerUrl, params.ContextUser);
                 }
+                progress.StageComplete('Cleanup');
             }
 
             const durationSec = Math.round((Date.now() - startTime) / 1000);
-            this.addOutputParam(params, 'BackupStartDate', headerInfo.BackupStartDate.toISOString());
-            this.addOutputParam(params, 'StagingDatabaseName', stagingDbName);
-            this.addOutputParam(params, 'TablesProcessed', tableResults.length);
-            this.addOutputParam(params, 'TotalRowsTransferred', totalRowsInserted);
-            this.addOutputParam(params, 'DurationSeconds', durationSec);
-            this.addOutputParam(params, 'StagingDatabaseDropped', dropStagingOnComplete ? 1 : 0);
+            const outputs = {
+                BackupStartDate: headerInfo.BackupStartDate.toISOString(),
+                StagingDatabaseName: stagingDbName,
+                TablesProcessed: tableResults.length,
+                TotalRowsTransferred: totalRowsInserted,
+                DurationSeconds: durationSec,
+                StagingDatabaseDropped: dropStagingOnComplete ? 1 : 0,
+            };
+            for (const [name, value] of Object.entries(outputs)) {
+                this.addOutputParam(params, name, value);
+            }
 
+            const message = `Successfully bootstrapped ${tableResults.length} table(s) (${totalRowsInserted.toLocaleString()} rows) in ${durationSec}s. Watermark seeded to ${headerInfo.BackupStartDate.toISOString()}.`;
+            await progress.Complete(message, outputs);
             return {
                 Success: true,
                 ResultCode: 'SUCCESS',
-                Message: `Successfully bootstrapped ${tableResults.length} table(s) (${totalRowsInserted.toLocaleString()} rows) in ${durationSec}s. Watermark seeded to ${headerInfo.BackupStartDate.toISOString()}.`,
+                Message: message,
                 Params: params.Params,
             };
 
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             LogError(`[BootstrapSQLServerIntegrationFromBackupAction] Failure: ${message}`);
+            await progress.Fail(message);
 
             // Automated fail-safe cleanup: the staging database if the restore was started (a restore that
             // failed midway leaves it in RESTORING state), and the storage credential whenever it was
@@ -293,6 +361,12 @@ export class BootstrapSQLServerIntegrationFromBackupAction extends BaseIntegrati
                 await runner.Dispose();
             }
         }
+    }
+
+    /** The result for an input the action cannot run with; a detached run is terminated with the reason. */
+    private async rejectInput(params: RunActionParams, progress: BootstrapProgress, resultCode: string, message: string): Promise<ActionResultSimple> {
+        await progress.Fail(message);
+        return { Success: false, ResultCode: resultCode, Message: message, Params: params.Params };
     }
 
     /** Best-effort teardown after a failure; each step is attempted even if the previous one failed. */

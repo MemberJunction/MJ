@@ -13,7 +13,7 @@ import {
   IntegrationSummary,
   EntityMapRow
 } from '../../services/integration-data.service';
-import { BootstrapResultSummary } from '../bootstrap-wizard/bootstrap-wizard.component';
+import { BootstrapResultSummary } from '../../services/backup-source.helpers';
 import {
   BuildConnectionsAgentContext,
   ResolveIntegrationSurface,

@@ -7,9 +7,15 @@
 "@memberjunction/external-data-source-oracle": minor
 "@memberjunction/external-data-source-postgres": minor
 "@memberjunction/external-data-source-snowflake": minor
+"@memberjunction/server": minor
+"@memberjunction/graphql-dataprovider": minor
 ---
 
 Add SQL Server backup bootstrap integration actions, Azure blob inspection, and Explorer integration dashboard bootstrap wizard.
+
+### `@memberjunction/server` and `@memberjunction/graphql-dataprovider`
+- `IntegrationStartBootstrap` mutation launches the bootstrap as a detached run (the restore and loads take hours) and returns a run ID at once; the action reports every stage onto the run's progress artifact stream, which clients follow with the existing `IntegrationTailRunEvents` / `IntegrationGetRun` queries. `GraphQLIntegrationClient` gains `StartBootstrap`, `GetRun` and `TailRunEvents`.
+- The action-run authorization check is shared (`AssertCanRunAction`) between `RunAction` and the bootstrap launch.
 
 ### `@memberjunction/external-data-sources` and the EDS drivers
 - `ExternalViewParams.seekAfter`: a structured keyset resume point (watermark, keys, and the consumed range of a millisecond-truncated temporal watermark) that each driver renders in its own dialect — identifier quoting, literal formatting, and where the dialect sorts NULL watermarks (PostgreSQL, Oracle and Snowflake sort them last; the rest first). MongoDB renders it as a filter document. Callers never hand-write dialect SQL for a seek.

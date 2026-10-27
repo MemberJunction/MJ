@@ -11,7 +11,7 @@ import { CopyScalarsAndArrays, EscapeSQLString, UUIDsEqual } from "@memberjuncti
 import { GetReadOnlyProvider, GetReadWriteProvider } from "../util.js";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IsScopeLimitedPrincipal } from "../auth/scopeLimitedPrincipal.js";
-import { EvaluateActionRunAuthorization, IsOwner } from "../auth/actionAuthorization.js";
+import { AssertCanRunAction } from "../auth/actionRunGuard.js";
 
 /**
  * Input type for action parameters
@@ -238,46 +238,12 @@ export class ActionResolver extends ResolverBase {
   }
 
   /**
-   * Refuses the run unless the caller is authorized for the action — see
-   * {@link EvaluateActionRunAuthorization}. The `MJ: Action Authorizations` rows, the authorization
-   * tree and the role grants all come from the request's provider, or all from the global provider
-   * when the request carries none.
+   * Refuses the run unless the caller is authorized for the action — the shared
+   * {@link AssertCanRunAction} guard, so every resolver that launches an action decides the same way.
    * @throws Error when the caller may not run the action
    */
   private async assertCanRunAction(action: MJActionEntityExtended, user: UserInfo, providers: Array<ProviderInfo>): Promise<void> {
-    if (IsOwner(user)) {
-      return; // an Owner may run any action, so nothing needs to be read
-    }
-    const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-    const actionAuthorizationIDs = await this.loadActionAuthorizationIDs(action.ID, provider);
-    const metadata = provider ?? Metadata.Provider; // global-provider-ok: fallback only when the request carries no provider
-    const actionAuthorizesCaller = ActionEngineServer.Instance.ActionAuthorizesCaller(action);
-    const decision = EvaluateActionRunAuthorization(user, actionAuthorizationIDs, metadata, actionAuthorizesCaller);
-    if (!decision.Allowed) {
-      throw new Error(`Not authorized to run action ${action.ID}: ${decision.Reason}`);
-    }
-  }
-
-  /**
-   * The AuthorizationID of each `MJ: Action Authorizations` row for the action. Read as the system
-   * user: this is the server's own authorization decision, so it must not depend on whether the
-   * caller can read that entity.
-   */
-  private async loadActionAuthorizationIDs(actionID: string, provider: DatabaseProviderBase | null): Promise<string[]> {
-    const systemUser = UserCache.Instance.GetSystemUser();
-    if (!systemUser) {
-      throw new Error("System user not found");
-    }
-    const result = await new RunView(provider).RunView<{ AuthorizationID: string }>({
-      EntityName: 'MJ: Action Authorizations',
-      ExtraFilter: `ActionID='${EscapeSQLString(actionID)}'`,
-      Fields: ['AuthorizationID'],
-      ResultType: 'simple'
-    }, systemUser);
-    if (!result.Success) {
-      throw new Error(`Could not read the authorizations for action ${actionID}: ${result.ErrorMessage}`);
-    }
-    return result.Results.map(row => row.AuthorizationID);
+    await AssertCanRunAction(action, user, providers);
   }
 
   /**

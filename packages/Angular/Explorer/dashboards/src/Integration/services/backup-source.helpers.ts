@@ -6,6 +6,111 @@
 
 const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
 
+/** Outcome of a bootstrap run as the wizard's completion step shows it. */
+export interface BootstrapResultSummary {
+  Success: boolean;
+  Message: string;
+  RunID?: string;
+  BackupStartDate?: string;
+  StagingDatabaseName?: string;
+  TablesProcessed?: number;
+  TotalRowsTransferred?: number;
+  DurationSeconds?: number;
+  StagingDatabaseDropped?: boolean;
+}
+
+/** One line of the wizard's live progress log, derived from a run event. */
+export interface BootstrapProgressLine {
+  Seq: number;
+  Ts: string;
+  Stage: string;
+  Message: string;
+  Level: 'info' | 'warn' | 'error';
+}
+
+/** The subset of a run event the bootstrap helpers read (matches the GraphQL integration client's event shape). */
+export interface BootstrapRunEvent {
+  Seq: number;
+  Ts: string;
+  EventType: string;
+  Level?: string;
+  Stage?: string;
+  Message?: string;
+  DataJSON?: string;
+}
+
+/** The subset of a run summary the bootstrap helpers read. */
+export interface BootstrapRunState {
+  RunID: string;
+  IsInFlight: boolean;
+  Success?: boolean;
+  ExitReason?: string;
+  LatestMessage?: string;
+  DurationMs?: number;
+}
+
+/**
+ * The progress-log lines a batch of run events contributes: stage starts, stage completions, errors
+ * and warnings, each with its stage and message. Heartbeats and record-level events are skipped so
+ * the log stays readable over a run of hours.
+ */
+export function ProgressLinesFromEvents(events: readonly BootstrapRunEvent[]): BootstrapProgressLine[] {
+  const shown = new Set(['run.start', 'stage.start', 'stage.complete', 'stage.error', 'warning', 'run.complete', 'run.fail', 'run.cancel']);
+  return events
+    .filter(ev => shown.has(ev.EventType) && (ev.Message || ev.Stage))
+    .map(ev => ({
+      Seq: ev.Seq,
+      Ts: ev.Ts,
+      Stage: ev.Stage ?? (ev.EventType.startsWith('run.') ? 'Run' : ''),
+      Message: ev.Message ?? ev.EventType,
+      Level: ev.Level === 'error' || ev.EventType === 'stage.error' || ev.EventType === 'run.fail' ? 'error' : ev.Level === 'warn' ? 'warn' : 'info',
+    }));
+}
+
+/**
+ * The outcome of a finished bootstrap run. The action reports its outputs on a terminal `Summary`
+ * stage event, so a successful run's figures come from there; a failed run's message comes from the
+ * run's own errors or last event.
+ */
+export function SummarizeBootstrapRun(run: BootstrapRunState, events: readonly BootstrapRunEvent[], errors?: readonly string[]): BootstrapResultSummary {
+  const summaryEvent = [...events].reverse().find(ev => ev.EventType === 'stage.complete' && ev.Stage === 'Summary');
+  const outputs = summaryEvent?.DataJSON ? parseOutputs(summaryEvent.DataJSON) : {};
+  const succeeded = run.Success === true && run.ExitReason === 'completed';
+  const failureMessage = errors && errors.length > 0 ? errors[errors.length - 1] : run.LatestMessage ?? `Run ended (${run.ExitReason ?? 'unknown'}).`;
+  return {
+    Success: succeeded,
+    Message: succeeded ? summaryEvent?.Message ?? run.LatestMessage ?? 'Bootstrap completed.' : failureMessage,
+    RunID: run.RunID,
+    BackupStartDate: asString(outputs['BackupStartDate']),
+    StagingDatabaseName: asString(outputs['StagingDatabaseName']),
+    TablesProcessed: asNumber(outputs['TablesProcessed']),
+    TotalRowsTransferred: asNumber(outputs['TotalRowsTransferred']),
+    DurationSeconds: asNumber(outputs['DurationSeconds']) ?? (run.DurationMs !== undefined ? Math.round(run.DurationMs / 1000) : undefined),
+    StagingDatabaseDropped: outputs['StagingDatabaseDropped'] === 1 || outputs['StagingDatabaseDropped'] === '1' || outputs['StagingDatabaseDropped'] === true || outputs['StagingDatabaseDropped'] === 'true',
+  };
+}
+
+function parseOutputs(json: string): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(json);
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function asString(value: unknown): string | undefined {
+  return value === undefined || value === null ? undefined : String(value);
+}
+
+function asNumber(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
+
 /** Human-readable size with two decimals, e.g. 1073741824 → "1 GB", 2048 → "2 KB", 1536 → "1.5 KB". */
 export function FormatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) {

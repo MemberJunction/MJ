@@ -60,6 +60,7 @@ Performs a high-speed initial bootstrap of external SQL Server tables into Membe
 | `TargetDataFileDirectory` | Input | string | No | Custom directory for staging database .mdf file |
 | `TargetLogFileDirectory` | Input | string | No | Custom directory for staging database .ldf file |
 | `EntityMapIDs` | Input | string | No | Comma-separated list of specific EntityMapIDs to restrict bootstrap |
+| `ProgressRunID` | Input | string | No | Integration progress run to report stages to. Set by the `IntegrationStartBootstrap` GraphQL mutation, which launches this action detached and returns the run ID; clients tail the run with `IntegrationTailRunEvents` instead of awaiting the action |
 | `BackupStartDate` | Output | string | — | Point-in-time timestamp (ISO UTC) when backup began (seeds watermarks) |
 | `StagingDatabaseName` | Output | string | — | Staging database name created |
 | `TablesProcessed` | Output | number | — | Count of entity tables transferred |

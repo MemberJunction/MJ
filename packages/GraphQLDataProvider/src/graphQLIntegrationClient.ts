@@ -121,6 +121,50 @@ export interface MutationResult {
     Message: string;
 }
 
+/** Inputs of the detached SQL Server backup bootstrap launch (mirrors the server's IntegrationBootstrapInput). */
+export interface IntegrationBootstrapStartInput {
+    CompanyIntegrationID: string;
+    BackupUrls: string;
+    SasToken?: string;
+    StorageCredentialID?: string;
+    StagingDatabaseName?: string;
+    DropStagingDbOnComplete?: boolean;
+    TruncateTargetBeforeLoad?: boolean;
+    BatchSize?: number;
+    EntityMapIDs?: string;
+    TargetDataFileDirectory?: string;
+    TargetLogFileDirectory?: string;
+}
+
+/** Summary of an integration run artifact, as IntegrationGetRun returns it. */
+export interface IntegrationRunSummary {
+    RunID: string;
+    RunKind: string;
+    CompanyIntegrationID?: string;
+    StartedAt: string;
+    IsInFlight: boolean;
+    EventCount: number;
+    Success?: boolean;
+    ExitReason?: string;
+    CompletedAt?: string;
+    DurationMs?: number;
+    LatestEventType?: string;
+    LatestMessage?: string;
+}
+
+/** One event of an integration run's progress stream, as IntegrationTailRunEvents returns it. */
+export interface IntegrationRunEvent {
+    Ts: string;
+    Seq: number;
+    EventType: string;
+    Level?: string;
+    Stage?: string;
+    Message?: string;
+    /** Subsystem-specific payload, JSON-serialized. */
+    DataJSON?: string;
+    Counts?: { Processed?: number; Succeeded?: number; Failed?: number; Skipped?: number; TotalKnown?: number };
+}
+
 /** A single entity map created during Apply All */
 export interface ApplyAllEntityMapCreated {
     SourceObjectName: string;
@@ -796,6 +840,51 @@ export class GraphQLIntegrationClient {
             const result = await this._dataProvider.ExecuteGQL(query, { companyIntegrationID, webhookURL, fullSync, syncDirection });
             return result?.IntegrationStartSync ?? { Success: false, Message: 'No response' };
         } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    /**
+     * Launch the SQL Server backup bootstrap as a detached run. Returns at once with the run ID;
+     * follow the run with {@link TailRunEvents} and read its outcome with {@link GetRun}.
+     */
+    public async StartBootstrap(input: IntegrationBootstrapStartInput): Promise<MutationResult & { RunID?: string; InProgress?: boolean }> {
+        try {
+            const query = gql`mutation IntegrationStartBootstrap($input: IntegrationBootstrapInput!) {
+                IntegrationStartBootstrap(input: $input) { Success Message RunID InProgress }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { input });
+            return result?.IntegrationStartBootstrap ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    /** The summary of one integration run artifact (manifest, terminal result, latest event). */
+    public async GetRun(runID: string): Promise<MutationResult & { Run?: IntegrationRunSummary; Errors?: string[] }> {
+        try {
+            const query = gql`query IntegrationGetRun($runID: String!) {
+                IntegrationGetRun(runID: $runID) {
+                    Success Message Errors
+                    Run { RunID RunKind CompanyIntegrationID StartedAt IsInFlight EventCount Success ExitReason CompletedAt DurationMs LatestEventType LatestMessage }
+                }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { runID });
+            return result?.IntegrationGetRun ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    /**
+     * The run's events after `sinceSeq`. Poll with the last `LatestSeq` seen to receive only new
+     * events; `IsInFlight === false` means the run is terminal and polling can stop.
+     */
+    public async TailRunEvents(runID: string, sinceSeq = 0): Promise<MutationResult & { Events?: IntegrationRunEvent[]; LatestSeq: number; IsInFlight: boolean }> {
+        try {
+            const query = gql`query IntegrationTailRunEvents($runID: String!, $sinceSeq: Float) {
+                IntegrationTailRunEvents(runID: $runID, sinceSeq: $sinceSeq) {
+                    Success Message LatestSeq IsInFlight
+                    Events { Ts Seq EventType Level Stage Message DataJSON Counts { Processed Succeeded Failed Skipped TotalKnown } }
+                }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { runID, sinceSeq });
+            return result?.IntegrationTailRunEvents ?? { Success: false, Message: 'No response', LatestSeq: sinceSeq, IsInFlight: false };
+        } catch (e) { return { Success: false, Message: (e as Error).message, LatestSeq: sinceSeq, IsInFlight: false }; }
     }
 
     public async CancelSync(companyIntegrationID: string): Promise<MutationResult> {

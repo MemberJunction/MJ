@@ -20,20 +20,22 @@ import {
   AzureBlobItem,
   ListAzureBackupBlobsResult
 } from '../../services/integration-data.service';
-import { AppendDirectoryPreset, BuildBackupUrlList, DeriveContainerUrl, FirstBackupUrl, FormatBytes } from '../../services/backup-source.helpers';
+import {
+  AppendDirectoryPreset,
+  BootstrapProgressLine,
+  BootstrapResultSummary,
+  BuildBackupUrlList,
+  DeriveContainerUrl,
+  FirstBackupUrl,
+  FormatBytes,
+  ProgressLinesFromEvents,
+  SummarizeBootstrapRun,
+} from '../../services/backup-source.helpers';
 
-export interface BootstrapResultSummary {
-  Success: boolean;
-  Message: string;
-  BackupStartDate?: string;
-  StagingDatabaseName?: string;
-  TablesProcessed?: number;
-  TotalRowsTransferred?: number;
-  DurationSeconds?: number;
-  StagingDatabaseDropped?: boolean;
-}
+export type { AzureBlobItem, InspectBackupResult, ListAzureBackupBlobsResult, BootstrapResultSummary, BootstrapProgressLine };
 
-export type { AzureBlobItem, InspectBackupResult, ListAzureBackupBlobsResult };
+/** How often the wizard asks the server for new run events while a bootstrap is running. */
+const RUN_POLL_INTERVAL_MS = 2500;
 
 export interface DirectoryPreset {
   Label: string;
@@ -101,11 +103,15 @@ export class BootstrapWizardComponent extends BaseAngularComponent implements On
   EntityMaps: EntityMapRow[] = [];
   IsLoadingPreview = false;
 
-  // Step 3: Execution Cockpit
+  // Step 3: Execution Cockpit — a detached server run the wizard follows by polling its event stream
   ExecutionStatus: ExecutionStatusType = 'idle';
   ExecutionStage = 'Preparing SQL Server instance...';
   ElapsedSeconds = 0;
+  RunID: string | null = null;
+  ProgressLog: BootstrapProgressLine[] = [];
   private timerInterval: ReturnType<typeof setInterval> | null = null;
+  private pollTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastSeq = 0;
   ExecutionError: string | null = null;
 
   // Step 4: Completion
@@ -124,6 +130,7 @@ export class BootstrapWizardComponent extends BaseAngularComponent implements On
 
   ngOnDestroy(): void {
     this.stopTimer();
+    this.stopPolling();
   }
 
   public get IsExecuting(): boolean {
@@ -314,6 +321,11 @@ export class BootstrapWizardComponent extends BaseAngularComponent implements On
     this.cdr.detectChanges();
   }
 
+  /**
+   * Launches the bootstrap as a detached server run and follows it. The restore and loads take
+   * hours, so nothing here awaits the work itself: the server answers with a run ID at once and the
+   * wizard polls the run's event stream until it is terminal.
+   */
   public async StartBootstrap(): Promise<void> {
     if (!this.CompanyIntegration) return;
 
@@ -321,16 +333,16 @@ export class BootstrapWizardComponent extends BaseAngularComponent implements On
     this.ExecutionStatus = 'running';
     this.ExecutionError = null;
     this.ElapsedSeconds = 0;
+    this.RunID = null;
+    this.ProgressLog = [];
+    this.lastSeq = 0;
+    this.ExecutionStage = 'Starting the bootstrap run...';
     this.startTimer();
-
-    this.ExecutionStage = this.SourceType === 'azure'
-      ? 'Executing database restore from Azure Blob and running local set-based ETL...'
-      : 'Executing database restore from host storage and running local set-based ETL...';
     this.cdr.detectChanges();
 
     try {
       const isAzure = this.SourceType === 'azure';
-      const result = await this.integrationService.RunBootstrapFromBackup(
+      const started = await this.integrationService.StartBootstrapFromBackup(
         this.CompanyIntegration.ID,
         {
           BackupUrls: this.BackupUrls.trim(),
@@ -343,28 +355,91 @@ export class BootstrapWizardComponent extends BaseAngularComponent implements On
         }
       );
 
-      this.stopTimer();
-
-      if (result.Success) {
-        this.ExecutionStatus = 'succeeded';
-        this.ResultSummary = result;
-        this.CurrentStep = 4;
-        this.Completed.emit(result);
-      } else {
-        this.ExecutionStatus = 'failed';
-        this.ExecutionError = result.Message || 'Bootstrap failed unexpectedly.';
+      if (!started.Success || !started.RunID) {
+        this.failRun(started.Message || 'The bootstrap could not be started.');
+        return;
       }
+      this.RunID = started.RunID;
+      this.ExecutionStage = 'Run started; waiting for the first stage...';
+      await this.pollRun(started.RunID);
     } catch (err) {
-      this.stopTimer();
-      this.ExecutionStatus = 'failed';
-      this.ExecutionError = err instanceof Error ? err.message : String(err);
+      this.failRun(err instanceof Error ? err.message : String(err));
     } finally {
       this.cdr.detectChanges();
     }
   }
 
+  /** One polling round: append new events to the log, then finish the run or schedule the next round. */
+  private async pollRun(runID: string): Promise<void> {
+    if (this.RunID !== runID) {
+      return; // the wizard was closed or reset while the request was in flight
+    }
+    const tail = await this.integrationService.TailBootstrapRun(runID, this.lastSeq);
+    if (this.RunID !== runID) {
+      return;
+    }
+    if (!tail.Success) {
+      this.failRun(tail.Message || 'Lost track of the bootstrap run.');
+      return;
+    }
+    const lines = ProgressLinesFromEvents(tail.Events);
+    if (lines.length > 0) {
+      this.ProgressLog = [...this.ProgressLog, ...lines];
+      this.ExecutionStage = lines[lines.length - 1].Message;
+    }
+    this.lastSeq = Math.max(this.lastSeq, tail.LatestSeq);
+    this.cdr.detectChanges();
+
+    if (tail.IsInFlight) {
+      this.pollTimer = setTimeout(() => { void this.pollRun(runID); }, RUN_POLL_INTERVAL_MS);
+      return;
+    }
+    await this.finishRun(runID);
+  }
+
+  /** The run is terminal: read its outcome and move to the completion step or show the failure. */
+  private async finishRun(runID: string): Promise<void> {
+    const detail = await this.integrationService.GetBootstrapRun(runID);
+    if (this.RunID !== runID) {
+      return;
+    }
+    this.stopTimer();
+    const summary = detail.Run
+      ? SummarizeBootstrapRun(detail.Run, this.ProgressLog.map(line => ({ Seq: line.Seq, Ts: line.Ts, EventType: 'log', Message: line.Message })), detail.Errors)
+      : { Success: false, Message: detail.Message || 'The bootstrap run could not be read.', RunID: runID };
+    if (detail.Run && summary.Success) {
+      // The outputs ride on the Summary event; re-read the tail so the summary sees that event's data.
+      const full = await this.integrationService.TailBootstrapRun(runID, 0);
+      const withOutputs = SummarizeBootstrapRun(detail.Run, full.Events, detail.Errors);
+      this.ExecutionStatus = 'succeeded';
+      this.ResultSummary = withOutputs;
+      this.CurrentStep = 4;
+      this.Completed.emit(withOutputs);
+    } else {
+      this.ExecutionStatus = 'failed';
+      this.ExecutionError = summary.Message;
+    }
+    this.cdr.detectChanges();
+  }
+
+  private failRun(message: string): void {
+    this.stopTimer();
+    this.stopPolling();
+    this.ExecutionStatus = 'failed';
+    this.ExecutionError = message;
+  }
+
+  private stopPolling(): void {
+    if (this.pollTimer) {
+      clearTimeout(this.pollTimer);
+      this.pollTimer = null;
+    }
+  }
+
   public Close(): void {
     this.stopTimer();
+    this.stopPolling();
+    this.RunID = null;
     this.Closed.emit();
   }
 
@@ -391,7 +466,11 @@ export class BootstrapWizardComponent extends BaseAngularComponent implements On
     this.ExecutionStatus = 'idle';
     this.ExecutionError = null;
     this.ResultSummary = null;
+    this.RunID = null;
+    this.ProgressLog = [];
+    this.lastSeq = 0;
     this.stopTimer();
+    this.stopPolling();
 
     if (this.CompanyIntegration) {
       const cleanId = this.CompanyIntegration.ID.replace(/[^a-zA-Z0-9]/g, '').substring(0, 8);

@@ -156,90 +156,69 @@ describe('Bootstrap Wizard Review Fixes', () => {
     });
   });
 
-  describe('Task 5: Output Params Fix in IntegrationDataService', () => {
-    it('reads output params from result.Result array', async () => {
+  describe('Detached bootstrap run in IntegrationDataService', () => {
+    async function serviceWithIntegrationClient(client: Record<string, unknown>): Promise<IntegrationDataService> {
       const svc = new IntegrationDataService();
-      vi.spyOn(svc as unknown as { lookupActionID: (name: string) => Promise<string> }, 'lookupActionID')
-        .mockResolvedValue('action-123');
-
-      // Mock action client result with outputs in Result array
-      const mockRunAction = vi.fn().mockResolvedValue({
-        Success: true,
-        Message: 'Done',
-        Result: [
-          { Name: 'BackupStartDate', Value: '2026-10-26T00:00:00Z', Type: 'Output' },
-          { Name: 'TotalRowsTransferred', Value: 1250000, Type: 'Output' },
-          { Name: 'DurationSeconds', Value: 42, Type: 'Output' },
-          { Name: 'StagingDatabaseDropped', Value: 'true', Type: 'Output' },
-          { Name: 'TablesProcessed', Value: 5, Type: 'Output' },
-        ],
-        Params: [
-          { Name: 'CompanyIntegrationID', Value: 'ci-1', Type: 'Input' },
-          { Name: 'BackupUrls', Value: 'https://blob/backup.bak', Type: 'Input' },
-        ]
-      });
-
       (svc as unknown as { Provider: unknown }).Provider = {};
-      const origGraphQLActionClient = await import('@memberjunction/graphql-dataprovider');
-      vi.spyOn(origGraphQLActionClient, 'GraphQLActionClient').mockImplementation(class {
-        RunAction = mockRunAction;
-      } as unknown as typeof origGraphQLActionClient.GraphQLActionClient);
+      const mod = await import('@memberjunction/graphql-dataprovider');
+      vi.spyOn(mod, 'GraphQLIntegrationClient').mockImplementation(class {
+        constructor() { Object.assign(this, client); }
+      } as unknown as typeof mod.GraphQLIntegrationClient);
+      return svc;
+    }
 
-      const res = await svc.RunBootstrapFromBackup('ci-1', {
+    it('StartBootstrapFromBackup sends the inputs to IntegrationStartBootstrap and returns the run ID', async () => {
+      const startBootstrap = vi.fn().mockResolvedValue({ Success: true, Message: 'started', RunID: 'bootstrap-1', InProgress: true });
+      const svc = await serviceWithIntegrationClient({ StartBootstrap: startBootstrap });
+
+      const res = await svc.StartBootstrapFromBackup('ci-1', {
         BackupUrls: 'https://blob/backup.bak',
-        TruncateTargetBeforeLoad: true,
+        SasToken: 'sv=1&sig=x',
+        StagingDatabaseName: 'MJ_Staging',
+        DropStagingDbOnComplete: true,
+        TruncateTargetBeforeLoad: false,
+        BatchSize: 500000,
       });
 
-      expect(res.Success).toBe(true);
-      expect(res.BackupStartDate).toBe('2026-10-26T00:00:00Z');
-      expect(res.TotalRowsTransferred).toBe(1250000);
-      expect(res.DurationSeconds).toBe(42);
-      expect(res.StagingDatabaseDropped).toBe(true);
-      expect(res.TablesProcessed).toBe(5);
-
-      // Verify TruncateTargetBeforeLoad was passed to action params
-      expect(mockRunAction).toHaveBeenCalledWith(
-        'action-123',
-        expect.arrayContaining([
-          expect.objectContaining({ Name: 'TruncateTargetBeforeLoad', Value: 'true' })
-        ])
-      );
+      expect(startBootstrap).toHaveBeenCalledWith({
+        CompanyIntegrationID: 'ci-1',
+        BackupUrls: 'https://blob/backup.bak',
+        SasToken: 'sv=1&sig=x',
+        StorageCredentialID: undefined,
+        StagingDatabaseName: 'MJ_Staging',
+        DropStagingDbOnComplete: true,
+        TruncateTargetBeforeLoad: false,
+        BatchSize: 500000,
+      });
+      expect(res).toEqual({ Success: true, Message: 'started', RunID: 'bootstrap-1' });
     });
 
-    it('reads output params from result.Result object / ResultData', async () => {
-      const svc = new IntegrationDataService();
-      vi.spyOn(svc as unknown as { lookupActionID: (name: string) => Promise<string> }, 'lookupActionID')
-        .mockResolvedValue('action-123');
-
-      const mockRunAction = vi.fn().mockResolvedValue({
-        Success: true,
-        Message: 'Done',
-        Result: {
-          BackupStartDate: '2026-10-26T05:00:00Z',
-          TotalRowsTransferred: 999999,
-          DurationSeconds: 15,
-          StagingDatabaseDropped: '1',
-          TablesProcessed: 8,
-        },
-        Params: []
+    it('TailBootstrapRun returns the new events, the latest sequence and whether the run is still in flight', async () => {
+      const tail = vi.fn().mockResolvedValue({
+        Success: true, Message: '2 event(s)', LatestSeq: 7, IsInFlight: true,
+        Events: [{ Ts: 't', Seq: 6, EventType: 'stage.start', Stage: 'Restore', Message: 'Restoring' }, { Ts: 't', Seq: 7, EventType: 'heartbeat', Stage: 'Restore' }],
       });
+      const svc = await serviceWithIntegrationClient({ TailRunEvents: tail });
 
-      (svc as unknown as { Provider: unknown }).Provider = {};
-      const origGraphQLActionClient = await import('@memberjunction/graphql-dataprovider');
-      vi.spyOn(origGraphQLActionClient, 'GraphQLActionClient').mockImplementation(class {
-        RunAction = mockRunAction;
-      } as unknown as typeof origGraphQLActionClient.GraphQLActionClient);
+      const res = await svc.TailBootstrapRun('bootstrap-1', 5);
 
-      const res = await svc.RunBootstrapFromBackup('ci-1', {
-        BackupUrls: 'https://blob/backup.bak',
+      expect(tail).toHaveBeenCalledWith('bootstrap-1', 5);
+      expect(res.Events).toHaveLength(2);
+      expect(res.LatestSeq).toBe(7);
+      expect(res.IsInFlight).toBe(true);
+    });
+
+    it('GetBootstrapRun returns the run summary and its errors', async () => {
+      const getRun = vi.fn().mockResolvedValue({
+        Success: true, Message: 'OK', Errors: ['[Restore] Cannot open backup device'],
+        Run: { RunID: 'bootstrap-1', RunKind: 'Other', StartedAt: 't', IsInFlight: false, EventCount: 9, Success: false, ExitReason: 'failed' },
       });
+      const svc = await serviceWithIntegrationClient({ GetRun: getRun });
 
-      expect(res.Success).toBe(true);
-      expect(res.BackupStartDate).toBe('2026-10-26T05:00:00Z');
-      expect(res.TotalRowsTransferred).toBe(999999);
-      expect(res.DurationSeconds).toBe(15);
-      expect(res.StagingDatabaseDropped).toBe(true);
-      expect(res.TablesProcessed).toBe(8);
+      const res = await svc.GetBootstrapRun('bootstrap-1');
+
+      expect(res.Run?.ExitReason).toBe('failed');
+      expect(res.Errors).toEqual(['[Restore] Cannot open backup device']);
     });
   });
 

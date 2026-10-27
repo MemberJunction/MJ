@@ -28,6 +28,8 @@ import {
   GraphQLDataProvider,
   GraphQLIntegrationClient,
   GraphQLActionClient,
+  IntegrationRunEvent,
+  IntegrationRunSummary,
   DiscoveredObjectResult,
   DiscoveredFieldResult,
   DiscoveryResult,
@@ -987,8 +989,12 @@ export class IntegrationDataService {
     return Number.isFinite(value) ? value : undefined;
   }
 
-  /** Run the SQL Server Backup Bootstrap action */
-  async RunBootstrapFromBackup(
+  /**
+   * Launch the SQL Server backup bootstrap as a detached server run. The restore and loads take hours,
+   * so the mutation returns at once with a run ID; follow it with {@link TailBootstrapRun} and read the
+   * outcome with {@link GetBootstrapRun}.
+   */
+  async StartBootstrapFromBackup(
     companyIntegrationID: string,
     options: {
       BackupUrls: string;
@@ -999,44 +1005,27 @@ export class IntegrationDataService {
       TruncateTargetBeforeLoad?: boolean;
       BatchSize?: number;
     }
-  ): Promise<{
-    Success: boolean;
-    Message: string;
-    BackupStartDate?: string;
-    StagingDatabaseName?: string;
-    TablesProcessed?: number;
-    TotalRowsTransferred?: number;
-    DurationSeconds?: number;
-    StagingDatabaseDropped?: boolean;
-  }> {
-    const result = await this.runNamedAction('Bootstrap SQL Server Integration From Backup', this.buildActionParams({
-      CompanyIntegrationID: companyIntegrationID,
-      BackupUrls: options.BackupUrls,
-      SasToken: options.SasToken,
-      StorageCredentialID: options.StorageCredentialID,
-      StagingDatabaseName: options.StagingDatabaseName,
-      DropStagingDbOnComplete: options.DropStagingDbOnComplete,
-      TruncateTargetBeforeLoad: options.TruncateTargetBeforeLoad,
-      BatchSize: options.BatchSize,
-    }));
-    if (!result) {
-      return {
-        Success: false,
-        Message: 'Action "Bootstrap SQL Server Integration From Backup" not found. Ensure the action is registered.'
-      };
-    }
+  ): Promise<{ Success: boolean; Message: string; RunID?: string }> {
+    const result = await this.getIntegrationClient().StartBootstrap({ CompanyIntegrationID: companyIntegrationID, ...options });
+    return { Success: result.Success, Message: result.Message ?? '', RunID: result.RunID };
+  }
 
-    const dropped = this.readOutputParam(result, 'StagingDatabaseDropped');
+  /** The run's events after `sinceSeq`; `IsInFlight === false` means the run is terminal and polling can stop. */
+  async TailBootstrapRun(runID: string, sinceSeq: number): Promise<{ Success: boolean; Message: string; Events: IntegrationRunEvent[]; LatestSeq: number; IsInFlight: boolean }> {
+    const result = await this.getIntegrationClient().TailRunEvents(runID, sinceSeq);
     return {
       Success: result.Success,
       Message: result.Message ?? '',
-      BackupStartDate: this.readOutputParam(result, 'BackupStartDate'),
-      StagingDatabaseName: this.readOutputParam(result, 'StagingDatabaseName') ?? options.StagingDatabaseName,
-      TablesProcessed: this.readOutputNumber(result, 'TablesProcessed'),
-      TotalRowsTransferred: this.readOutputNumber(result, 'TotalRowsTransferred'),
-      DurationSeconds: this.readOutputNumber(result, 'DurationSeconds'),
-      StagingDatabaseDropped: dropped === '1' || dropped === 'true',
+      Events: result.Events ?? [],
+      LatestSeq: result.LatestSeq ?? sinceSeq,
+      IsInFlight: result.IsInFlight ?? false,
     };
+  }
+
+  /** The run's summary and errors once it is terminal (or at any point, for its latest state). */
+  async GetBootstrapRun(runID: string): Promise<{ Success: boolean; Message: string; Run?: IntegrationRunSummary; Errors: string[] }> {
+    const result = await this.getIntegrationClient().GetRun(runID);
+    return { Success: result.Success, Message: result.Message ?? '', Run: result.Run, Errors: result.Errors ?? [] };
   }
 
   /**

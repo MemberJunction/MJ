@@ -22,6 +22,7 @@
     "@memberjunction/global": "6.2.0-edge.5",
     "@memberjunction/integration-engine": "6.2.0-edge.5",
     "@memberjunction/integration-engine-base": "6.2.0-edge.5",
+    "@memberjunction/integration-progress-artifacts": "6.2.0-edge.5",
     "@memberjunction/schema-engine": "6.2.0-edge.5",
     "@memberjunction/sqlserver-dataprovider": "6.2.0-edge.5",
     "mssql": "^12.2.0"

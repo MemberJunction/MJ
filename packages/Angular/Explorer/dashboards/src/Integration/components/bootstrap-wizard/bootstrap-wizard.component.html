@@ -449,7 +449,21 @@
                 <div class="progress-bar-animated"></div>
               </div>
 
+              @if (ProgressLog.length > 0) {
+                <ul class="progress-log" aria-live="polite">
+                  @for (line of ProgressLog; track line.Seq) {
+                    <li class="progress-log-line" [class.is-error]="line.Level === 'error'" [class.is-warn]="line.Level === 'warn'">
+                      <span class="progress-log-stage">{{ line.Stage }}</span>
+                      <span class="progress-log-message">{{ line.Message }}</span>
+                    </li>
+                  }
+                </ul>
+              }
+
               <div class="execution-tips">
+                @if (RunID) {
+                  <p><i class="fa-solid fa-satellite-dish"></i> Running on the server as run <code>{{ RunID }}</code>. The wizard follows it; closing this window does not stop it.</p>
+                }
                 @if (SourceType === 'azure') {
                   <p><i class="fa-solid fa-shield-halved"></i> Azure Blob blocks stream directly to local storage at NVMe speeds.</p>
                 } @else {
@@ -543,7 +557,8 @@
             <button mjButton variant="secondary" (click)="GoToStep(1)">Back to Config</button>
             <button mjButton variant="danger" (click)="Close()">Close</button>
           } @else {
-            <span class="footer-busy-note"><i class="fa-solid fa-spinner fa-spin"></i> Processing... Please do not close this window.</span>
+            <span class="footer-busy-note"><i class="fa-solid fa-spinner fa-spin"></i> Running on the server. You may close this window; the run continues.</span>
+            <button mjButton variant="secondary" (click)="Close()">Close</button>
           }
         }
 

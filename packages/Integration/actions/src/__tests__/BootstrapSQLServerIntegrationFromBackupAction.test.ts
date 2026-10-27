@@ -30,6 +30,24 @@ vi.mock('@memberjunction/integration-engine', () => {
 
 let mockGetCompanyIntegrationObjectFn: ReturnType<typeof vi.fn>;
 
+/** Every call made on the progress emitter, in order, so tests can assert the stream a detached run sees. */
+let progressCalls: Array<{ Method: string; Args: unknown[] }> = [];
+
+vi.mock('@memberjunction/integration-progress-artifacts', () => {
+    class FakeEmitter {
+        constructor(manifest: unknown) { progressCalls.push({ Method: 'constructor', Args: [manifest] }); }
+        public RunStart(...args: unknown[]) { progressCalls.push({ Method: 'RunStart', Args: args }); }
+        public StageStart(...args: unknown[]) { progressCalls.push({ Method: 'StageStart', Args: args }); }
+        public StageComplete(...args: unknown[]) { progressCalls.push({ Method: 'StageComplete', Args: args }); }
+        public StageError(...args: unknown[]) { progressCalls.push({ Method: 'StageError', Args: args }); }
+        public Heartbeat(...args: unknown[]) { progressCalls.push({ Method: 'Heartbeat', Args: args }); }
+        public Emit(...args: unknown[]) { progressCalls.push({ Method: 'Emit', Args: args }); }
+        public async Complete(...args: unknown[]) { progressCalls.push({ Method: 'Complete', Args: args }); }
+        public async Fail(...args: unknown[]) { progressCalls.push({ Method: 'Fail', Args: args }); }
+    }
+    return { IntegrationProgressEmitter: FakeEmitter };
+});
+
 vi.mock('@memberjunction/integration-engine-base', () => {
     return {
         IntegrationEngineBase: {
@@ -713,6 +731,79 @@ describe('BootstrapSQLServerIntegrationFromBackupAction', () => {
             expect(result.Success).toBe(false);
             expect(result.ResultCode).toBe('BOOTSTRAP_FAILED');
             expect(result.Message).toContain('AllowDirectSQLInsert enabled');
+        });
+    });
+
+    describe('Detached progress reporting (ProgressRunID)', () => {
+        beforeEach(() => {
+            progressCalls = [];
+        });
+
+        it('reports no progress at all when no ProgressRunID is supplied', async () => {
+            await action['InternalRunAction'](makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                SasToken: 'token123',
+            }));
+            expect(progressCalls).toHaveLength(0);
+        });
+
+        it('opens the run on the company integration, reports every stage, and completes with the outputs', async () => {
+            const result = await action['InternalRunAction'](makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                SasToken: 'token123',
+                StagingDatabaseName: 'MJ_Staging_TestDB',
+                ProgressRunID: 'bootstrap-run-1',
+            }));
+            expect(result.Success).toBe(true);
+
+            const manifest = progressCalls[0].Args[0] as { runID: string; companyIntegrationID: string; runKind: string };
+            expect(progressCalls[0].Method).toBe('constructor');
+            expect(manifest).toMatchObject({ runID: 'bootstrap-run-1', companyIntegrationID: 'ci-001', runKind: 'Other' });
+            expect(progressCalls[1].Method).toBe('RunStart');
+
+            const stages = progressCalls.filter(c => c.Method === 'StageStart').map(c => c.Args[0]);
+            expect(stages).toEqual(['Credential', 'Inspect', 'Restore', 'Load Customer', 'Watermarks', 'Cleanup']);
+            const loadDone = progressCalls.find(c => c.Method === 'StageComplete' && c.Args[0] === 'Load Customer');
+            expect(loadDone?.Args[1]).toEqual({ processed: 1500, succeeded: 1500 });
+
+            const summary = progressCalls.find(c => c.Method === 'Emit');
+            expect(summary?.Args[0]).toBe('stage.complete');
+            expect(summary?.Args[1]).toMatchObject({
+                stage: 'Summary',
+                data: { BackupStartDate: '2026-10-26T01:00:00.000Z', StagingDatabaseName: 'MJ_Staging_TestDB', TablesProcessed: 1, TotalRowsTransferred: 1500, StagingDatabaseDropped: 1 },
+            });
+            expect(progressCalls[progressCalls.length - 1].Method).toBe('Complete');
+            expect(progressCalls.some(c => c.Method === 'Fail')).toBe(false);
+        });
+
+        it('terminates the run as failed, attributed to the running stage, when a load fails', async () => {
+            mockSql = createMockSqlExecutor({ failOnInsert: true });
+            action.CustomDatabaseProvider = mockSql.executor;
+
+            const result = await action['InternalRunAction'](makeParams({
+                CompanyIntegrationID: 'ci-001',
+                BackupUrls: 'https://storage.blob.core.windows.net/backups/db.bak',
+                SasToken: 'token123',
+                ProgressRunID: 'bootstrap-run-2',
+            }));
+            expect(result.Success).toBe(false);
+
+            const stageError = progressCalls.find(c => c.Method === 'StageError');
+            expect(stageError?.Args[0]).toBe('Load Customer');
+            expect(String(stageError?.Args[1])).toContain('Target table disk full error');
+            expect(progressCalls[progressCalls.length - 1].Method).toBe('Fail');
+            expect(progressCalls.some(c => c.Method === 'Complete')).toBe(false);
+        });
+
+        it('terminates the run on a parameter failure so a detached caller is not left waiting', async () => {
+            const result = await action['InternalRunAction'](makeParams({
+                CompanyIntegrationID: 'ci-001',
+                ProgressRunID: 'bootstrap-run-3',
+            }));
+            expect(result.ResultCode).toBe('MISSING_PARAMETER');
+            expect(progressCalls.map(c => c.Method)).toEqual(['constructor', 'RunStart', 'StageError', 'Fail']);
         });
     });
 
