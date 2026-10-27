@@ -211,6 +211,43 @@ describe('CreateRecordAction', () => {
             const pkOut = findOutput(params.Params, 'PrimaryKey');
             expect(pkOut?.Value).toEqual({ UserID: 'u-9', RoleID: 'r-4' });
         });
+
+        it('populates fields via EntityInfo.Fields when entity is a generic BaseEntity without prototype getters (e.g. OpenApp entities like MJ_BizApps_Tasks: Tasks)', async () => {
+            // Simulate a generic BaseEntity instance where fields exist in EntityInfo.Fields
+            // rather than as Object.defineProperty getters on the entity prototype (`'Name' in entity === false`).
+            const entity = new FakeEntity([], { ID: 'bizapp-task-1' });
+            const provider = makeProvider({
+                entityInfo: makeEntityInfo(['Name', 'TypeID', 'IsPriority', 'HealthStatus', 'CheckInCadence']),
+                entity,
+            });
+            const params = makeParams(
+                [
+                    { Name: 'EntityName', Value: 'MJ_BizApps_Tasks: Tasks' },
+                    {
+                        Name: 'Fields',
+                        Value: {
+                            Name: 'Launch Revised Platform — Q4 (12 Weeks)',
+                            TypeID: '11111111-2222-3333-4444-555555555555',
+                            IsPriority: true,
+                            HealthStatus: 'OnTrack',
+                            CheckInCadence: 'Weekly',
+                        },
+                    },
+                ],
+                provider
+            );
+
+            const r = await action.InternalRunAction(params);
+
+            expect(r.Success).toBe(true);
+            expect(r.ResultCode).toBe('SUCCESS');
+            expect(entity.values.Name).toBe('Launch Revised Platform — Q4 (12 Weeks)');
+            expect(entity.values.TypeID).toBe('11111111-2222-3333-4444-555555555555');
+            expect(entity.values.IsPriority).toBe(true);
+            expect(entity.values.HealthStatus).toBe('OnTrack');
+            expect(entity.values.CheckInCadence).toBe('Weekly');
+            expect(logErrorSpy).not.toHaveBeenCalled();
+        });
     });
 
     describe('unknown-field handling', () => {
