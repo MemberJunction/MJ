@@ -81,6 +81,7 @@ export class DeleteRecordAction extends BaseRecordMutationAction {
             if (!loadResult.success) return loadResult.error!;
 
             // Store the record data before deletion
+            // fls-guard: loaded as params.ContextUser; width follows its user
             const deletedRecordData = entity.GetAll();
 
             // Delete the record

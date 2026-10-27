@@ -84,7 +84,7 @@ export class RunTemplateResolver extends ResolverBase {
             }
 
             // Load template content (get the first/highest priority content)
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(p);
             const templateContentResult = await rv.RunView<MJTemplateContentEntity>({
                 EntityName: 'MJ: Template Contents',
                 ExtraFilter: `TemplateID = '${templateId}'`,
@@ -102,12 +102,14 @@ export class RunTemplateResolver extends ResolverBase {
             }
 
             // Configure and render the template
-            await TemplateEngineServer.Instance.Config(true /*always refresh to get latest templates*/, currentUser);
+            await TemplateEngineServer.Instance.Config(true /*always refresh to get latest templates*/, currentUser, p);
             const result = await TemplateEngineServer.Instance.RenderTemplate(
                 templateEntity, 
                 templateContentResult.Results[0], 
-                data, 
-                true // skip validation for execution
+                data,
+                true, // skip validation for execution
+                undefined,
+                { ContextUser: currentUser },
             );
 
             const executionTime = Date.now() - startTime;

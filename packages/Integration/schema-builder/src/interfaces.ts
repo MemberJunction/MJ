@@ -186,7 +186,11 @@ export interface SchemaBuilderInput {
     MJVersion: string;
     /** Source system name (e.g., "HubSpot"). */
     SourceType: string;
-    /** Path to existing additionalSchemaInfo JSON file. */
+    /**
+     * Absolute path to the additionalSchemaInfo JSON file — pass `RuntimeSchemaManager.AdditionalSchemaInfoPath`
+     * so the builder merges into the same file RSU writes and CodeGen reads. A relative path resolves
+     * against process.cwd(), which need not be the directory CodeGen resolves against (#5858).
+     */
     AdditionalSchemaInfoPath: string;
     /** Path to migrations directory (e.g., "migrations/v2"). */
     MigrationsDir: string;

@@ -233,11 +233,20 @@ afterEach(() => {
     errSpy = undefined;
 });
 
+const makeTestUuid = (a: string, b: string) =>
+    [a.repeat(8), b.repeat(4), '4' + b.repeat(3), '8' + b.repeat(3), b.repeat(12)].join('-');
+const PRIOR_1 = makeTestUuid('1', '1');
+const PRIOR_2 = makeTestUuid('2', '2');
+const PRIOR_A = makeTestUuid('a', 'a');
+const PRIOR_B = makeTestUuid('b', 'b');
+const PRIOR_GONE = makeTestUuid('9', '9');
+
 function makeSessionEntity(overrides: Partial<FakeSession> = {}): FakeSession {
     return {
         ID: 'session-1',
         Status: 'Active',
         ConversationID: 'conv-1',
+        ExternalID: 'scope-res-1',
         UserID: 'user-1',
         Config_: JSON.stringify({ targetAgentID: 'target-1' }),
         NewRecord: vi.fn(),
@@ -1572,12 +1581,21 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
      */
     function makeRestoreProvider(opts: {
         prior?: FakeSession;
+        externalId?: string | null;
         rows?: Array<{ Channel: string; Config: string | null }>;
         runViewResult?: { Success: boolean; ErrorMessage?: string; Results?: unknown[] };
     }): { provider: unknown; runView: ReturnType<typeof vi.fn>; prior: FakeSession } {
-        const prior = opts.prior ?? makeSessionEntity({ ID: 'prior-1', UserID: 'user-1' });
+        const prior = opts.prior ?? makeSessionEntity({ ID: PRIOR_1, UserID: 'user-1' });
+        const conversation = makeSessionEntity({ ExternalID: opts.externalId ?? prior.ExternalID ?? 'scope-res-1' });
         const runView = vi.fn(async () => opts.runViewResult ?? { Success: true, Results: opts.rows ?? [] });
-        return { provider: { GetEntityObject: vi.fn(async () => prior), RunView: runView }, runView, prior };
+        return {
+            provider: {
+                GetEntityObject: vi.fn(async (name?: string) => (name === 'MJ: Conversations' ? conversation : prior)),
+                RunView: runView,
+            },
+            runView,
+            prior,
+        };
     }
 
     function setupHappyStart(): void {
@@ -1598,7 +1616,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
         currentProvider = provider;
         const resolver = makeResolver();
 
-        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
 
         expect(result.PriorChannelStatesJson).toBeDefined();
         expect(JSON.parse(result.PriorChannelStatesJson as string)).toEqual({
@@ -1607,7 +1625,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
         });
         // lastSessionId still flows into the new durable session record.
         const createArg = createSessionMock.mock.calls[0][0] as { lastSessionID?: string };
-        expect(createArg.lastSessionID).toBe('prior-1');
+        expect(createArg.lastSessionID).toBe(PRIOR_1);
     });
 
     /** RunView calls that hit the session-channel restore query (the only RunView in the start flow). */
@@ -1630,16 +1648,53 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
     it('omits the field (no state leak, no query) when the prior session belongs to ANOTHER user', async () => {
         setupHappyStart();
         const { provider, runView } = makeRestoreProvider({
-            prior: makeSessionEntity({ ID: 'prior-1', UserID: 'someone-else' }),
+            prior: makeSessionEntity({ ID: PRIOR_1, UserID: 'someone-else' }),
             rows: [{ Channel: 'Whiteboard', Config: '{"secret":true}' }],
         });
         currentProvider = provider;
         const resolver = makeResolver();
 
-        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
 
         expect(result.PriorChannelStatesJson).toBeUndefined();
         expect(restoreQueryCalls(runView)).toHaveLength(0);
+    });
+
+    it('skips restore for a second anonymous visitor (same UserID, different AnonymousVisitorID) and allows the matching anonymous visitor', async () => {
+        setupHappyStart();
+        const anonGuest = (visitorId: string): UserInfo =>
+            ({
+                ID: 'anon-1',
+                Email: 'anonymous@magic-link.local',
+                IsMagicLinkAnonymous: true,
+                // An unscoped multi-use invite: redemptions are told apart by mj_sid (a resource scope would be shared).
+                AnonymousVisitorID: visitorId,
+            }) as unknown as UserInfo;
+        const makeAnonResolver = (visitorId: string): RealtimeClientSessionResolver => {
+            const r = new RealtimeClientSessionResolver();
+            (r as unknown as { GetUserFromPayload: () => unknown }).GetUserFromPayload = () => anonGuest(visitorId);
+            return r;
+        };
+
+        const { provider: provider2, runView: runView2 } = makeRestoreProvider({
+            prior: makeSessionEntity({ ID: PRIOR_1, UserID: 'anon-1', ExternalID: 'visitor-1' }),
+            externalId: 'visitor-1',
+            rows: [{ Channel: 'Whiteboard', Config: '{"secret":true}' }],
+        });
+        currentProvider = provider2;
+        const refusedResult = await makeAnonResolver('visitor-2').StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
+        expect(refusedResult.PriorChannelStatesJson).toBeUndefined();
+        expect(restoreQueryCalls(runView2)).toHaveLength(0);
+
+        setupHappyStart();
+        const { provider: provider1 } = makeRestoreProvider({
+            prior: makeSessionEntity({ ID: PRIOR_1, UserID: 'anon-1', ExternalID: 'visitor-1' }),
+            externalId: 'visitor-1',
+            rows: [{ Channel: 'Whiteboard', Config: '{"items":[1]}' }],
+        });
+        currentProvider = provider1;
+        const allowedResult = await makeAnonResolver('visitor-1').StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
+        expect(allowedResult.PriorChannelStatesJson).toBe(JSON.stringify({ Whiteboard: '{"items":[1]}' }));
     });
 
     it('omits the field when the prior session does not exist', async () => {
@@ -1650,7 +1705,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
         currentProvider = provider;
         const resolver = makeResolver();
 
-        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-gone');
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_GONE);
 
         expect(result.PriorChannelStatesJson).toBeUndefined();
         expect(restoreQueryCalls(runView)).toHaveLength(0);
@@ -1662,7 +1717,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
         currentProvider = provider;
         const resolver = makeResolver();
 
-        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
         expect(result.PriorChannelStatesJson).toBeUndefined();
     });
 
@@ -1677,7 +1732,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
         currentProvider = provider;
         const resolver = makeResolver();
 
-        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
 
         expect(JSON.parse(result.PriorChannelStatesJson as string)).toEqual({ Whiteboard: '{"items":[]}' });
     });
@@ -1693,7 +1748,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
         currentProvider = provider;
         const resolver = makeResolver();
 
-        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
 
         const states = JSON.parse(result.PriorChannelStatesJson as string) as Record<string, string>;
         expect(Object.keys(states)).toEqual(['First']);
@@ -1705,7 +1760,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
         currentProvider = provider;
         const resolver = makeResolver();
 
-        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
 
         expect(result.AgentSessionId).toBe('session-restore');
         expect(result.PriorChannelStatesJson).toBeUndefined();
@@ -1721,7 +1776,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior cha
         };
         const resolver = makeResolver();
 
-        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
 
         expect(result.AgentSessionId).toBe('session-restore');
         expect(result.PriorChannelStatesJson).toBeUndefined();
@@ -2167,6 +2222,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior-tra
     interface ChainRow {
         UserID: string;
         LastSessionID?: string | null;
+        ExternalID?: string | null;
     }
 
     interface DetailQueryRow {
@@ -2195,7 +2251,16 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior-tra
             return { Success: true, Results: [] }; // session-channel restore — none
         });
         const provider = {
-            GetEntityObject: vi.fn(async () => {
+            GetEntityObject: vi.fn(async (entityName?: string) => {
+                if (entityName === 'MJ: Conversations') {
+                    const conv = makeSessionEntity();
+                    conv.Load = vi.fn(async (convId: string) => {
+                        const row = opts.chain[convId];
+                        conv.ExternalID = row?.ExternalID ?? 'scope-res-1';
+                        return true;
+                    });
+                    return conv;
+                }
                 const entity = makeSessionEntity();
                 entity.Load = vi.fn(async (id: string) => {
                     const row = opts.chain[id];
@@ -2203,6 +2268,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior-tra
                         return false;
                     }
                     entity.ID = id;
+                    entity.ConversationID = id;
                     entity.UserID = row.UserID;
                     entity.LastSessionID = row.LastSessionID ?? null;
                     return true;
@@ -2231,13 +2297,13 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior-tra
     it('threads the prior leg\'s role-tagged transcript into PrepareClientSession.PriorTranscript', async () => {
         setupHappyStart();
         const { provider } = makeHydrationProvider({
-            chain: { 'prior-1': { UserID: 'user-1' } },
+            chain: { [PRIOR_1]: { UserID: 'user-1' } },
             detailRows: [turn('User', 'hello there'), turn('AI', 'hi! how can I help?')],
         });
         currentProvider = provider;
         const resolver = makeResolver();
 
-        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
 
         expect(prepTranscriptArg()).toBe('User: hello there\nAssistant: hi! how can I help?');
     });
@@ -2246,23 +2312,23 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior-tra
         setupHappyStart();
         const { provider, runView } = makeHydrationProvider({
             chain: {
-                'prior-2': { UserID: 'user-1', LastSessionID: 'prior-1' },
-                'prior-1': { UserID: 'user-1' },
+                [PRIOR_2]: { UserID: 'user-1', LastSessionID: PRIOR_1 },
+                [PRIOR_1]: { UserID: 'user-1' },
             },
             detailRows: [turn('User', 'first leg'), turn('AI', 'second leg')],
         });
         currentProvider = provider;
         const resolver = makeResolver();
 
-        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-2');
+        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_2);
 
         const detailCall = runView.mock.calls.find(
             (c) => (c[0] as { EntityName: string }).EntityName === 'MJ: Conversation Details',
         );
         expect(detailCall).toBeDefined();
         const filter = (detailCall![0] as { ExtraFilter: string }).ExtraFilter;
-        expect(filter).toContain("'prior-2'");
-        expect(filter).toContain("'prior-1'");
+        expect(filter).toContain(`'${PRIOR_2}'`);
+        expect(filter).toContain(`'${PRIOR_1}'`);
         expect(prepTranscriptArg()).toBe('User: first leg\nAssistant: second leg');
     });
 
@@ -2270,15 +2336,15 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior-tra
         setupHappyStart();
         const { provider } = makeHydrationProvider({
             chain: {
-                'prior-a': { UserID: 'user-1', LastSessionID: 'prior-b' },
-                'prior-b': { UserID: 'user-1', LastSessionID: 'prior-a' },
+                [PRIOR_A]: { UserID: 'user-1', LastSessionID: PRIOR_B },
+                [PRIOR_B]: { UserID: 'user-1', LastSessionID: PRIOR_A },
             },
             detailRows: [turn('User', 'looped once')],
         });
         currentProvider = provider;
         const resolver = makeResolver();
 
-        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-a');
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_A);
 
         expect(result.AgentSessionId).toBe('session-new');
         expect(prepTranscriptArg()).toBe('User: looped once');
@@ -2287,11 +2353,11 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior-tra
     it('keeps only the NEWEST 30 turns (oldest dropped)', async () => {
         setupHappyStart();
         const rows = Array.from({ length: 35 }, (_, i) => turn('User', `turn ${i}`, `d-${i}`));
-        const { provider } = makeHydrationProvider({ chain: { 'prior-1': { UserID: 'user-1' } }, detailRows: rows });
+        const { provider } = makeHydrationProvider({ chain: { [PRIOR_1]: { UserID: 'user-1' } }, detailRows: rows });
         currentProvider = provider;
         const resolver = makeResolver();
 
-        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
 
         const lines = (prepTranscriptArg() ?? '').split('\n');
         expect(lines).toHaveLength(30);
@@ -2303,11 +2369,11 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior-tra
         setupHappyStart();
         // 10 turns of 1000 chars each — only the newest ~7 fit the 8000-char budget.
         const rows = Array.from({ length: 10 }, (_, i) => turn('User', `${i}`.padEnd(1000, 'x'), `d-${i}`));
-        const { provider } = makeHydrationProvider({ chain: { 'prior-1': { UserID: 'user-1' } }, detailRows: rows });
+        const { provider } = makeHydrationProvider({ chain: { [PRIOR_1]: { UserID: 'user-1' } }, detailRows: rows });
         currentProvider = provider;
         const resolver = makeResolver();
 
-        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
 
         const transcript = prepTranscriptArg() ?? '';
         expect(transcript.length).toBeLessThanOrEqual(8000);
@@ -2320,7 +2386,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior-tra
     it('skips hidden, error-role, and empty rows', async () => {
         setupHappyStart();
         const { provider } = makeHydrationProvider({
-            chain: { 'prior-1': { UserID: 'user-1' } },
+            chain: { [PRIOR_1]: { UserID: 'user-1' } },
             detailRows: [
                 { ID: 'd-1', Role: 'Error', Message: 'boom', HiddenToUser: false },
                 { ID: 'd-2', Role: 'AI', Message: 'secret', HiddenToUser: true },
@@ -2332,7 +2398,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior-tra
         currentProvider = provider;
         const resolver = makeResolver();
 
-        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
 
         expect(prepTranscriptArg()).toBe('User: visible');
     });
@@ -2351,50 +2417,85 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior-tra
     it('omits PriorTranscript (no leak) when the prior session belongs to ANOTHER user', async () => {
         setupHappyStart();
         const { provider } = makeHydrationProvider({
-            chain: { 'prior-1': { UserID: 'someone-else' } },
+            chain: { [PRIOR_1]: { UserID: 'someone-else' } },
             detailRows: [turn('User', 'their words')],
         });
         currentProvider = provider;
         const resolver = makeResolver();
 
-        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
 
         expect(prepTranscriptArg()).toBeUndefined();
+    });
+
+    it('skips prior legs owned by a different anonymous visitor (same UserID, different AnonymousVisitorID) and allows the matching visitor', async () => {
+        setupHappyStart();
+        const anonGuest = (visitorId: string): UserInfo =>
+            ({
+                ID: 'anon-1',
+                Email: 'anonymous@magic-link.local',
+                IsMagicLinkAnonymous: true,
+                // An unscoped multi-use invite: redemptions are told apart by mj_sid (a resource scope would be shared).
+                AnonymousVisitorID: visitorId,
+            }) as unknown as UserInfo;
+        const makeAnonResolver = (visitorId: string): RealtimeClientSessionResolver => {
+            const r = new RealtimeClientSessionResolver();
+            (r as unknown as { GetUserFromPayload: () => unknown }).GetUserFromPayload = () => anonGuest(visitorId);
+            return r;
+        };
+
+        const { provider: provider2 } = makeHydrationProvider({
+            chain: { [PRIOR_1]: { UserID: 'anon-1', ExternalID: 'visitor-1' } },
+            detailRows: [turn('User', 'visitor 1 secret')],
+        });
+        currentProvider = provider2;
+        await makeAnonResolver('visitor-2').StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
+        expect(prepTranscriptArg()).toBeUndefined();
+
+        prepareClientSessionMock.mockClear();
+        setupHappyStart();
+        const { provider: provider1 } = makeHydrationProvider({
+            chain: { [PRIOR_1]: { UserID: 'anon-1', ExternalID: 'visitor-1' } },
+            detailRows: [turn('User', 'visitor 1 secret')],
+        });
+        currentProvider = provider1;
+        await makeAnonResolver('visitor-1').StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
+        expect(prepTranscriptArg()).toBe('User: visitor 1 secret');
     });
 
     it('stops the chain walk at the first UNOWNED deeper leg but keeps the owned legs', async () => {
         setupHappyStart();
         const { provider, runView } = makeHydrationProvider({
             chain: {
-                'prior-2': { UserID: 'user-1', LastSessionID: 'prior-1' },
-                'prior-1': { UserID: 'someone-else' },
+                [PRIOR_2]: { UserID: 'user-1', LastSessionID: PRIOR_1 },
+                [PRIOR_1]: { UserID: 'someone-else' },
             },
             detailRows: [turn('User', 'owned leg only')],
         });
         currentProvider = provider;
         const resolver = makeResolver();
 
-        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-2');
+        await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_2);
 
         const detailCall = runView.mock.calls.find(
             (c) => (c[0] as { EntityName: string }).EntityName === 'MJ: Conversation Details',
         );
         const filter = (detailCall![0] as { ExtraFilter: string }).ExtraFilter;
-        expect(filter).toContain("'prior-2'");
-        expect(filter).not.toContain("'prior-1'");
+        expect(filter).toContain(`'${PRIOR_2}'`);
+        expect(filter).not.toContain(`'${PRIOR_1}'`);
         expect(prepTranscriptArg()).toBe('User: owned leg only');
     });
 
     it('tolerates a failed details query (start succeeds, no hydration)', async () => {
         setupHappyStart();
         const { provider } = makeHydrationProvider({
-            chain: { 'prior-1': { UserID: 'user-1' } },
+            chain: { [PRIOR_1]: { UserID: 'user-1' } },
             detailQueryFails: true,
         });
         currentProvider = provider;
         const resolver = makeResolver();
 
-        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
 
         expect(result.AgentSessionId).toBe('session-new');
         expect(prepTranscriptArg()).toBeUndefined();
@@ -2410,7 +2511,7 @@ describe('RealtimeClientSessionResolver.StartRealtimeClientSession — prior-tra
         };
         const resolver = makeResolver();
 
-        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, 'prior-1');
+        const result = await resolver.StartRealtimeClientSession('target-1', makeCtx(), undefined, PRIOR_1);
 
         expect(result.AgentSessionId).toBe('session-new');
         expect(prepTranscriptArg()).toBeUndefined();
@@ -3229,6 +3330,7 @@ describe('RealtimeClientSessionResolver — delegated runs get the browser sessi
             ID: 'anon-1',
             Email: 'anonymous@magic-link.local',
             IsMagicLinkAnonymous: true,
+            AnonymousVisitorID: 'scope-res-1',
             MagicLinkScope: { ResourceID: 'scope-res-1' },
         } as UserInfo;
         /** A resolver whose caller is a scoped anonymous magic-link visitor. */
@@ -3280,6 +3382,7 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         ID: 'anon-1',
         Email: 'anonymous@magic-link.local',
         IsMagicLinkAnonymous: true,
+        AnonymousVisitorID: 'scope-res-1',
         MagicLinkScope: { ResourceID: 'scope-res-1' },
     };
     const SYSTEM_USER = { ID: 'system-1', Email: 'system@system.org' } as UserInfo;
@@ -3896,6 +3999,7 @@ describe('RealtimeClientSessionResolver — colleague authorization (allowedAgen
             ID: 'anon-1',
             Email: 'anonymous@magic-link.local',
             IsMagicLinkAnonymous: true,
+            AnonymousVisitorID: 'scope-res-1',
             MagicLinkScope: { ResourceID: 'scope-res-1' },
         };
         currentProvider = makeProvider(() => makeMultiTargetSession('anon-1'));
@@ -4010,7 +4114,10 @@ describe('RealtimeClientSessionResolver — conversation-history hydration', () 
             return { Success: true, Results: [] };
         });
         const provider = {
-            GetEntityObject: vi.fn(async () => {
+            GetEntityObject: vi.fn(async (entityName: string) => {
+                if (entityName === 'MJ: Conversations') {
+                    return makeSessionEntity();
+                }
                 const entity = makeSessionEntity();
                 entity.Load = vi.fn(async (id: string) => {
                     const r = opts.chain?.[id];
@@ -4164,17 +4271,18 @@ describe('RealtimeClientSessionResolver — conversation-history hydration', () 
     it('DROPS turns the resumed transcript already framed, so the prompt carries one account of them', async () => {
         // The whole reason the leg ids travel with the prior transcript. A voice turn is an ordinary
         // Conversation Detail, so without this the resumed leg arrives twice in one prompt.
+        const prior1 = '00000000-0000-0000-0000-000000000501';
         const { provider } = makeProvider({
-            chain: { 'prior-1': { UserID: 'user-1' } },
+            chain: { [prior1]: { UserID: 'user-1' } },
             legRows: [{ ID: 'l-1', Role: 'User', Message: 'said on the last call', HiddenToUser: false }],
             historyRows: [
-                row('User', 'said on the last call', { AgentSessionID: 'prior-1' }),
+                row('User', 'said on the last call', { AgentSessionID: prior1 }),
                 row('User', 'typed afterwards'),
             ],
         });
         currentProvider = provider;
 
-        await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), 'conv-1', 'prior-1');
+        await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), 'conv-1', prior1);
 
         expect(historyArg().map((m) => m.content)).toEqual(['typed afterwards']);
         const prior = (prepareClientSessionMock.mock.calls[0][0] as { PriorTranscript?: string }).PriorTranscript;
@@ -4184,14 +4292,16 @@ describe('RealtimeClientSessionResolver — conversation-history hydration', () 
     it('matches covered session ids case-insensitively', async () => {
         // SQL Server returns uppercase ids and PostgreSQL lowercase; a case-sensitive compare would
         // double-inject the resumed leg on one of the two.
+        const prior1Lower = '00000000-0000-0000-0000-000000000501';
+        const prior1Upper = prior1Lower.toUpperCase();
         const { provider } = makeProvider({
-            chain: { 'PRIOR-1': { UserID: 'user-1' } },
+            chain: { [prior1Upper]: { UserID: 'user-1' } },
             legRows: [{ ID: 'l-1', Role: 'User', Message: 'said on the last call', HiddenToUser: false }],
-            historyRows: [row('User', 'said on the last call', { AgentSessionID: 'prior-1' })],
+            historyRows: [row('User', 'said on the last call', { AgentSessionID: prior1Lower })],
         });
         currentProvider = provider;
 
-        await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), 'conv-1', 'PRIOR-1');
+        await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), 'conv-1', prior1Upper);
 
         expect(historyArg()).toEqual([]);
     });

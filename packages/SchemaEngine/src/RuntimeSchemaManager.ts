@@ -65,13 +65,46 @@ const MAX_CHILD_HEAP_MB = 4096;
 
 // ─── Typed RSU Configuration ─────────────────────────────────────────
 
+/** File name RSU uses for additionalSchemaInfo when neither the env nor the server sets a path. */
+export const DEFAULT_ADDITIONAL_SCHEMA_INFO_FILE = 'additionalSchemaInfo.json';
+
+/**
+ * Resolves the absolute additionalSchemaInfo path RSU writes, stages and hands to CodeGen (#5858).
+ *
+ * Order matches CodeGen's `ResolveAdditionalSchemaInfoPath`: the `RSU_ADDITIONAL_SCHEMA_INFO_PATH`
+ * env override, then the path the server injected from mj.config (already absolute — resolved
+ * against the config file's directory), then {@link DEFAULT_ADDITIONAL_SCHEMA_INFO_FILE}.
+ * Relative values resolve against `workDir`; absolute values are kept as-is.
+ */
+export function ResolveRSUAdditionalSchemaInfoPath(workDir: string, injectedPath?: string | null, envOverride?: string): string {
+  const chosen = envOverride?.trim() || injectedPath?.trim() || DEFAULT_ADDITIONAL_SCHEMA_INFO_FILE;
+  return nodePath.resolve(workDir, chosen);
+}
+
+/**
+ * Returns the affected tables (`schema.table`) that have no entity in `entities`. Matching is
+ * case-insensitive; a name without a schema matches on table name alone.
+ */
+export function FindTablesWithoutEntities(
+  affectedTables: string[],
+  entities: ReadonlyArray<{ SchemaName: string; BaseTable: string }>,
+): string[] {
+  const known = new Set(entities.map((e) => `${e.SchemaName}.${e.BaseTable}`.toLowerCase()));
+  const knownTables = new Set(entities.map((e) => e.BaseTable.toLowerCase()));
+  return [...new Set(affectedTables)].filter((t) => {
+    const key = t.toLowerCase();
+    return key.includes('.') ? !known.has(key) : !knownTables.has(key);
+  });
+}
+
 /** Centralized, typed access to all RSU environment variables with defaults. */
 class RSUConfig {
   get MigrationsPath(): string {
     return process.env.RSU_MIGRATIONS_PATH || 'migrations/rsu';
   }
-  get AdditionalSchemaInfoPath(): string {
-    return process.env.RSU_ADDITIONAL_SCHEMA_INFO_PATH || 'additionalSchemaInfo.json';
+  /** The `RSU_ADDITIONAL_SCHEMA_INFO_PATH` override, or undefined when unset. */
+  get AdditionalSchemaInfoPathOverride(): string | undefined {
+    return process.env.RSU_ADDITIONAL_SCHEMA_INFO_PATH?.trim() || undefined;
   }
   get DefaultSchema(): string {
     return process.env.RSU_DEFAULT_SCHEMA || '__mj';
@@ -606,12 +639,12 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   }
 
   /**
-   * The additionalSchemaInfo path RSU writes to, relative to WorkDir. Prefers the
-   * CodeGen-configured path (injected at startup) so writer and reader agree; falls
-   * back to the env/default only when nothing was injected.
+   * The absolute additionalSchemaInfo path RSU writes, stages and hands to CodeGen. Callers
+   * that build RSU input (resolvers, SchemaBuilder) read it here so they merge into the same
+   * file. See {@link ResolveRSUAdditionalSchemaInfoPath} for the resolution order.
    */
-  private get additionalSchemaInfoPath(): string {
-    return this._additionalSchemaInfoPath ?? rsuConfig.AdditionalSchemaInfoPath;
+  public get AdditionalSchemaInfoPath(): string {
+    return ResolveRSUAdditionalSchemaInfoPath(rsuConfig.WorkDir, this._additionalSchemaInfoPath, rsuConfig.AdditionalSchemaInfoPathOverride);
   }
 
   // ─── Pending Work (post-restart tasks) ─────────────────────────
@@ -1243,7 +1276,15 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     await this.runStep('WriteAdditionalSchemaInfo', () => this.writeAdditionalSchemaInfo(successfulItems.map((r) => r.Input)), sharedSteps);
 
-    const codegenOk = await this.runStep('RunCodeGen', () => this.runCodeGen(), sharedSteps);
+    const affectedTables = [...new Set(successfulItems.flatMap((r) => r.Input.AffectedTables))];
+    const codegenOk = await this.runStep('RunCodeGen', async () => {
+      await this.runCodeGen();
+      // CodeGen can succeed while creating no entity for a table (e.g. it read an
+      // additionalSchemaInfo without the table's soft primary key). Fail the step and name
+      // the tables, or every later sync silently skips them (#5858).
+      await this.verifyEntitiesExist(affectedTables);
+      return true;
+    }, sharedSteps);
     // Thread the CodeGen success/failure into the post-migration result. A migration
     // can ExecuteMigration:success yet leave its entity with NO spCreate/spUpdate procs
     // if RunCodeGen failed — after which a sync silently skips the entity with
@@ -1531,7 +1572,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     const directoriesToCheck = [
       nodePath.join(workDir, rsuConfig.MigrationsPath),
-      dirname(nodePath.join(workDir, this.additionalSchemaInfoPath)),
+      dirname(this.AdditionalSchemaInfoPath),
       rsuConfig.CodeGenDir,
       workDir, // pipeline log
     ];
@@ -1643,7 +1684,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
   /**
    * Write/merge AdditionalSchemaInfo (soft PK/FK config) to disk so CodeGen can find it.
-   * Path comes from RSU_ADDITIONAL_SCHEMA_INFO_PATH config, resolved relative to WorkDir.
+   * Path comes from {@link AdditionalSchemaInfoPath} — the same file CodeGen reads.
    */
   private async writeAdditionalSchemaInfo(inputs: RSUPipelineInput[]): Promise<boolean> {
     const contents = inputs
@@ -1653,8 +1694,8 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     if (contents.length === 0) return true;
 
     const { readFileSync, writeFileSync, existsSync, mkdirSync } = await import('node:fs');
-    const { join, dirname } = await import('node:path');
-    const configFilePath = join(rsuConfig.WorkDir, this.additionalSchemaInfoPath);
+    const { dirname } = await import('node:path');
+    const configFilePath = this.AdditionalSchemaInfoPath;
 
     // Load existing config or start fresh
     // Format: { schemaName: [ { TableName, PrimaryKey?, ForeignKeys? }, ... ], ... }
@@ -1795,9 +1836,13 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     const codegenDir = rsuConfig.CodeGenDir;
     const timeoutMs = rsuConfig.CodeGenTimeoutMs;
 
+    // The child resolves additionalSchemaInfo on its own, from its own cwd. Pin it to the file
+    // this process just wrote so the two cannot diverge (#5858).
+    const childEnv: NodeJS.ProcessEnv = { ...this.buildChildEnv(), RSU_ADDITIONAL_SCHEMA_INFO_PATH: this.AdditionalSchemaInfoPath };
+
     const customCmd = rsuConfig.CodeGenCommand;
     if (customCmd) {
-      await execAsync(`cd "${codegenDir}" && ${customCmd}`, { timeout: timeoutMs, env: this.buildChildEnv() });
+      await execAsync(`cd "${codegenDir}" && ${customCmd}`, { timeout: timeoutMs, env: childEnv });
       return true;
     }
 
@@ -1815,7 +1860,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     try {
       // Exit code 0 = success. No stdout string matching needed.
-      await execAsync(`cd "${codegenDir}" && node "${tmpScript}"`, { timeout: timeoutMs, env: this.buildChildEnv() });
+      await execAsync(`cd "${codegenDir}" && node "${tmpScript}"`, { timeout: timeoutMs, env: childEnv });
       return true;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -1833,6 +1878,37 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         /* best-effort cleanup */
       }
     }
+  }
+
+  /**
+   * Throws when any affected table has no entity after CodeGen, listing the missing tables.
+   * Reads the Entity table directly: the in-memory metadata is not refreshed until restart.
+   */
+  private async verifyEntitiesExist(affectedTables: string[]): Promise<void> {
+    if (affectedTables.length === 0) return;
+    const provider = this.getDBProvider();
+    const d = this.dialect;
+    const schemas = [...new Set(affectedTables.filter((t) => t.includes('.')).map((t) => t.split('.')[0]))];
+    const schemaFilter = schemas.length > 0
+      ? ` WHERE ${d.QuoteIdentifier('SchemaName')} IN (${schemas.map((_, i) => d.ParameterPlaceholder(i)).join(', ')})`
+      : '';
+    const sql =
+      `SELECT ${d.QuoteIdentifier('SchemaName')}, ${d.QuoteIdentifier('BaseTable')} ` +
+      `FROM ${d.QuoteSchema(provider.MJCoreSchemaName, 'Entity')}${schemaFilter}`;
+    const rows = await provider.ExecuteSQL<{ SchemaName: string; BaseTable: string }>(
+      sql,
+      schemas.length > 0 ? schemas : undefined,
+      { description: 'RSU post-CodeGen entity check' },
+    );
+    const missing = FindTablesWithoutEntities(affectedTables, rows);
+    if (missing.length > 0) {
+      throw new RSUError(
+        'CODEGEN_NO_ENTITIES',
+        `CodeGen completed but created no entity for ${missing.length} of ${affectedTables.length} table(s): ${missing.join(', ')}. ` +
+          `Check that additionalSchemaInfo (${this.AdditionalSchemaInfoPath}) declares a primary key for each table and that CodeGen reads the same file.`,
+      );
+    }
+    this.rsuLog(`Verified an entity exists for all ${affectedTables.length} affected table(s)`);
   }
 
   /**
@@ -2201,7 +2277,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     }
 
     // AdditionalSchemaInfo
-    const schemaInfoPath = resolve(workDir, rsuConfig.AdditionalSchemaInfoPath);
+    const schemaInfoPath = this.AdditionalSchemaInfoPath;
     if (existsSync(schemaInfoPath)) {
       files.push({ repoPath: this.toRepoRelativePath(schemaInfoPath, workDir), absolutePath: schemaInfoPath });
     }
