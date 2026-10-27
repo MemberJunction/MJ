@@ -1274,11 +1274,6 @@ ALTER TABLE [${flyway:defaultSchema}].[MLTrainingPipeline]
         CONSTRAINT [FK_MLTrainingPipeline_EvaluationProtocol] FOREIGN KEY ([EvaluationProtocolID])
             REFERENCES [${flyway:defaultSchema}].[EvaluationProtocol] ([ID]);
 GO
-CREATE NONCLUSTERED INDEX [IX_MLTrainingPipeline_PredictionUnitID]
-    ON [${flyway:defaultSchema}].[MLTrainingPipeline] ([PredictionUnitID]);
-CREATE NONCLUSTERED INDEX [IX_MLTrainingPipeline_EvaluationProtocolID]
-    ON [${flyway:defaultSchema}].[MLTrainingPipeline] ([EvaluationProtocolID]);
-GO
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The exact Prediction Unit version this pipeline trains on. NULL only on a pipeline created before Predictive Studio 6.3 that has not been migrated; such a pipeline cannot be trained.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingPipeline', @level2type = N'COLUMN', @level2name = N'PredictionUnitID';
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The exact Evaluation Protocol version every training run of this pipeline is graded under. Its primary score family must equal the unit''s task kind.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingPipeline', @level2type = N'COLUMN', @level2name = N'EvaluationProtocolID';
 GO
@@ -1343,21 +1338,6 @@ CREATE TABLE [${flyway:defaultSchema}].[TrainingSnapshot] (
     CONSTRAINT [CK_TrainingSnapshot_Versions] CHECK ([LabelVersion] >= 1 AND [FeatureSpecVersion] >= 1)
 );
 GO
-CREATE NONCLUSTERED INDEX [IX_TrainingSnapshot_PipelineID]
-    ON [${flyway:defaultSchema}].[TrainingSnapshot] ([PipelineID]);
-CREATE NONCLUSTERED INDEX [IX_TrainingSnapshot_PredictionUnitID]
-    ON [${flyway:defaultSchema}].[TrainingSnapshot] ([PredictionUnitID]);
-CREATE NONCLUSTERED INDEX [IX_TrainingSnapshot_EvaluationProtocolID]
-    ON [${flyway:defaultSchema}].[TrainingSnapshot] ([EvaluationProtocolID]);
-CREATE NONCLUSTERED INDEX [IX_TrainingSnapshot_StorageProviderID]
-    ON [${flyway:defaultSchema}].[TrainingSnapshot] ([StorageProviderID]);
-CREATE NONCLUSTERED INDEX [IX_TrainingSnapshot_MatrixFileID]
-    ON [${flyway:defaultSchema}].[TrainingSnapshot] ([MatrixFileID]);
-CREATE NONCLUSTERED INDEX [IX_TrainingSnapshot_RowManifestFileID]
-    ON [${flyway:defaultSchema}].[TrainingSnapshot] ([RowManifestFileID]);
-CREATE NONCLUSTERED INDEX [IX_TrainingSnapshot_ProvenanceFileID]
-    ON [${flyway:defaultSchema}].[TrainingSnapshot] ([ProvenanceFileID]);
-GO
 
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'A Training Snapshot: the frozen data one training run learned from — the feature matrix, the row manifest (row id, entity key, decision date, group key, period, role) and per-value provenance as three write-once files, plus the content hash that fingerprints them together with the unit, label, feature-spec and protocol versions. Immutable; identical assemblies share one snapshot (unique ContentHash). Retraining from a snapshot reproduces the run.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot';
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'SHA-256 (lower-case hex) of the canonical JSON of the three file hashes, the feature schema hash, PredictionUnitID, LabelVersion, FeatureSpecVersion, EvaluationProtocolID and DataCutoff.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'ContentHash';
@@ -1410,11 +1390,6 @@ ALTER TABLE [${flyway:defaultSchema}].[MLTrainingRun]
         CONSTRAINT [FK_MLTrainingRun_EvaluationProtocol] FOREIGN KEY ([EvaluationProtocolID])
             REFERENCES [${flyway:defaultSchema}].[EvaluationProtocol] ([ID]),
         CONSTRAINT [CK_MLTrainingRun_ComputeSeconds] CHECK ([ComputeSeconds] >= 0);   -- NULL passes a CHECK on its own (UNKNOWN), so no IS NULL branch (migrations/CLAUDE.md)
-GO
-CREATE NONCLUSTERED INDEX [IX_MLTrainingRun_TrainingSnapshotID]
-    ON [${flyway:defaultSchema}].[MLTrainingRun] ([TrainingSnapshotID]);
-CREATE NONCLUSTERED INDEX [IX_MLTrainingRun_EvaluationProtocolID]
-    ON [${flyway:defaultSchema}].[MLTrainingRun] ([EvaluationProtocolID]);
 GO
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The Training Snapshot this run trained on; NULL for a run refused before assembly and for runs before Predictive Studio 6.3.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingRun', @level2type = N'COLUMN', @level2name = N'TrainingSnapshotID';
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The Evaluation Protocol version the run was graded under, pinned when the run started.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingRun', @level2type = N'COLUMN', @level2name = N'EvaluationProtocolID';
@@ -1991,7 +1966,7 @@ M5.2; `t2` and C2's `n400` M6.8; T2p's `n400` M8.3; N1c's, N1r's and W2-noise's 
 `base | t2`; M5.2 adds `n400` (D3-73).
 
 **Coding-standards invariants enforced at every milestone (`npm run check:standards` + step 2 self-audit):**
-- **CamelCase wire/persisted interface lines (D-039):** `npm run check:standards` checks every property line of every exported `interface` or object-type alias. In exported wire/persisted JSON shapes whose keys are camelCase (`prediction-unit.ts`, `assembly-contract.ts`, `evaluation-protocol.ts`, `training-run-results.ts`, `snapshot-types.ts`, `trainer-contract.ts`, `gate.ts`, `run-evaluation.ts`, `trainer-client.ts`, `training-engine.ts`), every camelCase property line must end with `// case-violation-ok-legacy-back-compat: contracts.ts wire name` (as shown in M10.3's `run-evaluation.ts`).
+- **CamelCase wire/persisted interface lines (D-039, D-067):** `npm run check:standards` (`naming-conventions`, severity `error` in `.mj-standards.json`) judges every member of every exported interface, type literal and enum. Only the persisted/wire shapes that §5.1's "Casing per module" paragraph lists as camelCase keep camelCase, and there every camelCase property line carries `// case-violation-ok-legacy-back-compat: contracts.ts wire name` on the line or the line above (as shown in M10.3's `run-evaluation.ts`); every other new exported type is PascalCase. The plan's snippets do not repeat the marker on every line — add it when writing the file.
 - **Deprecated aliases in touched files (§2.5, D-053):** when a task edits an existing file that carries `@deprecated` lowercase aliases (`ps-pipelines.component.ts` in M3.1, `delegation.ts` in M3.6, `maintenance-engine.ts` / `maintenance/metrics.ts` / `experiment/seams.ts` in M6.2, `ml-sidecar.ts` in M6.6, `evaluation-record.ts` / `importance-display.ts` in M7.2, `pipeline-builder.ts` / `business-predictions.view-models.ts` / `ps-predictions-resource.component.ts` in M10.4, `predictive-studio.nav.ts` / `ps-studio-resource.component.ts` in M11.2), delete the `@deprecated` aliases in that file and update any remaining callers (including inline Angular template bindings) in the same commit.
 - **No plan/finding/gate IDs in product code or comments (D-043, D-049):** product files in `packages/` (outside `TruthSuite` and `integration-test-suite/src/checks/ps-*`) must not contain plan IDs (`M1`–`M12`, `D3-xx`, `PR 3`), finding IDs (`F-LK-1`, `F-TR-6`, `F-PIT-1`, etc.), or gate/criterion IDs (`G1.x`, `G2.x`, `S1.x`) in identifiers, strings, or comments — state the domain rule in plain words when writing the file from the plan snippet.
 
@@ -27741,7 +27716,7 @@ export class PSProtocolEditorComponent {
 
 ```ts
 // components/protocol-versions/protocol-versions.component.ts  (L2)
-import { ChangeDetectorRef, Component, EventEmitter, inject, Input, Output } from '@angular/core';
+import { ChangeDetectorRef, Component, EventEmitter, inject, Input, OnInit, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RunView } from '@memberjunction/core';
 import type { MJEvaluationProtocolEntity, MJMLTrainingPipelineEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
@@ -27786,15 +27761,22 @@ interface VersionedProtocolRow {
     </div>
   `,
 })
-export class PSProtocolLineageComponent extends BaseAngularComponent {
+export class PSProtocolLineageComponent extends BaseAngularComponent implements OnInit {
   private readonly cdr = inject(ChangeDetectorRef);
   private _evaluationProtocolId: string | null = null;
+  private isInitialized = false;
 
   /** Any version row of the lineage. */
   @Input()
   public get EvaluationProtocolID(): string | null { return this._evaluationProtocolId; }
   public set EvaluationProtocolID(value: string | null) {
+    if (value === this._evaluationProtocolId) return;
     this._evaluationProtocolId = value;
+    if (this.isInitialized) void this.Load();   // before init `Provider` may not be bound yet (static attributes are set first); ngOnInit loads once
+  }
+
+  public ngOnInit(): void {
+    this.isInitialized = true;
     void this.Load();
   }
 
@@ -27902,7 +27884,7 @@ export class PSProtocolLineageComponent extends BaseAngularComponent {
 }
 ```
 
-  The unit widgets mirror the protocol ones with the unit types and functions (using `@Input()` getter/setter pairs and `inject(ChangeDetectorRef)` + `this.cdr.detectChanges()` after `await` in async methods, never `OnChanges`/`ngOnChanges`, per `packages/Angular/CLAUDE.md`):
+  The unit widgets mirror the protocol ones with the unit types and functions (using `@Input()` getter/setter pairs with an `isInitialized` flag — `ngOnInit` sets it and performs the first load once every input, `Provider` included, is bound; a setter loads only after init and only when the value changed — and `inject(ChangeDetectorRef)` + `this.cdr.detectChanges()` after `await` in async methods, never `OnChanges`/`ngOnChanges`, per `packages/Angular/CLAUDE.md`):
   - `unit-summary.component.ts` (L1, selector `mj-ps-unit-summary`): `PSUnitSummaryComponent` has
     `public static UnitSummaryRows(u: PredictionUnitSpec): readonly SummaryRow[]` (as `ProtocolSummaryRows` above); `@Input() Unit: PredictionUnitSpec | null`, `@Input() IsLatest`, `@Input() CanEdit`,
     `@Output() EditRequested`; rows: what one row is (`grain` entity + decision-date rule, or grain × periods of the
@@ -27920,7 +27902,7 @@ export class PSProtocolLineageComponent extends BaseAngularComponent {
     not of the form-editable kind); `Recompute()` calls `UnitEdits.ApplyUnitEdits`, shows its error in
     `[data-testid="ps-unit-error"]`, and shows "Label version will be N" from the result. The window input carries
     `data-testid="ps-unit-window"` and the save button `data-testid="ps-unit-save"` (M11.2's spec drives them).
-  - `unit-versions.component.ts` (L2, selector `mj-ps-unit-versions`): `@Input() get/set UnitID: string | null` (setter triggers `void this.Load()`, which calls `this.cdr.detectChanges()` after `await`),
+  - `unit-versions.component.ts` (L2, selector `mj-ps-unit-versions`): `@Input() get/set UnitID: string | null` (`ngOnInit` loads first; the setter triggers `void this.Load()` after init when the value changed; `Load` calls `this.cdr.detectChanges()` after `await`),
     `@Output() VersionCreated`; its version list carries `data-testid="ps-unit-version-list"`; loads the lineage like
     `protocol-versions` (`MJ: Prediction Units`,
     `LineageRootID='<root>'`, `PredictionUnit.ParsePredictionUnitRow`), and saves the next version with
@@ -27931,7 +27913,7 @@ export class PSProtocolLineageComponent extends BaseAngularComponent {
 
 ```ts
 // components/pipeline-bindings/pipeline-bindings.component.ts  (L2)
-import { ChangeDetectorRef, Component, EventEmitter, inject, Input, Output } from '@angular/core';
+import { ChangeDetectorRef, Component, EventEmitter, inject, Input, OnInit, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RunView } from '@memberjunction/core';
 import type { MJMLTrainingPipelineEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
@@ -27978,14 +27960,21 @@ type VersionFields = Pick<MJPredictionUnitEntity, 'ID' | 'Name' | 'Version' | 'L
     </dl>
   `,
 })
-export class PSPipelineBindingsComponent extends BaseAngularComponent {
+export class PSPipelineBindingsComponent extends BaseAngularComponent implements OnInit {
   private readonly cdr = inject(ChangeDetectorRef);
   private _pipelineId: string | null = null;
+  private isInitialized = false;
 
   @Input()
   public get PipelineID(): string | null { return this._pipelineId; }
   public set PipelineID(value: string | null) {
+    if (value === this._pipelineId) return;
     this._pipelineId = value;
+    if (this.isInitialized) void this.Load();   // before init `Provider` may not be bound yet (static attributes are set first); ngOnInit loads once
+  }
+
+  public ngOnInit(): void {
+    this.isInitialized = true;
     void this.Load();
   }
 
@@ -28068,7 +28057,7 @@ export class PSPipelineBindingsComponent extends BaseAngularComponent {
 
 ```ts
 // components/run-evaluation/run-evaluation.component.ts  (L2)
-import { ChangeDetectorRef, Component, inject, Input } from '@angular/core';
+import { ChangeDetectorRef, Component, inject, Input, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RunView } from '@memberjunction/core';
 import type { MJMLTrainingRunEntity } from '@memberjunction/core-entities';
@@ -28088,22 +28077,30 @@ import { PSEvaluationResultsComponent } from '../evaluation-results/evaluation-r
   `,
   styleUrls: ['../ps-widgets.css'],
 })
-export class PSRunEvaluationComponent extends BaseAngularComponent {
+export class PSRunEvaluationComponent extends BaseAngularComponent implements OnInit {
   private readonly cdr = inject(ChangeDetectorRef);
   private _modelId: string | null = null;
   private _trainingRunId: string | null = null;
+  private isInitialized = false;
 
   @Input()
   public get ModelID(): string | null { return this._modelId; }
   public set ModelID(value: string | null) {
+    if (value === this._modelId) return;
     this._modelId = value;
-    void this.Load();
+    if (this.isInitialized) void this.Load();   // before init `Provider` may not be bound yet (static attributes are set first); ngOnInit loads once
   }
 
   @Input()
   public get TrainingRunID(): string | null { return this._trainingRunId; }
   public set TrainingRunID(value: string | null) {
+    if (value === this._trainingRunId) return;
     this._trainingRunId = value;
+    if (this.isInitialized) void this.Load();
+  }
+
+  public ngOnInit(): void {
+    this.isInitialized = true;
     void this.Load();
   }
 
@@ -28130,7 +28127,7 @@ export class PSRunEvaluationComponent extends BaseAngularComponent {
 
 ```ts
 // components/versioned-list/versioned-list.component.ts  (L2)
-import { ChangeDetectorRef, Component, EventEmitter, inject, Input, Output } from '@angular/core';
+import { ChangeDetectorRef, Component, EventEmitter, inject, Input, OnInit, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RunView } from '@memberjunction/core';
 import { NormalizeUUID } from '@memberjunction/global';
@@ -28172,14 +28169,21 @@ export interface LineageItem {
     </table>
   `,
 })
-export class PSVersionedListComponent extends BaseAngularComponent {
+export class PSVersionedListComponent extends BaseAngularComponent implements OnInit {
   private readonly cdr = inject(ChangeDetectorRef);
   private _entityName: VersionedEntityName = 'MJ: Evaluation Protocols';
+  private isInitialized = false;
 
   @Input()
   public get EntityName(): VersionedEntityName { return this._entityName; }
   public set EntityName(value: VersionedEntityName) {
+    if (value === this._entityName) return;
     this._entityName = value;
+    if (this.isInitialized) void this.Load();   // before init `Provider` may not be bound yet (static attributes are set first); ngOnInit loads once
+  }
+
+  public ngOnInit(): void {
+    this.isInitialized = true;
     void this.Load();
   }
 
@@ -28390,7 +28394,7 @@ export class PSModelEvaluationPanel extends BaseFormPanel<MJMLModelEntity> {}
 export const PS_RECORD_PANELS = [PSProtocolLineagePanel, PSUnitVersionsPanel, PSPipelineBindingsPanel, PSModelEvaluationPanel] as const;
 ```
 
-  Register them from the Studio resource and export them from `packages/Angular/Explorer/dashboards/src/public-api.ts` (`export * from './PredictiveStudio/record-panels/ps-protocol-panels';`, required by `packages/Angular/CLAUDE.md` so Angular's compiler emits partial-compilation metadata for the four `@Component` panel classes in the library build). In
+  Register them from the Studio resource and export them from `packages/Angular/Explorer/dashboards/src/public-api.ts` (`export * from './PredictiveStudio/record-panels/ps-protocol-panels';` — the class-registration manifests list only classes exported from a package's type entry point (`GenerateClassRegistrationsManifest`'s `collectExportedClassNames`), and an unexported `@RegisterClass` class is a coverage gap of the manifest audit). In
   `resources/ps-studio-resource.component.ts` add `import { PS_RECORD_PANELS } from '../record-panels/ps-protocol-panels';`
   and, in `PSStudioResourceComponent`:
 
@@ -28470,8 +28474,9 @@ test.describe.serial('Predictive Studio — unit and protocol surfaces', () => {
 
   test('the model form shows the stored protocol results, readable in light and dark themes', async ({ page }) => {
     await openRecordInApp(page, 'MJ: ML Models', need('PS_C1_MODEL_ID'));
-    const evalNav = page.locator('[data-section-key="ps-model-evaluation"], .mj-left-nav-item, button, a', { hasText: 'Evaluation (protocol results)' }).first();
-    if (await evalNav.isVisible()) await evalNav.click();
+    const evalNav = page.locator('.mj-forms-chrome-rail-item', { hasText: 'Evaluation (protocol results)' });
+    await expect(evalNav).toHaveCount(1);
+    await evalNav.click();
     await expect(page.locator('[data-testid="ps-eval-outcome"]')).toBeVisible();
     await expect(page.locator('[data-testid="ps-eval-reason"]')).toContainText('[');
     expect(await page.locator('[data-testid="ps-eval-baseline"]').count()).toBeGreaterThanOrEqual(3);
@@ -28480,8 +28485,9 @@ test.describe.serial('Predictive Studio — unit and protocol surfaces', () => {
     await expect(page.locator('[data-testid="ps-eval-leakage"], [data-testid="ps-eval-leakage-none"]')).toHaveCount(1);
     await expectReadable(page, '[data-testid="ps-eval"]');
     await openRecordInApp(page, 'MJ: ML Models', need('PS_LEGACY_MODEL_ID'));
-    const legacyEvalNav = page.locator('[data-section-key="ps-model-evaluation"], .mj-left-nav-item, button, a', { hasText: 'Evaluation (protocol results)' }).first();
-    if (await legacyEvalNav.isVisible()) await legacyEvalNav.click();
+    const legacyEvalNav = page.locator('.mj-forms-chrome-rail-item', { hasText: 'Evaluation (protocol results)' });
+    await expect(legacyEvalNav).toHaveCount(1);
+    await legacyEvalNav.click();
     await expect(page.locator('[data-testid="ps-eval-empty"]')).toContainText('not evaluated under an Evaluation Protocol');
   });
 });
@@ -28504,7 +28510,7 @@ test.describe.serial('Predictive Studio — unit and protocol surfaces', () => {
 #### Task M11.3: Migrate every existing pipeline to a Prediction Unit and an Evaluation Protocol; delete the legacy training path
 
 **Decision (D3-37, amended by D3-42, D3-43 and D3-44; recorded in §9; the release step is added to
-`guides/PREDICTIVE_STUDIO_GUIDE.md` §19 and `program/conventions.md`):** the data migration runs as an **Action**, `Predictive Studio: Migrate Pipelines to
+`program/release-procedure.md`):** the data migration runs as an **Action**, `Predictive Studio: Migrate Pipelines to
 Prediction Units and Evaluation Protocols` (dry run by default, idempotent), executed by the release procedure's
 automated step right after PR 3 is deployed (Step 7: a dry run, the real run, and assertions that the two agree — no
 one reads the report to approve it). It is not a SQL migration and not metadata INSERTs because each unit needs the
@@ -28572,8 +28578,8 @@ holdout of D3-36 with the legacy share; the decision date itself advances to eac
 `Engine/src/prediction-unit/decision-date-advance.ts` (export it from `prediction-unit/index.ts`), the runtime rig
 `packages/TestingFramework/integration-test-suite/rigs/ps-pipeline-migration-check.ts` · Modify `Engine/src/index.ts`
 (`export * from './migration';`), `Engine/src/agent/pipeline-builder.ts`, `Engine/src/training/training-engine.ts`,
-`metadata/actions/predictive-studio/.predictive-studio-actions.json` (append one record), `guides/PREDICTIVE_STUDIO_GUIDE.md`
-(§19 release step; also `program/conventions.md` in plans repo), PR 2's harness `packages/AI/PredictiveStudio/TruthSuite/src/harness/pipelines.ts` · Tests
+`metadata/actions/predictive-studio/.predictive-studio-actions.json` (append one record), `program/release-procedure.md`
+(plans repo: one release step), PR 2's harness `packages/AI/PredictiveStudio/TruthSuite/src/harness/pipelines.ts` · Tests
 `Core/src/__tests__/legacy-pipeline.test.ts`, `Engine/src/prediction-unit/__tests__/decision-date-advance.test.ts` · Step 6
 deletes the files and members listed there.
 
@@ -29497,7 +29503,7 @@ describe('DecisionDateAdvanceChanges', () => {
     the refusal is raised before `createRunRow`, so
     `sqlcmd "${S[@]}" -Q "SELECT COUNT(*) FROM __mj.MLTrainingRun WHERE PipelineID='<id>'"` → `0`.
 
-- [ ] Step 7: Record the release step in `guides/PREDICTIVE_STUDIO_GUIDE.md` (§19 deployment note; and `program/conventions.md` in the plans repo), executed by the release agent
+- [ ] Step 7: Record the release step in `program/release-procedure.md` (plans repo), executed by the release agent
   with no reader in the loop (D3-44): "Right after deploying PR 3: (1) run
   `mj ai actions run -n "Migrate Pipelines to Prediction Units and Evaluation Protocols" -p DryRun=true --format json`
   and keep its `MigratedCount`, `ArchivedCount`, `HeldCount`; `FailedCount` must be 0. (2) Run it with `-p DryRun=false`:
@@ -30605,6 +30611,23 @@ corrected, B-REGISTRY-TEST).
   appear once that lazy chunk has loaded, and M11.2's spec opens record forms inside the app after the Studio door.
   Reason: owner, 2026-10-26 — it avoids the `ng-dashboards` → `ng-core-entity-forms` cycle and any new package.
   *Rejected:* the forms package's `MLModels/` folder (the cycle stays); a new widgets package.
+- **D3-75** · Adversarial review fold (the owner's reviewer, MJ commit `bab378eb53` and plans-repo commit `73bac87`,
+  2026-10-26; second review 2026-10-27). *Accepted:* `PSVersionedListComponent` imported by
+  `PredictiveStudioDashboardsModule` (the Studio resource is module-declared), the `.pstruth-c1-entities.json` lookup
+  shape (`SchemaName=pstruth&BaseTable=…` plus `Name`), the `a.Errors` / `PredictionUnitVersioning.columnsOf` /
+  `HoldoutPeriods` snippet fixes, M10.4's edits to the W7 gate check, the agent context and the harness tests, the
+  nav-test assertion update, the M12.4 / M12.7 and `protocol-rows.ts` references, the W7 no-signal spec fixture,
+  `@Input()` setters instead of `ngOnChanges`, the public-api export of the record panels (so the class-registration
+  manifests list them), the three allowlist additions, and the casing / deprecated-alias / plan-ID invariants in the §6
+  preamble. *Reverted:* the eleven hand-written foreign-key indexes (CodeGen emits `IDX_AUTO_MJ_FKEY_<Table>_<Column>`
+  for every FK column and its `IF NOT EXISTS` checks only that name, so the migration would index each column twice);
+  the relocation of M11.3's release step out of `program/release-procedure.md` (D3-44 stands; the guide's §19 is
+  "Getting started"); setters that loaded before `Provider` was bound (Angular applies static attribute inputs before
+  property bindings, so `EntityName="…"` ran `Load()` on the global provider — an `isInitialized` flag and `ngOnInit`
+  added, as the pattern in `packages/Angular/CLAUDE.md` prescribes); the conditional rail click in M11.2's spec (D3-45:
+  assertions only). The casing invariant now points at §5.1 instead of carrying a second file list, and the public-api
+  export states its real reason (the manifest audit, not compiler metadata). Reason: every change was verified against
+  `origin/next` @ `6e2b57017b` and the program rules; the fold itself had no §9 or §12 record (conventions §1 step 6).
 
 ### 9.2 Risks
 
@@ -30654,7 +30677,7 @@ Product-direction questions keep a working automated default; the others are dec
   hyperparameters only, and the builder logs feature-set proposals as not applied (M9.4); PR 5 owns them.
 - Q3-9 (decided): `ValidationStrategy` / `LeakageGuard` / `AsOfStrategy` stay on the pipeline, deprecated and read by
   nothing after M11.3; dropping them is a later breaking-change PR under the publish-no-break policy, outside this program.
-- Q3-10 (decided): the migration's release step is recorded by M11.3 Step 7 in `guides/PREDICTIVE_STUDIO_GUIDE.md` (§19) and `program/conventions.md` (D3-44).
+- Q3-10 (decided): the migration's release step is recorded by M11.3 Step 7 in `program/release-procedure.md` (D3-44).
 - Q3-11 (decided): D-024 puts the decision-table and interval parity loops in PR 3 (M10.2) and the 46 run-time checks
   of `deliver`/`compareToIncumbent`/`reverifyPublish`/`decideStatusWrite` in PR 4; PR 4's kickoff refresh updates its §3
   note (an instruction to that refresh, M12.7).
@@ -31022,3 +31045,22 @@ Product-direction questions keep a working automated default; the others are dec
 - **M11.2 re-homed** (D3-74): the record panels move to `dashboards/src/PredictiveStudio/record-panels/ps-protocol-panels.ts`,
   kept by `PSStudioResourceComponent.RecordPanels` and exported from `dashboards/src/public-api.ts` (with `PSVersionedListComponent` imported in `dashboards/src/predictive-studio-dashboards.module.ts`, both added to the allowlist); no `ng-core-entity-forms` change; the spec opens record forms in-app after the Studio door
   because the panels register with the lazy Predictive Studio chunk.
+
+### 2026-10-27 — adversarial review fold recorded and corrected (D3-75) — Claude Fable 5.1
+
+- **Trigger:** plan edit. The owner's adversarial reviewer committed `bab378eb53` (this plan: 218 insertions, 118
+  deletions) and plans-repo `73bac87` (`tools/milestone-exit.mjs`: `npm run check:ui` and per-package `test:python`
+  commands, a `.changeset` check required at M12, gate rows matched as `.gate-*.json`; conventions §6 gate text aligned
+  with D-063; the model-predictions proposal renamed to a D-069 candidate because D-061 was already taken) without §9
+  or §12 entries. A second review verified each change against `origin/next` @ `6e2b57017b`; D3-75 lists what was
+  kept and what was reverted.
+- **Kept** (verified): the module import, the C1 entity-metadata lookup shape, three snippet compile fixes, the M10.4
+  file list and W7 gate-check edits, the nav-test assertions, the M12 renumbering, the M11 parallel-safe wording, the W7
+  no-signal fixture, the setter pattern, the public-api export, the allowlist additions, the §6 invariants.
+- **Corrected:** §5.2 loses the eleven `IX_*` FK indexes (CodeGen's `IDX_AUTO_MJ_FKEY_*` covers them); M11.3 Step 7 and
+  Q3-10 point at `program/release-procedure.md` again; M11.1's five data-loading components gain `isInitialized` +
+  `ngOnInit` so the first load runs after `Provider` is bound; M11.2 Step 5's spec asserts the rail section
+  (`.mj-forms-chrome-rail-item`) and clicks it unconditionally; the §6 casing invariant defers to §5.1; M11.2 Step 3
+  states the manifest-audit reason for the export.
+- **Anchors:** no anchored line edited; `check-anchors` not re-run (code untouched). `milestone-exit --milestone M1
+  --skip-commands` → the same two cadence failures as the 2026-10-26 entry (`# checks 9 · failed 2`, `exit=1`).
