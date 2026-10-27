@@ -1,11 +1,18 @@
-import type { SQLParserDialect } from '@memberjunction/sql-dialect';
+import type {
+    DialectLexicalRules,
+    IdentifierQuoteForm,
+    LineCommentForm,
+    ParserDialect,
+    SQLParserDialect,
+    StringLiteralForm,
+} from '@memberjunction/sql-dialect';
 
 /**
  * Kinds of token {@link LexSQL} produces.
  *
  * - `word`: a bare keyword or identifier (`SELECT`, `Name`, `__mj`).
  * - `number`: a numeric literal.
- * - `string`: a string literal in any form (`'…'`, `N'…'`, `E'…'`, `$tag$…$tag$`).
+ * - `string`: a string literal in any form (`'…'`, `N'…'`, `E'…'`, `$tag$…$tag$`, `q'[…]'`).
  * - `identifier`: a quoted identifier (`"…"`, `[…]`, `` `…` ``).
  * - `comment`: a line or block comment.
  * - `open` / `close`: a parenthesis.
@@ -32,20 +39,57 @@ export interface SQLLexToken {
     Depth: number;
 }
 
-interface LexFeatures {
-    Brackets: boolean;
-    Backticks: boolean;
-    EscapeStrings: boolean;
-    DollarQuotes: boolean;
+/** A dialect the lexer accepts: one with a lexical facet, or the older parser-dialect interface. */
+export type LexDialect = ParserDialect | SQLParserDialect;
+
+const DOUBLE_QUOTED_IDENTIFIER: IdentifierQuoteForm = { Open: '"', Close: '"', DoubledCloseEscape: true };
+const PLAIN_STRING: StringLiteralForm = { Prefixes: ['', 'N'], Quote: "'", DoubledQuoteEscape: true, BackslashEscape: false };
+const ESCAPE_STRING: StringLiteralForm = { Prefixes: ['E'], Quote: "'", DoubledQuoteEscape: true, BackslashEscape: true };
+
+/**
+ * The lexical rules of a dialect. A dialect with a {@link DialectLexicalRules} facet supplies its
+ * own; for one with only the older interface they are derived from its quoting and string flags:
+ * `"…"` identifiers plus `[…]` or `` `…` `` when it quotes that way, `'…'` / `N'…'` strings plus
+ * `E'…'` and dollar quoting when flagged, `--` comments and nested block comments.
+ */
+function rulesFor(dialect: LexDialect): DialectLexicalRules {
+    if ('Lexical' in dialect) {
+        return dialect.Lexical;
+    }
+    return legacyRules(dialect);
 }
 
-function featuresFor(dialect: SQLParserDialect): LexFeatures {
+function legacyRules(dialect: SQLParserDialect): DialectLexicalRules {
     const sample = dialect.QuoteIdentifier('x');
+    const identifiers: IdentifierQuoteForm[] = [DOUBLE_QUOTED_IDENTIFIER];
+    if (sample.startsWith('[')) identifiers.push({ Open: '[', Close: ']', DoubledCloseEscape: true });
+    if (sample.startsWith('`')) identifiers.push({ Open: '`', Close: '`', DoubledCloseEscape: true });
     return {
-        Brackets: sample.startsWith('['),
-        Backticks: sample.startsWith('`'),
-        EscapeStrings: dialect.SupportsEscapeStringLiterals,
-        DollarQuotes: dialect.SupportsDollarQuotedStrings
+        IdentifierQuotes: identifiers,
+        StringLiterals: dialect.SupportsEscapeStringLiterals ? [PLAIN_STRING, ESCAPE_STRING] : [PLAIN_STRING],
+        BackslashEscapesDependOnServerSettings: false,
+        DollarQuotedStrings: dialect.SupportsDollarQuotedStrings ? 'tagged' : 'none',
+        AlternativeQuotingPrefixes: [],
+        LineComments: [{ Opener: '--', RequiresWhitespaceAfter: false }],
+        BlockComments: { Nested: true, ExecutableOpeners: [] },
+        ParameterPlaceholders: [],
+        UnquotedIdentifierCase: 'none',
+    };
+}
+
+/** Lexical rules with each form's prefixes sorted longest first, so `NQ'` is tried before `N'`. */
+interface CompiledRules {
+    Rules: DialectLexicalRules;
+    Strings: { Form: StringLiteralForm; Prefixes: string[] }[];
+    AlternativePrefixes: string[];
+}
+
+function compile(rules: DialectLexicalRules): CompiledRules {
+    const longestFirst = (prefixes: readonly string[]) => [...prefixes].sort((a, b) => b.length - a.length);
+    return {
+        Rules: rules,
+        Strings: rules.StringLiterals.map(form => ({ Form: form, Prefixes: longestFirst(form.Prefixes) })),
+        AlternativePrefixes: longestFirst(rules.AlternativeQuotingPrefixes),
     };
 }
 
@@ -58,22 +102,18 @@ const DIGIT = /[0-9]/;
  * including SQL the AST parser rejects. Every character of the input belongs to exactly one
  * token, so joining the tokens' text reproduces the input.
  *
- * Recognizes string literals with doubled-quote escapes and the `N` prefix, double-quoted
- * identifiers, `--` line comments (ended by a CR or an LF) and nested block comments everywhere,
- * and per dialect:
- * bracket or backtick identifiers when the dialect quotes identifiers that way, `E'…'` strings
- * with backslash escapes when {@link SQLParserDialect.SupportsEscapeStringLiterals} is set, and
- * dollar-quoted strings (`$$…$$`, `$tag$…$tag$`) when
- * {@link SQLParserDialect.SupportsDollarQuotedStrings} is set. An unterminated literal or comment
- * runs to the end of the input.
+ * The dialect's lexical rules decide which string literal forms (prefixes, doubled-quote and
+ * backslash escapes, dollar quoting, Oracle `q'…'` quoting), quoted identifier forms and comment
+ * forms (`--`, `#`, `//`, nested or flat block comments) exist. An unterminated literal or
+ * comment runs to the end of the input.
  */
-export function LexSQL(sql: string, dialect: SQLParserDialect): SQLLexToken[] {
-    const features = featuresFor(dialect);
+export function LexSQL(sql: string, dialect: LexDialect): SQLLexToken[] {
+    const rules = compile(rulesFor(dialect));
     const tokens: SQLLexToken[] = [];
     let depth = 0;
     let i = 0;
     while (i < sql.length) {
-        const [kind, end] = readToken(sql, i, features);
+        const [kind, end] = readToken(sql, i, rules);
         if (kind === 'close') depth = Math.max(0, depth - 1);
         tokens.push({ Kind: kind, Text: sql.substring(i, end), Start: i, End: end, Depth: depth });
         if (kind === 'open') depth++;
@@ -83,22 +123,22 @@ export function LexSQL(sql: string, dialect: SQLParserDialect): SQLLexToken[] {
 }
 
 /** Reads the token starting at `i`; returns its kind and the offset just past it. */
-function readToken(sql: string, i: number, f: LexFeatures): [SQLLexTokenKind, number] {
+function readToken(sql: string, i: number, rules: CompiledRules): [SQLLexTokenKind, number] {
+    const ch = sql[i];
+    if (/\s/.test(ch)) return ['whitespace', skipWhile(sql, i, c => /\s/.test(c))];
+    const comment = readComment(sql, i, rules.Rules);
+    if (comment > i) return ['comment', comment];
+    const literal = readStringLiteral(sql, i, rules);
+    if (literal > i) return ['string', literal];
+    const identifier = readQuotedIdentifier(sql, i, rules.Rules.IdentifierQuotes);
+    if (identifier > i) return ['identifier', identifier];
+    return readPlainToken(sql, i);
+}
+
+/** Punctuation, numbers, words and operators: the tokens every dialect shares. */
+function readPlainToken(sql: string, i: number): [SQLLexTokenKind, number] {
     const ch = sql[i];
     const next = sql[i + 1] ?? '';
-    if (/\s/.test(ch)) return ['whitespace', skipWhile(sql, i, c => /\s/.test(c))];
-    if (ch === '-' && next === '-') return ['comment', skipLineComment(sql, i)];
-    if (ch === '/' && next === '*') return ['comment', skipBlockComment(sql, i)];
-    if (ch === "'") return ['string', skipQuoted(sql, i, "'", false)];
-    if ((ch === 'N' || ch === 'n') && next === "'") return ['string', skipQuoted(sql, i + 1, "'", false)];
-    if (f.EscapeStrings && (ch === 'E' || ch === 'e') && next === "'") return ['string', skipQuoted(sql, i + 1, "'", true)];
-    if (f.DollarQuotes && ch === '$') {
-        const end = skipDollarQuoted(sql, i);
-        if (end > i) return ['string', end];
-    }
-    if (ch === '"') return ['identifier', skipQuoted(sql, i, '"', false)];
-    if (f.Brackets && ch === '[') return ['identifier', skipQuoted(sql, i, ']', false)];
-    if (f.Backticks && ch === '`') return ['identifier', skipQuoted(sql, i, '`', false)];
     if (ch === '(') return ['open', i + 1];
     if (ch === ')') return ['close', i + 1];
     if (ch === ',') return ['comma', i + 1];
@@ -115,36 +155,79 @@ function skipWhile(sql: string, i: number, test: (c: string) => boolean): number
     return j;
 }
 
-/** A line comment ends at a CR or an LF, as on SQL Server and PostgreSQL. */
+/** The end of a comment starting at `i`, or `i` when none starts there. */
+function readComment(sql: string, i: number, rules: DialectLexicalRules): number {
+    for (const form of rules.LineComments) {
+        if (opensLineComment(sql, i, form)) return skipLineComment(sql, i);
+    }
+    if (sql.startsWith('/*', i)) return skipBlockComment(sql, i, rules.BlockComments.Nested);
+    return i;
+}
+
+/**
+ * Whether a line comment of this form opens at `i`. A form that needs whitespace after its opener
+ * accepts a whitespace or control character, or the end of the text.
+ */
+function opensLineComment(sql: string, i: number, form: LineCommentForm): boolean {
+    if (!sql.startsWith(form.Opener, i)) return false;
+    if (!form.RequiresWhitespaceAfter) return true;
+    const following = sql.charCodeAt(i + form.Opener.length);
+    return Number.isNaN(following) || following <= 0x20 || following === 0x7f;
+}
+
+/** A line comment ends at a CR or an LF. */
 function skipLineComment(sql: string, i: number): number {
     let j = i;
     while (j < sql.length && sql[j] !== '\n' && sql[j] !== '\r') j++;
     return j;
 }
 
-/** Block comments nest on both SQL Server and PostgreSQL. */
-function skipBlockComment(sql: string, i: number): number {
+/** A block comment ends at the matching `*\/`; with `nested`, each inner `/*` needs its own. */
+function skipBlockComment(sql: string, i: number, nested: boolean): number {
     let depth = 0;
     let j = i;
     while (j < sql.length) {
-        if (sql[j] === '/' && sql[j + 1] === '*') { depth++; j += 2; continue; }
+        if (sql[j] === '/' && sql[j + 1] === '*' && (nested || depth === 0)) { depth++; j += 2; continue; }
         if (sql[j] === '*' && sql[j + 1] === '/') { depth--; j += 2; if (depth === 0) return j; continue; }
         j++;
     }
     return sql.length;
 }
 
+/** The end of a string literal starting at `i`, or `i` when none starts there. */
+function readStringLiteral(sql: string, i: number, rules: CompiledRules): number {
+    const alternative = readAlternativeQuoted(sql, i, rules.AlternativePrefixes);
+    if (alternative > i) return alternative;
+    for (const { Form, Prefixes } of rules.Strings) {
+        const prefix = Prefixes.find(p => startsWithIgnoringCase(sql, i, p) && sql[i + p.length] === Form.Quote);
+        if (prefix !== undefined) {
+            return skipQuoted(sql, i + prefix.length, Form.Quote, Form.DoubledQuoteEscape, Form.BackslashEscape);
+        }
+    }
+    return readDollarQuoted(sql, i, rules.Rules);
+}
+
+function startsWithIgnoringCase(sql: string, i: number, prefix: string): boolean {
+    return sql.substring(i, i + prefix.length).toUpperCase() === prefix.toUpperCase();
+}
+
+/** The end of a quoted identifier starting at `i`, or `i` when none starts there. */
+function readQuotedIdentifier(sql: string, i: number, forms: readonly IdentifierQuoteForm[]): number {
+    const form = forms.find(f => sql[i] === f.Open);
+    return form ? skipQuoted(sql, i, form.Close, form.DoubledCloseEscape, false) : i;
+}
+
 /**
- * Skips a quoted span opening at `i`. A doubled closing character is an escaped literal; with
- * `backslashEscapes`, so is any character after a backslash.
+ * Skips a quoted span opening at `i`. With `doubledEscape`, a doubled closing character is an
+ * escaped literal; with `backslashEscapes`, so is any character after a backslash.
  */
-function skipQuoted(sql: string, i: number, close: string, backslashEscapes: boolean): number {
+function skipQuoted(sql: string, i: number, close: string, doubledEscape: boolean, backslashEscapes: boolean): number {
     let j = i + 1;
     while (j < sql.length) {
         const c = sql[j];
         if (backslashEscapes && c === '\\') { j += 2; continue; }
         if (c === close) {
-            if (sql[j + 1] === close) { j += 2; continue; }
+            if (doubledEscape && sql[j + 1] === close) { j += 2; continue; }
             return j + 1;
         }
         j++;
@@ -152,13 +235,42 @@ function skipQuoted(sql: string, i: number, close: string, backslashEscapes: boo
     return sql.length;
 }
 
+const ALTERNATIVE_QUOTE_PARTNERS: Readonly<Record<string, string>> = { '[': ']', '{': '}', '<': '>', '(': ')' };
+
+/**
+ * Skips an Oracle alternative-quoted literal (`q'[…]'`, `nq'!…!'`) opening at `i`, or returns `i`.
+ * The delimiter is any character but a space, tab or line break; `[ { < (` close with their
+ * partner, any other delimiter with itself, and the closing delimiter is followed by a quote.
+ */
+function readAlternativeQuoted(sql: string, i: number, prefixes: readonly string[]): number {
+    const prefix = prefixes.find(p => startsWithIgnoringCase(sql, i, p) && sql[i + p.length] === "'");
+    if (prefix === undefined) return i;
+    const delimiterAt = i + prefix.length + 1;
+    const delimiter = String.fromCodePoint(sql.codePointAt(delimiterAt) ?? 0x20);
+    if (delimiterAt >= sql.length || /[ \t\r\n]/.test(delimiter)) return i;
+    const terminator = (ALTERNATIVE_QUOTE_PARTNERS[delimiter] ?? delimiter) + "'";
+    const close = sql.indexOf(terminator, delimiterAt + delimiter.length);
+    return close === -1 ? sql.length : close + terminator.length;
+}
+
+/** The end of a dollar-quoted string starting at `i`, or `i` when none starts there. */
+function readDollarQuoted(sql: string, i: number, rules: DialectLexicalRules): number {
+    if (sql[i] !== '$' || rules.DollarQuotedStrings === 'none') return i;
+    if (rules.DollarQuotedStrings === 'untagged') {
+        if (!sql.startsWith('$$', i)) return i;
+        const close = sql.indexOf('$$', i + 2);
+        return close === -1 ? sql.length : close + 2;
+    }
+    return skipTaggedDollarQuoted(sql, i);
+}
+
 /**
  * Skips a PostgreSQL dollar-quoted string opening at `i`, or returns `i` when the `$` does not
  * open one (a positional parameter such as `$1`, or a stray `$`).
  */
-function skipDollarQuoted(sql: string, i: number): number {
+function skipTaggedDollarQuoted(sql: string, i: number): number {
     // PostgreSQL accepts any non-ASCII character in a tag, as well as ASCII letters, digits and `_`.
-    const tag = /^\$([A-Za-z_\u0080-\uffff][A-Za-z0-9_\u0080-\uffff]*)?\$/.exec(sql.substring(i));
+    const tag = /^\$([A-Za-z_\u0080-￿][A-Za-z0-9_\u0080-￿]*)?\$/.exec(sql.substring(i));
     if (!tag) return i;
     const delimiter = tag[0];
     const close = sql.indexOf(delimiter, i + delimiter.length);

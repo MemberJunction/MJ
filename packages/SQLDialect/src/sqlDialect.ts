@@ -1,4 +1,30 @@
-import { DataTypeMap, MappedType } from './dataTypeMap.js';
+import { MappedType } from './dataTypeMap.js';
+import type { DataTypeMap } from './dataTypeMap.js';
+import { QueryDialect } from './queryDialect.js';
+import type { DialectKey } from './facets/dialectKey.js';
+import type { DialectTypes } from './facets/dialectTypes.js';
+import type { DialectBinding } from './facets/dialectBinding.js';
+import type { LimitClauseResult, DateAddUnit } from './facets/dialectWriter.js';
+import type {
+    DialectSchemaDDL,
+    SchemaIntrospectionSQL,
+    ColumnDDLOptions,
+    AlterColumnOptions,
+    TriggerOptions,
+    IndexOptions,
+    ResolveTypeOptions,
+} from './facets/dialectSchemaDDL.js';
+
+export type { LimitClauseResult } from './facets/dialectWriter.js';
+export type {
+    SchemaFieldType,
+    ResolveTypeOptions,
+    SchemaIntrospectionSQL,
+    ColumnDDLOptions,
+    AlterColumnOptions,
+    TriggerOptions,
+    IndexOptions,
+} from './facets/dialectSchemaDDL.js';
 
 /**
  * Canonical database-platform value used across MJ. Single source of truth —
@@ -12,128 +38,6 @@ import { DataTypeMap, MappedType } from './dataTypeMap.js';
  */
 export type DatabasePlatform = 'sqlserver' | 'postgresql';
 
-/**
- * Abstract field type used by SchemaEngine to describe columns
- * in a platform-agnostic way before DDL generation.
- */
-export type SchemaFieldType =
-    | 'string' | 'text' | 'integer' | 'bigint' | 'decimal'
-    | 'boolean' | 'datetime' | 'date' | 'uuid' | 'json'
-    | 'float' | 'time';
-
-/**
- * Options for resolving an abstract schema type to a concrete SQL type.
- */
-export interface ResolveTypeOptions {
-    /** Abstract type (e.g., 'string', 'integer', 'boolean'). */
-    type: SchemaFieldType;
-    /** Max length for string types. */
-    maxLength?: number;
-    /** Precision for decimal types. */
-    precision?: number;
-    /** Scale for decimal types. */
-    scale?: number;
-}
-
-/**
- * Result from limitClause() — SQL Server uses a prefix (TOP n) while
- * PostgreSQL uses a suffix (LIMIT n OFFSET m).
- */
-export interface LimitClauseResult {
-    /** SQL placed between SELECT and the column list (e.g., "TOP 10") */
-    prefix: string;
-    /** SQL placed after the ORDER BY / WHERE clause (e.g., "LIMIT 10 OFFSET 20") */
-    suffix: string;
-}
-
-/**
- * Schema introspection queries for a given database platform.
- * Each dialect provides platform-specific catalog queries.
- */
-export interface SchemaIntrospectionSQL {
-    /** Query that returns all user tables in a schema */
-    listTables: string;
-    /** Query that returns all columns for a given table */
-    listColumns: string;
-    /** Query that returns constraints (PK, UNIQUE, CHECK) */
-    listConstraints: string;
-    /** Query that returns foreign key relationships */
-    listForeignKeys: string;
-    /** Query that returns indexes */
-    listIndexes: string;
-    /** Template for checking if a database object exists */
-    objectExists: string;
-}
-
-/**
- * Options for generating a column definition in DDL.
- */
-export interface ColumnDDLOptions {
-    /** Column name (unquoted — the dialect will quote it). */
-    name: string;
-    /** Full SQL type string (e.g., "NVARCHAR(255)", "INTEGER", "TIMESTAMPTZ"). */
-    sqlType: string;
-    /** Whether the column allows NULL values. */
-    nullable: boolean;
-    /** Optional default value expression (e.g., "'Active'", "GETUTCDATE()"). */
-    defaultValue?: string;
-}
-
-/**
- * Options for ALTER TABLE column modification.
- */
-export interface AlterColumnOptions {
-    /** Column name (unquoted). */
-    columnName: string;
-    /** New SQL type string. */
-    newType: string;
-    /** New nullability. */
-    newNullable: boolean;
-}
-
-/**
- * Options for generating trigger DDL.
- */
-export interface TriggerOptions {
-    /** Schema name */
-    schema: string;
-    /** Table name the trigger is on */
-    tableName: string;
-    /** Trigger name */
-    triggerName: string;
-    /** Timing: BEFORE, AFTER, or INSTEAD OF */
-    timing: 'BEFORE' | 'AFTER' | 'INSTEAD OF';
-    /** Events that fire the trigger */
-    events: ('INSERT' | 'UPDATE' | 'DELETE')[];
-    /** The trigger body SQL */
-    body: string;
-    /** For PostgreSQL: name of the trigger function */
-    functionName?: string;
-    /** Whether the trigger fires FOR EACH ROW or FOR EACH STATEMENT */
-    forEach?: 'ROW' | 'STATEMENT';
-}
-
-/**
- * Options for generating index DDL.
- */
-export interface IndexOptions {
-    /** Schema name */
-    schema: string;
-    /** Table name */
-    tableName: string;
-    /** Index name */
-    indexName: string;
-    /** Columns to index */
-    columns: string[];
-    /** Whether this is a unique index */
-    unique?: boolean;
-    /** Index method (btree, gin, gist, hash — PostgreSQL specific, ignored for SQL Server) */
-    method?: string;
-    /** WHERE clause for partial indexes (PostgreSQL only) */
-    where?: string;
-    /** INCLUDE columns (SQL Server covering index) */
-    includeColumns?: string[];
-}
 
 /**
  * Minimal dialect interface consumed by `@memberjunction/sql-parser`.
@@ -142,8 +46,8 @@ export interface IndexOptions {
  * {@link SQLDialect} class implements this interface plus 80+ additional
  * methods for DDL/DML generation, data type mapping, etc.
  *
- * When adding a new database platform, implement at minimum this interface
- * for parser support. Implement the full `SQLDialect` for complete MJ support.
+ * @deprecated Use {@link ParserDialect} (a dialect's key and its lexical and grammar facets) or
+ * a {@link QueryDialect}. {@link SQLDialect} still satisfies this interface.
  */
 export interface SQLParserDialect {
     /** node-sql-parser dialect string (e.g., 'TransactSQL', 'PostgresQL', 'MySQL') */
@@ -175,23 +79,44 @@ export interface SQLParserDialect {
 }
 
 /**
- * Abstract base class for SQL dialect implementations.
+ * Abstract base class for the dialects of the platforms MJ itself runs on.
  *
- * Encapsulates ALL database-specific SQL syntax patterns into a single,
- * testable abstraction. This is a pure string/logic layer with zero
- * database driver dependencies.
+ * A {@link QueryDialect} (lexical rules, grammar facts, writer, types, binding) plus the
+ * {@link DDL} facet MJ needs to create and run its own schema. Every member below is kept for
+ * existing callers and delegates to one of the facets. This is a pure string/logic layer with
+ * zero database driver dependencies.
  */
-export abstract class SQLDialect implements SQLParserDialect {
+export abstract class SQLDialect extends QueryDialect implements SQLParserDialect {
     /**
      * The platform key identifying this dialect.
      */
     abstract get PlatformKey(): DatabasePlatform;
 
+    /** The dialect key, which for a platform dialect is its {@link PlatformKey}. */
+    get Key(): DialectKey {
+        return this.PlatformKey;
+    }
+
+    /** SQL type-name sets. */
+    abstract override get Types(): DialectTypes;
+
+    /** Driver binding rules. */
+    abstract override get Binding(): DialectBinding;
+
+    /** DDL, stored-procedure, migration, introspection and transaction SQL. */
+    abstract get DDL(): DialectSchemaDDL;
+
     /**
      * Returns the dialect name used by node-sql-parser for AST parsing.
      * SQL Server: 'TransactSQL', PostgreSQL: 'PostgresQL', etc.
      */
-    abstract get ParserDialect(): string;
+    get ParserDialect(): string {
+        const grammar = this.Grammar.ParserGrammar;
+        if (grammar === null) {
+            throw new Error(`The ${this.PlatformKey} dialect declares no node-sql-parser grammar.`);
+        }
+        return grammar;
+    }
 
     // ─── Identifier Quoting ──────────────────────────────────────────
 
@@ -199,13 +124,17 @@ export abstract class SQLDialect implements SQLParserDialect {
      * Quotes a database identifier (table name, column name, etc.).
      * SQL Server: [name], PostgreSQL: "name"
      */
-    abstract QuoteIdentifier(name: string): string;
+    QuoteIdentifier(name: string): string {
+        return this.Writer.QuoteIdentifier(name);
+    }
 
     /**
      * Produces a schema-qualified object reference.
      * SQL Server: [schema].[object], PostgreSQL: schema."object"
      */
-    abstract QuoteSchema(schema: string, object: string): string;
+    QuoteSchema(schema: string, object: string): string {
+        return this.Writer.QuoteSchema(schema, object);
+    }
 
     /**
      * Quotes a column alias used in `SELECT ... AS <alias>`. SQL Server is
@@ -214,7 +143,9 @@ export abstract class SQLDialect implements SQLParserDialect {
      * caller cares about preserving case (e.g. matching a TypeScript property
      * name in the result row).
      */
-    abstract QuoteColumnAlias(aliasName: string): string;
+    QuoteColumnAlias(aliasName: string): string {
+        return this.Writer.QuoteColumnAlias(aliasName);
+    }
 
     /**
      * Canonicalizes a SCHEMA name to the form the platform actually stores when
@@ -225,17 +156,18 @@ export abstract class SQLDialect implements SQLParserDialect {
      * aligned with what unquoted migration DDL produces — so a mixed-case schema
      * name can't split into two physical schemas (one quoted-mixed, one folded-lowercase).
      */
-    abstract CanonicalSchemaName(name: string): string;
+    CanonicalSchemaName(name: string): string {
+        return this.DDL.CanonicalSchemaName(name);
+    }
 
     /**
      * Quotes a value as a SQL string literal. Both SQL Server and PostgreSQL
-     * use single quotes with `''` doubling to escape internal apostrophes —
-     * this is concrete in the base class so callers don't reinvent the
-     * `value.replace(/'/g, "''")` pattern. Subclasses may override if a
-     * future dialect needs a different escape rule.
+     * use single quotes with `''` doubling to escape internal apostrophes.
+     * Use this instead of reinventing the `value.replace(/'/g, "''")` pattern;
+     * the dialect's writer owns the escape rule.
      */
     QuoteStringLiteral(value: string): string {
-        return `'${value.replace(/'/g, "''")}'`;
+        return this.Writer.QuoteStringLiteral(value);
     }
 
     /**
@@ -243,7 +175,9 @@ export abstract class SQLDialect implements SQLParserDialect {
      * `''` when a plain literal does. SQL Server: `N` when the text has characters outside ASCII,
      * which a plain literal would lose to the database code page. PostgreSQL: always `''`.
      */
-    abstract StringLiteralPrefix(text: string): string;
+    StringLiteralPrefix(text: string): string {
+        return this.Writer.StringLiteralPrefix(text);
+    }
 
     /**
      * Escapes the characters a `LIKE` pattern treats specially, so `text` matches literally with
@@ -252,13 +186,17 @@ export abstract class SQLDialect implements SQLParserDialect {
      * SQL Server: `[`, `%` and `_` become `[[]`, `[%]` and `[_]`. PostgreSQL: `\`, `%` and `_`
      * are escaped with a backslash.
      */
-    abstract EscapeLikePattern(text: string): string;
+    EscapeLikePattern(text: string): string {
+        return this.Writer.EscapeLikePattern(text);
+    }
 
     /**
      * The value to bind for a boolean query parameter. SQL Server: `1` / `0` (BIT),
      * PostgreSQL: `true` / `false`.
      */
-    abstract BooleanParameterValue(value: boolean): boolean | number;
+    BooleanParameterValue(value: boolean): boolean | number {
+        return this.Binding.BooleanParameterValue(value);
+    }
 
     // ─── Pagination ──────────────────────────────────────────────────
 
@@ -267,7 +205,9 @@ export abstract class SQLDialect implements SQLParserDialect {
      * SQL Server uses TOP (prefix) or OFFSET/FETCH (suffix).
      * PostgreSQL uses LIMIT/OFFSET (suffix).
      */
-    abstract LimitClause(limit: number, offset?: number): LimitClauseResult;
+    LimitClause(limit: number, offset?: number): LimitClauseResult {
+        return this.Writer.LimitClause(limit, offset);
+    }
 
     // ─── Literals & Expressions ──────────────────────────────────────
 
@@ -275,7 +215,9 @@ export abstract class SQLDialect implements SQLParserDialect {
      * Returns a boolean literal for the platform.
      * SQL Server: "1"/"0", PostgreSQL: "true"/"false"
      */
-    abstract BooleanLiteral(value: boolean): string;
+    BooleanLiteral(value: boolean): string {
+        return this.Writer.BooleanLiteral(value);
+    }
 
     /**
      * Returns the SQL type token for a boolean parameter in a stored-procedure /
@@ -289,13 +231,17 @@ export abstract class SQLDialect implements SQLParserDialect {
      * that PG rejected as `operator does not exist: boolean = integer` when
      * the generated CASE compared a `bit`-declared parameter with `= 1`.
      */
-    abstract BooleanParameterType(): string;
+    BooleanParameterType(): string {
+        return this.DDL.BooleanParameterType();
+    }
 
     /**
      * Returns the current UTC timestamp expression.
      * SQL Server: GETUTCDATE(), PostgreSQL: NOW() AT TIME ZONE 'UTC'
      */
-    abstract CurrentTimestampUTC(): string;
+    CurrentTimestampUTC(): string {
+        return this.Writer.CurrentTimestampUTC();
+    }
 
     /**
      * Wraps a single DML statement so the number of rows it affected comes back as a one-row,
@@ -308,7 +254,9 @@ export abstract class SQLDialect implements SQLParserDialect {
      * `dmlStatement` must be exactly one INSERT/UPDATE/DELETE and carry no trailing semicolon:
      * the PostgreSQL form is a CTE, which cannot wrap a statement batch.
      */
-    abstract AffectedRowCountSQL(dmlStatement: string, alias: string): string;
+    AffectedRowCountSQL(dmlStatement: string, alias: string): string {
+        return this.DDL.AffectedRowCountSQL(dmlStatement, alias);
+    }
 
     /**
      * Wraps an expression in the dialect's lowercase function — used for
@@ -324,7 +272,7 @@ export abstract class SQLDialect implements SQLParserDialect {
      * dialect-aware SQL surface in one place per the SQLDialect contract.
      */
     LowerCase(expr: string): string {
-        return `LOWER(${expr})`;
+        return this.Writer.LowerCase(expr);
     }
 
     // ─── Prompt / Tooling Description ──────────────────────
@@ -336,7 +284,7 @@ export abstract class SQLDialect implements SQLParserDialect {
      * Abstract on purpose: the name is dialect knowledge, so a new dialect
      * declares it once here rather than every prompt/UI keeping its own map.
      */
-    abstract get DisplayName(): string;
+    abstract override get DisplayName(): string;
 
     /**
      * The `sql-formatter` language key for this dialect (e.g. `'tsql'`,
@@ -405,10 +353,14 @@ export abstract class SQLDialect implements SQLParserDialect {
     // `information_schema` / `sys.columns` reports).
 
     /** SQL type names this dialect uses for boolean columns. */
-    abstract get BooleanTypeNames(): readonly string[];
+    get BooleanTypeNames(): readonly string[] {
+        return this.Types.BooleanTypeNames;
+    }
 
     /** SQL type names this dialect uses for variable-length character / text columns. */
-    abstract get StringTypeNames(): readonly string[];
+    get StringTypeNames(): readonly string[] {
+        return this.Types.StringTypeNames;
+    }
 
     /**
      * Subset of {@link StringTypeNames} that represents **fixed-width** /
@@ -421,7 +373,9 @@ export abstract class SQLDialect implements SQLParserDialect {
      * Used by `BaseEntity` to rtrim padding on load so dirty-checks and
      * downstream consumers see the logical value, not the storage form.
      */
-    abstract get FixedWidthStringTypeNames(): readonly string[];
+    get FixedWidthStringTypeNames(): readonly string[] {
+        return this.Types.FixedWidthStringTypeNames;
+    }
 
     /**
      * Maximum string length usable in an INDEX KEY column (PRIMARY KEY / UNIQUE constraint) on this
@@ -432,7 +386,7 @@ export abstract class SQLDialect implements SQLParserDialect {
      * length, so it keeps the no-cap default.
      */
     get MaxKeyStringLength(): number {
-        return Number.MAX_SAFE_INTEGER;
+        return this.DDL.MaxKeyStringLength;
     }
 
     /**
@@ -443,7 +397,7 @@ export abstract class SQLDialect implements SQLParserDialect {
      * Default: `null` (no in-row size limit).
      */
     get MaxInRowSizeBytes(): number | null {
-        return null;
+        return this.DDL.MaxInRowSizeBytes;
     }
 
     /**
@@ -451,7 +405,7 @@ export abstract class SQLDialect implements SQLParserDialect {
      * SQL Server: 1024. PostgreSQL: 1600. Default: `null`.
      */
     get MaxColumnCount(): number | null {
-        return null;
+        return this.DDL.MaxColumnCount;
     }
 
     /**
@@ -460,50 +414,71 @@ export abstract class SQLDialect implements SQLParserDialect {
      * their full size. Only meaningful for dialects that report a {@link MaxInRowSizeBytes}.
      * Default: 24 (a conservative off-row-pointer floor).
      */
-    EstimateInRowBytes(_rawSqlType: string): number {
-        return 24;
+    EstimateInRowBytes(rawSqlType: string): number {
+        return this.DDL.EstimateInRowBytes(rawSqlType);
     }
 
     /** SQL type names this dialect uses for date / time / timestamp columns. */
-    abstract get DateTypeNames(): readonly string[];
+    get DateTypeNames(): readonly string[] {
+        return this.Types.DateTypeNames;
+    }
 
     /** SQL type names this dialect uses for integer columns (int, bigint, smallint, …). */
-    abstract get IntegerTypeNames(): readonly string[];
+    get IntegerTypeNames(): readonly string[] {
+        return this.Types.IntegerTypeNames;
+    }
 
     /** SQL type names this dialect uses for floating-point / decimal columns. */
-    abstract get FloatTypeNames(): readonly string[];
+    get FloatTypeNames(): readonly string[] {
+        return this.Types.FloatTypeNames;
+    }
 
     /** SQL type names this dialect uses for UUID / uniqueidentifier columns. */
-    abstract get UuidTypeNames(): readonly string[];
+    get UuidTypeNames(): readonly string[] {
+        return this.Types.UuidTypeNames;
+    }
 
     /** SQL type names this dialect uses for binary blob columns (image, bytea, varbinary). */
-    abstract get BinaryTypeNames(): readonly string[];
+    get BinaryTypeNames(): readonly string[] {
+        return this.Types.BinaryTypeNames;
+    }
 
     /** SQL type names this dialect uses for JSON / XML structured columns. */
-    abstract get JsonTypeNames(): readonly string[];
+    get JsonTypeNames(): readonly string[] {
+        return this.Types.JsonTypeNames;
+    }
 
     /** SQL type names this dialect uses for fixed-precision currency columns. */
-    abstract get CurrencyTypeNames(): readonly string[];
+    get CurrencyTypeNames(): readonly string[] {
+        return this.Types.CurrencyTypeNames;
+    }
 
     /** SQL type names this dialect uses for interval / duration columns. */
-    abstract get IntervalTypeNames(): readonly string[];
+    get IntervalTypeNames(): readonly string[] {
+        return this.Types.IntervalTypeNames;
+    }
 
     /** SQL type names this dialect uses for network address columns (inet, cidr, …). */
-    abstract get NetworkTypeNames(): readonly string[];
+    get NetworkTypeNames(): readonly string[] {
+        return this.Types.NetworkTypeNames;
+    }
 
     /**
      * Returns a new UUID generation expression.
      * SQL Server: NEWID(), PostgreSQL: gen_random_uuid()
      */
-    abstract NewUUID(): string;
+    NewUUID(): string {
+        return this.DDL.NewUUID();
+    }
 
     /**
      * Returns the platform's n-ary null-coalescing expression. SQL Server and
-     * PostgreSQL both spell this `COALESCE(...)`, but a future dialect could
-     * use a different keyword — abstract on purpose so each dialect must
-     * declare its own form rather than inheriting an opinionated default.
+     * PostgreSQL both spell this `COALESCE(...)`; the dialect's writer owns
+     * the spelling.
      */
-    abstract Coalesce(expr: string, fallback: string): string;
+    Coalesce(expr: string, fallback: string): string {
+        return this.Writer.Coalesce(expr, fallback);
+    }
 
     /**
      * Returns the dialect's literal representation of NULL as it would
@@ -513,7 +488,7 @@ export abstract class SQLDialect implements SQLParserDialect {
      * should route through this rather than hard-coding the string.
      */
     get NullLiteral(): string {
-        return 'NULL';
+        return this.Writer.NullLiteral;
     }
 
     /**
@@ -533,7 +508,9 @@ export abstract class SQLDialect implements SQLParserDialect {
      * SQL Server: `@MyName`, PostgreSQL functions: `p_my_name`.
      * Codegen should call this rather than hard-coding `'@' + name`.
      */
-    abstract ParameterRef(name: string): string;
+    ParameterRef(name: string): string {
+        return this.DDL.ParameterRef(name);
+    }
 
     /**
      * Returns the default-value clause appended to a parameter declaration.
@@ -541,13 +518,17 @@ export abstract class SQLDialect implements SQLParserDialect {
      * `value` should be a SQL literal already formatted by the caller (e.g.
      * the dialect's NullLiteral, a quoted string, a numeric literal).
      */
-    abstract ParameterDefault(value: string): string;
+    ParameterDefault(value: string): string {
+        return this.DDL.ParameterDefault(value);
+    }
 
     /**
      * Returns a CAST-to-text expression.
      * SQL Server: CAST(expr AS NVARCHAR(MAX)), PostgreSQL: CAST(expr AS TEXT)
      */
-    abstract CastToText(expr: string): string;
+    CastToText(expr: string): string {
+        return this.Writer.CastToText(expr);
+    }
 
     /**
      * Returns a CAST to a bounded-width string type. Used when the result
@@ -561,15 +542,16 @@ export abstract class SQLDialect implements SQLParserDialect {
      * width to match the cap on indexable string columns in SQL Server.
      */
     CastToBoundedString(expr: string, maxLength: number = 450): string {
-        const sqlType = this.ResolveAbstractType({ type: 'string', maxLength });
-        return `CAST(${expr} AS ${sqlType})`;
+        return this.DDL.CastToBoundedString(expr, maxLength);
     }
 
     /**
      * Returns a CAST-to-UUID expression.
      * SQL Server: CAST(expr AS UNIQUEIDENTIFIER), PostgreSQL: CAST(expr AS UUID)
      */
-    abstract CastToUUID(expr: string): string;
+    CastToUUID(expr: string): string {
+        return this.DDL.CastToUUID(expr);
+    }
 
     /**
      * Returns the empty-GUID sentinel literal
@@ -580,7 +562,7 @@ export abstract class SQLDialect implements SQLParserDialect {
      * the explicit cast their grammar requires.
      */
     EmptyUUIDLiteral(): string {
-        return `'00000000-0000-0000-0000-000000000000'`;
+        return this.DDL.EmptyUUIDLiteral();
     }
 
     // ─── INSERT/UPDATE Return Patterns ───────────────────────────────
@@ -590,31 +572,41 @@ export abstract class SQLDialect implements SQLParserDialect {
      * SQL Server: OUTPUT INSERTED.col1, INSERTED.col2
      * PostgreSQL: RETURNING col1, col2
      */
-    abstract ReturnInsertedClause(columns?: string[]): string;
+    ReturnInsertedClause(columns?: string[]): string {
+        return this.DDL.ReturnInsertedClause(columns);
+    }
 
     /**
      * Returns the auto-increment PK expression for DDL.
      * SQL Server: IDENTITY(1,1), PostgreSQL: GENERATED ALWAYS AS IDENTITY
      */
-    abstract AutoIncrementPKExpression(): string;
+    AutoIncrementPKExpression(): string {
+        return this.DDL.AutoIncrementPKExpression();
+    }
 
     /**
      * Returns the default expression for a UUID primary key.
      * SQL Server: NEWSEQUENTIALID(), PostgreSQL: gen_random_uuid()
      */
-    abstract UUIDPKDefault(): string;
+    UUIDPKDefault(): string {
+        return this.DDL.UUIDPKDefault();
+    }
 
     /**
      * Returns the expression to get the last inserted identity value.
      * SQL Server: SCOPE_IDENTITY(), PostgreSQL: lastval()
      */
-    abstract ScopeIdentityExpression(): string;
+    ScopeIdentityExpression(): string {
+        return this.DDL.ScopeIdentityExpression();
+    }
 
     /**
      * Returns the row count variable/expression for the last statement.
      * SQL Server: @@ROWCOUNT, PostgreSQL: (via GET DIAGNOSTICS or FOUND)
      */
-    abstract RowCountExpression(): string;
+    RowCountExpression(): string {
+        return this.DDL.RowCountExpression();
+    }
 
     // ─── Batch & DDL Control ─────────────────────────────────────────
 
@@ -622,7 +614,9 @@ export abstract class SQLDialect implements SQLParserDialect {
      * Returns the batch separator for the platform.
      * SQL Server: "GO", PostgreSQL: "" (none needed)
      */
-    abstract BatchSeparator(): string;
+    BatchSeparator(): string {
+        return this.DDL.BatchSeparator();
+    }
 
     /**
      * Splits an oversized SQL batch into individual statements on `;`+EOL
@@ -639,11 +633,7 @@ export abstract class SQLDialect implements SQLParserDialect {
      * legitimately contain `;`+newline.
      */
     SplitStatements(batch: string): string[] {
-        return batch
-            .split(/;\s*\n/g)
-            .map((s) => s.trim())
-            .filter((s) => s.length > 0)
-            .map((s) => (s.endsWith(';') ? s : s + ';'));
+        return this.DDL.SplitStatements(batch);
     }
 
     /**
@@ -652,13 +642,17 @@ export abstract class SQLDialect implements SQLParserDialect {
      * @param schema - Schema name
      * @param name - Object name
      */
-    abstract ExistenceCheckSQL(objectType: string, schema: string, name: string): string;
+    ExistenceCheckSQL(objectType: string, schema: string, name: string): string {
+        return this.DDL.ExistenceCheckSQL(objectType, schema, name);
+    }
 
     /**
      * Whether the platform supports CREATE OR REPLACE for a given object type.
      * PostgreSQL supports it for FUNCTION, VIEW. SQL Server does not.
      */
-    abstract CreateOrReplaceSupported(objectType: string): boolean;
+    CreateOrReplaceSupported(objectType: string): boolean {
+        return this.DDL.CreateOrReplaceSupported(objectType);
+    }
 
     // ─── Full-Text Search ────────────────────────────────────────────
 
@@ -667,14 +661,18 @@ export abstract class SQLDialect implements SQLParserDialect {
      * SQL Server: CONTAINS(column, searchTerm)
      * PostgreSQL: column @@ plainto_tsquery('english', searchTerm)
      */
-    abstract FullTextSearchPredicate(column: string, searchTerm: string): string;
+    FullTextSearchPredicate(column: string, searchTerm: string): string {
+        return this.DDL.FullTextSearchPredicate(column, searchTerm);
+    }
 
     /**
      * Returns DDL to create a full-text index.
      * SQL Server: FULLTEXT CATALOG + FULLTEXT INDEX
      * PostgreSQL: tsvector column + GIN index
      */
-    abstract FullTextIndexDDL(table: string, columns: string[], catalog?: string): string;
+    FullTextIndexDDL(table: string, columns: string[], catalog?: string): string {
+        return this.DDL.FullTextIndexDDL(table, columns, catalog);
+    }
 
     // ─── CTE / Recursion ─────────────────────────────────────────────
 
@@ -682,7 +680,10 @@ export abstract class SQLDialect implements SQLParserDialect {
      * Returns the recursive CTE syntax keyword.
      * SQL Server: "WITH", PostgreSQL: "WITH RECURSIVE"
      */
-    abstract RecursiveCTESyntax(): string;
+    RecursiveCTESyntax(): string {
+        const keyword = this.Grammar.RecursiveKeyword;
+        return keyword === null ? 'WITH' : `WITH ${keyword}`;
+    }
 
     /**
      * Whether the platform allows ORDER BY inside CTE definitions without
@@ -690,13 +691,17 @@ export abstract class SQLDialect implements SQLParserDialect {
      * SQL Server: false (ORDER BY in CTEs is illegal without TOP/OFFSET/FOR XML)
      * PostgreSQL: true (ORDER BY in CTEs is always legal)
      */
-    abstract get AllowsOrderByInCTE(): boolean;
+    get AllowsOrderByInCTE(): boolean {
+        return this.Grammar.AllowsOrderByInCTE;
+    }
 
     /**
      * Default ORDER BY expression for paging when no user-specified ORDER BY exists.
      * SQL Server: '(SELECT NULL)', PostgreSQL: '1'
      */
-    abstract get DefaultPagingOrderBy(): string;
+    get DefaultPagingOrderBy(): string {
+        return this.Grammar.DefaultPagingOrderBy;
+    }
 
     /**
      * The ORDER BY expression for paging a set operation (`UNION` / `INTERSECT` / `EXCEPT`) or a
@@ -704,33 +709,47 @@ export abstract class SQLDialect implements SQLParserDialect {
      * items there. `null` when {@link DefaultPagingOrderBy} is accepted for those shapes too.
      * SQL Server: '1' (the first column), PostgreSQL: null
      */
-    abstract get SelectListPagingOrderBy(): string | null;
+    get SelectListPagingOrderBy(): string | null {
+        return this.Grammar.SelectListPagingOrderBy;
+    }
 
     /**
      * Whether skipping rows for a page needs an ORDER BY (`OFFSET … FETCH` does on SQL Server).
      * When true, a page taken from a derived table is ordered by {@link DefaultPagingOrderBy}.
      * SQL Server: true, PostgreSQL: false
      */
-    abstract get PagingRequiresOrderBy(): boolean;
+    get PagingRequiresOrderBy(): boolean {
+        return this.Grammar.PagingRequiresOrderBy;
+    }
 
     /** {@inheritDoc SQLParserDialect.SupportsEscapeStringLiterals} */
-    abstract get SupportsEscapeStringLiterals(): boolean;
+    get SupportsEscapeStringLiterals(): boolean {
+        return this.Lexical.StringLiterals.some(form => form.BackslashEscape && form.Prefixes.some(prefix => prefix.toUpperCase() === 'E'));
+    }
 
     /** {@inheritDoc SQLParserDialect.SupportsDollarQuotedStrings} */
-    abstract get SupportsDollarQuotedStrings(): boolean;
+    get SupportsDollarQuotedStrings(): boolean {
+        return this.Lexical.DollarQuotedStrings !== 'none';
+    }
 
     /** {@inheritDoc SQLParserDialect.QueryHintKeyword} */
-    abstract get QueryHintKeyword(): string | null;
+    get QueryHintKeyword(): string | null {
+        return this.Grammar.QueryHintKeyword;
+    }
 
     /** {@inheritDoc SQLParserDialect.CallerSQLForbiddenFunctions} */
-    abstract get CallerSQLForbiddenFunctions(): readonly string[];
+    get CallerSQLForbiddenFunctions(): readonly string[] {
+        return this.Grammar.CallerSQLForbiddenFunctions;
+    }
 
     // ─── Data Types ──────────────────────────────────────────────────
 
     /**
      * Returns the data type mapping for this dialect.
      */
-    abstract get TypeMap(): DataTypeMap;
+    get TypeMap(): DataTypeMap {
+        return this.DDL.TypeMap;
+    }
 
     /**
      * Convenience: maps a SQL Server type to this dialect's equivalent.
@@ -752,13 +771,21 @@ export abstract class SQLDialect implements SQLParserDialect {
      * Returns a parameter placeholder for the given index.
      * SQL Server: @p0, @p1, ... PostgreSQL: $1, $2, ...
      */
-    abstract ParameterPlaceholder(index: number): string;
+    ParameterPlaceholder(index: number): string {
+        return this.Binding.ParameterPlaceholder(index);
+    }
 
     /**
      * Returns the string concatenation operator.
      * SQL Server: "+", PostgreSQL: "||"
      */
-    abstract ConcatOperator(): string;
+    ConcatOperator(): string {
+        const operator = this.Writer.ConcatOperator();
+        if (operator === null) {
+            throw new Error(`The ${this.PlatformKey} dialect has no string concatenation operator.`);
+        }
+        return operator;
+    }
 
     // ─── String Functions ────────────────────────────────────────────
 
@@ -767,14 +794,18 @@ export abstract class SQLDialect implements SQLParserDialect {
      * SQL Server: STRING_SPLIT(value, delimiter)
      * PostgreSQL: string_to_array(value, delimiter) or regexp_split_to_table
      */
-    abstract StringSplitFunction(value: string, delimiter: string): string;
+    StringSplitFunction(value: string, delimiter: string): string {
+        return this.DDL.StringSplitFunction(value, delimiter);
+    }
 
     /**
      * Returns a JSON value extraction expression.
      * SQL Server: JSON_VALUE(column, path)
      * PostgreSQL: column->>'path' or jsonb_extract_path_text
      */
-    abstract JsonExtract(column: string, path: string): string;
+    JsonExtract(column: string, path: string): string {
+        return this.Writer.JsonExtract(column, path);
+    }
 
     // ─── Migration Emission ──────────────────────────────────────────
 
@@ -785,7 +816,9 @@ export abstract class SQLDialect implements SQLParserDialect {
      * `${` in the file text. Form is platform-specific (concat operator,
      * truncation rules) — see each dialect's implementation.
      */
-    abstract EscapeFlywayStringInterpolation(sql: string): string;
+    EscapeFlywayStringInterpolation(sql: string): string {
+        return this.DDL.EscapeFlywayStringInterpolation(sql);
+    }
 
     // ─── Procedure / Function Calls ──────────────────────────────────
 
@@ -794,7 +827,9 @@ export abstract class SQLDialect implements SQLParserDialect {
      * SQL Server: EXEC [schema].[name] @p0, @p1
      * PostgreSQL: SELECT * FROM schema.name($1, $2)
      */
-    abstract ProcedureCallSyntax(schema: string, name: string, params: string[]): string;
+    ProcedureCallSyntax(schema: string, name: string, params: string[]): string {
+        return this.DDL.ProcedureCallSyntax(schema, name, params);
+    }
 
     // ─── DDL Generation (Schema/Table) ──────────────────────────────
 
@@ -803,7 +838,9 @@ export abstract class SQLDialect implements SQLParserDialect {
      * SQL Server: IF NOT EXISTS (...) EXEC('CREATE SCHEMA [name]'); GO
      * PostgreSQL: CREATE SCHEMA IF NOT EXISTS "name";
      */
-    abstract CreateSchemaDDL(schemaName: string): string;
+    CreateSchemaDDL(schemaName: string): string {
+        return this.DDL.CreateSchemaDDL(schemaName);
+    }
 
     /**
      * Cap a column type if it cannot be used in a UNIQUE/index constraint.
@@ -812,7 +849,7 @@ export abstract class SQLDialect implements SQLParserDialect {
      * Override in platform-specific dialects.
      */
     CapIndexableType(rawSqlType: string): string {
-        return rawSqlType;
+        return this.DDL.CapIndexableType(rawSqlType);
     }
 
     /**
@@ -820,14 +857,18 @@ export abstract class SQLDialect implements SQLParserDialect {
      * SQL Server: ADD [colName] type NULL DEFAULT ...
      * PostgreSQL: ADD COLUMN "colName" type NULL DEFAULT ...
      */
-    abstract AddColumnClause(col: ColumnDDLOptions): string;
+    AddColumnClause(col: ColumnDDLOptions): string {
+        return this.DDL.AddColumnClause(col);
+    }
 
     /**
      * Returns ALTER COLUMN clause(s) for type/nullability changes.
      * SQL Server: ALTER TABLE t ALTER COLUMN [col] newType NULL/NOT NULL;
      * PostgreSQL: ALTER TABLE t ALTER COLUMN "col" TYPE newType, ALTER COLUMN "col" SET/DROP NOT NULL;
      */
-    abstract AlterColumnDDL(quotedTable: string, options: AlterColumnOptions): string;
+    AlterColumnDDL(quotedTable: string, options: AlterColumnOptions): string {
+        return this.DDL.AlterColumnDDL(quotedTable, options);
+    }
 
     /**
      * Returns description metadata SQL for a column.
@@ -837,14 +878,18 @@ export abstract class SQLDialect implements SQLParserDialect {
      * This extends CommentOnObject to support the 3-part column reference
      * that CommentOnObject doesn't handle.
      */
-    abstract CommentOnColumn(schema: string, table: string, column: string, comment: string): string;
+    CommentOnColumn(schema: string, table: string, column: string, comment: string): string {
+        return this.DDL.CommentOnColumn(schema, table, column, comment);
+    }
 
     /**
      * Returns the platform's fallback type for unknown/unmapped abstract types.
      * SQL Server: NVARCHAR(MAX)
      * PostgreSQL: TEXT
      */
-    abstract FallbackType(): string;
+    FallbackType(): string {
+        return this.DDL.FallbackType();
+    }
 
     /**
      * Resolves an abstract schema field type to a concrete SQL type string.
@@ -852,7 +897,9 @@ export abstract class SQLDialect implements SQLParserDialect {
      * SQL Server: 'string' -> 'NVARCHAR(255)', 'boolean' -> 'BIT'
      * PostgreSQL: 'string' -> 'VARCHAR(255)', 'boolean' -> 'BOOLEAN'
      */
-    abstract ResolveAbstractType(options: ResolveTypeOptions): string;
+    ResolveAbstractType(options: ResolveTypeOptions): string {
+        return this.DDL.ResolveAbstractType(options);
+    }
 
     // ─── DDL Generation (Conditional/Procedural) ────────────────────
 
@@ -865,7 +912,9 @@ export abstract class SQLDialect implements SQLParserDialect {
      * @param amount - Number of units to add (can be negative)
      * @param baseExpr - Base timestamp expression (e.g., from CurrentTimestampUTC())
      */
-    abstract DateAddExpression(unit: 'MINUTE' | 'HOUR' | 'DAY', amount: number, baseExpr: string): string;
+    DateAddExpression(unit: DateAddUnit, amount: number, baseExpr: string): string {
+        return this.Writer.DateAddExpression(unit, amount, baseExpr);
+    }
 
     /**
      * Returns a full CREATE TABLE wrapped in a "create if not exists" guard.
@@ -876,7 +925,9 @@ export abstract class SQLDialect implements SQLParserDialect {
      * @param tableName - Table name
      * @param columnsDDL - The column definitions (everything between the parentheses)
      */
-    abstract CreateTableIfNotExistsDDL(schema: string, tableName: string, columnsDDL: string): string;
+    CreateTableIfNotExistsDDL(schema: string, tableName: string, columnsDDL: string): string {
+        return this.DDL.CreateTableIfNotExistsDDL(schema, tableName, columnsDDL);
+    }
 
     /**
      * Returns a conditional IF/ELSE block in platform-appropriate procedural SQL.
@@ -887,7 +938,9 @@ export abstract class SQLDialect implements SQLParserDialect {
      * @param thenSQL - SQL to execute when condition is true
      * @param elseSQL - Optional SQL to execute when condition is false
      */
-    abstract ConditionalBlock(condition: string, thenSQL: string, elseSQL?: string): string;
+    ConditionalBlock(condition: string, thenSQL: string, elseSQL?: string): string {
+        return this.DDL.ConditionalBlock(condition, thenSQL, elseSQL);
+    }
 
     /**
      * Returns a non-fatal signal/notice statement detectable in CLI output.
@@ -899,31 +952,41 @@ export abstract class SQLDialect implements SQLParserDialect {
      *
      * @param message - Signal message to emit (used for detection in CLI output)
      */
-    abstract RaiseSignalSQL(message: string): string;
+    RaiseSignalSQL(message: string): string {
+        return this.DDL.RaiseSignalSQL(message);
+    }
 
     // ─── DDL Generation (Triggers/Indexes) ──────────────────────────
 
     /**
      * Generates trigger DDL for the platform.
      */
-    abstract TriggerDDL(options: TriggerOptions): string;
+    TriggerDDL(options: TriggerOptions): string {
+        return this.DDL.TriggerDDL(options);
+    }
 
     /**
      * Generates index DDL for the platform.
      */
-    abstract IndexDDL(options: IndexOptions): string;
+    IndexDDL(options: IndexOptions): string {
+        return this.DDL.IndexDDL(options);
+    }
 
     // ─── Permissions ─────────────────────────────────────────────────
 
     /**
      * Returns a GRANT statement for the platform.
      */
-    abstract GrantPermission(permission: string, objectType: string, schema: string, object: string, role: string): string;
+    GrantPermission(permission: string, objectType: string, schema: string, object: string, role: string): string {
+        return this.DDL.GrantPermission(permission, objectType, schema, object, role);
+    }
 
     /**
      * Returns a COMMENT ON statement (PostgreSQL) or sp_addextendedproperty (SQL Server).
      */
-    abstract CommentOnObject(objectType: string, schema: string, name: string, comment: string): string;
+    CommentOnObject(objectType: string, schema: string, name: string, comment: string): string {
+        return this.DDL.CommentOnObject(objectType, schema, name, comment);
+    }
 
     // ─── DDL Generation (Idempotent, single-statement) ──────────────
     //
@@ -943,7 +1006,7 @@ export abstract class SQLDialect implements SQLParserDialect {
      * @param columnsBody - The column/constraint lines that go between the parentheses
      */
     CreateTableIfAbsent(fullTable: string, columnsBody: string): string {
-        return `CREATE TABLE IF NOT EXISTS ${fullTable} (\n${columnsBody}\n);`;
+        return this.DDL.CreateTableIfAbsent(fullTable, columnsBody);
     }
 
     /**
@@ -953,7 +1016,7 @@ export abstract class SQLDialect implements SQLParserDialect {
      * SQL Server overrides to guard sp_addextendedproperty with a fn_listextendedproperty check.
      */
     CommentOnObjectIfAbsent(objectType: string, schema: string, name: string, comment: string): string {
-        return this.CommentOnObject(objectType, schema, name, comment) + ';';
+        return this.DDL.CommentOnObjectIfAbsent(objectType, schema, name, comment);
     }
 
     /**
@@ -962,7 +1025,7 @@ export abstract class SQLDialect implements SQLParserDialect {
      * SQL Server overrides to guard sp_addextendedproperty.
      */
     CommentOnColumnIfAbsent(schema: string, table: string, column: string, comment: string): string {
-        return this.CommentOnColumn(schema, table, column, comment);
+        return this.DDL.CommentOnColumnIfAbsent(schema, table, column, comment);
     }
 
     // ─── Schema Introspection ────────────────────────────────────────
@@ -970,7 +1033,9 @@ export abstract class SQLDialect implements SQLParserDialect {
     /**
      * Returns platform-specific schema introspection queries.
      */
-    abstract SchemaIntrospectionQueries(): SchemaIntrospectionSQL;
+    SchemaIntrospectionQueries(): SchemaIntrospectionSQL {
+        return this.DDL.SchemaIntrospectionQueries();
+    }
 
     /**
      * Returns a ready-to-run (no bind parameters) query that enumerates the foreign-key graph
@@ -992,7 +1057,9 @@ export abstract class SQLDialect implements SQLParserDialect {
      *
      * @param schema the schema whose intra-schema FK edges to enumerate (e.g. `__mj`)
      */
-    abstract ForeignKeyGraphSQL(schema: string): string;
+    ForeignKeyGraphSQL(schema: string): string {
+        return this.DDL.ForeignKeyGraphSQL(schema);
+    }
 
     /**
      * Wraps a list of statements in ONE all-or-nothing transaction batch for this platform, ready to
@@ -1009,19 +1076,20 @@ export abstract class SQLDialect implements SQLParserDialect {
      *
      * @param statements individual SQL statements (each WITHOUT a trailing `;`)
      */
-    abstract AtomicBatchScript(statements: string[]): string;
+    AtomicBatchScript(statements: string[]): string {
+        return this.DDL.AtomicBatchScript(statements);
+    }
 
     // ─── Null Handling ───────────────────────────────────────────────
 
     /**
      * Returns the platform's two-argument null-coalescing expression.
      * SQL Server: `ISNULL(expr, fallback)`, PostgreSQL: `COALESCE(expr, fallback)`.
-     * Abstract because each dialect must declare its own keyword — there is no
-     * safe default. A future dialect that has neither `ISNULL` nor `COALESCE`
-     * would silently emit invalid SQL if this fell through to a base
-     * implementation.
+     * The dialect's writer declares the keyword.
      */
-    abstract IsNull(expr: string, fallback: string): string;
+    IsNull(expr: string, fallback: string): string {
+        return this.Writer.IsNull(expr, fallback);
+    }
 
     // ─── Error Classification ───────────────────────────────────────
 
@@ -1037,14 +1105,18 @@ export abstract class SQLDialect implements SQLParserDialect {
      * Used by GenericDatabaseProvider to re-throw connection errors from
      * RunView/RunQuery instead of swallowing them into `{ Success: false }`.
      */
-    abstract IsConnectionError(e: unknown): boolean;
+    IsConnectionError(e: unknown): boolean {
+        return this.Binding.IsConnectionError(e);
+    }
 
     /**
      * Returns an IIF/CASE equivalent expression.
      * SQL Server: IIF(condition, trueVal, falseVal)
      * PostgreSQL: CASE WHEN condition THEN trueVal ELSE falseVal END
      */
-    abstract IIF(condition: string, trueVal: string, falseVal: string): string;
+    IIF(condition: string, trueVal: string, falseVal: string): string {
+        return this.Writer.IIF(condition, trueVal, falseVal);
+    }
 
     // ─── Nested transactions (savepoints) ────────────────────────────
 
@@ -1052,18 +1124,24 @@ export abstract class SQLDialect implements SQLParserDialect {
      * SQL that marks a nested transaction savepoint. SQL Server:
      * `SAVE TRANSACTION name`. PostgreSQL: `SAVEPOINT name`.
      */
-    abstract CreateSavepointSQL(name: string): string;
+    CreateSavepointSQL(name: string): string {
+        return this.DDL.CreateSavepointSQL(name);
+    }
 
     /**
      * SQL that discards a savepoint after a nested commit, or `null` when the
      * platform has no release (SQL Server savepoints live until the outer TX
      * ends). PostgreSQL: `RELEASE SAVEPOINT name`.
      */
-    abstract ReleaseSavepointSQL(name: string): string | null;
+    ReleaseSavepointSQL(name: string): string | null {
+        return this.DDL.ReleaseSavepointSQL(name);
+    }
 
     /**
      * SQL that undoes work after a savepoint. SQL Server:
      * `ROLLBACK TRANSACTION name`. PostgreSQL: `ROLLBACK TO SAVEPOINT name`.
      */
-    abstract RollbackToSavepointSQL(name: string): string;
+    RollbackToSavepointSQL(name: string): string {
+        return this.DDL.RollbackToSavepointSQL(name);
+    }
 }

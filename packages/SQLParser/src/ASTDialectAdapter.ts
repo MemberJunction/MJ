@@ -133,6 +133,8 @@ const ADAPTERS = new Map<string, ASTDialectAdapter>([
     ['TransactSQL', new TransactSQLAdapter()],
     ['PostgresQL', new LimitOffsetAdapter()],
     ['MySQL', new LimitOffsetAdapter()],
+    ['Snowflake', new LimitOffsetAdapter()],
+    ['Hive', new LimitOffsetAdapter()],
 ]);
 
 /**

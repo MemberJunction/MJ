@@ -144,8 +144,7 @@ describe("assertReadOnlyClause", () => {
 /**
  * MySQL comment syntax. In MySQL `--` starts a comment only when followed by whitespace or a control
  * character, so `--1` is NOT a comment there: `SELECT 1 --1 INTO OUTFILE '/tmp/x'` is `SELECT 1 - (-1)
- * INTO OUTFILE ...`, a file write. The only non-T-SQL key today is 'ansi' (the PostgreSQL grammar),
- * which reads `--1 ...` as a line comment, sees `SELECT 1`, and lets the text through.
+ * INTO OUTFILE ...`, a file write. Screened under the MySQL dialect, the text is read with MySQL's rules.
  */
 describe("assertReadOnlyNativeQuery: MySQL '--' comment rule", () => {
     const MYSQL_OUTFILE_BEHIND_DASHES = "SELECT 1 --1 INTO OUTFILE '/tmp/x'";
@@ -154,14 +153,114 @@ describe("assertReadOnlyNativeQuery: MySQL '--' comment rule", () => {
         expect(() => AssertReadOnlyNativeQuery("SELECT 1 INTO OUTFILE '/tmp/x'", "ansi")).toThrow(/SELECT \.\.\. INTO/);
     });
 
-    // Pinned: EDS dialects live in sql-dialect; a MySQL source is screened under the MySQL dialect's
-    // comment rules, fail closed (IMPLEMENTATION-PLAN §3 / DISCUSSION §6, 2026-10-27). EDS screen bypass row.
-    // Observed today: AssertReadOnlyNativeQuery(..., "ansi") does not throw ("expected [Function] to throw
-    // an error"): the ANSI grammar treats "--1 INTO OUTFILE '/tmp/x'" as a comment.
-    // Intended API: a MySQL dialect key backed by a sql-dialect MySQL dialect, e.g.
-    // AssertReadOnlyNativeQuery(MYSQL_OUTFILE_BEHIND_DASHES, "mysql"), which must throw. Until that key
-    // exists, a MySQL source is screened with "ansi", so this pins the call a MySQL source makes today.
-    it.fails("refuses 'SELECT 1 --1 INTO OUTFILE' for a MySQL source", () => {
-        expect(() => AssertReadOnlyNativeQuery(MYSQL_OUTFILE_BEHIND_DASHES, "ansi")).toThrow();
+    it("refuses 'SELECT 1 --1 INTO OUTFILE' for a MySQL source", () => {
+        expect(() => AssertReadOnlyNativeQuery(MYSQL_OUTFILE_BEHIND_DASHES, "mysql")).toThrow(/INTO/);
+    });
+
+    it("still reads '-- ' followed by a space as a MySQL comment", () => {
+        expect(() => AssertReadOnlyNativeQuery("SELECT id FROM orders -- note\n", "mysql")).not.toThrow();
+    });
+
+    it("'ansi' keeps screening with the PostgreSQL dialect (deprecated alias)", () => {
+        expect(() => AssertReadOnlyNativeQuery(MYSQL_OUTFILE_BEHIND_DASHES, "ansi")).not.toThrow();
+        expect(() => AssertReadOnlyNativeQuery("SELECT 1; DROP TABLE t", "ansi")).toThrow(/multiple statements/);
+    });
+});
+
+describe("assertReadOnlyNativeQuery: MySQL lexical rules", () => {
+    it("allows backtick identifiers", () => {
+        expect(() => AssertReadOnlyNativeQuery("SELECT `name`, `total` FROM `orders` WHERE `status` = 'a'", "mysql")).not.toThrow();
+    });
+    it("reads a semicolon inside a backtick identifier as part of the name", () => {
+        expect(() => AssertReadOnlyNativeQuery("SELECT `a;b` FROM `orders`", "mysql")).not.toThrow();
+    });
+    it("allows a '#' comment", () => {
+        expect(() => AssertReadOnlyNativeQuery("SELECT id FROM orders # trailing note", "mysql")).not.toThrow();
+    });
+    it("refuses a write after a '#' comment line", () => {
+        expect(() => AssertReadOnlyNativeQuery("# header\nDELETE FROM orders", "mysql")).toThrow(/read-only|write/i);
+    });
+    it("refuses GRANT behind a '#' comment", () => {
+        expect(() => AssertReadOnlyNativeQuery("# c\nGRANT SELECT ON db.t TO reader", "mysql")).toThrow(/GRANT|REVOKE|DENY/);
+    });
+    it("reads '#' inside a string literal as text, not a comment", () => {
+        expect(() => AssertReadOnlyNativeQuery("SELECT id FROM orders WHERE tag = '#1'; DELETE FROM orders", "mysql")).toThrow(/multiple statements/);
+    });
+    it("refuses a backslash-escaped quote: its end depends on NO_BACKSLASH_ESCAPES", () => {
+        expect(() => AssertReadOnlyNativeQuery("SELECT 'a\\'; DROP TABLE t; -- '", "mysql")).toThrow(/backslash/);
+    });
+    it("refuses an executable /*! */ comment", () => {
+        expect(() => AssertReadOnlyNativeQuery("SELECT 1 /*!50000 INTO OUTFILE '/tmp/x' */", "mysql")).toThrow(/comment/);
+    });
+    it("allows a double-quoted string (MySQL default SQL mode)", () => {
+        expect(() => AssertReadOnlyNativeQuery('SELECT id FROM orders WHERE status = "open"', "mysql")).not.toThrow();
+    });
+    it("refuses a '#' comment in a clause", () => {
+        expect(() => AssertReadOnlyClause("status = 'a' # x", "mysql", "where")).toThrow(/comment/);
+    });
+});
+
+describe("assertReadOnlyNativeQuery: Oracle (no grammar: lexical screen, fail closed)", () => {
+    it("allows a plain SELECT", () => {
+        expect(() => AssertReadOnlyNativeQuery("SELECT employee_id, last_name FROM hr.employees WHERE ROWNUM <= 10", "oracle")).not.toThrow();
+    });
+    it("allows a WITH query with a FETCH FIRST cap and a :bind", () => {
+        expect(() => AssertReadOnlyNativeQuery("WITH t AS (SELECT 1 AS x FROM dual) SELECT x FROM t WHERE x = :1 FETCH FIRST 5 ROWS ONLY", "oracle")).not.toThrow();
+    });
+    it("reads a semicolon inside a q'[…]' literal as text", () => {
+        expect(() => AssertReadOnlyNativeQuery("SELECT q'[it's; DROP TABLE t]' AS v FROM dual", "oracle")).not.toThrow();
+    });
+    it("refuses a statement after a q'{…}' literal", () => {
+        expect(() => AssertReadOnlyNativeQuery("SELECT q'{a}' FROM dual; DROP TABLE t", "oracle")).toThrow(/multiple statements/);
+    });
+    it.each([
+        ["DELETE", "DELETE FROM employees"],
+        ["UPDATE", "UPDATE employees SET salary = 0"],
+        ["BEGIN block", "BEGIN NULL; END;"],
+        ["SELECT FOR UPDATE", "SELECT * FROM employees FOR UPDATE"],
+        ["WITH FUNCTION", "WITH FUNCTION f RETURN NUMBER IS BEGIN RETURN 1; END; SELECT f FROM dual"],
+        ["MERGE", "MERGE INTO t USING s ON (t.id = s.id) WHEN MATCHED THEN UPDATE SET t.v = s.v"],
+    ])("refuses %s", (_label, sql) => {
+        expect(() => AssertReadOnlyNativeQuery(sql, "oracle")).toThrow();
+    });
+    it("screens an Oracle clause with Oracle lexical rules", () => {
+        expect(() => AssertReadOnlyClause("last_name = 'King'", "oracle", "where")).not.toThrow();
+        expect(() => AssertReadOnlyClause("1=1) UNION SELECT password FROM users WHERE (1=1", "oracle", "where")).toThrow();
+    });
+});
+
+describe("assertReadOnlyNativeQuery: Snowflake", () => {
+    it("allows a read with a $$ string containing a semicolon", () => {
+        expect(() => AssertReadOnlyNativeQuery("SELECT $$a; b$$ AS v FROM nation", "snowflake")).not.toThrow();
+    });
+    it("reads // as a line comment", () => {
+        expect(() => AssertReadOnlyNativeQuery("SELECT n_name FROM nation // trailing note", "snowflake")).not.toThrow();
+    });
+    it("refuses a write behind a // comment line", () => {
+        expect(() => AssertReadOnlyNativeQuery("// header\nDELETE FROM nation", "snowflake")).toThrow(/read-only|write/i);
+    });
+    it("reads a backslash-escaped quote as part of the literal", () => {
+        expect(() => AssertReadOnlyNativeQuery("SELECT 'a\\'; b' AS v FROM nation", "snowflake")).not.toThrow();
+    });
+    it("refuses a '//' comment in a clause", () => {
+        expect(() => AssertReadOnlyClause("n_name = 'x' // y", "snowflake", "where")).toThrow(/comment/);
+    });
+});
+
+describe("assertReadOnlyNativeQuery: Databricks", () => {
+    it("allows backtick identifiers and a three-part name", () => {
+        expect(() => AssertReadOnlyNativeQuery("SELECT `trip_distance` FROM `samples`.`nyctaxi`.`trips` LIMIT 10", "databricks")).not.toThrow();
+    });
+    it("reads a semicolon inside a backtick identifier as part of the name", () => {
+        expect(() => AssertReadOnlyNativeQuery("SELECT `a;b` FROM trips", "databricks")).not.toThrow();
+    });
+    it("reads '--' with no space after it as a comment", () => {
+        expect(() => AssertReadOnlyNativeQuery("SELECT 1 FROM trips --1; DROP TABLE trips", "databricks")).not.toThrow();
+    });
+    it("refuses a backslash in a string literal: escapedStringLiterals decides where it ends", () => {
+        expect(() => AssertReadOnlyNativeQuery("SELECT 'a\\'; DROP TABLE t; --' FROM trips", "databricks")).toThrow(/backslash/);
+    });
+    it("refuses a write", () => {
+        expect(() => AssertReadOnlyNativeQuery("DELETE FROM trips WHERE id = 1", "databricks")).toThrow(/read-only|write/i);
     });
 });

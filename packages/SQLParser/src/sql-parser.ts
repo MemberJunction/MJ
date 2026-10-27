@@ -22,6 +22,7 @@ import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import { PostgreSQLDialect, SQLServerDialect } from '@memberjunction/sql-dialect';
 import { GetASTDialectAdapter, type ASTDialectAdapter, type RowCapInfo } from './ASTDialectAdapter.js';
 import { IsKeyword, LexSQL, SignificantTokens } from './sqlLexer.js';
+import type { LexDialect } from './sqlLexer.js';
 import {
     MJToken,
     MJTemplateExpr,
@@ -559,7 +560,7 @@ export class SQLParser {
      * misses (the whole string fails to parse, so the AST is null). A rendered
      * read query must be a single statement, so any internal `;` is rejected.
      */
-    static HasStackedStatements(sql: string, dialect: SQLParserDialect): boolean {
+    static HasStackedStatements(sql: string, dialect: LexDialect): boolean {
         let sawSemicolon = false;
         // A semicolon before any content (the `;WITH` idiom) separates nothing.
         let sawContent = false;
@@ -584,7 +585,7 @@ export class SQLParser {
      * `[…]`, PostgreSQL `E'…'` and dollar-quoted strings (`$$…$$`, `$tag$…$tag$`), MySQL
      * `` `…` ``. Double-quoted identifiers are honored on every dialect.
      */
-    static StripComments(sql: string, dialect: SQLParserDialect): string {
+    static StripComments(sql: string, dialect: LexDialect): string {
         return LexSQL(sql, dialect)
             .map(t => t.Kind !== 'comment' ? t.Text : t.Text.startsWith('/*') ? ' ' : '')
             .join('');
